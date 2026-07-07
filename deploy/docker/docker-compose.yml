@@ -1,0 +1,90 @@
+# Ditero production stack: app (web + API) + Postgres + zero-cache, all on one
+# Compose network so services reach each other by name (no host.docker.internal).
+#
+# Run from the repo root:
+#   BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
+#     docker compose -f deploy/docker/docker-compose.yml up --build
+#
+# Postgres toggle (bundled vs external): DITERO_DATABASE_URL is the single
+# switch, shared by `app` and `zero-cache`. It defaults to the bundled
+# `upstream-db` below. To use an external Postgres instead, set
+# DITERO_DATABASE_URL to its DSN (that server needs wal_level=logical) and skip
+# the bundled db, e.g.:
+#   DITERO_DATABASE_URL=postgres://user:pass@db.example.com:5432/ditero \
+#     docker compose -f deploy/docker/docker-compose.yml up app zero-cache
+# `required: false` on the depends_on lets app/zero-cache start without the
+# bundled db in that mode.
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      args:
+        # Baked into the web bundle at build time; rebuild to change it.
+        VITE_ZERO_URL: ${VITE_ZERO_URL:-http://localhost:4848}
+    environment:
+      DATABASE_URL: ${DITERO_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD:-pass}@upstream-db:5432/ditero}
+      # Required. Fails fast if unset. Generate: openssl rand -hex 32
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET (e.g. openssl rand -hex 32)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      API_PORT: "3000"
+      SERVE_STATIC_DIR: /app/dist
+      # Optional shared workspace new users auto-join (empty = disabled).
+      DITERO_DEFAULT_WORKSPACE_ID: ${DITERO_DEFAULT_WORKSPACE_ID:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      upstream-db:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+
+  upstream-db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ditero
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
+    # Logical replication is required by zero-cache.
+    command: postgres -c wal_level=logical
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ditero-pg:/var/lib/postgresql
+    restart: unless-stopped
+
+  zero-cache:
+    image: rocicorp/zero:1.7.0
+    environment:
+      ZERO_UPSTREAM_DB: ${DITERO_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD:-pass}@upstream-db:5432/ditero}
+      ZERO_CVR_DB: ${DITERO_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD:-pass}@upstream-db:5432/ditero}
+      ZERO_CHANGE_DB: ${DITERO_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD:-pass}@upstream-db:5432/ditero}
+      ZERO_REPLICA_FILE: /data/replica.db
+      # zero-cache reaches the app by service name over the shared network.
+      ZERO_QUERY_URL: http://app:3000/api/zero/query
+      ZERO_MUTATE_URL: http://app:3000/api/zero/mutate
+      ZERO_AUTH_JWKS_URL: http://app:3000/api/auth/jwks
+      ZERO_ENABLE_CRUD_MUTATIONS: "false"
+      # Required by zero-cache in production mode. Generate: openssl rand -hex 32
+      ZERO_ADMIN_PASSWORD: ${ZERO_ADMIN_PASSWORD:?set ZERO_ADMIN_PASSWORD (e.g. openssl rand -hex 32)}
+    ports:
+      - "4848:4848"
+    depends_on:
+      upstream-db:
+        condition: service_healthy
+        required: false
+    volumes:
+      - ditero-zero:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4848/keepalive || exit 1"]
+      interval: 5s
+      start_period: 120s
+    restart: unless-stopped
+
+volumes:
+  ditero-pg:
+  ditero-zero:

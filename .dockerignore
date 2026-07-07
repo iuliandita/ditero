@@ -1,0 +1,30 @@
+# Keep the build context lean and secret-free.
+.git
+node_modules
+dist
+build
+out
+.output
+.vite
+*.tsbuildinfo
+
+# Local secrets / env (never bake into an image)
+.env
+.env.*
+
+# Spikes, tests, and generated reports
+spikes
+tests
+test-results
+playwright-report
+coverage
+
+# Context/docs not needed at runtime
+AGENTS.md
+docs
+
+# Editor / OS cruft
+.idea
+.vscode
+.DS_Store
+*.log

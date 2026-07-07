@@ -1,0 +1,50 @@
+# Dev stack: Postgres (logical replication) + zero-cache.
+services:
+  upstream-db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ditero
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pass
+    command: postgres -c wal_level=logical
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ditero-pg:/var/lib/postgresql
+
+  zero-cache:
+    image: rocicorp/zero:1.7.0
+    depends_on:
+      upstream-db:
+        condition: service_healthy
+    ports:
+      - "4848:4848"
+    environment:
+      ZERO_UPSTREAM_DB: postgres://postgres:pass@upstream-db:5432/ditero
+      ZERO_CVR_DB: postgres://postgres:pass@upstream-db:5432/ditero
+      ZERO_CHANGE_DB: postgres://postgres:pass@upstream-db:5432/ditero
+      ZERO_REPLICA_FILE: /data/replica.db
+      ZERO_ADMIN_PASSWORD: devadmin
+      # zero-cache calls back to the Elysia API running on the host:
+      ZERO_QUERY_URL: http://host.docker.internal:3000/api/zero/query
+      ZERO_MUTATE_URL: http://host.docker.internal:3000/api/zero/mutate
+      ZERO_ENABLE_CRUD_MUTATIONS: "false"
+      # Better Auth's JWKS endpoint, used to verify the JWT Zero receives from the client:
+      ZERO_AUTH_JWKS_URL: http://host.docker.internal:3000/api/auth/jwks
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ditero-zero:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4848/keepalive || exit 1"]
+      interval: 5s
+      start_period: 120s
+
+volumes:
+  ditero-pg:
+  ditero-zero:
