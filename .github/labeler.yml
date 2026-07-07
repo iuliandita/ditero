@@ -1,0 +1,54 @@
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/web/**"
+          - "apps/web/**"
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/server/**"
+          - "apps/server/**"
+          - "src/zero/**"
+
+database:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/db/**"
+          - "drizzle/**"
+
+native:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src-tauri/**"
+          - "capacitor.config.*"
+
+deployment:
+  - changed-files:
+      - any-glob-to-any-file: "deploy/**"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "*.md"
+          - "docs/**"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+          - "e2e/**"
+
+spikes:
+  - changed-files:
+      - any-glob-to-any-file: "spikes/**"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "package.json"
+          - "bun.lock"

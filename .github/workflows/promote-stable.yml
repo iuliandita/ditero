@@ -1,0 +1,106 @@
+name: Promote :stable
+
+# Manually promote a released tag to :stable. Rule: a release should be live for at least
+# 7 days with no follow-up patch before promotion. The 7-day age is soft-checked; younger
+# releases need override_age_check=true.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to promote (e.g. v0.44.0)"
+        required: true
+      override_age_check:
+        description: "Allow promotion of releases younger than 7 days"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-stable
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+
+      - name: Validate tag exists and check age
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          OVERRIDE: ${{ inputs.override_age_check }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG has no GitHub release; cannot promote"
+            exit 1
+          fi
+          published_at=$(gh release view "$TAG" --repo "$REPO" --json publishedAt -q '.publishedAt')
+          age_days=$(( ( $(date -u +%s) - $(date -u -d "$published_at" +%s) ) / 86400 ))
+          echo "published_at=$published_at age_days=$age_days"
+          if [ "$age_days" -lt 7 ] && [ "$OVERRIDE" != "true" ]; then
+            echo "::error::$TAG is only $age_days day(s) old; promotion requires >= 7 days or override_age_check=true"
+            exit 1
+          fi
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retag manifests as :stable
+        env:
+          GHCR_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          DOCKER_IMAGE: docker.io/iuliandita/ditero
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          docker buildx imagetools create --tag "${GHCR_IMAGE}:stable" "${GHCR_IMAGE}:${version}"
+          docker buildx imagetools create --tag "${DOCKER_IMAGE}:stable" "${DOCKER_IMAGE}:${version}"
+          docker buildx imagetools create --tag "${GHCR_IMAGE}:stable-debian" "${GHCR_IMAGE}:${version}-debian"
+          docker buildx imagetools create --tag "${DOCKER_IMAGE}:stable-debian" "${DOCKER_IMAGE}:${version}-debian"
+
+      - name: Resolve promoted digest
+        id: digest
+        env:
+          GHCR_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        run: |
+          set -euo pipefail
+          digest=$(docker buildx imagetools inspect "${GHCR_IMAGE}:stable" --format '{{ .Manifest.Digest }}')
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Sign :stable (cosign keyless)
+        env:
+          GHCR_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          DOCKER_IMAGE: docker.io/iuliandita/ditero
+          DIGEST: ${{ steps.digest.outputs.digest }}
+        run: |
+          cosign sign --yes "${GHCR_IMAGE}@${DIGEST}"
+          cosign sign --yes "${DOCKER_IMAGE}@${DIGEST}"
