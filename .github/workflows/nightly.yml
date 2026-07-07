@@ -22,8 +22,6 @@ env:
 
 jobs:
   nightly:
-    # Skips until deploy/docker/Dockerfile exists (M0).
-    if: ${{ hashFiles('deploy/docker/Dockerfile') != '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
