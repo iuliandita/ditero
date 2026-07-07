@@ -19,10 +19,8 @@ test-results
 playwright-report
 coverage
 
-# Local AI tooling / context and docs not needed at runtime
-.claude
+# Context/docs not needed at runtime
 AGENTS.md
-CLAUDE.md
 docs
 
 # Editor / OS cruft

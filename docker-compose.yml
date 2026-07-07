@@ -29,7 +29,7 @@ services:
       ZERO_CVR_DB: postgres://postgres:pass@upstream-db:5432/ditero
       ZERO_CHANGE_DB: postgres://postgres:pass@upstream-db:5432/ditero
       ZERO_REPLICA_FILE: /data/replica.db
-      ZERO_ADMIN_PASSWORD: spikeadmin
+      ZERO_ADMIN_PASSWORD: devadmin
       # zero-cache calls back to the Elysia API running on the host:
       ZERO_QUERY_URL: http://host.docker.internal:3000/api/zero/query
       ZERO_MUTATE_URL: http://host.docker.internal:3000/api/zero/mutate

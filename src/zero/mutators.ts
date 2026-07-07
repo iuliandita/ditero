@@ -6,7 +6,6 @@ import { z } from "zod";
 import { zql } from "./schema.gen.ts";
 
 const WRITE_ROLES = new Set(["owner", "admin", "member"]); // may edit content
-const ADMIN_ROLES = new Set(["owner", "admin"]); // may manage membership
 
 async function roleInWorkspace(
   tx: any,
@@ -82,29 +81,6 @@ export const mutators = defineMutators({
           title: args.title,
           visibility: "workspace",
         });
-      },
-    ),
-  },
-  membership: {
-    setRole: defineMutator(
-      z.object({
-        workspaceId: z.string(),
-        userId: z.string(),
-        role: z.enum(["owner", "admin", "member", "viewer"]),
-      }),
-      async ({ tx, ctx, args }: any) => {
-        const callerRole = await roleInWorkspace(tx, ctx.id, args.workspaceId);
-        if (!callerRole || !ADMIN_ROLES.has(callerRole)) {
-          throw new Error("access denied: need admin+");
-        }
-        const target = await tx.run(
-          zql.membership
-            .where("workspaceId", args.workspaceId)
-            .where("userId", args.userId)
-            .one(),
-        );
-        if (!target) throw new Error("membership not found");
-        await tx.mutate.membership.update({ id: target.id, role: args.role });
       },
     ),
   },
