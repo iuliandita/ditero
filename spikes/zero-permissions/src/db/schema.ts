@@ -2,7 +2,7 @@
 // Faithful to the ditero design (user / workspace / membership / list / task),
 // trimmed to only what the permission test needs.
 import { relations } from "drizzle-orm";
-import { boolean, pgEnum, pgTable, text, unique } from "drizzle-orm/pg-core";
+import { boolean, integer, pgEnum, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["owner", "admin", "member", "viewer"]);
 export const workspaceKindEnum = pgEnum("workspace_kind", ["personal", "shared"]);
@@ -89,3 +89,45 @@ export const listRelations = relations(list, ({ one, many }) => ({
 export const taskRelations = relations(task, ({ one }) => ({
   list: one(list, { fields: [task.listId], references: [list.id] }),
 }));
+
+// --- Spike B: notification/escalation (BACKEND-owned; NOT in the Zero schema) ---
+// Ownership split: the backend owns these via drizzle; task.done acks go through
+// the Zero mutator. That is the two-writer seam Spike B proves.
+
+export const channelKindEnum = pgEnum("channel_kind", ["ntfy", "telegram"]);
+export const reminderStateEnum = pgEnum("reminder_state", [
+  "pending",
+  "fired",
+  "acked",
+  "escalated",
+]);
+
+// Per-user delivery channel (which topic/chat to notify).
+export const userChannel = pgTable("user_channel", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  kind: channelKindEnum("kind").notNull(),
+  target: text("target").notNull(), // ntfy topic, or telegram chat id
+});
+
+// A reminder tied to a task, with escalation policy.
+export const reminder = pgTable("reminder", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id")
+    .notNull()
+    .references(() => task.id),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id), // recipient
+  fireAt: timestamp("fire_at", { withTimezone: true }).notNull(),
+  state: reminderStateEnum("state").notNull().default("pending"),
+  intervalSec: integer("interval_sec").notNull().default(60),
+  maxRepeats: integer("max_repeats").notNull().default(3),
+  repeatCount: integer("repeat_count").notNull().default(0),
+  lastFiredAt: timestamp("last_fired_at", { withTimezone: true }),
+  fallbackUserId: text("fallback_user_id").references(() => user.id),
+  ackedBy: text("acked_by").references(() => user.id),
+  ackedAt: timestamp("acked_at", { withTimezone: true }),
+});
