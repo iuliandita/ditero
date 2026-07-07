@@ -1,0 +1,3 @@
+# Default owner for everything in the repo. Used by GitHub for automatic
+# review requests and by protected-branch rules that require CODEOWNERS approval.
+* @iuliandita

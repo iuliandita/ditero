@@ -42,6 +42,14 @@ ios/
 npm-debug.log*
 .turbo/
 .cache/
+*.tmp
+.tmp/
+
+# --- sync engine local state ---
+.zero/
+
+# --- tooling scratch ---
+.playwright-mcp/
 
 # --- editors / OS ---
 .idea/
