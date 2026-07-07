@@ -4,6 +4,9 @@ CLAUDE.md
 .claude/
 docs/local/
 
+# --- private working roadmap (public one is docs/ROADMAP.md) ---
+/ROADMAP.md
+
 # --- dependencies ---
 node_modules/
 .pnp
