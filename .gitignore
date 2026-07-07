@@ -1,0 +1,52 @@
+# --- local AI tooling / context (never committed) ---
+AGENTS.md
+CLAUDE.md
+.claude/
+docs/local/
+
+# --- dependencies ---
+node_modules/
+.pnp
+.pnp.*
+
+# --- build output ---
+dist/
+build/
+out/
+.output/
+.vite/
+*.tsbuildinfo
+
+# --- env / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- test / coverage ---
+coverage/
+playwright-report/
+test-results/
+.nyc_output/
+
+# --- native shells ---
+# Tauri (desktop)
+src-tauri/target/
+src-tauri/gen/
+# Capacitor (mobile) generated native projects
+android/
+ios/
+.capacitor/
+
+# --- logs / caches ---
+*.log
+npm-debug.log*
+.turbo/
+.cache/
+
+# --- editors / OS ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
