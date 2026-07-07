@@ -65,8 +65,9 @@ The `deploy/docker` stack runs the whole spine: the app (web UI + API served
 same-origin on one port), PostgreSQL, and the Zero sync cache.
 
 ```sh
-# From the repo root. BETTER_AUTH_SECRET is required.
+# From the repo root. BETTER_AUTH_SECRET and ZERO_ADMIN_PASSWORD are required.
 BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
+ZERO_ADMIN_PASSWORD=$(openssl rand -hex 32) \
   docker compose -f deploy/docker/docker-compose.yml up --build
 ```
 
@@ -79,6 +80,7 @@ All configuration is environment-driven. The common variables:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `BETTER_AUTH_SECRET` | _(required)_ | Signing secret for auth/JWTs. Generate with `openssl rand -hex 32`. |
+| `ZERO_ADMIN_PASSWORD` | _(required)_ | Admin password zero-cache requires in production. Generate with `openssl rand -hex 32`. |
 | `BETTER_AUTH_URL` | `http://localhost:3000` | Public base URL the app is served from. |
 | `DITERO_DATABASE_URL` | bundled Postgres | Postgres DSN. Set to point at an external database (see below). |
 | `POSTGRES_PASSWORD` | `pass` | Password for the bundled Postgres. |
@@ -99,6 +101,7 @@ service:
 ```sh
 DITERO_DATABASE_URL=postgres://user:pass@db.example.com:5432/ditero \
 BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
+ZERO_ADMIN_PASSWORD=$(openssl rand -hex 32) \
   docker compose -f deploy/docker/docker-compose.yml up --build app zero-cache
 ```
 

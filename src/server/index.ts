@@ -65,23 +65,36 @@ const routes = new Elysia()
 		return result instanceof Response ? result : Response.json(result);
 	});
 
-// Prod (SERVE_STATIC_DIR set): serve the built web same-origin with an SPA
-// fallback, so web and API share one port (no CORS/trustedOrigins needed).
-// The /health + /api/* routes above are matched first; only non-API GETs reach
-// this catch-all. Dev leaves SERVE_STATIC_DIR unset and vite serves the web.
+// Prod (SERVE_STATIC_DIR set): serve the built web same-origin so web and API
+// share one port (no CORS/trustedOrigins needed). Runs from the NOT_FOUND hook
+// so it only handles routes the API didn't — it never shadows /api/* or /health.
+// SPA fallback: unknown non-API GETs return index.html for client-side routing.
+// Dev leaves SERVE_STATIC_DIR unset and vite serves the web.
 const staticDir = process.env.SERVE_STATIC_DIR;
 const app = (
 	staticDir
-		? routes.get("/*", async ({ request, set }) => {
+		? routes.onError(async ({ code, request }) => {
+				if (code !== "NOT_FOUND") return;
 				const { pathname } = new URL(request.url);
-				if (pathname.startsWith("/api/") || pathname === "/health") {
-					set.status = 404;
-					return "Not Found";
+				// Return explicit Responses so the 200 isn't overridden by the
+				// NOT_FOUND status Elysia's error hook would otherwise apply.
+				if (pathname.startsWith("/api/")) {
+					return new Response("Not Found", { status: 404 });
 				}
 				const rel = pathname.replace(/^\/+/, "");
-				const asset = rel ? Bun.file(join(staticDir, rel)) : null;
-				if (asset && (await asset.exists())) return asset;
-				return Bun.file(join(staticDir, "index.html"));
+				if (rel) {
+					const asset = Bun.file(join(staticDir, rel));
+					if (await asset.exists()) {
+						return new Response(asset, {
+							headers: { "content-type": asset.type },
+						});
+					}
+				}
+				// SPA fallback: unknown non-API GET -> client-side routing.
+				const index = Bun.file(join(staticDir, "index.html"));
+				return new Response(index, {
+					headers: { "content-type": index.type },
+				});
 			})
 		: routes
 ).listen(PORT);

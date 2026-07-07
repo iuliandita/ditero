@@ -69,7 +69,8 @@ services:
       ZERO_MUTATE_URL: http://app:3000/api/zero/mutate
       ZERO_AUTH_JWKS_URL: http://app:3000/api/auth/jwks
       ZERO_ENABLE_CRUD_MUTATIONS: "false"
-      ZERO_ADMIN_PASSWORD: ${ZERO_ADMIN_PASSWORD:-}
+      # Required by zero-cache in production mode. Generate: openssl rand -hex 32
+      ZERO_ADMIN_PASSWORD: ${ZERO_ADMIN_PASSWORD:?set ZERO_ADMIN_PASSWORD (e.g. openssl rand -hex 32)}
     ports:
       - "4848:4848"
     depends_on:
