@@ -8,6 +8,20 @@
       "when": 1783435254884,
       "tag": "0000_zippy_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783684147369,
+      "tag": "0001_curly_vertigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783684370668,
+      "tag": "0002_personal_workspace_owner",
+      "breakpoints": true
     }
   ]
 }

@@ -1,21 +1,18 @@
-# Dev stack: Postgres (logical replication) + zero-cache.
 services:
   upstream-db:
     image: postgres:18
     environment:
-      POSTGRES_DB: ditero
+      POSTGRES_DB: ditero_e2e
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: pass
     command: postgres -c wal_level=logical
     ports:
-      - "5432:5432"
+      - "55432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ditero_e2e"]
+      interval: 2s
       timeout: 5s
-      retries: 10
-    volumes:
-      - ditero-pg:/var/lib/postgresql
+      retries: 20
 
   zero-cache:
     image: rocicorp/zero:1.7.0
@@ -23,26 +20,25 @@ services:
       upstream-db:
         condition: service_healthy
     ports:
-      - "4848:4848"
+      - "4849:4848"
     environment:
-      ZERO_UPSTREAM_DB: postgres://postgres:pass@upstream-db:5432/ditero
-      ZERO_CVR_DB: postgres://postgres:pass@upstream-db:5432/ditero
-      ZERO_CHANGE_DB: postgres://postgres:pass@upstream-db:5432/ditero
+      ZERO_UPSTREAM_DB: postgres://postgres:pass@upstream-db:5432/ditero_e2e
+      ZERO_CVR_DB: postgres://postgres:pass@upstream-db:5432/ditero_e2e
+      ZERO_CHANGE_DB: postgres://postgres:pass@upstream-db:5432/ditero_e2e
       ZERO_REPLICA_FILE: /data/replica.db
-      ZERO_ADMIN_PASSWORD: devadmin
-      # zero-cache calls back to the Elysia API running on the host:
+      ZERO_ADMIN_PASSWORD: e2eadmin
       ZERO_QUERY_URL: http://host.docker.internal:3000/api/zero/query
       ZERO_MUTATE_URL: http://host.docker.internal:3000/api/zero/mutate
       ZERO_ENABLE_CRUD_MUTATIONS: "false"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ditero-zero:/data
+      - zero-data:/data
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:4848/keepalive || exit 1"]
-      interval: 5s
-      start_period: 120s
+      interval: 2s
+      start_period: 30s
+      retries: 30
 
 volumes:
-  ditero-pg:
-  ditero-zero:
+  zero-data:

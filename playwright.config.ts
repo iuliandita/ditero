@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Requires the docker dev stack up (postgres + zero-cache): `docker compose up -d`.
-// Playwright boots the Elysia API and the vite web server itself; global-setup
-// seeds the shared workspace. DITERO_DEFAULT_WORKSPACE_ID makes new signups
-// auto-join that workspace (dev/e2e only).
+const databaseURL =
+	process.env.E2E_DATABASE_URL ??
+	"postgres://postgres:pass@localhost:55432/ditero_e2e";
+
 export default defineConfig({
 	testDir: "tests/e2e",
 	globalSetup: "./tests/e2e/global-setup.ts",
@@ -24,13 +24,20 @@ export default defineConfig({
 			port: 3000,
 			reuseExistingServer: false,
 			timeout: 60_000,
-			env: { DITERO_DEFAULT_WORKSPACE_ID: "w_shared_e2e" },
+			env: {
+				DATABASE_URL: databaseURL,
+				NODE_ENV: "test",
+				BETTER_AUTH_SECRET: "e2e-only-better-auth-secret-32-bytes",
+				BETTER_AUTH_URL: "http://localhost:3000",
+				DITERO_REGISTRATION_MODE: "open",
+			},
 		},
 		{
 			command: "bun run dev:web",
 			port: 5173,
 			reuseExistingServer: false,
 			timeout: 60_000,
+			env: { VITE_ZERO_URL: "http://localhost:4849" },
 		},
 	],
 });

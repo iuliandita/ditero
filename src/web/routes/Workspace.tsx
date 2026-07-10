@@ -11,7 +11,7 @@ export function Workspace() {
 	const [lists] = useQuery(queries.lists.mine());
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openListId, setOpenListId] = useState<string | null>(null);
-	const [autoOpenShared, setAutoOpenShared] = useState(false);
+	const [openSharedRequested, setOpenSharedRequested] = useState(false);
 	const [title, setTitle] = useState("");
 
 	// Default active workspace is the user's personal one, so new lists stay private.
@@ -27,15 +27,19 @@ export function Workspace() {
 		[lists, activeId],
 	);
 
-	// Open-shared may fire before the shared workspace's lists have synced; open
-	// the first one once it arrives.
 	useEffect(() => {
-		if (!autoOpenShared) return;
-		if (activeLists.length >= 1) {
-			setOpenListId(activeLists[0].id);
-			setAutoOpenShared(false);
+		if (!openSharedRequested) return;
+		const shared = workspaces.find((w) => w.kind === "shared");
+		if (!shared) return;
+		if (activeId !== shared.id) {
+			setActiveId(shared.id);
+			setOpenListId(null);
 		}
-	}, [autoOpenShared, activeLists]);
+		const firstList = lists.find((l) => l.workspaceId === shared.id);
+		if (!firstList) return;
+		setOpenListId(firstList.id);
+		setOpenSharedRequested(false);
+	}, [openSharedRequested, workspaces, lists, activeId]);
 
 	async function createList() {
 		const t = title.trim();
@@ -56,11 +60,7 @@ export function Workspace() {
 	}
 
 	function openShared() {
-		const shared = workspaces.find((w) => w.kind === "shared");
-		if (!shared) return;
-		setActiveId(shared.id);
-		setOpenListId(null);
-		setAutoOpenShared(true);
+		setOpenSharedRequested(true);
 	}
 
 	return (

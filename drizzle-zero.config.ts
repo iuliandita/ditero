@@ -11,7 +11,6 @@ export default drizzleZeroConfig(schema, {
 			workspaceId: true,
 			ownerId: true,
 			title: true,
-			visibility: true,
 		},
 		task: { id: true, listId: true, title: true, done: true },
 	},

@@ -1,7 +1,14 @@
 // Domain schema: workspace / membership / list / task.
 // The `user` table is owned by Better Auth (see ./auth-schema); domain FKs point at it.
-import { relations } from "drizzle-orm";
-import { boolean, pgEnum, pgTable, text, unique } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import {
+	boolean,
+	pgEnum,
+	pgTable,
+	text,
+	unique,
+	uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { user } from "./auth-schema.ts";
 
 export * from "./auth-schema.ts";
@@ -11,19 +18,23 @@ export const workspaceKindEnum = pgEnum("workspace_kind", [
 	"personal",
 	"shared",
 ]);
-export const listVisibilityEnum = pgEnum("list_visibility", [
-	"workspace",
-	"private",
-]);
 
-export const workspace = pgTable("workspace", {
-	id: text("id").primaryKey(),
-	name: text("name").notNull(),
-	ownerId: text("owner_id")
-		.notNull()
-		.references(() => user.id),
-	kind: workspaceKindEnum("kind").notNull().default("shared"),
-});
+export const workspace = pgTable(
+	"workspace",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		ownerId: text("owner_id")
+			.notNull()
+			.references(() => user.id),
+		kind: workspaceKindEnum("kind").notNull().default("shared"),
+	},
+	(t) => [
+		uniqueIndex("workspace_personal_owner")
+			.on(t.ownerId)
+			.where(sql`${t.kind} = 'personal'`),
+	],
+);
 
 export const membership = pgTable(
 	"membership",
@@ -49,8 +60,6 @@ export const list = pgTable("list", {
 		.notNull()
 		.references(() => user.id),
 	title: text("title").notNull(),
-	// "workspace" = visible to all workspace members; "private" = only ownerId.
-	visibility: listVisibilityEnum("visibility").notNull().default("workspace"),
 });
 
 export const task = pgTable("task", {

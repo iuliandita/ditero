@@ -73,13 +73,11 @@ export const mutators = defineMutators({
 				if (!role || !WRITE_ROLES.has(role)) {
 					throw new Error("access denied: need member+");
 				}
-				// DB-side defaults are not applied by the Zero client — set visibility explicitly.
 				await tx.mutate.list.insert({
 					id: args.id,
 					workspaceId: args.workspaceId,
 					ownerId: ctx.id,
 					title: args.title,
-					visibility: "workspace",
 				});
 			},
 		),

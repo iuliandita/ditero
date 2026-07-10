@@ -1,20 +1,20 @@
 // Deterministic seed for the M0 spine e2e.
-// Creates a system-owned SHARED workspace with one list. New signups auto-join it
-// via DITERO_DEFAULT_WORKSPACE_ID (the auth bootstrap hook), so both test users
-// share a list, while each keeps a private personal workspace of their own.
+// Creates a system-owned shared workspace with one list. The browser test adds
+// memberships explicitly after signup.
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as s from "./schema.ts";
+import { assertSafeTestDatabase } from "./test-database.ts";
 
 export const SHARED_WORKSPACE_ID = "w_shared_e2e";
 const SYSTEM_USER_ID = "u_system_e2e";
 const SHARED_LIST_ID = "l_shared_e2e";
 
 async function main() {
+	const databaseURL = process.env.DATABASE_URL;
+	assertSafeTestDatabase(databaseURL, process.env.NODE_ENV);
 	const pool = new Pool({
-		connectionString:
-			process.env.DATABASE_URL ??
-			"postgres://postgres:pass@localhost:5432/ditero",
+		connectionString: databaseURL,
 	});
 	const db = drizzle(pool, { schema: s });
 
@@ -30,7 +30,7 @@ async function main() {
 	await db.insert(s.user).values({
 		id: SYSTEM_USER_ID,
 		name: "System",
-		email: "system@ditero.local",
+		email: "system@test.invalid",
 	});
 	await db.insert(s.workspace).values({
 		id: SHARED_WORKSPACE_ID,
@@ -43,7 +43,6 @@ async function main() {
 		workspaceId: SHARED_WORKSPACE_ID,
 		ownerId: SYSTEM_USER_ID,
 		title: "Shared list",
-		visibility: "workspace",
 	});
 
 	await pool.end();
