@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { db, pool } from "./db/client.ts";
 import * as s from "./db/schema.ts";
-import { ackReminder, tick } from "./notify/engine.ts";
+import { ackReminderWithToken, issueAckCapability, tick } from "./notify/engine.ts";
 import { resolveChatId } from "./notify/telegram.ts";
 
 const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "ditero-spike";
@@ -12,6 +12,7 @@ let TG = process.env.TELEGRAM_CHAT_ID;
 async function reset() {
   // Resolve telegram chat id lazily if the bot was DM'd but env not set.
   if (!TG) TG = await resolveChatId();
+  await db.delete(s.ackCapability);
   await db.delete(s.reminder);
   await db.delete(s.userChannel);
   await db.update(s.task).set({ done: false }).where(eq(s.task.id, "t_w1_a"));
@@ -39,18 +40,22 @@ async function main() {
     fallbackUserId: "u1", // escalate to Ana
   });
 
-  console.log("tick1", await tick()); // fire try 1
-  console.log("tick2", await tick()); // fire try 2 (hits max)
-  console.log("tick3", await tick()); // escalate to fallback u1
+  const tick1 = await tick(); // fire try 1
+  const tick2 = await tick(); // fire try 2 (hits max)
+  const tick3 = await tick(); // escalate to fallback u1
+  console.log("tick1", tick1);
+  console.log("tick2", tick2);
+  console.log("tick3", tick3);
   console.log("ack by u2 (through Zero mutator)");
-  await ackReminder("r1", "u2");
+  const token = await issueAckCapability("r1", "u2");
+  await ackReminderWithToken(token);
   console.log("tick4", await tick()); // acked -> nothing
 
   const r = (await db.select().from(s.reminder).where(eq(s.reminder.id, "r1")))[0];
   const t = (await db.select().from(s.task).where(eq(s.task.id, "t_w1_a")))[0];
 
   const checks = {
-    "escalation fired before ack": true, // shown by tick3 output
+    "escalation fired before ack": tick3.escalated.includes("r1"),
     "reminder acked": r.state === "acked" && r.ackedBy === "u2",
     "task.done set via Zero mutator": t.done === true,
   };

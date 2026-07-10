@@ -2,7 +2,7 @@
   "name": "ditero-spike-zero-permissions",
   "private": true,
   "type": "module",
-  "description": "Spike A: prove Zero multi-workspace row-permissions (a member cannot sync another member's private list).",
+  "description": "Spike A: prove Zero multi-workspace membership permissions.",
   "scripts": {
     "db:push": "drizzle-kit push",
     "db:seed": "bun run src/seed.ts",
@@ -10,6 +10,7 @@
     "dev:api": "bun run --hot src/server.ts",
     "dev:web": "vite",
     "typecheck": "tsc --noEmit",
+    "test:notify": "vitest run src/notify/engine.test.ts",
     "test:matrix": "playwright test"
   },
   "dependencies": {
@@ -34,6 +35,7 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-zero": "^0.19.0",
     "typescript": "^6.0.3",
-    "vite": "^8.1.3"
+    "vite": "^8.1.3",
+    "vitest": "^3.2.4"
   }
 }
