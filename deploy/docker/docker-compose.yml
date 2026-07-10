@@ -3,7 +3,7 @@
 #
 # Run from the repo root:
 #   BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
-#     docker compose -f deploy/docker/docker-compose.yml up --build
+#     docker compose -f deploy/docker/docker-compose.yml --profile bundled up --build
 #
 # Postgres toggle (bundled vs external): DITERO_DATABASE_URL is the single
 # switch, shared by `app` and `zero-cache`. It defaults to the bundled
@@ -12,8 +12,7 @@
 # the bundled db, e.g.:
 #   DITERO_DATABASE_URL=postgres://user:pass@db.example.com:5432/ditero \
 #     docker compose -f deploy/docker/docker-compose.yml up app zero-cache
-# `required: false` on the depends_on lets app/zero-cache start without the
-# bundled db in that mode.
+# The `bundled` profile is omitted in external-database mode.
 
 services:
   app:
@@ -30,8 +29,8 @@ services:
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       API_PORT: "3000"
       SERVE_STATIC_DIR: /app/dist
-      # Optional shared workspace new users auto-join (empty = disabled).
-      DITERO_DEFAULT_WORKSPACE_ID: ${DITERO_DEFAULT_WORKSPACE_ID:-}
+      PUBLIC_ZERO_URL: ${VITE_ZERO_URL:-http://localhost:4848}
+      DITERO_REGISTRATION_MODE: ${DITERO_REGISTRATION_MODE:-bootstrap}
     ports:
       - "3000:3000"
     depends_on:
@@ -41,6 +40,7 @@ services:
     restart: unless-stopped
 
   upstream-db:
+    profiles: ["bundled"]
     image: postgres:18
     environment:
       POSTGRES_DB: ditero
@@ -67,7 +67,6 @@ services:
       # zero-cache reaches the app by service name over the shared network.
       ZERO_QUERY_URL: http://app:3000/api/zero/query
       ZERO_MUTATE_URL: http://app:3000/api/zero/mutate
-      ZERO_AUTH_JWKS_URL: http://app:3000/api/auth/jwks
       ZERO_ENABLE_CRUD_MUTATIONS: "false"
       # Required by zero-cache in production mode. Generate: openssl rand -hex 32
       ZERO_ADMIN_PASSWORD: ${ZERO_ADMIN_PASSWORD:?set ZERO_ADMIN_PASSWORD (e.g. openssl rand -hex 32)}

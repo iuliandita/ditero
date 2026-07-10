@@ -3,8 +3,10 @@
 # with the Elysia API from a single Bun runtime. Build context is the repo root
 # (build with `context: .`); this file lives at deploy/docker/Dockerfile.
 
+ARG RUNTIME_IMAGE=oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0
+
 # --- build stage: install deps + build the web bundle -----------------------
-FROM oven/bun:1.3-alpine AS build
+FROM ${RUNTIME_IMAGE} AS build
 WORKDIR /app
 
 # Deps first for layer caching.
@@ -21,7 +23,7 @@ ENV VITE_ZERO_URL=${VITE_ZERO_URL}
 RUN bunx vite build
 
 # --- runtime stage ----------------------------------------------------------
-FROM oven/bun:1.3-alpine AS runtime
+FROM ${RUNTIME_IMAGE} AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \
@@ -41,7 +43,7 @@ RUN chmod +x ./entrypoint.sh
 USER bun
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO /dev/null http://localhost:3000/health || exit 1
+  CMD ["bun", "-e", "const r = await fetch('http://localhost:3000/health'); if (!r.ok) process.exit(1)"]
 
 # Run migrations, then start the server.
 ENTRYPOINT ["./entrypoint.sh"]

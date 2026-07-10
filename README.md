@@ -14,8 +14,8 @@ no paywalls.
 </div>
 
 > **Status: pre-alpha.** Ditero is under active design and construction on the `develop`
-> branch. There is no installable release yet. The architecture is proven (see
-> [de-risking spikes](#project-status)); the application is being built milestone by
+> branch. There is no installable release yet. The sync and authorization foundation is proven
+> (see [de-risking spikes](#project-status)); the application is being built milestone by
 > milestone toward `v1.0.0`. Watch/star to follow along.
 
 ## Why Ditero
@@ -42,10 +42,13 @@ Every incumbent gates or breaks something. Ditero's design targets the gaps dire
 - Reminders with escalation and acknowledgement, delivered to ntfy, Telegram, Discord,
   Slack, or email
 - Multi-workspace sharing with Owner / Admin / Member / Viewer roles
+- No-account guest links, simplified kid view, comments, and activity history
 - Login with Google, GitHub, Apple, email, or a local account
-- Web UI plus native apps for Android, Linux, Windows (iOS/macOS to follow)
+- Web UI plus native apps for Android, iOS, Linux, Windows, and macOS
 - Multi-language from day one and flexible theming beyond dark/light
-- A documented REST API
+- Saved views, dashboards, calendar/board/table layouts, focus timer, and voice capture
+- JSON export plus Todoist, TickTick, Microsoft To Do, and Trello importers
+- A documented REST API, agent-first CLI with MCP, and a full-screen TUI
 
 ## Tech stack
 
@@ -68,7 +71,7 @@ same-origin on one port), PostgreSQL, and the Zero sync cache.
 # From the repo root. BETTER_AUTH_SECRET and ZERO_ADMIN_PASSWORD are required.
 BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
 ZERO_ADMIN_PASSWORD=$(openssl rand -hex 32) \
-  docker compose -f deploy/docker/docker-compose.yml up --build
+  docker compose -f deploy/docker/docker-compose.yml --profile bundled up --build
 ```
 
 Then open http://localhost:3000 and sign up.
@@ -85,7 +88,7 @@ All configuration is environment-driven. The common variables:
 | `DITERO_DATABASE_URL` | bundled Postgres | Postgres DSN. Set to point at an external database (see below). |
 | `POSTGRES_PASSWORD` | `pass` | Password for the bundled Postgres. |
 | `VITE_ZERO_URL` | `http://localhost:4848` | zero-cache URL baked into the web bundle at **build** time. |
-| `DITERO_DEFAULT_WORKSPACE_ID` | _(empty)_ | Optional shared workspace new users auto-join. |
+| `DITERO_REGISTRATION_MODE` | `bootstrap` | `open`, `bootstrap` (first account only), or `closed`. Invitations extend bootstrap mode in M1. |
 
 > **Note:** `VITE_ZERO_URL` is compiled into the browser bundle when the image is
 > built (a single-page-app limitation for this milestone). To change the
@@ -93,10 +96,9 @@ All configuration is environment-driven. The common variables:
 
 ### Bundled vs. external Postgres
 
-By default the stack runs a bundled `upstream-db` (Postgres 18 with
-`wal_level=logical`). To use your own Postgres instead, set `DITERO_DATABASE_URL`
-to its DSN (the server must have `wal_level=logical`) and skip the bundled
-service:
+The `bundled` profile runs `upstream-db` (Postgres 18 with `wal_level=logical`).
+To use your own Postgres instead, set `DITERO_DATABASE_URL` to its DSN and omit
+that profile:
 
 ```sh
 DITERO_DATABASE_URL=postgres://user:pass@db.example.com:5432/ditero \
@@ -117,18 +119,19 @@ a `-debian` variant. Images use channel tags: `:nightly` (bleeding edge),
 
 ## Project status
 
-The two highest-risk design questions were validated with runnable spikes before committing
+The two highest-risk design questions were explored with runnable spikes before committing
 to the build:
 
 - **Permissions** — Zero expresses multi-workspace read isolation and role-gated writes.
-- **Notifications** — the reminder → channel → acknowledge → escalation loop works, with a
-  clean split between backend-owned reminder state and Zero-owned task state.
+- **Notifications** — the scheduler lock, secure acknowledgement capability, escalation state,
+  and Zero write-back seam work. Production channel/callback/replica/crash gates remain in M3.
 
-Both passed. The build now proceeds through a milestone roadmap on `develop`.
+The permission risk is retired; the notification architecture is narrowed and has explicit
+remaining gates. The build proceeds through a milestone roadmap on `develop`.
 
 ## Contributing
 
-Contributions are welcome once the spine lands. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
 branch/PR workflow and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## License
