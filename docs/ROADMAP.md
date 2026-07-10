@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-07-07 | Status: pre-v1, building on `develop`
+> Updated: 2026-07-10 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -11,9 +11,10 @@ small businesses: shared lists, shopping lists, projects, and habit/chore tracki
 reminders that actually fire. Web plus native apps, mobile-first, themeable, multilingual,
 with a public API and push to Discord/Slack/Telegram/ntfy.
 
-The design is locked and the two load-bearing technical risks are retired: workspace/
-membership read isolation and role-gated writes are proven on the sync engine, and the full
-reminder to notify to acknowledge to stop-escalation loop works end to end. The application
+The design is locked. Workspace/membership read isolation and role-gated writes are proven in
+the real application. The notification spike validated its scheduler-lock, callback-capability,
+and Zero write-back seam; production channel, callback, replica, quiet-hour, and crash gates
+remain in the notification milestone. The application
 spine has landed on `develop` (auth issuing JWTs, live sync between two users with workspace
 isolation, a list with tasks that create and toggle live, deployable via Docker Compose).
 The rest of v1 is being built milestone by milestone, each producing working, testable
@@ -24,8 +25,8 @@ Nothing is released yet. Development happens on `develop` with `0.x.y` pre-relea
 
 ## What v1 Delivers
 
-The complete feature set ships at 1.0. It is being built in this internal order to de-risk,
-not shipped piecemeal.
+Useful `0.x.y` increments may ship while the complete feature set is built. `1.0.0` is reserved
+for the full v1 contract.
 
 ### Core
 
@@ -37,8 +38,10 @@ not shipped piecemeal.
 - Drag-to-reorder that is concurrent-safe, with pointer, touch, and keyboard support.
 - Keep-style "completed items sink and mute" as a per-list display mode.
 - Shared workspaces with roles (Owner / Admin / Member / Viewer), email + link invites,
-  and an auto-created personal workspace for private lists.
+  no-account guest links, a simplified kid view, and an auto-created personal workspace for
+  private lists.
 - Multi-assignee tasks, @-mentions, and co-owned / rotating chores.
+- Task comments and a bounded activity feed.
 
 ### Reminders that fire
 
@@ -52,6 +55,7 @@ not shipped piecemeal.
 
 - Flexible recurrence (iCal RFC 5545 RRULE) shared by recurring tasks and habits.
 - Habits tracked via a completion log with streaks, adherence, and history.
+- Focus timer and lightweight Karma/gamification tied to completed work and habits.
 
 ### Attachments
 
@@ -65,8 +69,9 @@ not shipped piecemeal.
 ### Import and export
 
 - One-click JSON export of your data. You own it.
-- File-based importers from the common incumbents (Todoist, TickTick to start), built on a
+- File-based importers from Todoist, TickTick, Microsoft To Do, and Trello, built on a
   documented intermediate format so more sources are cheap to add.
+- Voice capture routed through the same quick-add parser with confirmation for ambiguity.
 - iCal feed export to subscribe your tasks into any calendar app.
 
 ### Surfaces
@@ -113,12 +118,9 @@ discussion.
 
 Good ideas with no timeline yet.
 
-- **Zero-knowledge encryption (operator-blind).** True end-to-end encryption where keys are
-  derived from your password in the browser and never reach the server, so not even the
-  operator can read your data. This is fundamentally in tension with server-side reminders
-  and reactive sync queries, so it is proposed as an opt-in, sensitive-data path (and the
-  backbone of managed hosting), not a blanket mode over all task content. Envelope encryption
-  for shared workspaces (a per-workspace key wrapped per member) is part of this proposal.
+- **Broader operator-blind encryption.** The v1 envelope-key foundation and encrypted
+  attachments can later cover additional opt-in sensitive fields. Blanket task encryption
+  remains incompatible with server-side reminders and reactive queries.
 - **Managed hosting.** A "we run it for you" offering alongside the free self-host, with
   strong per-tenant isolation (shared-DB row-tenancy first, dedicated DB per tenant for
   customers paying for isolation) and the zero-knowledge story above as a genuine guarantee
@@ -130,15 +132,15 @@ Good ideas with no timeline yet.
 
 Security is a first-class goal, not an afterthought.
 
-- **Authentication:** passkeys and multi-factor from the start, social and email/password
-  sign-in, session cookies that JavaScript cannot read, and CSRF protection.
+- **Authentication:** passkeys and multi-factor are required before the first public release,
+  alongside social and email/password sign-in, httpOnly session cookies, and CSRF protection.
 - **Encryption at rest:** secrets and sensitive fields are encrypted with AES-256-GCM using a
   key derived via HKDF, with key rotation support.
 - **End-to-end encryption for attachments:** files are encrypted in your browser before
   upload; neither the server nor the storage backend can read them. Shared attachments use
   envelope encryption (a per-workspace key wrapped for each member). Because keys derive from
-  your password and there is no admin backdoor, a **recovery code** is issued at signup;
-  losing both your password and recovery code means encrypted files cannot be recovered.
+  a separate E2E passphrase and there is no admin backdoor, an independent **recovery code** is
+  issued at E2E enrollment; losing both means encrypted files cannot be recovered.
 - **Hardening:** strict content-security-policy and security headers, rate limiting,
   request-time DNS pinning to prevent server-side request forgery, non-root signed container
   images, and a recurring automated security-audit pipeline.
