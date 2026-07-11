@@ -68,8 +68,12 @@ The `deploy/docker` stack runs the whole spine: the app (web UI + API served
 same-origin on one port), PostgreSQL, and the Zero sync cache.
 
 ```sh
-# From the repo root. BETTER_AUTH_SECRET and ZERO_ADMIN_PASSWORD are required.
+# From the repo root.
+POSTGRES_PASSWORD=$(openssl rand -hex 24) \
+DITERO_MIGRATION_DB_PASSWORD=$(openssl rand -hex 24) \
+DITERO_RUNTIME_DB_PASSWORD=$(openssl rand -hex 24) \
 BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
+DITERO_ENCRYPTION_KEY=$(openssl rand -base64 32) \
 ZERO_ADMIN_PASSWORD=$(openssl rand -hex 32) \
   docker compose -f deploy/docker/docker-compose.yml --profile bundled up --build
 ```
@@ -84,9 +88,15 @@ All configuration is environment-driven. The common variables:
 | --- | --- | --- |
 | `BETTER_AUTH_SECRET` | _(required)_ | Signing secret for auth/JWTs. Generate with `openssl rand -hex 32`. |
 | `ZERO_ADMIN_PASSWORD` | _(required)_ | Admin password zero-cache requires in production. Generate with `openssl rand -hex 32`. |
+| `DITERO_ENCRYPTION_KEY` | _(required)_ | 32-byte Base64 key for stored replayable secrets. |
+| `DITERO_MIGRATION_DB_PASSWORD` | _(required, bundled)_ | Password for the schema-owner role. |
+| `DITERO_RUNTIME_DB_PASSWORD` | _(required, bundled)_ | Password for the non-owner application role. |
 | `BETTER_AUTH_URL` | `http://localhost:3000` | Public base URL the app is served from. |
-| `DITERO_DATABASE_URL` | bundled Postgres | Postgres DSN. Set to point at an external database (see below). |
-| `POSTGRES_PASSWORD` | `pass` | Password for the bundled Postgres. |
+| `DITERO_DATABASE_URL` | bundled Postgres | Non-owner application Postgres DSN. |
+| `DITERO_MIGRATION_DATABASE_URL` | bundled Postgres | Schema-owner migration DSN. |
+| `DITERO_ZERO_DATABASE_URL` | bundled Postgres | Direct, replication-capable Zero DSN. |
+| `POSTGRES_PASSWORD` | _(required, bundled)_ | Password for bundled PostgreSQL and Zero's bundled connection. |
+| `DITERO_TRUSTED_PROXIES` | empty | Comma-separated CIDRs allowed to supply forwarding headers. |
 | `VITE_ZERO_URL` | `http://localhost:4848` | zero-cache URL baked into the web bundle at **build** time. |
 | `DITERO_REGISTRATION_MODE` | `bootstrap` | `open`, `bootstrap` (first account only), or `closed`. Invitations extend bootstrap mode in M1. |
 
@@ -97,17 +107,23 @@ All configuration is environment-driven. The common variables:
 ### Bundled vs. external Postgres
 
 The `bundled` profile runs `upstream-db` (Postgres 18 with `wal_level=logical`).
-To use your own Postgres instead, set `DITERO_DATABASE_URL` to its DSN and omit
-that profile:
+To use your own Postgres instead, provide separate runtime, migration-owner, and
+Zero DSNs and omit that profile:
 
 ```sh
-DITERO_DATABASE_URL=postgres://user:pass@db.example.com:5432/ditero \
+DITERO_DATABASE_URL=postgres://runtime:pass@db.example.com:5432/ditero \
+DITERO_MIGRATION_DATABASE_URL=postgres://owner:pass@db.example.com:5432/ditero \
+DITERO_ZERO_DATABASE_URL=postgres://zero:pass@db.example.com:5432/ditero \
 BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
+DITERO_ENCRYPTION_KEY=$(openssl rand -base64 32) \
 ZERO_ADMIN_PASSWORD=$(openssl rand -hex 32) \
   docker compose -f deploy/docker/docker-compose.yml up --build app zero-cache
 ```
 
-`DITERO_DATABASE_URL` is the single switch shared by the app and zero-cache.
+The runtime role must not own tables or bypass RLS. The Zero DSN must be direct,
+non-pooled, and able to create replication slots. See [security architecture](docs/security.md),
+[database roles](docs/runbooks/database-roles.md), and the
+[backup/restore runbook](docs/runbooks/backup-restore.md).
 
 ### Planned distribution
 

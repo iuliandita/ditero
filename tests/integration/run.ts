@@ -15,6 +15,7 @@ const env = {
 	DITERO_REGISTRATION_MODE: "bootstrap",
 	BETTER_AUTH_SECRET: "integration-only-better-auth-secret",
 	BETTER_AUTH_URL: "http://localhost:3000",
+	DITERO_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
 };
 
 function run(command: string, args: string[], allowFailure = false) {

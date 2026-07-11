@@ -2,15 +2,22 @@
 # Compose network so services reach each other by name (no host.docker.internal).
 #
 # Run from the repo root:
-#   BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
+#   POSTGRES_PASSWORD=$(openssl rand -hex 24) \
+#     DITERO_MIGRATION_DB_PASSWORD=$(openssl rand -hex 24) \
+#     DITERO_RUNTIME_DB_PASSWORD=$(openssl rand -hex 24) \
+#     BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
+#     DITERO_ENCRYPTION_KEY=$(openssl rand -base64 32) \
+#     ZERO_ADMIN_PASSWORD=$(openssl rand -hex 32) \
 #     docker compose -f deploy/docker/docker-compose.yml --profile bundled up --build
 #
-# Postgres toggle (bundled vs external): DITERO_DATABASE_URL is the single
-# switch, shared by `app` and `zero-cache`. It defaults to the bundled
-# `upstream-db` below. To use an external Postgres instead, set
-# DITERO_DATABASE_URL to its DSN (that server needs wal_level=logical) and skip
+# Postgres toggle (bundled vs external): DITERO_DATABASE_URL selects the app's
+# runtime connection. External deployments also provide separate migration and
+# Zero DSNs. To use an external Postgres, set those DSNs (the server needs
+# wal_level=logical) and skip
 # the bundled db, e.g.:
-#   DITERO_DATABASE_URL=postgres://user:pass@db.example.com:5432/ditero \
+#   DITERO_DATABASE_URL=postgres://runtime:pass@db.example.com:5432/ditero \
+#   DITERO_MIGRATION_DATABASE_URL=postgres://owner:pass@db.example.com:5432/ditero \
+#   DITERO_ZERO_DATABASE_URL=postgres://zero:pass@db.example.com:5432/ditero \
 #     docker compose -f deploy/docker/docker-compose.yml up app zero-cache
 # The `bundled` profile is omitted in external-database mode.
 
@@ -23,10 +30,24 @@ services:
         # Baked into the web bundle at build time; rebuild to change it.
         VITE_ZERO_URL: ${VITE_ZERO_URL:-http://localhost:4848}
     environment:
-      DATABASE_URL: ${DITERO_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD:-pass}@upstream-db:5432/ditero}
-      # Required. Fails fast if unset. Generate: openssl rand -hex 32
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET (e.g. openssl rand -hex 32)}
+      DATABASE_URL: ${DITERO_DATABASE_URL:-}
+      DATABASE_URL_FILE: ${DITERO_DATABASE_URL_FILE:-}
+      DATABASE_MIGRATION_URL: ${DITERO_MIGRATION_DATABASE_URL:-}
+      DATABASE_MIGRATION_URL_FILE: ${DITERO_MIGRATION_DATABASE_URL_FILE:-}
+      DITERO_RUNTIME_DB_PASSWORD: ${DITERO_RUNTIME_DB_PASSWORD:-}
+      DITERO_RUNTIME_DB_PASSWORD_FILE: ${DITERO_RUNTIME_DB_PASSWORD_FILE:-}
+      DITERO_MIGRATION_DB_PASSWORD: ${DITERO_MIGRATION_DB_PASSWORD:-}
+      DITERO_MIGRATION_DB_PASSWORD_FILE: ${DITERO_MIGRATION_DB_PASSWORD_FILE:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      BETTER_AUTH_SECRET_FILE: ${BETTER_AUTH_SECRET_FILE:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_SECRET_FILE: ${GOOGLE_CLIENT_SECRET_FILE:-}
+      DITERO_ENCRYPTION_KEY: ${DITERO_ENCRYPTION_KEY:-}
+      DITERO_ENCRYPTION_KEY_FILE: ${DITERO_ENCRYPTION_KEY_FILE:-}
+      DITERO_ENCRYPTION_KEY_NEXT: ${DITERO_ENCRYPTION_KEY_NEXT:-}
+      DITERO_ENCRYPTION_KEY_NEXT_FILE: ${DITERO_ENCRYPTION_KEY_NEXT_FILE:-}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      DITERO_TRUSTED_PROXIES: ${DITERO_TRUSTED_PROXIES:-}
       API_PORT: "3000"
       SERVE_STATIC_DIR: /app/dist
       PUBLIC_ZERO_URL: ${VITE_ZERO_URL:-http://localhost:4848}
@@ -41,11 +62,16 @@ services:
 
   upstream-db:
     profiles: ["bundled"]
-    image: postgres:18
+    image: postgres:18@sha256:4aabea78cf39b90e834caf3af7d602a18565f6fe2508705c8d01aa63245c2e20
     environment:
       POSTGRES_DB: ditero
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE:-}
+      DITERO_RUNTIME_DB_PASSWORD: ${DITERO_RUNTIME_DB_PASSWORD:-}
+      DITERO_RUNTIME_DB_PASSWORD_FILE: ${DITERO_RUNTIME_DB_PASSWORD_FILE:-}
+      DITERO_MIGRATION_DB_PASSWORD: ${DITERO_MIGRATION_DB_PASSWORD:-}
+      DITERO_MIGRATION_DB_PASSWORD_FILE: ${DITERO_MIGRATION_DB_PASSWORD_FILE:-}
     # Logical replication is required by zero-cache.
     command: postgres -c wal_level=logical
     healthcheck:
@@ -55,21 +81,31 @@ services:
       retries: 10
     volumes:
       - ditero-pg:/var/lib/postgresql
+      - ./secret-file.sh:/usr/local/lib/ditero/secret-file.sh:ro
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-ditero-roles.sh:ro
     restart: unless-stopped
 
   zero-cache:
-    image: rocicorp/zero:1.7.0
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      target: zero-runtime
     environment:
-      ZERO_UPSTREAM_DB: ${DITERO_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD:-pass}@upstream-db:5432/ditero}
-      ZERO_CVR_DB: ${DITERO_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD:-pass}@upstream-db:5432/ditero}
-      ZERO_CHANGE_DB: ${DITERO_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD:-pass}@upstream-db:5432/ditero}
+      ZERO_UPSTREAM_DB: ${DITERO_ZERO_DATABASE_URL:-}
+      ZERO_UPSTREAM_DB_FILE: ${DITERO_ZERO_DATABASE_URL_FILE:-}
+      ZERO_CVR_DB: ${DITERO_ZERO_DATABASE_URL:-}
+      ZERO_CVR_DB_FILE: ${DITERO_ZERO_DATABASE_URL_FILE:-}
+      ZERO_CHANGE_DB: ${DITERO_ZERO_DATABASE_URL:-}
+      ZERO_CHANGE_DB_FILE: ${DITERO_ZERO_DATABASE_URL_FILE:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE:-}
       ZERO_REPLICA_FILE: /data/replica.db
       # zero-cache reaches the app by service name over the shared network.
       ZERO_QUERY_URL: http://app:3000/api/zero/query
       ZERO_MUTATE_URL: http://app:3000/api/zero/mutate
       ZERO_ENABLE_CRUD_MUTATIONS: "false"
-      # Required by zero-cache in production mode. Generate: openssl rand -hex 32
-      ZERO_ADMIN_PASSWORD: ${ZERO_ADMIN_PASSWORD:?set ZERO_ADMIN_PASSWORD (e.g. openssl rand -hex 32)}
+      ZERO_ADMIN_PASSWORD: ${ZERO_ADMIN_PASSWORD:-}
+      ZERO_ADMIN_PASSWORD_FILE: ${ZERO_ADMIN_PASSWORD_FILE:-}
     ports:
       - "4848:4848"
     depends_on:

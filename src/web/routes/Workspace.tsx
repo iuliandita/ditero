@@ -4,6 +4,7 @@ import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { ListView } from "./ListView.tsx";
+import { SecurityPanel } from "./SecurityPanel.tsx";
 
 export function Workspace() {
 	const zero = useZero<typeof schema>();
@@ -119,6 +120,7 @@ export function Workspace() {
 			</ul>
 
 			{openListId ? <ListView listId={openListId} /> : null}
+			<SecurityPanel />
 		</div>
 	);
 }

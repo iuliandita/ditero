@@ -9,7 +9,10 @@ import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { Elysia } from "elysia";
 import { auth, handleAuthRequest } from "../auth/auth.ts";
 import { ensurePersonalWorkspace } from "../auth/bootstrap.ts";
+import { trustedAuthOrigins } from "../auth/origins.ts";
+import { requireSameOrigin } from "../auth/security.ts";
 import { pool } from "../db/client.ts";
+import { verifyRuntimeDatabaseRole } from "../db/runtime-role.ts";
 import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
 import { schema } from "../zero/schema.gen.ts";
@@ -18,6 +21,10 @@ import { corsPolicy, securityHeaders } from "./http-policy.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
 const responseHeaders = securityHeaders(process.env);
+const requestOrigins = [
+	process.env.BETTER_AUTH_URL ?? `http://localhost:${PORT}`,
+	...trustedAuthOrigins(process.env),
+];
 
 // Shared write DB provider (the ZQLDatabase path handleMutateRequest drives).
 const zdb = zeroNodePg(schema, pool);
@@ -29,8 +36,15 @@ const routes = new Elysia()
 	})
 	.get("/health", () => ({ ok: true }))
 	// Better Auth catch-all: serves JWKS (GET) and all auth POSTs.
-	.all("/api/auth/*", ({ request }) => handleAuthRequest(request))
+	.all("/api/auth/*", ({ request, server }) =>
+		handleAuthRequest(request, server?.requestIP(request)?.address),
+	)
 	.post("/api/bootstrap", async ({ request }) => {
+		try {
+			requireSameOrigin(request, requestOrigins);
+		} catch {
+			return new Response("Forbidden", { status: 403 });
+		}
 		const session = await auth.api.getSession({ headers: request.headers });
 		if (!session) return new Response("Unauthorized", { status: 401 });
 		const workspaceId = await ensurePersonalWorkspace(session.user);
@@ -109,6 +123,9 @@ const app = staticDir
 	: routes;
 
 if (import.meta.main) {
+	if (process.env.NODE_ENV === "production") {
+		await verifyRuntimeDatabaseRole(pool);
+	}
 	app.listen(PORT);
 	console.log(`ditero api on :${PORT}`);
 }

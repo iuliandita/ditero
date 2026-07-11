@@ -6,6 +6,7 @@ import {
 	pgEnum,
 	pgTable,
 	text,
+	timestamp,
 	unique,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -70,6 +71,22 @@ export const task = pgTable("task", {
 	title: text("title").notNull(),
 	done: boolean("done").notNull().default(false),
 });
+
+export const userSecret = pgTable(
+	"user_secret",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		kind: text("kind").notNull(),
+		ciphertext: text("ciphertext").notNull(),
+		keyFingerprint: text("key_fingerprint").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(t) => [unique("user_secret_user_kind").on(t.userId, t.kind)],
+);
 
 // Relations (drizzle-zero reads these to generate the Zero schema graph).
 // Named distinctly so it merges with auth-schema's userRelations instead of

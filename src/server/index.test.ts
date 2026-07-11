@@ -6,6 +6,7 @@ let pool: typeof import("../db/client.ts").pool;
 beforeAll(async () => {
 	process.env.BETTER_AUTH_URL = "http://localhost:3000";
 	process.env.BETTER_AUTH_SECRET = "unit-test-better-auth-secret";
+	process.env.DITERO_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
 	({ app } = await import("./index.ts"));
 	({ pool } = await import("../db/client.ts"));
 });

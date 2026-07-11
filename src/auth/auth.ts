@@ -1,19 +1,52 @@
+import { passkey } from "@better-auth/passkey";
 import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { jwt } from "better-auth/plugins";
+import { jwt, twoFactor } from "better-auth/plugins";
 import { count } from "drizzle-orm";
 import { db, pool } from "../db/client.ts";
 import { user } from "../db/schema.ts";
+import { createFieldKeyRing } from "../security/field-encryption.ts";
+import {
+	sanitizeAuthRequest,
+	trustedProxyCIDRsFromEnv,
+} from "../server/client-ip.ts";
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
+import { withFieldEncryption } from "./encrypted-adapter.ts";
 import { trustedAuthOrigins } from "./origins.ts";
 import { socialProvidersFromEnv } from "./providers.ts";
 import {
 	assertRegistrationAllowed,
 	resolveRegistrationMode,
 } from "./registration.ts";
+import {
+	authRateLimitOptions,
+	passkeyOptions,
+	requireSameOrigin,
+} from "./security.ts";
 
 const REGISTRATION_LOCK_KEY = 6_794_321;
 const registrationMode = resolveRegistrationMode(process.env);
+const authOrigins = [
+	process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+	...trustedAuthOrigins(process.env),
+];
+const trustedProxies = trustedProxyCIDRsFromEnv(
+	process.env.DITERO_TRUSTED_PROXIES,
+);
+const encryptionKey = process.env.DITERO_ENCRYPTION_KEY;
+if (process.env.NODE_ENV === "production" && !encryptionKey) {
+	throw new Error("DITERO_ENCRYPTION_KEY is required in production");
+}
+const authAdapter = drizzleAdapter(db, { provider: "pg" });
+const authDatabase = encryptionKey
+	? withFieldEncryption(
+			authAdapter,
+			createFieldKeyRing({
+				current: encryptionKey,
+				next: process.env.DITERO_ENCRYPTION_KEY_NEXT,
+			}),
+		)
+	: authAdapter;
 
 async function registeredUserCount(): Promise<number> {
 	const [result] = await db.select({ value: count() }).from(user);
@@ -21,11 +54,16 @@ async function registeredUserCount(): Promise<number> {
 }
 
 export const auth = betterAuth({
-	database: drizzleAdapter(db, { provider: "pg" }),
+	appName: "Ditero",
+	database: authDatabase,
 	secret: process.env.BETTER_AUTH_SECRET,
 	baseURL: process.env.BETTER_AUTH_URL,
 	trustedOrigins: trustedAuthOrigins(process.env),
 	emailAndPassword: { enabled: true },
+	rateLimit: authRateLimitOptions(),
+	advanced: {
+		ipAddress: { ipAddressHeaders: ["x-ditero-client-ip"] },
+	},
 	socialProviders: socialProvidersFromEnv({
 		GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
 		GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
@@ -57,10 +95,43 @@ export const auth = betterAuth({
 		},
 	},
 	// jwt plugin exposes /api/auth/token and JWKS at /api/auth/jwks.
-	plugins: [jwt()],
+	plugins: [
+		passkey(
+			passkeyOptions({
+				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+				DITERO_PASSKEY_ORIGIN: process.env.DITERO_PASSKEY_ORIGIN,
+				DITERO_PASSKEY_RP_ID: process.env.DITERO_PASSKEY_RP_ID,
+			}),
+		),
+		twoFactor({
+			issuer: "Ditero",
+			allowPasswordless: true,
+			accountLockout: {
+				enabled: true,
+				maxFailedAttempts: 5,
+				durationSeconds: 15 * 60,
+			},
+		}),
+		jwt(),
+	],
 });
 
-export async function handleAuthRequest(request: Request): Promise<Response> {
+export async function handleAuthRequest(
+	request: Request,
+	peerAddress?: string,
+): Promise<Response> {
+	request = sanitizeAuthRequest(request, peerAddress, trustedProxies);
+	if (
+		request.method !== "GET" &&
+		(request.headers.has("origin") || request.headers.has("cookie"))
+	) {
+		try {
+			requireSameOrigin(request, authOrigins);
+		} catch {
+			return new Response("Forbidden", { status: 403 });
+		}
+	}
+
 	if (registrationMode !== "bootstrap" || (await registeredUserCount()) > 0) {
 		return auth.handler(request);
 	}

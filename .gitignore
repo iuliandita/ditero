@@ -3,6 +3,7 @@ AGENTS.md
 CLAUDE.md
 .claude/
 docs/local/
+.handoff/
 
 # --- private working roadmap (public one is docs/ROADMAP.md) ---
 /ROADMAP.md

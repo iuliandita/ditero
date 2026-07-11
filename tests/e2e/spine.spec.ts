@@ -30,6 +30,10 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
 	try {
+		const keys = await pool.query<{ private_key: string }>(
+			"select private_key from jwks",
+		);
+		expect(keys.rows[0]?.private_key).toMatch(/^ditero:v1:/);
 		for (const userId of userIds) {
 			await pool.query(
 				`insert into membership (id, user_id, workspace_id, role)

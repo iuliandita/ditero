@@ -35,10 +35,11 @@ trap cleanup EXIT INT TERM
 docker network create "$network" >/dev/null
 docker run --detach --name "$database" --network "$network" \
   --env POSTGRES_DB=ditero --env POSTGRES_USER=postgres --env POSTGRES_PASSWORD=pass \
-  postgres:18 postgres -c wal_level=logical >/dev/null
+  postgres:18@sha256:4aabea78cf39b90e834caf3af7d602a18565f6fe2508705c8d01aa63245c2e20 \
+  postgres -c wal_level=logical >/dev/null
 
 attempt=0
-until docker exec "$database" pg_isready -U postgres -d ditero >/dev/null 2>&1; do
+until docker exec "$database" psql -U postgres -d ditero -c "select 1" >/dev/null 2>&1; do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 30 ]; then
     docker logs "$database" >&2
@@ -47,9 +48,18 @@ until docker exec "$database" pg_isready -U postgres -d ditero >/dev/null 2>&1; 
   sleep 1
 done
 
+docker exec "$database" psql -U postgres -d ditero -v ON_ERROR_STOP=1 -c "
+  create role ditero_runtime login password 'runtime-smoke' nosuperuser nobypassrls;
+  grant usage on schema public to ditero_runtime;
+  alter default privileges for role postgres in schema public
+    grant select, insert, update, delete on tables to ditero_runtime;
+" >/dev/null
+
 docker run --detach --name "$app" --network "$network" \
-  --env DATABASE_URL="postgres://postgres:pass@$database:5432/ditero" \
+	--env DATABASE_URL="postgres://ditero_runtime:runtime-smoke@$database:5432/ditero" \
+	--env DATABASE_MIGRATION_URL="postgres://postgres:pass@$database:5432/ditero" \
   --env BETTER_AUTH_SECRET=container-smoke-only-secret-32-bytes \
+	--env DITERO_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
   --env BETTER_AUTH_URL=http://localhost:3000 \
   "$image" >/dev/null
 

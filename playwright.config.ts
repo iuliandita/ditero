@@ -29,6 +29,8 @@ export default defineConfig({
 				NODE_ENV: "test",
 				BETTER_AUTH_SECRET: "e2e-only-better-auth-secret-32-bytes",
 				BETTER_AUTH_URL: "http://localhost:3000",
+				DITERO_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString("base64"),
+				DITERO_PASSKEY_ORIGIN: "http://localhost:5173",
 				DITERO_REGISTRATION_MODE: "open",
 			},
 		},
