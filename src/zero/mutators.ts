@@ -39,6 +39,7 @@ export const mutators = defineMutators({
 					listId: args.listId,
 					title: args.title,
 					done: false,
+					sortKey: "a0", // stub until ordering mutators land
 				});
 			},
 		),
@@ -84,6 +85,7 @@ export const mutators = defineMutators({
 					workspaceId: args.workspaceId,
 					ownerId: ctx.id,
 					title: args.title,
+					sortKey: "a0", // stub until ordering mutators land
 				});
 			},
 		),

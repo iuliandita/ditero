@@ -50,6 +50,7 @@ beforeAll(async () => {
 		workspaceId: "shared",
 		ownerId: "owner",
 		title: "Shared list",
+		sortKey: "a0",
 	});
 });
 
