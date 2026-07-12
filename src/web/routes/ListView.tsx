@@ -1,5 +1,6 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useMemo, useState } from "react";
+import { keyBetween } from "../../domain/sort-key.ts";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
@@ -18,7 +19,12 @@ export function ListView({ listId }: { listId: string }) {
 		const t = title.trim();
 		if (!t) return;
 		await zero.mutate(
-			mutators.task.create({ id: crypto.randomUUID(), listId, title: t }),
+			mutators.task.create({
+				id: crypto.randomUUID(),
+				listId,
+				title: t,
+				sortKey: keyBetween(null, null),
+			}),
 		).client;
 		setTitle("");
 	}

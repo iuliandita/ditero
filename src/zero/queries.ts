@@ -16,12 +16,18 @@ declare module "@rocicorp/zero" {
 	}
 }
 
-const listVisible =
+// Visible when the user has a membership in the owning workspace (design 2.20:
+// cross-workspace by construction). Reused by every workspace-scoped table; the
+// `workspace` relationship is identical across them, so widen to one concrete
+// table to share a single check shape.
+const workspaceVisible =
 	(ctx: AuthCtx) =>
-	({ exists }: ExpressionBuilder<"list", Schema>) =>
-		exists("workspace", (w) =>
-			w.where(({ exists: ex }) =>
-				ex("memberships", (m) => m.where("userId", ctx.id)),
+	<T extends "folder" | "label" | "list" | "template">(
+		eb: ExpressionBuilder<T, Schema>,
+	) =>
+		(eb as ExpressionBuilder<"list", Schema>).exists("workspace", (w) =>
+			w.where(({ exists }) =>
+				exists("memberships", (m) => m.where("userId", ctx.id)),
 			),
 		);
 
@@ -35,12 +41,32 @@ export const queries = defineQueries({
 		),
 	},
 	lists: {
-		mine: defineQuery(({ ctx }) => zql.list.where(listVisible(ctx))),
+		mine: defineQuery(({ ctx }) => zql.list.where(workspaceVisible(ctx))),
+	},
+	folders: {
+		mine: defineQuery(({ ctx }) => zql.folder.where(workspaceVisible(ctx))),
+	},
+	labels: {
+		mine: defineQuery(({ ctx }) => zql.label.where(workspaceVisible(ctx))),
+	},
+	templates: {
+		mine: defineQuery(({ ctx }) => zql.template.where(workspaceVisible(ctx))),
 	},
 	tasks: {
 		mine: defineQuery(({ ctx }) =>
 			zql.task.where(({ exists }) =>
-				exists("list", (l) => l.where(listVisible(ctx))),
+				exists("list", (l) => l.where(workspaceVisible(ctx))),
+			),
+		),
+	},
+	taskLabels: {
+		mine: defineQuery(({ ctx }) =>
+			zql.taskLabel.where(({ exists }) =>
+				exists("task", (t) =>
+					t.where(({ exists: e }) =>
+						e("list", (l) => l.where(workspaceVisible(ctx))),
+					),
+				),
 			),
 		),
 	},

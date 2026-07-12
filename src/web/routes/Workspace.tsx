@@ -1,5 +1,6 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useEffect, useMemo, useState } from "react";
+import { keyBetween } from "../../domain/sort-key.ts";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
@@ -50,6 +51,8 @@ export function Workspace() {
 				id: crypto.randomUUID(),
 				workspaceId: activeId,
 				title: t,
+				kind: "tasks",
+				sortKey: keyBetween(null, null),
 			}),
 		).client;
 		setTitle("");
