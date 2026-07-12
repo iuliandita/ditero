@@ -1,17 +1,21 @@
 // Write-permission custom mutators. Authorization is arbitrary code that runs
 // server-side (and client-side for optimism). Role is looked up from the
 // membership table via tx.run, then gates the write.
-import { defineMutator, defineMutators } from "@rocicorp/zero";
+import {
+	defineMutator,
+	defineMutators,
+	type Transaction,
+} from "@rocicorp/zero";
 import { z } from "zod";
-import { zql } from "./schema.gen.ts";
+import { type List, type Schema, zql } from "./schema.gen.ts";
 
 const WRITE_ROLES = new Set(["owner", "admin", "member"]); // may edit content
 
 async function roleInWorkspace(
-	tx: any,
+	tx: Transaction<Schema>,
 	userId: string,
 	workspaceId: string,
-): Promise<string | undefined> {
+): Promise<string | null | undefined> {
 	const rows = await tx.run(
 		zql.membership.where("userId", userId).where("workspaceId", workspaceId),
 	);
@@ -22,7 +26,7 @@ export const mutators = defineMutators({
 	task: {
 		create: defineMutator(
 			z.object({ id: z.string(), listId: z.string(), title: z.string() }),
-			async ({ tx, ctx, args }: any) => {
+			async ({ tx, ctx, args }) => {
 				const list = await tx.run(zql.list.where("id", args.listId).one());
 				if (!list) throw new Error("list not found");
 				const role = await roleInWorkspace(tx, ctx.id, list.workspaceId);
@@ -44,12 +48,14 @@ export const mutators = defineMutators({
 				title: z.string().optional(),
 				done: z.boolean().optional(),
 			}),
-			async ({ tx, ctx, args }: any) => {
+			async ({ tx, ctx, args }) => {
 				const task = await tx.run(
 					zql.task.where("id", args.id).related("list").one(),
 				);
 				if (!task) throw new Error("task not found");
-				const role = await roleInWorkspace(tx, ctx.id, task.list.workspaceId);
+				// related("list") types as optional; FK guarantees presence.
+				const list = task.list as List;
+				const role = await roleInWorkspace(tx, ctx.id, list.workspaceId);
 				if (!role || !WRITE_ROLES.has(role)) {
 					throw new Error("access denied: need member+");
 				}
@@ -68,18 +74,16 @@ export const mutators = defineMutators({
 				workspaceId: z.string(),
 				title: z.string(),
 			}),
-			async ({ tx, ctx, args }: any) => {
+			async ({ tx, ctx, args }) => {
 				const role = await roleInWorkspace(tx, ctx.id, args.workspaceId);
 				if (!role || !WRITE_ROLES.has(role)) {
 					throw new Error("access denied: need member+");
 				}
-				// DB-side defaults are not applied by the Zero client — set visibility explicitly.
 				await tx.mutate.list.insert({
 					id: args.id,
 					workspaceId: args.workspaceId,
 					ownerId: ctx.id,
 					title: args.title,
-					visibility: "workspace",
 				});
 			},
 		),

@@ -1,79 +1,149 @@
-import { betterAuth } from "better-auth";
+import { passkey } from "@better-auth/passkey";
+import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { jwt } from "better-auth/plugins";
-import { and, eq } from "drizzle-orm";
-import { db } from "../db/client.ts";
-import { membership, workspace } from "../db/schema.ts";
+import { jwt, twoFactor } from "better-auth/plugins";
+import { count } from "drizzle-orm";
+import { db, pool } from "../db/client.ts";
+import { user } from "../db/schema.ts";
+import { createFieldKeyRing } from "../security/field-encryption.ts";
+import {
+	sanitizeAuthRequest,
+	trustedProxyCIDRsFromEnv,
+} from "../server/client-ip.ts";
+import { ensurePersonalWorkspace } from "./bootstrap.ts";
+import { withFieldEncryption } from "./encrypted-adapter.ts";
+import { trustedAuthOrigins } from "./origins.ts";
+import { socialProvidersFromEnv } from "./providers.ts";
+import {
+	assertRegistrationAllowed,
+	resolveRegistrationMode,
+} from "./registration.ts";
+import {
+	authRateLimitOptions,
+	passkeyOptions,
+	requireSameOrigin,
+} from "./security.ts";
+
+const REGISTRATION_LOCK_KEY = 6_794_321;
+const registrationMode = resolveRegistrationMode(process.env);
+const authOrigins = [
+	process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+	...trustedAuthOrigins(process.env),
+];
+const trustedProxies = trustedProxyCIDRsFromEnv(
+	process.env.DITERO_TRUSTED_PROXIES,
+);
+const encryptionKey = process.env.DITERO_ENCRYPTION_KEY;
+if (process.env.NODE_ENV === "production" && !encryptionKey) {
+	throw new Error("DITERO_ENCRYPTION_KEY is required in production");
+}
+const authAdapter = drizzleAdapter(db, { provider: "pg" });
+const authDatabase = encryptionKey
+	? withFieldEncryption(
+			authAdapter,
+			createFieldKeyRing({
+				current: encryptionKey,
+				next: process.env.DITERO_ENCRYPTION_KEY_NEXT,
+			}),
+		)
+	: authAdapter;
+
+async function registeredUserCount(): Promise<number> {
+	const [result] = await db.select({ value: count() }).from(user);
+	return result.value;
+}
 
 export const auth = betterAuth({
-	database: drizzleAdapter(db, { provider: "pg" }),
+	appName: "Ditero",
+	database: authDatabase,
 	secret: process.env.BETTER_AUTH_SECRET,
 	baseURL: process.env.BETTER_AUTH_URL,
-	// Dev serves the web app from vite (proxying /api here), a different origin
-	// than the API. Prod serves both same-origin, so this is only needed for dev.
-	trustedOrigins: process.env.TRUSTED_ORIGINS
-		? process.env.TRUSTED_ORIGINS.split(",")
-		: ["http://localhost:5173"],
+	trustedOrigins: trustedAuthOrigins(process.env),
 	emailAndPassword: { enabled: true },
-	socialProviders: {
-		google: {
-			clientId: process.env.GOOGLE_CLIENT_ID ?? "",
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
-		},
+	rateLimit: authRateLimitOptions(),
+	advanced: {
+		ipAddress: { ipAddressHeaders: ["x-ditero-client-ip"] },
 	},
+	socialProviders: socialProvidersFromEnv({
+		GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+		GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+	}),
 	databaseHooks: {
 		user: {
 			create: {
-				// New users own a personal workspace and optionally join a shared one.
-				after: async (user) => {
-					const personalId = crypto.randomUUID();
-					await db.insert(workspace).values({
-						id: personalId,
-						name: `${user.name || user.email}'s space`,
-						ownerId: user.id,
-						kind: "personal",
-					});
-					await db.insert(membership).values({
-						id: crypto.randomUUID(),
-						userId: user.id,
-						workspaceId: personalId,
-						role: "owner",
-					});
-
-					// Dev/e2e convenience: auto-join a shared workspace when configured.
-					const defaultId = process.env.DITERO_DEFAULT_WORKSPACE_ID;
-					if (!defaultId) return;
+				before: async () => {
 					try {
-						const exists = await db
-							.select({ id: workspace.id })
-							.from(workspace)
-							.where(eq(workspace.id, defaultId))
-							.limit(1);
-						if (!exists.length) return;
-						const already = await db
-							.select({ id: membership.id })
-							.from(membership)
-							.where(
-								and(
-									eq(membership.userId, user.id),
-									eq(membership.workspaceId, defaultId),
-								),
-							)
-							.limit(1);
-						if (already.length) return;
-						await db.insert(membership).values({
-							id: crypto.randomUUID(),
-							userId: user.id,
-							workspaceId: defaultId,
-							role: "member",
+						assertRegistrationAllowed(
+							registrationMode,
+							await registeredUserCount(),
+						);
+					} catch (error) {
+						throw new APIError("FORBIDDEN", {
+							message:
+								error instanceof Error ? error.message : "Registration denied",
 						});
-					} catch {
-						// Missing/invalid default workspace must not break signup.
+					}
+				},
+				after: async (user) => {
+					try {
+						await ensurePersonalWorkspace(user);
+					} catch (error) {
+						console.error("personal workspace provisioning failed", error);
 					}
 				},
 			},
 		},
 	},
 	// jwt plugin exposes /api/auth/token and JWKS at /api/auth/jwks.
-	plugins: [jwt()],
+	plugins: [
+		passkey(
+			passkeyOptions({
+				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+				DITERO_PASSKEY_ORIGIN: process.env.DITERO_PASSKEY_ORIGIN,
+				DITERO_PASSKEY_RP_ID: process.env.DITERO_PASSKEY_RP_ID,
+			}),
+		),
+		twoFactor({
+			issuer: "Ditero",
+			allowPasswordless: true,
+			accountLockout: {
+				enabled: true,
+				maxFailedAttempts: 5,
+				durationSeconds: 15 * 60,
+			},
+		}),
+		jwt(),
+	],
 });
+
+export async function handleAuthRequest(
+	request: Request,
+	peerAddress?: string,
+): Promise<Response> {
+	request = sanitizeAuthRequest(request, peerAddress, trustedProxies);
+	if (
+		request.method !== "GET" &&
+		(request.headers.has("origin") || request.headers.has("cookie"))
+	) {
+		try {
+			requireSameOrigin(request, authOrigins);
+		} catch {
+			return new Response("Forbidden", { status: 403 });
+		}
+	}
+
+	if (registrationMode !== "bootstrap" || (await registeredUserCount()) > 0) {
+		return auth.handler(request);
+	}
+
+	const client = await pool.connect();
+	try {
+		await client.query("select pg_advisory_lock($1)", [REGISTRATION_LOCK_KEY]);
+		return await auth.handler(request);
+	} finally {
+		await client.query("select pg_advisory_unlock($1)", [
+			REGISTRATION_LOCK_KEY,
+		]);
+		client.release();
+	}
+}

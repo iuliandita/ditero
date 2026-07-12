@@ -1,7 +1,15 @@
 // Domain schema: workspace / membership / list / task.
 // The `user` table is owned by Better Auth (see ./auth-schema); domain FKs point at it.
-import { relations } from "drizzle-orm";
-import { boolean, pgEnum, pgTable, text, unique } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import {
+	boolean,
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+	unique,
+	uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { user } from "./auth-schema.ts";
 
 export * from "./auth-schema.ts";
@@ -11,19 +19,23 @@ export const workspaceKindEnum = pgEnum("workspace_kind", [
 	"personal",
 	"shared",
 ]);
-export const listVisibilityEnum = pgEnum("list_visibility", [
-	"workspace",
-	"private",
-]);
 
-export const workspace = pgTable("workspace", {
-	id: text("id").primaryKey(),
-	name: text("name").notNull(),
-	ownerId: text("owner_id")
-		.notNull()
-		.references(() => user.id),
-	kind: workspaceKindEnum("kind").notNull().default("shared"),
-});
+export const workspace = pgTable(
+	"workspace",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		ownerId: text("owner_id")
+			.notNull()
+			.references(() => user.id),
+		kind: workspaceKindEnum("kind").notNull().default("shared"),
+	},
+	(t) => [
+		uniqueIndex("workspace_personal_owner")
+			.on(t.ownerId)
+			.where(sql`${t.kind} = 'personal'`),
+	],
+);
 
 export const membership = pgTable(
 	"membership",
@@ -49,8 +61,6 @@ export const list = pgTable("list", {
 		.notNull()
 		.references(() => user.id),
 	title: text("title").notNull(),
-	// "workspace" = visible to all workspace members; "private" = only ownerId.
-	visibility: listVisibilityEnum("visibility").notNull().default("workspace"),
 });
 
 export const task = pgTable("task", {
@@ -61,6 +71,22 @@ export const task = pgTable("task", {
 	title: text("title").notNull(),
 	done: boolean("done").notNull().default(false),
 });
+
+export const userSecret = pgTable(
+	"user_secret",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		kind: text("kind").notNull(),
+		ciphertext: text("ciphertext").notNull(),
+		keyFingerprint: text("key_fingerprint").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(t) => [unique("user_secret_user_kind").on(t.userId, t.kind)],
+);
 
 // Relations (drizzle-zero reads these to generate the Zero schema graph).
 // Named distinctly so it merges with auth-schema's userRelations instead of

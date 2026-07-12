@@ -1,0 +1,44 @@
+services:
+  upstream-db:
+    image: postgres:18@sha256:4aabea78cf39b90e834caf3af7d602a18565f6fe2508705c8d01aa63245c2e20
+    environment:
+      POSTGRES_DB: ditero_e2e
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pass
+    command: postgres -c wal_level=logical
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ditero_e2e"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  zero-cache:
+    image: rocicorp/zero:1.7.0@sha256:114363cd8ae889862c283dabc88fdb62fe183a46fe4ed0ea35ebeca8d325dba3
+    depends_on:
+      upstream-db:
+        condition: service_healthy
+    ports:
+      - "4849:4848"
+    environment:
+      ZERO_UPSTREAM_DB: postgres://postgres:pass@upstream-db:5432/ditero_e2e
+      ZERO_CVR_DB: postgres://postgres:pass@upstream-db:5432/ditero_e2e
+      ZERO_CHANGE_DB: postgres://postgres:pass@upstream-db:5432/ditero_e2e
+      ZERO_REPLICA_FILE: /data/replica.db
+      ZERO_ADMIN_PASSWORD: e2eadmin
+      ZERO_QUERY_URL: http://host.docker.internal:3000/api/zero/query
+      ZERO_MUTATE_URL: http://host.docker.internal:3000/api/zero/mutate
+      ZERO_ENABLE_CRUD_MUTATIONS: "false"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - zero-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4848/keepalive || exit 1"]
+      interval: 2s
+      start_period: 30s
+      retries: 30
+
+volumes:
+  zero-data:

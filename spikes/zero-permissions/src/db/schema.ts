@@ -6,7 +6,6 @@ import { boolean, integer, pgEnum, pgTable, text, timestamp, unique } from "driz
 
 export const roleEnum = pgEnum("role", ["owner", "admin", "member", "viewer"]);
 export const workspaceKindEnum = pgEnum("workspace_kind", ["personal", "shared"]);
-export const listVisibilityEnum = pgEnum("list_visibility", ["workspace", "private"]);
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -47,8 +46,6 @@ export const list = pgTable("list", {
     .notNull()
     .references(() => user.id),
   title: text("title").notNull(),
-  // "workspace" = visible to all workspace members; "private" = only ownerId.
-  visibility: listVisibilityEnum("visibility").notNull().default("workspace"),
 });
 
 export const task = pgTable("task", {
@@ -130,4 +127,18 @@ export const reminder = pgTable("reminder", {
   fallbackUserId: text("fallback_user_id").references(() => user.id),
   ackedBy: text("acked_by").references(() => user.id),
   ackedAt: timestamp("acked_at", { withTimezone: true }),
+});
+
+export const ackCapability = pgTable("ack_capability", {
+  id: text("id").primaryKey(),
+  reminderId: text("reminder_id")
+    .notNull()
+    .references(() => reminder.id),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  action: text("action").notNull().default("complete"),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
 });

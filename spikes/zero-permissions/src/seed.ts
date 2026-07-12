@@ -2,7 +2,7 @@
 //
 // Users:   U1 Ana, U2 Bob, U3 Cy
 // W-spaces: WP1 = Ana's personal | W1 = shared(Ana owner, Bob member) | W2 = shared(Cy owner, Ana viewer)
-// Lists:    L_priv (WP1, private, Ana) | L_w1 (W1, workspace) | L_w2 (W2, workspace)
+// Lists:    L_priv (WP1) | L_w1 (W1) | L_w2 (W2)
 //
 // Expected sync visibility:
 //   Bob (U2)  -> L_w1 only. NOT L_w2, NOT L_priv.
@@ -19,6 +19,9 @@ const db = drizzle(pool, { schema: s });
 
 async function main() {
   // Idempotent: clear in FK-safe order.
+  await db.delete(s.ackCapability);
+  await db.delete(s.reminder);
+  await db.delete(s.userChannel);
   await db.delete(s.task);
   await db.delete(s.list);
   await db.delete(s.membership);
@@ -46,9 +49,9 @@ async function main() {
   ]);
 
   await db.insert(s.list).values([
-    { id: "l_priv", workspaceId: "wp1", ownerId: "u1", title: "Ana secret", visibility: "private" },
-    { id: "l_w1", workspaceId: "w1", ownerId: "u1", title: "Groceries", visibility: "workspace" },
-    { id: "l_w2", workspaceId: "w2", ownerId: "u3", title: "Cy tasks", visibility: "workspace" },
+    { id: "l_priv", workspaceId: "wp1", ownerId: "u1", title: "Ana secret" },
+    { id: "l_w1", workspaceId: "w1", ownerId: "u1", title: "Groceries" },
+    { id: "l_w2", workspaceId: "w2", ownerId: "u3", title: "Cy tasks" },
   ]);
 
   await db.insert(s.task).values([

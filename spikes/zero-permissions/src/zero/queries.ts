@@ -6,18 +6,13 @@ import { zql } from "./schema.gen.ts";
 
 export type AuthCtx = { id: string };
 
-// A list is visible when the user is a member of its workspace AND
-// (the list is workspace-visible OR the user owns it — covers private personal lists).
 const listVisible =
   (ctx: AuthCtx) =>
-  ({ and, or, cmp, exists }: any) =>
-    and(
-      exists("workspace", (w: any) =>
-        w.where(({ exists: ex }: any) =>
-          ex("memberships", (m: any) => m.where("userId", ctx.id)),
-        ),
+  ({ exists }: any) =>
+    exists("workspace", (w: any) =>
+      w.where(({ exists: ex }: any) =>
+        ex("memberships", (m: any) => m.where("userId", ctx.id)),
       ),
-      or(cmp("visibility", "workspace"), cmp("ownerId", ctx.id)),
     );
 
 export const queries = defineQueries({

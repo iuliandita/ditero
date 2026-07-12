@@ -6,7 +6,7 @@ import { mustGetQuery } from "@rocicorp/zero";
 import { handleQueryRequest } from "@rocicorp/zero/server";
 import { Elysia } from "elysia";
 import { mintToken, verifyToken } from "./auth.ts";
-import { ackReminder } from "./notify/engine.ts";
+import { ackReminderWithToken } from "./notify/engine.ts";
 import { queries } from "./zero/queries.ts";
 import { schema } from "./zero/schema.gen.ts";
 
@@ -34,13 +34,12 @@ const app = new Elysia()
     });
     return result instanceof Response ? result : Response.json(result);
   })
-  // Ack webhook. ntfy http action = POST; telegram url button = GET.
-  .post("/ack/:reminderId", async ({ params, query }) => {
-    await ackReminder(params.reminderId, String((query as { user?: string }).user ?? ""));
+  .post("/ack/:token", async ({ params }) => {
+    await ackReminderWithToken(params.token);
     return { ok: true };
   })
-  .get("/ack/:reminderId", async ({ params, query }) => {
-    await ackReminder(params.reminderId, String((query as { user?: string }).user ?? ""));
+  .get("/ack/:token", async ({ params }) => {
+    await ackReminderWithToken(params.token);
     return "Acked. You can close this.";
   })
   .listen(PORT);

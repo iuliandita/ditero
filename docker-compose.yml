@@ -34,8 +34,6 @@ services:
       ZERO_QUERY_URL: http://host.docker.internal:3000/api/zero/query
       ZERO_MUTATE_URL: http://host.docker.internal:3000/api/zero/mutate
       ZERO_ENABLE_CRUD_MUTATIONS: "false"
-      # Better Auth's JWKS endpoint, used to verify the JWT Zero receives from the client:
-      ZERO_AUTH_JWKS_URL: http://host.docker.internal:3000/api/auth/jwks
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

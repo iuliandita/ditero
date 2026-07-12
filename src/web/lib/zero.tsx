@@ -4,14 +4,14 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { mutators } from "../../zero/mutators.ts";
 import { schema } from "../../zero/schema.gen.ts";
+import { fetchZeroToken, watchZeroAuth } from "./zero-auth.ts";
 
-// Fetch a fresh JWT from Better Auth. In v1.7 the Zero client `auth` option is a
-// token string (not a callback), so the token is resolved before construction.
-async function fetchToken(): Promise<string> {
-	const res = await fetch("/api/auth/token", { credentials: "include" });
-	if (!res.ok) return "";
-	const body = (await res.json()) as { token?: string };
-	return body.token ?? "";
+async function repairAccountBootstrap(): Promise<void> {
+	const res = await fetch("/api/bootstrap", {
+		method: "POST",
+		credentials: "include",
+	});
+	if (!res.ok) throw new Error(`account bootstrap failed: ${res.status}`);
 }
 
 // Client-side context ({ id }) is passed for optimistic synced-query evaluation;
@@ -40,15 +40,21 @@ export function AppZeroProvider({
 
 	useEffect(() => {
 		let instance: ZeroClient | undefined;
+		let stopAuthRefresh: (() => void) | undefined;
 		let cancelled = false;
 		void (async () => {
-			const token = await fetchToken();
+			await repairAccountBootstrap();
+			const token = await fetchZeroToken();
 			if (cancelled) return;
 			instance = createZeroClient(userID, token);
+			stopAuthRefresh = watchZeroAuth(instance);
 			setZero(instance);
-		})();
+		})().catch((error) => {
+			if (!cancelled) console.error("Zero startup failed", error);
+		});
 		return () => {
 			cancelled = true;
+			stopAuthRefresh?.();
 			instance?.close();
 			setZero(null);
 		};
