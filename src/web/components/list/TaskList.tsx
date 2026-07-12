@@ -5,11 +5,13 @@ import { sortTasks } from "../../../domain/task-sort.ts";
 import type { Label, List, Task } from "../../../zero/schema.gen.ts";
 import { CompletedSection } from "./CompletedSection.tsx";
 import { type ShoppingHandlers, ShoppingRow } from "./ShoppingRow.tsx";
+import { SortableTaskList } from "./SortableTaskList.tsx";
 import { type RowHandlers, TaskRow } from "./TaskRow.tsx";
 
 const UNCATEGORIZED = ""; // sorts nowhere; rendered last explicitly
 
-export type TaskListHandlers = RowHandlers & ShoppingHandlers;
+export type TaskListHandlers = RowHandlers &
+	ShoppingHandlers & { onMove: (id: string, sortKey: string) => void };
 
 // First-seen category order among (already sort-key-ordered) tasks; the
 // uncategorized bucket is always emitted last.
@@ -105,7 +107,15 @@ export function TaskList({
 			</>
 		);
 	} else {
-		body = <ul className="flex flex-col">{visible.map(item)}</ul>;
+		// Non-shopping kinds are drag-sortable; the completed group below never is.
+		body = (
+			<SortableTaskList
+				tasks={visible}
+				onMove={handlers.onMove}
+				renderRow={row}
+				reduce={!!reduce}
+			/>
+		);
 	}
 
 	return (

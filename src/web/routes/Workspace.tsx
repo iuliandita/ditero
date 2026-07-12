@@ -1,7 +1,11 @@
-import { useQuery } from "@rocicorp/zero/react";
+import { useQuery, useZero } from "@rocicorp/zero/react";
 import { ChevronLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
+import type { schema } from "../../zero/schema.gen.ts";
+import { SortableList } from "../components/list/SortableList.tsx";
+import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
@@ -12,7 +16,6 @@ import { Sidebar } from "../components/shell/Sidebar.tsx";
 import {
 	Sheet,
 	SheetContent,
-	SheetDescription,
 	SheetHeader,
 	SheetTitle,
 } from "../components/ui/sheet.tsx";
@@ -22,11 +25,13 @@ import { SecurityPanel } from "./SecurityPanel.tsx";
 
 export function Workspace() {
 	const isDesktop = useIsDesktop();
+	const zero = useZero<typeof schema>();
 	const [workspaces] = useQuery(queries.workspaces.mine());
 	const [lists] = useQuery(queries.lists.mine());
 	const [folders] = useQuery(queries.folders.mine());
 	const [templates] = useQuery(queries.templates.mine());
 	const [tasks] = useQuery(queries.tasks.mine());
+	const [labels] = useQuery(queries.labels.mine());
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openListId, setOpenListId] = useState<string | null>(null);
 	const [openSharedRequested, setOpenSharedRequested] = useState(false);
@@ -98,6 +103,14 @@ export function Workspace() {
 		setSection("lists");
 		setOpenListId(id);
 	}
+	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
+	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
+	// of M1a scope: each group is its own DndContext, so a list can't leave it.
+	function moveList(id: string, sortKey: string) {
+		zero
+			.mutate(mutators.list.update({ id, sortKey }))
+			.client.catch((e) => console.error("list reorder failed", e));
+	}
 	function changeSection(next: Section) {
 		setSection(next);
 		if (next === "lists") setOpenListId(null);
@@ -165,25 +178,28 @@ export function Workspace() {
 							<div className="mb-1 px-1 text-xs font-medium text-muted-foreground">
 								{group.folder?.name ?? "Lists"}
 							</div>
-							<ul className="flex flex-col gap-1">
-								{group.lists.map((l) => (
-									<li key={l.id}>
-										<button
-											type="button"
-											onClick={() => openList(l.id)}
-											className="w-full rounded-lg border p-3 text-start"
-										>
-											{l.title}
-											{l.kind === "project" && progressByList.has(l.id) && (
-												<ListProgress
-													done={progressByList.get(l.id)?.done ?? 0}
-													total={progressByList.get(l.id)?.total ?? 0}
-												/>
-											)}
-										</button>
-									</li>
-								))}
-							</ul>
+							<SortableList
+								items={group.lists}
+								onMove={moveList}
+								handleLabel="Reorder list"
+								handleTestId="list-drag"
+								className="gap-1"
+								renderItem={(l) => (
+									<button
+										type="button"
+										onClick={() => openList(l.id)}
+										className="w-full rounded-lg border p-3 text-start"
+									>
+										{l.title}
+										{l.kind === "project" && progressByList.has(l.id) && (
+											<ListProgress
+												done={progressByList.get(l.id)?.done ?? 0}
+												total={progressByList.get(l.id)?.total ?? 0}
+											/>
+										)}
+									</button>
+								)}
+							/>
 						</div>
 					))}
 				{isDesktop && (
@@ -260,15 +276,15 @@ export function Workspace() {
 				</SheetContent>
 			</Sheet>
 
-			{/* Quick-add seam: Task 10 replaces this placeholder with the real sheet. */}
-			<Sheet open={quickAddOpen} onOpenChange={setQuickAddOpen}>
-				<SheetContent side="bottom">
-					<SheetHeader>
-						<SheetTitle>Quick add</SheetTitle>
-						<SheetDescription>Coming soon.</SheetDescription>
-					</SheetHeader>
-				</SheetContent>
-			</Sheet>
+			<QuickAddSheet
+				open={quickAddOpen}
+				onOpenChange={setQuickAddOpen}
+				lists={activeLists}
+				labels={labels}
+				tasks={tasks}
+				currentListId={openListId}
+				workspaceId={activeId ?? ""}
+			/>
 		</>
 	);
 }

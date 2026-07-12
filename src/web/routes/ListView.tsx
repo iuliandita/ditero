@@ -18,6 +18,7 @@ import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { Label, schema } from "../../zero/schema.gen.ts";
 import { IconPicker } from "../components/list/IconPicker.tsx";
+import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
 
@@ -44,6 +45,7 @@ export function ListView({ listId }: { listId: string }) {
 	const [error, setError] = useState<string | null>(null);
 	const [iconOpen, setIconOpen] = useState(false);
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+	const [scheduleTaskId, setScheduleTaskId] = useState<string | null>(null);
 
 	const list = lists.find((l) => l.id === listId);
 	const listTasks = useMemo(
@@ -94,6 +96,9 @@ export function ListView({ listId }: { listId: string }) {
 	const detailTask = detailTaskId
 		? (listTasks.find((t) => t.id === detailTaskId) ?? null)
 		: null;
+	const scheduleTask = scheduleTaskId
+		? (listTasks.find((t) => t.id === scheduleTaskId) ?? null)
+		: null;
 
 	async function run(mutation: { client: Promise<unknown> }) {
 		setError(null);
@@ -128,6 +133,9 @@ export function ListView({ listId }: { listId: string }) {
 		onToggle: (id: string, done: boolean) =>
 			void run(zero.mutate(mutators.task.update({ id, done: !done }))),
 		onOpenDetail: (task: { id: string }) => setDetailTaskId(task.id),
+		onSchedule: (task: { id: string }) => setScheduleTaskId(task.id),
+		onMove: (id: string, sortKey: string) =>
+			void run(zero.mutate(mutators.task.update({ id, sortKey }))),
 		onUpdate: (id: string, patch: { quantity?: string; unit?: string }) =>
 			void run(zero.mutate(mutators.task.update({ id, ...patch }))),
 	};
@@ -224,6 +232,22 @@ export function ListView({ listId }: { listId: string }) {
 				onSelect={(icon) =>
 					void run(zero.mutate(mutators.list.update({ id: list.id, icon })))
 				}
+			/>
+
+			<ScheduleSheet
+				task={scheduleTask}
+				open={scheduleTaskId != null}
+				onOpenChange={(o) => {
+					if (!o) setScheduleTaskId(null);
+				}}
+				onPick={(dueAt, dueAllDay) => {
+					if (scheduleTaskId)
+						void run(
+							zero.mutate(
+								mutators.task.update({ id: scheduleTaskId, dueAt, dueAllDay }),
+							),
+						);
+				}}
 			/>
 
 			<TaskDetail
