@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import * as tables from "../../src/db/schema.ts";
+import { STARTER_TEMPLATES } from "../../src/domain/template.ts";
 import { mutators } from "../../src/zero/mutators.ts";
 import { queries } from "../../src/zero/queries.ts";
 import { type Schema, schema } from "../../src/zero/schema.gen.ts";
@@ -335,6 +336,25 @@ describe("domain mutators", () => {
 						taskId: "v-it",
 						listId: "l1",
 						sortKey: "a1",
+					},
+				),
+		],
+		[
+			"template.instantiateContent",
+			() =>
+				call(
+					mutators.template.instantiateContent,
+					{ id: "viewer" },
+					{
+						content: {
+							kind: "list",
+							listKind: "tasks",
+							tasks: [{ title: "x" }],
+						},
+						workspaceId: "w1",
+						listId: "v-ic",
+						sortKey: "a1",
+						name: "x",
 					},
 				),
 		],
@@ -745,6 +765,53 @@ describe("domain mutators", () => {
 					workspaceId: "w2",
 					listId: "foreign-il",
 					sortKey: "a0",
+				},
+			),
+		).rejects.toThrow(/access denied/);
+	});
+
+	test("a starter content blob instantiates to a list + tasks in one tx", async () => {
+		// STARTER_TEMPLATES[0] is the shopping starter (8 items with qty/category).
+		const content = STARTER_TEMPLATES[0];
+		await call(
+			mutators.template.instantiateContent,
+			{ id: "member" },
+			{
+				content,
+				workspaceId: "w1",
+				listId: "starter-1",
+				sortKey: "z5",
+				name: "Groceries",
+			},
+		);
+		const list = await db.query.list.findFirst({
+			where: (l, { eq }) => eq(l.id, "starter-1"),
+		});
+		expect(list?.title).toBe("Groceries");
+		expect(list?.kind).toBe("shopping");
+		expect(list?.completedDisplay).toBe("sink");
+		const tasks = await db.query.task.findMany({
+			where: (t, { eq }) => eq(t.listId, "starter-1"),
+		});
+		expect(tasks).toHaveLength(8);
+		const milk = tasks.find((t) => t.title === "Milk");
+		expect(milk?.quantity).toBe("1");
+		expect(milk?.category).toBe("Dairy");
+		for (const t of tasks) expect(t.done).toBe(false);
+	});
+
+	test("instantiateContent into a foreign workspace is denied", async () => {
+		// member is not a member of w2.
+		await expect(
+			call(
+				mutators.template.instantiateContent,
+				{ id: "member" },
+				{
+					content: { kind: "list", listKind: "tasks", tasks: [] },
+					workspaceId: "w2",
+					listId: "foreign-ic",
+					sortKey: "a0",
+					name: "x",
 				},
 			),
 		).rejects.toThrow(/access denied/);

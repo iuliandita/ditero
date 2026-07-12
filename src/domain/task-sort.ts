@@ -1,7 +1,9 @@
 import type { completedDisplayEnum } from "../db/schema.ts";
 
 export type SortableTask = {
-	done: boolean;
+	// nullable to match the Zero wire shape (optional boolean); null is treated
+	// as not-done by the filters below.
+	done: boolean | null;
 	sortKey: string;
 	completedAt: number | null;
 };

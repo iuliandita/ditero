@@ -52,6 +52,9 @@
 	--color-kind-shopping: var(--kind-shopping);
 	--color-kind-checklist: var(--kind-checklist);
 	--color-kind-project: var(--kind-project);
+	--color-priority-1: var(--priority-1);
+	--color-priority-2: var(--priority-2);
+	--color-priority-3: var(--priority-3);
 	--radius-sm: calc(var(--radius) * 0.6);
 	--radius-md: calc(var(--radius) * 0.8);
 	--radius-lg: var(--radius);
@@ -98,6 +101,9 @@
 	--kind-shopping: oklch(0.55 0.15 150);
 	--kind-checklist: oklch(0.6 0.13 80);
 	--kind-project: oklch(0.55 0.19 300);
+	--priority-1: oklch(0.6 0.12 250);
+	--priority-2: oklch(0.68 0.15 65);
+	--priority-3: oklch(0.58 0.22 25);
 }
 
 /* must mirror the prefers-color-scheme dark block below */
@@ -137,6 +143,9 @@
 	--kind-shopping: oklch(0.75 0.15 150);
 	--kind-checklist: oklch(0.8 0.13 85);
 	--kind-project: oklch(0.72 0.16 300);
+	--priority-1: oklch(0.72 0.12 250);
+	--priority-2: oklch(0.78 0.15 70);
+	--priority-3: oklch(0.7 0.19 22);
 }
 
 /* OS dark default (.light class wins); must mirror the .dark block above */

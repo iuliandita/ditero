@@ -21,7 +21,6 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { type ListKind, suggestIcon } from "../../../domain/icon-map.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import {
-	instantiate,
 	STARTER_TEMPLATES,
 	type TemplateContent,
 } from "../../../domain/template.ts";
@@ -147,6 +146,7 @@ function Form({
 	const [folderId, setFolderId] = useState<string>(NONE);
 	const [templateSel, setTemplateSel] = useState<string>(BLANK);
 	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 	const titleId = useId();
 
 	const fromTemplate = templateSel !== BLANK;
@@ -158,13 +158,27 @@ function Form({
 		// Blank lists need a title; template lists carry their own name.
 		if (!fromTemplate && !t) return;
 		setBusy(true);
+		setError(null);
 		try {
 			const sortKey = nextKey(lists);
 			const folder = folderId === NONE ? undefined : folderId;
 
 			if (templateSel.startsWith("starter:")) {
 				const content = STARTER_TEMPLATES[Number(templateSel.slice(8))];
-				if (content) await createFromContent(content, t, sortKey, folder);
+				// Starters expand server-side in one tx (atomic, same path as DB
+				// templates) rather than a client-side list+tasks loop.
+				if (content && content.kind === "list") {
+					await zero.mutate(
+						mutators.template.instantiateContent({
+							content,
+							workspaceId,
+							listId: crypto.randomUUID(),
+							sortKey,
+							name: t || defaultName(content),
+							...(folder ? { folderId: folder } : {}),
+						}),
+					).client;
+				}
 			} else if (templateSel.startsWith("ws:")) {
 				await zero.mutate(
 					mutators.template.instantiateList({
@@ -190,53 +204,10 @@ function Form({
 			setTitle("");
 			setTemplateSel(BLANK);
 			onCreated?.();
+		} catch (e) {
+			setError(e instanceof Error ? e.message : "Could not create the list.");
 		} finally {
 			setBusy(false);
-		}
-	}
-
-	// Client-side expansion of a starter (a code constant, not a DB template):
-	// build the list + its tasks with fresh ids and insert them.
-	async function createFromContent(
-		content: TemplateContent,
-		overrideTitle: string,
-		sortKey: string,
-		folder: string | undefined,
-	) {
-		if (content.kind !== "list") return;
-		const { list, tasks } = instantiate(
-			content,
-			() => crypto.randomUUID(),
-			keyBetween,
-			{ sortKey, title: overrideTitle || defaultName(content) },
-		);
-		if (!list) return;
-		await zero.mutate(
-			mutators.list.create({
-				id: list.id,
-				workspaceId,
-				title: list.title,
-				kind: list.kind,
-				sortKey: list.sortKey,
-				...(list.icon ? { icon: list.icon } : {}),
-				...(folder ? { folderId: folder } : {}),
-			}),
-		).client;
-		for (const task of tasks) {
-			await zero.mutate(
-				mutators.task.create({
-					id: task.id,
-					listId: list.id,
-					title: task.title,
-					sortKey: task.sortKey,
-					...(task.parentId ? { parentId: task.parentId } : {}),
-					...(task.notes ? { notes: task.notes } : {}),
-					...(task.priority ? { priority: task.priority } : {}),
-					...(task.quantity ? { quantity: task.quantity } : {}),
-					...(task.unit ? { unit: task.unit } : {}),
-					...(task.category ? { category: task.category } : {}),
-				}),
-			).client;
 		}
 	}
 
@@ -315,6 +286,11 @@ function Form({
 				</Select>
 			</div>
 
+			{error && (
+				<p role="alert" className="text-sm text-destructive">
+					{error}
+				</p>
+			)}
 			<Button
 				data-testid="new-list-submit"
 				type="button"

@@ -3,7 +3,7 @@ import { type SortableTask, sortTasks } from "./task-sort.ts";
 
 const t = (
 	sortKey: string,
-	done: boolean,
+	done: boolean | null,
 	completedAt: number | null = null,
 ): SortableTask => ({ sortKey, done, completedAt });
 
@@ -81,6 +81,25 @@ describe("sortTasks: purity", () => {
 			}
 		}
 		expect(tasks.map((x) => x.sortKey)).toEqual(keys);
+	});
+});
+
+describe("sortTasks: null done treated as not-done", () => {
+	// Pins the SortableTask.done boolean|null widening: a null `done` (the Zero
+	// wire shape for an unset boolean) sorts exactly like false across all modes.
+	test("null done stays among the open/visible tasks in every mode", () => {
+		const tasks = [t("b", null), t("a", true, 100), t("c", false)];
+		const sink = sortTasks(tasks, "sink");
+		expect(sink.visible.map((x) => x.sortKey)).toEqual(["b", "c", "a"]);
+		expect(sink.completed).toEqual([]);
+
+		const keep = sortTasks(tasks, "keep");
+		expect(keep.visible.map((x) => x.sortKey)).toEqual(["a", "b", "c"]);
+		expect(keep.completed).toEqual([]);
+
+		const hide = sortTasks(tasks, "hide");
+		expect(hide.visible.map((x) => x.sortKey)).toEqual(["b", "c"]);
+		expect(hide.completed.map((x) => x.sortKey)).toEqual(["a"]);
 	});
 });
 

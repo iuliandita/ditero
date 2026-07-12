@@ -544,6 +544,43 @@ export const mutators = defineMutators({
 				for (const t of tasks) await insertInstantiatedTask(tx, t);
 			},
 		),
+		// Expand an inline list-template snapshot (a client-held content blob, e.g.
+		// a code starter) into a fresh list + tasks in ONE tx — same server path as
+		// instantiateList, so starters land atomically instead of via a client loop.
+		instantiateContent: defineMutator(
+			z.object({
+				content: templateContentSchema,
+				workspaceId: z.string(),
+				listId: z.string(),
+				sortKey: z.string(),
+				name: z.string(),
+				folderId: z.string().optional(),
+			}),
+			async ({ tx, ctx, args }) => {
+				await requireWrite(tx, ctx.id, args.workspaceId);
+				if (args.content.kind !== "list")
+					throw new Error("not a list template");
+				const { list, tasks } = instantiate(
+					args.content,
+					seededIds(args.listId),
+					keyBetween,
+					{ sortKey: args.sortKey, title: args.name },
+				);
+				if (!list) throw new Error("list template produced no list");
+				await tx.mutate.list.insert({
+					id: list.id,
+					workspaceId: args.workspaceId,
+					ownerId: ctx.id,
+					title: list.title,
+					kind: list.kind,
+					sortKey: list.sortKey,
+					completedDisplay: "sink",
+					...(list.icon !== undefined ? { icon: list.icon } : {}),
+					...(args.folderId !== undefined ? { folderId: args.folderId } : {}),
+				});
+				for (const t of tasks) await insertInstantiatedTask(tx, t);
+			},
+		),
 		// Expand a task template into the target list. The client supplies the new
 		// root task id + sortKey; subtask ids derive from it.
 		instantiateTask: defineMutator(

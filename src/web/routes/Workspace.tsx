@@ -7,6 +7,7 @@ import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
 import { Fab } from "../components/shell/Fab.tsx";
 import { groupLists } from "../components/shell/grouping.ts";
+import { ListProgress } from "../components/shell/ListProgress.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
 import {
 	Sheet,
@@ -25,6 +26,7 @@ export function Workspace() {
 	const [lists] = useQuery(queries.lists.mine());
 	const [folders] = useQuery(queries.folders.mine());
 	const [templates] = useQuery(queries.templates.mine());
+	const [tasks] = useQuery(queries.tasks.mine());
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openListId, setOpenListId] = useState<string | null>(null);
 	const [openSharedRequested, setOpenSharedRequested] = useState(false);
@@ -57,6 +59,20 @@ export function Workspace() {
 		() => groupLists(activeFolders, activeLists),
 		[activeFolders, activeLists],
 	);
+	// Aggregate completion per project list for the index progress bars.
+	const progressByList = useMemo(() => {
+		const map = new Map<string, { done: number; total: number }>();
+		for (const l of activeLists) {
+			if (l.kind === "project") map.set(l.id, { done: 0, total: 0 });
+		}
+		for (const t of tasks) {
+			const entry = map.get(t.listId);
+			if (!entry) continue;
+			entry.total++;
+			if (t.done) entry.done++;
+		}
+		return map;
+	}, [tasks, activeLists]);
 
 	useEffect(() => {
 		if (!openSharedRequested) return;
@@ -158,6 +174,12 @@ export function Workspace() {
 											className="w-full rounded-lg border p-3 text-start"
 										>
 											{l.title}
+											{l.kind === "project" && progressByList.has(l.id) && (
+												<ListProgress
+													done={progressByList.get(l.id)?.done ?? 0}
+													total={progressByList.get(l.id)?.total ?? 0}
+												/>
+											)}
 										</button>
 									</li>
 								))}
@@ -186,6 +208,7 @@ export function Workspace() {
 							onSelectWorkspace={selectWorkspace}
 							onOpenShared={() => setOpenSharedRequested(true)}
 							groups={groups}
+							progressByList={progressByList}
 							openListId={openListId}
 							onOpenList={openList}
 							section={section}

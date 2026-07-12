@@ -6,6 +6,7 @@ import type { ListKind } from "../../../domain/icon-map.ts";
 import type { Workspace } from "../../../zero/schema.gen.ts";
 import type { Section } from "./BottomNav.tsx";
 import type { ListGroup } from "./grouping.ts";
+import { ListProgress } from "./ListProgress.tsx";
 
 // Persistent desktop rail (280px, collapsible to a 64px icon rail). Top:
 // workspace switcher. Middle: folder/list tree with per-kind icons + accent.
@@ -16,6 +17,7 @@ export function Sidebar({
 	onSelectWorkspace,
 	onOpenShared,
 	groups,
+	progressByList,
 	openListId,
 	onOpenList,
 	section,
@@ -28,6 +30,7 @@ export function Sidebar({
 	onSelectWorkspace: (id: string) => void;
 	onOpenShared: () => void;
 	groups: ListGroup[];
+	progressByList: Map<string, { done: number; total: number }>;
 	openListId: string | null;
 	onOpenList: (id: string) => void;
 	section: Section;
@@ -104,7 +107,17 @@ export function Sidebar({
 											kind={(l.kind ?? "tasks") as ListKind}
 											title={l.title}
 										/>
-										{!collapsed && <span className="truncate">{l.title}</span>}
+										{!collapsed && (
+											<span className="flex min-w-0 flex-1 flex-col">
+												<span className="truncate">{l.title}</span>
+												{l.kind === "project" && progressByList.has(l.id) && (
+													<ListProgress
+														done={progressByList.get(l.id)?.done ?? 0}
+														total={progressByList.get(l.id)?.total ?? 0}
+													/>
+												)}
+											</span>
+										)}
 									</button>
 								</li>
 							))}
