@@ -5,6 +5,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import * as tables from "../../src/db/schema.ts";
 import { mutators } from "../../src/zero/mutators.ts";
+import { queries } from "../../src/zero/queries.ts";
 import { type Schema, schema } from "../../src/zero/schema.gen.ts";
 
 const databaseURL = process.env.DATABASE_URL;
@@ -98,6 +99,40 @@ beforeAll(async () => {
 	await db.insert(tables.label).values([
 		{ id: "lab-urgent", workspaceId: "w1", name: "urgent", color: "red" },
 		{ id: "lab-w2", workspaceId: "w2", name: "w2-label", color: "blue" },
+	]);
+	await db.insert(tables.template).values([
+		{
+			id: "tpl-list",
+			workspaceId: "w1",
+			kind: "list",
+			name: "Groceries",
+			icon: "shopping-cart",
+			content: {
+				kind: "list",
+				listKind: "shopping",
+				icon: "shopping-cart",
+				tasks: [
+					{ title: "Milk", quantity: "1", category: "Dairy" },
+					{
+						title: "Bread",
+						category: "Bakery",
+						subtasks: [{ title: "Sourdough" }],
+					},
+				],
+			},
+			createdBy: "owner",
+		},
+		{
+			id: "tpl-task",
+			workspaceId: "w1",
+			kind: "task",
+			name: "Deploy",
+			content: {
+				kind: "task",
+				task: { title: "Deploy", subtasks: [{ title: "Migrate" }] },
+			},
+			createdBy: "owner",
+		},
 	]);
 });
 
@@ -252,6 +287,54 @@ describe("domain mutators", () => {
 					{
 						taskId: "t1",
 						labelIds: ["lab-urgent"],
+					},
+				),
+		],
+		[
+			"template.save",
+			() =>
+				call(
+					mutators.template.save,
+					{ id: "viewer" },
+					{
+						id: "v-tpl",
+						workspaceId: "w1",
+						name: "x",
+						kind: "list",
+						content: { kind: "list", listKind: "tasks", tasks: [] },
+					},
+				),
+		],
+		[
+			"template.delete",
+			() =>
+				call(mutators.template.delete, { id: "viewer" }, { id: "tpl-list" }),
+		],
+		[
+			"template.instantiateList",
+			() =>
+				call(
+					mutators.template.instantiateList,
+					{ id: "viewer" },
+					{
+						templateId: "tpl-list",
+						workspaceId: "w1",
+						listId: "v-il",
+						sortKey: "a1",
+					},
+				),
+		],
+		[
+			"template.instantiateTask",
+			() =>
+				call(
+					mutators.template.instantiateTask,
+					{ id: "viewer" },
+					{
+						templateId: "tpl-task",
+						taskId: "v-it",
+						listId: "l1",
+						sortKey: "a1",
 					},
 				),
 		],
@@ -548,5 +631,162 @@ describe("domain mutators", () => {
 		await expect(
 			call(mutators.list.delete, { id: "member" }, { id: "l1" }),
 		).rejects.toThrow(/access denied/);
+	});
+
+	test("template.save round-trips jsonb content through Zero", async () => {
+		const content = {
+			kind: "list" as const,
+			listKind: "shopping" as const,
+			icon: "shopping-cart",
+			tasks: [
+				{ title: "Olives", quantity: "2", unit: "jar", category: "Pantry" },
+				{ title: "Cheese", category: "Dairy", subtasks: [{ title: "Feta" }] },
+			],
+		};
+		await call(
+			mutators.template.save,
+			{ id: "member" },
+			{
+				id: "tpl-roundtrip",
+				workspaceId: "w1",
+				name: "Snack run",
+				kind: "list",
+				icon: "shopping-cart",
+				content,
+			},
+		);
+		// Read back via the synced query (the Zero json path), not raw drizzle.
+		const rows = await zdb.run(
+			queries.templates.mine.fn({ args: undefined, ctx: { id: "member" } }),
+		);
+		const saved = rows.find((r) => r.id === "tpl-roundtrip");
+		expect(saved).toBeDefined();
+		expect(saved?.createdBy).toBe("member");
+		expect(saved?.content).toEqual(content);
+	});
+
+	test("template.save rejects malformed content", async () => {
+		await expect(
+			call(
+				mutators.template.save,
+				{ id: "member" },
+				{
+					id: "tpl-bad",
+					workspaceId: "w1",
+					name: "bad",
+					kind: "list",
+					// biome-ignore lint/suspicious/noExplicitAny: deliberately invalid content
+					content: { kind: "list", listKind: "bogus", tasks: [{}] } as any,
+				},
+			),
+		).rejects.toThrow();
+	});
+
+	test("member can instantiate a list template into their workspace", async () => {
+		await call(
+			mutators.template.instantiateList,
+			{ id: "member" },
+			{
+				templateId: "tpl-list",
+				workspaceId: "w1",
+				listId: "il-1",
+				sortKey: "z0",
+			},
+		);
+		const list = await db.query.list.findFirst({
+			where: (l, { eq }) => eq(l.id, "il-1"),
+		});
+		expect(list?.title).toBe("Groceries");
+		expect(list?.kind).toBe("shopping");
+		const tasks = await db.query.task.findMany({
+			where: (t, { eq }) => eq(t.listId, "il-1"),
+		});
+		// Milk + Bread + Sourdough subtask = 3 rows; none done, none with a due date.
+		expect(tasks).toHaveLength(3);
+		for (const t of tasks) {
+			expect(t.done).toBe(false);
+			expect(t.dueAt).toBeNull();
+		}
+		const bread = tasks.find((t) => t.title === "Bread");
+		const sub = tasks.find((t) => t.title === "Sourdough");
+		expect(sub?.parentId).toBe(bread?.id);
+	});
+
+	test("member can instantiate a task template into a target list", async () => {
+		await call(
+			mutators.template.instantiateTask,
+			{ id: "member" },
+			{
+				templateId: "tpl-task",
+				taskId: "it-1",
+				listId: "l1",
+				sortKey: "z1",
+			},
+		);
+		const root = await db.query.task.findFirst({
+			where: (t, { eq }) => eq(t.id, "it-1"),
+		});
+		expect(root?.title).toBe("Deploy");
+		expect(root?.listId).toBe("l1");
+		const subs = await db.query.task.findMany({
+			where: (t, { eq }) => eq(t.parentId, "it-1"),
+		});
+		expect(subs.map((s) => s.title)).toEqual(["Migrate"]);
+	});
+
+	test("instantiating a list into a foreign workspace is denied", async () => {
+		// member is not a member of w2.
+		await expect(
+			call(
+				mutators.template.instantiateList,
+				{ id: "member" },
+				{
+					templateId: "tpl-list",
+					workspaceId: "w2",
+					listId: "foreign-il",
+					sortKey: "a0",
+				},
+			),
+		).rejects.toThrow(/access denied/);
+	});
+
+	test("instantiating a task into a foreign list is denied", async () => {
+		// l2 belongs to w2, where member has no membership.
+		await expect(
+			call(
+				mutators.template.instantiateTask,
+				{ id: "member" },
+				{
+					templateId: "tpl-task",
+					taskId: "foreign-it",
+					listId: "l2",
+					sortKey: "a0",
+				},
+			),
+		).rejects.toThrow(/access denied/);
+	});
+
+	test("template.delete allows the creator and rejects a non-creator member", async () => {
+		await call(
+			mutators.template.save,
+			{ id: "member" },
+			{
+				id: "tpl-mine",
+				workspaceId: "w1",
+				name: "Mine",
+				kind: "task",
+				content: { kind: "task", task: { title: "solo" } },
+			},
+		);
+		// owner-created tpl-list: a plain member (non-creator, non-admin) cannot delete.
+		await expect(
+			call(mutators.template.delete, { id: "member" }, { id: "tpl-list" }),
+		).rejects.toThrow(/access denied/);
+		// creator can delete their own.
+		await call(mutators.template.delete, { id: "member" }, { id: "tpl-mine" });
+		const gone = await db.query.template.findFirst({
+			where: (t, { eq }) => eq(t.id, "tpl-mine"),
+		});
+		expect(gone).toBeUndefined();
 	});
 });

@@ -11,9 +11,17 @@
 import {
 	defineMutator,
 	defineMutators,
+	type ReadonlyJSONValue,
 	type Transaction,
 } from "@rocicorp/zero";
 import { z } from "zod";
+import type { ListKind } from "../domain/icon-map.ts";
+import { keyBetween } from "../domain/sort-key.ts";
+import {
+	type InstantiatedTask,
+	instantiate,
+	templateContentSchema,
+} from "../domain/template.ts";
 import { type List, type Schema, zql } from "./schema.gen.ts";
 
 const WRITE_ROLES = new Set(["owner", "admin", "member"]); // may edit content
@@ -43,14 +51,53 @@ async function requireWrite(
 	if (!role || !WRITE_ROLES.has(role)) throw new Error(DENIED);
 }
 
-const listKind = z.enum([
+// `satisfies` ties the tuple to ListKind so a typo or removed kind fails to
+// compile (twin of LIST_KINDS in domain/template.ts).
+const LIST_KINDS = [
 	"tasks",
 	"shopping",
 	"checklist",
 	"project",
 	"habits",
-]);
+] as const satisfies readonly ListKind[];
+const listKind = z.enum(LIST_KINDS);
 const completedDisplay = z.enum(["sink", "keep", "hide"]);
+const templateKind = z.enum(["list", "task"]);
+
+// Deterministic id generator seeded from a client-supplied id, so an
+// instantiate mutator produces identical ids on the optimistic client and the
+// authoritative server. First id is the seed itself (the list/root-task id the
+// client passed); children are `${seed}-N`.
+function seededIds(seed: string): () => string {
+	let n = 0;
+	return () => {
+		const id = n === 0 ? seed : `${seed}-${n}`;
+		n++;
+		return id;
+	};
+}
+
+// Insert one instantiated task, applying the client-invisible column defaults
+// (done, dueAllDay, priority) exactly like task.create does.
+async function insertInstantiatedTask(
+	tx: Transaction<Schema>,
+	t: InstantiatedTask,
+): Promise<void> {
+	await tx.mutate.task.insert({
+		id: t.id,
+		listId: t.listId,
+		title: t.title,
+		sortKey: t.sortKey,
+		done: false,
+		dueAllDay: false,
+		priority: t.priority ?? 0,
+		...(t.parentId !== undefined ? { parentId: t.parentId } : {}),
+		...(t.notes !== undefined ? { notes: t.notes } : {}),
+		...(t.quantity !== undefined ? { quantity: t.quantity } : {}),
+		...(t.unit !== undefined ? { unit: t.unit } : {}),
+		...(t.category !== undefined ? { category: t.category } : {}),
+	});
+}
 
 export const mutators = defineMutators({
 	task: {
@@ -409,6 +456,124 @@ export const mutators = defineMutators({
 						});
 					}
 				}
+			},
+		),
+	},
+	template: {
+		// Create a reusable template from a client-built content snapshot. Content
+		// is validated against the domain schema so malformed jsonb never lands.
+		save: defineMutator(
+			z.object({
+				id: z.string(),
+				workspaceId: z.string(),
+				name: z.string(),
+				kind: templateKind,
+				icon: z.string().optional(),
+				content: templateContentSchema,
+			}),
+			async ({ tx, ctx, args }) => {
+				await requireWrite(tx, ctx.id, args.workspaceId);
+				if (args.kind !== args.content.kind)
+					throw new Error("template kind does not match content");
+				await tx.mutate.template.insert({
+					id: args.id,
+					workspaceId: args.workspaceId,
+					kind: args.kind,
+					name: args.name,
+					content: args.content as ReadonlyJSONValue,
+					createdBy: ctx.id,
+					...(args.icon !== undefined ? { icon: args.icon } : {}),
+				});
+			},
+		),
+		delete: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const template = await tx.run(zql.template.where("id", args.id).one());
+				if (!template) throw new Error("template not found");
+				const role = await roleInWorkspace(tx, ctx.id, template.workspaceId);
+				// Creator (member+) may delete their own; deleting others' needs admin+.
+				const canDelete =
+					(role != null && ADMIN_ROLES.has(role)) ||
+					(template.createdBy === ctx.id &&
+						role != null &&
+						WRITE_ROLES.has(role));
+				if (!canDelete)
+					throw new Error("access denied: need admin+ or template creator");
+				await tx.mutate.template.delete({ id: args.id });
+			},
+		),
+		// Expand a list template into a fresh list + its tasks in the target
+		// workspace. The client supplies the new list id + sortKey (like
+		// list.create); child ids derive deterministically from the list id.
+		instantiateList: defineMutator(
+			z.object({
+				templateId: z.string(),
+				workspaceId: z.string(),
+				listId: z.string(),
+				sortKey: z.string(),
+			}),
+			async ({ tx, ctx, args }) => {
+				await requireWrite(tx, ctx.id, args.workspaceId);
+				const template = await tx.run(
+					zql.template.where("id", args.templateId).one(),
+				);
+				if (!template) throw new Error("template not found");
+				// Only usable from a workspace the caller can see the template in.
+				const srcRole = await roleInWorkspace(tx, ctx.id, template.workspaceId);
+				if (!srcRole) throw new Error(DENIED);
+				const content = templateContentSchema.parse(template.content);
+				if (content.kind !== "list") throw new Error("not a list template");
+				const { list, tasks } = instantiate(
+					content,
+					seededIds(args.listId),
+					keyBetween,
+					{ sortKey: args.sortKey, title: template.name },
+				);
+				if (!list) throw new Error("list template produced no list");
+				await tx.mutate.list.insert({
+					id: list.id,
+					workspaceId: args.workspaceId,
+					ownerId: ctx.id,
+					title: list.title,
+					kind: list.kind,
+					sortKey: list.sortKey,
+					completedDisplay: "sink",
+					...(list.icon !== undefined ? { icon: list.icon } : {}),
+				});
+				for (const t of tasks) await insertInstantiatedTask(tx, t);
+			},
+		),
+		// Expand a task template into the target list. The client supplies the new
+		// root task id + sortKey; subtask ids derive from it.
+		instantiateTask: defineMutator(
+			z.object({
+				templateId: z.string(),
+				taskId: z.string(),
+				listId: z.string(),
+				sortKey: z.string(),
+			}),
+			async ({ tx, ctx, args }) => {
+				const targetList = await tx.run(
+					zql.list.where("id", args.listId).one(),
+				);
+				if (!targetList) throw new Error("list not found");
+				await requireWrite(tx, ctx.id, targetList.workspaceId);
+				const template = await tx.run(
+					zql.template.where("id", args.templateId).one(),
+				);
+				if (!template) throw new Error("template not found");
+				const srcRole = await roleInWorkspace(tx, ctx.id, template.workspaceId);
+				if (!srcRole) throw new Error(DENIED);
+				const content = templateContentSchema.parse(template.content);
+				if (content.kind !== "task") throw new Error("not a task template");
+				const { tasks } = instantiate(
+					content,
+					seededIds(args.taskId),
+					keyBetween,
+					{ sortKey: args.sortKey, listId: args.listId },
+				);
+				for (const t of tasks) await insertInstantiatedTask(tx, t);
 			},
 		),
 	},
