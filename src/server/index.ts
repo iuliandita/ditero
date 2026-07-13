@@ -9,14 +9,25 @@ import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { Elysia } from "elysia";
 import { auth, handleAuthRequest } from "../auth/auth.ts";
 import { ensurePersonalWorkspace } from "../auth/bootstrap.ts";
+import {
+	acceptInvite,
+	InviteAcceptError,
+	previewInvite,
+} from "../auth/invite-accept.ts";
+import { createInvite, InviteCreateError } from "../auth/invite-create.ts";
+import {
+	createManagedAccount,
+	ManagedAccountError,
+} from "../auth/managed-account.ts";
 import { trustedAuthOrigins } from "../auth/origins.ts";
 import { requireSameOrigin } from "../auth/security.ts";
-import { pool } from "../db/client.ts";
+import { db, pool } from "../db/client.ts";
 import { verifyRuntimeDatabaseRole } from "../db/runtime-role.ts";
 import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
 import { schema } from "../zero/schema.gen.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
+import { lookupUsers } from "./discovery.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
@@ -49,6 +60,145 @@ const routes = new Elysia()
 		if (!session) return new Response("Unauthorized", { status: 401 });
 		const workspaceId = await ensurePersonalWorkspace(session.user);
 		return { workspaceId };
+	})
+	// Invite create: caller session; server generates + returns the token ONCE
+	// (never synced). Role-escalation gate lives in createInvite.
+	.post("/api/invite/create", async ({ request }) => {
+		try {
+			requireSameOrigin(request, requestOrigins);
+		} catch {
+			return new Response("Forbidden", { status: 403 });
+		}
+		const session = await auth.api.getSession({ headers: request.headers });
+		if (!session) return new Response("Unauthorized", { status: 401 });
+		let body: Record<string, unknown>;
+		try {
+			body = (await request.json()) as Record<string, unknown>;
+		} catch {
+			return new Response("Bad Request", { status: 400 });
+		}
+		if (typeof body.workspaceId !== "string" || typeof body.role !== "string") {
+			return new Response("Bad Request", { status: 400 });
+		}
+		try {
+			const result = await createInvite(
+				{
+					workspaceId: body.workspaceId,
+					role: body.role as never,
+					email: (body.email as string | null | undefined) ?? null,
+					expiresAt: (body.expiresAt as number | null | undefined) ?? null,
+					maxUses: (body.maxUses as number | null | undefined) ?? null,
+					attachTaskId:
+						(body.attachTaskId as string | null | undefined) ?? null,
+					attachKind: (body.attachKind as never) ?? null,
+				},
+				session.user.id,
+				db,
+			);
+			return result; // { id, token, link } -- token returned once, not synced.
+		} catch (error) {
+			if (error instanceof InviteCreateError) {
+				return new Response(error.message, { status: error.status });
+			}
+			throw error;
+		}
+	})
+	// Invite accept: ALWAYS requires a session. A brand-new invitee signs up FIRST
+	// (Task 6's email-invite bypass permits the signup), which authenticates them,
+	// THEN calls this. So there is no unauthenticated accept path here.
+	.post("/api/invite/accept", async ({ request }) => {
+		try {
+			requireSameOrigin(request, requestOrigins);
+		} catch {
+			return new Response("Forbidden", { status: 403 });
+		}
+		const session = await auth.api.getSession({ headers: request.headers });
+		if (!session) return new Response("Unauthorized", { status: 401 });
+		let body: Record<string, unknown>;
+		try {
+			body = (await request.json()) as Record<string, unknown>;
+		} catch {
+			return new Response("Bad Request", { status: 400 });
+		}
+		if (typeof body.token !== "string") {
+			return new Response("Bad Request", { status: 400 });
+		}
+		try {
+			return await acceptInvite(body.token, session.user.id, db);
+		} catch (error) {
+			if (error instanceof InviteAcceptError) {
+				// Distinct 4xx per reason; the token is never echoed back.
+				const status = error.reason === "not_found" ? 404 : 410;
+				return new Response(error.reason, { status });
+			}
+			throw error;
+		}
+	})
+	// Invite preview: minimal, pre-signup read. Returns ONLY {valid, workspaceName,
+	// email}; never the token, role, or ids. Cross-origin requests are rejected;
+	// same-origin (no Origin header) is allowed so the signup screen can read it.
+	.get("/api/invite/preview", async ({ request }) => {
+		const origin = request.headers.get("origin");
+		if (origin && !requestOrigins.some((o) => new URL(o).origin === origin)) {
+			return new Response("Forbidden", { status: 403 });
+		}
+		const token = new URL(request.url).searchParams.get("token");
+		if (!token) return { valid: false };
+		return await previewInvite(token, db);
+	})
+	// Managed ("kid") account: guardian session. Creates a restricted account under
+	// a non-routable @managed.invalid handle and adds it to the workspace.
+	.post("/api/account/managed", async ({ request }) => {
+		try {
+			requireSameOrigin(request, requestOrigins);
+		} catch {
+			return new Response("Forbidden", { status: 403 });
+		}
+		const session = await auth.api.getSession({ headers: request.headers });
+		if (!session) return new Response("Unauthorized", { status: 401 });
+		let body: Record<string, unknown>;
+		try {
+			body = (await request.json()) as Record<string, unknown>;
+		} catch {
+			return new Response("Bad Request", { status: 400 });
+		}
+		if (
+			typeof body.workspaceId !== "string" ||
+			typeof body.displayName !== "string" ||
+			typeof body.password !== "string"
+		) {
+			return new Response("Bad Request", { status: 400 });
+		}
+		try {
+			return await createManagedAccount(
+				{
+					guardianId: session.user.id,
+					workspaceId: body.workspaceId,
+					displayName: body.displayName,
+					password: body.password,
+					role: (body.role as never) ?? undefined,
+				},
+				db,
+				auth,
+			);
+		} catch (error) {
+			if (error instanceof ManagedAccountError) {
+				return new Response(error.message, { status: error.status });
+			}
+			throw error;
+		}
+	})
+	// User lookup for invite-on-assign pickers. Caller session; never returns email
+	// addresses (only id/name/image). Mode from DITERO_DISCOVERY.
+	.get("/api/users/lookup", async ({ request }) => {
+		const origin = request.headers.get("origin");
+		if (origin && !requestOrigins.some((o) => new URL(o).origin === origin)) {
+			return new Response("Forbidden", { status: 403 });
+		}
+		const session = await auth.api.getSession({ headers: request.headers });
+		if (!session) return new Response("Unauthorized", { status: 401 });
+		const email = new URL(request.url).searchParams.get("email") ?? "";
+		return await lookupUsers(email, session.user.id, db);
 	})
 	// Zero synced-query endpoint. zero-cache POSTs here; we authenticate and
 	// return filtered queries so only permitted rows sync.
