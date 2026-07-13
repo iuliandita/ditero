@@ -1,5 +1,5 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { Copy, UserPlus } from "lucide-react";
+import { Baby, Copy, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import { runMutation } from "../../lib/run-mutation.ts";
+import { AddKid } from "./AddKid.tsx";
 import { InviteDialog, type Role } from "./InviteDialog.tsx";
 
 const ROLE_BADGE: Record<Role, "default" | "secondary" | "outline"> = {
@@ -55,6 +56,7 @@ export function MembersPanel({
 	const [invites] = useQuery(queries.invites.forWorkspace());
 	const [error, setError] = useState<string | null>(null);
 	const [inviteOpen, setInviteOpen] = useState(false);
+	const [addKidOpen, setAddKidOpen] = useState(false);
 	// Links for invites minted this session. The token (and therefore the link)
 	// is never synced, so an invite arriving via Zero sync has no copyable link --
 	// only the row is available and we can offer Revoke. This map is the one place
@@ -212,6 +214,15 @@ export function MembersPanel({
 								<UserPlus />
 								Invite people
 							</Button>
+							<Button
+								type="button"
+								variant="outline"
+								data-testid="add-kid-open"
+								onClick={() => setAddKidOpen(true)}
+							>
+								<Baby />
+								Add child account
+							</Button>
 						</SheetFooter>
 					)}
 				</SheetContent>
@@ -226,6 +237,14 @@ export function MembersPanel({
 					onCreated={({ id, link }) =>
 						setCreatedLinks((m) => ({ ...m, [id]: link }))
 					}
+				/>
+			)}
+
+			{canInvite && callerRole && (
+				<AddKid
+					workspaceId={workspaceId}
+					open={addKidOpen}
+					onOpenChange={setAddKidOpen}
 				/>
 			)}
 		</>

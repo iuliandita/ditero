@@ -13,6 +13,7 @@ import { CreateList } from "../components/shell/CreateList.tsx";
 import { Fab } from "../components/shell/Fab.tsx";
 import { groupLists } from "../components/shell/grouping.ts";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
+import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
 import {
 	Sheet,
@@ -24,7 +25,22 @@ import { useIsDesktop } from "../lib/use-media-query.ts";
 import { ListView } from "./ListView.tsx";
 import { SecurityPanel } from "./SecurityPanel.tsx";
 
+// A restricted managed ("kid") account gets a wholly separate shell -- never the
+// normal workspace UI. Branch here, before any normal-shell hook runs, keying off
+// the kid's own managedAccounts row (userId === me && restricted). A normal user
+// has no such row, so this is false on the first render regardless of sync state
+// and their shell mounts unchanged.
 export function Workspace() {
+	const zero = useZero<typeof schema>();
+	const [managed] = useQuery(queries.managedAccounts.mine());
+	const restricted = managed.some(
+		(m) => m.userId === zero.userID && m.restricted,
+	);
+	if (restricted) return <RestrictedShell />;
+	return <NormalWorkspace />;
+}
+
+function NormalWorkspace() {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
 	const [workspaces] = useQuery(queries.workspaces.mine());
