@@ -21,11 +21,21 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "../components/ui/sheet.tsx";
+import { CheatSheet } from "../keyboard/CheatSheet.tsx";
 import {
 	type CommandHandlers,
 	CommandProvider,
+	useCommands,
 } from "../keyboard/CommandContext.tsx";
 import { CommandPalette } from "../keyboard/CommandPalette.tsx";
+import {
+	actOnFocused,
+	focusNext,
+	focusPrev,
+	openFocused,
+} from "../keyboard/roving.ts";
+import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
+import { useKeyBindings } from "../keyboard/useKeyBindings.ts";
 import { useIsDesktop } from "../lib/use-media-query.ts";
 import { ListView } from "./ListView.tsx";
 import { SecurityPanel } from "./SecurityPanel.tsx";
@@ -45,6 +55,16 @@ export function Workspace() {
 	return <NormalWorkspace />;
 }
 
+// Installs the global key handler inside CommandProvider scope so `run` and the
+// effective keymap resolve against live provider/pref state. Renders nothing;
+// mounted desktop-only (design 2.18).
+function WorkspaceKeyboard() {
+	const { run } = useCommands();
+	const keymap = useEffectiveKeymap();
+	useKeyBindings(keymap, run);
+	return null;
+}
+
 function NormalWorkspace() {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
@@ -62,6 +82,7 @@ function NormalWorkspace() {
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 	const [membersOpen, setMembersOpen] = useState(false);
+	const [cheatOpen, setCheatOpen] = useState(false);
 
 	// Default active workspace is the user's personal one, so new lists stay private.
 	useEffect(() => {
@@ -144,9 +165,9 @@ function NormalWorkspace() {
 		: null;
 
 	// Command handlers injected into the palette/keyboard system. palette.open and
-	// search.open are owned by the provider (it holds the open state). Stubs are
-	// wired by later M1c tasks: nav.today/Today (Task 12/13), help.cheatSheet
-	// overlay (Task 9), view.new (Task 13).
+	// search.open are owned by the provider (it holds the open state). Movement +
+	// toggle/delete drive roving DOM focus over [data-kbd-nav] rows, which no-op
+	// until Task 12 marks task rows. nav.today/view.new stay stubs (Task 13).
 	const commandHandlers = useMemo<CommandHandlers>(
 		() => ({
 			"task.create": () => setQuickAddOpen(true),
@@ -154,8 +175,13 @@ function NormalWorkspace() {
 				setOpenListId(null);
 				setSection("settings");
 			},
+			"nav.down": () => focusNext(),
+			"nav.up": () => focusPrev(),
+			"nav.open": () => openFocused(),
+			"task.toggleDone": () => actOnFocused("toggle"),
+			"task.delete": () => actOnFocused("delete"),
+			"help.cheatSheet": () => setCheatOpen(true),
 			"nav.today": () => {},
-			"help.cheatSheet": () => {},
 			"view.new": () => {},
 		}),
 		[],
@@ -358,9 +384,15 @@ function NormalWorkspace() {
 				workspaceId={activeId ?? ""}
 			/>
 
-			{/* Keyboard palette is desktop-only (design 2.18); the ⌘K opener lives
-			    inside it. RestrictedShell never mounts this. */}
-			{isDesktop && <CommandPalette onNavigateList={openList} />}
+			{/* Keyboard system is desktop-only (design 2.18): the global handler,
+			    ⌘K palette, and ? cheat-sheet. RestrictedShell never mounts these. */}
+			{isDesktop && (
+				<>
+					<WorkspaceKeyboard />
+					<CommandPalette onNavigateList={openList} />
+					<CheatSheet open={cheatOpen} onOpenChange={setCheatOpen} />
+				</>
+			)}
 		</CommandProvider>
 	);
 }

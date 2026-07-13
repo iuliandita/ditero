@@ -19,7 +19,7 @@ export function CommandPalette({
 }: {
 	onNavigateList: (listId: string) => void;
 }) {
-	const { isOpen, open, close, run } = useCommands();
+	const { isOpen, close, run } = useCommands();
 	const [lists] = useQuery(queries.lists.mine());
 	const [tasks] = useQuery(queries.tasks.mine());
 	const { views } = useViews();
@@ -35,19 +35,6 @@ export function CommandPalette({
 	const baseId = useId();
 	const listboxId = `${baseId}-listbox`;
 	const optionId = (index: number) => `${baseId}-opt-${index}`;
-
-	// Minimal desktop opener: Meta/Ctrl+K. Mounted desktop-only by Workspace; the
-	// full single-key/g-sequence handler is Task 9 and supersedes this.
-	useEffect(() => {
-		function onKey(e: KeyboardEvent) {
-			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-				e.preventDefault();
-				open();
-			}
-		}
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [open]);
 
 	// Reset query + highlight each time the palette opens, and focus the input.
 	useEffect(() => {

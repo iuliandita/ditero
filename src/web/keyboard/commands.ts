@@ -54,4 +54,41 @@ export const COMMANDS: CommandDef[] = [
 		bindings: { default: [["g", "s"]] },
 		context: "global",
 	},
+	// Movement is Linear-style single-key in BOTH profiles (design 2.18); vim only
+	// diverges on the edit/delete subset (dd to delete). j/k/o/x stay as defaults.
+	{
+		id: "nav.down",
+		category: "nav",
+		label: "Move down",
+		bindings: { default: [["j"]] },
+		context: "global",
+	},
+	{
+		id: "nav.up",
+		category: "nav",
+		label: "Move up",
+		bindings: { default: [["k"]] },
+		context: "global",
+	},
+	{
+		id: "nav.open",
+		category: "nav",
+		label: "Open focused",
+		bindings: { default: [["o"]] },
+		context: "global",
+	},
+	{
+		id: "task.toggleDone",
+		category: "task",
+		label: "Toggle done",
+		bindings: { default: [["x"]] },
+		context: "global",
+	},
+	{
+		id: "task.delete",
+		category: "task",
+		label: "Delete focused",
+		bindings: { default: [["Backspace"]], vim: [["d", "d"]] },
+		context: "global",
+	},
 ];

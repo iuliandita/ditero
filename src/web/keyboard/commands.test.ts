@@ -19,4 +19,9 @@ describe("COMMANDS registry", () => {
 		const km = resolveKeymap(COMMANDS, "default", {});
 		expect(findConflicts(km, COMMANDS)).toEqual([]);
 	});
+
+	test("vim profile has no binding conflicts", () => {
+		const km = resolveKeymap(COMMANDS, "vim", {});
+		expect(findConflicts(km, COMMANDS)).toEqual([]);
+	});
 });

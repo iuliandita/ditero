@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { type CommandDef, findConflicts, resolveKeymap } from "./keymap.ts";
+import {
+	CHORD_MODIFIERS,
+	type CommandDef,
+	contextsOverlap,
+	findConflicts,
+	MODIFIER_KEYS,
+	resolveKeymap,
+} from "./keymap.ts";
 
 const cmds: CommandDef[] = [
 	{
@@ -281,5 +288,32 @@ describe("findConflicts", () => {
 		expect(findConflicts(resolveKeymap(c, "default", {}), c)).toEqual([
 			["a", "b"],
 		]);
+	});
+});
+
+describe("contextsOverlap", () => {
+	test("global overlaps everything, both directions", () => {
+		expect(contextsOverlap("global", "global")).toBe(true);
+		expect(contextsOverlap("global", "list")).toBe(true);
+		expect(contextsOverlap("board", "global")).toBe(true);
+	});
+
+	test("non-global overlaps only itself", () => {
+		expect(contextsOverlap("list", "list")).toBe(true);
+		expect(contextsOverlap("list", "board")).toBe(false);
+	});
+});
+
+describe("modifier sets", () => {
+	test("MODIFIER_KEYS covers the named modifiers", () => {
+		for (const k of ["Meta", "Control", "Ctrl", "Shift", "Alt"])
+			expect(MODIFIER_KEYS.has(k)).toBe(true);
+		expect(MODIFIER_KEYS.has("k")).toBe(false);
+	});
+
+	test("CHORD_MODIFIERS is the Meta/Ctrl subset", () => {
+		expect(CHORD_MODIFIERS.has("Meta")).toBe(true);
+		expect(CHORD_MODIFIERS.has("Control")).toBe(true);
+		expect(CHORD_MODIFIERS.has("Shift")).toBe(false);
 	});
 });

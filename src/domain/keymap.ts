@@ -31,10 +31,29 @@ export function resolveKeymap(
 // ["g"] never collide.
 const serialize = (b: Binding): string => b.join(" ");
 
+// Named modifier keys (KeyboardEvent.key values). MODIFIER_KEYS are never a
+// single-key/sequence match on their own; CHORD_MODIFIERS are the ones that form
+// a Meta/Ctrl chord binding like ["Meta","k"]. Shared by the runtime handler +
+// cheat-sheet so a rebind resolves the same everywhere.
+export const MODIFIER_KEYS: ReadonlySet<string> = new Set([
+	"Meta",
+	"Control",
+	"Ctrl",
+	"Shift",
+	"Alt",
+]);
+export const CHORD_MODIFIERS: ReadonlySet<string> = new Set([
+	"Meta",
+	"Control",
+	"Ctrl",
+]);
+
 // global overlaps every context (incl. another global); two non-global contexts
 // overlap only when equal (list+list yes, list+board no).
-const contextsOverlap = (a: CommandContext, b: CommandContext): boolean =>
-	a === "global" || b === "global" || a === b;
+export const contextsOverlap = (
+	a: CommandContext,
+	b: CommandContext,
+): boolean => a === "global" || b === "global" || a === b;
 
 export function findConflicts(
 	km: EffectiveKeymap,
