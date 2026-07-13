@@ -7,6 +7,7 @@ import type { schema } from "../../zero/schema.gen.ts";
 import { SortableList } from "../components/list/SortableList.tsx";
 import { MembersPanel } from "../components/people/MembersPanel.tsx";
 import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
+import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
@@ -279,6 +280,9 @@ function NormalWorkspace() {
 				{isDesktop && (
 					<div className="border-t pt-2">
 						<SecurityPanel />
+						{/* Keyboard is a desktop feature (design 2.18); the rebind surface
+						    lives beside Security on the desktop settings landing only. */}
+						<KeymapSettings />
 					</div>
 				)}
 			</div>
