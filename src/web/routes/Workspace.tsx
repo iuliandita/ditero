@@ -5,6 +5,7 @@ import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { SortableList } from "../components/list/SortableList.tsx";
+import { MembersPanel } from "../components/people/MembersPanel.tsx";
 import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
@@ -12,6 +13,7 @@ import { CreateList } from "../components/shell/CreateList.tsx";
 import { Fab } from "../components/shell/Fab.tsx";
 import { groupLists } from "../components/shell/grouping.ts";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
+import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
 import {
 	Sheet,
@@ -23,7 +25,22 @@ import { useIsDesktop } from "../lib/use-media-query.ts";
 import { ListView } from "./ListView.tsx";
 import { SecurityPanel } from "./SecurityPanel.tsx";
 
+// A restricted managed ("kid") account gets a wholly separate shell -- never the
+// normal workspace UI. Branch here, before any normal-shell hook runs, keying off
+// the kid's own managedAccounts row (userId === me && restricted). A normal user
+// has no such row, so this is false on the first render regardless of sync state
+// and their shell mounts unchanged.
 export function Workspace() {
+	const zero = useZero<typeof schema>();
+	const [managed] = useQuery(queries.managedAccounts.mine());
+	const restricted = managed.some(
+		(m) => m.userId === zero.userID && m.restricted,
+	);
+	if (restricted) return <RestrictedShell />;
+	return <NormalWorkspace />;
+}
+
+function NormalWorkspace() {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
 	const [workspaces] = useQuery(queries.workspaces.mine());
@@ -39,6 +56,7 @@ export function Workspace() {
 	const [collapsed, setCollapsed] = useState(false);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
 	const [switcherOpen, setSwitcherOpen] = useState(false);
+	const [membersOpen, setMembersOpen] = useState(false);
 
 	// Default active workspace is the user's personal one, so new lists stay private.
 	useEffect(() => {
@@ -230,6 +248,7 @@ export function Workspace() {
 							activeId={activeId}
 							onSelectWorkspace={selectWorkspace}
 							onOpenShared={() => setOpenSharedRequested(true)}
+							onOpenMembers={() => setMembersOpen(true)}
 							groups={groups}
 							progressByList={progressByList}
 							openListId={openListId}
@@ -279,9 +298,32 @@ export function Workspace() {
 						>
 							Open shared
 						</button>
+						<button
+							type="button"
+							data-testid="open-members"
+							disabled={!activeId}
+							onClick={() => {
+								setSwitcherOpen(false);
+								setMembersOpen(true);
+							}}
+							className="rounded-lg px-3 py-2 text-start text-muted-foreground disabled:opacity-50"
+						>
+							Members
+						</button>
 					</div>
 				</SheetContent>
 			</Sheet>
+
+			{activeId && (
+				<MembersPanel
+					workspaceId={activeId}
+					workspaceName={
+						workspaces.find((w) => w.id === activeId)?.name ?? "Workspace"
+					}
+					open={membersOpen}
+					onOpenChange={setMembersOpen}
+				/>
+			)}
 
 			<QuickAddSheet
 				open={quickAddOpen}

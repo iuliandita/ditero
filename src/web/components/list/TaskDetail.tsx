@@ -30,6 +30,8 @@ import { cn } from "@/lib/utils";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
+import { AssigneePicker } from "../people/AssigneePicker.tsx";
+import { CommentThread } from "../people/CommentThread.tsx";
 
 const PRIORITY_OPTIONS = [
 	{ value: 0, label: "None" },
@@ -325,6 +327,8 @@ export function TaskDetail({
 						</div>
 					)}
 
+					<AssigneePicker task={t} workspaceId={list.workspaceId} />
+
 					{!isSubtask && (
 						<div className="flex flex-col gap-1 text-sm">
 							<span className="text-muted-foreground">Subtasks</span>
@@ -416,6 +420,10 @@ export function TaskDetail({
 							</Select>
 						</div>
 					)}
+
+					<div className="border-t pt-3">
+						<CommentThread task={t} workspaceId={list.workspaceId} />
+					</div>
 
 					<Button
 						variant="destructive"

@@ -35,6 +35,12 @@ export const completedDisplayEnum = pgEnum("completed_display", [
 	"hide",
 ]);
 export const templateKindEnum = pgEnum("template_kind", ["list", "task"]);
+export const inviteStatusEnum = pgEnum("invite_status", [
+	"pending",
+	"accepted",
+	"revoked",
+]);
+export const attachKindEnum = pgEnum("attach_kind", ["assign", "mention"]);
 
 export const workspace = pgTable(
 	"workspace",
@@ -165,6 +171,78 @@ export const template = pgTable("template", {
 		.references(() => user.id),
 });
 
+export const invite = pgTable(
+	"invite",
+	{
+		id: text("id").primaryKey(),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => workspace.id),
+		role: roleEnum("role").notNull().default("member"), // role the redeemer receives
+		email: text("email"), // null => open link/code invite
+		token: text("token").notNull(), // unguessable (uuid v4); redeem key
+		status: inviteStatusEnum("status").notNull().default("pending"),
+		expiresAt: timestamp("expires_at", { withTimezone: true }), // null => no expiry
+		maxUses: smallint("max_uses"), // null => unlimited (link/code)
+		uses: smallint("uses").notNull().default(0),
+		attachTaskId: text("attach_task_id").references(() => task.id, {
+			onDelete: "set null",
+		}),
+		attachKind: attachKindEnum("attach_kind"), // set iff attachTaskId set
+		createdBy: text("created_by")
+			.notNull()
+			.references(() => user.id),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [uniqueIndex("invite_token").on(t.token)],
+);
+
+export const taskAssignee = pgTable(
+	"task_assignee",
+	{
+		id: text("id").primaryKey(), // deterministic `taskId:userId`
+		taskId: text("task_id")
+			.notNull()
+			.references(() => task.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+	},
+	(t) => [unique("task_assignee_pair").on(t.taskId, t.userId)],
+);
+
+export const comment = pgTable("comment", {
+	id: text("id").primaryKey(),
+	taskId: text("task_id")
+		.notNull()
+		.references(() => task.id, { onDelete: "cascade" }),
+	authorId: text("author_id")
+		.notNull()
+		.references(() => user.id),
+	body: text("body").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+	editedAt: timestamp("edited_at", { withTimezone: true }),
+});
+
+export const managedAccount = pgTable("managed_account", {
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.unique()
+		.references(() => user.id, { onDelete: "cascade" }), // the kid
+	guardianId: text("guardian_id")
+		.notNull()
+		.references(() => user.id),
+	restricted: boolean("restricted").notNull().default(true),
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
 export const userSecret = pgTable(
 	"user_secret",
 	{
@@ -230,6 +308,8 @@ export const taskRelations = relations(task, ({ one, many }) => ({
 	}),
 	subtasks: many(task, { relationName: "subtasks" }),
 	taskLabels: many(taskLabel),
+	assignees: many(taskAssignee),
+	comments: many(comment),
 }));
 
 export const labelRelations = relations(label, ({ one, many }) => ({
@@ -249,5 +329,35 @@ export const templateRelations = relations(template, ({ one }) => ({
 	workspace: one(workspace, {
 		fields: [template.workspaceId],
 		references: [workspace.id],
+	}),
+}));
+
+export const inviteRelations = relations(invite, ({ one }) => ({
+	workspace: one(workspace, {
+		fields: [invite.workspaceId],
+		references: [workspace.id],
+	}),
+}));
+
+export const taskAssigneeRelations = relations(taskAssignee, ({ one }) => ({
+	task: one(task, { fields: [taskAssignee.taskId], references: [task.id] }),
+	user: one(user, { fields: [taskAssignee.userId], references: [user.id] }),
+}));
+
+export const commentRelations = relations(comment, ({ one }) => ({
+	task: one(task, { fields: [comment.taskId], references: [task.id] }),
+	author: one(user, { fields: [comment.authorId], references: [user.id] }),
+}));
+
+export const managedAccountRelations = relations(managedAccount, ({ one }) => ({
+	account: one(user, {
+		fields: [managedAccount.userId],
+		references: [user.id],
+		relationName: "managedAccount",
+	}),
+	guardian: one(user, {
+		fields: [managedAccount.guardianId],
+		references: [user.id],
+		relationName: "managedGuardian",
 	}),
 }));

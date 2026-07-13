@@ -38,12 +38,18 @@ export function TaskList({
 	subtasksByParent,
 	labelsByTask,
 	handlers,
+	sortable = true,
 }: {
 	list: List;
 	tasks: Task[];
 	subtasksByParent: Map<string, Task[]>;
 	labelsByTask: Map<string, Label[]>;
 	handlers: TaskListHandlers;
+	// Drag reorder is only coherent against the full ungrouped list: fractional
+	// keys are computed from in-view neighbors, so a filtered subset (e.g. one
+	// assignee group) would reorder relative to hidden rows. Callers rendering a
+	// subset pass sortable={false} to fall back to a static list.
+	sortable?: boolean;
 }) {
 	const reduce = useReducedMotion();
 	const kind = (list.kind ?? "tasks") as ListKind;
@@ -106,7 +112,7 @@ export function TaskList({
 				)}
 			</>
 		);
-	} else {
+	} else if (sortable) {
 		// Non-shopping kinds are drag-sortable; the completed group below never is.
 		body = (
 			<SortableTaskList
@@ -116,6 +122,9 @@ export function TaskList({
 				reduce={!!reduce}
 			/>
 		);
+	} else {
+		// Reorder disabled (e.g. grouped view): static list, swipe/row actions stay.
+		body = <ul className="flex flex-col">{visible.map(item)}</ul>;
 	}
 
 	return (

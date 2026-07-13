@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
+	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
@@ -20,7 +21,7 @@ import type { CompletedDisplay } from "../../domain/task-sort.ts";
 import { snapshotList } from "../../domain/template.ts";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
-import type { Label, schema } from "../../zero/schema.gen.ts";
+import type { Label, schema, Task } from "../../zero/schema.gen.ts";
 import { IconPicker } from "../components/list/IconPicker.tsx";
 import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
@@ -45,9 +46,12 @@ export function ListView({ listId }: { listId: string }) {
 	const [lists] = useQuery(queries.lists.mine());
 	const [labels] = useQuery(queries.labels.mine());
 	const [taskLabels] = useQuery(queries.taskLabels.mine());
+	const [assignees] = useQuery(queries.assignees.mine());
+	const [memberships] = useQuery(queries.memberships.mine());
 	const [title, setTitle] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [iconOpen, setIconOpen] = useState(false);
+	const [groupByAssignee, setGroupByAssignee] = useState(false);
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 	const [scheduleTaskId, setScheduleTaskId] = useState<string | null>(null);
 
@@ -96,6 +100,54 @@ export function ListView({ listId }: { listId: string }) {
 		}
 		return map;
 	}, [labelIdsByTask, labelsById]);
+
+	const userNames = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const m of memberships) {
+			if (m.user && !map.has(m.userId)) map.set(m.userId, m.user.name);
+		}
+		return map;
+	}, [memberships]);
+
+	// Client-only grouping over assignees.mine + parents. Each task lands in ONE
+	// group by a primary assignee (me first, else the lexicographically-first
+	// assignee), so a multi-assignee task is never double-listed. Order: "Assigned
+	// to me", then a group per other assignee (by name), then "Unassigned".
+	const assigneeGroups = useMemo(() => {
+		const me = zero.userID ?? "";
+		const byTask = new Map<string, string[]>();
+		for (const a of assignees) {
+			const bucket = byTask.get(a.taskId);
+			if (bucket) bucket.push(a.userId);
+			else byTask.set(a.taskId, [a.userId]);
+		}
+		const buckets = new Map<string, Task[]>();
+		for (const p of parents) {
+			const ids = byTask.get(p.id);
+			let key = "";
+			if (ids && ids.length > 0) {
+				key = ids.includes(me) ? me : ([...ids].sort()[0] ?? "");
+			}
+			const bucket = buckets.get(key);
+			if (bucket) bucket.push(p);
+			else buckets.set(key, [p]);
+		}
+		const others = [...buckets.keys()].filter((k) => k !== me && k !== "");
+		others.sort((a, b) =>
+			(userNames.get(a) ?? a).localeCompare(userNames.get(b) ?? b),
+		);
+		const order = [me, ...others, ""].filter((k) => buckets.has(k));
+		return order.map((key) => ({
+			key,
+			label:
+				key === me
+					? "Assigned to me"
+					: key === ""
+						? "Unassigned"
+						: (userNames.get(key) ?? "Someone"),
+			tasks: buckets.get(key) ?? [],
+		}));
+	}, [assignees, parents, userNames, zero.userID]);
 
 	const detailTask = detailTaskId
 		? (listTasks.find((t) => t.id === detailTaskId) ?? null)
@@ -210,6 +262,15 @@ export function ListView({ listId }: { listId: string }) {
 							))}
 						</DropdownMenuRadioGroup>
 						<DropdownMenuSeparator />
+						<DropdownMenuCheckboxItem
+							data-testid="group-by-assignee"
+							checked={groupByAssignee}
+							onCheckedChange={setGroupByAssignee}
+							onSelect={(e) => e.preventDefault()}
+						>
+							Group by assignee
+						</DropdownMenuCheckboxItem>
+						<DropdownMenuSeparator />
 						<DropdownMenuItem
 							data-testid="save-as-template"
 							onSelect={saveAsTemplate}
@@ -246,13 +307,33 @@ export function ListView({ listId }: { listId: string }) {
 				</p>
 			)}
 
-			<TaskList
-				list={list}
-				tasks={parents}
-				subtasksByParent={subtasksByParent}
-				labelsByTask={labelsByTask}
-				handlers={handlers}
-			/>
+			{groupByAssignee ? (
+				<div className="flex flex-col gap-4">
+					{assigneeGroups.map((g) => (
+						<section key={g.key || "unassigned"}>
+							<h3 className="mb-1 px-1 text-xs font-medium text-muted-foreground">
+								{g.label}
+							</h3>
+							<TaskList
+								list={list}
+								tasks={g.tasks}
+								subtasksByParent={subtasksByParent}
+								labelsByTask={labelsByTask}
+								handlers={handlers}
+								sortable={false}
+							/>
+						</section>
+					))}
+				</div>
+			) : (
+				<TaskList
+					list={list}
+					tasks={parents}
+					subtasksByParent={subtasksByParent}
+					labelsByTask={labelsByTask}
+					handlers={handlers}
+				/>
+			)}
 
 			<IconPicker
 				open={iconOpen}
