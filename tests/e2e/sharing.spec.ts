@@ -6,12 +6,11 @@ import { Pool } from "pg";
 // real cross-client Zero sync (invite/accept, assign, comment, kid) plus an
 // outsider isolation regression and the axe merge gate on the new surfaces.
 //
-// Accept handshake: there is no client `/accept?token=` page in this build
-// (App.tsx branches on session only). The invite link carries the token; the
-// invitee redeems it by POSTing the real /api/invite/accept endpoint from their
-// own authenticated context -- the exact call a client accept page would make.
-// This exercises the security-critical accept path (membership + attach in one
-// tx) end to end; only the missing UI page is bypassed. Flagged in the report.
+// Accept handshake: the invitee redeems through the real client `/accept?token=`
+// page. Scenario 1 drives the logged-out funnel (sign up on the page, then it
+// auto-accepts); scenario 3 drives the logged-in join. The web app and the auth
+// server run on different ports in e2e, so we navigate to the token on the web
+// origin (baseURL) rather than the raw link host (BETTER_AUTH_URL:3000).
 
 const SHARED_WORKSPACE_ID = "w_shared_e2e";
 const PASSWORD = "pw-123456";
@@ -107,19 +106,26 @@ function tokenFrom(link: string): string {
 	return token;
 }
 
-// Redeem an invite as the (already authenticated) invitee. Drives the real
-// accept endpoint from the invitee's browser context (session cookie + same
-// origin), returning the HTTP status so the test can assert success.
-async function acceptInvite(page: Page, token: string): Promise<number> {
-	return page.evaluate(async (t) => {
-		const res = await fetch("/api/invite/accept", {
-			method: "POST",
-			credentials: "include",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ token: t }),
-		});
-		return res.status;
-	}, token);
+// Redeem an invite by driving the real client accept page. `join` uses the
+// already-authenticated context's session; `signup` creates the account on the
+// page (prefilled email is set explicitly to be safe). Either way the page
+// auto-accepts and redirects to "/", so we wait for the app shell (new-list).
+async function redeemViaAcceptPage(
+	page: Page,
+	token: string,
+	opts: { mode: "join" } | { mode: "signup"; email: string; password: string },
+): Promise<void> {
+	await page.goto(`/accept?token=${token}`);
+	await expect(page.getByTestId("accept-page")).toBeVisible({ timeout: 15000 });
+	await expect(page.getByTestId("accept-workspace-name")).toBeVisible();
+	if (opts.mode === "join") {
+		await page.getByTestId("accept-join").click();
+	} else {
+		await page.getByTestId("accept-email").fill(opts.email);
+		await page.getByTestId("accept-password").fill(opts.password);
+		await page.getByTestId("accept-submit").click();
+	}
+	await expect(page.getByTestId("new-list")).toBeVisible({ timeout: 20000 });
 }
 
 // Gate per design 2.14: zero serious/critical violations. Moderate/minor logged
@@ -169,7 +175,8 @@ test("invite: email invite accepted -> member syncs to both, pending drops", asy
 
 	const ownerId = await signUp(pa, ownerEmail);
 	await joinShared(ownerId, "owner");
-	await signUp(pb, inviteeEmail); // real second user, not yet a member
+	// pb stays logged out: it will sign up ON the accept page (the real new-invitee
+	// funnel). Open registration in e2e permits the accept-page signup.
 
 	await openSharedDesktop(pa);
 	await pa.getByTestId("open-members").click();
@@ -188,8 +195,12 @@ test("invite: email invite accepted -> member syncs to both, pending drops", asy
 	const panel = pa.getByTestId("members-panel");
 	await expect(panel.getByText(inviteeEmail)).toBeVisible({ timeout: 15000 });
 
-	// Invitee redeems the real token -> membership created in one tx.
-	expect(await acceptInvite(pb, token)).toBe(200);
+	// Invitee redeems through the real accept page: signs up, page auto-accepts.
+	await redeemViaAcceptPage(pb, token, {
+		mode: "signup",
+		email: inviteeEmail,
+		password: PASSWORD,
+	});
 
 	// Member on both clients: invitee's client gains the shared workspace + list.
 	await openSharedDesktop(pb);
@@ -197,14 +208,13 @@ test("invite: email invite accepted -> member syncs to both, pending drops", asy
 		timeout: 15000,
 	});
 	// Owner's panel: the invitee now shows as a member (co-member membership synced
-	// live to the owner). Note the pending entry does NOT drop: an email invite is
-	// minted with maxUses=null (reusable), so acceptInvite never flips it to
-	// 'accepted' and it stays in the pending-only synced query. A stale pending row
-	// for someone who already joined is a UX gap flagged for follow-up, not a sync
-	// failure; the cross-client membership below is the load-bearing assertion.
+	// live). The pending entry drops -- an email invite is single-use (maxUses=1),
+	// so acceptInvite flips it to 'accepted' and it leaves the pending-only synced
+	// query.
 	await expect(panel.getByText(inviteeName, { exact: true })).toBeVisible({
 		timeout: 15000,
 	});
+	await expect(panel.getByText(inviteeEmail)).toHaveCount(0);
 
 	await a.close();
 	await b.close();
@@ -298,8 +308,9 @@ test("invite-on-assign: pick a non-member by email -> accept resolves the assign
 		await pa.getByTestId("assignee-invite-link").inputValue(),
 	);
 
-	// No assignment yet -- it is pending on acceptance.
-	expect(await acceptInvite(pc, token)).toBe(200);
+	// No assignment yet -- it is pending on acceptance. The outsider is already
+	// signed in, so the accept page shows Join; clicking it redeems the token.
+	await redeemViaAcceptPage(pc, token, { mode: "join" });
 
 	// The attach resolves: membership + task_assignee in one tx -> chip on owner.
 	// Detail sheet overlays the row; close it so the row chip is observable.

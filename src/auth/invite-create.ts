@@ -118,16 +118,22 @@ export async function createInvite(
 
 	const token = newInviteToken();
 	const id = crypto.randomUUID();
+	// A targeted (email) invite is single-use by default: it should redeem once,
+	// then acceptInvite flips it to 'accepted' so the owner's pending entry clears.
+	// Open link/code invites (email null) stay reusable unless a cap is given.
+	const email = input.email ?? null;
+	const maxUses =
+		input.maxUses !== undefined ? input.maxUses : email != null ? 1 : null;
 	await database.insert(invite).values({
 		id,
 		workspaceId: input.workspaceId,
 		role: input.role,
-		email: input.email ?? null,
+		email,
 		token,
 		status: "pending",
 		uses: 0,
 		expiresAt: input.expiresAt != null ? new Date(input.expiresAt) : null,
-		maxUses: input.maxUses ?? null,
+		maxUses,
 		attachTaskId: input.attachTaskId ?? null,
 		attachKind: input.attachKind ?? null,
 		createdBy: callerId,

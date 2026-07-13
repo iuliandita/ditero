@@ -230,6 +230,76 @@ describe("createInvite role-escalation gate", () => {
 	});
 });
 
+describe("createInvite maxUses defaults", () => {
+	test("email invite defaults to maxUses 1 and is single-use", async () => {
+		const res = await createInvite(
+			{ workspaceId: "shared", role: "member", email: "one@test.invalid" },
+			"owner",
+			db,
+			{},
+		);
+		const [row] = await db
+			.select()
+			.from(tables.invite)
+			.where(eq(tables.invite.id, res.id));
+		expect(row.maxUses).toBe(1);
+
+		await acceptInvite(res.token, "joiner", db);
+		const [after] = await db
+			.select()
+			.from(tables.invite)
+			.where(eq(tables.invite.id, res.id));
+		expect(after.status).toBe("accepted");
+		await expect(acceptInvite(res.token, "member", db)).rejects.toBeInstanceOf(
+			InviteAcceptError,
+		);
+	});
+
+	test("explicit maxUses on an email invite is honored", async () => {
+		const res = await createInvite(
+			{
+				workspaceId: "shared",
+				role: "member",
+				email: "five@test.invalid",
+				maxUses: 5,
+			},
+			"owner",
+			db,
+			{},
+		);
+		const [row] = await db
+			.select()
+			.from(tables.invite)
+			.where(eq(tables.invite.id, res.id));
+		expect(row.maxUses).toBe(5);
+	});
+
+	test("link (email-null) invite stays reusable (maxUses null)", async () => {
+		const res = await createInvite(
+			{ workspaceId: "shared", role: "member" },
+			"owner",
+			db,
+			{},
+		);
+		const [row] = await db
+			.select()
+			.from(tables.invite)
+			.where(eq(tables.invite.id, res.id));
+		expect(row.maxUses).toBeNull();
+
+		await acceptInvite(res.token, "joiner", db);
+		await acceptInvite(res.token, "member", db);
+		const memberships = await db
+			.select()
+			.from(tables.membership)
+			.where(eq(tables.membership.workspaceId, "shared"));
+		const joined = memberships.filter(
+			(m) => m.userId === "joiner" || m.userId === "member",
+		);
+		expect(joined).toHaveLength(2);
+	});
+});
+
 describe("createInvite attach validation", () => {
 	test("foreign-task attach is rejected (400)", async () => {
 		await expect(

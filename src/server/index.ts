@@ -87,7 +87,9 @@ const routes = new Elysia()
 					role: body.role as never,
 					email: (body.email as string | null | undefined) ?? null,
 					expiresAt: (body.expiresAt as number | null | undefined) ?? null,
-					maxUses: (body.maxUses as number | null | undefined) ?? null,
+					// Only an explicit numeric cap is honored; otherwise leave undefined so
+					// createInvite applies its default (email invite -> 1, link -> null).
+					maxUses: typeof body.maxUses === "number" ? body.maxUses : undefined,
 					attachTaskId:
 						(body.attachTaskId as string | null | undefined) ?? null,
 					attachKind: (body.attachKind as never) ?? null,
