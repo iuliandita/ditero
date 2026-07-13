@@ -1,4 +1,4 @@
-import { PanelLeft, PanelLeftClose, Settings } from "lucide-react";
+import { PanelLeft, PanelLeftClose, Settings, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ListIcon } from "@/lib/list-icon";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ export function Sidebar({
 	activeId,
 	onSelectWorkspace,
 	onOpenShared,
+	onOpenMembers,
 	groups,
 	progressByList,
 	openListId,
@@ -29,6 +30,7 @@ export function Sidebar({
 	activeId: string | null;
 	onSelectWorkspace: (id: string) => void;
 	onOpenShared: () => void;
+	onOpenMembers: () => void;
 	groups: ListGroup[];
 	progressByList: Map<string, { done: number; total: number }>;
 	openListId: string | null;
@@ -71,6 +73,22 @@ export function Sidebar({
 					onClick={onOpenShared}
 				>
 					{collapsed ? "S" : "Open shared"}
+				</Button>
+				{/* Workspace-level Members entry (UX doc section 1). The list-header
+				    "Share list" flow, which spins up a shared workspace from a personal
+				    list, is deferred: it needs a workspace-create + list-move mutator
+				    (M1b follow-up), not a UI-only change. */}
+				<Button
+					data-testid="open-members"
+					variant="ghost"
+					size="sm"
+					className={cn("justify-start", collapsed && "justify-center px-0")}
+					aria-label="Members"
+					disabled={!activeId}
+					onClick={onOpenMembers}
+				>
+					<Users className="size-4" />
+					{!collapsed && "Members"}
 				</Button>
 			</div>
 

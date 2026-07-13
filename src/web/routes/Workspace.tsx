@@ -5,6 +5,7 @@ import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { SortableList } from "../components/list/SortableList.tsx";
+import { MembersPanel } from "../components/people/MembersPanel.tsx";
 import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
@@ -39,6 +40,7 @@ export function Workspace() {
 	const [collapsed, setCollapsed] = useState(false);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
 	const [switcherOpen, setSwitcherOpen] = useState(false);
+	const [membersOpen, setMembersOpen] = useState(false);
 
 	// Default active workspace is the user's personal one, so new lists stay private.
 	useEffect(() => {
@@ -230,6 +232,7 @@ export function Workspace() {
 							activeId={activeId}
 							onSelectWorkspace={selectWorkspace}
 							onOpenShared={() => setOpenSharedRequested(true)}
+							onOpenMembers={() => setMembersOpen(true)}
 							groups={groups}
 							progressByList={progressByList}
 							openListId={openListId}
@@ -279,9 +282,32 @@ export function Workspace() {
 						>
 							Open shared
 						</button>
+						<button
+							type="button"
+							data-testid="open-members"
+							disabled={!activeId}
+							onClick={() => {
+								setSwitcherOpen(false);
+								setMembersOpen(true);
+							}}
+							className="rounded-lg px-3 py-2 text-start text-muted-foreground disabled:opacity-50"
+						>
+							Members
+						</button>
 					</div>
 				</SheetContent>
 			</Sheet>
+
+			{activeId && (
+				<MembersPanel
+					workspaceId={activeId}
+					workspaceName={
+						workspaces.find((w) => w.id === activeId)?.name ?? "Workspace"
+					}
+					open={membersOpen}
+					onOpenChange={setMembersOpen}
+				/>
+			)}
 
 			<QuickAddSheet
 				open={quickAddOpen}
