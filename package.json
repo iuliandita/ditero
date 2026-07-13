@@ -30,9 +30,9 @@
 		"drizzle-zero": "^0.19.0",
 		"shadcn": "^4.13.0",
 		"tailwindcss": "^4.3.2",
-		"typescript": "^6.0.3",
+		"typescript": "^7.0.2",
 		"vite": "^8.1.4",
-		"vitest": "^3.2.4"
+		"vitest": "^4.1.10"
 	},
 	"dependencies": {
 		"@better-auth/passkey": "^1.6.23",
