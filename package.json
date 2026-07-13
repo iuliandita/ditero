@@ -17,6 +17,7 @@
 		"test:e2e": "bun run tests/e2e/run.ts"
 	},
 	"devDependencies": {
+		"@axe-core/playwright": "^4.12.1",
 		"@biomejs/biome": "^2.5.3",
 		"@playwright/test": "^1.61.1",
 		"@tailwindcss/vite": "^4.3.2",

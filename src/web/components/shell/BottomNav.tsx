@@ -24,7 +24,7 @@ export function BottomNav({
 			>
 				<List className="size-5" />
 			</Tab>
-			<Tab label="Search" disabled>
+			<Tab label="Search" disabled title="Search — coming soon">
 				<Search className="size-5" />
 			</Tab>
 			<Tab
@@ -42,21 +42,26 @@ function Tab({
 	label,
 	active,
 	disabled,
+	title,
 	onClick,
 	children,
 }: {
 	label: string;
 	active?: boolean;
 	disabled?: boolean;
+	title?: string;
 	onClick?: () => void;
 	children: React.ReactNode;
 }) {
 	return (
 		<button
 			type="button"
-			disabled={disabled}
+			// aria-disabled (not the native attribute) keeps the tab focusable and
+			// announced so a placeholder destination stays discoverable.
+			aria-disabled={disabled || undefined}
+			title={title}
 			aria-current={active ? "page" : undefined}
-			onClick={onClick}
+			onClick={disabled ? undefined : onClick}
 			className={cn(
 				"flex min-h-[44px] flex-col items-center justify-center gap-0.5 py-2 text-xs font-medium transition-colors",
 				active ? "text-foreground" : "text-muted-foreground",

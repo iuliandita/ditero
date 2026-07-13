@@ -18,6 +18,7 @@ import { z } from "zod";
 import type { ListKind } from "../domain/icon-map.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
+	type InstantiatedList,
 	type InstantiatedTask,
 	instantiate,
 	templateContentSchema,
@@ -97,6 +98,31 @@ async function insertInstantiatedTask(
 		...(t.unit !== undefined ? { unit: t.unit } : {}),
 		...(t.category !== undefined ? { category: t.category } : {}),
 	});
+}
+
+// Insert an instantiated list plus its tasks (the shared tail of both
+// instantiate mutators). The caller has already resolved the target workspace
+// and checked write access.
+async function insertInstantiatedList(
+	tx: Transaction<Schema>,
+	ownerId: string,
+	workspaceId: string,
+	list: InstantiatedList,
+	tasks: InstantiatedTask[],
+	folderId?: string,
+): Promise<void> {
+	await tx.mutate.list.insert({
+		id: list.id,
+		workspaceId,
+		ownerId,
+		title: list.title,
+		kind: list.kind,
+		sortKey: list.sortKey,
+		completedDisplay: "sink",
+		...(list.icon !== undefined ? { icon: list.icon } : {}),
+		...(folderId !== undefined ? { folderId } : {}),
+	});
+	for (const t of tasks) await insertInstantiatedTask(tx, t);
 }
 
 export const mutators = defineMutators({
@@ -531,17 +557,7 @@ export const mutators = defineMutators({
 					{ sortKey: args.sortKey, title: template.name },
 				);
 				if (!list) throw new Error("list template produced no list");
-				await tx.mutate.list.insert({
-					id: list.id,
-					workspaceId: args.workspaceId,
-					ownerId: ctx.id,
-					title: list.title,
-					kind: list.kind,
-					sortKey: list.sortKey,
-					completedDisplay: "sink",
-					...(list.icon !== undefined ? { icon: list.icon } : {}),
-				});
-				for (const t of tasks) await insertInstantiatedTask(tx, t);
+				await insertInstantiatedList(tx, ctx.id, args.workspaceId, list, tasks);
 			},
 		),
 		// Expand an inline list-template snapshot (a client-held content blob, e.g.
@@ -567,18 +583,14 @@ export const mutators = defineMutators({
 					{ sortKey: args.sortKey, title: args.name },
 				);
 				if (!list) throw new Error("list template produced no list");
-				await tx.mutate.list.insert({
-					id: list.id,
-					workspaceId: args.workspaceId,
-					ownerId: ctx.id,
-					title: list.title,
-					kind: list.kind,
-					sortKey: list.sortKey,
-					completedDisplay: "sink",
-					...(list.icon !== undefined ? { icon: list.icon } : {}),
-					...(args.folderId !== undefined ? { folderId: args.folderId } : {}),
-				});
-				for (const t of tasks) await insertInstantiatedTask(tx, t);
+				await insertInstantiatedList(
+					tx,
+					ctx.id,
+					args.workspaceId,
+					list,
+					tasks,
+					args.folderId,
+				);
 			},
 		),
 		// Expand a task template into the target list. The client supplies the new

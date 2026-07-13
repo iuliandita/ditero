@@ -27,6 +27,7 @@ export default defineConfig({
 			env: {
 				DATABASE_URL: databaseURL,
 				NODE_ENV: "test",
+				DITERO_E2E: "1",
 				BETTER_AUTH_SECRET: "e2e-only-better-auth-secret-32-bytes",
 				BETTER_AUTH_URL: "http://localhost:3000",
 				DITERO_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString("base64"),

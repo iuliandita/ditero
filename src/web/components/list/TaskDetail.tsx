@@ -23,6 +23,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
+import { runMutation } from "@/lib/run-mutation";
 import { dueToInputs, inputsToDue, priorityMeta } from "@/lib/task-display";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
@@ -85,13 +86,9 @@ export function TaskDetail({
 	);
 	const selected = new Set(taskLabelIds);
 
-	async function run(mutation: { client: Promise<unknown> }) {
+	function run(mutation: { client: Promise<unknown> }) {
 		setError(null);
-		try {
-			await mutation.client;
-		} catch (e) {
-			setError(e instanceof Error ? e.message : "Something went wrong.");
-		}
+		return runMutation(mutation, setError);
 	}
 
 	if (!task) return null;
@@ -124,6 +121,10 @@ export function TaskDetail({
 		const name = newLabel.trim();
 		if (!name) return;
 		const id = crypto.randomUUID();
+		// Two sequential mutators (create the label, then attach it): not one atomic
+		// tx. Both are optimistic and local, so a partial state is momentary; the
+		// worst case is an orphan label if the second write fails, which the label
+		// manager can clean up. Fold into a single mutator if this proves fragile.
 		setError(null);
 		try {
 			await zero.mutate(
@@ -401,7 +402,7 @@ export function TaskDetail({
 									onOpenChange(false);
 								}}
 							>
-								<SelectTrigger className="w-full">
+								<SelectTrigger aria-label="Move to list" className="w-full">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>

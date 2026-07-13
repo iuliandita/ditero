@@ -5,15 +5,19 @@ import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ListIcon } from "@/lib/list-icon";
+import { runMutation } from "@/lib/run-mutation";
 import type { ListKind } from "../../domain/icon-map.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import type { CompletedDisplay } from "../../domain/task-sort.ts";
+import { snapshotList } from "../../domain/template.ts";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { Label, schema } from "../../zero/schema.gen.ts";
@@ -100,13 +104,9 @@ export function ListView({ listId }: { listId: string }) {
 		? (listTasks.find((t) => t.id === scheduleTaskId) ?? null)
 		: null;
 
-	async function run(mutation: { client: Promise<unknown> }) {
+	function run(mutation: { client: Promise<unknown> }) {
 		setError(null);
-		try {
-			await mutation.client;
-		} catch (e) {
-			setError(e instanceof Error ? e.message : "Something went wrong.");
-		}
+		return runMutation(mutation, setError);
 	}
 
 	async function createTask() {
@@ -126,6 +126,8 @@ export function ListView({ listId }: { listId: string }) {
 	}
 
 	if (!list) return null;
+	// Narrowed alias so nested function declarations keep the non-null type.
+	const openList = list;
 	const kind = (list.kind ?? "tasks") as ListKind;
 	const mode = (list.completedDisplay ?? "sink") as CompletedDisplay;
 
@@ -139,6 +141,28 @@ export function ListView({ listId }: { listId: string }) {
 		onUpdate: (id: string, patch: { quantity?: string; unit?: string }) =>
 			void run(zero.mutate(mutators.task.update({ id, ...patch }))),
 	};
+
+	// Snapshot the current list (with one level of subtasks) into a reusable
+	// workspace template; it then appears in the create-list template picker.
+	function saveAsTemplate() {
+		const rows = parents.map((p) => ({
+			...p,
+			subtasks: subtasksByParent.get(p.id) ?? [],
+		}));
+		const content = snapshotList({ kind, icon: openList.icon }, rows);
+		void run(
+			zero.mutate(
+				mutators.template.save({
+					id: crypto.randomUUID(),
+					workspaceId: openList.workspaceId,
+					name: openList.title,
+					kind: "list",
+					content,
+					...(openList.icon != null ? { icon: openList.icon } : {}),
+				}),
+			),
+		);
+	}
 
 	return (
 		<div data-testid="list">
@@ -185,6 +209,13 @@ export function ListView({ listId }: { listId: string }) {
 								</DropdownMenuRadioItem>
 							))}
 						</DropdownMenuRadioGroup>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							data-testid="save-as-template"
+							onSelect={saveAsTemplate}
+						>
+							Save as template
+						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</div>

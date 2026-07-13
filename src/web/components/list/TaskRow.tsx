@@ -96,14 +96,14 @@ function SwipeRow({
 	return (
 		<div className="relative overflow-hidden">
 			<div
-				className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-green-600"
+				className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-success"
 				style={{ opacity: dx > 0 ? 1 : 0 }}
 			>
 				<Check className="size-4" />
 			</div>
 			{onSchedule && (
 				<div
-					className="pointer-events-none absolute inset-y-0 end-0 flex items-center pe-3 text-blue-600"
+					className="pointer-events-none absolute inset-y-0 end-0 flex items-center pe-3 text-info"
 					style={{ opacity: dx < 0 ? 1 : 0 }}
 				>
 					<CalendarClock className="size-4" />

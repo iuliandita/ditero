@@ -1,6 +1,6 @@
 import { useZero } from "@rocicorp/zero/react";
 import { Plus } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Select,
@@ -147,6 +147,9 @@ function Form({
 	const [templateSel, setTemplateSel] = useState<string>(BLANK);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	// Synchronous in-flight guard: a fast double Enter fires before the `busy`
+	// state re-render lands, so the ref (not stale state) blocks the second submit.
+	const inFlight = useRef(false);
 	const titleId = useId();
 
 	const fromTemplate = templateSel !== BLANK;
@@ -154,9 +157,10 @@ function Form({
 
 	async function submit() {
 		const t = title.trim();
-		if (busy) return;
+		if (inFlight.current) return;
 		// Blank lists need a title; template lists carry their own name.
 		if (!fromTemplate && !t) return;
+		inFlight.current = true;
 		setBusy(true);
 		setError(null);
 		try {
@@ -205,8 +209,10 @@ function Form({
 			setTemplateSel(BLANK);
 			onCreated?.();
 		} catch (e) {
+			console.error(e);
 			setError(e instanceof Error ? e.message : "Could not create the list.");
 		} finally {
+			inFlight.current = false;
 			setBusy(false);
 		}
 	}
@@ -237,7 +243,7 @@ function Form({
 						type="button"
 						aria-pressed={kind === k.kind}
 						onClick={() => setKind(k.kind)}
-						className={`flex min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 text-sm ${
+						className={`flex min-h-11 items-center gap-1.5 rounded-lg border px-3 text-sm ${
 							kind === k.kind ? "border-ring bg-muted" : "text-muted-foreground"
 						}`}
 					>
@@ -249,7 +255,7 @@ function Form({
 
 			<div className="flex flex-col gap-2 sm:flex-row">
 				<Select value={folderId} onValueChange={setFolderId}>
-					<SelectTrigger className="w-full sm:w-1/2">
+					<SelectTrigger aria-label="Folder" className="w-full sm:w-1/2">
 						<SelectValue placeholder="Folder" />
 					</SelectTrigger>
 					<SelectContent>
@@ -263,7 +269,10 @@ function Form({
 				</Select>
 
 				<Select value={templateSel} onValueChange={setTemplateSel}>
-					<SelectTrigger className="w-full sm:w-1/2">
+					<SelectTrigger
+						aria-label="Start from template"
+						className="w-full sm:w-1/2"
+					>
 						<SelectValue placeholder="Start from template" />
 					</SelectTrigger>
 					<SelectContent>

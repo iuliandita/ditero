@@ -155,14 +155,21 @@ export function Workspace() {
 		content = (
 			<div className="flex flex-col gap-4 p-4 md:p-6">
 				<div className="flex items-center justify-between">
-					<button
-						type="button"
-						disabled={isDesktop}
-						onClick={() => setSwitcherOpen(true)}
-						className="text-lg font-semibold disabled:cursor-default"
-					>
-						{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
-					</button>
+					{isDesktop ? (
+						<h1 className="text-lg font-semibold">
+							{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
+						</h1>
+					) : (
+						// Mobile: the workspace name doubles as the switcher trigger.
+						<button
+							type="button"
+							aria-haspopup="dialog"
+							onClick={() => setSwitcherOpen(true)}
+							className="text-lg font-semibold"
+						>
+							{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
+						</button>
+					)}
 				</div>
 				<CreateList
 					workspaceId={activeId ?? ""}
