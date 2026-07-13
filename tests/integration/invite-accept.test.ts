@@ -213,6 +213,12 @@ describe("createInvite role-escalation gate", () => {
 		).rejects.toMatchObject({ status: 403 });
 	});
 
+	test("viewer cannot mint any invite (403)", async () => {
+		await expect(
+			createInvite({ workspaceId: "shared", role: "viewer" }, "viewer", db, {}),
+		).rejects.toMatchObject({ status: 403 });
+	});
+
 	test("DITERO_MEMBER_INVITES=admin blocks a member from any invite", async () => {
 		await expect(
 			createInvite({ workspaceId: "shared", role: "member" }, "member", db, {
@@ -233,7 +239,7 @@ describe("createInvite role-escalation gate", () => {
 describe("createInvite maxUses defaults", () => {
 	test("email invite defaults to maxUses 1 and is single-use", async () => {
 		const res = await createInvite(
-			{ workspaceId: "shared", role: "member", email: "one@test.invalid" },
+			{ workspaceId: "shared", role: "member", email: "joiner@test.invalid" },
 			"owner",
 			db,
 			{},
@@ -244,15 +250,15 @@ describe("createInvite maxUses defaults", () => {
 			.where(eq(tables.invite.id, res.id));
 		expect(row.maxUses).toBe(1);
 
-		await acceptInvite(res.token, "joiner", db);
+		await acceptInvite(res.token, "joiner", "joiner@test.invalid", db);
 		const [after] = await db
 			.select()
 			.from(tables.invite)
 			.where(eq(tables.invite.id, res.id));
 		expect(after.status).toBe("accepted");
-		await expect(acceptInvite(res.token, "member", db)).rejects.toBeInstanceOf(
-			InviteAcceptError,
-		);
+		await expect(
+			acceptInvite(res.token, "member", "member@test.invalid", db),
+		).rejects.toBeInstanceOf(InviteAcceptError);
 	});
 
 	test("explicit maxUses on an email invite is honored", async () => {
@@ -287,8 +293,8 @@ describe("createInvite maxUses defaults", () => {
 			.where(eq(tables.invite.id, res.id));
 		expect(row.maxUses).toBeNull();
 
-		await acceptInvite(res.token, "joiner", db);
-		await acceptInvite(res.token, "member", db);
+		await acceptInvite(res.token, "joiner", "joiner@test.invalid", db);
+		await acceptInvite(res.token, "member", "member@test.invalid", db);
 		const memberships = await db
 			.select()
 			.from(tables.membership)
@@ -369,7 +375,7 @@ describe("acceptInvite", () => {
 
 	test("existing user accepts -> membership created", async () => {
 		const { token } = await makeInvite({});
-		const res = await acceptInvite(token, "joiner", db);
+		const res = await acceptInvite(token, "joiner", "joiner@test.invalid", db);
 		expect(res.workspaceId).toBe("shared");
 		const rows = await db
 			.select()
@@ -384,7 +390,7 @@ describe("acceptInvite", () => {
 			attachTaskId: "shared-task",
 			attachKind: "assign",
 		});
-		await acceptInvite(token, "joiner", db);
+		await acceptInvite(token, "joiner", "joiner@test.invalid", db);
 		const rows = await db
 			.select()
 			.from(tables.taskAssignee)
@@ -397,7 +403,7 @@ describe("acceptInvite", () => {
 			attachTaskId: "shared-task",
 			attachKind: "mention",
 		});
-		await acceptInvite(token, "joiner", db);
+		await acceptInvite(token, "joiner", "joiner@test.invalid", db);
 		const rows = await db
 			.select()
 			.from(tables.taskAssignee)
@@ -407,7 +413,9 @@ describe("acceptInvite", () => {
 
 	test("revoked token rejected with reason 'revoked'", async () => {
 		const { token } = await makeInvite({ status: "revoked" });
-		await expect(acceptInvite(token, "joiner", db)).rejects.toMatchObject({
+		await expect(
+			acceptInvite(token, "joiner", "joiner@test.invalid", db),
+		).rejects.toMatchObject({
 			reason: "revoked",
 		});
 	});
@@ -416,36 +424,77 @@ describe("acceptInvite", () => {
 		const { token } = await makeInvite({
 			expiresAt: new Date(Date.now() - 60_000),
 		});
-		await expect(acceptInvite(token, "joiner", db)).rejects.toMatchObject({
+		await expect(
+			acceptInvite(token, "joiner", "joiner@test.invalid", db),
+		).rejects.toMatchObject({
 			reason: "expired",
 		});
 	});
 
 	test("exhausted token rejected with reason 'exhausted'", async () => {
 		const { token } = await makeInvite({ maxUses: 1, uses: 1 });
-		await expect(acceptInvite(token, "joiner", db)).rejects.toMatchObject({
+		await expect(
+			acceptInvite(token, "joiner", "joiner@test.invalid", db),
+		).rejects.toMatchObject({
 			reason: "exhausted",
 		});
 	});
 
 	test("unknown token rejected with reason 'not_found'", async () => {
-		await expect(acceptInvite("nope", "joiner", db)).rejects.toMatchObject({
+		await expect(
+			acceptInvite("nope", "joiner", "joiner@test.invalid", db),
+		).rejects.toMatchObject({
 			reason: "not_found",
 		});
 	});
 
 	test("maxUses:1 -> first use accepts, status flips, second use rejected", async () => {
 		const { id, token } = await makeInvite({ maxUses: 1 });
-		await acceptInvite(token, "joiner", db);
+		await acceptInvite(token, "joiner", "joiner@test.invalid", db);
 		const rows = await db
 			.select()
 			.from(tables.invite)
 			.where(eq(tables.invite.id, id));
 		expect(rows[0].uses).toBe(1);
 		expect(rows[0].status).toBe("accepted");
-		await expect(acceptInvite(token, "member", db)).rejects.toBeInstanceOf(
-			InviteAcceptError,
-		);
+		await expect(
+			acceptInvite(token, "member", "member@test.invalid", db),
+		).rejects.toBeInstanceOf(InviteAcceptError);
+	});
+
+	test("email invite redeemed by the MATCHING email succeeds", async () => {
+		const { token } = await makeInvite({ email: "joiner@test.invalid" });
+		const res = await acceptInvite(token, "joiner", "joiner@test.invalid", db);
+		expect(res.workspaceId).toBe("shared");
+		const rows = await db
+			.select()
+			.from(tables.membership)
+			.where(eq(tables.membership.userId, "joiner"));
+		expect(rows.map((r) => r.workspaceId)).toContain("shared");
+	});
+
+	test("email invite match is case-insensitive", async () => {
+		const { token } = await makeInvite({ email: "Joiner@Test.Invalid" });
+		const res = await acceptInvite(token, "joiner", "joiner@test.invalid", db);
+		expect(res.workspaceId).toBe("shared");
+	});
+
+	test("email invite redeemed by a DIFFERENT email is rejected (email_mismatch)", async () => {
+		const { token } = await makeInvite({ email: "someone@test.invalid" });
+		await expect(
+			acceptInvite(token, "joiner", "joiner@test.invalid", db),
+		).rejects.toMatchObject({ reason: "email_mismatch" });
+		const rows = await db
+			.select()
+			.from(tables.membership)
+			.where(eq(tables.membership.userId, "joiner"));
+		expect(rows).toHaveLength(0);
+	});
+
+	test("link (email-null) invite is redeemable by any email", async () => {
+		const { token } = await makeInvite({});
+		const res = await acceptInvite(token, "member", "member@test.invalid", db);
+		expect(res.workspaceId).toBe("shared");
 	});
 });
 
@@ -545,6 +594,52 @@ describe("createManagedAccount", () => {
 			),
 		).rejects.toMatchObject({ status: 403 });
 	});
+
+	test("DITERO_MEMBER_INVITES=admin: a member guardian is rejected (403)", async () => {
+		await expect(
+			createManagedAccount(
+				{
+					guardianId: "member",
+					workspaceId: "shared",
+					displayName: "Kiddo",
+					password: "kid-password-1",
+				},
+				db,
+				auth,
+				{ DITERO_MEMBER_INVITES: "admin" },
+			),
+		).rejects.toMatchObject({ status: 403 });
+	});
+
+	test("DITERO_MEMBER_INVITES=admin: an admin guardian succeeds", async () => {
+		const res = await createManagedAccount(
+			{
+				guardianId: "admin",
+				workspaceId: "shared",
+				displayName: "Kiddo",
+				password: "kid-password-1",
+			},
+			db,
+			auth,
+			{ DITERO_MEMBER_INVITES: "admin" },
+		);
+		expect(res.email).toMatch(/@managed\.invalid$/);
+	});
+
+	test("default policy lets a plain member create a kid", async () => {
+		const res = await createManagedAccount(
+			{
+				guardianId: "member",
+				workspaceId: "shared",
+				displayName: "Kiddo",
+				password: "kid-password-1",
+			},
+			db,
+			auth,
+			{},
+		);
+		expect(res.email).toMatch(/@managed\.invalid$/);
+	});
 });
 
 describe("lookupUsers (email mode)", () => {
@@ -565,5 +660,20 @@ describe("lookupUsers (email mode)", () => {
 
 	test("a name (non-email) does not match in email mode", async () => {
 		expect(await lookupUsers("member", "owner", db, {})).toEqual([]);
+	});
+});
+
+describe("lookupUsers (directory mode)", () => {
+	const directory = { DITERO_DISCOVERY: "directory" };
+
+	test("returns a co-workspace user by name prefix", async () => {
+		const res = await lookupUsers("mem", "owner", db, directory);
+		expect(res.map((r) => r.id)).toContain("member");
+	});
+
+	test("does NOT return a user who shares no workspace with the caller", async () => {
+		// outsider is only in `other`; owner is only in `shared` -> no overlap.
+		const res = await lookupUsers("outsi", "owner", db, directory);
+		expect(res.map((r) => r.id)).not.toContain("outsider");
 	});
 });

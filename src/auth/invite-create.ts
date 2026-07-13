@@ -2,6 +2,7 @@
 // HTTP (never synced, never stored client-side). Role-escalation is the crown-jewel
 // gate: a caller can only mint an invite for a role they are entitled to grant.
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { db as defaultDb } from "../db/client.ts";
 import { invite, list, task } from "../db/schema.ts";
 import { newInviteToken } from "../domain/invite.ts";
@@ -9,6 +10,7 @@ import { isRestrictedAccount } from "./managed-account.ts";
 import {
 	ADMIN_ROLES,
 	type AppEnv,
+	memberInvitePolicy,
 	ROLES,
 	type Role,
 	roleInWorkspace,
@@ -34,12 +36,6 @@ export type CreateInviteInput = {
 	attachTaskId?: string | null;
 	attachKind?: "assign" | "mention" | null;
 };
-
-// Default "allow": member+ can invite member/viewer. "admin": only admin+ can
-// invite anyone (tightens the member-invite lever for stricter instances).
-export function memberInvitePolicy(env: AppEnv): "allow" | "admin" {
-	return env.DITERO_MEMBER_INVITES === "admin" ? "admin" : "allow";
-}
 
 export function publicBaseUrl(env: AppEnv): string {
 	return env.BETTER_AUTH_URL ?? `http://localhost:${env.API_PORT ?? 3000}`;
@@ -122,6 +118,10 @@ export async function createInvite(
 	// then acceptInvite flips it to 'accepted' so the owner's pending entry clears.
 	// Open link/code invites (email null) stay reusable unless a cap is given.
 	const email = input.email ?? null;
+	// A targeted invite address must be a real, bounded email (RFC 5321 max 320).
+	if (email != null && !z.string().email().max(320).safeParse(email).success) {
+		throw new InviteCreateError(400, "invalid email");
+	}
 	const maxUses =
 		input.maxUses !== undefined ? input.maxUses : email != null ? 1 : null;
 	await database.insert(invite).values({

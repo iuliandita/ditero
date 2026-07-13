@@ -14,6 +14,12 @@ export const ROLES = new Set<Role>(["owner", "admin", "member", "viewer"]);
 export const ADMIN_ROLES = new Set<Role>(["owner", "admin"]);
 export const WRITE_ROLES = new Set<Role>(["owner", "admin", "member"]);
 
+// Default "allow": member+ can invite member/viewer (and provision managed kids).
+// "admin": only admin+ can, tightening the member lever for stricter instances.
+export function memberInvitePolicy(env: AppEnv): "allow" | "admin" {
+	return env.DITERO_MEMBER_INVITES === "admin" ? "admin" : "allow";
+}
+
 type RoleDb = Pick<typeof defaultDb, "select">;
 
 export async function roleInWorkspace(

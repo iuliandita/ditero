@@ -686,7 +686,11 @@ export const mutators = defineMutators({
 	},
 	comment: {
 		add: defineMutator(
-			z.object({ id: z.string(), taskId: z.string(), body: z.string() }),
+			z.object({
+				id: z.string(),
+				taskId: z.string(),
+				body: z.string().max(10000),
+			}),
 			async ({ tx, ctx, args }) => {
 				const task = await tx.run(
 					zql.task.where("id", args.taskId).related("list").one(),

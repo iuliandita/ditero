@@ -6,7 +6,14 @@ import { and, eq } from "drizzle-orm";
 import { db as defaultDb } from "../db/client.ts";
 import { managedAccount, membership } from "../db/schema.ts";
 import { auth as defaultAuth } from "./auth.ts";
-import { type Role, roleInWorkspace, WRITE_ROLES } from "./membership-role.ts";
+import {
+	ADMIN_ROLES,
+	type AppEnv,
+	memberInvitePolicy,
+	type Role,
+	roleInWorkspace,
+	WRITE_ROLES,
+} from "./membership-role.ts";
 import { withRegistrationBypass } from "./registration-bypass.ts";
 
 type RestrictedDb = Pick<typeof defaultDb, "select">;
@@ -58,6 +65,7 @@ export async function createManagedAccount(
 	input: CreateManagedAccountInput,
 	database: typeof defaultDb = defaultDb,
 	authInstance: AuthLike = defaultAuth,
+	env: AppEnv = process.env,
 ): Promise<{ userId: string; email: string }> {
 	const role: Role = input.role ?? "member";
 	if (!MANAGED_ROLES.has(role)) {
@@ -66,11 +74,11 @@ export async function createManagedAccount(
 			"managed account role must be member/viewer",
 		);
 	}
-	if (!input.displayName.trim()) {
-		throw new ManagedAccountError(400, "displayName is required");
+	if (!input.displayName.trim() || input.displayName.length > 100) {
+		throw new ManagedAccountError(400, "displayName is required (max 100)");
 	}
-	if (!input.password) {
-		throw new ManagedAccountError(400, "password is required");
+	if (input.password.length < 8 || input.password.length > 200) {
+		throw new ManagedAccountError(400, "password must be 8-200 chars");
 	}
 
 	// A restricted account cannot provision sub-accounts (server backstop).
@@ -86,8 +94,21 @@ export async function createManagedAccount(
 		input.guardianId,
 		input.workspaceId,
 	);
-	if (!guardianRole || !WRITE_ROLES.has(guardianRole)) {
+	if (!guardianRole) {
 		throw new ManagedAccountError(403, "guardian is not a workspace member");
+	}
+	// Honor the same member-invite lever as createInvite: provisioning a kid drops a
+	// new account into the shared workspace, so a strict ("admin") instance must not
+	// let a plain member do it. Default policy allows member+.
+	const allowed =
+		memberInvitePolicy(env) === "admin"
+			? ADMIN_ROLES.has(guardianRole)
+			: WRITE_ROLES.has(guardianRole);
+	if (!allowed) {
+		throw new ManagedAccountError(
+			403,
+			"insufficient role to create a managed account",
+		);
 	}
 
 	// RFC 6761 `.invalid` TLD: guaranteed non-resolvable, never deliverable.

@@ -126,11 +126,21 @@ const routes = new Elysia()
 			return new Response("Bad Request", { status: 400 });
 		}
 		try {
-			return await acceptInvite(body.token, session.user.id, db);
+			return await acceptInvite(
+				body.token,
+				session.user.id,
+				session.user.email,
+				db,
+			);
 		} catch (error) {
 			if (error instanceof InviteAcceptError) {
 				// Distinct 4xx per reason; the token is never echoed back.
-				const status = error.reason === "not_found" ? 404 : 410;
+				const status =
+					error.reason === "not_found"
+						? 404
+						: error.reason === "email_mismatch"
+							? 403
+							: 410;
 				return new Response(error.reason, { status });
 			}
 			throw error;
@@ -182,6 +192,7 @@ const routes = new Elysia()
 				},
 				db,
 				auth,
+				process.env,
 			);
 		} catch (error) {
 			if (error instanceof ManagedAccountError) {
