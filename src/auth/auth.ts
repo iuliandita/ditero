@@ -12,12 +12,14 @@ import {
 } from "../server/client-ip.ts";
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
 import { withFieldEncryption } from "./encrypted-adapter.ts";
+import { emailHasRedeemableInvite } from "./invite-bypass.ts";
 import { trustedAuthOrigins } from "./origins.ts";
 import { socialProvidersFromEnv } from "./providers.ts";
 import {
 	assertRegistrationAllowed,
 	resolveRegistrationMode,
 } from "./registration.ts";
+import { registrationBypassActive } from "./registration-bypass.ts";
 import {
 	authRateLimitOptions,
 	passkeyOptions,
@@ -71,11 +73,15 @@ export const auth = betterAuth({
 	databaseHooks: {
 		user: {
 			create: {
-				before: async () => {
+				before: async (newUser) => {
 					try {
+						const invited =
+							registrationBypassActive() ||
+							(await emailHasRedeemableInvite(newUser.email, db, Date.now()));
 						assertRegistrationAllowed(
 							registrationMode,
 							await registeredUserCount(),
+							{ invited },
 						);
 					} catch (error) {
 						throw new APIError("FORBIDDEN", {

@@ -50,4 +50,43 @@ describe("assertRegistrationAllowed", () => {
 			/invitation/i,
 		);
 	});
+
+	test("invited bypasses closed", () => {
+		expect(() =>
+			assertRegistrationAllowed("closed", 5, { invited: true }),
+		).not.toThrow();
+	});
+
+	test("uninvited stays denied when closed", () => {
+		expect(() =>
+			assertRegistrationAllowed("closed", 5, { invited: false }),
+		).toThrow(/registration is disabled/i);
+	});
+
+	test("invited bypasses bootstrap after the first user", () => {
+		expect(() =>
+			assertRegistrationAllowed("bootstrap", 3, { invited: true }),
+		).not.toThrow();
+	});
+
+	test("uninvited stays denied for bootstrap after the first user", () => {
+		expect(() =>
+			assertRegistrationAllowed("bootstrap", 3, { invited: false }),
+		).toThrow(/invitation/i);
+	});
+
+	test("open always permits regardless of invited", () => {
+		expect(() =>
+			assertRegistrationAllowed("open", 99, { invited: false }),
+		).not.toThrow();
+		expect(() =>
+			assertRegistrationAllowed("open", 99, { invited: true }),
+		).not.toThrow();
+	});
+
+	test("invited does not narrow the bootstrap first-user rule", () => {
+		expect(() =>
+			assertRegistrationAllowed("bootstrap", 0, { invited: false }),
+		).not.toThrow();
+	});
 });
