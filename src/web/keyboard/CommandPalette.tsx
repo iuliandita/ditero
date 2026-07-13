@@ -16,8 +16,10 @@ type Group = { heading: string; items: Item[] };
 
 export function CommandPalette({
 	onNavigateList,
+	onNavigateView,
 }: {
 	onNavigateList: (listId: string) => void;
+	onNavigateView: (viewId: string) => void;
 }) {
 	const { isOpen, close, run } = useCommands();
 	const [lists] = useQuery(queries.lists.mine());
@@ -64,8 +66,7 @@ export function CommandPalette({
 		}));
 		if (cmdItems.length) result.push({ heading: "Commands", items: cmdItems });
 
-		// Navigate: lists + saved views + built-in views. Views are stubs for M1c
-		// (Task 13 wires view navigation); selecting one just closes the palette.
+		// Navigate: lists + built-in views + saved views. Views open the renderer.
 		const navItems: Item[] = [];
 		for (const l of lists) {
 			if (q !== "" && !l.title.toLowerCase().includes(q)) continue;
@@ -77,11 +78,19 @@ export function CommandPalette({
 		}
 		for (const v of BUILTIN_VIEWS) {
 			if (q !== "" && !v.name.toLowerCase().includes(q)) continue;
-			navItems.push({ key: `builtin:${v.id}`, label: v.name, run: () => {} });
+			navItems.push({
+				key: `builtin:${v.id}`,
+				label: v.name,
+				run: () => onNavigateView(v.id),
+			});
 		}
 		for (const v of views) {
 			if (q !== "" && !v.name.toLowerCase().includes(q)) continue;
-			navItems.push({ key: `view:${v.id}`, label: v.name, run: () => {} });
+			navItems.push({
+				key: `view:${v.id}`,
+				label: v.name,
+				run: () => onNavigateView(v.id),
+			});
 		}
 		if (navItems.length) result.push({ heading: "Navigate", items: navItems });
 
@@ -113,7 +122,17 @@ export function CommandPalette({
 		}
 
 		return result;
-	}, [q, query, lists, tasks, views, searchLists, run, onNavigateList]);
+	}, [
+		q,
+		query,
+		lists,
+		tasks,
+		views,
+		searchLists,
+		run,
+		onNavigateList,
+		onNavigateView,
+	]);
 
 	const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 

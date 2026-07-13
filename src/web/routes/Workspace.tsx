@@ -1,10 +1,22 @@
+import type { ReadonlyJSONValue } from "@rocicorp/zero";
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { ChevronLeft } from "lucide-react";
+import {
+	ChevronLeft,
+	House,
+	MoreHorizontal,
+	Pencil,
+	Pin,
+	PinOff,
+	Trash2,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { keyBetween } from "../../domain/sort-key.ts";
+import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { SortableList } from "../components/list/SortableList.tsx";
+import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { MembersPanel } from "../components/people/MembersPanel.tsx";
 import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
 import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
@@ -16,12 +28,28 @@ import { groupLists } from "../components/shell/grouping.ts";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
+import { Button } from "../components/ui/button.tsx";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu.tsx";
 import {
 	Sheet,
 	SheetContent,
 	SheetHeader,
 	SheetTitle,
 } from "../components/ui/sheet.tsx";
+import {
+	type ViewFormValue,
+	ViewManager,
+} from "../components/views/ViewManager.tsx";
+import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
+import { useUserPref } from "../hooks/useUserPref.ts";
+import type { SavedView } from "../hooks/useViews.ts";
+import { useViews } from "../hooks/useViews.ts";
 import { CheatSheet } from "../keyboard/CheatSheet.tsx";
 import {
 	type CommandHandlers,
@@ -37,9 +65,27 @@ import {
 } from "../keyboard/roving.ts";
 import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
 import { useKeyBindings } from "../keyboard/useKeyBindings.ts";
+import { ICONS } from "../lib/list-icon.tsx";
 import { useIsDesktop } from "../lib/use-media-query.ts";
+import {
+	BUILTIN_VIEWS,
+	type BuiltinViewId,
+	DEFAULT_HOME,
+	getBuiltin,
+} from "../views/builtins.ts";
 import { ListView } from "./ListView.tsx";
 import { SecurityPanel } from "./SecurityPanel.tsx";
+
+// Resolved view descriptor: a built-in aggregate or a saved row, unified for the
+// renderer/header. `saved` is set only for editable saved views.
+type ResolvedView = {
+	id: string;
+	name: string;
+	icon: string | null;
+	filter: FilterGroup;
+	display: ViewDisplay;
+	saved: SavedView | null;
+};
 
 // A restricted managed ("kid") account gets a wholly separate shell -- never the
 // normal workspace UI. Branch here, before any normal-shell hook runs, keying off
@@ -75,8 +121,19 @@ function NormalWorkspace() {
 	const [templates] = useQuery(queries.templates.mine());
 	const [tasks] = useQuery(queries.tasks.mine());
 	const [labels] = useQuery(queries.labels.mine());
+	const [taskLabels] = useQuery(queries.taskLabels.mine());
+	const [assignees] = useQuery(queries.assignees.mine());
+	const [memberships] = useQuery(queries.memberships.mine());
+	const { views: savedViews } = useViews();
+	const { pref, setPref } = useUserPref();
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openListId, setOpenListId] = useState<string | null>(null);
+	// null on the landing (home view); a built-in id or saved view.id otherwise.
+	const [openViewId, setOpenViewId] = useState<string | null>(null);
+	const [viewManager, setViewManager] = useState<
+		{ mode: "create" } | { mode: "edit"; id: string } | null
+	>(null);
+	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 	const [openSharedRequested, setOpenSharedRequested] = useState(false);
 	const [section, setSection] = useState<Section>("lists");
 	const [collapsed, setCollapsed] = useState(false);
@@ -142,11 +199,27 @@ function NormalWorkspace() {
 	function selectWorkspace(id: string) {
 		setActiveId(id);
 		setOpenListId(null);
+		setOpenViewId(null);
 		setSwitcherOpen(false);
 	}
 	function openList(id: string) {
 		setSection("lists");
+		setOpenViewId(null);
+		setDetailTaskId(null);
 		setOpenListId(id);
+	}
+	// Alternate content mode to a list: a view (built-in or saved) clears the open
+	// list and vice-versa (they never render together).
+	function openView(id: string) {
+		setSection("lists");
+		setOpenListId(null);
+		setDetailTaskId(null);
+		setOpenViewId(id);
+	}
+	function openSettings() {
+		setOpenListId(null);
+		setOpenViewId(null);
+		setSection("settings");
 	}
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
@@ -158,22 +231,166 @@ function NormalWorkspace() {
 	}
 	function changeSection(next: Section) {
 		setSection(next);
-		if (next === "lists") setOpenListId(null);
+		if (next === "lists") {
+			setOpenListId(null);
+			setOpenViewId(null);
+		}
 	}
 
 	const openListRow = openListId
 		? (activeLists.find((l) => l.id === openListId) ?? null)
 		: null;
 
+	// --- Views wiring ---------------------------------------------------------
+	// Members for the renderer/filter-builder pickers: one entry per co-member.
+	const members = useMemo(() => {
+		const seen = new Set<string>();
+		const out: { id: string; name: string }[] = [];
+		for (const m of memberships) {
+			if (m.user && !seen.has(m.userId)) {
+				seen.add(m.userId);
+				out.push({ id: m.userId, name: m.user.name });
+			}
+		}
+		return out;
+	}, [memberships]);
+	// The renderer scopes to workspaces the user actually belongs to.
+	const membershipWorkspaceIds = useMemo(
+		() => workspaces.map((w) => w.id),
+		[workspaces],
+	);
+	const homeRef = pref.homeViewRef ?? DEFAULT_HOME;
+	const pinnedViews = useMemo(() => {
+		const set = new Set(pref.pinnedViews);
+		return savedViews
+			.filter((v) => set.has(v.id))
+			.sort((a, b) =>
+				a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0,
+			);
+	}, [savedViews, pref.pinnedViews]);
+
+	function resolveView(id: string): ResolvedView | null {
+		const b = getBuiltin(id as BuiltinViewId);
+		if (b)
+			return {
+				id,
+				name: b.name,
+				icon: b.icon,
+				filter: b.filter,
+				display: b.display,
+				saved: null,
+			};
+		const s = savedViews.find((v) => v.id === id);
+		if (s)
+			return {
+				id,
+				name: s.name,
+				icon: s.icon ?? null,
+				filter: s.filter,
+				display: s.display,
+				saved: s,
+			};
+		return null;
+	}
+
+	const isPinned = (id: string) => pref.pinnedViews.includes(id);
+	function togglePin(id: string) {
+		setPref({
+			pinnedViews: isPinned(id)
+				? pref.pinnedViews.filter((v) => v !== id)
+				: [...pref.pinnedViews, id],
+		});
+	}
+	function setHome(id: string) {
+		setPref({ homeViewRef: id });
+	}
+	function deleteView(id: string) {
+		void zero
+			.mutate(mutators.view.delete({ id }))
+			.client.catch((e) => console.error("view.delete failed", e));
+		// Drop it from pins, and fall the home ref back to the default if it pointed
+		// here (both are one pref write when both apply).
+		const patch: Parameters<typeof setPref>[0] = {};
+		if (isPinned(id))
+			patch.pinnedViews = pref.pinnedViews.filter((v) => v !== id);
+		if (pref.homeViewRef === id) patch.homeViewRef = null;
+		if (Object.keys(patch).length) setPref(patch);
+		setOpenViewId(null);
+	}
+
+	function submitView(value: ViewFormValue) {
+		if (viewManager?.mode === "edit") {
+			void zero
+				.mutate(
+					mutators.view.update({
+						id: viewManager.id,
+						name: value.name,
+						icon: value.icon,
+						filter: value.filter as ReadonlyJSONValue,
+						display: value.display as ReadonlyJSONValue,
+					}),
+				)
+				.client.catch((e) => console.error("view.update failed", e));
+		} else {
+			const id = crypto.randomUUID();
+			const lastKey = pinnedViews.reduce<string | null>(
+				(max, v) => (max == null || v.sortKey > max ? v.sortKey : max),
+				null,
+			);
+			void zero
+				.mutate(
+					mutators.view.create({
+						id,
+						name: value.name,
+						...(value.icon != null ? { icon: value.icon } : {}),
+						scope: value.scope,
+						workspaceId: value.workspaceId,
+						filter: value.filter as ReadonlyJSONValue,
+						display: value.display as ReadonlyJSONValue,
+						sortKey: keyBetween(lastKey, null),
+					}),
+				)
+				.client.catch((e) => console.error("view.create failed", e));
+			// Pin so it appears in the sidebar, and land on it.
+			setPref({ pinnedViews: [...pref.pinnedViews, id] });
+			openView(id);
+		}
+		setViewManager(null);
+	}
+
+	// Label ids per task -> TaskDetail (view onOpenTask reuses the list sheet).
+	const labelIdsByTask = useMemo(() => {
+		const map = new Map<string, string[]>();
+		for (const tl of taskLabels) {
+			const bucket = map.get(tl.taskId);
+			if (bucket) bucket.push(tl.labelId);
+			else map.set(tl.taskId, [tl.labelId]);
+		}
+		return map;
+	}, [taskLabels]);
+	const detailTask = detailTaskId
+		? (tasks.find((t) => t.id === detailTaskId) ?? null)
+		: null;
+	const detailList = detailTask
+		? (lists.find((l) => l.id === detailTask.listId) ?? null)
+		: null;
+
+	// The view shown when no list is open: an explicitly opened one, else home.
+	const activeViewId = openListId ? null : (openViewId ?? homeRef);
+
 	// Command handlers injected into the palette/keyboard system. palette.open and
 	// search.open are owned by the provider (it holds the open state). Movement +
 	// toggle/delete drive roving DOM focus over [data-kbd-nav] rows, which no-op
-	// until Task 12 marks task rows. nav.today/view.new stay stubs (Task 13).
+	// until Task 12 marks task rows.
+	// Handlers only touch stable setState setters (inlined rather than calling the
+	// openView/openSettings helpers) so the map has no unstable deps; the provider
+	// keeps them in a ref, so identity need not change across renders.
 	const commandHandlers = useMemo<CommandHandlers>(
 		() => ({
 			"task.create": () => setQuickAddOpen(true),
 			"settings.open": () => {
 				setOpenListId(null);
+				setOpenViewId(null);
 				setSection("settings");
 			},
 			"nav.down": () => focusNext(),
@@ -182,11 +399,18 @@ function NormalWorkspace() {
 			"task.toggleDone": () => actOnFocused("toggle"),
 			"task.delete": () => actOnFocused("delete"),
 			"help.cheatSheet": () => setCheatOpen(true),
-			"nav.today": () => {},
-			"view.new": () => {},
+			"nav.today": () => {
+				setSection("lists");
+				setOpenListId(null);
+				setOpenViewId("today");
+			},
+			"view.new": () => setViewManager({ mode: "create" }),
 		}),
 		[],
 	);
+
+	const activeView = activeViewId ? resolveView(activeViewId) : null;
+	const HeaderIcon = activeView?.icon ? ICONS[activeView.icon] : null;
 
 	let content: React.ReactNode;
 	// Mobile keeps Settings on its own tab; desktop pins SecurityPanel to the
@@ -220,69 +444,201 @@ function NormalWorkspace() {
 			</div>
 		);
 	} else {
+		// No list open: the view surface (an explicitly opened view, or the home
+		// view on the landing). On the landing the list-index/create/settings
+		// controls stay rendered below so those flows remain reachable.
+		const isLanding = openViewId == null;
 		content = (
-			<div className="flex flex-col gap-4 p-4 md:p-6">
-				<div className="flex items-center justify-between">
-					{isDesktop ? (
-						<h1 className="text-lg font-semibold">
-							{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
-						</h1>
-					) : (
-						// Mobile: the workspace name doubles as the switcher trigger.
-						<button
-							type="button"
-							aria-haspopup="dialog"
-							onClick={() => setSwitcherOpen(true)}
-							className="text-lg font-semibold"
-						>
-							{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
-						</button>
-					)}
-				</div>
-				<CreateList
-					workspaceId={activeId ?? ""}
-					lists={activeLists}
-					folders={activeFolders}
-					templates={activeTemplates}
-				/>
-				{/* Desktop nav lives in the sidebar; render the list index only on
-				    mobile so a list title never appears twice at once. */}
-				{!isDesktop &&
-					groups.map((group) => (
-						<div key={group.folder?.id ?? "__ungrouped__"}>
-							<div className="mb-1 px-1 text-xs font-medium text-muted-foreground">
-								{group.folder?.name ?? "Lists"}
-							</div>
-							<SortableList
-								items={group.lists}
-								onMove={moveList}
-								handleLabel="Reorder list"
-								handleTestId="list-drag"
-								className="gap-1"
-								renderItem={(l) => (
-									<button
-										type="button"
-										onClick={() => openList(l.id)}
-										className="w-full rounded-lg border p-3 text-start"
+			<div className="flex flex-col gap-6 p-4 md:p-6">
+				{activeView ? (
+					<section aria-label={activeView.name} data-testid="view-surface">
+						<div className="mb-3 flex items-center gap-2">
+							{!isDesktop && !isLanding && (
+								<button
+									type="button"
+									aria-label="Back"
+									onClick={() => setOpenViewId(null)}
+									className="flex size-9 shrink-0 items-center justify-center rounded-lg"
+								>
+									<ChevronLeft className="size-5" />
+								</button>
+							)}
+							{HeaderIcon && (
+								<HeaderIcon
+									aria-hidden
+									className="size-5 shrink-0 text-muted-foreground"
+								/>
+							)}
+							<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
+								{activeView.name}
+							</h1>
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										aria-label="View actions"
+										data-testid="view-actions"
 									>
-										{l.title}
-										{l.kind === "project" && progressByList.has(l.id) && (
-											<ListProgress
-												done={progressByList.get(l.id)?.done ?? 0}
-												total={progressByList.get(l.id)?.total ?? 0}
-											/>
-										)}
-									</button>
-								)}
-							/>
+										<MoreHorizontal />
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="end">
+									<DropdownMenuItem
+										data-testid="view-set-home"
+										onSelect={() => setHome(activeView.id)}
+									>
+										<House /> Set as home
+									</DropdownMenuItem>
+									{activeView.saved && (
+										<>
+											<DropdownMenuItem
+												data-testid="view-pin"
+												onSelect={() => togglePin(activeView.id)}
+											>
+												{isPinned(activeView.id) ? (
+													<>
+														<PinOff /> Unpin
+													</>
+												) : (
+													<>
+														<Pin /> Pin
+													</>
+												)}
+											</DropdownMenuItem>
+											<DropdownMenuItem
+												data-testid="view-edit"
+												onSelect={() =>
+													setViewManager({ mode: "edit", id: activeView.id })
+												}
+											>
+												<Pencil /> Edit
+											</DropdownMenuItem>
+											<DropdownMenuSeparator />
+											<DropdownMenuItem
+												data-testid="view-delete"
+												className="text-destructive"
+												onSelect={() => deleteView(activeView.id)}
+											>
+												<Trash2 /> Delete
+											</DropdownMenuItem>
+										</>
+									)}
+								</DropdownMenuContent>
+							</DropdownMenu>
 						</div>
-					))}
-				{isDesktop && (
-					<div className="border-t pt-2">
-						<SecurityPanel />
-						{/* Keyboard is a desktop feature (design 2.18); the rebind surface
-						    lives beside Security on the desktop settings landing only. */}
-						<KeymapSettings />
+						<ViewRenderer
+							filter={activeView.filter}
+							display={activeView.display}
+							tasks={tasks}
+							lists={lists}
+							folders={folders}
+							labels={labels}
+							taskLabels={taskLabels}
+							assignees={assignees}
+							members={members}
+							currentUserId={zero.userID ?? ""}
+							membershipWorkspaceIds={membershipWorkspaceIds}
+							onOpenTask={(t) => setDetailTaskId(t.id)}
+						/>
+					</section>
+				) : (
+					<p className="text-sm text-muted-foreground">View not found.</p>
+				)}
+
+				{isLanding && (
+					<div className="flex flex-col gap-4">
+						{/* Mobile has no sidebar; surface built-ins + pinned views here so
+						    they are reachable and open the renderer on mobile too. */}
+						{!isDesktop && (
+							<nav aria-label="Views" className="flex flex-col gap-0.5">
+								<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
+									Views
+								</div>
+								{[...BUILTIN_VIEWS, ...pinnedViews].map((v) => (
+									<button
+										key={v.id}
+										type="button"
+										aria-current={activeViewId === v.id ? "page" : undefined}
+										onClick={() => openView(v.id)}
+										className="rounded-lg px-2 py-2 text-start text-sm hover:bg-muted"
+									>
+										{v.name}
+									</button>
+								))}
+								<button
+									type="button"
+									data-testid="new-view"
+									onClick={() => setViewManager({ mode: "create" })}
+									className="rounded-lg px-2 py-2 text-start text-sm text-muted-foreground hover:bg-muted"
+								>
+									+ New view
+								</button>
+							</nav>
+						)}
+						<div className="flex items-center justify-between">
+							{isDesktop ? (
+								<h2 className="text-base font-semibold">
+									{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
+								</h2>
+							) : (
+								// Mobile: the workspace name doubles as the switcher trigger.
+								<button
+									type="button"
+									aria-haspopup="dialog"
+									onClick={() => setSwitcherOpen(true)}
+									className="text-base font-semibold"
+								>
+									{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
+								</button>
+							)}
+						</div>
+						<CreateList
+							workspaceId={activeId ?? ""}
+							lists={activeLists}
+							folders={activeFolders}
+							templates={activeTemplates}
+						/>
+						{/* Desktop nav lives in the sidebar; render the list index only on
+						    mobile so a list title never appears twice at once. */}
+						{!isDesktop &&
+							groups.map((group) => (
+								<div key={group.folder?.id ?? "__ungrouped__"}>
+									<div className="mb-1 px-1 text-xs font-medium text-muted-foreground">
+										{group.folder?.name ?? "Lists"}
+									</div>
+									<SortableList
+										items={group.lists}
+										onMove={moveList}
+										handleLabel="Reorder list"
+										handleTestId="list-drag"
+										className="gap-1"
+										renderItem={(l) => (
+											<button
+												type="button"
+												onClick={() => openList(l.id)}
+												className="w-full rounded-lg border p-3 text-start"
+											>
+												{l.title}
+												{l.kind === "project" && progressByList.has(l.id) && (
+													<ListProgress
+														done={progressByList.get(l.id)?.done ?? 0}
+														total={progressByList.get(l.id)?.total ?? 0}
+													/>
+												)}
+											</button>
+										)}
+									/>
+								</div>
+							))}
+						{isDesktop && (
+							<div className="border-t pt-2">
+								<SecurityPanel />
+								{/* Keyboard is a desktop feature (design 2.18); the rebind
+								    surface lives beside Security on the desktop landing. */}
+								<KeymapSettings />
+							</div>
+						)}
 					</div>
 				)}
 			</div>
@@ -306,11 +662,13 @@ function NormalWorkspace() {
 							progressByList={progressByList}
 							openListId={openListId}
 							onOpenList={openList}
+							builtinViews={BUILTIN_VIEWS}
+							pinnedViews={pinnedViews}
+							activeViewId={activeViewId}
+							onOpenView={openView}
+							onNewView={() => setViewManager({ mode: "create" })}
 							section={section}
-							onOpenSettings={() => {
-								setOpenListId(null);
-								setSection("settings");
-							}}
+							onOpenSettings={openSettings}
 							collapsed={collapsed}
 							onToggleCollapsed={() => setCollapsed((c) => !c)}
 						/>
@@ -388,12 +746,65 @@ function NormalWorkspace() {
 				workspaceId={activeId ?? ""}
 			/>
 
+			{viewManager && (
+				<ViewManager
+					open
+					onOpenChange={(o) => {
+						if (!o) setViewManager(null);
+					}}
+					mode={viewManager.mode}
+					initial={
+						viewManager.mode === "edit"
+							? (() => {
+									const s = savedViews.find((v) => v.id === viewManager.id);
+									return s
+										? {
+												name: s.name,
+												icon: s.icon ?? null,
+												scope: s.scope ?? "personal",
+												workspaceId: s.workspaceId,
+												filter: s.filter,
+												display: s.display,
+											}
+										: undefined;
+								})()
+							: undefined
+					}
+					lists={lists.map((l) => ({ id: l.id, title: l.title }))}
+					folders={folders.map((f) => ({ id: f.id, name: f.name }))}
+					labels={labels.map((l) => ({
+						id: l.id,
+						name: l.name,
+						color: l.color ?? undefined,
+					}))}
+					members={members}
+					workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
+					onSubmit={submitView}
+				/>
+			)}
+
+			{/* View onOpenTask reuses the list TaskDetail sheet (design 2.20). */}
+			{detailTask && detailList && (
+				<TaskDetail
+					task={detailTask}
+					open
+					onOpenChange={(o) => {
+						if (!o) setDetailTaskId(null);
+					}}
+					list={detailList}
+					allLists={lists}
+					allTasks={tasks}
+					allLabels={labels}
+					taskLabelIds={labelIdsByTask.get(detailTask.id) ?? []}
+				/>
+			)}
+
 			{/* Keyboard system is desktop-only (design 2.18): the global handler,
 			    ⌘K palette, and ? cheat-sheet. RestrictedShell never mounts these. */}
 			{isDesktop && (
 				<>
 					<WorkspaceKeyboard />
-					<CommandPalette onNavigateList={openList} />
+					<CommandPalette onNavigateList={openList} onNavigateView={openView} />
 					<CheatSheet open={cheatOpen} onOpenChange={setCheatOpen} />
 				</>
 			)}
