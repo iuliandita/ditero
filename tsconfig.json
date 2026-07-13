@@ -10,6 +10,9 @@
 		"esModuleInterop": true,
 		"allowImportingTsExtensions": true,
 		"verbatimModuleSyntax": true,
+		"paths": {
+			"@/*": ["./src/web/*"]
+		},
 		"types": ["bun", "node"]
 	},
 	"include": ["src", "tests", "drizzle.config.ts", "vite.config.ts"]

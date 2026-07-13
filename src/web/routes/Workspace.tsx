@@ -1,19 +1,44 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
+import { ChevronLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
+import { SortableList } from "../components/list/SortableList.tsx";
+import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
+import { AppShell } from "../components/shell/AppShell.tsx";
+import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
+import { CreateList } from "../components/shell/CreateList.tsx";
+import { Fab } from "../components/shell/Fab.tsx";
+import { groupLists } from "../components/shell/grouping.ts";
+import { ListProgress } from "../components/shell/ListProgress.tsx";
+import { Sidebar } from "../components/shell/Sidebar.tsx";
+import {
+	Sheet,
+	SheetContent,
+	SheetHeader,
+	SheetTitle,
+} from "../components/ui/sheet.tsx";
+import { useIsDesktop } from "../lib/use-media-query.ts";
 import { ListView } from "./ListView.tsx";
 import { SecurityPanel } from "./SecurityPanel.tsx";
 
 export function Workspace() {
+	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
 	const [workspaces] = useQuery(queries.workspaces.mine());
 	const [lists] = useQuery(queries.lists.mine());
+	const [folders] = useQuery(queries.folders.mine());
+	const [templates] = useQuery(queries.templates.mine());
+	const [tasks] = useQuery(queries.tasks.mine());
+	const [labels] = useQuery(queries.labels.mine());
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openListId, setOpenListId] = useState<string | null>(null);
 	const [openSharedRequested, setOpenSharedRequested] = useState(false);
-	const [title, setTitle] = useState("");
+	const [section, setSection] = useState<Section>("lists");
+	const [collapsed, setCollapsed] = useState(false);
+	const [quickAddOpen, setQuickAddOpen] = useState(false);
+	const [switcherOpen, setSwitcherOpen] = useState(false);
 
 	// Default active workspace is the user's personal one, so new lists stay private.
 	useEffect(() => {
@@ -27,6 +52,32 @@ export function Workspace() {
 		() => lists.filter((l) => l.workspaceId === activeId),
 		[lists, activeId],
 	);
+	const activeFolders = useMemo(
+		() => folders.filter((f) => f.workspaceId === activeId),
+		[folders, activeId],
+	);
+	const activeTemplates = useMemo(
+		() => templates.filter((t) => t.workspaceId === activeId),
+		[templates, activeId],
+	);
+	const groups = useMemo(
+		() => groupLists(activeFolders, activeLists),
+		[activeFolders, activeLists],
+	);
+	// Aggregate completion per project list for the index progress bars.
+	const progressByList = useMemo(() => {
+		const map = new Map<string, { done: number; total: number }>();
+		for (const l of activeLists) {
+			if (l.kind === "project") map.set(l.id, { done: 0, total: 0 });
+		}
+		for (const t of tasks) {
+			const entry = map.get(t.listId);
+			if (!entry) continue;
+			entry.total++;
+			if (t.done) entry.done++;
+		}
+		return map;
+	}, [tasks, activeLists]);
 
 	useEffect(() => {
 		if (!openSharedRequested) return;
@@ -38,89 +89,209 @@ export function Workspace() {
 		}
 		const firstList = lists.find((l) => l.workspaceId === shared.id);
 		if (!firstList) return;
+		setSection("lists");
 		setOpenListId(firstList.id);
 		setOpenSharedRequested(false);
 	}, [openSharedRequested, workspaces, lists, activeId]);
 
-	async function createList() {
-		const t = title.trim();
-		if (!activeId || !t) return;
-		await zero.mutate(
-			mutators.list.create({
-				id: crypto.randomUUID(),
-				workspaceId: activeId,
-				title: t,
-			}),
-		).client;
-		setTitle("");
-	}
-
 	function selectWorkspace(id: string) {
 		setActiveId(id);
 		setOpenListId(null);
+		setSwitcherOpen(false);
+	}
+	function openList(id: string) {
+		setSection("lists");
+		setOpenListId(id);
+	}
+	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
+	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
+	// of M1a scope: each group is its own DndContext, so a list can't leave it.
+	function moveList(id: string, sortKey: string) {
+		zero
+			.mutate(mutators.list.update({ id, sortKey }))
+			.client.catch((e) => console.error("list reorder failed", e));
+	}
+	function changeSection(next: Section) {
+		setSection(next);
+		if (next === "lists") setOpenListId(null);
 	}
 
-	function openShared() {
-		setOpenSharedRequested(true);
+	const openListRow = openListId
+		? (activeLists.find((l) => l.id === openListId) ?? null)
+		: null;
+
+	let content: React.ReactNode;
+	// Mobile keeps Settings on its own tab; desktop pins SecurityPanel to the
+	// list-index landing so it is always reachable (the auth-hardening e2e drives
+	// it right after signup without navigating).
+	if (!isDesktop && section === "settings") {
+		content = (
+			<div className="p-4">
+				<SecurityPanel />
+			</div>
+		);
+	} else if (openListId) {
+		content = (
+			<div>
+				<div className="flex items-center gap-2 border-b p-3 md:hidden">
+					<button
+						type="button"
+						aria-label="Back to lists"
+						onClick={() => setOpenListId(null)}
+						className="flex size-11 items-center justify-center rounded-lg"
+					>
+						<ChevronLeft className="size-5" />
+					</button>
+					<span className="truncate font-medium">
+						{openListRow?.title ?? "List"}
+					</span>
+				</div>
+				<div className="p-4 md:p-6">
+					<ListView listId={openListId} />
+				</div>
+			</div>
+		);
+	} else {
+		content = (
+			<div className="flex flex-col gap-4 p-4 md:p-6">
+				<div className="flex items-center justify-between">
+					{isDesktop ? (
+						<h1 className="text-lg font-semibold">
+							{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
+						</h1>
+					) : (
+						// Mobile: the workspace name doubles as the switcher trigger.
+						<button
+							type="button"
+							aria-haspopup="dialog"
+							onClick={() => setSwitcherOpen(true)}
+							className="text-lg font-semibold"
+						>
+							{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
+						</button>
+					)}
+				</div>
+				<CreateList
+					workspaceId={activeId ?? ""}
+					lists={activeLists}
+					folders={activeFolders}
+					templates={activeTemplates}
+				/>
+				{/* Desktop nav lives in the sidebar; render the list index only on
+				    mobile so a list title never appears twice at once. */}
+				{!isDesktop &&
+					groups.map((group) => (
+						<div key={group.folder?.id ?? "__ungrouped__"}>
+							<div className="mb-1 px-1 text-xs font-medium text-muted-foreground">
+								{group.folder?.name ?? "Lists"}
+							</div>
+							<SortableList
+								items={group.lists}
+								onMove={moveList}
+								handleLabel="Reorder list"
+								handleTestId="list-drag"
+								className="gap-1"
+								renderItem={(l) => (
+									<button
+										type="button"
+										onClick={() => openList(l.id)}
+										className="w-full rounded-lg border p-3 text-start"
+									>
+										{l.title}
+										{l.kind === "project" && progressByList.has(l.id) && (
+											<ListProgress
+												done={progressByList.get(l.id)?.done ?? 0}
+												total={progressByList.get(l.id)?.total ?? 0}
+											/>
+										)}
+									</button>
+								)}
+							/>
+						</div>
+					))}
+				{isDesktop && (
+					<div className="border-t pt-2">
+						<SecurityPanel />
+					</div>
+				)}
+			</div>
+		);
 	}
 
 	return (
-		<div data-testid="workspace" className="mx-auto max-w-xl p-6">
-			<div className="mb-4 flex items-center gap-2">
-				{workspaces.map((w) => (
-					<button
-						key={w.id}
-						type="button"
-						className={`border px-2 py-1 ${w.id === activeId ? "bg-black text-white" : ""}`}
-						onClick={() => selectWorkspace(w.id)}
-					>
-						{w.name}
-					</button>
-				))}
-				<button
-					data-testid="open-shared"
-					type="button"
-					className="border px-2 py-1"
-					onClick={openShared}
-				>
-					Open shared
-				</button>
-			</div>
+		<>
+			<AppShell
+				sidebar={
+					// Render (not CSS-hide) per viewport so a list title never exists
+					// twice in the DOM — the mobile index renders the same titles.
+					isDesktop ? (
+						<Sidebar
+							workspaces={workspaces}
+							activeId={activeId}
+							onSelectWorkspace={selectWorkspace}
+							onOpenShared={() => setOpenSharedRequested(true)}
+							groups={groups}
+							progressByList={progressByList}
+							openListId={openListId}
+							onOpenList={openList}
+							section={section}
+							onOpenSettings={() => {
+								setOpenListId(null);
+								setSection("settings");
+							}}
+							collapsed={collapsed}
+							onToggleCollapsed={() => setCollapsed((c) => !c)}
+						/>
+					) : null
+				}
+				bottomNav={<BottomNav section={section} onSection={changeSection} />}
+				fab={<Fab onOpen={() => setQuickAddOpen(true)} />}
+			>
+				{content}
+			</AppShell>
 
-			<div className="mb-4 flex gap-2">
-				<input
-					data-testid="new-list"
-					className="flex-1 border p-2"
-					placeholder="new list"
-					value={title}
-					onChange={(e) => setTitle(e.target.value)}
-				/>
-				<button
-					data-testid="new-list-submit"
-					type="button"
-					className="border bg-black p-2 text-white"
-					onClick={createList}
-				>
-					Add list
-				</button>
-			</div>
-
-			<ul className="flex flex-col gap-1">
-				{activeLists.map((l) => (
-					<li key={l.id}>
+			{/* Mobile workspace switcher: Lists-header title tap -> bottom sheet. */}
+			<Sheet open={switcherOpen} onOpenChange={setSwitcherOpen}>
+				<SheetContent side="bottom">
+					<SheetHeader>
+						<SheetTitle>Workspaces</SheetTitle>
+					</SheetHeader>
+					<div className="flex flex-col gap-1 p-4 pt-0">
+						{workspaces.map((w) => (
+							<button
+								key={w.id}
+								type="button"
+								onClick={() => selectWorkspace(w.id)}
+								className={`rounded-lg px-3 py-2 text-start ${
+									w.id === activeId ? "bg-muted font-medium" : ""
+								}`}
+							>
+								{w.name}
+							</button>
+						))}
 						<button
 							type="button"
-							className="w-full border p-2 text-left"
-							onClick={() => setOpenListId(l.id)}
+							onClick={() => {
+								setOpenSharedRequested(true);
+								setSwitcherOpen(false);
+							}}
+							className="rounded-lg px-3 py-2 text-start text-muted-foreground"
 						>
-							{l.title}
+							Open shared
 						</button>
-					</li>
-				))}
-			</ul>
+					</div>
+				</SheetContent>
+			</Sheet>
 
-			{openListId ? <ListView listId={openListId} /> : null}
-			<SecurityPanel />
-		</div>
+			<QuickAddSheet
+				open={quickAddOpen}
+				onOpenChange={setQuickAddOpen}
+				lists={activeLists}
+				labels={labels}
+				tasks={tasks}
+				currentListId={openListId}
+				workspaceId={activeId ?? ""}
+			/>
+		</>
 	);
 }

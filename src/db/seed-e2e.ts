@@ -43,6 +43,7 @@ async function main() {
 		workspaceId: SHARED_WORKSPACE_ID,
 		ownerId: SYSTEM_USER_ID,
 		title: "Shared list",
+		sortKey: "a0",
 	});
 
 	await pool.end();

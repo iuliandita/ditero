@@ -5,7 +5,7 @@ type PasskeyEnvironment = {
 };
 
 export function authRateLimitOptions() {
-	return {
+	const options = {
 		enabled: true,
 		storage: "database" as const,
 		window: 60,
@@ -20,6 +20,16 @@ export function authRateLimitOptions() {
 			"/passkey/*": { window: 60, max: 10 },
 		},
 	};
+	// Relax the signup/signin ceiling under the e2e harness only: its multi-context
+	// matrix signs up many users per minute from one loopback IP. Prod keeps 5/60s.
+	// Gated on DITERO_E2E, not NODE_ENV=test — the security unit test and the
+	// auth-hardening integration test both run under NODE_ENV=test and assert the
+	// strict limits, so keying off NODE_ENV would break them.
+	if (process.env.DITERO_E2E === "1") {
+		options.customRules["/sign-in/email"] = { window: 60, max: 1000 };
+		options.customRules["/sign-up/email"] = { window: 60, max: 1000 };
+	}
+	return options;
 }
 
 export function passkeyOptions(env: PasskeyEnvironment) {

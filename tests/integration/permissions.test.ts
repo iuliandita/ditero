@@ -50,6 +50,7 @@ beforeAll(async () => {
 		workspaceId: "shared",
 		ownerId: "owner",
 		title: "Shared list",
+		sortKey: "a0",
 	});
 });
 
@@ -97,6 +98,8 @@ describe("workspace membership permissions", () => {
 					id: `created-${userId}`,
 					workspaceId: "shared",
 					title: userId,
+					kind: "tasks",
+					sortKey: "a0",
 				},
 			});
 		});
@@ -115,6 +118,8 @@ describe("workspace membership permissions", () => {
 						id: `denied-${userId}`,
 						workspaceId: "shared",
 						title: userId,
+						kind: "tasks",
+						sortKey: "a0",
 					},
 				});
 			}),
