@@ -7,6 +7,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { AssigneeChips } from "@/components/people/AssigneeChips";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatDue, isOverdue, priorityMeta } from "@/lib/task-display";
@@ -205,6 +206,7 @@ export function TaskRow({
 						</span>
 						{!bare && (
 							<div className="mt-0.5 flex flex-wrap items-center gap-2">
+								<AssigneeChips taskId={task.id} />
 								<DueChip task={task} />
 								{labels.map((l) => (
 									<Badge key={l.id} variant="outline" className="h-4 px-1.5">
