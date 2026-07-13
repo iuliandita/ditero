@@ -260,6 +260,48 @@ export const mutators = defineMutators({
 				await tx.mutate.task.delete({ id: args.id });
 			},
 		),
+		// Assign an existing workspace member to a task. Non-members never reach
+		// here: they go through invite.create (attachKind 'assign'), which attaches
+		// on accept. Idempotent on the deterministic `taskId:userId` pair.
+		assign: defineMutator(
+			z.object({ taskId: z.string(), userId: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const task = await tx.run(
+					zql.task.where("id", args.taskId).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				const list = task.list as List;
+				await requireWrite(tx, ctx.id, list.workspaceId);
+				const assigneeRole = await roleInWorkspace(
+					tx,
+					args.userId,
+					list.workspaceId,
+				);
+				if (!assigneeRole) throw new Error("assignee not a member");
+				const id = `${args.taskId}:${args.userId}`;
+				const existing = await tx.run(zql.taskAssignee.where("id", id).one());
+				if (existing) return; // already assigned; no-op
+				await tx.mutate.taskAssignee.insert({
+					id,
+					taskId: args.taskId,
+					userId: args.userId,
+				});
+			},
+		),
+		unassign: defineMutator(
+			z.object({ taskId: z.string(), userId: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const task = await tx.run(
+					zql.task.where("id", args.taskId).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				const list = task.list as List;
+				await requireWrite(tx, ctx.id, list.workspaceId);
+				const id = `${args.taskId}:${args.userId}`;
+				const existing = await tx.run(zql.taskAssignee.where("id", id).one());
+				if (existing) await tx.mutate.taskAssignee.delete({ id });
+			},
+		),
 	},
 	list: {
 		create: defineMutator(
@@ -623,6 +665,81 @@ export const mutators = defineMutators({
 					{ sortKey: args.sortKey, listId: args.listId },
 				);
 				for (const t of tasks) await insertInstantiatedTask(tx, t);
+			},
+		),
+	},
+	// invite.create is NOT a Zero mutator: the whole row is server-written (token
+	// is notNull and non-synced), so there is no optimistic benefit. It lives as
+	// POST /api/invite/create (server generates the token, returns the link).
+	invite: {
+		revoke: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const inv = await tx.run(zql.invite.where("id", args.id).one());
+				if (!inv) throw new Error("invite not found");
+				const role = await roleInWorkspace(tx, ctx.id, inv.workspaceId);
+				if (!role || !ADMIN_ROLES.has(role))
+					throw new Error("access denied: need admin+");
+				await tx.mutate.invite.update({ id: args.id, status: "revoked" });
+			},
+		),
+	},
+	comment: {
+		add: defineMutator(
+			z.object({ id: z.string(), taskId: z.string(), body: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const task = await tx.run(
+					zql.task.where("id", args.taskId).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				const list = task.list as List;
+				await requireWrite(tx, ctx.id, list.workspaceId);
+				await tx.mutate.comment.insert({
+					id: args.id,
+					taskId: args.taskId,
+					authorId: ctx.id,
+					body: args.body,
+				});
+			},
+		),
+		edit: defineMutator(
+			z.object({ id: z.string(), body: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const c = await tx.run(zql.comment.where("id", args.id).one());
+				if (!c) throw new Error("comment not found");
+				if (c.authorId !== ctx.id)
+					throw new Error("access denied: comment author only");
+				const task = await tx.run(
+					zql.task.where("id", c.taskId).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				const list = task.list as List;
+				await requireWrite(tx, ctx.id, list.workspaceId);
+				await tx.mutate.comment.update({
+					id: args.id,
+					body: args.body,
+					editedAt: Date.now(),
+				});
+			},
+		),
+		delete: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const c = await tx.run(zql.comment.where("id", args.id).one());
+				if (!c) throw new Error("comment not found");
+				const task = await tx.run(
+					zql.task.where("id", c.taskId).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				const list = task.list as List;
+				const role = await roleInWorkspace(tx, ctx.id, list.workspaceId);
+				// Author (member+) may delete their own; deleting others' needs admin+.
+				const canDelete =
+					(role != null && ADMIN_ROLES.has(role)) ||
+					(c.authorId === ctx.id && role != null && WRITE_ROLES.has(role));
+				if (!canDelete)
+					throw new Error("access denied: need admin+ or comment author");
+				await tx.mutate.comment.delete({ id: args.id });
 			},
 		),
 	},
