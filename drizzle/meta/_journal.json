@@ -50,6 +50,13 @@
       "when": 1783940077616,
       "tag": "0006_purple_true_believers",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783975562168,
+      "tag": "0007_fluffy_sunspot",
+      "breakpoints": true
     }
   ]
 }

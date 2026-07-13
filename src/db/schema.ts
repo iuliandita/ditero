@@ -41,6 +41,8 @@ export const inviteStatusEnum = pgEnum("invite_status", [
 	"revoked",
 ]);
 export const attachKindEnum = pgEnum("attach_kind", ["assign", "mention"]);
+export const viewScopeEnum = pgEnum("view_scope", ["personal", "workspace"]);
+export const keymapProfileEnum = pgEnum("keymap_profile", ["default", "vim"]);
 
 export const workspace = pgTable(
 	"workspace",
@@ -243,6 +245,46 @@ export const managedAccount = pgTable("managed_account", {
 		.notNull(),
 });
 
+export const view = pgTable("view", {
+	id: text("id").primaryKey(),
+	ownerId: text("owner_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	// null => personal / cross-workspace view; set => workspace-shared
+	workspaceId: text("workspace_id").references(() => workspace.id),
+	name: text("name").notNull(),
+	icon: text("icon"),
+	scope: viewScopeEnum("scope").notNull().default("personal"),
+	filter: jsonb("filter").notNull(), // FilterGroup AST (src/domain/view-filter.ts, later task)
+	display: jsonb("display").notNull(), // ViewDisplay (src/domain/view-filter.ts, later task)
+	sortKey: text("sort_key").notNull(), // fractional sort-key for sidebar order (matches folder/list/task)
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
+export const userPref = pgTable("user_pref", {
+	// id === userId (one row per user)
+	id: text("id")
+		.primaryKey()
+		.references(() => user.id, { onDelete: "cascade" }),
+	keymap: jsonb("keymap").notNull().default(sql`'{}'::jsonb`), // Record<commandId, binding[]>
+	keymapProfile: keymapProfileEnum("keymap_profile")
+		.notNull()
+		.default("default"),
+	homeViewRef: text("home_view_ref"), // built-in id ("today"...) or view.id; null => "today"
+	pinnedViews: jsonb("pinned_views").notNull().default(sql`'[]'::jsonb`), // ordered refs
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
 export const userSecret = pgTable(
 	"user_secret",
 	{
@@ -360,4 +402,16 @@ export const managedAccountRelations = relations(managedAccount, ({ one }) => ({
 		references: [user.id],
 		relationName: "managedGuardian",
 	}),
+}));
+
+export const viewRelations = relations(view, ({ one }) => ({
+	owner: one(user, { fields: [view.ownerId], references: [user.id] }),
+	workspace: one(workspace, {
+		fields: [view.workspaceId],
+		references: [workspace.id],
+	}),
+}));
+
+export const userPrefRelations = relations(userPref, ({ one }) => ({
+	user: one(user, { fields: [userPref.id], references: [user.id] }),
 }));
