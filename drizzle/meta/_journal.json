@@ -43,6 +43,13 @@
       "when": 1783874230981,
       "tag": "0005_tranquil_the_liberteens",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783940077616,
+      "tag": "0006_purple_true_believers",
+      "breakpoints": true
     }
   ]
 }
