@@ -116,6 +116,26 @@ describe("createInvite role-escalation gate", () => {
 		expect(rows[0].token).toBe(res.token);
 	});
 
+	test("restricted managed account cannot mint any invite (403, no row)", async () => {
+		// `member` has the member role but is also a restricted managed account.
+		await db.insert(tables.managedAccount).values({
+			id: "ma-member",
+			userId: "member",
+			guardianId: "owner",
+			restricted: true,
+		});
+		await expect(
+			createInvite(
+				{ workspaceId: "shared", role: "member", email: "a@test.invalid" },
+				"member",
+				db,
+				{},
+			),
+		).rejects.toMatchObject({ status: 403 });
+		const rows = await db.select().from(tables.invite);
+		expect(rows).toHaveLength(0);
+	});
+
 	test("member can mint a viewer invite", async () => {
 		const res = await createInvite(
 			{ workspaceId: "shared", role: "viewer" },

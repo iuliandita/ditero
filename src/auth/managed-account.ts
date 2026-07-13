@@ -2,11 +2,34 @@
 // name + password; we synthesize a non-routable @managed.invalid email as the
 // sign-in handle. User creation is wrapped in withRegistrationBypass so it works
 // even in closed/bootstrap mode. The kid is added to the guardian's workspace.
+import { and, eq } from "drizzle-orm";
 import { db as defaultDb } from "../db/client.ts";
 import { managedAccount, membership } from "../db/schema.ts";
 import { auth as defaultAuth } from "./auth.ts";
 import { type Role, roleInWorkspace, WRITE_ROLES } from "./membership-role.ts";
 import { withRegistrationBypass } from "./registration-bypass.ts";
+
+type RestrictedDb = Pick<typeof defaultDb, "select">;
+
+// True when the user is a restricted managed ("kid") account. The kid model is a
+// UI restriction over a normal membership, so this is the server backstop that
+// denies restricted callers any invite/sub-account creation regardless of role.
+export async function isRestrictedAccount(
+	userId: string,
+	database: RestrictedDb = defaultDb,
+): Promise<boolean> {
+	const rows = await database
+		.select({ id: managedAccount.id })
+		.from(managedAccount)
+		.where(
+			and(
+				eq(managedAccount.userId, userId),
+				eq(managedAccount.restricted, true),
+			),
+		)
+		.limit(1);
+	return rows.length > 0;
+}
 
 export class ManagedAccountError extends Error {
 	constructor(
@@ -48,6 +71,14 @@ export async function createManagedAccount(
 	}
 	if (!input.password) {
 		throw new ManagedAccountError(400, "password is required");
+	}
+
+	// A restricted account cannot provision sub-accounts (server backstop).
+	if (await isRestrictedAccount(input.guardianId, database)) {
+		throw new ManagedAccountError(
+			403,
+			"restricted accounts cannot create accounts",
+		);
 	}
 
 	const guardianRole = await roleInWorkspace(

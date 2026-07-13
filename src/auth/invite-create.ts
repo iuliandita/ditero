@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db as defaultDb } from "../db/client.ts";
 import { invite, list, task } from "../db/schema.ts";
 import { newInviteToken } from "../domain/invite.ts";
+import { isRestrictedAccount } from "./managed-account.ts";
 import {
 	ADMIN_ROLES,
 	type AppEnv,
@@ -65,6 +66,12 @@ export async function createInvite(
 			400,
 			"attachKind and attachTaskId must be set together",
 		);
+	}
+
+	// Server backstop: a restricted managed ("kid") account can mint no invites via
+	// any path, regardless of its workspace role. Checked before the role gate.
+	if (await isRestrictedAccount(callerId, database)) {
+		throw new InviteCreateError(403, "restricted accounts cannot invite");
 	}
 
 	const callerRole = await roleInWorkspace(

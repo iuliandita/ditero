@@ -55,9 +55,14 @@ function activeMention(
 export function CommentThread({
 	task,
 	workspaceId,
+	restricted = false,
 }: {
 	task: Task;
 	workspaceId: string;
+	// Restricted ("kid") callers: the entire invite-on-mention flow is disabled --
+	// no connection lookup, no invite-confirm panel, no links. @names stay plain
+	// text; commenting itself is unchanged. Default false leaves normal mounts as-is.
+	restricted?: boolean;
 }) {
 	const zero = useZero<typeof schema>();
 	const me = zero.userID ?? "";
@@ -128,17 +133,18 @@ export function CommentThread({
 	);
 
 	const callerRole = members.find((m) => m.userId === me)?.role ?? null;
-	const canInvite = callerRole != null && INVITE_ROLES.has(callerRole);
+	const canInvite =
+		!restricted && callerRole != null && INVITE_ROLES.has(callerRole);
 
 	const mention = activeMention(body, caret);
 	const suggestions = useMemo(() => {
-		if (!mention) return [];
+		if (!mention || restricted) return [];
 		const q = mention.query.toLowerCase();
 		const ranked = [...memberPeople, ...connectionPeople].filter((p) =>
 			p.name.toLowerCase().startsWith(q),
 		);
 		return ranked.slice(0, 6);
-	}, [mention, memberPeople, connectionPeople]);
+	}, [mention, memberPeople, connectionPeople, restricted]);
 
 	function run(mutation: { client: Promise<unknown> }) {
 		setError(null);

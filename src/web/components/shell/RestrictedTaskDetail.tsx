@@ -94,7 +94,7 @@ export function RestrictedTaskDetail({
 					)}
 
 					<div className="border-t pt-3">
-						<CommentThread task={t} workspaceId={workspaceId} />
+						<CommentThread task={t} workspaceId={workspaceId} restricted />
 					</div>
 				</div>
 			</SheetContent>
