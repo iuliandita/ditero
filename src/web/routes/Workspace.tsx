@@ -21,6 +21,11 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "../components/ui/sheet.tsx";
+import {
+	type CommandHandlers,
+	CommandProvider,
+} from "../keyboard/CommandContext.tsx";
+import { CommandPalette } from "../keyboard/CommandPalette.tsx";
 import { useIsDesktop } from "../lib/use-media-query.ts";
 import { ListView } from "./ListView.tsx";
 import { SecurityPanel } from "./SecurityPanel.tsx";
@@ -138,6 +143,24 @@ function NormalWorkspace() {
 		? (activeLists.find((l) => l.id === openListId) ?? null)
 		: null;
 
+	// Command handlers injected into the palette/keyboard system. palette.open and
+	// search.open are owned by the provider (it holds the open state). Stubs are
+	// wired by later M1c tasks: nav.today/Today (Task 12/13), help.cheatSheet
+	// overlay (Task 9), view.new (Task 13).
+	const commandHandlers = useMemo<CommandHandlers>(
+		() => ({
+			"task.create": () => setQuickAddOpen(true),
+			"settings.open": () => {
+				setOpenListId(null);
+				setSection("settings");
+			},
+			"nav.today": () => {},
+			"help.cheatSheet": () => {},
+			"view.new": () => {},
+		}),
+		[],
+	);
+
 	let content: React.ReactNode;
 	// Mobile keeps Settings on its own tab; desktop pins SecurityPanel to the
 	// list-index landing so it is always reachable (the auth-hardening e2e drives
@@ -237,7 +260,7 @@ function NormalWorkspace() {
 	}
 
 	return (
-		<>
+		<CommandProvider handlers={commandHandlers}>
 			<AppShell
 				sidebar={
 					// Render (not CSS-hide) per viewport so a list title never exists
@@ -334,6 +357,10 @@ function NormalWorkspace() {
 				currentListId={openListId}
 				workspaceId={activeId ?? ""}
 			/>
-		</>
+
+			{/* Keyboard palette is desktop-only (design 2.18); the ⌘K opener lives
+			    inside it. RestrictedShell never mounts this. */}
+			{isDesktop && <CommandPalette onNavigateList={openList} />}
+		</CommandProvider>
 	);
 }
