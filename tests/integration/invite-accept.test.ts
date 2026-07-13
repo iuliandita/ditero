@@ -156,6 +156,32 @@ describe("createInvite role-escalation gate", () => {
 		expect(rows[0].role).toBe("admin");
 	});
 
+	test("admin is BLOCKED from minting an owner invite (403, no privilege escalation)", async () => {
+		await expect(
+			createInvite({ workspaceId: "shared", role: "owner" }, "admin", db, {}),
+		).rejects.toMatchObject({ status: 403 });
+		const rows = await db
+			.select()
+			.from(tables.invite)
+			.where(eq(tables.invite.role, "owner"));
+		expect(rows).toHaveLength(0);
+	});
+
+	test("owner can mint an owner invite", async () => {
+		const res = await createInvite(
+			{ workspaceId: "shared", role: "owner" },
+			"owner",
+			db,
+			{},
+		);
+		const rows = await db
+			.select()
+			.from(tables.invite)
+			.where(eq(tables.invite.id, res.id));
+		expect(rows).toHaveLength(1);
+		expect(rows[0].role).toBe("owner");
+	});
+
 	test("non-member cannot mint any invite (403)", async () => {
 		await expect(
 			createInvite(

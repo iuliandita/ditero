@@ -74,13 +74,22 @@ export async function createInvite(
 	);
 	if (!callerRole) throw new InviteCreateError(403, "not a workspace member");
 
-	// Role-escalation gate. Granting admin/owner always needs admin+. Granting
-	// member/viewer needs member+ (WRITE_ROLES) unless policy tightens it to admin.
-	const grantNeedsAdmin =
-		ADMIN_ROLES.has(input.role) || memberInvitePolicy(env) === "admin";
-	const allowed = grantNeedsAdmin
-		? ADMIN_ROLES.has(callerRole)
-		: WRITE_ROLES.has(callerRole);
+	// Role-escalation gate, from most-privileged grant down:
+	// - owner: only an owner may grant owner (workspace lifecycle/transfer); an
+	//   admin must NOT be able to escalate an invitee past itself.
+	// - admin: owner or admin (ADMIN_ROLES).
+	// - member/viewer: member+ (WRITE_ROLES), unless policy tightens to admin+.
+	let allowed: boolean;
+	if (input.role === "owner") {
+		allowed = callerRole === "owner";
+	} else if (input.role === "admin") {
+		allowed = ADMIN_ROLES.has(callerRole);
+	} else {
+		allowed =
+			memberInvitePolicy(env) === "admin"
+				? ADMIN_ROLES.has(callerRole)
+				: WRITE_ROLES.has(callerRole);
+	}
 	if (!allowed) {
 		throw new InviteCreateError(403, "insufficient role to grant this invite");
 	}
