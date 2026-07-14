@@ -54,8 +54,8 @@ export const COMMANDS: CommandDef[] = [
 		bindings: { default: [["g", "s"]] },
 		context: "global",
 	},
-	// Movement is Linear-style single-key in BOTH profiles (design 2.18); vim only
-	// diverges on the edit/delete subset (dd to delete). j/k/o/x stay as defaults.
+	// Movement is Linear-style single-key in BOTH profiles (design 2.18): j/k/o/x
+	// are the defaults for move/open/toggle.
 	{
 		id: "nav.down",
 		category: "nav",
@@ -84,11 +84,7 @@ export const COMMANDS: CommandDef[] = [
 		bindings: { default: [["x"]] },
 		context: "global",
 	},
-	{
-		id: "task.delete",
-		category: "task",
-		label: "Delete focused",
-		bindings: { default: [["Backspace"]], vim: [["d", "d"]] },
-		context: "global",
-	},
+	// task.delete (Backspace / vim d d) is deferred until a task-delete UI exists
+	// to bind [data-kbd-action="delete"] to; advertising it with no target would be
+	// a dead binding.
 ];

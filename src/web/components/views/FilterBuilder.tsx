@@ -16,11 +16,12 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type {
-	FilterCondition,
-	FilterField,
-	FilterGroup,
-	FilterNode,
+import {
+	type FilterCondition,
+	type FilterField,
+	type FilterGroup,
+	type FilterNode,
+	isGroup,
 } from "../../../domain/view-filter.ts";
 import { FIELD_METAS, metaFor, type ValueControl } from "./filter-options.ts";
 
@@ -31,10 +32,6 @@ type BuilderData = {
 	labels: { id: string; name: string; color?: string }[];
 	members: { id: string; name: string }[];
 };
-
-function isGroup(node: FilterNode): node is FilterGroup {
-	return (node as FilterGroup).op !== undefined;
-}
 
 // "in" is the only multi-valued operator (emits string[]); all others emit a
 // single scalar. Mirrors view-filter's asStringArray vs scalar handling.

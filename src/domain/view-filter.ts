@@ -63,7 +63,7 @@ export type FilterCtx = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function isGroup(node: FilterNode): node is FilterGroup {
+export function isGroup(node: FilterNode): node is FilterGroup {
 	return (node as FilterGroup).op !== undefined;
 }
 

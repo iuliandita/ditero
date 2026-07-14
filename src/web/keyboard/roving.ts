@@ -1,6 +1,6 @@
-// Roving DOM focus over rows marked [data-kbd-nav]. All helpers no-op when no
-// such rows exist yet (Task 12 marks task rows), so movement commands are safe to
-// wire now. "Focused" = the nav row that is or contains document.activeElement.
+// Roving DOM focus over task rows: TaskRow marks its open button [data-kbd-nav]
+// and its row container [data-kbd-row]. All helpers no-op when no such rows are
+// present. "Focused" = the nav element that is or contains document.activeElement.
 
 function navItems(): HTMLElement[] {
 	return Array.from(document.querySelectorAll<HTMLElement>("[data-kbd-nav]"));
@@ -33,11 +33,13 @@ export function openFocused(): void {
 	items[i].click();
 }
 
-// Fire a row's inline action button ([data-kbd-action="toggle"|"delete"]); no-op
-// when the focused row has none.
-export function actOnFocused(action: "toggle" | "delete"): void {
+// Fire the focused row's inline toggle control ([data-kbd-action="toggle"]),
+// resolved from the row container so a sibling control (not a descendant of the
+// nav element) still matches. No-op when the focused row has none.
+export function actOnFocused(action: "toggle"): void {
 	const items = navItems();
 	const i = currentIndex(items);
 	if (i < 0) return;
-	items[i].querySelector<HTMLElement>(`[data-kbd-action="${action}"]`)?.click();
+	const row = items[i].closest<HTMLElement>("[data-kbd-row]") ?? items[i];
+	row.querySelector<HTMLElement>(`[data-kbd-action="${action}"]`)?.click();
 }

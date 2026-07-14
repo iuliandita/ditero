@@ -450,6 +450,48 @@ test("keys: c opens quick-add, is skipped in inputs, g t opens Today", async ({
 	await expect(page.getByTestId("list")).toHaveCount(0);
 });
 
+// --- Scenario 5b: roving j/k moves row focus, x toggles, o opens detail ---
+test("keys: j/k move task-row focus, x toggles done, o opens detail", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("v5b"));
+	await waitWorkspaceReady(page);
+
+	await createListDesktop(page, "L5b");
+	await openListDesktop(page, "L5b");
+	await addTask(page, "Row A");
+	await addTask(page, "Row B");
+
+	// The roving targets are the per-row open buttons TaskRow marks [data-kbd-nav].
+	const navs = page.getByTestId("list").locator("[data-kbd-nav]");
+	await expect(navs).toHaveCount(2);
+
+	// j walks down the rows, k walks back up.
+	await blur(page);
+	await page.keyboard.press("j");
+	await expect(navs.nth(0)).toBeFocused();
+	await page.keyboard.press("j");
+	await expect(navs.nth(1)).toBeFocused();
+	await page.keyboard.press("k");
+	await expect(navs.nth(0)).toBeFocused();
+
+	// o opens the focused row's detail (clicks the nav element).
+	await page.keyboard.press("o");
+	const detail = page.getByRole("dialog");
+	await expect(detail.getByLabel("Task title")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(detail).toBeHidden({ timeout: 15000 });
+
+	// x toggles the focused row's checkbox done. Re-focus row 0 deterministically
+	// first (Escape may not restore focus to a nav element).
+	await blur(page);
+	await page.keyboard.press("j");
+	await page.keyboard.press("x");
+	await expect(
+		page.getByTestId("list").getByRole("checkbox", { name: "Row A" }),
+	).toBeChecked({ timeout: 15000 });
+});
+
 // --- Scenario 6: remap a command, verify it persists + fires; vim reflected ---
 test("keymap: rebind persists across reload and fires; vim profile reflected", async ({
 	page,
@@ -492,15 +534,13 @@ test("keymap: rebind persists across reload and fires; vim profile reflected", a
 		timeout: 15000,
 	});
 
-	// Vim profile: the delete command reflects its `d d` binding in the settings.
+	// Vim profile: selecting it flips the pressed state (movement stays j/k/o/x in
+	// both profiles, so there is no vim-only binding to assert post-M1c).
 	await page.getByTestId("keymap-profile-vim").click();
 	await expect(page.getByTestId("keymap-profile-vim")).toHaveAttribute(
 		"aria-pressed",
 		"true",
 	);
-	await expect(
-		page.locator("li", { hasText: "Delete focused" }).getByText("d d"),
-	).toBeVisible();
 });
 
 // --- Scenario 7: cheat-sheet lists command bindings ---

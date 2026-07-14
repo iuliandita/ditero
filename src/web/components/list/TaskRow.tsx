@@ -182,17 +182,21 @@ export function TaskRow({
 					handlers.onSchedule ? () => handlers.onSchedule?.(task) : undefined
 				}
 			>
-				<div className="flex items-start gap-2 py-1.5">
+				{/* data-kbd-row scopes the roving toggle action to this row; the open
+				    button carries data-kbd-nav (roving focus + open target). */}
+				<div className="flex items-start gap-2 py-1.5" data-kbd-row>
 					<Checkbox
 						aria-label={task.title}
 						checked={task.done ?? false}
 						onCheckedChange={() =>
 							handlers.onToggle(task.id, task.done ?? false)
 						}
+						data-kbd-action="toggle"
 						className="mt-0.5"
 					/>
 					<button
 						type="button"
+						data-kbd-nav
 						onClick={() => handlers.onOpenDetail(task)}
 						className="min-w-0 flex-1 text-start"
 					>

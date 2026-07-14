@@ -40,7 +40,8 @@ export function CommandProvider({
 	// The provider owns the palette's open state, so it also owns the commands that
 	// summon the palette. Callers can override either by passing the id in
 	// `handlers`; everything else (task.create, settings.open, ...) comes from the
-	// injected map. Task 9 routes `/` (search) to something richer.
+	// injected map. `/` (search.open) opens the same palette -- it is the unified
+	// search surface.
 	const run = useCallback(
 		(id: string) => {
 			const handler = handlersRef.current[id];

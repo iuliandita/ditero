@@ -381,8 +381,7 @@ function NormalWorkspace() {
 
 	// Command handlers injected into the palette/keyboard system. palette.open and
 	// search.open are owned by the provider (it holds the open state). Movement +
-	// toggle/delete drive roving DOM focus over [data-kbd-nav] rows, which no-op
-	// until Task 12 marks task rows.
+	// toggle drive roving DOM focus over the [data-kbd-nav] task rows TaskRow marks.
 	// Handlers only touch stable setState setters (inlined rather than calling the
 	// openView/openSettings helpers) so the map has no unstable deps; the provider
 	// keeps them in a ref, so identity need not change across renders.
@@ -398,7 +397,6 @@ function NormalWorkspace() {
 			"nav.up": () => focusPrev(),
 			"nav.open": () => openFocused(),
 			"task.toggleDone": () => actOnFocused("toggle"),
-			"task.delete": () => actOnFocused("delete"),
 			"help.cheatSheet": () => setCheatOpen(true),
 			"nav.today": () => {
 				setSection("lists");
