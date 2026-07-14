@@ -1,5 +1,5 @@
 import { useZero } from "@rocicorp/zero/react";
-import { Check, Plus, Timer, Trash2, X } from "lucide-react";
+import { Check, Plus, SkipForward, Timer, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -272,6 +272,23 @@ export function TaskDetail({
 					</div>
 
 					{!isSubtask && <RecurrenceEditor key={t.id} task={t} />}
+
+					{!isSubtask && t.rrule != null && kind !== "habits" && (
+						<Button
+							variant="outline"
+							size="sm"
+							className="self-start"
+							data-testid="recurrence-skip"
+							aria-label="Skip this occurrence"
+							onClick={() =>
+								void run(
+									zero.mutate(mutators.task.skipOccurrence({ id: t.id })),
+								)
+							}
+						>
+							<SkipForward /> Skip this occurrence
+						</Button>
+					)}
 
 					{kind !== "checklist" && (
 						<div className="flex flex-col gap-1 text-sm">

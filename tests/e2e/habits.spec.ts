@@ -221,6 +221,58 @@ test("recurring task: list checkbox advances the due date and stays pending", as
 	});
 });
 
+// L1: the Skip control on a recurring, non-habit task routes to
+// task.skipOccurrence -- it advances the due date WITHOUT marking done and
+// WITHOUT awarding Karma (the distinguisher from complete, which advances and
+// awards). Habits get their own skip on the card, so the detail control is
+// gated off there.
+test("recurring task: Skip control advances the due date without awarding Karma", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("recur-skip"));
+	await waitWorkspaceReady(page);
+
+	await createListDesktop(page, "Skips");
+	await openListDesktop(page, "Skips");
+	await addTask(page, "Sweep floor");
+
+	// Due today + a daily recurrence so the row reads "Today" and Skip is offered.
+	const detail = await openDetail(page, "Sweep floor");
+	const now = new Date();
+	const pad = (n: number) => String(n).padStart(2, "0");
+	const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+	await detail.getByLabel("Due date").fill(today);
+	await detail.getByTestId("recurrence-enable").click();
+	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
+
+	// Skip control is present on this recurring, non-habit task.
+	const skip = detail.getByTestId("recurrence-skip");
+	await expect(skip).toBeVisible();
+
+	// Axe the detail surface with the new Skip markup present.
+	await expectNoSeriousA11y(page, "task detail with skip");
+
+	await skip.click();
+	await closeDetail(page);
+
+	// Due date rolled to tomorrow and the task stayed pending (not done).
+	const list = page.getByTestId("list");
+	const row = list.locator("[data-kbd-row]").filter({ hasText: "Sweep floor" });
+	const checkbox = row.getByRole("checkbox", { name: "Sweep floor" });
+	await expect(row.getByText("Tomorrow", { exact: false })).toBeVisible({
+		timeout: 15000,
+	});
+	await expect(checkbox).toHaveAttribute("aria-checked", "false");
+
+	// No Karma: skip awards nothing, so the Progress ledger stays empty and points
+	// stay at 0 (a complete would have line-itemed a +5 gain here).
+	await page.getByRole("button", { name: /'s space/ }).click();
+	const panel = page.getByTestId("karma-panel");
+	await expect(panel).toBeVisible();
+	await expect(page.getByTestId("karma-ledger-empty")).toBeVisible();
+	await expect(panel.getByText("0 pts")).toBeVisible();
+});
+
 // Create a Habits list from the starter template (habits kind is not in the
 // blank-list picker; the starter is the create path).
 async function createHabitsList(page: Page): Promise<void> {
