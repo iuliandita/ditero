@@ -5,20 +5,21 @@ type PasskeyEnvironment = {
 };
 
 export function authRateLimitOptions() {
+	const customRules: Record<string, { window: number; max: number }> = {
+		"/sign-in/email": { window: 60, max: 5 },
+		"/sign-up/email": { window: 60, max: 5 },
+		"/request-password-reset": { window: 300, max: 3 },
+		"/reset-password": { window: 300, max: 5 },
+		"/change-password": { window: 300, max: 5 },
+		"/two-factor/*": { window: 60, max: 5 },
+		"/passkey/*": { window: 60, max: 10 },
+	};
 	const options = {
 		enabled: true,
 		storage: "database" as const,
 		window: 60,
 		max: 100,
-		customRules: {
-			"/sign-in/email": { window: 60, max: 5 },
-			"/sign-up/email": { window: 60, max: 5 },
-			"/request-password-reset": { window: 300, max: 3 },
-			"/reset-password": { window: 300, max: 5 },
-			"/change-password": { window: 300, max: 5 },
-			"/two-factor/*": { window: 60, max: 5 },
-			"/passkey/*": { window: 60, max: 10 },
-		},
+		customRules,
 	};
 	// Relax the signup/signin ceiling under the e2e harness only: its multi-context
 	// matrix signs up many users per minute from one loopback IP. Prod keeps 5/60s.
@@ -28,6 +29,10 @@ export function authRateLimitOptions() {
 	if (process.env.DITERO_E2E === "1") {
 		options.customRules["/sign-in/email"] = { window: 60, max: 1000 };
 		options.customRules["/sign-up/email"] = { window: 60, max: 1000 };
+		// The views e2e resolves the signed-in user via a get-session round-trip;
+		// relax it here (test-only) so a poll loop does not trip the default 100/60s
+		// limiter mid-run. Prod keeps the default limit — never relaxed outside e2e.
+		options.customRules["/get-session"] = { window: 60, max: 1000 };
 	}
 	return options;
 }

@@ -23,7 +23,8 @@ import {
 	instantiate,
 	templateContentSchema,
 } from "../domain/template.ts";
-import { type List, type Schema, zql } from "./schema.gen.ts";
+import { filterGroupSchema, viewDisplaySchema } from "../domain/view-filter.ts";
+import { type List, type Schema, type View, zql } from "./schema.gen.ts";
 
 const WRITE_ROLES = new Set(["owner", "admin", "member"]); // may edit content
 const ADMIN_ROLES = new Set(["owner", "admin"]);
@@ -52,6 +53,23 @@ async function requireWrite(
 	if (!role || !WRITE_ROLES.has(role)) throw new Error(DENIED);
 }
 
+// Update/reorder auth for a view: a personal view is the owner's alone; a
+// workspace view follows the workspace write gate. (Delete is stricter and
+// inlined: workspace-view delete is creator-or-admin, like template.delete.)
+async function requireViewEdit(
+	tx: Transaction<Schema>,
+	userId: string,
+	view: View,
+): Promise<void> {
+	if (view.scope === "personal") {
+		if (view.ownerId !== userId)
+			throw new Error("access denied: view owner only");
+		return;
+	}
+	if (!view.workspaceId) throw new Error("workspace view missing workspaceId");
+	await requireWrite(tx, userId, view.workspaceId);
+}
+
 // `satisfies` ties the tuple to ListKind so a typo or removed kind fails to
 // compile (twin of LIST_KINDS in domain/template.ts).
 const LIST_KINDS = [
@@ -64,6 +82,19 @@ const LIST_KINDS = [
 const listKind = z.enum(LIST_KINDS);
 const completedDisplay = z.enum(["sink", "keep", "hide"]);
 const templateKind = z.enum(["list", "task"]);
+
+// Validate the client-supplied view AST/display through the domain schemas while
+// keeping the mutator arg surface as ReadonlyJSONValue (FilterGroup/ViewDisplay
+// are not structurally JSON, so z.custom preserves the JSON insert type). The
+// predicate runs server-side, so a malformed tree is rejected at write time.
+const viewFilterArg = z.custom<ReadonlyJSONValue>(
+	(v) => filterGroupSchema.safeParse(v).success,
+	{ message: "invalid view filter" },
+);
+const viewDisplayArg = z.custom<ReadonlyJSONValue>(
+	(v) => viewDisplaySchema.safeParse(v).success,
+	{ message: "invalid view display" },
+);
 
 // Deterministic id generator seeded from a client-supplied id, so an
 // instantiate mutator produces identical ids on the optimistic client and the
@@ -744,6 +775,130 @@ export const mutators = defineMutators({
 				if (!canDelete)
 					throw new Error("access denied: need admin+ or comment author");
 				await tx.mutate.comment.delete({ id: args.id });
+			},
+		),
+	},
+	view: {
+		// filter/display are validated server-side against the domain AST/display
+		// schemas (bounded field enum, operator length, nesting depth, breadth, and
+		// total-node caps) so a member with shared-workspace write access cannot
+		// store a malformed tree that DoSes co-members in taskMatchesFilter.
+		create: defineMutator(
+			z.object({
+				id: z.string(),
+				name: z.string().min(1).max(120),
+				icon: z.string().max(64).optional(),
+				scope: z.enum(["personal", "workspace"]),
+				workspaceId: z.string().nullable(),
+				filter: viewFilterArg,
+				display: viewDisplayArg,
+				sortKey: z.string(),
+			}),
+			async ({ tx, ctx, args }) => {
+				if (args.scope === "workspace") {
+					if (!args.workspaceId)
+						throw new Error("workspace view needs workspaceId");
+					await requireWrite(tx, ctx.id, args.workspaceId);
+				} else if (args.workspaceId != null) {
+					throw new Error("personal view must not set workspaceId");
+				}
+				await tx.mutate.view.insert({
+					id: args.id,
+					ownerId: ctx.id,
+					workspaceId: args.workspaceId,
+					name: args.name,
+					icon: args.icon ?? null,
+					scope: args.scope,
+					filter: args.filter,
+					display: args.display,
+					sortKey: args.sortKey,
+				});
+			},
+		),
+		update: defineMutator(
+			z.object({
+				id: z.string(),
+				name: z.string().min(1).max(120).optional(),
+				icon: z.string().max(64).nullable().optional(),
+				filter: viewFilterArg.optional(),
+				display: viewDisplayArg.optional(),
+			}),
+			async ({ tx, ctx, args }) => {
+				const view = await tx.run(zql.view.where("id", args.id).one());
+				if (!view) throw new Error("view not found");
+				await requireViewEdit(tx, ctx.id, view);
+				await tx.mutate.view.update({
+					id: args.id,
+					...(args.name !== undefined ? { name: args.name } : {}),
+					...(args.icon !== undefined ? { icon: args.icon } : {}),
+					...(args.filter !== undefined ? { filter: args.filter } : {}),
+					...(args.display !== undefined ? { display: args.display } : {}),
+				});
+			},
+		),
+		reorder: defineMutator(
+			z.object({ id: z.string(), sortKey: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const view = await tx.run(zql.view.where("id", args.id).one());
+				if (!view) throw new Error("view not found");
+				await requireViewEdit(tx, ctx.id, view);
+				await tx.mutate.view.update({ id: args.id, sortKey: args.sortKey });
+			},
+		),
+		delete: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const view = await tx.run(zql.view.where("id", args.id).one());
+				if (!view) throw new Error("view not found");
+				if (view.scope === "personal") {
+					if (view.ownerId !== ctx.id)
+						throw new Error("access denied: view owner only");
+				} else {
+					if (!view.workspaceId)
+						throw new Error("workspace view missing workspaceId");
+					const role = await roleInWorkspace(tx, ctx.id, view.workspaceId);
+					// Creator (member+) may delete their own; deleting others' needs admin+.
+					const canDelete =
+						(role != null && ADMIN_ROLES.has(role)) ||
+						(view.ownerId === ctx.id && role != null && WRITE_ROLES.has(role));
+					if (!canDelete)
+						throw new Error("access denied: need admin+ or view owner");
+				}
+				await tx.mutate.view.delete({ id: args.id });
+			},
+		),
+	},
+	userPref: {
+		// One row per user, keyed by ctx.id (never a client-supplied id, so a
+		// caller can only ever write their own prefs). Upsert: update if present.
+		set: defineMutator(
+			z.object({
+				// Caps mirror the M1b jsonb posture: bound the client-controlled
+				// user_pref writes so a caller cannot store an unbounded blob.
+				keymap: z
+					.record(
+						z.string().max(64),
+						z.array(z.array(z.string().max(24)).max(4)).max(4),
+					)
+					.refine((obj) => Object.keys(obj).length <= 100, {
+						message: "too many keymap entries",
+					})
+					.optional(),
+				keymapProfile: z.enum(["default", "vim"]).optional(),
+				homeViewRef: z.string().max(200).nullable().optional(),
+				pinnedViews: z.array(z.string().max(64)).max(200).optional(),
+			}),
+			async ({ tx, ctx, args }) => {
+				const existing = await tx.run(zql.userPref.where("id", ctx.id).one());
+				if (existing) await tx.mutate.userPref.update({ id: ctx.id, ...args });
+				else
+					await tx.mutate.userPref.insert({
+						id: ctx.id,
+						keymap: args.keymap ?? {},
+						keymapProfile: args.keymapProfile ?? "default",
+						homeViewRef: args.homeViewRef ?? null,
+						pinnedViews: args.pinnedViews ?? [],
+					});
 			},
 		),
 	},

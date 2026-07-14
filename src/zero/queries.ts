@@ -22,7 +22,7 @@ declare module "@rocicorp/zero" {
 // table to share a single check shape.
 const workspaceVisible =
 	(ctx: AuthCtx) =>
-	<T extends "folder" | "label" | "list" | "membership" | "template">(
+	<T extends "folder" | "label" | "list" | "membership" | "template" | "view">(
 		eb: ExpressionBuilder<T, Schema>,
 	) =>
 		(eb as ExpressionBuilder<"list", Schema>).exists("workspace", (w) =>
@@ -137,5 +137,22 @@ export const queries = defineQueries({
 				or(cmp("userId", ctx.id), cmp("guardianId", ctx.id)),
 			),
 		),
+	},
+	// Visibility union: personal views the caller owns (scope personal, gate on
+	// ownerId) OR workspace-shared views whose workspace the caller is a member of.
+	views: {
+		mine: defineQuery(({ ctx }) =>
+			zql.view.where((eb) => {
+				const { or, and, cmp } = eb;
+				return or(
+					and(cmp("scope", "personal"), cmp("ownerId", ctx.id)),
+					and(cmp("scope", "workspace"), workspaceVisible(ctx)(eb)),
+				);
+			}),
+		),
+	},
+	// One pref row per user (id === userId); the caller reads only their own.
+	userPrefs: {
+		mine: defineQuery(({ ctx }) => zql.userPref.where("id", ctx.id)),
 	},
 });
