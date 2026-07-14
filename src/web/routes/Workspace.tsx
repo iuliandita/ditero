@@ -17,11 +17,13 @@ import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
+import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
 import { SortableList } from "../components/list/SortableList.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { MembersPanel } from "../components/people/MembersPanel.tsx";
 import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
 import { FocusSettings } from "../components/settings/FocusSettings.tsx";
+import { KarmaSettings } from "../components/settings/KarmaSettings.tsx";
 import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
@@ -427,6 +429,8 @@ function NormalWorkspace() {
 		content = (
 			<div className="p-4">
 				<SecurityPanel />
+				<KarmaPanel />
+				<KarmaSettings />
 				<FocusSettings />
 			</div>
 		);
@@ -650,6 +654,8 @@ function NormalWorkspace() {
 						{isDesktop && (
 							<div className="border-t pt-2">
 								<SecurityPanel />
+								<KarmaPanel />
+								<KarmaSettings />
 								{/* Keyboard is a desktop feature (design 2.18); the rebind
 								    surface lives beside Security on the desktop landing. */}
 								<KeymapSettings />
