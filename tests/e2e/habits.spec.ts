@@ -176,6 +176,51 @@ test("recurrence: set weekly every-2-weeks Mon/Wed, round-trips, toggle relative
 	await expect(detail.getByTestId("recurrence-enable")).toBeVisible();
 });
 
+// Part A proof: the list checkbox routes a done-transition through task.complete,
+// so completing a recurring task advances the occurrence instead of marking it
+// done. The row rolls its due date forward and stays pending.
+test("recurring task: list checkbox advances the due date and stays pending", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("recur-task"));
+	await waitWorkspaceReady(page);
+
+	await createListDesktop(page, "Chores");
+	await openListDesktop(page, "Chores");
+	await addTask(page, "Take out bins");
+
+	// Due today + a daily recurrence, set through the detail surface. Use the
+	// browser-local calendar day so it reads back as "Today" (formatDue compares
+	// against local now; a UTC-derived string can be off by a day).
+	const detail = await openDetail(page, "Take out bins");
+	const now = new Date();
+	const pad = (n: number) => String(n).padStart(2, "0");
+	const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+	await detail.getByLabel("Due date").fill(today);
+	await detail.getByTestId("recurrence-enable").click();
+	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
+	await closeDetail(page);
+
+	const list = page.getByTestId("list");
+	const row = list
+		.locator("[data-kbd-row]")
+		.filter({ hasText: "Take out bins" });
+	const checkbox = row.getByRole("checkbox", { name: "Take out bins" });
+	await expect(row.getByText("Today", { exact: false })).toBeVisible();
+	await expect(checkbox).toHaveAttribute("aria-checked", "false");
+
+	// Complete via the list checkbox -> task.complete advances the occurrence.
+	await checkbox.click();
+
+	// Pending again (done stayed false) and the due date rolled to tomorrow.
+	await expect(checkbox).toHaveAttribute("aria-checked", "false", {
+		timeout: 15000,
+	});
+	await expect(row.getByText("Tomorrow", { exact: false })).toBeVisible({
+		timeout: 15000,
+	});
+});
+
 // Create a Habits list from the starter template (habits kind is not in the
 // blank-list picker; the starter is the create path).
 async function createHabitsList(page: Page): Promise<void> {

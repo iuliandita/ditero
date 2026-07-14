@@ -47,6 +47,23 @@ async function openListDesktop(page: Page, name: string): Promise<void> {
 	await expect(page.getByTestId("list")).toBeVisible();
 }
 
+async function createListDesktop(page: Page, name: string): Promise<void> {
+	await waitWorkspaceReady(page);
+	await page.getByTestId("new-list").fill(name);
+	await page.getByTestId("new-list-submit").click();
+	await expect(
+		sidebarLists(page).getByRole("button", { name, exact: true }).first(),
+	).toBeVisible({ timeout: 15000 });
+}
+
+async function addTask(page: Page, title: string): Promise<void> {
+	await page.getByTestId("new-task").fill(title);
+	await page.getByTestId("new-task-submit").click();
+	await expect(
+		page.getByTestId("list").getByText(title, { exact: true }),
+	).toBeVisible({ timeout: 15000 });
+}
+
 // Create a Habits list from the starter template (habits kind is not in the
 // blank-list picker; the starter is the create path) -- mirrors habits.spec.
 async function createHabitsList(page: Page): Promise<void> {
@@ -136,4 +153,39 @@ test("karma: complete a habit, Progress panel shows level + points + ledger; set
 
 	// Axe the panel + settings surface (landing) while populated.
 	await expectNoSeriousA11y(page, "karma panel + settings");
+});
+
+// Part A proof: completing a regular (non-recurring) task through the list
+// checkbox routes to task.complete, which awards Karma (task_complete, +5 at
+// default priority). Proves the checkbox is wired to the awarding path.
+test("karma: completing a regular task via the list checkbox awards Karma", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("karma-task"));
+	await waitWorkspaceReady(page);
+
+	await createListDesktop(page, "Errands");
+	await openListDesktop(page, "Errands");
+	await addTask(page, "Buy milk");
+
+	const list = page.getByTestId("list");
+	const checkbox = list.getByRole("checkbox", { name: "Buy milk" });
+	await checkbox.click();
+	await expect(checkbox).toHaveAttribute("aria-checked", "true", {
+		timeout: 15000,
+	});
+
+	// Landing renders the Progress panel on desktop.
+	await workspaceButton(page).click();
+	await expect(page.getByTestId("karma-panel")).toBeVisible();
+
+	// Ledger line-items the task completion as a +5 gain (base task, priority 0).
+	const row = page
+		.getByTestId("karma-ledger-row")
+		.filter({ hasText: "Completed a task" });
+	await expect(row).toBeVisible({ timeout: 15000 });
+	await expect(row.getByTestId("karma-ledger-delta")).toHaveText("+5");
+	await expect(page.getByTestId("karma-panel").getByText("5 pts")).toBeVisible({
+		timeout: 15000,
+	});
 });
