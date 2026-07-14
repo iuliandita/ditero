@@ -442,6 +442,11 @@ export const mutators = defineMutators({
 				if (!task) throw new Error("task not found");
 				const list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				// Habits are task rows in a kind=habits list; they complete only via
+				// habit.log. Reject before any mutate/karma so a habit id cannot
+				// double-award task karma and advance the habit's dueAt.
+				if (list.kind === "habits")
+					throw new Error("habits complete via habit.log");
 				const now = Date.now();
 				// Non-recurring completion is idempotent: an already-done task is a
 				// no-op so a repeat call cannot re-award Karma. Recurring tasks still

@@ -503,6 +503,21 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 				call(mutators.task.complete, { id: "hm-viewer" }, { id: "hm-t-plain" }),
 			).rejects.toThrow(/access denied/);
 		});
+
+		// A habit is a task row in a kind=habits list; it completes only via
+		// habit.log. task.complete must reject it before any write so it cannot
+		// double-award task Karma or advance the habit's dueAt.
+		test("habit-kind task is rejected and writes nothing", async () => {
+			await expect(
+				call(mutators.task.complete, { id: "hm-owner" }, { id: "hm-habit" }),
+			).rejects.toThrow(/habit\.log/);
+			const t = await taskRow("hm-habit");
+			expect(t.done).toBe(false);
+			expect(t.completedAt).toBeNull();
+			expect(t.dueAt ?? null).toBeNull(); // dueAt not advanced
+			expect(await karmaRow("hm-owner")).toBeUndefined();
+			expect(await eventCount("hm-owner")).toBe(0);
+		});
 	});
 
 	describe("task.skipOccurrence", () => {
