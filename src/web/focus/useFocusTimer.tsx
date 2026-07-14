@@ -163,7 +163,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		if (!session?.running) return;
 		function tick() {
 			const s = sessionRef.current;
-			if (!s || !s.running || s.endsAt == null) return;
+			if (!s?.running || s.endsAt == null) return;
 			const now = Date.now();
 			if (now >= s.endsAt) {
 				complete();
@@ -171,7 +171,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			}
 			const rem = remainingSecFrom(s.endsAt, now);
 			setSession((prev) =>
-				prev && prev.running && prev.remainingSec !== rem
+				prev?.running && prev.remainingSec !== rem
 					? { ...prev, remainingSec: rem }
 					: prev,
 			);
@@ -211,7 +211,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
 	const pause = useCallback(() => {
 		setSession((prev) => {
-			if (!prev || !prev.running || prev.endsAt == null) return prev;
+			if (!prev?.running || prev.endsAt == null) return prev;
 			return {
 				...prev,
 				running: false,
