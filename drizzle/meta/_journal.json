@@ -57,6 +57,13 @@
       "when": 1783975562168,
       "tag": "0007_fluffy_sunspot",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784053283829,
+      "tag": "0008_material_tomorrow_man",
+      "breakpoints": true
     }
   ]
 }
