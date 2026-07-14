@@ -16,10 +16,12 @@ import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
+import { FocusTimer } from "../components/focus/FocusTimer.tsx";
 import { SortableList } from "../components/list/SortableList.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { MembersPanel } from "../components/people/MembersPanel.tsx";
 import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
+import { FocusSettings } from "../components/settings/FocusSettings.tsx";
 import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
@@ -48,6 +50,7 @@ import {
 	ViewManager,
 } from "../components/views/ViewManager.tsx";
 import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
+import { FocusProvider } from "../focus/useFocusTimer.tsx";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import type { SavedView } from "../hooks/useViews.ts";
 import { useViews } from "../hooks/useViews.ts";
@@ -424,6 +427,7 @@ function NormalWorkspace() {
 		content = (
 			<div className="p-4">
 				<SecurityPanel />
+				<FocusSettings />
 			</div>
 		);
 	} else if (openListId) {
@@ -649,6 +653,7 @@ function NormalWorkspace() {
 								{/* Keyboard is a desktop feature (design 2.18); the rebind
 								    surface lives beside Security on the desktop landing. */}
 								<KeymapSettings />
+								<FocusSettings />
 							</div>
 						)}
 					</div>
@@ -658,168 +663,175 @@ function NormalWorkspace() {
 	}
 
 	return (
-		<CommandProvider handlers={commandHandlers}>
-			<AppShell
-				sidebar={
-					// Render (not CSS-hide) per viewport so a list title never exists
-					// twice in the DOM — the mobile index renders the same titles.
-					isDesktop ? (
-						<Sidebar
-							workspaces={workspaces}
-							activeId={activeId}
-							onSelectWorkspace={selectWorkspace}
-							onOpenShared={() => setOpenSharedRequested(true)}
-							onOpenMembers={() => setMembersOpen(true)}
-							groups={groups}
-							progressByList={progressByList}
-							openListId={openListId}
-							onOpenList={openList}
-							builtinViews={BUILTIN_VIEWS}
-							pinnedViews={pinnedViews}
-							activeViewId={activeViewId}
-							onOpenView={openView}
-							onNewView={() => setViewManager({ mode: "create" })}
-							section={section}
-							onOpenSettings={openSettings}
-							collapsed={collapsed}
-							onToggleCollapsed={() => setCollapsed((c) => !c)}
-						/>
-					) : null
-				}
-				bottomNav={<BottomNav section={section} onSection={changeSection} />}
-				fab={<Fab onOpen={() => setQuickAddOpen(true)} />}
-			>
-				{content}
-			</AppShell>
+		<FocusProvider>
+			<CommandProvider handlers={commandHandlers}>
+				<AppShell
+					sidebar={
+						// Render (not CSS-hide) per viewport so a list title never exists
+						// twice in the DOM — the mobile index renders the same titles.
+						isDesktop ? (
+							<Sidebar
+								workspaces={workspaces}
+								activeId={activeId}
+								onSelectWorkspace={selectWorkspace}
+								onOpenShared={() => setOpenSharedRequested(true)}
+								onOpenMembers={() => setMembersOpen(true)}
+								groups={groups}
+								progressByList={progressByList}
+								openListId={openListId}
+								onOpenList={openList}
+								builtinViews={BUILTIN_VIEWS}
+								pinnedViews={pinnedViews}
+								activeViewId={activeViewId}
+								onOpenView={openView}
+								onNewView={() => setViewManager({ mode: "create" })}
+								section={section}
+								onOpenSettings={openSettings}
+								collapsed={collapsed}
+								onToggleCollapsed={() => setCollapsed((c) => !c)}
+							/>
+						) : null
+					}
+					bottomNav={<BottomNav section={section} onSection={changeSection} />}
+					fab={<Fab onOpen={() => setQuickAddOpen(true)} />}
+				>
+					{content}
+				</AppShell>
 
-			{/* Mobile workspace switcher: Lists-header title tap -> bottom sheet. */}
-			<Sheet open={switcherOpen} onOpenChange={setSwitcherOpen}>
-				<SheetContent side="bottom">
-					<SheetHeader>
-						<SheetTitle>Workspaces</SheetTitle>
-					</SheetHeader>
-					<div className="flex flex-col gap-1 p-4 pt-0">
-						{workspaces.map((w) => (
+				{/* Mobile workspace switcher: Lists-header title tap -> bottom sheet. */}
+				<Sheet open={switcherOpen} onOpenChange={setSwitcherOpen}>
+					<SheetContent side="bottom">
+						<SheetHeader>
+							<SheetTitle>Workspaces</SheetTitle>
+						</SheetHeader>
+						<div className="flex flex-col gap-1 p-4 pt-0">
+							{workspaces.map((w) => (
+								<button
+									key={w.id}
+									type="button"
+									onClick={() => selectWorkspace(w.id)}
+									className={`rounded-lg px-3 py-2 text-start ${
+										w.id === activeId ? "bg-muted font-medium" : ""
+									}`}
+								>
+									{w.name}
+								</button>
+							))}
 							<button
-								key={w.id}
 								type="button"
-								onClick={() => selectWorkspace(w.id)}
-								className={`rounded-lg px-3 py-2 text-start ${
-									w.id === activeId ? "bg-muted font-medium" : ""
-								}`}
+								onClick={() => {
+									setOpenSharedRequested(true);
+									setSwitcherOpen(false);
+								}}
+								className="rounded-lg px-3 py-2 text-start text-muted-foreground"
 							>
-								{w.name}
+								Open shared
 							</button>
-						))}
-						<button
-							type="button"
-							onClick={() => {
-								setOpenSharedRequested(true);
-								setSwitcherOpen(false);
-							}}
-							className="rounded-lg px-3 py-2 text-start text-muted-foreground"
-						>
-							Open shared
-						</button>
-						<button
-							type="button"
-							data-testid="open-members"
-							disabled={!activeId}
-							onClick={() => {
-								setSwitcherOpen(false);
-								setMembersOpen(true);
-							}}
-							className="rounded-lg px-3 py-2 text-start text-muted-foreground disabled:opacity-50"
-						>
-							Members
-						</button>
-					</div>
-				</SheetContent>
-			</Sheet>
+							<button
+								type="button"
+								data-testid="open-members"
+								disabled={!activeId}
+								onClick={() => {
+									setSwitcherOpen(false);
+									setMembersOpen(true);
+								}}
+								className="rounded-lg px-3 py-2 text-start text-muted-foreground disabled:opacity-50"
+							>
+								Members
+							</button>
+						</div>
+					</SheetContent>
+				</Sheet>
 
-			{activeId && (
-				<MembersPanel
-					workspaceId={activeId}
-					workspaceName={
-						workspaces.find((w) => w.id === activeId)?.name ?? "Workspace"
-					}
-					open={membersOpen}
-					onOpenChange={setMembersOpen}
+				{activeId && (
+					<MembersPanel
+						workspaceId={activeId}
+						workspaceName={
+							workspaces.find((w) => w.id === activeId)?.name ?? "Workspace"
+						}
+						open={membersOpen}
+						onOpenChange={setMembersOpen}
+					/>
+				)}
+
+				<QuickAddSheet
+					open={quickAddOpen}
+					onOpenChange={setQuickAddOpen}
+					lists={activeLists}
+					labels={labels}
+					tasks={tasks}
+					currentListId={openListId}
+					workspaceId={activeId ?? ""}
 				/>
-			)}
 
-			<QuickAddSheet
-				open={quickAddOpen}
-				onOpenChange={setQuickAddOpen}
-				lists={activeLists}
-				labels={labels}
-				tasks={tasks}
-				currentListId={openListId}
-				workspaceId={activeId ?? ""}
-			/>
+				{viewManager && (
+					<ViewManager
+						open
+						onOpenChange={(o) => {
+							if (!o) setViewManager(null);
+						}}
+						mode={viewManager.mode}
+						initial={
+							viewManager.mode === "edit"
+								? (() => {
+										const s = savedViews.find((v) => v.id === viewManager.id);
+										return s
+											? {
+													name: s.name,
+													icon: s.icon ?? null,
+													scope: s.scope ?? "personal",
+													workspaceId: s.workspaceId,
+													filter: s.filter,
+													display: s.display,
+												}
+											: undefined;
+									})()
+								: undefined
+						}
+						lists={lists.map((l) => ({ id: l.id, title: l.title }))}
+						folders={folders.map((f) => ({ id: f.id, name: f.name }))}
+						labels={labels.map((l) => ({
+							id: l.id,
+							name: l.name,
+							color: l.color ?? undefined,
+						}))}
+						members={members}
+						workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
+						onSubmit={submitView}
+					/>
+				)}
 
-			{viewManager && (
-				<ViewManager
-					open
-					onOpenChange={(o) => {
-						if (!o) setViewManager(null);
-					}}
-					mode={viewManager.mode}
-					initial={
-						viewManager.mode === "edit"
-							? (() => {
-									const s = savedViews.find((v) => v.id === viewManager.id);
-									return s
-										? {
-												name: s.name,
-												icon: s.icon ?? null,
-												scope: s.scope ?? "personal",
-												workspaceId: s.workspaceId,
-												filter: s.filter,
-												display: s.display,
-											}
-										: undefined;
-								})()
-							: undefined
-					}
-					lists={lists.map((l) => ({ id: l.id, title: l.title }))}
-					folders={folders.map((f) => ({ id: f.id, name: f.name }))}
-					labels={labels.map((l) => ({
-						id: l.id,
-						name: l.name,
-						color: l.color ?? undefined,
-					}))}
-					members={members}
-					workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
-					onSubmit={submitView}
-				/>
-			)}
+				{/* View onOpenTask reuses the list TaskDetail sheet (design 2.20). */}
+				{detailTask && detailList && (
+					<TaskDetail
+						task={detailTask}
+						open
+						onOpenChange={(o) => {
+							if (!o) setDetailTaskId(null);
+						}}
+						list={detailList}
+						allLists={lists}
+						allTasks={tasks}
+						allLabels={labels}
+						taskLabelIds={labelIdsByTask.get(detailTask.id) ?? []}
+					/>
+				)}
 
-			{/* View onOpenTask reuses the list TaskDetail sheet (design 2.20). */}
-			{detailTask && detailList && (
-				<TaskDetail
-					task={detailTask}
-					open
-					onOpenChange={(o) => {
-						if (!o) setDetailTaskId(null);
-					}}
-					list={detailList}
-					allLists={lists}
-					allTasks={tasks}
-					allLabels={labels}
-					taskLabelIds={labelIdsByTask.get(detailTask.id) ?? []}
-				/>
-			)}
-
-			{/* Keyboard system is desktop-only (design 2.18): the global handler,
+				{/* Keyboard system is desktop-only (design 2.18): the global handler,
 			    ⌘K palette, and ? cheat-sheet. RestrictedShell never mounts these. */}
-			{isDesktop && (
-				<>
-					<WorkspaceKeyboard />
-					<CommandPalette onNavigateList={openList} onNavigateView={openView} />
-					<CheatSheet open={cheatOpen} onOpenChange={setCheatOpen} />
-				</>
-			)}
-		</CommandProvider>
+				{isDesktop && (
+					<>
+						<WorkspaceKeyboard />
+						<CommandPalette
+							onNavigateList={openList}
+							onNavigateView={openView}
+						/>
+						<CheatSheet open={cheatOpen} onOpenChange={setCheatOpen} />
+					</>
+				)}
+
+				<FocusTimer />
+			</CommandProvider>
+		</FocusProvider>
 	);
 }

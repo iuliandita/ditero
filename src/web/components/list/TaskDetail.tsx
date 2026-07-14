@@ -1,5 +1,5 @@
 import { useZero } from "@rocicorp/zero/react";
-import { Check, Plus, Trash2, X } from "lucide-react";
+import { Check, Plus, Timer, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,9 @@ import { cn } from "@/lib/utils";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
+import { formatFocusedDuration } from "../../focus/timer-core.ts";
+import { useFocusTimer } from "../../focus/useFocusTimer.tsx";
+import { useFocusSessions } from "../../hooks/useFocusSessions.ts";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
 import { CommentThread } from "../people/CommentThread.tsx";
 import { RecurrenceEditor } from "../task/RecurrenceEditor.tsx";
@@ -71,9 +74,21 @@ export function TaskDetail({
 }) {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
+	const focus = useFocusTimer();
 	const [error, setError] = useState<string | null>(null);
 	const [newSubtask, setNewSubtask] = useState("");
 	const [newLabel, setNewLabel] = useState("");
+
+	// Total time-on-task = sum of this task's completed `work` focus intervals.
+	const { sessions: focusSessions } = useFocusSessions(task?.id);
+	const focusedSec = useMemo(
+		() =>
+			focusSessions.reduce(
+				(sum, s) => (s.kind === "work" ? sum + s.durationSec : sum),
+				0,
+			),
+		[focusSessions],
+	);
 
 	const kind = (list.kind ?? "tasks") as List["kind"];
 	const subtasks = useMemo(
@@ -235,6 +250,25 @@ export function TaskDetail({
 								</Button>
 							)}
 						</div>
+					</div>
+
+					<div className="flex items-center justify-between gap-2 text-sm">
+						<span
+							className="text-muted-foreground"
+							data-testid="task-time-on-task"
+						>
+							{focusedSec > 0
+								? formatFocusedDuration(focusedSec)
+								: "No focus time yet"}
+						</span>
+						<Button
+							variant="outline"
+							size="sm"
+							data-testid="task-focus-start"
+							onClick={() => focus.startForTask(t.id, t.title)}
+						>
+							<Timer /> Start focus
+						</Button>
 					</div>
 
 					{!isSubtask && <RecurrenceEditor key={t.id} task={t} />}
