@@ -281,8 +281,8 @@ describe("round-trip snapshot -> instantiate", () => {
 });
 
 describe("STARTER_TEMPLATES", () => {
-	test("three valid, schema-conformant list templates", () => {
-		expect(STARTER_TEMPLATES).toHaveLength(3);
+	test("four valid, schema-conformant list templates", () => {
+		expect(STARTER_TEMPLATES).toHaveLength(4);
 		for (const content of STARTER_TEMPLATES) {
 			expect(templateContentSchema.safeParse(content).success).toBe(true);
 			expect(content.kind).toBe("list");

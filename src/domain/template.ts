@@ -280,4 +280,21 @@ export const STARTER_TEMPLATES: TemplateContent[] = [
 			{ title: "Grocery run", priority: 1 },
 		],
 	},
+	{
+		kind: "list",
+		listKind: "habits",
+		icon: "repeat",
+		// Recurrence is added per-habit in the detail surface (templates carry no
+		// RRULE); the titles seed a common daily-habits set.
+		tasks: [
+			{ title: "Drink water" },
+			{ title: "Exercise" },
+			{ title: "Read" },
+			{ title: "Meditate" },
+			{ title: "Take vitamins" },
+			{ title: "Walk the dog" },
+			{ title: "Journal" },
+			{ title: "Stretch" },
+		],
+	},
 ];

@@ -175,3 +175,80 @@ test("recurrence: set weekly every-2-weeks Mon/Wed, round-trips, toggle relative
 	detail = await openDetail(page, "Water plants");
 	await expect(detail.getByTestId("recurrence-enable")).toBeVisible();
 });
+
+// Create a Habits list from the starter template (habits kind is not in the
+// blank-list picker; the starter is the create path).
+async function createHabitsList(page: Page): Promise<void> {
+	await waitWorkspaceReady(page);
+	await page.getByRole("combobox", { name: "Start from template" }).click();
+	await page.getByRole("option", { name: "Habits", exact: true }).click();
+	await page.getByTestId("new-list-submit").click();
+	await expect(
+		sidebarLists(page)
+			.getByRole("button", { name: "Habits", exact: true })
+			.first(),
+	).toBeVisible({ timeout: 15000 });
+}
+
+function habitCard(page: Page, title: string): Locator {
+	return page.getByTestId("habit-card").filter({ hasText: title });
+}
+
+test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap update", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("habit"));
+	await createHabitsList(page);
+	await openListDesktop(page, "Habits");
+
+	const HABIT = "Drink water";
+	const card = habitCard(page, HABIT);
+	await expect(card).toBeVisible();
+	// No recurrence yet -> the guard renders the prompt, not streak math.
+	await expect(card.getByTestId("habit-no-recurrence")).toBeVisible();
+
+	// Set a daily recurrence via the task detail (default preset is daily).
+	const detail = await openDetail(page, HABIT);
+	await detail.getByTestId("recurrence-enable").click();
+	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
+	await closeDetail(page);
+
+	// Tracker now renders; today unlogged -> streak 0, primary not pressed.
+	await expect(card.getByTestId("habit-streak")).toHaveText("0 days");
+	await expect(card.getByTestId("habit-done")).toHaveAttribute(
+		"aria-pressed",
+		"false",
+	);
+
+	const today = new Date().toISOString().slice(0, 10);
+
+	// Mark done for today -> streak advances, primary reflects done, heatmap cell.
+	await card.getByTestId("habit-done").click();
+	await expect(card.getByTestId("habit-streak")).toHaveText("1 day");
+	await expect(card.getByTestId("habit-done")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await expect(card.getByRole("img", { name: `${today}: done` })).toBeVisible();
+
+	// Undo -> back to unlogged (streak 0, primary not pressed).
+	await card.getByTestId("habit-undo").click();
+	await expect(card.getByTestId("habit-streak")).toHaveText("0 days");
+	await expect(card.getByTestId("habit-done")).toHaveAttribute(
+		"aria-pressed",
+		"false",
+	);
+
+	// Skip today -> logged skipped (neutral for streak), heatmap cell reflects it.
+	await card.getByTestId("habit-skip").click();
+	await expect(card.getByTestId("habit-skip")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await expect(
+		card.getByRole("img", { name: `${today}: skipped` }),
+	).toBeVisible();
+
+	// Axe the habit list surface.
+	await expectNoSeriousA11y(page, "habit list");
+});

@@ -15,6 +15,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { todayISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import {
 	type FilterCondition,
@@ -37,10 +38,6 @@ type BuilderData = {
 // single scalar. Mirrors view-filter's asStringArray vs scalar handling.
 function isMulti(operator: string): boolean {
 	return operator === "in";
-}
-
-function todayISO(): string {
-	return new Date().toISOString().slice(0, 10);
 }
 
 function optionsFor(control: ValueControl, data: BuilderData): Option[] {
