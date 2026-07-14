@@ -54,6 +54,7 @@ const LAYOUTS: { value: ViewLayout; label: string }[] = [
 	{ value: "list", label: "List" },
 	{ value: "board", label: "Board" },
 	{ value: "table", label: "Table" },
+	{ value: "calendar", label: "Calendar" },
 ];
 const GROUP_BYS: { value: GroupBy; label: string }[] = [
 	{ value: "none", label: "None" },

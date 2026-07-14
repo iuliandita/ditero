@@ -23,7 +23,7 @@ export type FilterCondition = {
 export type FilterNode = FilterCondition | FilterGroup;
 export type FilterGroup = { op: "and" | "or"; conditions: FilterNode[] };
 
-export type ViewLayout = "list" | "board" | "table";
+export type ViewLayout = "list" | "board" | "table" | "calendar";
 export type GroupBy =
 	| "none"
 	| "status"
@@ -134,7 +134,7 @@ export const filterGroupSchema = filterGroupBase.superRefine(
 );
 
 export const viewDisplaySchema: z.ZodType<ViewDisplay> = z.object({
-	layout: z.enum(["list", "board", "table"]),
+	layout: z.enum(["list", "board", "table", "calendar"]),
 	groupBy: z.enum([
 		"none",
 		"status",
