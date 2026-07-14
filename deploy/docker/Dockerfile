@@ -28,7 +28,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production --omit=optional --omit=peer
 
-FROM rocicorp/zero:1.7.0@sha256:114363cd8ae889862c283dabc88fdb62fe183a46fe4ed0ea35ebeca8d325dba3 AS zero-runtime
+FROM rocicorp/zero:1.8.0@sha256:9be2d9303b076f2aef29cbcc629350dbc40cf0531ead59a7f61572eeb65fef72 AS zero-runtime
 COPY --chmod=755 deploy/docker/secret-file.sh /usr/local/lib/ditero/secret-file.sh
 COPY --chmod=755 deploy/docker/zero-entrypoint.sh /usr/local/bin/ditero-zero-entrypoint
 ENTRYPOINT ["/usr/local/bin/ditero-zero-entrypoint"]
