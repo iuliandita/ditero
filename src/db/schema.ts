@@ -286,6 +286,9 @@ export const userPref = pgTable("user_pref", {
 		.default("default"),
 	homeViewRef: text("home_view_ref"), // built-in id ("today"...) or view.id; null => "today"
 	pinnedViews: jsonb("pinned_views").notNull().default(sql`'[]'::jsonb`), // ordered refs
+	karmaGoals: jsonb("karma_goals"), // { daily, weekly } | null
+	vacation: jsonb("vacation"), // { active, until? } | null
+	focus: jsonb("focus"), // { workMin, breakMin, longBreakMin, roundsPerLongBreak, autoCycle } | null
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.defaultNow()
 		.notNull(),
@@ -319,6 +322,10 @@ export const habitLog = pgTable(
 			.references(() => task.id, { onDelete: "cascade" }),
 		date: text("date").notNull(), // "YYYY-MM-DD" local occurrence date
 		status: habitLogStatusEnum("status").notNull(),
+		// Karma points currently attributed to this row's done state (0 when
+		// skipped/not-awarded). Recorded so compensation/idempotency reuse the
+		// exact awarded amount instead of recomputing from live priority/status.
+		karmaDelta: integer("karma_delta").notNull().default(0),
 		completedAt: timestamp("completed_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()

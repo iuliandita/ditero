@@ -1,0 +1,1 @@
+ALTER TABLE "habit_log" ADD COLUMN "karma_delta" integer DEFAULT 0 NOT NULL;
