@@ -155,4 +155,30 @@ export const queries = defineQueries({
 	userPrefs: {
 		mine: defineQuery(({ ctx }) => zql.userPref.where("id", ctx.id)),
 	},
+	// A habit-log row's visibility is exactly its parent habit task's visibility:
+	// the habit is a task whose list's workspace the caller must be a member of.
+	// Mirrors tasks.mine, one relation deeper (habit -> list).
+	habitLogs: {
+		mine: defineQuery(({ ctx }) =>
+			zql.habitLog.where(({ exists }) =>
+				exists("habit", (t) =>
+					t.where(({ exists: e }) =>
+						e("list", (l) => l.where(workspaceVisible(ctx))),
+					),
+				),
+			),
+		),
+	},
+	// Per-user karma aggregate; caller reads only their own row (id === userId).
+	karma: {
+		mine: defineQuery(({ ctx }) => zql.karma.where("userId", ctx.id)),
+	},
+	// Per-user karma ledger; caller reads only their own events.
+	karmaEvents: {
+		mine: defineQuery(({ ctx }) => zql.karmaEvent.where("userId", ctx.id)),
+	},
+	// Per-user focus/pomodoro sessions; caller reads only their own.
+	focusSessions: {
+		mine: defineQuery(({ ctx }) => zql.focusSession.where("userId", ctx.id)),
+	},
 });
