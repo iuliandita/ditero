@@ -17,7 +17,7 @@ import {
 import { z } from "zod";
 import type { ListKind } from "../domain/icon-map.ts";
 import { karmaForCompletion, levelForPoints } from "../domain/karma.ts";
-import { nextDue } from "../domain/recurrence.ts";
+import { nextDue, parseRule } from "../domain/recurrence.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
 	type InstantiatedList,
@@ -296,6 +296,13 @@ export const mutators = defineMutators({
 				unit: z.string().nullable().optional(),
 				category: z.string().nullable().optional(),
 				sortKey: z.string().optional(),
+				rrule: z.string().nullable().optional(),
+				recurrenceRelative: z.boolean().optional(),
+				reminderTime: z
+					.string()
+					.regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+					.nullable()
+					.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				const task = await tx.run(
@@ -304,6 +311,9 @@ export const mutators = defineMutators({
 				if (!task) throw new Error("task not found");
 				const list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				// Fail loud before any write if a non-null rrule is malformed, so the
+				// complete/skip paths never read back an unparseable recurrence.
+				if (args.rrule != null) parseRule(args.rrule);
 				// done and completedAt are one invariant, kept here in one place.
 				const completed =
 					args.done === undefined
@@ -324,6 +334,13 @@ export const mutators = defineMutators({
 					...(args.unit !== undefined ? { unit: args.unit } : {}),
 					...(args.category !== undefined ? { category: args.category } : {}),
 					...(args.sortKey !== undefined ? { sortKey: args.sortKey } : {}),
+					...(args.rrule !== undefined ? { rrule: args.rrule } : {}),
+					...(args.recurrenceRelative !== undefined
+						? { recurrenceRelative: args.recurrenceRelative }
+						: {}),
+					...(args.reminderTime !== undefined
+						? { reminderTime: args.reminderTime }
+						: {}),
 				});
 			},
 		),

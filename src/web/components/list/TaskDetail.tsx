@@ -32,6 +32,7 @@ import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
 import { CommentThread } from "../people/CommentThread.tsx";
+import { RecurrenceEditor } from "../task/RecurrenceEditor.tsx";
 
 const PRIORITY_OPTIONS = [
 	{ value: 0, label: "None" },
@@ -235,6 +236,8 @@ export function TaskDetail({
 							)}
 						</div>
 					</div>
+
+					{!isSubtask && <RecurrenceEditor key={t.id} task={t} />}
 
 					{kind !== "checklist" && (
 						<div className="flex flex-col gap-1 text-sm">

@@ -1,0 +1,177 @@
+import AxeBuilder from "@axe-core/playwright";
+import { expect, type Locator, type Page, test } from "@playwright/test";
+
+// M2 recurrence editor e2e. Exercises the preset-driven recurrence control in the
+// task detail surface: enable, set a weekly every-2-weeks Mon/Wed rule, verify the
+// read-back, toggle fixed<->relative, round-trip across a close/reopen, and clear.
+// Plus the axe merge gate on the editor surface. Conventions (signUp/uniqueEmail/
+// testid locators/frozen-frame axe) mirror views.spec.
+test.describe.configure({ retries: 2, timeout: 90_000 });
+
+const PASSWORD = "pw-123456";
+const SIGNUP_TIMEOUT = 30_000;
+
+let emailSeq = 0;
+function uniqueEmail(prefix: string): string {
+	emailSeq += 1;
+	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
+}
+
+async function signUp(page: Page, email: string): Promise<void> {
+	await page.goto("/");
+	await page.getByTestId("email").fill(email);
+	await page.getByTestId("password").fill(PASSWORD);
+	await page.getByTestId("signup").click();
+	await expect(page.getByTestId("workspace")).toBeVisible({
+		timeout: SIGNUP_TIMEOUT,
+	});
+}
+
+function sidebarLists(page: Page): Locator {
+	return page.getByRole("navigation", { name: "Lists" });
+}
+
+async function waitWorkspaceReady(page: Page): Promise<void> {
+	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
+		timeout: SIGNUP_TIMEOUT,
+	});
+}
+
+async function createListDesktop(page: Page, name: string): Promise<void> {
+	await waitWorkspaceReady(page);
+	await page.getByTestId("new-list").fill(name);
+	await page.getByTestId("new-list-submit").click();
+	await expect(
+		sidebarLists(page).getByRole("button", { name, exact: true }).first(),
+	).toBeVisible({ timeout: 15000 });
+}
+
+async function openListDesktop(page: Page, name: string): Promise<void> {
+	await sidebarLists(page)
+		.getByRole("button", { name, exact: true })
+		.last()
+		.click();
+	await expect(page.getByTestId("list")).toBeVisible();
+}
+
+async function addTask(page: Page, title: string): Promise<void> {
+	await page.getByTestId("new-task").fill(title);
+	await page.getByTestId("new-task-submit").click();
+	await expect(
+		page.getByTestId("list").getByText(title, { exact: true }),
+	).toBeVisible({ timeout: 15000 });
+}
+
+async function openDetail(page: Page, title: string): Promise<Locator> {
+	await page
+		.getByTestId("list")
+		.locator("[data-kbd-nav]")
+		.filter({ hasText: title })
+		.first()
+		.click();
+	const detail = page.getByRole("dialog");
+	await expect(detail.getByLabel("Task title")).toBeVisible();
+	return detail;
+}
+
+async function closeDetail(page: Page): Promise<void> {
+	await page.keyboard.press("Escape");
+	await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15000 });
+}
+
+// Gate per design 2.14: zero serious/critical violations. Freeze animations so
+// axe samples the settled frame (matches views.spec exactly).
+async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
+	await page.addStyleTag({
+		content:
+			"*,*::before,*::after{animation:none!important;transition:none!important}",
+	});
+	const { violations } = await new AxeBuilder({ page }).analyze();
+	const serious = violations.filter(
+		(v) => v.impact === "serious" || v.impact === "critical",
+	);
+	if (serious.length > 0)
+		console.error(
+			`a11y[${surface}] serious/critical:`,
+			JSON.stringify(
+				serious.map((v) => ({ id: v.id, nodes: v.nodes.length })),
+				null,
+				2,
+			),
+		);
+	expect(serious, `serious/critical a11y violations on ${surface}`).toEqual([]);
+}
+
+test("recurrence: set weekly every-2-weeks Mon/Wed, round-trips, toggle relative, clear", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("recur"));
+	await waitWorkspaceReady(page);
+
+	await createListDesktop(page, "Recurring");
+	await openListDesktop(page, "Recurring");
+	await addTask(page, "Water plants");
+
+	let detail = await openDetail(page, "Water plants");
+
+	// Enable recurrence -> the preset editor appears.
+	await detail.getByTestId("recurrence-enable").click();
+	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
+
+	// Weekly, every 2, on Mon (seeded) + Wed.
+	await detail.getByTestId("recurrence-freq-weekly").click();
+	await detail.getByTestId("recurrence-interval").fill("2");
+	await expect(detail.getByTestId("recurrence-weekday-0")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await detail.getByTestId("recurrence-weekday-2").click();
+	await expect(detail.getByTestId("recurrence-summary")).toHaveText(
+		"Every 2 weeks on Mon, Wed",
+	);
+
+	// Fixed -> relative.
+	await detail.getByTestId("recurrence-relative").click();
+	await expect(detail.getByTestId("recurrence-relative")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+
+	// Axe the editor surface while it is open and populated.
+	await expectNoSeriousA11y(page, "recurrence editor");
+
+	// Round-trip: close, reopen, the persisted preset + read-back reappear.
+	await closeDetail(page);
+	detail = await openDetail(page, "Water plants");
+	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
+	await expect(detail.getByTestId("recurrence-freq-weekly")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await expect(detail.getByTestId("recurrence-interval")).toHaveValue("2");
+	await expect(detail.getByTestId("recurrence-weekday-0")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await expect(detail.getByTestId("recurrence-weekday-2")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await expect(detail.getByTestId("recurrence-summary")).toHaveText(
+		"Every 2 weeks on Mon, Wed",
+	);
+	await expect(detail.getByTestId("recurrence-relative")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+
+	// Clear recurrence -> back to "Does not repeat".
+	await detail.getByTestId("recurrence-clear").click();
+	await expect(detail.getByTestId("recurrence-enable")).toBeVisible();
+	await expect(detail.getByTestId("recurrence-editor")).toHaveCount(0);
+
+	// Persisted clear: reopen and the control is off.
+	await closeDetail(page);
+	detail = await openDetail(page, "Water plants");
+	await expect(detail.getByTestId("recurrence-enable")).toBeVisible();
+});
