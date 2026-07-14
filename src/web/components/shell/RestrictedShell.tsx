@@ -100,9 +100,12 @@ export function RestrictedShell() {
 
 	function toggle(task: Task) {
 		setError(null);
+		const done = task.done ?? false;
 		void runMutation(
 			zero.mutate(
-				mutators.task.update({ id: task.id, done: !(task.done ?? false) }),
+				done
+					? mutators.task.update({ id: task.id, done: false })
+					: mutators.task.complete({ id: task.id }),
 			),
 			setError,
 		);

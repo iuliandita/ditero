@@ -40,7 +40,11 @@ export function RestrictedTaskDetail({
 
 	function toggle() {
 		void runMutation(
-			zero.mutate(mutators.task.update({ id: t.id, done: !done })),
+			zero.mutate(
+				done
+					? mutators.task.update({ id: t.id, done: false })
+					: mutators.task.complete({ id: t.id }),
+			),
 			(msg) => console.error(msg),
 		);
 	}

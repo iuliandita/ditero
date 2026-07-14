@@ -375,9 +375,13 @@ export function TaskDetail({
 										<Checkbox
 											aria-label={s.title}
 											checked={s.done ?? false}
-											onCheckedChange={() =>
-												update({ id: s.id, done: !(s.done ?? false) })
-											}
+											onCheckedChange={() => {
+												if (s.done) update({ id: s.id, done: false });
+												else
+													void run(
+														zero.mutate(mutators.task.complete({ id: s.id })),
+													);
+											}}
 										/>
 										<span
 											className={cn(

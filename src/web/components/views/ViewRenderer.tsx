@@ -259,7 +259,13 @@ export function ViewRenderer(props: {
 
 	const handlers: RowHandlers = {
 		onToggle: (id, done) =>
-			void run(zero.mutate(mutators.task.update({ id, done: !done }))),
+			void run(
+				zero.mutate(
+					done
+						? mutators.task.update({ id, done: false })
+						: mutators.task.complete({ id }),
+				),
+			),
 		onOpenDetail: (task) => onOpenTask(task),
 	};
 
@@ -277,7 +283,11 @@ export function ViewRenderer(props: {
 			);
 		} else if (display.groupBy === "status") {
 			void run(
-				zero.mutate(mutators.task.update({ id, done: columnKey === "done" })),
+				zero.mutate(
+					columnKey === "done"
+						? mutators.task.complete({ id })
+						: mutators.task.update({ id, done: false }),
+				),
 			);
 		}
 	}
