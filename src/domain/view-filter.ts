@@ -3,6 +3,7 @@
 // predicate (no Zero runtime, no DB, no React). Callers narrow the candidate
 // set by workspace via resolveWorkspaceScope, then keep tasks that pass
 // taskMatchesFilter.
+import { z } from "zod";
 
 export type FilterField =
 	| "done"
@@ -65,6 +66,94 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function isGroup(node: FilterNode): node is FilterGroup {
 	return (node as FilterGroup).op !== undefined;
 }
+
+// Server-authoritative validation of a client-supplied filter/display AST. A
+// member with write access to a shared workspace can call view.create/update
+// directly (bypassing the builder UI); a malformed tree would otherwise sync to
+// co-members and throw in taskMatchesFilter during their render. The mutators
+// parse against these schemas, so a bad field/operator or an over-deep/over-wide
+// tree is rejected at write time.
+const FILTER_FIELDS = [
+	"done",
+	"due",
+	"priority",
+	"kind",
+	"list",
+	"folder",
+	"label",
+	"assignee",
+] as const satisfies readonly FilterField[];
+
+const MAX_CONDITIONS = 50; // breadth per group
+const MAX_FILTER_DEPTH = 5; // group nesting
+const MAX_FILTER_NODES = 200; // total conditions + groups
+
+const filterConditionSchema = z.object({
+	field: z.enum(FILTER_FIELDS),
+	operator: z.string().min(1).max(20),
+	value: z.unknown(),
+});
+
+const filterGroupBase: z.ZodType<FilterGroup> = z.lazy(() =>
+	z.object({
+		op: z.enum(["and", "or"]),
+		conditions: z
+			.array(z.union([filterConditionSchema, filterGroupBase]))
+			.max(MAX_CONDITIONS),
+	}),
+);
+
+// z.lazy caps breadth but not total depth/size; walk once and reject over-deep or
+// over-large trees (both are cheap stack/CPU DoS vectors against co-members).
+export function assertFilterDepth(
+	group: FilterGroup,
+	maxDepth = MAX_FILTER_DEPTH,
+	maxNodes = MAX_FILTER_NODES,
+): void {
+	let nodes = 0;
+	const walk = (node: FilterNode, depth: number): void => {
+		nodes += 1;
+		if (nodes > maxNodes) throw new Error("view-filter: filter too large");
+		if (isGroup(node)) {
+			if (depth > maxDepth)
+				throw new Error("view-filter: filter nesting too deep");
+			for (const child of node.conditions) walk(child, depth + 1);
+		}
+	};
+	walk(group, 1);
+}
+
+export const filterGroupSchema = filterGroupBase.superRefine(
+	(group, refCtx) => {
+		try {
+			assertFilterDepth(group);
+		} catch (err) {
+			refCtx.addIssue({ code: "custom", message: (err as Error).message });
+		}
+	},
+);
+
+export const viewDisplaySchema: z.ZodType<ViewDisplay> = z.object({
+	layout: z.enum(["list", "board", "table"]),
+	groupBy: z.enum([
+		"none",
+		"status",
+		"priority",
+		"assignee",
+		"label",
+		"list",
+		"due",
+	]),
+	sort: z.object({
+		field: z.string().max(40),
+		dir: z.enum(["asc", "desc"]),
+	}),
+	workspaceScope: z.discriminatedUnion("mode", [
+		z.object({ mode: z.literal("all") }),
+		z.object({ mode: z.literal("subset"), ids: z.array(z.string()).max(100) }),
+		z.object({ mode: z.literal("one"), id: z.string() }),
+	]),
+});
 
 // Day boundaries derive from ctx.now as a UTC calendar day. Timezone-aware
 // boundaries (per-user zone) are a later refinement.

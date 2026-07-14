@@ -15,6 +15,7 @@ import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
+import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { SortableList } from "../components/list/SortableList.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { MembersPanel } from "../components/people/MembersPanel.tsx";
@@ -410,7 +411,12 @@ function NormalWorkspace() {
 	);
 
 	const activeView = activeViewId ? resolveView(activeViewId) : null;
-	const HeaderIcon = activeView?.icon ? ICONS[activeView.icon] : null;
+	// Object.hasOwn guards the client-controlled icon key: a prototype key
+	// ("constructor"/"__proto__") must not resolve to a non-component and throw.
+	const HeaderIcon =
+		activeView?.icon && Object.hasOwn(ICONS, activeView.icon)
+			? ICONS[activeView.icon]
+			: null;
 
 	let content: React.ReactNode;
 	// Mobile keeps Settings on its own tab; desktop pins SecurityPanel to the
@@ -527,20 +533,28 @@ function NormalWorkspace() {
 								</DropdownMenuContent>
 							</DropdownMenu>
 						</div>
-						<ViewRenderer
-							filter={activeView.filter}
-							display={activeView.display}
-							tasks={tasks}
-							lists={lists}
-							folders={folders}
-							labels={labels}
-							taskLabels={taskLabels}
-							assignees={assignees}
-							members={members}
-							currentUserId={zero.userID ?? ""}
-							membershipWorkspaceIds={membershipWorkspaceIds}
-							onOpenTask={(t) => setDetailTaskId(t.id)}
-						/>
+						{/* A malformed synced view (a co-member's bad filter/display) can
+						    throw in the renderer; the boundary keeps it inline instead of
+						    white-screening. resetKey clears the error on view switch. */}
+						<ErrorBoundary
+							resetKey={activeView.id}
+							onReset={() => setOpenViewId(null)}
+						>
+							<ViewRenderer
+								filter={activeView.filter}
+								display={activeView.display}
+								tasks={tasks}
+								lists={lists}
+								folders={folders}
+								labels={labels}
+								taskLabels={taskLabels}
+								assignees={assignees}
+								members={members}
+								currentUserId={zero.userID ?? ""}
+								membershipWorkspaceIds={membershipWorkspaceIds}
+								onOpenTask={(t) => setDetailTaskId(t.id)}
+							/>
+						</ErrorBoundary>
 					</section>
 				) : (
 					<p className="text-sm text-muted-foreground">View not found.</p>

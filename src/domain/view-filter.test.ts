@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vitest";
 import {
+	assertFilterDepth,
 	type FilterCtx,
 	type FilterGroup,
 	type FilterTask,
+	filterGroupSchema,
 	resolveWorkspaceScope,
 	taskMatchesFilter,
+	viewDisplaySchema,
 } from "./view-filter.ts";
 
 const now = new Date("2026-07-13T12:00:00Z");
@@ -456,6 +459,74 @@ describe("errors", () => {
 				ctx,
 			),
 		).toThrow(/invalid due date bound/i);
+	});
+});
+
+describe("filterGroupSchema (server-side AST validation)", () => {
+	test("a valid AST passes", () => {
+		const ast = {
+			op: "and",
+			conditions: [
+				{ field: "done", operator: "is", value: true },
+				{
+					op: "or",
+					conditions: [{ field: "priority", operator: "gte", value: 2 }],
+				},
+			],
+		};
+		expect(() => filterGroupSchema.parse(ast)).not.toThrow();
+	});
+
+	test("an unknown field is rejected at the schema level", () => {
+		const ast = {
+			op: "and",
+			conditions: [{ field: "bogus", operator: "eq", value: 1 }],
+		};
+		expect(() => filterGroupSchema.parse(ast)).toThrow();
+	});
+
+	test("an over-deep (6+ nested) group is rejected", () => {
+		let node: unknown = { op: "and", conditions: [] };
+		for (let i = 0; i < 6; i++) node = { op: "and", conditions: [node] };
+		expect(() => filterGroupSchema.parse(node)).toThrow(/deep/i);
+	});
+
+	test("an over-large (201+ node) tree is rejected", () => {
+		const conditions = Array.from({ length: 45 }, () => ({
+			field: "done",
+			operator: "is",
+			value: true,
+		}));
+		const groups = Array.from({ length: 5 }, () => ({
+			op: "and",
+			conditions,
+		}));
+		expect(() =>
+			filterGroupSchema.parse({ op: "and", conditions: groups }),
+		).toThrow(/large/i);
+	});
+
+	test("assertFilterDepth rejects nesting past the cap", () => {
+		let node: FilterGroup = { op: "and", conditions: [] };
+		for (let i = 0; i < 6; i++) node = { op: "and", conditions: [node] };
+		expect(() => assertFilterDepth(node)).toThrow(/deep/i);
+	});
+});
+
+describe("viewDisplaySchema", () => {
+	const ok = {
+		layout: "list",
+		groupBy: "none",
+		sort: { field: "sortKey", dir: "asc" },
+		workspaceScope: { mode: "all" },
+	};
+
+	test("a valid ViewDisplay passes", () => {
+		expect(() => viewDisplaySchema.parse(ok)).not.toThrow();
+	});
+
+	test("an invalid layout is rejected", () => {
+		expect(() => viewDisplaySchema.parse({ ...ok, layout: "grid" })).toThrow();
 	});
 });
 

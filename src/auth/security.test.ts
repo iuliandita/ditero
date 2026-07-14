@@ -18,6 +18,9 @@ describe("authRateLimitOptions", () => {
 			window: 60,
 			max: 5,
 		});
+		// /get-session is only relaxed under the e2e harness (DITERO_E2E); prod keeps
+		// the default limit, so it must have no customRule here.
+		expect(options.customRules["/get-session"]).toBeUndefined();
 	});
 });
 

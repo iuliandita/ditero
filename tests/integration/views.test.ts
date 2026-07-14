@@ -3,7 +3,7 @@
 // they return, so a gap leaks other users' saved views or prefs. Assertions are
 // the spec -- keep them strict. Mirrors sharing.test.ts: rows are seeded via
 // Drizzle, then the compiled ZQL is run against Postgres through zeroNodePg.
-import type { Transaction } from "@rocicorp/zero";
+import type { ReadonlyJSONValue, Transaction } from "@rocicorp/zero";
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -22,6 +22,17 @@ const db = drizzle(pool, { schema: tables });
 const zdb = zeroNodePg(schema, pool);
 
 const ctx = (id: string) => ({ args: undefined, ctx: { id } }) as const;
+
+// view.create/update now validate filter/display against the domain schemas, so
+// mutator calls must pass a well-formed (if trivial) AST + display. Typed as
+// ReadonlyJSONValue to match the mutator's JSON arg surface.
+const OK_FILTER: ReadonlyJSONValue = { op: "and", conditions: [] };
+const OK_DISPLAY: ReadonlyJSONValue = {
+	layout: "list",
+	groupBy: "none",
+	sort: { field: "sortKey", dir: "asc" },
+	workspaceScope: { mode: "all" },
+};
 
 // a owns the personal + workspace views and is w's owner; c is a plain member
 // (sees the workspace view, not the personal one); d is admin, e is viewer, b is
@@ -74,8 +85,8 @@ beforeAll(async () => {
 			ownerId: "viz-a",
 			name: "A private",
 			scope: "personal",
-			filter: {},
-			display: {},
+			filter: OK_FILTER,
+			display: OK_DISPLAY,
 			sortKey: "a0",
 		},
 		{
@@ -84,8 +95,8 @@ beforeAll(async () => {
 			workspaceId: "viz-w",
 			name: "Team view",
 			scope: "workspace",
-			filter: {},
-			display: {},
+			filter: OK_FILTER,
+			display: OK_DISPLAY,
 			sortKey: "a1",
 		},
 	]);
@@ -163,8 +174,8 @@ describe("view write-permission mutators", () => {
 					name: "nope",
 					scope: "workspace" as const,
 					workspaceId: "viz-w",
-					filter: {},
-					display: {},
+					filter: OK_FILTER,
+					display: OK_DISPLAY,
 					sortKey: "z0",
 				},
 			),
@@ -181,8 +192,8 @@ describe("view write-permission mutators", () => {
 					name: "bad",
 					scope: "personal" as const,
 					workspaceId: "viz-w",
-					filter: {},
-					display: {},
+					filter: OK_FILTER,
+					display: OK_DISPLAY,
 					sortKey: "z1",
 				},
 			),
@@ -199,8 +210,8 @@ describe("view write-permission mutators", () => {
 					name: "bad",
 					scope: "workspace" as const,
 					workspaceId: null,
-					filter: {},
-					display: {},
+					filter: OK_FILTER,
+					display: OK_DISPLAY,
 					sortKey: "z2",
 				},
 			),
@@ -216,8 +227,8 @@ describe("view write-permission mutators", () => {
 				name: "P2",
 				scope: "personal" as const,
 				workspaceId: null,
-				filter: {},
-				display: {},
+				filter: OK_FILTER,
+				display: OK_DISPLAY,
 				sortKey: "a5",
 			},
 		);
@@ -297,8 +308,8 @@ describe("workspace-view write-permission mutators", () => {
 				name: "C team view",
 				scope: "workspace" as const,
 				workspaceId: "viz-w",
-				filter: {},
-				display: {},
+				filter: OK_FILTER,
+				display: OK_DISPLAY,
 				sortKey: "c0",
 			},
 		);
@@ -353,8 +364,8 @@ describe("workspace-view write-permission mutators", () => {
 				name: "C own",
 				scope: "workspace" as const,
 				workspaceId: "viz-w",
-				filter: {},
-				display: {},
+				filter: OK_FILTER,
+				display: OK_DISPLAY,
 				sortKey: "c2",
 			},
 		);
@@ -372,8 +383,8 @@ describe("workspace-view write-permission mutators", () => {
 				name: "A team view",
 				scope: "workspace" as const,
 				workspaceId: "viz-w",
-				filter: {},
-				display: {},
+				filter: OK_FILTER,
+				display: OK_DISPLAY,
 				sortKey: "c3",
 			},
 		);
@@ -385,6 +396,74 @@ describe("workspace-view write-permission mutators", () => {
 		// Admin may delete another member's workspace view.
 		await call(mutators.view.delete, { id: "viz-d" }, { id: "viz-view-adel" });
 		expect(await viewRow("viz-view-adel")).toBeUndefined();
+	});
+});
+
+// Server-side AST/display validation (M1c security pass): the mutator validator
+// runs before the fn body, so a member with shared-workspace write access cannot
+// store a malformed filter that DoSes co-members at read time.
+describe("view AST/display validation", () => {
+	test("create rejects a malformed filter (unknown field)", async () => {
+		await expect(
+			call(
+				mutators.view.create,
+				{ id: "viz-a" },
+				{
+					id: "viz-view-badast",
+					name: "bad ast",
+					scope: "personal" as const,
+					workspaceId: null,
+					filter: {
+						op: "and",
+						conditions: [{ field: "bogus", operator: "eq", value: 1 }],
+					},
+					display: OK_DISPLAY,
+					sortKey: "z6",
+				},
+			),
+		).rejects.toThrow();
+		expect(await viewRow("viz-view-badast")).toBeUndefined();
+	});
+
+	test("create rejects an over-deep filter", async () => {
+		let node: unknown = { op: "and", conditions: [] };
+		for (let i = 0; i < 6; i++) node = { op: "and", conditions: [node] };
+		await expect(
+			call(
+				mutators.view.create,
+				{ id: "viz-a" },
+				{
+					id: "viz-view-deepast",
+					name: "deep ast",
+					scope: "personal" as const,
+					workspaceId: null,
+					filter: node as ReadonlyJSONValue,
+					display: OK_DISPLAY,
+					sortKey: "z5",
+				},
+			),
+		).rejects.toThrow();
+		expect(await viewRow("viz-view-deepast")).toBeUndefined();
+	});
+
+	test("create accepts a valid non-trivial filter", async () => {
+		await call(
+			mutators.view.create,
+			{ id: "viz-a" },
+			{
+				id: "viz-view-okast",
+				name: "ok ast",
+				scope: "personal" as const,
+				workspaceId: null,
+				filter: {
+					op: "and",
+					conditions: [{ field: "done", operator: "is", value: true }],
+				},
+				display: OK_DISPLAY,
+				sortKey: "z4",
+			},
+		);
+		expect(await viewRow("viz-view-okast")).toBeDefined();
 	});
 });
 
@@ -456,5 +535,21 @@ describe("userPref write-permission mutator", () => {
 		)[0];
 		expect(a?.homeViewRef).toBe("a-choice");
 		expect(b?.homeViewRef).toBe("b-choice");
+	});
+
+	test("rejects an over-cap pinnedViews / keymap write", async () => {
+		await expect(
+			call(
+				mutators.userPref.set,
+				{ id: "viz-c" },
+				{ pinnedViews: Array.from({ length: 201 }, (_, i) => `v${i}`) },
+			),
+		).rejects.toThrow();
+		const bigKeymap: Record<string, string[][]> = Object.fromEntries(
+			Array.from({ length: 101 }, (_, i) => [`cmd${i}`, [["a"]]]),
+		);
+		await expect(
+			call(mutators.userPref.set, { id: "viz-c" }, { keymap: bigKeymap }),
+		).rejects.toThrow();
 	});
 });

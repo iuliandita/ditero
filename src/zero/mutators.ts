@@ -23,6 +23,7 @@ import {
 	instantiate,
 	templateContentSchema,
 } from "../domain/template.ts";
+import { filterGroupSchema, viewDisplaySchema } from "../domain/view-filter.ts";
 import { type List, type Schema, type View, zql } from "./schema.gen.ts";
 
 const WRITE_ROLES = new Set(["owner", "admin", "member"]); // may edit content
@@ -81,6 +82,19 @@ const LIST_KINDS = [
 const listKind = z.enum(LIST_KINDS);
 const completedDisplay = z.enum(["sink", "keep", "hide"]);
 const templateKind = z.enum(["list", "task"]);
+
+// Validate the client-supplied view AST/display through the domain schemas while
+// keeping the mutator arg surface as ReadonlyJSONValue (FilterGroup/ViewDisplay
+// are not structurally JSON, so z.custom preserves the JSON insert type). The
+// predicate runs server-side, so a malformed tree is rejected at write time.
+const viewFilterArg = z.custom<ReadonlyJSONValue>(
+	(v) => filterGroupSchema.safeParse(v).success,
+	{ message: "invalid view filter" },
+);
+const viewDisplayArg = z.custom<ReadonlyJSONValue>(
+	(v) => viewDisplaySchema.safeParse(v).success,
+	{ message: "invalid view display" },
+);
 
 // Deterministic id generator seeded from a client-supplied id, so an
 // instantiate mutator produces identical ids on the optimistic client and the
@@ -765,9 +779,10 @@ export const mutators = defineMutators({
 		),
 	},
 	view: {
-		// filter/display are opaque JSON validated at read time (taskMatchesFilter
-		// fails loud); the Task 11 builder emits valid ASTs. Server-side AST
-		// validation reassessed in the M1c security pass.
+		// filter/display are validated server-side against the domain AST/display
+		// schemas (bounded field enum, operator length, nesting depth, breadth, and
+		// total-node caps) so a member with shared-workspace write access cannot
+		// store a malformed tree that DoSes co-members in taskMatchesFilter.
 		create: defineMutator(
 			z.object({
 				id: z.string(),
@@ -775,8 +790,8 @@ export const mutators = defineMutators({
 				icon: z.string().max(64).optional(),
 				scope: z.enum(["personal", "workspace"]),
 				workspaceId: z.string().nullable(),
-				filter: z.custom<ReadonlyJSONValue>(),
-				display: z.custom<ReadonlyJSONValue>(),
+				filter: viewFilterArg,
+				display: viewDisplayArg,
 				sortKey: z.string(),
 			}),
 			async ({ tx, ctx, args }) => {
@@ -805,8 +820,8 @@ export const mutators = defineMutators({
 				id: z.string(),
 				name: z.string().min(1).max(120).optional(),
 				icon: z.string().max(64).nullable().optional(),
-				filter: z.custom<ReadonlyJSONValue>().optional(),
-				display: z.custom<ReadonlyJSONValue>().optional(),
+				filter: viewFilterArg.optional(),
+				display: viewDisplayArg.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				const view = await tx.run(zql.view.where("id", args.id).one());
@@ -858,10 +873,20 @@ export const mutators = defineMutators({
 		// caller can only ever write their own prefs). Upsert: update if present.
 		set: defineMutator(
 			z.object({
-				keymap: z.record(z.string(), z.array(z.array(z.string()))).optional(),
+				// Caps mirror the M1b jsonb posture: bound the client-controlled
+				// user_pref writes so a caller cannot store an unbounded blob.
+				keymap: z
+					.record(
+						z.string().max(64),
+						z.array(z.array(z.string().max(24)).max(4)).max(4),
+					)
+					.refine((obj) => Object.keys(obj).length <= 100, {
+						message: "too many keymap entries",
+					})
+					.optional(),
 				keymapProfile: z.enum(["default", "vim"]).optional(),
-				homeViewRef: z.string().nullable().optional(),
-				pinnedViews: z.array(z.string()).optional(),
+				homeViewRef: z.string().max(200).nullable().optional(),
+				pinnedViews: z.array(z.string().max(64)).max(200).optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				const existing = await tx.run(zql.userPref.where("id", ctx.id).one());

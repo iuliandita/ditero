@@ -182,10 +182,13 @@ export function ListIcon({
 	className?: string;
 }) {
 	const name = icon ?? suggestIcon(title, kind);
-	const Icon = ICONS[name];
+	// Object.hasOwn guards the client-controlled key: a prototype key
+	// ("constructor"/"__proto__") must not resolve to a non-component via the
+	// prototype chain and crash the render.
+	const Icon = Object.hasOwn(ICONS, name) ? ICONS[name] : undefined;
 	// A stored icon that is not a registry key is an emoji chosen in the picker;
 	// render it as a glyph rather than the fallback list mark.
-	if (!Icon && icon && !ICONS[icon]) {
+	if (!Icon && icon && !Object.hasOwn(ICONS, icon)) {
 		return (
 			<span aria-hidden className={cn("text-base leading-none", className)}>
 				{icon}
