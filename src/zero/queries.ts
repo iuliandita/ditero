@@ -22,7 +22,16 @@ declare module "@rocicorp/zero" {
 // table to share a single check shape.
 const workspaceVisible =
 	(ctx: AuthCtx) =>
-	<T extends "folder" | "label" | "list" | "membership" | "template" | "view">(
+	<
+		T extends
+			| "dashboard"
+			| "folder"
+			| "label"
+			| "list"
+			| "membership"
+			| "template"
+			| "view",
+	>(
 		eb: ExpressionBuilder<T, Schema>,
 	) =>
 		(eb as ExpressionBuilder<"list", Schema>).exists("workspace", (w) =>
@@ -143,6 +152,19 @@ export const queries = defineQueries({
 	views: {
 		mine: defineQuery(({ ctx }) =>
 			zql.view.where((eb) => {
+				const { or, and, cmp } = eb;
+				return or(
+					and(cmp("scope", "personal"), cmp("ownerId", ctx.id)),
+					and(cmp("scope", "workspace"), workspaceVisible(ctx)(eb)),
+				);
+			}),
+		),
+	},
+	// Same visibility union as views: personal dashboards the caller owns OR
+	// workspace-shared dashboards whose workspace the caller is a member of.
+	dashboards: {
+		mine: defineQuery(({ ctx }) =>
+			zql.dashboard.where((eb) => {
 				const { or, and, cmp } = eb;
 				return or(
 					and(cmp("scope", "personal"), cmp("ownerId", ctx.id)),
