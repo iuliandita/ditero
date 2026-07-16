@@ -15,6 +15,7 @@ import {
 	type Transaction,
 } from "@rocicorp/zero";
 import { z } from "zod";
+import { panelsSchema } from "../domain/dashboard.ts";
 import type { ListKind } from "../domain/icon-map.ts";
 import { karmaForCompletion, levelForPoints } from "../domain/karma.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
@@ -26,7 +27,13 @@ import {
 	templateContentSchema,
 } from "../domain/template.ts";
 import { filterGroupSchema, viewDisplaySchema } from "../domain/view-filter.ts";
-import { type List, type Schema, type View, zql } from "./schema.gen.ts";
+import {
+	type Dashboard,
+	type List,
+	type Schema,
+	type View,
+	zql,
+} from "./schema.gen.ts";
 
 const WRITE_ROLES = new Set(["owner", "admin", "member"]); // may edit content
 const ADMIN_ROLES = new Set(["owner", "admin"]);
@@ -72,6 +79,23 @@ async function requireViewEdit(
 	await requireWrite(tx, userId, view.workspaceId);
 }
 
+// Twin of requireViewEdit for dashboards: personal is owner-only; workspace
+// follows the workspace write gate. (Delete is stricter and inlined, like view.)
+async function requireDashboardEdit(
+	tx: Transaction<Schema>,
+	userId: string,
+	dashboard: Dashboard,
+): Promise<void> {
+	if (dashboard.scope === "personal") {
+		if (dashboard.ownerId !== userId)
+			throw new Error("access denied: dashboard owner only");
+		return;
+	}
+	if (!dashboard.workspaceId)
+		throw new Error("workspace dashboard missing workspaceId");
+	await requireWrite(tx, userId, dashboard.workspaceId);
+}
+
 // `satisfies` ties the tuple to ListKind so a typo or removed kind fails to
 // compile (twin of LIST_KINDS in domain/template.ts).
 const LIST_KINDS = [
@@ -96,6 +120,10 @@ const viewFilterArg = z.custom<ReadonlyJSONValue>(
 const viewDisplayArg = z.custom<ReadonlyJSONValue>(
 	(v) => viewDisplaySchema.safeParse(v).success,
 	{ message: "invalid view display" },
+);
+const dashboardPanelsArg = z.custom<ReadonlyJSONValue>(
+	(v) => panelsSchema.safeParse(v).success,
+	{ message: "invalid dashboard panels" },
 );
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/; // YYYY-MM-DD
@@ -1173,6 +1201,105 @@ export const mutators = defineMutators({
 						throw new Error("access denied: need admin+ or view owner");
 				}
 				await tx.mutate.view.delete({ id: args.id });
+			},
+		),
+	},
+	dashboard: {
+		// Panels are validated server-side against the domain panel schema (typed
+		// panel union, MAX_PANELS cap, duplicate-id refine, bounded inline filter
+		// AST) -- same posture as view filter/display above.
+		create: defineMutator(
+			z.object({
+				id: z.string(),
+				name: z.string().min(1).max(120),
+				icon: z.string().max(64).optional(),
+				scope: z.enum(["personal", "workspace"]),
+				workspaceId: z.string().nullable(),
+				panels: dashboardPanelsArg,
+				sortKey: z.string(),
+			}),
+			async ({ tx, ctx, args }) => {
+				if (args.scope === "workspace") {
+					if (!args.workspaceId)
+						throw new Error("workspace dashboard needs workspaceId");
+					await requireWrite(tx, ctx.id, args.workspaceId);
+				} else if (args.workspaceId != null) {
+					throw new Error("personal dashboard must not set workspaceId");
+				}
+				await tx.mutate.dashboard.insert({
+					id: args.id,
+					ownerId: ctx.id,
+					workspaceId: args.workspaceId,
+					name: args.name,
+					icon: args.icon ?? null,
+					scope: args.scope,
+					panels: args.panels,
+					sortKey: args.sortKey,
+				});
+			},
+		),
+		// scope/workspaceId/ownerId are immutable after create: not in the arg
+		// schema, never spread into the update.
+		update: defineMutator(
+			z.object({
+				id: z.string(),
+				name: z.string().min(1).max(120).optional(),
+				icon: z.string().max(64).nullable().optional(),
+				panels: dashboardPanelsArg.optional(),
+			}),
+			async ({ tx, ctx, args }) => {
+				const dashboard = await tx.run(
+					zql.dashboard.where("id", args.id).one(),
+				);
+				if (!dashboard) throw new Error("dashboard not found");
+				await requireDashboardEdit(tx, ctx.id, dashboard);
+				await tx.mutate.dashboard.update({
+					id: args.id,
+					...(args.name !== undefined ? { name: args.name } : {}),
+					...(args.icon !== undefined ? { icon: args.icon } : {}),
+					...(args.panels !== undefined ? { panels: args.panels } : {}),
+					updatedAt: Date.now(),
+				});
+			},
+		),
+		reorder: defineMutator(
+			z.object({ id: z.string(), sortKey: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const dashboard = await tx.run(
+					zql.dashboard.where("id", args.id).one(),
+				);
+				if (!dashboard) throw new Error("dashboard not found");
+				await requireDashboardEdit(tx, ctx.id, dashboard);
+				await tx.mutate.dashboard.update({
+					id: args.id,
+					sortKey: args.sortKey,
+				});
+			},
+		),
+		delete: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const dashboard = await tx.run(
+					zql.dashboard.where("id", args.id).one(),
+				);
+				if (!dashboard) throw new Error("dashboard not found");
+				if (dashboard.scope === "personal") {
+					if (dashboard.ownerId !== ctx.id)
+						throw new Error("access denied: dashboard owner only");
+				} else {
+					if (!dashboard.workspaceId)
+						throw new Error("workspace dashboard missing workspaceId");
+					const role = await roleInWorkspace(tx, ctx.id, dashboard.workspaceId);
+					// Creator (member+) may delete their own; deleting others' needs admin+.
+					const canDelete =
+						(role != null && ADMIN_ROLES.has(role)) ||
+						(dashboard.ownerId === ctx.id &&
+							role != null &&
+							WRITE_ROLES.has(role));
+					if (!canDelete)
+						throw new Error("access denied: need admin+ or dashboard owner");
+				}
+				await tx.mutate.dashboard.delete({ id: args.id });
 			},
 		),
 	},
