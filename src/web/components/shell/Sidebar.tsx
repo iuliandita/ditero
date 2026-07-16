@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ICONS, ListIcon } from "@/lib/list-icon";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
-import type { Workspace } from "../../../zero/schema.gen.ts";
+import type { Dashboard, Workspace } from "../../../zero/schema.gen.ts";
 import type { SavedView } from "../../hooks/useViews.ts";
 import type { BuiltinView } from "../../views/builtins.ts";
 import type { Section } from "./BottomNav.tsx";
@@ -41,6 +41,10 @@ export function Sidebar({
 	activeViewId,
 	onOpenView,
 	onNewView,
+	dashboards,
+	activeDashboardId,
+	onOpenDashboard,
+	onNewDashboard,
 	section,
 	onOpenSettings,
 	collapsed,
@@ -60,6 +64,10 @@ export function Sidebar({
 	activeViewId: string | null;
 	onOpenView: (id: string) => void;
 	onNewView: () => void;
+	dashboards: Dashboard[];
+	activeDashboardId: string | null;
+	onOpenDashboard: (id: string) => void;
+	onNewDashboard: () => void;
 	section: Section;
 	onOpenSettings: () => void;
 	collapsed: boolean;
@@ -68,6 +76,9 @@ export function Sidebar({
 	// A view row is current only on the views surface: no list open, lists section.
 	const viewActive = (id: string) =>
 		activeViewId === id && openListId == null && section === "lists";
+	// Opening a dashboard clears list/view state, so its own id check suffices.
+	const dashboardActive = (id: string) =>
+		activeDashboardId === id && section === "lists";
 	const viewRow = (id: string, name: string, icon?: string | null) => (
 		<li key={id}>
 			<button
@@ -163,6 +174,51 @@ export function Sidebar({
 							>
 								<Plus className="size-4 shrink-0" />
 								{!collapsed && "New view"}
+							</button>
+						</li>
+					</ul>
+				</div>
+
+				<div className="mb-3">
+					{!collapsed && (
+						<div className="px-2 py-1 text-xs font-medium text-muted-foreground">
+							Dashboards
+						</div>
+					)}
+					<ul className="flex flex-col gap-0.5">
+						{dashboards.map((d) => (
+							<li key={d.id}>
+								<button
+									type="button"
+									aria-current={dashboardActive(d.id) ? "page" : undefined}
+									onClick={() => onOpenDashboard(d.id)}
+									title={d.name}
+									className={cn(
+										"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm",
+										dashboardActive(d.id)
+											? "bg-sidebar-accent font-medium"
+											: "hover:bg-sidebar-accent/60",
+										collapsed && "justify-center px-0",
+									)}
+								>
+									<ViewIcon icon={d.icon} />
+									{!collapsed && <span className="truncate">{d.name}</span>}
+								</button>
+							</li>
+						))}
+						<li>
+							<button
+								type="button"
+								data-testid="new-dashboard"
+								onClick={onNewDashboard}
+								title="New dashboard"
+								className={cn(
+									"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
+									collapsed && "justify-center px-0",
+								)}
+							>
+								<Plus className="size-4 shrink-0" />
+								{!collapsed && "New dashboard"}
 							</button>
 						</li>
 					</ul>

@@ -15,6 +15,11 @@ import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
+import {
+	type DashboardFormValue,
+	DashboardManager,
+} from "../components/dashboard/DashboardManager.tsx";
+import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
 import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
@@ -53,6 +58,7 @@ import {
 } from "../components/views/ViewManager.tsx";
 import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
+import { useDashboards } from "../hooks/useDashboards.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import type { SavedView } from "../hooks/useViews.ts";
 import { useViews } from "../hooks/useViews.ts";
@@ -131,12 +137,18 @@ function NormalWorkspace() {
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
 	const { views: savedViews } = useViews();
+	const { dashboards } = useDashboards();
 	const { pref, setPref } = useUserPref();
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openListId, setOpenListId] = useState<string | null>(null);
 	// null on the landing (home view); a built-in id or saved view.id otherwise.
 	const [openViewId, setOpenViewId] = useState<string | null>(null);
 	const [viewManager, setViewManager] = useState<
+		{ mode: "create" } | { mode: "edit"; id: string } | null
+	>(null);
+	// A third content mode besides list/view; exclusive with both.
+	const [openDashboardId, setOpenDashboardId] = useState<string | null>(null);
+	const [dashboardManager, setDashboardManager] = useState<
 		{ mode: "create" } | { mode: "edit"; id: string } | null
 	>(null);
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
@@ -198,6 +210,7 @@ function NormalWorkspace() {
 		const firstList = lists.find((l) => l.workspaceId === shared.id);
 		if (!firstList) return;
 		setSection("lists");
+		setOpenDashboardId(null);
 		setOpenListId(firstList.id);
 		setOpenSharedRequested(false);
 	}, [openSharedRequested, workspaces, lists, activeId]);
@@ -206,11 +219,13 @@ function NormalWorkspace() {
 		setActiveId(id);
 		setOpenListId(null);
 		setOpenViewId(null);
+		setOpenDashboardId(null);
 		setSwitcherOpen(false);
 	}
 	function openList(id: string) {
 		setSection("lists");
 		setOpenViewId(null);
+		setOpenDashboardId(null);
 		setDetailTaskId(null);
 		setOpenListId(id);
 	}
@@ -219,12 +234,22 @@ function NormalWorkspace() {
 	function openView(id: string) {
 		setSection("lists");
 		setOpenListId(null);
+		setOpenDashboardId(null);
 		setDetailTaskId(null);
 		setOpenViewId(id);
+	}
+	// Third exclusive content mode: a dashboard clears list/view and vice-versa.
+	function openDashboard(id: string) {
+		setSection("lists");
+		setOpenListId(null);
+		setOpenViewId(null);
+		setDetailTaskId(null);
+		setOpenDashboardId(id);
 	}
 	function openSettings() {
 		setOpenListId(null);
 		setOpenViewId(null);
+		setOpenDashboardId(null);
 		setSection("settings");
 	}
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
@@ -240,6 +265,7 @@ function NormalWorkspace() {
 		if (next === "lists") {
 			setOpenListId(null);
 			setOpenViewId(null);
+			setOpenDashboardId(null);
 		}
 	}
 
@@ -364,6 +390,51 @@ function NormalWorkspace() {
 		setViewManager(null);
 	}
 
+	// --- Dashboards wiring ------------------------------------------------------
+	const openDashboardRow = openDashboardId
+		? (dashboards.find((d) => d.id === openDashboardId) ?? null)
+		: null;
+
+	function deleteDashboard(id: string) {
+		if (!window.confirm("Delete this dashboard?")) return;
+		void zero
+			.mutate(mutators.dashboard.delete({ id }))
+			.client.catch((e) => console.error("dashboard.delete failed", e));
+		setOpenDashboardId(null);
+	}
+
+	function submitDashboard(value: DashboardFormValue) {
+		if (dashboardManager?.mode === "edit") {
+			void zero
+				.mutate(
+					mutators.dashboard.update({
+						id: dashboardManager.id,
+						name: value.name,
+						icon: value.icon,
+					}),
+				)
+				.client.catch((e) => console.error("dashboard.update failed", e));
+		} else {
+			const id = crypto.randomUUID();
+			const lastKey = dashboards.at(-1)?.sortKey ?? null;
+			void zero
+				.mutate(
+					mutators.dashboard.create({
+						id,
+						name: value.name,
+						...(value.icon != null ? { icon: value.icon } : {}),
+						scope: value.scope,
+						workspaceId: value.workspaceId,
+						panels: [],
+						sortKey: keyBetween(lastKey, null),
+					}),
+				)
+				.client.catch((e) => console.error("dashboard.create failed", e));
+			openDashboard(id);
+		}
+		setDashboardManager(null);
+	}
+
 	// Label ids per task -> TaskDetail (view onOpenTask reuses the list sheet).
 	const labelIdsByTask = useMemo(() => {
 		const map = new Map<string, string[]>();
@@ -381,8 +452,10 @@ function NormalWorkspace() {
 		? (lists.find((l) => l.id === detailTask.listId) ?? null)
 		: null;
 
-	// The view shown when no list is open: an explicitly opened one, else home.
-	const activeViewId = openListId ? null : (openViewId ?? homeRef);
+	// The view shown when no list or dashboard is open: an explicitly opened one,
+	// else home.
+	const activeViewId =
+		openListId || openDashboardId ? null : (openViewId ?? homeRef);
 
 	// Command handlers injected into the palette/keyboard system. palette.open and
 	// search.open are owned by the provider (it holds the open state). Movement +
@@ -396,6 +469,7 @@ function NormalWorkspace() {
 			"settings.open": () => {
 				setOpenListId(null);
 				setOpenViewId(null);
+				setOpenDashboardId(null);
 				setSection("settings");
 			},
 			"nav.down": () => focusNext(),
@@ -406,6 +480,7 @@ function NormalWorkspace() {
 			"nav.today": () => {
 				setSection("lists");
 				setOpenListId(null);
+				setOpenDashboardId(null);
 				setOpenViewId("today");
 			},
 			"view.new": () => setViewManager({ mode: "create" }),
@@ -453,6 +528,69 @@ function NormalWorkspace() {
 				<div className="p-4 md:p-6">
 					<ListView listId={openListId} />
 				</div>
+			</div>
+		);
+	} else if (openDashboardId) {
+		// Dashboard surface: the stub renders the name; the actions row above it
+		// carries the mobile back control plus edit/delete (view-header idiom).
+		content = (
+			<div className="flex flex-col gap-6 p-4 md:p-6">
+				{openDashboardRow ? (
+					<section
+						aria-label={openDashboardRow.name}
+						data-testid="dashboard-surface"
+					>
+						<div className="mb-3 flex items-center gap-2">
+							{!isDesktop && (
+								<button
+									type="button"
+									aria-label="Back"
+									onClick={() => setOpenDashboardId(null)}
+									className="flex size-9 shrink-0 items-center justify-center rounded-lg"
+								>
+									<ChevronLeft className="size-5" />
+								</button>
+							)}
+							<div className="flex-1" />
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										aria-label="Dashboard actions"
+										data-testid="dashboard-actions"
+									>
+										<MoreHorizontal />
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="end">
+									<DropdownMenuItem
+										data-testid="dashboard-edit"
+										onSelect={() =>
+											setDashboardManager({
+												mode: "edit",
+												id: openDashboardRow.id,
+											})
+										}
+									>
+										<Pencil /> Edit
+									</DropdownMenuItem>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem
+										data-testid="dashboard-delete"
+										className="text-destructive"
+										onSelect={() => deleteDashboard(openDashboardRow.id)}
+									>
+										<Trash2 /> Delete
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						</div>
+						<DashboardView dashboard={openDashboardRow} />
+					</section>
+				) : (
+					<p className="text-sm text-muted-foreground">Dashboard not found.</p>
+				)}
 			</div>
 		);
 	} else {
@@ -691,6 +829,10 @@ function NormalWorkspace() {
 								activeViewId={activeViewId}
 								onOpenView={openView}
 								onNewView={() => setViewManager({ mode: "create" })}
+								dashboards={dashboards}
+								activeDashboardId={openDashboardId}
+								onOpenDashboard={openDashboard}
+								onNewDashboard={() => setDashboardManager({ mode: "create" })}
 								section={section}
 								onOpenSettings={openSettings}
 								collapsed={collapsed}
@@ -804,6 +946,35 @@ function NormalWorkspace() {
 						members={members}
 						workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
 						onSubmit={submitView}
+					/>
+				)}
+
+				{dashboardManager && (
+					<DashboardManager
+						open
+						onOpenChange={(o) => {
+							if (!o) setDashboardManager(null);
+						}}
+						mode={dashboardManager.mode}
+						initial={
+							dashboardManager.mode === "edit"
+								? (() => {
+										const d = dashboards.find(
+											(row) => row.id === dashboardManager.id,
+										);
+										return d
+											? {
+													name: d.name,
+													icon: d.icon ?? null,
+													scope: d.scope ?? "personal",
+													workspaceId: d.workspaceId ?? null,
+												}
+											: undefined;
+									})()
+								: undefined
+						}
+						workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
+						onSubmit={submitDashboard}
 					/>
 				)}
 
