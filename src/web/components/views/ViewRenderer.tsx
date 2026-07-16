@@ -29,6 +29,7 @@ import { groupTasks } from "../../views/group.ts";
 import { SortableList } from "../list/SortableList.tsx";
 import { type RowHandlers, TaskRow } from "../list/TaskRow.tsx";
 import { BoardLayout } from "./BoardLayout.tsx";
+import { CalendarLayout } from "./CalendarLayout.tsx";
 import { TableLayout } from "./TableLayout.tsx";
 
 // One filtered+enriched task ready to render as a row/card/cell.
@@ -258,7 +259,13 @@ export function ViewRenderer(props: {
 
 	const handlers: RowHandlers = {
 		onToggle: (id, done) =>
-			void run(zero.mutate(mutators.task.update({ id, done: !done }))),
+			void run(
+				zero.mutate(
+					done
+						? mutators.task.update({ id, done: false })
+						: mutators.task.complete({ id }),
+				),
+			),
 		onOpenDetail: (task) => onOpenTask(task),
 	};
 
@@ -276,7 +283,11 @@ export function ViewRenderer(props: {
 			);
 		} else if (display.groupBy === "status") {
 			void run(
-				zero.mutate(mutators.task.update({ id, done: columnKey === "done" })),
+				zero.mutate(
+					columnKey === "done"
+						? mutators.task.complete({ id })
+						: mutators.task.update({ id, done: false }),
+				),
 			);
 		}
 	}
@@ -284,6 +295,10 @@ export function ViewRenderer(props: {
 	function onSort(sort: ViewSort) {
 		setLocalSort(sort);
 		onSortChange?.(sort);
+	}
+
+	function onReschedule(id: string, dueAt: number) {
+		void run(zero.mutate(mutators.task.update({ id, dueAt })));
 	}
 
 	// Shared guard: a manual sortKey reorder only makes sense when the visible
@@ -310,8 +325,12 @@ export function ViewRenderer(props: {
 	const boardRegroupable =
 		display.groupBy === "priority" || display.groupBy === "status";
 
-	const asList = !isDesktop && display.layout !== "list";
-	const renderList = display.layout === "list" || !isDesktop;
+	// Calendar owns its own mobile collapse (month grid -> agenda), so it is not
+	// folded into the generic "viewing as list" path.
+	const asList =
+		!isDesktop && display.layout !== "list" && display.layout !== "calendar";
+	const renderList =
+		display.layout === "list" || (!isDesktop && display.layout !== "calendar");
 
 	return (
 		<div data-testid="view-renderer">
@@ -326,7 +345,18 @@ export function ViewRenderer(props: {
 					Viewing as list
 				</p>
 			)}
-			{renderList ? (
+			{display.layout === "calendar" ? (
+				<CalendarLayout
+					entries={sorted.map((e) => ({
+						task: e.task,
+						kind: e.kind,
+						labels: e.labels,
+					}))}
+					isDesktop={isDesktop}
+					onOpenTask={onOpenTask}
+					onReschedule={onReschedule}
+				/>
+			) : renderList ? (
 				<ListLayout
 					groups={entryGroups}
 					reorderable={listReorderable}

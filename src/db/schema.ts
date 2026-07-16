@@ -4,6 +4,7 @@ import { relations, sql } from "drizzle-orm";
 import {
 	boolean,
 	foreignKey,
+	integer,
 	jsonb,
 	pgEnum,
 	pgTable,
@@ -43,6 +44,11 @@ export const inviteStatusEnum = pgEnum("invite_status", [
 export const attachKindEnum = pgEnum("attach_kind", ["assign", "mention"]);
 export const viewScopeEnum = pgEnum("view_scope", ["personal", "workspace"]);
 export const keymapProfileEnum = pgEnum("keymap_profile", ["default", "vim"]);
+export const habitLogStatusEnum = pgEnum("habit_log_status", [
+	"done",
+	"skipped",
+]);
+export const focusKindEnum = pgEnum("focus_kind", ["work", "break"]);
 
 export const workspace = pgTable(
 	"workspace",
@@ -122,6 +128,9 @@ export const task = pgTable(
 		quantity: text("quantity"), // shopping extras, nullable on all kinds
 		unit: text("unit"),
 		category: text("category"),
+		rrule: text("rrule"), // null => non-recurring; RFC 5545 RRULE
+		recurrenceRelative: boolean("recurrence_relative").notNull().default(false), // true => next due from completion, not schedule
+		reminderTime: text("reminder_time"), // "HH:MM" local, nullable
 	},
 	(t) => [
 		foreignKey({
@@ -277,6 +286,9 @@ export const userPref = pgTable("user_pref", {
 		.default("default"),
 	homeViewRef: text("home_view_ref"), // built-in id ("today"...) or view.id; null => "today"
 	pinnedViews: jsonb("pinned_views").notNull().default(sql`'[]'::jsonb`), // ordered refs
+	karmaGoals: jsonb("karma_goals"), // { daily, weekly } | null
+	vacation: jsonb("vacation"), // { active, until? } | null
+	focus: jsonb("focus"), // { workMin, breakMin, longBreakMin, roundsPerLongBreak, autoCycle } | null
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.defaultNow()
 		.notNull(),
@@ -300,6 +312,66 @@ export const userSecret = pgTable(
 	},
 	(t) => [unique("user_secret_user_kind").on(t.userId, t.kind)],
 );
+
+export const habitLog = pgTable(
+	"habit_log",
+	{
+		id: text("id").primaryKey(),
+		habitId: text("habit_id")
+			.notNull()
+			.references(() => task.id, { onDelete: "cascade" }),
+		date: text("date").notNull(), // "YYYY-MM-DD" local occurrence date
+		status: habitLogStatusEnum("status").notNull(),
+		// Karma points currently attributed to this row's done state (0 when
+		// skipped/not-awarded). Recorded so compensation/idempotency reuse the
+		// exact awarded amount instead of recomputing from live priority/status.
+		karmaDelta: integer("karma_delta").notNull().default(0),
+		completedAt: timestamp("completed_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [unique("habit_log_habit_date").on(t.habitId, t.date)],
+);
+
+export const karma = pgTable("karma", {
+	userId: text("user_id")
+		.primaryKey()
+		.references(() => user.id, { onDelete: "cascade" }),
+	points: integer("points").notNull().default(0),
+	level: integer("level").notNull().default(1),
+	updatedAt: timestamp("updated_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
+export const karmaEvent = pgTable("karma_event", {
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	date: text("date").notNull(), // "YYYY-MM-DD" local
+	delta: integer("delta").notNull(),
+	reason: text("reason").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
+export const focusSession = pgTable("focus_session", {
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	taskId: text("task_id").references(() => task.id, { onDelete: "set null" }),
+	kind: focusKindEnum("kind").notNull(),
+	startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+	endedAt: timestamp("ended_at", { withTimezone: true }).notNull(),
+	durationSec: integer("duration_sec").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
 
 // Relations (drizzle-zero reads these to generate the Zero schema graph).
 // Named distinctly so it merges with auth-schema's userRelations instead of
@@ -352,6 +424,8 @@ export const taskRelations = relations(task, ({ one, many }) => ({
 	taskLabels: many(taskLabel),
 	assignees: many(taskAssignee),
 	comments: many(comment),
+	habitLogs: many(habitLog),
+	focusSessions: many(focusSession),
 }));
 
 export const labelRelations = relations(label, ({ one, many }) => ({
@@ -414,4 +488,21 @@ export const viewRelations = relations(view, ({ one }) => ({
 
 export const userPrefRelations = relations(userPref, ({ one }) => ({
 	user: one(user, { fields: [userPref.id], references: [user.id] }),
+}));
+
+export const habitLogRelations = relations(habitLog, ({ one }) => ({
+	habit: one(task, { fields: [habitLog.habitId], references: [task.id] }),
+}));
+
+export const karmaRelations = relations(karma, ({ one }) => ({
+	user: one(user, { fields: [karma.userId], references: [user.id] }),
+}));
+
+export const karmaEventRelations = relations(karmaEvent, ({ one }) => ({
+	user: one(user, { fields: [karmaEvent.userId], references: [user.id] }),
+}));
+
+export const focusSessionRelations = relations(focusSession, ({ one }) => ({
+	user: one(user, { fields: [focusSession.userId], references: [user.id] }),
+	task: one(task, { fields: [focusSession.taskId], references: [task.id] }),
 }));

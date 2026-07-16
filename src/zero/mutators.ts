@@ -16,6 +16,8 @@ import {
 } from "@rocicorp/zero";
 import { z } from "zod";
 import type { ListKind } from "../domain/icon-map.ts";
+import { karmaForCompletion, levelForPoints } from "../domain/karma.ts";
+import { nextDue, parseRule } from "../domain/recurrence.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
 	type InstantiatedList,
@@ -94,6 +96,83 @@ const viewFilterArg = z.custom<ReadonlyJSONValue>(
 const viewDisplayArg = z.custom<ReadonlyJSONValue>(
 	(v) => viewDisplaySchema.safeParse(v).success,
 	{ message: "invalid view display" },
+);
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/; // YYYY-MM-DD
+
+// UTC calendar day of a ms timestamp, matching the domain modules (karma.ts /
+// recurrence.ts all reason in UTC), so a karma_event lands on the same day the
+// goal evaluator counts it.
+const ymd = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+
+// Upsert the caller's karma aggregate and append a ledger event. `delta` may be
+// negative (undo/compensation); points floor at 0 and level is recomputed from
+// the new total. karma.points is a DB-defaulted column the Zero client cannot
+// see, so read it as `?? 0`. Used by task.complete + habit.log/unlog.
+async function awardKarma(
+	tx: Transaction<Schema>,
+	userId: string,
+	delta: number,
+	reason: string,
+	dateStr: string,
+): Promise<void> {
+	const now = Date.now();
+	const existing = await tx.run(zql.karma.where("userId", userId).one());
+	const points = Math.max(0, (existing?.points ?? 0) + delta);
+	if (existing) {
+		await tx.mutate.karma.update({
+			userId,
+			points,
+			level: levelForPoints(points),
+			updatedAt: now,
+		});
+	} else {
+		await tx.mutate.karma.insert({
+			userId,
+			points,
+			level: levelForPoints(points),
+			updatedAt: now,
+		});
+	}
+	await tx.mutate.karmaEvent.insert({
+		id: crypto.randomUUID(),
+		userId,
+		date: dateStr,
+		delta,
+		reason,
+		createdAt: now,
+	});
+}
+
+// Per-user pref caps (fail-closed, mirroring the M1c z.custom/safeParse posture):
+// concrete object schemas validated behind ReadonlyJSONValue so a malformed or
+// oversized blob is rejected at write time while the json insert type is kept.
+const karmaGoalsSchema = z.object({
+	daily: z.number().int().min(0).max(1000),
+	weekly: z.number().int().min(0).max(1000),
+});
+const vacationSchema = z.object({
+	active: z.boolean(),
+	until: z.string().regex(DATE_RE).optional(),
+});
+const focusSchema = z.object({
+	workMin: z.number().int().min(1).max(180),
+	breakMin: z.number().int().min(1).max(180),
+	longBreakMin: z.number().int().min(1).max(180),
+	roundsPerLongBreak: z.number().int().min(1).max(12),
+	autoCycle: z.boolean(),
+});
+const karmaGoalsArg = z.custom<ReadonlyJSONValue>(
+	(v) => karmaGoalsSchema.safeParse(v).success,
+	{ message: "invalid karmaGoals" },
+);
+const vacationArg = z.custom<ReadonlyJSONValue>(
+	(v) => vacationSchema.safeParse(v).success,
+	{ message: "invalid vacation" },
+);
+const focusArg = z.custom<ReadonlyJSONValue>(
+	(v) => focusSchema.safeParse(v).success,
+	{ message: "invalid focus" },
 );
 
 // Deterministic id generator seeded from a client-supplied id, so an
@@ -217,6 +296,13 @@ export const mutators = defineMutators({
 				unit: z.string().nullable().optional(),
 				category: z.string().nullable().optional(),
 				sortKey: z.string().optional(),
+				rrule: z.string().nullable().optional(),
+				recurrenceRelative: z.boolean().optional(),
+				reminderTime: z
+					.string()
+					.regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+					.nullable()
+					.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				const task = await tx.run(
@@ -225,6 +311,9 @@ export const mutators = defineMutators({
 				if (!task) throw new Error("task not found");
 				const list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				// Fail loud before any write if a non-null rrule is malformed, so the
+				// complete/skip paths never read back an unparseable recurrence.
+				if (args.rrule != null) parseRule(args.rrule);
 				// done and completedAt are one invariant, kept here in one place.
 				const completed =
 					args.done === undefined
@@ -245,6 +334,13 @@ export const mutators = defineMutators({
 					...(args.unit !== undefined ? { unit: args.unit } : {}),
 					...(args.category !== undefined ? { category: args.category } : {}),
 					...(args.sortKey !== undefined ? { sortKey: args.sortKey } : {}),
+					...(args.rrule !== undefined ? { rrule: args.rrule } : {}),
+					...(args.recurrenceRelative !== undefined
+						? { recurrenceRelative: args.recurrenceRelative }
+						: {}),
+					...(args.reminderTime !== undefined
+						? { reminderTime: args.reminderTime }
+						: {}),
 				});
 			},
 		),
@@ -331,6 +427,218 @@ export const mutators = defineMutators({
 				const id = `${args.taskId}:${args.userId}`;
 				const existing = await tx.run(zql.taskAssignee.where("id", id).one());
 				if (existing) await tx.mutate.taskAssignee.delete({ id });
+			},
+		),
+		// Complete a task: for a recurring task advance to the next occurrence
+		// (series continues); otherwise mark done. Karma is awarded on every real
+		// completion, including each recurring occurrence. Recurrence is computed
+		// before any mutate so a malformed rrule aborts with zero writes.
+		complete: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const task = await tx.run(
+					zql.task.where("id", args.id).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				const list = task.list as List;
+				await requireWrite(tx, ctx.id, list.workspaceId);
+				// Habits are task rows in a kind=habits list; they complete only via
+				// habit.log. Reject before any mutate/karma so a habit id cannot
+				// double-award task karma and advance the habit's dueAt.
+				if (list.kind === "habits")
+					throw new Error("habits complete via habit.log");
+				const now = Date.now();
+				// Non-recurring completion is idempotent: an already-done task is a
+				// no-op so a repeat call cannot re-award Karma. Recurring tasks still
+				// advance+award per occurrence (each occurrence is a real completion).
+				if (!task.rrule && task.done) return;
+				if (task.rrule) {
+					const from = new Date(task.dueAt ?? now);
+					const next = nextDue(task.rrule, from, {
+						relative: task.recurrenceRelative ?? false,
+						completedAt: new Date(now),
+					});
+					if (next !== null) {
+						await tx.mutate.task.update({
+							id: args.id,
+							dueAt: next.getTime(),
+							done: false,
+							completedAt: null,
+						});
+					} else {
+						await tx.mutate.task.update({
+							id: args.id,
+							done: true,
+							completedAt: now,
+						});
+					}
+				} else {
+					await tx.mutate.task.update({
+						id: args.id,
+						done: true,
+						completedAt: now,
+					});
+				}
+				await awardKarma(
+					tx,
+					ctx.id,
+					karmaForCompletion("task", task.priority ?? 0),
+					"task_complete",
+					ymd(now),
+				);
+			},
+		),
+		// Skip the current occurrence of a recurring task: advance the due date
+		// without marking done and without Karma. Recurring tasks only.
+		skipOccurrence: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const task = await tx.run(
+					zql.task.where("id", args.id).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				const list = task.list as List;
+				await requireWrite(tx, ctx.id, list.workspaceId);
+				if (!task.rrule) throw new Error("not a recurring task");
+				const now = Date.now();
+				const next = nextDue(task.rrule, new Date(task.dueAt ?? now), {
+					relative: task.recurrenceRelative ?? false,
+					completedAt: new Date(now),
+				});
+				if (next === null) throw new Error("recurrence exhausted");
+				await tx.mutate.task.update({
+					id: args.id,
+					dueAt: next.getTime(),
+					done: false,
+					completedAt: null,
+				});
+			},
+		),
+	},
+	habit: {
+		// Log a habit occurrence for a date. Upsert on the (habitId, date) unique
+		// pair. Karma is awarded once per date reaching `done`: re-logging an
+		// already-done date does not re-award (idempotent); `skipped` awards none.
+		log: defineMutator(
+			z.object({
+				habitId: z.string(),
+				date: z.string().regex(DATE_RE),
+				status: z.enum(["done", "skipped"]),
+			}),
+			async ({ tx, ctx, args }) => {
+				const habit = await tx.run(
+					zql.task.where("id", args.habitId).related("list").one(),
+				);
+				if (!habit) throw new Error("habit not found");
+				const list = habit.list as List;
+				await requireWrite(tx, ctx.id, list.workspaceId);
+				const now = Date.now();
+				const existing = await tx.run(
+					zql.habitLog
+						.where("habitId", args.habitId)
+						.where("date", args.date)
+						.one(),
+				);
+				const wasDone = existing?.status === "done";
+				const priorDelta = existing?.karmaDelta ?? 0;
+				const completedAt = args.status === "done" ? now : null;
+				// The row's attributed Karma follows the transition: award on entering
+				// done, revoke on leaving it, keep it on an idempotent re-log. Never
+				// recompute from live priority while already done.
+				let karmaDelta = priorDelta;
+				if (args.status === "done" && !wasDone) {
+					karmaDelta = karmaForCompletion("habit", habit.priority ?? 0);
+				} else if (args.status !== "done" && wasDone) {
+					karmaDelta = 0;
+				}
+				if (existing) {
+					await tx.mutate.habitLog.update({
+						id: existing.id,
+						status: args.status,
+						karmaDelta,
+						completedAt,
+					});
+				} else {
+					await tx.mutate.habitLog.insert({
+						id: crypto.randomUUID(),
+						habitId: args.habitId,
+						date: args.date,
+						status: args.status,
+						karmaDelta,
+						completedAt,
+					});
+				}
+				if (args.status === "done" && !wasDone) {
+					await awardKarma(tx, ctx.id, karmaDelta, "habit_done", args.date);
+				} else if (args.status !== "done" && wasDone && priorDelta > 0) {
+					await awardKarma(tx, ctx.id, -priorDelta, "habit_undo", args.date);
+				}
+			},
+		),
+		// Remove a habit-log occurrence. If it was `done`, append a compensating
+		// negative karma_event and decrement points so the ledger stays balanced.
+		unlog: defineMutator(
+			z.object({ habitId: z.string(), date: z.string().regex(DATE_RE) }),
+			async ({ tx, ctx, args }) => {
+				const habit = await tx.run(
+					zql.task.where("id", args.habitId).related("list").one(),
+				);
+				if (!habit) throw new Error("habit not found");
+				const list = habit.list as List;
+				await requireWrite(tx, ctx.id, list.workspaceId);
+				const existing = await tx.run(
+					zql.habitLog
+						.where("habitId", args.habitId)
+						.where("date", args.date)
+						.one(),
+				);
+				if (!existing) return; // no-op
+				// Compensate the EXACT recorded amount, never a live-priority recompute.
+				const recorded = existing.karmaDelta ?? 0;
+				if (recorded > 0) {
+					await awardKarma(tx, ctx.id, -recorded, "habit_undo", args.date);
+				}
+				await tx.mutate.habitLog.delete({ id: existing.id });
+			},
+		),
+	},
+	focus: {
+		// Record one finished focus/break interval for the caller. Keyed to
+		// ctx.id (never a client-supplied userId). No Karma.
+		logSession: defineMutator(
+			z
+				.object({
+					taskId: z.string().optional(),
+					kind: z.enum(["work", "break"]),
+					startedAt: z.number(),
+					endedAt: z.number(),
+					durationSec: z
+						.number()
+						.int()
+						.min(1)
+						.max(24 * 60 * 60),
+				})
+				// durationSec cannot disagree wildly with the interval it claims to
+				// measure (small slack for rounding); guards a padded time-on-task sum.
+				.refine((a) => a.endedAt >= a.startedAt, {
+					message: "endedAt before startedAt",
+				})
+				.refine(
+					(a) =>
+						a.durationSec <= Math.ceil((a.endedAt - a.startedAt) / 1000) + 1,
+					{ message: "durationSec exceeds elapsed span" },
+				),
+			async ({ tx, ctx, args }) => {
+				await tx.mutate.focusSession.insert({
+					id: crypto.randomUUID(),
+					userId: ctx.id,
+					kind: args.kind,
+					startedAt: args.startedAt,
+					endedAt: args.endedAt,
+					durationSec: args.durationSec,
+					createdAt: Date.now(),
+					...(args.taskId !== undefined ? { taskId: args.taskId } : {}),
+				});
 			},
 		),
 	},
@@ -887,6 +1195,10 @@ export const mutators = defineMutators({
 				keymapProfile: z.enum(["default", "vim"]).optional(),
 				homeViewRef: z.string().max(200).nullable().optional(),
 				pinnedViews: z.array(z.string().max(64)).max(200).optional(),
+				// M2: bounded goal/vacation/focus prefs (fail-closed via z.custom caps).
+				karmaGoals: karmaGoalsArg.optional(),
+				vacation: vacationArg.optional(),
+				focus: focusArg.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				const existing = await tx.run(zql.userPref.where("id", ctx.id).one());
@@ -898,6 +1210,9 @@ export const mutators = defineMutators({
 						keymapProfile: args.keymapProfile ?? "default",
 						homeViewRef: args.homeViewRef ?? null,
 						pinnedViews: args.pinnedViews ?? [],
+						karmaGoals: args.karmaGoals ?? null,
+						vacation: args.vacation ?? null,
+						focus: args.focus ?? null,
 					});
 			},
 		),

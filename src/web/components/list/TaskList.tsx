@@ -3,6 +3,7 @@ import { type ReactNode, useMemo } from "react";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { sortTasks } from "../../../domain/task-sort.ts";
 import type { Label, List, Task } from "../../../zero/schema.gen.ts";
+import { HabitCard } from "../habit/HabitCard.tsx";
 import { CompletedSection } from "./CompletedSection.tsx";
 import { type ShoppingHandlers, ShoppingRow } from "./ShoppingRow.tsx";
 import { SortableTaskList } from "./SortableTaskList.tsx";
@@ -58,6 +59,25 @@ export function TaskList({
 		() => sortTasks(tasks, mode),
 		[tasks, mode],
 	);
+
+	// habits render as a vertical stack of cards, not task rows: completion is
+	// per-occurrence (habit_log), so the done/sink/hide flow and swipe rows don't
+	// apply here (shell doc 2).
+	if (kind === "habits") {
+		return (
+			<ul className="flex flex-col gap-2" data-testid="habit-list">
+				{tasks.map((task) => (
+					<li key={task.id}>
+						<HabitCard
+							task={task}
+							list={list}
+							onOpenDetail={handlers.onOpenDetail}
+						/>
+					</li>
+				))}
+			</ul>
+		);
+	}
 
 	const row = (task: Task): ReactNode => {
 		if (kind === "shopping") {

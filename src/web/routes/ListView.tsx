@@ -185,7 +185,13 @@ export function ListView({ listId }: { listId: string }) {
 
 	const handlers = {
 		onToggle: (id: string, done: boolean) =>
-			void run(zero.mutate(mutators.task.update({ id, done: !done }))),
+			void run(
+				zero.mutate(
+					done
+						? mutators.task.update({ id, done: false })
+						: mutators.task.complete({ id }),
+				),
+			),
 		onOpenDetail: (task: { id: string }) => setDetailTaskId(task.id),
 		onSchedule: (task: { id: string }) => setScheduleTaskId(task.id),
 		onMove: (id: string, sortKey: string) =>

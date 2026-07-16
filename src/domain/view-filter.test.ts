@@ -525,6 +525,12 @@ describe("viewDisplaySchema", () => {
 		expect(() => viewDisplaySchema.parse(ok)).not.toThrow();
 	});
 
+	test("the calendar layout passes", () => {
+		expect(() =>
+			viewDisplaySchema.parse({ ...ok, layout: "calendar" }),
+		).not.toThrow();
+	});
+
 	test("an invalid layout is rejected", () => {
 		expect(() => viewDisplaySchema.parse({ ...ok, layout: "grid" })).toThrow();
 	});

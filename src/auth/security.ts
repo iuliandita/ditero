@@ -33,6 +33,10 @@ export function authRateLimitOptions() {
 		// relax it here (test-only) so a poll loop does not trip the default 100/60s
 		// limiter mid-run. Prod keeps the default limit — never relaxed outside e2e.
 		options.customRules["/get-session"] = { window: 60, max: 1000 };
+		// Zero refreshes its JWT via /token; under accumulated suite load the warm
+		// files can exceed the default 100/60s and surface as "token refresh failed:
+		// 429". Test-only relaxation; prod keeps the default limit.
+		options.customRules["/token"] = { window: 60, max: 1000 };
 	}
 	return options;
 }
