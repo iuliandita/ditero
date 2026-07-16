@@ -13,16 +13,26 @@ import {
 	Pencil,
 	Plus,
 	Trash2,
+	TriangleAlert,
 } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { type JSX, type ReactNode, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
+	MAX_PANELS,
 	type Panel,
 	type PanelSize,
 	panelsSchema,
+	type ResolvedSource,
+	resolvePanelSource,
 } from "../../../domain/dashboard.ts";
-import type { Dashboard } from "../../../zero/schema.gen.ts";
+import type {
+	Dashboard,
+	Folder,
+	Task,
+	Workspace,
+} from "../../../zero/schema.gen.ts";
+import type { SavedView } from "../../hooks/useViews.ts";
 import { useIsDesktop } from "../../lib/use-media-query.ts";
 import { useReorderSensors } from "../list/SortableList.tsx";
 import { Button } from "../ui/button.tsx";
@@ -33,25 +43,49 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
-import { PanelFrame } from "./PanelFrame.tsx";
+import { AddPanelDialog } from "./AddPanelDialog.tsx";
+import { CounterPanel } from "./CounterPanel.tsx";
+import { PanelFrame, panelLabel } from "./PanelFrame.tsx";
 import { PANEL_SPAN_CLASS } from "./panel-span.ts";
+import { type PanelData, type PanelIds, TasksPanel } from "./TasksPanel.tsx";
 
-// Typed panel-body dispatch; Tasks 7/8 replace the placeholders per type.
-function renderPanel(panel: Panel): ReactNode {
-	switch (panel.type) {
-		case "tasks":
-		case "counter":
-		case "streak":
-		case "focus":
-			return (
-				<p
-					data-testid="panel-body-placeholder"
-					className="text-sm text-muted-foreground"
+type EditablePanel = Extract<Panel, { type: "tasks" | "counter" }>;
+type PanelDialogState =
+	| { mode: "add" }
+	| { mode: "edit"; panel: EditablePanel }
+	| null;
+
+// Dangling view ref (shell doc §4): explicit warning, never silently empty.
+// "Replace view" opens the panel editor for canEdit users regardless of the
+// surface edit mode; viewers get the text only.
+function ViewMissing({
+	canEdit,
+	onReplace,
+}: {
+	canEdit: boolean;
+	onReplace: () => void;
+}): JSX.Element {
+	return (
+		<div
+			data-testid="panel-view-missing"
+			className="flex flex-col items-start gap-2 text-sm text-muted-foreground"
+		>
+			<p className="flex items-start gap-1.5">
+				<TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+				This panel's saved view was deleted or isn't shared with you.
+			</p>
+			{canEdit && (
+				<Button
+					variant="outline"
+					size="sm"
+					data-testid="panel-replace-view"
+					onClick={onReplace}
 				>
-					{panel.type}
-				</p>
-			);
-	}
+					Replace view
+				</Button>
+			)}
+		</div>
+	);
 }
 
 // One drag-sortable grid tile. The dnd transform lives on this wrapper (which
@@ -59,12 +93,18 @@ function renderPanel(panel: Panel): ReactNode {
 // Under prefers-reduced-motion the reflow transition drops to instant swaps.
 function SortablePanel({
 	panel,
+	viewName,
+	onEdit,
 	onResize,
 	onRemove,
+	children,
 }: {
 	panel: Panel;
+	viewName: string | null;
+	onEdit?: () => void;
 	onResize: (size: PanelSize) => void;
 	onRemove: () => void;
+	children: ReactNode;
 }): JSX.Element {
 	const reduce = useReducedMotion();
 	const {
@@ -89,10 +129,12 @@ function SortablePanel({
 				panel={panel}
 				editing
 				handle={{ attributes, listeners }}
+				viewName={viewName}
+				onEdit={onEdit}
 				onResize={onResize}
 				onRemove={onRemove}
 			>
-				{renderPanel(panel)}
+				{children}
 			</PanelFrame>
 		</div>
 	);
@@ -108,7 +150,14 @@ export function DashboardView({
 	onEditDashboard,
 	onDeleteDashboard,
 	onBack,
-	onAddPanel,
+	data,
+	ids,
+	views,
+	folders,
+	members,
+	workspaces,
+	onOpenTask,
+	onOpenView,
 }: {
 	dashboard: Dashboard;
 	canEdit: boolean;
@@ -116,21 +165,49 @@ export function DashboardView({
 	onEditDashboard: () => void;
 	onDeleteDashboard: () => void;
 	onBack: () => void;
-	onAddPanel: () => void;
+	data: PanelData;
+	ids: PanelIds;
+	views: SavedView[];
+	folders: Folder[];
+	members: { id: string; name: string }[];
+	workspaces: Workspace[];
+	onOpenTask: (task: Task) => void;
+	onOpenView: (viewId: string) => void;
 }): JSX.Element {
 	const isDesktop = useIsDesktop();
 	// Effective edit mode is gated on canEdit so a mid-edit role revocation
 	// drops the surface back to view chrome instead of stranding failing writes.
 	const [editRequested, setEditRequested] = useState(false);
-	const editing = editRequested && canEdit;
+	const [panelDialog, setPanelDialog] = useState<PanelDialogState>(null);
 	const sensors = useReorderSensors();
 	// Panels are synced JSON a co-member could have corrupted out-of-band; a
-	// malformed array renders an inline error block, never a crash.
+	// malformed array renders an inline error block, never a crash. The Edit
+	// toggle stays absent in that state (nothing on the surface is editable).
 	const parsed = useMemo(
 		() => panelsSchema.safeParse(dashboard.panels),
 		[dashboard.panels],
 	);
 	const panels = parsed.success ? parsed.data : [];
+	const editing = editRequested && canEdit && parsed.success;
+
+	const viewsById = useMemo(
+		() => new Map(views.map((v) => [v.id, v])),
+		[views],
+	);
+	const atCap = panels.length >= MAX_PANELS;
+
+	// resolvePanelSource returns a fresh object per call; resolving once per
+	// panels/views change keeps each panel's `resolved` prop referentially
+	// stable so usePanelEntries' memo holds across parent renders.
+	const resolvedById = useMemo(() => {
+		const map = new Map<string, ResolvedSource>();
+		for (const p of panels) {
+			if (p.type !== "tasks" && p.type !== "counter") continue;
+			const resolved = resolvePanelSource(p.source, viewsById);
+			if (resolved) map.set(p.id, resolved);
+		}
+		return map;
+	}, [panels, viewsById]);
 
 	function resizePanel(id: string, size: PanelSize) {
 		onUpdate(panels.map((p) => (p.id === id ? { ...p, size } : p)));
@@ -145,6 +222,80 @@ export function DashboardView({
 		const to = panels.findIndex((p) => p.id === over.id);
 		if (from < 0 || to < 0) return;
 		onUpdate(arrayMove(panels, from, to));
+	}
+	function submitPanel(panel: Panel) {
+		if (panelDialog?.mode === "edit") {
+			onUpdate(panels.map((p) => (p.id === panel.id ? panel : p)));
+		} else {
+			onUpdate([...panels, panel]);
+		}
+		setPanelDialog(null);
+	}
+
+	// The referenced view's name feeds the derived header label (shell doc §1)
+	// and the expand-dialog title; null for inline sources and dangling refs.
+	function panelViewName(panel: Panel): string | null {
+		if (panel.type !== "tasks" && panel.type !== "counter") return null;
+		if (panel.source.kind !== "view") return null;
+		return viewsById.get(panel.source.viewId)?.name ?? null;
+	}
+
+	// Typed panel-body dispatch; streak/focus bodies land in Task 8.
+	function renderPanel(panel: Panel): ReactNode {
+		switch (panel.type) {
+			case "tasks":
+			case "counter": {
+				const resolved = resolvedById.get(panel.id) ?? null;
+				if (resolved === null) {
+					return (
+						<ViewMissing
+							canEdit={canEdit}
+							onReplace={() => setPanelDialog({ mode: "edit", panel })}
+						/>
+					);
+				}
+				const label = panelLabel(panel, panelViewName(panel));
+				return panel.type === "tasks" ? (
+					<TasksPanel
+						panel={panel}
+						resolved={resolved}
+						label={label}
+						data={data}
+						ids={ids}
+						onOpenTask={onOpenTask}
+						onOpenView={onOpenView}
+					/>
+				) : (
+					<CounterPanel
+						panel={panel}
+						resolved={resolved}
+						label={label}
+						data={data}
+						ids={ids}
+						onOpenTask={onOpenTask}
+						onOpenView={onOpenView}
+					/>
+				);
+			}
+			case "streak":
+			case "focus":
+				return (
+					<p
+						data-testid="panel-body-placeholder"
+						className="text-sm text-muted-foreground"
+					>
+						{panel.type}
+					</p>
+				);
+			default:
+				return panel satisfies never;
+		}
+	}
+
+	// The editor dialog covers tasks/counter only until Task 8.
+	function editHandlerFor(panel: Panel): (() => void) | undefined {
+		if (panel.type !== "tasks" && panel.type !== "counter") return undefined;
+		return () => setPanelDialog({ mode: "edit", panel });
 	}
 
 	let body: ReactNode;
@@ -173,7 +324,7 @@ export function DashboardView({
 						data-testid="dashboard-empty-add"
 						onClick={() => {
 							setEditRequested(true);
-							onAddPanel();
+							setPanelDialog({ mode: "add" });
 						}}
 					>
 						<Plus /> Add panel
@@ -192,27 +343,43 @@ export function DashboardView({
 							<SortablePanel
 								key={p.id}
 								panel={p}
+								viewName={panelViewName(p)}
+								onEdit={editHandlerFor(p)}
 								onResize={(size) => resizePanel(p.id, size)}
 								onRemove={() => removePanel(p.id)}
-							/>
+							>
+								{renderPanel(p)}
+							</SortablePanel>
 						))
 					: panels.map((p) => (
 							<div key={p.id} className={PANEL_SPAN_CLASS[p.size]}>
-								<PanelFrame panel={p} editing={false}>
+								<PanelFrame
+									panel={p}
+									editing={false}
+									viewName={panelViewName(p)}
+								>
 									{renderPanel(p)}
 								</PanelFrame>
 							</div>
 						))}
-				{editing && (
-					<button
-						type="button"
-						data-testid="add-panel"
-						onClick={onAddPanel}
-						className="flex min-h-28 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40 md:col-span-3"
-					>
-						<Plus className="size-4" /> Add panel
-					</button>
-				)}
+				{editing &&
+					(atCap ? (
+						<p
+							data-testid="panel-limit-reached"
+							className="flex min-h-28 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground md:col-span-3"
+						>
+							Panel limit reached
+						</p>
+					) : (
+						<button
+							type="button"
+							data-testid="add-panel"
+							onClick={() => setPanelDialog({ mode: "add" })}
+							className="flex min-h-28 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40 md:col-span-3"
+						>
+							<Plus className="size-4" /> Add panel
+						</button>
+					))}
 			</div>
 		);
 		body = editing ? (
@@ -249,7 +416,7 @@ export function DashboardView({
 				<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
 					{dashboard.name}
 				</h1>
-				{canEdit && (
+				{canEdit && parsed.success && (
 					<Button
 						variant={editing ? "default" : "outline"}
 						size="sm"
@@ -290,6 +457,30 @@ export function DashboardView({
 				</DropdownMenu>
 			</div>
 			{body}
+			{panelDialog && (
+				<AddPanelDialog
+					// Remount per target so edit prefill never leaks between panels.
+					key={panelDialog.mode === "edit" ? panelDialog.panel.id : "add"}
+					open
+					onOpenChange={(o) => {
+						if (!o) setPanelDialog(null);
+					}}
+					mode={panelDialog.mode}
+					atCap={atCap}
+					initial={panelDialog.mode === "edit" ? panelDialog.panel : undefined}
+					views={views.map((v) => ({ id: v.id, name: v.name }))}
+					lists={data.lists.map((l) => ({ id: l.id, title: l.title }))}
+					folders={folders.map((f) => ({ id: f.id, name: f.name }))}
+					labels={data.labels.map((l) => ({
+						id: l.id,
+						name: l.name,
+						color: l.color ?? undefined,
+					}))}
+					members={members}
+					workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
+					onSubmit={submitPanel}
+				/>
+			)}
 		</section>
 	);
 }

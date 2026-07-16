@@ -429,6 +429,17 @@ function NormalWorkspace() {
 		setOpenDashboardId(null);
 	}
 
+	// Stable prop objects for DashboardView's panel evaluation (same synced sets
+	// the ViewRenderer surface consumes).
+	const panelData = useMemo(
+		() => ({ tasks, lists, labels, taskLabels, assignees }),
+		[tasks, lists, labels, taskLabels, assignees],
+	);
+	const panelIds = useMemo(
+		() => ({ currentUserId: zero.userID ?? "", membershipWorkspaceIds }),
+		[zero.userID, membershipWorkspaceIds],
+	);
+
 	function submitDashboard(value: DashboardFormValue) {
 		if (dashboardManager?.mode === "edit") {
 			void zero
@@ -573,9 +584,14 @@ function NormalWorkspace() {
 						}
 						onDeleteDashboard={() => deleteDashboard(openDashboardRow.id)}
 						onBack={() => setOpenDashboardId(null)}
-						onAddPanel={() => {
-							// Task 7 wires the AddPanelDialog here.
-						}}
+						data={panelData}
+						ids={panelIds}
+						views={savedViews}
+						folders={folders}
+						members={members}
+						workspaces={workspaces}
+						onOpenTask={(t) => setDetailTaskId(t.id)}
+						onOpenView={openView}
 					/>
 				) : (
 					<p className="text-sm text-muted-foreground">Dashboard not found.</p>

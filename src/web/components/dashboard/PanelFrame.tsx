@@ -2,9 +2,19 @@ import type {
 	DraggableAttributes,
 	DraggableSyntheticListeners,
 } from "@dnd-kit/core";
-import { Check, GripVertical, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+	Check,
+	GripVertical,
+	MoreHorizontal,
+	Pencil,
+	Trash2,
+} from "lucide-react";
 import type { JSX, ReactNode } from "react";
-import type { Panel, PanelSize } from "../../../domain/dashboard.ts";
+import {
+	PANEL_SPANS,
+	type Panel,
+	type PanelSize,
+} from "../../../domain/dashboard.ts";
 import { Button } from "../ui/button.tsx";
 import {
 	DropdownMenu,
@@ -24,13 +34,13 @@ const TYPE_LABEL: Record<Panel["type"], string> = {
 	focus: "Focus",
 };
 
-// Region label: user title, else the type name (view-name derivation is Task 7).
-export function panelLabel(panel: Panel): string {
-	return panel.title || TYPE_LABEL[panel.type];
+// Region label: user title, else the referenced view's name, else the type name.
+export function panelLabel(panel: Panel, viewName?: string | null): string {
+	return panel.title || viewName || TYPE_LABEL[panel.type];
 }
 
-const SIZES: PanelSize[] = ["s", "m", "l", "full"];
-const SIZE_LABEL: Record<PanelSize, string> = {
+const SIZES = Object.keys(PANEL_SPANS) as PanelSize[];
+export const SIZE_LABEL: Record<PanelSize, string> = {
 	s: "Small",
 	m: "Medium",
 	l: "Large",
@@ -44,6 +54,8 @@ export function PanelFrame({
 	panel,
 	editing,
 	handle,
+	viewName,
+	onEdit,
 	onResize,
 	onRemove,
 	children,
@@ -54,11 +66,14 @@ export function PanelFrame({
 		attributes: DraggableAttributes;
 		listeners: DraggableSyntheticListeners;
 	};
+	viewName?: string | null;
+	// Absent for panel types the editor dialog doesn't cover yet (Task 8).
+	onEdit?: () => void;
 	onResize?: (size: PanelSize) => void;
 	onRemove?: () => void;
 	children: ReactNode;
 }): JSX.Element {
-	const label = panelLabel(panel);
+	const label = panelLabel(panel, viewName);
 	return (
 		<section
 			aria-label={label}
@@ -98,6 +113,11 @@ export function PanelFrame({
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
+							{onEdit && (
+								<DropdownMenuItem data-testid="panel-edit" onSelect={onEdit}>
+									<Pencil /> Edit panel
+								</DropdownMenuItem>
+							)}
 							<DropdownMenuSub>
 								<DropdownMenuSubTrigger data-testid="panel-resize">
 									Resize
