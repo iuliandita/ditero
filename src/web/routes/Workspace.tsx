@@ -10,6 +10,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { Panel } from "../../domain/dashboard.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { mutators } from "../../zero/mutators.ts";
@@ -395,6 +396,31 @@ function NormalWorkspace() {
 		? (dashboards.find((d) => d.id === openDashboardId) ?? null)
 		: null;
 
+	// Mirrors requireDashboardEdit in the mutators: personal -> owner only,
+	// workspace -> role in the write set. The server re-checks on write.
+	const canEditDashboard = useMemo(() => {
+		if (!openDashboardRow) return false;
+		if (openDashboardRow.scope === "personal")
+			return openDashboardRow.ownerId === zero.userID;
+		return memberships.some(
+			(m) =>
+				m.userId === zero.userID &&
+				m.workspaceId === openDashboardRow.workspaceId &&
+				(m.role === "owner" || m.role === "admin" || m.role === "member"),
+		);
+	}, [openDashboardRow, memberships, zero.userID]);
+
+	function updateDashboardPanels(id: string, panels: Panel[]) {
+		void zero
+			.mutate(
+				mutators.dashboard.update({
+					id,
+					panels: panels as ReadonlyJSONValue,
+				}),
+			)
+			.client.catch((e) => console.error("dashboard.update failed", e));
+	}
+
 	function deleteDashboard(id: string) {
 		if (!window.confirm("Delete this dashboard?")) return;
 		void zero
@@ -531,63 +557,26 @@ function NormalWorkspace() {
 			</div>
 		);
 	} else if (openDashboardId) {
-		// Dashboard surface: the stub renders the name; the actions row above it
-		// carries the mobile back control plus edit/delete (view-header idiom).
 		content = (
 			<div className="flex flex-col gap-6 p-4 md:p-6">
 				{openDashboardRow ? (
-					<section
-						aria-label={openDashboardRow.name}
-						data-testid="dashboard-surface"
-					>
-						<div className="mb-3 flex items-center gap-2">
-							{!isDesktop && (
-								<button
-									type="button"
-									aria-label="Back"
-									onClick={() => setOpenDashboardId(null)}
-									className="flex size-9 shrink-0 items-center justify-center rounded-lg"
-								>
-									<ChevronLeft className="size-5" />
-								</button>
-							)}
-							<div className="flex-1" />
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										aria-label="Dashboard actions"
-										data-testid="dashboard-actions"
-									>
-										<MoreHorizontal />
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent align="end">
-									<DropdownMenuItem
-										data-testid="dashboard-edit"
-										onSelect={() =>
-											setDashboardManager({
-												mode: "edit",
-												id: openDashboardRow.id,
-											})
-										}
-									>
-										<Pencil /> Edit
-									</DropdownMenuItem>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem
-										data-testid="dashboard-delete"
-										className="text-destructive"
-										onSelect={() => deleteDashboard(openDashboardRow.id)}
-									>
-										<Trash2 /> Delete
-									</DropdownMenuItem>
-								</DropdownMenuContent>
-							</DropdownMenu>
-						</div>
-						<DashboardView dashboard={openDashboardRow} />
-					</section>
+					// Keyed so edit mode never carries over between dashboards.
+					<DashboardView
+						key={openDashboardRow.id}
+						dashboard={openDashboardRow}
+						canEdit={canEditDashboard}
+						onUpdate={(panels) =>
+							updateDashboardPanels(openDashboardRow.id, panels)
+						}
+						onEditDashboard={() =>
+							setDashboardManager({ mode: "edit", id: openDashboardRow.id })
+						}
+						onDeleteDashboard={() => deleteDashboard(openDashboardRow.id)}
+						onBack={() => setOpenDashboardId(null)}
+						onAddPanel={() => {
+							// Task 7 wires the AddPanelDialog here.
+						}}
+					/>
 				) : (
 					<p className="text-sm text-muted-foreground">Dashboard not found.</p>
 				)}
@@ -731,6 +720,33 @@ function NormalWorkspace() {
 									className="rounded-lg px-2 py-2 text-start text-sm text-muted-foreground hover:bg-muted"
 								>
 									+ New view
+								</button>
+							</nav>
+						)}
+						{/* Dashboards mirror the Views block so they are reachable on
+						    mobile too (desktop nav lives in the sidebar). */}
+						{!isDesktop && (
+							<nav aria-label="Dashboards" className="flex flex-col gap-0.5">
+								<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
+									Dashboards
+								</div>
+								{dashboards.map((d) => (
+									<button
+										key={d.id}
+										type="button"
+										onClick={() => openDashboard(d.id)}
+										className="rounded-lg px-2 py-2 text-start text-sm hover:bg-muted"
+									>
+										{d.name}
+									</button>
+								))}
+								<button
+									type="button"
+									data-testid="new-dashboard"
+									onClick={() => setDashboardManager({ mode: "create" })}
+									className="rounded-lg px-2 py-2 text-start text-sm text-muted-foreground hover:bg-muted"
+								>
+									+ New dashboard
 								</button>
 							</nav>
 						)}

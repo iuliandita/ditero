@@ -1,0 +1,135 @@
+import type {
+	DraggableAttributes,
+	DraggableSyntheticListeners,
+} from "@dnd-kit/core";
+import { Check, GripVertical, MoreHorizontal, Trash2 } from "lucide-react";
+import type { JSX, ReactNode } from "react";
+import type { Panel, PanelSize } from "../../../domain/dashboard.ts";
+import { Button } from "../ui/button.tsx";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
+	DropdownMenuTrigger,
+} from "../ui/dropdown-menu.tsx";
+
+const TYPE_LABEL: Record<Panel["type"], string> = {
+	tasks: "Tasks",
+	counter: "Counter",
+	streak: "Streak",
+	focus: "Focus",
+};
+
+// Region label: user title, else the type name (view-name derivation is Task 7).
+export function panelLabel(panel: Panel): string {
+	return panel.title || TYPE_LABEL[panel.type];
+}
+
+const SIZES: PanelSize[] = ["s", "m", "l", "full"];
+const SIZE_LABEL: Record<PanelSize, string> = {
+	s: "Small",
+	m: "Medium",
+	l: "Large",
+	full: "Full width",
+};
+
+// Slim always-on panel chrome (shell doc §1): the header is the accessible
+// region label, and in edit mode doubles as the drag handle; the "..." menu
+// (resize/remove) renders in edit mode only.
+export function PanelFrame({
+	panel,
+	editing,
+	handle,
+	onResize,
+	onRemove,
+	children,
+}: {
+	panel: Panel;
+	editing: boolean;
+	handle?: {
+		attributes: DraggableAttributes;
+		listeners: DraggableSyntheticListeners;
+	};
+	onResize?: (size: PanelSize) => void;
+	onRemove?: () => void;
+	children: ReactNode;
+}): JSX.Element {
+	const label = panelLabel(panel);
+	return (
+		<section
+			aria-label={label}
+			data-testid="panel-frame"
+			className="flex h-full flex-col rounded-lg border bg-card"
+		>
+			<header className="flex items-center gap-1 px-3 py-2">
+				{editing && handle ? (
+					<button
+						type="button"
+						data-testid="panel-drag"
+						aria-label={`Move ${label} panel`}
+						className="flex min-w-0 flex-1 cursor-grab touch-none items-center gap-1.5 rounded text-start focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+						{...handle.attributes}
+						{...handle.listeners}
+					>
+						<GripVertical className="size-3.5 shrink-0 text-muted-foreground/60" />
+						<span className="truncate text-xs font-medium text-muted-foreground">
+							{label}
+						</span>
+					</button>
+				) : (
+					<span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
+						{label}
+					</span>
+				)}
+				{editing && (
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								aria-label={`${label} panel actions`}
+								data-testid="panel-menu"
+							>
+								<MoreHorizontal />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<DropdownMenuSub>
+								<DropdownMenuSubTrigger data-testid="panel-resize">
+									Resize
+								</DropdownMenuSubTrigger>
+								<DropdownMenuSubContent>
+									{SIZES.map((size) => (
+										<DropdownMenuItem
+											key={size}
+											data-testid={`panel-size-${size}`}
+											onSelect={() => onResize?.(size)}
+										>
+											{SIZE_LABEL[size]}
+											{panel.size === size && <Check className="ml-auto" />}
+										</DropdownMenuItem>
+									))}
+								</DropdownMenuSubContent>
+							</DropdownMenuSub>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								data-testid="panel-remove"
+								className="text-destructive"
+								onSelect={() => {
+									if (window.confirm("Remove this panel?")) onRemove?.();
+								}}
+							>
+								<Trash2 /> Remove
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
+			</header>
+			<div className="flex-1 px-3 pb-3">{children}</div>
+		</section>
+	);
+}
