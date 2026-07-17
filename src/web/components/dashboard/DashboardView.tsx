@@ -8,6 +8,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
 	ChevronLeft,
+	House,
 	LayoutDashboard,
 	MoreHorizontal,
 	Pencil,
@@ -38,6 +39,7 @@ import { useReorderSensors } from "../list/SortableList.tsx";
 import { Button } from "../ui/button.tsx";
 import {
 	DropdownMenu,
+	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
@@ -148,6 +150,8 @@ export function DashboardView({
 	onUpdate,
 	onEditDashboard,
 	onDeleteDashboard,
+	onSetHome,
+	isHome,
 	onBack,
 	data,
 	ids,
@@ -163,6 +167,8 @@ export function DashboardView({
 	onUpdate: (panels: Panel[]) => void;
 	onEditDashboard: () => void;
 	onDeleteDashboard: () => void;
+	onSetHome: () => void;
+	isHome: boolean;
 	onBack: () => void;
 	data: PanelData;
 	ids: PanelIds;
@@ -439,6 +445,13 @@ export function DashboardView({
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
+						<DropdownMenuCheckboxItem
+							data-testid="dashboard-set-home"
+							checked={isHome}
+							onSelect={onSetHome}
+						>
+							<House /> Set as home
+						</DropdownMenuCheckboxItem>
 						<DropdownMenuItem
 							data-testid="dashboard-rename"
 							onSelect={onEditDashboard}

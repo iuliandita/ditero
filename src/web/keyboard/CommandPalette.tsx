@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { searchTasks } from "../../domain/search.ts";
 import { queries } from "../../zero/queries.ts";
+import { useDashboards } from "../hooks/useDashboards.ts";
 import { useViews } from "../hooks/useViews.ts";
 import { BUILTIN_VIEWS } from "../views/builtins.ts";
 import { useCommands } from "./CommandContext.tsx";
@@ -17,14 +18,17 @@ type Group = { heading: string; items: Item[] };
 export function CommandPalette({
 	onNavigateList,
 	onNavigateView,
+	onNavigateDashboard,
 }: {
 	onNavigateList: (listId: string) => void;
 	onNavigateView: (viewId: string) => void;
+	onNavigateDashboard: (dashboardId: string) => void;
 }) {
 	const { isOpen, close, run } = useCommands();
 	const [lists] = useQuery(queries.lists.mine());
 	const [tasks] = useQuery(queries.tasks.mine());
 	const { views } = useViews();
+	const { dashboards } = useDashboards();
 
 	const [query, setQuery] = useState("");
 	const [active, setActive] = useState(0);
@@ -92,6 +96,15 @@ export function CommandPalette({
 				run: () => onNavigateView(v.id),
 			});
 		}
+		for (const d of dashboards) {
+			const label = `Dashboard: ${d.name}`;
+			if (q !== "" && !label.toLowerCase().includes(q)) continue;
+			navItems.push({
+				key: `dashboard:${d.id}`,
+				label,
+				run: () => onNavigateDashboard(d.id),
+			});
+		}
 		if (navItems.length) result.push({ heading: "Navigate", items: navItems });
 
 		// Search: only on a non-empty query (searchTasks returns [] otherwise).
@@ -128,10 +141,12 @@ export function CommandPalette({
 		lists,
 		tasks,
 		views,
+		dashboards,
 		searchLists,
 		run,
 		onNavigateList,
 		onNavigateView,
+		onNavigateDashboard,
 	]);
 
 	const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);

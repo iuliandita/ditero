@@ -9,7 +9,7 @@ import {
 	PinOff,
 	Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Panel } from "../../domain/dashboard.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
@@ -42,6 +42,7 @@ import { Sidebar } from "../components/shell/Sidebar.tsx";
 import { Button } from "../components/ui/button.tsx";
 import {
 	DropdownMenu,
+	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
@@ -86,6 +87,7 @@ import {
 	DEFAULT_HOME,
 	getBuiltin,
 } from "../views/builtins.ts";
+import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
 import { ListView } from "./ListView.tsx";
 import { SecurityPanel } from "./SecurityPanel.tsx";
 
@@ -138,8 +140,8 @@ function NormalWorkspace() {
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
 	const { views: savedViews } = useViews();
-	const { dashboards } = useDashboards();
-	const { pref, setPref } = useUserPref();
+	const { dashboards, loading: dashboardsLoading } = useDashboards();
+	const { pref, setPref, loading: prefLoading } = useUserPref();
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openListId, setOpenListId] = useState<string | null>(null);
 	// null on the landing (home view); a built-in id or saved view.id otherwise.
@@ -160,6 +162,8 @@ function NormalWorkspace() {
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 	const [membersOpen, setMembersOpen] = useState(false);
 	const [cheatOpen, setCheatOpen] = useState(false);
+	// One-shot: a "dashboard:<id>" home ref lands on that dashboard after sync.
+	const [homeApplied, setHomeApplied] = useState(false);
 
 	// Default active workspace is the user's personal one, so new lists stay private.
 	useEffect(() => {
@@ -231,22 +235,23 @@ function NormalWorkspace() {
 		setOpenListId(id);
 	}
 	// Alternate content mode to a list: a view (built-in or saved) clears the open
-	// list and vice-versa (they never render together).
-	function openView(id: string) {
+	// list and vice-versa (they never render together). useCallback (setters only)
+	// so the command-handler memo can depend on these.
+	const openView = useCallback((id: string) => {
 		setSection("lists");
 		setOpenListId(null);
 		setOpenDashboardId(null);
 		setDetailTaskId(null);
 		setOpenViewId(id);
-	}
+	}, []);
 	// Third exclusive content mode: a dashboard clears list/view and vice-versa.
-	function openDashboard(id: string) {
+	const openDashboard = useCallback((id: string) => {
 		setSection("lists");
 		setOpenListId(null);
 		setOpenViewId(null);
 		setDetailTaskId(null);
 		setOpenDashboardId(id);
-	}
+	}, []);
 	function openSettings() {
 		setOpenListId(null);
 		setOpenViewId(null);
@@ -292,7 +297,42 @@ function NormalWorkspace() {
 		() => workspaces.map((w) => w.id),
 		[workspaces],
 	);
-	const homeRef = pref.homeViewRef ?? DEFAULT_HOME;
+	// Home ref resolution: builtin/saved view, "dashboard:<id>", or (dangling/
+	// garbage) DEFAULT_HOME — pure helper, unit-tested.
+	const homeTarget = useMemo(
+		() =>
+			resolveHomeRef(pref.homeViewRef, {
+				savedViewIds: savedViews.map((v) => v.id),
+				dashboardIds: dashboards.map((d) => d.id),
+			}),
+		[pref.homeViewRef, savedViews, dashboards],
+	);
+	// The view surface's home: a dashboard home falls back to DEFAULT_HOME here
+	// (used pre-sync and after backing out of the home dashboard).
+	const homeRef = homeTarget.kind === "view" ? homeTarget.id : DEFAULT_HOME;
+
+	// Land on the home dashboard once both prefs and dashboards have synced (a
+	// dangling ref already resolved to a view above). One-shot and gated on the
+	// exclusive modes + section so it never hijacks navigation (e.g. Settings
+	// opened before sync) or re-opens after Back.
+	useEffect(() => {
+		if (homeApplied || prefLoading || dashboardsLoading) return;
+		setHomeApplied(true);
+		if (homeTarget.kind !== "dashboard") return;
+		if (openListId || openViewId || openDashboardId) return;
+		if (section !== "lists") return;
+		setDetailTaskId(null);
+		setOpenDashboardId(homeTarget.id);
+	}, [
+		homeApplied,
+		prefLoading,
+		dashboardsLoading,
+		homeTarget,
+		openListId,
+		openViewId,
+		openDashboardId,
+		section,
+	]);
 	const pinnedViews = useMemo(() => {
 		const set = new Set(pref.pinnedViews);
 		return savedViews
@@ -426,6 +466,9 @@ function NormalWorkspace() {
 		void zero
 			.mutate(mutators.dashboard.delete({ id }))
 			.client.catch((e) => console.error("dashboard.delete failed", e));
+		// Mirror deleteView: never leave the home ref dangling.
+		if (pref.homeViewRef === dashboardHomeRef(id))
+			setPref({ homeViewRef: null });
 		setOpenDashboardId(null);
 	}
 
@@ -497,9 +540,10 @@ function NormalWorkspace() {
 	// Command handlers injected into the palette/keyboard system. palette.open and
 	// search.open are owned by the provider (it holds the open state). Movement +
 	// toggle drive roving DOM focus over the [data-kbd-nav] task rows TaskRow marks.
-	// Handlers only touch stable setState setters (inlined rather than calling the
-	// openView/openSettings helpers) so the map has no unstable deps; the provider
-	// keeps them in a ref, so identity need not change across renders.
+	// Nav handlers route through the canonical open* helpers (useCallback,
+	// stable); the provider keeps the map in a ref, so identity churn from
+	// firstDashboardId changes is harmless.
+	const firstDashboardId = dashboards[0]?.id ?? null;
 	const commandHandlers = useMemo<CommandHandlers>(
 		() => ({
 			"task.create": () => setQuickAddOpen(true),
@@ -514,15 +558,16 @@ function NormalWorkspace() {
 			"nav.open": () => openFocused(),
 			"task.toggleDone": () => actOnFocused("toggle"),
 			"help.cheatSheet": () => setCheatOpen(true),
-			"nav.today": () => {
-				setSection("lists");
-				setOpenListId(null);
-				setOpenDashboardId(null);
-				setOpenViewId("today");
-			},
+			"nav.today": () => openView("today"),
 			"view.new": () => setViewManager({ mode: "create" }),
+			// First dashboard in sidebar (sortKey) order; silent no-op when none
+			// exist (matches the movement handlers' posture — no toast idiom).
+			"nav.dashboard": () => {
+				if (firstDashboardId) openDashboard(firstDashboardId);
+			},
+			"dashboard.new": () => setDashboardManager({ mode: "create" }),
 		}),
-		[],
+		[firstDashboardId, openView, openDashboard],
 	);
 
 	const activeView = activeViewId ? resolveView(activeViewId) : null;
@@ -583,6 +628,8 @@ function NormalWorkspace() {
 							setDashboardManager({ mode: "edit", id: openDashboardRow.id })
 						}
 						onDeleteDashboard={() => deleteDashboard(openDashboardRow.id)}
+						onSetHome={() => setHome(dashboardHomeRef(openDashboardRow.id))}
+						isHome={pref.homeViewRef === dashboardHomeRef(openDashboardRow.id)}
 						onBack={() => setOpenDashboardId(null)}
 						data={panelData}
 						ids={panelIds}
@@ -639,12 +686,16 @@ function NormalWorkspace() {
 									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="end">
-									<DropdownMenuItem
+									<DropdownMenuCheckboxItem
 										data-testid="view-set-home"
+										checked={
+											homeTarget.kind === "view" &&
+											activeView.id === homeTarget.id
+										}
 										onSelect={() => setHome(activeView.id)}
 									>
 										<House /> Set as home
-									</DropdownMenuItem>
+									</DropdownMenuCheckboxItem>
 									{activeView.saved && (
 										<>
 											<DropdownMenuItem
@@ -1034,6 +1085,7 @@ function NormalWorkspace() {
 						<CommandPalette
 							onNavigateList={openList}
 							onNavigateView={openView}
+							onNavigateDashboard={openDashboard}
 						/>
 						<CheatSheet open={cheatOpen} onOpenChange={setCheatOpen} />
 					</>

@@ -24,4 +24,11 @@ describe("COMMANDS registry", () => {
 		const km = resolveKeymap(COMMANDS, "vim", {});
 		expect(findConflicts(km, COMMANDS)).toEqual([]);
 	});
+
+	test("nav.dashboard binds g d in both profiles", () => {
+		for (const profile of ["default", "vim"] as const) {
+			const km = resolveKeymap(COMMANDS, profile, {});
+			expect(km["nav.dashboard"]).toEqual([["g", "d"]]);
+		}
+	});
 });
