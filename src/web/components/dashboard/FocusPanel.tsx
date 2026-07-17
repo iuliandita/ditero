@@ -35,7 +35,9 @@ export function FocusPanel({
 			>
 				{stats.minutes} min focused
 			</p>
-			<p className="text-xs text-muted-foreground/70">Your sessions only</p>
+			{/* Full-strength muted token: the /70 variant fails the WCAG AA 4.5:1
+			    contrast gate (axe serious) at this size. */}
+			<p className="text-xs text-muted-foreground">Your sessions only</p>
 		</div>
 	);
 }

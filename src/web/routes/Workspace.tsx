@@ -9,7 +9,7 @@ import {
 	PinOff,
 	Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Panel } from "../../domain/dashboard.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
@@ -435,6 +435,22 @@ function NormalWorkspace() {
 	const openDashboardRow = openDashboardId
 		? (dashboards.find((d) => d.id === openDashboardId) ?? null)
 		: null;
+
+	// Self-heal: if the open dashboard vanishes from the synced set (deleted by a
+	// co-member, or opened from a stale cache right after a delete), fall back to
+	// the home view instead of stranding the surface on "Dashboard not found".
+	// Only after the row was seen once for this id — a fresh create's optimistic
+	// row can land a render after openDashboard(id) and must not be kicked out.
+	const seenDashboardId = useRef<string | null>(null);
+	useEffect(() => {
+		if (openDashboardRow) {
+			seenDashboardId.current = openDashboardRow.id;
+			return;
+		}
+		if (dashboardsLoading || !openDashboardId) return;
+		if (seenDashboardId.current !== openDashboardId) return;
+		setOpenDashboardId(null);
+	}, [openDashboardRow, dashboardsLoading, openDashboardId]);
 
 	// Mirrors requireDashboardEdit in the mutators: personal -> owner only,
 	// workspace -> role in the write set. The server re-checks on write.
