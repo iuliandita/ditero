@@ -4,6 +4,7 @@ import { type JSX, useMemo, useRef, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
 import { useIsDesktop } from "@/lib/use-media-query";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import { compareTasksBy } from "../../../domain/task-sort.ts";
 import type {
 	FilterCtx,
 	FilterGroup,
@@ -49,30 +50,11 @@ type Enriched = {
 	groupTask: GroupTask;
 };
 
-// Base ascending comparators; `dir` flips the sign. Null due sorts last on asc.
-function compareBy(a: Enriched, b: Enriched, field: string): number {
-	switch (field) {
-		case "due": {
-			const av = a.task.dueAt ?? Number.POSITIVE_INFINITY;
-			const bv = b.task.dueAt ?? Number.POSITIVE_INFINITY;
-			return av - bv;
-		}
-		case "priority":
-			return (a.task.priority ?? 0) - (b.task.priority ?? 0);
-		case "title":
-			return a.task.title.localeCompare(b.task.title);
-		default:
-			return a.task.sortKey < b.task.sortKey
-				? -1
-				: a.task.sortKey > b.task.sortKey
-					? 1
-					: 0;
-	}
-}
-
 function sortEnriched(entries: Enriched[], sort: ViewSort): Enriched[] {
 	const dir = sort.dir === "desc" ? -1 : 1;
-	return [...entries].sort((a, b) => dir * compareBy(a, b, sort.field));
+	return [...entries].sort(
+		(a, b) => dir * compareTasksBy(a.task, b.task, sort.field),
+	);
 }
 
 // group.ts skips empty priority buckets (correct for list/table), but a

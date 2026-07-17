@@ -27,16 +27,26 @@ import {
 	DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
 
-const TYPE_LABEL: Record<Panel["type"], string> = {
-	tasks: "Tasks",
-	counter: "Counter",
-	streak: "Streak",
-	focus: "Focus",
-};
+// Derived fallback per shell doc §1: view name for source panels (passed in as
+// viewName), "N habits" / "Focus today" for the data-bound types.
+function derivedLabel(panel: Panel): string {
+	switch (panel.type) {
+		case "tasks":
+			return "Tasks";
+		case "counter":
+			return "Counter";
+		case "streak":
+			return `${panel.habitIds.length} habit${panel.habitIds.length === 1 ? "" : "s"}`;
+		case "focus":
+			return panel.range === "today" ? "Focus today" : "Focus this week";
+		default:
+			return panel satisfies never;
+	}
+}
 
-// Region label: user title, else the referenced view's name, else the type name.
+// Region label: user title, else the referenced view's name, else derived.
 export function panelLabel(panel: Panel, viewName?: string | null): string {
-	return panel.title || viewName || TYPE_LABEL[panel.type];
+	return panel.title || viewName || derivedLabel(panel);
 }
 
 const SIZES = Object.keys(PANEL_SPANS) as PanelSize[];
@@ -67,7 +77,6 @@ export function PanelFrame({
 		listeners: DraggableSyntheticListeners;
 	};
 	viewName?: string | null;
-	// Absent for panel types the editor dialog doesn't cover yet (Task 8).
 	onEdit?: () => void;
 	onResize?: (size: PanelSize) => void;
 	onRemove?: () => void;

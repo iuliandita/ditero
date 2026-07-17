@@ -45,15 +45,14 @@ import {
 } from "../ui/dropdown-menu.tsx";
 import { AddPanelDialog } from "./AddPanelDialog.tsx";
 import { CounterPanel } from "./CounterPanel.tsx";
+import { FocusPanel } from "./FocusPanel.tsx";
 import { PanelFrame, panelLabel } from "./PanelFrame.tsx";
+import type { PanelData, PanelIds } from "./panel-shared.tsx";
 import { PANEL_SPAN_CLASS } from "./panel-span.ts";
-import { type PanelData, type PanelIds, TasksPanel } from "./TasksPanel.tsx";
+import { StreakPanel } from "./StreakPanel.tsx";
+import { TasksPanel } from "./TasksPanel.tsx";
 
-type EditablePanel = Extract<Panel, { type: "tasks" | "counter" }>;
-type PanelDialogState =
-	| { mode: "add" }
-	| { mode: "edit"; panel: EditablePanel }
-	| null;
+type PanelDialogState = { mode: "add" } | { mode: "edit"; panel: Panel } | null;
 
 // Dangling view ref (shell doc §4): explicit warning, never silently empty.
 // "Replace view" opens the panel editor for canEdit users regardless of the
@@ -196,6 +195,17 @@ export function DashboardView({
 	);
 	const atCap = panels.length >= MAX_PANELS;
 
+	// Habit tasks = tasks on lists of kind "habits" (same mechanics HabitCard's
+	// surface uses); feeds the streak-panel multi-pick.
+	const habitTasks = useMemo(() => {
+		const habitListIds = new Set(
+			data.lists.filter((l) => l.kind === "habits").map((l) => l.id),
+		);
+		return data.tasks
+			.filter((t) => habitListIds.has(t.listId))
+			.map((t) => ({ id: t.id, title: t.title }));
+	}, [data.lists, data.tasks]);
+
 	// resolvePanelSource returns a fresh object per call; resolving once per
 	// panels/views change keeps each panel's `resolved` prop referentially
 	// stable so usePanelEntries' memo holds across parent renders.
@@ -240,7 +250,7 @@ export function DashboardView({
 		return viewsById.get(panel.source.viewId)?.name ?? null;
 	}
 
-	// Typed panel-body dispatch; streak/focus bodies land in Task 8.
+	// Typed panel-body dispatch.
 	function renderPanel(panel: Panel): ReactNode {
 		switch (panel.type) {
 			case "tasks":
@@ -278,24 +288,14 @@ export function DashboardView({
 				);
 			}
 			case "streak":
-			case "focus":
 				return (
-					<p
-						data-testid="panel-body-placeholder"
-						className="text-sm text-muted-foreground"
-					>
-						{panel.type}
-					</p>
+					<StreakPanel panel={panel} data={data} onOpenTask={onOpenTask} />
 				);
+			case "focus":
+				return <FocusPanel panel={panel} />;
 			default:
 				return panel satisfies never;
 		}
-	}
-
-	// The editor dialog covers tasks/counter only until Task 8.
-	function editHandlerFor(panel: Panel): (() => void) | undefined {
-		if (panel.type !== "tasks" && panel.type !== "counter") return undefined;
-		return () => setPanelDialog({ mode: "edit", panel });
 	}
 
 	let body: ReactNode;
@@ -344,7 +344,7 @@ export function DashboardView({
 								key={p.id}
 								panel={p}
 								viewName={panelViewName(p)}
-								onEdit={editHandlerFor(p)}
+								onEdit={() => setPanelDialog({ mode: "edit", panel: p })}
 								onResize={(size) => resizePanel(p.id, size)}
 								onRemove={() => removePanel(p.id)}
 							>
@@ -478,6 +478,7 @@ export function DashboardView({
 					}))}
 					members={members}
 					workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
+					habitTasks={habitTasks}
 					onSubmit={submitPanel}
 				/>
 			)}

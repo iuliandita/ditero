@@ -1,6 +1,7 @@
-import { Hash, ListChecks } from "lucide-react";
+import { Flame, Hash, ListChecks, Timer } from "lucide-react";
 import { type JSX, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -36,10 +37,8 @@ import type {
 import { FilterBuilder } from "../views/FilterBuilder.tsx";
 import { SIZE_LABEL } from "./PanelFrame.tsx";
 
-// Streak/focus config steps are Task 8; until then the type picker offers only
-// the source-driven panels (hidden, not disabled, per the Task 7 decision).
-type PanelType = "tasks" | "counter";
-type EditablePanel = Extract<Panel, { type: PanelType }>;
+type PanelType = Panel["type"];
+const MAX_STREAK_HABITS = 10;
 
 const TYPE_OPTIONS: {
 	value: PanelType;
@@ -58,6 +57,18 @@ const TYPE_OPTIONS: {
 		label: "Counter",
 		hint: "A single count of matching tasks",
 		icon: Hash,
+	},
+	{
+		value: "streak",
+		label: "Streak",
+		hint: "Current streaks for picked habits",
+		icon: Flame,
+	},
+	{
+		value: "focus",
+		label: "Focus",
+		hint: "Your focus sessions and minutes",
+		icon: Timer,
 	},
 ];
 
@@ -98,9 +109,10 @@ function Field({
 	);
 }
 
-// Add + edit dialog for tasks/counter panels: step 1 type picker (add only),
-// step 2 source (saved view OR inline filter+sort+scope) + size/title/limit.
-// Emits a complete Panel; the caller appends or replaces via dashboard.update.
+// Add + edit dialog for all panel types: step 1 type picker (add only), step 2
+// per-type config (source for tasks/counter, habit multi-pick for streak,
+// range for focus) + size/title. Emits a complete schema-valid Panel; the
+// caller appends or replaces via dashboard.update.
 export function AddPanelDialog({
 	open,
 	onOpenChange,
@@ -113,6 +125,7 @@ export function AddPanelDialog({
 	labels,
 	members,
 	workspaces,
+	habitTasks,
 	onSubmit,
 }: {
 	open: boolean;
@@ -120,13 +133,15 @@ export function AddPanelDialog({
 	mode: "add" | "edit";
 	// MAX_PANELS reached: adding would only fail server-side, so block save.
 	atCap: boolean;
-	initial?: EditablePanel;
+	initial?: Panel;
 	views: { id: string; name: string }[];
 	lists: { id: string; title: string }[];
 	folders: { id: string; name: string }[];
 	labels: { id: string; name: string; color?: string }[];
 	members: { id: string; name: string }[];
 	workspaces: { id: string; name: string }[];
+	// Synced habit-kind tasks (tasks on lists of kind "habits").
+	habitTasks: { id: string; title: string }[];
 	onSubmit: (panel: Panel) => void;
 }): JSX.Element {
 	const isDesktop = useIsDesktop();
@@ -134,7 +149,10 @@ export function AddPanelDialog({
 	const firstWorkspace = workspaces[0]?.id ?? "";
 
 	const [type, setType] = useState<PanelType | null>(initial?.type ?? null);
-	const initialSource = initial?.source;
+	const initialSource =
+		initial?.type === "tasks" || initial?.type === "counter"
+			? initial.source
+			: undefined;
 	const [sourceMode, setSourceMode] = useState<"view" | "inline">(
 		initialSource?.kind === "inline" ? "inline" : "view",
 	);
@@ -158,6 +176,12 @@ export function AddPanelDialog({
 			? initialSource.workspaceScope
 			: { mode: "all" },
 	);
+	const [habitIds, setHabitIds] = useState<string[]>(
+		initial?.type === "streak" ? initial.habitIds : [],
+	);
+	const [range, setRange] = useState<"today" | "week">(
+		initial?.type === "focus" ? initial.range : "today",
+	);
 	const [size, setSize] = useState<PanelSize>(initial?.size ?? "m");
 	const [title, setTitle] = useState(initial?.title ?? "");
 	const [limit, setLimit] = useState(
@@ -175,30 +199,60 @@ export function AddPanelDialog({
 		sourceMode === "view"
 			? viewId !== ""
 			: scope.mode !== "one" || scope.id !== "";
-	const canSave =
-		type !== null && sourceValid && limitValid && !(mode === "add" && atCap);
+	// Ids carried in from an edited panel that no longer resolve to a synced
+	// habit task (deleted/unshared). Shown as explicit removable rows (StreakPanel
+	// philosophy: never silent); they count toward the cap until dropped, and a
+	// pick that holds ONLY missing ids does not validate.
+	const habitTaskIds = new Set(habitTasks.map((h) => h.id));
+	const missingHabitIds = habitIds.filter((id) => !habitTaskIds.has(id));
+	const configValid =
+		type === "tasks" || type === "counter"
+			? sourceValid && limitValid
+			: type === "streak"
+				? habitIds.some((id) => habitTaskIds.has(id)) &&
+					habitIds.length <= MAX_STREAK_HABITS
+				: true; // focus: range always set
+	const canSave = type !== null && configValid && !(mode === "add" && atCap);
+
+	function toggleHabit(id: string, checked: boolean) {
+		setHabitIds((ids) =>
+			checked
+				? ids.includes(id)
+					? ids
+					: [...ids, id]
+				: ids.filter((h) => h !== id),
+		);
+	}
 
 	function submit() {
 		if (!canSave || type === null) return;
+		const trimmed = title.trim();
+		const base = {
+			id: initial?.id ?? crypto.randomUUID(),
+			size,
+			...(trimmed ? { title: trimmed } : {}),
+		};
+		if (type === "streak") {
+			onSubmit({ ...base, type: "streak", habitIds });
+			return;
+		}
+		if (type === "focus") {
+			onSubmit({ ...base, type: "focus", range });
+			return;
+		}
 		const source: PanelSource =
 			sourceMode === "view"
 				? { kind: "view", viewId }
 				: { kind: "inline", filter, sort, workspaceScope: scope };
-		const trimmed = title.trim();
-		const base = {
-			id: initial?.id ?? crypto.randomUUID(),
-			source,
-			size,
-			...(trimmed ? { title: trimmed } : {}),
-		};
 		onSubmit(
 			type === "tasks"
 				? {
 						...base,
 						type: "tasks",
+						source,
 						...(limitNum !== null ? { limit: limitNum } : {}),
 					}
-				: { ...base, type: "counter" },
+				: { ...base, type: "counter", source },
 		);
 	}
 
@@ -226,8 +280,8 @@ export function AddPanelDialog({
 		</div>
 	);
 
-	const configStep = (
-		<div className="flex flex-col gap-4 overflow-y-auto px-4 pb-4 md:px-6">
+	const sourceStep = (
+		<>
 			<Field label="Source" htmlFor={`${baseId}-source`}>
 				<Select
 					value={sourceMode}
@@ -361,6 +415,102 @@ export function AddPanelDialog({
 					</div>
 				</>
 			)}
+		</>
+	);
+
+	// Multi-pick 1..10 habit-kind tasks; unchecked boxes disable at the cap so
+	// the emitted array always passes the server-side 1..10 bound.
+	const atHabitCap = habitIds.length >= MAX_STREAK_HABITS;
+	const streakStep = (
+		<fieldset className="flex flex-col gap-1">
+			<legend className="mb-1 text-xs font-medium">
+				Habits (pick 1-{MAX_STREAK_HABITS})
+			</legend>
+			{missingHabitIds.map((id) => {
+				const inputId = `${baseId}-habit-${id}`;
+				return (
+					<div
+						key={id}
+						className="flex min-h-9 items-center gap-2.5 rounded px-1 text-sm"
+					>
+						<Checkbox
+							id={inputId}
+							data-testid="panel-habit-missing"
+							checked
+							onCheckedChange={(v) => {
+								if (v !== true) toggleHabit(id, false);
+							}}
+						/>
+						<label
+							htmlFor={inputId}
+							className="min-w-0 flex-1 truncate text-muted-foreground"
+						>
+							Missing habit (deleted or not shared with you)
+						</label>
+					</div>
+				);
+			})}
+			{habitTasks.length === 0 && missingHabitIds.length === 0 ? (
+				<p
+					data-testid="panel-no-habits"
+					className="text-sm text-muted-foreground"
+				>
+					No habits yet. Add tasks to a habits list first.
+				</p>
+			) : (
+				habitTasks.map((h) => {
+					const checked = habitIds.includes(h.id);
+					const inputId = `${baseId}-habit-${h.id}`;
+					return (
+						<div
+							key={h.id}
+							className="flex min-h-9 items-center gap-2.5 rounded px-1 text-sm hover:bg-muted/40"
+						>
+							<Checkbox
+								id={inputId}
+								data-testid="panel-habit-pick"
+								checked={checked}
+								disabled={!checked && atHabitCap}
+								onCheckedChange={(v) => toggleHabit(h.id, v === true)}
+							/>
+							<label htmlFor={inputId} className="min-w-0 flex-1 truncate">
+								{h.title}
+							</label>
+						</div>
+					);
+				})
+			)}
+		</fieldset>
+	);
+
+	const focusStep = (
+		<fieldset className="flex flex-col gap-1">
+			<legend className="mb-1 text-xs font-medium">Range</legend>
+			{(["today", "week"] as const).map((r) => (
+				<label
+					key={r}
+					className="flex min-h-9 items-center gap-2.5 rounded px-1 text-sm hover:bg-muted/40"
+				>
+					<input
+						type="radio"
+						name={`${baseId}-range`}
+						data-testid={`panel-range-${r}`}
+						value={r}
+						checked={range === r}
+						onChange={() => setRange(r)}
+						className="size-4 accent-primary"
+					/>
+					{r === "today" ? "Today" : "Last 7 days"}
+				</label>
+			))}
+		</fieldset>
+	);
+
+	const configStep = (
+		<div className="flex flex-col gap-4 overflow-y-auto px-4 pb-4 md:px-6">
+			{(type === "tasks" || type === "counter") && sourceStep}
+			{type === "streak" && streakStep}
+			{type === "focus" && focusStep}
 
 			<div className="grid grid-cols-2 gap-3">
 				<Field label="Size" htmlFor={`${baseId}-size`}>

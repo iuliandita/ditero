@@ -6,6 +6,7 @@ import {
 	DEFAULT_PANEL_LIMIT,
 	type ResolvedSource,
 } from "../../../domain/dashboard.ts";
+import { compareTasksBy } from "../../../domain/task-sort.ts";
 import {
 	type FilterCtx,
 	type FilterTask,
@@ -30,28 +31,6 @@ export type PanelListFields = {
 };
 
 export type PanelEntry<T, L> = { task: T; kind: string; labels: L[] };
-
-// Base ascending comparators, mirroring ViewRenderer: null due sorts last on
-// asc, unknown fields fall back to sortKey order.
-function compareBy<T extends PanelTaskFields>(
-	a: T,
-	b: T,
-	field: string,
-): number {
-	switch (field) {
-		case "due": {
-			const av = a.dueAt ?? Number.POSITIVE_INFINITY;
-			const bv = b.dueAt ?? Number.POSITIVE_INFINITY;
-			return av - bv;
-		}
-		case "priority":
-			return (a.priority ?? 0) - (b.priority ?? 0);
-		case "title":
-			return a.title.localeCompare(b.title);
-		default:
-			return a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0;
-	}
-}
 
 export function matchingTasks<
 	T extends PanelTaskFields,
@@ -112,7 +91,7 @@ export function matchingTasks<
 	}
 	const dir = resolved.sort.dir === "desc" ? -1 : 1;
 	return out.sort(
-		(a, b) => dir * compareBy(a.task, b.task, resolved.sort.field),
+		(a, b) => dir * compareTasksBy(a.task, b.task, resolved.sort.field),
 	);
 }
 

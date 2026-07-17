@@ -7,7 +7,7 @@ import {
 	type PanelIds,
 	usePanelEntries,
 	usePanelRowHandlers,
-} from "./TasksPanel.tsx";
+} from "./panel-shared.tsx";
 
 // Big-number tile (shell doc §1): one dominant tabular-nums numeral centered
 // in the body, label stays in the header, whole tile a click-through with the

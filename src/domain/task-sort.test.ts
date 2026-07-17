@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { type SortableTask, sortTasks } from "./task-sort.ts";
+import {
+	compareTasksBy,
+	type FieldSortableTask,
+	type SortableTask,
+	sortTasks,
+} from "./task-sort.ts";
 
 const t = (
 	sortKey: string,
@@ -108,5 +113,45 @@ describe("sortTasks: defensive completedAt null", () => {
 		const tasks = [t("a", true, 200), t("b", true, null), t("c", true, 100)];
 		const { completed } = sortTasks(tasks, "hide");
 		expect(completed.map((x) => x.sortKey)).toEqual(["a", "c", "b"]);
+	});
+});
+
+describe("compareTasksBy", () => {
+	const ft = (over: Partial<FieldSortableTask>): FieldSortableTask => ({
+		title: "t",
+		sortKey: "a",
+		dueAt: null,
+		priority: 0,
+		...over,
+	});
+
+	test("due: null sorts last on asc", () => {
+		expect(
+			compareTasksBy(ft({ dueAt: null }), ft({ dueAt: 100 }), "due"),
+		).toBeGreaterThan(0);
+		expect(
+			compareTasksBy(ft({ dueAt: 50 }), ft({ dueAt: 100 }), "due"),
+		).toBeLessThan(0);
+	});
+
+	test("priority ascending, null as 0", () => {
+		expect(
+			compareTasksBy(ft({ priority: null }), ft({ priority: 1 }), "priority"),
+		).toBeLessThan(0);
+	});
+
+	test("title locale compare", () => {
+		expect(
+			compareTasksBy(ft({ title: "a" }), ft({ title: "b" }), "title"),
+		).toBeLessThan(0);
+	});
+
+	test("unknown field falls back to sortKey order", () => {
+		expect(
+			compareTasksBy(ft({ sortKey: "a" }), ft({ sortKey: "b" }), "nope"),
+		).toBeLessThan(0);
+		expect(
+			compareTasksBy(ft({ sortKey: "a" }), ft({ sortKey: "a" }), "nope"),
+		).toBe(0);
 	});
 });

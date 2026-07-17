@@ -38,3 +38,33 @@ export function sortTasks<T extends SortableTask>(
 	// sink: completed sinks to the bottom of the same list.
 	return { visible: [...open, ...done], completed: [] };
 }
+
+export type FieldSortableTask = {
+	title: string;
+	sortKey: string;
+	dueAt?: number | null;
+	priority?: number | null;
+};
+
+// Base ascending comparator for view/panel field sorts (the caller flips the
+// sign for desc). Null due sorts last on asc; unknown fields fall back to
+// sortKey order.
+export function compareTasksBy(
+	a: FieldSortableTask,
+	b: FieldSortableTask,
+	field: string,
+): number {
+	switch (field) {
+		case "due": {
+			const av = a.dueAt ?? Number.POSITIVE_INFINITY;
+			const bv = b.dueAt ?? Number.POSITIVE_INFINITY;
+			return av - bv;
+		}
+		case "priority":
+			return (a.priority ?? 0) - (b.priority ?? 0);
+		case "title":
+			return a.title.localeCompare(b.title);
+		default:
+			return a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0;
+	}
+}
