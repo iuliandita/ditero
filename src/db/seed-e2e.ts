@@ -21,6 +21,8 @@ async function main() {
 	// Clean slate, FK-safe order (session/account also cascade from user).
 	await db.delete(s.task);
 	await db.delete(s.list);
+	// dashboard.workspace_id has no cascade; drop rows before their workspace.
+	await db.delete(s.dashboard);
 	await db.delete(s.membership);
 	await db.delete(s.workspace);
 	await db.delete(s.session);

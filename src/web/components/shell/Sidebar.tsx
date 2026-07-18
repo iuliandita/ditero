@@ -17,9 +17,13 @@ import type { Section } from "./BottomNav.tsx";
 import type { ListGroup } from "./grouping.ts";
 import { ListProgress } from "./ListProgress.tsx";
 
-// View row icon: built-ins carry a lucide key; saved views may have none.
+// View row icon: built-ins carry a lucide key; saved views/dashboards may have
+// none. Object.hasOwn guards the client-controlled key so a prototype key
+// ("constructor"/"__proto__") on a shared row can't resolve to a non-component
+// and crash the sidebar for every co-member.
 function ViewIcon({ icon }: { icon?: string | null }) {
-	const Icon = (icon && ICONS[icon]) || ListFallback;
+	const Icon =
+		(icon && Object.hasOwn(ICONS, icon) && ICONS[icon]) || ListFallback;
 	return <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />;
 }
 

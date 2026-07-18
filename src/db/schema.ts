@@ -387,7 +387,7 @@ export const dashboard = pgTable("dashboard", {
 	scope: dashboardScopeEnum("scope").notNull().default("personal"),
 	name: text("name").notNull(),
 	icon: text("icon"),
-	panels: jsonb("panels").notNull().default(sql`'[]'::jsonb`), // DashboardPanel[] (validation = later task)
+	panels: jsonb("panels").notNull().default(sql`'[]'::jsonb`), // Panel[] (validated via panelsSchema in mutators)
 	sortKey: text("sort_key").notNull(), // fractional sort-key for sidebar order (matches view)
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.defaultNow()

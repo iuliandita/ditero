@@ -632,30 +632,39 @@ function NormalWorkspace() {
 		content = (
 			<div className="flex flex-col gap-6 p-4 md:p-6">
 				{openDashboardRow ? (
-					// Keyed so edit mode never carries over between dashboards.
-					<DashboardView
+					// Keyed so edit mode never carries over between dashboards. The
+					// boundary keeps a panel-body throw (e.g. a bad rrule) inline
+					// instead of white-screening; resetKey clears it on switch.
+					<ErrorBoundary
 						key={openDashboardRow.id}
-						dashboard={openDashboardRow}
-						canEdit={canEditDashboard}
-						onUpdate={(panels) =>
-							updateDashboardPanels(openDashboardRow.id, panels)
-						}
-						onEditDashboard={() =>
-							setDashboardManager({ mode: "edit", id: openDashboardRow.id })
-						}
-						onDeleteDashboard={() => deleteDashboard(openDashboardRow.id)}
-						onSetHome={() => setHome(dashboardHomeRef(openDashboardRow.id))}
-						isHome={pref.homeViewRef === dashboardHomeRef(openDashboardRow.id)}
-						onBack={() => setOpenDashboardId(null)}
-						data={panelData}
-						ids={panelIds}
-						views={savedViews}
-						folders={folders}
-						members={members}
-						workspaces={workspaces}
-						onOpenTask={(t) => setDetailTaskId(t.id)}
-						onOpenView={openView}
-					/>
+						resetKey={openDashboardRow.id}
+						onReset={() => setOpenDashboardId(null)}
+					>
+						<DashboardView
+							dashboard={openDashboardRow}
+							canEdit={canEditDashboard}
+							onUpdate={(panels) =>
+								updateDashboardPanels(openDashboardRow.id, panels)
+							}
+							onEditDashboard={() =>
+								setDashboardManager({ mode: "edit", id: openDashboardRow.id })
+							}
+							onDeleteDashboard={() => deleteDashboard(openDashboardRow.id)}
+							onSetHome={() => setHome(dashboardHomeRef(openDashboardRow.id))}
+							isHome={
+								pref.homeViewRef === dashboardHomeRef(openDashboardRow.id)
+							}
+							onBack={() => setOpenDashboardId(null)}
+							data={panelData}
+							ids={panelIds}
+							views={savedViews}
+							folders={folders}
+							members={members}
+							workspaces={workspaces}
+							onOpenTask={(t) => setDetailTaskId(t.id)}
+							onOpenView={openView}
+						/>
+					</ErrorBoundary>
 				) : (
 					<p className="text-sm text-muted-foreground">Dashboard not found.</p>
 				)}
