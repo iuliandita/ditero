@@ -49,6 +49,10 @@ export const habitLogStatusEnum = pgEnum("habit_log_status", [
 	"skipped",
 ]);
 export const focusKindEnum = pgEnum("focus_kind", ["work", "break"]);
+export const dashboardScopeEnum = pgEnum("dashboard_scope", [
+	"personal",
+	"workspace",
+]);
 
 export const workspace = pgTable(
 	"workspace",
@@ -373,6 +377,26 @@ export const focusSession = pgTable("focus_session", {
 		.notNull(),
 });
 
+export const dashboard = pgTable("dashboard", {
+	id: text("id").primaryKey(),
+	ownerId: text("owner_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	// null => personal / cross-workspace dashboard; set => workspace-shared
+	workspaceId: text("workspace_id").references(() => workspace.id),
+	scope: dashboardScopeEnum("scope").notNull().default("personal"),
+	name: text("name").notNull(),
+	icon: text("icon"),
+	panels: jsonb("panels").notNull().default(sql`'[]'::jsonb`), // Panel[] (validated via panelsSchema in mutators)
+	sortKey: text("sort_key").notNull(), // fractional sort-key for sidebar order (matches view)
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
 // Relations (drizzle-zero reads these to generate the Zero schema graph).
 // Named distinctly so it merges with auth-schema's userRelations instead of
 // shadowing it in the re-exported namespace.
@@ -505,4 +529,12 @@ export const karmaEventRelations = relations(karmaEvent, ({ one }) => ({
 export const focusSessionRelations = relations(focusSession, ({ one }) => ({
 	user: one(user, { fields: [focusSession.userId], references: [user.id] }),
 	task: one(task, { fields: [focusSession.taskId], references: [task.id] }),
+}));
+
+export const dashboardRelations = relations(dashboard, ({ one }) => ({
+	owner: one(user, { fields: [dashboard.ownerId], references: [user.id] }),
+	workspace: one(workspace, {
+		fields: [dashboard.workspaceId],
+		references: [workspace.id],
+	}),
 }));

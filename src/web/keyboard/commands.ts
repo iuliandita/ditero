@@ -41,6 +41,20 @@ export const COMMANDS: CommandDef[] = [
 		context: "global",
 	},
 	{
+		id: "nav.dashboard",
+		category: "nav",
+		label: "Go to dashboard",
+		bindings: { default: [["g", "d"]] },
+		context: "global",
+	},
+	{
+		id: "dashboard.new",
+		category: "view",
+		label: "New dashboard",
+		bindings: { default: [] },
+		context: "global",
+	},
+	{
 		id: "help.cheatSheet",
 		category: "help",
 		label: "Keyboard shortcuts",

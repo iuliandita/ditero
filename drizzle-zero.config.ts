@@ -127,6 +127,18 @@ export default drizzleZeroConfig(schema, {
 			reason: true,
 			createdAt: true,
 		},
+		dashboard: {
+			id: true,
+			ownerId: true,
+			workspaceId: true,
+			scope: true,
+			name: true,
+			icon: true,
+			panels: true,
+			sortKey: true,
+			createdAt: true,
+			updatedAt: true,
+		},
 		focusSession: {
 			id: true,
 			userId: true,

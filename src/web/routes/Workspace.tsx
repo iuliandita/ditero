@@ -9,12 +9,18 @@ import {
 	PinOff,
 	Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Panel } from "../../domain/dashboard.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
+import {
+	type DashboardFormValue,
+	DashboardManager,
+} from "../components/dashboard/DashboardManager.tsx";
+import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
 import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
@@ -36,6 +42,7 @@ import { Sidebar } from "../components/shell/Sidebar.tsx";
 import { Button } from "../components/ui/button.tsx";
 import {
 	DropdownMenu,
+	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
@@ -53,6 +60,7 @@ import {
 } from "../components/views/ViewManager.tsx";
 import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
+import { useDashboards } from "../hooks/useDashboards.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import type { SavedView } from "../hooks/useViews.ts";
 import { useViews } from "../hooks/useViews.ts";
@@ -79,6 +87,7 @@ import {
 	DEFAULT_HOME,
 	getBuiltin,
 } from "../views/builtins.ts";
+import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
 import { ListView } from "./ListView.tsx";
 import { SecurityPanel } from "./SecurityPanel.tsx";
 
@@ -131,12 +140,18 @@ function NormalWorkspace() {
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
 	const { views: savedViews } = useViews();
-	const { pref, setPref } = useUserPref();
+	const { dashboards, loading: dashboardsLoading } = useDashboards();
+	const { pref, setPref, loading: prefLoading } = useUserPref();
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openListId, setOpenListId] = useState<string | null>(null);
 	// null on the landing (home view); a built-in id or saved view.id otherwise.
 	const [openViewId, setOpenViewId] = useState<string | null>(null);
 	const [viewManager, setViewManager] = useState<
+		{ mode: "create" } | { mode: "edit"; id: string } | null
+	>(null);
+	// A third content mode besides list/view; exclusive with both.
+	const [openDashboardId, setOpenDashboardId] = useState<string | null>(null);
+	const [dashboardManager, setDashboardManager] = useState<
 		{ mode: "create" } | { mode: "edit"; id: string } | null
 	>(null);
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
@@ -147,6 +162,8 @@ function NormalWorkspace() {
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 	const [membersOpen, setMembersOpen] = useState(false);
 	const [cheatOpen, setCheatOpen] = useState(false);
+	// One-shot: a "dashboard:<id>" home ref lands on that dashboard after sync.
+	const [homeApplied, setHomeApplied] = useState(false);
 
 	// Default active workspace is the user's personal one, so new lists stay private.
 	useEffect(() => {
@@ -198,6 +215,7 @@ function NormalWorkspace() {
 		const firstList = lists.find((l) => l.workspaceId === shared.id);
 		if (!firstList) return;
 		setSection("lists");
+		setOpenDashboardId(null);
 		setOpenListId(firstList.id);
 		setOpenSharedRequested(false);
 	}, [openSharedRequested, workspaces, lists, activeId]);
@@ -206,25 +224,38 @@ function NormalWorkspace() {
 		setActiveId(id);
 		setOpenListId(null);
 		setOpenViewId(null);
+		setOpenDashboardId(null);
 		setSwitcherOpen(false);
 	}
 	function openList(id: string) {
 		setSection("lists");
 		setOpenViewId(null);
+		setOpenDashboardId(null);
 		setDetailTaskId(null);
 		setOpenListId(id);
 	}
 	// Alternate content mode to a list: a view (built-in or saved) clears the open
-	// list and vice-versa (they never render together).
-	function openView(id: string) {
+	// list and vice-versa (they never render together). useCallback (setters only)
+	// so the command-handler memo can depend on these.
+	const openView = useCallback((id: string) => {
 		setSection("lists");
 		setOpenListId(null);
+		setOpenDashboardId(null);
 		setDetailTaskId(null);
 		setOpenViewId(id);
-	}
+	}, []);
+	// Third exclusive content mode: a dashboard clears list/view and vice-versa.
+	const openDashboard = useCallback((id: string) => {
+		setSection("lists");
+		setOpenListId(null);
+		setOpenViewId(null);
+		setDetailTaskId(null);
+		setOpenDashboardId(id);
+	}, []);
 	function openSettings() {
 		setOpenListId(null);
 		setOpenViewId(null);
+		setOpenDashboardId(null);
 		setSection("settings");
 	}
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
@@ -240,6 +271,7 @@ function NormalWorkspace() {
 		if (next === "lists") {
 			setOpenListId(null);
 			setOpenViewId(null);
+			setOpenDashboardId(null);
 		}
 	}
 
@@ -265,7 +297,42 @@ function NormalWorkspace() {
 		() => workspaces.map((w) => w.id),
 		[workspaces],
 	);
-	const homeRef = pref.homeViewRef ?? DEFAULT_HOME;
+	// Home ref resolution: builtin/saved view, "dashboard:<id>", or (dangling/
+	// garbage) DEFAULT_HOME — pure helper, unit-tested.
+	const homeTarget = useMemo(
+		() =>
+			resolveHomeRef(pref.homeViewRef, {
+				savedViewIds: savedViews.map((v) => v.id),
+				dashboardIds: dashboards.map((d) => d.id),
+			}),
+		[pref.homeViewRef, savedViews, dashboards],
+	);
+	// The view surface's home: a dashboard home falls back to DEFAULT_HOME here
+	// (used pre-sync and after backing out of the home dashboard).
+	const homeRef = homeTarget.kind === "view" ? homeTarget.id : DEFAULT_HOME;
+
+	// Land on the home dashboard once both prefs and dashboards have synced (a
+	// dangling ref already resolved to a view above). One-shot and gated on the
+	// exclusive modes + section so it never hijacks navigation (e.g. Settings
+	// opened before sync) or re-opens after Back.
+	useEffect(() => {
+		if (homeApplied || prefLoading || dashboardsLoading) return;
+		setHomeApplied(true);
+		if (homeTarget.kind !== "dashboard") return;
+		if (openListId || openViewId || openDashboardId) return;
+		if (section !== "lists") return;
+		setDetailTaskId(null);
+		setOpenDashboardId(homeTarget.id);
+	}, [
+		homeApplied,
+		prefLoading,
+		dashboardsLoading,
+		homeTarget,
+		openListId,
+		openViewId,
+		openDashboardId,
+		section,
+	]);
 	const pinnedViews = useMemo(() => {
 		const set = new Set(pref.pinnedViews);
 		return savedViews
@@ -364,6 +431,106 @@ function NormalWorkspace() {
 		setViewManager(null);
 	}
 
+	// --- Dashboards wiring ------------------------------------------------------
+	const openDashboardRow = openDashboardId
+		? (dashboards.find((d) => d.id === openDashboardId) ?? null)
+		: null;
+
+	// Self-heal: if the open dashboard vanishes from the synced set (deleted by a
+	// co-member, or opened from a stale cache right after a delete), fall back to
+	// the home view instead of stranding the surface on "Dashboard not found".
+	// Only after the row was seen once for this id — a fresh create's optimistic
+	// row can land a render after openDashboard(id) and must not be kicked out.
+	const seenDashboardId = useRef<string | null>(null);
+	useEffect(() => {
+		if (openDashboardRow) {
+			seenDashboardId.current = openDashboardRow.id;
+			return;
+		}
+		if (dashboardsLoading || !openDashboardId) return;
+		if (seenDashboardId.current !== openDashboardId) return;
+		setOpenDashboardId(null);
+	}, [openDashboardRow, dashboardsLoading, openDashboardId]);
+
+	// Mirrors requireDashboardEdit in the mutators: personal -> owner only,
+	// workspace -> role in the write set. The server re-checks on write.
+	const canEditDashboard = useMemo(() => {
+		if (!openDashboardRow) return false;
+		if (openDashboardRow.scope === "personal")
+			return openDashboardRow.ownerId === zero.userID;
+		return memberships.some(
+			(m) =>
+				m.userId === zero.userID &&
+				m.workspaceId === openDashboardRow.workspaceId &&
+				(m.role === "owner" || m.role === "admin" || m.role === "member"),
+		);
+	}, [openDashboardRow, memberships, zero.userID]);
+
+	function updateDashboardPanels(id: string, panels: Panel[]) {
+		void zero
+			.mutate(
+				mutators.dashboard.update({
+					id,
+					panels: panels as ReadonlyJSONValue,
+				}),
+			)
+			.client.catch((e) => console.error("dashboard.update failed", e));
+	}
+
+	function deleteDashboard(id: string) {
+		if (!window.confirm("Delete this dashboard?")) return;
+		void zero
+			.mutate(mutators.dashboard.delete({ id }))
+			.client.catch((e) => console.error("dashboard.delete failed", e));
+		// Mirror deleteView: never leave the home ref dangling.
+		if (pref.homeViewRef === dashboardHomeRef(id))
+			setPref({ homeViewRef: null });
+		setOpenDashboardId(null);
+	}
+
+	// Stable prop objects for DashboardView's panel evaluation (same synced sets
+	// the ViewRenderer surface consumes).
+	const panelData = useMemo(
+		() => ({ tasks, lists, labels, taskLabels, assignees }),
+		[tasks, lists, labels, taskLabels, assignees],
+	);
+	const panelIds = useMemo(
+		() => ({ currentUserId: zero.userID ?? "", membershipWorkspaceIds }),
+		[zero.userID, membershipWorkspaceIds],
+	);
+
+	function submitDashboard(value: DashboardFormValue) {
+		if (dashboardManager?.mode === "edit") {
+			void zero
+				.mutate(
+					mutators.dashboard.update({
+						id: dashboardManager.id,
+						name: value.name,
+						icon: value.icon,
+					}),
+				)
+				.client.catch((e) => console.error("dashboard.update failed", e));
+		} else {
+			const id = crypto.randomUUID();
+			const lastKey = dashboards.at(-1)?.sortKey ?? null;
+			void zero
+				.mutate(
+					mutators.dashboard.create({
+						id,
+						name: value.name,
+						...(value.icon != null ? { icon: value.icon } : {}),
+						scope: value.scope,
+						workspaceId: value.workspaceId,
+						panels: [],
+						sortKey: keyBetween(lastKey, null),
+					}),
+				)
+				.client.catch((e) => console.error("dashboard.create failed", e));
+			openDashboard(id);
+		}
+		setDashboardManager(null);
+	}
+
 	// Label ids per task -> TaskDetail (view onOpenTask reuses the list sheet).
 	const labelIdsByTask = useMemo(() => {
 		const map = new Map<string, string[]>();
@@ -381,21 +548,25 @@ function NormalWorkspace() {
 		? (lists.find((l) => l.id === detailTask.listId) ?? null)
 		: null;
 
-	// The view shown when no list is open: an explicitly opened one, else home.
-	const activeViewId = openListId ? null : (openViewId ?? homeRef);
+	// The view shown when no list or dashboard is open: an explicitly opened one,
+	// else home.
+	const activeViewId =
+		openListId || openDashboardId ? null : (openViewId ?? homeRef);
 
 	// Command handlers injected into the palette/keyboard system. palette.open and
 	// search.open are owned by the provider (it holds the open state). Movement +
 	// toggle drive roving DOM focus over the [data-kbd-nav] task rows TaskRow marks.
-	// Handlers only touch stable setState setters (inlined rather than calling the
-	// openView/openSettings helpers) so the map has no unstable deps; the provider
-	// keeps them in a ref, so identity need not change across renders.
+	// Nav handlers route through the canonical open* helpers (useCallback,
+	// stable); the provider keeps the map in a ref, so identity churn from
+	// firstDashboardId changes is harmless.
+	const firstDashboardId = dashboards[0]?.id ?? null;
 	const commandHandlers = useMemo<CommandHandlers>(
 		() => ({
 			"task.create": () => setQuickAddOpen(true),
 			"settings.open": () => {
 				setOpenListId(null);
 				setOpenViewId(null);
+				setOpenDashboardId(null);
 				setSection("settings");
 			},
 			"nav.down": () => focusNext(),
@@ -403,14 +574,16 @@ function NormalWorkspace() {
 			"nav.open": () => openFocused(),
 			"task.toggleDone": () => actOnFocused("toggle"),
 			"help.cheatSheet": () => setCheatOpen(true),
-			"nav.today": () => {
-				setSection("lists");
-				setOpenListId(null);
-				setOpenViewId("today");
-			},
+			"nav.today": () => openView("today"),
 			"view.new": () => setViewManager({ mode: "create" }),
+			// First dashboard in sidebar (sortKey) order; silent no-op when none
+			// exist (matches the movement handlers' posture — no toast idiom).
+			"nav.dashboard": () => {
+				if (firstDashboardId) openDashboard(firstDashboardId);
+			},
+			"dashboard.new": () => setDashboardManager({ mode: "create" }),
 		}),
-		[],
+		[firstDashboardId, openView, openDashboard],
 	);
 
 	const activeView = activeViewId ? resolveView(activeViewId) : null;
@@ -455,6 +628,48 @@ function NormalWorkspace() {
 				</div>
 			</div>
 		);
+	} else if (openDashboardId) {
+		content = (
+			<div className="flex flex-col gap-6 p-4 md:p-6">
+				{openDashboardRow ? (
+					// Keyed so edit mode never carries over between dashboards. The
+					// boundary keeps a panel-body throw (e.g. a bad rrule) inline
+					// instead of white-screening; resetKey clears it on switch.
+					<ErrorBoundary
+						key={openDashboardRow.id}
+						resetKey={openDashboardRow.id}
+						onReset={() => setOpenDashboardId(null)}
+					>
+						<DashboardView
+							dashboard={openDashboardRow}
+							canEdit={canEditDashboard}
+							onUpdate={(panels) =>
+								updateDashboardPanels(openDashboardRow.id, panels)
+							}
+							onEditDashboard={() =>
+								setDashboardManager({ mode: "edit", id: openDashboardRow.id })
+							}
+							onDeleteDashboard={() => deleteDashboard(openDashboardRow.id)}
+							onSetHome={() => setHome(dashboardHomeRef(openDashboardRow.id))}
+							isHome={
+								pref.homeViewRef === dashboardHomeRef(openDashboardRow.id)
+							}
+							onBack={() => setOpenDashboardId(null)}
+							data={panelData}
+							ids={panelIds}
+							views={savedViews}
+							folders={folders}
+							members={members}
+							workspaces={workspaces}
+							onOpenTask={(t) => setDetailTaskId(t.id)}
+							onOpenView={openView}
+						/>
+					</ErrorBoundary>
+				) : (
+					<p className="text-sm text-muted-foreground">Dashboard not found.</p>
+				)}
+			</div>
+		);
 	} else {
 		// No list open: the view surface (an explicitly opened view, or the home
 		// view on the landing). On the landing the list-index/create/settings
@@ -496,12 +711,16 @@ function NormalWorkspace() {
 									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="end">
-									<DropdownMenuItem
+									<DropdownMenuCheckboxItem
 										data-testid="view-set-home"
+										checked={
+											homeTarget.kind === "view" &&
+											activeView.id === homeTarget.id
+										}
 										onSelect={() => setHome(activeView.id)}
 									>
 										<House /> Set as home
-									</DropdownMenuItem>
+									</DropdownMenuCheckboxItem>
 									{activeView.saved && (
 										<>
 											<DropdownMenuItem
@@ -593,6 +812,33 @@ function NormalWorkspace() {
 									className="rounded-lg px-2 py-2 text-start text-sm text-muted-foreground hover:bg-muted"
 								>
 									+ New view
+								</button>
+							</nav>
+						)}
+						{/* Dashboards mirror the Views block so they are reachable on
+						    mobile too (desktop nav lives in the sidebar). */}
+						{!isDesktop && (
+							<nav aria-label="Dashboards" className="flex flex-col gap-0.5">
+								<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
+									Dashboards
+								</div>
+								{dashboards.map((d) => (
+									<button
+										key={d.id}
+										type="button"
+										onClick={() => openDashboard(d.id)}
+										className="rounded-lg px-2 py-2 text-start text-sm hover:bg-muted"
+									>
+										{d.name}
+									</button>
+								))}
+								<button
+									type="button"
+									data-testid="new-dashboard"
+									onClick={() => setDashboardManager({ mode: "create" })}
+									className="rounded-lg px-2 py-2 text-start text-sm text-muted-foreground hover:bg-muted"
+								>
+									+ New dashboard
 								</button>
 							</nav>
 						)}
@@ -691,6 +937,10 @@ function NormalWorkspace() {
 								activeViewId={activeViewId}
 								onOpenView={openView}
 								onNewView={() => setViewManager({ mode: "create" })}
+								dashboards={dashboards}
+								activeDashboardId={openDashboardId}
+								onOpenDashboard={openDashboard}
+								onNewDashboard={() => setDashboardManager({ mode: "create" })}
 								section={section}
 								onOpenSettings={openSettings}
 								collapsed={collapsed}
@@ -807,6 +1057,35 @@ function NormalWorkspace() {
 					/>
 				)}
 
+				{dashboardManager && (
+					<DashboardManager
+						open
+						onOpenChange={(o) => {
+							if (!o) setDashboardManager(null);
+						}}
+						mode={dashboardManager.mode}
+						initial={
+							dashboardManager.mode === "edit"
+								? (() => {
+										const d = dashboards.find(
+											(row) => row.id === dashboardManager.id,
+										);
+										return d
+											? {
+													name: d.name,
+													icon: d.icon ?? null,
+													scope: d.scope ?? "personal",
+													workspaceId: d.workspaceId ?? null,
+												}
+											: undefined;
+									})()
+								: undefined
+						}
+						workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
+						onSubmit={submitDashboard}
+					/>
+				)}
+
 				{/* View onOpenTask reuses the list TaskDetail sheet (design 2.20). */}
 				{detailTask && detailList && (
 					<TaskDetail
@@ -831,6 +1110,7 @@ function NormalWorkspace() {
 						<CommandPalette
 							onNavigateList={openList}
 							onNavigateView={openView}
+							onNavigateDashboard={openDashboard}
 						/>
 						<CheatSheet open={cheatOpen} onOpenChange={setCheatOpen} />
 					</>

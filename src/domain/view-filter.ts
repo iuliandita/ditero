@@ -133,6 +133,15 @@ export const filterGroupSchema = filterGroupBase.superRefine(
 	},
 );
 
+export const workspaceScopeSchema: z.ZodType<WorkspaceScope> =
+	z.discriminatedUnion("mode", [
+		z.object({ mode: z.literal("all") }).strict(),
+		z
+			.object({ mode: z.literal("subset"), ids: z.array(z.string()).max(100) })
+			.strict(),
+		z.object({ mode: z.literal("one"), id: z.string() }).strict(),
+	]);
+
 export const viewDisplaySchema: z.ZodType<ViewDisplay> = z.object({
 	layout: z.enum(["list", "board", "table", "calendar"]),
 	groupBy: z.enum([
@@ -148,11 +157,7 @@ export const viewDisplaySchema: z.ZodType<ViewDisplay> = z.object({
 		field: z.string().max(40),
 		dir: z.enum(["asc", "desc"]),
 	}),
-	workspaceScope: z.discriminatedUnion("mode", [
-		z.object({ mode: z.literal("all") }),
-		z.object({ mode: z.literal("subset"), ids: z.array(z.string()).max(100) }),
-		z.object({ mode: z.literal("one"), id: z.string() }),
-	]),
+	workspaceScope: workspaceScopeSchema,
 });
 
 // Day boundaries derive from ctx.now as a UTC calendar day. Timezone-aware
