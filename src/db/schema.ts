@@ -4,6 +4,7 @@ import { relations, sql } from "drizzle-orm";
 import {
 	boolean,
 	foreignKey,
+	index,
 	integer,
 	jsonb,
 	pgEnum,
@@ -477,6 +478,10 @@ export const reminderState = pgTable(
 			t.occurrenceAt,
 			t.recipientUserId,
 		),
+		index("reminder_state_sweep").on(t.status, t.nextAttemptAt),
+		index("reminder_state_deferred").on(t.status, t.deferredUntil),
+		// Ack terminates every sibling on the same occurrence.
+		index("reminder_state_siblings").on(t.taskId, t.occurrenceAt),
 	],
 );
 
@@ -505,7 +510,15 @@ export const notificationOutbox = pgTable(
 			.defaultNow()
 			.notNull(),
 	},
-	(t) => [unique("notification_outbox_idempotency").on(t.idempotencyKey)],
+	(t) => [
+		unique("notification_outbox_idempotency").on(t.idempotencyKey),
+		index("notification_outbox_claim").on(t.status, t.nextAttemptAt),
+		index("notification_outbox_reclaim").on(t.status, t.claimedAt),
+		index("notification_outbox_recipient").on(t.recipientUserId, t.status),
+		// The prune sweep exists to bound table growth; it was the one job
+		// filtering on an unindexed predicate.
+		index("notification_outbox_prune").on(t.status, t.createdAt),
+	],
 );
 
 export const deliveryAttempt = pgTable("delivery_attempt", {
@@ -535,6 +548,17 @@ export const ackCapability = pgTable("ack_capability", {
 	expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 	consumedAt: timestamp("consumed_at", { withTimezone: true }),
 	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
+// Server-only token bucket. The ack route is an unauthenticated public endpoint
+// on a multi-replica deployment, so an in-process limiter would bound nothing.
+// Deliberately absent from drizzle-zero.config.ts.
+export const rateBucket = pgTable("rate_bucket", {
+	key: text("key").primaryKey(),
+	tokens: integer("tokens").notNull(),
+	refilledAt: timestamp("refilled_at", { withTimezone: true })
 		.defaultNow()
 		.notNull(),
 });

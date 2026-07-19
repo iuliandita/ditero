@@ -29,6 +29,7 @@ import { schema } from "../zero/schema.gen.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
+import { startScheduler } from "./notifications/scheduler.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
 const responseHeaders = securityHeaders(process.env);
@@ -289,6 +290,9 @@ if (import.meta.main) {
 	if (process.env.NODE_ENV === "production") {
 		await verifyRuntimeDatabaseRole(pool);
 	}
+	// Every replica starts one; the advisory lock elects the leader per tick.
+	// Timing is validated here so a bad interval fails at boot, not at 03:00.
+	startScheduler(db, pool);
 	app.listen(PORT);
 	console.log(`ditero api on :${PORT}`);
 }

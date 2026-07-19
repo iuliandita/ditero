@@ -47,6 +47,7 @@
 		"chrono-node": "^2.10.0",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
+		"croner": "^10.0.1",
 		"drizzle-orm": "^0.45.2",
 		"elysia": "^1.4.29",
 		"exact-mirror": "^0.2.7",
