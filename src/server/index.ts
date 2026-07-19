@@ -21,6 +21,8 @@ import {
 } from "../auth/managed-account.ts";
 import { trustedAuthOrigins } from "../auth/origins.ts";
 import { requireSameOrigin } from "../auth/security.ts";
+import { notifyAllowedPrivateCIDRs } from "../config/notify-egress.ts";
+import { workerTiming } from "../config/worker.ts";
 import { db, pool } from "../db/client.ts";
 import { verifyRuntimeDatabaseRole } from "../db/runtime-role.ts";
 import { mutators } from "../zero/mutators.ts";
@@ -29,7 +31,11 @@ import { schema } from "../zero/schema.gen.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
+import { ackBaseUrl } from "./notifications/capability.ts";
+import { createSendFn } from "./notifications/dispatch.ts";
+import { ackRoutes } from "./notifications/routes.ts";
 import { startScheduler } from "./notifications/scheduler.ts";
+import { startWorker } from "./notifications/worker.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
 const responseHeaders = securityHeaders(process.env);
@@ -41,7 +47,32 @@ const requestOrigins = [
 // Shared write DB provider (the ZQLDatabase path handleMutateRequest drives).
 const zdb = zeroNodePg(schema, pool);
 
+// Same-origin + session, the shape every authenticated POST here shares.
+// Deliberately NOT applied to the ack route (C24): that one is reached by push
+// clients with no session and, from ntfy's web UI, cross-origin.
+type Session = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
+
+function guardedPost(
+	handler: (request: Request, session: Session) => Promise<unknown>,
+) {
+	return async ({ request }: { request: Request }) => {
+		try {
+			requireSameOrigin(request, requestOrigins);
+		} catch {
+			return new Response("Forbidden", { status: 403 });
+		}
+		const session = await auth.api.getSession({ headers: request.headers });
+		if (!session) return new Response("Unauthorized", { status: 401 });
+		return await handler(request, session);
+	};
+}
+
 const routes = new Elysia()
+	// Public capability ack, mounted AHEAD of the global CORS plugin: the button
+	// is pressed from ntfy's web UI, a genuine cross-origin request the global
+	// policy rejects (and which `origin: false` rejects outright in production).
+	// It carries no session or cookie, so its own permissive allowance is safe.
+	.use(ackRoutes(db))
 	.use(cors(corsPolicy(process.env)))
 	.onRequest(({ set }) => {
 		Object.assign(set.headers, responseHeaders);
@@ -51,102 +82,94 @@ const routes = new Elysia()
 	.all("/api/auth/*", ({ request, server }) =>
 		handleAuthRequest(request, server?.requestIP(request)?.address),
 	)
-	.post("/api/bootstrap", async ({ request }) => {
-		try {
-			requireSameOrigin(request, requestOrigins);
-		} catch {
-			return new Response("Forbidden", { status: 403 });
-		}
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) return new Response("Unauthorized", { status: 401 });
-		const workspaceId = await ensurePersonalWorkspace(session.user);
-		return { workspaceId };
-	})
+	.post(
+		"/api/bootstrap",
+		guardedPost(async (_request, session) => {
+			const workspaceId = await ensurePersonalWorkspace(session.user);
+			return { workspaceId };
+		}),
+	)
 	// Invite create: caller session; server generates + returns the token ONCE
 	// (never synced). Role-escalation gate lives in createInvite.
-	.post("/api/invite/create", async ({ request }) => {
-		try {
-			requireSameOrigin(request, requestOrigins);
-		} catch {
-			return new Response("Forbidden", { status: 403 });
-		}
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) return new Response("Unauthorized", { status: 401 });
-		let body: Record<string, unknown>;
-		try {
-			body = (await request.json()) as Record<string, unknown>;
-		} catch {
-			return new Response("Bad Request", { status: 400 });
-		}
-		if (typeof body.workspaceId !== "string" || typeof body.role !== "string") {
-			return new Response("Bad Request", { status: 400 });
-		}
-		try {
-			const result = await createInvite(
-				{
-					workspaceId: body.workspaceId,
-					role: body.role as never,
-					email: (body.email as string | null | undefined) ?? null,
-					expiresAt: (body.expiresAt as number | null | undefined) ?? null,
-					// Only an explicit numeric cap is honored; otherwise leave undefined so
-					// createInvite applies its default (email invite -> 1, link -> null).
-					maxUses: typeof body.maxUses === "number" ? body.maxUses : undefined,
-					attachTaskId:
-						(body.attachTaskId as string | null | undefined) ?? null,
-					attachKind: (body.attachKind as never) ?? null,
-				},
-				session.user.id,
-				db,
-			);
-			return result; // { id, token, link } -- token returned once, not synced.
-		} catch (error) {
-			if (error instanceof InviteCreateError) {
-				return new Response(error.message, { status: error.status });
+	.post(
+		"/api/invite/create",
+		guardedPost(async (request, session) => {
+			let body: Record<string, unknown>;
+			try {
+				body = (await request.json()) as Record<string, unknown>;
+			} catch {
+				return new Response("Bad Request", { status: 400 });
 			}
-			throw error;
-		}
-	})
+			if (
+				typeof body.workspaceId !== "string" ||
+				typeof body.role !== "string"
+			) {
+				return new Response("Bad Request", { status: 400 });
+			}
+			try {
+				const result = await createInvite(
+					{
+						workspaceId: body.workspaceId,
+						role: body.role as never,
+						email: (body.email as string | null | undefined) ?? null,
+						expiresAt: (body.expiresAt as number | null | undefined) ?? null,
+						// Only an explicit numeric cap is honored; otherwise leave undefined so
+						// createInvite applies its default (email invite -> 1, link -> null).
+						maxUses:
+							typeof body.maxUses === "number" ? body.maxUses : undefined,
+						attachTaskId:
+							(body.attachTaskId as string | null | undefined) ?? null,
+						attachKind: (body.attachKind as never) ?? null,
+					},
+					session.user.id,
+					db,
+				);
+				return result; // { id, token, link } -- token returned once, not synced.
+			} catch (error) {
+				if (error instanceof InviteCreateError) {
+					return new Response(error.message, { status: error.status });
+				}
+				throw error;
+			}
+		}),
+	)
 	// Invite accept: ALWAYS requires a session. A brand-new invitee signs up FIRST
 	// (Task 6's email-invite bypass permits the signup), which authenticates them,
 	// THEN calls this. So there is no unauthenticated accept path here.
-	.post("/api/invite/accept", async ({ request }) => {
-		try {
-			requireSameOrigin(request, requestOrigins);
-		} catch {
-			return new Response("Forbidden", { status: 403 });
-		}
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) return new Response("Unauthorized", { status: 401 });
-		let body: Record<string, unknown>;
-		try {
-			body = (await request.json()) as Record<string, unknown>;
-		} catch {
-			return new Response("Bad Request", { status: 400 });
-		}
-		if (typeof body.token !== "string") {
-			return new Response("Bad Request", { status: 400 });
-		}
-		try {
-			return await acceptInvite(
-				body.token,
-				session.user.id,
-				session.user.email,
-				db,
-			);
-		} catch (error) {
-			if (error instanceof InviteAcceptError) {
-				// Distinct 4xx per reason; the token is never echoed back.
-				const status =
-					error.reason === "not_found"
-						? 404
-						: error.reason === "email_mismatch"
-							? 403
-							: 410;
-				return new Response(error.reason, { status });
+	.post(
+		"/api/invite/accept",
+		guardedPost(async (request, session) => {
+			let body: Record<string, unknown>;
+			try {
+				body = (await request.json()) as Record<string, unknown>;
+			} catch {
+				return new Response("Bad Request", { status: 400 });
 			}
-			throw error;
-		}
-	})
+			if (typeof body.token !== "string") {
+				return new Response("Bad Request", { status: 400 });
+			}
+			try {
+				return await acceptInvite(
+					body.token,
+					session.user.id,
+					session.user.email,
+					db,
+				);
+			} catch (error) {
+				if (error instanceof InviteAcceptError) {
+					// Distinct 4xx per reason; the token is never echoed back.
+					const status =
+						error.reason === "not_found"
+							? 404
+							: error.reason === "email_mismatch"
+								? 403
+								: 410;
+					return new Response(error.reason, { status });
+				}
+				throw error;
+			}
+		}),
+	)
 	// Invite preview: minimal, pre-signup read. Returns ONLY {valid, workspaceName,
 	// email}; never the token, role, or ids. Cross-origin requests are rejected;
 	// same-origin (no Origin header) is allowed so the signup screen can read it.
@@ -161,47 +184,43 @@ const routes = new Elysia()
 	})
 	// Managed ("kid") account: guardian session. Creates a restricted account under
 	// a non-routable @managed.invalid handle and adds it to the workspace.
-	.post("/api/account/managed", async ({ request }) => {
-		try {
-			requireSameOrigin(request, requestOrigins);
-		} catch {
-			return new Response("Forbidden", { status: 403 });
-		}
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) return new Response("Unauthorized", { status: 401 });
-		let body: Record<string, unknown>;
-		try {
-			body = (await request.json()) as Record<string, unknown>;
-		} catch {
-			return new Response("Bad Request", { status: 400 });
-		}
-		if (
-			typeof body.workspaceId !== "string" ||
-			typeof body.displayName !== "string" ||
-			typeof body.password !== "string"
-		) {
-			return new Response("Bad Request", { status: 400 });
-		}
-		try {
-			return await createManagedAccount(
-				{
-					guardianId: session.user.id,
-					workspaceId: body.workspaceId,
-					displayName: body.displayName,
-					password: body.password,
-					role: (body.role as never) ?? undefined,
-				},
-				db,
-				auth,
-				process.env,
-			);
-		} catch (error) {
-			if (error instanceof ManagedAccountError) {
-				return new Response(error.message, { status: error.status });
+	.post(
+		"/api/account/managed",
+		guardedPost(async (request, session) => {
+			let body: Record<string, unknown>;
+			try {
+				body = (await request.json()) as Record<string, unknown>;
+			} catch {
+				return new Response("Bad Request", { status: 400 });
 			}
-			throw error;
-		}
-	})
+			if (
+				typeof body.workspaceId !== "string" ||
+				typeof body.displayName !== "string" ||
+				typeof body.password !== "string"
+			) {
+				return new Response("Bad Request", { status: 400 });
+			}
+			try {
+				return await createManagedAccount(
+					{
+						guardianId: session.user.id,
+						workspaceId: body.workspaceId,
+						displayName: body.displayName,
+						password: body.password,
+						role: (body.role as never) ?? undefined,
+					},
+					db,
+					auth,
+					process.env,
+				);
+			} catch (error) {
+				if (error instanceof ManagedAccountError) {
+					return new Response(error.message, { status: error.status });
+				}
+				throw error;
+			}
+		}),
+	)
 	// User lookup for invite-on-assign pickers. Caller session; never returns email
 	// addresses (only id/name/image). Mode from DITERO_DISCOVERY.
 	.get("/api/users/lookup", async ({ request }) => {
@@ -293,6 +312,20 @@ if (import.meta.main) {
 	// Every replica starts one; the advisory lock elects the leader per tick.
 	// Timing is validated here so a bad interval fails at boot, not at 03:00.
 	startScheduler(db, pool);
+	// The drain runs on every replica (claims are mediated by SKIP LOCKED).
+	// ackBaseUrl is null when no public origin is configured, which disables the
+	// ack action rather than minting a link no push client can follow.
+	startWorker(
+		db,
+		createSendFn({
+			database: db,
+			allowedPrivateCIDRs: notifyAllowedPrivateCIDRs(
+				process.env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
+			),
+			deadlineMs: workerTiming(process.env).adapterDeadlineMs,
+			ackBaseUrl: ackBaseUrl(process.env),
+		}),
+	);
 	app.listen(PORT);
 	console.log(`ditero api on :${PORT}`);
 }

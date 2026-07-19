@@ -3,7 +3,7 @@
 // rendered payload to the channel adapter. It never throws -- the worker
 // classifies a ProviderResult, and a rejection would be flattened into an
 // untyped transport error that loses the permanent/retryable distinction.
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
@@ -14,23 +14,26 @@ import type { Network } from "../client-ip.ts";
 import { ntfyAdapter } from "./adapters/ntfy.ts";
 import type { ChannelAdapter, ChannelPayload } from "./adapters/types.ts";
 import { permanent } from "./adapters/types.ts";
+import {
+	ACK_ACTION,
+	ACK_PATH,
+	ACK_TTL_MS,
+	ackToken,
+	hashAckToken,
+} from "./capability.ts";
 import type { OutboxRow, SendFn } from "./worker.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 
-// Path of the public capability route Task 13 mounts. Exported so the two sides
-// cannot drift into minting links nobody serves.
-export const ACK_PATH = "/api/notifications/ack";
-// The only action minted today. Bindings are checked on consume, so a
-// capability minted for one action must not redeem another (C27).
-export const ACK_ACTION = "complete";
-// Comfortably outlives the ~33-minute retry ladder and any escalation ladder,
-// while bounding how long a leaked notification stays actionable.
-export const ACK_TTL_MS = 24 * 3_600_000;
-
-export function hashAckToken(token: string): string {
-	return createHash("sha256").update(token).digest("hex");
-}
+// The capability primitives moved to capability.ts, which owns both halves of
+// the mint/consume contract; re-exported so this module's existing surface and
+// its callers are unchanged.
+export {
+	ACK_ACTION,
+	ACK_PATH,
+	ACK_TTL_MS,
+	hashAckToken,
+} from "./capability.ts";
 
 // Only the reminder payload is modelled today; Task 14 adds the event shape.
 // The `kind` literal is what is load-bearing: unknown payloads fail closed as
@@ -105,7 +108,7 @@ async function mintAckUrl(
 	// ack_capability.reminder_state_id is notNull and event rows (Task 14) carry
 	// no reminder, so those get no ack action rather than a constraint violation.
 	if (row.reminderStateId === null || ackBaseUrl === null) return null;
-	const token = randomBytes(32).toString("base64url");
+	const token = ackToken();
 	await database.insert(tables.ackCapability).values({
 		id: randomUUID(),
 		tokenHash: hashAckToken(token),

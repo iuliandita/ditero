@@ -15,6 +15,11 @@ import {
 	type Transaction,
 } from "@rocicorp/zero";
 import { z } from "zod";
+import {
+	ACK_TERMINAL_STATUSES,
+	type AckStore,
+	completeForAck,
+} from "../domain/ack-complete.ts";
 import { panelsSchema } from "../domain/dashboard.ts";
 import type { ListKind } from "../domain/icon-map.ts";
 import { karmaForCompletion, levelForPoints } from "../domain/karma.ts";
@@ -318,6 +323,79 @@ async function insertInstantiatedList(
 		...(folderId !== undefined ? { folderId } : {}),
 	});
 	for (const t of tasks) await insertInstantiatedTask(tx, t);
+}
+
+// Zero-side implementation of the shared ack completion port. The capability
+// route implements the same port over its Drizzle transaction, so the policy
+// (role gate, habits-vs-task branching, viewer handling) lives in exactly one
+// place while each entry point keeps its own transaction mechanism.
+function zeroAckStore(tx: Transaction<Schema>): AckStore {
+	return {
+		async task(taskId) {
+			const row = await tx.run(
+				zql.task.where("id", taskId).related("list").one(),
+			);
+			if (!row) return null;
+			const list = row.list as List;
+			return {
+				id: row.id,
+				workspaceId: list.workspaceId,
+				// The Zero client cannot see Postgres column defaults; `tasks`
+				// mirrors the list.kind default.
+				listKind: list.kind ?? "tasks",
+				rrule: row.rrule ?? null,
+				recurrenceRelative: row.recurrenceRelative ?? false,
+				dueAt: row.dueAt ?? null,
+				done: row.done ?? false,
+				priority: row.priority ?? 0,
+			};
+		},
+		async role(userId, workspaceId) {
+			return (await roleInWorkspace(tx, userId, workspaceId)) ?? null;
+		},
+		async timezone(userId) {
+			const pref = await tx.run(zql.userPref.where("id", userId).one());
+			return pref?.timezone ?? "UTC";
+		},
+		async updateTask(id, patch) {
+			await tx.mutate.task.update({
+				id,
+				done: patch.done,
+				completedAt: patch.completedAt,
+				...(patch.dueAt === undefined ? {} : { dueAt: patch.dueAt }),
+			});
+		},
+		async habitLog(habitId, date) {
+			const row = await tx.run(
+				zql.habitLog.where("habitId", habitId).where("date", date).one(),
+			);
+			return row
+				? { id: row.id, status: row.status, karmaDelta: row.karmaDelta ?? 0 }
+				: null;
+		},
+		async putHabitLog(row) {
+			if (row.existingId) {
+				await tx.mutate.habitLog.update({
+					id: row.existingId,
+					status: "done",
+					karmaDelta: row.karmaDelta,
+					completedAt: row.completedAt,
+				});
+				return;
+			}
+			await tx.mutate.habitLog.insert({
+				id: crypto.randomUUID(),
+				habitId: row.habitId,
+				date: row.date,
+				status: "done",
+				karmaDelta: row.karmaDelta,
+				completedAt: row.completedAt,
+			});
+		},
+		async awardKarma(userId, delta, reason, date) {
+			await awardKarma(tx, userId, delta, reason, date);
+		},
+	};
 }
 
 export const mutators = defineMutators({
@@ -684,6 +762,58 @@ export const mutators = defineMutators({
 					await awardKarma(tx, ctx.id, -recorded, "habit_undo", args.date);
 				}
 				await tx.mutate.habitLog.delete({ id: existing.id });
+			},
+		),
+	},
+	reminder: {
+		// In-app ack. No capability is involved -- the caller is already
+		// authenticated -- so the gate is simply "this is my reminder row".
+		// Completion runs through the same shared path the public capability
+		// route uses.
+		ack: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const reminder = await tx.run(
+					zql.reminderState.where("id", args.id).one(),
+				);
+				if (!reminder) throw new Error("reminder not found");
+				if (reminder.recipientUserId !== ctx.id)
+					throw new Error("access denied: not your reminder");
+				const now = Date.now();
+				const acked = {
+					status: "acked" as const,
+					ackedAt: now,
+					ackedVia: "in_app",
+					deferredUntil: null,
+				};
+				await tx.mutate.reminderState.update({ id: reminder.id, ...acked });
+				// C7: terminate every sibling on the same occurrence, or a
+				// co-assignee keeps being escalated for a reminder already acked.
+				const siblings = await tx.run(
+					zql.reminderState
+						.where("taskId", reminder.taskId)
+						.where("occurrenceAt", reminder.occurrenceAt),
+				);
+				for (const sibling of siblings) {
+					if (sibling.id === reminder.id) continue;
+					if (
+						(ACK_TERMINAL_STATUSES as readonly string[]).includes(
+							sibling.status ?? "pending",
+						)
+					)
+						continue;
+					await tx.mutate.reminderState.update({ id: sibling.id, ...acked });
+				}
+				await completeForAck(
+					zeroAckStore(tx),
+					{
+						taskId: reminder.taskId,
+						occurrenceAt: reminder.occurrenceAt,
+						recipientUserId: reminder.recipientUserId,
+					},
+					ctx.id,
+					now,
+				);
 			},
 		),
 	},

@@ -22,6 +22,7 @@ import {
 	classifyRetry,
 	MAX_ATTEMPTS,
 } from "../../domain/notification-retry.ts";
+import { pruneAckCapabilities } from "./capability.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -59,6 +60,9 @@ export type WorkerSummary = {
 	reclaimed: number;
 	abandoned: number;
 	pruned: number;
+	// Expired or consumed ack_capability rows. Task 12 mints a fresh capability
+	// per attempt, so nothing else bounds that table's growth.
+	prunedCapabilities: number;
 	claimed: number;
 	sent: number;
 	failed: number;
@@ -347,19 +351,19 @@ export async function workerTick(
 		timing.leaseMs,
 		timing.batchSize,
 	);
-	const pruned =
-		options.prune === false
-			? 0
-			: await pruneTerminal(
-					database,
-					timing.retentionMs,
-					timing.pruneBatchSize,
-				);
+	const skipPrune = options.prune === false;
+	const pruned = skipPrune
+		? 0
+		: await pruneTerminal(database, timing.retentionMs, timing.pruneBatchSize);
+	const prunedCapabilities = skipPrune
+		? 0
+		: await pruneAckCapabilities(database, timing.pruneBatchSize);
 	const claimed = await claimBatch(database, timing.batchSize, replicaId);
 
 	const summary: WorkerSummary = {
 		...reclaim,
 		pruned,
+		prunedCapabilities,
 		claimed: claimed.length,
 		sent: 0,
 		failed: 0,
