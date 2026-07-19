@@ -581,8 +581,10 @@ async function loadSweepRows(
 			.innerJoin(tables.list, eq(tables.task.listId, tables.list.id));
 
 	// Branch A: waking from quiet hours. Branch C (self-heal): a row a crash
-	// stranded with no schedule and no send -- fire_count = 0 is the reliable
-	// discriminator, since a fired row always carries at least 1.
+	// stranded before it was either fired or deferred -- fire_count = 0 is the
+	// reliable discriminator, since a fired row always carries at least 1, and
+	// it must catch both stranded shapes (next_attempt_at NULL and the
+	// insert-time placeholder) or the row is reachable by no branch at all.
 	const waking = await base().where(
 		or(
 			and(
@@ -593,8 +595,11 @@ async function loadSweepRows(
 			and(
 				eq(tables.reminderState.status, "pending"),
 				eq(tables.reminderState.fireCount, 0),
-				isNull(tables.reminderState.nextAttemptAt),
 				isNull(tables.reminderState.deferredUntil),
+				or(
+					isNull(tables.reminderState.nextAttemptAt),
+					lte(tables.reminderState.nextAttemptAt, now),
+				),
 			),
 		),
 	);

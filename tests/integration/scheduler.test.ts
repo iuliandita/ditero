@@ -602,6 +602,28 @@ describe("recipients", () => {
 		expect(await outboxFor(row.id)).toHaveLength(1);
 	});
 
+	// The insert writes next_attempt_at = now as a placeholder, so a strand can
+	// carry a stale schedule rather than a null one. fire_count = 0 is what
+	// makes both shapes reachable; the escalate branch requires fire_count > 0.
+	test("the self-heal branch recovers a strand that kept its placeholder schedule", async () => {
+		await seedTask("sched-r8b", { repeatEveryMin: 10, maxRepeats: 2 });
+		await tick(ON_TIME);
+		const [row] = await remindersFor("sched-r8b");
+		await db
+			.delete(tables.notificationOutbox)
+			.where(eq(tables.notificationOutbox.reminderStateId, row.id));
+		await db
+			.update(tables.reminderState)
+			.set({ status: "pending", fireCount: 0, nextAttemptAt: ON_TIME })
+			.where(eq(tables.reminderState.id, row.id));
+
+		await tick(new Date("2026-08-01T09:20:00Z"));
+
+		const [healed] = await remindersFor("sched-r8b");
+		expect(healed.fireCount).toBe(1);
+		expect(await outboxFor(row.id)).toHaveLength(1);
+	});
+
 	test("idempotency keys carry the fire count so repeats do not collide", async () => {
 		await seedTask("sched-r9", { repeatEveryMin: 10, maxRepeats: 3 });
 		await tick(ON_TIME);
