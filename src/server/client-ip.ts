@@ -1,7 +1,7 @@
 import ipaddr from "ipaddr.js";
 
 type Address = ipaddr.IPv4 | ipaddr.IPv6;
-type Network = readonly [Address, number];
+export type Network = readonly [Address, number];
 
 type ClientIPInput = {
 	peerAddress: string;
