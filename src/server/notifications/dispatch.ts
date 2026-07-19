@@ -9,11 +9,11 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
 import * as tables from "../../db/schema.ts";
 import type { ChannelKind } from "../../domain/notification-channel.ts";
-import type { ProviderResult } from "../../domain/notification-retry.ts";
 import type { safeFetch } from "../../security/safe-http.ts";
 import type { Network } from "../client-ip.ts";
 import { ntfyAdapter } from "./adapters/ntfy.ts";
 import type { ChannelAdapter, ChannelPayload } from "./adapters/types.ts";
+import { permanent } from "./adapters/types.ts";
 import type { OutboxRow, SendFn } from "./worker.ts";
 
 type Database = NodePgDatabase<typeof tables>;
@@ -33,8 +33,10 @@ export function hashAckToken(token: string): string {
 }
 
 // Only the reminder payload is modelled today; Task 14 adds the event shape.
-// Strict, so an unrecognized payload fails closed as permanently undeliverable
-// rather than being rendered as an empty notification.
+// The `kind` literal is what is load-bearing: unknown payloads fail closed as
+// permanently undeliverable rather than rendering an empty notification.
+// Deliberately loose otherwise -- the scheduler carries fields this does not
+// read, and rejecting them would couple the two sides for no gain.
 const reminderPayloadSchema = z
 	.object({
 		kind: z.literal("reminder"),
@@ -48,8 +50,9 @@ export type DispatchDeps = {
 	database: Database;
 	allowedPrivateCIDRs: readonly Network[];
 	deadlineMs: number;
-	// Absolute origin the ack link is built from. Null disables the ack action
-	// entirely rather than emitting a relative URL no push client can follow.
+	// Absolute origin the ack link is built from, validated at construction.
+	// Null disables the ack action entirely rather than emitting a relative URL
+	// no push client can follow.
 	ackBaseUrl: string | null;
 	adapters?: Partial<Record<ChannelKind, ChannelAdapter>>;
 	fetch?: typeof safeFetch;
@@ -59,18 +62,14 @@ const DEFAULT_ADAPTERS: Partial<Record<ChannelKind, ChannelAdapter>> = {
 	ntfy: ntfyAdapter,
 };
 
-function permanent(error: string): ProviderResult {
-	return { ok: false, policyRejected: true, error };
-}
-
-function renderPayload(raw: unknown): ChannelPayload | null {
+function renderPayload(raw: unknown): Omit<ChannelPayload, "ackUrl"> | null {
 	const parsed = reminderPayloadSchema.safeParse(raw);
 	if (!parsed.success) return null;
 	return {
 		title: parsed.data.taskTitle,
+		// i18n: Task 15 renders this in the recipient's locale and timezone.
 		body: `Due ${parsed.data.occurrenceAt}`,
 		urgent: parsed.data.urgent === true,
-		ackUrl: null,
 	};
 }
 
@@ -120,6 +119,17 @@ async function mintAckUrl(
 
 export function createSendFn(deps: DispatchDeps): SendFn {
 	const adapters = deps.adapters ?? DEFAULT_ADAPTERS;
+	// Fail at construction, not per notification: a malformed origin would
+	// otherwise mint unfollowable ack links for every reminder, silently.
+	if (deps.ackBaseUrl !== null) {
+		try {
+			new URL(deps.ackBaseUrl);
+		} catch {
+			throw new Error(
+				`dispatch: ackBaseUrl must be an absolute URL, got "${deps.ackBaseUrl}"`,
+			);
+		}
+	}
 	return async (row: OutboxRow, signal: AbortSignal) => {
 		try {
 			const adapter = adapters[row.channelKind];

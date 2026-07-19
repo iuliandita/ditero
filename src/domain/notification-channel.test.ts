@@ -42,6 +42,36 @@ describe("channelConfigSchema", () => {
 			}).success,
 		).toBe(false);
 	});
+
+	// The token is sent as an Authorization header. A CR/LF/NUL in it makes
+	// header construction throw a TypeError that embeds the token itself, which
+	// would then be persisted as a delivery error. Rejected at write time so it
+	// can never reach storage.
+	it.each([
+		["CRLF", "bad\r\nX-Injected: yes"],
+		["bare LF", "bad\nvalue"],
+		["NUL", "bad\0value"],
+		["a space", "bad value"],
+		["non-ASCII", "tökén"],
+		["empty", ""],
+	])("rejects a token containing %s", (_case, token) => {
+		expect(
+			channelConfigSchema.ntfy.safeParse({
+				serverUrl: "https://ntfy.sh",
+				topic: "t",
+				token,
+			}).success,
+		).toBe(false);
+	});
+
+	it("accepts a printable-ASCII token and an absent one", () => {
+		for (const config of [
+			{ serverUrl: "https://ntfy.sh", topic: "t", token: "tk_A1-b2.c3~" },
+			{ serverUrl: "https://ntfy.sh", topic: "t" },
+		]) {
+			expect(channelConfigSchema.ntfy.safeParse(config).success).toBe(true);
+		}
+	});
 });
 
 describe("maskChannelConfig", () => {

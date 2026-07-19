@@ -9,6 +9,7 @@ import type {
 	ChannelAdapter,
 	ChannelPayload,
 } from "./types.ts";
+import { permanent } from "./types.ts";
 
 const TITLE_MAX = 200;
 const BODY_MAX = 4_000;
@@ -17,8 +18,8 @@ const ACK_LABEL = "Done";
 
 // Header values are single-line by definition: a CR/LF in a user-supplied title
 // is a header-injection attempt that undici rejects outright, which would turn a
-// badly-named task into a permanent delivery failure (C20). Other C0 controls go
-// too -- they are invisible in a notification and only serve to smuggle intent.
+// badly-named task into a permanent delivery failure (C20). The other C0
+// controls go too -- invisible in a notification, useful only for smuggling.
 function headerSafe(value: string, max: number): string {
 	let out = "";
 	for (const character of value) {
@@ -26,6 +27,16 @@ function headerSafe(value: string, max: number): string {
 		out += code < 0x20 || code === 0x7f ? " " : character;
 	}
 	return out.replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+// Header values serialize as latin1, so an Arabic, Hebrew or Chinese title
+// arrives as mojibake. ntfy's documented escape hatch is RFC 2047 encoded-words:
+// "you may also encode any header (including the title) as RFC 2047, e.g.
+// =?UTF-8?B?8J+HqfCfh6o=?= (base64)". Applied only when needed -- an ASCII title
+// stays human-readable on the wire, and the encoded form costs ~33% more length.
+function encodeHeaderValue(value: string): string {
+	if (/^[\x20-\x7e]*$/.test(value)) return value;
+	return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
 }
 
 const URL_IN_TEXT = /https?:\/\/[^\s"'<>]+/g;
@@ -38,8 +49,10 @@ function safeMessage(error: unknown): string {
 	return message.replace(URL_IN_TEXT, redactChannelUrl);
 }
 
-// ntfy's Actions header is comma/semicolon delimited, so any value that could
-// contain a delimiter is quoted, with `"` and `\` escaped.
+// ntfy's Actions header separates fields with commas and actions with
+// semicolons, and documents that values containing either "may be quoted with
+// double or single quotes". Every non-constant field is quoted, including the
+// URL, whose origin comes from operator config.
 function quoteAction(value: string): string {
 	return `"${value.replace(/[\\"]/g, (character) => `\\${character}`)}"`;
 }
@@ -54,24 +67,20 @@ function retryAfterSeconds(header: string | null): number | undefined {
 	return Number.isFinite(seconds) ? seconds : undefined;
 }
 
-function permanent(error: string): ProviderResult {
-	return { ok: false, policyRejected: true, error };
-}
-
 function buildHeaders(
 	payload: ChannelPayload,
 	token: string | undefined,
 ): Headers {
 	const headers = new Headers({
 		"Content-Type": "text/plain; charset=utf-8",
-		"X-Title": headerSafe(payload.title, TITLE_MAX),
+		"X-Title": encodeHeaderValue(headerSafe(payload.title, TITLE_MAX)),
 	});
 	if (payload.urgent) headers.set("Priority", "urgent");
 	if (token) headers.set("Authorization", `Bearer ${token}`);
 	if (payload.ackUrl) {
 		headers.set(
 			"Actions",
-			`http, ${quoteAction(ACK_LABEL)}, ${payload.ackUrl}, method=POST, clear=true`,
+			`http, ${quoteAction(ACK_LABEL)}, ${quoteAction(payload.ackUrl)}, method=POST, clear=true`,
 		);
 	}
 	return headers;
@@ -96,20 +105,34 @@ export const ntfyAdapter: ChannelAdapter = {
 		};
 		const url = `${serverUrl.replace(/\/+$/, "")}/${topic}`;
 
+		// Built outside the send's try/catch, and reported with no interpolated
+		// message: a TypeError from Headers embeds the offending value, and here
+		// that value can be the Authorization token. The charset regex in
+		// ntfyConfigSchema should make this unreachable; this is the second half
+		// of that guarantee, covering configs stored before the regex existed.
+		let headers: Headers;
+		try {
+			headers = buildHeaders(payload, token);
+		} catch {
+			return permanent("ntfy: unusable channel config");
+		}
+
+		// Matches worker.ts's sendWithDeadline rather than introducing a second
+		// idiom: AbortSignal.timeout holds its timer for the full deadline even
+		// after a send that already completed.
+		const deadline = new AbortController();
+		const timer = setTimeout(() => deadline.abort(), ctx.deadlineMs);
 		try {
 			// Both bounds, not either: the worker's signal is what reaches the
-			// socket when it stops waiting, and the timeout is what stops a
+			// socket when it stops waiting, and the deadline is what stops a
 			// slow-drip response from holding the slot (C18).
 			const response = await (ctx.fetch ?? safeFetch)(url, {
 				method: "POST",
-				headers: buildHeaders(payload, token),
+				headers,
 				// The body is text/plain, not a header: newlines are legitimate there
 				// and only the length needs bounding.
 				body: payload.body.slice(0, BODY_MAX),
-				signal: AbortSignal.any([
-					ctx.signal,
-					AbortSignal.timeout(ctx.deadlineMs),
-				]),
+				signal: AbortSignal.any([ctx.signal, deadline.signal]),
 				allowedPrivateCIDRs: ctx.allowedPrivateCIDRs,
 				maxResponseBytes: RESPONSE_MAX_BYTES,
 			});
@@ -132,6 +155,8 @@ export const ntfyAdapter: ChannelAdapter = {
 				ok: false,
 				error: `ntfy: ${redactChannelUrl(url)} failed: ${safeMessage(error)}`,
 			};
+		} finally {
+			clearTimeout(timer);
 		}
 	},
 };

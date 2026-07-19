@@ -38,3 +38,11 @@ export type ChannelAdapter = {
 		ctx: AdapterContext,
 	): Promise<ProviderResult>;
 };
+
+// `policyRejected` is what makes classifyRetry return permanent. Shared so the
+// adapters and the dispatch path cannot drift on how a never-deliverable send
+// is reported. Note the resulting retry_class is "policy" for every cause,
+// including plain misconfiguration; Task 17 splits the operator-facing label.
+export function permanent(error: string): ProviderResult {
+	return { ok: false, policyRejected: true, error };
+}

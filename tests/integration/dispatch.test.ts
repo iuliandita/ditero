@@ -409,6 +409,22 @@ describe("dispatch", () => {
 		expect((await attemptsFor(disabled))[0].retryClass).toBe("policy");
 	});
 
+	// A malformed origin would otherwise mint unfollowable ack links for every
+	// reminder, silently, for as long as it stayed misconfigured.
+	it.each([
+		"not-a-url",
+		"",
+		"/relative/path",
+	])("refuses to construct with ackBaseUrl %o", (ackBaseUrl) => {
+		expect(() => createSendFn({ ...deps, ackBaseUrl })).toThrow(
+			/ackBaseUrl must be an absolute URL/,
+		);
+	});
+
+	it("constructs with a null ackBaseUrl", () => {
+		expect(() => createSendFn({ ...deps, ackBaseUrl: null })).not.toThrow();
+	});
+
 	it("hands the stored channel config to the adapter", async () => {
 		const stored = {
 			serverUrl: "https://ntfy.example.test",

@@ -21,7 +21,15 @@ const ntfyConfigSchema = z
 			.min(1)
 			.max(64)
 			.regex(/^[A-Za-z0-9_-]+$/),
-		token: z.string().max(256).optional(),
+		// Printable ASCII only. The token is sent as an Authorization header, and
+		// a CR/LF/NUL in it makes header construction throw a TypeError whose
+		// message embeds the token itself -- which would then be persisted as a
+		// delivery error. Rejected at write time so it can never be stored.
+		token: z
+			.string()
+			.max(256)
+			.regex(/^[\x21-\x7e]+$/, "token must be printable ASCII without spaces")
+			.optional(),
 	})
 	.strict();
 

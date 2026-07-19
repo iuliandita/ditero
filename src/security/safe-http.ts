@@ -172,7 +172,15 @@ export async function safeFetch(
 	input: string | URL,
 	options: SafeFetchOptions = {},
 ): Promise<Response> {
-	const url = new URL(input);
+	// A malformed URL is a refusal, not a transport failure: it never becomes
+	// valid, so retrying it burns the whole ladder. Unreachable from ntfy (whose
+	// URL is schema-validated) but every M3b adapter takes a user-pasted webhook.
+	let url: URL;
+	try {
+		url = new URL(input);
+	} catch {
+		throw new OutboundPolicyError("Outbound URL is not a valid absolute URL");
+	}
 	if (url.protocol !== "http:" && url.protocol !== "https:") {
 		throw new OutboundPolicyError(
 			"Outbound URL protocol must be HTTP or HTTPS",

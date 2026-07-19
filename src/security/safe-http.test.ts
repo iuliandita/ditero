@@ -2,6 +2,7 @@ import { describe, expect, it, test } from "vitest";
 import { parseTrustedProxyCIDRs } from "../server/client-ip.ts";
 import {
 	assertPublicAddress,
+	OutboundPolicyError,
 	resolvePinnedTarget,
 	safeFetch,
 } from "./safe-http.ts";
@@ -59,6 +60,30 @@ describe("outbound HTTP target validation", () => {
 		await expect(safeFetch("https://user:pass@example.com")).rejects.toThrow(
 			/credentials/i,
 		);
+	});
+
+	// Every refusal must be an OutboundPolicyError, not a bare Error: callers
+	// classify on the type to decide permanent vs retryable, and a refusal
+	// retried on the ladder re-probes the target once per attempt.
+	test.each([
+		["a blocked address", "http://127.0.0.1/admin"],
+		["a non-HTTP protocol", "file:///etc/passwd"],
+		["URL credentials", "https://user:pass@example.com"],
+		["a malformed URL", "not-a-url"],
+		["an empty URL", ""],
+	])("refuses %s as a policy error", async (_case, input) => {
+		await expect(safeFetch(input)).rejects.toBeInstanceOf(OutboundPolicyError);
+	});
+
+	// A resolver that returns nothing is NOT a policy refusal: NXDOMAIN and a
+	// resolver outage are indistinguishable here, so it stays retryable.
+	test("leaves an unresolvable target a plain Error", async () => {
+		const error = await resolvePinnedTarget("nowhere.invalid", {
+			resolve4: async () => [],
+			resolve6: async () => [],
+		}).catch((thrown: unknown) => thrown);
+		expect(error).toBeInstanceOf(Error);
+		expect(error).not.toBeInstanceOf(OutboundPolicyError);
 	});
 });
 
