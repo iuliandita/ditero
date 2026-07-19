@@ -203,6 +203,63 @@ const focusArg = z.custom<ReadonlyJSONValue>(
 	{ message: "invalid focus" },
 );
 
+// M3a: per-user notification defaults. Validation here is what makes the
+// scheduler's fail-loud read path (zoned.ts / quiet-hours.ts / escalation.ts)
+// safe -- a value that passes here must not throw there.
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+function isValidTimeZone(tz: string): boolean {
+	try {
+		new Intl.DateTimeFormat("en-US", { timeZone: tz });
+		return true;
+	} catch {
+		return false;
+	}
+}
+const timezoneArg = z.string().max(100).refine(isValidTimeZone, {
+	message: "invalid IANA timezone",
+});
+const quietHoursSchema = z
+	.object({
+		start: z.string().regex(HHMM_RE),
+		end: z.string().regex(HHMM_RE),
+	})
+	.strict();
+const quietHoursArg = z.custom<ReadonlyJSONValue>(
+	(v) => v === null || quietHoursSchema.safeParse(v).success,
+	{ message: "invalid quietHours" },
+);
+// maxRepeats caps at 20: smallint permits 32767, and repeatEveryMin: 1 with an
+// uncapped maxRepeats turns one reminder into thousands of pushes on a real
+// phone -- self-inflicted, but it can exhaust the per-user outbox cap and
+// black out that user's legitimate reminders.
+const escalationDefaultsSchema = z.object({
+	repeatEveryMin: z.number().int().positive().nullable(),
+	maxRepeats: z.number().int().min(0).max(20).nullable(),
+	fallbackUserId: z.string().max(200).nullable(),
+});
+const escalationDefaultsArg = z.custom<ReadonlyJSONValue>(
+	(v) => v === null || escalationDefaultsSchema.safeParse(v).success,
+	{ message: "invalid escalationDefaults" },
+);
+
+// Escalation fallback must be a co-member: without this, any caller could name
+// any user id in the instance as their fallback and, after the first
+// escalation, that stranger starts receiving pushes carrying attacker-
+// controlled task titles from a workspace they never joined. Mirrors
+// task.assign's assigneeRole check, widened from "member of this one
+// workspace" to "shares any workspace with the caller".
+async function sharesWorkspace(
+	tx: Transaction<Schema>,
+	userA: string,
+	userB: string,
+): Promise<boolean> {
+	const mine = await tx.run(zql.membership.where("userId", userA));
+	const workspaceIds = new Set(mine.map((m) => m.workspaceId));
+	if (workspaceIds.size === 0) return false;
+	const theirs = await tx.run(zql.membership.where("userId", userB));
+	return theirs.some((m) => workspaceIds.has(m.workspaceId));
+}
+
 // Deterministic id generator seeded from a client-supplied id, so an
 // instantiate mutator produces identical ids on the optimistic client and the
 // authoritative server. First id is the seed itself (the list/root-task id the
@@ -1326,8 +1383,26 @@ export const mutators = defineMutators({
 				karmaGoals: karmaGoalsArg.optional(),
 				vacation: vacationArg.optional(),
 				focus: focusArg.optional(),
+				// M3a: notification defaults. Null means "not configured", never
+				// collapsed to a default here -- the scheduler resolves inheritance.
+				timezone: timezoneArg.optional(),
+				quietHours: quietHoursArg.optional(),
+				escalationDefaults: escalationDefaultsArg.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
+				if (args.escalationDefaults) {
+					const { fallbackUserId } = args.escalationDefaults as {
+						fallbackUserId: string | null;
+					};
+					if (
+						fallbackUserId &&
+						!(await sharesWorkspace(tx, ctx.id, fallbackUserId))
+					) {
+						throw new Error(
+							"escalation fallback must share a workspace with you",
+						);
+					}
+				}
 				const existing = await tx.run(zql.userPref.where("id", ctx.id).one());
 				if (existing) await tx.mutate.userPref.update({ id: ctx.id, ...args });
 				else
@@ -1340,6 +1415,9 @@ export const mutators = defineMutators({
 						karmaGoals: args.karmaGoals ?? null,
 						vacation: args.vacation ?? null,
 						focus: args.focus ?? null,
+						timezone: args.timezone ?? "UTC",
+						quietHours: args.quietHours ?? null,
+						escalationDefaults: args.escalationDefaults ?? null,
 					});
 			},
 		),
