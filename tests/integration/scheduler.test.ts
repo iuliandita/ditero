@@ -730,4 +730,36 @@ describe("outbox capacity refusal", () => {
 				.where(eq(tables.notificationChannel.id, "sched-chan2-a"));
 		}
 	});
+
+	// At the cap the insert is suppressed before ON CONFLICT can fire, so a
+	// re-enqueue of rows that already exist reports `refused`, not `duplicate`.
+	// Deciding on the counters alone would mark this reminder failed while its
+	// outbox row is queued and about to deliver.
+	test("a reminder whose rows already exist is not failed by a refusal at the cap", async () => {
+		await seedTask("sched-cap3", {}, [A]);
+		await capTick(ON_TIME, 500);
+		const [fired] = await remindersFor("sched-cap3");
+		expect(await outboxFor(fired.id)).toHaveLength(1);
+
+		// Put the reminder back into the shape the self-heal branch re-fires
+		// with the same fire_count, and therefore the same idempotency key.
+		await db
+			.update(tables.reminderState)
+			.set({ status: "pending", fireCount: 0, nextAttemptAt: ON_TIME })
+			.where(eq(tables.reminderState.id, fired.id));
+		await db.insert(tables.notificationOutbox).values({
+			id: "sched-cap3-filler",
+			recipientUserId: A,
+			channelKind: "ntfy",
+			payload: {},
+			idempotencyKey: "sched-cap3-filler",
+			status: "queued",
+		});
+
+		await capTick(ON_TIME, 2);
+
+		const [reminder] = await remindersFor("sched-cap3");
+		expect(reminder.status).not.toBe("failed");
+		expect(await outboxFor(reminder.id)).toHaveLength(1);
+	});
 });

@@ -42,6 +42,19 @@ describe("workerTiming", () => {
 		).not.toThrow();
 	});
 
+	// A lane task is send + completeDelivery; a budget that models only the send
+	// half accepts a config leaving 1ms for the write.
+	test("a deadline that leaves no room for the completion write is rejected", () => {
+		expect(() =>
+			workerTiming({
+				DITERO_WORKER_LEASE_MS: "60000",
+				DITERO_NOTIFY_DEADLINE_MS: "59999",
+				DITERO_WORKER_BATCH_SIZE: "1",
+				DITERO_WORKER_CONCURRENCY: "1",
+			}),
+		).toThrow(/completion write/);
+	});
+
 	test("a single send longer than the lease is rejected", () => {
 		expect(() =>
 			workerTiming({

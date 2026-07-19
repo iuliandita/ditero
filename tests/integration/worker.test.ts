@@ -36,7 +36,14 @@ const pool = new Pool({ connectionString: databaseURL, max: 6 });
 const db = drizzle(pool, { schema: tables });
 // Replica B: the partition tests need two real connections claiming at once,
 // which one pooled client cannot express.
-const otherPool = new Pool({ connectionString: databaseURL, max: 6 });
+// statement_timeout so a claim that blocks (the failure mode when SKIP LOCKED
+// is missing) fails sharply on its own query instead of hanging the connection
+// and cascading into every later test's beforeEach.
+const otherPool = new Pool({
+	connectionString: databaseURL,
+	max: 6,
+	statement_timeout: 2_000,
+});
 const otherDb = drizzle(otherPool, { schema: tables });
 
 const OWNER = "wk-owner";
@@ -217,7 +224,10 @@ describe("claiming", () => {
 			// Hold the transaction, and therefore A's row locks, open.
 			await held;
 		});
-		while (claimedByA.length === 0) await sleep(5);
+		for (let waited = 0; claimedByA.length === 0; waited++) {
+			if (waited > 200) throw new Error("replica A never claimed its batch");
+			await sleep(5);
+		}
 
 		const startedAt = Date.now();
 		const claimedByB = (await claimBatch(otherDb, 5, B)).map((row) => row.id);
@@ -251,7 +261,7 @@ describe("lease and fencing", () => {
 		await claimBatch(db, 10, A);
 		await backdateClaim("wk-l-stuck", 120_000);
 
-		const result = await reclaimExpired(db, 60_000);
+		const result = await reclaimExpired(db, 60_000, 100);
 
 		expect(result.reclaimed).toBe(1);
 		const row = await outbox("wk-l-stuck");
@@ -268,7 +278,7 @@ describe("lease and fencing", () => {
 		await claimBatch(db, 10, A);
 		await backdateClaim("wk-l-log", 120_000);
 
-		await reclaimExpired(db, 60_000);
+		await reclaimExpired(db, 60_000, 100);
 
 		const [attempt] = await attemptsFor("wk-l-log");
 		expect(attempt.attemptNo).toBe(1);
@@ -280,7 +290,7 @@ describe("lease and fencing", () => {
 		await seedOutbox("wk-l-fresh");
 		await claimBatch(db, 10, A);
 
-		const result = await reclaimExpired(db, 60_000);
+		const result = await reclaimExpired(db, 60_000, 100);
 
 		expect(result).toEqual({ reclaimed: 0, abandoned: 0 });
 		const row = await outbox("wk-l-fresh");
@@ -296,7 +306,7 @@ describe("lease and fencing", () => {
 
 		const [claimedByA] = await claimBatch(db, 10, A);
 		await backdateClaim("wk-f-race", 120_000);
-		await reclaimExpired(db, 60_000);
+		await reclaimExpired(db, 60_000, 100);
 		await makeDue("wk-f-race");
 
 		const [claimedByB] = await claimBatch(otherDb, 10, B);
@@ -328,7 +338,7 @@ describe("lease and fencing", () => {
 			const claimed = await claimBatch(db, 10, A);
 			if (claimed.length === 0) break;
 			await backdateClaim("wk-f-hang", 120_000);
-			abandoned += (await reclaimExpired(db, 60_000)).abandoned;
+			abandoned += (await reclaimExpired(db, 60_000, 100)).abandoned;
 			await makeDue("wk-f-hang");
 		}
 
@@ -358,6 +368,23 @@ describe("sending", () => {
 		expect(row.attempts).toBe(1);
 		const [attempt] = await attemptsFor("wk-s-hang");
 		expect(attempt.error).toBe("adapter deadline exceeded");
+	});
+
+	// Without the signal on the seam, a hung endpoint holds its socket and
+	// buffers open per timed-out send, per replica, per hanging channel.
+	test("a timed-out send has its signal aborted", async () => {
+		await seedOutbox("wk-s-abort");
+		let observed: AbortSignal | undefined;
+
+		await tick({
+			send: (_row, signal) => {
+				observed = signal;
+				return new Promise<ProviderResult>(() => {});
+			},
+			timing: { ...timing, adapterDeadlineMs: 100 },
+		});
+
+		expect(observed?.aborted).toBe(true);
 	});
 
 	test("a throwing adapter is caught and the row is requeued, not stranded", async () => {
@@ -430,7 +457,7 @@ describe("sending", () => {
 
 		// The lease reclaim is what recovers it.
 		await backdateClaim("wk-s-dberr", 120_000);
-		expect((await reclaimExpired(db, 60_000)).reclaimed).toBe(1);
+		expect((await reclaimExpired(db, 60_000, 100)).reclaimed).toBe(1);
 	});
 
 	test("two replicas ticking on one batch deliver each row exactly once", async () => {

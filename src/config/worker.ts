@@ -27,6 +27,10 @@ export const DEFAULT_PRUNE_CADENCE_TICKS = 60;
 export const DEFAULT_PRUNE_BATCH_SIZE = 1_000;
 export const DEFAULT_MAX_QUEUED_PER_USER = 500;
 
+// Per-wave budget for the completion write, which shares the lane with the
+// send but is not covered by the adapter deadline.
+const DB_ALLOWANCE_MS = 5_000;
+
 type WorkerEnvironment = Record<string, string | undefined>;
 
 // The enqueue side (scheduler) needs this bound without pulling in the send-side
@@ -93,10 +97,14 @@ export function workerTiming(env: WorkerEnvironment): WorkerTiming {
 	// that the completion fence cannot prevent, because the fence protects row
 	// state and not the network.
 	const waves = Math.ceil(timing.batchSize / timing.sendConcurrency);
-	const worstCaseMs = waves * timing.adapterDeadlineMs;
+	// A lane task is send + completeDelivery, and only the send half is bounded
+	// by adapterDeadlineMs. Charging each wave a database allowance keeps the
+	// budget from accepting configs that leave no room for the write at all
+	// (deadline 59999 against a 60000 lease would otherwise pass).
+	const worstCaseMs = waves * (timing.adapterDeadlineMs + DB_ALLOWANCE_MS);
 	if (worstCaseMs >= timing.leaseMs) {
 		throw new Error(
-			`worker timing: a full batch can take ${worstCaseMs}ms (${waves} waves of DITERO_NOTIFY_DEADLINE_MS=${timing.adapterDeadlineMs}ms at DITERO_WORKER_BATCH_SIZE=${timing.batchSize} / DITERO_WORKER_CONCURRENCY=${timing.sendConcurrency}), which must be less than DITERO_WORKER_LEASE_MS=${timing.leaseMs}; otherwise later rows in a slow batch are reclaimed mid-send and delivered twice`,
+			`worker timing: a full batch can take ${worstCaseMs}ms (${waves} waves of DITERO_NOTIFY_DEADLINE_MS=${timing.adapterDeadlineMs}ms plus ${DB_ALLOWANCE_MS}ms for the completion write, at DITERO_WORKER_BATCH_SIZE=${timing.batchSize} / DITERO_WORKER_CONCURRENCY=${timing.sendConcurrency}), which must be less than DITERO_WORKER_LEASE_MS=${timing.leaseMs}; otherwise later rows in a slow batch are reclaimed mid-send and delivered twice`,
 		);
 	}
 	return timing;

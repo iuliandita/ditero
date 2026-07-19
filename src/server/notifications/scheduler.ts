@@ -214,16 +214,26 @@ async function enqueue(
 
 	// C13: a reminder refused on every channel would otherwise sit `pending`
 	// with no outbox row -- permanent limbo, and reminder_state IS synced, so it
-	// must tell the user the truth. Only when the whole loop enqueued nothing:
-	// marking it failed while a sibling channel holds a live queued row would
-	// invert the lie, reporting a failure the user is about to receive anyway.
-	// `enqueued === 0` with no refusals is the idempotent re-run case, which is
-	// not a failure.
+	// must tell the user the truth.
+	//
+	// The counters alone cannot decide this. At the cap the insert is suppressed
+	// before ON CONFLICT can fire, so a re-run whose rows already exist is
+	// reported `refused` and is indistinguishable from a genuine first refusal.
+	// Ask the question that actually matters instead -- does this reminder have
+	// an outbox row at all -- which is also robust to any future path that
+	// enqueues nothing for a third reason.
 	if (refused > 0 && enqueued === 0) {
-		await tx
-			.update(tables.reminderState)
-			.set({ status: "failed", nextAttemptAt: null, deferredUntil: null })
-			.where(eq(tables.reminderState.id, reminderStateId));
+		const live = await tx
+			.select({ id: tables.notificationOutbox.id })
+			.from(tables.notificationOutbox)
+			.where(eq(tables.notificationOutbox.reminderStateId, reminderStateId))
+			.limit(1);
+		if (live.length === 0) {
+			await tx
+				.update(tables.reminderState)
+				.set({ status: "failed", nextAttemptAt: null, deferredUntil: null })
+				.where(eq(tables.reminderState.id, reminderStateId));
+		}
 	}
 	return enqueued;
 }

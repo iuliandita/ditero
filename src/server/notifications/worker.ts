@@ -44,7 +44,16 @@ export type OutboxRow = {
 // The seam Task 12 fills. Shaped by what classifyRetry consumes: a send
 // reports a ProviderResult and nothing else, so the worker never learns
 // anything channel-specific.
-export type SendFn = (row: OutboxRow) => Promise<ProviderResult>;
+//
+// The signal is aborted when the worker stops waiting for this send, so an
+// adapter must pass it to fetch: without it a hung endpoint leaks a socket and
+// its buffers per timed-out send, per replica, per hanging channel. It is on
+// the signature from the start because widening it later means touching every
+// adapter Task 12 writes against this type.
+export type SendFn = (
+	row: OutboxRow,
+	signal: AbortSignal,
+) => Promise<ProviderResult>;
 
 export type WorkerSummary = {
 	reclaimed: number;
@@ -142,22 +151,27 @@ export async function claimBatch(
 export async function reclaimExpired(
 	database: Database,
 	leaseMs: number,
+	batchSize: number,
 ): Promise<{ reclaimed: number; abandoned: number }> {
 	const { rows } = await database.execute<{ status: string }>(sql`
 		with expired as (
 			select id from notification_outbox
 			where status = 'sending' and claimed_at < now() - ${interval(leaseMs)}
 			for update skip locked
+			limit ${batchSize}
 		),
 		bumped as (
 			update notification_outbox o
 			set status = (case when o.attempts + 1 >= ${MAX_ATTEMPTS} then 'abandoned' else 'queued' end)::outbox_status,
 				attempts = o.attempts + 1,
 				-- Mirrors the backoff ladder in domain/notification-retry.ts
-				-- (1s doubling, capped at 300s). Reclaimed rows would otherwise
-				-- keep next_attempt_at in the past and be re-claimable in the
-				-- same tick with no backoff at all.
-				next_attempt_at = now() + make_interval(secs => least(power(2, o.attempts)::double precision, 300)),
+				-- (1s doubling, capped at 300s, plus up to 25% jitter).
+				-- Reclaimed rows would otherwise keep next_attempt_at in the
+				-- past and be re-claimable in the same tick with no backoff at
+				-- all; without the jitter a mass reclaim gives every row an
+				-- identical next_attempt_at and they all come due together.
+				next_attempt_at = now() + make_interval(secs =>
+					least(power(2, o.attempts)::double precision, 300) * (1 + random() * 0.25)),
 				claimed_at = null,
 				claimed_by = null
 			from expired e
@@ -182,7 +196,9 @@ export async function reclaimExpired(
 //
 // Batched: an unbounded DELETE on the first tick after a busy retention window
 // takes the whole backlog in one statement while every other replica blocks on
-// its row locks, and each of them delays its own claim behind it.
+// its row locks, and each of them delays its own claim behind it. At defaults
+// (1000 rows every 60th 1s tick) one replica drains ~1000 rows/minute, so
+// ~1.4M/day -- the sizing target if a deployment ever outgrows it.
 //
 // Keys on created_at rather than on when the row went terminal, which assumes
 // rows do not sit queued for a meaningful fraction of the retention window. At
@@ -260,18 +276,19 @@ export async function completeDelivery(
 // The module that owns the lease owns the timeout. An adapter that never
 // settles would otherwise block the tick forever, and croner's `protect` then
 // suppresses every subsequent tick: that replica silently stops claiming,
-// reclaiming and pruning off a single bad row. The losing send is abandoned,
-// not cancelled -- it cannot be -- but its worker slot is freed, which is what
-// the batch wall-clock bound depends on.
+// reclaiming and pruning off a single bad row. Freeing the worker slot is what
+// the batch wall-clock bound depends on; aborting the signal is what stops the
+// abandoned request from holding its socket open behind us.
 async function sendWithDeadline(
 	send: SendFn,
 	row: OutboxRow,
 	deadlineMs: number,
 ): Promise<ProviderResult> {
+	const controller = new AbortController();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
 		return await Promise.race([
-			send(row),
+			send(row, controller.signal),
 			new Promise<ProviderResult>((resolve) => {
 				timer = setTimeout(
 					() => resolve({ ok: false, error: "adapter deadline exceeded" }),
@@ -285,6 +302,9 @@ async function sendWithDeadline(
 		return { ok: false, error: String(error) };
 	} finally {
 		clearTimeout(timer);
+		// Safe on the success path too: the adapter has already read everything
+		// it needed to build its ProviderResult by the time it resolves.
+		controller.abort();
 	}
 }
 
@@ -303,7 +323,14 @@ async function dispatchBatch(
 		async () => {
 			while (cursor < rows.length) {
 				const row = rows[cursor++];
-				await run(row);
+				try {
+					await run(row);
+				} catch (error) {
+					// `run` handles its own failures; this only keeps one unforeseen
+					// rejection from tearing down Promise.all with sibling lanes
+					// still in flight and their later rejections unhandled.
+					console.error(`worker: lane failed on row ${row.id}:`, error);
+				}
 			}
 		},
 	);
@@ -315,7 +342,11 @@ export async function workerTick(
 	options: WorkerOptions,
 ): Promise<WorkerSummary> {
 	const { timing, replicaId } = options;
-	const reclaim = await reclaimExpired(database, timing.leaseMs);
+	const reclaim = await reclaimExpired(
+		database,
+		timing.leaseMs,
+		timing.batchSize,
+	);
 	const pruned =
 		options.prune === false
 			? 0
@@ -373,9 +404,6 @@ export function startWorker(
 		"* * * * * *",
 		{
 			interval: Math.max(1, Math.round(timing.tickMs / 1000)),
-			// Every replica would otherwise fire on the same second boundary and
-			// contend on the same rows each tick.
-			startAt: new Date(Date.now() + Math.floor(Math.random() * timing.tickMs)),
 			protect: () =>
 				console.warn("worker: previous tick still running, skipping"),
 		},
