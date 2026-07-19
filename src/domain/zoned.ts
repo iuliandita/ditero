@@ -114,7 +114,7 @@ export function instantToWallClock(
 	};
 }
 
-const DAY_MS = 24 * 3_600_000;
+export const DAY_MS = 24 * 3_600_000;
 
 // A wall-clock time in a zone maps to an instant only after resolving that zone's
 // offset *at that instant* -- a chicken-and-egg. Probing a day on either side of the
