@@ -2,6 +2,8 @@ export type EscalationPolicy = {
 	repeatEveryMin: number | null;
 	maxRepeats: number | null;
 	fallbackUserId: string | null;
+	// Not read here: quiet-hours and dispatch consume it directly. It rides
+	// along on the policy type only because it travels with the rest of it.
 	urgent: boolean;
 };
 
@@ -14,11 +16,12 @@ export type EscalationState = { fireCount: number };
 
 export type EscalationAction =
 	| { kind: "repeat"; at: Date }
-	// One-shot: the caller marks reminder_state 'escalated' (a terminal
-	// status alongside acked/failed/expired) after this fires, so the
-	// fallback gets a single notification with no repeat budget of its own.
-	// The design's sweep step lists exactly these three outcomes with no
-	// further escalation chain, so this module has nothing more to express.
+	// The caller marks the original reminder_state 'escalated' (terminal,
+	// alongside acked/failed/expired) and creates a sibling reminder_state
+	// for userId carrying the same repeat policy but fallbackUserId: null.
+	// So the fallback is reminded on the same repeat cadence as the
+	// original recipient was -- what it loses is the ability to escalate
+	// again, which is what keeps the chain from cycling.
 	| { kind: "escalate"; userId: string }
 	| { kind: "terminal"; reason: "exhausted" | "no_repeat" };
 
