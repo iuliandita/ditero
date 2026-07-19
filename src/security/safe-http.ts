@@ -3,6 +3,20 @@ import ipaddr from "ipaddr.js";
 import { Agent, buildConnector, request } from "undici";
 import type { Network } from "../server/client-ip.ts";
 
+// A request refused by policy before or during transfer -- blocked address,
+// disallowed protocol, URL credentials, oversized response. Callers must be
+// able to tell these from a transport failure without matching on message
+// strings: the notification worker treats them as permanently undeliverable
+// (C17), where a transport error is retried with backoff. Retrying a refusal
+// burns the whole ladder on a channel that can never succeed, and re-probes an
+// SSRF target on every attempt.
+export class OutboundPolicyError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "OutboundPolicyError";
+	}
+}
+
 type Resolver = {
 	resolve4: (hostname: string) => Promise<string[]>;
 	resolve6: (hostname: string) => Promise<string[]>;
@@ -70,11 +84,15 @@ function assertNotForbidden(value: string): ipaddr.IPv4 | ipaddr.IPv6 {
 	const hostname = normalizedHostname(value);
 	const parsed = ipaddr.parse(hostname);
 	if (parsed.kind() === "ipv6" && matchesAny(parsed, transitionNetworks)) {
-		throw new Error("Outbound target must resolve to a public address");
+		throw new OutboundPolicyError(
+			"Outbound target must resolve to a public address",
+		);
 	}
 	const address = ipaddr.process(hostname);
 	if (matchesAny(address, neverAllowed)) {
-		throw new Error("Outbound target must resolve to a public address");
+		throw new OutboundPolicyError(
+			"Outbound target must resolve to a public address",
+		);
 	}
 	return address;
 }
@@ -86,7 +104,9 @@ export function assertPublicAddress(
 	const address = assertNotForbidden(value);
 	if (address.range() === "unicast") return;
 	if (matchesAny(address, allowedPrivateCIDRs)) return;
-	throw new Error("Outbound target must resolve to a public address");
+	throw new OutboundPolicyError(
+		"Outbound target must resolve to a public address",
+	);
 }
 
 async function resolveFamily(
@@ -124,6 +144,9 @@ export async function resolvePinnedTarget(
 		...ipv4.map((address) => ({ address, family: 4 as const })),
 		...ipv6.map((address) => ({ address, family: 6 as const })),
 	];
+	// Deliberately a plain Error, not an OutboundPolicyError: nothing was
+	// refused, the resolver had no answer. A DNS outage is transient and must
+	// stay retryable, unlike the policy refusals above.
 	if (answers.length === 0) throw new Error("Outbound target did not resolve");
 	for (const answer of answers) {
 		assertPublicAddress(answer.address, allowedPrivateCIDRs);
@@ -151,10 +174,12 @@ export async function safeFetch(
 ): Promise<Response> {
 	const url = new URL(input);
 	if (url.protocol !== "http:" && url.protocol !== "https:") {
-		throw new Error("Outbound URL protocol must be HTTP or HTTPS");
+		throw new OutboundPolicyError(
+			"Outbound URL protocol must be HTTP or HTTPS",
+		);
 	}
 	if (url.username || url.password) {
-		throw new Error("Outbound URL credentials are not allowed");
+		throw new OutboundPolicyError("Outbound URL credentials are not allowed");
 	}
 	const target = await resolvePinnedTarget(
 		url.hostname,
@@ -192,7 +217,9 @@ export async function safeFetch(
 			const buffer = Buffer.from(chunk);
 			size += buffer.length;
 			if (size > limit) {
-				throw new Error("Outbound response exceeds the configured size limit");
+				throw new OutboundPolicyError(
+					"Outbound response exceeds the configured size limit",
+				);
 			}
 			chunks.push(buffer);
 		}
