@@ -20,6 +20,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
 import type { SchedulerTiming } from "../../config/scheduler.ts";
 import { schedulerTiming } from "../../config/scheduler.ts";
+import { maxQueuedPerUser } from "../../config/worker.ts";
 import * as tables from "../../db/schema.ts";
 import {
 	type EscalationPolicy,
@@ -31,6 +32,7 @@ import {
 	quietHoursDecision,
 } from "../../domain/quiet-hours.ts";
 import { reminderWindow } from "../../domain/reminder-window.ts";
+import { type EnqueueOptions, enqueueOutbox } from "./worker.ts";
 
 export const SCHEDULER_LOCK_KEY = 918274;
 
@@ -58,7 +60,12 @@ export type ScanOptions = {
 	// Test seam for the crash-between-insert-and-enqueue case (C1). Inert
 	// unless passed; there is no env or production path that sets it.
 	onBeforeEnqueue?: () => void | Promise<void>;
+	maxQueuedPerUser?: number;
 };
+
+// Options plus the per-tick enqueue cap state, so the refusal warning dedupes
+// per user per tick rather than per refused row.
+type TickOptions = ScanOptions & { cap: EnqueueOptions };
 
 export async function withLeaderLock<T>(
 	pool: Pool,
@@ -181,13 +188,13 @@ async function enqueue(
 	payload: ReturnType<typeof reminderPayload>,
 	fireCount: number,
 	now: Date,
+	cap: EnqueueOptions,
 ): Promise<number> {
 	let enqueued = 0;
 	for (const channelKind of channels) {
-		const inserted = await tx
-			.insert(tables.notificationOutbox)
-			.values({
-				id: randomUUID(),
+		const outcome = await enqueueOutbox(
+			tx,
+			{
 				reminderStateId,
 				recipientUserId,
 				channelKind,
@@ -196,12 +203,11 @@ async function enqueue(
 				// it the second repeat loses to the unique constraint and nobody
 				// is notified.
 				idempotencyKey: `${reminderStateId}:${channelKind}:${fireCount}`,
-				status: "queued",
 				nextAttemptAt: now,
-			})
-			.onConflictDoNothing()
-			.returning({ id: tables.notificationOutbox.id });
-		enqueued += inserted.length;
+			},
+			cap,
+		);
+		if (outcome === "inserted") enqueued++;
 	}
 	return enqueued;
 }
@@ -216,6 +222,7 @@ async function fire(
 	nextAttemptAt: Date | null,
 	channels: ChannelKind[],
 	now: Date,
+	cap: EnqueueOptions,
 	onBeforeEnqueue?: () => void | Promise<void>,
 ): Promise<number> {
 	await tx
@@ -236,6 +243,7 @@ async function fire(
 		reminderPayload(task, occurrenceAt, fireCount),
 		fireCount,
 		now,
+		cap,
 	);
 }
 
@@ -265,9 +273,17 @@ export async function scanTick(
 		cappedTaskIds: [],
 	};
 
+	const tickOptions: TickOptions = {
+		...options,
+		cap: {
+			maxQueuedPerUser:
+				options.maxQueuedPerUser ?? maxQueuedPerUser(process.env),
+			refusedLogged: new Set(),
+		},
+	};
 	const from = new Date(now.getTime() - timing.graceMs);
-	await createDueReminders(database, now, from, timing, summary, options);
-	await sweep(database, now, summary, options);
+	await createDueReminders(database, now, from, timing, summary, tickOptions);
+	await sweep(database, now, summary, tickOptions);
 	return summary;
 }
 
@@ -367,7 +383,7 @@ async function createDueReminders(
 	from: Date,
 	timing: SchedulerTiming,
 	summary: TickSummary,
-	options: ScanOptions,
+	options: TickOptions,
 ): Promise<void> {
 	const taskRows = await loadTasks(database, from, now);
 	if (taskRows.length === 0) return;
@@ -456,6 +472,7 @@ async function createDueReminders(
 						firedLate,
 						now,
 						summary,
+						cap: options.cap,
 						onBeforeEnqueue: options.onBeforeEnqueue,
 					});
 				} catch (error) {
@@ -481,6 +498,7 @@ async function createReminder(
 		firedLate: boolean;
 		now: Date;
 		summary: TickSummary;
+		cap: EnqueueOptions;
 		onBeforeEnqueue?: () => void | Promise<void>;
 	},
 ): Promise<void> {
@@ -534,6 +552,7 @@ async function createReminder(
 			repeatAt(policy, now),
 			input.channels,
 			now,
+			input.cap,
 			input.onBeforeEnqueue,
 		);
 		summary.fired++;
@@ -625,7 +644,7 @@ async function sweep(
 	database: Database,
 	now: Date,
 	summary: TickSummary,
-	options: ScanOptions,
+	options: TickOptions,
 ): Promise<void> {
 	const rows = await loadSweepRows(database, now);
 	if (rows.length === 0) return;
@@ -672,7 +691,7 @@ async function sweepWake(
 	channels: Map<string, ChannelKind[]>,
 	now: Date,
 	summary: TickSummary,
-	options: ScanOptions,
+	options: TickOptions,
 ): Promise<void> {
 	const pref = prefs.get(row.recipientUserId) ?? DEFAULT_PREF;
 	const decision = decideQuietHours(pref, row.urgent, now, row.recipientUserId);
@@ -704,6 +723,7 @@ async function sweepWake(
 			repeatAt(policy, now),
 			channels.get(row.recipientUserId) ?? [],
 			now,
+			options.cap,
 			options.onBeforeEnqueue,
 		);
 	});
@@ -717,7 +737,7 @@ async function sweepEscalate(
 	channels: Map<string, ChannelKind[]>,
 	now: Date,
 	summary: TickSummary,
-	options: ScanOptions,
+	options: TickOptions,
 ): Promise<void> {
 	const pref = prefs.get(row.recipientUserId) ?? DEFAULT_PREF;
 	const policy = policyFor(row, pref);
@@ -735,6 +755,7 @@ async function sweepEscalate(
 				action.at,
 				channels.get(row.recipientUserId) ?? [],
 				now,
+				options.cap,
 				options.onBeforeEnqueue,
 			);
 		});
@@ -778,7 +799,7 @@ async function escalateToFallback(
 	channels: Map<string, ChannelKind[]>,
 	now: Date,
 	summary: TickSummary,
-	options: ScanOptions,
+	options: TickOptions,
 ): Promise<void> {
 	// The sibling row carries no marker saying "already escalated", so the
 	// cycle guard is structural: a row whose own recipient is the policy's
@@ -854,6 +875,7 @@ async function escalateToFallback(
 					repeatAt(policy, now),
 					channels.get(fallbackUserId) ?? [],
 					now,
+					options.cap,
 					options.onBeforeEnqueue,
 				);
 			}

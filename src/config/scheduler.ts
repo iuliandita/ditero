@@ -1,3 +1,5 @@
+import { positiveInt } from "./env.ts";
+
 export type SchedulerTiming = {
 	tickMs: number;
 	graceMs: number;
@@ -13,15 +15,6 @@ type SchedulerEnvironment = Record<string, string | undefined> & {
 	DITERO_SCHEDULER_GRACE_MS?: string;
 	DITERO_SCHEDULER_LATE_THRESHOLD_MS?: string;
 };
-
-function positiveInt(name: string, raw: string | undefined, fallback: number) {
-	if (raw === undefined || raw === "") return fallback;
-	const value = Number(raw);
-	if (!Number.isInteger(value) || value <= 0) {
-		throw new Error(`${name}: expected a positive integer, got "${raw}"`);
-	}
-	return value;
-}
 
 export function schedulerTiming(env: SchedulerEnvironment): SchedulerTiming {
 	const timing: SchedulerTiming = {
