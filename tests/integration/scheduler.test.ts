@@ -681,3 +681,53 @@ describe("scan isolation from unrelated rows", () => {
 		expect(rows).toHaveLength(0);
 	});
 });
+
+// C13, corrected: a refused enqueue must terminate its reminder_state row, but
+// only when the whole channel loop enqueued nothing. Marking it failed while a
+// sibling channel holds a live queued row inverts the lie -- reporting a
+// failure for a reminder the user is about to receive.
+describe("outbox capacity refusal", () => {
+	const capTick = (now: Date, maxQueuedPerUser: number) =>
+		scanTick(db, { now, timing, maxQueuedPerUser });
+
+	test("a reminder refused on every channel is terminated, not left pending", async () => {
+		await seedTask("sched-cap1", {}, [A]);
+		await db.insert(tables.notificationOutbox).values({
+			id: "sched-cap-filler",
+			recipientUserId: A,
+			channelKind: "ntfy",
+			payload: {},
+			idempotencyKey: "sched-cap-filler",
+			status: "queued",
+		});
+
+		await capTick(ON_TIME, 1);
+
+		const [reminder] = await remindersFor("sched-cap1");
+		expect(reminder.status).toBe("failed");
+		expect(reminder.nextAttemptAt).toBeNull();
+		expect(await outboxFor(reminder.id)).toEqual([]);
+	});
+
+	test("a reminder that reached one channel stays pending even if another is refused", async () => {
+		await db.insert(tables.notificationChannel).values({
+			id: "sched-chan2-a",
+			userId: A,
+			kind: "telegram",
+			config: {},
+		});
+		try {
+			await seedTask("sched-cap2", {}, [A]);
+
+			await capTick(ON_TIME, 1);
+
+			const [reminder] = await remindersFor("sched-cap2");
+			expect(reminder.status).toBe("pending");
+			expect(await outboxFor(reminder.id)).toHaveLength(1);
+		} finally {
+			await db
+				.delete(tables.notificationChannel)
+				.where(eq(tables.notificationChannel.id, "sched-chan2-a"));
+		}
+	});
+});

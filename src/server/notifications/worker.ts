@@ -5,7 +5,7 @@
 // at-least-once bookkeeping.
 import { randomUUID } from "node:crypto";
 import { Cron } from "croner";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { WorkerTiming } from "../../config/worker.ts";
 import {
@@ -26,6 +26,11 @@ import {
 type Database = NodePgDatabase<typeof tables>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type ChannelKind = (typeof tables.channelKindEnum.enumValues)[number];
+
+// Written by the reclaim path, which has no ProviderResult to classify: the
+// worker never heard back at all. Distinct from "transport" (we tried and the
+// network answered) so an operator can tell a hung provider from a refused one.
+export const LEASE_EXPIRED = "lease-expired";
 
 export type OutboxRow = {
 	id: string;
@@ -50,15 +55,24 @@ export type WorkerSummary = {
 	failed: number;
 	retried: number;
 	fenced: number;
+	// Rows whose outcome could not be recorded at all. Without this a database
+	// outage reports an all-zero summary plus a console line.
+	errored: number;
 };
 
 export type WorkerOptions = {
 	send: SendFn;
-	timing?: WorkerTiming;
-	// Required, not defaulted: a fallback resolved per call would mint a fresh
-	// id every tick, and a caller whose claim and completion span two ticks
-	// could then never fence its own writes.
+	// Required, not defaulted: resolving config inside the tick moves a
+	// misconfiguration from boot into the tick's try/catch, where it is a log
+	// line every second instead of a failed start.
+	timing: WorkerTiming;
+	// Required for the same reason the fence exists: a per-call fallback would
+	// mint a fresh id every tick, and a caller whose claim and completion span
+	// two ticks could never fence its own writes.
 	replicaId: string;
+	// Prune is comparatively expensive and is not needed every tick; startWorker
+	// runs it on a coarse cadence.
+	prune?: boolean;
 };
 
 const ERROR_MAX_LENGTH = 300;
@@ -82,7 +96,7 @@ function interval(ms: number) {
 // two workers never claim the same row; `, id` is only a deterministic
 // tiebreak. One statement, therefore its own transaction.
 export async function claimBatch(
-	database: Database,
+	database: Database | Transaction,
 	limit: number,
 	replicaId: string,
 ): Promise<OutboxRow[]> {
@@ -119,18 +133,44 @@ export async function claimBatch(
 // hangs past the lease loops claim -> hang -> reclaim forever, classifyRetry is
 // never reached, MAX_ATTEMPTS never applies, and the user is notified once per
 // lease interval from a single row.
+//
+// One data-modifying CTE so the bump and its delivery_attempt row commit
+// together: a row that hangs all the way to `abandoned` would otherwise end
+// with attempts = MAX_ATTEMPTS and no attempt history at all, leaving the table
+// that answers "why did my reminder never arrive" empty in precisely the case
+// that most needs answering.
 export async function reclaimExpired(
 	database: Database,
 	leaseMs: number,
 ): Promise<{ reclaimed: number; abandoned: number }> {
 	const { rows } = await database.execute<{ status: string }>(sql`
-		update notification_outbox
-		set status = (case when attempts + 1 >= ${MAX_ATTEMPTS} then 'abandoned' else 'queued' end)::outbox_status,
-			attempts = attempts + 1,
-			claimed_at = null,
-			claimed_by = null
-		where status = 'sending' and claimed_at < now() - ${interval(leaseMs)}
-		returning status
+		with expired as (
+			select id from notification_outbox
+			where status = 'sending' and claimed_at < now() - ${interval(leaseMs)}
+			for update skip locked
+		),
+		bumped as (
+			update notification_outbox o
+			set status = (case when o.attempts + 1 >= ${MAX_ATTEMPTS} then 'abandoned' else 'queued' end)::outbox_status,
+				attempts = o.attempts + 1,
+				-- Mirrors the backoff ladder in domain/notification-retry.ts
+				-- (1s doubling, capped at 300s). Reclaimed rows would otherwise
+				-- keep next_attempt_at in the past and be re-claimable in the
+				-- same tick with no backoff at all.
+				next_attempt_at = now() + make_interval(secs => least(power(2, o.attempts)::double precision, 300)),
+				claimed_at = null,
+				claimed_by = null
+			from expired e
+			where o.id = e.id
+			returning o.id, o.status, o.attempts
+		),
+		logged as (
+			insert into delivery_attempt (id, outbox_id, attempt_no, provider_status, retry_class, error)
+			select gen_random_uuid()::text, b.id, b.attempts, null, ${LEASE_EXPIRED},
+				'lease expired before the worker reported a result'
+			from bumped b
+		)
+		select status from bumped
 	`);
 	const abandoned = rows.filter((row) => row.status === "abandoned").length;
 	return { reclaimed: rows.length - abandoned, abandoned };
@@ -139,14 +179,29 @@ export async function reclaimExpired(
 // `failed` belongs here (C14): the permanent-failure branch writes it, and a
 // misconfigured channel returning 401 forever is the one genuinely unbounded
 // growth case this prune exists to bound. delivery_attempt cascades.
+//
+// Batched: an unbounded DELETE on the first tick after a busy retention window
+// takes the whole backlog in one statement while every other replica blocks on
+// its row locks, and each of them delays its own claim behind it.
+//
+// Keys on created_at rather than on when the row went terminal, which assumes
+// rows do not sit queued for a meaningful fraction of the retention window. At
+// 30 days against a ~33-minute retry ladder that holds comfortably; if the
+// retention window is ever configured near the ladder's span, a long-queued row
+// could be pruned in the tick it is sent, taking its attempt history with it.
 export async function pruneTerminal(
 	database: Database,
 	retentionMs: number,
+	batchSize: number,
 ): Promise<number> {
 	const { rowCount } = await database.execute(sql`
 		delete from notification_outbox
-		where status in ('sent', 'abandoned', 'failed')
-			and created_at < now() - ${interval(retentionMs)}
+		where ctid in (
+			select ctid from notification_outbox
+			where status in ('sent', 'abandoned', 'failed')
+				and created_at < now() - ${interval(retentionMs)}
+			limit ${batchSize}
+		)
 	`);
 	return rowCount ?? 0;
 }
@@ -202,16 +257,73 @@ export async function completeDelivery(
 	});
 }
 
+// The module that owns the lease owns the timeout. An adapter that never
+// settles would otherwise block the tick forever, and croner's `protect` then
+// suppresses every subsequent tick: that replica silently stops claiming,
+// reclaiming and pruning off a single bad row. The losing send is abandoned,
+// not cancelled -- it cannot be -- but its worker slot is freed, which is what
+// the batch wall-clock bound depends on.
+async function sendWithDeadline(
+	send: SendFn,
+	row: OutboxRow,
+	deadlineMs: number,
+): Promise<ProviderResult> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			send(row),
+			new Promise<ProviderResult>((resolve) => {
+				timer = setTimeout(
+					() => resolve({ ok: false, error: "adapter deadline exceeded" }),
+					deadlineMs,
+				);
+			}),
+		]);
+	} catch (error) {
+		// A throwing adapter is a transport failure, not a reason to strand the
+		// row in `sending` until its lease expires.
+		return { ok: false, error: String(error) };
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+// Bounded concurrency, not a serial drain: all rows in a batch share one
+// claimed_at, so a serial loop gives the last row an effective deadline of
+// batchSize * adapterDeadlineMs and pushes it past the lease. See the
+// cross-field check in config/worker.ts.
+async function dispatchBatch(
+	rows: OutboxRow[],
+	concurrency: number,
+	run: (row: OutboxRow) => Promise<void>,
+): Promise<void> {
+	let cursor = 0;
+	const lanes = Array.from(
+		{ length: Math.min(concurrency, rows.length) },
+		async () => {
+			while (cursor < rows.length) {
+				const row = rows[cursor++];
+				await run(row);
+			}
+		},
+	);
+	await Promise.all(lanes);
+}
+
 export async function workerTick(
 	database: Database,
 	options: WorkerOptions,
 ): Promise<WorkerSummary> {
-	const timing = options.timing ?? workerTiming(process.env);
-	const { replicaId } = options;
+	const { timing, replicaId } = options;
 	const reclaim = await reclaimExpired(database, timing.leaseMs);
-	// Bounds table growth. Terminal rows are invisible to the per-user cap,
-	// which counts only queued + sending, so this is not what keeps that honest.
-	const pruned = await pruneTerminal(database, timing.retentionMs);
+	const pruned =
+		options.prune === false
+			? 0
+			: await pruneTerminal(
+					database,
+					timing.retentionMs,
+					timing.pruneBatchSize,
+				);
 	const claimed = await claimBatch(database, timing.batchSize, replicaId);
 
 	const summary: WorkerSummary = {
@@ -222,99 +334,31 @@ export async function workerTick(
 		failed: 0,
 		retried: 0,
 		fenced: 0,
+		errored: 0,
 	};
 
-	for (const row of claimed) {
-		let result: ProviderResult;
-		try {
-			result = await options.send(row);
-		} catch (error) {
-			// A throwing adapter is a transport failure, not a reason to strand
-			// the row in `sending` until its lease expires.
-			result = { ok: false, error: String(error) };
-		}
+	await dispatchBatch(claimed, timing.sendConcurrency, async (row) => {
+		const result = await sendWithDeadline(
+			options.send,
+			row,
+			timing.adapterDeadlineMs,
+		);
 		let outcome: Awaited<ReturnType<typeof completeDelivery>>;
 		try {
 			outcome = await completeDelivery(database, row, result, replicaId);
 		} catch (error) {
+			// The row stays `sending` with claimed_by intact, so the lease
+			// reclaim recovers it rather than it being lost here.
+			summary.errored++;
 			console.error(`worker: recording outbox row ${row.id} failed:`, error);
-			continue;
+			return;
 		}
 		if (!outcome.applied) summary.fenced++;
 		else if (outcome.decision.kind === "done") summary.sent++;
 		else if (outcome.decision.kind === "retry") summary.retried++;
 		else summary.failed++;
-	}
+	});
 	return summary;
-}
-
-export type OutboxInsert = {
-	reminderStateId: string | null;
-	recipientUserId: string;
-	channelKind: ChannelKind;
-	payload: unknown;
-	idempotencyKey: string;
-	nextAttemptAt: Date;
-};
-
-export type EnqueueOptions = {
-	maxQueuedPerUser: number;
-	// Per-tick dedupe for the refusal warning. A silently dropped notification
-	// reads as a delivery bug later, but one line per refused row is a flood.
-	refusedLogged?: Set<string>;
-};
-
-// Bounds a runaway recurrence or an event storm per user rather than letting it
-// fill the disk (design §6).
-export async function enqueueOutbox(
-	database: Database | Transaction,
-	row: OutboxInsert,
-	options: EnqueueOptions,
-): Promise<"inserted" | "duplicate" | "refused"> {
-	const [queued] = await database
-		.select({ count: sql<number>`count(*)::int` })
-		.from(tables.notificationOutbox)
-		.where(
-			and(
-				eq(tables.notificationOutbox.recipientUserId, row.recipientUserId),
-				inArray(tables.notificationOutbox.status, ["queued", "sending"]),
-			),
-		);
-
-	if (queued.count >= options.maxQueuedPerUser) {
-		if (!options.refusedLogged?.has(row.recipientUserId)) {
-			options.refusedLogged?.add(row.recipientUserId);
-			console.warn(
-				`worker: user ${row.recipientUserId} is at the outbox cap (${options.maxQueuedPerUser}); refusing further notifications this tick`,
-			);
-		}
-		// C13: leaving the reminder `pending` with no outbox row is permanent
-		// limbo, and reminder_state IS synced -- it must tell the user the truth
-		// rather than showing a reminder that never resolves.
-		if (row.reminderStateId) {
-			await database
-				.update(tables.reminderState)
-				.set({ status: "failed", nextAttemptAt: null, deferredUntil: null })
-				.where(eq(tables.reminderState.id, row.reminderStateId));
-		}
-		return "refused";
-	}
-
-	const inserted = await database
-		.insert(tables.notificationOutbox)
-		.values({
-			id: randomUUID(),
-			reminderStateId: row.reminderStateId,
-			recipientUserId: row.recipientUserId,
-			channelKind: row.channelKind,
-			payload: row.payload,
-			idempotencyKey: row.idempotencyKey,
-			status: "queued",
-			nextAttemptAt: row.nextAttemptAt,
-		})
-		.onConflictDoNothing()
-		.returning({ id: tables.notificationOutbox.id });
-	return inserted.length > 0 ? "inserted" : "duplicate";
 }
 
 export function startWorker(
@@ -324,16 +368,25 @@ export function startWorker(
 ): Cron {
 	const timing = workerTiming(env);
 	const replicaId = resolveReplicaId(env);
+	let tick = 0;
 	return new Cron(
 		"* * * * * *",
 		{
 			interval: Math.max(1, Math.round(timing.tickMs / 1000)),
+			// Every replica would otherwise fire on the same second boundary and
+			// contend on the same rows each tick.
+			startAt: new Date(Date.now() + Math.floor(Math.random() * timing.tickMs)),
 			protect: () =>
 				console.warn("worker: previous tick still running, skipping"),
 		},
 		async () => {
 			try {
-				await workerTick(database, { send, timing, replicaId });
+				await workerTick(database, {
+					send,
+					timing,
+					replicaId,
+					prune: tick++ % timing.pruneCadenceTicks === 0,
+				});
 			} catch (error) {
 				console.error("worker: tick failed:", error);
 			}

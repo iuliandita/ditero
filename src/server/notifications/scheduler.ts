@@ -32,7 +32,7 @@ import {
 	quietHoursDecision,
 } from "../../domain/quiet-hours.ts";
 import { reminderWindow } from "../../domain/reminder-window.ts";
-import { type EnqueueOptions, enqueueOutbox } from "./worker.ts";
+import { type EnqueueOptions, enqueueOutbox } from "./outbox.ts";
 
 export const SCHEDULER_LOCK_KEY = 918274;
 
@@ -191,6 +191,7 @@ async function enqueue(
 	cap: EnqueueOptions,
 ): Promise<number> {
 	let enqueued = 0;
+	let refused = 0;
 	for (const channelKind of channels) {
 		const outcome = await enqueueOutbox(
 			tx,
@@ -208,6 +209,21 @@ async function enqueue(
 			cap,
 		);
 		if (outcome === "inserted") enqueued++;
+		else if (outcome === "refused") refused++;
+	}
+
+	// C13: a reminder refused on every channel would otherwise sit `pending`
+	// with no outbox row -- permanent limbo, and reminder_state IS synced, so it
+	// must tell the user the truth. Only when the whole loop enqueued nothing:
+	// marking it failed while a sibling channel holds a live queued row would
+	// invert the lie, reporting a failure the user is about to receive anyway.
+	// `enqueued === 0` with no refusals is the idempotent re-run case, which is
+	// not a failure.
+	if (refused > 0 && enqueued === 0) {
+		await tx
+			.update(tables.reminderState)
+			.set({ status: "failed", nextAttemptAt: null, deferredUntil: null })
+			.where(eq(tables.reminderState.id, reminderStateId));
 	}
 	return enqueued;
 }
