@@ -41,7 +41,7 @@
 		"@dnd-kit/utilities": "^3.2.2",
 		"@elysiajs/cors": "^1.4.2",
 		"@fontsource-variable/geist": "^5.2.9",
-		"@rocicorp/zero": "^1.7.0",
+		"@rocicorp/zero": "^1.8.0",
 		"@sinclair/typebox": "^0.34.49",
 		"better-auth": "^1.6.23",
 		"chrono-node": "^2.10.0",
