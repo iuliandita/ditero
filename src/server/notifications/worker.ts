@@ -400,8 +400,10 @@ export function startWorker(
 	database: Database,
 	send: SendFn,
 	env: NodeJS.ProcessEnv = process.env,
+	// Accepted so a caller that already resolved the timing (to build the send
+	// fn's deadline) does not parse the environment a second time.
+	timing: WorkerTiming = workerTiming(env),
 ): Cron {
-	const timing = workerTiming(env);
 	const replicaId = resolveReplicaId(env);
 	let tick = 0;
 	return new Cron(

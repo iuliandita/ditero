@@ -1,0 +1,1 @@
+ALTER TABLE "reminder_state" ADD COLUMN "ack_outcome" text;

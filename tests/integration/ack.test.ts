@@ -21,6 +21,7 @@ import {
 	test,
 } from "vitest";
 import * as tables from "../../src/db/schema.ts";
+import { parseTrustedProxyCIDRs } from "../../src/server/client-ip.ts";
 import { app } from "../../src/server/index.ts";
 import {
 	ACK_ACTION,
@@ -30,9 +31,12 @@ import {
 	ACK_TTL_MS,
 	ackToken,
 	hashAckToken,
+	pruneAckCapabilities,
 	REJECT_FLOOR_MS,
+	takeRateToken,
 } from "../../src/server/notifications/capability.ts";
 import { ACK_PATH as DISPATCH_ACK_PATH } from "../../src/server/notifications/dispatch.ts";
+import type { AckRouteOptions } from "../../src/server/notifications/routes.ts";
 import { ackRoutes } from "../../src/server/notifications/routes.ts";
 import { mutators } from "../../src/zero/mutators.ts";
 import type { Schema } from "../../src/zero/schema.gen.ts";
@@ -416,6 +420,33 @@ describe("ack route: rejection", () => {
 		await expectRejected(await postAck("not-a-real-token"));
 	});
 
+	// An unexpected failure inside the redeem must not surface as a 500: that
+	// would tell a prober the token reached the completion path, which is the
+	// single most valuable oracle the uniform rejection exists to deny.
+	test("turns an unexpected redeem failure into a floored rejection", async () => {
+		const broken = new Proxy(db, {
+			get(target, property) {
+				if (property === "transaction") {
+					return async () => {
+						throw new Error("simulated database failure");
+					};
+				}
+				const value = Reflect.get(target, property);
+				return typeof value === "function" ? value.bind(target) : value;
+			},
+		}) as typeof db;
+		const route = new Elysia().use(
+			ackRoutes(broken, { keyPrefix: "ack:broken:" }),
+		);
+
+		const started = performance.now();
+		const response = await route.handle(ackRequest("anything"));
+		const elapsed = performance.now() - started;
+
+		await expectRejected(response);
+		expect(elapsed).toBeGreaterThanOrEqual(REJECT_FLOOR_MS - 5);
+	});
+
 	test("every rejection class returns an identical status and body", async () => {
 		const consumed = await mintCapability(
 			await seedReminder("ak-r10a", MEMBER),
@@ -532,14 +563,28 @@ describe("ack route: rejection", () => {
 // Per IP, not per token: consume-before-validate burns the token on the first
 // attempt, so a per-token limit is near-inert.
 describe("ack route: rate limiting", () => {
-	test("bounds attempts from one client address", async () => {
-		const limited = new Elysia().use(
-			ackRoutes(db, { capacity: 3, refillPerSec: 0, keyPrefix: "ack:rl:" }),
+	// Loopback is trusted so x-forwarded-for is honored, which is the only way
+	// to present distinct client addresses through `.handle()` (there is no
+	// socket, so every request would otherwise resolve to 127.0.0.1).
+	const proxied = (options: Partial<AckRouteOptions> = {}) =>
+		new Elysia().use(
+			ackRoutes(db, {
+				capacity: 3,
+				refillPerSec: 0,
+				keyPrefix: "ack:rl:",
+				trustedProxies: parseTrustedProxyCIDRs(["127.0.0.1/32"]),
+				...options,
+			}),
 		);
+
+	const fromIP = (route: ReturnType<typeof proxied>, ip: string, n: number) =>
+		route.handle(ackRequest(`garbage-rl-${n}`, { "x-forwarded-for": ip }));
+
+	test("bounds attempts from one client address", async () => {
+		const route = proxied();
 		const statuses: number[] = [];
 		for (let i = 0; i < 5; i += 1) {
-			const response = await limited.handle(ackRequest(`garbage-rl-${i}`));
-			statuses.push(response.status);
+			statuses.push((await fromIP(route, "203.0.113.7", i)).status);
 		}
 		expect(statuses.slice(0, 3)).toEqual([
 			ACK_REJECT_STATUS,
@@ -547,15 +592,138 @@ describe("ack route: rate limiting", () => {
 			ACK_REJECT_STATUS,
 		]);
 		expect(statuses.slice(3)).toEqual([429, 429]);
+	});
 
-		const buckets = await db
-			.select()
-			.from(tables.rateBucket)
-			.where(like(tables.rateBucket.key, "ack:rl:%"));
-		expect(buckets).toHaveLength(1);
+	// Without this, a bucket keyed on a constant would satisfy the test above.
+	test("buckets each client address separately", async () => {
+		const route = proxied();
+		for (let i = 0; i < 4; i += 1) await fromIP(route, "203.0.113.20", i);
+		// The first address is exhausted; a different one still has its own bucket.
+		expect((await fromIP(route, "203.0.113.20", 9)).status).toBe(429);
+		expect((await fromIP(route, "203.0.113.21", 9)).status).toBe(
+			ACK_REJECT_STATUS,
+		);
+
+		const keys = (
+			await db
+				.select()
+				.from(tables.rateBucket)
+				.where(like(tables.rateBucket.key, "ack:rl:%"))
+		).map((row) => row.key);
+		expect(keys).toContain("ack:rl:203.0.113.20");
+		expect(keys).toContain("ack:rl:203.0.113.21");
+	});
+
+	// A routed IPv6 allocation is a /64 per customer; per-/128 keys give one
+	// attacker 2^64 buckets and the limit bounds nothing.
+	test("collapses an IPv6 client to its /64", async () => {
+		const route = proxied();
+		for (let i = 0; i < 4; i += 1) {
+			await fromIP(route, "2001:db8:1:2::a1", i);
+		}
+		// A different address inside the same /64 shares the exhausted bucket.
+		expect((await fromIP(route, "2001:db8:1:2::ffff", 9)).status).toBe(429);
+		// A different /64 does not.
+		expect((await fromIP(route, "2001:db8:1:3::a1", 9)).status).toBe(
+			ACK_REJECT_STATUS,
+		);
+	});
+
+	// The bug this replaced: refill was gated behind `tokens > 0`, so a bucket
+	// that reached zero could only recover after a full idle window -- a one-hour
+	// lockout on the milestone's headline feature after 30 acks.
+	test("refills an emptied bucket at the configured rate", async () => {
+		const route = proxied({ capacity: 1, refillPerSec: 2 });
+		expect((await fromIP(route, "203.0.113.30", 0)).status).toBe(
+			ACK_REJECT_STATUS,
+		);
+		expect((await fromIP(route, "203.0.113.30", 1)).status).toBe(429);
+
+		await new Promise((resolve) => setTimeout(resolve, 1_200));
+		expect((await fromIP(route, "203.0.113.30", 2)).status).toBe(
+			ACK_REJECT_STATUS,
+		);
+	});
+
+	// The compounding half: writing refilled_at = now() on every accepted request
+	// discards the fractional credit, so at a sub-1/s rate the steady-state refill
+	// is exactly zero. refilled_at may only advance by the whole tokens credited.
+	//
+	// Driven through takeRateToken rather than the route: the reject floor pads
+	// every HTTP call by 250ms, which is enough slack that a clock reset still
+	// looks like a working refill. Asserting on the observable consequence -- the
+	// third take succeeds only if the leftover accrual was banked -- is what makes
+	// this discriminating.
+	test("preserves fractional accrual across requests", async () => {
+		const key = "ack:rl:accrual";
+		const sleep = (ms: number) =>
+			new Promise((resolve) => setTimeout(resolve, ms));
+
+		expect(await takeRateToken(db, key, 1, 1)).toBe(true);
+		await sleep(1_500);
+		// Credits exactly one token, so refilled_at advances by exactly 1s and the
+		// remaining ~0.5s stays banked.
+		expect(await takeRateToken(db, key, 1, 1)).toBe(true);
+		await sleep(700);
+		// Only 0.7s of fresh time, but 1.2s since the (correctly advanced)
+		// refilled_at. A clock reset here would credit nothing and deny.
+		expect(await takeRateToken(db, key, 1, 1)).toBe(true);
+	});
+
+	test("treats a long-untouched bucket as full", async () => {
+		const key = "ack:rl:203.0.113.50";
+		const route = proxied({ capacity: 3, refillPerSec: 0 });
+		for (let i = 0; i < 4; i += 1) await fromIP(route, "203.0.113.50", i);
+		expect((await fromIP(route, "203.0.113.50", 9)).status).toBe(429);
+
+		// Age the bucket past the idle window (default one hour).
 		await db
-			.delete(tables.rateBucket)
-			.where(like(tables.rateBucket.key, "ack:rl:%"));
+			.update(tables.rateBucket)
+			.set({ refilledAt: new Date(Date.now() - 2 * 3_600_000) })
+			.where(eq(tables.rateBucket.key, key));
+
+		expect((await fromIP(route, "203.0.113.50", 9)).status).toBe(
+			ACK_REJECT_STATUS,
+		);
+	});
+});
+
+describe("ack capability prune", () => {
+	test("deletes expired and consumed rows, keeps live ones", async () => {
+		const live = await mintCapability(
+			await seedReminder("ak-p1", MEMBER),
+			MEMBER,
+		);
+		const expired = await mintCapability(
+			await seedReminder("ak-p2", MEMBER, { taskId: OTHER_TASK }),
+			MEMBER,
+			{ expiresAt: new Date(Date.now() - 1_000) },
+		);
+		const consumed = await mintCapability(
+			await seedReminder("ak-p3", MEMBER, { occurrenceAt: new Date(5_000) }),
+			MEMBER,
+			{ consumedAt: new Date() },
+		);
+
+		expect(await pruneAckCapabilities(db, 100)).toBe(2);
+		expect(await capabilityFor(live)).toBeDefined();
+		expect(await capabilityFor(expired)).toBeUndefined();
+		expect(await capabilityFor(consumed)).toBeUndefined();
+	});
+
+	test("bounds one sweep to the batch size", async () => {
+		for (let i = 0; i < 4; i += 1) {
+			await mintCapability(
+				await seedReminder(`ak-p4-${i}`, MEMBER, {
+					occurrenceAt: new Date(10_000 + i),
+				}),
+				MEMBER,
+				{ expiresAt: new Date(Date.now() - 1_000) },
+			);
+		}
+		expect(await pruneAckCapabilities(db, 2)).toBe(2);
+		expect(await pruneAckCapabilities(db, 100)).toBe(2);
+		expect(await pruneAckCapabilities(db, 100)).toBe(0);
 	});
 });
 
@@ -595,5 +763,110 @@ describe("in-app reminder.ack mutator", () => {
 		expect(logs).toHaveLength(1);
 		expect(logs[0].date).toBe(LOCAL_DATE);
 		expect(logs[0].status).toBe("done");
+	});
+});
+
+// The AckStore port exists so the two entry points cannot drift. Nothing pins
+// that unless the rows they leave are compared directly -- which is how
+// nextAttemptAt came to be cleared on one path and not the other.
+describe("both ack paths leave the same rows", () => {
+	// Fields a reminder_state row carries after an ack, in both directions.
+	const ackShape = (row: typeof tables.reminderState.$inferSelect) => ({
+		status: row.status,
+		ackOutcome: row.ackOutcome,
+		nextAttemptAt: row.nextAttemptAt,
+		deferredUntil: row.deferredUntil,
+		ackedAtSet: row.ackedAt !== null,
+	});
+
+	test("identical reminder_state for a task-kind ack", async () => {
+		const viaRoute = await seedReminder("ak-par1", MEMBER);
+		await postAck(await mintCapability(viaRoute, MEMBER));
+		const routeRow = await reminderRow(viaRoute);
+
+		await wipeVolatile();
+		const viaMutator = await seedReminder("ak-par2", MEMBER);
+		await call(mutators.reminder.ack, { id: MEMBER }, { id: viaMutator });
+		const mutatorRow = await reminderRow(viaMutator);
+
+		expect(ackShape(mutatorRow)).toEqual(ackShape(routeRow));
+		expect(routeRow.nextAttemptAt).toBeNull();
+		expect(routeRow.ackOutcome).toBe("completed");
+		// The channel is the one field that legitimately differs.
+		expect(routeRow.ackedVia).toBe("capability");
+		expect(mutatorRow.ackedVia).toBe("in_app");
+	});
+
+	// Ids and wall-clock stamps differ by construction; everything the karma
+	// arithmetic and habit-log write decide must not.
+	async function karmaAndLogShape() {
+		const logs = await db
+			.select()
+			.from(tables.habitLog)
+			.where(eq(tables.habitLog.habitId, HABIT));
+		const aggregate = await db
+			.select()
+			.from(tables.karma)
+			.where(eq(tables.karma.userId, MEMBER));
+		const events = await db
+			.select()
+			.from(tables.karmaEvent)
+			.where(eq(tables.karmaEvent.userId, MEMBER));
+		return {
+			logs: logs.map((r) => ({
+				habitId: r.habitId,
+				date: r.date,
+				status: r.status,
+				karmaDelta: r.karmaDelta,
+				completedAtSet: r.completedAt !== null,
+			})),
+			karma: aggregate.map((r) => ({ points: r.points, level: r.level })),
+			events: events.map((r) => ({
+				date: r.date,
+				delta: r.delta,
+				reason: r.reason,
+			})),
+		};
+	}
+
+	test("identical karma and habit_log for a habit-kind ack", async () => {
+		const viaRoute = await seedReminder("ak-par3", MEMBER, { taskId: HABIT });
+		await postAck(await mintCapability(viaRoute, MEMBER));
+		const routeShape = await karmaAndLogShape();
+
+		await wipeVolatile();
+		const viaMutator = await seedReminder("ak-par4", MEMBER, { taskId: HABIT });
+		await call(mutators.reminder.ack, { id: MEMBER }, { id: viaMutator });
+
+		expect(await karmaAndLogShape()).toEqual(routeShape);
+		expect(routeShape.logs).toHaveLength(1);
+		expect(routeShape.events).toHaveLength(1);
+		expect(routeShape.karma[0].points).toBeGreaterThan(0);
+	});
+
+	// The viewer decision is only defensible if it is observable afterwards:
+	// "reminder silenced, task untouched" must be distinguishable from
+	// "reminder acked, task done" during a missed-medication review.
+	test("records ack_only when a viewer acks without completing", async () => {
+		const viaRoute = await seedReminder("ak-par5", VIEWER);
+		await postAck(await mintCapability(viaRoute, VIEWER));
+		expect((await reminderRow(viaRoute)).ackOutcome).toBe("ack_only");
+
+		const viaMutator = await seedReminder("ak-par6", VIEWER, {
+			taskId: OTHER_TASK,
+		});
+		await call(mutators.reminder.ack, { id: VIEWER }, { id: viaMutator });
+		expect((await reminderRow(viaMutator)).ackOutcome).toBe("ack_only");
+	});
+
+	test("records logged for a habit ack on both paths", async () => {
+		const viaRoute = await seedReminder("ak-par7", MEMBER, { taskId: HABIT });
+		await postAck(await mintCapability(viaRoute, MEMBER));
+		expect((await reminderRow(viaRoute)).ackOutcome).toBe("logged");
+
+		await wipeVolatile();
+		const viaMutator = await seedReminder("ak-par8", MEMBER, { taskId: HABIT });
+		await call(mutators.reminder.ack, { id: MEMBER }, { id: viaMutator });
+		expect((await reminderRow(viaMutator)).ackOutcome).toBe("logged");
 	});
 });

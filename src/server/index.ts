@@ -315,6 +315,7 @@ if (import.meta.main) {
 	// The drain runs on every replica (claims are mediated by SKIP LOCKED).
 	// ackBaseUrl is null when no public origin is configured, which disables the
 	// ack action rather than minting a link no push client can follow.
+	const timing = workerTiming(process.env);
 	startWorker(
 		db,
 		createSendFn({
@@ -322,9 +323,11 @@ if (import.meta.main) {
 			allowedPrivateCIDRs: notifyAllowedPrivateCIDRs(
 				process.env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
 			),
-			deadlineMs: workerTiming(process.env).adapterDeadlineMs,
+			deadlineMs: timing.adapterDeadlineMs,
 			ackBaseUrl: ackBaseUrl(process.env),
 		}),
+		process.env,
+		timing,
 	);
 	app.listen(PORT);
 	console.log(`ditero api on :${PORT}`);

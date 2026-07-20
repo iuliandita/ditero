@@ -173,10 +173,14 @@ export default drizzleZeroConfig(schema, {
 			recipientUserId: true,
 			status: true,
 			fireCount: true,
+			// Synced so the in-app ack can clear it exactly as the capability
+			// route does; without it the two ack paths leave different rows.
+			nextAttemptAt: true,
 			deferredUntil: true,
 			firedLate: true,
 			ackedAt: true,
 			ackedVia: true,
+			ackOutcome: true,
 			createdAt: true,
 		},
 	},

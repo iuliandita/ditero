@@ -66,6 +66,25 @@ export type AckStore = {
 	): Promise<void>;
 };
 
+// "ack_only" is the viewer outcome: the reminder is acked (escalation stops)
+// but no content is written.
+export type AckOutcome = "completed" | "logged" | "ack_only";
+
+// The reminder_state shape an ack writes, shared by both entry points so a
+// field cannot be set on one path and forgotten on the other -- which is
+// exactly what nextAttemptAt did before this existed. Timestamps are ms here;
+// the Drizzle caller maps them to Date.
+export function ackedPatch(now: number, via: string, outcome: AckOutcome) {
+	return {
+		status: "acked" as const,
+		ackedAt: now,
+		ackedVia: via,
+		ackOutcome: outcome,
+		nextAttemptAt: null,
+		deferredUntil: null,
+	};
+}
+
 // Thrown when the acking user may not write. Both callers translate it into the
 // uniform rejection, and the capability route lets it roll its transaction back
 // so the token survives a denial that may later be fixed.
@@ -81,10 +100,6 @@ export type AckReminder = {
 	occurrenceAt: number;
 	recipientUserId: string;
 };
-
-// "ack_only" is the viewer outcome: the reminder is acked (escalation stops)
-// but no content is written.
-export type AckOutcome = "completed" | "logged" | "ack_only";
 
 export async function completeForAck(
 	store: AckStore,

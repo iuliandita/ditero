@@ -471,6 +471,11 @@ export const reminderState = pgTable(
 		firedLate: boolean("fired_late").notNull().default(false),
 		ackedAt: timestamp("acked_at", { withTimezone: true }),
 		ackedVia: text("acked_via"), // channelKindEnum value or "in_app"; not an enum since it spans both
+		// What the ack actually did: "completed" (task marked done / advanced),
+		// "logged" (habit occurrence recorded), "ack_only" (viewer silenced the
+		// reminder, nothing written). Without it a missed-medication review cannot
+		// tell "acked and done" from "acked and untouched".
+		ackOutcome: text("ack_outcome"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),

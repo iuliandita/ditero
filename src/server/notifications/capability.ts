@@ -14,9 +14,10 @@ import {
 	ACK_TERMINAL_STATUSES,
 	AckCompletionDenied,
 	type AckStore,
+	ackedPatch,
 	completeForAck,
 } from "../../domain/ack-complete.ts";
-import { levelForPoints } from "../../domain/karma.ts";
+import { karmaWrite } from "../../domain/karma.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 type DbTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -72,6 +73,14 @@ export function ackBaseUrl(
 
 // Single atomic statement: read-modify-write in application code would let two
 // replicas both see the last token. Zero rows means the bucket is empty.
+//
+// Two things here are load-bearing and were wrong in the obvious formulation.
+// The predicate tests the REFILLED balance, not the stored one: gating refill
+// behind `tokens > 0` means an emptied bucket can never recover through the
+// mechanism meant to recover it. And `refilled_at` advances only by the whole
+// tokens actually credited, never to now(): at a sub-1/s rate, resetting the
+// clock on every accepted request floors the credit to 0 forever, so the
+// steady-state refill would be exactly zero rather than refillPerSec.
 export async function takeRateToken(
 	database: Database,
 	key: string,
@@ -79,17 +88,28 @@ export async function takeRateToken(
 	refillPerSec: number,
 	idleResetMs: number = ACK_RATE_IDLE_RESET_MS,
 ): Promise<boolean> {
+	// Cast explicitly: Postgres infers a bound parameter's type from context, and
+	// `${refillPerSec} > 0` alone infers integer, which rejects the 0.5/s default
+	// outright ("invalid input syntax for type integer").
+	const rate = sql`${refillPerSec}::double precision`;
+	const idle = sql`rate_bucket.refilled_at < now() - make_interval(secs => ${idleResetMs / 1000}::double precision)`;
+	const credit = sql`floor(extract(epoch from now() - rate_bucket.refilled_at) * ${rate})`;
+	const refilled = sql`least(${capacity}, rate_bucket.tokens + ${credit})`;
 	const { rows } = await database.execute<{ tokens: number }>(sql`
 		insert into rate_bucket (key, tokens, refilled_at)
 		values (${key}, ${capacity - 1}, now())
 		on conflict (key) do update
-		set tokens = least(
-				${capacity},
-				rate_bucket.tokens + floor(extract(epoch from now() - rate_bucket.refilled_at) * ${refillPerSec})
-			) - 1,
-			refilled_at = now()
-		where rate_bucket.tokens > 0
-			or rate_bucket.refilled_at < now() - make_interval(secs => ${idleResetMs / 1000})
+		set tokens = (case when ${idle} then ${capacity} else ${refilled} end) - 1,
+			refilled_at = case
+				when ${idle} then now()
+				-- Guarded: a zero rate credits nothing, and dividing by it would
+				-- abort the statement rather than simply not refilling.
+				when ${rate} > 0
+					then rate_bucket.refilled_at
+						+ make_interval(secs => ${credit} / ${rate})
+				else rate_bucket.refilled_at
+			end
+		where ${refilled} > 0 or ${idle}
 		returning tokens
 	`);
 	return rows.length > 0;
@@ -214,19 +234,16 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 				.from(tables.karma)
 				.where(eq(tables.karma.userId, userId))
 				.limit(1);
-			const points = Math.max(0, (existing[0]?.points ?? 0) + delta);
+			const next = karmaWrite(existing[0]?.points ?? 0, delta);
 			if (existing.length > 0) {
 				await tx
 					.update(tables.karma)
-					.set({ points, level: levelForPoints(points), updatedAt: now })
+					.set({ ...next, updatedAt: now })
 					.where(eq(tables.karma.userId, userId));
 			} else {
-				await tx.insert(tables.karma).values({
-					userId,
-					points,
-					level: levelForPoints(points),
-					updatedAt: now,
-				});
+				await tx
+					.insert(tables.karma)
+					.values({ userId, ...next, updatedAt: now });
 			}
 			await tx.insert(tables.karmaEvent).values({
 				id: randomUUID(),
@@ -282,13 +299,21 @@ export async function redeemAckCapability(
 				return false;
 			}
 
-			const acked = {
-				status: "acked" as const,
-				ackedAt: new Date(now),
-				ackedVia: via,
-				nextAttemptAt: null,
-				deferredUntil: null,
-			};
+			// Completion runs first so its outcome can be recorded on the row: a
+			// denial throws and rolls everything back, so nothing observes the
+			// intermediate order.
+			const outcome = await completeForAck(
+				drizzleAckStore(tx),
+				{
+					taskId: reminder.taskId,
+					occurrenceAt: reminder.occurrenceAt.getTime(),
+					recipientUserId: reminder.recipientUserId,
+				},
+				capability.recipient_user_id,
+				now,
+			);
+			const patch = ackedPatch(now, via, outcome);
+			const acked = { ...patch, ackedAt: new Date(patch.ackedAt) };
 			await tx
 				.update(tables.reminderState)
 				.set(acked)
@@ -306,17 +331,6 @@ export async function redeemAckCapability(
 						notInArray(tables.reminderState.status, [...ACK_TERMINAL_STATUSES]),
 					),
 				);
-
-			await completeForAck(
-				drizzleAckStore(tx),
-				{
-					taskId: reminder.taskId,
-					occurrenceAt: reminder.occurrenceAt.getTime(),
-					recipientUserId: reminder.recipientUserId,
-				},
-				capability.recipient_user_id,
-				now,
-			);
 			return true;
 		});
 	} catch (error) {

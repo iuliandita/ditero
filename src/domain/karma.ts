@@ -35,6 +35,18 @@ export function levelForPoints(points: number): number {
 	return level;
 }
 
+// The whole arithmetic of applying a delta to a karma aggregate. Extracted so
+// every store that writes karma (the Zero mutator path and the ack route's
+// Drizzle path) shares the clamp and the level recomputation rather than
+// reimplementing them, which is how the two would silently diverge.
+export function karmaWrite(
+	existingPoints: number,
+	delta: number,
+): { points: number; level: number } {
+	const points = Math.max(0, existingPoints + delta);
+	return { points, level: levelForPoints(points) };
+}
+
 export type KarmaEvent = { date: string; delta: number; reason: string }; // date "YYYY-MM-DD"
 export type KarmaGoals = { daily: number; weekly: number };
 

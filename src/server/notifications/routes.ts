@@ -11,7 +11,11 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Elysia } from "elysia";
 import type * as tables from "../../db/schema.ts";
 import type { Network } from "../client-ip.ts";
-import { resolveClientIP, trustedProxyCIDRsFromEnv } from "../client-ip.ts";
+import {
+	rateLimitKey,
+	resolveClientIP,
+	trustedProxyCIDRsFromEnv,
+} from "../client-ip.ts";
 import {
 	ACK_PATH,
 	ACK_RATE_CAPACITY,
@@ -65,7 +69,14 @@ export function ackRoutes(database: Database, options: AckRouteOptions = {}) {
 			// Every rejection costs at least REJECT_FLOOR_MS regardless of which
 			// check failed (C26).
 			const reject = async () => {
-				await sleep(Math.max(0, REJECT_FLOOR_MS - (Date.now() - started)));
+				// Rounded UP to the next whole floor, not clamped at one: padding
+				// can only ever extend, so a slow reject path (consume, two reads,
+				// a rollback, under contention) would otherwise overshoot the floor
+				// and become distinguishable from a fast one again.
+				const elapsed = Date.now() - started;
+				const target =
+					(Math.floor(elapsed / REJECT_FLOOR_MS) + 1) * REJECT_FLOOR_MS;
+				await sleep(target - elapsed);
 				return new Response(ACK_REJECT_BODY, {
 					status: ACK_REJECT_STATUS,
 					headers: ACK_CORS,
@@ -75,11 +86,13 @@ export function ackRoutes(database: Database, options: AckRouteOptions = {}) {
 			// Keyed on the resolved client address: the in-memory pattern is
 			// single-process and this pipeline is multi-replica by definition.
 			const peerAddress = server?.requestIP(request)?.address ?? "127.0.0.1";
-			const clientIP = resolveClientIP({
-				peerAddress,
-				forwardedFor: request.headers.get("x-forwarded-for"),
-				trustedProxies,
-			});
+			const clientIP = rateLimitKey(
+				resolveClientIP({
+					peerAddress,
+					forwardedFor: request.headers.get("x-forwarded-for"),
+					trustedProxies,
+				}),
+			);
 			const allowed = await takeRateToken(
 				database,
 				`${keyPrefix}${clientIP}`,

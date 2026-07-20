@@ -18,11 +18,12 @@ import { z } from "zod";
 import {
 	ACK_TERMINAL_STATUSES,
 	type AckStore,
+	ackedPatch,
 	completeForAck,
 } from "../domain/ack-complete.ts";
 import { panelsSchema } from "../domain/dashboard.ts";
 import type { ListKind } from "../domain/icon-map.ts";
-import { karmaForCompletion, levelForPoints } from "../domain/karma.ts";
+import { karmaForCompletion, karmaWrite } from "../domain/karma.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
@@ -151,21 +152,11 @@ async function awardKarma(
 ): Promise<void> {
 	const now = Date.now();
 	const existing = await tx.run(zql.karma.where("userId", userId).one());
-	const points = Math.max(0, (existing?.points ?? 0) + delta);
+	const next = karmaWrite(existing?.points ?? 0, delta);
 	if (existing) {
-		await tx.mutate.karma.update({
-			userId,
-			points,
-			level: levelForPoints(points),
-			updatedAt: now,
-		});
+		await tx.mutate.karma.update({ userId, ...next, updatedAt: now });
 	} else {
-		await tx.mutate.karma.insert({
-			userId,
-			points,
-			level: levelForPoints(points),
-			updatedAt: now,
-		});
+		await tx.mutate.karma.insert({ userId, ...next, updatedAt: now });
 	}
 	await tx.mutate.karmaEvent.insert({
 		id: crypto.randomUUID(),
@@ -780,12 +771,19 @@ export const mutators = defineMutators({
 				if (reminder.recipientUserId !== ctx.id)
 					throw new Error("access denied: not your reminder");
 				const now = Date.now();
-				const acked = {
-					status: "acked" as const,
-					ackedAt: now,
-					ackedVia: "in_app",
-					deferredUntil: null,
-				};
+				// Completion first, so its outcome lands on the row (the capability
+				// route does the same); a denial throws before anything is written.
+				const outcome = await completeForAck(
+					zeroAckStore(tx),
+					{
+						taskId: reminder.taskId,
+						occurrenceAt: reminder.occurrenceAt,
+						recipientUserId: reminder.recipientUserId,
+					},
+					ctx.id,
+					now,
+				);
+				const acked = ackedPatch(now, "in_app", outcome);
 				await tx.mutate.reminderState.update({ id: reminder.id, ...acked });
 				// C7: terminate every sibling on the same occurrence, or a
 				// co-assignee keeps being escalated for a reminder already acked.
@@ -804,16 +802,6 @@ export const mutators = defineMutators({
 						continue;
 					await tx.mutate.reminderState.update({ id: sibling.id, ...acked });
 				}
-				await completeForAck(
-					zeroAckStore(tx),
-					{
-						taskId: reminder.taskId,
-						occurrenceAt: reminder.occurrenceAt,
-						recipientUserId: reminder.recipientUserId,
-					},
-					ctx.id,
-					now,
-				);
 			},
 		),
 	},
