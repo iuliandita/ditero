@@ -13,11 +13,12 @@ import {
 	createFieldKeyRing,
 	decryptField,
 	encryptField,
+	reencryptField,
 } from "./field-encryption.ts";
 
 const ENVELOPE_PREFIX = "ditero:v1:";
 
-export function channelFieldContext(kind: ChannelKind, field: string): string {
+function channelFieldContext(kind: ChannelKind, field: string): string {
 	return `notification-channel:${kind}:${field}`;
 }
 
@@ -82,6 +83,27 @@ export function decryptChannelConfig(
 	return out;
 }
 
-export function isEncryptedChannelValue(value: unknown): boolean {
-	return typeof value === "string" && value.startsWith(ENVELOPE_PREFIX);
+// What the backfill uses, and the ONLY path that moves an already-enveloped
+// secret onto a new key. encryptChannelConfig deliberately skips anything that
+// already looks enveloped -- that is what makes the write path idempotent, and
+// it is also why it can never rotate. reencryptField decrypts under whichever
+// read key works and re-encrypts under the write key only when the two differ,
+// so this stays a no-op when no rotation is in progress.
+export function reencryptChannelConfig(
+	kind: ChannelKind,
+	config: Record<string, unknown>,
+	ring: FieldKeyRing,
+): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(config)) {
+		if (isPublicChannelField(kind, key) || typeof value !== "string") {
+			out[key] = value;
+			continue;
+		}
+		const context = channelFieldContext(kind, key);
+		out[key] = value.startsWith(ENVELOPE_PREFIX)
+			? reencryptField(value, context, ring)
+			: encryptField(value, context, ring);
+	}
+	return out;
 }

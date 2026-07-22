@@ -4,13 +4,16 @@
 // assertion alone passes against no encryption at all), the mask/restore
 // round-trip against a real stored row, and verified_at bookkeeping. All
 // outbound HTTP is an injected double.
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import * as tables from "../../src/db/schema.ts";
 import { MASKED } from "../../src/domain/notification-channel.ts";
 import type { ProviderResult } from "../../src/domain/notification-retry.ts";
+import { decryptChannelConfig } from "../../src/security/channel-config.ts";
+import { backfillChannelConfigs } from "../../src/security/encrypt-channel-configs.ts";
+import { createFieldKeyRing } from "../../src/security/field-encryption.ts";
 import type { ChannelAdapter } from "../../src/server/notifications/adapters/types.ts";
 import {
 	ChannelError,
@@ -67,6 +70,11 @@ beforeEach(async () => {
 	await db
 		.delete(tables.notificationChannel)
 		.where(inArray(tables.notificationChannel.userId, [...userIds]));
+	// The test-send budget is DB-backed and per user, so it carries across tests
+	// in this file; the budget test owns its own capacity via the deps seam.
+	await db.execute(
+		sql`delete from rate_bucket where key like 'channel-test:%'`,
+	);
 	for (const id of userIds) {
 		await db
 			.insert(tables.user)
@@ -130,6 +138,92 @@ describe("channel config at rest", () => {
 
 		expect(result.ok).toBe(true);
 		expect(sent[0]).toEqual(CONFIG);
+	});
+});
+
+describe("backfill / rotation script", () => {
+	const KEY = process.env.DITERO_ENCRYPTION_KEY as string;
+	const NEXT = Buffer.alloc(32, 9).toString("base64");
+
+	async function seedRaw(config: Record<string, unknown>) {
+		await db.insert(tables.notificationChannel).values({
+			id: "ch-raw",
+			userId: USER,
+			kind: "ntfy",
+			config,
+			enabled: true,
+		});
+	}
+
+	it("envelopes a legacy plaintext row", async () => {
+		await seedRaw(CONFIG);
+		const changed = await backfillChannelConfigs(
+			pool,
+			createFieldKeyRing({ current: KEY }),
+		);
+		expect(changed).toBe(1);
+
+		const stored = await rawConfig();
+		expect(JSON.stringify(stored)).not.toContain(TOKEN);
+		expect(stored.token).toMatch(/^ditero:v1:/);
+		// Still readable through the normal path.
+		const [view] = await listChannels(db, USER);
+		expect(view.config.serverUrl).toBe(CONFIG.serverUrl);
+	});
+
+	it("is a no-op on a second run", async () => {
+		await seedRaw(CONFIG);
+		const ring = createFieldKeyRing({ current: KEY });
+		expect(await backfillChannelConfigs(pool, ring)).toBe(1);
+		expect(await backfillChannelConfigs(pool, ring)).toBe(0);
+	});
+
+	// The rotation the runbook promises. encryptChannelConfig alone reports
+	// "rewrote 0 rows" here and leaves every secret under the retired key.
+	it("moves an already-enveloped secret onto the next key", async () => {
+		await saveChannel(db, USER, { kind: "ntfy", config: CONFIG });
+		const before = await rawConfig();
+
+		const changed = await backfillChannelConfigs(
+			pool,
+			createFieldKeyRing({ current: KEY, next: NEXT }),
+		);
+		expect(changed).toBe(1);
+		const after = await rawConfig();
+		expect(after.token).not.toBe(before.token);
+
+		// Decryptable with the NEW key alone: the operator can now retire the old.
+		expect(
+			decryptChannelConfig("ntfy", after, createFieldKeyRing({ current: NEXT }))
+				.token,
+		).toBe(TOKEN);
+	});
+
+	// The lost-update case. The write lands INSIDE the backfill's run, in the
+	// window between the id scan and the row's own transaction -- the exact
+	// interleaving a version that captured `config` up front would clobber.
+	// (SELECT ... FOR UPDATE additionally covers the truly-concurrent window,
+	// which a single-process test cannot hit deterministically.)
+	it("does not clobber a config written while it runs", async () => {
+		await seedRaw(CONFIG);
+		let wrote = false;
+		await backfillChannelConfigs(pool, createFieldKeyRing({ current: KEY }), {
+			onBeforeRow: async () => {
+				if (wrote) return;
+				wrote = true;
+				await saveChannel(db, USER, {
+					kind: "ntfy",
+					config: { ...CONFIG, token: "tk_written_during_backfill" },
+				});
+			},
+		});
+		expect(wrote).toBe(true);
+
+		const stored = await rawConfig();
+		expect(
+			decryptChannelConfig("ntfy", stored, createFieldKeyRing({ current: KEY }))
+				.token,
+		).toBe("tk_written_during_backfill");
 	});
 });
 
@@ -266,6 +360,33 @@ describe("test send", () => {
 		).toEqual({ ok: false, reason: "Request timed out" });
 	});
 
+	// An authenticated caller could otherwise drive unbounded outbound traffic
+	// at arbitrary public hosts through the instance.
+	it("spends a per-user budget and refuses beyond it", async () => {
+		const { adapter, sent } = stubAdapter({ ok: true, status: 200 });
+		// refillPerSec 0 would make the refill branch unreachable; use a real
+		// rate that simply cannot refill within the test's wall time.
+		const deps = {
+			adapters: { ntfy: adapter },
+			rateCapacity: 2,
+			rateRefillPerSec: 1 / 3_600,
+		};
+		const body = { kind: "ntfy", config: CONFIG };
+
+		await testChannel(db, USER, body, deps);
+		await testChannel(db, USER, body, deps);
+		await expect(testChannel(db, USER, body, deps)).rejects.toMatchObject({
+			status: 429,
+		});
+		// The refused call must not have sent, and must not have rewritten the row.
+		expect(sent).toHaveLength(2);
+
+		// The budget is per user: a different caller is unaffected.
+		expect(await testChannel(db, OTHER, body, deps)).toMatchObject({
+			ok: true,
+		});
+	});
+
 	it("a changed config clears a previous verification", async () => {
 		const { adapter } = stubAdapter({ ok: true, status: 200 });
 		await testChannel(
@@ -308,6 +429,47 @@ describe("input validation", () => {
 				kind: "ntfy",
 				config: { ...CONFIG, sneaky: "value" },
 			}),
+		).rejects.toBeInstanceOf(ChannelError);
+	});
+
+	// The settings toggle sends `enabled` alone. It must not be able to blank a
+	// stored config, nor reset verified_at through the changed-config branch.
+	it("an enabled-only write preserves the config and the verification", async () => {
+		const { adapter } = stubAdapter({ ok: true, status: 200 });
+		await testChannel(
+			db,
+			USER,
+			{ kind: "ntfy", config: CONFIG },
+			{ adapters: { ntfy: adapter } },
+		);
+		const verifiedBefore = (await listChannels(db, USER))[0].verifiedAt;
+		expect(verifiedBefore).not.toBeNull();
+
+		await saveChannel(db, USER, { kind: "ntfy", enabled: false });
+		const [view] = await listChannels(db, USER);
+		expect(view.enabled).toBe(false);
+		expect(view.verifiedAt).toBe(verifiedBefore);
+		expect(view.config).toEqual({
+			serverUrl: CONFIG.serverUrl,
+			topic: CONFIG.topic,
+			token: MASKED,
+		});
+		// The secret survived, not just the public half.
+		const stored = await rawConfig();
+		expect(
+			decryptChannelConfig(
+				"ntfy",
+				stored,
+				createFieldKeyRing({
+					current: process.env.DITERO_ENCRYPTION_KEY as string,
+				}),
+			).token,
+		).toBe(TOKEN);
+	});
+
+	it("an enabled-only write with no stored row is rejected", async () => {
+		await expect(
+			saveChannel(db, USER, { kind: "ntfy", enabled: true }),
 		).rejects.toBeInstanceOf(ChannelError);
 	});
 

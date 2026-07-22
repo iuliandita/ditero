@@ -78,6 +78,28 @@ function guardedPost(
 	};
 }
 
+// GET counterpart to guardedPost. Reads use the looser origin check rather
+// than requireSameOrigin: a same-origin GET carries no Origin header at all, so
+// only a present-and-foreign origin is refused.
+function foreignOrigin(request: Request): boolean {
+	const origin = request.headers.get("origin");
+	return (
+		origin !== null && !requestOrigins.some((o) => new URL(o).origin === origin)
+	);
+}
+
+function guardedGet(
+	handler: (request: Request, session: Session) => Promise<unknown>,
+) {
+	return async ({ request }: { request: Request }) => {
+		if (foreignOrigin(request))
+			return new Response("Forbidden", { status: 403 });
+		const session = await auth.api.getSession({ headers: request.headers });
+		if (!session) return new Response("Unauthorized", { status: 401 });
+		return await handler(request, session);
+	};
+}
+
 // Shared JSON-body + ChannelError shape for the three channel writes. The error
 // message is a fixed category ("invalid channel config"), never the config, so
 // a 400 body can never echo a secret back.
@@ -208,10 +230,8 @@ const routes = new Elysia()
 	// email}; never the token, role, or ids. Cross-origin requests are rejected;
 	// same-origin (no Origin header) is allowed so the signup screen can read it.
 	.get("/api/invite/preview", async ({ request }) => {
-		const origin = request.headers.get("origin");
-		if (origin && !requestOrigins.some((o) => new URL(o).origin === origin)) {
+		if (foreignOrigin(request))
 			return new Response("Forbidden", { status: 403 });
-		}
 		const token = new URL(request.url).searchParams.get("token");
 		if (!token) return { valid: false };
 		return await previewInvite(token, db);
@@ -257,27 +277,21 @@ const routes = new Elysia()
 	)
 	// User lookup for invite-on-assign pickers. Caller session; never returns email
 	// addresses (only id/name/image). Mode from DITERO_DISCOVERY.
-	.get("/api/users/lookup", async ({ request }) => {
-		const origin = request.headers.get("origin");
-		if (origin && !requestOrigins.some((o) => new URL(o).origin === origin)) {
-			return new Response("Forbidden", { status: 403 });
-		}
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) return new Response("Unauthorized", { status: 401 });
-		const email = new URL(request.url).searchParams.get("email") ?? "";
-		return await lookupUsers(email, session.user.id, db);
-	})
+	.get(
+		"/api/users/lookup",
+		guardedGet(async (request, session) => {
+			const email = new URL(request.url).searchParams.get("email") ?? "";
+			return await lookupUsers(email, session.user.id, db);
+		}),
+	)
 	// Notification channels. The config column never syncs, so the settings form
 	// reads it here -- masked, never in cleartext (design 6).
-	.get("/api/notifications/channels", async ({ request }) => {
-		const origin = request.headers.get("origin");
-		if (origin && !requestOrigins.some((o) => new URL(o).origin === origin)) {
-			return new Response("Forbidden", { status: 403 });
-		}
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) return new Response("Unauthorized", { status: 401 });
-		return { channels: await listChannels(db, session.user.id) };
-	})
+	.get(
+		"/api/notifications/channels",
+		guardedGet(async (_request, session) => ({
+			channels: await listChannels(db, session.user.id),
+		})),
+	)
 	.post(
 		"/api/notifications/channel",
 		guardedPost((request, session) =>

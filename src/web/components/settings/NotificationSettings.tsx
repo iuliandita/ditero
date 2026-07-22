@@ -12,18 +12,41 @@ import {
 	useNotificationChannels,
 } from "../../hooks/useNotificationChannels.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
+import {
+	maxRepeatsInput,
+	REPEAT_EVERY_MIN_MAX,
+	REPEATS_MAX,
+	repeatEveryMinInput,
+} from "../../lib/escalation-input.ts";
 import { QuietHoursEditor } from "./QuietHoursEditor.tsx";
 
-// Fixed five-row list in the design's channel-enum order (shell doc 1): the
-// four unimplemented rows render disabled so M3b adds live rows in place with
-// no layout reshuffle.
-const ROWS: { kind: ChannelKind; label: string; available: boolean }[] = [
-	{ kind: "ntfy", label: "ntfy", available: true },
-	{ kind: "telegram", label: "Telegram", available: false },
-	{ kind: "discord", label: "Discord", available: false },
-	{ kind: "slack", label: "Slack", available: false },
-	{ kind: "email", label: "Email", available: false },
+// The four channels M3b adds, rendered disabled BELOW the live ntfy row and in
+// the design's channel-enum order, so M3b replaces each in place rather than
+// reshuffling the list (shell doc 1). ntfy is not here: it has its own row
+// component with a config form, not a label.
+const PENDING_ROWS: { kind: ChannelKind; label: string }[] = [
+	{ kind: "telegram", label: "Telegram" },
+	{ kind: "discord", label: "Discord" },
+	{ kind: "slack", label: "Slack" },
+	{ kind: "email", label: "Email" },
 ];
+
+// Shell doc 1 asks for a relative timestamp next to "Verified".
+const RELATIVE = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+	["day", 86_400_000],
+	["hour", 3_600_000],
+	["minute", 60_000],
+];
+
+function relativeTime(at: number): string {
+	const delta = at - Date.now();
+	for (const [unit, ms] of UNITS) {
+		if (Math.abs(delta) >= ms)
+			return RELATIVE.format(Math.round(delta / ms), unit);
+	}
+	return RELATIVE.format(0, "minute");
+}
 
 type NtfyForm = { serverUrl: string; topic: string; token: string };
 
@@ -87,11 +110,14 @@ function NtfyRow({ api }: { api: ReturnType<typeof useNotificationChannels> }) {
 		}
 	}
 
+	// Sends `enabled` alone, never the form: the toggle must not smuggle a
+	// half-typed edit into the stored row or reset verified_at (the server
+	// preserves the stored config when `config` is omitted).
 	async function onToggle() {
 		setBusy(true);
 		try {
 			if (stored) {
-				await save({ ...payload(), enabled: !stored.enabled });
+				await save({ kind: "ntfy", enabled: !stored.enabled });
 			} else {
 				setOpen((o) => !o);
 			}
@@ -177,7 +203,7 @@ function NtfyRow({ api }: { api: ReturnType<typeof useNotificationChannels> }) {
 							disabled={busy}
 							onClick={() => void onTest()}
 						>
-							Test send
+							Save &amp; test send
 						</Button>
 						{stored && (
 							<Button
@@ -204,7 +230,7 @@ function NtfyRow({ api }: { api: ReturnType<typeof useNotificationChannels> }) {
 							{result.state === "verified" && (
 								<>
 									<Check className="size-3.5 text-emerald-600" />
-									Verified {new Date(result.at).toLocaleString()}
+									Verified {relativeTime(result.at)}
 								</>
 							)}
 							{result.state === "failed" && (
@@ -255,11 +281,6 @@ function EscalationDefaults() {
 		});
 	}
 
-	function toNumber(value: string): number | null {
-		const n = Number.parseInt(value, 10);
-		return Number.isFinite(n) && n >= 0 ? n : null;
-	}
-
 	return (
 		<div
 			className="mt-4 flex flex-wrap gap-3"
@@ -270,11 +291,13 @@ function EscalationDefaults() {
 				<input
 					type="number"
 					min={1}
-					max={10080}
+					max={REPEAT_EVERY_MIN_MAX}
 					value={defaults?.repeatEveryMin ?? ""}
 					data-testid="escalation-repeat"
 					className="h-8 w-32 rounded-lg border bg-transparent px-2 text-sm"
-					onChange={(e) => set({ repeatEveryMin: toNumber(e.target.value) })}
+					onChange={(e) =>
+						set({ repeatEveryMin: repeatEveryMinInput(e.target.value) })
+					}
 				/>
 			</label>
 			<label className="flex flex-col gap-1 text-sm">
@@ -282,12 +305,12 @@ function EscalationDefaults() {
 				<input
 					type="number"
 					min={0}
-					max={20}
+					max={REPEATS_MAX}
 					placeholder="3"
 					value={defaults?.maxRepeats ?? ""}
 					data-testid="escalation-max"
 					className="h-8 w-32 rounded-lg border bg-transparent px-2 text-sm"
-					onChange={(e) => set({ maxRepeats: toNumber(e.target.value) })}
+					onChange={(e) => set({ maxRepeats: maxRepeatsInput(e.target.value) })}
 				/>
 			</label>
 			<label className="flex flex-col gap-1 text-sm">
@@ -338,7 +361,7 @@ export function NotificationSettings() {
 			)}
 			<div className="mt-2 flex flex-col gap-2">
 				<NtfyRow api={api} />
-				{ROWS.filter((r) => !r.available).map((r) => (
+				{PENDING_ROWS.map((r) => (
 					<div
 						key={r.kind}
 						data-testid={`channel-${r.kind}`}

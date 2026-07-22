@@ -1,6 +1,6 @@
 import type { ReadonlyJSONValue } from "@rocicorp/zero";
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
@@ -71,6 +71,9 @@ function readEscalationDefaults(v: unknown): EscalationDefaults | null {
 // silently mistimes every reminder (design 0). There is no timezone edit
 // control in M3a, so a stored "UTC" is always the column default rather than a
 // deliberate choice -- detection may overwrite it, but only with a real zone.
+let detectionAttempted = false;
+let detectionWrote = false;
+
 function detectedTimeZone(): string | null {
 	try {
 		const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -176,16 +179,20 @@ export function useUserPref(): {
 	);
 
 	const loading = details.type !== "complete";
-	const [detected, setDetected] = useState(false);
-	const wrote = useRef(false);
+	// Module-scoped, not a per-instance ref: ReminderChip calls this hook and
+	// renders once per task row, so N mounted instances would otherwise all see
+	// the stored "UTC" in the same flush and fire N identical writes for one
+	// fact. The first instance to get there writes; the rest read the flag.
+	const [, forceRender] = useState(0);
 	useEffect(() => {
-		if (loading || wrote.current) return;
+		if (loading || detectionAttempted) return;
 		const zone = detectedTimeZone();
 		if (!zone || pref.timezone !== "UTC") return;
-		wrote.current = true;
-		setDetected(true);
+		detectionAttempted = true;
+		detectionWrote = true;
+		forceRender((n) => n + 1);
 		setPref({ timezone: zone });
 	}, [loading, pref.timezone, setPref]);
 
-	return { pref, setPref, loading, timezoneDetected: detected };
+	return { pref, setPref, loading, timezoneDetected: detectionWrote };
 }

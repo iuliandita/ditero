@@ -210,7 +210,11 @@ test.describe("notification settings", () => {
 		page,
 	}) => {
 		await page.setViewportSize({ width: 390, height: 844 });
-		await page.getByRole("button", { name: "Settings" }).click();
+		// The shell swaps sidebar for bottom-nav on the resize; wait for the tab
+		// to mount rather than racing the re-render.
+		const settingsTab = page.getByRole("button", { name: "Settings" });
+		await expect(settingsTab).toBeVisible({ timeout: 15_000 });
+		await settingsTab.click();
 		const panel = await settings(page);
 		await expect(panel.getByTestId("channel-ntfy")).toBeVisible();
 		await expect(panel.getByTestId("channel-telegram")).toHaveAttribute(
@@ -334,6 +338,98 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		);
 		await expect(reopened.getByTestId("reminder-repeat")).toHaveValue("15");
 		await expect(reopened.getByTestId("reminder-max")).toHaveValue("2");
+	});
+
+	// Shell doc 7: the per-task control and the chip must both hold up at phone
+	// width, and the chip's Ack is a row-level tap target, so it carries the same
+	// thumb-zone minimum the habit done/skip controls do.
+	//
+	// Set up at desktop width first: creating a list from a template is a desktop
+	// index affordance, and what is under test here is how the two reminder
+	// surfaces render on a phone, not the create flow.
+	test("mobile: the reminder control stacks and the chip meets the tap target", async ({
+		page,
+	}) => {
+		await signUp(page, uniqueEmail("mobilepolicy"));
+		await createHabitsList(page);
+
+		const HABIT = "Drink water";
+		let detail = await openDetail(page, HABIT);
+		const when = await localNowMinus(page, 2);
+		await detail.getByLabel("Due date").fill(when.date);
+		await detail.getByTestId("reminder-time").fill(when.time);
+		await page.keyboard.press("Escape");
+		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+		await page.setViewportSize({ width: 390, height: 844 });
+		detail = await openDetail(page, HABIT);
+
+		// The disclosure is collapsed by default and opens on tap, unchanged from
+		// desktop.
+		const disclosure = detail.getByTestId("reminder-overrides-toggle");
+		await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+		await disclosure.click();
+		await expect(detail.getByTestId("reminder-overrides")).toBeVisible();
+
+		// Fields stack rather than overflowing the sheet.
+		const sheet = await detail.boundingBox();
+		const repeat = await detail.getByTestId("reminder-repeat").boundingBox();
+		expect(sheet).not.toBeNull();
+		expect(repeat).not.toBeNull();
+		if (sheet && repeat) {
+			expect(repeat.x + repeat.width).toBeLessThanOrEqual(
+				sheet.x + sheet.width + 1,
+			);
+		}
+		await expectNoSeriousA11y(page, "reminder policy (mobile)");
+
+		await page.keyboard.press("Escape");
+		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+		const chip = page.getByTestId("reminder-chip").first();
+		await expect(chip).toBeVisible({ timeout: 45_000 });
+		const box = await chip.boundingBox();
+		expect(box).not.toBeNull();
+		// min-h-9 == 36px, the row-level minimum used elsewhere on mobile.
+		if (box) expect(box.height).toBeGreaterThanOrEqual(36);
+
+		// No horizontal overflow at a phone width with the chip rendered.
+		const overflow = await page.evaluate(
+			() => document.documentElement.scrollWidth > window.innerWidth + 1,
+		);
+		expect(overflow).toBe(false);
+	});
+
+	// Shell doc 6: an enabled-but-never-verified channel must be traceable from
+	// the task, not look like a silent no-op.
+	test("an unverified channel adds a note to the live reminder chip", async ({
+		page,
+	}) => {
+		await signUp(page, uniqueEmail("unverified"));
+		// Configure ntfy but never test it: enabled, verified_at still null.
+		await settings(page);
+		await fillNtfy(page, "e2e-unverified", TOKEN);
+		await page.getByTestId("ntfy-save").click();
+		await expect(page.getByTestId("channel-ntfy-toggle")).toHaveAttribute(
+			"aria-checked",
+			"true",
+			{ timeout: 15_000 },
+		);
+
+		await createHabitsList(page);
+		const detail = await openDetail(page, "Drink water");
+		const when = await localNowMinus(page, 2);
+		await detail.getByLabel("Due date").fill(when.date);
+		await detail.getByTestId("reminder-time").fill(when.time);
+		await page.keyboard.press("Escape");
+		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
+
+		await expect(page.getByTestId("reminder-chip").first()).toBeVisible({
+			timeout: 45_000,
+		});
+		await expect(
+			page.getByTestId("reminder-unverified-note").first(),
+		).toContainText("delivery channel not verified");
 	});
 
 	// S4: completeForAck branches on list kind, and the habit branch is the one

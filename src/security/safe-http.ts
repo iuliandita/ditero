@@ -247,7 +247,7 @@ export async function safeFetch(
 		// Bun the resolved-address pin (DNS-rebinding protection) is inert. The
 		// policy checks in resolvePinnedTarget still run before the request, so
 		// the address boundary itself holds; closing the rebind window needs a
-		// transport that honors a custom connector and is tracked separately.
+		// transport that honors a custom connector (issue #31).
 		await dispatcher.close?.();
 	}
 }

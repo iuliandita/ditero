@@ -13,6 +13,7 @@ import {
 	channelKeyRing,
 	decryptChannelConfig,
 } from "../../security/channel-config.ts";
+import type { FieldKeyRing } from "../../security/field-encryption.ts";
 import type { safeFetch } from "../../security/safe-http.ts";
 import type { Network } from "../client-ip.ts";
 import { ntfyAdapter } from "./adapters/ntfy.ts";
@@ -111,6 +112,7 @@ async function loadChannelConfig(
 	database: Database,
 	userId: string,
 	kind: ChannelKind,
+	ring: FieldKeyRing | null,
 ): Promise<{ config: unknown } | null> {
 	const rows = await database
 		.select({ config: tables.notificationChannel.config })
@@ -130,7 +132,7 @@ async function loadChannelConfig(
 		config: decryptChannelConfig(
 			kind,
 			rows[0].config as Record<string, unknown>,
-			channelKeyRing(),
+			ring,
 		),
 	};
 }
@@ -162,6 +164,8 @@ async function mintAckUrl(
 
 export function createSendFn(deps: DispatchDeps): SendFn {
 	const adapters = deps.adapters ?? DEFAULT_ADAPTERS;
+	// Derived once: the ring is HKDF work per key and the send path is hot.
+	const ring = channelKeyRing();
 	// Fail at construction, not per notification: a malformed origin would
 	// otherwise mint unfollowable ack links for every reminder, silently.
 	if (deps.ackBaseUrl !== null) {
@@ -189,6 +193,7 @@ export function createSendFn(deps: DispatchDeps): SendFn {
 				deps.database,
 				row.recipientUserId,
 				row.channelKind,
+				ring,
 			);
 			if (channel === null) {
 				return permanent(

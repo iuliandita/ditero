@@ -22,7 +22,10 @@ import {
 	completeForAck,
 } from "../domain/ack-complete.ts";
 import { panelsSchema } from "../domain/dashboard.ts";
-import { MAX_REPEATS_CAP } from "../domain/escalation-policy.ts";
+import {
+	MAX_REPEAT_EVERY_MIN,
+	MAX_REPEATS_CAP,
+} from "../domain/escalation-policy.ts";
 import type { ListKind } from "../domain/icon-map.ts";
 import { karmaForCompletion, karmaWrite } from "../domain/karma.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
@@ -272,8 +275,15 @@ const quietHoursArg = z.custom<ReadonlyJSONValue>(
 // phone -- self-inflicted, but it can exhaust the per-user outbox cap and
 // black out that user's legitimate reminders.
 const escalationDefaultsSchema = z.object({
-	repeatEveryMin: z.number().int().positive().nullable(),
-	maxRepeats: z.number().int().min(0).max(20).nullable(),
+	// Same bounds as the per-task columns in task.update: the two levels merge
+	// into one policy, so a value legal at one and not the other is a trap.
+	repeatEveryMin: z
+		.number()
+		.int()
+		.positive()
+		.max(MAX_REPEAT_EVERY_MIN)
+		.nullable(),
+	maxRepeats: z.number().int().min(0).max(MAX_REPEATS_CAP).nullable(),
 	fallbackUserId: z.string().max(200).nullable(),
 });
 const escalationDefaultsArg = z.custom<ReadonlyJSONValue>(
@@ -503,14 +513,11 @@ export const mutators = defineMutators({
 				// Per-task reminder policy (M3a). null on any of the three escalation
 				// columns means "inherit the user default", never "disabled".
 				urgent: z.boolean().optional(),
-				// Capped at a week: the column is a bare smallint, and the pairing
-				// that matters (a tiny interval with a large count) is bounded by
-				// maxRepeats below.
 				repeatEveryMin: z
 					.number()
 					.int()
 					.positive()
-					.max(10_080)
+					.max(MAX_REPEAT_EVERY_MIN)
 					.nullable()
 					.optional(),
 				maxRepeats: z

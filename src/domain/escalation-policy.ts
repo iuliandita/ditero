@@ -11,6 +11,11 @@ export const DEFAULT_MAX_REPEATS = 3;
 // uncapped repeat count is thousands of pushes at a real phone.
 export const MAX_REPEATS_CAP = 20;
 
+// A week. The column is a bare smallint (32767 minutes ~ 22 days), and a repeat
+// interval beyond a week is indistinguishable from "never repeat", which the
+// null case already expresses.
+export const MAX_REPEAT_EVERY_MIN = 10_080;
+
 export type TaskEscalationFields = {
 	repeatEveryMin: number | null;
 	maxRepeats: number | null;

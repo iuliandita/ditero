@@ -4,6 +4,7 @@ import { runMutation } from "@/lib/run-mutation";
 import { cn } from "@/lib/utils";
 import { mutators } from "../../../zero/mutators.ts";
 import type { ReminderState, schema, Task } from "../../../zero/schema.gen.ts";
+import { useChannelDeliveryStatus } from "../../hooks/useNotificationChannels.ts";
 import { useReminderStates } from "../../hooks/useReminderStates.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 
@@ -54,6 +55,7 @@ export function ReminderChip({ task }: { task: Task }) {
 	const zero = useZero<typeof schema>();
 	const { pref } = useUserPref();
 	const { current } = useReminderStates(task.id);
+	const { allUnverified } = useChannelDeliveryStatus();
 	const [error, setError] = useState<string | null>(null);
 
 	// Completion is the terminal state that matters: an acked chip on a done
@@ -76,6 +78,9 @@ export function ReminderChip({ task }: { task: Task }) {
 		);
 	}
 
+	// Shell doc 6: a live reminder whose only channel has never verified would
+	// otherwise look like a silent no-op. The note traces the failure back to
+	// settings instead.
 	return (
 		<>
 			<button
@@ -94,6 +99,14 @@ export function ReminderChip({ task }: { task: Task }) {
 			>
 				{text} - Ack
 			</button>
+			{allUnverified && (
+				<span
+					data-testid="reminder-unverified-note"
+					className="text-xs text-muted-foreground"
+				>
+					delivery channel not verified
+				</span>
+			)}
 			{error && (
 				<span role="alert" className="text-xs text-destructive">
 					{error}

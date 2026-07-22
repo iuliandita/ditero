@@ -3,12 +3,13 @@ import {
 	channelKeyRing,
 	decryptChannelConfig,
 	encryptChannelConfig,
-	isEncryptedChannelValue,
+	reencryptChannelConfig,
 } from "./channel-config.ts";
 import { createFieldKeyRing } from "./field-encryption.ts";
 
 const KEY = Buffer.alloc(32, 3).toString("base64");
 const OTHER = Buffer.alloc(32, 4).toString("base64");
+const NEXT = Buffer.alloc(32, 5).toString("base64");
 const ring = createFieldKeyRing({ current: KEY });
 
 const CONFIG = {
@@ -23,7 +24,7 @@ describe("channel config encryption", () => {
 		expect(stored.serverUrl).toBe(CONFIG.serverUrl);
 		expect(stored.topic).toBe(CONFIG.topic);
 		expect(stored.token).not.toBe(CONFIG.token);
-		expect(isEncryptedChannelValue(stored.token)).toBe(true);
+		expect(stored.token).toMatch(/^ditero:v1:/);
 		expect(JSON.stringify(stored)).not.toContain(CONFIG.token);
 	});
 
@@ -65,6 +66,47 @@ describe("channel config encryption", () => {
 		expect(() =>
 			decryptChannelConfig("telegram", { token: stored.token }, ring),
 		).toThrow(/authentication failed/);
+	});
+
+	// The backfill's whole reason to exist during a rotation. encryptChannelConfig
+	// cannot do this -- it skips anything already enveloped -- so a missing
+	// rotation path leaves every secret under the retired key.
+	test("re-envelopes an existing secret onto the next key", () => {
+		const stored = encryptChannelConfig("ntfy", CONFIG, ring);
+		const rotating = createFieldKeyRing({ current: KEY, next: NEXT });
+
+		const rotated = reencryptChannelConfig("ntfy", stored, rotating);
+		expect(rotated.token).not.toBe(stored.token);
+
+		// The point: the old key alone can no longer read it, the new key alone can.
+		const nextOnly = createFieldKeyRing({ current: NEXT });
+		expect(decryptChannelConfig("ntfy", rotated, nextOnly)).toEqual(CONFIG);
+		expect(() =>
+			decryptChannelConfig(
+				"ntfy",
+				rotated,
+				createFieldKeyRing({ current: KEY }),
+			),
+		).toThrow(/authentication failed/);
+	});
+
+	test("re-encrypting under the same key rewrites nothing", () => {
+		const stored = encryptChannelConfig("ntfy", CONFIG, ring);
+		expect(reencryptChannelConfig("ntfy", stored, ring)).toEqual(stored);
+	});
+
+	test("the rotation pass also envelopes a legacy plaintext secret", () => {
+		const rotating = createFieldKeyRing({ current: KEY, next: NEXT });
+		const rotated = reencryptChannelConfig("ntfy", CONFIG, rotating);
+		expect(rotated.token).toMatch(/^ditero:v1:/);
+		expect(JSON.stringify(rotated)).not.toContain(CONFIG.token);
+		expect(
+			decryptChannelConfig(
+				"ntfy",
+				rotated,
+				createFieldKeyRing({ current: NEXT }),
+			),
+		).toEqual(CONFIG);
 	});
 
 	test("channelKeyRing is null without a configured key", () => {

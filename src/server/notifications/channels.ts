@@ -22,6 +22,7 @@ import {
 import type { safeFetch } from "../../security/safe-http.ts";
 import { ntfyAdapter } from "./adapters/ntfy.ts";
 import type { ChannelAdapter } from "./adapters/types.ts";
+import { takeRateToken } from "./capability.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 
@@ -37,6 +38,15 @@ const CHANNEL_KINDS = new Set<string>(tables.channelKindEnum.enumValues);
 // Bounds the client-controlled JSONB, mirroring the M1b/M1c input-cap posture.
 const MAX_FIELDS = 20;
 const MAX_VALUE_LENGTH = 2_048;
+
+// Test-send fires a real outbound request at a user-supplied serverUrl, so an
+// authenticated caller could otherwise drive unbounded traffic at arbitrary
+// public hosts through this instance. Same token bucket the ack route uses,
+// keyed per user rather than per IP (the caller is authenticated here).
+// A burst of 5, refilling one per minute: enough to iterate on a config, far
+// too slow to be a traffic source.
+export const TEST_SEND_CAPACITY = 5;
+export const TEST_SEND_REFILL_PER_SEC = 1 / 60;
 
 export class ChannelError extends Error {
 	constructor(
@@ -66,6 +76,9 @@ export type ChannelDeps = {
 	adapters?: Partial<Record<ChannelKind, ChannelAdapter>>;
 	fetch?: typeof safeFetch;
 	env?: NodeJS.ProcessEnv;
+	// Test seams for the per-user send budget; production uses the constants.
+	rateCapacity?: number;
+	rateRefillPerSec?: number;
 };
 
 function requireKind(value: unknown): ChannelKind {
@@ -118,28 +131,23 @@ async function storedConfig(
 	);
 }
 
+// Deliberately does NOT decrypt: the mask replaces every non-public field
+// whatever it holds, so decrypting first would materialize every user's
+// plaintext credentials in memory for a page that only ever renders `***`, and
+// would make the settings page throw on a missing or wrong key.
 export async function listChannels(
 	database: Database,
 	userId: string,
-	env: NodeJS.ProcessEnv = process.env,
 ): Promise<ChannelView[]> {
 	const rows = await database
 		.select()
 		.from(tables.notificationChannel)
 		.where(eq(tables.notificationChannel.userId, userId));
-	const ring = channelKeyRing(env);
 	return rows.map((row) => ({
 		kind: row.kind,
 		enabled: row.enabled,
 		verifiedAt: row.verifiedAt?.getTime() ?? null,
-		config: maskChannelConfig(
-			row.kind,
-			decryptChannelConfig(
-				row.kind,
-				row.config as Record<string, unknown>,
-				ring,
-			),
-		),
+		config: maskChannelConfig(row.kind, row.config as Record<string, unknown>),
 	}));
 }
 
@@ -154,9 +162,37 @@ async function upsertChannel(
 	const input = requireConfig(body);
 	const kind = requireKind(input.kind);
 	const enabled = input.enabled === undefined ? true : input.enabled === true;
+	const previous = await storedConfig(database, userId, kind, env);
+
+	// `config` omitted means "flip enabled only": the settings toggle must not
+	// smuggle whatever half-typed edit is sitting in the form into the stored
+	// row, nor reset verified_at through the changed-config branch below.
+	if (input.config === undefined) {
+		if (previous === null) {
+			throw new ChannelError("no stored config to update", 400);
+		}
+		const [only] = await database
+			.update(tables.notificationChannel)
+			.set({ enabled, updatedAt: new Date() })
+			.where(
+				and(
+					eq(tables.notificationChannel.userId, userId),
+					eq(tables.notificationChannel.kind, kind),
+				),
+			)
+			.returning();
+		return {
+			view: {
+				kind: only.kind,
+				enabled: only.enabled,
+				verifiedAt: only.verifiedAt?.getTime() ?? null,
+				config: maskChannelConfig(kind, previous),
+			},
+			config: previous,
+		};
+	}
 	const incoming = requireConfig(input.config);
 
-	const previous = await storedConfig(database, userId, kind, env);
 	// Restore BEFORE validation: the schema rejects the literal MASKED value.
 	const restored = restoreChannelConfig(
 		kind,
@@ -256,6 +292,17 @@ export async function testChannel(
 	{ ok: true; verifiedAt: number } | { ok: false; reason: TestFailure }
 > {
 	const env = deps.env ?? process.env;
+	// Budget is spent BEFORE the config is persisted: a caller who has run out
+	// must not be able to keep rewriting the row either.
+	const allowed = await takeRateToken(
+		database,
+		`channel-test:${userId}`,
+		deps.rateCapacity ?? TEST_SEND_CAPACITY,
+		deps.rateRefillPerSec ?? TEST_SEND_REFILL_PER_SEC,
+	);
+	if (!allowed) {
+		throw new ChannelError("too many test sends, try again shortly", 429);
+	}
 	const { view, config } = await upsertChannel(database, userId, body, env);
 	const adapter = (deps.adapters ?? IMPLEMENTED)[view.kind];
 	if (!adapter) throw new ChannelError("channel not available yet", 400);

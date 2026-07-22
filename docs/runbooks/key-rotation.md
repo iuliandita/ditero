@@ -12,8 +12,21 @@ DITERO_ENCRYPTION_KEY_NEXT="$NEW_KEY" \
 bun run security:rotate-auth-secrets
 ```
 
-5. Exercise passkey/TOTP login, OAuth refresh, Zero JWT issuance, and configured notification channels.
-6. Promote the new value to `DITERO_ENCRYPTION_KEY`, remove `DITERO_ENCRYPTION_KEY_NEXT`, restart, and repeat the checks.
-7. Retain the old key only in the protected rollback record until the rollback window closes.
+5. Rotate the notification channel credentials with the same DSN and key pair:
+
+```sh
+DATABASE_MIGRATION_URL='postgres://...' \
+DITERO_ENCRYPTION_KEY="$OLD_KEY" \
+DITERO_ENCRYPTION_KEY_NEXT="$NEW_KEY" \
+bun run security:encrypt-channel-configs
+```
+
+   Skipping this leaves every channel token under the old key, and step 7's retirement makes them
+   undecryptable -- every user has to re-enter their credentials. The reported row count should
+   match the number of configured channels; `0 row(s)` here means nothing rotated.
+
+6. Exercise passkey/TOTP login, OAuth refresh, Zero JWT issuance, and send a test notification on each configured channel.
+7. Promote the new value to `DITERO_ENCRYPTION_KEY`, remove `DITERO_ENCRYPTION_KEY_NEXT`, restart, and repeat the checks.
+8. Retain the old key only in the protected rollback record until the rollback window closes.
 
 The migration is transactional and idempotent. Backend `user_secret` rows rotate on authenticated reads during step 3.

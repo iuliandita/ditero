@@ -7,6 +7,12 @@ import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
+import {
+	maxRepeatsInput,
+	REPEAT_EVERY_MIN_MAX,
+	REPEATS_MAX,
+	repeatEveryMinInput,
+} from "../../lib/escalation-input.ts";
 
 // Per-task reminder policy (shell doc 4). Urgent carries its consequence in its
 // own label, not a tooltip: its failure mode is a missed dose.
@@ -47,11 +53,6 @@ export function ReminderPolicy({
 	function update(patch: Parameters<typeof mutators.task.update>[0]) {
 		setError(null);
 		void runMutation(zero.mutate(mutators.task.update(patch)), setError);
-	}
-
-	function toNumber(value: string): number | null {
-		const n = Number.parseInt(value, 10);
-		return Number.isFinite(n) && n >= 0 ? n : null;
 	}
 
 	return (
@@ -115,7 +116,7 @@ export function ReminderPolicy({
 						<input
 							type="number"
 							min={1}
-							max={10080}
+							max={REPEAT_EVERY_MIN_MAX}
 							value={task.repeatEveryMin ?? ""}
 							placeholder={String(defaults?.repeatEveryMin ?? "off")}
 							data-testid="reminder-repeat"
@@ -123,7 +124,7 @@ export function ReminderPolicy({
 							onChange={(e) =>
 								update({
 									id: task.id,
-									repeatEveryMin: toNumber(e.target.value),
+									repeatEveryMin: repeatEveryMinInput(e.target.value),
 								})
 							}
 						/>
@@ -133,13 +134,16 @@ export function ReminderPolicy({
 						<input
 							type="number"
 							min={0}
-							max={20}
+							max={REPEATS_MAX}
 							value={task.maxRepeats ?? ""}
 							placeholder={String(defaults?.maxRepeats ?? DEFAULT_MAX_REPEATS)}
 							data-testid="reminder-max"
 							className="h-8 w-32 rounded-lg border bg-transparent px-2 text-sm"
 							onChange={(e) =>
-								update({ id: task.id, maxRepeats: toNumber(e.target.value) })
+								update({
+									id: task.id,
+									maxRepeats: maxRepeatsInput(e.target.value),
+								})
 							}
 						/>
 					</label>

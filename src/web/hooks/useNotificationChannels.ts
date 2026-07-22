@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@rocicorp/zero/react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChannelKind } from "../../domain/notification-channel.ts";
+import { queries } from "../../zero/queries.ts";
 
 // The config column never syncs, so channels come from the server API rather
 // than Zero. What the client holds is always the MASKED view: secrets are
 // write-only from here on (design 6).
+// `config` omitted means "flip enabled only": the server preserves the stored
+// config and leaves verified_at alone.
+export type ChannelWrite = {
+	kind: ChannelKind;
+	config?: Record<string, unknown>;
+	enabled: boolean;
+};
+
 export type ChannelView = {
 	kind: ChannelKind;
 	enabled: boolean;
@@ -15,6 +25,21 @@ export type TestResult =
 	| { state: "untested" }
 	| { state: "verified"; at: number }
 	| { state: "failed"; reason: string };
+
+// Delivery readiness, read straight off the synced notification_channel rows
+// (config is omitted at the drizzle-zero layer, enabled/verified_at are not).
+// Deliberately not the API hook above: the reminder chip renders per task row
+// and must not fire an HTTP request each time.
+export function useChannelDeliveryStatus(): { allUnverified: boolean } {
+	const [rows] = useQuery(queries.notificationChannels.mine());
+	return useMemo(() => {
+		const enabled = rows.filter((r) => r.enabled);
+		return {
+			allUnverified:
+				enabled.length > 0 && enabled.every((r) => r.verifiedAt == null),
+		};
+	}, [rows]);
+}
 
 async function post(path: string, body: unknown): Promise<Response> {
 	return await fetch(path, {
@@ -29,17 +54,9 @@ export function useNotificationChannels(): {
 	channels: ChannelView[];
 	loading: boolean;
 	error: string | null;
-	save: (input: {
-		kind: ChannelKind;
-		config: Record<string, unknown>;
-		enabled: boolean;
-	}) => Promise<boolean>;
+	save: (input: ChannelWrite) => Promise<boolean>;
 	remove: (kind: ChannelKind) => Promise<boolean>;
-	test: (input: {
-		kind: ChannelKind;
-		config: Record<string, unknown>;
-		enabled: boolean;
-	}) => Promise<TestResult>;
+	test: (input: ChannelWrite) => Promise<TestResult>;
 } {
 	const [channels, setChannels] = useState<ChannelView[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -68,13 +85,7 @@ export function useNotificationChannels(): {
 		void reload();
 	}, [reload]);
 
-	const save = useCallback<
-		(input: {
-			kind: ChannelKind;
-			config: Record<string, unknown>;
-			enabled: boolean;
-		}) => Promise<boolean>
-	>(
+	const save = useCallback<(input: ChannelWrite) => Promise<boolean>>(
 		async (input) => {
 			setError(null);
 			const res = await post("/api/notifications/channel", input);
@@ -104,13 +115,7 @@ export function useNotificationChannels(): {
 		[reload],
 	);
 
-	const test = useCallback<
-		(input: {
-			kind: ChannelKind;
-			config: Record<string, unknown>;
-			enabled: boolean;
-		}) => Promise<TestResult>
-	>(
+	const test = useCallback<(input: ChannelWrite) => Promise<TestResult>>(
 		async (input) => {
 			setError(null);
 			const res = await post("/api/notifications/channel/test", input);

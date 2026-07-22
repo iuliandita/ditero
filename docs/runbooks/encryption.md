@@ -16,6 +16,6 @@ Notification channel credentials (`notification_channel.config`) are enveloped t
 bun run security:encrypt-channel-configs
 ```
 
-It is idempotent and also re-envelopes under `DITERO_ENCRYPTION_KEY_NEXT` during a rotation, so it is safe to run on every deploy.
+It is idempotent, safe to run on every deploy, and safe to run against a live app (each row is claimed with `SELECT ... FOR UPDATE`, so a concurrent save is never reverted). During a rotation it also re-envelopes already-encrypted secrets under `DITERO_ENCRYPTION_KEY_NEXT`; run it before promoting the new key and confirm the reported row count matches the number of configured channels.
 
 Loss of every configured field key makes TOTP, OAuth, JWT signing, and integration credentials unrecoverable. Users must re-enroll or reconnect affected credentials.
