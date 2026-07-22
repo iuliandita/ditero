@@ -5,6 +5,7 @@ import {
 } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
 import { OutboundPolicyError, safeFetch } from "../../../security/safe-http.ts";
+import { retryAfterSeconds } from "./retry-after.ts";
 import type {
 	AdapterContext,
 	ChannelAdapter,
@@ -54,16 +55,6 @@ function safeMessage(error: unknown): string {
 // URL, whose origin comes from operator config.
 function quoteAction(value: string): string {
 	return `"${value.replace(/[\\"]/g, (character) => `\\${character}`)}"`;
-}
-
-function retryAfterSeconds(header: string | null): number | undefined {
-	const raw = header?.trim();
-	// Number("") is 0, which would ask for an immediate retry of a 429.
-	if (!raw) return undefined;
-	const seconds = Number(raw);
-	// An HTTP-date form is legal here and is deliberately not parsed:
-	// classifyRetry falls back to its own backoff when retryAfterSec is absent.
-	return Number.isFinite(seconds) ? seconds : undefined;
 }
 
 function buildHeaders(

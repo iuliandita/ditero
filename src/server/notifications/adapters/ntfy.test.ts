@@ -392,23 +392,44 @@ function sourceFiles(dir: string): string[] {
 	);
 }
 
+// Derived, not listed: every adapter added by a later task inherits the rules
+// below without touching this file. Shared helpers under adapters/ (types.ts,
+// retry-after.ts) export no ChannelAdapter and are not held to them -- which
+// also lets the import rule demand a VALUE import, since types.ts references
+// safeFetch as a type only and would satisfy it vacuously.
+function adapterFiles(): string[] {
+	return sourceFiles(join(NOTIFICATION_SOURCES, "adapters")).filter((file) =>
+		/:\s*ChannelAdapter\s*=/.test(readFileSync(file, "utf8")),
+	);
+}
+
 // The single highest-severity control in M3, so it is asserted positively: the
 // negative form alone is bypassable (C19) via globalThis.fetch, undici's
 // request, or an alias, and scanning only adapters/ misses dispatch.ts.
 describe("notification egress policy", () => {
 	it("every adapter routes outbound HTTP through safeFetch", () => {
-		// types.ts is the shared contract, not an adapter: it references safeFetch
-		// only as a type. Exempted by name so the rule below can demand a VALUE
-		// import, which a type-only import would otherwise satisfy vacuously.
-		const files = sourceFiles(join(NOTIFICATION_SOURCES, "adapters")).filter(
-			(file) => !file.endsWith("types.ts"),
-		);
-		expect(files.length).toBeGreaterThan(0);
+		const files = adapterFiles();
+		expect(files.length).toBeGreaterThan(1);
 		for (const file of files) {
 			const source = readFileSync(file, "utf8");
 			expect(source, `${file} must import safeFetch as a value`).toMatch(
 				/import\s+\{(?![^}]*\btype\s+safeFetch\b)[^}]*\bsafeFetch\b[^}]*\}\s+from\s+["'][^"']*security\/safe-http\.ts["']/,
 			);
+		}
+	});
+
+	// The positive half of the same control: a value import proves nothing about
+	// what the send actually calls. Exactly one occurrence, so a second transport
+	// added beside the checked one is a failure rather than a pass.
+	it("every adapter resolves its transport to exactly `ctx.fetch ?? safeFetch`", () => {
+		const files = adapterFiles();
+		expect(files.length).toBeGreaterThan(1);
+		for (const file of files) {
+			const source = readFileSync(file, "utf8");
+			expect(
+				source.match(/\(\s*ctx\.fetch\s*\?\?\s*safeFetch\s*\)\s*\(/g),
+				`${file} must call (ctx.fetch ?? safeFetch) exactly once`,
+			).toHaveLength(1);
 		}
 	});
 

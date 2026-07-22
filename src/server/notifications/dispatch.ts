@@ -17,6 +17,7 @@ import type { FieldKeyRing } from "../../security/field-encryption.ts";
 import type { safeFetch } from "../../security/safe-http.ts";
 import type { Network } from "../client-ip.ts";
 import { ntfyAdapter } from "./adapters/ntfy.ts";
+import { telegramAdapter } from "./adapters/telegram.ts";
 import type { ChannelAdapter, ChannelPayload } from "./adapters/types.ts";
 import { permanent } from "./adapters/types.ts";
 import {
@@ -73,6 +74,7 @@ export type DispatchDeps = {
 
 const DEFAULT_ADAPTERS: Partial<Record<ChannelKind, ChannelAdapter>> = {
 	ntfy: ntfyAdapter,
+	telegram: telegramAdapter,
 };
 
 function renderPayload(raw: unknown): Omit<ChannelPayload, "ackUrl"> | null {
