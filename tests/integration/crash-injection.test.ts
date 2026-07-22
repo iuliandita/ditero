@@ -20,6 +20,8 @@ import { privateHost } from "../support/private-host.ts";
 import {
 	ReplicaRig,
 	RIG_TIMING,
+	outboxFor as rigOutboxFor,
+	wireFor as rigWireFor,
 	type SeededScope,
 	seedReminderTask,
 	seedUser,
@@ -48,34 +50,10 @@ let tap: NtfyTap;
 let rig: ReplicaRig;
 let scope: SeededScope;
 
-// Reminder deliveries only: the ackUrl is minted just for rows carrying a
-// reminder_state, so it separates these from the overdue-sweep event notices
-// every replica emits once at boot.
-function wireFor(taskId: string, topic?: string) {
-	return tap.deliveries.filter(
-		(d) =>
-			d.title === taskId &&
-			d.ackUrl !== null &&
-			(topic === undefined || d.topic === topic),
-	);
-}
-
-async function outboxFor(taskIds: string[]) {
-	return await db
-		.select({
-			id: lib.notificationOutbox.id,
-			key: lib.notificationOutbox.idempotencyKey,
-			status: lib.notificationOutbox.status,
-			attempts: lib.notificationOutbox.attempts,
-			claimedBy: lib.notificationOutbox.claimedBy,
-		})
-		.from(lib.notificationOutbox)
-		.innerJoin(
-			lib.reminderState,
-			eq(lib.notificationOutbox.reminderStateId, lib.reminderState.id),
-		)
-		.where(inArray(lib.reminderState.taskId, taskIds));
-}
+// Bound to this file's tap/db so the call sites stay unchanged.
+const wireFor = (taskId: string, topic?: string) =>
+	rigWireFor(tap, taskId, topic);
+const outboxFor = (taskIds: string[]) => rigOutboxFor(db, taskIds);
 
 // Drive the escalation ladder without waiting out repeat_every_min: what is
 // under test is the sweep's branch, not the clock.

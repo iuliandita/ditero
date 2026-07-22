@@ -1,6 +1,7 @@
 import {
 	channelConfigSchema,
 	redactChannelUrl,
+	redactUrlsIn,
 } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
 import { OutboundPolicyError, safeFetch } from "../../../security/safe-http.ts";
@@ -39,14 +40,12 @@ function encodeHeaderValue(value: string): string {
 	return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
 }
 
-const URL_IN_TEXT = /https?:\/\/[^\s"'<>]+/g;
-
 // The worker redacts again before persisting; doing it here too means a caller
 // that only logs the ProviderResult still cannot leak a channel URL's
 // credentials or query secrets.
 function safeMessage(error: unknown): string {
 	const message = error instanceof Error ? error.message : "unknown error";
-	return message.replace(URL_IN_TEXT, redactChannelUrl);
+	return redactUrlsIn(message);
 }
 
 // ntfy's Actions header separates fields with commas and actions with

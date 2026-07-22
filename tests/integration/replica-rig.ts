@@ -11,9 +11,10 @@
 // running against a live worker and assert nothing.
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as tables from "../../src/db/schema.ts";
+import type { Delivery, NtfyTap } from "../support/ntfy-tap.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 
@@ -398,6 +399,47 @@ export async function seedReminderTask(
 			.values({ id: `${id}:${userId}`, taskId: id, userId });
 	}
 	return id;
+}
+
+// Reminder deliveries the tap actually received for a task. The ntfy title is
+// the task title, and the fixture titles every task with its own id.
+//
+// The ackUrl is what separates a reminder from an event notification: dispatch
+// mints a capability only for rows carrying a reminder_state. Without that
+// filter the overdue sweep -- which every replica runs once at boot -- lands in
+// these counts. `topic` narrows to one recipient's channel.
+export function wireFor(
+	tap: NtfyTap,
+	taskId: string,
+	topic?: string,
+): Delivery[] {
+	return tap.deliveries.filter(
+		(delivery) =>
+			delivery.title === taskId &&
+			delivery.ackUrl !== null &&
+			(topic === undefined || delivery.topic === topic),
+	);
+}
+
+// The outbox rows behind a set of tasks. One projection for both rig suites:
+// the columns are cheap and which subset a given assertion reads is not worth
+// a second variant.
+export async function outboxFor(database: Database, taskIds: string[]) {
+	return await database
+		.select({
+			id: tables.notificationOutbox.id,
+			key: tables.notificationOutbox.idempotencyKey,
+			status: tables.notificationOutbox.status,
+			attempts: tables.notificationOutbox.attempts,
+			claimedBy: tables.notificationOutbox.claimedBy,
+			recipientUserId: tables.notificationOutbox.recipientUserId,
+		})
+		.from(tables.notificationOutbox)
+		.innerJoin(
+			tables.reminderState,
+			eq(tables.notificationOutbox.reminderStateId, tables.reminderState.id),
+		)
+		.where(inArray(tables.reminderState.taskId, taskIds));
 }
 
 // Every replica ticks the moment it boots, so a leftover row from an earlier

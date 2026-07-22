@@ -134,3 +134,12 @@ export function redactChannelUrl(url: string): string {
 
 	return parsed.toString();
 }
+
+const URL_IN_TEXT = /https?:\/\/[^\s"'<>]+/g;
+
+// Redacts every URL embedded in free text (adapter and provider error messages,
+// mostly). Shared so the adapter layer and the worker's persist layer cannot
+// drift apart on what counts as a URL.
+export function redactUrlsIn(text: string): string {
+	return text.replace(URL_IN_TEXT, redactChannelUrl);
+}

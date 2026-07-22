@@ -19,6 +19,8 @@ import { type NtfyTap, startNtfyTap } from "../support/ntfy-tap.ts";
 import { privateHost } from "../support/private-host.ts";
 import {
 	ReplicaRig,
+	outboxFor as rigOutboxFor,
+	wireFor as rigWireFor,
 	type SeededScope,
 	seedReminderTask,
 	seedUser,
@@ -43,32 +45,9 @@ let tap: NtfyTap;
 let rig: ReplicaRig;
 let scope: SeededScope;
 
-async function outboxFor(taskIds: string[]) {
-	return await db
-		.select({
-			id: tables.notificationOutbox.id,
-			key: tables.notificationOutbox.idempotencyKey,
-			status: tables.notificationOutbox.status,
-			recipientUserId: tables.notificationOutbox.recipientUserId,
-		})
-		.from(tables.notificationOutbox)
-		.innerJoin(
-			tables.reminderState,
-			eq(tables.notificationOutbox.reminderStateId, tables.reminderState.id),
-		)
-		.where(inArray(tables.reminderState.taskId, taskIds));
-}
-
-// Reminder deliveries the tap actually received for a task. The ntfy title is
-// the task title, and the fixture titles every task with its own id.
-//
-// The ackUrl is what separates a reminder from an event notification: dispatch
-// mints a capability only for rows carrying a reminder_state. Without that
-// filter the overdue sweep -- which every replica runs once at boot -- lands in
-// these counts.
-function wireFor(taskId: string) {
-	return tap.deliveries.filter((d) => d.title === taskId && d.ackUrl !== null);
-}
+// Bound to this file's tap/db so the call sites stay unchanged.
+const wireFor = (taskId: string) => rigWireFor(tap, taskId);
+const outboxFor = (taskIds: string[]) => rigOutboxFor(db, taskIds);
 
 // Which replica put a delivery on the wire: the ack link's origin is that
 // replica's DITERO_PUBLIC_URL.

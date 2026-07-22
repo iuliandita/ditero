@@ -3,6 +3,7 @@ import { Check, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DEFAULT_MAX_REPEATS } from "../../../domain/escalation-policy.ts";
 import type { ChannelKind } from "../../../domain/notification-channel.ts";
 import { MASKED } from "../../../domain/notification-channel.ts";
 import { queries } from "../../../zero/queries.ts";
@@ -306,7 +307,7 @@ function EscalationDefaults() {
 					type="number"
 					min={0}
 					max={REPEATS_MAX}
-					placeholder="3"
+					placeholder={String(DEFAULT_MAX_REPEATS)}
 					value={defaults?.maxRepeats ?? ""}
 					data-testid="escalation-max"
 					className="h-8 w-32 rounded-lg border bg-transparent px-2 text-sm"

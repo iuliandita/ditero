@@ -23,9 +23,9 @@ import type {
 import {
 	ACK_ACTION,
 	ACK_PATH,
-	createSendFn,
 	hashAckToken,
-} from "../../src/server/notifications/dispatch.ts";
+} from "../../src/server/notifications/capability.ts";
+import { createSendFn } from "../../src/server/notifications/dispatch.ts";
 import { workerTick } from "../../src/server/notifications/worker.ts";
 
 const databaseURL = process.env.DATABASE_URL;

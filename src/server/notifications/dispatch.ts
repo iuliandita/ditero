@@ -30,16 +30,6 @@ import type { OutboxRow, SendFn } from "./worker.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 
-// The capability primitives moved to capability.ts, which owns both halves of
-// the mint/consume contract; re-exported so this module's existing surface and
-// its callers are unchanged.
-export {
-	ACK_ACTION,
-	ACK_PATH,
-	ACK_TTL_MS,
-	hashAckToken,
-} from "./capability.ts";
-
 // The `kind` literal is what is load-bearing: unknown payloads fail closed as
 // permanently undeliverable rather than rendering an empty notification.
 // Deliberately loose otherwise -- the producers carry fields this does not

@@ -35,7 +35,6 @@ import {
 	REJECT_FLOOR_MS,
 	takeRateToken,
 } from "../../src/server/notifications/capability.ts";
-import { ACK_PATH as DISPATCH_ACK_PATH } from "../../src/server/notifications/dispatch.ts";
 import type { AckRouteOptions } from "../../src/server/notifications/routes.ts";
 import { ackRoutes } from "../../src/server/notifications/routes.ts";
 import { mutators } from "../../src/zero/mutators.ts";
@@ -253,7 +252,6 @@ afterAll(async () => {
 describe("ack route: success", () => {
 	// The minted URL and the mounted route must agree, or every ack button 404s.
 	test("the mounted path is the path dispatch mints", async () => {
-		expect(ACK_PATH).toBe(DISPATCH_ACK_PATH);
 		const token = await mintCapability(
 			await seedReminder("ak-r-path", MEMBER),
 			MEMBER,

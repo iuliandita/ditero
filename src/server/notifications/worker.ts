@@ -14,7 +14,7 @@ import {
 	workerTiming,
 } from "../../config/worker.ts";
 import * as tables from "../../db/schema.ts";
-import { redactChannelUrl } from "../../domain/notification-channel.ts";
+import { redactUrlsIn } from "../../domain/notification-channel.ts";
 import type {
 	ProviderResult,
 	RetryDecision,
@@ -94,13 +94,12 @@ export type WorkerOptions = {
 };
 
 const ERROR_MAX_LENGTH = 300;
-const URL_IN_TEXT = /https?:\/\/[^\s"'<>]+/g;
 
 // Redact BEFORE truncating (C15): truncation can cut a URL mid-token so the
 // redaction pattern no longer matches, persisting a partial webhook or bot
 // token into delivery_attempt.error, which surfaces in the operator view.
 function sanitizeError(message: string): string {
-	const redacted = message.replace(URL_IN_TEXT, redactChannelUrl);
+	const redacted = redactUrlsIn(message);
 	return redacted.length > ERROR_MAX_LENGTH
 		? redacted.slice(0, ERROR_MAX_LENGTH)
 		: redacted;
