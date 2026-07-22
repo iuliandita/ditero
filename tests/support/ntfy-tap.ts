@@ -19,7 +19,12 @@ export type Delivery = {
 // URL is the second quoted value: `http, "Done", "<url>", method=POST, ...`.
 export function parseAckUrl(actions: string | null): string | null {
 	if (!actions) return null;
-	const quoted = [...actions.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) =>
+	// Unrolled rather than the ambiguous `(?:[^"\\]|\\.)*`, which CodeQL flags as
+	// js/polynomial-redos. Measured: both forms cost the same here, because the
+	// quadratic term is matchAll retrying every start position against an
+	// unterminated quote, not the inner alternation. The unrolled form is still
+	// the correct shape; the input is a header this suite's own stub captured.
+	const quoted = [...actions.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)].map((m) =>
 		m[1].replace(/\\(.)/g, "$1"),
 	);
 	return quoted.find((value) => /^https?:\/\//.test(value)) ?? null;

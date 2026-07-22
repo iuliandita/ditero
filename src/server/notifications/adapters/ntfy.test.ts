@@ -339,7 +339,7 @@ describe("ntfyAdapter", () => {
 			'http, "Done", "https://app.example.test/ack/a\\",b;c", method=POST, clear=true',
 		);
 		// Label and URL still read as two distinct quoted fields.
-		const fields = actions.match(/"(?:[^"\\]|\\.)*"/g) ?? [];
+		const fields = actions.match(/"[^"\\]*(?:\\.[^"\\]*)*"/g) ?? [];
 		expect(fields).toHaveLength(2);
 		expect(fields[0]).toBe('"Done"');
 		expect(fields[1].slice(1, -1).replace(/\\(.)/g, "$1")).toBe(ackUrl);
