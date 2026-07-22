@@ -9,17 +9,34 @@
 //                       still gets a 200 here and the "preserves it" test
 //                       passes against a broken restore.
 //   anything else    -> 200
+//
+// GET /_captured?topic=x replays what the stub received, so the live-ack spec
+// can read the ack action URL off the wire instead of reconstructing it.
 const port = Number(process.env.NTFY_STUB_PORT ?? 4599);
+
+type Captured = {
+	topic: string;
+	title: string;
+	body: string;
+	actions: string | null;
+};
+const captured: Captured[] = [];
 
 // Matches TOKEN in notifications.spec.ts.
 const EXPECTED_TOKEN = "tk_e2e_secret_value";
 
 Bun.serve({
 	port,
-	fetch(request) {
-		const { pathname } = new URL(request.url);
+	async fetch(request) {
+		const { pathname, searchParams } = new URL(request.url);
 		if (request.method === "GET" && pathname === "/health") {
 			return new Response("ok");
+		}
+		if (request.method === "GET" && pathname === "/_captured") {
+			const topic = searchParams.get("topic");
+			return Response.json(
+				topic ? captured.filter((c) => c.topic === topic) : captured,
+			);
 		}
 		if (request.method !== "POST") return new Response(null, { status: 405 });
 		if (pathname === "/reject-me") return new Response("no", { status: 401 });
@@ -29,6 +46,12 @@ Bun.serve({
 				return new Response("unauthorized", { status: 401 });
 			}
 		}
+		captured.push({
+			topic: pathname.replace(/^\/+/, ""),
+			title: request.headers.get("x-title") ?? "",
+			body: await request.text(),
+			actions: request.headers.get("actions"),
+		});
 		return new Response("{}", {
 			headers: { "content-type": "application/json" },
 		});

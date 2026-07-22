@@ -7,6 +7,8 @@ import { randomUUID } from "node:crypto";
 import { Cron } from "croner";
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { CrashHook } from "../../config/test-crash.ts";
+import { crashHook } from "../../config/test-crash.ts";
 import type { WorkerTiming } from "../../config/worker.ts";
 import {
 	replicaId as resolveReplicaId,
@@ -86,6 +88,9 @@ export type WorkerOptions = {
 	// Prune is comparatively expensive and is not needed every tick; startWorker
 	// runs it on a coarse cadence.
 	prune?: boolean;
+	// Process-suicide seam for the durability rig. A no-op unless the process
+	// booted with DITERO_TEST_CRASH_POINT outside production (config/test-crash).
+	crash?: CrashHook;
 };
 
 const ERROR_MAX_LENGTH = 300;
@@ -359,6 +364,9 @@ export async function workerTick(
 		? 0
 		: await pruneAckCapabilities(database, timing.pruneBatchSize);
 	const claimed = await claimBatch(database, timing.batchSize, replicaId);
+	// Claimed and committed, nothing dispatched: the shape the lease reclaim has
+	// to recover.
+	if (claimed.length > 0) options.crash?.("mid-claim");
 
 	const summary: WorkerSummary = {
 		...reclaim,
@@ -373,11 +381,16 @@ export async function workerTick(
 	};
 
 	await dispatchBatch(claimed, timing.sendConcurrency, async (row) => {
+		options.crash?.("before-send");
 		const result = await sendWithDeadline(
 			options.send,
 			row,
 			timing.adapterDeadlineMs,
 		);
+		// The provider has accepted; the local commit has not happened. This
+		// window is sub-millisecond and is exactly where at-least-once stops
+		// being exactly-once.
+		options.crash?.("after-send");
 		let outcome: Awaited<ReturnType<typeof completeDelivery>>;
 		try {
 			outcome = await completeDelivery(database, row, result, replicaId);
@@ -405,6 +418,7 @@ export function startWorker(
 	timing: WorkerTiming = workerTiming(env),
 ): Cron {
 	const replicaId = resolveReplicaId(env);
+	const crash = crashHook(env);
 	let tick = 0;
 	return new Cron(
 		"* * * * * *",
@@ -420,6 +434,7 @@ export function startWorker(
 					timing,
 					replicaId,
 					prune: tick++ % timing.pruneCadenceTicks === 0,
+					crash,
 				});
 			} catch (error) {
 				console.error("worker: tick failed:", error);

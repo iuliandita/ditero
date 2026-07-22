@@ -20,6 +20,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
 import type { SchedulerTiming } from "../../config/scheduler.ts";
 import { schedulerTiming } from "../../config/scheduler.ts";
+import { crashHook } from "../../config/test-crash.ts";
 import { maxQueuedPerUser } from "../../config/worker.ts";
 import * as tables from "../../db/schema.ts";
 import {
@@ -60,8 +61,10 @@ export type TickSummary = {
 export type ScanOptions = {
 	now?: Date;
 	timing?: SchedulerTiming;
-	// Test seam for the crash-between-insert-and-enqueue case (C1). Inert
-	// unless passed; there is no env or production path that sets it.
+	// Test seam for the crash-between-insert-and-enqueue case (C1). In-process
+	// callers pass their own; startScheduler wires the process-suicide hook,
+	// which is a no-op unless DITERO_TEST_CRASH_POINT armed it outside
+	// production (config/test-crash).
 	onBeforeEnqueue?: () => void | Promise<void>;
 	maxQueuedPerUser?: number;
 };
@@ -838,6 +841,7 @@ export function startScheduler(
 	env: NodeJS.ProcessEnv = process.env,
 ): Cron {
 	const timing = schedulerTiming(env);
+	const crash = crashHook(env);
 	const seconds = Math.max(1, Math.round(timing.tickMs / 1000));
 	return new Cron(
 		"* * * * * *",
@@ -854,7 +858,10 @@ export function startScheduler(
 		async () => {
 			try {
 				await withLeaderLock(pool, SCHEDULER_LOCK_KEY, () =>
-					scanTick(database, { timing }),
+					scanTick(database, {
+						timing,
+						onBeforeEnqueue: () => crash("mid-scan"),
+					}),
 				);
 			} catch (error) {
 				console.error("scheduler: tick failed:", error);
