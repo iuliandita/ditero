@@ -24,6 +24,7 @@ import {
 import { panelsSchema } from "../domain/dashboard.ts";
 import type { ListKind } from "../domain/icon-map.ts";
 import { karmaForCompletion, karmaWrite } from "../domain/karma.ts";
+import { parseMentions } from "../domain/mention.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
@@ -33,10 +34,12 @@ import {
 	templateContentSchema,
 } from "../domain/template.ts";
 import { filterGroupSchema, viewDisplaySchema } from "../domain/view-filter.ts";
+import { collectEvent } from "./event-sink.ts";
 import {
 	type Dashboard,
 	type List,
 	type Schema,
+	type User,
 	type View,
 	zql,
 } from "./schema.gen.ts";
@@ -55,6 +58,34 @@ async function roleInWorkspace(
 		zql.membership.where("userId", userId).where("workspaceId", workspaceId),
 	);
 	return rows[0]?.role;
+}
+
+// @handle -> user id, restricted to current members of the comment's workspace
+// and matched on display name case-insensitively, mirroring what the mention
+// picker offers. Returns first-seen order, without the author.
+async function resolveMentions(
+	tx: Transaction<Schema>,
+	body: string,
+	workspaceId: string,
+	authorId: string,
+): Promise<string[]> {
+	const handles = parseMentions(body);
+	if (handles.length === 0) return [];
+	const members = await tx.run(
+		zql.membership.where("workspaceId", workspaceId).related("user"),
+	);
+	const byName = new Map<string, string>();
+	for (const m of members) {
+		const u = m.user as User | undefined;
+		if (u?.name) byName.set(u.name.toLowerCase(), u.id);
+	}
+	const out: string[] = [];
+	for (const handle of handles) {
+		const userId = byName.get(handle.toLowerCase());
+		if (userId && userId !== authorId && !out.includes(userId))
+			out.push(userId);
+	}
+	return out;
 }
 
 // Shared content-write gate. Callers resolve the workspace themselves (direct
@@ -567,6 +598,20 @@ export const mutators = defineMutators({
 					taskId: args.taskId,
 					userId: args.userId,
 				});
+				// Assigning yourself is not news. Collected, not enqueued: the
+				// server drains this after the mutation commits (server/notifications/
+				// events.ts); on the client it is a no-op.
+				if (args.userId !== ctx.id) {
+					collectEvent({
+						recipientUserId: args.userId,
+						event: {
+							kind: "assign",
+							taskId: args.taskId,
+							taskTitle: task.title,
+							actorUserId: ctx.id,
+						},
+					});
+				}
 			},
 		),
 		unassign: defineMutator(
@@ -1246,6 +1291,26 @@ export const mutators = defineMutators({
 					authorId: ctx.id,
 					body: args.body,
 				});
+				// Only handles that resolve to a current member of this workspace are
+				// notified; a mention of anyone else is the invite-on-mention flow's
+				// job, not a notification. Self-mentions are excluded.
+				for (const userId of await resolveMentions(
+					tx,
+					args.body,
+					list.workspaceId,
+					ctx.id,
+				)) {
+					collectEvent({
+						recipientUserId: userId,
+						event: {
+							kind: "mention",
+							commentId: args.id,
+							taskId: args.taskId,
+							taskTitle: task.title,
+							actorUserId: ctx.id,
+						},
+					});
+				}
 			},
 		),
 		edit: defineMutator(

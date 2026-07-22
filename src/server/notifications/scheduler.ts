@@ -27,12 +27,15 @@ import {
 	nextEscalation,
 } from "../../domain/escalation.ts";
 import { resolveEscalationPolicy } from "../../domain/escalation-policy.ts";
-import {
-	type QuietDecision,
-	quietHoursDecision,
-} from "../../domain/quiet-hours.ts";
 import { reminderWindow } from "../../domain/reminder-window.ts";
 import { type EnqueueOptions, enqueueOutbox } from "./outbox.ts";
+import {
+	DEFAULT_PREF,
+	decideQuietHours,
+	loadChannels,
+	loadPrefs,
+	type Pref,
+} from "./recipients.ts";
 
 export const SCHEDULER_LOCK_KEY = 918274;
 
@@ -114,18 +117,6 @@ type TaskRow = {
 	workspaceId: string;
 };
 
-type Pref = {
-	timezone: string;
-	quietHours: unknown;
-	escalationDefaults: unknown;
-};
-
-const DEFAULT_PREF: Pref = {
-	timezone: "UTC",
-	quietHours: null,
-	escalationDefaults: null,
-};
-
 // A non-recurring task's occurrence is its dueAt calendar date re-timed by
 // reminderTime, so only tasks anchored near the window can produce one. A
 // recurring task's dueAt is the series anchor and can sit years back, so it is
@@ -155,29 +146,6 @@ function policyFor(task: TaskRow, pref: Pref): EscalationPolicy {
 		},
 		pref.escalationDefaults,
 	);
-}
-
-function decideQuietHours(
-	pref: Pref,
-	urgent: boolean,
-	at: Date,
-	userId: string,
-): QuietDecision {
-	try {
-		return quietHoursDecision(
-			pref.quietHours as never,
-			pref.timezone,
-			at,
-			urgent,
-		);
-	} catch (error) {
-		// A broken preference must not silently suppress a reminder.
-		console.error(
-			`scheduler: unusable quiet hours for user ${userId}, firing anyway:`,
-			error,
-		);
-		return { kind: "fire" };
-	}
 }
 
 async function enqueue(
@@ -350,57 +318,6 @@ async function loadTasks(
 				),
 			),
 		);
-}
-
-async function loadPrefs(
-	database: Database,
-	userIds: string[],
-): Promise<Map<string, Pref>> {
-	const prefs = new Map<string, Pref>();
-	if (userIds.length === 0) return prefs;
-	const rows = await database
-		.select({
-			id: tables.userPref.id,
-			timezone: tables.userPref.timezone,
-			quietHours: tables.userPref.quietHours,
-			escalationDefaults: tables.userPref.escalationDefaults,
-		})
-		.from(tables.userPref)
-		.where(inArray(tables.userPref.id, userIds));
-	for (const row of rows) {
-		prefs.set(row.id, {
-			timezone: row.timezone,
-			quietHours: row.quietHours,
-			escalationDefaults: row.escalationDefaults,
-		});
-	}
-	return prefs;
-}
-
-async function loadChannels(
-	database: Database,
-	userIds: string[],
-): Promise<Map<string, ChannelKind[]>> {
-	const channels = new Map<string, ChannelKind[]>();
-	if (userIds.length === 0) return channels;
-	const rows = await database
-		.select({
-			userId: tables.notificationChannel.userId,
-			kind: tables.notificationChannel.kind,
-		})
-		.from(tables.notificationChannel)
-		.where(
-			and(
-				inArray(tables.notificationChannel.userId, userIds),
-				eq(tables.notificationChannel.enabled, true),
-			),
-		);
-	for (const row of rows) {
-		const list = channels.get(row.userId) ?? [];
-		list.push(row.kind);
-		channels.set(row.userId, list);
-	}
-	return channels;
 }
 
 async function createDueReminders(

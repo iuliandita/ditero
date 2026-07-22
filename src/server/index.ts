@@ -33,6 +33,12 @@ import { lookupUsers } from "./discovery.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
 import { ackBaseUrl } from "./notifications/capability.ts";
 import { createSendFn } from "./notifications/dispatch.ts";
+import {
+	type CollectedEvent,
+	enqueueEventsSafely,
+	startOverdueSweep,
+	withEventCollector,
+} from "./notifications/events.ts";
 import { ackRoutes } from "./notifications/routes.ts";
 import { startScheduler } from "./notifications/scheduler.ts";
 import { startWorker } from "./notifications/worker.ts";
@@ -254,6 +260,11 @@ const routes = new Elysia()
 	.post("/api/zero/mutate", async ({ request }) => {
 		const ctx = await ctxFromAuthHeader(request.headers.get("Authorization"));
 		if (!ctx) return new Response("Unauthorized", { status: 401 });
+		// Notification events are collected per mutation and enqueued only after
+		// handleMutateRequest resolves -- outside the mutator transaction, so a
+		// mutator the role gate rejects notifies nobody (see notifications/events.ts
+		// for the non-atomicity this accepts).
+		const committed: CollectedEvent[] = [];
 		const result = await handleMutateRequest({
 			dbProvider: zdb,
 			handler: (transact) =>
@@ -265,11 +276,14 @@ const routes = new Elysia()
 							args: unknown;
 						}) => Promise<void>;
 					};
-					await m.fn({ tx, ctx, args });
+					const collected: CollectedEvent[] = [];
+					await withEventCollector(collected, () => m.fn({ tx, ctx, args }));
+					committed.push(...collected);
 				}),
 			request,
 			userID: ctx.id,
 		});
+		await enqueueEventsSafely(db, committed);
 		return result instanceof Response ? result : Response.json(result);
 	});
 
@@ -312,6 +326,9 @@ if (import.meta.main) {
 	// Every replica starts one; the advisory lock elects the leader per tick.
 	// Timing is validated here so a bad interval fails at boot, not at 03:00.
 	startScheduler(db, pool);
+	// Leader-elected like the scan: a periodic table sweep, not a request-driven
+	// event.
+	startOverdueSweep(db, pool);
 	// The drain runs on every replica (claims are mediated by SKIP LOCKED).
 	// ackBaseUrl is null when no public origin is configured, which disables the
 	// ack action rather than minting a link no push client can follow.

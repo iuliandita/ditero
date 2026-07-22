@@ -35,10 +35,9 @@ export {
 	hashAckToken,
 } from "./capability.ts";
 
-// Only the reminder payload is modelled today; Task 14 adds the event shape.
 // The `kind` literal is what is load-bearing: unknown payloads fail closed as
 // permanently undeliverable rather than rendering an empty notification.
-// Deliberately loose otherwise -- the scheduler carries fields this does not
+// Deliberately loose otherwise -- the producers carry fields this does not
 // read, and rejecting them would couple the two sides for no gain.
 const reminderPayloadSchema = z
 	.object({
@@ -48,6 +47,22 @@ const reminderPayloadSchema = z
 		urgent: z.boolean().optional(),
 	})
 	.loose();
+
+// Event notifications (assignment, mention, overdue). They carry no reminder,
+// so they are never urgent and never get an ack action.
+const eventPayloadSchema = z
+	.object({
+		kind: z.enum(["assign", "mention", "overdue"]),
+		taskTitle: z.string(),
+		dueAt: z.string().optional(),
+	})
+	.loose();
+
+const EVENT_BODY: Record<"assign" | "mention" | "overdue", string> = {
+	assign: "You were assigned this task",
+	mention: "You were mentioned in a comment",
+	overdue: "This task is overdue",
+};
 
 export type DispatchDeps = {
 	database: Database;
@@ -66,13 +81,25 @@ const DEFAULT_ADAPTERS: Partial<Record<ChannelKind, ChannelAdapter>> = {
 };
 
 function renderPayload(raw: unknown): Omit<ChannelPayload, "ackUrl"> | null {
-	const parsed = reminderPayloadSchema.safeParse(raw);
-	if (!parsed.success) return null;
+	const reminder = reminderPayloadSchema.safeParse(raw);
+	if (reminder.success) {
+		return {
+			title: reminder.data.taskTitle,
+			// i18n: Task 15 renders this in the recipient's locale and timezone.
+			body: `Due ${reminder.data.occurrenceAt}`,
+			urgent: reminder.data.urgent === true,
+		};
+	}
+	const event = eventPayloadSchema.safeParse(raw);
+	if (!event.success) return null;
+	const suffix =
+		event.data.kind === "overdue" && event.data.dueAt
+			? ` (due ${event.data.dueAt})`
+			: "";
 	return {
-		title: parsed.data.taskTitle,
-		// i18n: Task 15 renders this in the recipient's locale and timezone.
-		body: `Due ${parsed.data.occurrenceAt}`,
-		urgent: parsed.data.urgent === true,
+		title: event.data.taskTitle,
+		body: `${EVENT_BODY[event.data.kind]}${suffix}`,
+		urgent: false,
 	};
 }
 
