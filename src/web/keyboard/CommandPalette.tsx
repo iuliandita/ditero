@@ -173,11 +173,21 @@ export function CommandPalette({
 		close();
 	}
 
+	// Unmounted outright when closed rather than left to Radix's exit animation.
+	// A closing layer stays mounted for the whole animation and still claims
+	// Escape, so any command that opens another surface (quick-add, new view,
+	// cheat sheet) left the palette swallowing the first Escape aimed at that
+	// surface (#19). Dropping the subtree ends the layer in the same commit.
+	// Suppressing the animation in CSS does not work here: tw-animate-css's
+	// `animate-out` outranks `animate-none` in the cascade.
+	if (!isOpen) return null;
+
 	return (
-		<Dialog open={isOpen} onOpenChange={(o) => !o && close()}>
+		<Dialog open onOpenChange={(o) => !o && close()}>
 			<DialogContent
 				showCloseButton={false}
 				aria-describedby={undefined}
+				data-testid="command-palette"
 				className="top-24 max-w-lg translate-y-0 gap-0 p-0 sm:max-w-lg"
 				onKeyDown={(e) => {
 					if (e.key === "ArrowDown") {
