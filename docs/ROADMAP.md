@@ -12,9 +12,11 @@ reminders that actually fire. Web plus native apps, mobile-first, themeable, mul
 with a public API and push to Discord/Slack/Telegram/ntfy.
 
 The design is locked. Workspace/membership read isolation and role-gated writes are proven in
-the real application. The notification spike validated its scheduler-lock, callback-capability,
-and Zero write-back seam; production channel, callback, replica, quiet-hour, and crash gates
-remain in the notification milestone. The application
+the real application. The notification engine has landed: durable at-least-once delivery with a
+single-leader scheduler, an every-replica outbox worker, quiet hours, escalation, and
+acknowledgement from in-app or an ntfy button — validated by a rig that runs real replicas and
+kills them mid-send. ntfy is the only channel so far; Telegram, Discord, Slack, and email
+follow. The application
 spine has landed on `develop` (auth issuing JWTs, live sync between two users with workspace
 isolation, a list with tasks that create and toggle live, deployable via Docker Compose).
 The rest of v1 is being built milestone by milestone, each producing working, testable
