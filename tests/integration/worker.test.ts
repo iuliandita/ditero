@@ -408,7 +408,9 @@ describe("sending", () => {
 	// Finding 1: a serial drain gives the last row of a batch an effective
 	// deadline of batchSize * adapterDeadlineMs, pushing it past the lease.
 	test("a batch is dispatched with bounded concurrency, not serially", async () => {
-		for (let i = 0; i < 6; i++) await seedOutbox(`wk-s-conc-${i}`);
+		const rows = 6;
+		const sendMs = 150;
+		for (let i = 0; i < rows; i++) await seedOutbox(`wk-s-conc-${i}`);
 		let inFlight = 0;
 		let peak = 0;
 
@@ -418,16 +420,20 @@ describe("sending", () => {
 			send: async () => {
 				inFlight++;
 				peak = Math.max(peak, inFlight);
-				await sleep(150);
+				await sleep(sendMs);
 				inFlight--;
 				return ok;
 			},
 		});
 		const elapsed = Date.now() - startedAt;
 
+		// The discriminator: a serial drain never has more than one send in
+		// flight, so this alone fails it, and it does not depend on how fast the
+		// machine is. The wall-clock check below is a second, weaker net -- bound
+		// to the serial floor rather than an arbitrary number, because a loaded
+		// CI runner took 720ms for the concurrent case that a 600ms bound failed.
 		expect(peak).toBe(3);
-		// Serial would be ~900ms; two waves of three is ~300ms.
-		expect(elapsed).toBeLessThan(600);
+		expect(elapsed).toBeLessThan(rows * sendMs);
 	});
 
 	test("a failure to record the outcome leaves the row claimed for reclaim", async () => {

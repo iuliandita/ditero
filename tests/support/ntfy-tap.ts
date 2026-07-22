@@ -17,17 +17,34 @@ export type Delivery = {
 
 // The Actions header quotes every non-constant field (adapters/ntfy.ts), so the
 // URL is the second quoted value: `http, "Done", "<url>", method=POST, ...`.
+// Scanned rather than matched. Every quote-pair regex here is polynomial, and not
+// because of its own shape: matchAll restarts at each position, so an unterminated
+// quote rescans the tail once per offset. Unrolling the alternation does not change
+// that -- measured identical, and CodeQL flags both. A single pass does.
+function quotedFields(input: string): string[] {
+	const fields: string[] = [];
+	for (let i = 0; i < input.length; i++) {
+		if (input[i] !== '"') continue;
+		let value = "";
+		let j = i + 1;
+		for (; j < input.length && input[j] !== '"'; j++) {
+			if (input[j] === "\\" && j + 1 < input.length) j++;
+			value += input[j];
+		}
+		if (j >= input.length) break; // unterminated: no closing quote follows
+		fields.push(value);
+		i = j;
+	}
+	return fields;
+}
+
 export function parseAckUrl(actions: string | null): string | null {
 	if (!actions) return null;
-	// Unrolled rather than the ambiguous `(?:[^"\\]|\\.)*`, which CodeQL flags as
-	// js/polynomial-redos. Measured: both forms cost the same here, because the
-	// quadratic term is matchAll retrying every start position against an
-	// unterminated quote, not the inner alternation. The unrolled form is still
-	// the correct shape; the input is a header this suite's own stub captured.
-	const quoted = [...actions.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)].map((m) =>
-		m[1].replace(/\\(.)/g, "$1"),
+	return (
+		quotedFields(actions).find(
+			(value) => value.startsWith("http://") || value.startsWith("https://"),
+		) ?? null
 	);
-	return quoted.find((value) => /^https?:\/\//.test(value)) ?? null;
 }
 
 export type NtfyTap = {
