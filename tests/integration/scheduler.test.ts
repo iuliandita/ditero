@@ -509,6 +509,26 @@ describe("recipients", () => {
 		);
 	});
 
+	// S2: without the client-side timezone write-back, every non-UTC user's
+	// reminders fire at the wrong instant, and every other test in this file
+	// sets the zone directly in a fixture -- so only an explicit
+	// wrong-time-must-not-fire assertion catches it.
+	test("a Pacific/Auckland 08:00 reminder fires at 20:00Z, not 08:00Z", async () => {
+		await setPref(OWNER, { timezone: "Pacific/Auckland" });
+		await seedTask("sched-r3b", { reminderTime: "08:00" });
+
+		// dueAt is 12:00Z == 2026-08-02 00:00 NZST, so the occurrence is
+		// 2026-08-02 08:00 NZST == 2026-08-01T20:00Z. A UTC-computed expansion
+		// would instead land on 2026-08-01T08:00Z, inside this first window.
+		await tick(new Date("2026-08-01T08:00:30Z"));
+		expect(await remindersFor("sched-r3b")).toHaveLength(0);
+
+		await tick(new Date("2026-08-01T20:00:30Z"));
+		const rows = await remindersFor("sched-r3b");
+		expect(rows).toHaveLength(1);
+		expect(rows[0].occurrenceAt.toISOString()).toBe("2026-08-01T20:00:00.000Z");
+	});
+
 	test("one malformed reminderTime does not stop the other tasks", async () => {
 		await seedTask("sched-r4-bad", { reminderTime: "9am" });
 		await seedTask("sched-r4-a");

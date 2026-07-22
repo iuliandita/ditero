@@ -315,6 +315,58 @@ describe("sharing write-permission mutators", () => {
 		).rejects.toThrow(/assignee not a member/);
 	});
 
+	// M3a per-task reminder policy: the fallback receives this task's title on a
+	// push, so it is gated on membership of the TASK's workspace (narrower than
+	// the user-level default's "shares any workspace").
+	test("task.update rejects a fallbackUserId outside the task's workspace", async () => {
+		await expect(
+			call(
+				mutators.task.update,
+				{ id: "owner" },
+				{ id: "shared-task", fallbackUserId: "outsider" },
+			),
+		).rejects.toThrow(/fallback is not a member/);
+	});
+
+	test("task.update persists the reminder policy for a member fallback", async () => {
+		await call(
+			mutators.task.update,
+			{ id: "owner" },
+			{
+				id: "shared-task",
+				urgent: true,
+				repeatEveryMin: 15,
+				maxRepeats: 2,
+				fallbackUserId: "member",
+			},
+		);
+		const [row] = await db
+			.select()
+			.from(tables.task)
+			.where(eq(tables.task.id, "shared-task"));
+		expect(row.urgent).toBe(true);
+		expect(row.repeatEveryMin).toBe(15);
+		expect(row.maxRepeats).toBe(2);
+		expect(row.fallbackUserId).toBe("member");
+	});
+
+	test("task.update caps maxRepeats and rejects a zero repeat interval", async () => {
+		await expect(
+			call(
+				mutators.task.update,
+				{ id: "owner" },
+				{ id: "shared-task", maxRepeats: 32767 },
+			),
+		).rejects.toThrow();
+		await expect(
+			call(
+				mutators.task.update,
+				{ id: "owner" },
+				{ id: "shared-task", repeatEveryMin: 0 },
+			),
+		).rejects.toThrow();
+	});
+
 	test("task.assign by a non-member of the task's workspace is rejected", async () => {
 		await expect(
 			call(

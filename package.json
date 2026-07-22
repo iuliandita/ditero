@@ -6,6 +6,7 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "bun run src/db/migrate.ts",
 		"security:rotate-auth-secrets": "bun run src/security/rotate-auth-secrets.ts",
+		"security:encrypt-channel-configs": "bun run src/security/encrypt-channel-configs.ts",
 		"zero:gen": "drizzle-zero generate -o src/zero/schema.gen.ts",
 		"lint": "biome check",
 		"dev:server": "bun run --hot src/server/index.ts",

@@ -10,6 +10,10 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import * as tables from "../../src/db/schema.ts";
+import {
+	DEFAULT_MAX_REPEATS,
+	resolveEscalationPolicy,
+} from "../../src/domain/escalation-policy.ts";
 import { mutators } from "../../src/zero/mutators.ts";
 import { queries } from "../../src/zero/queries.ts";
 import { type Schema, schema } from "../../src/zero/schema.gen.ts";
@@ -610,6 +614,60 @@ describe("userPref write-permission mutator: M3a notification defaults", () => {
 				call(mutators.userPref.set, { id: "viz-a" }, { quietHours }),
 			).rejects.toThrow();
 		}
+	});
+
+	// S5: a user setting both pickers to the same time means "quiet all day",
+	// but the domain reads equal start/end as "never quiet" -- the exact
+	// opposite. Rejected at the write path rather than reinterpreted; all-day
+	// quiet already has a primitive (disable the channel).
+	test("equal quiet-hours start and end is rejected", async () => {
+		await expect(
+			call(
+				mutators.userPref.set,
+				{ id: "viz-a" },
+				{ quietHours: { start: "22:00", end: "22:00" } },
+			),
+		).rejects.toThrow();
+	});
+
+	// S3: repeatEveryMin without maxRepeats is deliberately ACCEPTED. null means
+	// "inherit", and at the user level the resolver's DEFAULT_MAX_REPEATS floor
+	// is the terminal answer -- rejecting the pair would forbid "repeat every 10
+	// minutes, use the default count".
+	test("repeatEveryMin with a null maxRepeats is accepted and inherits the floor", async () => {
+		await call(
+			mutators.userPref.set,
+			{ id: "viz-c" },
+			{
+				escalationDefaults: {
+					repeatEveryMin: 10,
+					maxRepeats: null,
+					fallbackUserId: null,
+				},
+			},
+		);
+		const row = (
+			await db
+				.select()
+				.from(tables.userPref)
+				.where(eq(tables.userPref.id, "viz-c"))
+		)[0];
+		expect(row?.escalationDefaults).toEqual({
+			repeatEveryMin: 10,
+			maxRepeats: null,
+			fallbackUserId: null,
+		});
+		expect(
+			resolveEscalationPolicy(
+				{
+					repeatEveryMin: null,
+					maxRepeats: null,
+					fallbackUserId: null,
+					urgent: false,
+				},
+				row?.escalationDefaults,
+			).maxRepeats,
+		).toBe(DEFAULT_MAX_REPEATS);
 	});
 
 	test("valid escalation defaults are persisted", async () => {

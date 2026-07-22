@@ -31,6 +31,7 @@ import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
 import { FocusSettings } from "../components/settings/FocusSettings.tsx";
 import { KarmaSettings } from "../components/settings/KarmaSettings.tsx";
 import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
+import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
@@ -605,6 +606,7 @@ function NormalWorkspace() {
 				<KarmaPanel />
 				<KarmaSettings />
 				<FocusSettings />
+				<NotificationSettings />
 			</div>
 		);
 	} else if (openListId) {
@@ -906,6 +908,7 @@ function NormalWorkspace() {
 								    surface lives beside Security on the desktop landing. */}
 								<KeymapSettings />
 								<FocusSettings />
+								<NotificationSettings />
 							</div>
 						)}
 					</div>

@@ -1,4 +1,27 @@
+import { networkInterfaces } from "node:os";
 import { defineConfig, devices } from "@playwright/test";
+
+// The ntfy stub cannot live on loopback: safe-http refuses 127.0.0.0/8
+// unconditionally and no allowlist may re-enable it (that is the point of the
+// SSRF boundary). Bind the stub to a real private interface instead -- the
+// docker bridge, which any machine running this suite has -- and allowlist that
+// one address for the API process only.
+function stubHost(): string {
+	const candidates = Object.values(networkInterfaces())
+		.flat()
+		.filter((i) => i && i.family === "IPv4" && !i.internal)
+		.map((i) => (i as { address: string }).address);
+	const host =
+		candidates.find((a) => a.startsWith("172.")) ??
+		candidates.find((a) => a.startsWith("10.") || a.startsWith("192.168.")) ??
+		candidates[0];
+	if (!host) throw new Error("e2e: no non-loopback IPv4 for the ntfy stub");
+	return host;
+}
+
+const NTFY_HOST = stubHost();
+// Read by tests/e2e/notifications.spec.ts (workers inherit this process env).
+process.env.E2E_NTFY_URL = `http://${NTFY_HOST}:4599`;
 
 const databaseURL =
 	process.env.E2E_DATABASE_URL ??
@@ -33,7 +56,20 @@ export default defineConfig({
 				DITERO_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString("base64"),
 				DITERO_PASSKEY_ORIGIN: "http://localhost:5173",
 				DITERO_REGISTRATION_MODE: "open",
+				// The ntfy stub below is on loopback; without this the SSRF guard
+				// rejects every test send before it leaves the process.
+				DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS: `${NTFY_HOST}/32`,
+				// A 30s scan tick would put the reminder e2e past its timeout; the
+				// late threshold must stay at >= 2 ticks (config/scheduler.ts).
+				DITERO_SCHEDULER_TICK_MS: "2000",
+				DITERO_SCHEDULER_LATE_THRESHOLD_MS: "5000",
 			},
+		},
+		{
+			command: "bun run tests/e2e/ntfy-stub.ts",
+			url: `http://${NTFY_HOST}:4599/health`,
+			reuseExistingServer: false,
+			timeout: 30_000,
 		},
 		{
 			command: "bun run dev:web",

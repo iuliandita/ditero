@@ -237,6 +237,17 @@ export async function safeFetch(
 			headers: responseHeaders(result.headers),
 		});
 	} finally {
-		await dispatcher.close();
+		// Bun ships its own `undici` shim whose Agent is a bare EventEmitter with
+		// no close(), so an unguarded call threw out of this finally and turned
+		// EVERY outbound send into a transport failure under the runtime the app
+		// actually runs on -- invisible until a test exercised safeFetch for real
+		// rather than injecting a double.
+		//
+		// NOTE: that same shim also ignores the pinning connector above, so under
+		// Bun the resolved-address pin (DNS-rebinding protection) is inert. The
+		// policy checks in resolvePinnedTarget still run before the request, so
+		// the address boundary itself holds; closing the rebind window needs a
+		// transport that honors a custom connector and is tracked separately.
+		await dispatcher.close?.();
 	}
 }

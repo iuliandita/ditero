@@ -9,6 +9,10 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
 import * as tables from "../../db/schema.ts";
 import type { ChannelKind } from "../../domain/notification-channel.ts";
+import {
+	channelKeyRing,
+	decryptChannelConfig,
+} from "../../security/channel-config.ts";
 import type { safeFetch } from "../../security/safe-http.ts";
 import type { Network } from "../client-ip.ts";
 import { ntfyAdapter } from "./adapters/ntfy.ts";
@@ -119,7 +123,16 @@ async function loadChannelConfig(
 			),
 		)
 		.limit(1);
-	return rows.length === 0 ? null : { config: rows[0].config };
+	if (rows.length === 0) return null;
+	// Single decrypt point for the send path: the adapters receive cleartext and
+	// nothing else in the pipeline reads this column.
+	return {
+		config: decryptChannelConfig(
+			kind,
+			rows[0].config as Record<string, unknown>,
+			channelKeyRing(),
+		),
+	};
 }
 
 // Minted here rather than at enqueue (C21): the outbox payload is retained for

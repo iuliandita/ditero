@@ -36,6 +36,8 @@ import { useFocusSessions } from "../../hooks/useFocusSessions.ts";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
 import { CommentThread } from "../people/CommentThread.tsx";
 import { RecurrenceEditor } from "../task/RecurrenceEditor.tsx";
+import { ReminderChip } from "../task/ReminderChip.tsx";
+import { ReminderPolicy } from "../task/ReminderPolicy.tsx";
 
 const PRIORITY_OPTIONS = [
 	{ value: 0, label: "None" },
@@ -249,6 +251,7 @@ export function TaskDetail({
 									<X />
 								</Button>
 							)}
+							<ReminderChip task={t} />
 						</div>
 					</div>
 
@@ -272,6 +275,14 @@ export function TaskDetail({
 					</div>
 
 					{!isSubtask && <RecurrenceEditor key={t.id} task={t} />}
+
+					{!isSubtask && (
+						<ReminderPolicy
+							key={`reminder-${t.id}`}
+							task={t}
+							workspaceId={list.workspaceId}
+						/>
+					)}
 
 					{!isSubtask && t.rrule != null && kind !== "habits" && (
 						<Button

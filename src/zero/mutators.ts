@@ -22,6 +22,7 @@ import {
 	completeForAck,
 } from "../domain/ack-complete.ts";
 import { panelsSchema } from "../domain/dashboard.ts";
+import { MAX_REPEATS_CAP } from "../domain/escalation-policy.ts";
 import type { ListKind } from "../domain/icon-map.ts";
 import { karmaForCompletion, karmaWrite } from "../domain/karma.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
@@ -248,12 +249,20 @@ function isValidTimeZone(tz: string): boolean {
 const timezoneArg = z.string().max(100).refine(isValidTimeZone, {
 	message: "invalid IANA timezone",
 });
+// S5: equal start and end is rejected, not reinterpreted. The domain reads it
+// as "never quiet" (the opposite of what a user setting both to 22:00 intends),
+// and the alternative reading -- quiet all day -- would park every non-urgent
+// reminder with no wake time. All-day quiet already has a primitive: turn the
+// channel off.
 const quietHoursSchema = z
 	.object({
 		start: z.string().regex(HHMM_RE),
 		end: z.string().regex(HHMM_RE),
 	})
-	.strict();
+	.strict()
+	.refine((q) => q.start !== q.end, {
+		message: "quiet hours start and end must differ",
+	});
 const quietHoursArg = z.custom<ReadonlyJSONValue>(
 	(v) => v === null || quietHoursSchema.safeParse(v).success,
 	{ message: "invalid quietHours" },
@@ -491,6 +500,27 @@ export const mutators = defineMutators({
 					.regex(/^([01]\d|2[0-3]):[0-5]\d$/)
 					.nullable()
 					.optional(),
+				// Per-task reminder policy (M3a). null on any of the three escalation
+				// columns means "inherit the user default", never "disabled".
+				urgent: z.boolean().optional(),
+				// Capped at a week: the column is a bare smallint, and the pairing
+				// that matters (a tiny interval with a large count) is bounded by
+				// maxRepeats below.
+				repeatEveryMin: z
+					.number()
+					.int()
+					.positive()
+					.max(10_080)
+					.nullable()
+					.optional(),
+				maxRepeats: z
+					.number()
+					.int()
+					.min(0)
+					.max(MAX_REPEATS_CAP)
+					.nullable()
+					.optional(),
+				fallbackUserId: z.string().max(200).nullable().optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				const task = await tx.run(
@@ -502,6 +532,19 @@ export const mutators = defineMutators({
 				// Fail loud before any write if a non-null rrule is malformed, so the
 				// complete/skip paths never read back an unparseable recurrence.
 				if (args.rrule != null) parseRule(args.rrule);
+				// The escalation fallback receives this task's title on a push, so it
+				// must be a member of the task's own workspace -- narrower than the
+				// user-level default's "shares any workspace with you". The scheduler
+				// re-checks at fire time, since memberships change in between.
+				if (args.fallbackUserId != null) {
+					const fallbackRole = await roleInWorkspace(
+						tx,
+						args.fallbackUserId,
+						list.workspaceId,
+					);
+					if (!fallbackRole)
+						throw new Error("escalation fallback is not a member");
+				}
 				// done and completedAt are one invariant, kept here in one place.
 				const completed =
 					args.done === undefined
@@ -528,6 +571,16 @@ export const mutators = defineMutators({
 						: {}),
 					...(args.reminderTime !== undefined
 						? { reminderTime: args.reminderTime }
+						: {}),
+					...(args.urgent !== undefined ? { urgent: args.urgent } : {}),
+					...(args.repeatEveryMin !== undefined
+						? { repeatEveryMin: args.repeatEveryMin }
+						: {}),
+					...(args.maxRepeats !== undefined
+						? { maxRepeats: args.maxRepeats }
+						: {}),
+					...(args.fallbackUserId !== undefined
+						? { fallbackUserId: args.fallbackUserId }
 						: {}),
 				});
 			},

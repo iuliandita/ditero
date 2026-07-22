@@ -52,14 +52,20 @@ const PUBLIC_FIELDS: Partial<Record<ChannelKind, readonly string[]>> = {
 	ntfy: ["serverUrl", "topic"],
 };
 
+// Same allow-list the mask uses, exposed so the at-rest encryption covers
+// exactly the fields the mask refuses to hand back -- one definition of
+// "secret", not two that can drift.
+export function isPublicChannelField(kind: ChannelKind, key: string): boolean {
+	return (PUBLIC_FIELDS[kind] ?? []).includes(key);
+}
+
 export function maskChannelConfig(
 	kind: ChannelKind,
 	config: Record<string, unknown>,
 ): Record<string, unknown> {
-	const publicFields = new Set(PUBLIC_FIELDS[kind] ?? []);
 	const masked: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(config)) {
-		masked[key] = publicFields.has(key) ? value : MASKED;
+		masked[key] = isPublicChannelField(kind, key) ? value : MASKED;
 	}
 	return masked;
 }

@@ -437,9 +437,10 @@ export const notificationChannel = pgTable(
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
 		kind: channelKindEnum("kind").notNull(),
-		// Never synced (omitted at the drizzle-zero layer). Holds channel credentials
-		// and is currently stored as plaintext JSONB; the design requires encryption
-		// at rest via the M0.1 field-encryption path, which M3a Task 15 owns.
+		// Never synced (omitted at the drizzle-zero layer). Holds channel
+		// credentials: the secret fields are enveloped at rest via the
+		// field-encryption path (security/channel-config.ts); the public fields
+		// (ntfy serverUrl/topic) stay readable.
 		config: jsonb("config").notNull(),
 		enabled: boolean("enabled").notNull().default(true),
 		verifiedAt: timestamp("verified_at", { withTimezone: true }),

@@ -14,6 +14,7 @@ import { formatDue, isOverdue, priorityMeta } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import type { Label, Task } from "../../../zero/schema.gen.ts";
+import { ReminderChip } from "../task/ReminderChip.tsx";
 
 export type RowHandlers = {
 	onToggle: (id: string, done: boolean) => void;
@@ -238,6 +239,9 @@ export function TaskRow({
 							</div>
 						)}
 					</button>
+					{/* Outside the title button: the chip is itself a control when the
+					    reminder is still live, and a button cannot nest in a button. */}
+					{!bare && <ReminderChip task={task} />}
 					{!bare && <PriorityFlag priority={task.priority} />}
 					{total > 0 && (
 						<button

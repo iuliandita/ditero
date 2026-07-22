@@ -32,6 +32,13 @@ import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
 import { ackBaseUrl } from "./notifications/capability.ts";
+import {
+	ChannelError,
+	deleteChannel,
+	listChannels,
+	saveChannel,
+	testChannel,
+} from "./notifications/channels.ts";
 import { createSendFn } from "./notifications/dispatch.ts";
 import {
 	eventMutateSession,
@@ -69,6 +76,29 @@ function guardedPost(
 		if (!session) return new Response("Unauthorized", { status: 401 });
 		return await handler(request, session);
 	};
+}
+
+// Shared JSON-body + ChannelError shape for the three channel writes. The error
+// message is a fixed category ("invalid channel config"), never the config, so
+// a 400 body can never echo a secret back.
+async function channelWrite(
+	request: Request,
+	run: (body: unknown) => Promise<unknown>,
+): Promise<unknown> {
+	let body: unknown;
+	try {
+		body = await request.json();
+	} catch {
+		return new Response("Bad Request", { status: 400 });
+	}
+	try {
+		return await run(body);
+	} catch (error) {
+		if (error instanceof ChannelError) {
+			return new Response(error.message, { status: error.status });
+		}
+		throw error;
+	}
 }
 
 const routes = new Elysia()
@@ -237,6 +267,35 @@ const routes = new Elysia()
 		const email = new URL(request.url).searchParams.get("email") ?? "";
 		return await lookupUsers(email, session.user.id, db);
 	})
+	// Notification channels. The config column never syncs, so the settings form
+	// reads it here -- masked, never in cleartext (design 6).
+	.get("/api/notifications/channels", async ({ request }) => {
+		const origin = request.headers.get("origin");
+		if (origin && !requestOrigins.some((o) => new URL(o).origin === origin)) {
+			return new Response("Forbidden", { status: 403 });
+		}
+		const session = await auth.api.getSession({ headers: request.headers });
+		if (!session) return new Response("Unauthorized", { status: 401 });
+		return { channels: await listChannels(db, session.user.id) };
+	})
+	.post(
+		"/api/notifications/channel",
+		guardedPost((request, session) =>
+			channelWrite(request, (body) => saveChannel(db, session.user.id, body)),
+		),
+	)
+	.post(
+		"/api/notifications/channel/delete",
+		guardedPost((request, session) =>
+			channelWrite(request, (body) => deleteChannel(db, session.user.id, body)),
+		),
+	)
+	.post(
+		"/api/notifications/channel/test",
+		guardedPost((request, session) =>
+			channelWrite(request, (body) => testChannel(db, session.user.id, body)),
+		),
+	)
 	// Zero synced-query endpoint. zero-cache POSTs here; we authenticate and
 	// return filtered queries so only permitted rows sync.
 	.post("/api/zero/query", async ({ request }) => {
