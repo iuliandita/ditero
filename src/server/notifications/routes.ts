@@ -113,9 +113,13 @@ export function ackRoutes(database: Database, options: AckRouteOptions = {}) {
 				});
 			}
 
-			let ok: boolean;
+			let redeemed: string | null;
 			try {
-				ok = await redeemAckCapability(database, params.token, "capability");
+				redeemed = await redeemAckCapability(
+					database,
+					params.token,
+					"capability",
+				);
 			} catch (error) {
 				// Logged, not surfaced: a 500 here would tell a prober that this
 				// token reached the completion path, which the uniform rejection
@@ -123,7 +127,7 @@ export function ackRoutes(database: Database, options: AckRouteOptions = {}) {
 				console.error("ack: redeem failed:", error);
 				return await reject();
 			}
-			if (!ok) return await reject();
+			if (redeemed === null) return await reject();
 			return new Response("Done.", { status: 200, headers: ACK_CORS });
 		});
 }

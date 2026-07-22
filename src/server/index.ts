@@ -46,6 +46,8 @@ import {
 } from "./notifications/events.ts";
 import { ackRoutes } from "./notifications/routes.ts";
 import { startScheduler } from "./notifications/scheduler.ts";
+import { startTelegramPoller } from "./notifications/telegram-poll.ts";
+import { telegramWebhookRoutes } from "./notifications/telegram-webhook.ts";
 import { startWorker } from "./notifications/worker.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
@@ -129,6 +131,10 @@ const routes = new Elysia()
 	// policy rejects (and which `origin: false` rejects outright in production).
 	// It carries no session or cookie, so its own permissive allowance is safe.
 	.use(ackRoutes(db))
+	// Same placement and the same reason: Telegram posts the callback with no
+	// session and no Origin header, and the route authenticates itself with the
+	// provider's secret-token header.
+	.use(telegramWebhookRoutes(db))
 	.use(cors(corsPolicy(process.env)))
 	.onRequest(({ set }) => {
 		Object.assign(set.headers, responseHeaders);
@@ -404,6 +410,10 @@ if (import.meta.main) {
 	// Leader-elected like the scan: a periodic table sweep, not a request-driven
 	// event.
 	startOverdueSweep(db, pool);
+	// Leader-elected too, under its own key: Telegram hands an update to
+	// whichever poller asks first, so a second one consumes acks away. In
+	// webhook mode it registers the listener with each bot instead of polling.
+	startTelegramPoller(db, pool);
 	// The drain runs on every replica (claims are mediated by SKIP LOCKED).
 	// ackBaseUrl is null when no public origin is configured, which disables the
 	// ack action rather than minting a link no push client can follow.

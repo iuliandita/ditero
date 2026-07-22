@@ -411,6 +411,56 @@ describe("input validation", () => {
 		).rejects.toBeInstanceOf(ChannelError);
 	});
 
+	// Design 3.1: an app-mode button is acked through an interactions endpoint on
+	// this deployment's public origin. Saved without one, the channel would look
+	// configured and deliver buttons nothing can answer.
+	describe("app mode without a public base URL", () => {
+		const APP = {
+			kind: "discord",
+			config: {
+				mode: "app",
+				botToken: "MTIzNDU2Nzg5MDEyMzQ1Njc4.GaBcDe.bot-secret",
+				publicKey: "a".repeat(64),
+				channelId: "1234567890123456789",
+			},
+		};
+		const WEBHOOK = {
+			kind: "discord",
+			config: {
+				mode: "webhook",
+				webhookUrl: "https://discord.com/api/webhooks/123456789/wh-secret-xyz",
+			},
+		};
+		const noPublicUrl = {
+			...process.env,
+			DITERO_PUBLIC_URL: "",
+			BETTER_AUTH_URL: "",
+		};
+		const withPublicUrl = {
+			...noPublicUrl,
+			DITERO_PUBLIC_URL: "https://app.example.test",
+		};
+
+		it("is rejected and stores nothing", async () => {
+			await expect(
+				saveChannel(db, USER, APP, noPublicUrl),
+			).rejects.toBeInstanceOf(ChannelError);
+			expect(await listChannels(db, USER)).toEqual([]);
+		});
+
+		it("is accepted once one is configured", async () => {
+			const view = await saveChannel(db, USER, APP, withPublicUrl);
+			expect(view.config).toMatchObject({ mode: "app", botToken: MASKED });
+			expect(JSON.stringify(await rawConfig())).not.toContain("bot-secret");
+		});
+
+		// The gate is app-mode only: webhook mode needs no endpoint of ours.
+		it("does not block webhook mode", async () => {
+			const view = await saveChannel(db, USER, WEBHOOK, noPublicUrl);
+			expect(view.config).toMatchObject({ mode: "webhook" });
+		});
+	});
+
 	it("rejects an unknown kind", async () => {
 		await expect(
 			saveChannel(db, USER, { kind: "carrier-pigeon", config: {} }),

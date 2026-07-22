@@ -20,17 +20,19 @@ import {
 	encryptChannelConfig,
 } from "../../security/channel-config.ts";
 import type { safeFetch } from "../../security/safe-http.ts";
+import { discordAdapter } from "./adapters/discord.ts";
 import { ntfyAdapter } from "./adapters/ntfy.ts";
 import type { ChannelAdapter } from "./adapters/types.ts";
-import { takeRateToken } from "./capability.ts";
+import { ackBaseUrl, takeRateToken } from "./capability.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 
-// M3a ships ntfy only; the other four rows are rendered disabled in the UI
-// (shell doc 1) and are rejected here so a hand-rolled POST cannot store a
-// config for a channel with no adapter.
+// Rows without an adapter are rendered disabled in the UI (shell doc 1) and are
+// rejected here so a hand-rolled POST cannot store a config for a channel
+// nothing can send on.
 const IMPLEMENTED: Partial<Record<ChannelKind, ChannelAdapter>> = {
 	ntfy: ntfyAdapter,
+	discord: discordAdapter,
 };
 
 const CHANNEL_KINDS = new Set<string>(tables.channelKindEnum.enumValues);
@@ -105,6 +107,26 @@ function requireConfig(value: unknown): Record<string, unknown> {
 		}
 	}
 	return Object.fromEntries(entries);
+}
+
+// Design 3.1: an app-mode button is acked through an interactions endpoint on
+// this deployment's own public origin. With no public base URL there is no
+// endpoint to register and no ack link to fall back to, so the mode is refused
+// at save rather than stored and left silently non-interactive -- which is the
+// same invisible failure the webhook-mode type guard exists to prevent.
+// ackBaseUrl is the codebase's only notion of "public origin"; reused, not
+// re-derived.
+function requireInteractiveSupport(
+	config: Record<string, unknown>,
+	env: NodeJS.ProcessEnv,
+): void {
+	if (config.mode !== "app") return;
+	if (ackBaseUrl(env) === null) {
+		throw new ChannelError(
+			"app mode needs a public base URL: set DITERO_PUBLIC_URL first",
+			400,
+		);
+	}
 }
 
 async function storedConfig(
@@ -204,6 +226,7 @@ async function upsertChannel(
 		throw new ChannelError("invalid channel config", 400);
 	}
 	const config = parsed.data as Record<string, unknown>;
+	requireInteractiveSupport(config, env);
 	const stored = encryptChannelConfig(kind, config, channelKeyRing(env));
 	// A changed config invalidates the previous verification: the old
 	// verified_at described a server/topic/token combination that no longer

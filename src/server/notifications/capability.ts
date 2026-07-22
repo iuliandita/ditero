@@ -279,16 +279,27 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 	};
 }
 
-// Redeem a capability token. Returns false for every rejection class; the
-// caller must not distinguish them. Throwing out of the transaction body is how
-// a denied completion rolls the consume back -- the token stays usable once the
-// denial is fixed -- while a binding mismatch returns false and keeps the burn.
+// Redeem a capability token. Returns the recipient the capability was bound to,
+// or null for every rejection class; the caller must not distinguish them.
+// Throwing out of the transaction body is how a denied completion rolls the
+// consume back -- the token stays usable once the denial is fixed -- while a
+// binding mismatch returns null and keeps the burn.
+//
+// The recipient is returned rather than a bare boolean because a channel
+// listener resolves a callback to several possible recipients (a group chat one
+// whole family is bound to) and has to answer the provider with THAT user's
+// credentials, not an arbitrary member's.
 export async function redeemAckCapability(
 	database: Database,
 	token: string,
 	via: string,
 	now: number = Date.now(),
-): Promise<boolean> {
+	// Channel listeners bind the callback's sender to the capability's
+	// recipient (design 5). Checked after the consume, like every other binding
+	// here: a mismatch keeps the burn rather than leaving the token alive for a
+	// corrected retry.
+	options: { allowedRecipients?: readonly string[] } = {},
+): Promise<string | null> {
 	try {
 		return await database.transaction(async (tx) => {
 			const { rows } = await tx.execute<{
@@ -305,8 +316,14 @@ export async function redeemAckCapability(
 			`);
 			const capability = rows[0];
 			// Unknown, expired or already consumed -- one outcome, by design.
-			if (!capability) return false;
-			if (capability.action !== ACK_ACTION) return false;
+			if (!capability) return null;
+			if (capability.action !== ACK_ACTION) return null;
+			if (
+				options.allowedRecipients !== undefined &&
+				!options.allowedRecipients.includes(capability.recipient_user_id)
+			) {
+				return null;
+			}
 
 			const reminders = await tx
 				.select()
@@ -314,11 +331,11 @@ export async function redeemAckCapability(
 				.where(eq(tables.reminderState.id, capability.reminder_state_id))
 				.limit(1);
 			const reminder = reminders[0];
-			if (!reminder) return false;
+			if (!reminder) return null;
 			// A capability minted for one recipient must not act as another's,
 			// even if both are on the same occurrence.
 			if (reminder.recipientUserId !== capability.recipient_user_id) {
-				return false;
+				return null;
 			}
 
 			// Completion runs first so its outcome can be recorded on the row: a
@@ -353,11 +370,11 @@ export async function redeemAckCapability(
 						notInArray(tables.reminderState.status, [...ACK_TERMINAL_STATUSES]),
 					),
 				);
-			return true;
+			return capability.recipient_user_id;
 		});
 	} catch (error) {
 		// A denied completion rolled the whole transaction back, consume included.
-		if (error instanceof AckCompletionDenied) return false;
+		if (error instanceof AckCompletionDenied) return null;
 		throw error;
 	}
 }

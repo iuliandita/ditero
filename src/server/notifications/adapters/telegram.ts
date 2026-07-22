@@ -34,7 +34,7 @@ const TOKEN_SEGMENT = /^[A-Za-z0-9_-]{16,}$/;
 // encodeURIComponent's blanket %3A would put a percent-escape in the path of
 // every single request. Encode the characters that actually change the request
 // target -- `/`, `?`, `#`, `%` -- and leave the rest byte-identical.
-function pathSegment(value: string): string {
+export function pathSegment(value: string): string {
 	return encodeURIComponent(value).replace(/%3A/g, ":");
 }
 
