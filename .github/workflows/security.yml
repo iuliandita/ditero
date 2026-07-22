@@ -49,7 +49,7 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
-          skip-dirs: node_modules,spikes
+          skip-dirs: node_modules
           severity: HIGH,CRITICAL
           scanners: vuln,secret,misconfig
           format: sarif

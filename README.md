@@ -15,7 +15,7 @@ no paywalls.
 
 > **Status: pre-alpha.** Ditero is under active design and construction on the `develop`
 > branch. There is no installable release yet. The sync and authorization foundation is proven
-> (see [de-risking spikes](#project-status)); the application is being built milestone by
+> (see [project status](#project-status)); the application is being built milestone by
 > milestone toward `v1.0.0`. Watch/star to follow along.
 
 ## Why Ditero
@@ -153,16 +153,17 @@ a `-debian` variant. Images use channel tags: `:nightly` (bleeding edge),
 
 ## Project status
 
-The two highest-risk design questions were explored with runnable spikes before committing
-to the build:
+The two highest-risk design questions were explored with runnable spikes before committing to
+the build, and both are now settled in the application itself:
 
 - **Permissions** — Zero expresses multi-workspace read isolation and role-gated writes.
-- **Notifications** — the scheduler lock, secure acknowledgement capability, escalation state,
-  and Zero write-back seam work. The delivery engine has since been built and validated against
-  real multi-replica crashes; the remaining channels beyond ntfy are still outstanding.
+- **Notifications** — durable at-least-once delivery, a single-leader scheduler, quiet hours,
+  escalation, and acknowledgement from in-app or a channel button. Validated by a test rig that
+  runs real replicas and kills them mid-send. ntfy is the only channel so far; Telegram,
+  Discord, Slack, and email follow.
 
-The permission risk is retired; the notification architecture is narrowed and has explicit
-remaining gates. The build proceeds through a milestone roadmap on `develop`.
+Both spikes have been removed now that the production code supersedes them. The build proceeds
+through a milestone roadmap on `develop`.
 
 ## Contributing
 
