@@ -685,7 +685,6 @@ describe("recipients", () => {
 
 describe("scan isolation from unrelated rows", () => {
 	test("a reminder in another workspace's list is untouched by role", async () => {
-		// Sanity: the scan is not membership-filtered, but the escalate branch is.
 		await seedTask("sched-x1", { repeatEveryMin: 10, maxRepeats: 2 });
 		const summary = await tick(ON_TIME);
 		expect(summary.created).toBeGreaterThan(0);
@@ -699,6 +698,40 @@ describe("scan isolation from unrelated rows", () => {
 				),
 			);
 		expect(rows).toHaveLength(0);
+	});
+
+	// task_assignee survives a membership removal, so an ex-member would keep
+	// receiving reminders carrying the task title on their own push channel.
+	test("an assignee who is not a member gets no reminder, their co-assignee still does", async () => {
+		await seedTask("sched-x2", { repeatEveryMin: 10, maxRepeats: 2 }, [
+			A,
+			OUTSIDER,
+		]);
+		await tick(ON_TIME);
+
+		const rows = await remindersFor("sched-x2");
+		expect(rows.map((r) => r.recipientUserId)).toEqual([A]);
+		expect(await outboxFor(rows[0].id)).toHaveLength(1);
+	});
+
+	// The owner fallback is the other route into the same leak: a list whose
+	// owner left the workspace has no assignees to fall back from.
+	test("a list owner who is not a member gets no reminder", async () => {
+		await db
+			.delete(tables.membership)
+			.where(eq(tables.membership.userId, OWNER));
+		try {
+			await seedTask("sched-x3", { repeatEveryMin: 10, maxRepeats: 2 });
+			await tick(ON_TIME);
+			expect(await remindersFor("sched-x3")).toHaveLength(0);
+		} finally {
+			await db.insert(tables.membership).values({
+				id: `sched-m-${OWNER}`,
+				userId: OWNER,
+				workspaceId: WS,
+				role: "owner",
+			});
+		}
 	});
 });
 

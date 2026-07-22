@@ -4,6 +4,7 @@ import {
 	MASKED,
 	maskChannelConfig,
 	redactChannelUrl,
+	redactUrlsIn,
 	restoreChannelConfig,
 } from "./notification-channel.ts";
 
@@ -187,5 +188,26 @@ describe("redactChannelUrl", () => {
 		expect(redactChannelUrl("https://discord.com/api/webhooks/123/")).toBe(
 			"https://discord.com/api/webhooks/123/",
 		);
+	});
+
+	// The ack token is a bearer capability on the deployment's own origin, so no
+	// host rule catches it. Shape mirrors dispatch.ts's mintAckUrl.
+	it("redacts the ack capability token on the app's own origin", () => {
+		const token = "xS3-t0k3n_abcDEF";
+		const redacted = redactChannelUrl(
+			`https://app.example.test/api/notifications/ack/${token}`,
+		);
+		expect(redacted).not.toContain(token);
+		expect(redacted).toBe(
+			"https://app.example.test/api/notifications/ack/[REDACTED]",
+		);
+	});
+
+	it("redacts an ack token embedded in an error message", () => {
+		const token = "xS3-t0k3n_abcDEF";
+		const sanitized = redactUrlsIn(
+			`ntfy rejected https://app.example.test/api/notifications/ack/${token} with 502`,
+		);
+		expect(sanitized).not.toContain(token);
 	});
 });

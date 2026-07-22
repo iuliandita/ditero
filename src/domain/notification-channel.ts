@@ -100,6 +100,12 @@ const SECRET_LAST_SEGMENT_DOMAINS = [
 	"slack.com",
 ];
 
+// Mirrors ACK_PATH in server/notifications/capability.ts, which this domain
+// module must not import (it pulls the database layer in). The ack token is the
+// whole credential and rides in the last path segment, on the deployment's own
+// origin, so no host rule can catch it.
+const ACK_URL_PREFIX = "/api/notifications/ack/";
+
 function isSecretLastSegmentHost(host: string): boolean {
 	return SECRET_LAST_SEGMENT_DOMAINS.some(
 		(domain) => host === domain || host.endsWith(`.${domain}`),
@@ -124,7 +130,8 @@ export function redactChannelUrl(url: string): string {
 			"/bot[REDACTED]",
 		);
 	} else if (
-		isSecretLastSegmentHost(parsed.hostname) &&
+		(isSecretLastSegmentHost(parsed.hostname) ||
+			parsed.pathname.startsWith(ACK_URL_PREFIX)) &&
 		!parsed.pathname.endsWith("/")
 	) {
 		const segments = parsed.pathname.split("/");

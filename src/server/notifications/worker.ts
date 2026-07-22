@@ -23,7 +23,7 @@ import {
 	classifyRetry,
 	MAX_ATTEMPTS,
 } from "../../domain/notification-retry.ts";
-import { pruneAckCapabilities } from "./capability.ts";
+import { pruneAckCapabilities, pruneRateBuckets } from "./capability.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -64,6 +64,9 @@ export type WorkerSummary = {
 	// Expired or consumed ack_capability rows. Task 12 mints a fresh capability
 	// per attempt, so nothing else bounds that table's growth.
 	prunedCapabilities: number;
+	// Idle rate_bucket rows. The ack route is unauthenticated, so this is the
+	// only bound on a table any anonymous caller can grow.
+	prunedRateBuckets: number;
 	claimed: number;
 	sent: number;
 	failed: number;
@@ -362,6 +365,9 @@ export async function workerTick(
 	const prunedCapabilities = skipPrune
 		? 0
 		: await pruneAckCapabilities(database, timing.pruneBatchSize);
+	const prunedRateBuckets = skipPrune
+		? 0
+		: await pruneRateBuckets(database, timing.pruneBatchSize);
 	const claimed = await claimBatch(database, timing.batchSize, replicaId);
 	// Claimed and committed, nothing dispatched: the shape the lease reclaim has
 	// to recover.
@@ -371,6 +377,7 @@ export async function workerTick(
 		...reclaim,
 		pruned,
 		prunedCapabilities,
+		prunedRateBuckets,
 		claimed: claimed.length,
 		sent: 0,
 		failed: 0,

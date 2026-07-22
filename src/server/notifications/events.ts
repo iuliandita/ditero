@@ -35,6 +35,7 @@ import {
 	DEFAULT_PREF,
 	decideQuietHours,
 	loadChannels,
+	loadMemberships,
 	loadPrefs,
 } from "./recipients.ts";
 import { withLeaderLock } from "./scheduler.ts";
@@ -315,20 +316,9 @@ export async function overdueSweep(
 	const everyone = new Set<string>();
 	for (const row of rows) for (const id of recipientsFor(row)) everyone.add(id);
 
-	// task_assignee rows and list.ownerId both survive a membership removal, so
-	// without this an ex-member keeps receiving overdue notices carrying the task
-	// title. Assign and mention are gated on membership at write time; this is
-	// the equivalent gate at notify time.
-	const memberOf = new Set<string>();
-	for (const row of await database
-		.select({
-			userId: tables.membership.userId,
-			workspaceId: tables.membership.workspaceId,
-		})
-		.from(tables.membership)
-		.where(inArray(tables.membership.userId, [...everyone]))) {
-		memberOf.add(`${row.userId}:${row.workspaceId}`);
-	}
+	// Assign and mention are gated on membership at write time; this is the
+	// equivalent gate at notify time (see loadMemberships).
+	const memberOf = await loadMemberships(database, [...everyone]);
 
 	const prefs = await loadPrefs(database, [...everyone]);
 	const channels = await loadChannels(database, [...everyone]);

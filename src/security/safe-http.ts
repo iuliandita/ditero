@@ -38,6 +38,10 @@ type SafeFetchOptions = {
 // before any allowlist check, and regardless of how the embedded address
 // would otherwise be classified.
 const transitionNetworks = [
+	// RFC 4291 IPv4-compatible: `::a9fe:a9fe` is the metadata endpoint spelled so
+	// that `range()` reports plain unicast. `::` and `::1` also fall inside it and
+	// stay refused, as they already were via neverAllowed.
+	[ipaddr.parse("::"), 96],
 	[ipaddr.parse("64:ff9b::"), 96],
 	[ipaddr.parse("64:ff9b:1::"), 48],
 	[ipaddr.parse("2001::"), 32],

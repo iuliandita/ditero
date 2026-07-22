@@ -678,6 +678,35 @@ describe("capacity and pruning", () => {
 		expect(await pruneTerminal(db, 30 * 24 * 3_600_000, 2)).toBe(1);
 	});
 
+	// The prune only bounds rate_bucket if the tick actually calls it: the public
+	// ack route writes those rows and nothing else deletes them.
+	test("the tick prunes idle rate buckets and skips them when not pruning", async () => {
+		const key = "wk-prune-bucket";
+		const seedBucket = async () => {
+			await db
+				.insert(tables.rateBucket)
+				.values({
+					key,
+					tokens: 0,
+					refilledAt: new Date(Date.now() - 3 * 3_600_000),
+				})
+				.onConflictDoNothing();
+		};
+		try {
+			await seedBucket();
+			expect((await tick({ prune: false })).prunedRateBuckets).toBe(0);
+			expect((await tick()).prunedRateBuckets).toBe(1);
+			expect(
+				await db
+					.select({ key: tables.rateBucket.key })
+					.from(tables.rateBucket)
+					.where(eq(tables.rateBucket.key, key)),
+			).toEqual([]);
+		} finally {
+			await db.delete(tables.rateBucket).where(eq(tables.rateBucket.key, key));
+		}
+	});
+
 	test("prune is skipped when the tick does not ask for it", async () => {
 		const old = new Date(Date.now() - 40 * 24 * 3_600_000);
 		await seedOutbox("wk-p-skip", { status: "sent", createdAt: old });

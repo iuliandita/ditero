@@ -134,6 +134,28 @@ export async function pruneAckCapabilities(
 	return rowCount ?? 0;
 }
 
+// The ack route is public and unauthenticated, so every distinct client address
+// writes a permanent rate_bucket row and nothing else deletes them. A row
+// untouched for longer than the idle window is already treated as full, so
+// deleting it changes no decision. The margin over idleResetMs keeps a bucket
+// that is still being refilled out of the delete's way.
+export async function pruneRateBuckets(
+	database: Database,
+	batchSize: number,
+	idleResetMs: number = ACK_RATE_IDLE_RESET_MS,
+): Promise<number> {
+	const cutoff = sql`now() - make_interval(secs => ${(2 * idleResetMs) / 1000}::double precision)`;
+	const { rowCount } = await database.execute(sql`
+		delete from rate_bucket
+		where ctid in (
+			select ctid from rate_bucket
+			where refilled_at < ${cutoff}
+			limit ${batchSize}
+		)
+	`);
+	return rowCount ?? 0;
+}
+
 function drizzleAckStore(tx: DbTransaction): AckStore {
 	return {
 		async task(taskId) {

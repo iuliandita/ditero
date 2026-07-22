@@ -32,6 +32,7 @@ import {
 	ackToken,
 	hashAckToken,
 	pruneAckCapabilities,
+	pruneRateBuckets,
 	REJECT_FLOOR_MS,
 	takeRateToken,
 } from "../../src/server/notifications/capability.ts";
@@ -722,6 +723,48 @@ describe("ack capability prune", () => {
 		expect(await pruneAckCapabilities(db, 2)).toBe(2);
 		expect(await pruneAckCapabilities(db, 100)).toBe(2);
 		expect(await pruneAckCapabilities(db, 100)).toBe(0);
+	});
+});
+
+// The ack route is unauthenticated, so an anonymous caller mints one permanent
+// rate_bucket row per distinct address; this prune is the only bound on it.
+describe("rate bucket prune", () => {
+	const seedBucket = async (key: string, ageMs: number) => {
+		await db.insert(tables.rateBucket).values({
+			key,
+			tokens: 0,
+			refilledAt: new Date(Date.now() - ageMs),
+		});
+		return key;
+	};
+	const bucketKeys = async () =>
+		(
+			await db
+				.select({ key: tables.rateBucket.key })
+				.from(tables.rateBucket)
+				.where(like(tables.rateBucket.key, "ack:prune:%"))
+		).map((row) => row.key);
+
+	test("deletes a bucket idle past the window and keeps a recent one", async () => {
+		await seedBucket("ack:prune:stale", 3 * 3_600_000);
+		await seedBucket("ack:prune:fresh", 60_000);
+		// Inside the 2x margin, so still refilling and not eligible.
+		await seedBucket("ack:prune:recent", 90 * 60_000);
+
+		expect(await pruneRateBuckets(db, 100)).toBe(1);
+		expect((await bucketKeys()).sort()).toEqual([
+			"ack:prune:fresh",
+			"ack:prune:recent",
+		]);
+	});
+
+	test("bounds one sweep to the batch size", async () => {
+		for (let i = 0; i < 4; i += 1) {
+			await seedBucket(`ack:prune:b${i}`, 3 * 3_600_000);
+		}
+		expect(await pruneRateBuckets(db, 2)).toBe(2);
+		expect(await pruneRateBuckets(db, 100)).toBe(2);
+		expect(await pruneRateBuckets(db, 100)).toBe(0);
 	});
 });
 

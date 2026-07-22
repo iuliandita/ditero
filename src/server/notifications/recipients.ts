@@ -76,6 +76,27 @@ export async function loadChannels(
 	return channels;
 }
 
+// Membership keys, `${userId}:${workspaceId}`. task_assignee rows and
+// list.ownerId both survive a membership removal, so every notify path that
+// derives recipients from them must re-check here or an ex-member keeps
+// receiving task titles from a workspace they left.
+export async function loadMemberships(
+	database: Database,
+	userIds: string[],
+): Promise<Set<string>> {
+	const members = new Set<string>();
+	if (userIds.length === 0) return members;
+	const rows = await database
+		.select({
+			userId: tables.membership.userId,
+			workspaceId: tables.membership.workspaceId,
+		})
+		.from(tables.membership)
+		.where(inArray(tables.membership.userId, userIds));
+	for (const row of rows) members.add(`${row.userId}:${row.workspaceId}`);
+	return members;
+}
+
 export function decideQuietHours(
 	pref: Pref,
 	urgent: boolean,

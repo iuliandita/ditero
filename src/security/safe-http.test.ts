@@ -20,8 +20,18 @@ describe("outbound HTTP target validation", () => {
 		"64:ff9b:1::7f00:1",
 		"2002:7f00:1::",
 		"2001:0000:4136:e378:8000:63bf:3fff:fdd2",
+		// RFC 4291 IPv4-compatible: the same targets ::ffff: forms already cover,
+		// spelled so that range() reports plain unicast.
+		"::a9fe:a9fe",
+		"::7f00:1",
 	])("rejects non-public or transition address %s", (address) => {
 		expect(() => assertPublicAddress(address)).toThrow();
+	});
+
+	// The ::/96 entry must not change how the two addresses inside it that were
+	// already blocked by neverAllowed are classified.
+	test.each(["::", "::1"])("still rejects %s", (address) => {
+		expect(() => assertPublicAddress(address)).toThrow(OutboundPolicyError);
 	});
 
 	test.each([

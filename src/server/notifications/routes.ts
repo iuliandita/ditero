@@ -36,6 +36,10 @@ export type AckRouteOptions = {
 	trustedProxies?: Network[];
 };
 
+// Mounted ahead of the app's global header hook (server/index.ts), so these
+// replies carry no nosniff/frame headers. Accepted: every response here is a
+// constant plaintext string with no markup, script or reflected input.
+//
 // ntfy's action button cannot follow a redirect chain or read a JSON body; the
 // status code is the whole protocol. `*` because the caller is an arbitrary
 // third-party notification UI and the route carries no cookies or credentials.

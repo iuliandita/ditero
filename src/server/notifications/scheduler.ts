@@ -34,6 +34,7 @@ import {
 	DEFAULT_PREF,
 	decideQuietHours,
 	loadChannels,
+	loadMemberships,
 	loadPrefs,
 	type Pref,
 } from "./recipients.ts";
@@ -362,6 +363,10 @@ async function createDueReminders(
 	}
 	const prefs = await loadPrefs(database, [...everyone]);
 	const channels = await loadChannels(database, [...everyone]);
+	// The list owner stays in `everyone` regardless: its preference supplies the
+	// expansion timezone even when the owner is no longer a member and so
+	// receives nothing.
+	const memberOf = await loadMemberships(database, [...everyone]);
 
 	for (const task of taskRows) {
 		// Isolate per task: a malformed reminderTime or an invalid stored
@@ -408,6 +413,9 @@ async function createDueReminders(
 				now.getTime() - occurrence.occurrenceAt.getTime() >
 				timing.lateThresholdMs;
 			for (const recipientUserId of recipientsFor(task)) {
+				// Equivalent of the overdue sweep's notify-time gate; the escalate
+				// branch re-checks the same way.
+				if (!memberOf.has(`${recipientUserId}:${task.workspaceId}`)) continue;
 				try {
 					await createReminder(database, {
 						task,
