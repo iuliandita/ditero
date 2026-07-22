@@ -1,7 +1,7 @@
 import ipaddr from "ipaddr.js";
 
 type Address = ipaddr.IPv4 | ipaddr.IPv6;
-type Network = readonly [Address, number];
+export type Network = readonly [Address, number];
 
 type ClientIPInput = {
 	peerAddress: string;
@@ -44,12 +44,23 @@ export function trustedProxyCIDRsFromEnv(value?: string): Network[] {
 	);
 }
 
+// Returned when the peer address itself cannot be parsed. A throw here would
+// surface as a 500 from callers whose whole design is a uniform response (the
+// public ack route), which is an oracle; collapsing to one shared key instead
+// fails closed for rate-limiting purposes.
+export const UNKNOWN_CLIENT_IP = "invalid";
+
 export function resolveClientIP({
 	peerAddress,
 	forwardedFor,
 	trustedProxies,
 }: ClientIPInput): string {
-	const peer = parseAddress(peerAddress);
+	let peer: Address;
+	try {
+		peer = parseAddress(peerAddress);
+	} catch {
+		return UNKNOWN_CLIENT_IP;
+	}
 	if (!forwardedFor || !isTrusted(peer, trustedProxies)) return peer.toString();
 
 	let chain: Address[];
@@ -67,6 +78,27 @@ export function resolveClientIP({
 		}
 	}
 	return peer.toString();
+}
+
+// Rate-limit bucket key for a resolved address. A routed IPv6 allocation is a
+// /64 per customer, so keying per-/128 gives one attacker 2^64 buckets and the
+// limit bounds nothing. IPv4-mapped forms are canonicalized so ::ffff:1.2.3.4
+// and 1.2.3.4 cannot be two buckets for one client.
+export function rateLimitKey(address: string): string {
+	let parsed: Address;
+	try {
+		parsed = parseAddress(address);
+	} catch {
+		return address;
+	}
+	if (parsed.kind() === "ipv6") {
+		const ipv6 = parsed as ipaddr.IPv6;
+		if (ipv6.isIPv4MappedAddress()) return ipv6.toIPv4Address().toString();
+		// Zero the interface identifier: the low 64 bits of the 8 hextets.
+		const parts = ipv6.parts.slice(0, 4);
+		return `${new ipaddr.IPv6([...parts, 0, 0, 0, 0]).toString()}/64`;
+	}
+	return parsed.toString();
 }
 
 export function sanitizeAuthRequest(

@@ -4,6 +4,7 @@ import { relations, sql } from "drizzle-orm";
 import {
 	boolean,
 	foreignKey,
+	index,
 	integer,
 	jsonb,
 	pgEnum,
@@ -52,6 +53,28 @@ export const focusKindEnum = pgEnum("focus_kind", ["work", "break"]);
 export const dashboardScopeEnum = pgEnum("dashboard_scope", [
 	"personal",
 	"workspace",
+]);
+export const channelKindEnum = pgEnum("channel_kind", [
+	"ntfy",
+	"telegram",
+	"discord",
+	"slack",
+	"email",
+]);
+export const reminderStatusEnum = pgEnum("reminder_status", [
+	"pending",
+	"deferred",
+	"acked",
+	"escalated",
+	"failed",
+	"expired",
+]);
+export const outboxStatusEnum = pgEnum("outbox_status", [
+	"queued",
+	"sending",
+	"sent",
+	"failed",
+	"abandoned",
 ]);
 
 export const workspace = pgTable(
@@ -135,6 +158,12 @@ export const task = pgTable(
 		rrule: text("rrule"), // null => non-recurring; RFC 5545 RRULE
 		recurrenceRelative: boolean("recurrence_relative").notNull().default(false), // true => next due from completion, not schedule
 		reminderTime: text("reminder_time"), // "HH:MM" local, nullable
+		repeatEveryMin: smallint("repeat_every_min"), // escalation repeat interval; null => inherit user-level default
+		maxRepeats: smallint("max_repeats"), // escalation repeat cap; null => inherit user-level default
+		fallbackUserId: text("fallback_user_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		urgent: boolean("urgent").notNull().default(false),
 	},
 	(t) => [
 		foreignKey({
@@ -293,6 +322,9 @@ export const userPref = pgTable("user_pref", {
 	karmaGoals: jsonb("karma_goals"), // { daily, weekly } | null
 	vacation: jsonb("vacation"), // { active, until? } | null
 	focus: jsonb("focus"), // { workMin, breakMin, longBreakMin, roundsPerLongBreak, autoCycle } | null
+	timezone: text("timezone").notNull().default("UTC"),
+	quietHours: jsonb("quiet_hours"), // { start: "HH:MM", end: "HH:MM" } | null
+	escalationDefaults: jsonb("escalation_defaults"), // { repeatEveryMin, maxRepeats, fallbackUserId } | null
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.defaultNow()
 		.notNull(),
@@ -393,6 +425,149 @@ export const dashboard = pgTable("dashboard", {
 		.defaultNow()
 		.notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
+export const notificationChannel = pgTable(
+	"notification_channel",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		kind: channelKindEnum("kind").notNull(),
+		// Never synced (omitted at the drizzle-zero layer). Holds channel
+		// credentials: the secret fields are enveloped at rest via the
+		// field-encryption path (security/channel-config.ts); the public fields
+		// (ntfy serverUrl/topic) stay readable.
+		config: jsonb("config").notNull(),
+		enabled: boolean("enabled").notNull().default(true),
+		verifiedAt: timestamp("verified_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [unique("notification_channel_user_kind").on(t.userId, t.kind)],
+);
+
+export const reminderState = pgTable(
+	"reminder_state",
+	{
+		id: text("id").primaryKey(),
+		taskId: text("task_id")
+			.notNull()
+			.references(() => task.id, { onDelete: "cascade" }),
+		occurrenceAt: timestamp("occurrence_at", { withTimezone: true }).notNull(),
+		recipientUserId: text("recipient_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		status: reminderStatusEnum("status").notNull().default("pending"),
+		fireCount: smallint("fire_count").notNull().default(0),
+		nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+		deferredUntil: timestamp("deferred_until", { withTimezone: true }),
+		firedLate: boolean("fired_late").notNull().default(false),
+		ackedAt: timestamp("acked_at", { withTimezone: true }),
+		ackedVia: text("acked_via"), // channelKindEnum value or "in_app"; not an enum since it spans both
+		// What the ack actually did: "completed" (task marked done / advanced),
+		// "logged" (habit occurrence recorded), "ack_only" (viewer silenced the
+		// reminder, nothing written). Without it a missed-medication review cannot
+		// tell "acked and done" from "acked and untouched".
+		ackOutcome: text("ack_outcome"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		unique("reminder_state_occurrence").on(
+			t.taskId,
+			t.occurrenceAt,
+			t.recipientUserId,
+		),
+		index("reminder_state_sweep").on(t.status, t.nextAttemptAt),
+		index("reminder_state_deferred").on(t.status, t.deferredUntil),
+		// Ack terminates every sibling on the same occurrence.
+		index("reminder_state_siblings").on(t.taskId, t.occurrenceAt),
+	],
+);
+
+export const notificationOutbox = pgTable(
+	"notification_outbox",
+	{
+		id: text("id").primaryKey(),
+		reminderStateId: text("reminder_state_id").references(
+			() => reminderState.id,
+			{ onDelete: "cascade" },
+		),
+		recipientUserId: text("recipient_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		channelKind: channelKindEnum("channel_kind").notNull(),
+		payload: jsonb("payload").notNull(),
+		idempotencyKey: text("idempotency_key").notNull(),
+		status: outboxStatusEnum("status").notNull().default("queued"),
+		attempts: smallint("attempts").notNull().default(0),
+		nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		claimedAt: timestamp("claimed_at", { withTimezone: true }),
+		claimedBy: text("claimed_by"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		unique("notification_outbox_idempotency").on(t.idempotencyKey),
+		index("notification_outbox_claim").on(t.status, t.nextAttemptAt),
+		index("notification_outbox_reclaim").on(t.status, t.claimedAt),
+		index("notification_outbox_recipient").on(t.recipientUserId, t.status),
+		// The prune sweep exists to bound table growth; it was the one job
+		// filtering on an unindexed predicate.
+		index("notification_outbox_prune").on(t.status, t.createdAt),
+	],
+);
+
+export const deliveryAttempt = pgTable("delivery_attempt", {
+	id: text("id").primaryKey(),
+	outboxId: text("outbox_id")
+		.notNull()
+		.references(() => notificationOutbox.id, { onDelete: "cascade" }),
+	attemptNo: smallint("attempt_no").notNull(),
+	providerStatus: smallint("provider_status"),
+	retryClass: text("retry_class").notNull(), // not an enum; taxonomy still being designed, avoids a migration per change
+	error: text("error"), // truncated + redacted by the delivery worker before write
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
+export const ackCapability = pgTable("ack_capability", {
+	id: text("id").primaryKey(),
+	tokenHash: text("token_hash").notNull().unique(),
+	reminderStateId: text("reminder_state_id")
+		.notNull()
+		.references(() => reminderState.id, { onDelete: "cascade" }),
+	recipientUserId: text("recipient_user_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	action: text("action").notNull(),
+	expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+	consumedAt: timestamp("consumed_at", { withTimezone: true }),
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
+// Server-only token bucket. The ack route is an unauthenticated public endpoint
+// on a multi-replica deployment, so an in-process limiter would bound nothing.
+// Deliberately absent from drizzle-zero.config.ts.
+export const rateBucket = pgTable("rate_bucket", {
+	key: text("key").primaryKey(),
+	tokens: integer("tokens").notNull(),
+	refilledAt: timestamp("refilled_at", { withTimezone: true })
 		.defaultNow()
 		.notNull(),
 });
@@ -536,5 +711,67 @@ export const dashboardRelations = relations(dashboard, ({ one }) => ({
 	workspace: one(workspace, {
 		fields: [dashboard.workspaceId],
 		references: [workspace.id],
+	}),
+}));
+
+export const notificationChannelRelations = relations(
+	notificationChannel,
+	({ one }) => ({
+		user: one(user, {
+			fields: [notificationChannel.userId],
+			references: [user.id],
+		}),
+	}),
+);
+
+export const reminderStateRelations = relations(
+	reminderState,
+	({ one, many }) => ({
+		task: one(task, {
+			fields: [reminderState.taskId],
+			references: [task.id],
+		}),
+		recipient: one(user, {
+			fields: [reminderState.recipientUserId],
+			references: [user.id],
+		}),
+		outboxEntries: many(notificationOutbox),
+		ackCapabilities: many(ackCapability),
+	}),
+);
+
+export const notificationOutboxRelations = relations(
+	notificationOutbox,
+	({ one, many }) => ({
+		reminderState: one(reminderState, {
+			fields: [notificationOutbox.reminderStateId],
+			references: [reminderState.id],
+		}),
+		recipient: one(user, {
+			fields: [notificationOutbox.recipientUserId],
+			references: [user.id],
+		}),
+		deliveryAttempts: many(deliveryAttempt),
+	}),
+);
+
+export const deliveryAttemptRelations = relations(
+	deliveryAttempt,
+	({ one }) => ({
+		outbox: one(notificationOutbox, {
+			fields: [deliveryAttempt.outboxId],
+			references: [notificationOutbox.id],
+		}),
+	}),
+);
+
+export const ackCapabilityRelations = relations(ackCapability, ({ one }) => ({
+	reminderState: one(reminderState, {
+		fields: [ackCapability.reminderStateId],
+		references: [reminderState.id],
+	}),
+	recipient: one(user, {
+		fields: [ackCapability.recipientUserId],
+		references: [user.id],
 	}),
 }));

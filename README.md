@@ -15,7 +15,7 @@ no paywalls.
 
 > **Status: pre-alpha.** Ditero is under active design and construction on the `develop`
 > branch. There is no installable release yet. The sync and authorization foundation is proven
-> (see [de-risking spikes](#project-status)); the application is being built milestone by
+> (see [project status](#project-status)); the application is being built milestone by
 > milestone toward `v1.0.0`. Watch/star to follow along.
 
 ## Why Ditero
@@ -125,6 +125,24 @@ non-pooled, and able to create replication slots. See [security architecture](do
 [database roles](docs/runbooks/database-roles.md), and the
 [backup/restore runbook](docs/runbooks/backup-restore.md).
 
+### Notifications
+
+Reminders for due tasks and habits, plus assignment, mention, and overdue
+notices, delivered through a durable outbox with retries, escalation, quiet
+hours, and one-tap acknowledgement. **ntfy is the only channel implemented
+today**; Telegram, Discord, Slack, and email are listed in the UI but rejected
+by the server until their adapters land.
+
+Delivery is **at-least-once, never exactly-once** — you can receive a duplicate —
+and there are bounded conditions under which a notification is dropped entirely.
+Reminders are **not medical-grade**. Read
+[docs/notifications.md](docs/notifications.md) before relying on this for
+medication, and [security architecture](docs/security.md#notification-egress-and-ntfy-topics)
+before pointing a channel at a host on your own network.
+
+All scheduler and worker knobs, with their defaults and the boot-validated
+ordering constraints between them, are documented in [.env.example](.env.example).
+
 ### Planned distribution
 
 Ditero will also ship as multi-arch container images on GHCR and Docker Hub, with
@@ -135,15 +153,17 @@ a `-debian` variant. Images use channel tags: `:nightly` (bleeding edge),
 
 ## Project status
 
-The two highest-risk design questions were explored with runnable spikes before committing
-to the build:
+The two highest-risk design questions were explored with runnable spikes before committing to
+the build, and both are now settled in the application itself:
 
 - **Permissions** — Zero expresses multi-workspace read isolation and role-gated writes.
-- **Notifications** — the scheduler lock, secure acknowledgement capability, escalation state,
-  and Zero write-back seam work. Production channel/callback/replica/crash gates remain in M3.
+- **Notifications** — durable at-least-once delivery, a single-leader scheduler, quiet hours,
+  escalation, and acknowledgement from in-app or a channel button. Validated by a test rig that
+  runs real replicas and kills them mid-send. ntfy is the only channel so far; Telegram,
+  Discord, Slack, and email follow.
 
-The permission risk is retired; the notification architecture is narrowed and has explicit
-remaining gates. The build proceeds through a milestone roadmap on `develop`.
+Both spikes have been removed now that the production code supersedes them. The build proceeds
+through a milestone roadmap on `develop`.
 
 ## Contributing
 

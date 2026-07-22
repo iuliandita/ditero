@@ -12,8 +12,7 @@ out
 .env
 .env.*
 
-# Spikes, tests, and generated reports
-spikes
+# Tests and generated reports
 tests
 test-results
 playwright-report

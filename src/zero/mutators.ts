@@ -15,9 +15,20 @@ import {
 	type Transaction,
 } from "@rocicorp/zero";
 import { z } from "zod";
+import {
+	ACK_TERMINAL_STATUSES,
+	type AckStore,
+	ackedPatch,
+	completeForAck,
+} from "../domain/ack-complete.ts";
 import { panelsSchema } from "../domain/dashboard.ts";
+import {
+	MAX_REPEAT_EVERY_MIN,
+	MAX_REPEATS_CAP,
+} from "../domain/escalation-policy.ts";
 import type { ListKind } from "../domain/icon-map.ts";
-import { karmaForCompletion, levelForPoints } from "../domain/karma.ts";
+import { karmaForCompletion, karmaWrite } from "../domain/karma.ts";
+import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
@@ -27,10 +38,12 @@ import {
 	templateContentSchema,
 } from "../domain/template.ts";
 import { filterGroupSchema, viewDisplaySchema } from "../domain/view-filter.ts";
+import { collectEvent } from "./event-sink.ts";
 import {
 	type Dashboard,
 	type List,
 	type Schema,
+	type User,
 	type View,
 	zql,
 } from "./schema.gen.ts";
@@ -49,6 +62,37 @@ async function roleInWorkspace(
 		zql.membership.where("userId", userId).where("workspaceId", workspaceId),
 	);
 	return rows[0]?.role;
+}
+
+// @handle -> user id, restricted to current members of the comment's workspace.
+// Matching is personMatchesHandle, the same rule the picker uses to decide what
+// it offered: an exact name match would make every user whose display name
+// contains a space unmentionable, since a parsed handle never contains
+// whitespace. Returns first-seen order, without the author.
+async function resolveMentions(
+	tx: Transaction<Schema>,
+	body: string,
+	workspaceId: string,
+	authorId: string,
+): Promise<string[]> {
+	const handles = parseMentions(body);
+	if (handles.length === 0) return [];
+	const members = await tx.run(
+		zql.membership.where("workspaceId", workspaceId).related("user"),
+	);
+	const people: { id: string; name: string }[] = [];
+	for (const m of members) {
+		const u = m.user as User | undefined;
+		if (u?.name && u.id !== authorId) people.push({ id: u.id, name: u.name });
+	}
+	const out: string[] = [];
+	for (const handle of handles) {
+		for (const person of people) {
+			if (personMatchesHandle(person.name, handle) && !out.includes(person.id))
+				out.push(person.id);
+		}
+	}
+	return out;
 }
 
 // Shared content-write gate. Callers resolve the workspace themselves (direct
@@ -146,21 +190,11 @@ async function awardKarma(
 ): Promise<void> {
 	const now = Date.now();
 	const existing = await tx.run(zql.karma.where("userId", userId).one());
-	const points = Math.max(0, (existing?.points ?? 0) + delta);
+	const next = karmaWrite(existing?.points ?? 0, delta);
 	if (existing) {
-		await tx.mutate.karma.update({
-			userId,
-			points,
-			level: levelForPoints(points),
-			updatedAt: now,
-		});
+		await tx.mutate.karma.update({ userId, ...next, updatedAt: now });
 	} else {
-		await tx.mutate.karma.insert({
-			userId,
-			points,
-			level: levelForPoints(points),
-			updatedAt: now,
-		});
+		await tx.mutate.karma.insert({ userId, ...next, updatedAt: now });
 	}
 	await tx.mutate.karmaEvent.insert({
 		id: crypto.randomUUID(),
@@ -202,6 +236,78 @@ const focusArg = z.custom<ReadonlyJSONValue>(
 	(v) => focusSchema.safeParse(v).success,
 	{ message: "invalid focus" },
 );
+
+// M3a: per-user notification defaults. Validation here is what makes the
+// scheduler's fail-loud read path (zoned.ts / quiet-hours.ts / escalation.ts)
+// safe -- a value that passes here must not throw there.
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+function isValidTimeZone(tz: string): boolean {
+	try {
+		new Intl.DateTimeFormat("en-US", { timeZone: tz });
+		return true;
+	} catch {
+		return false;
+	}
+}
+const timezoneArg = z.string().max(100).refine(isValidTimeZone, {
+	message: "invalid IANA timezone",
+});
+// S5: equal start and end is rejected, not reinterpreted. The domain reads it
+// as "never quiet" (the opposite of what a user setting both to 22:00 intends),
+// and the alternative reading -- quiet all day -- would park every non-urgent
+// reminder with no wake time. All-day quiet already has a primitive: turn the
+// channel off.
+const quietHoursSchema = z
+	.object({
+		start: z.string().regex(HHMM_RE),
+		end: z.string().regex(HHMM_RE),
+	})
+	.strict()
+	.refine((q) => q.start !== q.end, {
+		message: "quiet hours start and end must differ",
+	});
+const quietHoursArg = z.custom<ReadonlyJSONValue>(
+	(v) => v === null || quietHoursSchema.safeParse(v).success,
+	{ message: "invalid quietHours" },
+);
+// maxRepeats caps at 20: smallint permits 32767, and repeatEveryMin: 1 with an
+// uncapped maxRepeats turns one reminder into thousands of pushes on a real
+// phone -- self-inflicted, but it can exhaust the per-user outbox cap and
+// black out that user's legitimate reminders.
+const escalationDefaultsSchema = z.object({
+	// Same bounds as the per-task columns in task.update: the two levels merge
+	// into one policy, so a value legal at one and not the other is a trap.
+	repeatEveryMin: z
+		.number()
+		.int()
+		.positive()
+		.max(MAX_REPEAT_EVERY_MIN)
+		.nullable(),
+	maxRepeats: z.number().int().min(0).max(MAX_REPEATS_CAP).nullable(),
+	fallbackUserId: z.string().max(200).nullable(),
+});
+const escalationDefaultsArg = z.custom<ReadonlyJSONValue>(
+	(v) => v === null || escalationDefaultsSchema.safeParse(v).success,
+	{ message: "invalid escalationDefaults" },
+);
+
+// Escalation fallback must be a co-member: without this, any caller could name
+// any user id in the instance as their fallback and, after the first
+// escalation, that stranger starts receiving pushes carrying attacker-
+// controlled task titles from a workspace they never joined. Mirrors
+// task.assign's assigneeRole check, widened from "member of this one
+// workspace" to "shares any workspace with the caller".
+async function sharesWorkspace(
+	tx: Transaction<Schema>,
+	userA: string,
+	userB: string,
+): Promise<boolean> {
+	const mine = await tx.run(zql.membership.where("userId", userA));
+	const workspaceIds = new Set(mine.map((m) => m.workspaceId));
+	if (workspaceIds.size === 0) return false;
+	const theirs = await tx.run(zql.membership.where("userId", userB));
+	return theirs.some((m) => workspaceIds.has(m.workspaceId));
+}
 
 // Deterministic id generator seeded from a client-supplied id, so an
 // instantiate mutator produces identical ids on the optimistic client and the
@@ -261,6 +367,79 @@ async function insertInstantiatedList(
 		...(folderId !== undefined ? { folderId } : {}),
 	});
 	for (const t of tasks) await insertInstantiatedTask(tx, t);
+}
+
+// Zero-side implementation of the shared ack completion port. The capability
+// route implements the same port over its Drizzle transaction, so the policy
+// (role gate, habits-vs-task branching, viewer handling) lives in exactly one
+// place while each entry point keeps its own transaction mechanism.
+function zeroAckStore(tx: Transaction<Schema>): AckStore {
+	return {
+		async task(taskId) {
+			const row = await tx.run(
+				zql.task.where("id", taskId).related("list").one(),
+			);
+			if (!row) return null;
+			const list = row.list as List;
+			return {
+				id: row.id,
+				workspaceId: list.workspaceId,
+				// The Zero client cannot see Postgres column defaults; `tasks`
+				// mirrors the list.kind default.
+				listKind: list.kind ?? "tasks",
+				rrule: row.rrule ?? null,
+				recurrenceRelative: row.recurrenceRelative ?? false,
+				dueAt: row.dueAt ?? null,
+				done: row.done ?? false,
+				priority: row.priority ?? 0,
+			};
+		},
+		async role(userId, workspaceId) {
+			return (await roleInWorkspace(tx, userId, workspaceId)) ?? null;
+		},
+		async timezone(userId) {
+			const pref = await tx.run(zql.userPref.where("id", userId).one());
+			return pref?.timezone ?? "UTC";
+		},
+		async updateTask(id, patch) {
+			await tx.mutate.task.update({
+				id,
+				done: patch.done,
+				completedAt: patch.completedAt,
+				...(patch.dueAt === undefined ? {} : { dueAt: patch.dueAt }),
+			});
+		},
+		async habitLog(habitId, date) {
+			const row = await tx.run(
+				zql.habitLog.where("habitId", habitId).where("date", date).one(),
+			);
+			return row
+				? { id: row.id, status: row.status, karmaDelta: row.karmaDelta ?? 0 }
+				: null;
+		},
+		async putHabitLog(row) {
+			if (row.existingId) {
+				await tx.mutate.habitLog.update({
+					id: row.existingId,
+					status: "done",
+					karmaDelta: row.karmaDelta,
+					completedAt: row.completedAt,
+				});
+				return;
+			}
+			await tx.mutate.habitLog.insert({
+				id: crypto.randomUUID(),
+				habitId: row.habitId,
+				date: row.date,
+				status: "done",
+				karmaDelta: row.karmaDelta,
+				completedAt: row.completedAt,
+			});
+		},
+		async awardKarma(userId, delta, reason, date) {
+			await awardKarma(tx, userId, delta, reason, date);
+		},
+	};
 }
 
 export const mutators = defineMutators({
@@ -331,6 +510,24 @@ export const mutators = defineMutators({
 					.regex(/^([01]\d|2[0-3]):[0-5]\d$/)
 					.nullable()
 					.optional(),
+				// Per-task reminder policy (M3a). null on any of the three escalation
+				// columns means "inherit the user default", never "disabled".
+				urgent: z.boolean().optional(),
+				repeatEveryMin: z
+					.number()
+					.int()
+					.positive()
+					.max(MAX_REPEAT_EVERY_MIN)
+					.nullable()
+					.optional(),
+				maxRepeats: z
+					.number()
+					.int()
+					.min(0)
+					.max(MAX_REPEATS_CAP)
+					.nullable()
+					.optional(),
+				fallbackUserId: z.string().max(200).nullable().optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				const task = await tx.run(
@@ -342,6 +539,19 @@ export const mutators = defineMutators({
 				// Fail loud before any write if a non-null rrule is malformed, so the
 				// complete/skip paths never read back an unparseable recurrence.
 				if (args.rrule != null) parseRule(args.rrule);
+				// The escalation fallback receives this task's title on a push, so it
+				// must be a member of the task's own workspace -- narrower than the
+				// user-level default's "shares any workspace with you". The scheduler
+				// re-checks at fire time, since memberships change in between.
+				if (args.fallbackUserId != null) {
+					const fallbackRole = await roleInWorkspace(
+						tx,
+						args.fallbackUserId,
+						list.workspaceId,
+					);
+					if (!fallbackRole)
+						throw new Error("escalation fallback is not a member");
+				}
 				// done and completedAt are one invariant, kept here in one place.
 				const completed =
 					args.done === undefined
@@ -368,6 +578,16 @@ export const mutators = defineMutators({
 						: {}),
 					...(args.reminderTime !== undefined
 						? { reminderTime: args.reminderTime }
+						: {}),
+					...(args.urgent !== undefined ? { urgent: args.urgent } : {}),
+					...(args.repeatEveryMin !== undefined
+						? { repeatEveryMin: args.repeatEveryMin }
+						: {}),
+					...(args.maxRepeats !== undefined
+						? { maxRepeats: args.maxRepeats }
+						: {}),
+					...(args.fallbackUserId !== undefined
+						? { fallbackUserId: args.fallbackUserId }
 						: {}),
 				});
 			},
@@ -441,6 +661,20 @@ export const mutators = defineMutators({
 					taskId: args.taskId,
 					userId: args.userId,
 				});
+				// Assigning yourself is not news. Collected, not enqueued: the
+				// server drains this after the mutation commits (server/notifications/
+				// events.ts); on the client it is a no-op.
+				if (args.userId !== ctx.id) {
+					collectEvent({
+						recipientUserId: args.userId,
+						event: {
+							kind: "assign",
+							taskId: args.taskId,
+							taskTitle: task.title,
+							actorUserId: ctx.id,
+						},
+					});
+				}
 			},
 		),
 		unassign: defineMutator(
@@ -627,6 +861,55 @@ export const mutators = defineMutators({
 					await awardKarma(tx, ctx.id, -recorded, "habit_undo", args.date);
 				}
 				await tx.mutate.habitLog.delete({ id: existing.id });
+			},
+		),
+	},
+	reminder: {
+		// In-app ack. No capability is involved -- the caller is already
+		// authenticated -- so the gate is simply "this is my reminder row".
+		// Completion runs through the same shared path the public capability
+		// route uses.
+		ack: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const reminder = await tx.run(
+					zql.reminderState.where("id", args.id).one(),
+				);
+				if (!reminder) throw new Error("reminder not found");
+				if (reminder.recipientUserId !== ctx.id)
+					throw new Error("access denied: not your reminder");
+				const now = Date.now();
+				// Completion first, so its outcome lands on the row (the capability
+				// route does the same); a denial throws before anything is written.
+				const outcome = await completeForAck(
+					zeroAckStore(tx),
+					{
+						taskId: reminder.taskId,
+						occurrenceAt: reminder.occurrenceAt,
+						recipientUserId: reminder.recipientUserId,
+					},
+					ctx.id,
+					now,
+				);
+				const acked = ackedPatch(now, "in_app", outcome);
+				await tx.mutate.reminderState.update({ id: reminder.id, ...acked });
+				// C7: terminate every sibling on the same occurrence, or a
+				// co-assignee keeps being escalated for a reminder already acked.
+				const siblings = await tx.run(
+					zql.reminderState
+						.where("taskId", reminder.taskId)
+						.where("occurrenceAt", reminder.occurrenceAt),
+				);
+				for (const sibling of siblings) {
+					if (sibling.id === reminder.id) continue;
+					if (
+						(ACK_TERMINAL_STATUSES as readonly string[]).includes(
+							sibling.status ?? "pending",
+						)
+					)
+						continue;
+					await tx.mutate.reminderState.update({ id: sibling.id, ...acked });
+				}
 			},
 		),
 	},
@@ -1071,6 +1354,26 @@ export const mutators = defineMutators({
 					authorId: ctx.id,
 					body: args.body,
 				});
+				// Only handles that resolve to a current member of this workspace are
+				// notified; a mention of anyone else is the invite-on-mention flow's
+				// job, not a notification. Self-mentions are excluded.
+				for (const userId of await resolveMentions(
+					tx,
+					args.body,
+					list.workspaceId,
+					ctx.id,
+				)) {
+					collectEvent({
+						recipientUserId: userId,
+						event: {
+							kind: "mention",
+							commentId: args.id,
+							taskId: args.taskId,
+							taskTitle: task.title,
+							actorUserId: ctx.id,
+						},
+					});
+				}
 			},
 		),
 		edit: defineMutator(
@@ -1326,8 +1629,26 @@ export const mutators = defineMutators({
 				karmaGoals: karmaGoalsArg.optional(),
 				vacation: vacationArg.optional(),
 				focus: focusArg.optional(),
+				// M3a: notification defaults. Null means "not configured", never
+				// collapsed to a default here -- the scheduler resolves inheritance.
+				timezone: timezoneArg.optional(),
+				quietHours: quietHoursArg.optional(),
+				escalationDefaults: escalationDefaultsArg.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
+				if (args.escalationDefaults) {
+					const { fallbackUserId } = args.escalationDefaults as {
+						fallbackUserId: string | null;
+					};
+					if (
+						fallbackUserId &&
+						!(await sharesWorkspace(tx, ctx.id, fallbackUserId))
+					) {
+						throw new Error(
+							"escalation fallback must share a workspace with you",
+						);
+					}
+				}
 				const existing = await tx.run(zql.userPref.where("id", ctx.id).one());
 				if (existing) await tx.mutate.userPref.update({ id: ctx.id, ...args });
 				else
@@ -1340,6 +1661,9 @@ export const mutators = defineMutators({
 						karmaGoals: args.karmaGoals ?? null,
 						vacation: args.vacation ?? null,
 						focus: args.focus ?? null,
+						timezone: args.timezone ?? "UTC",
+						quietHours: args.quietHours ?? null,
+						escalationDefaults: args.escalationDefaults ?? null,
 					});
 			},
 		),

@@ -43,10 +43,6 @@ tests:
           - "tests/**"
           - "e2e/**"
 
-spikes:
-  - changed-files:
-      - any-glob-to-any-file: "spikes/**"
-
 dependencies:
   - changed-files:
       - any-glob-to-any-file:

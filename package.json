@@ -6,6 +6,7 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "bun run src/db/migrate.ts",
 		"security:rotate-auth-secrets": "bun run src/security/rotate-auth-secrets.ts",
+		"security:encrypt-channel-configs": "bun run src/security/encrypt-channel-configs.ts",
 		"zero:gen": "drizzle-zero generate -o src/zero/schema.gen.ts",
 		"lint": "biome check",
 		"dev:server": "bun run --hot src/server/index.ts",
@@ -47,6 +48,7 @@
 		"chrono-node": "^2.10.0",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
+		"croner": "^10.0.1",
 		"drizzle-orm": "^0.45.2",
 		"elysia": "^1.4.29",
 		"exact-mirror": "^0.2.7",
@@ -68,6 +70,9 @@
 		"zod": "^4.4.3"
 	},
 	"overrides": {
-		"uuid": "^11.1.1"
+		"uuid": "^11.1.1",
+		"fast-uri": "^3.1.4",
+		"brace-expansion": "^2.1.2",
+		"@opentelemetry/propagator-jaeger": "^2.9.0"
 	}
 }

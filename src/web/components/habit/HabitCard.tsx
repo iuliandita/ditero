@@ -10,6 +10,7 @@ import { computeStreak, type HabitLogEntry } from "../../../domain/streak.ts";
 import { mutators } from "../../../zero/mutators.ts";
 import type { List, schema, Task } from "../../../zero/schema.gen.ts";
 import { useHabitLogs } from "../../hooks/useHabitLogs.ts";
+import { ReminderChip } from "../task/ReminderChip.tsx";
 import { HabitTracker } from "./HabitTracker.tsx";
 
 type TodayStatus = "done" | "skipped" | "none";
@@ -86,6 +87,9 @@ export function HabitCard({
 						</span>
 					)}
 				</button>
+				{/* Outside the title button: the chip is itself the Ack control
+				    while the reminder is live. */}
+				<ReminderChip task={task} />
 			</div>
 
 			{streak ? (

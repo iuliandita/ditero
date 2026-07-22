@@ -1,6 +1,21 @@
 import { resolve4, resolve6 } from "node:dns/promises";
 import ipaddr from "ipaddr.js";
 import { Agent, buildConnector, request } from "undici";
+import type { Network } from "../server/client-ip.ts";
+
+// A request refused by policy before or during transfer -- blocked address,
+// disallowed protocol, URL credentials, oversized response. Callers must be
+// able to tell these from a transport failure without matching on message
+// strings: the notification worker treats them as permanently undeliverable
+// (C17), where a transport error is retried with backoff. Retrying a refusal
+// burns the whole ladder on a channel that can never succeed, and re-probes an
+// SSRF target on every attempt.
+export class OutboundPolicyError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "OutboundPolicyError";
+	}
+}
 
 type Resolver = {
 	resolve4: (hostname: string) => Promise<string[]>;
@@ -13,13 +28,41 @@ type SafeFetchOptions = {
 	body?: string | Uint8Array;
 	signal?: AbortSignal;
 	maxResponseBytes?: number;
+	allowedPrivateCIDRs?: readonly Network[];
 };
 
+// Encodings that hide a private/loopback address inside an otherwise-unicast
+// IPv6 literal. ipaddr.js only unwraps the ipv4-mapped/compatible forms (via
+// `process`); these transition encodings keep their embedded IPv4 payload
+// hidden from `range()`, so they must be rejected on the raw parsed address,
+// before any allowlist check, and regardless of how the embedded address
+// would otherwise be classified.
 const transitionNetworks = [
+	// RFC 4291 IPv4-compatible: `::a9fe:a9fe` is the metadata endpoint spelled so
+	// that `range()` reports plain unicast. `::` and `::1` also fall inside it and
+	// stay refused, as they already were via neverAllowed.
+	[ipaddr.parse("::"), 96],
 	[ipaddr.parse("64:ff9b::"), 96],
 	[ipaddr.parse("64:ff9b:1::"), 48],
 	[ipaddr.parse("2001::"), 32],
 	[ipaddr.parse("2002::"), 16],
+] as const;
+
+// Ranges an operator allowlist may never re-enable: reaching these from a
+// user-supplied URL is always an attack, never a self-hosted deployment.
+// IPv6 unique-local (fc00::/7) is deliberately absent -- it is the IPv6
+// analogue of RFC1918 private space and a legitimate self-hosted target.
+const neverAllowed = [
+	[ipaddr.parse("0.0.0.0"), 8], // RFC5735 "this network"
+	[ipaddr.parse("127.0.0.0"), 8], // loopback
+	[ipaddr.parse("169.254.0.0"), 16], // link-local, incl. cloud metadata 169.254.169.254
+	[ipaddr.parse("100.64.0.0"), 10], // CGNAT shared address space
+	[ipaddr.parse("224.0.0.0"), 4], // multicast
+	[ipaddr.parse("255.255.255.255"), 32], // limited broadcast
+	[ipaddr.parse("::1"), 128], // loopback
+	[ipaddr.parse("::"), 128], // unspecified
+	[ipaddr.parse("fe80::"), 10], // link-local
+	[ipaddr.parse("ff00::"), 8], // multicast
 ] as const;
 
 function normalizedHostname(value: string): string {
@@ -28,23 +71,46 @@ function normalizedHostname(value: string): string {
 		: value;
 }
 
-export function assertPublicAddress(value: string): void {
-	const parsed = ipaddr.parse(normalizedHostname(value));
-	if (parsed.kind() === "ipv6") {
-		const address = parsed as ipaddr.IPv6;
-		if (
-			transitionNetworks.some(
-				([network, prefix]) =>
-					network.kind() === "ipv6" && address.match(network, prefix),
-			)
-		) {
-			throw new Error("Outbound target must resolve to a public address");
-		}
+function matchesAny(
+	address: ipaddr.IPv4 | ipaddr.IPv6,
+	networks: readonly Network[],
+): boolean {
+	return networks.some(
+		([network, prefix]) =>
+			address.kind() === network.kind() && address.match(network, prefix),
+	);
+}
+
+// Runs every non-relaxable check and returns the normalized address. No
+// allowlist is in scope here, so a future editor cannot accidentally let an
+// allowlist short-circuit these checks -- there is nothing to short-circuit.
+function assertNotForbidden(value: string): ipaddr.IPv4 | ipaddr.IPv6 {
+	const hostname = normalizedHostname(value);
+	const parsed = ipaddr.parse(hostname);
+	if (parsed.kind() === "ipv6" && matchesAny(parsed, transitionNetworks)) {
+		throw new OutboundPolicyError(
+			"Outbound target must resolve to a public address",
+		);
 	}
-	const address = ipaddr.process(normalizedHostname(value));
-	if (address.range() !== "unicast") {
-		throw new Error("Outbound target must resolve to a public address");
+	const address = ipaddr.process(hostname);
+	if (matchesAny(address, neverAllowed)) {
+		throw new OutboundPolicyError(
+			"Outbound target must resolve to a public address",
+		);
 	}
+	return address;
+}
+
+export function assertPublicAddress(
+	value: string,
+	allowedPrivateCIDRs: readonly Network[] = [],
+): void {
+	const address = assertNotForbidden(value);
+	if (address.range() === "unicast") return;
+	if (matchesAny(address, allowedPrivateCIDRs)) return;
+	throw new OutboundPolicyError(
+		"Outbound target must resolve to a public address",
+	);
 }
 
 async function resolveFamily(
@@ -63,10 +129,11 @@ async function resolveFamily(
 export async function resolvePinnedTarget(
 	hostname: string,
 	resolver: Resolver = { resolve4, resolve6 },
+	allowedPrivateCIDRs: readonly Network[] = [],
 ): Promise<{ address: string; family: 4 | 6 }> {
 	const literal = normalizedHostname(hostname);
 	if (ipaddr.isValid(literal)) {
-		assertPublicAddress(literal);
+		assertPublicAddress(literal, allowedPrivateCIDRs);
 		return {
 			address: literal,
 			family: ipaddr.parse(literal).kind() === "ipv4" ? 4 : 6,
@@ -81,8 +148,13 @@ export async function resolvePinnedTarget(
 		...ipv4.map((address) => ({ address, family: 4 as const })),
 		...ipv6.map((address) => ({ address, family: 6 as const })),
 	];
+	// Deliberately a plain Error, not an OutboundPolicyError: nothing was
+	// refused, the resolver had no answer. A DNS outage is transient and must
+	// stay retryable, unlike the policy refusals above.
 	if (answers.length === 0) throw new Error("Outbound target did not resolve");
-	for (const answer of answers) assertPublicAddress(answer.address);
+	for (const answer of answers) {
+		assertPublicAddress(answer.address, allowedPrivateCIDRs);
+	}
 	return answers[0];
 }
 
@@ -104,14 +176,28 @@ export async function safeFetch(
 	input: string | URL,
 	options: SafeFetchOptions = {},
 ): Promise<Response> {
-	const url = new URL(input);
+	// A malformed URL is a refusal, not a transport failure: it never becomes
+	// valid, so retrying it burns the whole ladder. Unreachable from ntfy (whose
+	// URL is schema-validated) but every M3b adapter takes a user-pasted webhook.
+	let url: URL;
+	try {
+		url = new URL(input);
+	} catch {
+		throw new OutboundPolicyError("Outbound URL is not a valid absolute URL");
+	}
 	if (url.protocol !== "http:" && url.protocol !== "https:") {
-		throw new Error("Outbound URL protocol must be HTTP or HTTPS");
+		throw new OutboundPolicyError(
+			"Outbound URL protocol must be HTTP or HTTPS",
+		);
 	}
 	if (url.username || url.password) {
-		throw new Error("Outbound URL credentials are not allowed");
+		throw new OutboundPolicyError("Outbound URL credentials are not allowed");
 	}
-	const target = await resolvePinnedTarget(url.hostname);
+	const target = await resolvePinnedTarget(
+		url.hostname,
+		undefined,
+		options.allowedPrivateCIDRs,
+	);
 	const connect = buildConnector({ timeout: 10_000 });
 	const dispatcher = new Agent({
 		connect: (connectOptions, callback) =>
@@ -143,7 +229,9 @@ export async function safeFetch(
 			const buffer = Buffer.from(chunk);
 			size += buffer.length;
 			if (size > limit) {
-				throw new Error("Outbound response exceeds the configured size limit");
+				throw new OutboundPolicyError(
+					"Outbound response exceeds the configured size limit",
+				);
 			}
 			chunks.push(buffer);
 		}
@@ -153,6 +241,17 @@ export async function safeFetch(
 			headers: responseHeaders(result.headers),
 		});
 	} finally {
-		await dispatcher.close();
+		// Bun ships its own `undici` shim whose Agent is a bare EventEmitter with
+		// no close(), so an unguarded call threw out of this finally and turned
+		// EVERY outbound send into a transport failure under the runtime the app
+		// actually runs on -- invisible until a test exercised safeFetch for real
+		// rather than injecting a double.
+		//
+		// NOTE: that same shim also ignores the pinning connector above, so under
+		// Bun the resolved-address pin (DNS-rebinding protection) is inert. The
+		// policy checks in resolvePinnedTarget still run before the request, so
+		// the address boundary itself holds; closing the rebind window needs a
+		// transport that honors a custom connector (issue #31).
+		await dispatcher.close?.();
 	}
 }

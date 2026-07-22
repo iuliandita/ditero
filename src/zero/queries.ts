@@ -203,4 +203,18 @@ export const queries = defineQueries({
 	focusSessions: {
 		mine: defineQuery(({ ctx }) => zql.focusSession.where("userId", ctx.id)),
 	},
+	// Own-user only. `config` is excluded at the drizzle-zero layer, so it can
+	// never reach a client even though the row itself syncs.
+	notificationChannels: {
+		mine: defineQuery(({ ctx }) =>
+			zql.notificationChannel.where("userId", ctx.id),
+		),
+	},
+	// Delivery state is per recipient: the caller reads the rows addressed to them,
+	// never a co-assignee's independent escalation state.
+	reminderStates: {
+		mine: defineQuery(({ ctx }) =>
+			zql.reminderState.where("recipientUserId", ctx.id),
+		),
+	},
 });

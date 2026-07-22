@@ -10,6 +10,10 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import * as tables from "../../src/db/schema.ts";
+import {
+	DEFAULT_MAX_REPEATS,
+	resolveEscalationPolicy,
+} from "../../src/domain/escalation-policy.ts";
 import { mutators } from "../../src/zero/mutators.ts";
 import { queries } from "../../src/zero/queries.ts";
 import { type Schema, schema } from "../../src/zero/schema.gen.ts";
@@ -551,5 +555,258 @@ describe("userPref write-permission mutator", () => {
 		await expect(
 			call(mutators.userPref.set, { id: "viz-c" }, { keymap: bigKeymap }),
 		).rejects.toThrow();
+	});
+});
+
+// M3a: timezone/quietHours/escalationDefaults. viz-d has no seeded pref row,
+// so its set exercises the insert branch -- the one the original bug missed,
+// since it enumerated columns explicitly and never mentioned these three.
+describe("userPref write-permission mutator: M3a notification defaults", () => {
+	test("a valid IANA timezone is persisted", async () => {
+		await call(
+			mutators.userPref.set,
+			{ id: "viz-a" },
+			{ timezone: "Europe/Bucharest" },
+		);
+		const row = (
+			await db
+				.select()
+				.from(tables.userPref)
+				.where(eq(tables.userPref.id, "viz-a"))
+		)[0];
+		expect(row?.timezone).toBe("Europe/Bucharest");
+	});
+
+	test("an invalid timezone string is rejected", async () => {
+		await expect(
+			call(
+				mutators.userPref.set,
+				{ id: "viz-a" },
+				{ timezone: "Europe/Bucarest" },
+			),
+		).rejects.toThrow();
+	});
+
+	test("valid quiet hours are persisted", async () => {
+		await call(
+			mutators.userPref.set,
+			{ id: "viz-a" },
+			{ quietHours: { start: "22:00", end: "07:00" } },
+		);
+		const row = (
+			await db
+				.select()
+				.from(tables.userPref)
+				.where(eq(tables.userPref.id, "viz-a"))
+		)[0];
+		expect(row?.quietHours).toEqual({ start: "22:00", end: "07:00" });
+	});
+
+	test("malformed quiet hours are rejected", async () => {
+		const bad: ReadonlyJSONValue[] = [
+			{ start: "22:00" }, // missing end
+			{ start: "24:00", end: "07:00" }, // out-of-range hour
+			{ start: "22:60", end: "07:00" }, // out-of-range minute
+			{ start: "22:00", end: "07:00", extra: "x" }, // unknown key
+		];
+		for (const quietHours of bad) {
+			await expect(
+				call(mutators.userPref.set, { id: "viz-a" }, { quietHours }),
+			).rejects.toThrow();
+		}
+	});
+
+	// S5: a user setting both pickers to the same time means "quiet all day",
+	// but the domain reads equal start/end as "never quiet" -- the exact
+	// opposite. Rejected at the write path rather than reinterpreted; all-day
+	// quiet already has a primitive (disable the channel).
+	test("equal quiet-hours start and end is rejected", async () => {
+		await expect(
+			call(
+				mutators.userPref.set,
+				{ id: "viz-a" },
+				{ quietHours: { start: "22:00", end: "22:00" } },
+			),
+		).rejects.toThrow();
+	});
+
+	// S3: repeatEveryMin without maxRepeats is deliberately ACCEPTED. null means
+	// "inherit", and at the user level the resolver's DEFAULT_MAX_REPEATS floor
+	// is the terminal answer -- rejecting the pair would forbid "repeat every 10
+	// minutes, use the default count".
+	test("repeatEveryMin with a null maxRepeats is accepted and inherits the floor", async () => {
+		await call(
+			mutators.userPref.set,
+			{ id: "viz-c" },
+			{
+				escalationDefaults: {
+					repeatEveryMin: 10,
+					maxRepeats: null,
+					fallbackUserId: null,
+				},
+			},
+		);
+		const row = (
+			await db
+				.select()
+				.from(tables.userPref)
+				.where(eq(tables.userPref.id, "viz-c"))
+		)[0];
+		expect(row?.escalationDefaults).toEqual({
+			repeatEveryMin: 10,
+			maxRepeats: null,
+			fallbackUserId: null,
+		});
+		expect(
+			resolveEscalationPolicy(
+				{
+					repeatEveryMin: null,
+					maxRepeats: null,
+					fallbackUserId: null,
+					urgent: false,
+				},
+				row?.escalationDefaults,
+			).maxRepeats,
+		).toBe(DEFAULT_MAX_REPEATS);
+	});
+
+	test("valid escalation defaults are persisted", async () => {
+		await call(
+			mutators.userPref.set,
+			{ id: "viz-c" },
+			{
+				escalationDefaults: {
+					repeatEveryMin: 10,
+					maxRepeats: 3,
+					fallbackUserId: "viz-a",
+				},
+			},
+		);
+		const row = (
+			await db
+				.select()
+				.from(tables.userPref)
+				.where(eq(tables.userPref.id, "viz-c"))
+		)[0];
+		expect(row?.escalationDefaults).toEqual({
+			repeatEveryMin: 10,
+			maxRepeats: 3,
+			fallbackUserId: "viz-a",
+		});
+	});
+
+	test("repeatEveryMin: 0 and a negative value are rejected", async () => {
+		for (const repeatEveryMin of [0, -5]) {
+			await expect(
+				call(
+					mutators.userPref.set,
+					{ id: "viz-c" },
+					{
+						escalationDefaults: {
+							repeatEveryMin,
+							maxRepeats: 3,
+							fallbackUserId: null,
+						},
+					},
+				),
+			).rejects.toThrow();
+		}
+	});
+
+	test("maxRepeats above the cap (20) is rejected", async () => {
+		await expect(
+			call(
+				mutators.userPref.set,
+				{ id: "viz-c" },
+				{
+					escalationDefaults: {
+						repeatEveryMin: 1,
+						maxRepeats: 32767,
+						fallbackUserId: null,
+					},
+				},
+			),
+		).rejects.toThrow();
+	});
+
+	test("a fallbackUserId with no shared workspace with the caller is rejected", async () => {
+		// viz-c (member of viz-w) naming viz-b (in no workspace at all).
+		await expect(
+			call(
+				mutators.userPref.set,
+				{ id: "viz-c" },
+				{
+					escalationDefaults: {
+						repeatEveryMin: 5,
+						maxRepeats: 2,
+						fallbackUserId: "viz-b",
+					},
+				},
+			),
+		).rejects.toThrow(/share a workspace/);
+	});
+
+	test("a fallbackUserId naming a co-member is accepted", async () => {
+		// viz-c and viz-d both belong to viz-w.
+		await call(
+			mutators.userPref.set,
+			{ id: "viz-c" },
+			{
+				escalationDefaults: {
+					repeatEveryMin: 5,
+					maxRepeats: 2,
+					fallbackUserId: "viz-d",
+				},
+			},
+		);
+		const row = (
+			await db
+				.select()
+				.from(tables.userPref)
+				.where(eq(tables.userPref.id, "viz-c"))
+		)[0];
+		expect(
+			(row?.escalationDefaults as { fallbackUserId: string | null } | null)
+				?.fallbackUserId,
+		).toBe("viz-d");
+	});
+
+	test("insert branch (no existing pref row) persists timezone/quietHours/escalationDefaults", async () => {
+		// viz-d has no seeded row (only viz-a/viz-b are seeded in beforeAll) --
+		// this set() call must take the insert path, not the update path.
+		const before = (
+			await db
+				.select()
+				.from(tables.userPref)
+				.where(eq(tables.userPref.id, "viz-d"))
+		)[0];
+		expect(before).toBeUndefined();
+
+		await call(
+			mutators.userPref.set,
+			{ id: "viz-d" },
+			{
+				timezone: "Asia/Tokyo",
+				quietHours: { start: "23:00", end: "06:00" },
+				escalationDefaults: {
+					repeatEveryMin: 15,
+					maxRepeats: 4,
+					fallbackUserId: "viz-a",
+				},
+			},
+		);
+		const row = (
+			await db
+				.select()
+				.from(tables.userPref)
+				.where(eq(tables.userPref.id, "viz-d"))
+		)[0];
+		expect(row?.timezone).toBe("Asia/Tokyo");
+		expect(row?.quietHours).toEqual({ start: "23:00", end: "06:00" });
+		expect(row?.escalationDefaults).toEqual({
+			repeatEveryMin: 15,
+			maxRepeats: 4,
+			fallbackUserId: "viz-a",
+		});
 	});
 });
