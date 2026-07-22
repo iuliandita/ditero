@@ -34,10 +34,8 @@ import { corsPolicy, securityHeaders } from "./http-policy.ts";
 import { ackBaseUrl } from "./notifications/capability.ts";
 import { createSendFn } from "./notifications/dispatch.ts";
 import {
-	type CollectedEvent,
-	enqueueEventsSafely,
+	eventMutateSession,
 	startOverdueSweep,
-	withEventCollector,
 } from "./notifications/events.ts";
 import { ackRoutes } from "./notifications/routes.ts";
 import { startScheduler } from "./notifications/scheduler.ts";
@@ -261,14 +259,14 @@ const routes = new Elysia()
 		const ctx = await ctxFromAuthHeader(request.headers.get("Authorization"));
 		if (!ctx) return new Response("Unauthorized", { status: 401 });
 		// Notification events are collected per mutation and enqueued only after
-		// handleMutateRequest resolves -- outside the mutator transaction, so a
-		// mutator the role gate rejects notifies nobody (see notifications/events.ts
-		// for the non-atomicity this accepts).
-		const committed: CollectedEvent[] = [];
+		// the whole request resolves -- outside the mutator transaction, and only
+		// for mutations that actually committed. notifications/events.ts owns both
+		// halves and the non-atomicity they accept.
+		const events = eventMutateSession(db);
 		const result = await handleMutateRequest({
 			dbProvider: zdb,
 			handler: (transact) =>
-				transact(async (tx: unknown, name: string, args: unknown) => {
+				events.run(transact, async (tx, name, args) => {
 					const m = mustGetMutator(mutators, name) as {
 						fn: (a: {
 							tx: unknown;
@@ -276,14 +274,12 @@ const routes = new Elysia()
 							args: unknown;
 						}) => Promise<void>;
 					};
-					const collected: CollectedEvent[] = [];
-					await withEventCollector(collected, () => m.fn({ tx, ctx, args }));
-					committed.push(...collected);
+					await m.fn({ tx, ctx, args });
 				}),
 			request,
 			userID: ctx.id,
 		});
-		await enqueueEventsSafely(db, committed);
+		await events.flush();
 		return result instanceof Response ? result : Response.json(result);
 	});
 

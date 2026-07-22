@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runMutation } from "@/lib/run-mutation";
 import { deriveConnections } from "../../../domain/connections.ts";
-import { parseMentions } from "../../../domain/mention.ts";
+import { parseMentions, personMatchesHandle } from "../../../domain/mention.ts";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
@@ -20,21 +20,6 @@ const stampFmt = new Intl.DateTimeFormat(undefined, {
 	dateStyle: "medium",
 	timeStyle: "short",
 });
-
-function firstToken(name: string): string {
-	return name.trim().split(/\s+/)[0] ?? "";
-}
-
-// A parsed handle resolves to a person when it equals their first name token or
-// their whitespace-stripped full name (case-insensitive). Keeps insert (`@Name`)
-// and the post-send parse in sync without a rich editor.
-function personMatchesHandle(name: string, handle: string): boolean {
-	const h = handle.toLowerCase();
-	return (
-		firstToken(name).toLowerCase() === h ||
-		name.replace(/\s+/g, "").toLowerCase() === h
-	);
-}
 
 // The active `@token` immediately left of the caret, or null. The `@` must sit
 // at the start or follow whitespace, and the token must be whitespace-free.

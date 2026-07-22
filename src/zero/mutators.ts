@@ -24,7 +24,7 @@ import {
 import { panelsSchema } from "../domain/dashboard.ts";
 import type { ListKind } from "../domain/icon-map.ts";
 import { karmaForCompletion, karmaWrite } from "../domain/karma.ts";
-import { parseMentions } from "../domain/mention.ts";
+import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
@@ -60,9 +60,11 @@ async function roleInWorkspace(
 	return rows[0]?.role;
 }
 
-// @handle -> user id, restricted to current members of the comment's workspace
-// and matched on display name case-insensitively, mirroring what the mention
-// picker offers. Returns first-seen order, without the author.
+// @handle -> user id, restricted to current members of the comment's workspace.
+// Matching is personMatchesHandle, the same rule the picker uses to decide what
+// it offered: an exact name match would make every user whose display name
+// contains a space unmentionable, since a parsed handle never contains
+// whitespace. Returns first-seen order, without the author.
 async function resolveMentions(
 	tx: Transaction<Schema>,
 	body: string,
@@ -74,16 +76,17 @@ async function resolveMentions(
 	const members = await tx.run(
 		zql.membership.where("workspaceId", workspaceId).related("user"),
 	);
-	const byName = new Map<string, string>();
+	const people: { id: string; name: string }[] = [];
 	for (const m of members) {
 		const u = m.user as User | undefined;
-		if (u?.name) byName.set(u.name.toLowerCase(), u.id);
+		if (u?.name && u.id !== authorId) people.push({ id: u.id, name: u.name });
 	}
 	const out: string[] = [];
 	for (const handle of handles) {
-		const userId = byName.get(handle.toLowerCase());
-		if (userId && userId !== authorId && !out.includes(userId))
-			out.push(userId);
+		for (const person of people) {
+			if (personMatchesHandle(person.name, handle) && !out.includes(person.id))
+				out.push(person.id);
+		}
 	}
 	return out;
 }

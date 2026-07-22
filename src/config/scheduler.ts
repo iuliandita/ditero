@@ -7,6 +7,10 @@ export type SchedulerTiming = {
 };
 
 export const DEFAULT_TICK_MS = 30_000;
+// The overdue sweep is idempotent per recipient local day, so anything past the
+// first sweep of that day is pure waste. Hours, not ticks: it deliberately does
+// NOT follow the scan tick.
+export const DEFAULT_OVERDUE_SWEEP_MS = 3_600_000;
 export const DEFAULT_GRACE_MS = 3_600_000;
 export const DEFAULT_LATE_THRESHOLD_MS = 60_000;
 
@@ -48,4 +52,14 @@ export function schedulerTiming(env: SchedulerEnvironment): SchedulerTiming {
 		);
 	}
 	return timing;
+}
+
+export function overdueSweepMs(
+	env: Record<string, string | undefined>,
+): number {
+	return positiveInt(
+		"DITERO_OVERDUE_SWEEP_MS",
+		env.DITERO_OVERDUE_SWEEP_MS,
+		DEFAULT_OVERDUE_SWEEP_MS,
+	);
 }
