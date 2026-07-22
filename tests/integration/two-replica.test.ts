@@ -10,7 +10,7 @@
 // by completeDelivery, so the database cannot answer "which replica sent this"
 // after the fact -- the notification itself can.
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -25,7 +25,6 @@ import {
 	seedWorkspace,
 	sleep,
 	waitFor,
-	wipeNotificationTables,
 	wipeRigFixture,
 } from "./replica-rig.ts";
 
@@ -80,14 +79,29 @@ function senderOf(ackUrl: string | null): string | null {
 beforeAll(async () => {
 	const host = privateHost();
 	tap = await startNtfyTap(host, TAP_PORT);
-	await wipeNotificationTables(db);
+	// wipeRigFixture truncates the notification tables itself.
 	await wipeRigFixture(db, [USER_A, USER_B], [`${PREFIX}-ws`]);
 	await seedUser(db, USER_A, tap.url);
 	await seedUser(db, USER_B, tap.url);
 	scope = await seedWorkspace(db, PREFIX, USER_A, [USER_A, USER_B]);
+	// Guard the fixture before any replica exists: without an enabled ntfy
+	// channel every assertion below fails opaquely on a timeout, and the cause
+	// would only surface after four slow tests.
+	const channels = await db
+		.select({ userId: tables.notificationChannel.userId })
+		.from(tables.notificationChannel)
+		.where(
+			and(
+				inArray(tables.notificationChannel.userId, [USER_A, USER_B]),
+				eq(tables.notificationChannel.enabled, true),
+				eq(tables.notificationChannel.kind, "ntfy"),
+			),
+		);
+	expect(channels).toHaveLength(2);
+
 	rig = new ReplicaRig({
 		databaseURL,
-		replicas: ["", ""],
+		replicaEnv: ["", ""],
 		tapCIDR: `${host}/32`,
 	});
 	await rig.start();
@@ -287,29 +301,19 @@ describe("two replicas, one database", () => {
 	test("an invalid timing combination is refused at boot", async () => {
 		const bad = new ReplicaRig({
 			databaseURL,
-			replicas: ["DITERO_SCHEDULER_TICK_MS=5000"],
+			replicaEnv: ["DITERO_SCHEDULER_TICK_MS=5000"],
 			tapCIDR: "10.0.0.1/32",
 			basePort: 3199,
 		});
-		// lateThreshold (1000) < 2 x tick (10000): config/scheduler.ts throws, so
-		// the process must die instead of serving /health.
-		await expect(bad.start()).rejects.toThrow(/exited before boot|timed out/);
-		await bad.killAll();
+		try {
+			// lateThreshold (2000) < 2 x tick (10000): config/scheduler.ts throws,
+			// so the process must die instead of serving /health.
+			await expect(bad.start()).rejects.toThrow(/exited before boot|timed out/);
+		} finally {
+			// Unconditional: if the boot validation ever regresses, `start`
+			// RESOLVES, the rejects assertion throws, and a live replica on 3199
+			// would otherwise outlive the suite.
+			await bad.killAll();
+		}
 	}, 90_000);
-});
-
-// Sanity guard for the fixture itself: if this ever finds rows the assertions
-// above are scoped against something that does not exist.
-test("the fixture seeded an enabled ntfy channel for both users", async () => {
-	const channels = await db
-		.select({ userId: tables.notificationChannel.userId })
-		.from(tables.notificationChannel)
-		.where(
-			and(
-				inArray(tables.notificationChannel.userId, [USER_A, USER_B]),
-				eq(tables.notificationChannel.enabled, true),
-				sql`${tables.notificationChannel.kind} = 'ntfy'`,
-			),
-		);
-	expect(channels).toHaveLength(2);
 });

@@ -7,8 +7,7 @@ import { randomUUID } from "node:crypto";
 import { Cron } from "croner";
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type { CrashHook } from "../../config/test-crash.ts";
-import { crashHook } from "../../config/test-crash.ts";
+import { type CrashHook, crashHook } from "../../config/test-crash.ts";
 import type { WorkerTiming } from "../../config/worker.ts";
 import {
 	replicaId as resolveReplicaId,
@@ -88,8 +87,9 @@ export type WorkerOptions = {
 	// Prune is comparatively expensive and is not needed every tick; startWorker
 	// runs it on a coarse cadence.
 	prune?: boolean;
-	// Process-suicide seam for the durability rig. A no-op unless the process
-	// booted with DITERO_TEST_CRASH_POINT outside production (config/test-crash).
+	// Process-suicide seam for the durability rig. Absent -- not a no-op closure
+	// -- unless the process booted under NODE_ENV=test with
+	// DITERO_TEST_CRASH_POINT set (config/test-crash).
 	crash?: CrashHook;
 };
 

@@ -133,7 +133,13 @@ const routes = new Elysia()
 	.onRequest(({ set }) => {
 		Object.assign(set.headers, responseHeaders);
 	})
-	.get("/health", () => ({ ok: true }))
+	// `replica` echoes DITERO_REPLICA_ID verbatim (null when unset) rather than
+	// minting an identity here: startWorker resolves its own, and a second
+	// random one would name a process nothing else answers to.
+	.get("/health", () => ({
+		ok: true,
+		replica: process.env.DITERO_REPLICA_ID ?? null,
+	}))
 	// Better Auth catch-all: serves JWKS (GET) and all auth POSTs.
 	.all("/api/auth/*", ({ request, server }) =>
 		handleAuthRequest(request, server?.requestIP(request)?.address),

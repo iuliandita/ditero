@@ -5,7 +5,13 @@
 // in it. The only way to prove the at-least-once claim the docs make is for the
 // process to kill ITSELF at a named point.
 //
-// Inert unless BOTH: the process is not production AND the variable is set.
+// Armed only under an ALLOWLIST: NODE_ENV must be exactly "test" and the
+// variable must be set. Deny by default is the point -- this is a self-hosted
+// product, `bun src/server/index.ts` with no NODE_ENV at all is a normal way to
+// run it, and the failure mode of a fail-open guard here is a server that
+// SIGKILLs itself in a loop. Denying "production" and arming everything else
+// (unset, "", "prod", "staging", a typo) would be exactly backwards.
+//
 // Resolved once, at boot, so a variable that appears later in a running
 // process's environment cannot arm anything.
 export const CRASH_POINTS = [
@@ -19,8 +25,6 @@ export type CrashPoint = (typeof CRASH_POINTS)[number];
 
 export type CrashHook = (point: CrashPoint) => void;
 
-const NOOP: CrashHook = () => {};
-
 function isCrashPoint(value: string): value is CrashPoint {
 	return (CRASH_POINTS as readonly string[]).includes(value);
 }
@@ -29,13 +33,16 @@ function isCrashPoint(value: string): value is CrashPoint {
 // which is the opposite of what the rig needs to observe.
 const suicide = () => process.kill(process.pid, "SIGKILL");
 
+// `undefined` when inert, never a no-op closure: callers pass the result
+// straight through as an optional hook, so "not armed" is an ABSENT option
+// rather than a live function every production tick calls and awaits.
 export function crashHook(
 	env: Record<string, string | undefined>,
 	kill: () => void = suicide,
-): CrashHook {
-	if (env.NODE_ENV === "production") return NOOP;
+): CrashHook | undefined {
+	if (env.NODE_ENV !== "test") return undefined;
 	const raw = env.DITERO_TEST_CRASH_POINT?.trim();
-	if (!raw) return NOOP;
+	if (!raw) return undefined;
 	if (!isCrashPoint(raw)) {
 		throw new Error(
 			`DITERO_TEST_CRASH_POINT: expected one of ${CRASH_POINTS.join(", ")}, got "${raw}"`,

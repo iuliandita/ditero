@@ -30,15 +30,24 @@ export type RigTiming = {
 	sendConcurrency: number;
 };
 
-// Sub-second where the config allows it, and otherwise as close to the boot
-// validation's floor as the checks in config/worker.ts permit: one wave of
-// (adapterDeadline + 5s database allowance) must stay under the lease, so the
-// lease cannot go below ~6s no matter how the rig is tuned.
+// Two hard floors bound how fast this can be tuned, and both are worth stating
+// because the obvious sub-second values do not do what they look like:
+//
+//  - croner quantizes to whole seconds (`Math.max(1, Math.round(ms / 1000))` in
+//    both startScheduler and startWorker), so any tick under 1500ms runs at 1s.
+//    The ticks are set to 1000 rather than to a smaller number that silently
+//    rounds up to the same thing.
+//  - config/worker.ts charges a fixed 5s database allowance per wave, and one
+//    wave of (adapterDeadline + 5s) must stay under the lease -- so the lease
+//    cannot go below ~6s however the rest is tuned.
+//
+// The values the config DOES honor at sub-second precision (grace, late
+// threshold, lease, adapter deadline) are set as tight as those checks allow.
 export const RIG_TIMING: RigTiming = {
-	schedulerTickMs: 500,
-	lateThresholdMs: 1_000,
+	schedulerTickMs: 1_000,
+	lateThresholdMs: 2_000,
 	graceMs: 3_600_000,
-	workerTickMs: 500,
+	workerTickMs: 1_000,
 	leaseMs: 7_000,
 	adapterDeadlineMs: 1_500,
 	batchSize: 5,
@@ -47,9 +56,9 @@ export const RIG_TIMING: RigTiming = {
 
 export type RigOptions = {
 	databaseURL: string;
-	// One entry per replica; the value is that replica's extra environment
-	// (DITERO_TEST_CRASH_POINT, mostly).
-	replicas: string[];
+	// One entry per replica: that replica's extra environment, "K=V,K2=V2"
+	// (DITERO_TEST_CRASH_POINT, mostly). Length decides the replica count.
+	replicaEnv: string[];
 	tapCIDR: string;
 	basePort?: number;
 	timing?: RigTiming;
@@ -85,13 +94,16 @@ export class ReplicaRig {
 	private readonly options: RigOptions;
 	private readonly timing: RigTiming;
 	private readonly extraEnv: string[];
+	private readonly reap: () => void;
 
 	constructor(options: RigOptions) {
 		this.options = options;
 		this.timing = options.timing ?? RIG_TIMING;
-		this.extraEnv = options.replicas;
+		// Copied: launch/restart rewrite entries, and aliasing the caller's array
+		// would mutate the literal a test declared inline.
+		this.extraEnv = [...options.replicaEnv];
 		const base = options.basePort ?? RIG_BASE_PORT;
-		this.replicas = options.replicas.map((_, index) => ({
+		this.replicas = options.replicaEnv.map((_, index) => ({
 			// Deterministic, and the value the completion fence compares against:
 			// the two-replica tests assert both of these appear in claimed_by.
 			id: `rig-${index}`,
@@ -99,13 +111,27 @@ export class ReplicaRig {
 			process: null,
 			exited: true,
 		}));
+		// afterAll covers a thrown test; it does NOT cover a hard-killed vitest
+		// worker (hook timeout, --test-timeout, CI cancel). A surviving replica is
+		// bound to a fixed port and keeps scanning the shared database, which
+		// poisons every later run on this machine.
+		this.reap = () => {
+			for (const replica of this.replicas) replica.process?.kill("SIGKILL");
+		};
+		process.once("exit", this.reap);
+		process.once("SIGINT", this.reap);
+		process.once("SIGTERM", this.reap);
 	}
 
 	private envFor(index: number): NodeJS.ProcessEnv {
 		const replica = this.replicas[index];
 		const t = this.timing;
+		// A minimal base, never `...process.env`: a developer with any DITERO_*
+		// knob exported would otherwise get a differently-tuned rig and a failure
+		// that reproduces on no other machine. PATH is what `bun` needs to run.
 		return {
-			...process.env,
+			PATH: process.env.PATH,
+			HOME: process.env.HOME,
 			DATABASE_URL: this.options.databaseURL,
 			NODE_ENV: "test",
 			API_PORT: String(replica.port),
@@ -134,16 +160,16 @@ export class ReplicaRig {
 	async start(index?: number): Promise<void> {
 		const indexes =
 			index === undefined ? this.replicas.map((_, i) => i) : [index];
-		for (const i of indexes) await this.spawnOne(i);
+		for (const i of indexes) this.spawnOne(i);
 		await Promise.all(indexes.map((i) => this.waitHealthy(i)));
 	}
 
 	// Spawn without waiting for /health: a replica armed with a crash point can
 	// reach that point before the listener answers, and waiting would turn the
 	// expected suicide into a boot failure.
-	async launch(index: number, env?: string): Promise<void> {
+	launch(index: number, env?: string): void {
 		if (env !== undefined) this.extraEnv[index] = env;
-		await this.spawnOne(index);
+		this.spawnOne(index);
 	}
 
 	async stop(index: number): Promise<void> {
@@ -152,7 +178,7 @@ export class ReplicaRig {
 		await this.waitForExit(index);
 	}
 
-	private async spawnOne(index: number): Promise<void> {
+	private spawnOne(index: number): void {
 		const replica = this.replicas[index];
 		const child = spawn("bun", ["src/server/index.ts"], {
 			env: this.envFor(index),
@@ -172,6 +198,13 @@ export class ReplicaRig {
 		});
 	}
 
+	// Ports are fixed, so /health alone is not proof this rig owns the listener:
+	// a stale replica or a developer's own server on the port answers it while
+	// our child is dying of EADDRINUSE, and the suite then drives a ghost.
+	// /health echoes DITERO_REPLICA_ID; only a matching id counts.
+	//
+	// Fixed ports also mean two concurrent CI jobs on one host collide. Accepted:
+	// the existing e2e already pins 3000/5173/55432.
 	private async waitHealthy(index: number): Promise<void> {
 		const replica = this.replicas[index];
 		await waitFor(
@@ -184,8 +217,16 @@ export class ReplicaRig {
 					const response = await fetch(
 						`http://localhost:${replica.port}/health`,
 					);
-					return response.ok;
-				} catch {
+					if (!response.ok) return false;
+					const body = (await response.json()) as { replica?: string | null };
+					if (body.replica === replica.id) return true;
+					throw new Error(
+						`rig: :${replica.port} is owned by ${body.replica ?? "an unidentified process"}, not ${replica.id}`,
+					);
+				} catch (error) {
+					if (error instanceof Error && error.message.startsWith("rig:")) {
+						throw error;
+					}
 					return false;
 				}
 			},
@@ -208,7 +249,12 @@ export class ReplicaRig {
 	}
 
 	async killAll(): Promise<void> {
-		for (const replica of this.replicas) replica.process?.kill("SIGKILL");
+		this.reap();
+		// The process-level safety net is per rig instance; leaving it attached
+		// would accumulate listeners across every rig a run creates.
+		process.off("exit", this.reap);
+		process.off("SIGINT", this.reap);
+		process.off("SIGTERM", this.reap);
 		await Promise.all(
 			this.replicas.map((replica, index) =>
 				replica.exited ? Promise.resolve() : this.waitForExit(index, 10_000),
@@ -221,7 +267,7 @@ export class ReplicaRig {
 	// recovery.
 	async restart(index: number, env?: string): Promise<void> {
 		if (env !== undefined) this.extraEnv[index] = env;
-		await this.spawnOne(index);
+		this.spawnOne(index);
 		await this.waitHealthy(index);
 	}
 }
@@ -356,9 +402,7 @@ export async function seedReminderTask(
 
 // Every replica ticks the moment it boots, so a leftover row from an earlier
 // file in this (serial) suite would be delivered to the rig's tap and counted.
-export async function wipeNotificationTables(
-	database: Database,
-): Promise<void> {
+async function wipeNotificationTables(database: Database): Promise<void> {
 	await database.execute(sql`
 		truncate table delivery_attempt, ack_capability, notification_outbox,
 			reminder_state, rate_bucket restart identity cascade

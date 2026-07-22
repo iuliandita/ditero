@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
+import { parseAckUrl } from "../support/ntfy-tap.ts";
 
 // M3a Task 16 e2e: the live half of the durability gate.
 //
@@ -101,16 +102,6 @@ async function captured(page: Page, topic: string): Promise<Captured[]> {
 	return (await response.json()) as Captured[];
 }
 
-// The Actions header quotes every non-constant field (adapters/ntfy.ts), so the
-// ack URL is the quoted value that looks like one.
-function ackUrlOf(actions: string | null): string | null {
-	if (!actions) return null;
-	const quoted = [...actions.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) =>
-		m[1].replace(/\\(.)/g, "$1"),
-	);
-	return quoted.find((value) => /^https?:\/\//.test(value)) ?? null;
-}
-
 async function waitForNotification(
 	page: Page,
 	topic: string,
@@ -175,7 +166,12 @@ async function seedSharedList(ownerId: string, title: string): Promise<string> {
 
 // The seeded shared workspace outlives this file (global-setup seeds once) and
 // every later spec asserts against it, so the list this test adds -- and its
-// completed task -- must not survive the run.
+// completed task and memberships -- must not survive the run.
+//
+// This is load-bearing rather than tidy: `ack-live` sorts FIRST alphabetically
+// and playwright.config pins `workers: 1`, so anything left behind is visible
+// to the entire rest of the suite. Dropping this cleanup was observed to fail
+// two domain.spec tests.
 async function restoreSharedWorkspace(
 	listId: string | null,
 	userIds: string[],
@@ -278,9 +274,9 @@ test("live ack: a real tap's action URL acks a habit and the open client sees it
 	const delivery = await waitForNotification(
 		page,
 		topic,
-		(row) => row.title === HABIT && ackUrlOf(row.actions) !== null,
+		(row) => row.title === HABIT && parseAckUrl(row.actions) !== null,
 	);
-	const ackUrl = ackUrlOf(delivery.actions);
+	const ackUrl = parseAckUrl(delivery.actions);
 	expect(ackUrl).not.toBeNull();
 	expect(ackUrl).toContain("/api/notifications/ack/");
 
@@ -407,9 +403,9 @@ test("live ack: assignment notifies through /api/zero/mutate, and one ack termin
 		const delivery = await waitForNotification(
 			pa,
 			topicA,
-			(row) => row.title === TASK && ackUrlOf(row.actions) !== null,
+			(row) => row.title === TASK && parseAckUrl(row.actions) !== null,
 		);
-		const ackUrl = ackUrlOf(delivery.actions);
+		const ackUrl = parseAckUrl(delivery.actions);
 		expect(ackUrl).not.toBeNull();
 
 		const urlB = pb.url();

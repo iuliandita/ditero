@@ -26,7 +26,6 @@ import {
 	seedWorkspace,
 	sleep,
 	waitFor,
-	wipeNotificationTables,
 	wipeRigFixture,
 } from "./replica-rig.ts";
 
@@ -92,14 +91,14 @@ async function dueNow(taskId: string): Promise<number> {
 beforeAll(async () => {
 	const host = privateHost();
 	tap = await startNtfyTap(host, TAP_PORT);
-	await wipeNotificationTables(db);
+	// wipeRigFixture truncates the notification tables itself.
 	await wipeRigFixture(db, [USER_A, USER_B], [`${PREFIX}-ws`]);
 	await seedUser(db, USER_A, tap.url);
 	await seedUser(db, USER_B, tap.url);
 	scope = await seedWorkspace(db, PREFIX, USER_A, [USER_A, USER_B]);
 	rig = new ReplicaRig({
 		databaseURL,
-		replicas: [""],
+		replicaEnv: [""],
 		tapCIDR: `${host}/32`,
 		basePort: 3191,
 		timing: { ...RIG_TIMING, lateThresholdMs: LATE_THRESHOLD_MS },
@@ -121,7 +120,7 @@ async function crashThenRecover(
 ): Promise<void> {
 	await rig.stop(0);
 	await seed();
-	await rig.launch(0, `DITERO_TEST_CRASH_POINT=${point}`);
+	rig.launch(0, `DITERO_TEST_CRASH_POINT=${point}`);
 	await rig.waitForExit(0, 60_000);
 	await rig.restart(0, "");
 }
@@ -257,6 +256,9 @@ describe("crash injection", () => {
 
 	// X7 / C1: every other crash test targets the worker. This one kills the
 	// leader inside the scan, between the reminder_state write and its enqueue.
+	// The recovery under test is that those two are ONE transaction: commit the
+	// row before the enqueue and the crash strands it at fire_count 1 with no
+	// outbox row and no re-fire, which this test catches.
 	test("the leader killed mid-scan strands no reminder_state row", async () => {
 		const taskId = `${PREFIX}-scan`;
 		await crashThenRecover("mid-scan", async () => {

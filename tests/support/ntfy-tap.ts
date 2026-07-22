@@ -28,9 +28,6 @@ export function parseAckUrl(actions: string | null): string | null {
 export type NtfyTap = {
 	url: string;
 	deliveries: Delivery[];
-	// Deliveries whose topic matches, in arrival order.
-	forTopic(topic: string): Delivery[];
-	clear(): void;
 	close(): Promise<void>;
 };
 
@@ -69,10 +66,6 @@ export async function startNtfyTap(
 	return {
 		url: `http://${host}:${port}`,
 		deliveries,
-		forTopic: (topic) => deliveries.filter((d) => d.topic === topic),
-		clear: () => {
-			deliveries.length = 0;
-		},
 		close: () =>
 			new Promise<void>((resolve, reject) =>
 				server.close((error) => (error ? reject(error) : resolve())),

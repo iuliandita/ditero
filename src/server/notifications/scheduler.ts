@@ -858,9 +858,12 @@ export function startScheduler(
 		async () => {
 			try {
 				await withLeaderLock(pool, SCHEDULER_LOCK_KEY, () =>
+					// Left undefined when the seam is not armed, so the production
+					// enqueue path keeps short-circuiting on an absent option rather
+					// than awaiting a live no-op closure every transaction.
 					scanTick(database, {
 						timing,
-						onBeforeEnqueue: () => crash("mid-scan"),
+						onBeforeEnqueue: crash && (() => crash("mid-scan")),
 					}),
 				);
 			} catch (error) {
