@@ -125,6 +125,24 @@ non-pooled, and able to create replication slots. See [security architecture](do
 [database roles](docs/runbooks/database-roles.md), and the
 [backup/restore runbook](docs/runbooks/backup-restore.md).
 
+### Notifications
+
+Reminders for due tasks and habits, plus assignment, mention, and overdue
+notices, delivered through a durable outbox with retries, escalation, quiet
+hours, and one-tap acknowledgement. **ntfy is the only channel implemented
+today**; Telegram, Discord, Slack, and email are listed in the UI but rejected
+by the server until their adapters land.
+
+Delivery is **at-least-once, never exactly-once** — you can receive a duplicate —
+and there are bounded conditions under which a notification is dropped entirely.
+Reminders are **not medical-grade**. Read
+[docs/notifications.md](docs/notifications.md) before relying on this for
+medication, and [security architecture](docs/security.md#notification-egress-and-ntfy-topics)
+before pointing a channel at a host on your own network.
+
+All scheduler and worker knobs, with their defaults and the boot-validated
+ordering constraints between them, are documented in [.env.example](.env.example).
+
 ### Planned distribution
 
 Ditero will also ship as multi-arch container images on GHCR and Docker Hub, with
@@ -140,7 +158,8 @@ to the build:
 
 - **Permissions** — Zero expresses multi-workspace read isolation and role-gated writes.
 - **Notifications** — the scheduler lock, secure acknowledgement capability, escalation state,
-  and Zero write-back seam work. Production channel/callback/replica/crash gates remain in M3.
+  and Zero write-back seam work. The delivery engine has since been built and validated against
+  real multi-replica crashes; the remaining channels beyond ntfy are still outstanding.
 
 The permission risk is retired; the notification architecture is narrowed and has explicit
 remaining gates. The build proceeds through a milestone roadmap on `develop`.
