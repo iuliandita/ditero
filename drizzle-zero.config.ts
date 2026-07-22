@@ -163,6 +163,10 @@ export default drizzleZeroConfig(schema, {
 			// config intentionally NOT exposed (channel credentials; server-only)
 			enabled: true,
 			verifiedAt: true,
+			// Health, not diagnostics: a closed enum plus a timestamp. The raw
+			// provider error stays in delivery_attempt (server-only, redacted).
+			lastErrorAt: true,
+			lastErrorCode: true,
 			createdAt: true,
 			updatedAt: true,
 		},

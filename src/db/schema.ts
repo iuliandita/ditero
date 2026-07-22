@@ -15,6 +15,7 @@ import {
 	unique,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { CHANNEL_ERROR_CODES } from "../domain/notification-retry.ts";
 import { user } from "./auth-schema.ts";
 
 export * from "./auth-schema.ts";
@@ -61,6 +62,14 @@ export const channelKindEnum = pgEnum("channel_kind", [
 	"slack",
 	"email",
 ]);
+// Enum, not text: the column is Zero-synced, and a text column would let a
+// provider error body (credentials and all) reach every client of that user.
+// Values live in domain/notification-retry.ts with the mapping that produces
+// them, so the two cannot drift.
+export const channelErrorCodeEnum = pgEnum(
+	"channel_error_code",
+	CHANNEL_ERROR_CODES,
+);
 export const reminderStatusEnum = pgEnum("reminder_status", [
 	"pending",
 	"deferred",
@@ -444,6 +453,11 @@ export const notificationChannel = pgTable(
 		config: jsonb("config").notNull(),
 		enabled: boolean("enabled").notNull().default(true),
 		verifiedAt: timestamp("verified_at", { withTimezone: true }),
+		// Written only by the worker's completion path: set on a permanent
+		// delivery failure, cleared on the next success. verifiedAt alone would
+		// keep rendering "Verified" for a credential that has started failing.
+		lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+		lastErrorCode: channelErrorCodeEnum("last_error_code"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),

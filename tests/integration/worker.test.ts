@@ -87,6 +87,9 @@ async function wipeVolatile() {
 
 async function wipe() {
 	await wipeVolatile();
+	await db
+		.delete(tables.notificationChannel)
+		.where(inArray(tables.notificationChannel.userId, [...userIds]));
 	await db.delete(tables.task).where(eq(tables.task.id, TASK));
 	await db.delete(tables.list).where(eq(tables.list.id, LIST));
 	await db
@@ -576,6 +579,100 @@ describe("redaction", () => {
 		// The exact 10 characters truncate-then-redact would have persisted.
 		expect(attempt.error).not.toContain(password.slice(0, 10));
 		expect(attempt.error?.length).toBeLessThanOrEqual(300);
+	});
+});
+
+// Channel health is what the settings page renders instead of an indefinite
+// "Verified" for a credential that has started failing, so every assertion here
+// reads the persisted row rather than the worker summary.
+describe("channel health", () => {
+	const CHANNEL = "wk-chan";
+
+	async function channel() {
+		const rows = await db
+			.select()
+			.from(tables.notificationChannel)
+			.where(eq(tables.notificationChannel.id, CHANNEL));
+		if (rows.length !== 1) throw new Error("channel row not found");
+		return rows[0];
+	}
+
+	beforeEach(async () => {
+		await db
+			.delete(tables.notificationChannel)
+			.where(eq(tables.notificationChannel.id, CHANNEL));
+		await db.insert(tables.notificationChannel).values({
+			id: CHANNEL,
+			userId: OWNER,
+			kind: "ntfy",
+			config: { serverUrl: "https://ntfy.invalid", topic: "wk" },
+		});
+	});
+
+	test("a permanent failure records the error time and category", async () => {
+		await seedOutbox("wk-h-perm");
+
+		await tick({ send: async () => permanent });
+
+		const row = await channel();
+		expect(row.lastErrorCode).toBe("auth");
+		expect(row.lastErrorAt).toBeInstanceOf(Date);
+		expect((await outbox("wk-h-perm")).status).toBe("failed");
+	});
+
+	test("the category follows the provider status, not a single default", async () => {
+		await seedOutbox("wk-h-404");
+		await tick({
+			send: async () => ({ ok: false, status: 404, error: "no such topic" }),
+		});
+		expect((await channel()).lastErrorCode).toBe("not_found");
+	});
+
+	test("the next success clears both columns", async () => {
+		await seedOutbox("wk-h-clear-1");
+		await tick({ send: async () => permanent });
+		expect((await channel()).lastErrorCode).toBe("auth");
+
+		await seedOutbox("wk-h-clear-2");
+		await tick({ send: sendOk });
+
+		const row = await channel();
+		expect(row.lastErrorCode).toBeNull();
+		expect(row.lastErrorAt).toBeNull();
+	});
+
+	// A 503 still has ~33 minutes of ladder to run; flipping the channel to
+	// "broken" on the first blip would tell the user something untrue.
+	test("a retryable failure leaves the channel unmarked", async () => {
+		await seedOutbox("wk-h-retry");
+
+		const summary = await tick({ send: async () => retryable });
+
+		expect(summary.retried).toBe(1);
+		const row = await channel();
+		expect(row.lastErrorCode).toBeNull();
+		expect(row.lastErrorAt).toBeNull();
+	});
+
+	// The column is Zero-synced, so a text column would carry a provider error
+	// body -- which can contain the bot token from the URL that produced it --
+	// to every client of that user. Proven at the database, not the type layer:
+	// a `text` column would make this insert succeed.
+	test("the database rejects any category outside the enum", async () => {
+		const rejection = await db
+			.execute(sql`
+				update notification_channel
+				set last_error_code = '401 Unauthorized {"token":"leaked"}'
+				where id = ${CHANNEL}
+			`)
+			.then(
+				() => null,
+				(error: unknown) => error as { cause?: { code?: string } },
+			);
+		// Drizzle wraps the driver error; the pg SQLSTATE for an out-of-enum
+		// value is what proves the constraint is the database's, not the ORM's.
+		expect(rejection?.cause?.code).toBe("22P02");
+		expect((await channel()).lastErrorCode).toBeNull();
 	});
 });
 

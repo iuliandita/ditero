@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { classifyRetry, MAX_ATTEMPTS } from "./notification-retry.ts";
+import {
+	channelErrorCode,
+	classifyRetry,
+	MAX_ATTEMPTS,
+} from "./notification-retry.ts";
 
 describe("classifyRetry", () => {
 	it("treats a 2xx as done", () => {
@@ -199,5 +203,59 @@ describe("classifyRetry", () => {
 				0,
 			),
 		).toEqual({ kind: "permanent", retryClass: "policy" });
+	});
+});
+
+describe("channelErrorCode", () => {
+	const permanentFor = (result: Parameters<typeof classifyRetry>[0]) =>
+		channelErrorCode(
+			classifyRetry(result, 1, 0),
+			result.ok ? 200 : result.status,
+		);
+
+	it("returns null for anything the worker will still retry", () => {
+		expect(permanentFor({ ok: true, status: 200 })).toBeNull();
+		expect(permanentFor({ ok: false, status: 503, error: "x" })).toBeNull();
+		expect(permanentFor({ ok: false, status: 429, error: "x" })).toBeNull();
+		expect(permanentFor({ ok: false, error: "econnrefused" })).toBeNull();
+	});
+
+	it("maps credential failures to auth", () => {
+		expect(permanentFor({ ok: false, status: 401, error: "x" })).toBe("auth");
+		expect(permanentFor({ ok: false, status: 403, error: "x" })).toBe("auth");
+		expect(permanentFor({ ok: false, status: 407, error: "x" })).toBe("auth");
+	});
+
+	it("maps a missing target to not_found", () => {
+		expect(permanentFor({ ok: false, status: 404, error: "x" })).toBe(
+			"not_found",
+		);
+		expect(permanentFor({ ok: false, status: 410, error: "x" })).toBe(
+			"not_found",
+		);
+	});
+
+	it("maps an outbound policy rejection to policy", () => {
+		expect(
+			permanentFor({ ok: false, policyRejected: true, error: "blocked" }),
+		).toBe("policy");
+	});
+
+	// 400/422 has no category of its own; "policy" (the provider refused the
+	// request) is the closest honest fit and is the documented imprecision.
+	it("falls back to policy for a 4xx it cannot place", () => {
+		expect(permanentFor({ ok: false, status: 400, error: "x" })).toBe("policy");
+		expect(permanentFor({ ok: false, status: 422, error: "x" })).toBe("policy");
+	});
+
+	it("maps exhaustion by its final status, defaulting to transport", () => {
+		const at = (result: Parameters<typeof classifyRetry>[0]) =>
+			channelErrorCode(
+				classifyRetry(result, MAX_ATTEMPTS, 0),
+				result.ok ? 200 : result.status,
+			);
+		expect(at({ ok: false, status: 503, error: "x" })).toBe("transport");
+		expect(at({ ok: false, error: "econnrefused" })).toBe("transport");
+		expect(at({ ok: false, status: 429, error: "x" })).toBe("rate_limited");
 	});
 });
