@@ -390,12 +390,13 @@ test("palette: Meta+K opens, runs New task, and a search hit opens its list", as
 	await expect(page.getByRole("option", { name: "New task" })).toBeVisible();
 	await page.keyboard.press("Enter");
 	await expect(page.getByTestId("quickadd-input")).toBeVisible();
+	// One-shot count, NOT toHaveCount: a retrying matcher would sit here waiting out
+	// the palette's exit animation and thereby hide the very race it is meant to
+	// catch. The palette must already be unmounted the moment the sheet is up --
+	// a still-mounted layer claims Escape and the sheet below it never closes (#19).
+	expect(await page.getByTestId("command-palette").count()).toBe(0);
 	await page.keyboard.press("Escape");
-	// Wait for the sheet + its overlay to fully tear down before navigating, else
-	// the closing overlay can intercept the next click (pointer-events race).
-	await expect(page.getByTestId("quickadd-input")).toBeHidden({
-		timeout: 15000,
-	});
+	await expect(page.getByTestId("quickadd-input")).toBeHidden();
 
 	// Move off the list so the search navigation is observable as a fresh open.
 	await sidebarLists(page)
