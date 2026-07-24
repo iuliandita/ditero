@@ -101,6 +101,26 @@ export function rateLimitKey(address: string): string {
 	return parsed.toString();
 }
 
+// Rate-limit key for a request whose peer address may be absent (server?.requestIP
+// returns null). A missing peer must collapse to UNKNOWN_CLIENT_IP, never a
+// synthesized 127.0.0.1: behind a local reverse proxy that literal is trusted, so
+// resolveClientIP would then honour an attacker-chosen X-Forwarded-For and the
+// bucket key becomes freely rotatable (issue #37).
+export function resolveClientRateKey({
+	peerAddress,
+	forwardedFor,
+	trustedProxies,
+}: {
+	peerAddress: string | null | undefined;
+	forwardedFor: string | null;
+	trustedProxies: Network[];
+}): string {
+	if (peerAddress == null) return rateLimitKey(UNKNOWN_CLIENT_IP);
+	return rateLimitKey(
+		resolveClientIP({ peerAddress, forwardedFor, trustedProxies }),
+	);
+}
+
 export function sanitizeAuthRequest(
 	request: Request,
 	peerAddress: string | undefined,

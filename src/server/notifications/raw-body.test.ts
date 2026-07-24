@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { Elysia, t } from "elysia";
 import { describe, expect, it } from "vitest";
 import { verifySlackSignature } from "../../domain/channel-signature.ts";
+import { UNKNOWN_CLIENT_IP } from "../client-ip.ts";
 import {
 	parseSignedBody,
 	RAW_BODY_MAX_BYTES,
@@ -335,7 +336,9 @@ describe("raw-body seam", () => {
 		expect(response.status).toBe(429);
 		expect(touchedBody).toBe(false);
 		expect(calls).toHaveLength(0);
-		expect(rateKeys).toEqual(["127.0.0.1"]);
+		// No server here, so requestIP is absent and the key collapses to the
+		// shared unknown bucket rather than a synthesized 127.0.0.1 (issue #37).
+		expect(rateKeys).toEqual([UNKNOWN_CLIENT_IP]);
 	});
 });
 
