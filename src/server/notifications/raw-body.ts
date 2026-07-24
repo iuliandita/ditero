@@ -31,8 +31,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as tables from "../../db/schema.ts";
 import type { Network } from "../client-ip.ts";
 import {
-	rateLimitKey,
-	resolveClientIP,
+	resolveClientRateKey,
 	trustedProxyCIDRsFromEnv,
 } from "../client-ip.ts";
 import {
@@ -242,14 +241,11 @@ export function rawBodyHandler(options: RawBodyOptions) {
 			requestIP: (request: Request) => { address: string } | null;
 		} | null;
 	}): Promise<Response> => {
-		const peerAddress = server?.requestIP(request)?.address ?? "127.0.0.1";
-		const clientIP = rateLimitKey(
-			resolveClientIP({
-				peerAddress,
-				forwardedFor: request.headers.get("x-forwarded-for"),
-				trustedProxies,
-			}),
-		);
+		const clientIP = resolveClientRateKey({
+			peerAddress: server?.requestIP(request)?.address,
+			forwardedFor: request.headers.get("x-forwarded-for"),
+			trustedProxies,
+		});
 		// Ahead of the body read, so a flood cannot make us buffer for it. Kept
 		// distinct from the uniform rejection: it is address-scoped and decided
 		// before any request content is looked at, so it reveals nothing.

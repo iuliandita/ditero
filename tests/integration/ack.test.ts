@@ -562,11 +562,12 @@ describe("ack route: rejection", () => {
 // Per IP, not per token: consume-before-validate burns the token on the first
 // attempt, so a per-token limit is near-inert.
 describe("ack route: rate limiting", () => {
-	// Loopback is trusted so x-forwarded-for is honored, which is the only way
-	// to present distinct client addresses through `.handle()` (there is no
-	// socket, so every request would otherwise resolve to 127.0.0.1).
-	const proxied = (options: Partial<AckRouteOptions> = {}) =>
-		new Elysia().use(
+	// `.handle()` has no socket, so a server stub supplies a fixed loopback peer;
+	// loopback is trusted, so x-forwarded-for is honored and each request can
+	// present a distinct client address. A null peer would instead collapse to the
+	// shared unknown bucket (issue #37), which is why the stub is required now.
+	const proxied = (options: Partial<AckRouteOptions> = {}) => {
+		const app = new Elysia().use(
 			ackRoutes(db, {
 				capacity: 3,
 				refillPerSec: 0,
@@ -575,6 +576,11 @@ describe("ack route: rate limiting", () => {
 				...options,
 			}),
 		);
+		(app as unknown as { server: unknown }).server = {
+			requestIP: () => ({ address: "127.0.0.1" }),
+		};
+		return app;
+	};
 
 	const fromIP = (route: ReturnType<typeof proxied>, ip: string, n: number) =>
 		route.handle(ackRequest(`garbage-rl-${n}`, { "x-forwarded-for": ip }));

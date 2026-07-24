@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 import {
 	parseTrustedProxyCIDRs,
 	resolveClientIP,
+	resolveClientRateKey,
 	sanitizeAuthRequest,
+	UNKNOWN_CLIENT_IP,
 } from "./client-ip.ts";
 
 describe("resolveClientIP", () => {
@@ -69,5 +71,44 @@ describe("resolveClientIP", () => {
 
 		expect(request.headers.get("x-forwarded-for")).toBeNull();
 		expect(request.headers.get("x-ditero-client-ip")).toBe("203.0.113.8");
+	});
+});
+
+describe("resolveClientRateKey", () => {
+	// 127.0.0.1 trusted models the common "behind a local reverse proxy" deploy.
+	const trustedProxies = parseTrustedProxyCIDRs(["127.0.0.1/32"]);
+
+	test("collapses a missing peer to the shared unknown key", () => {
+		expect(
+			resolveClientRateKey({
+				peerAddress: null,
+				forwardedFor: null,
+				trustedProxies,
+			}),
+		).toBe(UNKNOWN_CLIENT_IP);
+	});
+
+	// The regression: a null peer must not be synthesized into a trusted
+	// 127.0.0.1 that then honours an attacker-chosen X-Forwarded-For, which would
+	// hand the caller a freely-rotatable rate-limit key. Guards client-ip.ts
+	// resolveClientRateKey's null branch.
+	test("ignores forwarding headers when the peer is missing", () => {
+		expect(
+			resolveClientRateKey({
+				peerAddress: undefined,
+				forwardedFor: "203.0.113.9",
+				trustedProxies,
+			}),
+		).toBe(UNKNOWN_CLIENT_IP);
+	});
+
+	test("keys a real peer through the normal resolution path", () => {
+		expect(
+			resolveClientRateKey({
+				peerAddress: "127.0.0.1",
+				forwardedFor: "203.0.113.9",
+				trustedProxies,
+			}),
+		).toBe("203.0.113.9");
 	});
 });

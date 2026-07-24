@@ -12,8 +12,7 @@ import { Elysia } from "elysia";
 import type * as tables from "../../db/schema.ts";
 import type { Network } from "../client-ip.ts";
 import {
-	rateLimitKey,
-	resolveClientIP,
+	resolveClientRateKey,
 	trustedProxyCIDRsFromEnv,
 } from "../client-ip.ts";
 import {
@@ -89,14 +88,11 @@ export function ackRoutes(database: Database, options: AckRouteOptions = {}) {
 
 			// Keyed on the resolved client address: the in-memory pattern is
 			// single-process and this pipeline is multi-replica by definition.
-			const peerAddress = server?.requestIP(request)?.address ?? "127.0.0.1";
-			const clientIP = rateLimitKey(
-				resolveClientIP({
-					peerAddress,
-					forwardedFor: request.headers.get("x-forwarded-for"),
-					trustedProxies,
-				}),
-			);
+			const clientIP = resolveClientRateKey({
+				peerAddress: server?.requestIP(request)?.address,
+				forwardedFor: request.headers.get("x-forwarded-for"),
+				trustedProxies,
+			});
 			const allowed = await takeRateToken(
 				database,
 				`${keyPrefix}${clientIP}`,
