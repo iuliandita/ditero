@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ChannelKind } from "../../../domain/notification-channel.ts";
+import { m } from "../../../paraglide/messages.js";
 import type {
 	TestResult,
 	useNotificationChannels,
@@ -13,8 +14,7 @@ import {
 	channelLabel,
 	channelModeSummary,
 	channelWarningMessage,
-	m,
-} from "../../lib/messages.ts";
+} from "../../lib/channel-messages.ts";
 import {
 	appModeDisabled,
 	CHANNEL_MODES,

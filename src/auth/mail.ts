@@ -17,9 +17,9 @@
 // longer, which is the same oracle in a different unit.
 import { mailableAddress } from "../domain/mail-address.ts";
 import { encodeHeaderValue, headerSafe } from "../domain/mime-header.ts";
+import { m } from "../paraglide/messages.js";
 import { type Mailer, mailerFromEnv } from "../server/mail/transport.ts";
 import { ackBaseUrl } from "../server/notifications/capability.ts";
-import { m } from "./mail-messages.ts";
 
 export type AuthMailKind = "verify" | "reset";
 

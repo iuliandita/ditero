@@ -16,8 +16,8 @@ import { user, workspace } from "../../db/schema.ts";
 import type { InviteMailStatus } from "../../domain/invite.ts";
 import { mailableAddress } from "../../domain/mail-address.ts";
 import { encodeHeaderValue, headerSafe } from "../../domain/mime-header.ts";
+import { m } from "../../paraglide/messages.js";
 import { ackBaseUrl } from "../notifications/capability.ts";
-import { m } from "./invite-mail-messages.ts";
 import type { Mailer } from "./transport.ts";
 import { mailerFromEnv } from "./transport.ts";
 
