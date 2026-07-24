@@ -1,3 +1,5 @@
+import { m } from "../../../paraglide/messages.js";
+
 // Aggregate completion bar for project-kind lists in the index surfaces
 // (sidebar tree + mobile list-of-lists). Renders nothing when the list has no
 // tasks. done/total counts come from the already-synced tasks.mine data.
@@ -11,7 +13,7 @@ export function ListProgress({ done, total }: { done: number; total: number }) {
 			aria-valuenow={pct}
 			aria-valuemin={0}
 			aria-valuemax={100}
-			aria-label={`${done} of ${total} complete`}
+			aria-label={m.list_progress_label({ done, total })}
 		>
 			<div
 				className="h-full rounded-full bg-kind-project"

@@ -11,6 +11,7 @@ import { runMutation } from "@/lib/run-mutation";
 import { formatDue, isOverdue } from "@/lib/task-display";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { CommentThread } from "../people/CommentThread.tsx";
@@ -78,12 +79,16 @@ export function RestrictedTaskDetail({
 						onClick={toggle}
 					>
 						<Check />
-						{done ? "Completed" : "Mark done"}
+						{done
+							? m.restricted_detail_completed()
+							: m.restricted_detail_mark_done()}
 					</Button>
 
 					{t.dueAt != null && (
 						<div className="flex flex-col gap-1 text-sm">
-							<span className="text-muted-foreground">Due</span>
+							<span className="text-muted-foreground">
+								{m.restricted_detail_due()}
+							</span>
 							<span className={cn(isOverdue(t) && !done && "text-destructive")}>
 								{formatDue(t.dueAt, t.dueAllDay)}
 							</span>
@@ -92,7 +97,9 @@ export function RestrictedTaskDetail({
 
 					{t.notes && (
 						<div className="flex flex-col gap-1 text-sm">
-							<span className="text-muted-foreground">Notes</span>
+							<span className="text-muted-foreground">
+								{m.restricted_detail_notes()}
+							</span>
 							<p className="whitespace-pre-wrap break-words">{t.notes}</p>
 						</div>
 					)}

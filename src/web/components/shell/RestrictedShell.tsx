@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { runMutation } from "@/lib/run-mutation";
 import { formatDue, isOverdue } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
@@ -114,7 +115,9 @@ export function RestrictedShell() {
 	return (
 		<div data-testid="restricted-shell" className="min-h-dvh">
 			<main className="mx-auto w-full max-w-xl p-4 md:p-6">
-				<h1 className="mb-4 text-2xl font-semibold">My tasks</h1>
+				<h1 className="mb-4 text-2xl font-semibold">
+					{m.restricted_my_tasks_heading()}
+				</h1>
 
 				{error && (
 					<p role="alert" className="mb-2 text-sm text-destructive">
@@ -124,7 +127,7 @@ export function RestrictedShell() {
 
 				{myTasks.length === 0 ? (
 					<p className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
-						Nothing assigned to you right now.
+						{m.restricted_nothing_assigned()}
 					</p>
 				) : (
 					<ul className="flex flex-col gap-2">
