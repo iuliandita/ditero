@@ -5,7 +5,7 @@
 // at-least-once bookkeeping.
 import { randomUUID } from "node:crypto";
 import { Cron } from "croner";
-import { sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { type CrashHook, crashHook } from "../../config/test-crash.ts";
 import type { WorkerTiming } from "../../config/worker.ts";
@@ -20,6 +20,7 @@ import type {
 	RetryDecision,
 } from "../../domain/notification-retry.ts";
 import {
+	channelErrorCode,
 	classifyRetry,
 	MAX_ATTEMPTS,
 } from "../../domain/notification-retry.ts";
@@ -233,6 +234,40 @@ export async function pruneTerminal(
 	return rowCount ?? 0;
 }
 
+// Channel health rides the completion transaction so a client never sees an
+// outbox row go terminal while the channel still reads healthy (or vice versa).
+// The clear is guarded on a non-null code: without the guard every successful
+// send writes the row, and each write is a Zero replication event fanned out to
+// that user's clients for no state change at all.
+async function recordChannelHealth(
+	tx: Transaction,
+	row: OutboxRow,
+	decision: RetryDecision,
+	status: number | undefined,
+): Promise<void> {
+	const owner = and(
+		eq(tables.notificationChannel.userId, row.recipientUserId),
+		eq(tables.notificationChannel.kind, row.channelKind),
+	);
+	if (decision.kind === "done") {
+		await tx
+			.update(tables.notificationChannel)
+			.set({ lastErrorAt: null, lastErrorCode: null, updatedAt: new Date() })
+			.where(and(owner, isNotNull(tables.notificationChannel.lastErrorCode)));
+		return;
+	}
+	const code = channelErrorCode(decision, status);
+	if (!code) return;
+	await tx
+		.update(tables.notificationChannel)
+		.set({
+			lastErrorAt: new Date(),
+			lastErrorCode: code,
+			updatedAt: new Date(),
+		})
+		.where(owner);
+}
+
 // `applied: false` means the row was reclaimed while this worker was sending.
 // The fence is what stops a late completion from overwriting `sent` with
 // `failed`, resurrecting a terminal row for a third delivery, or clobbering
@@ -280,6 +315,7 @@ export async function completeDelivery(
 			retryClass: decision.retryClass,
 			error: result.ok ? null : sanitizeError(result.error),
 		});
+		await recordChannelHealth(tx, row, decision, result.status);
 		return { applied: true, decision };
 	});
 }

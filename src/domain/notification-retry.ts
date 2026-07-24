@@ -21,6 +21,20 @@ export type RetryClass =
 	| "unexpected-status"
 	| "policy";
 
+// User-safe channel-health categories. Closed by construction (a Postgres enum
+// backs the column) so a provider error body -- which can carry the bot token or
+// webhook secret out of the URL that produced it -- is structurally unable to
+// reach a synced column. The raw text stays in delivery_attempt.error, redacted
+// and server-only.
+export const CHANNEL_ERROR_CODES = [
+	"auth",
+	"not_found",
+	"rate_limited",
+	"policy",
+	"transport",
+] as const;
+export type ChannelErrorCode = (typeof CHANNEL_ERROR_CODES)[number];
+
 export type RetryDecision =
 	| { kind: "done"; retryClass: RetryClass }
 	| { kind: "retry"; delayMs: number; retryClass: RetryClass }
@@ -131,4 +145,26 @@ export function classifyRetry(
 	else retryClass = "unexpected-status";
 
 	return { kind: "retry", delayMs: backoff(attempt, jitter), retryClass };
+}
+
+// Channel health, not attempt bookkeeping: only a decision the worker will never
+// retry says anything about the channel itself. A retryable failure returns null
+// so a transient 503 does not flip a working channel to "broken" for the ~33
+// minutes the ladder still has to run.
+//
+// `status` narrows within a permanent class; the fallback differs by class
+// because the two mean different things when the status is uninformative:
+// a 4xx we cannot place is still the provider refusing the request ("policy"),
+// while exhaustion is by construction 5xx/network/no-status ("transport").
+export function channelErrorCode(
+	decision: RetryDecision,
+	status: number | undefined,
+): ChannelErrorCode | null {
+	if (decision.kind !== "permanent") return null;
+	if (decision.retryClass === "policy") return "policy";
+
+	if (status === 401 || status === 403 || status === 407) return "auth";
+	if (status === 404 || status === 410) return "not_found";
+	if (status === 429) return "rate_limited";
+	return decision.retryClass === "exhausted" ? "transport" : "policy";
 }

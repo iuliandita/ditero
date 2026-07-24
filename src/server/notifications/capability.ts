@@ -28,6 +28,20 @@ export const ACK_PATH = "/api/notifications/ack";
 // The only action minted today. Bindings are checked on consume, so a
 // capability minted for one action must not redeem another (C27).
 export const ACK_ACTION = "complete";
+// A test send carries a live capability of this action instead: outbound
+// success proves half a round trip, and for Discord app mode the half that
+// silently lies is the outbound one. Redeeming it is what proves the inbound
+// listener works, so it stamps verified_at and clears the channel's last error.
+export const ACK_VERIFY_ACTION = "verify";
+// Long enough to walk to the phone the test landed on, short enough that a
+// leaked test message is not an indefinite write primitive. Deliberately not
+// the reminder ladder's 24h: nothing escalates a test.
+export const VERIFY_TTL_MS = 3_600_000;
+// The `via` values that name a chat provider's own inbound listener. Anything
+// else ("capability", "in_app") is this deployment's own ack path.
+const REDEEMING_CHANNEL_KINDS = new Set<string>(
+	tables.channelKindEnum.enumValues,
+);
 // Comfortably outlives the ~33-minute retry ladder and any escalation ladder,
 // while bounding how long a leaked notification stays actionable.
 export const ACK_TTL_MS = 24 * 3_600_000;
@@ -279,34 +293,90 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 	};
 }
 
-// Redeem a capability token. Returns false for every rejection class; the
-// caller must not distinguish them. Throwing out of the transaction body is how
-// a denied completion rolls the consume back -- the token stays usable once the
-// denial is fixed -- while a binding mismatch returns false and keeps the burn.
+// Redeem a capability token. Returns the recipient the capability was bound to,
+// or null for every rejection class; the caller must not distinguish them.
+// Throwing out of the transaction body is how a denied completion rolls the
+// consume back -- the token stays usable once the denial is fixed -- while a
+// binding mismatch returns null and keeps the burn.
+//
+// The recipient is returned rather than a bare boolean because a channel
+// listener resolves a callback to several possible recipients (a group chat one
+// whole family is bound to) and has to answer the provider with THAT user's
+// credentials, not an arbitrary member's.
 export async function redeemAckCapability(
 	database: Database,
 	token: string,
 	via: string,
 	now: number = Date.now(),
-): Promise<boolean> {
+	// Channel listeners bind the callback's sender to the capability's
+	// recipient (design 5). Checked after the consume, like every other binding
+	// here: a mismatch keeps the burn rather than leaving the token alive for a
+	// corrected retry.
+	options: { allowedRecipients?: readonly string[] } = {},
+): Promise<string | null> {
 	try {
 		return await database.transaction(async (tx) => {
 			const { rows } = await tx.execute<{
-				reminder_state_id: string;
+				reminder_state_id: string | null;
 				recipient_user_id: string;
 				action: string;
+				channel_kind: string | null;
 			}>(sql`
 				update ack_capability
 				set consumed_at = now()
 				where token_hash = ${hashAckToken(token)}
 					and consumed_at is null
 					and expires_at > now()
-				returning reminder_state_id, recipient_user_id, action
+				returning reminder_state_id, recipient_user_id, action, channel_kind
 			`);
 			const capability = rows[0];
 			// Unknown, expired or already consumed -- one outcome, by design.
-			if (!capability) return false;
-			if (capability.action !== ACK_ACTION) return false;
+			if (!capability) return null;
+			if (
+				options.allowedRecipients !== undefined &&
+				!options.allowedRecipients.includes(capability.recipient_user_id)
+			) {
+				return null;
+			}
+			if (capability.action === ACK_VERIFY_ACTION) {
+				if (capability.channel_kind === null) return null;
+				// A capability minted for Discord must not be redeemable through the
+				// Telegram or Slack listener: stamping "verified" is a claim that
+				// THAT channel's inbound leg works, which is the entire point of
+				// making the test an ack round trip. `via` is the redeeming channel's
+				// kind at every listener and "capability" at the link route, which is
+				// a legitimate ack path for any kind.
+				if (
+					REDEEMING_CHANNEL_KINDS.has(via) &&
+					via !== capability.channel_kind
+				) {
+					return null;
+				}
+				await tx
+					.update(tables.notificationChannel)
+					.set({
+						verifiedAt: new Date(now),
+						ackVerifiedAt: new Date(now),
+						lastErrorAt: null,
+						lastErrorCode: null,
+						updatedAt: new Date(now),
+					})
+					.where(
+						and(
+							eq(
+								tables.notificationChannel.userId,
+								capability.recipient_user_id,
+							),
+							eq(
+								tables.notificationChannel.kind,
+								capability.channel_kind as (typeof tables.channelKindEnum.enumValues)[number],
+							),
+						),
+					);
+				return capability.recipient_user_id;
+			}
+			if (capability.action !== ACK_ACTION) return null;
+			if (capability.reminder_state_id === null) return null;
 
 			const reminders = await tx
 				.select()
@@ -314,11 +384,11 @@ export async function redeemAckCapability(
 				.where(eq(tables.reminderState.id, capability.reminder_state_id))
 				.limit(1);
 			const reminder = reminders[0];
-			if (!reminder) return false;
+			if (!reminder) return null;
 			// A capability minted for one recipient must not act as another's,
 			// even if both are on the same occurrence.
 			if (reminder.recipientUserId !== capability.recipient_user_id) {
-				return false;
+				return null;
 			}
 
 			// Completion runs first so its outcome can be recorded on the row: a
@@ -353,11 +423,11 @@ export async function redeemAckCapability(
 						notInArray(tables.reminderState.status, [...ACK_TERMINAL_STATUSES]),
 					),
 				);
-			return true;
+			return capability.recipient_user_id;
 		});
 	} catch (error) {
 		// A denied completion rolled the whole transaction back, consume included.
-		if (error instanceof AckCompletionDenied) return false;
+		if (error instanceof AckCompletionDenied) return null;
 		throw error;
 	}
 }

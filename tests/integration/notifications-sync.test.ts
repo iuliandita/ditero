@@ -38,6 +38,15 @@ const userIds = ["notif-a", "notif-b", "notif-c", "notif-d"] as const;
 const channelIds = ["notif-chan-a", "notif-chan-b"] as const;
 const reminderIds = ["notif-rem-c", "notif-rem-d"] as const;
 const occurrenceAt = new Date("2026-08-01T09:00:00Z");
+const lastErrorAt = new Date("2026-08-01T08:00:00Z");
+
+function channelColumns(): Record<string, unknown> {
+	return (
+		schema.tables as Record<string, unknown> & {
+			notificationChannel: { columns: Record<string, unknown> };
+		}
+	).notificationChannel.columns;
+}
 
 async function wipe() {
 	await db
@@ -104,6 +113,8 @@ beforeAll(async () => {
 			userId: "notif-a",
 			kind: "ntfy",
 			config: { topic: "secret-topic-a", server: "https://ntfy.sh" },
+			lastErrorAt,
+			lastErrorCode: "auth",
 		},
 		{
 			id: "notif-chan-b",
@@ -173,14 +184,34 @@ describe("notificationChannels.mine isolation", () => {
 	//     fail to compile once the type is fixed), so this asserts the key
 	//     itself is absent, not just falsy.
 	test("config is absent from the generated schema and from every returned row", () => {
-		expect(
-			"config" in
-				(
-					schema.tables as Record<string, unknown> & {
-						notificationChannel: { columns: Record<string, unknown> };
-					}
-				).notificationChannel.columns,
-		).toBe(false);
+		expect("config" in channelColumns()).toBe(false);
+	});
+
+	// Pins the whole allowlist, not just `config`: the two health columns are
+	// deliberately synced, and anything else appearing here is a widening that
+	// was not reviewed. An equality assertion is what makes an accidental
+	// addition fail; `toContain` per column would not.
+	test("the synced column set is exactly the reviewed allowlist", () => {
+		expect(Object.keys(channelColumns()).sort()).toEqual(
+			[
+				"id",
+				"userId",
+				"kind",
+				"enabled",
+				"verifiedAt",
+				"ackVerifiedAt",
+				"lastErrorAt",
+				"lastErrorCode",
+				"createdAt",
+				"updatedAt",
+			].sort(),
+		);
+	});
+
+	test("the health columns reach the owner's row, carrying the enum not free text", async () => {
+		const [row] = await myChannels("notif-a");
+		expect(row.lastErrorCode).toBe("auth");
+		expect(row.lastErrorAt).toEqual(lastErrorAt.getTime());
 	});
 
 	test("config is absent from every returned row's own keys (wire shape)", async () => {

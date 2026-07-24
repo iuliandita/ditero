@@ -1,0 +1,1 @@
+ALTER TABLE "notification_channel" ADD COLUMN "ack_verified_at" timestamp with time zone;

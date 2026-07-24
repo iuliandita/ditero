@@ -33,23 +33,144 @@ const ntfyConfigSchema = z
 	})
 	.strict();
 
-// M3b populates telegram/discord/slack/email; placeholders keep this map
-// total over ChannelKind so callers never index into `undefined`.
-const emptyConfigSchema = z.object({}).strict();
+// Same reason as the ntfy token above: every one of these rides in an
+// Authorization header, so a CR/LF in it throws a TypeError carrying the
+// credential in its message, which then gets persisted as a delivery error.
+const headerCredential = z
+	.string()
+	.max(256)
+	.regex(/^[\x21-\x7e]+$/, "credential must be printable ASCII without spaces");
+
+// The last path segment of a provider webhook URL IS the bearer credential, and
+// redactChannelUrl only strips it for the known provider hosts. Pinning the host
+// per provider keeps "a config we accept whose secret survives into a persisted
+// delivery error" unrepresentable. Suffix match, never substring.
+function webhookUrlFor(provider: string, domains: readonly string[]) {
+	return z
+		.string()
+		.max(2_048)
+		.refine((value) => {
+			if (!isHttpUrl(value)) return false;
+			const host = new URL(value).hostname.toLowerCase();
+			return domains.some(
+				(domain) => host === domain || host.endsWith(`.${domain}`),
+			);
+		}, `webhookUrl must be a ${provider} webhook URL`);
+}
+
+// Mirrors SECRET_LAST_SEGMENT_DOMAINS below, so every accepted Discord webhook
+// URL is one redactChannelUrl covers -- including the canary/ptb style subdomains
+// this does not need to enumerate.
+const discordWebhookUrl = webhookUrlFor("Discord", [
+	"discord.com",
+	"discordapp.com",
+]);
+const slackWebhookUrl = webhookUrlFor("Slack", ["hooks.slack.com"]);
+
+const telegramConfigSchema = z
+	.object({
+		botToken: headerCredential,
+		chatId: z
+			.string()
+			.max(64)
+			.regex(/^(-?\d+|@[A-Za-z0-9_]+)$/, "chatId must be an id or @username"),
+	})
+	.strict();
+
+// Discriminated on `mode` so an adapter can never reach for a credential the
+// config does not hold: webhook mode is structurally incapable of carrying a
+// bot token, which is what makes Discord's silent component-drop unreachable.
+const discordConfigSchema = z.discriminatedUnion("mode", [
+	z
+		.object({ mode: z.literal("webhook"), webhookUrl: discordWebhookUrl })
+		.strict(),
+	z
+		.object({
+			mode: z.literal("app"),
+			botToken: headerCredential,
+			publicKey: z.string().regex(/^[0-9a-fA-F]{64}$/, "publicKey must be hex"),
+			channelId: z.string().max(64).regex(/^\d+$/),
+		})
+		.strict(),
+]);
+
+const slackConfigSchema = z.discriminatedUnion("mode", [
+	z
+		.object({ mode: z.literal("webhook"), webhookUrl: slackWebhookUrl })
+		.strict(),
+	z
+		.object({
+			mode: z.literal("app"),
+			botToken: headerCredential,
+			signingSecret: headerCredential,
+			channelId: z
+				.string()
+				.max(64)
+				.regex(/^[A-Za-z0-9_-]+$/),
+		})
+		.strict(),
+]);
+
+const emailConfigSchema = z.object({ address: z.email().max(254) }).strict();
 
 export const channelConfigSchema: Record<ChannelKind, z.ZodTypeAny> = {
 	ntfy: ntfyConfigSchema,
-	telegram: emptyConfigSchema,
-	discord: emptyConfigSchema,
-	slack: emptyConfigSchema,
-	email: emptyConfigSchema,
+	telegram: telegramConfigSchema,
+	discord: discordConfigSchema,
+	slack: slackConfigSchema,
+	email: emailConfigSchema,
 };
+
+export type ChannelConfigMode = "webhook" | "app";
+export type ChannelConfigKey = { key: string; optional: boolean };
+
+// Derived from the schema, never a second hand-maintained list: a required field
+// added to a schema above but forgotten in the settings form is omitted from the
+// POST and comes back as an unactionable "invalid channel config".
+// `mode` is excluded because it is the discriminant, rendered as a radio group
+// rather than a text input.
+type Introspected = {
+	shape?: Record<string, z.ZodTypeAny>;
+	options?: Introspected[];
+};
+
+function keysOf(schema: Introspected): ChannelConfigKey[] {
+	return Object.entries(schema.shape ?? {})
+		.filter(([key]) => key !== "mode")
+		.map(([key, field]) => ({
+			key,
+			optional: field.safeParse(undefined).success,
+		}));
+}
+
+export function channelConfigKeys(
+	kind: ChannelKind,
+	mode: ChannelConfigMode,
+): ChannelConfigKey[] {
+	const schema = channelConfigSchema[kind] as unknown as Introspected;
+	if (!schema.options) return keysOf(schema);
+	const option = schema.options.find(
+		(candidate) => candidate.shape?.mode.safeParse(mode).success,
+	);
+	return option ? keysOf(option) : [];
+}
 
 // Allow-list, not deny-list: any field not explicitly known to be public data
 // (including keys from a future/unvalidated config shape) is masked. Secrets
 // must never leave the server in any form, including ciphertext.
+// A webhook URL is a credential, not an address: its last path segment is the
+// whole bearer secret (see redactChannelUrl).
+// `email.address` is public for the same reason `chatId` and `channelId` are: it
+// is a destination identifier, the only reader of a masked config is the row's
+// own owner, and a config that is nothing but the address would be unverifiable
+// in the settings form if masked. The account's own address is already stored in
+// plaintext by the auth tables, so encrypting this one buys nothing.
 const PUBLIC_FIELDS: Partial<Record<ChannelKind, readonly string[]>> = {
 	ntfy: ["serverUrl", "topic"],
+	telegram: ["chatId"],
+	discord: ["mode", "channelId"],
+	slack: ["mode", "channelId"],
+	email: ["address"],
 };
 
 // Same allow-list the mask uses, exposed so the at-rest encryption covers
@@ -80,14 +201,22 @@ export function restoreChannelConfig(
 	incoming: Record<string, unknown>,
 	previous: { kind: ChannelKind; config: Record<string, unknown> } | null,
 ): Record<string, unknown> {
-	const restored: Record<string, unknown> = {};
+	// The kind guard alone does not cover mode: the save path always loads
+	// `previous` by kind, so kind can never differ there and mode can.
+	const carried =
+		previous && previous.kind === kind && incoming.mode === previous.config.mode
+			? previous.config
+			: null;
+	// Null-prototype accumulator + hasOwn: a body with an own `__proto__` key
+	// would otherwise reparent the object instead of setting a property.
+	const restored: Record<string, unknown> = Object.create(null);
 	for (const [key, value] of Object.entries(incoming)) {
 		if (value !== MASKED) {
 			restored[key] = value;
 			continue;
 		}
-		if (previous && previous.kind === kind && key in previous.config) {
-			restored[key] = previous.config[key];
+		if (carried && Object.hasOwn(carried, key)) {
+			restored[key] = carried[key];
 		}
 	}
 	return restored;

@@ -1,11 +1,19 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
-// M3a Task 15 e2e: the notification settings surface (channel config, masked
-// secret round-trip, test send, quiet hours), the per-task reminder policy, and
-// the in-app ack on a habits-kind list (S4 -- the C22 habit-ack bug ships again
-// if the in-app path is only ever exercised on a tasks list). Conventions
-// (signUp/uniqueEmail/testid locators/frozen-frame axe) mirror habits.spec.
+// M3a Task 15 e2e (repaired for M3b Task 16): the notification settings surface
+// (channel config, masked secret round-trip, test send, quiet hours), the
+// per-task reminder policy, and the in-app ack on a habits-kind list (S4 -- the
+// C22 habit-ack bug ships again if the in-app path is only ever exercised on a
+// tasks list). Conventions (signUp/uniqueEmail/testid locators/frozen-frame axe)
+// mirror habits.spec.
+//
+// M3b Task 15 replaced M3a's single-channel surface with the five-row
+// ChannelRow, so the testids moved (ntfy-* -> channel-ntfy-*) and a test send no
+// longer claims "Verified": that word is now reserved for a returned ack, and an
+// unacked send reads "Sent ... not acknowledged". The channels.spec file owns the
+// M3b-specific coverage; this file's ntfy assertions are re-pointed at the new
+// surface so the M3a behaviours it guards stay under test.
 test.describe.configure({ retries: 2, timeout: 90_000 });
 
 const PASSWORD = "pw-123456";
@@ -52,13 +60,24 @@ async function fillNtfy(
 	topic: string,
 	token?: string,
 ): Promise<void> {
-	// The config form is behind the row's enabled toggle until a row exists.
-	if (!(await page.getByTestId("ntfy-server-url").count())) {
-		await page.getByTestId("channel-ntfy-toggle").click();
+	// Rows collapse by default (shell doc 1); the form only mounts once the row
+	// is expanded, so open it before reaching for a field.
+	if (!(await page.getByTestId("channel-ntfy-serverUrl").count())) {
+		await page.getByTestId("channel-ntfy-disclosure").click();
 	}
-	await page.getByTestId("ntfy-server-url").fill(NTFY);
-	await page.getByTestId("ntfy-topic").fill(topic);
-	if (token !== undefined) await page.getByTestId("ntfy-token").fill(token);
+	await page.getByTestId("channel-ntfy-serverUrl").fill(NTFY);
+	await page.getByTestId("channel-ntfy-topic").fill(topic);
+	if (token !== undefined) {
+		await page.getByTestId("channel-ntfy-token").fill(token);
+	}
+}
+
+// A collapsed row rehydrates closed on reload; expand it to inspect the stored
+// fields (shell doc 1).
+async function expandNtfy(page: Page): Promise<void> {
+	if (!(await page.getByTestId("channel-ntfy-serverUrl").count())) {
+		await page.getByTestId("channel-ntfy-disclosure").click();
+	}
 }
 
 async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
@@ -86,7 +105,7 @@ test.describe("notification settings", () => {
 	}) => {
 		await settings(page);
 		await fillNtfy(page, "e2e-alerts", TOKEN);
-		await page.getByTestId("ntfy-save").click();
+		await page.getByTestId("channel-ntfy-save").click();
 		await expect(page.getByTestId("channel-ntfy-toggle")).toHaveAttribute(
 			"aria-checked",
 			"true",
@@ -98,17 +117,18 @@ test.describe("notification settings", () => {
 		await page.reload();
 		await waitWorkspaceReady(page);
 		await settings(page);
-		await expect(page.getByTestId("ntfy-server-url")).toHaveValue(NTFY, {
+		await expandNtfy(page);
+		await expect(page.getByTestId("channel-ntfy-serverUrl")).toHaveValue(NTFY, {
 			timeout: 15_000,
 		});
-		await expect(page.getByTestId("ntfy-token")).toHaveValue("***");
+		await expect(page.getByTestId("channel-ntfy-token")).toHaveValue("***");
 		expect(await page.content()).not.toContain(TOKEN);
 	});
 
 	test("saving without retyping the secret preserves it", async ({ page }) => {
 		await settings(page);
 		await fillNtfy(page, "e2e-keep-1", TOKEN);
-		await page.getByTestId("ntfy-save").click();
+		await page.getByTestId("channel-ntfy-save").click();
 		await expect(page.getByTestId("channel-ntfy-toggle")).toHaveAttribute(
 			"aria-checked",
 			"true",
@@ -118,38 +138,47 @@ test.describe("notification settings", () => {
 		await page.reload();
 		await waitWorkspaceReady(page);
 		await settings(page);
-		await expect(page.getByTestId("ntfy-token")).toHaveValue("***", {
+		await expandNtfy(page);
+		await expect(page.getByTestId("channel-ntfy-token")).toHaveValue("***", {
 			timeout: 15_000,
 		});
 		// Change only the topic, leave "***" in place, then prove the preserved
 		// secret still works by sending with it. The stub rejects this topic
 		// family without the exact bearer token, so a restore that silently
-		// dropped the secret fails here instead of passing on a 200.
-		await page.getByTestId("ntfy-topic").fill("e2e-keep-2");
-		await page.getByTestId("ntfy-save").click();
-		await page.getByTestId("ntfy-test").click();
-		await expect(page.getByTestId("ntfy-test-result")).toContainText(
-			"Verified",
+		// dropped the secret fails with "Server rejected the request" instead of
+		// the "Sent" a successful send produces.
+		await page.getByTestId("channel-ntfy-topic").fill("e2e-keep-2");
+		await page.getByTestId("channel-ntfy-save").click();
+		await page.getByTestId("channel-ntfy-test").click();
+		await expect(page.getByTestId("channel-ntfy-test-result")).toContainText(
+			"Sent",
 			{ timeout: 20_000 },
 		);
 	});
 
-	test("a successful test send marks the channel verified", async ({
+	test("a successful test send records the send and it survives a reload", async ({
 		page,
 	}) => {
 		await settings(page);
 		await fillNtfy(page, "e2e-verify", TOKEN);
-		await page.getByTestId("ntfy-test").click();
-		await expect(page.getByTestId("ntfy-test-result")).toContainText(
-			"Verified",
+		await page.getByTestId("channel-ntfy-test").click();
+		// A send the provider accepted, with no ack pressed, is "Sent" -- never
+		// "Verified", which now means an acknowledgement came back (shell doc 5).
+		await expect(page.getByTestId("channel-ntfy-test-result")).toContainText(
+			"Sent",
 			{ timeout: 20_000 },
 		);
+		await expect(
+			page.getByTestId("channel-ntfy-test-result"),
+		).not.toContainText("Verified");
 
+		// The transient result region resets on reload; verified_at persists and
+		// surfaces in the collapsed row's status as the unacked "Sent".
 		await page.reload();
 		await waitWorkspaceReady(page);
 		await settings(page);
-		await expect(page.getByTestId("ntfy-test-result")).toContainText(
-			"Verified",
+		await expect(page.getByTestId("channel-ntfy")).toContainText(
+			"not acknowledged",
 			{ timeout: 20_000 },
 		);
 	});
@@ -160,12 +189,12 @@ test.describe("notification settings", () => {
 		await settings(page);
 		// The stub answers 401 on this topic.
 		await fillNtfy(page, "reject-me", TOKEN);
-		await page.getByTestId("ntfy-test").click();
-		const result = page.getByTestId("ntfy-test-result");
+		await page.getByTestId("channel-ntfy-test").click();
+		const result = page.getByTestId("channel-ntfy-test-result");
 		await expect(result).toContainText("Server rejected the request", {
 			timeout: 20_000,
 		});
-		await expect(result).not.toContainText("Verified");
+		await expect(result).not.toContainText("Sent");
 		// The reason is the surface under test; the token itself is legitimately
 		// still in the field the user just typed into (test 1 covers the
 		// post-reload case, where it must be gone).
@@ -197,7 +226,7 @@ test.describe("notification settings", () => {
 	test("axe: settings page", async ({ page }) => {
 		await settings(page);
 		await fillNtfy(page, "e2e-axe", TOKEN);
-		await page.getByTestId("ntfy-save").click();
+		await page.getByTestId("channel-ntfy-save").click();
 		await expect(page.getByTestId("channel-ntfy-toggle")).toHaveAttribute(
 			"aria-checked",
 			"true",
@@ -217,7 +246,14 @@ test.describe("notification settings", () => {
 		await settingsTab.click();
 		const panel = await settings(page);
 		await expect(panel.getByTestId("channel-ntfy")).toBeVisible();
-		await expect(panel.getByTestId("channel-telegram")).toHaveAttribute(
+		// Every channel is built now, so Telegram is a real, non-disabled row.
+		// Email is the disabled one on this deployment: it carries no SMTP, and an
+		// unavailable channel stays visible with its reason (shell doc 6).
+		await expect(panel.getByTestId("channel-telegram")).not.toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+		await expect(panel.getByTestId("channel-email")).toHaveAttribute(
 			"aria-disabled",
 			"true",
 		);
@@ -409,7 +445,7 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		// Configure ntfy but never test it: enabled, verified_at still null.
 		await settings(page);
 		await fillNtfy(page, "e2e-unverified", TOKEN);
-		await page.getByTestId("ntfy-save").click();
+		await page.getByTestId("channel-ntfy-save").click();
 		await expect(page.getByTestId("channel-ntfy-toggle")).toHaveAttribute(
 			"aria-checked",
 			"true",

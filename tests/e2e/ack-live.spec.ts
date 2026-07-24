@@ -82,12 +82,15 @@ async function configureNtfy(page: Page, topic: string): Promise<void> {
 	await expect(page.getByTestId("notification-settings")).toBeVisible({
 		timeout: 15_000,
 	});
-	if (!(await page.getByTestId("ntfy-server-url").count())) {
-		await page.getByTestId("channel-ntfy-toggle").click();
+	// M3b Task 15 replaced the single-channel surface with the five-row
+	// ChannelRow; the ntfy form now lives behind the collapsed row's disclosure
+	// and its fields moved under the channel-ntfy-* prefix.
+	if (!(await page.getByTestId("channel-ntfy-serverUrl").count())) {
+		await page.getByTestId("channel-ntfy-disclosure").click();
 	}
-	await page.getByTestId("ntfy-server-url").fill(NTFY);
-	await page.getByTestId("ntfy-topic").fill(topic);
-	await page.getByTestId("ntfy-save").click();
+	await page.getByTestId("channel-ntfy-serverUrl").fill(NTFY);
+	await page.getByTestId("channel-ntfy-topic").fill(topic);
+	await page.getByTestId("channel-ntfy-save").click();
 	await expect(page.getByTestId("channel-ntfy-toggle")).toHaveAttribute(
 		"aria-checked",
 		"true",

@@ -15,6 +15,7 @@ import {
 	unique,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { CHANNEL_ERROR_CODES } from "../domain/notification-retry.ts";
 import { user } from "./auth-schema.ts";
 
 export * from "./auth-schema.ts";
@@ -61,6 +62,14 @@ export const channelKindEnum = pgEnum("channel_kind", [
 	"slack",
 	"email",
 ]);
+// Enum, not text: the column is Zero-synced, and a text column would let a
+// provider error body (credentials and all) reach every client of that user.
+// Values live in domain/notification-retry.ts with the mapping that produces
+// them, so the two cannot drift.
+export const channelErrorCodeEnum = pgEnum(
+	"channel_error_code",
+	CHANNEL_ERROR_CODES,
+);
 export const reminderStatusEnum = pgEnum("reminder_status", [
 	"pending",
 	"deferred",
@@ -444,6 +453,16 @@ export const notificationChannel = pgTable(
 		config: jsonb("config").notNull(),
 		enabled: boolean("enabled").notNull().default(true),
 		verifiedAt: timestamp("verified_at", { withTimezone: true }),
+		// Set only when a verify capability is redeemed, i.e. the inbound leg was
+		// actually exercised. verifiedAt alone cannot tell "we sent something and
+		// the provider accepted it" from "a human acked it", so a Discord app-mode
+		// row whose button was silently dropped would read "Verified" forever.
+		ackVerifiedAt: timestamp("ack_verified_at", { withTimezone: true }),
+		// Written only by the worker's completion path: set on a permanent
+		// delivery failure, cleared on the next success. verifiedAt alone would
+		// keep rendering "Verified" for a credential that has started failing.
+		lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+		lastErrorCode: channelErrorCodeEnum("last_error_code"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
@@ -547,13 +566,19 @@ export const deliveryAttempt = pgTable("delivery_attempt", {
 export const ackCapability = pgTable("ack_capability", {
 	id: text("id").primaryKey(),
 	tokenHash: text("token_hash").notNull().unique(),
-	reminderStateId: text("reminder_state_id")
-		.notNull()
-		.references(() => reminderState.id, { onDelete: "cascade" }),
+	// Nullable since M3b: a test-send mints a capability that verifies a channel
+	// rather than acking a reminder, and there is no reminder to point at.
+	reminderStateId: text("reminder_state_id").references(
+		() => reminderState.id,
+		{ onDelete: "cascade" },
+	),
 	recipientUserId: text("recipient_user_id")
 		.notNull()
 		.references(() => user.id, { onDelete: "cascade" }),
 	action: text("action").notNull(),
+	// Set only on a verify capability; the channel whose verified_at the ack
+	// stamps.
+	channelKind: channelKindEnum("channel_kind"),
 	expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 	consumedAt: timestamp("consumed_at", { withTimezone: true }),
 	createdAt: timestamp("created_at", { withTimezone: true })

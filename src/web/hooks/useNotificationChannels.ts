@@ -2,6 +2,12 @@ import { useQuery } from "@rocicorp/zero/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChannelKind } from "../../domain/notification-channel.ts";
 import { queries } from "../../zero/queries.ts";
+import {
+	type ChannelCapabilities,
+	DEFAULT_CAPABILITIES,
+	type InteractionsUrls,
+} from "../components/settings/channel-form.ts";
+import { channelSaveErrorMessage, m } from "../lib/messages.ts";
 
 // The config column never syncs, so channels come from the server API rather
 // than Zero. What the client holds is always the MASKED view: secrets are
@@ -18,6 +24,7 @@ export type ChannelView = {
 	kind: ChannelKind;
 	enabled: boolean;
 	verifiedAt: number | null;
+	ackVerifiedAt: number | null;
 	config: Record<string, unknown>;
 };
 
@@ -52,13 +59,22 @@ async function post(path: string, body: unknown): Promise<Response> {
 
 export function useNotificationChannels(): {
 	channels: ChannelView[];
+	capabilities: ChannelCapabilities;
+	interactionsUrls: InteractionsUrls | null;
 	loading: boolean;
 	error: string | null;
-	save: (input: ChannelWrite) => Promise<boolean>;
-	remove: (kind: ChannelKind) => Promise<boolean>;
+	// save/remove hand the failure BACK rather than only parking it in the shared
+	// `error`: five rows read one hook, so a shared error renders a role="alert"
+	// inside rows that never failed (shell doc 5 wants per-row regions).
+	save: (input: ChannelWrite) => Promise<string | null>;
+	remove: (kind: ChannelKind) => Promise<string | null>;
 	test: (input: ChannelWrite) => Promise<TestResult>;
 } {
 	const [channels, setChannels] = useState<ChannelView[]>([]);
+	const [capabilities, setCapabilities] =
+		useState<ChannelCapabilities>(DEFAULT_CAPABILITIES);
+	const [interactionsUrls, setInteractionsUrls] =
+		useState<InteractionsUrls | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
@@ -68,14 +84,20 @@ export function useNotificationChannels(): {
 				credentials: "include",
 			});
 			if (!res.ok) {
-				setError(`Could not load channels (${res.status}).`);
+				setError(m.channel_load_failed());
 				return;
 			}
-			const data = (await res.json()) as { channels: ChannelView[] };
+			const data = (await res.json()) as {
+				channels: ChannelView[];
+				capabilities: ChannelCapabilities;
+				interactionsUrls: InteractionsUrls | null;
+			};
 			setChannels(data.channels);
+			setCapabilities(data.capabilities ?? DEFAULT_CAPABILITIES);
+			setInteractionsUrls(data.interactionsUrls ?? null);
 			setError(null);
 		} catch {
-			setError("Could not load channels.");
+			setError(m.channel_load_failed());
 		} finally {
 			setLoading(false);
 		}
@@ -85,43 +107,33 @@ export function useNotificationChannels(): {
 		void reload();
 	}, [reload]);
 
-	const save = useCallback<(input: ChannelWrite) => Promise<boolean>>(
+	const save = useCallback<(input: ChannelWrite) => Promise<string | null>>(
 		async (input) => {
-			setError(null);
 			const res = await post("/api/notifications/channel", input);
 			if (!res.ok) {
-				setError(
-					(await res.text()).trim() || `Could not save (${res.status}).`,
-				);
-				return false;
+				return channelSaveErrorMessage((await res.text()).trim());
 			}
 			await reload();
-			return true;
+			return null;
 		},
 		[reload],
 	);
 
-	const remove = useCallback(
-		async (kind: ChannelKind) => {
-			setError(null);
+	const remove = useCallback<(kind: ChannelKind) => Promise<string | null>>(
+		async (kind) => {
 			const res = await post("/api/notifications/channel/delete", { kind });
-			if (!res.ok) {
-				setError(`Could not remove the channel (${res.status}).`);
-				return false;
-			}
+			if (!res.ok) return m.channel_remove_failed();
 			await reload();
-			return true;
+			return null;
 		},
 		[reload],
 	);
 
 	const test = useCallback<(input: ChannelWrite) => Promise<TestResult>>(
 		async (input) => {
-			setError(null);
 			const res = await post("/api/notifications/channel/test", input);
 			if (!res.ok) {
-				const reason =
-					(await res.text()).trim() || `Test failed (${res.status}).`;
+				const reason = channelSaveErrorMessage((await res.text()).trim());
 				await reload();
 				return { state: "failed", reason };
 			}
@@ -136,5 +148,14 @@ export function useNotificationChannels(): {
 		[reload],
 	);
 
-	return { channels, loading, error, save, remove, test };
+	return {
+		channels,
+		capabilities,
+		interactionsUrls,
+		loading,
+		error,
+		save,
+		remove,
+		test,
+	};
 }

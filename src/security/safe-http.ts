@@ -29,6 +29,10 @@ type SafeFetchOptions = {
 	signal?: AbortSignal;
 	maxResponseBytes?: number;
 	allowedPrivateCIDRs?: readonly Network[];
+	// Only long polling needs this: Telegram's getUpdates deliberately withholds
+	// response headers for the whole poll window, so the default would abort
+	// every poll before it could return an update.
+	headersTimeoutMs?: number;
 };
 
 // Encodings that hide a private/loopback address inside an otherwise-unicast
@@ -212,6 +216,7 @@ export async function safeFetch(
 			),
 	});
 
+	const headersTimeout = options.headersTimeoutMs ?? 10_000;
 	try {
 		const result = await request(url, {
 			dispatcher,
@@ -219,8 +224,9 @@ export async function safeFetch(
 			headers: options.headers,
 			body: options.body,
 			signal: options.signal,
-			headersTimeout: 10_000,
-			bodyTimeout: 15_000,
+			headersTimeout,
+			// The body budget is on top of the headers wait, never below it.
+			bodyTimeout: Math.max(15_000, headersTimeout + 5_000),
 		});
 		const limit = options.maxResponseBytes ?? 1_048_576;
 		const chunks: Buffer[] = [];

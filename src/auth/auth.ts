@@ -13,6 +13,7 @@ import {
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
 import { withFieldEncryption } from "./encrypted-adapter.ts";
 import { emailHasRedeemableInvite } from "./invite-bypass.ts";
+import { mailUnavailableResponse, sendAuthMail } from "./mail.ts";
 import { trustedAuthOrigins } from "./origins.ts";
 import { socialProvidersFromEnv } from "./providers.ts";
 import {
@@ -61,7 +62,22 @@ export const auth = betterAuth({
 	secret: process.env.BETTER_AUTH_SECRET,
 	baseURL: process.env.BETTER_AUTH_URL,
 	trustedOrigins: trustedAuthOrigins(process.env),
-	emailAndPassword: { enabled: true },
+	emailAndPassword: {
+		enabled: true,
+		sendResetPassword: async ({ user, url }) => {
+			sendAuthMail("reset", user, url);
+		},
+	},
+	// requireEmailVerification stays off deliberately. It is the one setting
+	// that could turn a broken SMTP server into permanently unusable accounts,
+	// which is not a default a self-hoster can recover from. Verification is
+	// offered, not enforced.
+	emailVerification: {
+		sendOnSignUp: true,
+		sendVerificationEmail: async ({ user, url }) => {
+			sendAuthMail("verify", user, url);
+		},
+	},
 	rateLimit: authRateLimitOptions(),
 	advanced: {
 		ipAddress: { ipAddressHeaders: ["x-ditero-client-ip"] },
@@ -137,6 +153,9 @@ export async function handleAuthRequest(
 			return new Response("Forbidden", { status: 403 });
 		}
 	}
+
+	const unavailable = mailUnavailableResponse(request);
+	if (unavailable) return unavailable;
 
 	if (registrationMode !== "bootstrap" || (await registeredUserCount()) > 0) {
 		return auth.handler(request);

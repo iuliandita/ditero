@@ -113,6 +113,68 @@ Ack links require a public origin: `DITERO_PUBLIC_URL`, falling back to
 `BETTER_AUTH_URL`. With neither set, notifications are still delivered but carry
 no action button.
 
+### Telegram's Done button
+
+Telegram renders the ack as an inline button. How the tap gets back to the app
+is `DITERO_TELEGRAM_MODE`:
+
+| Mode | How updates arrive | Needs |
+| --- | --- | --- |
+| `poll` (default) | The app long-polls `getUpdates`, outbound only | Nothing. Works behind NAT, no public URL, no certificate |
+| `webhook` | Telegram POSTs to the listener below | A public HTTPS origin and `DITERO_TELEGRAM_WEBHOOK_SECRET` |
+
+**The two are mutually exclusive at the provider**: `getUpdates` does not work
+while a webhook is set. So on boot the app reconciles every configured bot -
+`deleteWebhook` in poll mode, `setWebhook` in webhook mode - and logs the result
+per bot, by bot id:
+
+```
+telegram: transport=poll (long polling, outbound only)
+telegram: bot 8100000 webhook cleared, polling for acks
+```
+
+A line missing for a bot, or an error in its place, means that bot receives
+nothing. That is the failure mode to grep for after a mode switch.
+
+Polling is **leader-elected**, like the scheduler: exactly one replica polls,
+under its own Postgres advisory lock. Telegram hands each update to whichever
+caller asks first, so a second poller would consume half the acks into a process
+that then confirms them away.
+
+Bot tokens are per user. The poller polls **every distinct configured bot**, up
+to `DITERO_TELEGRAM_MAX_BOTS` (default 10) concurrent long polls; past that the
+extra bots are not polled and the truncation is logged. One shared bot for the
+whole instance is the ordinary shape and costs one connection.
+
+Nothing stores a poll cursor. Telegram treats an update as confirmed once
+`getUpdates` is called with a higher offset, so a restart simply asks with no
+offset and is handed only what was never confirmed.
+
+#### Webhook mode
+
+Every delivery must carry the shared secret Telegram echoes for you:
+
+1. Set `DITERO_TELEGRAM_WEBHOOK_SECRET` (1-256 characters, `A-Z a-z 0-9 _ -`).
+2. Set `DITERO_TELEGRAM_MODE=webhook`. The app registers the endpoint with
+   every configured bot itself; the equivalent by hand is:
+
+```
+curl -X POST "https://api.telegram.org/bot<token>/setWebhook" \
+  -d url=https://ditero.example.com/api/notifications/telegram/webhook \
+  -d secret_token="$DITERO_TELEGRAM_WEBHOOK_SECRET"
+```
+
+It is **deployment-level, not per user**: one URL serves every bot, and nothing
+in the request identifies a channel before the body is parsed. Leave it unset
+and the listener authenticates nothing, so it rejects every delivery with the
+same `400` — buttons will simply never work, with nothing in the update to say
+why. `getWebhookInfo` reporting `last_error_message` on every delivery is the
+symptom.
+
+The listener has its own IP rate limit, much larger than the ack route's: all of
+its traffic arrives from Telegram's own address ranges, so the whole instance
+shares one bucket.
+
 ## Reminder status
 
 `reminder_state.status` is what a reminder ended up as, and it syncs to the

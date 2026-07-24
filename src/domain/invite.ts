@@ -1,3 +1,20 @@
+import type { ChannelErrorCode } from "./notification-retry.ts";
+
+// Reported to the inviter alongside the created invite, so it is a wire
+// contract both halves read: the server mail path produces it, the invite
+// dialog renders it. Creation never fails on a mail problem -- the row and its
+// link stay usable out-of-band, so rolling the invite back, or answering 5xx
+// while it exists, would destroy something that works over something that did
+// not.
+export type InviteMailStatus =
+	| { status: "sent" }
+	// No address on the invite: a link/code invite was never going to be mailed.
+	| { status: "skipped" }
+	| { status: "smtp_disabled" }
+	| { status: "no_public_url" }
+	| { status: "invalid_address" }
+	| { status: "failed"; retryable: boolean; category: ChannelErrorCode };
+
 export type InviteRow = {
 	status: "pending" | "accepted" | "revoked";
 	expiresAt: number | null; // epoch ms

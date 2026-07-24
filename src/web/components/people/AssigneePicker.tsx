@@ -10,10 +10,12 @@ import {
 } from "@/components/ui/popover";
 import { runMutation } from "@/lib/run-mutation";
 import { deriveConnections } from "../../../domain/connections.ts";
+import type { InviteMailStatus } from "../../../domain/invite.ts";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { MemberAvatar } from "./avatar.tsx";
+import { InviteMailNotice } from "./InviteMailNotice";
 
 type LookupUser = { id: string; name: string; image: string | null };
 type Pending = { name: string; userId?: string; email?: string };
@@ -41,6 +43,10 @@ export function AssigneePicker({
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState<Pending | null>(null);
 	const [invitedLink, setInvitedLink] = useState<string | null>(null);
+	const [inviteMail, setInviteMail] = useState<InviteMailStatus | undefined>(
+		undefined,
+	);
+	const [inviteMailTo, setInviteMailTo] = useState("");
 	const [copied, setCopied] = useState(false);
 	const [email, setEmail] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -91,6 +97,8 @@ export function AssigneePicker({
 
 	function requestInvite(p: Pending) {
 		setInvitedLink(null);
+		setInviteMail(undefined);
+		setInviteMailTo("");
 		setCopied(false);
 		setPending(p);
 	}
@@ -119,7 +127,12 @@ export function AssigneePicker({
 				);
 				return;
 			}
-			const data = (await res.json()) as { link: string };
+			const data = (await res.json()) as {
+				link: string;
+				mail?: InviteMailStatus;
+			};
+			setInviteMail(data.mail);
+			setInviteMailTo(pending.email ?? "");
 			setInvitedLink(data.link);
 			setPending(null);
 		} catch (e) {
@@ -235,6 +248,7 @@ export function AssigneePicker({
 							</div>
 						) : invitedLink ? (
 							<div className="flex flex-col gap-2 rounded-md border p-2">
+								<InviteMailNotice mail={inviteMail} email={inviteMailTo} />
 								<span className="text-xs text-muted-foreground">
 									Invite created. Share this link; they are assigned on accept.
 								</span>
