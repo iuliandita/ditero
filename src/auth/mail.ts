@@ -120,16 +120,16 @@ export function sendAuthMail(
 	// itself it must never fail a request, so it is folded into the tracked
 	// promise. resolveRecipientLocale falls back to en on any failure.
 	const settled = (async () => {
-		const locale = await resolveRecipientLocale(database, user.id ?? null);
-		// Translated, so it can be non-ASCII even though no user input reaches it.
-		const { subject, text } = compose(kind, locale, {
-			name: headerSafe(
-				user.name?.trim() || m.auth_mail_greeting_fallback({}, { locale }),
-				NAME_MAX,
-			),
-			url: publicAuthLink(rawUrl, env),
-		});
 		try {
+			const locale = await resolveRecipientLocale(database, user.id ?? null);
+			// Translated, so it can be non-ASCII even though no user input reaches it.
+			const { subject, text } = compose(kind, locale, {
+				name: headerSafe(
+					user.name?.trim() || m.auth_mail_greeting_fallback({}, { locale }),
+					NAME_MAX,
+				),
+				url: publicAuthLink(rawUrl, env),
+			});
 			const result = await activeMailer.send({
 				to,
 				subject: encodeHeaderValue(headerSafe(subject, SUBJECT_MAX)),
@@ -146,8 +146,10 @@ export function sendAuthMail(
 				`auth mail: ${kind} send to ${to} failed${code}: ${result.failure.category}`,
 			);
 		} catch (error) {
-			// Narrowed like every other log here: transport.send does not reject, so
-			// anything arriving is unclassified and its shape is not known.
+			// Nothing on this path may reject: in production the send is detached and
+			// nothing awaits `settled`, so an escaped throw is an unhandled rejection.
+			// transport.send does not reject, and the locale/compose steps do not
+			// throw today -- this holds the never-fail-a-request invariant regardless.
 			console.error(
 				`auth mail: ${kind} send to ${to} threw: ${error instanceof Error ? error.name : "unknown"}`,
 			);

@@ -13,6 +13,7 @@ import { createMailer } from "./transport.ts";
 const sinks: SmtpSink[] = [];
 
 afterEach(async () => {
+	vi.restoreAllMocks();
 	await Promise.all(sinks.splice(0).map((sink) => sink.close()));
 });
 
@@ -93,7 +94,6 @@ describe("sendInviteMail", () => {
 		});
 		expect(status).toEqual({ status: "sent" });
 		expect(getLocale).not.toHaveBeenCalled();
-		getLocale.mockRestore();
 	});
 
 	it("strips a trailing slash rather than minting a double-slash link", async () => {
