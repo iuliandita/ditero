@@ -16,6 +16,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import type { InviteMailStatus } from "../../../domain/invite.ts";
+import { InviteMailNotice } from "./InviteMailNotice";
 
 export type Role = "owner" | "admin" | "member" | "viewer";
 
@@ -64,6 +66,8 @@ export function InviteDialog({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [link, setLink] = useState<string | null>(null);
+	const [mail, setMail] = useState<InviteMailStatus | undefined>(undefined);
+	const [sentTo, setSentTo] = useState("");
 	const [copied, setCopied] = useState(false);
 	const emailId = useId();
 
@@ -71,6 +75,8 @@ export function InviteDialog({
 		setEmail("");
 		setError(null);
 		setLink(null);
+		setMail(undefined);
+		setSentTo("");
 		setCopied(false);
 	}
 
@@ -98,7 +104,10 @@ export function InviteDialog({
 				id: string;
 				token: string;
 				link: string;
+				mail?: InviteMailStatus;
 			};
+			setSentTo(email.trim());
+			setMail(data.mail);
 			setLink(data.link);
 			onCreated({ id: data.id, link: data.link });
 		} catch (e) {
@@ -138,6 +147,7 @@ export function InviteDialog({
 
 				{link ? (
 					<div className="flex flex-col gap-2">
+						<InviteMailNotice mail={mail} email={sentTo} />
 						<span className="text-sm text-muted-foreground">
 							Invite link (copy it now, it is shown only once):
 						</span>

@@ -13,7 +13,9 @@ import type {
 } from "./types.ts";
 import { permanent } from "./types.ts";
 
-const CONTENT_MAX = 2_000;
+// Shared with the interactions listener, which appends a done marker to the
+// message it edits and must clamp against the same cap.
+export const CONTENT_MAX = 2_000;
 // Discord's documented cap on a button's `url`. A longer one is a 400, which
 // loses the whole notification rather than just the button.
 const ACK_URL_MAX = 512;

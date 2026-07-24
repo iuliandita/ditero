@@ -9,8 +9,17 @@ import {
 } from "../../../security/safe-http.ts";
 import { ACK_PATH } from "../capability.ts";
 import {
+	ACK_ACTION_ID,
+	ACK_VALUE_PREFIX,
+	ACTION_ID_MAX,
+	ACTION_VALUE_MAX,
+	type AckButton,
+	type AppBlock,
+	appBlocks,
+	appBody,
 	type LinkButton,
 	messageBlocks,
+	type PostMessageBody,
 	type SlackBlock,
 	slackAdapter,
 	type WebhookMessageBody,
@@ -378,25 +387,6 @@ describe("slackAdapter", () => {
 		expect(calls).toHaveLength(0);
 	});
 
-	// A valid app-mode config is the one shape that would tempt a fall-through to
-	// the webhook path, which has no bot token to post with at all.
-	it("refuses an app-mode config until Task 11 lands, by name", async () => {
-		const { calls, fetchImpl } = recorder(() => posted());
-		const result = await slackAdapter.send(
-			{
-				mode: "app",
-				botToken: "xoxb-1234-5678-abcdefghijklmnop",
-				signingSecret: "8f742231b10e8888abcd99yyyzzz85a5",
-				channelId: "C0A1B2C3D4",
-			},
-			payload,
-			context(fetchImpl),
-		);
-		expect(result).toMatchObject({ ok: false, policyRejected: true });
-		expect(result.ok === false ? result.error : "").toContain("app mode");
-		expect(calls).toHaveLength(0);
-	});
-
 	// The bearer credential rides in the URL PATH, so any error string that
 	// quotes the URL quotes the credential, and it survives a query-only
 	// redactor. The `T…/B…` ids ahead of it go too.
@@ -592,5 +582,337 @@ describe("webhookBody", () => {
 		const body = webhookBody({ ...payload, ackUrl: null });
 		expect(body.text).toBe("Walk the dog");
 		expect(body.blocks).toHaveLength(1);
+	});
+});
+
+const BOT_TOKEN = "xoxb-fakefixture-0987654321-AbCdEfGhIjKlMnOpQrStUvWx";
+const CHANNEL_ID = "C0A1B2C3D4";
+const appConfig = {
+	mode: "app",
+	botToken: BOT_TOKEN,
+	signingSecret: "8f742231b10e8888abcd99yyyzzz85a5",
+	channelId: CHANNEL_ID,
+};
+
+// docs.slack.dev/reference/methods/chat.postMessage (checked 2026-07-23): the
+// method answers HTTP 200 for BOTH outcomes, with `ok` in the JSON envelope.
+function apiOk(): Response {
+	return new Response(
+		JSON.stringify({ ok: true, channel: CHANNEL_ID, ts: "1503435956.000247" }),
+		{ status: 200, headers: { "Content-Type": "application/json" } },
+	);
+}
+
+function apiError(error: string, init: ResponseInit = {}): Response {
+	return new Response(JSON.stringify({ ok: false, error }), {
+		status: 200,
+		headers: { "Content-Type": "application/json" },
+		...init,
+	});
+}
+
+describe("slackAdapter app mode", () => {
+	it("posts to chat.postMessage with a bearer bot token", async () => {
+		const { calls, fetchImpl } = recorder(() => apiOk());
+		const result = await slackAdapter.send(
+			appConfig,
+			payload,
+			context(fetchImpl),
+		);
+		expect(result).toEqual({ ok: true, status: 200 });
+		expect(calls).toHaveLength(1);
+		// The literal endpoint, not one rebuilt from the module's constants: it is
+		// a contract with Slack.
+		expect(calls[0].url).toBe("https://slack.com/api/chat.postMessage");
+		expect(calls[0].options?.method).toBe("POST");
+		const headers = new Headers(calls[0].options?.headers);
+		expect(headers.get("authorization")).toBe(`Bearer ${BOT_TOKEN}`);
+		expect(headers.get("content-type")).toBe("application/json; charset=utf-8");
+		expect(sentBody(calls[0]).channel).toBe(CHANNEL_ID);
+	});
+
+	// The wire shape is a contract with Slack, so the expectation is the literal
+	// JSON. An INTERACTIVE button is the whole point of app mode: a link button
+	// here would be the dead control the webhook-mode guard exists to prevent.
+	it("carries the ack capability in an interactive button", async () => {
+		const { calls, fetchImpl } = recorder(() => apiOk());
+		await slackAdapter.send(appConfig, payload, context(fetchImpl));
+
+		const blocks = sentBody(calls[0]).blocks as AppBlock[];
+		expect(blocks).toHaveLength(2);
+		expect(blocks[1]).toEqual({
+			type: "actions",
+			elements: [
+				{
+					type: "button",
+					text: { type: "plain_text", text: "Done" },
+					action_id: "ditero_ack",
+					value: `c:${ACK_TOKEN}`,
+				},
+			],
+		});
+		// Never a url: that is what makes it dispatch an interaction rather than
+		// navigate.
+		expect(String(calls[0].options?.body)).not.toContain('"url"');
+	});
+
+	// Pinned against the DOCUMENTED caps so a future ACK_TOKEN_BYTES change fails
+	// here rather than as a 400 in a user's Slack.
+	it("fits the capability inside Slack's action_id and value caps", () => {
+		const blocks = appBlocks(payload);
+		const actions = blocks[1];
+		expect(actions.type).toBe("actions");
+		const button = actions.type === "actions" ? actions.elements[0] : null;
+		expect(button?.value).toBe(`${ACK_VALUE_PREFIX}${ACK_TOKEN}`);
+		// 45 = "c:" + a 43-character base64url token, well inside 2000.
+		expect(button?.value).toHaveLength(45);
+		expect(button?.value.length).toBeLessThanOrEqual(ACTION_VALUE_MAX);
+		expect(ACTION_VALUE_MAX).toBe(2_000);
+		expect(button?.action_id).toBe(ACK_ACTION_ID);
+		expect(ACK_ACTION_ID.length).toBeLessThanOrEqual(ACTION_ID_MAX);
+		expect(ACTION_ID_MAX).toBe(255);
+	});
+
+	// The scheme is deliberately NOT a criterion here, unlike webhook mode: an
+	// interactive button carries the token, never the URL, so nothing navigates
+	// and only a value that does not look like a capability is refused. Same
+	// rule as the Discord app-mode button.
+	it.each([
+		["no ack capability", null],
+		["an unparseable URL", "not a url"],
+		["a last segment that is not a token", "https://app.example.test/ack/x"],
+	])("emits no actions block for %s", (_case, ackUrl) => {
+		const blocks = appBlocks({ ...payload, ackUrl });
+		expect(blocks).toHaveLength(1);
+		expect(blocks[0].type).toBe("section");
+	});
+
+	it("escapes broadcast pings in app mode too", () => {
+		const body = appBody(CHANNEL_ID, {
+			...payload,
+			title: "<!channel> buy milk",
+			ackUrl: null,
+		});
+		expect(body.text).toBe("&lt;!channel&gt; buy milk");
+		expect(JSON.stringify(body)).not.toContain("<!channel>");
+	});
+
+	// THE TRAP: chat.postMessage answers HTTP 200 for failures too. A
+	// `response.ok` check alone records a revoked token as a delivered reminder.
+	it.each([
+		["a revoked token", "invalid_auth", 401, "permanent", "client", "auth"],
+		[
+			"a missing channel",
+			"channel_not_found",
+			404,
+			"permanent",
+			"client",
+			"not_found",
+		],
+		["a scope gap", "missing_scope", 403, "permanent", "client", "auth"],
+		[
+			"an unmodelled error",
+			"msg_too_long",
+			400,
+			"permanent",
+			"client",
+			"policy",
+		],
+		["a Slack outage", "service_unavailable", 503, "retry", "server", null],
+	])("treats HTTP 200 with %s as a failure", async (_case, code, status, kind, retryClass, errorCode) => {
+		const { fetchImpl } = recorder(() => apiError(String(code)));
+		const result = await slackAdapter.send(
+			appConfig,
+			payload,
+			context(fetchImpl),
+		);
+		expect(result).toMatchObject({ ok: false, status });
+		const decision = classifyRetry(result, 1, 0);
+		expect(decision).toMatchObject({ kind, retryClass });
+		expect(channelErrorCode(decision, Number(status))).toBe(errorCode);
+		// The error code is what an operator triages from.
+		expect(result.ok === false ? result.error : "").toContain(String(code));
+	});
+
+	it("honours Retry-After on an envelope rate limit", async () => {
+		const { fetchImpl } = recorder(() =>
+			apiError("ratelimited", { headers: { "Retry-After": "11" } }),
+		);
+		const result = await slackAdapter.send(
+			appConfig,
+			payload,
+			context(fetchImpl),
+		);
+		expect(result).toMatchObject({ status: 429, retryAfterSec: 11 });
+		expect(classifyRetry(result, 1, 0)).toMatchObject({
+			kind: "retry",
+			retryClass: "throttled",
+		});
+	});
+
+	it("honours a real 429 status with Retry-After", async () => {
+		const { fetchImpl } = recorder(
+			() =>
+				new Response(JSON.stringify({ ok: false, error: "ratelimited" }), {
+					status: 429,
+					headers: { "Retry-After": "3" },
+				}),
+		);
+		const result = await slackAdapter.send(
+			appConfig,
+			payload,
+			context(fetchImpl),
+		);
+		expect(result).toMatchObject({ status: 429, retryAfterSec: 3 });
+	});
+
+	// A 200 with no readable envelope says nothing about delivery, so it must not
+	// be reported as one -- and must not be declared permanent either.
+	it("does not treat an unparseable 200 body as delivered", async () => {
+		const { fetchImpl } = recorder(
+			() => new Response("<html>proxy</html>", { status: 200 }),
+		);
+		const result = await slackAdapter.send(
+			appConfig,
+			payload,
+			context(fetchImpl),
+		);
+		expect(result.ok).toBe(false);
+		// Never "slack 200": the one line an operator triages from would claim the
+		// send worked.
+		expect(result.ok === false ? result.error : "").toContain(
+			"no envelope code",
+		);
+		expect(classifyRetry(result, 1, 0)).toMatchObject({ kind: "retry" });
+	});
+
+	// The bot token rides in an Authorization header, so no URL redactor covers
+	// it: it has to be matched literally wherever a remote can echo it back.
+	it.each([
+		[
+			"an error envelope echoing the token",
+			() => apiError(`invalid_auth for ${BOT_TOKEN}`),
+		],
+		[
+			"a transport error quoting the token",
+			() => {
+				throw new Error(`connect ETIMEDOUT with Bearer ${BOT_TOKEN}`);
+			},
+		],
+		[
+			"a policy rejection quoting the token",
+			() => {
+				throw new OutboundPolicyError(`refused: ${BOT_TOKEN}`);
+			},
+		],
+	])("never leaks the bot token via %s", async (_case, respond) => {
+		const { fetchImpl } = recorder(respond as (call: Call) => Response);
+		const result = await slackAdapter.send(
+			appConfig,
+			payload,
+			context(fetchImpl),
+		);
+		const serialized = JSON.stringify(result);
+		expect(serialized).not.toContain(BOT_TOKEN);
+		// A prefix too: a redactor that trimmed only the tail would pass above.
+		expect(serialized).not.toContain("xoxb-fakefixture");
+		expect(serialized).toContain("[REDACTED]");
+	});
+
+	// The mirror image of the webhook-mode guard, and it must not weaken it:
+	// AckButton is a SEPARATE type, so LinkButton/SlackBlock/WebhookMessageBody
+	// stay incapable of expressing an interactive element.
+	it("makes a link button unrepresentable in app mode", () => {
+		const ack: AckButton = {
+			type: "button",
+			text: { type: "plain_text", text: "Done" },
+			action_id: ACK_ACTION_ID,
+			value: `c:${ACK_TOKEN}`,
+		};
+		// Positive first: the permitted shape must be constructible, or every
+		// negative below holds vacuously.
+		expect(ack.action_id).toBe(ACK_ACTION_ID);
+
+		// FRESH literals: rejected by excess-property checking alone, so these
+		// still pass with `url?: never` deleted. Kept for the containing shapes,
+		// where they are the realistic authoring mistake.
+		// @ts-expect-error a `url` makes the button navigate instead of dispatching
+		const withUrl: AckButton = { ...ack, url: ACK_URL };
+		const emitted: readonly AppBlock[] = [
+			{
+				type: "actions",
+				elements: [
+					{
+						type: "button",
+						text: { type: "plain_text", text: "Done" },
+						// @ts-expect-error a link button cannot reach an app-mode actions block
+						url: ACK_URL,
+					},
+				],
+			},
+		];
+
+		// ASSEMBLED, not fresh: only `url?: never` rejects these, so deleting the
+		// field OR widening it to `string` fails typecheck here.
+		const widenedUrl = { ...ack, url: ACK_URL };
+		// @ts-expect-error `url?: never`, not excess-property checking, rejects this
+		const fromWidenedUrl: AckButton = widenedUrl;
+		const assembledRow = { type: "actions" as const, elements: [widenedUrl] };
+		// @ts-expect-error nor may it reach an actions block
+		const fromAssembledRow: readonly AppBlock[] = [assembledRow];
+		const assembledBody = {
+			channel: CHANNEL_ID,
+			text: "x",
+			blocks: [assembledRow],
+		};
+		// @ts-expect-error nor the serialized chat.postMessage body
+		const fromAssembledBody: PostMessageBody = assembledBody;
+
+		// The two REQUIRED halves of the dispatch contract. Deleting either field
+		// from AckButton makes the matching assembled value assignable.
+		const noActionId = {
+			type: "button" as const,
+			text: { type: "plain_text" as const, text: "Done" },
+			value: `c:${ACK_TOKEN}`,
+		};
+		// @ts-expect-error a button with no action_id dispatches nothing we can route
+		const fromNoActionId: AckButton = noActionId;
+		const noValue = {
+			type: "button" as const,
+			text: { type: "plain_text" as const, text: "Done" },
+			action_id: ACK_ACTION_ID,
+		};
+		// @ts-expect-error a button with no value carries no capability
+		const fromNoValue: AckButton = noValue;
+
+		// And the two families stay disjoint, which is what keeps the webhook guard
+		// intact: neither is assignable to the other's block union.
+		const linkOnly: LinkButton = {
+			type: "button",
+			text: { type: "plain_text", text: "Done" },
+			url: ACK_URL,
+		};
+		const ackRow = { type: "actions" as const, elements: [ack] };
+		// @ts-expect-error an interactive button still cannot reach the webhook body
+		const intoWebhook: WebhookMessageBody = { text: "x", blocks: [ackRow] };
+		const linkRow = { type: "actions" as const, elements: [linkOnly] };
+		const intoApp: PostMessageBody = {
+			channel: CHANNEL_ID,
+			text: "x",
+			// @ts-expect-error nor a link button the app-mode body
+			blocks: [linkRow],
+		};
+
+		expect([
+			withUrl,
+			emitted,
+			fromWidenedUrl,
+			fromAssembledRow,
+			fromAssembledBody,
+			fromNoActionId,
+			fromNoValue,
+			intoWebhook,
+			intoApp,
+		]).toHaveLength(9);
 	});
 });

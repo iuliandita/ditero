@@ -1,3 +1,4 @@
+import { encodeHeaderValue, headerSafe } from "../../../domain/mime-header.ts";
 import {
 	channelConfigSchema,
 	redactChannelUrl,
@@ -17,29 +18,6 @@ const TITLE_MAX = 200;
 const BODY_MAX = 4_000;
 const RESPONSE_MAX_BYTES = 64 * 1_024;
 const ACK_LABEL = "Done";
-
-// Header values are single-line by definition: a CR/LF in a user-supplied title
-// is a header-injection attempt that undici rejects outright, which would turn a
-// badly-named task into a permanent delivery failure (C20). The other C0
-// controls go too -- invisible in a notification, useful only for smuggling.
-function headerSafe(value: string, max: number): string {
-	let out = "";
-	for (const character of value) {
-		const code = character.codePointAt(0) ?? 0;
-		out += code < 0x20 || code === 0x7f ? " " : character;
-	}
-	return out.replace(/\s+/g, " ").trim().slice(0, max);
-}
-
-// Header values serialize as latin1, so an Arabic, Hebrew or Chinese title
-// arrives as mojibake. ntfy's documented escape hatch is RFC 2047 encoded-words:
-// "you may also encode any header (including the title) as RFC 2047, e.g.
-// =?UTF-8?B?8J+HqfCfh6o=?= (base64)". Applied only when needed -- an ASCII title
-// stays human-readable on the wire, and the encoded form costs ~33% more length.
-function encodeHeaderValue(value: string): string {
-	if (/^[\x20-\x7e]*$/.test(value)) return value;
-	return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
-}
 
 // The worker redacts again before persisting; doing it here too means a caller
 // that only logs the ProviderResult still cannot leak a channel URL's

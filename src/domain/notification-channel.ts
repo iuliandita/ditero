@@ -121,6 +121,40 @@ export const channelConfigSchema: Record<ChannelKind, z.ZodTypeAny> = {
 	email: emailConfigSchema,
 };
 
+export type ChannelConfigMode = "webhook" | "app";
+export type ChannelConfigKey = { key: string; optional: boolean };
+
+// Derived from the schema, never a second hand-maintained list: a required field
+// added to a schema above but forgotten in the settings form is omitted from the
+// POST and comes back as an unactionable "invalid channel config".
+// `mode` is excluded because it is the discriminant, rendered as a radio group
+// rather than a text input.
+type Introspected = {
+	shape?: Record<string, z.ZodTypeAny>;
+	options?: Introspected[];
+};
+
+function keysOf(schema: Introspected): ChannelConfigKey[] {
+	return Object.entries(schema.shape ?? {})
+		.filter(([key]) => key !== "mode")
+		.map(([key, field]) => ({
+			key,
+			optional: field.safeParse(undefined).success,
+		}));
+}
+
+export function channelConfigKeys(
+	kind: ChannelKind,
+	mode: ChannelConfigMode,
+): ChannelConfigKey[] {
+	const schema = channelConfigSchema[kind] as unknown as Introspected;
+	if (!schema.options) return keysOf(schema);
+	const option = schema.options.find(
+		(candidate) => candidate.shape?.mode.safeParse(mode).success,
+	);
+	return option ? keysOf(option) : [];
+}
+
 // Allow-list, not deny-list: any field not explicitly known to be public data
 // (including keys from a future/unvalidated config shape) is masked. Secrets
 // must never leave the server in any form, including ciphertext.

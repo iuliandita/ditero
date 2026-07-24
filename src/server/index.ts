@@ -21,6 +21,7 @@ import {
 } from "../auth/managed-account.ts";
 import { trustedAuthOrigins } from "../auth/origins.ts";
 import { requireSameOrigin } from "../auth/security.ts";
+import { mailConfig } from "../config/mail.ts";
 import { notifyAllowedPrivateCIDRs } from "../config/notify-egress.ts";
 import { workerTiming } from "../config/worker.ts";
 import { db, pool } from "../db/client.ts";
@@ -31,14 +32,18 @@ import { schema } from "../zero/schema.gen.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
+import { sendInviteMail } from "./mail/invite-mail.ts";
 import { ackBaseUrl } from "./notifications/capability.ts";
 import {
 	ChannelError,
+	channelCapabilities,
 	deleteChannel,
+	interactionsUrls,
 	listChannels,
 	saveChannel,
 	testChannel,
 } from "./notifications/channels.ts";
+import { discordInteractionRoutes } from "./notifications/discord-interactions.ts";
 import { createSendFn } from "./notifications/dispatch.ts";
 import {
 	eventMutateSession,
@@ -46,6 +51,7 @@ import {
 } from "./notifications/events.ts";
 import { ackRoutes } from "./notifications/routes.ts";
 import { startScheduler } from "./notifications/scheduler.ts";
+import { slackInteractionRoutes } from "./notifications/slack-interactions.ts";
 import { startTelegramPoller } from "./notifications/telegram-poll.ts";
 import { telegramWebhookRoutes } from "./notifications/telegram-webhook.ts";
 import { startWorker } from "./notifications/worker.ts";
@@ -102,9 +108,10 @@ function guardedGet(
 	};
 }
 
-// Shared JSON-body + ChannelError shape for the three channel writes. The error
-// message is a fixed category ("invalid channel config"), never the config, so
-// a 400 body can never echo a secret back.
+// Shared JSON-body + ChannelError shape for the three channel writes. The body
+// is the error's stable CODE, never its prose: the prose named deployment env
+// vars ("set DITERO_PUBLIC_URL first") to non-admin users and could not be
+// translated. The client maps the code through messages.ts.
 async function channelWrite(
 	request: Request,
 	run: (body: unknown) => Promise<unknown>,
@@ -119,7 +126,7 @@ async function channelWrite(
 		return await run(body);
 	} catch (error) {
 		if (error instanceof ChannelError) {
-			return new Response(error.message, { status: error.status });
+			return new Response(error.code, { status: error.status });
 		}
 		throw error;
 	}
@@ -135,6 +142,12 @@ const routes = new Elysia()
 	// session and no Origin header, and the route authenticates itself with the
 	// provider's secret-token header.
 	.use(telegramWebhookRoutes(db))
+	// Same placement and reason again: Discord posts interactions with no
+	// session and no Origin header, authenticating with an Ed25519 signature.
+	.use(discordInteractionRoutes(db))
+	// Same placement and reason again: Slack posts interactions with no session
+	// and no Origin header, authenticating with a v0 HMAC signature.
+	.use(slackInteractionRoutes(db))
 	.use(cors(corsPolicy(process.env)))
 	.onRequest(({ set }) => {
 		Object.assign(set.headers, responseHeaders);
@@ -174,12 +187,13 @@ const routes = new Elysia()
 			) {
 				return new Response("Bad Request", { status: 400 });
 			}
+			const email = (body.email as string | null | undefined) ?? null;
 			try {
 				const result = await createInvite(
 					{
 						workspaceId: body.workspaceId,
 						role: body.role as never,
-						email: (body.email as string | null | undefined) ?? null,
+						email,
 						expiresAt: (body.expiresAt as number | null | undefined) ?? null,
 						// Only an explicit numeric cap is honored; otherwise leave undefined so
 						// createInvite applies its default (email invite -> 1, link -> null).
@@ -192,7 +206,30 @@ const routes = new Elysia()
 					session.user.id,
 					db,
 				);
-				return result; // { id, token, link } -- token returned once, not synced.
+				// The invite exists either way; a mail problem is reported, never
+				// raised. Rolling the row back over a dead SMTP server would destroy a
+				// link that still works out-of-band.
+				//
+				// Awaited because the status is part of the response, so the send is
+				// bounded instead: sendInviteMail's own deadline caps the wait, and the
+				// signal drops it the moment the inviter gives up.
+				const mail = await sendInviteMail(
+					{
+						email,
+						token: result.token,
+						workspaceId: body.workspaceId,
+						inviterId: session.user.id,
+					},
+					{ database: db, signal: request.signal },
+				);
+				if (mail.status === "failed") {
+					console.warn(
+						`invite ${result.id}: mail not sent (${mail.category}, retryable=${mail.retryable})`,
+					);
+				}
+				// { id, token, link } -- token returned once, not synced -- plus the
+				// delivery status, so "I invited them" is not a silent lie.
+				return { ...result, mail };
 			} catch (error) {
 				if (error instanceof InviteCreateError) {
 					return new Response(error.message, { status: error.status });
@@ -302,6 +339,8 @@ const routes = new Elysia()
 		"/api/notifications/channels",
 		guardedGet(async (_request, session) => ({
 			channels: await listChannels(db, session.user.id),
+			capabilities: channelCapabilities(),
+			interactionsUrls: interactionsUrls(),
 		})),
 	)
 	.post(
@@ -417,6 +456,11 @@ if (import.meta.main) {
 	// The drain runs on every replica (claims are mediated by SKIP LOCKED).
 	// ackBaseUrl is null when no public origin is configured, which disables the
 	// ack action rather than minting a link no push client can follow.
+	// Validated here so a malformed SMTP setting fails at boot rather than on the
+	// first reminder. Absent config is legal: it disables the email channel.
+	if (mailConfig(process.env) === null) {
+		console.log("ditero: no DITERO_SMTP_HOST, email channel disabled");
+	}
 	const timing = workerTiming(process.env);
 	startWorker(
 		db,

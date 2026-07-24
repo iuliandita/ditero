@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { classifyRetry } from "../../../domain/notification-retry.ts";
 import {
@@ -403,12 +403,33 @@ function adapterFiles(): string[] {
 	);
 }
 
+// The email adapter's transport is SMTP, so it makes no HTTP call and cannot
+// satisfy the `(ctx.fetch ?? safeFetch)(` rule below. The exemption is an
+// explicit list rather than "any adapter that happens not to import safeFetch":
+// an adapter that quietly dropped the import would otherwise exempt itself,
+// which is exactly the regression these two tests exist to catch. Being on the
+// list is not a discount either -- an exempt adapter must reach NO network
+// primitive at all, which is stricter than the rule it is exempt from.
+const NON_HTTP_ADAPTERS = ["email.ts"];
+
+function httpAdapterFiles(): string[] {
+	return adapterFiles().filter(
+		(file) => !NON_HTTP_ADAPTERS.includes(basename(file)),
+	);
+}
+
+function nonHttpAdapterFiles(): string[] {
+	return adapterFiles().filter((file) =>
+		NON_HTTP_ADAPTERS.includes(basename(file)),
+	);
+}
+
 // The single highest-severity control in M3, so it is asserted positively: the
 // negative form alone is bypassable (C19) via globalThis.fetch, undici's
 // request, or an alias, and scanning only adapters/ misses dispatch.ts.
 describe("notification egress policy", () => {
 	it("every adapter routes outbound HTTP through safeFetch", () => {
-		const files = adapterFiles();
+		const files = httpAdapterFiles();
 		expect(files.length).toBeGreaterThan(1);
 		for (const file of files) {
 			const source = readFileSync(file, "utf8");
@@ -422,7 +443,7 @@ describe("notification egress policy", () => {
 	// what the send actually calls. Exactly one occurrence, so a second transport
 	// added beside the checked one is a failure rather than a pass.
 	it("every adapter resolves its transport to exactly `ctx.fetch ?? safeFetch`", () => {
-		const files = adapterFiles();
+		const files = httpAdapterFiles();
 		expect(files.length).toBeGreaterThan(1);
 		for (const file of files) {
 			const source = readFileSync(file, "utf8");
@@ -433,11 +454,30 @@ describe("notification egress policy", () => {
 		}
 	});
 
+	// The other half of the partition. An adapter exempt from the safeFetch rules
+	// has to be exempt because it speaks no HTTP, not because it found another
+	// way out: no fetch under any spelling, no undici, no raw socket. The file
+	// list is the allowlist above, so a new adapter cannot land here silently.
+	//
+	// `\bfetch\b` is case-insensitive and matches prose too, so a comment in an
+	// exempt adapter that merely says "fetch" fails this. That direction is the
+	// safe one -- reword the comment.
+	it("a non-HTTP adapter reaches no network primitive at all", () => {
+		const files = nonHttpAdapterFiles();
+		expect(files).toHaveLength(NON_HTTP_ADAPTERS.length);
+		for (const file of files) {
+			const source = readFileSync(file, "utf8");
+			expect(source, `${file} must not touch HTTP`).not.toMatch(
+				/\bfetch\b|\bsafe-http\b|["']undici["']|["']node:(https?|net|tls|dgram)["']/i,
+			);
+		}
+	});
+
 	it("nothing under notifications reaches the network directly", () => {
 		for (const file of sourceFiles(NOTIFICATION_SOURCES)) {
 			const source = readFileSync(file, "utf8");
 			expect(source, `${file} must not call the network directly`).not.toMatch(
-				/\bfetch\s*\(|\brequest\s*\(|["']undici["']|["']node:https?["']/,
+				/\bfetch\s*\(|\brequest\s*\(|["']undici["']|["']node:(https?|net|tls|dgram)["']/,
 			);
 		}
 	});

@@ -4,17 +4,27 @@
 // assertion alone passes against no encryption at all), the mask/restore
 // round-trip against a real stored row, and verified_at bookkeeping. All
 // outbound HTTP is an injected double.
-import { eq, inArray, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import * as tables from "../../src/db/schema.ts";
+import type { ChannelKind } from "../../src/domain/notification-channel.ts";
 import { MASKED } from "../../src/domain/notification-channel.ts";
 import type { ProviderResult } from "../../src/domain/notification-retry.ts";
 import { decryptChannelConfig } from "../../src/security/channel-config.ts";
 import { backfillChannelConfigs } from "../../src/security/encrypt-channel-configs.ts";
 import { createFieldKeyRing } from "../../src/security/field-encryption.ts";
 import type { ChannelAdapter } from "../../src/server/notifications/adapters/types.ts";
+import {
+	ACK_ACTION,
+	ACK_VERIFY_ACTION,
+	ackToken,
+	hashAckToken,
+	redeemAckCapability,
+	VERIFY_TTL_MS,
+} from "../../src/server/notifications/capability.ts";
 import {
 	ChannelError,
 	deleteChannel,
@@ -23,6 +33,7 @@ import {
 	testChannel,
 } from "../../src/server/notifications/channels.ts";
 import { createSendFn } from "../../src/server/notifications/dispatch.ts";
+import { startSmtpSink } from "../support/smtp-sink.ts";
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
@@ -32,6 +43,13 @@ const db = drizzle(pool, { schema: tables });
 
 const USER = "ch-user";
 const OTHER = "ch-other";
+// Only the verify-capability suite needs these: a reminder to point a
+// (deliberately misdirected) verify capability at.
+const WS = "ch-ws";
+const LIST = "ch-list";
+const TASK = "ch-task";
+const RS = "ch-reminder";
+const OCCURRENCE = new Date("2026-08-01T20:00:00Z");
 const userIds = [USER, OTHER] as const;
 const TOKEN = "tk_a_real_ntfy_secret";
 const CONFIG = {
@@ -40,21 +58,35 @@ const CONFIG = {
 	token: TOKEN,
 };
 
-function stubAdapter(result: ProviderResult): {
+function stubAdapter(
+	result: ProviderResult,
+	kind: ChannelKind = "ntfy",
+): {
 	adapter: ChannelAdapter;
 	sent: unknown[];
+	ackUrls: (string | null | undefined)[];
 } {
 	const sent: unknown[] = [];
+	const ackUrls: (string | null | undefined)[] = [];
 	return {
 		sent,
+		ackUrls,
 		adapter: {
-			kind: "ntfy",
-			async send(config) {
+			kind,
+			async send(config, message) {
 				sent.push(config);
+				ackUrls.push(message.ackUrl);
 				return result;
 			},
 		},
 	};
+}
+
+// The raw token exists only inside the message the adapter was handed; nothing
+// persists it (only its hash).
+function tokenFrom(ackUrl: string | null | undefined): string {
+	if (!ackUrl) throw new Error("test send carried no ack URL");
+	return ackUrl.slice(ackUrl.lastIndexOf("/") + 1);
 }
 
 async function rawConfig(userId = USER): Promise<Record<string, unknown>> {
@@ -67,6 +99,9 @@ async function rawConfig(userId = USER): Promise<Record<string, unknown>> {
 }
 
 beforeEach(async () => {
+	await db
+		.delete(tables.ackCapability)
+		.where(inArray(tables.ackCapability.recipientUserId, [...userIds]));
 	await db
 		.delete(tables.notificationChannel)
 		.where(inArray(tables.notificationChannel.userId, [...userIds]));
@@ -88,12 +123,57 @@ beforeEach(async () => {
 			})
 			.onConflictDoNothing();
 	}
+	await db
+		.insert(tables.workspace)
+		.values({ id: WS, name: "Channels WS", ownerId: USER, kind: "shared" })
+		.onConflictDoNothing();
+	// Owner membership so that a verify capability leaking into the reminder path
+	// would actually SUCCEED there; without it the completion is denied and the
+	// test would pass for the wrong reason.
+	await db
+		.insert(tables.membership)
+		.values({ id: "ch-m-user", userId: USER, workspaceId: WS, role: "owner" })
+		.onConflictDoNothing();
+	await db
+		.insert(tables.list)
+		.values({
+			id: LIST,
+			workspaceId: WS,
+			ownerId: USER,
+			title: "Channels list",
+			kind: "tasks",
+			sortKey: "a0",
+		})
+		.onConflictDoNothing();
+	await db
+		.insert(tables.task)
+		.values({ id: TASK, listId: LIST, title: "Walk the dog", sortKey: "a0" })
+		.onConflictDoNothing();
+	await db.delete(tables.reminderState).where(eq(tables.reminderState.id, RS));
+	await db.insert(tables.reminderState).values({
+		id: RS,
+		taskId: TASK,
+		occurrenceAt: OCCURRENCE,
+		recipientUserId: USER,
+		status: "pending",
+		fireCount: 1,
+	});
 });
 
 afterAll(async () => {
 	await db
+		.delete(tables.ackCapability)
+		.where(inArray(tables.ackCapability.recipientUserId, [...userIds]));
+	await db
 		.delete(tables.notificationChannel)
 		.where(inArray(tables.notificationChannel.userId, [...userIds]));
+	await db.delete(tables.reminderState).where(eq(tables.reminderState.id, RS));
+	await db.delete(tables.task).where(eq(tables.task.id, TASK));
+	await db.delete(tables.list).where(eq(tables.list.id, LIST));
+	await db
+		.delete(tables.membership)
+		.where(eq(tables.membership.workspaceId, WS));
+	await db.delete(tables.workspace).where(eq(tables.workspace.id, WS));
 	await db.delete(tables.user).where(inArray(tables.user.id, [...userIds]));
 	await pool.end();
 });
@@ -138,6 +218,54 @@ describe("channel config at rest", () => {
 
 		expect(result.ok).toBe(true);
 		expect(sent[0]).toEqual(CONFIG);
+	});
+
+	// The default adapter table, not an injected one: a channel registered in
+	// channels.ts but missing from dispatch.ts would save cleanly and then be
+	// permanently undeliverable, which no unit test of either file can see.
+	// Driven into a real SMTP server for the same reason the M3a rig exists.
+	it("delivers an email notification through the registered adapter", async () => {
+		const sink = await startSmtpSink();
+		const previous = { ...process.env };
+		Object.assign(process.env, {
+			DITERO_SMTP_HOST: sink.host,
+			DITERO_SMTP_PORT: String(sink.port),
+			DITERO_SMTP_ALLOW_INSECURE: "true",
+			DITERO_SMTP_FROM: "ditero@example.test",
+		});
+		try {
+			await saveChannel(db, USER, {
+				kind: "email",
+				config: { address: "recipient@example.test" },
+			});
+			const send = createSendFn({
+				database: db,
+				allowedPrivateCIDRs: [],
+				deadlineMs: 5_000,
+				ackBaseUrl: null,
+			});
+			const result = await send(
+				{
+					id: "ch-outbox-email",
+					reminderStateId: null,
+					recipientUserId: USER,
+					channelKind: "email",
+					payload: { kind: "assign", taskTitle: "Walk the dog" },
+					attempts: 0,
+				} as never,
+				new AbortController().signal,
+			);
+
+			expect(result.ok).toBe(true);
+			expect(sink.commands).toContainEqual("RCPT TO:<recipient@example.test>");
+			expect(sink.messages[0]).toContain("Subject: Walk the dog");
+		} finally {
+			for (const key of Object.keys(process.env)) {
+				if (!(key in previous)) delete process.env[key];
+			}
+			Object.assign(process.env, previous);
+			await sink.close();
+		}
 	});
 });
 
@@ -387,6 +515,27 @@ describe("test send", () => {
 		});
 	});
 
+	// The stored config comes back through JSONB, which normalises key order,
+	// while the parsed one carries the Zod shape's. A plain stringify comparison
+	// made every save look changed and silently reset verified_at.
+	it("an unchanged config keeps the verification", async () => {
+		const { adapter } = stubAdapter({ ok: true, status: 200 });
+		await testChannel(
+			db,
+			USER,
+			{ kind: "ntfy", config: CONFIG },
+			{ adapters: { ntfy: adapter } },
+		);
+		const before = (await listChannels(db, USER))[0].verifiedAt;
+		expect(before).not.toBeNull();
+
+		await saveChannel(db, USER, {
+			kind: "ntfy",
+			config: { ...CONFIG, token: MASKED },
+		});
+		expect((await listChannels(db, USER))[0].verifiedAt).toBe(before);
+	});
+
 	it("a changed config clears a previous verification", async () => {
 		const { adapter } = stubAdapter({ ok: true, status: 200 });
 		await testChannel(
@@ -461,6 +610,37 @@ describe("input validation", () => {
 		});
 	});
 
+	// Design 3.3: the SMTP host, port and credentials are operator env, never per
+	// user, so on a deployment with no SMTP an email channel would save cleanly,
+	// render as configured, and silently never deliver. Same shape as the
+	// app-mode gate above, for the same reason.
+	describe("email without SMTP configured", () => {
+		const EMAIL = {
+			kind: "email",
+			config: { address: "someone@example.test" },
+		};
+		const noSmtp = { ...process.env, DITERO_SMTP_HOST: "" };
+		const withSmtp = {
+			...noSmtp,
+			DITERO_SMTP_HOST: "smtp.example.test",
+			DITERO_SMTP_FROM: "ditero@example.test",
+		};
+
+		it("is rejected and stores nothing", async () => {
+			await expect(saveChannel(db, USER, EMAIL, noSmtp)).rejects.toBeInstanceOf(
+				ChannelError,
+			);
+			expect(await listChannels(db, USER)).toEqual([]);
+		});
+
+		it("is accepted once a transport exists", async () => {
+			const view = await saveChannel(db, USER, EMAIL, withSmtp);
+			// The address is a destination, not a credential: public by the same
+			// rule as chatId and channelId.
+			expect(view.config).toEqual({ address: "someone@example.test" });
+		});
+	});
+
 	it("rejects an unknown kind", async () => {
 		await expect(
 			saveChannel(db, USER, { kind: "carrier-pigeon", config: {} }),
@@ -531,5 +711,201 @@ describe("input validation", () => {
 		});
 		expect(await listChannels(db, USER)).toEqual([]);
 		expect(await listChannels(db, OTHER)).toHaveLength(1);
+	});
+});
+
+// The verify half of the ack mechanism had no test at any level, and it is the
+// half that made ack_capability.reminder_state_id nullable. Everything below is
+// about what a verify capability may and may not do.
+describe("verify capability", () => {
+	const ENV = { ...process.env, DITERO_PUBLIC_URL: "https://app.example.test" };
+
+	async function channelRow(kind: ChannelKind = "ntfy", userId = USER) {
+		const [row] = await db
+			.select()
+			.from(tables.notificationChannel)
+			.where(
+				and(
+					eq(tables.notificationChannel.userId, userId),
+					eq(tables.notificationChannel.kind, kind),
+				),
+			);
+		return row;
+	}
+
+	async function capabilities(userId = USER) {
+		return await db
+			.select()
+			.from(tables.ackCapability)
+			.where(eq(tables.ackCapability.recipientUserId, userId));
+	}
+
+	async function mint(
+		fields: Partial<typeof tables.ackCapability.$inferInsert> = {},
+	) {
+		const token = ackToken();
+		await db.insert(tables.ackCapability).values({
+			id: `ch-cap-${randomUUID()}`,
+			tokenHash: hashAckToken(token),
+			reminderStateId: null,
+			recipientUserId: USER,
+			action: ACK_VERIFY_ACTION,
+			channelKind: "ntfy",
+			expiresAt: new Date(Date.now() + VERIFY_TTL_MS),
+			...fields,
+		});
+		return token;
+	}
+
+	// Sends and returns the raw token the message carried.
+	async function sendTest(kind: ChannelKind, config: Record<string, unknown>) {
+		const stub = stubAdapter({ ok: true, status: 200 }, kind);
+		await testChannel(
+			db,
+			USER,
+			{ kind, config },
+			{ adapters: { [kind]: stub.adapter }, env: ENV },
+		);
+		return tokenFrom(stub.ackUrls[0]);
+	}
+
+	it("mints one bound to the channel with no reminder to ack", async () => {
+		await sendTest("ntfy", CONFIG);
+		const [cap] = await capabilities();
+		expect(cap.action).toBe(ACK_VERIFY_ACTION);
+		expect(cap.reminderStateId).toBeNull();
+		expect(cap.channelKind).toBe("ntfy");
+		expect(cap.consumedAt).toBeNull();
+		// The 1h test TTL, not the reminder ladder's 24h: nothing escalates a test.
+		const ttl = cap.expiresAt.getTime() - cap.createdAt.getTime();
+		expect(Math.abs(ttl - VERIFY_TTL_MS)).toBeLessThan(5_000);
+	});
+
+	it("stamps both timestamps and clears the last error when redeemed", async () => {
+		const token = await sendTest("ntfy", CONFIG);
+		await db
+			.update(tables.notificationChannel)
+			.set({
+				verifiedAt: null,
+				ackVerifiedAt: null,
+				lastErrorAt: new Date(),
+				lastErrorCode: "auth",
+			})
+			.where(eq(tables.notificationChannel.userId, USER));
+
+		expect(await redeemAckCapability(db, token, "capability")).toBe(USER);
+		const row = await channelRow();
+		expect(row.verifiedAt).not.toBeNull();
+		expect(row.ackVerifiedAt).not.toBeNull();
+		expect(row.lastErrorAt).toBeNull();
+		expect(row.lastErrorCode).toBeNull();
+	});
+
+	// The outbound leg alone never sets it: that is the whole point of the
+	// column. A Discord app-mode row whose button was dropped must not read
+	// "Verified".
+	it("is the only thing that sets ack_verified_at", async () => {
+		await sendTest("ntfy", CONFIG);
+		const row = await channelRow();
+		expect(row.verifiedAt).not.toBeNull();
+		expect(row.ackVerifiedAt).toBeNull();
+	});
+
+	it("never reaches the reminder path even when it names a reminder", async () => {
+		const token = await mint({ reminderStateId: RS });
+		expect(await redeemAckCapability(db, token, "capability")).toBe(USER);
+		const [reminder] = await db
+			.select()
+			.from(tables.reminderState)
+			.where(eq(tables.reminderState.id, RS));
+		expect(reminder.ackedAt).toBeNull();
+		expect(reminder.status).toBe("pending");
+	});
+
+	it("a complete capability cannot stamp a channel", async () => {
+		await saveChannel(db, USER, { kind: "ntfy", config: CONFIG }, ENV);
+		const token = await mint({ action: ACK_ACTION, reminderStateId: null });
+		expect(await redeemAckCapability(db, token, "capability")).toBeNull();
+		const row = await channelRow();
+		expect(row.verifiedAt).toBeNull();
+		expect(row.ackVerifiedAt).toBeNull();
+	});
+
+	it("rejects one that outlived the 1h TTL", async () => {
+		await saveChannel(db, USER, { kind: "ntfy", config: CONFIG }, ENV);
+		const dead = await mint({
+			expiresAt: new Date(Date.now() - 1),
+		});
+		expect(await redeemAckCapability(db, dead, "capability")).toBeNull();
+		expect((await channelRow()).ackVerifiedAt).toBeNull();
+
+		// Control at the other side of the boundary, so the assertion above is
+		// about expiry and not about the fixture being unredeemable.
+		const alive = await mint({
+			expiresAt: new Date(Date.now() + VERIFY_TTL_MS - 60_000),
+		});
+		expect(await redeemAckCapability(db, alive, "capability")).toBe(USER);
+		expect((await channelRow()).ackVerifiedAt).not.toBeNull();
+	});
+
+	// Stamping "verified" claims THAT channel's inbound leg works. A Discord
+	// capability redeemed through the Slack listener would claim it for a path
+	// Discord never exercised.
+	it("refuses a redemption through another channel's listener", async () => {
+		await saveChannel(
+			db,
+			USER,
+			{
+				kind: "discord",
+				config: {
+					mode: "webhook",
+					webhookUrl: "https://discord.com/api/webhooks/1/wh-secret",
+				},
+			},
+			ENV,
+		);
+		await saveChannel(db, USER, { kind: "ntfy", config: CONFIG }, ENV);
+
+		const wrong = await mint({ channelKind: "discord" });
+		expect(await redeemAckCapability(db, wrong, "slack")).toBeNull();
+		expect((await channelRow("discord")).ackVerifiedAt).toBeNull();
+		expect((await channelRow("ntfy")).ackVerifiedAt).toBeNull();
+
+		const right = await mint({ channelKind: "discord" });
+		expect(await redeemAckCapability(db, right, "discord")).toBe(USER);
+		expect((await channelRow("discord")).ackVerifiedAt).not.toBeNull();
+		// Only the bound channel; the sibling row is untouched.
+		expect((await channelRow("ntfy")).ackVerifiedAt).toBeNull();
+	});
+
+	// Nulling verified_at on a config change is only half of it: the capability
+	// is bound to (recipient, kind) and nothing else, so an outstanding one would
+	// stamp a config it was never sent to.
+	it("is invalidated when the config it was minted for changes", async () => {
+		const token = await sendTest("ntfy", CONFIG);
+		await saveChannel(
+			db,
+			USER,
+			{ kind: "ntfy", config: { ...CONFIG, topic: "elsewhere" } },
+			ENV,
+		);
+		expect(await capabilities()).toEqual([]);
+		expect(await redeemAckCapability(db, token, "capability")).toBeNull();
+		const row = await channelRow();
+		expect(row.verifiedAt).toBeNull();
+		expect(row.ackVerifiedAt).toBeNull();
+	});
+
+	// An unchanged re-save must not throw away a capability the user is about to
+	// tap on their phone.
+	it("survives a save that changes nothing", async () => {
+		const token = await sendTest("ntfy", CONFIG);
+		await saveChannel(
+			db,
+			USER,
+			{ kind: "ntfy", config: { ...CONFIG, token: MASKED } },
+			ENV,
+		);
+		expect(await redeemAckCapability(db, token, "capability")).toBe(USER);
 	});
 });

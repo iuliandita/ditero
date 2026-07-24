@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db as defaultDb } from "../db/client.ts";
 import { invite, list, task } from "../db/schema.ts";
 import { newInviteToken } from "../domain/invite.ts";
+import { ackBaseUrl } from "../server/notifications/capability.ts";
 import { isRestrictedAccount } from "./managed-account.ts";
 import {
 	ADMIN_ROLES,
@@ -37,12 +38,17 @@ export type CreateInviteInput = {
 	attachKind?: "assign" | "mention" | null;
 };
 
+// ackBaseUrl is the codebase's single notion of a public origin
+// (DITERO_PUBLIC_URL, then BETTER_AUTH_URL); this used to read BETTER_AUTH_URL
+// alone, which was a second one. The localhost fallback stays for the returned
+// copy-me link -- invite mail refuses to send without a real public URL rather
+// than mailing an unusable one.
 export function publicBaseUrl(env: AppEnv): string {
-	return env.BETTER_AUTH_URL ?? `http://localhost:${env.API_PORT ?? 3000}`;
+	return ackBaseUrl(env) ?? `http://localhost:${env.API_PORT ?? 3000}`;
 }
 
 export function inviteLink(token: string, env: AppEnv): string {
-	return `${publicBaseUrl(env)}/accept?token=${token}`;
+	return `${publicBaseUrl(env).replace(/\/+$/, "")}/accept?token=${encodeURIComponent(token)}`;
 }
 
 export async function createInvite(

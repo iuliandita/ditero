@@ -2,6 +2,7 @@ import type { ChannelKind } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
 import type { safeFetch } from "../../../security/safe-http.ts";
 import type { Network } from "../../client-ip.ts";
+import type { Mailer } from "../../mail/transport.ts";
 
 export type ChannelPayload = {
 	title: string;
@@ -20,11 +21,16 @@ export type ChannelPayload = {
 // caps the gap between chunks, so a slow-drip server otherwise holds a worker
 // slot indefinitely (C18) -- and gives a future non-HTTP adapter something to
 // bound itself with.
+// `mailer` is the same seam as `fetch`, for the one adapter whose transport is
+// SMTP rather than HTTP. Unset means "resolve the operator-configured mailer",
+// which is null on a deployment with no SMTP -- not an error the adapter has to
+// be told about separately.
 export type AdapterContext = {
 	allowedPrivateCIDRs: readonly Network[];
 	deadlineMs: number;
 	signal: AbortSignal;
 	fetch?: typeof safeFetch;
+	mailer?: Mailer | null;
 };
 
 // `send` must never throw: the worker classifies a ProviderResult, and a

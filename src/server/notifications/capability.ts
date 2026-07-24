@@ -28,6 +28,20 @@ export const ACK_PATH = "/api/notifications/ack";
 // The only action minted today. Bindings are checked on consume, so a
 // capability minted for one action must not redeem another (C27).
 export const ACK_ACTION = "complete";
+// A test send carries a live capability of this action instead: outbound
+// success proves half a round trip, and for Discord app mode the half that
+// silently lies is the outbound one. Redeeming it is what proves the inbound
+// listener works, so it stamps verified_at and clears the channel's last error.
+export const ACK_VERIFY_ACTION = "verify";
+// Long enough to walk to the phone the test landed on, short enough that a
+// leaked test message is not an indefinite write primitive. Deliberately not
+// the reminder ladder's 24h: nothing escalates a test.
+export const VERIFY_TTL_MS = 3_600_000;
+// The `via` values that name a chat provider's own inbound listener. Anything
+// else ("capability", "in_app") is this deployment's own ack path.
+const REDEEMING_CHANNEL_KINDS = new Set<string>(
+	tables.channelKindEnum.enumValues,
+);
 // Comfortably outlives the ~33-minute retry ladder and any escalation ladder,
 // while bounding how long a leaked notification stays actionable.
 export const ACK_TTL_MS = 24 * 3_600_000;
@@ -303,27 +317,66 @@ export async function redeemAckCapability(
 	try {
 		return await database.transaction(async (tx) => {
 			const { rows } = await tx.execute<{
-				reminder_state_id: string;
+				reminder_state_id: string | null;
 				recipient_user_id: string;
 				action: string;
+				channel_kind: string | null;
 			}>(sql`
 				update ack_capability
 				set consumed_at = now()
 				where token_hash = ${hashAckToken(token)}
 					and consumed_at is null
 					and expires_at > now()
-				returning reminder_state_id, recipient_user_id, action
+				returning reminder_state_id, recipient_user_id, action, channel_kind
 			`);
 			const capability = rows[0];
 			// Unknown, expired or already consumed -- one outcome, by design.
 			if (!capability) return null;
-			if (capability.action !== ACK_ACTION) return null;
 			if (
 				options.allowedRecipients !== undefined &&
 				!options.allowedRecipients.includes(capability.recipient_user_id)
 			) {
 				return null;
 			}
+			if (capability.action === ACK_VERIFY_ACTION) {
+				if (capability.channel_kind === null) return null;
+				// A capability minted for Discord must not be redeemable through the
+				// Telegram or Slack listener: stamping "verified" is a claim that
+				// THAT channel's inbound leg works, which is the entire point of
+				// making the test an ack round trip. `via` is the redeeming channel's
+				// kind at every listener and "capability" at the link route, which is
+				// a legitimate ack path for any kind.
+				if (
+					REDEEMING_CHANNEL_KINDS.has(via) &&
+					via !== capability.channel_kind
+				) {
+					return null;
+				}
+				await tx
+					.update(tables.notificationChannel)
+					.set({
+						verifiedAt: new Date(now),
+						ackVerifiedAt: new Date(now),
+						lastErrorAt: null,
+						lastErrorCode: null,
+						updatedAt: new Date(now),
+					})
+					.where(
+						and(
+							eq(
+								tables.notificationChannel.userId,
+								capability.recipient_user_id,
+							),
+							eq(
+								tables.notificationChannel.kind,
+								capability.channel_kind as (typeof tables.channelKindEnum.enumValues)[number],
+							),
+						),
+					);
+				return capability.recipient_user_id;
+			}
+			if (capability.action !== ACK_ACTION) return null;
+			if (capability.reminder_state_id === null) return null;
 
 			const reminders = await tx
 				.select()

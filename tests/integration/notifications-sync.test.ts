@@ -199,6 +199,7 @@ describe("notificationChannels.mine isolation", () => {
 				"kind",
 				"enabled",
 				"verifiedAt",
+				"ackVerifiedAt",
 				"lastErrorAt",
 				"lastErrorCode",
 				"createdAt",

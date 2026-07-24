@@ -12,11 +12,32 @@ import type {
 } from "./types.ts";
 import { permanent } from "./types.ts";
 
-// Block Kit caps: section text 3000, button text 75, button url 3000.
-const SECTION_TEXT_MAX = 3_000;
+// Block Kit caps, docs.slack.dev/reference/block-kit/block-elements/button-element
+// (checked 2026-07-23): text 75, url 3000, action_id 255, value 2000.
+// Shared with slack-interactions.ts, which appends a done marker to the text it
+// replaces and must clamp against the same bound.
+export const SECTION_TEXT_MAX = 3_000;
 const ACK_URL_MAX = 3_000;
+export const ACTION_ID_MAX = 255;
+export const ACTION_VALUE_MAX = 2_000;
 const RESPONSE_MAX_BYTES = 64 * 1_024;
 const ACK_LABEL = "Done";
+
+// docs.slack.dev/reference/methods/chat.postMessage (checked 2026-07-23): POST,
+// JSON accepted, token "passed as an HTTP Authorization header".
+const API_URL = "https://slack.com/api/chat.postMessage";
+
+// The dispatch key the interactions listener matches on. Constant, because the
+// capability rides in `value`: Slack's action_id cap is 255 and the value cap is
+// 2000, so the larger field carries the token and the smaller one names the
+// feature.
+export const ACK_ACTION_ID = "ditero_ack";
+// Shared with slack-interactions.ts, which parses what this emits.
+export const ACK_VALUE_PREFIX = "c:";
+
+// No upper bound here: ACTION_VALUE_MAX rejects anything longer anyway, and a
+// second limit would only be a place for the two to disagree.
+const TOKEN_SEGMENT = /^[A-Za-z0-9_-]{16,}$/;
 
 type PlainText = { type: "plain_text"; text: string };
 
@@ -109,6 +130,95 @@ export function webhookBody(payload: ChannelPayload): WebhookMessageBody {
 	};
 }
 
+// App mode's counterpart, deliberately a separate type. Widening LinkButton,
+// SlackBlock or WebhookMessageBody to admit an action_id would silently delete
+// the webhook-mode guard above, so the two shapes never meet.
+//
+// The mirror-image guard: `url?: never` plus a REQUIRED action_id and value. A
+// Block Kit button carrying a `url` navigates the browser, and a webhook-mode
+// link button is exactly the thing that arrives at the interactions listener as
+// an unrecognised action -- so emitting one here would produce the dead button
+// app mode exists to avoid. Anchored the same way, and with the same
+// fresh-vs-assembled caveat, as the webhook types above.
+export type AckButton = {
+	type: "button";
+	text: PlainText;
+	action_id: string;
+	value: string;
+	url?: never;
+};
+
+export type AppBlock =
+	| { type: "section"; text: PlainText }
+	| { type: "actions"; elements: readonly AckButton[] };
+
+export type PostMessageBody = {
+	channel: string;
+	text: string;
+	blocks: readonly AppBlock[];
+};
+
+// The adapter is handed the ack URL, not the raw capability, because that is
+// what every other channel needs; the interactive button carries the token
+// itself, so it is read back out of the URL's last segment. Anything that does
+// not look like a capability token yields no button rather than a broken one --
+// a button whose value no interaction handler recognises is worse than none.
+export function ackActionValue(ackUrl: string | null): string | null {
+	if (!ackUrl) return null;
+	let segment: string;
+	try {
+		const path = new URL(ackUrl).pathname;
+		segment = decodeURIComponent(path.slice(path.lastIndexOf("/") + 1));
+	} catch {
+		return null;
+	}
+	if (!TOKEN_SEGMENT.test(segment)) return null;
+	const value = `${ACK_VALUE_PREFIX}${segment}`;
+	return value.length <= ACTION_VALUE_MAX ? value : null;
+}
+
+// Same return-type anchoring as messageBlocks/webhookBody: the builders hand
+// back typed values and the send path stringifies at the call site.
+export function appBlocks(payload: ChannelPayload): readonly AppBlock[] {
+	const text = escapeSlackText(`${payload.title}\n\n${payload.body}`).slice(
+		0,
+		SECTION_TEXT_MAX,
+	);
+	const value = ackActionValue(payload.ackUrl);
+	return [
+		{ type: "section", text: { type: "plain_text", text } },
+		...(value
+			? [
+					{
+						type: "actions" as const,
+						elements: [
+							{
+								type: "button" as const,
+								text: { type: "plain_text" as const, text: ACK_LABEL },
+								action_id: ACK_ACTION_ID,
+								value,
+							},
+						],
+					},
+				]
+			: []),
+	];
+}
+
+export function appBody(
+	channelId: string,
+	payload: ChannelPayload,
+): PostMessageBody {
+	return {
+		channel: channelId,
+		// Notification/accessibility fallback, and the text slack-interactions.ts
+		// reads back to rebuild the message it replaces. mrkdwn-parsed, hence
+		// escaped.
+		text: escapeSlackText(payload.title).slice(0, SECTION_TEXT_MAX),
+		blocks: appBlocks(payload),
+	};
+}
+
 // Stricter than redactChannelUrl, which blanks only the last path segment and
 // so leaves the `T…/B…` ids. Those are not the bearer credential, but nothing
 // in an operator's error line needs them, and the whole `/services/…` tail is
@@ -158,16 +268,86 @@ function webhookSecrets(webhookUrl: string): readonly string[] {
 	return [...secrets];
 }
 
-// The mode-agnostic shape the send block below consumes. Task 11's app mode
-// builds one of these against chat.postMessage with an Authorization header and
-// its own interactive block builder; nothing under it changes.
+// The mode-agnostic shape the send block below consumes. `mode` survives here
+// only because the two transports disagree about what a success looks like: an
+// incoming webhook answers plain text, chat.postMessage answers a JSON envelope
+// that reports failures under HTTP 200.
 type Outbound = {
+	mode: "webhook" | "app";
 	url: string;
-	headers: Record<string, string>;
+	headers: Headers;
 	body: string;
 	redactedUrl: string;
 	secrets: readonly string[];
 };
+
+function webhookOutbound(
+	webhookUrl: string,
+	payload: ChannelPayload,
+): Outbound {
+	return {
+		mode: "webhook",
+		url: webhookUrl,
+		headers: new Headers({ "Content-Type": "application/json" }),
+		body: JSON.stringify(webhookBody(payload)),
+		redactedUrl: redactedTarget(webhookUrl),
+		secrets: webhookSecrets(webhookUrl),
+	};
+}
+
+function appOutbound(
+	botToken: string,
+	channelId: string,
+	payload: ChannelPayload,
+): Outbound {
+	return {
+		mode: "app",
+		url: API_URL,
+		headers: new Headers({
+			"Content-Type": "application/json; charset=utf-8",
+			Authorization: `Bearer ${botToken}`,
+		}),
+		body: JSON.stringify(appBody(channelId, payload)),
+		// No credential in the URL at all in this mode: the token is a header.
+		redactedUrl: API_URL,
+		secrets: [botToken],
+	};
+}
+
+type Envelope = { ok?: unknown; error?: unknown };
+
+function parseEnvelope(text: string): Envelope | null {
+	try {
+		const parsed: unknown = JSON.parse(text);
+		return parsed && typeof parsed === "object" ? (parsed as Envelope) : null;
+	} catch {
+		return null;
+	}
+}
+
+// Slack's `ok: false` error codes carry no status of their own, and almost all
+// of them are permanent config, scope or payload problems -- so the default is
+// a permanent 400 and the transient ones are named. Getting this backwards
+// either burns the ~33-minute ladder on a revoked token or abandons a reminder
+// over a momentary Slack outage. A Map, not an object: the error string comes
+// from a remote, and `constructor` would resolve on an object literal.
+const APP_ERROR_STATUS = new Map<string, number>([
+	["invalid_auth", 401],
+	["not_authed", 401],
+	["token_revoked", 401],
+	["token_expired", 401],
+	["account_inactive", 401],
+	["no_permission", 403],
+	["missing_scope", 403],
+	["channel_not_found", 404],
+	["not_in_channel", 404],
+	["is_archived", 404],
+	["ratelimited", 429],
+	["service_unavailable", 503],
+	["fatal_error", 503],
+	["internal_error", 503],
+	["request_timeout", 503],
+]);
 
 export const slackAdapter: ChannelAdapter = {
 	kind: "slack",
@@ -190,19 +370,20 @@ export const slackAdapter: ChannelAdapter = {
 					channelId: string;
 			  };
 
-		// Task 11 owns app mode. Until it lands an app-mode config is loudly
-		// undeliverable rather than quietly downgraded to a link-button send.
-		if (channel.mode !== "webhook") {
-			return permanent("slack: app mode is not implemented");
+		// Built outside the send's try/catch, and reported with no interpolated
+		// message: a TypeError from Headers embeds the offending value, and in app
+		// mode that value is the bot token. The charset regex on the config schema
+		// should make this unreachable; this is the second half of that guarantee,
+		// covering configs stored before the regex existed.
+		let outbound: Outbound;
+		try {
+			outbound =
+				channel.mode === "webhook"
+					? webhookOutbound(channel.webhookUrl, payload)
+					: appOutbound(channel.botToken, channel.channelId, payload);
+		} catch {
+			return permanent("slack: unusable channel config");
 		}
-
-		const outbound: Outbound = {
-			url: channel.webhookUrl,
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(webhookBody(payload)),
-			redactedUrl: redactedTarget(channel.webhookUrl),
-			secrets: webhookSecrets(channel.webhookUrl),
-		};
 		// Literal first, then structural: redactChannelUrl blanks only the last
 		// path segment, so running it first would leave the `T…/B…` ids of an
 		// echoed full URL behind with nothing left for the literal pass to match.
@@ -236,15 +417,43 @@ export const slackAdapter: ChannelAdapter = {
 			// reports failures as real status codes carrying a plain-text error code
 			// (`invalid_payload`, `channel_not_found`, …). There is no JSON envelope
 			// to read, so the status alone decides.
-			if (response.ok) return { ok: true, status: response.status };
+			if (outbound.mode === "webhook" && response.ok) {
+				return { ok: true, status: response.status };
+			}
 
 			// Slack returns Retry-After in SECONDS on a 429; incoming webhooks are
 			// limited to roughly one message per second per channel.
 			const retryAfter = retryAfterSeconds(response.headers.get("retry-after"));
-			const detail = scrub(await response.text())
-				.replace(/\s+/g, " ")
-				.trim()
-				.slice(0, 200);
+			const text = await response.text();
+
+			// chat.postMessage answers HTTP 200 with `{"ok": false, "error": "…"}`
+			// for most application-level failures, so `response.ok` alone reports a
+			// revoked token as a delivery. The envelope decides; the HTTP status only
+			// fills in when there is no parseable envelope.
+			if (outbound.mode === "app") {
+				const envelope = parseEnvelope(text);
+				if (response.ok && envelope?.ok === true) {
+					return { ok: true, status: response.status };
+				}
+				const code =
+					typeof envelope?.error === "string"
+						? envelope.error.slice(0, 100)
+						: "";
+				const status = response.ok
+					? (APP_ERROR_STATUS.get(code) ?? (code ? 400 : undefined))
+					: response.status;
+				return {
+					ok: false,
+					...(status === undefined ? {} : { status }),
+					...(retryAfter === undefined ? {} : { retryAfterSec: retryAfter }),
+					// Never bare `response.status` as the fallback: a 200 carrying
+					// `{"ok": false}` with no error code would read `slack 200`, and the
+					// one line an operator triages from would claim the send worked.
+					error: `slack ${status ?? `HTTP ${response.status}, no envelope code`} from ${outbound.redactedUrl}${code ? `: ${scrub(code)}` : ""}`,
+				};
+			}
+
+			const detail = scrub(text).replace(/\s+/g, " ").trim().slice(0, 200);
 			return {
 				ok: false,
 				status: response.status,

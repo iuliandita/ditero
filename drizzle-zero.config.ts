@@ -165,6 +165,7 @@ export default drizzleZeroConfig(schema, {
 			verifiedAt: true,
 			// Health, not diagnostics: a closed enum plus a timestamp. The raw
 			// provider error stays in delivery_attempt (server-only, redacted).
+			ackVerifiedAt: true,
 			lastErrorAt: true,
 			lastErrorCode: true,
 			createdAt: true,

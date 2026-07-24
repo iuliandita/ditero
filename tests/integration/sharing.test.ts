@@ -133,6 +133,11 @@ afterAll(async () => {
 	await db.delete(tables.taskAssignee);
 	await db.delete(tables.invite);
 	await db.delete(tables.managedAccount);
+	// Also the list/task this file seeds: left behind, they break any sibling
+	// whose own cleanup deletes `workspace` without deleting them first.
+	await db.delete(tables.taskLabel);
+	await db.delete(tables.task);
+	await db.delete(tables.list);
 	await pool.end();
 });
 
