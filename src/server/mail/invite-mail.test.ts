@@ -2,10 +2,11 @@
 // (tests/support/smtp-sink.ts) and asserts on the bytes it received. Asserting
 // against a mailer double would not have caught the recipient hijack, which is
 // visible only in the RCPT TO line.
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SmtpSink } from "../../../tests/support/smtp-sink.ts";
 import { startSmtpSink } from "../../../tests/support/smtp-sink.ts";
 import type { MailConfig } from "../../config/mail.ts";
+import * as paraglideRuntime from "../../paraglide/runtime.js";
 import { sendInviteMail } from "./invite-mail.ts";
 import { createMailer } from "./transport.ts";
 
@@ -76,6 +77,23 @@ describe("sendInviteMail", () => {
 		expect(message).toMatch(
 			/^Subject: Ada invited you to Renovation on Ditero/m,
 		);
+	});
+
+	// A cold invitee has no account, so the mail renders in en (design decision).
+	// What is asserted is that the render THREADS an explicit locale: a threaded
+	// render never consults Paraglide's ambient getLocale, which is unsafe on a
+	// server shared by concurrent requests.
+	it("threads an explicit locale rather than consulting the ambient locale", async () => {
+		const started = await sink();
+		const getLocale = vi.spyOn(paraglideRuntime, "getLocale");
+		const status = await sendInviteMail(INPUT, {
+			database: stubDb("Renovation", "Ada"),
+			env: ENV,
+			mailer: createMailer(config(started)),
+		});
+		expect(status).toEqual({ status: "sent" });
+		expect(getLocale).not.toHaveBeenCalled();
+		getLocale.mockRestore();
 	});
 
 	it("strips a trailing slash rather than minting a double-slash link", async () => {

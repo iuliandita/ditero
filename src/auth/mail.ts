@@ -15,11 +15,14 @@
 // unknown address by design, but awaiting a send would reintroduce the
 // difference as latency -- known addresses would take an SMTP round trip
 // longer, which is the same oracle in a different unit.
+import { db } from "../db/client.ts";
+import type { Locale } from "../domain/locale.ts";
 import { mailableAddress } from "../domain/mail-address.ts";
 import { encodeHeaderValue, headerSafe } from "../domain/mime-header.ts";
 import { m } from "../paraglide/messages.js";
 import { type Mailer, mailerFromEnv } from "../server/mail/transport.ts";
 import { ackBaseUrl } from "../server/notifications/capability.ts";
+import { resolveRecipientLocale } from "../server/recipient-locale.ts";
 
 export type AuthMailKind = "verify" | "reset";
 
@@ -55,16 +58,17 @@ export function publicAuthLink(
 
 function compose(
 	kind: AuthMailKind,
+	locale: Locale,
 	params: { name: string; url: string },
 ): { subject: string; text: string } {
 	return kind === "verify"
 		? {
-				subject: m.auth_mail_verify_subject(),
-				text: m.auth_mail_verify_body(params),
+				subject: m.auth_mail_verify_subject({}, { locale }),
+				text: m.auth_mail_verify_body(params, { locale }),
 			}
 		: {
-				subject: m.auth_mail_reset_subject(),
-				text: m.auth_mail_reset_body(params),
+				subject: m.auth_mail_reset_subject({}, { locale }),
+				text: m.auth_mail_reset_body(params, { locale }),
 			};
 }
 
@@ -72,13 +76,16 @@ export type AuthMailDeps = {
 	// `null` states "no mailer" explicitly; `undefined` resolves from env.
 	mailer?: Mailer | null;
 	env?: Record<string, string | undefined>;
+	// Where the recipient's stored locale is read from. Defaults to the shared
+	// app client; a test passes a stub.
+	database?: Pick<typeof db, "select">;
 	// Test seam only. Production detaches the send and nothing awaits it.
 	track?: (settled: Promise<void>) => void;
 };
 
 export function sendAuthMail(
 	kind: AuthMailKind,
-	user: { email: string; name?: string | null },
+	user: { id?: string | null; email: string; name?: string | null },
 	rawUrl: string,
 	deps: AuthMailDeps = {},
 ): void {
@@ -107,22 +114,27 @@ export function sendAuthMail(
 		return;
 	}
 
-	// Translated, so it can be non-ASCII even though no user input reaches it.
-	const { subject, text } = compose(kind, {
-		name: headerSafe(
-			user.name?.trim() || m.auth_mail_greeting_fallback(),
-			NAME_MAX,
-		),
-		url: publicAuthLink(rawUrl, env),
-	});
-
-	const settled = mailer
-		.send({
-			to,
-			subject: encodeHeaderValue(headerSafe(subject, SUBJECT_MAX)),
-			text,
-		})
-		.then((result) => {
+	const activeMailer = mailer;
+	const database = deps.database ?? db;
+	// The locale read is part of the detached, non-blocking flow: like the send
+	// itself it must never fail a request, so it is folded into the tracked
+	// promise. resolveRecipientLocale falls back to en on any failure.
+	const settled = (async () => {
+		const locale = await resolveRecipientLocale(database, user.id ?? null);
+		// Translated, so it can be non-ASCII even though no user input reaches it.
+		const { subject, text } = compose(kind, locale, {
+			name: headerSafe(
+				user.name?.trim() || m.auth_mail_greeting_fallback({}, { locale }),
+				NAME_MAX,
+			),
+			url: publicAuthLink(rawUrl, env),
+		});
+		try {
+			const result = await activeMailer.send({
+				to,
+				subject: encodeHeaderValue(headerSafe(subject, SUBJECT_MAX)),
+				text,
+			});
 			if (result.ok) return;
 			// Category and reply code only. The server's reply text is remote free
 			// text, and the link -- which carries the token -- never goes near a log.
@@ -133,14 +145,14 @@ export function sendAuthMail(
 			console.error(
 				`auth mail: ${kind} send to ${to} failed${code}: ${result.failure.category}`,
 			);
-		})
-		.catch((error) => {
+		} catch (error) {
 			// Narrowed like every other log here: transport.send does not reject, so
 			// anything arriving is unclassified and its shape is not known.
 			console.error(
 				`auth mail: ${kind} send to ${to} threw: ${error instanceof Error ? error.name : "unknown"}`,
 			);
-		});
+		}
+	})();
 	deps.track?.(settled);
 }
 
@@ -167,11 +179,12 @@ export function mailUnavailableResponse(
 	}
 	if (configured) return null;
 	// Address-independent, so it is no enumeration oracle: it reports the state
-	// of the deployment, which is the same answer for every caller.
+	// of the deployment, which is the same answer for every caller. There is no
+	// recipient identity here (unauthenticated POST), so it renders in en.
 	return new Response(
 		JSON.stringify({
 			code: "MAIL_NOT_CONFIGURED",
-			message: m.auth_mail_not_configured(),
+			message: m.auth_mail_not_configured({}, { locale: "en" }),
 		}),
 		{ status: 503, headers: { "content-type": "application/json" } },
 	);
