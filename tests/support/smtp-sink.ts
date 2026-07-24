@@ -15,6 +15,10 @@ export type SinkOptions = {
 	advertiseAuth?: boolean;
 	// Replies substituted for the default 250/235, e.g. "550 5.1.1 no such user".
 	replies?: Partial<Record<"auth" | "mail" | "rcpt" | "data", string>>;
+	// A fixed port, for the e2e standalone server that a separate process must
+	// point DITERO_SMTP_PORT at. Omitted (0) lets the OS pick, which is what the
+	// in-process integration callers want so parallel sinks never collide.
+	port?: number;
 };
 
 export type SmtpSink = {
@@ -105,8 +109,9 @@ export async function startSmtpSink(
 	);
 	await new Promise<void>((resolve, reject) => {
 		server.once("error", reject);
-		// Port 0: the OS picks a free one, so parallel sinks never collide.
-		server.listen(0, sink.host, resolve);
+		// Port 0 (the default): the OS picks a free one, so parallel in-process
+		// sinks never collide. A fixed port is only for the e2e standalone server.
+		server.listen(options.port ?? 0, sink.host, resolve);
 	});
 	const address = server.address();
 	if (address === null || typeof address === "string") {

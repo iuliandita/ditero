@@ -443,38 +443,45 @@ if (import.meta.main) {
 	if (process.env.NODE_ENV === "production") {
 		await verifyRuntimeDatabaseRole(pool);
 	}
-	// Every replica starts one; the advisory lock elects the leader per tick.
-	// Timing is validated here so a bad interval fails at boot, not at 03:00.
-	startScheduler(db, pool);
-	// Leader-elected like the scan: a periodic table sweep, not a request-driven
-	// event.
-	startOverdueSweep(db, pool);
-	// Leader-elected too, under its own key: Telegram hands an update to
-	// whichever poller asks first, so a second one consumes acks away. In
-	// webhook mode it registers the listener with each bot instead of polling.
-	startTelegramPoller(db, pool);
-	// The drain runs on every replica (claims are mediated by SKIP LOCKED).
-	// ackBaseUrl is null when no public origin is configured, which disables the
-	// ack action rather than minting a link no push client can follow.
 	// Validated here so a malformed SMTP setting fails at boot rather than on the
 	// first reminder. Absent config is legal: it disables the email channel.
 	if (mailConfig(process.env) === null) {
 		console.log("ditero: no DITERO_SMTP_HOST, email channel disabled");
 	}
-	const timing = workerTiming(process.env);
-	startWorker(
-		db,
-		createSendFn({
-			database: db,
-			allowedPrivateCIDRs: notifyAllowedPrivateCIDRs(
-				process.env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
-			),
-			deadlineMs: timing.adapterDeadlineMs,
-			ackBaseUrl: ackBaseUrl(process.env),
-		}),
-		process.env,
-		timing,
-	);
+	// A replica can be run purely as a request server, with the notification
+	// scan/drain/poll loops off (DITERO_BACKGROUND_JOBS=0). The pipeline is
+	// leader-elected and multi-replica by design, so this changes nothing about
+	// correctness; it is for a deployment that wants dedicated worker replicas,
+	// or an auxiliary API replica that must not touch the shared outbox.
+	if (process.env.DITERO_BACKGROUND_JOBS !== "0") {
+		// Every replica starts one; the advisory lock elects the leader per tick.
+		// Timing is validated here so a bad interval fails at boot, not at 03:00.
+		startScheduler(db, pool);
+		// Leader-elected like the scan: a periodic table sweep, not a
+		// request-driven event.
+		startOverdueSweep(db, pool);
+		// Leader-elected too, under its own key: Telegram hands an update to
+		// whichever poller asks first, so a second one consumes acks away. In
+		// webhook mode it registers the listener with each bot instead of polling.
+		startTelegramPoller(db, pool);
+		// The drain runs on every replica (claims are mediated by SKIP LOCKED).
+		// ackBaseUrl is null when no public origin is configured, which disables
+		// the ack action rather than minting a link no push client can follow.
+		const timing = workerTiming(process.env);
+		startWorker(
+			db,
+			createSendFn({
+				database: db,
+				allowedPrivateCIDRs: notifyAllowedPrivateCIDRs(
+					process.env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
+				),
+				deadlineMs: timing.adapterDeadlineMs,
+				ackBaseUrl: ackBaseUrl(process.env),
+			}),
+			process.env,
+			timing,
+		);
+	}
 	app.listen(PORT);
 	console.log(`ditero api on :${PORT}`);
 }
