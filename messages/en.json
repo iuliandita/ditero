@@ -78,5 +78,7 @@
 	"auth_mail_greeting_fallback": "there",
 	"auth_mail_not_configured": "This server cannot send email, so password resets by email are unavailable. Ask your administrator to reset your password or to configure SMTP.",
 	"invite_mail_subject": "{inviter} invited you to {workspace} on Ditero",
-	"invite_mail_body": "{inviter} invited you to join {workspace} on Ditero.\n\nAccept the invitation:\n{link}\n\nIf you were not expecting this, you can ignore this email."
+	"invite_mail_body": "{inviter} invited you to join {workspace} on Ditero.\n\nAccept the invitation:\n{link}\n\nIf you were not expecting this, you can ignore this email.",
+	"language_switcher_label": "Language",
+	"language_settings_heading": "Language"
 }

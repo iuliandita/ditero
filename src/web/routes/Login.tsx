@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
 
@@ -139,6 +140,9 @@ export function Login() {
 				Continue with Google
 			</button>
 			{error ? <p className="text-red-600">{error}</p> : null}
+			<div className="mt-4 border-t pt-4">
+				<LanguageSwitcher />
+			</div>
 		</div>
 	);
 }

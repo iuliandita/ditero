@@ -1,6 +1,7 @@
 import type { ReadonlyJSONValue } from "@rocicorp/zero";
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getLocale, setLocale } from "../../paraglide/runtime.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
@@ -9,6 +10,11 @@ import {
 	DEFAULT_FOCUS,
 	type FocusConfig,
 } from "../focus/timer-core.ts";
+import {
+	applyDocumentLocale,
+	isSupportedLocale,
+	type Locale,
+} from "../lib/locale.ts";
 import { runMutation } from "../lib/run-mutation.ts";
 
 export type KarmaGoals = { daily: number; weekly: number };
@@ -31,6 +37,7 @@ export type UserPrefState = {
 	timezone: string; // IANA zone every reminder time is interpreted in
 	quietHours: QuietHours; // null => not configured
 	escalationDefaults: EscalationDefaults | null; // null => not configured
+	locale: Locale | null; // null => no preference set (Accept-Language fallback)
 };
 
 const DEFAULTS: UserPrefState = {
@@ -44,6 +51,7 @@ const DEFAULTS: UserPrefState = {
 	timezone: "UTC",
 	quietHours: null,
 	escalationDefaults: null,
+	locale: null,
 };
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -73,6 +81,14 @@ function readEscalationDefaults(v: unknown): EscalationDefaults | null {
 // deliberate choice -- detection may overwrite it, but only with a real zone.
 let detectionAttempted = false;
 let detectionWrote = false;
+
+// Login reconcile (M-i18n): a synced `user_pref.locale` set on another device
+// wins over whatever the pre-auth strategy chain (cookie/localStorage/
+// Accept-Language) resolved on this one. Reload is Paraglide's setLocale
+// default -- after it, getLocale() reads the reconciled value, so this fires
+// at most once per session (no loop). Module-scoped like the timezone guard:
+// useUserPref mounts many times per render (e.g. once per task row).
+let localeReconcileAttempted = false;
 
 function detectedTimeZone(): string | null {
 	try {
@@ -131,6 +147,10 @@ export function useUserPref(): {
 			timezone: row.timezone ?? DEFAULTS.timezone,
 			quietHours: readQuietHours(row.quietHours),
 			escalationDefaults: readEscalationDefaults(row.escalationDefaults),
+			locale:
+				typeof row.locale === "string" && isSupportedLocale(row.locale)
+					? row.locale
+					: null,
 		};
 	}, [rows]);
 
@@ -193,6 +213,15 @@ export function useUserPref(): {
 		forceRender((n) => n + 1);
 		setPref({ timezone: zone });
 	}, [loading, pref.timezone, setPref]);
+
+	useEffect(() => {
+		if (loading || localeReconcileAttempted) return;
+		localeReconcileAttempted = true;
+		if (pref.locale && pref.locale !== getLocale()) {
+			applyDocumentLocale(pref.locale);
+			setLocale(pref.locale);
+		}
+	}, [loading, pref.locale]);
 
 	return { pref, setPref, loading, timezoneDetected: detectionWrote };
 }
