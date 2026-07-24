@@ -5,21 +5,21 @@ import {
 	findConflicts,
 	resolveKeymap,
 } from "../../../domain/keymap.ts";
+import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import { formatBinding } from "../../keyboard/binding-label.ts";
 import { EMPTY_CAPTURE, stepCapture } from "../../keyboard/capture.ts";
+import { categoryLabel } from "../../keyboard/category-label.ts";
 import { COMMANDS } from "../../keyboard/commands.ts";
 import { useEffectiveKeymap } from "../../keyboard/useEffectiveKeymap.ts";
 
-const CATEGORY_LABEL: Record<string, string> = {
-	general: "General",
-	task: "Task",
-	view: "View",
-	nav: "Navigation",
-	help: "Help",
-};
+// `c.label` is a locale-dependent getter, so the lookup resolves it per render
+// rather than storing what it read at import.
+const COMMAND_BY_ID = new Map(COMMANDS.map((c) => [c.id, c]));
 
-const LABEL_OF = new Map(COMMANDS.map((c) => [c.id, c.label]));
+function commandLabel(id: string): string {
+	return COMMAND_BY_ID.get(id)?.label ?? id;
+}
 
 // Commands grouped by category, preserving registry order (all commands, incl.
 // unassigned ones -- unlike the cheat-sheet which hides empties).
@@ -97,8 +97,8 @@ export function KeymapSettings() {
 		const prospective = { ...pref.keymap, [draft.commandId]: [draft.binding] };
 		const km = resolveKeymap(COMMANDS, pref.keymapProfile, prospective);
 		for (const [a, b] of findConflicts(km, COMMANDS)) {
-			if (a === draft.commandId) return LABEL_OF.get(b) ?? b;
-			if (b === draft.commandId) return LABEL_OF.get(a) ?? a;
+			if (a === draft.commandId) return commandLabel(b);
+			if (b === draft.commandId) return commandLabel(a);
 		}
 		return null;
 	}, [draft, pref.keymap, pref.keymapProfile]);
@@ -132,10 +132,10 @@ export function KeymapSettings() {
 		<section className="mt-8 border-t pt-4" aria-labelledby="keymap-heading">
 			<div className="flex items-center justify-between gap-4">
 				<h2 id="keymap-heading" className="text-sm font-semibold">
-					Keyboard shortcuts
+					{m.keymap_heading()}
 				</h2>
 				<fieldset className="m-0 inline-flex gap-1 border-0 p-0">
-					<legend className="sr-only">Keymap profile</legend>
+					<legend className="sr-only">{m.keymap_profile_legend()}</legend>
 					<Button
 						size="sm"
 						variant={pref.keymapProfile === "default" ? "default" : "outline"}
@@ -143,7 +143,7 @@ export function KeymapSettings() {
 						data-testid="keymap-profile-default"
 						onClick={() => setPref({ keymapProfile: "default" })}
 					>
-						Default
+						{m.keymap_profile_default()}
 					</Button>
 					<Button
 						size="sm"
@@ -152,7 +152,7 @@ export function KeymapSettings() {
 						data-testid="keymap-profile-vim"
 						onClick={() => setPref({ keymapProfile: "vim" })}
 					>
-						Vim
+						{m.keymap_profile_vim()}
 					</Button>
 				</fieldset>
 			</div>
@@ -161,7 +161,7 @@ export function KeymapSettings() {
 				{GROUPS.map(([category, rows]) => (
 					<div key={category}>
 						<h3 className="mb-1 text-xs font-medium text-muted-foreground">
-							{CATEGORY_LABEL[category] ?? category}
+							{categoryLabel(category)}
 						</h3>
 						<ul className="flex flex-col gap-1">
 							{rows.map((cmd) => {
@@ -187,7 +187,7 @@ export function KeymapSettings() {
 														aria-hidden="true"
 														className="size-1.5 rounded-full bg-primary motion-safe:animate-pulse"
 													/>
-													Press keys… (Esc to cancel)
+													{m.keymap_capture_hint()}
 												</span>
 											) : drafting && draft ? (
 												<>
@@ -204,7 +204,7 @@ export function KeymapSettings() {
 														</kbd>
 														{conflictLabel ? (
 															<span className="text-xs text-destructive">
-																Conflicts with {conflictLabel}
+																{m.keymap_conflict({ command: conflictLabel })}
 															</span>
 														) : null}
 													</span>
@@ -212,19 +212,21 @@ export function KeymapSettings() {
 														ref={saveRef}
 														size="xs"
 														data-testid="keymap-save"
-														aria-label={`Save binding for ${cmd.label}`}
+														aria-label={m.keymap_save_label({
+															command: cmd.label,
+														})}
 														onClick={saveDraft}
 													>
-														Save
+														{m.keymap_save()}
 													</Button>
 													<Button
 														size="xs"
 														variant="ghost"
 														data-testid="keymap-cancel"
-														aria-label="Cancel rebind"
+														aria-label={m.keymap_cancel_label()}
 														onClick={cancelDraft}
 													>
-														Cancel
+														{m.keymap_cancel()}
 													</Button>
 												</>
 											) : (
@@ -239,7 +241,7 @@ export function KeymapSettings() {
 														</span>
 													) : (
 														<span className="text-xs text-muted-foreground">
-															Unassigned
+															{m.keymap_unassigned()}
 														</span>
 													)}
 													<Button
@@ -248,21 +250,25 @@ export function KeymapSettings() {
 														}}
 														size="xs"
 														variant="outline"
-														aria-label={`Rebind ${cmd.label}`}
+														aria-label={m.keymap_rebind_label({
+															command: cmd.label,
+														})}
 														data-testid={`keymap-rebind-${cmd.id}`}
 														onClick={() => startCapture(cmd.id)}
 													>
-														Rebind
+														{m.keymap_rebind()}
 													</Button>
 													{hasOverride ? (
 														<Button
 															size="xs"
 															variant="ghost"
-															aria-label={`Reset ${cmd.label} to default`}
+															aria-label={m.keymap_reset_label({
+																command: cmd.label,
+															})}
 															data-testid={`keymap-reset-${cmd.id}`}
 															onClick={() => resetCommand(cmd.id)}
 														>
-															Reset
+															{m.keymap_reset()}
 														</Button>
 													) : null}
 												</>

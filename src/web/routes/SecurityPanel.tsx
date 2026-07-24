@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { m } from "../../paraglide/messages.js";
 import { authClient } from "../lib/auth-client.ts";
 
 type PasskeyRecord = { id: string; name?: string | null };
@@ -18,7 +19,7 @@ export function SecurityPanel() {
 	const loadPasskeys = useCallback(async () => {
 		const result = await authClient.passkey.listUserPasskeys();
 		if (result.error) {
-			setError(result.error.message ?? "Could not load passkeys");
+			setError(result.error.message ?? m.security_error_load_passkeys());
 			return;
 		}
 		setPasskeys(result.data ?? []);
@@ -30,9 +31,11 @@ export function SecurityPanel() {
 
 	async function addPasskey() {
 		setError(null);
+		// Persisted, not display text: a localized name would be stored once and
+		// then render in that locale for every later session. Do not key it.
 		const result = await authClient.passkey.addPasskey({ name: "This device" });
 		if (result.error) {
-			setError(result.error.message ?? "Could not add passkey");
+			setError(result.error.message ?? m.security_error_add_passkey());
 			return;
 		}
 		await loadPasskeys();
@@ -42,7 +45,7 @@ export function SecurityPanel() {
 		setError(null);
 		const result = await authClient.passkey.deletePasskey({ id });
 		if (result.error) {
-			setError(result.error.message ?? "Could not remove passkey");
+			setError(result.error.message ?? m.security_error_remove_passkey());
 			return;
 		}
 		await loadPasskeys();
@@ -52,9 +55,7 @@ export function SecurityPanel() {
 		setError(null);
 		const result = await authClient.twoFactor.enable({ password });
 		if (result.error) {
-			setError(
-				result.error.message ?? "Could not enable two-factor authentication",
-			);
+			setError(result.error.message ?? m.security_error_enable_2fa());
 			return;
 		}
 		setPassword("");
@@ -66,7 +67,7 @@ export function SecurityPanel() {
 		setError(null);
 		const result = await authClient.twoFactor.verifyTotp({ code: totpCode });
 		if (result.error) {
-			setError(result.error.message ?? "Invalid authenticator code");
+			setError(result.error.message ?? m.security_error_invalid_code());
 			return;
 		}
 		setTwoFactorEnabled(true);
@@ -78,9 +79,7 @@ export function SecurityPanel() {
 		setError(null);
 		const result = await authClient.twoFactor.disable({ password });
 		if (result.error) {
-			setError(
-				result.error.message ?? "Could not disable two-factor authentication",
-			);
+			setError(result.error.message ?? m.security_error_disable_2fa());
 			return;
 		}
 		setPassword("");
@@ -92,7 +91,7 @@ export function SecurityPanel() {
 		<section className="mt-8 border-t pt-4" aria-labelledby="security-heading">
 			<div className="flex items-center justify-between gap-4">
 				<h2 id="security-heading" className="text-sm font-semibold">
-					Security
+					{m.security_heading()}
 				</h2>
 				<button
 					data-testid="sign-out"
@@ -100,20 +99,22 @@ export function SecurityPanel() {
 					className="border px-2 py-1"
 					onClick={() => authClient.signOut()}
 				>
-					Sign out
+					{m.security_sign_out()}
 				</button>
 			</div>
 
 			<div className="mt-4">
 				<div className="flex items-center justify-between gap-4">
-					<h3 className="text-sm font-medium">Passkeys</h3>
+					<h3 className="text-sm font-medium">
+						{m.security_passkeys_heading()}
+					</h3>
 					<button
 						data-testid="add-passkey"
 						type="button"
 						className="border px-2 py-1"
 						onClick={addPasskey}
 					>
-						Add passkey
+						{m.security_add_passkey()}
 					</button>
 				</div>
 				<ul className="mt-2 space-y-1">
@@ -123,13 +124,13 @@ export function SecurityPanel() {
 							data-testid="passkey-item"
 							className="flex items-center justify-between gap-3 border p-2 text-sm"
 						>
-							<span>{item.name || "Passkey"}</span>
+							<span>{item.name || m.security_passkey_unnamed()}</span>
 							<button
 								type="button"
 								className="border px-2 py-1"
 								onClick={() => removePasskey(item.id)}
 							>
-								Remove
+								{m.security_passkey_remove()}
 							</button>
 						</li>
 					))}
@@ -138,16 +139,18 @@ export function SecurityPanel() {
 
 			<div className="mt-4 space-y-2">
 				<div className="flex items-center justify-between gap-4">
-					<h3 className="text-sm font-medium">Authenticator app</h3>
+					<h3 className="text-sm font-medium">{m.security_totp_heading()}</h3>
 					<span data-testid="two-factor-status" className="text-sm">
-						{twoFactorEnabled ? "Enabled" : "Disabled"}
+						{twoFactorEnabled
+							? m.security_totp_enabled()
+							: m.security_totp_disabled()}
 					</span>
 				</div>
 				<input
 					data-testid="security-password"
 					type="password"
 					className="w-full border p-2"
-					placeholder="Current password"
+					placeholder={m.security_password_placeholder()}
 					value={password}
 					onChange={(event) => setPassword(event.target.value)}
 				/>
@@ -158,7 +161,7 @@ export function SecurityPanel() {
 						className="border px-2 py-1"
 						onClick={disableTwoFactor}
 					>
-						Disable 2FA
+						{m.security_disable_2fa()}
 					</button>
 				) : (
 					<button
@@ -167,7 +170,7 @@ export function SecurityPanel() {
 						className="border px-2 py-1"
 						onClick={enableTwoFactor}
 					>
-						Enable 2FA
+						{m.security_enable_2fa()}
 					</button>
 				)}
 
@@ -180,7 +183,7 @@ export function SecurityPanel() {
 							data-testid="totp-code"
 							inputMode="numeric"
 							className="w-full border p-2"
-							placeholder="Authenticator code"
+							placeholder={m.security_totp_code_placeholder()}
 							value={totpCode}
 							onChange={(event) => setTotpCode(event.target.value)}
 						/>
@@ -190,7 +193,7 @@ export function SecurityPanel() {
 							className="border px-2 py-1"
 							onClick={verifyTwoFactor}
 						>
-							Verify
+							{m.security_verify_2fa()}
 						</button>
 					</div>
 				) : null}

@@ -9,28 +9,9 @@ import {
 import type { Binding } from "../../domain/keymap.ts";
 import { m } from "../../paraglide/messages.js";
 import { formatBinding } from "./binding-label.ts";
+import { categoryLabel } from "./category-label.ts";
 import { COMMANDS } from "./commands.ts";
 import { useEffectiveKeymap } from "./useEffectiveKeymap.ts";
-
-// Getters: this map is module-level, so resolving the messages eagerly would
-// freeze them at the import-time locale.
-const CATEGORY_LABEL: Record<string, string> = {
-	get general() {
-		return m.cheatsheet_category_general();
-	},
-	get task() {
-		return m.cheatsheet_category_task();
-	},
-	get view() {
-		return m.cheatsheet_category_view();
-	},
-	get nav() {
-		return m.cheatsheet_category_nav();
-	},
-	get help() {
-		return m.cheatsheet_category_help();
-	},
-};
 
 export function CheatSheet({
 	open,
@@ -69,7 +50,7 @@ export function CheatSheet({
 					{groups.map(([category, rows]) => (
 						<section key={category}>
 							<h3 className="mb-1 text-xs font-medium text-muted-foreground">
-								{CATEGORY_LABEL[category] ?? category}
+								{categoryLabel(category)}
 							</h3>
 							<ul className="flex flex-col gap-1">
 								{rows.map((row) => (
