@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ChannelKind } from "../../../domain/notification-channel.ts";
 import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
 import type {
 	TestResult,
 	useNotificationChannels,
@@ -36,7 +37,6 @@ import {
 	summaryDetail,
 } from "./channel-form.ts";
 
-const RELATIVE = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 	["day", 86_400_000],
 	["hour", 3_600_000],
@@ -46,12 +46,17 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 const COPIED_RESET_MS = 2_000;
 
 export function relativeTime(at: number): string {
+	// Built per call, not once at module load: a locale switch must not keep
+	// formatting against the locale that happened to be active at import.
+	const relative = new Intl.RelativeTimeFormat(getLocale(), {
+		numeric: "auto",
+	});
 	const delta = at - Date.now();
 	for (const [unit, ms] of UNITS) {
 		if (Math.abs(delta) >= ms)
-			return RELATIVE.format(Math.round(delta / ms), unit);
+			return relative.format(Math.round(delta / ms), unit);
 	}
-	return RELATIVE.format(0, "minute");
+	return relative.format(0, "minute");
 }
 
 type Api = ReturnType<typeof useNotificationChannels>;
@@ -236,7 +241,7 @@ export function ChannelRow({
 						disabled={busy}
 						onClick={() => void onToggle()}
 					>
-						{stored.enabled ? m.channel_toggle_on() : m.channel_toggle_off()}
+						{stored.enabled ? m.toggle_on() : m.toggle_off()}
 					</Button>
 				) : (
 					<Button

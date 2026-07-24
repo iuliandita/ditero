@@ -1,3 +1,4 @@
+import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 
 const DEFAULT_QUIET = { start: "22:00", end: "07:00" };
@@ -21,11 +22,13 @@ export function QuietHoursEditor() {
 		<div data-testid="quiet-hours">
 			<div className="flex flex-wrap items-end gap-3">
 				<label className="flex flex-col gap-1 text-sm">
-					<span className="text-muted-foreground">Quiet from</span>
+					<span className="text-muted-foreground">
+						{m.quiet_hours_start_label()}
+					</span>
 					<input
 						type="time"
 						value={quiet?.start ?? ""}
-						aria-label="Quiet hours start"
+						aria-label={m.quiet_hours_start_aria()}
 						data-testid="quiet-start"
 						aria-describedby="quiet-hours-note"
 						className="h-8 rounded-lg border bg-transparent px-2 text-sm"
@@ -33,11 +36,13 @@ export function QuietHoursEditor() {
 					/>
 				</label>
 				<label className="flex flex-col gap-1 text-sm">
-					<span className="text-muted-foreground">until</span>
+					<span className="text-muted-foreground">
+						{m.quiet_hours_end_label()}
+					</span>
 					<input
 						type="time"
 						value={quiet?.end ?? ""}
-						aria-label="Quiet hours end"
+						aria-label={m.quiet_hours_end_aria()}
 						data-testid="quiet-end"
 						aria-describedby="quiet-hours-note"
 						className="h-8 rounded-lg border bg-transparent px-2 text-sm"
@@ -51,15 +56,15 @@ export function QuietHoursEditor() {
 						className="h-8 rounded-lg border px-2 text-sm"
 						onClick={() => setPref({ quietHours: null })}
 					>
-						Clear
+						{m.quiet_hours_clear()}
 					</button>
 				)}
 			</div>
 
 			<p className="mt-2 text-xs text-muted-foreground" data-testid="quiet-tz">
 				{timezoneDetected
-					? `Detected as ${pref.timezone} - is this right?`
-					: `Times are in ${pref.timezone}.`}
+					? m.quiet_hours_timezone_detected({ timezone: pref.timezone })
+					: m.quiet_hours_timezone({ timezone: pref.timezone })}
 			</p>
 
 			{equal && (
@@ -68,8 +73,7 @@ export function QuietHoursEditor() {
 					data-testid="quiet-equal-warning"
 					className="mt-2 text-xs text-destructive"
 				>
-					Start and end must differ. To silence every channel instead, turn the
-					channel off above.
+					{m.quiet_hours_equal_warning()}
 				</p>
 			)}
 
@@ -78,7 +82,7 @@ export function QuietHoursEditor() {
 				className="mt-2 text-xs text-muted-foreground"
 				data-testid="quiet-urgent-note"
 			>
-				Reminders marked urgent ignore quiet hours.
+				{m.quiet_hours_urgent_note()}
 			</p>
 		</div>
 	);

@@ -51,7 +51,9 @@ function EscalationDefaults() {
 			data-testid="escalation-defaults"
 		>
 			<label className="flex flex-col gap-1 text-sm">
-				<span className="text-muted-foreground">Repeat every (min)</span>
+				<span className="text-muted-foreground">
+					{m.escalation_repeat_every()}
+				</span>
 				<input
 					type="number"
 					min={1}
@@ -65,7 +67,9 @@ function EscalationDefaults() {
 				/>
 			</label>
 			<label className="flex flex-col gap-1 text-sm">
-				<span className="text-muted-foreground">Max repeats</span>
+				<span className="text-muted-foreground">
+					{m.escalation_max_repeats()}
+				</span>
 				<input
 					type="number"
 					min={0}
@@ -78,14 +82,16 @@ function EscalationDefaults() {
 				/>
 			</label>
 			<label className="flex flex-col gap-1 text-sm">
-				<span className="text-muted-foreground">Fallback member</span>
+				<span className="text-muted-foreground">
+					{m.escalation_fallback_member()}
+				</span>
 				<select
 					value={defaults?.fallbackUserId ?? ""}
 					data-testid="escalation-fallback"
 					className="h-8 rounded-lg border bg-transparent px-2 text-sm"
 					onChange={(e) => set({ fallbackUserId: e.target.value || null })}
 				>
-					<option value="">Nobody</option>
+					<option value="">{m.escalation_fallback_nobody()}</option>
 					{people.map((p) => (
 						<option key={p.id} value={p.id}>
 							{p.name}

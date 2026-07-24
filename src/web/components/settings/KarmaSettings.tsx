@@ -1,18 +1,32 @@
 import { Button } from "@/components/ui/button";
+import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 
 // Karma goals + vacation editor (shell doc 5). Goal inputs cap at the mutator's
 // 0..1000; useUserPref.setPref re-clamps every write. Vacation carries an
 // optional "until" date and an honesty note. 0 means "unset" (no goal ring
 // target), which the panel renders as an unset affordance rather than dividing
-// by zero.
+// by zero. `label` is a getter: this array is module-level, so resolving the
+// message eagerly would freeze it at the import-time locale.
 const GOAL_FIELDS: {
 	key: "daily" | "weekly";
 	label: string;
 	testid: string;
 }[] = [
-	{ key: "daily", label: "Daily goal", testid: "karma-goal-daily-input" },
-	{ key: "weekly", label: "Weekly goal", testid: "karma-goal-weekly-input" },
+	{
+		key: "daily",
+		get label() {
+			return m.karma_goal_daily();
+		},
+		testid: "karma-goal-daily-input",
+	},
+	{
+		key: "weekly",
+		get label() {
+			return m.karma_goal_weekly();
+		},
+		testid: "karma-goal-weekly-input",
+	},
 ];
 
 export function KarmaSettings() {
@@ -27,10 +41,10 @@ export function KarmaSettings() {
 			data-testid="karma-settings"
 		>
 			<h2 id="karma-settings-heading" className="text-sm font-semibold">
-				Karma goals
+				{m.karma_goals_heading()}
 			</h2>
 			<p className="mt-1 text-xs text-muted-foreground">
-				Daily and weekly completion targets. Set to 0 to disable a goal.
+				{m.karma_goals_description()}
 			</p>
 
 			<div className="mt-4 grid grid-cols-2 gap-3">
@@ -56,9 +70,9 @@ export function KarmaSettings() {
 
 			<div className="mt-6 flex items-center justify-between gap-4">
 				<span className="flex flex-col">
-					<span className="text-sm">Vacation mode</span>
+					<span className="text-sm">{m.karma_vacation_label()}</span>
 					<span className="text-xs text-muted-foreground">
-						Pauses streak breaks and goal penalties. A pause, not a cheat.
+						{m.karma_vacation_note()}
 					</span>
 				</span>
 				<Button
@@ -66,19 +80,21 @@ export function KarmaSettings() {
 					variant={vacation.active ? "default" : "outline"}
 					role="switch"
 					aria-checked={vacation.active}
-					aria-label="Vacation mode"
+					aria-label={m.karma_vacation_label()}
 					data-testid="karma-vacation-toggle"
 					onClick={() =>
 						setPref({ vacation: { ...vacation, active: !vacation.active } })
 					}
 				>
-					{vacation.active ? "On" : "Off"}
+					{vacation.active ? m.toggle_on() : m.toggle_off()}
 				</Button>
 			</div>
 
 			{vacation.active && (
 				<label className="mt-3 flex flex-col gap-1 text-sm">
-					<span className="text-muted-foreground">Until (optional)</span>
+					<span className="text-muted-foreground">
+						{m.karma_vacation_until()}
+					</span>
 					<input
 						type="date"
 						value={vacation.until ?? ""}

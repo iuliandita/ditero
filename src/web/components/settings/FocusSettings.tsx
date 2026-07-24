@@ -1,19 +1,36 @@
 import { Button } from "@/components/ui/button";
+import { m } from "../../../paraglide/messages.js";
 import { clampFocusConfig, type FocusConfig } from "../../focus/timer-core.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 
 // Minute/round fields for the pomodoro config. `max` mirrors the mutator caps so
 // the UI never offers an out-of-range value; the write is re-clamped anyway.
+// `label` is a getter: this array is module-level, so resolving the message
+// eagerly would freeze it at the import-time locale.
 const MIN_FIELDS: {
 	key: "workMin" | "breakMin" | "longBreakMin";
 	label: string;
 	testid: string;
 }[] = [
-	{ key: "workMin", label: "Focus (min)", testid: "focus-work-min" },
-	{ key: "breakMin", label: "Break (min)", testid: "focus-break-min" },
+	{
+		key: "workMin",
+		get label() {
+			return m.focus_field_work_min();
+		},
+		testid: "focus-work-min",
+	},
+	{
+		key: "breakMin",
+		get label() {
+			return m.focus_field_break_min();
+		},
+		testid: "focus-break-min",
+	},
 	{
 		key: "longBreakMin",
-		label: "Long break (min)",
+		get label() {
+			return m.focus_field_long_break_min();
+		},
 		testid: "focus-longbreak-min",
 	},
 ];
@@ -31,10 +48,10 @@ export function FocusSettings() {
 	return (
 		<section className="mt-8 border-t pt-4" aria-labelledby="focus-heading">
 			<h2 id="focus-heading" className="text-sm font-semibold">
-				Focus timer
+				{m.focus_settings_heading()}
 			</h2>
 			<p className="mt-1 text-xs text-muted-foreground">
-				Pomodoro intervals for the focus timer.
+				{m.focus_settings_description()}
 			</p>
 
 			<div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -53,7 +70,9 @@ export function FocusSettings() {
 					</label>
 				))}
 				<label className="flex flex-col gap-1 text-sm">
-					<span className="text-muted-foreground">Rounds / long break</span>
+					<span className="text-muted-foreground">
+						{m.focus_field_rounds()}
+					</span>
 					<input
 						type="number"
 						min={1}
@@ -69,7 +88,7 @@ export function FocusSettings() {
 			</div>
 
 			<div className="mt-4 flex items-center justify-between gap-4">
-				<span className="text-sm">Auto-start the next interval</span>
+				<span className="text-sm">{m.focus_autocycle_label()}</span>
 				<Button
 					size="sm"
 					variant={focus.autoCycle ? "default" : "outline"}
@@ -78,7 +97,7 @@ export function FocusSettings() {
 					data-testid="focus-autocycle"
 					onClick={() => write({ autoCycle: !focus.autoCycle })}
 				>
-					{focus.autoCycle ? "On" : "Off"}
+					{focus.autoCycle ? m.toggle_on() : m.toggle_off()}
 				</Button>
 			</div>
 		</section>
