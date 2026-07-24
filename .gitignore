@@ -63,3 +63,6 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 .superpowers/
+
+# Paraglide compiled output (regenerated on compile/build)
+/src/paraglide/
