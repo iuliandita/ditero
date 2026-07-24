@@ -442,6 +442,25 @@ function zeroAckStore(tx: Transaction<Schema>): AckStore {
 	};
 }
 
+// The next occurrence of a recurring task, or null when the series is exhausted
+// (fixed UNTIL/COUNT) -- relative series never exhaust. task.complete/skip and
+// task.update's done-invariant all derive it here so they cannot drift on what
+// "series exhausted" means. Non-recurring tasks return null.
+function nextOccurrence(
+	task: {
+		rrule: string | null;
+		dueAt: number | Date | null;
+		recurrenceRelative: boolean | null;
+	},
+	now: number,
+): Date | null {
+	if (task.rrule == null) return null;
+	return nextDue(task.rrule, new Date(task.dueAt ?? now), {
+		relative: task.recurrenceRelative ?? false,
+		completedAt: new Date(now),
+	});
+}
+
 export const mutators = defineMutators({
 	task: {
 		create: defineMutator(
@@ -539,6 +558,30 @@ export const mutators = defineMutators({
 				// Fail loud before any write if a non-null rrule is malformed, so the
 				// complete/skip paths never read back an unparseable recurrence.
 				if (args.rrule != null) parseRule(args.rrule);
+				// Invariant shared with task.complete (issue #24): `done && rrule` is
+				// reserved for an exhausted series. Reject a write whose resulting state
+				// would leave `done: true` on a live recurrence, so the scheduler never
+				// mistakes an active series for a finished one. Advance a recurring task
+				// through task.complete, or clear its rrule in the same write.
+				const effDone = args.done !== undefined ? args.done : task.done;
+				const effRrule = args.rrule !== undefined ? args.rrule : task.rrule;
+				if (effDone && effRrule != null) {
+					const next = nextOccurrence(
+						{
+							rrule: effRrule,
+							dueAt: args.dueAt !== undefined ? args.dueAt : task.dueAt,
+							recurrenceRelative:
+								args.recurrenceRelative !== undefined
+									? args.recurrenceRelative
+									: task.recurrenceRelative,
+						},
+						Date.now(),
+					);
+					if (next !== null)
+						throw new Error(
+							"cannot mark a recurring task done while its series is live; use task.complete",
+						);
+				}
 				// The escalation fallback receives this task's title on a push, so it
 				// must be a member of the task's own workspace -- narrower than the
 				// user-level default's "shares any workspace with you". The scheduler
@@ -715,11 +758,7 @@ export const mutators = defineMutators({
 				// advance+award per occurrence (each occurrence is a real completion).
 				if (!task.rrule && task.done) return;
 				if (task.rrule) {
-					const from = new Date(task.dueAt ?? now);
-					const next = nextDue(task.rrule, from, {
-						relative: task.recurrenceRelative ?? false,
-						completedAt: new Date(now),
-					});
+					const next = nextOccurrence(task, now);
 					if (next !== null) {
 						await tx.mutate.task.update({
 							id: args.id,
@@ -763,10 +802,7 @@ export const mutators = defineMutators({
 				await requireWrite(tx, ctx.id, list.workspaceId);
 				if (!task.rrule) throw new Error("not a recurring task");
 				const now = Date.now();
-				const next = nextDue(task.rrule, new Date(task.dueAt ?? now), {
-					relative: task.recurrenceRelative ?? false,
-					completedAt: new Date(now),
-				});
+				const next = nextOccurrence(task, now);
 				if (next === null) throw new Error("recurrence exhausted");
 				await tx.mutate.task.update({
 					id: args.id,

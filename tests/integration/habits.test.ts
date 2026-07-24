@@ -544,6 +544,85 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 		});
 	});
 
+	// task.update must not be able to disagree with task.complete about what
+	// `done` means on a recurring task: `done && rrule` is reserved for an
+	// exhausted series (issue #24). Guards mutators.ts task.update's live-series
+	// rejection.
+	describe("task.update recurrence-done invariant", () => {
+		test("rejects done:true on a live fixed recurring task, writes nothing", async () => {
+			await expect(
+				call(
+					mutators.task.update,
+					{ id: "hm-owner" },
+					{ id: "hm-t-fixed", done: true },
+				),
+			).rejects.toThrow(/task\.complete/);
+			const t = await taskRow("hm-t-fixed");
+			expect(t.done).toBe(false);
+			expect(t.completedAt).toBeNull();
+			expect(t.dueAt?.getTime()).toBe(ANCHOR);
+		});
+
+		test("rejects done:true on a live relative recurring task", async () => {
+			await expect(
+				call(
+					mutators.task.update,
+					{ id: "hm-owner" },
+					{ id: "hm-t-rel", done: true },
+				),
+			).rejects.toThrow(/task\.complete/);
+			expect((await taskRow("hm-t-rel")).done).toBe(false);
+		});
+
+		test("rejects adding a live rrule to an already-done task", async () => {
+			await call(
+				mutators.task.update,
+				{ id: "hm-owner" },
+				{ id: "hm-t-plain", done: true },
+			);
+			await expect(
+				call(
+					mutators.task.update,
+					{ id: "hm-owner" },
+					{ id: "hm-t-plain", rrule: "FREQ=DAILY", dueAt: ANCHOR },
+				),
+			).rejects.toThrow(/task\.complete/);
+			const t = await taskRow("hm-t-plain");
+			expect(t.rrule).toBeNull();
+		});
+
+		test("allows done:true on an exhausted series (valid terminal state)", async () => {
+			await call(
+				mutators.task.update,
+				{ id: "hm-owner" },
+				{ id: "hm-t-exhausted", done: true },
+			);
+			const t = await taskRow("hm-t-exhausted");
+			expect(t.done).toBe(true);
+			expect(t.completedAt).not.toBeNull();
+		});
+
+		test("allows done:true when the same write clears the rrule", async () => {
+			await call(
+				mutators.task.update,
+				{ id: "hm-owner" },
+				{ id: "hm-t-fixed", done: true, rrule: null },
+			);
+			const t = await taskRow("hm-t-fixed");
+			expect(t.done).toBe(true);
+			expect(t.rrule).toBeNull();
+		});
+
+		test("allows done:true on a plain non-recurring task", async () => {
+			await call(
+				mutators.task.update,
+				{ id: "hm-owner" },
+				{ id: "hm-t-plain", done: true },
+			);
+			expect((await taskRow("hm-t-plain")).done).toBe(true);
+		});
+	});
+
 	describe("habit.log", () => {
 		const DATE = "2026-07-14";
 
