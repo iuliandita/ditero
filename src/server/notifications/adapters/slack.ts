@@ -349,6 +349,14 @@ const APP_ERROR_STATUS = new Map<string, number>([
 	["request_timeout", 503],
 ]);
 
+// Incoming-webhook error codes that are workspace-policy restrictions rather than
+// credential problems: the webhook was disabled by an admin, so the fix is an
+// admin action, not re-checking a token. The status-only classifier maps their
+// 403 to "auth" (right for Discord's "Missing Access"); the adapter overrides to
+// "policy" so the channel-health surface tells the user the right thing (#38). A
+// Set, not an object, for the same remote-string reason as APP_ERROR_STATUS.
+const WEBHOOK_POLICY_ERRORS = new Set(["action_prohibited"]);
+
 export const slackAdapter: ChannelAdapter = {
 	kind: "slack",
 	async send(
@@ -453,11 +461,18 @@ export const slackAdapter: ChannelAdapter = {
 				};
 			}
 
+			// An incoming webhook's failure body is the bare error code, so the
+			// trimmed body is what names a policy restriction. Matched before scrub,
+			// which only ever redacts credentials and leaves a code token intact.
+			const errorCode = WEBHOOK_POLICY_ERRORS.has(text.trim())
+				? ("policy" as const)
+				: undefined;
 			const detail = scrub(text).replace(/\s+/g, " ").trim().slice(0, 200);
 			return {
 				ok: false,
 				status: response.status,
 				...(retryAfter === undefined ? {} : { retryAfterSec: retryAfter }),
+				...(errorCode ? { errorCode } : {}),
 				// Never the raw URL: its `/services/` tail is the bearer credential.
 				error: `slack ${response.status} from ${outbound.redactedUrl}${detail ? `: ${detail}` : ""}`,
 			};

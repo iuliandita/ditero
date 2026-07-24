@@ -248,6 +248,39 @@ describe("channelErrorCode", () => {
 		expect(permanentFor({ ok: false, status: 422, error: "x" })).toBe("policy");
 	});
 
+	// #38: a body-aware override from the adapter wins over the status mapping,
+	// which is how Slack's action_prohibited 403 reaches health as "policy"
+	// instead of the default "auth". Guards channelErrorCode's `override` branch.
+	it("honours an adapter override over the status-based category", () => {
+		const decision = classifyRetry(
+			{ ok: false, status: 403, errorCode: "policy", error: "x" },
+			1,
+			0,
+		);
+		expect(channelErrorCode(decision, 403, "policy")).toBe("policy");
+		// Without the override the same 403 is still "auth", proving the override
+		// is what changed the outcome, not the status.
+		expect(channelErrorCode(decision, 403)).toBe("auth");
+	});
+
+	it("ignores an override on a still-retryable decision", () => {
+		const decision = classifyRetry(
+			{ ok: false, status: 503, error: "x" },
+			1,
+			0,
+		);
+		expect(channelErrorCode(decision, 503, "policy")).toBeNull();
+	});
+
+	it("keeps a safeFetch policy rejection as policy regardless of override", () => {
+		const decision = classifyRetry(
+			{ ok: false, policyRejected: true, error: "blocked" },
+			1,
+			0,
+		);
+		expect(channelErrorCode(decision, undefined, "auth")).toBe("policy");
+	});
+
 	it("maps exhaustion by its final status, defaulting to transport", () => {
 		const at = (result: Parameters<typeof classifyRetry>[0]) =>
 			channelErrorCode(

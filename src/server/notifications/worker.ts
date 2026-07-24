@@ -16,6 +16,7 @@ import {
 import * as tables from "../../db/schema.ts";
 import { redactUrlsIn } from "../../domain/notification-channel.ts";
 import type {
+	ChannelErrorCode,
 	ProviderResult,
 	RetryDecision,
 } from "../../domain/notification-retry.ts";
@@ -244,6 +245,7 @@ async function recordChannelHealth(
 	row: OutboxRow,
 	decision: RetryDecision,
 	status: number | undefined,
+	errorCode: ChannelErrorCode | undefined,
 ): Promise<void> {
 	const owner = and(
 		eq(tables.notificationChannel.userId, row.recipientUserId),
@@ -256,7 +258,7 @@ async function recordChannelHealth(
 			.where(and(owner, isNotNull(tables.notificationChannel.lastErrorCode)));
 		return;
 	}
-	const code = channelErrorCode(decision, status);
+	const code = channelErrorCode(decision, status, errorCode);
 	if (!code) return;
 	await tx
 		.update(tables.notificationChannel)
@@ -315,7 +317,13 @@ export async function completeDelivery(
 			retryClass: decision.retryClass,
 			error: result.ok ? null : sanitizeError(result.error),
 		});
-		await recordChannelHealth(tx, row, decision, result.status);
+		await recordChannelHealth(
+			tx,
+			row,
+			decision,
+			result.status,
+			result.ok ? undefined : result.errorCode,
+		);
 		return { applied: true, decision };
 	});
 }

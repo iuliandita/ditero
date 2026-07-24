@@ -298,13 +298,16 @@ describe("slackAdapter", () => {
 	// permanent classification is what silently kills a channel; null is the
 	// retryable case, where the channel must not be marked broken at all.
 	it.each([
+		// action_prohibited is a workspace-policy restriction, not a credential
+		// problem, so it must reach the health surface as "policy" not "auth"
+		// (#38). The adapter supplies that via result.errorCode.
 		[
 			"a disabled hook",
 			403,
 			"action_prohibited",
 			"permanent",
 			"client",
-			"auth",
+			"policy",
 		],
 		["a deleted hook", 404, "no_service", "permanent", "client", "not_found"],
 		[
@@ -332,7 +335,13 @@ describe("slackAdapter", () => {
 		expect(result).toMatchObject({ ok: false, status });
 		const decision = classifyRetry(result, 1, 0);
 		expect(decision).toMatchObject({ kind, retryClass });
-		expect(channelErrorCode(decision, Number(status))).toBe(errorCode);
+		expect(
+			channelErrorCode(
+				decision,
+				Number(status),
+				result.ok ? undefined : result.errorCode,
+			),
+		).toBe(errorCode);
 		// The plain-text error code is what an operator triages from.
 		expect(result.ok === false ? result.error : "").toContain(
 			String(bodyText).slice(0, 20),
