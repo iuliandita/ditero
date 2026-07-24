@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it, test } from "vitest";
 import { parseTrustedProxyCIDRs } from "../server/client-ip.ts";
 import {
@@ -6,6 +7,145 @@ import {
 	resolvePinnedTarget,
 	safeFetch,
 } from "./safe-http.ts";
+
+// A stand-in for node's http/https `request`: it never opens a socket, it
+// records the options it was handed and drives the response callback to
+// completion so safeFetch's promise settles. The point is to observe how the
+// connection would have been dialed (the `lookup` pin and the TLS `servername`)
+// without a network.
+type FakeRequestFn = NonNullable<
+	NonNullable<Parameters<typeof safeFetch>[2]>["requestFn"]
+>;
+
+function fakeTransport(response: { status?: number; body?: string } = {}) {
+	const calls: { url: URL; options: Record<string, unknown> }[] = [];
+	const requestFn = ((
+		url: URL,
+		options: Record<string, unknown>,
+		cb: (res: EventEmitter & { statusCode: number }) => void,
+	) => {
+		calls.push({ url, options });
+		let destroyed = false;
+		const res = Object.assign(new EventEmitter(), {
+			statusCode: response.status ?? 200,
+			statusMessage: "OK",
+			headers: {} as Record<string, string>,
+			setTimeout: () => {},
+		});
+		const req = Object.assign(new EventEmitter(), {
+			write: () => true,
+			// Stage the response so a `destroy` triggered mid-stream (the byte cap)
+			// stops the "end" from firing, exactly as a real socket would.
+			end: () => {
+				queueMicrotask(() => {
+					cb(res);
+					queueMicrotask(() => {
+						if (destroyed) return;
+						res.emit("data", Buffer.from(response.body ?? ""));
+						queueMicrotask(() => {
+							if (destroyed) return;
+							res.emit("end");
+						});
+					});
+				});
+			},
+			destroy: (error?: Error) => {
+				destroyed = true;
+				queueMicrotask(() => req.emit("error", error));
+			},
+		});
+		return req;
+	}) as unknown as FakeRequestFn;
+	return { calls, requestFn };
+}
+
+const publicResolver = {
+	resolve4: async () => ["93.184.216.34"],
+	resolve6: async () => [],
+};
+
+// The invariant #31 is about: the socket must dial the address the policy check
+// already vetted, so a DNS server that answers public-for-the-check then
+// private-for-the-connect cannot rebind between the two. Under Bun's undici
+// shim the connector pin was silently ignored; the node http/https path pins
+// through a custom `lookup`.
+describe("outbound connection pinning", () => {
+	async function drainLookup(
+		lookup: unknown,
+	): Promise<Array<{ address: string; family: number }>> {
+		return await new Promise((resolve) => {
+			(lookup as (h: string, o: unknown, cb: unknown) => void)(
+				"hooks.example.test",
+				{ all: true },
+				(_err: unknown, result: Array<{ address: string; family: number }>) =>
+					resolve(result),
+			);
+		});
+	}
+
+	it("dials the vetted address, not a fresh resolution", async () => {
+		const { calls, requestFn } = fakeTransport();
+		await safeFetch(
+			"https://hooks.example.test/webhook",
+			{},
+			{ resolver: publicResolver, requestFn },
+		);
+		expect(calls).toHaveLength(1);
+		expect(await drainLookup(calls[0].options.lookup)).toEqual([
+			{ address: "93.184.216.34", family: 4 },
+		]);
+	});
+
+	it("keeps the original hostname for TLS so the certificate is validated against it", async () => {
+		const { calls, requestFn } = fakeTransport();
+		await safeFetch(
+			"https://hooks.example.test/webhook",
+			{},
+			{ resolver: publicResolver, requestFn },
+		);
+		expect(calls[0].options.servername).toBe("hooks.example.test");
+	});
+
+	it("returns the transport's response as a Response", async () => {
+		const { requestFn } = fakeTransport({ status: 202, body: "pong" });
+		const response = await safeFetch(
+			"https://hooks.example.test/webhook",
+			{},
+			{ resolver: publicResolver, requestFn },
+		);
+		expect(response.status).toBe(202);
+		expect(await response.text()).toBe("pong");
+	});
+
+	it("refuses a rebinding resolver before any socket is opened", async () => {
+		const { calls, requestFn } = fakeTransport();
+		await expect(
+			safeFetch(
+				"https://hooks.example.test/webhook",
+				{},
+				{
+					resolver: {
+						resolve4: async () => ["93.184.216.34", "127.0.0.1"],
+						resolve6: async () => [],
+					},
+					requestFn,
+				},
+			),
+		).rejects.toThrow(/public/i);
+		expect(calls).toHaveLength(0);
+	});
+
+	it("caps the response body and reports the overflow as a policy refusal", async () => {
+		const { requestFn } = fakeTransport({ body: "x".repeat(100) });
+		await expect(
+			safeFetch(
+				"https://hooks.example.test/webhook",
+				{ maxResponseBytes: 10 },
+				{ resolver: publicResolver, requestFn },
+			),
+		).rejects.toBeInstanceOf(OutboundPolicyError);
+	});
+});
 
 describe("outbound HTTP target validation", () => {
 	test.each([
