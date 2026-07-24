@@ -3,11 +3,24 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SinkOptions, SmtpSink } from "../../tests/support/smtp-sink.ts";
 import { startSmtpSink } from "../../tests/support/smtp-sink.ts";
+import * as paraglideRuntime from "../paraglide/runtime.js";
 import {
 	mailUnavailableResponse,
 	publicAuthLink,
 	sendAuthMail,
 } from "./mail.ts";
+
+type AuthMailDb = NonNullable<Parameters<typeof sendAuthMail>[3]>["database"];
+
+// resolveRecipientLocale issues one select for the user's stored locale.
+function stubUserPrefDb(locale: string | null): AuthMailDb {
+	const chain = {
+		from: () => chain,
+		where: () => chain,
+		limit: () => Promise.resolve([{ locale }]),
+	};
+	return { select: () => chain } as unknown as AuthMailDb;
+}
 
 const sinks: SmtpSink[] = [];
 
@@ -88,6 +101,34 @@ describe("auth mail", () => {
 		);
 		expect(started.messages[0]).toContain("Hi Ada,");
 		expect(decodeBody(started.messages[0])).toContain(VERIFY_URL);
+	});
+
+	// The recipient of auth mail is a registered user, so their stored locale is
+	// honored. No translations exist yet, so a "de" recipient still receives
+	// English; what is asserted is that an explicit locale reaches every m.* call,
+	// which a threaded render proves by never consulting the ambient getLocale.
+	it("threads the recipient's locale rather than consulting the ambient locale", async () => {
+		const started = await sink();
+		const getLocale = vi.spyOn(paraglideRuntime, "getLocale");
+		let settled: Promise<void> | undefined;
+		sendAuthMail(
+			"verify",
+			{ id: "u1", email: "someone@example.test", name: "Ada" },
+			VERIFY_URL,
+			{
+				env: smtpEnv(started),
+				database: stubUserPrefDb("de"),
+				track: (promise) => {
+					settled = promise;
+				},
+			},
+		);
+		await settled;
+		expect(getLocale).not.toHaveBeenCalled();
+		expect(started.messages).toHaveLength(1);
+		expect(started.messages[0]).toContain(
+			"Subject: Confirm your email address",
+		);
 	});
 
 	it("builds the link from the configured public URL, not Better Auth's", async () => {

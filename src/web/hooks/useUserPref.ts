@@ -1,6 +1,7 @@
 import type { ReadonlyJSONValue } from "@rocicorp/zero";
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getLocale, setLocale } from "../../paraglide/runtime.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
@@ -9,6 +10,11 @@ import {
 	DEFAULT_FOCUS,
 	type FocusConfig,
 } from "../focus/timer-core.ts";
+import {
+	applyDocumentLocale,
+	isSupportedLocale,
+	type Locale,
+} from "../lib/locale.ts";
 import { runMutation } from "../lib/run-mutation.ts";
 
 export type KarmaGoals = { daily: number; weekly: number };
@@ -31,6 +37,7 @@ export type UserPrefState = {
 	timezone: string; // IANA zone every reminder time is interpreted in
 	quietHours: QuietHours; // null => not configured
 	escalationDefaults: EscalationDefaults | null; // null => not configured
+	locale: Locale | null; // null => no preference set (Accept-Language fallback)
 };
 
 const DEFAULTS: UserPrefState = {
@@ -44,6 +51,7 @@ const DEFAULTS: UserPrefState = {
 	timezone: "UTC",
 	quietHours: null,
 	escalationDefaults: null,
+	locale: null,
 };
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -71,8 +79,19 @@ function readEscalationDefaults(v: unknown): EscalationDefaults | null {
 // silently mistimes every reminder (design 0). There is no timezone edit
 // control in M3a, so a stored "UTC" is always the column default rather than a
 // deliberate choice -- detection may overwrite it, but only with a real zone.
-let detectionAttempted = false;
+//
+// Both guards below are keyed to the signed-in user id, not a plain boolean:
+// passkey/2FA verification, signup, and sign-out do not reload the page, so a
+// same-tab account switch (user A signs out, user B signs in) would otherwise
+// leave a bare "already attempted" flag set from A's session and silently
+// suppress B's detection/reconcile. Keying to userId resets the guard exactly
+// when the signed-in user changes, while still firing at most once per user
+// per tab session (a reload after reconcile makes getLocale() match, so the
+// effect below no-ops on the next run for the same user -- no reload loop).
+let detectionAttemptedForUserId: string | undefined;
 let detectionWrote = false;
+
+let localeReconcileAttemptedForUserId: string | undefined;
 
 function detectedTimeZone(): string | null {
 	try {
@@ -131,6 +150,10 @@ export function useUserPref(): {
 			timezone: row.timezone ?? DEFAULTS.timezone,
 			quietHours: readQuietHours(row.quietHours),
 			escalationDefaults: readEscalationDefaults(row.escalationDefaults),
+			locale:
+				typeof row.locale === "string" && isSupportedLocale(row.locale)
+					? row.locale
+					: null,
 		};
 	}, [rows]);
 
@@ -185,14 +208,26 @@ export function useUserPref(): {
 	// fact. The first instance to get there writes; the rest read the flag.
 	const [, forceRender] = useState(0);
 	useEffect(() => {
-		if (loading || detectionAttempted) return;
+		if (loading || detectionAttemptedForUserId === zero.userID) return;
 		const zone = detectedTimeZone();
-		if (!zone || pref.timezone !== "UTC") return;
-		detectionAttempted = true;
+		if (!zone || pref.timezone !== "UTC") {
+			detectionAttemptedForUserId = zero.userID;
+			return;
+		}
+		detectionAttemptedForUserId = zero.userID;
 		detectionWrote = true;
 		forceRender((n) => n + 1);
 		setPref({ timezone: zone });
-	}, [loading, pref.timezone, setPref]);
+	}, [loading, pref.timezone, setPref, zero.userID]);
+
+	useEffect(() => {
+		if (loading || localeReconcileAttemptedForUserId === zero.userID) return;
+		localeReconcileAttemptedForUserId = zero.userID;
+		if (pref.locale && pref.locale !== getLocale()) {
+			applyDocumentLocale(pref.locale);
+			setLocale(pref.locale);
+		}
+	}, [loading, pref.locale, zero.userID]);
 
 	return { pref, setPref, loading, timezoneDetected: detectionWrote };
 }

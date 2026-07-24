@@ -1,13 +1,14 @@
 import { useQuery } from "@rocicorp/zero/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChannelKind } from "../../domain/notification-channel.ts";
+import { m } from "../../paraglide/messages.js";
 import { queries } from "../../zero/queries.ts";
 import {
 	type ChannelCapabilities,
 	DEFAULT_CAPABILITIES,
 	type InteractionsUrls,
 } from "../components/settings/channel-form.ts";
-import { channelSaveErrorMessage, m } from "../lib/messages.ts";
+import { channelSaveErrorMessage } from "../lib/channel-messages.ts";
 
 // The config column never syncs, so channels come from the server API rather
 // than Zero. What the client holds is always the MASKED view: secrets are

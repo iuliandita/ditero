@@ -14,10 +14,11 @@ import { eq } from "drizzle-orm";
 import type { db as defaultDb } from "../../db/client.ts";
 import { user, workspace } from "../../db/schema.ts";
 import type { InviteMailStatus } from "../../domain/invite.ts";
+import type { Locale } from "../../domain/locale.ts";
 import { mailableAddress } from "../../domain/mail-address.ts";
 import { encodeHeaderValue, headerSafe } from "../../domain/mime-header.ts";
+import { m } from "../../paraglide/messages.js";
 import { ackBaseUrl } from "../notifications/capability.ts";
-import { m } from "./invite-mail-messages.ts";
 import type { Mailer } from "./transport.ts";
 import { mailerFromEnv } from "./transport.ts";
 
@@ -86,12 +87,21 @@ export async function sendInviteMail(
 	const inviterName = headerSafe(inviterRow?.name ?? "", NAME_MAX);
 	const link = inviteAcceptUrl(base, input.token);
 
+	// Cold third-party invite: the invitee has no account yet, so there is no
+	// stored preference to honor and the mail renders in en (fallback-is-en-always
+	// design decision). The explicit locale is threaded regardless, so no server
+	// render ever falls back to the concurrency-unsafe ambient locale.
+	const locale: Locale = "en";
+
 	// text/plain only, which is all the transport sends -- so there is no HTML to
 	// escape. Both interpolated names are user-controlled, hence headerSafe above:
 	// the subject becomes a header, and RFC 2047 carries the non-ASCII case.
 	const subject = encodeHeaderValue(
 		headerSafe(
-			m.invite_mail_subject({ inviter: inviterName, workspace: workspaceName }),
+			m.invite_mail_subject(
+				{ inviter: inviterName, workspace: workspaceName },
+				{ locale },
+			),
 			SUBJECT_MAX,
 		),
 	);
@@ -99,11 +109,10 @@ export async function sendInviteMail(
 		{
 			to,
 			subject,
-			text: m.invite_mail_body({
-				inviter: inviterName,
-				workspace: workspaceName,
-				link,
-			}),
+			text: m.invite_mail_body(
+				{ inviter: inviterName, workspace: workspaceName, link },
+				{ locale },
+			),
 		},
 		{
 			signal: deps.signal,

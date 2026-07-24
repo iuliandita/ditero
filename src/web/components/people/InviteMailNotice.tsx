@@ -1,4 +1,4 @@
-import { inviteMailMessage } from "@/lib/messages";
+import { inviteMailMessage } from "@/lib/channel-messages";
 import type { InviteMailStatus } from "../../../domain/invite.ts";
 
 // An invite whose mail never went out still has a usable link, so this sits next

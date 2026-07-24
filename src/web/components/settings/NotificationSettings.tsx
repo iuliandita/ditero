@@ -2,6 +2,7 @@ import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useMemo } from "react";
 import { DEFAULT_MAX_REPEATS } from "../../../domain/escalation-policy.ts";
 import type { ChannelKind } from "../../../domain/notification-channel.ts";
+import { m } from "../../../paraglide/messages.js";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import { useNotificationChannels } from "../../hooks/useNotificationChannels.ts";
@@ -12,7 +13,6 @@ import {
 	REPEATS_MAX,
 	repeatEveryMinInput,
 } from "../../lib/escalation-input.ts";
-import { m } from "../../lib/messages.ts";
 import { ChannelRow } from "./ChannelRow.tsx";
 import { CHANNEL_ORDER, type ChannelHealthRow } from "./channel-form.ts";
 import { QuietHoursEditor } from "./QuietHoursEditor.tsx";

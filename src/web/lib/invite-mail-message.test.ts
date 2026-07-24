@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { InviteMailStatus } from "../../domain/invite.ts";
-import { inviteMailMessage } from "./messages.ts";
+import { inviteMailMessage } from "./channel-messages.ts";
 
 describe("inviteMailMessage", () => {
 	it("says nothing for a link invite that was never going to be mailed", () => {

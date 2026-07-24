@@ -31,6 +31,7 @@ import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
 import { FocusSettings } from "../components/settings/FocusSettings.tsx";
 import { KarmaSettings } from "../components/settings/KarmaSettings.tsx";
 import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
+import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
@@ -81,6 +82,8 @@ import {
 import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
 import { useKeyBindings } from "../keyboard/useKeyBindings.ts";
 import { ICONS } from "../lib/list-icon.tsx";
+import type { Locale } from "../lib/locale.ts";
+import { runMutation } from "../lib/run-mutation.ts";
 import { useIsDesktop } from "../lib/use-media-query.ts";
 import {
 	BUILTIN_VIEWS,
@@ -131,6 +134,18 @@ function WorkspaceKeyboard() {
 function NormalWorkspace() {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
+	const persistLocale = useCallback(
+		(locale: Locale) => {
+			// Best-effort by design, not a swallowed error: changeLocale() already
+			// applied the strategy chain + document locale before this runs, so a
+			// failed write only means cross-device sync doesn't happen yet -- Zero
+			// replays the queued mutation after reload/reconnect.
+			void runMutation(zero.mutate(mutators.userPref.set({ locale })), (m) =>
+				console.error("userPref.set failed", m),
+			);
+		},
+		[zero],
+	);
 	const [workspaces] = useQuery(queries.workspaces.mine());
 	const [lists] = useQuery(queries.lists.mine());
 	const [folders] = useQuery(queries.folders.mine());
@@ -605,6 +620,7 @@ function NormalWorkspace() {
 				<SecurityPanel />
 				<KarmaPanel />
 				<KarmaSettings />
+				<LanguageSwitcher persistLocale={persistLocale} />
 				<FocusSettings />
 				<NotificationSettings />
 			</div>
@@ -904,6 +920,7 @@ function NormalWorkspace() {
 								<SecurityPanel />
 								<KarmaPanel />
 								<KarmaSettings />
+								<LanguageSwitcher persistLocale={persistLocale} />
 								{/* Keyboard is a desktop feature (design 2.18); the rebind
 								    surface lives beside Security on the desktop landing. */}
 								<KeymapSettings />

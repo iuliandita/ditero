@@ -28,6 +28,7 @@ import {
 } from "../domain/escalation-policy.ts";
 import type { ListKind } from "../domain/icon-map.ts";
 import { karmaForCompletion, karmaWrite } from "../domain/karma.ts";
+import { LOCALES } from "../domain/locale.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
 import { keyBetween } from "../domain/sort-key.ts";
@@ -252,6 +253,10 @@ function isValidTimeZone(tz: string): boolean {
 const timezoneArg = z.string().max(100).refine(isValidTimeZone, {
 	message: "invalid IANA timezone",
 });
+// M-i18n: recipient locale for cross-device sync + server-rendered mail/notifications.
+const localeArg = z
+	.enum(LOCALES as unknown as [string, ...string[]])
+	.nullable();
 // S5: equal start and end is rejected, not reinterpreted. The domain reads it
 // as "never quiet" (the opposite of what a user setting both to 22:00 intends),
 // and the alternative reading -- quiet all day -- would park every non-urgent
@@ -1670,6 +1675,8 @@ export const mutators = defineMutators({
 				timezone: timezoneArg.optional(),
 				quietHours: quietHoursArg.optional(),
 				escalationDefaults: escalationDefaultsArg.optional(),
+				// M-i18n: null means "no preference set" (falls back to Accept-Language).
+				locale: localeArg.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				if (args.escalationDefaults) {
@@ -1700,6 +1707,7 @@ export const mutators = defineMutators({
 						timezone: args.timezone ?? "UTC",
 						quietHours: args.quietHours ?? null,
 						escalationDefaults: args.escalationDefaults ?? null,
+						locale: args.locale ?? null,
 					});
 			},
 		),
