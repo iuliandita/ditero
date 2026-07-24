@@ -2,6 +2,8 @@ import { useZero } from "@rocicorp/zero/react";
 import { useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
 import { cn } from "@/lib/utils";
+import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { ReminderState, schema, Task } from "../../../zero/schema.gen.ts";
 import { useChannelDeliveryStatus } from "../../hooks/useNotificationChannels.ts";
@@ -10,8 +12,9 @@ import { useUserPref } from "../../hooks/useUserPref.ts";
 
 const ACTIONABLE = new Set(["pending", "deferred", "escalated"]);
 
+// Built per call: a cached formatter would freeze the import-time locale.
 function hhmm(at: number): string {
-	return new Date(at).toLocaleTimeString([], {
+	return new Date(at).toLocaleTimeString(getLocale(), {
 		hour: "2-digit",
 		minute: "2-digit",
 	});
@@ -26,23 +29,30 @@ function label(
 	switch (reminder.status) {
 		case "deferred":
 			return {
-				text: `Deferred until ${reminder.deferredUntil ? hhmm(reminder.deferredUntil) : "quiet hours end"}`,
+				text: m.reminder_deferred_until({
+					when: reminder.deferredUntil
+						? hhmm(reminder.deferredUntil)
+						: m.reminder_until_quiet_hours_end(),
+				}),
 				tone: "text-muted-foreground",
 			};
 		case "escalated":
 			return {
-				text: `Escalating (${reminder.fireCount} of ${resolvedMaxRepeats ?? "?"})`,
+				text: m.reminder_escalating({
+					count: reminder.fireCount ?? 0,
+					max: resolvedMaxRepeats ?? m.reminder_max_unknown(),
+				}),
 				tone: "text-amber-600",
 			};
 		case "acked":
-			return { text: "Acknowledged", tone: "text-muted-foreground" };
+			return { text: m.reminder_acked(), tone: "text-muted-foreground" };
 		case "failed":
-			return { text: "Reminder failed", tone: "text-destructive" };
+			return { text: m.reminder_failed(), tone: "text-destructive" };
 		case "expired":
-			return { text: "Reminder expired", tone: "text-destructive" };
+			return { text: m.reminder_expired(), tone: "text-destructive" };
 		default:
 			return {
-				text: `Reminder set ${hhmm(reminder.occurrenceAt)}`,
+				text: m.reminder_set_at({ time: hhmm(reminder.occurrenceAt) }),
 				tone: "text-muted-foreground",
 			};
 	}
@@ -86,7 +96,7 @@ export function ReminderChip({ task }: { task: Task }) {
 			<button
 				type="button"
 				data-testid="reminder-chip"
-				aria-label={`${text}. Acknowledge reminder`}
+				aria-label={m.reminder_ack_aria({ status: text })}
 				// Row-level tap target parity with the habit done/skip controls.
 				className={cn("min-h-9 rounded-full border px-3 py-0.5 text-xs", tone)}
 				onClick={() => {
@@ -97,14 +107,14 @@ export function ReminderChip({ task }: { task: Task }) {
 					);
 				}}
 			>
-				{text} - Ack
+				{m.reminder_ack_chip({ status: text })}
 			</button>
 			{allUnverified && (
 				<span
 					data-testid="reminder-unverified-note"
 					className="text-xs text-muted-foreground"
 				>
-					delivery channel not verified
+					{m.reminder_channel_unverified()}
 				</span>
 			)}
 			{error && (

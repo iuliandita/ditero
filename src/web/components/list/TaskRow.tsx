@@ -10,9 +10,15 @@ import {
 import { AssigneeChips } from "@/components/people/AssigneeChips";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { formatDue, isOverdue, priorityMeta } from "@/lib/task-display";
+import {
+	formatDue,
+	isOverdue,
+	priorityLabel,
+	priorityMeta,
+} from "@/lib/task-display";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import { m } from "../../../paraglide/messages.js";
 import type { Label, Task } from "../../../zero/schema.gen.ts";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 
@@ -150,7 +156,7 @@ function PriorityFlag({ priority }: { priority: number | null | undefined }) {
 	if (!meta) return null;
 	return (
 		<Flag
-			aria-label={`Priority: ${meta.label}`}
+			aria-label={m.task_priority_aria({ priority: priorityLabel(priority) })}
 			className={cn("size-3.5 shrink-0 fill-current", meta.color)}
 		/>
 	);
@@ -220,7 +226,7 @@ export function TaskRow({
 								))}
 								{total > 0 && kind !== "project" && (
 									<span className="text-xs text-muted-foreground">
-										{doneCount}/{total}
+										{m.task_subtask_progress({ done: doneCount, total })}
 									</span>
 								)}
 							</div>
@@ -234,7 +240,7 @@ export function TaskRow({
 									/>
 								</div>
 								<span className="text-xs text-muted-foreground">
-									{doneCount}/{total}
+									{m.task_subtask_progress({ done: doneCount, total })}
 								</span>
 							</div>
 						)}
@@ -246,7 +252,9 @@ export function TaskRow({
 					{total > 0 && (
 						<button
 							type="button"
-							aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+							aria-label={
+								expanded ? m.subtasks_collapse() : m.subtasks_expand()
+							}
 							aria-expanded={expanded}
 							onClick={() => setExpanded((e) => !e)}
 							className="mt-0.5 text-muted-foreground"

@@ -2,6 +2,7 @@ import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useMemo } from "react";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { sortTasks } from "../../../domain/task-sort.ts";
+import { m } from "../../../paraglide/messages.js";
 import type { Label, List, Task } from "../../../zero/schema.gen.ts";
 import { HabitCard } from "../habit/HabitCard.tsx";
 import { CompletedSection } from "./CompletedSection.tsx";
@@ -122,7 +123,9 @@ export function TaskList({
 				{groups.map(([category, items]) => (
 					<div key={category} className="mb-2">
 						<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
-							{category === UNCATEGORIZED ? "Other" : category}
+							{category === UNCATEGORIZED
+								? m.shopping_category_other()
+								: category}
 						</div>
 						<ul className="flex flex-col">{items.map(item)}</ul>
 					</div>

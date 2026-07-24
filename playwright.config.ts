@@ -58,6 +58,9 @@ export default defineConfig({
 	use: {
 		baseURL: "http://localhost:5173",
 		trace: "on-first-retry",
+		// Negative-offset on purpose: CI runners are UTC, where a date rendered in
+		// the wrong zone looks correct. Keeps the weekday assertions load-bearing.
+		timezoneId: "America/New_York",
 	},
 	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 	webServer: [

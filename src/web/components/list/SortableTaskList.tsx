@@ -6,6 +6,7 @@ import {
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import { reorderSortKey } from "@/lib/reorder";
+import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
 import { SortableRow, useReorderSensors } from "./SortableList.tsx";
 
@@ -59,7 +60,7 @@ export function SortableTaskList({
 							) : (
 								<SortableRow
 									id={task.id}
-									label="Reorder task"
+									label={m.task_reorder_handle()}
 									testId="task-drag"
 								>
 									{renderRow(task)}

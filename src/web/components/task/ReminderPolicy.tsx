@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { runMutation } from "@/lib/run-mutation";
 import { DEFAULT_MAX_REPEATS } from "../../../domain/escalation-policy.ts";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
@@ -42,9 +43,10 @@ export function ReminderPolicy({
 		() =>
 			memberships
 				.filter(
-					(m) => m.workspaceId === workspaceId && m.userId !== me && m.user,
+					(mem) =>
+						mem.workspaceId === workspaceId && mem.userId !== me && mem.user,
 				)
-				.map((m) => ({ id: m.userId, name: m.user?.name ?? m.userId })),
+				.map((mem) => ({ id: mem.userId, name: mem.user?.name ?? mem.userId })),
 		[memberships, workspaceId, me],
 	);
 
@@ -65,12 +67,12 @@ export function ReminderPolicy({
 
 			{task.rrule == null && (
 				<label className="flex flex-col gap-1">
-					<span className="text-muted-foreground">Reminder time</span>
+					<span className="text-muted-foreground">{m.reminder_time()}</span>
 					<input
 						type="time"
 						value={task.reminderTime ?? ""}
 						data-testid="reminder-time"
-						aria-label="Reminder time"
+						aria-label={m.reminder_time()}
 						className="h-8 w-fit rounded-lg border bg-transparent px-2 text-sm"
 						onChange={(e) =>
 							update({
@@ -84,7 +86,7 @@ export function ReminderPolicy({
 
 			<div className="flex items-center justify-between gap-3">
 				<span id="urgent-label" className="text-sm">
-					Urgent (ignores quiet hours)
+					{m.reminder_urgent_label()}
 				</span>
 				<Button
 					size="sm"
@@ -95,7 +97,7 @@ export function ReminderPolicy({
 					data-testid="reminder-urgent"
 					onClick={() => update({ id: task.id, urgent: !task.urgent })}
 				>
-					{task.urgent ? "On" : "Off"}
+					{task.urgent ? m.toggle_on() : m.toggle_off()}
 				</Button>
 			</div>
 
@@ -106,19 +108,23 @@ export function ReminderPolicy({
 				className="w-fit text-xs text-muted-foreground underline"
 				onClick={() => setOpen((o) => !o)}
 			>
-				Override defaults
+				{m.reminder_override_defaults()}
 			</button>
 
 			{open && (
 				<div className="flex flex-wrap gap-3" data-testid="reminder-overrides">
 					<label className="flex flex-col gap-1">
-						<span className="text-muted-foreground">Repeat every (min)</span>
+						<span className="text-muted-foreground">
+							{m.escalation_repeat_every()}
+						</span>
 						<input
 							type="number"
 							min={1}
 							max={REPEAT_EVERY_MIN_MAX}
 							value={task.repeatEveryMin ?? ""}
-							placeholder={String(defaults?.repeatEveryMin ?? "off")}
+							placeholder={String(
+								defaults?.repeatEveryMin ?? m.escalation_off(),
+							)}
 							data-testid="reminder-repeat"
 							className="h-8 w-32 rounded-lg border bg-transparent px-2 text-sm"
 							onChange={(e) =>
@@ -130,7 +136,9 @@ export function ReminderPolicy({
 						/>
 					</label>
 					<label className="flex flex-col gap-1">
-						<span className="text-muted-foreground">Max repeats</span>
+						<span className="text-muted-foreground">
+							{m.escalation_max_repeats()}
+						</span>
 						<input
 							type="number"
 							min={0}
@@ -148,7 +156,9 @@ export function ReminderPolicy({
 						/>
 					</label>
 					<label className="flex flex-col gap-1">
-						<span className="text-muted-foreground">Fallback member</span>
+						<span className="text-muted-foreground">
+							{m.escalation_fallback_member()}
+						</span>
 						<select
 							value={task.fallbackUserId ?? ""}
 							data-testid="reminder-fallback"
@@ -160,10 +170,10 @@ export function ReminderPolicy({
 								})
 							}
 						>
-							<option value="">Inherit default</option>
-							{members.map((m) => (
-								<option key={m.id} value={m.id}>
-									{m.name}
+							<option value="">{m.escalation_inherit_default()}</option>
+							{members.map((mem) => (
+								<option key={mem.id} value={mem.id}>
+									{mem.name}
 								</option>
 							))}
 						</select>

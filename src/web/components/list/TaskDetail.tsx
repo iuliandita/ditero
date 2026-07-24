@@ -24,10 +24,16 @@ import {
 	SheetTitle,
 } from "@/components/ui/sheet";
 import { runMutation } from "@/lib/run-mutation";
-import { dueToInputs, inputsToDue, priorityMeta } from "@/lib/task-display";
+import {
+	dueToInputs,
+	inputsToDue,
+	priorityLabelShort,
+	priorityMeta,
+} from "@/lib/task-display";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { keyBetween } from "../../../domain/sort-key.ts";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
 import { formatFocusedDuration } from "../../focus/timer-core.ts";
@@ -39,12 +45,7 @@ import { RecurrenceEditor } from "../task/RecurrenceEditor.tsx";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { ReminderPolicy } from "../task/ReminderPolicy.tsx";
 
-const PRIORITY_OPTIONS = [
-	{ value: 0, label: "None" },
-	{ value: 1, label: "Low" },
-	{ value: 2, label: "Med" },
-	{ value: 3, label: "High" },
-];
+const PRIORITY_OPTIONS = [0, 1, 2, 3];
 
 // Sort key placing a moved task after the last top-level task in the target list.
 function tailKey(tasks: Task[]): string {
@@ -158,7 +159,7 @@ export function TaskDetail({
 			).client;
 			setNewLabel("");
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Could not create label.");
+			setError(e instanceof Error ? e.message : m.task_create_label_failed());
 		}
 	}
 
@@ -188,11 +189,11 @@ export function TaskDetail({
 				className={cn("gap-0 overflow-y-auto", !isDesktop && "max-h-[90dvh]")}
 			>
 				<SheetHeader>
-					<SheetTitle className="sr-only">Task details</SheetTitle>
+					<SheetTitle className="sr-only">{m.task_detail_title()}</SheetTitle>
 					<Input
 						defaultValue={task.title}
 						key={task.id}
-						aria-label="Task title"
+						aria-label={m.task_detail_title_field()}
 						className="h-9 border-transparent px-0 text-base font-medium focus-visible:border-input focus-visible:px-2.5"
 						onBlur={(e) => {
 							const v = e.target.value.trim();
@@ -209,7 +210,9 @@ export function TaskDetail({
 					)}
 
 					<label className="flex flex-col gap-1 text-sm">
-						<span className="text-muted-foreground">Notes</span>
+						<span className="text-muted-foreground">
+							{m.task_field_notes()}
+						</span>
 						<textarea
 							key={`notes-${task.id}`}
 							defaultValue={task.notes ?? ""}
@@ -224,19 +227,19 @@ export function TaskDetail({
 					</label>
 
 					<div className="flex flex-col gap-1 text-sm">
-						<span className="text-muted-foreground">Due</span>
+						<span className="text-muted-foreground">{m.task_field_due()}</span>
 						<div className="flex items-center gap-2">
 							<input
 								type="date"
 								value={due.date}
-								aria-label="Due date"
+								aria-label={m.task_due_date_aria()}
 								className="h-8 rounded-lg border bg-transparent px-2 text-sm"
 								onChange={(e) => setDue(e.target.value, due.time)}
 							/>
 							<input
 								type="time"
 								value={due.time}
-								aria-label="Due time"
+								aria-label={m.task_due_time_aria()}
 								disabled={!due.date}
 								className="h-8 rounded-lg border bg-transparent px-2 text-sm disabled:opacity-50"
 								onChange={(e) => setDue(due.date, e.target.value)}
@@ -245,7 +248,7 @@ export function TaskDetail({
 								<Button
 									variant="ghost"
 									size="icon-sm"
-									aria-label="Clear due date"
+									aria-label={m.task_due_clear()}
 									onClick={() => update({ id: task.id, dueAt: null })}
 								>
 									<X />
@@ -262,7 +265,7 @@ export function TaskDetail({
 						>
 							{focusedSec > 0
 								? formatFocusedDuration(focusedSec)
-								: "No focus time yet"}
+								: m.task_no_focus_time()}
 						</span>
 						<Button
 							variant="outline"
@@ -270,7 +273,7 @@ export function TaskDetail({
 							data-testid="task-focus-start"
 							onClick={() => focus.startForTask(t.id, t.title)}
 						>
-							<Timer /> Start focus
+							<Timer /> {m.task_start_focus()}
 						</Button>
 					</div>
 
@@ -290,30 +293,32 @@ export function TaskDetail({
 							size="sm"
 							className="self-start"
 							data-testid="recurrence-skip"
-							aria-label="Skip this occurrence"
+							aria-label={m.task_skip_occurrence()}
 							onClick={() =>
 								void run(
 									zero.mutate(mutators.task.skipOccurrence({ id: t.id })),
 								)
 							}
 						>
-							<SkipForward /> Skip this occurrence
+							<SkipForward /> {m.task_skip_occurrence()}
 						</Button>
 					)}
 
 					{kind !== "checklist" && (
 						<div className="flex flex-col gap-1 text-sm">
-							<span className="text-muted-foreground">Priority</span>
+							<span className="text-muted-foreground">
+								{m.task_field_priority()}
+							</span>
 							<div className="flex gap-1.5">
-								{PRIORITY_OPTIONS.map((p) => {
-									const meta = priorityMeta(p.value);
-									const active = (task.priority ?? 0) === p.value;
+								{PRIORITY_OPTIONS.map((level) => {
+									const meta = priorityMeta(level);
+									const active = (task.priority ?? 0) === level;
 									return (
 										<button
-											key={p.value}
+											key={level}
 											type="button"
 											aria-pressed={active}
-											onClick={() => update({ id: task.id, priority: p.value })}
+											onClick={() => update({ id: task.id, priority: level })}
 											className={cn(
 												"flex-1 rounded-lg border px-2 py-1 text-sm",
 												active
@@ -322,7 +327,7 @@ export function TaskDetail({
 												active && meta ? meta.color : "",
 											)}
 										>
-											{p.label}
+											{priorityLabelShort(level)}
 										</button>
 									);
 								})}
@@ -332,7 +337,9 @@ export function TaskDetail({
 
 					{kind !== "checklist" && (
 						<div className="flex flex-col gap-1 text-sm">
-							<span className="text-muted-foreground">Labels</span>
+							<span className="text-muted-foreground">
+								{m.task_field_labels()}
+							</span>
 							<div className="flex flex-wrap items-center gap-1.5">
 								{currentLabels.map((l) => (
 									<Badge key={l.id} variant="secondary">
@@ -342,7 +349,7 @@ export function TaskDetail({
 								<Popover>
 									<PopoverTrigger asChild>
 										<Button variant="outline" size="sm">
-											<Plus /> Labels
+											<Plus /> {m.task_field_labels()}
 										</Button>
 									</PopoverTrigger>
 									<PopoverContent align="start" className="w-64">
@@ -365,14 +372,14 @@ export function TaskDetail({
 											))}
 											{allLabels.length === 0 && (
 												<span className="px-1.5 py-1 text-xs text-muted-foreground">
-													No labels yet.
+													{m.task_no_labels()}
 												</span>
 											)}
 										</div>
 										<div className="flex items-center gap-1.5 border-t pt-2">
 											<Input
 												value={newLabel}
-												placeholder="New label"
+												placeholder={m.task_new_label_placeholder()}
 												onChange={(e) => setNewLabel(e.target.value)}
 												onKeyDown={(e) => {
 													if (e.key === "Enter") void createLabel();
@@ -383,7 +390,7 @@ export function TaskDetail({
 												onClick={() => void createLabel()}
 												disabled={!newLabel.trim()}
 											>
-												Add
+												{m.action_add()}
 											</Button>
 										</div>
 									</PopoverContent>
@@ -396,7 +403,9 @@ export function TaskDetail({
 
 					{!isSubtask && (
 						<div className="flex flex-col gap-1 text-sm">
-							<span className="text-muted-foreground">Subtasks</span>
+							<span className="text-muted-foreground">
+								{m.task_field_subtasks()}
+							</span>
 							<ul className="flex flex-col">
 								{subtasks.map((s) => (
 									<li key={s.id} className="flex items-center gap-2 py-1">
@@ -422,7 +431,7 @@ export function TaskDetail({
 										<Button
 											variant="ghost"
 											size="icon-sm"
-											aria-label={`Delete ${s.title}`}
+											aria-label={m.task_delete_named({ title: s.title })}
 											onClick={() =>
 												void run(
 													zero.mutate(mutators.task.delete({ id: s.id })),
@@ -437,7 +446,7 @@ export function TaskDetail({
 							<div className="flex items-center gap-1.5">
 								<Input
 									value={newSubtask}
-									placeholder="Add subtask"
+									placeholder={m.task_add_subtask_placeholder()}
 									onChange={(e) => setNewSubtask(e.target.value)}
 									onKeyDown={(e) => {
 										if (e.key === "Enter") addSubtask();
@@ -448,7 +457,7 @@ export function TaskDetail({
 									onClick={addSubtask}
 									disabled={!newSubtask.trim()}
 								>
-									Add
+									{m.action_add()}
 								</Button>
 							</div>
 						</div>
@@ -456,7 +465,9 @@ export function TaskDetail({
 
 					{!isSubtask && moveTargets.length > 0 && (
 						<div className="flex flex-col gap-1 text-sm">
-							<span className="text-muted-foreground">Move to list</span>
+							<span className="text-muted-foreground">
+								{m.task_move_to_list()}
+							</span>
 							<Select
 								value={list.id}
 								onValueChange={(target) => {
@@ -475,7 +486,10 @@ export function TaskDetail({
 									onOpenChange(false);
 								}}
 							>
-								<SelectTrigger aria-label="Move to list" className="w-full">
+								<SelectTrigger
+									aria-label={m.task_move_to_list()}
+									className="w-full"
+								>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -502,7 +516,7 @@ export function TaskDetail({
 							onOpenChange(false);
 						}}
 					>
-						<Trash2 /> Delete task
+						<Trash2 /> {m.task_delete()}
 					</Button>
 				</div>
 			</SheetContent>

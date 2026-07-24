@@ -10,20 +10,45 @@ import {
 	type RecurrencePreset,
 	rruleToPreset,
 } from "../../../domain/recurrence.ts";
+import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 
 type Freq = RecurrencePreset["freq"];
 
-const FREQS: { value: Freq; label: string }[] = [
-	{ value: "daily", label: "Daily" },
-	{ value: "weekly", label: "Weekly" },
-	{ value: "monthly", label: "Monthly" },
-	{ value: "yearly", label: "Yearly" },
-];
+const FREQS: Freq[] = ["daily", "weekly", "monthly", "yearly"];
 
-// 0=Mon .. 6=Sun, matching the domain preset weekday encoding.
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// Thunks: resolving `m` at module scope would freeze the import-time locale.
+const FREQ_LABELS: Record<Freq, () => string> = {
+	daily: m.recurrence_freq_daily,
+	weekly: m.recurrence_freq_weekly,
+	monthly: m.recurrence_freq_monthly,
+	yearly: m.recurrence_freq_yearly,
+};
+
+const UNIT_LABELS: Record<Freq, (i: { count: number }) => string> = {
+	daily: m.recurrence_unit_daily,
+	weekly: m.recurrence_unit_weekly,
+	monthly: m.recurrence_unit_monthly,
+	yearly: m.recurrence_unit_yearly,
+};
+
+// 0=Mon .. 6=Sun, matching the domain preset weekday encoding; CLDR names so
+// every locale works without a translation pass.
+function weekdayNames(): string[] {
+	// timeZone stays pinned: the references are UTC midnights, so an unpinned
+	// formatter shifts the array a day in negative-offset zones -- and callers
+	// index it by domain day, so that persists the wrong weekday.
+	const fmt = new Intl.DateTimeFormat(getLocale(), {
+		weekday: "short",
+		timeZone: "UTC",
+	});
+	// 2024-01-01 was a Monday.
+	return Array.from({ length: 7 }, (_, i) =>
+		fmt.format(new Date(Date.UTC(2024, 0, 1 + i))),
+	);
+}
 
 const DEFAULT_PRESET: RecurrencePreset = { freq: "daily", interval: 1 };
 
@@ -64,38 +89,28 @@ function presetForFreq(freq: Freq, prev: RecurrencePreset): RecurrencePreset {
 }
 
 function unitLabel(p: RecurrencePreset): string {
-	const plural = p.interval !== 1;
-	switch (p.freq) {
-		case "daily":
-			return plural ? "days" : "day";
-		case "weekly":
-			return plural ? "weeks" : "week";
-		case "monthly":
-			return plural ? "months" : "month";
-		case "yearly":
-			return plural ? "years" : "year";
-	}
+	return UNIT_LABELS[p.freq]({ count: p.interval });
 }
 
-function describePreset(p: RecurrencePreset): string {
-	const every = p.interval === 1 ? "Every" : `Every ${p.interval}`;
+function describePreset(p: RecurrencePreset, weekdays: string[]): string {
 	switch (p.freq) {
 		case "daily":
-			return p.interval === 1 ? "Every day" : `${every} days`;
-		case "weekly": {
-			const days = [...p.weekdays]
-				.sort((a, b) => a - b)
-				.map((d) => WEEKDAYS[d])
-				.join(", ");
-			const unit = p.interval === 1 ? "week" : "weeks";
-			return `${every} ${unit} on ${days}`;
-		}
-		case "monthly": {
-			const unit = p.interval === 1 ? "month" : "months";
-			return `${every} ${unit} on day ${p.monthday}`;
-		}
+			return m.recurrence_summary_daily({ count: p.interval });
+		case "weekly":
+			return m.recurrence_summary_weekly({
+				count: p.interval,
+				days: [...p.weekdays]
+					.sort((a, b) => a - b)
+					.map((d) => weekdays[d])
+					.join(", "),
+			});
+		case "monthly":
+			return m.recurrence_summary_monthly({
+				count: p.interval,
+				monthday: p.monthday,
+			});
 		case "yearly":
-			return p.interval === 1 ? "Every year" : `${every} years`;
+			return m.recurrence_summary_yearly({ count: p.interval });
 	}
 }
 
@@ -126,7 +141,7 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 		try {
 			rrule = presetToRRule(p);
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Invalid recurrence.");
+			setError(e instanceof Error ? e.message : m.recurrence_invalid());
 			return;
 		}
 		void runMutation(
@@ -214,7 +229,7 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 	if (!enabled) {
 		return (
 			<div className="flex flex-col gap-1 text-sm">
-				<span className="text-muted-foreground">Repeat</span>
+				<span className="text-muted-foreground">{m.recurrence_repeat()}</span>
 				<Button
 					variant="outline"
 					size="sm"
@@ -222,11 +237,13 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 					data-testid="recurrence-enable"
 					onClick={enable}
 				>
-					<Repeat /> Does not repeat
+					<Repeat /> {m.recurrence_does_not_repeat()}
 				</Button>
 			</div>
 		);
 	}
+
+	const weekdays = weekdayNames();
 
 	return (
 		<div
@@ -234,15 +251,15 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 			data-testid="recurrence-editor"
 		>
 			<div className="flex items-center justify-between">
-				<span className="text-muted-foreground">Repeat</span>
+				<span className="text-muted-foreground">{m.recurrence_repeat()}</span>
 				<Button
 					variant="ghost"
 					size="sm"
 					data-testid="recurrence-clear"
-					aria-label="Does not repeat"
+					aria-label={m.recurrence_does_not_repeat()}
 					onClick={clear}
 				>
-					<X /> Don't repeat
+					<X /> {m.recurrence_clear()}
 				</Button>
 			</div>
 
@@ -253,19 +270,19 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 			)}
 
 			<fieldset
-				aria-label="Frequency"
+				aria-label={m.recurrence_frequency()}
 				className="flex gap-1.5 border-0 p-0"
 				data-testid="recurrence-freq"
 			>
-				{FREQS.map((f) => {
-					const active = preset.freq === f.value;
+				{FREQS.map((freq) => {
+					const active = preset.freq === freq;
 					return (
 						<button
-							key={f.value}
+							key={freq}
 							type="button"
 							aria-pressed={active}
-							data-testid={`recurrence-freq-${f.value}`}
-							onClick={() => setFreq(f.value)}
+							data-testid={`recurrence-freq-${freq}`}
+							onClick={() => setFreq(freq)}
 							className={cn(
 								"flex-1 rounded-lg border px-2 py-1 text-sm transition-colors motion-reduce:transition-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
 								active
@@ -273,20 +290,20 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 									: "text-muted-foreground",
 							)}
 						>
-							{f.label}
+							{FREQ_LABELS[freq]()}
 						</button>
 					);
 				})}
 			</fieldset>
 
 			<div className="flex items-center gap-2">
-				<span className="text-muted-foreground">Every</span>
+				<span className="text-muted-foreground">{m.recurrence_every()}</span>
 				<Input
 					type="number"
 					min={1}
 					step={1}
 					value={preset.interval}
-					aria-label="Interval"
+					aria-label={m.recurrence_interval()}
 					data-testid="recurrence-interval"
 					className="h-8 w-20"
 					onChange={(e) => setInterval(e.target.valueAsNumber)}
@@ -296,11 +313,11 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 
 			{preset.freq === "weekly" && (
 				<fieldset
-					aria-label="Weekdays"
+					aria-label={m.recurrence_weekdays()}
 					className="flex flex-wrap gap-1.5 border-0 p-0"
 					data-testid="recurrence-weekdays"
 				>
-					{WEEKDAYS.map((label, day) => {
+					{weekdays.map((label, day) => {
 						const active = preset.weekdays.includes(day);
 						return (
 							<button
@@ -326,14 +343,14 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 
 			{preset.freq === "monthly" && (
 				<div className="flex items-center gap-2">
-					<span className="text-muted-foreground">On day</span>
+					<span className="text-muted-foreground">{m.recurrence_on_day()}</span>
 					<Input
 						type="number"
 						min={1}
 						max={31}
 						step={1}
 						value={preset.monthday}
-						aria-label="Day of month"
+						aria-label={m.recurrence_day_of_month()}
 						data-testid="recurrence-monthday"
 						className="h-8 w-20"
 						onChange={(e) => setMonthday(e.target.valueAsNumber)}
@@ -349,11 +366,15 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 				className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-start transition-colors motion-reduce:transition-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
 			>
 				<span className="flex flex-col">
-					<span>{relative ? "After I complete it" : "On schedule"}</span>
+					<span>
+						{relative
+							? m.recurrence_relative_on()
+							: m.recurrence_relative_off()}
+					</span>
 					<span className="text-xs text-muted-foreground">
 						{relative
-							? "Next due counts from completion"
-							: "Next due follows the fixed schedule"}
+							? m.recurrence_relative_on_hint()
+							: m.recurrence_relative_off_hint()}
 					</span>
 				</span>
 				<span
@@ -373,11 +394,11 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 			</button>
 
 			<div className="flex items-center gap-2">
-				<span className="text-muted-foreground">Reminder time</span>
+				<span className="text-muted-foreground">{m.reminder_time()}</span>
 				<Input
 					type="time"
 					value={reminder}
-					aria-label="Reminder time"
+					aria-label={m.reminder_time()}
 					data-testid="recurrence-reminder"
 					className="h-8 w-32"
 					onChange={(e) => commitReminder(e.target.value)}
@@ -386,7 +407,7 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						aria-label="Clear reminder time"
+						aria-label={m.reminder_time_clear()}
 						onClick={() => commitReminder("")}
 					>
 						<X />
@@ -398,7 +419,7 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 				className="text-sm text-muted-foreground"
 				data-testid="recurrence-summary"
 			>
-				{describePreset(preset)}
+				{describePreset(preset, weekdays)}
 			</p>
 		</div>
 	);

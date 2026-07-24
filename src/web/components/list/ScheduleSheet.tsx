@@ -5,6 +5,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
+import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
 
 // Quick due-date picker opened by a left-swipe on a task (design 2.6). Non-
@@ -49,7 +50,11 @@ export function ScheduleSheet({
 		<Sheet open={open} onOpenChange={onOpenChange}>
 			<SheetContent side="bottom">
 				<SheetHeader>
-					<SheetTitle>Schedule{task ? `: ${task.title}` : ""}</SheetTitle>
+					<SheetTitle>
+						{task
+							? m.schedule_sheet_title_task({ title: task.title })
+							: m.schedule_sheet_title()}
+					</SheetTitle>
 				</SheetHeader>
 				<div className="flex flex-col gap-2 p-4 pt-0">
 					<Button
@@ -57,31 +62,31 @@ export function ScheduleSheet({
 						className="justify-start"
 						onClick={() => pick(todayEvening())}
 					>
-						Today evening
+						{m.schedule_today_evening()}
 					</Button>
 					<Button
 						variant="outline"
 						className="justify-start"
 						onClick={() => pick(tomorrow())}
 					>
-						Tomorrow
+						{m.schedule_tomorrow()}
 					</Button>
 					<Button
 						variant="outline"
 						className="justify-start"
 						onClick={() => pick(thisWeekend())}
 					>
-						This weekend
+						{m.schedule_this_weekend()}
 					</Button>
 					<input
 						type="date"
-						aria-label="Pick a due date"
+						aria-label={m.schedule_pick_date()}
 						className="h-9 rounded-lg border bg-transparent px-3 text-base md:text-sm"
 						onChange={(e) => {
 							if (!e.target.value) return;
-							const [y, m, d] = e.target.value.split("-").map(Number);
+							const [y, mo, d] = e.target.value.split("-").map(Number);
 							pick({
-								dueAt: new Date(y, m - 1, d).getTime(),
+								dueAt: new Date(y, mo - 1, d).getTime(),
 								dueAllDay: true,
 							});
 						}}
