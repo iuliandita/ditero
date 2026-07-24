@@ -1,7 +1,31 @@
 import { resolve4, resolve6 } from "node:dns/promises";
+import type { IncomingMessage, RequestOptions } from "node:http";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import ipaddr from "ipaddr.js";
-import { Agent, buildConnector, request } from "undici";
 import type { Network } from "../server/client-ip.ts";
+
+// A node http/https `request`. safeFetch pins the socket through the `lookup`
+// option, so the transport must be one that honors it -- which rules out Bun's
+// undici shim, whose Agent ignores a custom connector (issue #31).
+type RequestFn = (
+	url: URL,
+	options: RequestOptions,
+	callback: (response: IncomingMessage) => void,
+) => {
+	on(event: "error", listener: (error: Error) => void): unknown;
+	write(chunk: string | Uint8Array): unknown;
+	end(): unknown;
+	destroy(error?: Error): unknown;
+};
+
+// Injectable seams, defaulted for production. Tests supply a resolver to script
+// DNS answers and a requestFn to observe how the socket would be dialed without
+// opening one.
+type SafeFetchDeps = {
+	resolver?: Resolver;
+	requestFn?: RequestFn;
+};
 
 // A request refused by policy before or during transfer -- blocked address,
 // disallowed protocol, URL credentials, oversized response. Callers must be
@@ -179,6 +203,7 @@ function responseHeaders(
 export async function safeFetch(
 	input: string | URL,
 	options: SafeFetchOptions = {},
+	deps: SafeFetchDeps = {},
 ): Promise<Response> {
 	// A malformed URL is a refusal, not a transport failure: it never becomes
 	// valid, so retrying it burns the whole ladder. Unreachable from ntfy (whose
@@ -199,65 +224,129 @@ export async function safeFetch(
 	}
 	const target = await resolvePinnedTarget(
 		url.hostname,
-		undefined,
+		deps.resolver,
 		options.allowedPrivateCIDRs,
 	);
-	const connect = buildConnector({ timeout: 10_000 });
-	const dispatcher = new Agent({
-		connect: (connectOptions, callback) =>
-			connect(
-				{
-					...connectOptions,
-					hostname: target.address,
-					host: target.address,
-					servername: normalizedHostname(url.hostname),
-				},
-				callback,
-			),
-	});
+	const requestFn =
+		deps.requestFn ?? (url.protocol === "https:" ? httpsRequest : httpRequest);
+	return await pinnedRequest(url, target, options, requestFn);
+}
 
+// Pins the socket to the address resolvePinnedTarget already vetted: the custom
+// `lookup` returns that one address and nothing else, so the transport never
+// re-resolves the hostname and a DNS server cannot answer public for the policy
+// check then private for the connect. `servername` keeps TLS pointed at the
+// real hostname so the certificate is still validated against the name, not the
+// pinned IP. This is the node path that replaces undici, whose connector Bun
+// ignores.
+async function pinnedRequest(
+	url: URL,
+	target: { address: string; family: 4 | 6 },
+	options: SafeFetchOptions,
+	requestFn: RequestFn,
+): Promise<Response> {
 	const headersTimeout = options.headersTimeoutMs ?? 10_000;
-	try {
-		const result = await request(url, {
-			dispatcher,
+	// The body budget is on top of the headers wait, never below it.
+	const bodyTimeout = Math.max(15_000, headersTimeout + 5_000);
+	const limit = options.maxResponseBytes ?? 1_048_576;
+
+	return await new Promise<Response>((resolve, reject) => {
+		let settled = false;
+		const settle = (run: () => void) => {
+			if (settled) return;
+			settled = true;
+			run();
+		};
+
+		const requestOptions: RequestOptions = {
 			method: options.method ?? "GET",
-			headers: options.headers,
-			body: options.body,
+			headers: toOutgoingHeaders(options.headers),
 			signal: options.signal,
-			headersTimeout,
-			// The body budget is on top of the headers wait, never below it.
-			bodyTimeout: Math.max(15_000, headersTimeout + 5_000),
+			servername: normalizedHostname(url.hostname),
+			lookup: (_hostname, lookupOptions, callback) => {
+				const entry = { address: target.address, family: target.family };
+				// Modern node and Bun both request the "all" form (an array); the
+				// tuple form is the fallback for a runtime that asks for one address.
+				if (
+					typeof lookupOptions === "object" &&
+					lookupOptions !== null &&
+					(lookupOptions as { all?: boolean }).all
+				) {
+					(callback as (e: null, a: (typeof entry)[]) => void)(null, [entry]);
+				} else {
+					(callback as (e: null, a: string, f: number) => void)(
+						null,
+						target.address,
+						target.family,
+					);
+				}
+			},
+		} as RequestOptions;
+
+		const request = requestFn(url, requestOptions, (response) => {
+			clearTimeout(headersTimer);
+			// bodyTimeout bounds the gap between chunks: a server dripping one byte
+			// at a time would otherwise hold the slot forever (C18).
+			response.setTimeout?.(bodyTimeout, () => {
+				request.destroy(new Error("Outbound response body stalled"));
+			});
+			const chunks: Buffer[] = [];
+			let size = 0;
+			response.on("data", (chunk: Buffer) => {
+				const buffer = Buffer.from(chunk);
+				size += buffer.length;
+				if (size > limit) {
+					// A refusal, not a transport error: the response is already too big
+					// and retrying re-probes the target and re-downloads the overflow.
+					request.destroy(
+						new OutboundPolicyError(
+							"Outbound response exceeds the configured size limit",
+						),
+					);
+					return;
+				}
+				chunks.push(buffer);
+			});
+			response.on("end", () =>
+				settle(() =>
+					resolve(
+						new Response(Buffer.concat(chunks), {
+							status: response.statusCode ?? 0,
+							statusText: response.statusMessage ?? "",
+							headers: responseHeaders(response.headers),
+						}),
+					),
+				),
+			);
+			response.on("error", (error: Error) => settle(() => reject(error)));
 		});
-		const limit = options.maxResponseBytes ?? 1_048_576;
-		const chunks: Buffer[] = [];
-		let size = 0;
-		for await (const chunk of result.body) {
-			const buffer = Buffer.from(chunk);
-			size += buffer.length;
-			if (size > limit) {
-				throw new OutboundPolicyError(
-					"Outbound response exceeds the configured size limit",
-				);
-			}
-			chunks.push(buffer);
-		}
-		return new Response(Buffer.concat(chunks), {
-			status: result.statusCode,
-			statusText: result.statusText,
-			headers: responseHeaders(result.headers),
+
+		// A plain Error, never an OutboundPolicyError: headers that never arrive are
+		// a transport failure and must stay retryable, unlike the size-cap refusal.
+		const headersTimer = setTimeout(() => {
+			request.destroy(
+				new Error("Outbound request timed out waiting for response headers"),
+			);
+		}, headersTimeout);
+
+		request.on("error", (error) => {
+			clearTimeout(headersTimer);
+			settle(() => reject(error));
 		});
-	} finally {
-		// Bun ships its own `undici` shim whose Agent is a bare EventEmitter with
-		// no close(), so an unguarded call threw out of this finally and turned
-		// EVERY outbound send into a transport failure under the runtime the app
-		// actually runs on -- invisible until a test exercised safeFetch for real
-		// rather than injecting a double.
-		//
-		// NOTE: that same shim also ignores the pinning connector above, so under
-		// Bun the resolved-address pin (DNS-rebinding protection) is inert. The
-		// policy checks in resolvePinnedTarget still run before the request, so
-		// the address boundary itself holds; closing the rebind window needs a
-		// transport that honors a custom connector (issue #31).
-		await dispatcher.close?.();
-	}
+		if (options.body !== undefined) request.write(options.body);
+		request.end();
+	});
+}
+
+// node's request wants a plain header bag, not a HeadersInit. Routing through
+// Headers keeps the CR/LF rejection undici gave for free: a hostile header
+// value throws here rather than smuggling a second header onto the wire.
+function toOutgoingHeaders(
+	init: HeadersInit | undefined,
+): Record<string, string> {
+	const headers: Record<string, string> = {};
+	new Headers(init).forEach((value, name) => {
+		headers[name] = value;
+	});
+	return headers;
 }
