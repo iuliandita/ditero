@@ -14,7 +14,11 @@ import {
 	InviteAcceptError,
 	previewInvite,
 } from "../auth/invite-accept.ts";
-import { createInvite, InviteCreateError } from "../auth/invite-create.ts";
+import {
+	createInvite,
+	InviteCreateError,
+	spendInviteCreateBudget,
+} from "../auth/invite-create.ts";
 import {
 	createManagedAccount,
 	ManagedAccountError,
@@ -189,6 +193,10 @@ const routes = new Elysia()
 			}
 			const email = (body.email as string | null | undefined) ?? null;
 			try {
+				// Authenticated-caller-first (guardedPost), then rate-gate, then
+				// create: bounds both the invite rows and the real mail the send
+				// below now fires at a caller-supplied address.
+				await spendInviteCreateBudget(session.user.id, db);
 				const result = await createInvite(
 					{
 						workspaceId: body.workspaceId,

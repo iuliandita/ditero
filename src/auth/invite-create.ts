@@ -6,7 +6,10 @@ import { z } from "zod";
 import { db as defaultDb } from "../db/client.ts";
 import { invite, list, task } from "../db/schema.ts";
 import { newInviteToken } from "../domain/invite.ts";
-import { ackBaseUrl } from "../server/notifications/capability.ts";
+import {
+	ackBaseUrl,
+	takeRateToken,
+} from "../server/notifications/capability.ts";
 import { isRestrictedAccount } from "./managed-account.ts";
 import {
 	ADMIN_ROLES,
@@ -25,6 +28,38 @@ export class InviteCreateError extends Error {
 	) {
 		super(message);
 		this.name = "InviteCreateError";
+	}
+}
+
+// The route now sends a real invite mail to a caller-supplied address, so an
+// unbounded /api/invite/create would let one authenticated member mail-bomb a
+// third party and burn the deployment's SMTP reputation. Spent per user BEFORE
+// createInvite, the budget also caps the invite ROWS a caller can spawn, not
+// just the mail. A burst of 20 refilling one per minute is enough to invite a
+// whole team in one sitting, and far too slow to be a source of mail traffic.
+// Distinct `invite-create:` namespace from `channel-test:`/`ack:` so no bucket
+// can drain another.
+export const INVITE_CREATE_CAPACITY = 20;
+export const INVITE_CREATE_REFILL_PER_SEC = 1 / 60;
+
+// Gated in the route between the caller's authentication and createInvite: a
+// spent-out caller cannot spawn rows or mail. Placing it before createInvite's
+// role/workspace validation keeps the 429 from becoming an oracle for those
+// checks (you get 429 either way), mirroring test-send's spend-before-validate.
+export async function spendInviteCreateBudget(
+	callerId: string,
+	database: typeof defaultDb = defaultDb,
+	capacity: number = INVITE_CREATE_CAPACITY,
+	refillPerSec: number = INVITE_CREATE_REFILL_PER_SEC,
+): Promise<void> {
+	const allowed = await takeRateToken(
+		database,
+		`invite-create:${callerId}`,
+		capacity,
+		refillPerSec,
+	);
+	if (!allowed) {
+		throw new InviteCreateError(429, "too many invites, try again shortly");
 	}
 }
 
