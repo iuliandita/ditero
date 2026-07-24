@@ -79,16 +79,19 @@ function readEscalationDefaults(v: unknown): EscalationDefaults | null {
 // silently mistimes every reminder (design 0). There is no timezone edit
 // control in M3a, so a stored "UTC" is always the column default rather than a
 // deliberate choice -- detection may overwrite it, but only with a real zone.
-let detectionAttempted = false;
+//
+// Both guards below are keyed to the signed-in user id, not a plain boolean:
+// passkey/2FA verification, signup, and sign-out do not reload the page, so a
+// same-tab account switch (user A signs out, user B signs in) would otherwise
+// leave a bare "already attempted" flag set from A's session and silently
+// suppress B's detection/reconcile. Keying to userId resets the guard exactly
+// when the signed-in user changes, while still firing at most once per user
+// per tab session (a reload after reconcile makes getLocale() match, so the
+// effect below no-ops on the next run for the same user -- no reload loop).
+let detectionAttemptedForUserId: string | undefined;
 let detectionWrote = false;
 
-// Login reconcile (M-i18n): a synced `user_pref.locale` set on another device
-// wins over whatever the pre-auth strategy chain (cookie/localStorage/
-// Accept-Language) resolved on this one. Reload is Paraglide's setLocale
-// default -- after it, getLocale() reads the reconciled value, so this fires
-// at most once per session (no loop). Module-scoped like the timezone guard:
-// useUserPref mounts many times per render (e.g. once per task row).
-let localeReconcileAttempted = false;
+let localeReconcileAttemptedForUserId: string | undefined;
 
 function detectedTimeZone(): string | null {
 	try {
@@ -205,23 +208,26 @@ export function useUserPref(): {
 	// fact. The first instance to get there writes; the rest read the flag.
 	const [, forceRender] = useState(0);
 	useEffect(() => {
-		if (loading || detectionAttempted) return;
+		if (loading || detectionAttemptedForUserId === zero.userID) return;
 		const zone = detectedTimeZone();
-		if (!zone || pref.timezone !== "UTC") return;
-		detectionAttempted = true;
+		if (!zone || pref.timezone !== "UTC") {
+			detectionAttemptedForUserId = zero.userID;
+			return;
+		}
+		detectionAttemptedForUserId = zero.userID;
 		detectionWrote = true;
 		forceRender((n) => n + 1);
 		setPref({ timezone: zone });
-	}, [loading, pref.timezone, setPref]);
+	}, [loading, pref.timezone, setPref, zero.userID]);
 
 	useEffect(() => {
-		if (loading || localeReconcileAttempted) return;
-		localeReconcileAttempted = true;
+		if (loading || localeReconcileAttemptedForUserId === zero.userID) return;
+		localeReconcileAttemptedForUserId = zero.userID;
 		if (pref.locale && pref.locale !== getLocale()) {
 			applyDocumentLocale(pref.locale);
 			setLocale(pref.locale);
 		}
-	}, [loading, pref.locale]);
+	}, [loading, pref.locale, zero.userID]);
 
 	return { pref, setPref, loading, timezoneDetected: detectionWrote };
 }

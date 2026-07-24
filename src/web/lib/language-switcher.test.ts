@@ -11,18 +11,13 @@ describe("localeOptions", () => {
 });
 
 describe("changeLocale", () => {
-	it("persists, applies the document locale, then calls setLocale when authed", () => {
+	it("persists, applies the document locale, then calls setLocale when persistLocale is supplied", () => {
 		const calls: string[] = [];
 		const setLocale = vi.fn(() => calls.push("setLocale"));
 		const applyDocumentLocale = vi.fn(() => calls.push("applyDocumentLocale"));
 		const persistLocale = vi.fn(() => calls.push("persistLocale"));
 
-		changeLocale("de", {
-			setLocale,
-			applyDocumentLocale,
-			persistLocale,
-			authed: true,
-		});
+		changeLocale("de", { setLocale, applyDocumentLocale, persistLocale });
 
 		expect(persistLocale).toHaveBeenCalledWith("de");
 		expect(applyDocumentLocale).toHaveBeenCalledWith("de");
@@ -34,19 +29,12 @@ describe("changeLocale", () => {
 		]);
 	});
 
-	it("does not persist when not authed", () => {
+	it("does not call persistLocale when omitted (pre-auth)", () => {
 		const setLocale = vi.fn();
 		const applyDocumentLocale = vi.fn();
-		const persistLocale = vi.fn();
 
-		changeLocale("ar", {
-			setLocale,
-			applyDocumentLocale,
-			persistLocale,
-			authed: false,
-		});
+		changeLocale("ar", { setLocale, applyDocumentLocale });
 
-		expect(persistLocale).not.toHaveBeenCalled();
 		expect(applyDocumentLocale).toHaveBeenCalledWith("ar");
 		expect(setLocale).toHaveBeenCalledWith("ar");
 	});

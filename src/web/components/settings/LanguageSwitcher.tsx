@@ -25,12 +25,7 @@ export function LanguageSwitcher({
 	function onChange(next: string) {
 		const locale = next as Locale;
 		setValue(locale);
-		changeLocale(locale, {
-			setLocale,
-			applyDocumentLocale,
-			persistLocale: persistLocale ?? (() => {}),
-			authed: persistLocale != null,
-		});
+		changeLocale(locale, { setLocale, applyDocumentLocale, persistLocale });
 	}
 
 	return (

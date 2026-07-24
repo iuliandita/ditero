@@ -136,6 +136,10 @@ function NormalWorkspace() {
 	const zero = useZero<typeof schema>();
 	const persistLocale = useCallback(
 		(locale: Locale) => {
+			// Best-effort by design, not a swallowed error: changeLocale() already
+			// applied the strategy chain + document locale before this runs, so a
+			// failed write only means cross-device sync doesn't happen yet -- Zero
+			// replays the queued mutation after reload/reconnect.
 			void runMutation(zero.mutate(mutators.userPref.set({ locale })), (m) =>
 				console.error("userPref.set failed", m),
 			);

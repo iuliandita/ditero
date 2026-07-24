@@ -9,8 +9,10 @@ export function localeOptions(): LocaleOption[] {
 export type ChangeLocaleDeps = {
 	setLocale: (locale: Locale, options?: { reload?: boolean }) => void;
 	applyDocumentLocale: (locale: Locale) => void;
-	persistLocale: (locale: Locale) => void;
-	authed: boolean;
+	// Omitted pre-auth, where there is no Zero client to persist through -- its
+	// presence/absence *is* the authed/not-authed distinction, so there is no
+	// separate flag to keep in sync with it.
+	persistLocale?: (locale: Locale) => void;
 };
 
 // Reload is Paraglide's default and deliberate here: `m.*()` calls are not
@@ -19,7 +21,7 @@ export type ChangeLocaleDeps = {
 // showing the old locale. The app is local-first (Zero rehydrates synced
 // state from cache), so a full reload is cheap and guaranteed-correct.
 export function changeLocale(locale: Locale, deps: ChangeLocaleDeps): void {
-	if (deps.authed) deps.persistLocale(locale);
+	deps.persistLocale?.(locale);
 	deps.applyDocumentLocale(locale);
 	deps.setLocale(locale);
 }
