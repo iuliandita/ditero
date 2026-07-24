@@ -8,6 +8,14 @@ export type ProviderResult =
 			// by policy before it ever reached the network -- blocked address,
 			// disallowed protocol, oversized response. Never worth retrying.
 			policyRejected?: boolean;
+			// A body-aware channel-health category the adapter is more sure of than
+			// the status alone. The classifier maps every 403 to "auth", which is
+			// right for Discord's "Missing Access" but wrong for Slack's
+			// "action_prohibited" (workspace policy disabled the webhook -- an admin
+			// action, not a credential fix). Only the adapter knows what its
+			// provider's status means, so it can override channelErrorCode here
+			// (issue #38). Health categories only; it never changes retry behaviour.
+			errorCode?: ChannelErrorCode;
 			error: string;
 	  };
 
@@ -156,12 +164,20 @@ export function classifyRetry(
 // because the two mean different things when the status is uninformative:
 // a 4xx we cannot place is still the provider refusing the request ("policy"),
 // while exhaustion is by construction 5xx/network/no-status ("transport").
+//
+// `override` is the adapter's body-aware category (issue #38): the classifier is
+// status-only and cannot tell Slack's policy-restriction 403 from a credential
+// one. When the adapter supplies a category for a permanent failure it wins over
+// the status mapping, but never over a safeFetch policy rejection (which is not
+// the adapter's to reinterpret) or a retryable decision (not a health signal).
 export function channelErrorCode(
 	decision: RetryDecision,
 	status: number | undefined,
+	override?: ChannelErrorCode,
 ): ChannelErrorCode | null {
 	if (decision.kind !== "permanent") return null;
 	if (decision.retryClass === "policy") return "policy";
+	if (override) return override;
 
 	if (status === 401 || status === 403 || status === 407) return "auth";
 	if (status === 404 || status === 410) return "not_found";
