@@ -1,5 +1,10 @@
-export const LOCALES = ["en", "de", "es", "fr", "ro", "ar"] as const;
-export type Locale = (typeof LOCALES)[number];
+import type { Locale } from "../../domain/locale.ts";
+
+export {
+	isSupportedLocale,
+	LOCALES,
+	type Locale,
+} from "../../domain/locale.ts";
 
 const RTL = new Set<string>(["ar"]);
 const NATIVE: Record<Locale, string> = {
@@ -10,10 +15,6 @@ const NATIVE: Record<Locale, string> = {
 	ro: "Română",
 	ar: "العربية",
 };
-
-export function isSupportedLocale(v: string): v is Locale {
-	return (LOCALES as readonly string[]).includes(v);
-}
 
 export function isRtl(locale: string): boolean {
 	return RTL.has(locale);

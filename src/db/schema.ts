@@ -334,6 +334,7 @@ export const userPref = pgTable("user_pref", {
 	timezone: text("timezone").notNull().default("UTC"),
 	quietHours: jsonb("quiet_hours"), // { start: "HH:MM", end: "HH:MM" } | null
 	escalationDefaults: jsonb("escalation_defaults"), // { repeatEveryMin, maxRepeats, fallbackUserId } | null
+	locale: text("locale"), // Locale from src/domain/locale.ts; null => browser/Accept-Language default
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.defaultNow()
 		.notNull(),

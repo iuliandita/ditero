@@ -810,3 +810,28 @@ describe("userPref write-permission mutator: M3a notification defaults", () => {
 		});
 	});
 });
+
+// M-i18n: persisted per-user locale, synced cross-device and read server-side
+// to render mail/notifications in the recipient's locale.
+describe("userPref write-permission mutator: locale", () => {
+	test("rejects an unsupported locale", async () => {
+		await expect(
+			call(mutators.userPref.set, { id: "viz-a" }, { locale: "zz" }),
+		).rejects.toThrow();
+	});
+
+	test("accepts and persists a supported locale", async () => {
+		await call(
+			mutators.userPref.set,
+			{ id: "viz-a" },
+			{ locale: "de" as const },
+		);
+		const row = (
+			await db
+				.select()
+				.from(tables.userPref)
+				.where(eq(tables.userPref.id, "viz-a"))
+		)[0];
+		expect(row?.locale).toBe("de");
+	});
+});
