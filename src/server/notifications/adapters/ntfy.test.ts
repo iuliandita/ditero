@@ -424,6 +424,39 @@ function nonHttpAdapterFiles(): string[] {
 	);
 }
 
+// A text scan has a low ceiling against a determined editor, so the deny
+// patterns below are widened past a bare `fetch(` to the shapes an evasion
+// would actually take (issue #32): a global fetch read into a local, a
+// destructure off globalThis, a dynamic import() or require() that hides the
+// module specifier, and the node network builtins beyond http/https. The
+// evasion corpus in the last describe asserts each of these is caught and that
+// the legitimate shapes (ctx.fetch, node:crypto, a "-window" import) are not.
+const NETWORK_MODULES = "node:(?:https?|http2|net|tls|dgram|dns)";
+const GLOBAL_OBJECTS = "globalThis|window|self|global";
+
+// For a non-HTTP adapter (email): it must speak no network at all, so even the
+// bare word `fetch` is banned. Case-insensitive so a comment cannot smuggle it.
+const NETWORK_PRIMITIVE = new RegExp(
+	`\\bfetch\\b|\\bsafe-http\\b|\\bimport\\s*\\(|\\brequire\\s*\\(|["']undici["']|["']${NETWORK_MODULES}["']`,
+	"i",
+);
+
+// For every notification file: `fetch`/`request` are legitimate identifiers
+// here (ctx.fetch is threaded everywhere), so only a CALL is banned -- plus the
+// alias shapes that reach a call without spelling `fetch(` literally.
+const DIRECT_NETWORK = new RegExp(
+	[
+		"\\bfetch\\s*\\(",
+		"\\brequest\\s*\\(",
+		"\\bimport\\s*\\(",
+		"\\brequire\\s*\\(",
+		`\\b(?:${GLOBAL_OBJECTS})\\s*\\.\\s*fetch\\b`,
+		`\\{[^}]*\\bfetch\\b[^}]*\\}\\s*=\\s*(?:${GLOBAL_OBJECTS})\\b`,
+		`["']undici["']`,
+		`["']${NETWORK_MODULES}["']`,
+	].join("|"),
+);
+
 // The single highest-severity control in M3, so it is asserted positively: the
 // negative form alone is bypassable (C19) via globalThis.fetch, undici's
 // request, or an alias, and scanning only adapters/ misses dispatch.ts.
@@ -468,7 +501,7 @@ describe("notification egress policy", () => {
 		for (const file of files) {
 			const source = readFileSync(file, "utf8");
 			expect(source, `${file} must not touch HTTP`).not.toMatch(
-				/\bfetch\b|\bsafe-http\b|["']undici["']|["']node:(https?|net|tls|dgram)["']/i,
+				NETWORK_PRIMITIVE,
 			);
 		}
 	});
@@ -477,8 +510,38 @@ describe("notification egress policy", () => {
 		for (const file of sourceFiles(NOTIFICATION_SOURCES)) {
 			const source = readFileSync(file, "utf8");
 			expect(source, `${file} must not call the network directly`).not.toMatch(
-				/\bfetch\s*\(|\brequest\s*\(|["']undici["']|["']node:(https?|net|tls|dgram)["']/,
+				DIRECT_NETWORK,
 			);
 		}
+	});
+});
+
+// The guard is a text scan, so its worth is exactly the set of evasions it
+// catches. These are the bypasses the milestone audit found the original
+// regexes missing (issue #32); each must be caught, and the legitimate shapes
+// each rule has to coexist with must not be.
+describe("egress guard evasion corpus", () => {
+	it.each([
+		["global fetch read into a local", "const go = globalThis.fetch;\ngo(url)"],
+		["destructured global fetch", "const { fetch: f } = globalThis;\nf(url)"],
+		["node:net import", 'import { connect } from "node:net";'],
+		["concatenated dynamic import", 'await import("undi" + "ci");'],
+		["window.fetch call", "window.fetch(url)"],
+		["require of a node builtin", 'require("node:tls")'],
+		["node:http2 import", 'import http2 from "node:http2";'],
+		["node:dns import", 'import { resolve4 } from "node:dns";'],
+	])("catches %s", (_case, snippet) => {
+		expect(snippet).toMatch(DIRECT_NETWORK);
+	});
+
+	it.each([
+		["threaded ctx.fetch", "const fn = ctx.fetch ?? safeFetch;"],
+		["node:crypto import", 'import { createHmac } from "node:crypto";'],
+		[
+			"a reminder-window import",
+			'import { reminderWindow } from "../../domain/reminder-window.ts";',
+		],
+	])("does not flag %s", (_case, snippet) => {
+		expect(snippet).not.toMatch(DIRECT_NETWORK);
 	});
 });
