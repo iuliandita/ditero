@@ -1,5 +1,6 @@
 import { List, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { m } from "../../../paraglide/messages.js";
 
 export type Section = "lists" | "settings";
 
@@ -14,21 +15,21 @@ export function BottomNav({
 }) {
 	return (
 		<nav
-			aria-label="Primary"
+			aria-label={m.nav_primary_label()}
 			className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] supports-backdrop-filter:bg-background/80 supports-backdrop-filter:backdrop-blur"
 		>
 			<Tab
-				label="Lists"
+				label={m.nav_lists()}
 				active={section === "lists"}
 				onClick={() => onSection("lists")}
 			>
 				<List className="size-5" />
 			</Tab>
-			<Tab label="Search" disabled title="Search — coming soon">
+			<Tab label={m.nav_search()} disabled title={m.nav_search_disabled_hint()}>
 				<Search className="size-5" />
 			</Tab>
 			<Tab
-				label="Settings"
+				label={m.nav_settings()}
 				active={section === "settings"}
 				onClick={() => onSection("settings")}
 			>

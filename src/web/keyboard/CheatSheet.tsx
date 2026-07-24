@@ -7,16 +7,29 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import type { Binding } from "../../domain/keymap.ts";
+import { m } from "../../paraglide/messages.js";
 import { formatBinding } from "./binding-label.ts";
 import { COMMANDS } from "./commands.ts";
 import { useEffectiveKeymap } from "./useEffectiveKeymap.ts";
 
+// Getters: this map is module-level, so resolving the messages eagerly would
+// freeze them at the import-time locale.
 const CATEGORY_LABEL: Record<string, string> = {
-	general: "General",
-	task: "Task",
-	view: "View",
-	nav: "Navigation",
-	help: "Help",
+	get general() {
+		return m.cheatsheet_category_general();
+	},
+	get task() {
+		return m.cheatsheet_category_task();
+	},
+	get view() {
+		return m.cheatsheet_category_view();
+	},
+	get nav() {
+		return m.cheatsheet_category_nav();
+	},
+	get help() {
+		return m.cheatsheet_category_help();
+	},
 };
 
 export function CheatSheet({
@@ -49,10 +62,8 @@ export function CheatSheet({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-md sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle>Keyboard shortcuts</DialogTitle>
-					<DialogDescription>
-						Shortcuts work anywhere outside text fields.
-					</DialogDescription>
+					<DialogTitle>{m.cheatsheet_title()}</DialogTitle>
+					<DialogDescription>{m.cheatsheet_description()}</DialogDescription>
 				</DialogHeader>
 				<div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
 					{groups.map(([category, rows]) => (

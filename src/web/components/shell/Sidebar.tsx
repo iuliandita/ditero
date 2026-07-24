@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ICONS, ListIcon } from "@/lib/list-icon";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import { m } from "../../../paraglide/messages.js";
 import type { Dashboard, Workspace } from "../../../zero/schema.gen.ts";
 import type { SavedView } from "../../hooks/useViews.ts";
 import type { BuiltinView } from "../../views/builtins.ts";
@@ -133,9 +134,10 @@ export function Sidebar({
 					variant="ghost"
 					size="sm"
 					className={cn("justify-start", collapsed && "justify-center px-0")}
+					aria-label={m.sidebar_open_shared()}
 					onClick={onOpenShared}
 				>
-					{collapsed ? "S" : "Open shared"}
+					{collapsed ? m.sidebar_open_shared_short() : m.sidebar_open_shared()}
 				</Button>
 				{/* Workspace-level Members entry (UX doc section 1). The list-header
 				    "Share list" flow, which spins up a shared workspace from a personal
@@ -146,20 +148,23 @@ export function Sidebar({
 					variant="ghost"
 					size="sm"
 					className={cn("justify-start", collapsed && "justify-center px-0")}
-					aria-label="Members"
+					aria-label={m.sidebar_members()}
 					disabled={!activeId}
 					onClick={onOpenMembers}
 				>
 					<Users className="size-4" />
-					{!collapsed && "Members"}
+					{!collapsed && m.sidebar_members()}
 				</Button>
 			</div>
 
-			<nav className="flex-1 overflow-y-auto p-2" aria-label="Lists">
+			<nav
+				className="flex-1 overflow-y-auto p-2"
+				aria-label={m.sidebar_lists_nav_label()}
+			>
 				<div className="mb-3">
 					{!collapsed && (
 						<div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-							Views
+							{m.sidebar_views_heading()}
 						</div>
 					)}
 					<ul className="flex flex-col gap-0.5">
@@ -170,14 +175,14 @@ export function Sidebar({
 								type="button"
 								data-testid="new-view"
 								onClick={onNewView}
-								title="New view"
+								title={m.action_new_view()}
 								className={cn(
 									"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
 									collapsed && "justify-center px-0",
 								)}
 							>
 								<Plus className="size-4 shrink-0" />
-								{!collapsed && "New view"}
+								{!collapsed && m.action_new_view()}
 							</button>
 						</li>
 					</ul>
@@ -186,7 +191,7 @@ export function Sidebar({
 				<div className="mb-3">
 					{!collapsed && (
 						<div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-							Dashboards
+							{m.sidebar_dashboards_heading()}
 						</div>
 					)}
 					<ul className="flex flex-col gap-0.5">
@@ -215,14 +220,14 @@ export function Sidebar({
 								type="button"
 								data-testid="new-dashboard"
 								onClick={onNewDashboard}
-								title="New dashboard"
+								title={m.action_new_dashboard()}
 								className={cn(
 									"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
 									collapsed && "justify-center px-0",
 								)}
 							>
 								<Plus className="size-4 shrink-0" />
-								{!collapsed && "New dashboard"}
+								{!collapsed && m.action_new_dashboard()}
 							</button>
 						</li>
 					</ul>
@@ -232,7 +237,7 @@ export function Sidebar({
 					<div key={group.folder?.id ?? "__ungrouped__"} className="mb-3">
 						{!collapsed && (
 							<div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-								{group.folder?.name ?? "Lists"}
+								{group.folder?.name ?? m.sidebar_ungrouped_lists()}
 							</div>
 						)}
 						<ul className="flex flex-col gap-0.5">
@@ -290,12 +295,12 @@ export function Sidebar({
 					onClick={onOpenSettings}
 				>
 					<Settings className="size-4" />
-					{!collapsed && "Settings"}
+					{!collapsed && m.nav_settings()}
 				</Button>
 				<Button
 					variant="ghost"
 					size="icon-sm"
-					aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+					aria-label={collapsed ? m.sidebar_expand() : m.sidebar_collapse()}
 					onClick={onToggleCollapsed}
 				>
 					{collapsed ? (

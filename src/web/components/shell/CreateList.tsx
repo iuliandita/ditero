@@ -24,6 +24,7 @@ import {
 	STARTER_TEMPLATES,
 	type TemplateContent,
 } from "../../../domain/template.ts";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type {
 	Folder,
@@ -33,12 +34,34 @@ import type {
 } from "../../../zero/schema.gen.ts";
 
 // Kinds offered in the picker. habits exists in the enum but is intentionally
-// hidden here (it is a recurring-by-nature kind, created elsewhere).
+// hidden here (it is a recurring-by-nature kind, created elsewhere). `label` is a
+// getter: this array is module-level, so resolving the message eagerly would
+// freeze it at the import-time locale.
 const PICKABLE_KINDS: { kind: ListKind; label: string }[] = [
-	{ kind: "tasks", label: "Tasks" },
-	{ kind: "shopping", label: "Shopping" },
-	{ kind: "checklist", label: "Checklist" },
-	{ kind: "project", label: "Project" },
+	{
+		kind: "tasks",
+		get label() {
+			return m.list_kind_tasks();
+		},
+	},
+	{
+		kind: "shopping",
+		get label() {
+			return m.list_kind_shopping();
+		},
+	},
+	{
+		kind: "checklist",
+		get label() {
+			return m.list_kind_checklist();
+		},
+	},
+	{
+		kind: "project",
+		get label() {
+			return m.list_kind_project();
+		},
+	},
 ];
 
 const NONE = "__none__";
@@ -106,12 +129,12 @@ function MobileCreateList(props: {
 			<SheetTrigger asChild>
 				<Button variant="outline" className="w-full justify-start">
 					<Plus className="size-4" />
-					New list
+					{m.create_list_new_list()}
 				</Button>
 			</SheetTrigger>
 			<SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto">
 				<SheetHeader>
-					<SheetTitle>New list</SheetTitle>
+					<SheetTitle>{m.create_list_new_list()}</SheetTitle>
 				</SheetHeader>
 				<div className="p-4 pt-0">
 					<Form
@@ -210,7 +233,7 @@ function Form({
 			onCreated?.();
 		} catch (e) {
 			console.error(e);
-			setError(e instanceof Error ? e.message : "Could not create the list.");
+			setError(e instanceof Error ? e.message : m.create_list_failed());
 		} finally {
 			inFlight.current = false;
 			setBusy(false);
@@ -227,7 +250,7 @@ function Form({
 					id={titleId}
 					data-testid="new-list"
 					className="h-9 flex-1 rounded-lg border bg-transparent px-3 text-base md:text-sm"
-					placeholder="List name"
+					placeholder={m.create_list_name_placeholder()}
 					value={title}
 					onChange={(e) => setTitle(e.target.value)}
 					onKeyDown={(e) => {
@@ -255,11 +278,14 @@ function Form({
 
 			<div className="flex flex-col gap-2 sm:flex-row">
 				<Select value={folderId} onValueChange={setFolderId}>
-					<SelectTrigger aria-label="Folder" className="w-full sm:w-1/2">
-						<SelectValue placeholder="Folder" />
+					<SelectTrigger
+						aria-label={m.create_list_folder_label()}
+						className="w-full sm:w-1/2"
+					>
+						<SelectValue placeholder={m.create_list_folder_label()} />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value={NONE}>No folder</SelectItem>
+						<SelectItem value={NONE}>{m.create_list_no_folder()}</SelectItem>
 						{folders.map((f) => (
 							<SelectItem key={f.id} value={f.id}>
 								{f.name}
@@ -270,13 +296,15 @@ function Form({
 
 				<Select value={templateSel} onValueChange={setTemplateSel}>
 					<SelectTrigger
-						aria-label="Start from template"
+						aria-label={m.create_list_template_label()}
 						className="w-full sm:w-1/2"
 					>
-						<SelectValue placeholder="Start from template" />
+						<SelectValue placeholder={m.create_list_template_label()} />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value={BLANK}>Blank</SelectItem>
+						<SelectItem value={BLANK}>
+							{m.create_list_template_blank()}
+						</SelectItem>
 						{STARTER_TEMPLATES.map((content, i) => (
 							<SelectItem
 								// biome-ignore lint/suspicious/noArrayIndexKey: starters are a fixed constant list
@@ -307,19 +335,19 @@ function Form({
 				disabled={busy}
 				className="self-end"
 			>
-				Add list
+				{m.create_list_submit()}
 			</Button>
 		</div>
 	);
 }
 
 function defaultName(content: TemplateContent): string {
-	if (content.kind !== "list") return "List";
+	if (content.kind !== "list") return m.template_default_name_generic();
 	return {
-		tasks: "Tasks",
-		shopping: "Shopping list",
-		checklist: "Checklist",
-		project: "Project",
-		habits: "Habits",
+		tasks: m.template_default_name_tasks(),
+		shopping: m.template_default_name_shopping(),
+		checklist: m.template_default_name_checklist(),
+		project: m.template_default_name_project(),
+		habits: m.template_default_name_habits(),
 	}[content.listKind];
 }

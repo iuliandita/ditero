@@ -3,6 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { searchTasks } from "../../domain/search.ts";
+import { m } from "../../paraglide/messages.js";
 import { queries } from "../../zero/queries.ts";
 import { useDashboards } from "../hooks/useDashboards.ts";
 import { useViews } from "../hooks/useViews.ts";
@@ -68,7 +69,8 @@ export function CommandPalette({
 			label: c.label,
 			run: () => run(c.id),
 		}));
-		if (cmdItems.length) result.push({ heading: "Commands", items: cmdItems });
+		if (cmdItems.length)
+			result.push({ heading: m.palette_group_commands(), items: cmdItems });
 
 		// Navigate: lists + built-in views + saved views. Views open the renderer.
 		const navItems: Item[] = [];
@@ -97,15 +99,17 @@ export function CommandPalette({
 			});
 		}
 		for (const d of dashboards) {
-			const label = `Dashboard: ${d.name}`;
-			if (q !== "" && !label.toLowerCase().includes(q)) continue;
+			// Match the raw name, not the decorated label: filtering on the
+			// translated prefix would make the search string locale-dependent.
+			if (q !== "" && !d.name.toLowerCase().includes(q)) continue;
 			navItems.push({
 				key: `dashboard:${d.id}`,
-				label,
+				label: m.palette_dashboard_item({ name: d.name }),
 				run: () => onNavigateDashboard(d.id),
 			});
 		}
-		if (navItems.length) result.push({ heading: "Navigate", items: navItems });
+		if (navItems.length)
+			result.push({ heading: m.palette_group_navigate(), items: navItems });
 
 		// Search: only on a non-empty query (searchTasks returns [] otherwise).
 		if (q !== "") {
@@ -122,16 +126,16 @@ export function CommandPalette({
 			);
 			const searchItems: Item[] = hits.map((h) => {
 				const task = tasks.find((t) => t.id === h.taskId);
-				const listTitle = listTitles.get(h.listId) ?? "List";
+				const listTitle = listTitles.get(h.listId) ?? m.palette_untitled_list();
 				return {
 					key: `task:${h.taskId}`,
-					label: task?.title ?? "Task",
+					label: task?.title ?? m.palette_untitled_task(),
 					hint: listTitle,
 					run: () => onNavigateList(h.listId),
 				};
 			});
 			if (searchItems.length)
-				result.push({ heading: "Search", items: searchItems });
+				result.push({ heading: m.palette_group_search(), items: searchItems });
 		}
 
 		return result;
@@ -204,14 +208,14 @@ export function CommandPalette({
 					}
 				}}
 			>
-				<DialogTitle className="sr-only">Command palette</DialogTitle>
+				<DialogTitle className="sr-only">{m.palette_title()}</DialogTitle>
 				<div className="border-b p-2">
 					<Input
 						ref={inputRef}
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
-						placeholder="Type a command or search..."
-						aria-label="Command palette search"
+						placeholder={m.palette_search_placeholder()}
+						aria-label={m.palette_search_label()}
 						role="combobox"
 						aria-expanded={flat.length > 0}
 						aria-controls={listboxId}
@@ -222,12 +226,12 @@ export function CommandPalette({
 				<div
 					id={listboxId}
 					role="listbox"
-					aria-label="Results"
+					aria-label={m.palette_results_label()}
 					className="max-h-80 overflow-y-auto p-1"
 				>
 					{flat.length === 0 ? (
 						<p className="px-2 py-6 text-center text-sm text-muted-foreground">
-							No results
+							{m.palette_no_results()}
 						</p>
 					) : (
 						groups.map((group) => (

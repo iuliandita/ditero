@@ -1,70 +1,91 @@
 import type { CommandDef } from "../../domain/keymap.ts";
+import { m } from "../../paraglide/messages.js";
 
 // Pure command registry: ids/labels/bindings/context, no handlers. Handlers are
 // injected at mount via CommandProvider so this stays testable. Task 9 EXTENDS
 // this array with movement + vim bindings; keep every id unique and every
 // command's `context` set (findConflicts guards the default profile in the test).
+// `label` is a getter: this array is module-level, so resolving the message
+// eagerly would freeze it at the import-time locale.
 export const COMMANDS: CommandDef[] = [
 	{
 		id: "palette.open",
 		category: "general",
-		label: "Command palette",
+		get label() {
+			return m.command_palette_open();
+		},
 		bindings: { default: [["Meta", "k"]] },
 		context: "global",
 	},
 	{
 		id: "task.create",
 		category: "task",
-		label: "New task",
+		get label() {
+			return m.command_task_create();
+		},
 		bindings: { default: [["c"]] },
 		context: "global",
 	},
 	{
 		id: "search.open",
 		category: "general",
-		label: "Search",
+		get label() {
+			return m.command_search_open();
+		},
 		bindings: { default: [["/"]] },
 		context: "global",
 	},
 	{
 		id: "view.new",
 		category: "view",
-		label: "New view",
+		get label() {
+			return m.action_new_view();
+		},
 		bindings: { default: [] },
 		context: "global",
 	},
 	{
 		id: "nav.today",
 		category: "nav",
-		label: "Go to Today",
+		get label() {
+			return m.command_nav_today();
+		},
 		bindings: { default: [["g", "t"]] },
 		context: "global",
 	},
 	{
 		id: "nav.dashboard",
 		category: "nav",
-		label: "Go to dashboard",
+		get label() {
+			return m.command_nav_dashboard();
+		},
 		bindings: { default: [["g", "d"]] },
 		context: "global",
 	},
 	{
 		id: "dashboard.new",
 		category: "view",
-		label: "New dashboard",
+		get label() {
+			return m.action_new_dashboard();
+		},
 		bindings: { default: [] },
 		context: "global",
 	},
 	{
 		id: "help.cheatSheet",
 		category: "help",
-		label: "Keyboard shortcuts",
+		get label() {
+			return m.command_help_cheat_sheet();
+		},
 		bindings: { default: [["?"]] },
 		context: "global",
 	},
 	{
 		id: "settings.open",
 		category: "general",
-		label: "Open settings",
+		get label() {
+			return m.command_settings_open();
+		},
 		bindings: { default: [["g", "s"]] },
 		context: "global",
 	},
@@ -73,28 +94,36 @@ export const COMMANDS: CommandDef[] = [
 	{
 		id: "nav.down",
 		category: "nav",
-		label: "Move down",
+		get label() {
+			return m.command_nav_down();
+		},
 		bindings: { default: [["j"]] },
 		context: "global",
 	},
 	{
 		id: "nav.up",
 		category: "nav",
-		label: "Move up",
+		get label() {
+			return m.command_nav_up();
+		},
 		bindings: { default: [["k"]] },
 		context: "global",
 	},
 	{
 		id: "nav.open",
 		category: "nav",
-		label: "Open focused",
+		get label() {
+			return m.command_nav_open();
+		},
 		bindings: { default: [["o"]] },
 		context: "global",
 	},
 	{
 		id: "task.toggleDone",
 		category: "task",
-		label: "Toggle done",
+		get label() {
+			return m.command_task_toggle_done();
+		},
 		bindings: { default: [["x"]] },
 		context: "global",
 	},
