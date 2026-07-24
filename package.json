@@ -12,7 +12,7 @@
 		"dev:server": "bun run --hot src/server/index.ts",
 		"dev:web": "vite",
 		"zero:cache": "docker compose up zero-cache",
-		"i18n:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --emit-ts-declarations",
+		"i18n:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --emit-ts-declarations --strategy cookie localStorage preferredLanguage baseLocale",
 		"i18n:validate": "bun run scripts/i18n-validate.ts",
 		"typecheck": "bun run i18n:compile && tsc --noEmit",
 		"test": "vitest run --dir src",
