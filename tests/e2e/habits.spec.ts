@@ -17,6 +17,17 @@ function uniqueEmail(prefix: string): string {
 	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
 }
 
+// The runner's zone and the browser's pinned zone are different calendar days
+// for part of every night, so the "today" a due-date field gets must come from
+// the page, not from this process.
+function browserToday(page: Page): Promise<string> {
+	return page.evaluate(() => {
+		const now = new Date();
+		const pad = (n: number) => String(n).padStart(2, "0");
+		return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+	});
+}
+
 async function signUp(page: Page, email: string): Promise<void> {
 	await page.goto("/");
 	await page.getByTestId("email").fill(email);
@@ -193,9 +204,7 @@ test("recurring task: list checkbox advances the due date and stays pending", as
 	// browser-local calendar day so it reads back as "Today" (formatDue compares
 	// against local now; a UTC-derived string can be off by a day).
 	const detail = await openDetail(page, "Take out bins");
-	const now = new Date();
-	const pad = (n: number) => String(n).padStart(2, "0");
-	const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+	const today = await browserToday(page);
 	await detail.getByLabel("Due date").fill(today);
 	await detail.getByTestId("recurrence-enable").click();
 	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
@@ -238,9 +247,7 @@ test("recurring task: Skip control advances the due date without awarding Karma"
 
 	// Due today + a daily recurrence so the row reads "Today" and Skip is offered.
 	const detail = await openDetail(page, "Sweep floor");
-	const now = new Date();
-	const pad = (n: number) => String(n).padStart(2, "0");
-	const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+	const today = await browserToday(page);
 	await detail.getByLabel("Due date").fill(today);
 	await detail.getByTestId("recurrence-enable").click();
 	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
