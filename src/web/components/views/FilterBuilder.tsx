@@ -371,9 +371,6 @@ function GroupCard({
 				<span className="text-xs font-medium text-muted-foreground">
 					{depth === 0 ? m.filter_heading_filters() : m.filter_heading_group()}
 				</span>
-				<span className="text-xs text-muted-foreground">
-					{m.filter_match()}
-				</span>
 				<Select
 					value={group.op}
 					onValueChange={(v) =>

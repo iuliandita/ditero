@@ -59,7 +59,7 @@ export function publicAuthLink(
 function compose(
 	kind: AuthMailKind,
 	locale: Locale,
-	params: { name: string; url: string },
+	params: { greeting: string; url: string },
 ): { subject: string; text: string } {
 	return kind === "verify"
 		? {
@@ -122,12 +122,18 @@ export function sendAuthMail(
 	const settled = (async () => {
 		try {
 			const locale = await resolveRecipientLocale(database, user.id ?? null);
+			// Two greetings rather than a pseudo-name in the {name} slot: a nameless
+			// recipient needs a whole line each locale writes itself, not a word
+			// substituted into a sentence built for English.
+			const name = user.name?.trim();
 			// Translated, so it can be non-ASCII even though no user input reaches it.
 			const { subject, text } = compose(kind, locale, {
-				name: headerSafe(
-					user.name?.trim() || m.auth_mail_greeting_fallback({}, { locale }),
-					NAME_MAX,
-				),
+				greeting: name
+					? m.auth_mail_greeting_named(
+							{ name: headerSafe(name, NAME_MAX) },
+							{ locale },
+						)
+					: m.auth_mail_greeting_anon({}, { locale }),
 				url: publicAuthLink(rawUrl, env),
 			});
 			const result = await activeMailer.send({

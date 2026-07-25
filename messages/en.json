@@ -72,10 +72,11 @@
 	"invite_mail_failed_retryable": "The invitation could not be emailed just now. The link below still works - share it yourself.",
 	"invite_mail_failed_permanent": "The invitation could not be emailed and will not arrive. Share the link below yourself.",
 	"auth_mail_verify_subject": "Confirm your email address",
-	"auth_mail_verify_body": "Hi {name},\n\nConfirm this address to finish setting up your Ditero account:\n\n{url}\n\nIf you did not create an account, ignore this message.",
+	"auth_mail_verify_body": "{greeting}\n\nConfirm this address to finish setting up your Ditero account:\n\n{url}\n\nIf you did not create an account, ignore this message.",
 	"auth_mail_reset_subject": "Reset your Ditero password",
-	"auth_mail_reset_body": "Hi {name},\n\nUse this link to choose a new password:\n\n{url}\n\nThe link expires in an hour and can be used once. If you did not ask\nfor it, ignore this message -- your password has not changed.",
-	"auth_mail_greeting_fallback": "there",
+	"auth_mail_reset_body": "{greeting}\n\nUse this link to choose a new password:\n\n{url}\n\nThe link expires in an hour and can be used once. If you did not ask\nfor it, ignore this message -- your password has not changed.",
+	"auth_mail_greeting_named": "Hi {name},",
+	"auth_mail_greeting_anon": "Hi there,",
 	"auth_mail_not_configured": "This server cannot send email, so password resets by email are unavailable. Ask your administrator to reset your password or to configure SMTP.",
 	"invite_mail_subject": "{inviter} invited you to {workspace} on Ditero",
 	"invite_mail_body": "{inviter} invited you to join {workspace} on Ditero.\n\nAccept the invitation:\n{link}\n\nIf you were not expecting this, you can ignore this email.",
@@ -95,7 +96,20 @@
 	"sidebar_ungrouped_lists": "Lists",
 	"sidebar_expand": "Expand sidebar",
 	"sidebar_collapse": "Collapse sidebar",
-	"list_progress_label": "{done} of {total} complete",
+	"list_progress_label": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local donePlural = done: plural"
+			],
+			"selectors": ["donePlural"],
+			"match": {
+				"donePlural=one": "{done} of {total} complete",
+				"donePlural=other": "{done} of {total} complete"
+			}
+		}
+	],
 	"restricted_my_tasks_heading": "My tasks",
 	"restricted_nothing_assigned": "Nothing assigned to you right now.",
 	"restricted_detail_completed": "Completed",
@@ -162,7 +176,7 @@
 	"quiet_hours_clear": "Clear",
 	"quiet_hours_timezone_detected": "Detected as {timezone} - is this right?",
 	"quiet_hours_timezone": "Times are in {timezone}.",
-	"quiet_hours_equal_warning": "Start and end must differ. To silence every channel instead, turn the channel off above.",
+	"quiet_hours_equal_warning": "Start and end must differ. To stop notifications entirely, turn your channels off above.",
 	"quiet_hours_urgent_note": "Reminders marked urgent ignore quiet hours.",
 	"focus_settings_heading": "Focus timer",
 	"focus_settings_description": "Pomodoro intervals for the focus timer.",
@@ -220,7 +234,16 @@
 	"priority_high": "High",
 	"due_today": "Today",
 	"due_tomorrow": "Tomorrow",
-	"list_completed_count": "{count} completed",
+	"list_completed_count": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} completed",
+				"countPlural=other": "{count} completed"
+			}
+		}
+	],
 	"list_change_icon": "Change list icon",
 	"list_display_options": "List display options",
 	"list_completed_heading": "Completed tasks",
@@ -431,10 +454,9 @@
 	"filter_op_excludes": "excludes",
 	"filter_heading_filters": "Filters",
 	"filter_heading_group": "Group",
-	"filter_match": "match",
 	"filter_combine_label": "Combine conditions",
-	"filter_combine_all": "All (AND)",
-	"filter_combine_any": "Any (OR)",
+	"filter_combine_all": "Match all conditions (AND)",
+	"filter_combine_any": "Match any condition (OR)",
 	"filter_join_and": "and",
 	"filter_join_or": "or",
 	"filter_conditions_label": "Filter conditions",
@@ -488,7 +510,16 @@
 	"calendar_viewing_as_agenda": "Viewing as agenda",
 	"calendar_chip_recurring": "{title}, recurring",
 	"calendar_day_today": "{date}, today",
-	"filter_multi_selected": "{count} selected",
+	"filter_multi_selected": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} selected",
+				"countPlural=other": "{count} selected"
+			}
+		}
+	],
 	"board_column_count": [
 		{
 			"declarations": ["input count", "local countPlural = count: plural"],
@@ -581,7 +612,20 @@
 			}
 		}
 	],
-	"panel_streak_summary": "{count} day streak, {pct}% on track",
+	"panel_streak_summary": [
+		{
+			"declarations": [
+				"input count",
+				"input pct",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} day streak, {pct}% on track",
+				"countPlural=other": "{count} day streak, {pct}% on track"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_summary": "no recurrence set",
 	"panel_streak_row_aria": "{title}: {summary}. Open task",
 	"panel_streak_no_recurrence": "No recurrence",
@@ -596,7 +640,19 @@
 			}
 		}
 	],
-	"panel_focus_minutes": "{minutes} min focused",
+	"panel_focus_minutes": [
+		{
+			"declarations": [
+				"input minutes",
+				"local minutesPlural = minutes: plural"
+			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=one": "{minutes} min focused",
+				"minutesPlural=other": "{minutes} min focused"
+			}
+		}
+	],
 	"panel_focus_own_only": "Your sessions only",
 	"habit_no_recurrence_hint": "Set a recurrence to start tracking this habit.",
 	"habit_skip_action": "Skip",
@@ -633,16 +689,90 @@
 	"focus_stop_aria": "Stop focus",
 	"focus_cue_work_complete": "Focus complete",
 	"focus_cue_break_over": "Break over",
-	"focus_duration_seconds": "{seconds}s focused",
-	"focus_duration_minutes": "{minutes}m focused",
-	"focus_duration_hours_minutes": "{hours}h {minutes}m focused",
+	"focus_duration_seconds": [
+		{
+			"declarations": [
+				"input seconds",
+				"local secondsPlural = seconds: plural"
+			],
+			"selectors": ["secondsPlural"],
+			"match": {
+				"secondsPlural=one": "{seconds}s focused",
+				"secondsPlural=other": "{seconds}s focused"
+			}
+		}
+	],
+	"focus_duration_minutes": [
+		{
+			"declarations": [
+				"input minutes",
+				"local minutesPlural = minutes: plural"
+			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=one": "{minutes}m focused",
+				"minutesPlural=other": "{minutes}m focused"
+			}
+		}
+	],
+	"focus_duration_hours_minutes": [
+		{
+			"declarations": [
+				"input hours",
+				"input minutes",
+				"local hoursPlural = hours: plural"
+			],
+			"selectors": ["hoursPlural"],
+			"match": {
+				"hoursPlural=one": "{hours}h {minutes}m focused",
+				"hoursPlural=other": "{hours}h {minutes}m focused"
+			}
+		}
+	],
 	"karma_panel_heading": "Progress",
 	"karma_vacation_badge": "Vacation",
 	"karma_vacation_panel_note": "Vacation pauses streak breaks and goal penalties. It is a pause, not a cheat -- points are still only earned by real completions.",
 	"karma_vacation_panel_note_until": "Vacation pauses streak breaks and goal penalties until {date}. It is a pause, not a cheat -- points are still only earned by real completions.",
-	"karma_level_maxed_aria": "Level {level}, max level reached, {points} points",
-	"karma_level_progress_aria": "Level {level}, {into} of {span} points toward level {next}",
-	"karma_points_short": "{points} pts",
+	"karma_level_maxed_aria": [
+		{
+			"declarations": [
+				"input points",
+				"input level",
+				"local pointsPlural = points: plural"
+			],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=one": "Level {level}, max level reached, {points} point",
+				"pointsPlural=other": "Level {level}, max level reached, {points} points"
+			}
+		}
+	],
+	"karma_level_progress_aria": [
+		{
+			"declarations": [
+				"input span",
+				"input into",
+				"input level",
+				"input next",
+				"local spanPlural = span: plural"
+			],
+			"selectors": ["spanPlural"],
+			"match": {
+				"spanPlural=one": "Level {level}, {into} of {span} point toward level {next}",
+				"spanPlural=other": "Level {level}, {into} of {span} points toward level {next}"
+			}
+		}
+	],
+	"karma_points_short": [
+		{
+			"declarations": ["input points", "local pointsPlural = points: plural"],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=one": "{points} pts",
+				"pointsPlural=other": "{points} pts"
+			}
+		}
+	],
 	"karma_level_max": "Max level",
 	"karma_level_next": "Next: {points}",
 	"karma_goal_daily_title": "Daily",
