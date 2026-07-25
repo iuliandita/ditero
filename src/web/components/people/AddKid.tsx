@@ -16,15 +16,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { m } from "../../../paraglide/messages.js";
+import { ROLE_LABELS } from "./role-labels.ts";
 
 // A kid is only ever granted member/viewer in the shared workspace (mirrors the
 // server MANAGED_ROLES gate in auth/managed-account.ts).
 type ManagedRole = "member" | "viewer";
-
-const ROLE_LABELS: Record<ManagedRole, string> = {
-	member: "Member",
-	viewer: "Viewer",
-};
 
 export function AddKid({
 	workspaceId,
@@ -72,16 +69,14 @@ export function AddKid({
 			});
 			if (!res.ok) {
 				const msg = (await res.text()).trim();
-				setError(msg || `Could not add the child account (${res.status}).`);
+				setError(msg || m.add_kid_failed_status({ status: res.status }));
 				return;
 			}
 			const data = (await res.json()) as { userId: string; email: string };
 			setHandle(data.email);
 		} catch (e) {
 			console.error(e);
-			setError(
-				e instanceof Error ? e.message : "Could not add the child account.",
-			);
+			setError(e instanceof Error ? e.message : m.add_kid_failed());
 		} finally {
 			setBusy(false);
 		}
@@ -107,32 +102,28 @@ export function AddKid({
 		>
 			<DialogContent data-testid="add-kid-dialog">
 				<DialogHeader>
-					<DialogTitle>Add child account</DialogTitle>
-					<DialogDescription>
-						Provision a restricted account. The child signs in with the handle
-						below and the password you set -- they only see tasks assigned to
-						them.
-					</DialogDescription>
+					<DialogTitle>{m.add_kid_dialog_title()}</DialogTitle>
+					<DialogDescription>{m.add_kid_description()}</DialogDescription>
 				</DialogHeader>
 
 				{handle ? (
 					<div className="flex flex-col gap-2">
 						<span className="text-sm text-muted-foreground">
-							Sign-in handle (share it with the password you set):
+							{m.add_kid_handle_hint()}
 						</span>
 						<div className="flex items-center gap-2">
 							<Input
 								data-testid="add-kid-handle"
 								readOnly
 								value={handle}
-								aria-label="Sign-in handle"
+								aria-label={m.add_kid_handle_aria()}
 								onFocus={(e) => e.currentTarget.select()}
 							/>
 							<Button
 								type="button"
 								variant="outline"
 								size="icon"
-								aria-label="Copy sign-in handle"
+								aria-label={m.add_kid_copy_handle_aria()}
 								data-testid="add-kid-copy"
 								onClick={() => void copyHandle()}
 							>
@@ -141,7 +132,7 @@ export function AddKid({
 						</div>
 						{copied && (
 							<span role="status" className="text-sm text-muted-foreground">
-								Copied to clipboard.
+								{m.copied_to_clipboard()}
 							</span>
 						)}
 						<Button
@@ -150,27 +141,27 @@ export function AddKid({
 							className="self-end"
 							onClick={reset}
 						>
-							Add another
+							{m.add_kid_another()}
 						</Button>
 					</div>
 				) : (
 					<div className="flex flex-col gap-3">
 						<div className="flex flex-col gap-1.5">
 							<label htmlFor={nameId} className="text-sm font-medium">
-								Name
+								{m.field_name()}
 							</label>
 							<Input
 								id={nameId}
 								data-testid="add-kid-name"
 								value={displayName}
-								placeholder="Child's name"
+								placeholder={m.add_kid_name_placeholder()}
 								onChange={(e) => setDisplayName(e.target.value)}
 							/>
 						</div>
 
 						<div className="flex flex-col gap-1.5">
 							<label htmlFor={passwordId} className="text-sm font-medium">
-								Password
+								{m.field_password()}
 							</label>
 							<Input
 								id={passwordId}
@@ -182,21 +173,21 @@ export function AddKid({
 						</div>
 
 						<div className="flex flex-col gap-1.5">
-							<span className="text-sm font-medium">Role</span>
+							<span className="text-sm font-medium">{m.field_role()}</span>
 							<Select
 								value={role}
 								onValueChange={(v) => setRole(v as ManagedRole)}
 							>
 								<SelectTrigger
-									aria-label="Role"
+									aria-label={m.field_role()}
 									data-testid="add-kid-role"
 									className="w-full"
 								>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="member">{ROLE_LABELS.member}</SelectItem>
-									<SelectItem value="viewer">{ROLE_LABELS.viewer}</SelectItem>
+									<SelectItem value="member">{ROLE_LABELS.member()}</SelectItem>
+									<SelectItem value="viewer">{ROLE_LABELS.viewer()}</SelectItem>
 								</SelectContent>
 							</Select>
 						</div>
@@ -214,7 +205,7 @@ export function AddKid({
 							className="self-end"
 							onClick={() => void submit()}
 						>
-							Add child
+							{m.add_kid_submit()}
 						</Button>
 					</div>
 				)}

@@ -12,24 +12,20 @@ import {
 	SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import { runMutation } from "../../lib/run-mutation.ts";
 import { AddKid } from "./AddKid.tsx";
 import { InviteDialog, type Role } from "./InviteDialog.tsx";
+import { ROLE_LABELS } from "./role-labels.ts";
 
 const ROLE_BADGE: Record<Role, "default" | "secondary" | "outline"> = {
 	owner: "default",
 	admin: "secondary",
 	member: "outline",
 	viewer: "outline",
-};
-const ROLE_LABEL: Record<Role, string> = {
-	owner: "Owner",
-	admin: "Admin",
-	member: "Member",
-	viewer: "Viewer",
 };
 
 function initials(name: string): string {
@@ -65,16 +61,16 @@ export function MembersPanel({
 	const [copiedId, setCopiedId] = useState<string | null>(null);
 
 	const members = useMemo(
-		() => memberships.filter((m) => m.workspaceId === workspaceId),
+		() => memberships.filter((mem) => mem.workspaceId === workspaceId),
 		[memberships, workspaceId],
 	);
 	const pending = useMemo(
-		() => invites.filter((i) => i.workspaceId === workspaceId),
+		() => invites.filter((inv) => inv.workspaceId === workspaceId),
 		[invites, workspaceId],
 	);
 	const callerRole = useMemo(
 		() =>
-			(members.find((m) => m.userId === zero.userID)?.role as
+			(members.find((mem) => mem.userId === zero.userID)?.role as
 				| Role
 				| undefined) ?? null,
 		[members, zero.userID],
@@ -103,28 +99,28 @@ export function MembersPanel({
 					className={isDesktop ? undefined : "max-h-[85dvh]"}
 				>
 					<SheetHeader>
-						<SheetTitle>Members</SheetTitle>
+						<SheetTitle>{m.members_heading()}</SheetTitle>
 						<SheetDescription>{workspaceName}</SheetDescription>
 					</SheetHeader>
 
 					<div className="flex flex-col gap-5 overflow-y-auto px-4">
 						<section className="flex flex-col gap-2">
 							<h3 className="text-xs font-medium text-muted-foreground">
-								Members
+								{m.members_heading()}
 							</h3>
 							<ul className="flex flex-col gap-1">
-								{members.map((m) => {
-									const name = m.user?.name ?? m.userId;
-									const role = (m.role as Role) ?? "member";
+								{members.map((mem) => {
+									const name = mem.user?.name ?? mem.userId;
+									const role = (mem.role as Role) ?? "member";
 									return (
 										<li
-											key={m.id}
+											key={mem.id}
 											className="flex items-center gap-3 rounded-lg border p-2"
 										>
 											<span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-medium">
-												{m.user?.image ? (
+												{mem.user?.image ? (
 													<img
-														src={m.user.image}
+														src={mem.user.image}
 														alt=""
 														className="size-full object-cover"
 													/>
@@ -134,12 +130,15 @@ export function MembersPanel({
 											</span>
 											<span className="min-w-0 flex-1 truncate text-sm">
 												{name}
-												{m.userId === zero.userID && (
-													<span className="text-muted-foreground"> (you)</span>
+												{mem.userId === zero.userID && (
+													<span className="text-muted-foreground">
+														{" "}
+														{m.person_you_suffix()}
+													</span>
 												)}
 											</span>
 											<Badge variant={ROLE_BADGE[role]}>
-												{ROLE_LABEL[role]}
+												{ROLE_LABELS[role]()}
 											</Badge>
 										</li>
 									);
@@ -152,26 +151,26 @@ export function MembersPanel({
 						{pending.length > 0 && (
 							<section className="flex flex-col gap-2">
 								<h3 className="text-xs font-medium text-muted-foreground">
-									Pending
+									{m.members_pending_heading()}
 								</h3>
 								<ul className="flex flex-col gap-1">
-									{pending.map((i) => {
-										const link = createdLinks[i.id];
+									{pending.map((inv) => {
+										const link = createdLinks[inv.id];
 										return (
 											<li
-												key={i.id}
+												key={inv.id}
 												className="flex items-center gap-2 rounded-lg border p-2"
 											>
 												<span className="min-w-0 flex-1 truncate text-sm">
-													{i.email ?? "Link invite"}
+													{inv.email ?? m.invite_link_entry_fallback()}
 												</span>
 												{link && (
 													<Button
 														type="button"
 														variant="ghost"
 														size="icon-sm"
-														aria-label="Copy invite link"
-														onClick={() => void copy(i.id, link)}
+														aria-label={m.invite_copy_link_aria()}
+														onClick={() => void copy(inv.id, link)}
 													>
 														<Copy />
 													</Button>
@@ -181,9 +180,9 @@ export function MembersPanel({
 													variant="destructive"
 													size="sm"
 													data-testid="invite-revoke"
-													onClick={() => void revoke(i.id)}
+													onClick={() => void revoke(inv.id)}
 												>
-													Revoke
+													{m.invite_revoke()}
 												</Button>
 											</li>
 										);
@@ -191,7 +190,7 @@ export function MembersPanel({
 								</ul>
 								{copiedId && (
 									<span role="status" className="text-xs text-muted-foreground">
-										Copied to clipboard.
+										{m.copied_to_clipboard()}
 									</span>
 								)}
 							</section>
@@ -212,7 +211,7 @@ export function MembersPanel({
 								onClick={() => setInviteOpen(true)}
 							>
 								<UserPlus />
-								Invite people
+								{m.invite_people_action()}
 							</Button>
 							<Button
 								type="button"
@@ -221,7 +220,7 @@ export function MembersPanel({
 								onClick={() => setAddKidOpen(true)}
 							>
 								<Baby />
-								Add child account
+								{m.add_kid_action()}
 							</Button>
 						</SheetFooter>
 					)}
@@ -235,7 +234,7 @@ export function MembersPanel({
 					open={inviteOpen}
 					onOpenChange={setInviteOpen}
 					onCreated={({ id, link }) =>
-						setCreatedLinks((m) => ({ ...m, [id]: link }))
+						setCreatedLinks((links) => ({ ...links, [id]: link }))
 					}
 				/>
 			)}

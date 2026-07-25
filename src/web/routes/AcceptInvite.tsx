@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { m } from "../../paraglide/messages.js";
 import { authClient } from "../lib/auth-client.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
 
@@ -21,13 +22,14 @@ function tokenFromLocation(): string | null {
 }
 
 // Map the accept endpoint's 4xx into one friendly line; never echo the raw reason.
+// The reasons stay the server's invite-state values -- only the lines resolve.
 function acceptMessage(status: number, reason: string): string {
-	if (status === 401) return "Please sign in to accept this invite.";
-	if (status === 404) return "This invite is no longer valid.";
-	if (reason === "expired") return "This invite has expired.";
-	if (reason === "exhausted") return "This invite has already been used.";
-	if (reason === "revoked") return "This invite has been revoked.";
-	return "This invite could not be accepted.";
+	if (status === 401) return m.accept_error_sign_in_required();
+	if (status === 404) return m.accept_error_invalid();
+	if (reason === "expired") return m.accept_error_expired();
+	if (reason === "exhausted") return m.accept_error_exhausted();
+	if (reason === "revoked") return m.accept_error_revoked();
+	return m.accept_error_generic();
 }
 
 export function AcceptInvite() {
@@ -114,7 +116,7 @@ export function AcceptInvite() {
 				const name = email.split("@")[0] || email;
 				const res = await authClient.signUp.email({ email, password, name });
 				if (res.error) {
-					setError(res.error.message ?? "Could not create the account.");
+					setError(res.error.message ?? m.accept_signup_failed());
 					return;
 				}
 			} else {
@@ -124,9 +126,7 @@ export function AcceptInvite() {
 					return;
 				}
 				if (result.kind === "two-factor") {
-					setError(
-						"Two-factor is enabled. Sign in on the main page, then reopen this link.",
-					);
+					setError(m.accept_two_factor_hint());
 					return;
 				}
 			}
@@ -140,7 +140,7 @@ export function AcceptInvite() {
 	if (preview.state === "loading" || isPending) {
 		return (
 			<div className="mx-auto flex max-w-sm flex-col gap-3 p-6">
-				<p className="text-sm text-muted-foreground">Loading invite...</p>
+				<p className="text-sm text-muted-foreground">{m.accept_loading()}</p>
 			</div>
 		);
 	}
@@ -151,16 +151,15 @@ export function AcceptInvite() {
 				data-testid="accept-invalid"
 				className="mx-auto flex max-w-sm flex-col gap-3 p-6"
 			>
-				<h1 className="text-lg font-semibold">Invite unavailable</h1>
+				<h1 className="text-lg font-semibold">{m.accept_invalid_title()}</h1>
 				<p className="text-sm text-muted-foreground">
-					This invite is no longer valid. It may have expired, been used, or
-					been revoked.
+					{m.accept_invalid_body()}
 				</p>
 				<a
 					href="/"
 					className="text-sm text-primary underline-offset-4 hover:underline"
 				>
-					Go to Ditero
+					{m.accept_go_home()}
 				</a>
 			</div>
 		);
@@ -172,16 +171,14 @@ export function AcceptInvite() {
 			className="mx-auto flex max-w-sm flex-col gap-4 p-6"
 		>
 			<div className="flex flex-col gap-1">
-				<h1 className="text-lg font-semibold">You've been invited</h1>
-				<p className="text-sm text-muted-foreground">
-					Join{" "}
-					<span
-						data-testid="accept-workspace-name"
-						className="font-medium text-foreground"
-					>
-						{preview.workspaceName}
-					</span>{" "}
-					on Ditero.
+				<h1 className="text-lg font-semibold">{m.accept_title()}</h1>
+				{/* One sentence, one message: the workspace name is a placeholder, so
+				    the emphasis span the English layout had cannot survive translation. */}
+				<p
+					data-testid="accept-join-line"
+					className="text-sm text-muted-foreground"
+				>
+					{m.accept_join_line({ workspace: preview.workspaceName })}
 				</p>
 			</div>
 
@@ -193,7 +190,7 @@ export function AcceptInvite() {
 						disabled={busy}
 						onClick={() => void join()}
 					>
-						Join {preview.workspaceName}
+						{m.accept_join_button({ workspace: preview.workspaceName })}
 					</Button>
 				</div>
 			) : (
@@ -206,14 +203,14 @@ export function AcceptInvite() {
 				>
 					<div className="flex flex-col gap-1.5">
 						<label htmlFor={emailId} className="text-sm font-medium">
-							Email
+							{m.field_email()}
 						</label>
 						<Input
 							id={emailId}
 							data-testid="accept-email"
 							type="email"
 							autoComplete="email"
-							placeholder="name@example.com"
+							placeholder={m.email_placeholder()}
 							value={email}
 							onChange={(e) => setEmail(e.target.value)}
 							required
@@ -221,7 +218,7 @@ export function AcceptInvite() {
 					</div>
 					<div className="flex flex-col gap-1.5">
 						<label htmlFor={passwordId} className="text-sm font-medium">
-							Password
+							{m.field_password()}
 						</label>
 						<Input
 							id={passwordId}
@@ -236,20 +233,22 @@ export function AcceptInvite() {
 						/>
 					</div>
 					<Button type="submit" data-testid="accept-submit" disabled={busy}>
-						{mode === "signup" ? "Create account and join" : "Sign in and join"}
+						{mode === "signup"
+							? m.accept_submit_signup()
+							: m.accept_submit_signin()}
 					</Button>
 					<button
 						type="button"
 						data-testid="accept-mode-toggle"
 						className="self-start text-sm text-primary underline-offset-4 hover:underline"
 						onClick={() => {
-							setMode((m) => (m === "signup" ? "signin" : "signup"));
+							setMode((cur) => (cur === "signup" ? "signin" : "signup"));
 							setError(null);
 						}}
 					>
 						{mode === "signup"
-							? "Already have an account? Sign in"
-							: "Need an account? Create one"}
+							? m.accept_toggle_to_signin()
+							: m.accept_toggle_to_signup()}
 					</button>
 				</form>
 			)}
