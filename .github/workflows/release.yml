@@ -56,6 +56,7 @@ jobs:
           exit-code: "1"
           trivy-version: "0.70.0"
       - run: bun run lint
+      - run: bun run i18n:compile && bun run i18n:validate
       - run: bun run typecheck
       - run: bun run test
       - run: bun run test:integration
