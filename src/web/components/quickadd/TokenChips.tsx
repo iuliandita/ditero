@@ -1,6 +1,7 @@
 import { CalendarClock, Flag, Hash, ListTodo, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { QuickAddToken } from "../../../domain/quick-add.ts";
+import { m } from "../../../paraglide/messages.js";
 
 const ICONS = {
 	date: CalendarClock,
@@ -41,7 +42,8 @@ export function TokenChips({
 						{tk.text}
 						<button
 							type="button"
-							aria-label={`Remove ${tk.text}`}
+							// `tk.text` is the verbatim input span (sigil included), never translated.
+							aria-label={m.quickadd_chip_remove({ token: tk.text })}
 							onClick={() => onRemove(tk)}
 							className="-me-1 ms-0.5 rounded-full hover:bg-black/10"
 						>
