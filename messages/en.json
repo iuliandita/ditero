@@ -614,7 +614,11 @@
 	],
 	"panel_streak_summary": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input pct",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{count} day streak, {pct}% on track",
@@ -738,7 +742,7 @@
 			],
 			"selectors": ["pointsPlural"],
 			"match": {
-				"pointsPlural=one": "Level {level}, max level reached, {points} points",
+				"pointsPlural=one": "Level {level}, max level reached, {points} point",
 				"pointsPlural=other": "Level {level}, max level reached, {points} points"
 			}
 		}
@@ -754,7 +758,7 @@
 			],
 			"selectors": ["spanPlural"],
 			"match": {
-				"spanPlural=one": "Level {level}, {into} of {span} points toward level {next}",
+				"spanPlural=one": "Level {level}, {into} of {span} point toward level {next}",
 				"spanPlural=other": "Level {level}, {into} of {span} points toward level {next}"
 			}
 		}

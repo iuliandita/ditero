@@ -628,7 +628,11 @@
 	],
 	"panel_streak_summary": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input pct",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Serie de {count} zi, {pct}% respectat",
