@@ -12,6 +12,7 @@ import {
 	type QuickAddToken,
 } from "../../../domain/quick-add.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
 import { TokenChips } from "./TokenChips.tsx";
@@ -148,7 +149,7 @@ export function QuickAddSheet({
 			setRaw("");
 			inputRef.current?.focus();
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Could not add the task.");
+			setError(e instanceof Error ? e.message : m.quickadd_failed());
 		} finally {
 			setBusy(false);
 		}
@@ -158,15 +159,23 @@ export function QuickAddSheet({
 		<Sheet open={open} onOpenChange={onOpenChange}>
 			<SheetContent side="bottom">
 				<SheetHeader>
-					<SheetTitle>Quick add</SheetTitle>
+					<SheetTitle>{m.quickadd_sheet_title()}</SheetTitle>
 				</SheetHeader>
 				<div className="flex flex-col gap-3 p-4 pt-0">
 					<input
 						ref={inputRef}
 						data-testid="quickadd-input"
-						aria-label="Quick add task"
+						aria-label={m.quickadd_input_label()}
 						className="h-10 w-full rounded-lg border bg-transparent px-3 text-base md:text-sm"
-						placeholder="e.g. Buy milk tomorrow p2 #store ~groceries"
+						// Parser grammar, passed in rather than translated: the
+						// `#`/`~`/`pN` sigils are literal syntax and chrono only
+						// parses English date words.
+						placeholder={m.quickadd_placeholder({
+							date: "tomorrow",
+							priority: "p2",
+							label: "#store",
+							list: "~groceries",
+						})}
 						value={raw}
 						onChange={(e) => setRaw(e.target.value)}
 						onKeyDown={(e) => {
@@ -186,8 +195,8 @@ export function QuickAddSheet({
 					<div className="flex items-center justify-between gap-2">
 						<span className="truncate text-xs text-muted-foreground">
 							{targetList
-								? `Adding to ${targetList.title}`
-								: "No list available"}
+								? m.quickadd_adding_to({ list: targetList.title })
+								: m.quickadd_no_list()}
 						</span>
 						<Button
 							data-testid="quickadd-submit"
@@ -195,7 +204,7 @@ export function QuickAddSheet({
 							onClick={() => void submit()}
 							disabled={busy || !targetList || !title.trim()}
 						>
-							Add task
+							{m.list_add_task()}
 						</Button>
 					</div>
 				</div>
