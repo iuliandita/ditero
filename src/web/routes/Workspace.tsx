@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Panel } from "../../domain/dashboard.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
+import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
@@ -115,7 +116,7 @@ export function Workspace() {
 	const zero = useZero<typeof schema>();
 	const [managed] = useQuery(queries.managedAccounts.mine());
 	const restricted = managed.some(
-		(m) => m.userId === zero.userID && m.restricted,
+		(row) => row.userId === zero.userID && row.restricted,
 	);
 	if (restricted) return <RestrictedShell />;
 	return <NormalWorkspace />;
@@ -140,8 +141,9 @@ function NormalWorkspace() {
 			// applied the strategy chain + document locale before this runs, so a
 			// failed write only means cross-device sync doesn't happen yet -- Zero
 			// replays the queued mutation after reload/reconnect.
-			void runMutation(zero.mutate(mutators.userPref.set({ locale })), (m) =>
-				console.error("userPref.set failed", m),
+			void runMutation(
+				zero.mutate(mutators.userPref.set({ locale })),
+				(message) => console.error("userPref.set failed", message),
 			);
 		},
 		[zero],
@@ -300,10 +302,10 @@ function NormalWorkspace() {
 	const members = useMemo(() => {
 		const seen = new Set<string>();
 		const out: { id: string; name: string }[] = [];
-		for (const m of memberships) {
-			if (m.user && !seen.has(m.userId)) {
-				seen.add(m.userId);
-				out.push({ id: m.userId, name: m.user.name });
+		for (const row of memberships) {
+			if (row.user && !seen.has(row.userId)) {
+				seen.add(row.userId);
+				out.push({ id: row.userId, name: row.user.name });
 			}
 		}
 		return out;
@@ -475,10 +477,10 @@ function NormalWorkspace() {
 		if (openDashboardRow.scope === "personal")
 			return openDashboardRow.ownerId === zero.userID;
 		return memberships.some(
-			(m) =>
-				m.userId === zero.userID &&
-				m.workspaceId === openDashboardRow.workspaceId &&
-				(m.role === "owner" || m.role === "admin" || m.role === "member"),
+			(row) =>
+				row.userId === zero.userID &&
+				row.workspaceId === openDashboardRow.workspaceId &&
+				(row.role === "owner" || row.role === "admin" || row.role === "member"),
 		);
 	}, [openDashboardRow, memberships, zero.userID]);
 
@@ -494,7 +496,7 @@ function NormalWorkspace() {
 	}
 
 	function deleteDashboard(id: string) {
-		if (!window.confirm("Delete this dashboard?")) return;
+		if (!window.confirm(m.dashboard_delete_confirm())) return;
 		void zero
 			.mutate(mutators.dashboard.delete({ id }))
 			.client.catch((e) => console.error("dashboard.delete failed", e));
@@ -631,14 +633,14 @@ function NormalWorkspace() {
 				<div className="flex items-center gap-2 border-b p-3 md:hidden">
 					<button
 						type="button"
-						aria-label="Back to lists"
+						aria-label={m.list_back_to_lists()}
 						onClick={() => setOpenListId(null)}
 						className="flex size-11 items-center justify-center rounded-lg"
 					>
 						<ChevronLeft className="size-5" />
 					</button>
 					<span className="truncate font-medium">
-						{openListRow?.title ?? "List"}
+						{openListRow?.title ?? m.list_untitled_fallback()}
 					</span>
 				</div>
 				<div className="p-4 md:p-6">
@@ -684,7 +686,9 @@ function NormalWorkspace() {
 						/>
 					</ErrorBoundary>
 				) : (
-					<p className="text-sm text-muted-foreground">Dashboard not found.</p>
+					<p className="text-sm text-muted-foreground">
+						{m.dashboard_not_found()}
+					</p>
 				)}
 			</div>
 		);
@@ -701,7 +705,7 @@ function NormalWorkspace() {
 							{!isDesktop && !isLanding && (
 								<button
 									type="button"
-									aria-label="Back"
+									aria-label={m.view_back()}
 									onClick={() => setOpenViewId(null)}
 									className="flex size-9 shrink-0 items-center justify-center rounded-lg"
 								>
@@ -722,7 +726,7 @@ function NormalWorkspace() {
 									<Button
 										variant="ghost"
 										size="icon-sm"
-										aria-label="View actions"
+										aria-label={m.view_actions()}
 										data-testid="view-actions"
 									>
 										<MoreHorizontal />
@@ -737,7 +741,7 @@ function NormalWorkspace() {
 										}
 										onSelect={() => setHome(activeView.id)}
 									>
-										<House /> Set as home
+										<House /> {m.view_set_home()}
 									</DropdownMenuCheckboxItem>
 									{activeView.saved && (
 										<>
@@ -747,11 +751,11 @@ function NormalWorkspace() {
 											>
 												{isPinned(activeView.id) ? (
 													<>
-														<PinOff /> Unpin
+														<PinOff /> {m.view_unpin()}
 													</>
 												) : (
 													<>
-														<Pin /> Pin
+														<Pin /> {m.view_pin()}
 													</>
 												)}
 											</DropdownMenuItem>
@@ -761,7 +765,7 @@ function NormalWorkspace() {
 													setViewManager({ mode: "edit", id: activeView.id })
 												}
 											>
-												<Pencil /> Edit
+												<Pencil /> {m.view_menu_edit()}
 											</DropdownMenuItem>
 											<DropdownMenuSeparator />
 											<DropdownMenuItem
@@ -769,7 +773,7 @@ function NormalWorkspace() {
 												className="text-destructive"
 												onSelect={() => deleteView(activeView.id)}
 											>
-												<Trash2 /> Delete
+												<Trash2 /> {m.view_menu_delete()}
 											</DropdownMenuItem>
 										</>
 									)}
@@ -800,7 +804,7 @@ function NormalWorkspace() {
 						</ErrorBoundary>
 					</section>
 				) : (
-					<p className="text-sm text-muted-foreground">View not found.</p>
+					<p className="text-sm text-muted-foreground">{m.view_not_found()}</p>
 				)}
 
 				{isLanding && (
@@ -808,9 +812,12 @@ function NormalWorkspace() {
 						{/* Mobile has no sidebar; surface built-ins + pinned views here so
 						    they are reachable and open the renderer on mobile too. */}
 						{!isDesktop && (
-							<nav aria-label="Views" className="flex flex-col gap-0.5">
+							<nav
+								aria-label={m.views_nav_label()}
+								className="flex flex-col gap-0.5"
+							>
 								<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
-									Views
+									{m.sidebar_views_heading()}
 								</div>
 								{[...BUILTIN_VIEWS, ...pinnedViews].map((v) => (
 									<button
@@ -829,16 +836,19 @@ function NormalWorkspace() {
 									onClick={() => setViewManager({ mode: "create" })}
 									className="rounded-lg px-2 py-2 text-start text-sm text-muted-foreground hover:bg-muted"
 								>
-									+ New view
+									+ {m.action_new_view()}
 								</button>
 							</nav>
 						)}
 						{/* Dashboards mirror the Views block so they are reachable on
 						    mobile too (desktop nav lives in the sidebar). */}
 						{!isDesktop && (
-							<nav aria-label="Dashboards" className="flex flex-col gap-0.5">
+							<nav
+								aria-label={m.dashboards_nav_label()}
+								className="flex flex-col gap-0.5"
+							>
 								<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
-									Dashboards
+									{m.sidebar_dashboards_heading()}
 								</div>
 								{dashboards.map((d) => (
 									<button
@@ -856,14 +866,15 @@ function NormalWorkspace() {
 									onClick={() => setDashboardManager({ mode: "create" })}
 									className="rounded-lg px-2 py-2 text-start text-sm text-muted-foreground hover:bg-muted"
 								>
-									+ New dashboard
+									+ {m.action_new_dashboard()}
 								</button>
 							</nav>
 						)}
 						<div className="flex items-center justify-between">
 							{isDesktop ? (
 								<h2 className="text-base font-semibold">
-									{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
+									{workspaces.find((w) => w.id === activeId)?.name ??
+										m.workspace_heading_fallback()}
 								</h2>
 							) : (
 								// Mobile: the workspace name doubles as the switcher trigger.
@@ -873,7 +884,8 @@ function NormalWorkspace() {
 									onClick={() => setSwitcherOpen(true)}
 									className="text-base font-semibold"
 								>
-									{workspaces.find((w) => w.id === activeId)?.name ?? "Lists"}
+									{workspaces.find((w) => w.id === activeId)?.name ??
+										m.workspace_heading_fallback()}
 								</button>
 							)}
 						</div>
@@ -889,12 +901,12 @@ function NormalWorkspace() {
 							groups.map((group) => (
 								<div key={group.folder?.id ?? "__ungrouped__"}>
 									<div className="mb-1 px-1 text-xs font-medium text-muted-foreground">
-										{group.folder?.name ?? "Lists"}
+										{group.folder?.name ?? m.sidebar_ungrouped_lists()}
 									</div>
 									<SortableList
 										items={group.lists}
 										onMove={moveList}
-										handleLabel="Reorder list"
+										handleLabel={m.list_reorder_handle()}
 										handleTestId="list-drag"
 										className="gap-1"
 										renderItem={(l) => (
@@ -978,7 +990,7 @@ function NormalWorkspace() {
 				<Sheet open={switcherOpen} onOpenChange={setSwitcherOpen}>
 					<SheetContent side="bottom">
 						<SheetHeader>
-							<SheetTitle>Workspaces</SheetTitle>
+							<SheetTitle>{m.workspace_switcher_title()}</SheetTitle>
 						</SheetHeader>
 						<div className="flex flex-col gap-1 p-4 pt-0">
 							{workspaces.map((w) => (
@@ -1001,7 +1013,7 @@ function NormalWorkspace() {
 								}}
 								className="rounded-lg px-3 py-2 text-start text-muted-foreground"
 							>
-								Open shared
+								{m.sidebar_open_shared()}
 							</button>
 							<button
 								type="button"
@@ -1013,7 +1025,7 @@ function NormalWorkspace() {
 								}}
 								className="rounded-lg px-3 py-2 text-start text-muted-foreground disabled:opacity-50"
 							>
-								Members
+								{m.sidebar_members()}
 							</button>
 						</div>
 					</SheetContent>
@@ -1023,7 +1035,8 @@ function NormalWorkspace() {
 					<MembersPanel
 						workspaceId={activeId}
 						workspaceName={
-							workspaces.find((w) => w.id === activeId)?.name ?? "Workspace"
+							workspaces.find((w) => w.id === activeId)?.name ??
+							m.workspace_name_fallback()
 						}
 						open={membersOpen}
 						onOpenChange={setMembersOpen}

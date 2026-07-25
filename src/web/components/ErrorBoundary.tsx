@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { m } from "../../paraglide/messages.js";
 import { Button } from "./ui/button.tsx";
 
 type Props = {
@@ -41,9 +42,9 @@ export class ErrorBoundary extends Component<Props, State> {
 					role="alert"
 					className="flex flex-col items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4"
 				>
-					<p className="text-sm font-medium">This view couldn't be rendered.</p>
+					<p className="text-sm font-medium">{m.error_boundary_message()}</p>
 					<Button variant="outline" size="sm" onClick={this.handleReset}>
-						Go home
+						{m.error_boundary_go_home()}
 					</Button>
 				</div>
 			);
