@@ -1,4 +1,6 @@
 import type { GroupBy } from "../../domain/view-filter.ts";
+import { m } from "../../paraglide/messages.js";
+import { priorityLabel } from "../lib/task-display.ts";
 
 // Pure grouping for the view renderer. Views feed an already filtered + sorted
 // task set here; grouping only buckets + orders the buckets, never re-sorts the
@@ -52,20 +54,15 @@ function dueBucketKey(dueAt: Date | null, now: Date): string {
 }
 
 const PRIORITY_ORDER = [3, 2, 1, 0];
-const PRIORITY_LABELS: Record<number, string> = {
-	3: "High",
-	2: "Medium",
-	1: "Low",
-	0: "None",
-};
 
 const DUE_ORDER = ["overdue", "today", "next7", "later", "none"];
-const DUE_LABELS: Record<string, string> = {
-	overdue: "Overdue",
-	today: "Today",
-	next7: "Next 7 days",
-	later: "Later",
-	none: "No date",
+// Thunks: resolving `m` at module scope would freeze the import-time locale.
+const DUE_LABELS: Record<string, () => string> = {
+	overdue: m.due_overdue,
+	today: m.due_today,
+	next7: m.due_next7,
+	later: m.due_later,
+	none: m.due_no_date,
 };
 
 // Buckets tasks into ordered groups. Semantics per mode:
@@ -95,8 +92,8 @@ export function groupTasks(
 			const done: GroupTask[] = [];
 			for (const t of tasks) (t.done ? done : open).push(t);
 			return [
-				{ key: "open", label: "Open", tasks: open },
-				{ key: "done", label: "Done", tasks: done },
+				{ key: "open", label: m.status_open(), tasks: open },
+				{ key: "done", label: m.status_done(), tasks: done },
 			];
 		}
 		case "priority": {
@@ -107,7 +104,7 @@ export function groupTasks(
 			}
 			return PRIORITY_ORDER.filter((p) => buckets.has(String(p))).map((p) => ({
 				key: String(p),
-				label: PRIORITY_LABELS[p],
+				label: priorityLabel(p),
 				tasks: buckets.get(String(p)) ?? [],
 			}));
 		}
@@ -122,7 +119,7 @@ export function groupTasks(
 			const keys = buckets.has("") ? [...named, ""] : named;
 			return keys.map((k) => ({
 				key: k,
-				label: k === "" ? "Unassigned" : ctx.memberName(k),
+				label: k === "" ? m.group_unassigned() : ctx.memberName(k),
 				tasks: buckets.get(k) ?? [],
 			}));
 		}
@@ -137,7 +134,7 @@ export function groupTasks(
 			const keys = buckets.has("") ? [...named, ""] : named;
 			return keys.map((k) => ({
 				key: k,
-				label: k === "" ? "No label" : ctx.labelName(k),
+				label: k === "" ? m.group_no_label() : ctx.labelName(k),
 				tasks: buckets.get(k) ?? [],
 			}));
 		}
@@ -159,7 +156,7 @@ export function groupTasks(
 				pushInto(buckets, dueBucketKey(t.dueAt, ctx.now), t);
 			return DUE_ORDER.filter((k) => buckets.has(k)).map((k) => ({
 				key: k,
-				label: DUE_LABELS[k],
+				label: DUE_LABELS[k](),
 				tasks: buckets.get(k) ?? [],
 			}));
 		}

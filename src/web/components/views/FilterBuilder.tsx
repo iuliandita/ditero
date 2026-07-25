@@ -24,6 +24,7 @@ import {
 	type FilterNode,
 	isGroup,
 } from "../../../domain/view-filter.ts";
+import { m } from "../../../paraglide/messages.js";
 import { FIELD_METAS, metaFor, type ValueControl } from "./filter-options.ts";
 
 type Option = { value: string; label: string };
@@ -52,8 +53,13 @@ function optionsFor(control: ValueControl, data: BuilderData): Option[] {
 			return data.labels.map((l) => ({ value: l.id, label: l.name }));
 		case "assignee":
 			return [
-				{ value: "me", label: "Me" },
-				...data.members.map((m) => ({ value: m.id, label: m.name })),
+				// "me" is the AST token view-filter resolves to the caller; only the
+				// label is translated.
+				{ value: "me", label: m.filter_assignee_me() },
+				...data.members.map((member) => ({
+					value: member.id,
+					label: member.name,
+				})),
 			];
 		default:
 			return [];
@@ -114,18 +120,20 @@ function MultiPicker({
 				<Button
 					variant="outline"
 					size="sm"
-					aria-label="Value"
+					aria-label={m.filter_value_label()}
 					data-testid="value-control"
 					className="min-w-32 justify-between"
 				>
-					{selected.length === 0 ? "Any" : `${selected.length} selected`}
+					{selected.length === 0
+						? m.filter_multi_any()
+						: m.filter_multi_selected({ count: selected.length })}
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent align="start" className="w-56">
 				<div className="flex max-h-56 flex-col gap-0.5 overflow-y-auto">
 					{options.length === 0 && (
 						<span className="px-1.5 py-1 text-xs text-muted-foreground">
-							No options.
+							{m.filter_no_options()}
 						</span>
 					)}
 					{options.map((o) => (
@@ -192,15 +200,15 @@ function ConditionRow({
 				>
 					<SelectTrigger
 						size="sm"
-						aria-label="Value"
+						aria-label={m.filter_value_label()}
 						data-testid="value-control"
 						className="min-w-28"
 					>
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value="true">Done</SelectItem>
-						<SelectItem value="false">Not done</SelectItem>
+						<SelectItem value="true">{m.status_done()}</SelectItem>
+						<SelectItem value="false">{m.status_not_done()}</SelectItem>
 					</SelectContent>
 				</Select>
 			);
@@ -209,7 +217,7 @@ function ConditionRow({
 			return (
 				<Input
 					type="date"
-					aria-label="Value"
+					aria-label={m.filter_value_label()}
 					data-testid="value-control"
 					className="h-7 w-auto"
 					value={typeof condition.value === "string" ? condition.value : ""}
@@ -242,11 +250,11 @@ function ConditionRow({
 			>
 				<SelectTrigger
 					size="sm"
-					aria-label="Value"
+					aria-label={m.filter_value_label()}
 					data-testid="value-control"
 					className="min-w-32"
 				>
-					<SelectValue placeholder="Select..." />
+					<SelectValue placeholder={m.select_placeholder()} />
 				</SelectTrigger>
 				<SelectContent>
 					{opts.map((o) => (
@@ -261,22 +269,22 @@ function ConditionRow({
 
 	return (
 		<fieldset
-			aria-label="Filter condition"
+			aria-label={m.filter_condition_label()}
 			className="flex min-w-0 flex-wrap items-center gap-1.5 border-0 p-0"
 		>
 			<Select value={condition.field} onValueChange={changeField}>
 				<SelectTrigger
 					size="sm"
-					aria-label="Field"
+					aria-label={m.filter_field_label()}
 					data-testid="field-select"
 					className="min-w-28"
 				>
 					<SelectValue />
 				</SelectTrigger>
 				<SelectContent>
-					{FIELD_METAS.map((m) => (
-						<SelectItem key={m.field} value={m.field}>
-							{m.label}
+					{FIELD_METAS.map((meta) => (
+						<SelectItem key={meta.field} value={meta.field}>
+							{meta.label}
 						</SelectItem>
 					))}
 				</SelectContent>
@@ -284,7 +292,7 @@ function ConditionRow({
 			<Select value={condition.operator} onValueChange={changeOperator}>
 				<SelectTrigger
 					size="sm"
-					aria-label="Operator"
+					aria-label={m.filter_operator_label()}
 					data-testid="operator-select"
 					className="min-w-24"
 				>
@@ -302,7 +310,7 @@ function ConditionRow({
 			<Button
 				variant="ghost"
 				size="icon-sm"
-				aria-label="Remove condition"
+				aria-label={m.filter_remove_condition()}
 				data-testid="remove"
 				className="ms-auto"
 				onClick={onRemove}
@@ -349,7 +357,11 @@ function GroupCard({
 
 	return (
 		<fieldset
-			aria-label={depth === 0 ? "Filter conditions" : "Nested filter group"}
+			aria-label={
+				depth === 0
+					? m.filter_conditions_label()
+					: m.filter_nested_group_label()
+			}
 			className={cn(
 				"flex min-w-0 flex-col gap-2 rounded-lg border p-2.5",
 				depth > 0 && "bg-muted/30",
@@ -357,9 +369,11 @@ function GroupCard({
 		>
 			<div className="flex items-center gap-2">
 				<span className="text-xs font-medium text-muted-foreground">
-					{depth === 0 ? "Filters" : "Group"}
+					{depth === 0 ? m.filter_heading_filters() : m.filter_heading_group()}
 				</span>
-				<span className="text-xs text-muted-foreground">match</span>
+				<span className="text-xs text-muted-foreground">
+					{m.filter_match()}
+				</span>
 				<Select
 					value={group.op}
 					onValueChange={(v) =>
@@ -368,21 +382,21 @@ function GroupCard({
 				>
 					<SelectTrigger
 						size="sm"
-						aria-label="Combine conditions"
+						aria-label={m.filter_combine_label()}
 						data-testid="group-op"
 					>
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value="and">All (AND)</SelectItem>
-						<SelectItem value="or">Any (OR)</SelectItem>
+						<SelectItem value="and">{m.filter_combine_all()}</SelectItem>
+						<SelectItem value="or">{m.filter_combine_any()}</SelectItem>
 					</SelectContent>
 				</Select>
 				{onRemove && (
 					<Button
 						variant="ghost"
 						size="icon-sm"
-						aria-label="Remove group"
+						aria-label={m.filter_remove_group()}
 						data-testid="remove"
 						className="ms-auto"
 						onClick={onRemove}
@@ -395,7 +409,7 @@ function GroupCard({
 			<div className="flex flex-col gap-2">
 				{group.conditions.length === 0 && (
 					<p className="text-xs text-muted-foreground">
-						No conditions yet — matches everything.
+						{m.filter_no_conditions()}
 					</p>
 				)}
 				{group.conditions.map((node, i) => (
@@ -403,7 +417,7 @@ function GroupCard({
 					<div key={i} className="flex flex-col gap-1">
 						{i > 0 && (
 							<span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-								{group.op}
+								{group.op === "or" ? m.filter_join_or() : m.filter_join_and()}
 							</span>
 						)}
 						{isGroup(node) ? (
@@ -433,7 +447,7 @@ function GroupCard({
 					data-testid="add-condition"
 					onClick={addCondition}
 				>
-					<Plus /> Condition
+					<Plus /> {m.filter_add_condition()}
 				</Button>
 				<Button
 					variant="outline"
@@ -441,7 +455,7 @@ function GroupCard({
 					data-testid="add-group"
 					onClick={addGroup}
 				>
-					<Plus /> Group
+					<Plus /> {m.filter_add_group()}
 				</Button>
 			</div>
 		</fieldset>

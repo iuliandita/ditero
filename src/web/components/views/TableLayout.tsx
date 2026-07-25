@@ -2,6 +2,7 @@ import { Flag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDue, isOverdue, priorityMeta } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
+import { m } from "../../../paraglide/messages.js";
 import type { Label, Task } from "../../../zero/schema.gen.ts";
 import { AssigneeChips } from "../people/AssigneeChips.tsx";
 import type { ViewSort } from "./ViewRenderer.tsx";
@@ -10,10 +11,11 @@ export type TableEntry = { task: Task; labels: Label[] };
 
 // Only scalar columns are sortable (map onto the view sort fields); multi-value
 // columns (Assignees/Labels) and List have no stable single-key sort.
-const SORTABLE: Record<string, string> = {
-	title: "Title",
-	due: "Due",
-	priority: "Priority",
+// Thunks: resolving `m` at module scope would freeze the import-time locale.
+const SORTABLE: Record<string, () => string> = {
+	title: m.field_title,
+	due: m.task_field_due,
+	priority: m.task_field_priority,
 };
 
 function ariaSort(
@@ -45,7 +47,7 @@ function SortHeader({
 				onClick={toggle}
 				className="flex items-center gap-1 font-medium hover:text-foreground"
 			>
-				{SORTABLE[field]}
+				{SORTABLE[field]()}
 				{active && (
 					<span aria-hidden="true">{sort.dir === "asc" ? "▲" : "▼"}</span>
 				)}
@@ -76,13 +78,13 @@ export function TableLayout({
 						<SortHeader field="due" sort={sort} onSort={onSort} />
 						<SortHeader field="priority" sort={sort} onSort={onSort} />
 						<th scope="col" className="px-3 py-2 text-start font-medium">
-							Assignees
+							{m.field_assignees()}
 						</th>
 						<th scope="col" className="px-3 py-2 text-start font-medium">
-							Labels
+							{m.task_field_labels()}
 						</th>
 						<th scope="col" className="px-3 py-2 text-start font-medium">
-							List
+							{m.field_list()}
 						</th>
 					</tr>
 				</thead>

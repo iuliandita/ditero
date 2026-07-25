@@ -29,6 +29,7 @@ import type {
 	ViewLayout,
 	WorkspaceScope,
 } from "../../../domain/view-filter.ts";
+import { m } from "../../../paraglide/messages.js";
 import { FilterBuilder } from "./FilterBuilder.tsx";
 
 // Assembled form output; the caller (Workspace) turns this into a view.create or
@@ -50,27 +51,34 @@ const DEFAULT_DISPLAY: ViewDisplay = {
 	workspaceScope: { mode: "all" },
 };
 
-const LAYOUTS: { value: ViewLayout; label: string }[] = [
-	{ value: "list", label: "List" },
-	{ value: "board", label: "Board" },
-	{ value: "table", label: "Table" },
-	{ value: "calendar", label: "Calendar" },
-];
-const GROUP_BYS: { value: GroupBy; label: string }[] = [
-	{ value: "none", label: "None" },
-	{ value: "status", label: "Status" },
-	{ value: "priority", label: "Priority" },
-	{ value: "assignee", label: "Assignee" },
-	{ value: "label", label: "Label" },
-	{ value: "list", label: "List" },
-	{ value: "due", label: "Due" },
-];
-const SORT_FIELDS: { value: string; label: string }[] = [
-	{ value: "sortKey", label: "Manual" },
-	{ value: "due", label: "Due date" },
-	{ value: "priority", label: "Priority" },
-	{ value: "title", label: "Title" },
-];
+// Every option `value` below is persisted in view.display and stays a literal;
+// only the labels are translated. Thunks, not resolved strings: these maps are
+// module-level, so calling `m` here would freeze the import-time locale.
+const LAYOUT_LABELS: Record<ViewLayout, () => string> = {
+	list: m.view_layout_list,
+	board: m.view_layout_board,
+	table: m.view_layout_table,
+	calendar: m.view_layout_calendar,
+};
+const GROUP_BY_LABELS: Record<GroupBy, () => string> = {
+	none: m.view_groupby_none,
+	status: m.field_status,
+	priority: m.task_field_priority,
+	assignee: m.field_assignee,
+	label: m.field_label,
+	list: m.field_list,
+	due: m.task_field_due,
+};
+const SORT_FIELD_LABELS: Record<string, () => string> = {
+	sortKey: m.view_sort_manual,
+	due: m.view_sort_due_date,
+	priority: m.task_field_priority,
+	title: m.field_title,
+};
+
+const LAYOUTS = Object.keys(LAYOUT_LABELS) as ViewLayout[];
+const GROUP_BYS = Object.keys(GROUP_BY_LABELS) as GroupBy[];
+const SORT_FIELDS = Object.keys(SORT_FIELD_LABELS);
 
 // With `htmlFor` the caption is a real <label> bound to one control; without it
 // (a composite like FilterBuilder) it is a plain section caption, not a label
@@ -189,17 +197,17 @@ export function ViewManager({
 
 	const body = (
 		<div className="flex flex-col gap-4 overflow-y-auto px-4 pb-4 md:px-6">
-			<Field label="Name" htmlFor={`${baseId}-name`}>
+			<Field label={m.field_name()} htmlFor={`${baseId}-name`}>
 				<Input
 					id={`${baseId}-name`}
 					data-testid="view-name"
 					value={name}
 					onChange={(e) => setName(e.target.value)}
-					placeholder="View name"
+					placeholder={m.view_name_placeholder()}
 				/>
 			</Field>
 
-			<Field label="Filter">
+			<Field label={m.view_field_filter()}>
 				<FilterBuilder
 					value={filter}
 					onChange={setFilter}
@@ -211,7 +219,7 @@ export function ViewManager({
 			</Field>
 
 			<div className="grid grid-cols-2 gap-3">
-				<Field label="Layout" htmlFor={`${baseId}-layout`}>
+				<Field label={m.view_field_layout()} htmlFor={`${baseId}-layout`}>
 					<Select
 						value={display.layout}
 						onValueChange={(v) => setLayout(v as ViewLayout)}
@@ -220,15 +228,15 @@ export function ViewManager({
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							{LAYOUTS.map((o) => (
-								<SelectItem key={o.value} value={o.value}>
-									{o.label}
+							{LAYOUTS.map((value) => (
+								<SelectItem key={value} value={value}>
+									{LAYOUT_LABELS[value]()}
 								</SelectItem>
 							))}
 						</SelectContent>
 					</Select>
 				</Field>
-				<Field label="Group by" htmlFor={`${baseId}-groupby`}>
+				<Field label={m.view_field_group_by()} htmlFor={`${baseId}-groupby`}>
 					<Select
 						value={display.groupBy}
 						onValueChange={(v) => setGroupBy(v as GroupBy)}
@@ -237,29 +245,29 @@ export function ViewManager({
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							{GROUP_BYS.map((o) => (
-								<SelectItem key={o.value} value={o.value}>
-									{o.label}
+							{GROUP_BYS.map((value) => (
+								<SelectItem key={value} value={value}>
+									{GROUP_BY_LABELS[value]()}
 								</SelectItem>
 							))}
 						</SelectContent>
 					</Select>
 				</Field>
-				<Field label="Sort by" htmlFor={`${baseId}-sortfield`}>
+				<Field label={m.view_field_sort_by()} htmlFor={`${baseId}-sortfield`}>
 					<Select value={display.sort.field} onValueChange={setSortField}>
 						<SelectTrigger id={`${baseId}-sortfield`} size="sm">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							{SORT_FIELDS.map((o) => (
-								<SelectItem key={o.value} value={o.value}>
-									{o.label}
+							{SORT_FIELDS.map((value) => (
+								<SelectItem key={value} value={value}>
+									{SORT_FIELD_LABELS[value]()}
 								</SelectItem>
 							))}
 						</SelectContent>
 					</Select>
 				</Field>
-				<Field label="Direction" htmlFor={`${baseId}-sortdir`}>
+				<Field label={m.view_field_direction()} htmlFor={`${baseId}-sortdir`}>
 					<Select
 						value={display.sort.dir}
 						onValueChange={(v) => setSortDir(v as "asc" | "desc")}
@@ -268,12 +276,12 @@ export function ViewManager({
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="asc">Ascending</SelectItem>
-							<SelectItem value="desc">Descending</SelectItem>
+							<SelectItem value="asc">{m.view_sort_asc()}</SelectItem>
+							<SelectItem value="desc">{m.view_sort_desc()}</SelectItem>
 						</SelectContent>
 					</Select>
 				</Field>
-				<Field label="Workspaces" htmlFor={`${baseId}-wsscope`}>
+				<Field label={m.view_field_workspaces()} htmlFor={`${baseId}-wsscope`}>
 					<Select
 						value={display.workspaceScope.mode === "one" ? "one" : "all"}
 						onValueChange={(v) => setScopeMode(v === "one" ? "one" : "all")}
@@ -282,16 +290,20 @@ export function ViewManager({
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="all">All workspaces</SelectItem>
-							<SelectItem value="one">One workspace</SelectItem>
+							<SelectItem value="all">
+								{m.view_scope_all_workspaces()}
+							</SelectItem>
+							<SelectItem value="one">
+								{m.view_scope_one_workspace()}
+							</SelectItem>
 						</SelectContent>
 					</Select>
 				</Field>
 				{display.workspaceScope.mode === "one" && (
-					<Field label="Workspace" htmlFor={`${baseId}-wsscope-one`}>
+					<Field label={m.field_workspace()} htmlFor={`${baseId}-wsscope-one`}>
 						<Select value={scopeWorkspaceId} onValueChange={setScopeWorkspace}>
 							<SelectTrigger id={`${baseId}-wsscope-one`} size="sm">
-								<SelectValue placeholder="Select..." />
+								<SelectValue placeholder={m.select_placeholder()} />
 							</SelectTrigger>
 							<SelectContent>
 								{workspaces.map((w) => (
@@ -307,7 +319,7 @@ export function ViewManager({
 
 			{canSetScope && (
 				<div className="grid grid-cols-2 gap-3">
-					<Field label="Visibility" htmlFor={`${baseId}-scope`}>
+					<Field label={m.view_field_visibility()} htmlFor={`${baseId}-scope`}>
 						<Select
 							value={scope}
 							onValueChange={(v) =>
@@ -318,19 +330,26 @@ export function ViewManager({
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem value="personal">Personal</SelectItem>
-								<SelectItem value="workspace">Workspace</SelectItem>
+								<SelectItem value="personal">
+									{m.view_visibility_personal()}
+								</SelectItem>
+								<SelectItem value="workspace">
+									{m.view_visibility_workspace()}
+								</SelectItem>
 							</SelectContent>
 						</Select>
 					</Field>
 					{scope === "workspace" && (
-						<Field label="Shared in" htmlFor={`${baseId}-scope-ws`}>
+						<Field
+							label={m.view_field_shared_in()}
+							htmlFor={`${baseId}-scope-ws`}
+						>
 							<Select
 								value={workspaceId ?? ""}
 								onValueChange={(v) => setWorkspaceId(v)}
 							>
 								<SelectTrigger id={`${baseId}-scope-ws`} size="sm">
-									<SelectValue placeholder="Select..." />
+									<SelectValue placeholder={m.select_placeholder()} />
 								</SelectTrigger>
 								<SelectContent>
 									{workspaces.map((w) => (
@@ -347,7 +366,10 @@ export function ViewManager({
 		</div>
 	);
 
-	const title = mode === "create" ? "New view" : "Edit view";
+	const title =
+		mode === "create"
+			? m.view_dialog_create_title()
+			: m.view_dialog_edit_title();
 	const footer = (
 		<Button
 			type="button"
@@ -355,7 +377,7 @@ export function ViewManager({
 			disabled={!canSave}
 			onClick={submit}
 		>
-			{mode === "create" ? "Create view" : "Save changes"}
+			{mode === "create" ? m.view_submit_create() : m.view_submit_save()}
 		</Button>
 	);
 

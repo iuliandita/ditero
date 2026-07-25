@@ -126,7 +126,8 @@ export function CommandPalette({
 			);
 			const searchItems: Item[] = hits.map((h) => {
 				const task = tasks.find((t) => t.id === h.taskId);
-				const listTitle = listTitles.get(h.listId) ?? m.palette_untitled_list();
+				const listTitle =
+					listTitles.get(h.listId) ?? m.list_untitled_fallback();
 				return {
 					key: `task:${h.taskId}`,
 					label: task?.title ?? m.palette_untitled_task(),

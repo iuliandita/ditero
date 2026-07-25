@@ -11,6 +11,7 @@ import {
 import { useMemo } from "react";
 import { reorderSortKey } from "@/lib/reorder";
 import { cn } from "@/lib/utils";
+import { m } from "../../../paraglide/messages.js";
 import { SortableRow, useReorderSensors } from "../list/SortableList.tsx";
 import { type RowHandlers, TaskRow } from "../list/TaskRow.tsx";
 import type { ViewEntry, ViewEntryGroup } from "./ViewRenderer.tsx";
@@ -50,7 +51,7 @@ function ColumnShell({
 	return (
 		<section
 			ref={setNodeRef}
-			aria-label={group.label || "Tasks"}
+			aria-label={group.label || m.board_column_untitled()}
 			className={cn(
 				"flex w-64 shrink-0 flex-col rounded-lg bg-muted/40",
 				isOver && "ring-2 ring-ring",
@@ -58,10 +59,10 @@ function ColumnShell({
 		>
 			<header className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-lg bg-muted/80 px-3 py-2 backdrop-blur">
 				<span className="truncate text-xs font-medium">
-					{group.label || "Tasks"}
+					{group.label || m.board_column_untitled()}
 				</span>
 				<span className="shrink-0 text-xs text-muted-foreground">
-					{count} {count === 1 ? "item" : "items"}
+					{m.board_column_count({ count })}
 				</span>
 			</header>
 			<div className="flex flex-col gap-1 p-2">{children}</div>
@@ -90,7 +91,7 @@ function DroppableColumn({
 					<div key={e.task.id} className="rounded-md border bg-card p-1">
 						<SortableRow
 							id={e.task.id}
-							label="Move card"
+							label={m.board_move_card()}
 							testId="board-card-handle"
 						>
 							<Card entry={e} handlers={handlers} />
