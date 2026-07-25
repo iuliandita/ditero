@@ -199,6 +199,7 @@ beforeEach(async () => {
 			timezone: "UTC",
 			quietHours: null,
 			escalationDefaults: null,
+			locale: null,
 		});
 	}
 });
@@ -412,6 +413,48 @@ describe("quiet hours and the sweep", () => {
 		expect(after.find((r) => r.recipientUserId === FALLBACK)?.status).not.toBe(
 			"escalated",
 		);
+	});
+
+	// Each outbox row carries the language of the person it is addressed to, so
+	// the send path renders without a second lookup. The sibling's must be the
+	// FALLBACK's, not the original recipient's -- both prefs are in scope where
+	// the sibling is enqueued, and the wrong one reads as plausible.
+	test("each reminder row carries its own recipient's locale", async () => {
+		await setPref(OWNER, { locale: "de" });
+		await setPref(FALLBACK, { locale: "fr" });
+		await seedTask("sched-e2b", {
+			repeatEveryMin: 10,
+			maxRepeats: 1,
+			fallbackUserId: FALLBACK,
+		});
+		await tick(ON_TIME);
+		await tick(new Date("2026-08-01T09:10:31Z"));
+
+		const rows = await remindersFor("sched-e2b");
+		const original = rows.find((r) => r.recipientUserId === OWNER);
+		const sibling = rows.find((r) => r.recipientUserId === FALLBACK);
+		expect(original).toBeDefined();
+		expect(sibling).toBeDefined();
+
+		const originalOutbox = await outboxFor(original?.id ?? "");
+		expect(originalOutbox).toHaveLength(1);
+		expect(originalOutbox[0].payload).toMatchObject({ locale: "de" });
+
+		const siblingOutbox = await outboxFor(sibling?.id ?? "");
+		expect(siblingOutbox).toHaveLength(1);
+		expect(siblingOutbox[0].payload).toMatchObject({ locale: "fr" });
+	});
+
+	// An unsupported or unset stored locale renders in en; nothing else does.
+	test("a reminder for a recipient with no stored locale carries en", async () => {
+		await setPref(OWNER, { locale: "kl" });
+		await seedTask("sched-e2c");
+		await tick(ON_TIME);
+
+		const [row] = await remindersFor("sched-e2c");
+		const outbox = await outboxFor(row.id);
+		expect(outbox).toHaveLength(1);
+		expect(outbox[0].payload).toMatchObject({ locale: "en" });
 	});
 
 	// S1: memberships change between writing the preference and firing it.

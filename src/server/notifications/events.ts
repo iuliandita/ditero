@@ -24,6 +24,7 @@ import type { Pool } from "pg";
 import { overdueSweepMs } from "../../config/scheduler.ts";
 import { maxQueuedPerUser } from "../../config/worker.ts";
 import * as tables from "../../db/schema.ts";
+import type { Locale } from "../../domain/locale.ts";
 import { instantToWallClock } from "../../domain/zoned.ts";
 import {
 	type NotificationEvent,
@@ -82,15 +83,19 @@ export type EventPayload = {
 	actorUserId?: string;
 	commentId?: string;
 	dueAt?: string;
+	// The recipient's language, from the preferences this fan-out already loaded.
+	// dispatch renders with it explicitly; the server has no safe ambient locale.
+	locale: Locale;
 };
 
-function payloadFor(event: NotificationEvent): EventPayload {
+function payloadFor(event: NotificationEvent, locale: Locale): EventPayload {
 	if (event.kind === "assign") {
 		return {
 			kind: "assign",
 			taskId: event.taskId,
 			taskTitle: event.taskTitle,
 			actorUserId: event.actorUserId,
+			locale,
 		};
 	}
 	return {
@@ -99,6 +104,7 @@ function payloadFor(event: NotificationEvent): EventPayload {
 		taskTitle: event.taskTitle,
 		commentId: event.commentId,
 		actorUserId: event.actorUserId,
+		locale,
 	};
 }
 
@@ -178,7 +184,7 @@ export async function enqueueEvents(
 			database,
 			item.recipientUserId,
 			userChannels,
-			payloadFor(item.event),
+			payloadFor(item.event, pref.locale),
 			(channelKind) => keyFor(item, channelKind),
 			decision.kind === "defer" ? decision.until : now,
 			cap,
@@ -395,6 +401,7 @@ export async function overdueSweep(
 				taskId: candidate.row.taskId,
 				taskTitle: candidate.row.title,
 				dueAt: candidate.row.dueAt?.toISOString(),
+				locale: pref.locale,
 			},
 			() => candidate.key,
 			decision.kind === "defer" ? decision.until : now,

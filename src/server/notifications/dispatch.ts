@@ -8,7 +8,9 @@ import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
 import * as tables from "../../db/schema.ts";
+import type { Locale } from "../../domain/locale.ts";
 import type { ChannelKind } from "../../domain/notification-channel.ts";
+import { m } from "../../paraglide/messages.js";
 import {
 	channelKeyRing,
 	decryptChannelConfig,
@@ -16,6 +18,7 @@ import {
 import type { FieldKeyRing } from "../../security/field-encryption.ts";
 import type { safeFetch } from "../../security/safe-http.ts";
 import type { Network } from "../client-ip.ts";
+import { localeFromPref } from "../recipient-locale.ts";
 import { discordAdapter } from "./adapters/discord.ts";
 import { emailAdapter } from "./adapters/email.ts";
 import { ntfyAdapter } from "./adapters/ntfy.ts";
@@ -44,6 +47,9 @@ const reminderPayloadSchema = z
 		taskTitle: z.string(),
 		occurrenceAt: z.string(),
 		urgent: z.boolean().optional(),
+		// Never fatal to the render: a payload carrying a locale of the wrong
+		// shape must still be delivered, in en.
+		locale: z.string().optional().catch(undefined),
 	})
 	.loose();
 
@@ -54,14 +60,25 @@ const eventPayloadSchema = z
 		kind: z.enum(["assign", "mention", "overdue"]),
 		taskTitle: z.string(),
 		dueAt: z.string().optional(),
+		locale: z.string().optional().catch(undefined),
 	})
 	.loose();
 
-const EVENT_BODY: Record<"assign" | "mention" | "overdue", string> = {
-	assign: "You were assigned this task",
-	mention: "You were mentioned in a comment",
-	overdue: "This task is overdue",
-};
+// A function, not a constant map: every render takes the recipient's locale
+// explicitly. Reading Paraglide's ambient locale here would be process-global
+// state shared by concurrent sends, and a module-scope render would freeze one
+// language for the lifetime of the process.
+function eventBody(
+	kind: "assign" | "mention" | "overdue",
+	dueAt: string | undefined,
+	locale: Locale,
+): string {
+	if (kind === "assign") return m.notify_assign_body({}, { locale });
+	if (kind === "mention") return m.notify_mention_body({}, { locale });
+	return dueAt
+		? m.notify_overdue_body_due({ due: dueAt }, { locale })
+		: m.notify_overdue_body({}, { locale });
+}
 
 export type DispatchDeps = {
 	database: Database;
@@ -83,25 +100,31 @@ const DEFAULT_ADAPTERS: Partial<Record<ChannelKind, ChannelAdapter>> = {
 	email: emailAdapter,
 };
 
-function renderPayload(raw: unknown): Omit<ChannelPayload, "ackUrl"> | null {
+export function renderPayload(
+	raw: unknown,
+): Omit<ChannelPayload, "ackUrl"> | null {
 	const reminder = reminderPayloadSchema.safeParse(raw);
 	if (reminder.success) {
 		return {
 			title: reminder.data.taskTitle,
-			// i18n: Task 15 renders this in the recipient's locale and timezone.
-			body: `Due ${reminder.data.occurrenceAt}`,
+			body: m.notify_reminder_body(
+				{ when: reminder.data.occurrenceAt },
+				// A row enqueued before the locale was carried, or one carrying an
+				// unsupported value, renders in en -- the one fallback there is.
+				{ locale: localeFromPref(reminder.data.locale) },
+			),
 			urgent: reminder.data.urgent === true,
 		};
 	}
 	const event = eventPayloadSchema.safeParse(raw);
 	if (!event.success) return null;
-	const suffix =
-		event.data.kind === "overdue" && event.data.dueAt
-			? ` (due ${event.data.dueAt})`
-			: "";
 	return {
 		title: event.data.taskTitle,
-		body: `${EVENT_BODY[event.data.kind]}${suffix}`,
+		body: eventBody(
+			event.data.kind,
+			event.data.kind === "overdue" ? event.data.dueAt : undefined,
+			localeFromPref(event.data.locale),
+		),
 		urgent: false,
 	};
 }

@@ -321,7 +321,7 @@ beforeEach(async () => {
 		.delete(tables.notificationChannel)
 		.where(inArray(tables.notificationChannel.userId, [...userIds]));
 	for (const id of userIds) {
-		await setPref(id, { timezone: "UTC", quietHours: null });
+		await setPref(id, { timezone: "UTC", quietHours: null, locale: null });
 		await setMembership(id, id !== OUT);
 	}
 	await seedTask(TASK);
@@ -352,6 +352,27 @@ describe("assignment notifications", () => {
 			kind: "assign",
 			taskId: TASK,
 			actorUserId: A,
+		});
+	});
+
+	// The recipient's stored language rides on the payload so the send path
+	// renders in it without a second lookup. Only en.json exists, so every locale
+	// still renders the same text: what is asserted is the locale that was
+	// actually carried, not the rendered string.
+	test.each([
+		["a supported stored locale", "de", "de"],
+		["an unsupported stored locale", "kl", "en"],
+		["no stored locale", null, "en"],
+	])("carries the recipient's locale on the payload for %s", async (_label, stored, expected) => {
+		await seedChannel(B, "ntfy");
+		await setPref(B, { locale: stored });
+		const collected = await mutate(mutators.task.assign, A, {
+			taskId: TASK,
+			userId: B,
+		});
+		expect(await enqueue(collected)).toBe(1);
+		expect((await outboxFor(B))[0].payload).toMatchObject({
+			locale: expected,
 		});
 	});
 

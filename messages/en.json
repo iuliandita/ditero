@@ -812,5 +812,10 @@
 	"dashboard_not_found": "Dashboard not found.",
 	"dashboard_delete_confirm": "Delete this dashboard?",
 	"key_space": "Space",
-	"key_esc": "Esc"
+	"key_esc": "Esc",
+	"notify_reminder_body": "Due {when}",
+	"notify_assign_body": "You were assigned this task",
+	"notify_mention_body": "You were mentioned in a comment",
+	"notify_overdue_body": "This task is overdue",
+	"notify_overdue_body_due": "This task is overdue (due {due})"
 }
