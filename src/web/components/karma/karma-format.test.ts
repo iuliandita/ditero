@@ -1,16 +1,19 @@
 import { describe, expect, test } from "vitest";
-import { m } from "../../../paraglide/messages.js";
 import { levelProgress, reasonLabel, ringFraction } from "./karma-format.ts";
+
+// Expected values are the English catalog literals, not `m.*()`: routing both
+// sides through the same message makes the assertion pass even if the catalog
+// entry is emptied. Locale coverage is locale-freeze.test.ts's job.
 
 describe("reasonLabel", () => {
 	test("maps known reasons", () => {
-		expect(reasonLabel("task_complete")).toBe(m.karma_reason_task_complete());
-		expect(reasonLabel("habit_done")).toBe(m.karma_reason_habit_done());
-		expect(reasonLabel("habit_undo")).toBe(m.karma_reason_habit_undo());
+		expect(reasonLabel("task_complete")).toBe("Completed a task");
+		expect(reasonLabel("habit_done")).toBe("Habit done");
+		expect(reasonLabel("habit_undo")).toBe("Habit undone");
 	});
 	test("humanizes unknown reasons", () => {
 		expect(reasonLabel("some_new_reason")).toBe("Some new reason");
-		expect(reasonLabel("")).toBe(m.karma_reason_fallback());
+		expect(reasonLabel("")).toBe("Karma change");
 	});
 	test("inherited Object keys never resolve as a label", () => {
 		expect(reasonLabel("constructor")).toBe("Constructor");

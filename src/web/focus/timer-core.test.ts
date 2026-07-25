@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest";
-import { m } from "../../paraglide/messages.js";
 import {
 	type Cycle,
 	clampFocusConfig,
@@ -12,6 +11,10 @@ import {
 	phaseLabel,
 	remainingSecFrom,
 } from "./timer-core.ts";
+
+// Expected strings are the English catalog literals. Asserting against `m.*()`
+// puts the same message on both sides, so an emptied catalog entry would still
+// pass -- and here that would silently erase the phase and tier distinctions.
 
 describe("clampFocusConfig", () => {
 	test("null/garbage -> defaults", () => {
@@ -129,28 +132,20 @@ describe("formatting", () => {
 
 	test("phaseLabel distinguishes long break", () => {
 		expect(phaseLabel({ phase: "work", round: 1, isLongBreak: false })).toBe(
-			m.focus_phase_work(),
+			"Focus",
 		);
 		expect(phaseLabel({ phase: "break", round: 1, isLongBreak: false })).toBe(
-			m.focus_phase_break(),
+			"Break",
 		);
 		expect(phaseLabel({ phase: "break", round: 4, isLongBreak: true })).toBe(
-			m.focus_phase_long_break(),
+			"Long break",
 		);
 	});
 
 	test("formatFocusedDuration tiers: seconds, minutes, hours+minutes", () => {
-		expect(formatFocusedDuration(0)).toBe(
-			m.focus_duration_seconds({ seconds: 0 }),
-		);
-		expect(formatFocusedDuration(2)).toBe(
-			m.focus_duration_seconds({ seconds: 2 }),
-		);
-		expect(formatFocusedDuration(25 * 60)).toBe(
-			m.focus_duration_minutes({ minutes: 25 }),
-		);
-		expect(formatFocusedDuration(3600 + 5 * 60)).toBe(
-			m.focus_duration_hours_minutes({ hours: 1, minutes: "05" }),
-		);
+		expect(formatFocusedDuration(0)).toBe("0s focused");
+		expect(formatFocusedDuration(2)).toBe("2s focused");
+		expect(formatFocusedDuration(25 * 60)).toBe("25m focused");
+		expect(formatFocusedDuration(3600 + 5 * 60)).toBe("1h 05m focused");
 	});
 });
