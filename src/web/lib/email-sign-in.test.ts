@@ -20,6 +20,16 @@ describe("signInEmail", () => {
 		).resolves.toEqual({ kind: "signed-in" });
 	});
 
+	// A crashed backend or a proxy can answer without a JSON body at all.
+	test("still reports an error when the response carries no JSON body", async () => {
+		const request = vi.fn(async () => new Response("", { status: 500 }));
+		const result = await signInEmail("a@test.invalid", "password", request);
+		if (result.kind !== "error") {
+			throw new Error(`expected an error result, got ${result.kind}`);
+		}
+		expect(result.message.length).toBeGreaterThan(0);
+	});
+
 	test("returns the server error message", async () => {
 		const request = vi.fn(async () =>
 			Response.json({ message: "Invalid credentials" }, { status: 401 }),

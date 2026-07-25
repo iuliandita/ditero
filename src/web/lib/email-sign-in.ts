@@ -1,3 +1,5 @@
+import { m } from "../../paraglide/messages.js";
+
 type SignInResult =
 	| { kind: "signed-in" }
 	| { kind: "two-factor" }
@@ -24,7 +26,10 @@ export async function signInEmail(
 		twoFactorRedirect?: boolean;
 	};
 	if (!response.ok) {
-		return { kind: "error", message: body.message ?? "sign in failed" };
+		return {
+			kind: "error",
+			message: body.message ?? m.login_error_sign_in_failed(),
+		};
 	}
 	if (body.twoFactorRedirect) return { kind: "two-factor" };
 	return { kind: "signed-in" };
