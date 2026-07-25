@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { browserToday } from "../support/browser-day.ts";
 
 // M2 recurrence editor e2e. Exercises the preset-driven recurrence control in the
 // task detail surface: enable, set a weekly every-2-weeks Mon/Wed rule, verify the
@@ -15,17 +16,6 @@ let emailSeq = 0;
 function uniqueEmail(prefix: string): string {
 	emailSeq += 1;
 	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-// The runner's zone and the browser's pinned zone are different calendar days
-// for part of every night, so the "today" a due-date field gets must come from
-// the page, not from this process.
-function browserToday(page: Page): Promise<string> {
-	return page.evaluate(() => {
-		const now = new Date();
-		const pad = (n: number) => String(n).padStart(2, "0");
-		return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-	});
 }
 
 async function signUp(page: Page, email: string): Promise<void> {
@@ -324,7 +314,9 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 		"false",
 	);
 
-	const today = new Date().toISOString().slice(0, 10);
+	// The heatmap cell is labelled with the user's LOCAL day (habitDay), which is
+	// what the app both writes and reads -- not this process's UTC day.
+	const today = await browserToday(page);
 
 	// Mark done for today -> streak advances, primary reflects done, heatmap cell.
 	await card.getByTestId("habit-done").click();
