@@ -9,6 +9,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
@@ -122,10 +123,12 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 						durationSec,
 					}),
 				),
-				(m) => console.error("focus.logSession failed", m),
+				(msg) => console.error("focus.logSession failed", msg),
 			);
 		}
-		showCue(kind === "work" ? "Focus complete" : "Break over");
+		showCue(
+			kind === "work" ? m.focus_cue_work_complete() : m.focus_cue_break_over(),
+		);
 
 		const next = nextCycle(s.cycle, cfg);
 		const nextSec = plannedFor(next, cfg);

@@ -1,15 +1,20 @@
 import { describe, expect, test } from "vitest";
+import { m } from "../../../paraglide/messages.js";
 import { levelProgress, reasonLabel, ringFraction } from "./karma-format.ts";
 
 describe("reasonLabel", () => {
 	test("maps known reasons", () => {
-		expect(reasonLabel("task_complete")).toBe("Completed a task");
-		expect(reasonLabel("habit_done")).toBe("Habit done");
-		expect(reasonLabel("habit_undo")).toBe("Habit undone");
+		expect(reasonLabel("task_complete")).toBe(m.karma_reason_task_complete());
+		expect(reasonLabel("habit_done")).toBe(m.karma_reason_habit_done());
+		expect(reasonLabel("habit_undo")).toBe(m.karma_reason_habit_undo());
 	});
 	test("humanizes unknown reasons", () => {
 		expect(reasonLabel("some_new_reason")).toBe("Some new reason");
-		expect(reasonLabel("")).toBe("Karma change");
+		expect(reasonLabel("")).toBe(m.karma_reason_fallback());
+	});
+	test("inherited Object keys never resolve as a label", () => {
+		expect(reasonLabel("constructor")).toBe("Constructor");
+		expect(reasonLabel("__proto__")).toBe("Proto");
 	});
 });
 

@@ -7,6 +7,7 @@ import { runMutation } from "@/lib/run-mutation";
 import { cn } from "@/lib/utils";
 import { localDay } from "../../../domain/local-day.ts";
 import { computeStreak, type HabitLogEntry } from "../../../domain/streak.ts";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { List, schema, Task } from "../../../zero/schema.gen.ts";
 import { useHabitLogs } from "../../hooks/useHabitLogs.ts";
@@ -104,7 +105,7 @@ export function HabitCard({
 					className="mt-3 text-sm text-muted-foreground"
 					data-testid="habit-no-recurrence"
 				>
-					Set a recurrence to start tracking this habit.
+					{m.habit_no_recurrence_hint()}
 				</p>
 			)}
 
@@ -120,7 +121,7 @@ export function HabitCard({
 						data-testid="habit-skip"
 						onClick={() => log("skipped")}
 					>
-						<SkipForward /> Skip
+						<SkipForward /> {m.habit_skip_action()}
 					</Button>
 					<Button
 						type="button"
@@ -130,14 +131,16 @@ export function HabitCard({
 						data-testid="habit-undo"
 						onClick={unlog}
 					>
-						<RotateCcw /> Undo
+						<RotateCcw /> {m.habit_undo_action()}
 					</Button>
 				</div>
 				<Button
 					type="button"
 					variant={done ? "default" : "outline"}
 					aria-pressed={done}
-					aria-label={done ? "Done today" : "Mark done for today"}
+					aria-label={
+						done ? m.habit_done_today_aria() : m.habit_mark_done_aria()
+					}
 					data-testid="habit-done"
 					onClick={() => (done ? unlog() : log("done"))}
 					className={cn(
@@ -145,7 +148,7 @@ export function HabitCard({
 						done && "bg-success text-background hover:bg-success/90",
 					)}
 				>
-					<Check /> {done ? "Done" : "Done today"}
+					<Check /> {done ? m.habit_done_state() : m.habit_done_action()}
 				</Button>
 			</div>
 		</div>

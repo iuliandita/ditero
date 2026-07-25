@@ -2,6 +2,7 @@ import { Palmtree } from "lucide-react";
 import type { ReactNode } from "react";
 import { evaluateGoals, levelForPoints } from "../../../domain/karma.ts";
 import { localDay } from "../../../domain/local-day.ts";
+import { m } from "../../../paraglide/messages.js";
 import { useKarma } from "../../hooks/useKarma.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import { cn } from "../../lib/utils.ts";
@@ -88,10 +89,13 @@ export function KarmaPanel() {
 	);
 
 	const levelLabel = prog.maxed
-		? `Level ${level}, max level reached, ${points} points`
-		: `Level ${level}, ${prog.into} of ${prog.span} points toward level ${
-				level + 1
-			}`;
+		? m.karma_level_maxed_aria({ level, points })
+		: m.karma_level_progress_aria({
+				level,
+				into: prog.into,
+				span: prog.span,
+				next: level + 1,
+			});
 
 	return (
 		<section
@@ -101,7 +105,7 @@ export function KarmaPanel() {
 		>
 			<div className="flex items-center justify-between gap-3">
 				<h2 id="karma-heading" className="text-sm font-semibold">
-					Progress
+					{m.karma_panel_heading()}
 				</h2>
 				{vacation.active && (
 					<span
@@ -109,7 +113,7 @@ export function KarmaPanel() {
 						className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
 					>
 						<Palmtree className="size-3" aria-hidden="true" />
-						Vacation
+						{m.karma_vacation_badge()}
 					</span>
 				)}
 			</div>
@@ -119,9 +123,9 @@ export function KarmaPanel() {
 					className="mt-1 text-xs text-muted-foreground"
 					data-testid="karma-vacation-note"
 				>
-					Vacation pauses streak breaks and goal penalties
-					{vacation.until ? ` until ${vacation.until}` : ""}. It is a pause, not
-					a cheat -- points are still only earned by real completions.
+					{vacation.until
+						? m.karma_vacation_panel_note_until({ date: vacation.until })
+						: m.karma_vacation_panel_note()}
 				</p>
 			)}
 
@@ -130,22 +134,24 @@ export function KarmaPanel() {
 					<Ring fraction={prog.fraction} label={levelLabel} met={prog.maxed}>
 						<span className="text-lg font-semibold">{level}</span>
 						<span className="text-[10px] text-muted-foreground">
-							{points} pts
+							{m.karma_points_short({ points })}
 						</span>
 					</Ring>
 					<span className="text-xs text-muted-foreground">
-						{prog.maxed ? "Max level" : `Next: ${prog.next}`}
+						{prog.maxed
+							? m.karma_level_max()
+							: m.karma_level_next({ points: prog.next ?? 0 })}
 					</span>
 				</div>
 
 				<GoalRing
-					title="Daily"
+					kind="daily"
 					done={dailyDone}
 					goal={goals.daily}
 					met={dailyMet}
 				/>
 				<GoalRing
-					title="Weekly"
+					kind="weekly"
 					done={weeklyDone}
 					goal={goals.weekly}
 					met={weeklyMet}
@@ -153,10 +159,12 @@ export function KarmaPanel() {
 			</div>
 
 			<h3 className="mt-6 mb-2 text-xs font-medium text-muted-foreground">
-				Karma updates
+				{m.karma_ledger_heading()}
 			</h3>
 			{loading ? (
-				<p className="text-sm text-muted-foreground">Loading…</p>
+				<p className="text-sm text-muted-foreground">
+					{m.karma_ledger_loading()}
+				</p>
 			) : (
 				<KarmaLedger events={events} />
 			)}
@@ -164,36 +172,68 @@ export function KarmaPanel() {
 	);
 }
 
+type GoalKind = "daily" | "weekly";
+
+// Whole aria sentences per goal, never "{translated title} goal ...": an
+// inflected language cannot compose that. Thunks: module-scope locale freeze.
+const GOAL_LABELS: Record<
+	GoalKind,
+	{
+		title: () => string;
+		unset: () => string;
+		progress: (i: { done: number; goal: number }) => string;
+		met: (i: { done: number; goal: number }) => string;
+	}
+> = {
+	daily: {
+		title: m.karma_goal_daily_title,
+		unset: m.karma_goal_daily_unset_aria,
+		progress: m.karma_goal_daily_aria,
+		met: m.karma_goal_daily_met_aria,
+	},
+	weekly: {
+		title: m.karma_goal_weekly_title,
+		unset: m.karma_goal_weekly_unset_aria,
+		progress: m.karma_goal_weekly_aria,
+		met: m.karma_goal_weekly_met_aria,
+	},
+};
+
 function GoalRing({
-	title,
+	kind,
 	done,
 	goal,
 	met,
 }: {
-	title: string;
+	kind: GoalKind;
 	done: number;
 	goal: number;
 	met: boolean;
 }) {
 	const unset = goal <= 0;
+	const msg = GOAL_LABELS[kind];
 	const label = unset
-		? `${title} goal not set`
-		: `${title} goal ${done} of ${goal}${met ? ", met" : ""}`;
+		? msg.unset()
+		: met
+			? msg.met({ done, goal })
+			: msg.progress({ done, goal });
 	return (
 		<div
 			className="flex flex-col items-center gap-1"
-			data-testid={`karma-goal-${title.toLowerCase()}`}
+			data-testid={`karma-goal-${kind}`}
 		>
 			<Ring fraction={ringFraction(done, goal)} label={label} met={met}>
 				{unset ? (
-					<span className="text-xs text-muted-foreground">Not set</span>
+					<span className="text-xs text-muted-foreground">
+						{m.karma_goal_unset_value()}
+					</span>
 				) : (
 					<span className="text-sm font-semibold tabular-nums">
 						{done}/{goal}
 					</span>
 				)}
 			</Ring>
-			<span className="text-xs text-muted-foreground">{title}</span>
+			<span className="text-xs text-muted-foreground">{msg.title()}</span>
 		</div>
 	);
 }

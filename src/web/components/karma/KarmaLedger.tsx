@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { m } from "../../../paraglide/messages.js";
 import type { KarmaEvent } from "../../../zero/schema.gen.ts";
 import { reasonLabel } from "./karma-format.ts";
 
@@ -23,7 +24,7 @@ export function KarmaLedger({ events }: { events: KarmaEvent[] }) {
 				className="text-sm text-muted-foreground"
 				data-testid="karma-ledger-empty"
 			>
-				No karma yet. Complete a task or a habit to start earning points.
+				{m.karma_ledger_empty()}
 			</p>
 		);
 

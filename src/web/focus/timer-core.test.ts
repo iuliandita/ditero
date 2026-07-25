@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { m } from "../../paraglide/messages.js";
 import {
 	type Cycle,
 	clampFocusConfig,
@@ -128,20 +129,28 @@ describe("formatting", () => {
 
 	test("phaseLabel distinguishes long break", () => {
 		expect(phaseLabel({ phase: "work", round: 1, isLongBreak: false })).toBe(
-			"Focus",
+			m.focus_phase_work(),
 		);
 		expect(phaseLabel({ phase: "break", round: 1, isLongBreak: false })).toBe(
-			"Break",
+			m.focus_phase_break(),
 		);
 		expect(phaseLabel({ phase: "break", round: 4, isLongBreak: true })).toBe(
-			"Long break",
+			m.focus_phase_long_break(),
 		);
 	});
 
 	test("formatFocusedDuration tiers: seconds, minutes, hours+minutes", () => {
-		expect(formatFocusedDuration(0)).toBe("0s focused");
-		expect(formatFocusedDuration(2)).toBe("2s focused");
-		expect(formatFocusedDuration(25 * 60)).toBe("25m focused");
-		expect(formatFocusedDuration(3600 + 5 * 60)).toBe("1h 05m focused");
+		expect(formatFocusedDuration(0)).toBe(
+			m.focus_duration_seconds({ seconds: 0 }),
+		);
+		expect(formatFocusedDuration(2)).toBe(
+			m.focus_duration_seconds({ seconds: 2 }),
+		);
+		expect(formatFocusedDuration(25 * 60)).toBe(
+			m.focus_duration_minutes({ minutes: 25 }),
+		);
+		expect(formatFocusedDuration(3600 + 5 * 60)).toBe(
+			m.focus_duration_hours_minutes({ hours: 1, minutes: "05" }),
+		);
 	});
 });

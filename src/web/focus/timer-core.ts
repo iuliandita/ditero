@@ -1,7 +1,11 @@
-// Pure focus/Pomodoro timer logic: config clamping, phase cycling, and formatting.
-// No React, no timers, no I/O -- unit-tested in node. The store (useFocusTimer.tsx)
-// drives real time on top of these functions and computes remaining from
-// timestamps, so tab throttling never desyncs the countdown.
+// Focus/Pomodoro timer logic: config clamping, phase cycling, and formatting.
+// No React, no timers, no network -- unit-tested in node. The cycle/config logic
+// is pure; phaseLabel and formatFocusedDuration read the active locale, so they
+// resolve their message at call time. The store (useFocusTimer.tsx) drives real
+// time on top of these functions and computes remaining from timestamps, so tab
+// throttling never desyncs the countdown.
+
+import { m } from "../../paraglide/messages.js";
 
 export type Phase = "work" | "break";
 
@@ -97,16 +101,17 @@ export function remainingSecFrom(endsAt: number, now: number): number {
 	return Math.max(0, Math.ceil((endsAt - now) / 1000));
 }
 
+// Digit-pair countdown, not a locale-sensitive duration format.
 export function formatMMSS(sec: number): string {
 	const s = Math.max(0, Math.floor(sec));
-	const m = Math.floor(s / 60);
+	const min = Math.floor(s / 60);
 	const r = s % 60;
-	return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+	return `${String(min).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
 }
 
 export function phaseLabel(cycle: Cycle): string {
-	if (cycle.phase === "work") return "Focus";
-	return cycle.isLongBreak ? "Long break" : "Break";
+	if (cycle.phase === "work") return m.focus_phase_work();
+	return cycle.isLongBreak ? m.focus_phase_long_break() : m.focus_phase_break();
 }
 
 // Human total time-on-task for the detail surface. Sub-minute values (only real
@@ -114,9 +119,15 @@ export function phaseLabel(cycle: Cycle): string {
 // then hours + minutes.
 export function formatFocusedDuration(totalSec: number): string {
 	const s = Math.max(0, Math.floor(totalSec));
-	if (s < 60) return `${s}s focused`;
+	if (s < 60) return m.focus_duration_seconds({ seconds: s });
 	const h = Math.floor(s / 3600);
-	const m = Math.floor((s % 3600) / 60);
-	if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m focused`;
-	return `${m}m focused`;
+	const min = Math.floor((s % 3600) / 60);
+	if (h > 0)
+		// {minutes} is deliberately a pre-padded string here ("1h 05m"), unlike the
+		// bare number below -- it must never be run through a number formatter.
+		return m.focus_duration_hours_minutes({
+			hours: h,
+			minutes: String(min).padStart(2, "0"),
+		});
+	return m.focus_duration_minutes({ minutes: min });
 }

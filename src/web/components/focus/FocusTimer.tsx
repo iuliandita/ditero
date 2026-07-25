@@ -1,5 +1,6 @@
 import { Pause, Play, RotateCcw, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { m } from "../../../paraglide/messages.js";
 import {
 	formatMMSS,
 	phaseLabel,
@@ -23,11 +24,14 @@ export function FocusTimer() {
 			? remainingSecFrom(session.endsAt, Date.now())
 			: session.remainingSec
 		: session.remainingSec;
-	const roundText = `Round ${session.cycle.round} of ${roundsPerLongBreak}`;
+	const roundText = m.focus_round_of({
+		round: session.cycle.round,
+		total: roundsPerLongBreak,
+	});
 
 	return (
 		<section
-			aria-label="Focus timer"
+			aria-label={m.focus_timer_region_aria()}
 			data-testid="focus-timer"
 			className="fixed inset-x-2 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-40 rounded-xl border bg-background/95 p-3 shadow-lg supports-backdrop-filter:bg-background/85 supports-backdrop-filter:backdrop-blur md:inset-x-auto md:right-4 md:bottom-4 md:w-72"
 		>
@@ -83,30 +87,30 @@ export function FocusTimer() {
 						data-testid="focus-pause"
 						onClick={pause}
 					>
-						<Pause /> Pause
+						<Pause /> {m.focus_pause_action()}
 					</Button>
 				) : (
 					<Button size="sm" data-testid="focus-start" onClick={start}>
-						<Play /> Start
+						<Play /> {m.focus_start_action()}
 					</Button>
 				)}
 				<Button
 					size="sm"
 					variant="ghost"
-					aria-label="Skip to next interval"
+					aria-label={m.focus_skip_aria()}
 					data-testid="focus-skip"
 					onClick={skip}
 				>
-					<SkipForward /> Skip
+					<SkipForward /> {m.focus_skip_action()}
 				</Button>
 				<Button
 					size="sm"
 					variant="ghost"
-					aria-label="Stop focus"
+					aria-label={m.focus_stop_aria()}
 					data-testid="focus-stop"
 					onClick={reset}
 				>
-					<RotateCcw /> Stop
+					<RotateCcw /> {m.focus_stop_action()}
 				</Button>
 			</div>
 
