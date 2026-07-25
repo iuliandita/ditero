@@ -11,6 +11,11 @@ export default defineConfig({
 			project: "./project.inlang",
 			outdir: "./src/paraglide",
 			emitTsDeclarations: true,
+			// Must mirror the `i18n:compile` script: both write this outdir, and the
+			// plugin wins for `vite dev`/`vite build`. Without it the shipped bundle
+			// falls back to paraglide's default chain and loses localStorage
+			// persistence and preferredLanguage detection.
+			strategy: ["cookie", "localStorage", "preferredLanguage", "baseLocale"],
 		}),
 	],
 	resolve: {

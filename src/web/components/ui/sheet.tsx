@@ -3,6 +3,7 @@ import { Dialog as SheetPrimitive } from "radix-ui";
 import type * as React from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { m } from "../../../paraglide/messages.js";
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
 	return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -73,7 +74,7 @@ function SheetContent({
 							size="icon-sm"
 						>
 							<XIcon />
-							<span className="sr-only">Close</span>
+							<span className="sr-only">{m.modal_close_label()}</span>
 						</Button>
 					</SheetPrimitive.Close>
 				)}

@@ -1,4 +1,5 @@
 import { type Binding, MODIFIER_KEYS } from "../../domain/keymap.ts";
+import { m } from "../../paraglide/messages.js";
 
 const SYMBOL: Record<string, string> = {
 	Meta: "⌘",
@@ -8,15 +9,21 @@ const SYMBOL: Record<string, string> = {
 	Alt: "⌥",
 	Backspace: "⌫",
 	Enter: "↵",
-	Escape: "Esc",
 	ArrowUp: "↑",
 	ArrowDown: "↓",
 	ArrowLeft: "←",
 	ArrowRight: "→",
-	" ": "Space",
 };
 
-const keyLabel = (k: string): string => SYMBOL[k] ?? k;
+// The two keycaps that are words rather than glyphs. Thunks: this map is
+// module-level, and resolving `m` here would freeze the import-time locale.
+const WORD_LABELS: Record<string, () => string> = {
+	Escape: m.key_esc,
+	" ": m.key_space,
+};
+
+const keyLabel = (k: string): string =>
+	Object.hasOwn(WORD_LABELS, k) ? WORD_LABELS[k]() : (SYMBOL[k] ?? k);
 
 // Chords render tight with the modifier symbol (⌘K); sequences render spaced (g t).
 export function formatBinding(b: Binding): string {
