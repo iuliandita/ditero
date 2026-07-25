@@ -592,7 +592,17 @@
 			}
 		}
 	],
-	"panel_streak_summary": "Série de {count} jours, {pct}% de régularité",
+	"panel_streak_summary": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Série de {count} jour, {pct}% de régularité",
+				"countPlural=many": "Série de {count} jours, {pct}% de régularité",
+				"countPlural=other": "Série de {count} jours, {pct}% de régularité"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_summary": "aucune répétition définie",
 	"panel_streak_row_aria": "{title} : {summary}. Ouvrir la tâche",
 	"panel_streak_no_recurrence": "Aucune répétition",

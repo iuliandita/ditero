@@ -581,7 +581,16 @@
 			}
 		}
 	],
-	"panel_streak_summary": "{count} day streak, {pct}% on track",
+	"panel_streak_summary": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} day streak, {pct}% on track",
+				"countPlural=other": "{count} day streak, {pct}% on track"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_summary": "no recurrence set",
 	"panel_streak_row_aria": "{title}: {summary}. Open task",
 	"panel_streak_no_recurrence": "No recurrence",

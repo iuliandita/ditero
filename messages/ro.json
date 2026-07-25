@@ -592,7 +592,17 @@
 			}
 		}
 	],
-	"panel_streak_summary": "Serie de {count} zile, {pct}% respectat",
+	"panel_streak_summary": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Serie de {count} zi, {pct}% respectat",
+				"countPlural=few": "Serie de {count} zile, {pct}% respectat",
+				"countPlural=other": "Serie de {count} de zile, {pct}% respectat"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_summary": "fără recurență setată",
 	"panel_streak_row_aria": "{title}: {summary}. Deschide sarcina",
 	"panel_streak_no_recurrence": "Fără recurență",

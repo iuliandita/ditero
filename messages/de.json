@@ -581,7 +581,16 @@
 			}
 		}
 	],
-	"panel_streak_summary": "{count} Tage Serie, {pct}% im Plan",
+	"panel_streak_summary": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} Tag Serie, {pct}% im Plan",
+				"countPlural=other": "{count} Tage Serie, {pct}% im Plan"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_summary": "keine Wiederholung festgelegt",
 	"panel_streak_row_aria": "{title}: {summary}. Aufgabe öffnen",
 	"panel_streak_no_recurrence": "Keine Wiederholung",

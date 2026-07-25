@@ -625,7 +625,20 @@
 			}
 		}
 	],
-	"panel_streak_summary": "سلسلة {count} يوم، {pct}% على المسار",
+	"panel_streak_summary": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا سلسلة، {pct}% على المسار",
+				"countPlural=one": "سلسلة يوم واحد، {pct}% على المسار",
+				"countPlural=two": "سلسلة يومين، {pct}% على المسار",
+				"countPlural=few": "سلسلة {count} أيام، {pct}% على المسار",
+				"countPlural=many": "سلسلة {count} يومًا، {pct}% على المسار",
+				"countPlural=other": "سلسلة {count} يوم، {pct}% على المسار"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_summary": "لا تكرار محدد",
 	"panel_streak_row_aria": "{title}: {summary}. فتح المهمة",
 	"panel_streak_no_recurrence": "بلا تكرار",

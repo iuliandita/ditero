@@ -592,7 +592,17 @@
 			}
 		}
 	],
-	"panel_streak_summary": "Racha de {count} días, {pct}% cumplido",
+	"panel_streak_summary": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Racha de {count} día, {pct}% cumplido",
+				"countPlural=many": "Racha de {count} días, {pct}% cumplido",
+				"countPlural=other": "Racha de {count} días, {pct}% cumplido"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_summary": "sin repetición configurada",
 	"panel_streak_row_aria": "{title}: {summary}. Abrir la tarea",
 	"panel_streak_no_recurrence": "Sin repetición",
