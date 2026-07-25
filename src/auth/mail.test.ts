@@ -103,6 +103,22 @@ describe("auth mail", () => {
 		expect(decodeBody(started.messages[0])).toContain(VERIFY_URL);
 	});
 
+	// A nameless recipient takes a whole greeting line of its own. Substituting a
+	// stand-in name into the named greeting reads as broken in every locale whose
+	// greeting is not "Hi <word>," -- so the empty name must not reach {name}.
+	it("greets a recipient with no name without inventing one", async () => {
+		const started = await sink();
+		await send(
+			"verify",
+			{ email: "someone@example.test", name: "  " },
+			VERIFY_URL,
+			smtpEnv(started),
+		);
+
+		expect(started.messages[0]).toContain("Hi there,");
+		expect(started.messages[0]).not.toContain("Hi ,");
+	});
+
 	// The recipient of auth mail is a registered user, so their stored locale is
 	// honored: an explicit locale must reach every m.* call, which a threaded
 	// render proves by never consulting the ambient getLocale. The German subject
