@@ -96,7 +96,20 @@
 	"sidebar_ungrouped_lists": "Listen",
 	"sidebar_expand": "Seitenleiste ausklappen",
 	"sidebar_collapse": "Seitenleiste einklappen",
-	"list_progress_label": "{done} von {total} erledigt",
+	"list_progress_label": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local donePlural = done: plural"
+			],
+			"selectors": ["donePlural"],
+			"match": {
+				"donePlural=one": "{done} von {total} erledigt",
+				"donePlural=other": "{done} von {total} erledigt"
+			}
+		}
+	],
 	"restricted_my_tasks_heading": "Meine Aufgaben",
 	"restricted_nothing_assigned": "Dir ist gerade nichts zugewiesen.",
 	"restricted_detail_completed": "Erledigt",
@@ -221,7 +234,16 @@
 	"priority_high": "Hoch",
 	"due_today": "Heute",
 	"due_tomorrow": "Morgen",
-	"list_completed_count": "{count} erledigt",
+	"list_completed_count": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} erledigt",
+				"countPlural=other": "{count} erledigt"
+			}
+		}
+	],
 	"list_change_icon": "Listensymbol ändern",
 	"list_display_options": "Anzeigeoptionen der Liste",
 	"list_completed_heading": "Erledigte Aufgaben",
@@ -488,7 +510,16 @@
 	"calendar_viewing_as_agenda": "Anzeige als Agenda",
 	"calendar_chip_recurring": "{title}, wiederkehrend",
 	"calendar_day_today": "{date}, heute",
-	"filter_multi_selected": "{count} ausgewählt",
+	"filter_multi_selected": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} ausgewählt",
+				"countPlural=other": "{count} ausgewählt"
+			}
+		}
+	],
 	"board_column_count": [
 		{
 			"declarations": ["input count", "local countPlural = count: plural"],
@@ -605,7 +636,19 @@
 			}
 		}
 	],
-	"panel_focus_minutes": "{minutes} Min. fokussiert",
+	"panel_focus_minutes": [
+		{
+			"declarations": [
+				"input minutes",
+				"local minutesPlural = minutes: plural"
+			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=one": "{minutes} Min. fokussiert",
+				"minutesPlural=other": "{minutes} Min. fokussiert"
+			}
+		}
+	],
 	"panel_focus_own_only": "Nur deine Sitzungen",
 	"habit_no_recurrence_hint": "Leg eine Wiederholung fest, um diese Gewohnheit zu verfolgen.",
 	"habit_skip_action": "Überspringen",
@@ -642,16 +685,90 @@
 	"focus_stop_aria": "Fokus beenden",
 	"focus_cue_work_complete": "Fokus abgeschlossen",
 	"focus_cue_break_over": "Pause vorbei",
-	"focus_duration_seconds": "{seconds} s fokussiert",
-	"focus_duration_minutes": "{minutes} Min. fokussiert",
-	"focus_duration_hours_minutes": "{hours} Std. {minutes} Min. fokussiert",
+	"focus_duration_seconds": [
+		{
+			"declarations": [
+				"input seconds",
+				"local secondsPlural = seconds: plural"
+			],
+			"selectors": ["secondsPlural"],
+			"match": {
+				"secondsPlural=one": "{seconds} s fokussiert",
+				"secondsPlural=other": "{seconds} s fokussiert"
+			}
+		}
+	],
+	"focus_duration_minutes": [
+		{
+			"declarations": [
+				"input minutes",
+				"local minutesPlural = minutes: plural"
+			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=one": "{minutes} Min. fokussiert",
+				"minutesPlural=other": "{minutes} Min. fokussiert"
+			}
+		}
+	],
+	"focus_duration_hours_minutes": [
+		{
+			"declarations": [
+				"input hours",
+				"input minutes",
+				"local hoursPlural = hours: plural"
+			],
+			"selectors": ["hoursPlural"],
+			"match": {
+				"hoursPlural=one": "{hours} Std. {minutes} Min. fokussiert",
+				"hoursPlural=other": "{hours} Std. {minutes} Min. fokussiert"
+			}
+		}
+	],
 	"karma_panel_heading": "Fortschritt",
 	"karma_vacation_badge": "Urlaub",
 	"karma_vacation_panel_note": "Der Urlaubsmodus pausiert Serienabbrüche und Zielabzüge. Das ist eine Pause, kein Trick -- Punkte gibt es weiterhin nur für echte Erledigungen.",
 	"karma_vacation_panel_note_until": "Der Urlaubsmodus pausiert Serienabbrüche und Zielabzüge bis {date}. Das ist eine Pause, kein Trick -- Punkte gibt es weiterhin nur für echte Erledigungen.",
-	"karma_level_maxed_aria": "Level {level}, höchstes Level erreicht, {points} Punkte",
-	"karma_level_progress_aria": "Level {level}, {into} von {span} Punkten bis Level {next}",
-	"karma_points_short": "{points} Pkt.",
+	"karma_level_maxed_aria": [
+		{
+			"declarations": [
+				"input points",
+				"input level",
+				"local pointsPlural = points: plural"
+			],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=one": "Level {level}, höchstes Level erreicht, {points} Punkt",
+				"pointsPlural=other": "Level {level}, höchstes Level erreicht, {points} Punkte"
+			}
+		}
+	],
+	"karma_level_progress_aria": [
+		{
+			"declarations": [
+				"input span",
+				"input into",
+				"input level",
+				"input next",
+				"local spanPlural = span: plural"
+			],
+			"selectors": ["spanPlural"],
+			"match": {
+				"spanPlural=one": "Level {level}, {into} von {span} Punkt bis Level {next}",
+				"spanPlural=other": "Level {level}, {into} von {span} Punkten bis Level {next}"
+			}
+		}
+	],
+	"karma_points_short": [
+		{
+			"declarations": ["input points", "local pointsPlural = points: plural"],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=one": "{points} Pkt.",
+				"pointsPlural=other": "{points} Pkt."
+			}
+		}
+	],
 	"karma_level_max": "Höchstes Level",
 	"karma_level_next": "Nächstes: {points}",
 	"karma_goal_daily_title": "Täglich",

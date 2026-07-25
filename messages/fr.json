@@ -96,7 +96,21 @@
 	"sidebar_ungrouped_lists": "Listes",
 	"sidebar_expand": "Déplier la barre latérale",
 	"sidebar_collapse": "Replier la barre latérale",
-	"list_progress_label": "{done} sur {total} terminées",
+	"list_progress_label": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local donePlural = done: plural"
+			],
+			"selectors": ["donePlural"],
+			"match": {
+				"donePlural=one": "{done} sur {total} terminée",
+				"donePlural=many": "{done} sur {total} terminées",
+				"donePlural=other": "{done} sur {total} terminées"
+			}
+		}
+	],
 	"restricted_my_tasks_heading": "Mes tâches",
 	"restricted_nothing_assigned": "Rien ne t'est assigné pour le moment.",
 	"restricted_detail_completed": "Terminée",
@@ -221,7 +235,17 @@
 	"priority_high": "Haute",
 	"due_today": "Aujourd'hui",
 	"due_tomorrow": "Demain",
-	"list_completed_count": "{count} terminées",
+	"list_completed_count": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} terminée",
+				"countPlural=many": "{count} terminées",
+				"countPlural=other": "{count} terminées"
+			}
+		}
+	],
 	"list_change_icon": "Changer l'icône de la liste",
 	"list_display_options": "Options d'affichage de la liste",
 	"list_completed_heading": "Tâches terminées",
@@ -496,7 +520,17 @@
 	"calendar_viewing_as_agenda": "Affichage en agenda",
 	"calendar_chip_recurring": "{title}, récurrente",
 	"calendar_day_today": "{date}, aujourd'hui",
-	"filter_multi_selected": "{count} sélectionnés",
+	"filter_multi_selected": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} sélectionné",
+				"countPlural=many": "{count} sélectionnés",
+				"countPlural=other": "{count} sélectionnés"
+			}
+		}
+	],
 	"board_column_count": [
 		{
 			"declarations": ["input count", "local countPlural = count: plural"],
@@ -618,7 +652,20 @@
 			}
 		}
 	],
-	"panel_focus_minutes": "{minutes} min de focus",
+	"panel_focus_minutes": [
+		{
+			"declarations": [
+				"input minutes",
+				"local minutesPlural = minutes: plural"
+			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=one": "{minutes} min de focus",
+				"minutesPlural=many": "{minutes} min de focus",
+				"minutesPlural=other": "{minutes} min de focus"
+			}
+		}
+	],
 	"panel_focus_own_only": "Tes sessions uniquement",
 	"habit_no_recurrence_hint": "Définis une répétition pour commencer à suivre cette habitude.",
 	"habit_skip_action": "Passer",
@@ -656,16 +703,96 @@
 	"focus_stop_aria": "Arrêter le focus",
 	"focus_cue_work_complete": "Focus terminé",
 	"focus_cue_break_over": "Pause terminée",
-	"focus_duration_seconds": "{seconds} s de focus",
-	"focus_duration_minutes": "{minutes} min de focus",
-	"focus_duration_hours_minutes": "{hours} h {minutes} min de focus",
+	"focus_duration_seconds": [
+		{
+			"declarations": [
+				"input seconds",
+				"local secondsPlural = seconds: plural"
+			],
+			"selectors": ["secondsPlural"],
+			"match": {
+				"secondsPlural=one": "{seconds} s de focus",
+				"secondsPlural=many": "{seconds} s de focus",
+				"secondsPlural=other": "{seconds} s de focus"
+			}
+		}
+	],
+	"focus_duration_minutes": [
+		{
+			"declarations": [
+				"input minutes",
+				"local minutesPlural = minutes: plural"
+			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=one": "{minutes} min de focus",
+				"minutesPlural=many": "{minutes} min de focus",
+				"minutesPlural=other": "{minutes} min de focus"
+			}
+		}
+	],
+	"focus_duration_hours_minutes": [
+		{
+			"declarations": [
+				"input hours",
+				"input minutes",
+				"local hoursPlural = hours: plural"
+			],
+			"selectors": ["hoursPlural"],
+			"match": {
+				"hoursPlural=one": "{hours} h {minutes} min de focus",
+				"hoursPlural=many": "{hours} h {minutes} min de focus",
+				"hoursPlural=other": "{hours} h {minutes} min de focus"
+			}
+		}
+	],
 	"karma_panel_heading": "Progression",
 	"karma_vacation_badge": "Vacances",
 	"karma_vacation_panel_note": "Le mode vacances met en pause les ruptures de série et les pénalités d'objectif. C'est une pause, pas une triche -- les points ne s'obtiennent toujours qu'avec de vraies tâches terminées.",
 	"karma_vacation_panel_note_until": "Le mode vacances met en pause les ruptures de série et les pénalités d'objectif jusqu'au {date}. C'est une pause, pas une triche -- les points ne s'obtiennent toujours qu'avec de vraies tâches terminées.",
-	"karma_level_maxed_aria": "Niveau {level}, niveau maximum atteint, {points} points",
-	"karma_level_progress_aria": "Niveau {level}, {into} points sur {span} vers le niveau {next}",
-	"karma_points_short": "{points} pts",
+	"karma_level_maxed_aria": [
+		{
+			"declarations": [
+				"input points",
+				"input level",
+				"local pointsPlural = points: plural"
+			],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=one": "Niveau {level}, niveau maximum atteint, {points} point",
+				"pointsPlural=many": "Niveau {level}, niveau maximum atteint, {points} points",
+				"pointsPlural=other": "Niveau {level}, niveau maximum atteint, {points} points"
+			}
+		}
+	],
+	"karma_level_progress_aria": [
+		{
+			"declarations": [
+				"input into",
+				"input level",
+				"input next",
+				"input span",
+				"local intoPlural = into: plural"
+			],
+			"selectors": ["intoPlural"],
+			"match": {
+				"intoPlural=one": "Niveau {level}, {into} point sur {span} vers le niveau {next}",
+				"intoPlural=many": "Niveau {level}, {into} points sur {span} vers le niveau {next}",
+				"intoPlural=other": "Niveau {level}, {into} points sur {span} vers le niveau {next}"
+			}
+		}
+	],
+	"karma_points_short": [
+		{
+			"declarations": ["input points", "local pointsPlural = points: plural"],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=one": "{points} pts",
+				"pointsPlural=many": "{points} pts",
+				"pointsPlural=other": "{points} pts"
+			}
+		}
+	],
 	"karma_level_max": "Niveau max",
 	"karma_level_next": "Suivant : {points}",
 	"karma_goal_daily_title": "Jour",

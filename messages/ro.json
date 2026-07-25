@@ -96,7 +96,21 @@
 	"sidebar_ungrouped_lists": "Liste",
 	"sidebar_expand": "Extinde bara laterală",
 	"sidebar_collapse": "Restrânge bara laterală",
-	"list_progress_label": "{done} din {total} finalizate",
+	"list_progress_label": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local donePlural = done: plural"
+			],
+			"selectors": ["donePlural"],
+			"match": {
+				"donePlural=one": "{done} din {total} finalizată",
+				"donePlural=few": "{done} din {total} finalizate",
+				"donePlural=other": "{done} din {total} finalizate"
+			}
+		}
+	],
 	"restricted_my_tasks_heading": "Sarcinile mele",
 	"restricted_nothing_assigned": "Momentan nu ai nimic de făcut.",
 	"restricted_detail_completed": "Finalizată",
@@ -221,7 +235,17 @@
 	"priority_high": "Ridicată",
 	"due_today": "Azi",
 	"due_tomorrow": "Mâine",
-	"list_completed_count": "{count} finalizate",
+	"list_completed_count": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} finalizată",
+				"countPlural=few": "{count} finalizate",
+				"countPlural=other": "{count} de finalizate"
+			}
+		}
+	],
 	"list_change_icon": "Schimbă pictograma listei",
 	"list_display_options": "Opțiuni de afișare a listei",
 	"list_completed_heading": "Sarcini finalizate",
@@ -496,7 +520,17 @@
 	"calendar_viewing_as_agenda": "Afișare ca agendă",
 	"calendar_chip_recurring": "{title}, recurentă",
 	"calendar_day_today": "{date}, azi",
-	"filter_multi_selected": "{count} selectate",
+	"filter_multi_selected": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} selectat",
+				"countPlural=few": "{count} selectate",
+				"countPlural=other": "{count} de selectate"
+			}
+		}
+	],
 	"board_column_count": [
 		{
 			"declarations": ["input count", "local countPlural = count: plural"],
@@ -618,7 +652,20 @@
 			}
 		}
 	],
-	"panel_focus_minutes": "{minutes} min de concentrare",
+	"panel_focus_minutes": [
+		{
+			"declarations": [
+				"input minutes",
+				"local minutesPlural = minutes: plural"
+			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=one": "{minutes} min de concentrare",
+				"minutesPlural=few": "{minutes} min de concentrare",
+				"minutesPlural=other": "{minutes} min de concentrare"
+			}
+		}
+	],
 	"panel_focus_own_only": "Doar sesiunile tale",
 	"habit_no_recurrence_hint": "Setează o recurență ca să începi să urmărești acest obicei.",
 	"habit_skip_action": "Sari",
@@ -656,16 +703,96 @@
 	"focus_stop_aria": "Oprește concentrarea",
 	"focus_cue_work_complete": "Concentrare încheiată",
 	"focus_cue_break_over": "Pauza s-a terminat",
-	"focus_duration_seconds": "{seconds}s de concentrare",
-	"focus_duration_minutes": "{minutes}m de concentrare",
-	"focus_duration_hours_minutes": "{hours}h {minutes}m de concentrare",
+	"focus_duration_seconds": [
+		{
+			"declarations": [
+				"input seconds",
+				"local secondsPlural = seconds: plural"
+			],
+			"selectors": ["secondsPlural"],
+			"match": {
+				"secondsPlural=one": "{seconds}s de concentrare",
+				"secondsPlural=few": "{seconds}s de concentrare",
+				"secondsPlural=other": "{seconds}s de concentrare"
+			}
+		}
+	],
+	"focus_duration_minutes": [
+		{
+			"declarations": [
+				"input minutes",
+				"local minutesPlural = minutes: plural"
+			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=one": "{minutes}m de concentrare",
+				"minutesPlural=few": "{minutes}m de concentrare",
+				"minutesPlural=other": "{minutes}m de concentrare"
+			}
+		}
+	],
+	"focus_duration_hours_minutes": [
+		{
+			"declarations": [
+				"input hours",
+				"input minutes",
+				"local hoursPlural = hours: plural"
+			],
+			"selectors": ["hoursPlural"],
+			"match": {
+				"hoursPlural=one": "{hours}h {minutes}m de concentrare",
+				"hoursPlural=few": "{hours}h {minutes}m de concentrare",
+				"hoursPlural=other": "{hours}h {minutes}m de concentrare"
+			}
+		}
+	],
 	"karma_panel_heading": "Progres",
 	"karma_vacation_badge": "Vacanță",
 	"karma_vacation_panel_note": "Vacanța oprește pierderea seriilor și penalizările de obiectiv. E o pauză, nu o portiță -- punctele se câștigă tot doar prin finalizări reale.",
 	"karma_vacation_panel_note_until": "Vacanța oprește pierderea seriilor și penalizările de obiectiv până la {date}. E o pauză, nu o portiță -- punctele se câștigă tot doar prin finalizări reale.",
-	"karma_level_maxed_aria": "Nivelul {level}, nivel maxim atins, {points} puncte",
-	"karma_level_progress_aria": "Nivelul {level}, {into} din {span} puncte până la nivelul {next}",
-	"karma_points_short": "{points} pct",
+	"karma_level_maxed_aria": [
+		{
+			"declarations": [
+				"input points",
+				"input level",
+				"local pointsPlural = points: plural"
+			],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=one": "Nivelul {level}, nivel maxim atins, {points} punct",
+				"pointsPlural=few": "Nivelul {level}, nivel maxim atins, {points} puncte",
+				"pointsPlural=other": "Nivelul {level}, nivel maxim atins, {points} de puncte"
+			}
+		}
+	],
+	"karma_level_progress_aria": [
+		{
+			"declarations": [
+				"input span",
+				"input into",
+				"input level",
+				"input next",
+				"local spanPlural = span: plural"
+			],
+			"selectors": ["spanPlural"],
+			"match": {
+				"spanPlural=one": "Nivelul {level}, {into} din {span} punct până la nivelul {next}",
+				"spanPlural=few": "Nivelul {level}, {into} din {span} puncte până la nivelul {next}",
+				"spanPlural=other": "Nivelul {level}, {into} din {span} de puncte până la nivelul {next}"
+			}
+		}
+	],
+	"karma_points_short": [
+		{
+			"declarations": ["input points", "local pointsPlural = points: plural"],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=one": "{points} pct",
+				"pointsPlural=few": "{points} pct",
+				"pointsPlural=other": "{points} de pct"
+			}
+		}
+	],
 	"karma_level_max": "Nivel maxim",
 	"karma_level_next": "Următorul: {points}",
 	"karma_goal_daily_title": "Zilnic",

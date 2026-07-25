@@ -96,7 +96,24 @@
 	"sidebar_ungrouped_lists": "القوائم",
 	"sidebar_expand": "توسيع الشريط الجانبي",
 	"sidebar_collapse": "طيّ الشريط الجانبي",
-	"list_progress_label": "اكتمل {done} من {total}",
+	"list_progress_label": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local donePlural = done: plural"
+			],
+			"selectors": ["donePlural"],
+			"match": {
+				"donePlural=zero": "لم تكتمل أي مهمة من {total}",
+				"donePlural=one": "اكتملت مهمة واحدة من {total}",
+				"donePlural=two": "اكتملت مهمتان من {total}",
+				"donePlural=few": "اكتملت {done} مهام من {total}",
+				"donePlural=many": "اكتمل {done} مهمة من {total}",
+				"donePlural=other": "اكتمل {done} مهمة من {total}"
+			}
+		}
+	],
 	"restricted_my_tasks_heading": "مهامي",
 	"restricted_nothing_assigned": "لا شيء مُسند إليك الآن.",
 	"restricted_detail_completed": "مكتملة",
@@ -221,7 +238,20 @@
 	"priority_high": "عالية",
 	"due_today": "اليوم",
 	"due_tomorrow": "غدًا",
-	"list_completed_count": "{count} مكتملة",
+	"list_completed_count": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا مهام مكتملة",
+				"countPlural=one": "مهمة واحدة مكتملة",
+				"countPlural=two": "مهمتان مكتملتان",
+				"countPlural=few": "{count} مهام مكتملة",
+				"countPlural=many": "{count} مهمة مكتملة",
+				"countPlural=other": "{count} مهمة مكتملة"
+			}
+		}
+	],
 	"list_change_icon": "تغيير أيقونة القائمة",
 	"list_display_options": "خيارات عرض القائمة",
 	"list_completed_heading": "المهام المكتملة",
@@ -520,7 +550,20 @@
 	"calendar_viewing_as_agenda": "العرض كأجندة",
 	"calendar_chip_recurring": "{title}، متكررة",
 	"calendar_day_today": "{date}، اليوم",
-	"filter_multi_selected": "{count} محددة",
+	"filter_multi_selected": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا عناصر محددة",
+				"countPlural=one": "عنصر واحد محدد",
+				"countPlural=two": "عنصران محددان",
+				"countPlural=few": "{count} عناصر محددة",
+				"countPlural=many": "{count} عنصرًا محددًا",
+				"countPlural=other": "{count} عنصر محدد"
+			}
+		}
+	],
 	"board_column_count": [
 		{
 			"declarations": ["input count", "local countPlural = count: plural"],
@@ -657,7 +700,23 @@
 			}
 		}
 	],
-	"panel_focus_minutes": "{minutes} دقيقة تركيز",
+	"panel_focus_minutes": [
+		{
+			"declarations": [
+				"input minutes",
+				"local minutesPlural = minutes: plural"
+			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=zero": "لا دقائق تركيز",
+				"minutesPlural=one": "دقيقة تركيز واحدة",
+				"minutesPlural=two": "دقيقتا تركيز",
+				"minutesPlural=few": "{minutes} دقائق تركيز",
+				"minutesPlural=many": "{minutes} دقيقة تركيز",
+				"minutesPlural=other": "{minutes} دقيقة تركيز"
+			}
+		}
+	],
 	"panel_focus_own_only": "جلساتك فقط",
 	"habit_no_recurrence_hint": "حدد تكرارًا لبدء تتبع هذه العادة.",
 	"habit_skip_action": "تخطي",
@@ -698,16 +757,114 @@
 	"focus_stop_aria": "إيقاف التركيز",
 	"focus_cue_work_complete": "اكتمل التركيز",
 	"focus_cue_break_over": "انتهت الاستراحة",
-	"focus_duration_seconds": "{seconds} ثانية تركيز",
-	"focus_duration_minutes": "{minutes} دقيقة تركيز",
-	"focus_duration_hours_minutes": "{hours} ساعة و{minutes} دقيقة تركيز",
+	"focus_duration_seconds": [
+		{
+			"declarations": [
+				"input seconds",
+				"local secondsPlural = seconds: plural"
+			],
+			"selectors": ["secondsPlural"],
+			"match": {
+				"secondsPlural=zero": "لا ثوانٍ تركيز",
+				"secondsPlural=one": "ثانية تركيز واحدة",
+				"secondsPlural=two": "ثانيتا تركيز",
+				"secondsPlural=few": "{seconds} ثوانٍ تركيز",
+				"secondsPlural=many": "{seconds} ثانية تركيز",
+				"secondsPlural=other": "{seconds} ثانية تركيز"
+			}
+		}
+	],
+	"focus_duration_minutes": [
+		{
+			"declarations": [
+				"input minutes",
+				"local minutesPlural = minutes: plural"
+			],
+			"selectors": ["minutesPlural"],
+			"match": {
+				"minutesPlural=zero": "لا دقائق تركيز",
+				"minutesPlural=one": "دقيقة تركيز واحدة",
+				"minutesPlural=two": "دقيقتا تركيز",
+				"minutesPlural=few": "{minutes} دقائق تركيز",
+				"minutesPlural=many": "{minutes} دقيقة تركيز",
+				"minutesPlural=other": "{minutes} دقيقة تركيز"
+			}
+		}
+	],
+	"focus_duration_hours_minutes": [
+		{
+			"declarations": [
+				"input hours",
+				"input minutes",
+				"local hoursPlural = hours: plural"
+			],
+			"selectors": ["hoursPlural"],
+			"match": {
+				"hoursPlural=zero": "{hours} ساعة و{minutes} دقيقة تركيز",
+				"hoursPlural=one": "ساعة و{minutes} دقيقة تركيز",
+				"hoursPlural=two": "ساعتان و{minutes} دقيقة تركيز",
+				"hoursPlural=few": "{hours} ساعات و{minutes} دقيقة تركيز",
+				"hoursPlural=many": "{hours} ساعة و{minutes} دقيقة تركيز",
+				"hoursPlural=other": "{hours} ساعة و{minutes} دقيقة تركيز"
+			}
+		}
+	],
 	"karma_panel_heading": "التقدم",
 	"karma_vacation_badge": "إجازة",
 	"karma_vacation_panel_note": "توقف الإجازة انقطاع السلاسل وخصومات الأهداف مؤقتًا. هي إيقاف مؤقت وليست التفافًا - ما زالت النقاط تُكتسب بالإنجازات الحقيقية فقط.",
 	"karma_vacation_panel_note_until": "توقف الإجازة انقطاع السلاسل وخصومات الأهداف حتى {date}. هي إيقاف مؤقت وليست التفافًا - ما زالت النقاط تُكتسب بالإنجازات الحقيقية فقط.",
-	"karma_level_maxed_aria": "المستوى {level}، بلغت أعلى مستوى، {points} نقطة",
-	"karma_level_progress_aria": "المستوى {level}، {into} من {span} نقطة نحو المستوى {next}",
-	"karma_points_short": "{points} نقطة",
+	"karma_level_maxed_aria": [
+		{
+			"declarations": [
+				"input points",
+				"input level",
+				"local pointsPlural = points: plural"
+			],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=zero": "المستوى {level}، بلغت أعلى مستوى، لا نقاط",
+				"pointsPlural=one": "المستوى {level}، بلغت أعلى مستوى، نقطة واحدة",
+				"pointsPlural=two": "المستوى {level}، بلغت أعلى مستوى، نقطتان",
+				"pointsPlural=few": "المستوى {level}، بلغت أعلى مستوى، {points} نقاط",
+				"pointsPlural=many": "المستوى {level}، بلغت أعلى مستوى، {points} نقطة",
+				"pointsPlural=other": "المستوى {level}، بلغت أعلى مستوى، {points} نقطة"
+			}
+		}
+	],
+	"karma_level_progress_aria": [
+		{
+			"declarations": [
+				"input span",
+				"input into",
+				"input level",
+				"input next",
+				"local spanPlural = span: plural"
+			],
+			"selectors": ["spanPlural"],
+			"match": {
+				"spanPlural=zero": "المستوى {level}، {into} من {span} نقطة نحو المستوى {next}",
+				"spanPlural=one": "المستوى {level}، {into} من نقطة واحدة نحو المستوى {next}",
+				"spanPlural=two": "المستوى {level}، {into} من نقطتين نحو المستوى {next}",
+				"spanPlural=few": "المستوى {level}، {into} من {span} نقاط نحو المستوى {next}",
+				"spanPlural=many": "المستوى {level}، {into} من {span} نقطة نحو المستوى {next}",
+				"spanPlural=other": "المستوى {level}، {into} من {span} نقطة نحو المستوى {next}"
+			}
+		}
+	],
+	"karma_points_short": [
+		{
+			"declarations": ["input points", "local pointsPlural = points: plural"],
+			"selectors": ["pointsPlural"],
+			"match": {
+				"pointsPlural=zero": "لا نقاط",
+				"pointsPlural=one": "نقطة واحدة",
+				"pointsPlural=two": "نقطتان",
+				"pointsPlural=few": "{points} نقاط",
+				"pointsPlural=many": "{points} نقطة",
+				"pointsPlural=other": "{points} نقطة"
+			}
+		}
+	],
 	"karma_level_max": "أعلى مستوى",
 	"karma_level_next": "التالي: {points}",
 	"karma_goal_daily_title": "يومي",
