@@ -773,5 +773,20 @@
 			}
 		}
 	],
-	"mention_invite_failed_status": "Could not invite {name} ({status})."
+	"mention_invite_failed_status": "Could not invite {name} ({status}).",
+	"login_email_placeholder": "email",
+	"login_password_placeholder": "password",
+	"login_signup": "Sign up",
+	"login_signin": "Sign in",
+	"login_signin_passkey": "Sign in with passkey",
+	"login_continue_google": "Continue with Google",
+	"login_two_factor_title": "Two-factor authentication",
+	"login_backup_code_placeholder": "Backup code",
+	"login_verify_code": "Verify code",
+	"login_use_backup_code": "Use backup code",
+	"login_error_signup_failed": "sign up failed",
+	"login_error_passkey_failed": "passkey sign in failed",
+	"login_error_invalid_totp": "invalid authenticator code",
+	"login_error_invalid_backup_code": "invalid backup code",
+	"login_error_sign_in_failed": "sign in failed"
 }
