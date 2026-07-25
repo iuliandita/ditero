@@ -9,8 +9,9 @@
 // Pure by construction so it is safe for mutators.ts to import: that module is
 // bundled into the web client, and pulling in node:crypto or Drizzle here would
 // drag the server runtime with it.
-import { habitDay } from "./habit-day.ts";
+
 import { karmaForCompletion } from "./karma.ts";
+import { localDay } from "./local-day.ts";
 import { nextDue } from "./recurrence.ts";
 
 // Mirrors mutators.ts WRITE_ROLES. A viewer is deliberately excluded and
@@ -20,10 +21,6 @@ const WRITE_ROLES = new Set(["owner", "admin", "member"]);
 // Reminder statuses a sibling termination must not overwrite: already terminal,
 // or terminal for a reason acking does not undo.
 export const ACK_TERMINAL_STATUSES = ["acked", "failed", "expired"] as const;
-
-// UTC calendar day, matching mutators.ts and the karma domain (goal evaluation
-// counts events by this key).
-const ymd = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
 export type AckTask = {
 	id: string;
@@ -121,13 +118,17 @@ export async function completeForAck(
 	// them with no way to ever silence a repeating med reminder.
 	if (!WRITE_ROLES.has(role)) return "ack_only";
 
+	// Habit logs and karma events are both keyed to the actor's LOCAL calendar
+	// day; the UTC day of the same instant is a different day every evening west
+	// of UTC, which would score the completion against a day the user is not in.
+	const timeZone = await store.timezone(actorUserId);
+
 	// C22: habits are task rows in a kind=habits list and task.complete rejects
 	// them outright. Med reminders and dog walks are habit-kind, so routing every
 	// ack through the task path would break the button for exactly the reminders
 	// that most need it.
 	if (task.listKind === "habits") {
-		const timeZone = await store.timezone(actorUserId);
-		const date = habitDay(new Date(reminder.occurrenceAt), timeZone);
+		const date = localDay(new Date(reminder.occurrenceAt), timeZone);
 		const existing = await store.habitLog(task.id, date);
 		// Idempotent per (habit, date), matching habit.log: an already-done date
 		// must not re-award Karma.
@@ -168,7 +169,7 @@ export async function completeForAck(
 		actorUserId,
 		karmaForCompletion("task", task.priority),
 		"task_complete",
-		ymd(now),
+		localDay(new Date(now), timeZone),
 	);
 	return "completed";
 }

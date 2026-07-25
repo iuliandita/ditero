@@ -1,7 +1,7 @@
 import { Flame } from "lucide-react";
 import { type JSX, useMemo } from "react";
 import type { Panel } from "../../../domain/dashboard.ts";
-import { habitDay } from "../../../domain/habit-day.ts";
+import { localDay } from "../../../domain/local-day.ts";
 import { computeStreak, type HabitLogEntry } from "../../../domain/streak.ts";
 import type { Task } from "../../../zero/schema.gen.ts";
 import { useHabitLogs } from "../../hooks/useHabitLogs.ts";
@@ -20,7 +20,7 @@ function StreakRow({
 }): JSX.Element {
 	const { logs } = useHabitLogs(task.id);
 	const { pref } = useUserPref();
-	const today = habitDay(new Date(), pref.timezone);
+	const today = localDay(new Date(), pref.timezone);
 	const entries = useMemo<HabitLogEntry[]>(
 		() => logs.map((l) => ({ date: l.date, status: l.status })),
 		[logs],

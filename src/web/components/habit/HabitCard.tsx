@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ListIcon } from "@/lib/list-icon";
 import { runMutation } from "@/lib/run-mutation";
 import { cn } from "@/lib/utils";
-import { habitDay } from "../../../domain/habit-day.ts";
+import { localDay } from "../../../domain/local-day.ts";
 import { computeStreak, type HabitLogEntry } from "../../../domain/streak.ts";
 import { mutators } from "../../../zero/mutators.ts";
 import type { List, schema, Task } from "../../../zero/schema.gen.ts";
@@ -20,7 +20,7 @@ type TodayStatus = "done" | "skipped" | "none";
 // + adherence + heatmap (HabitTracker), and a single large primary "done" control
 // with a secondary skip/undo pair. Completion is per-occurrence via habit_log,
 // not the task's done flag. Mutations go straight through Zero (mirrors
-// RecurrenceEditor); today is the user's local day (habitDay), the same day an
+// RecurrenceEditor); today is the user's local day (localDay), the same day an
 // ack writes.
 export function HabitCard({
 	task,
@@ -34,7 +34,7 @@ export function HabitCard({
 	const zero = useZero<typeof schema>();
 	const { logs } = useHabitLogs(task.id);
 	const { pref } = useUserPref();
-	const today = habitDay(new Date(), pref.timezone);
+	const today = localDay(new Date(), pref.timezone);
 
 	const entries = useMemo<HabitLogEntry[]>(
 		() => logs.map((l) => ({ date: l.date, status: l.status })),

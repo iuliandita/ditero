@@ -163,7 +163,7 @@ async function addFocusPanel(
 // current streak = 2) and two 10-minute work focus sessions, straight into the
 // user's personal workspace (views.spec seeding pattern; callers reload so the
 // client re-subscribes). `today` must be the BROWSER's local day: habit_log
-// dates are the user's local day (habitDay), which this process's zone only
+// dates are the user's local day (localDay), which this process's zone only
 // agrees with for part of the day.
 async function seedHabitAndFocus(
 	email: string,

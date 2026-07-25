@@ -314,7 +314,7 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 		"false",
 	);
 
-	// The heatmap cell is labelled with the user's LOCAL day (habitDay), which is
+	// The heatmap cell is labelled with the user's LOCAL day (localDay), which is
 	// what the app both writes and reads -- not this process's UTC day.
 	const today = await browserToday(page);
 

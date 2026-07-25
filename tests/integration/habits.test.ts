@@ -14,11 +14,13 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
 	afterAll,
+	afterEach,
 	beforeAll,
 	beforeEach,
 	describe,
 	expect,
 	test,
+	vi,
 } from "vitest";
 import * as tables from "../../src/db/schema.ts";
 import { mutators } from "../../src/zero/mutators.ts";
@@ -934,6 +936,78 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 			);
 			expect((await karmaRow("hm-owner")).points).toBe(5);
 			expect(await eventCount("hm-owner")).toBe(1);
+		});
+
+		// Karma must land on the caller's LOCAL day, the same frame habit.log's
+		// client-supplied date uses -- otherwise an evening completion west of UTC
+		// scores against tomorrow and the goal rings read 0.
+		describe("karma day frame", () => {
+			// 21:00 in New York; the UTC date of the same instant is the next day.
+			const EVENING_NY = Date.UTC(2026, 6, 15, 1, 0, 0);
+
+			beforeEach(async () => {
+				await db
+					.delete(tables.userPref)
+					.where(eq(tables.userPref.id, "hm-owner"));
+				vi.useFakeTimers();
+				vi.setSystemTime(EVENING_NY);
+			});
+			afterEach(async () => {
+				vi.useRealTimers();
+				await db
+					.delete(tables.userPref)
+					.where(eq(tables.userPref.id, "hm-owner"));
+			});
+
+			async function eventDates(userId: string) {
+				return (
+					await db
+						.select()
+						.from(tables.karmaEvent)
+						.where(eq(tables.karmaEvent.userId, userId))
+				).map((e) => e.date);
+			}
+
+			test("task.complete awards against the caller's local day", async () => {
+				await db
+					.insert(tables.userPref)
+					.values({ id: "hm-owner", timezone: "America/New_York" });
+				await call(
+					mutators.task.complete,
+					{ id: "hm-owner" },
+					{ id: "hm-t-plain" },
+				);
+				expect(await eventDates("hm-owner")).toEqual(["2026-07-14"]);
+			});
+
+			test("task.complete and habit.log agree on the day", async () => {
+				await db
+					.insert(tables.userPref)
+					.values({ id: "hm-owner", timezone: "America/New_York" });
+				await call(
+					mutators.task.complete,
+					{ id: "hm-owner" },
+					{ id: "hm-t-plain" },
+				);
+				await call(
+					mutators.habit.log,
+					{ id: "hm-owner" },
+					{ habitId: "hm-habit", date: "2026-07-14", status: "done" },
+				);
+				expect(await eventDates("hm-owner")).toEqual([
+					"2026-07-14",
+					"2026-07-14",
+				]);
+			});
+
+			test("a caller with no pref row falls back to UTC", async () => {
+				await call(
+					mutators.task.complete,
+					{ id: "hm-owner" },
+					{ id: "hm-t-plain" },
+				);
+				expect(await eventDates("hm-owner")).toEqual(["2026-07-15"]);
+			});
 		});
 
 		test("focus.logSession rejects a duration far exceeding the timestamp span", async () => {
