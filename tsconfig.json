@@ -15,5 +15,5 @@
 		},
 		"types": ["bun", "node"]
 	},
-	"include": ["src", "tests", "drizzle.config.ts", "vite.config.ts"]
+	"include": ["src", "tests", "scripts", "drizzle.config.ts", "vite.config.ts"]
 }
