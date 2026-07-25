@@ -28,6 +28,7 @@ import {
 	nextEscalation,
 } from "../../domain/escalation.ts";
 import { resolveEscalationPolicy } from "../../domain/escalation-policy.ts";
+import type { Locale } from "../../domain/locale.ts";
 import { reminderWindow } from "../../domain/reminder-window.ts";
 import { type EnqueueOptions, enqueueOutbox } from "./outbox.ts";
 import {
@@ -128,7 +129,15 @@ type TaskRow = {
 const ANCHOR_PAD_MS = 3 * 24 * 3_600_000;
 
 // Payload shape is deliberately minimal; Task 12's adapters own rendering.
-function reminderPayload(task: TaskRow, occurrenceAt: Date, fireCount: number) {
+// `locale` is the recipient's, resolved by the fan-out that already read their
+// preferences: dispatch renders with it explicitly, because the server must
+// never consult Paraglide's process-global ambient locale.
+function reminderPayload(
+	task: TaskRow,
+	occurrenceAt: Date,
+	fireCount: number,
+	locale: Locale,
+) {
 	return {
 		kind: "reminder" as const,
 		taskId: task.id,
@@ -137,6 +146,7 @@ function reminderPayload(task: TaskRow, occurrenceAt: Date, fireCount: number) {
 		occurrenceAt: occurrenceAt.toISOString(),
 		fireCount,
 		urgent: task.urgent,
+		locale,
 	};
 }
 
@@ -219,6 +229,7 @@ async function fire(
 	fireCount: number,
 	nextAttemptAt: Date | null,
 	channels: ChannelKind[],
+	locale: Locale,
 	now: Date,
 	cap: EnqueueOptions,
 	onBeforeEnqueue?: () => void | Promise<void>,
@@ -238,7 +249,7 @@ async function fire(
 		reminderStateId,
 		recipientUserId,
 		channels,
-		reminderPayload(task, occurrenceAt, fireCount),
+		reminderPayload(task, occurrenceAt, fireCount, locale),
 		fireCount,
 		now,
 		cap,
@@ -505,6 +516,7 @@ async function createReminder(
 			1,
 			repeatAt(policy, now),
 			input.channels,
+			pref.locale,
 			now,
 			input.cap,
 			input.onBeforeEnqueue,
@@ -676,6 +688,7 @@ async function sweepWake(
 			1,
 			repeatAt(policy, now),
 			channels.get(row.recipientUserId) ?? [],
+			pref.locale,
 			now,
 			options.cap,
 			options.onBeforeEnqueue,
@@ -708,6 +721,7 @@ async function sweepEscalate(
 				row.fireCount + 1,
 				action.at,
 				channels.get(row.recipientUserId) ?? [],
+				pref.locale,
 				now,
 				options.cap,
 				options.onBeforeEnqueue,
@@ -828,6 +842,7 @@ async function escalateToFallback(
 					1,
 					repeatAt(policy, now),
 					channels.get(fallbackUserId) ?? [],
+					pref.locale,
 					now,
 					options.cap,
 					options.onBeforeEnqueue,

@@ -23,6 +23,9 @@ test.describe.configure({ timeout: 120_000 });
 const SHARED_WORKSPACE_ID = "w_shared_e2e";
 const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
+// Pinned English, not the compiled message: this filters the ntfy row, and a
+// message that resolved to "" would silently degrade it to a title-only match.
+const ASSIGN_BODY = "You were assigned this task";
 // Set by playwright.config: a private non-loopback address, since the SSRF
 // boundary refuses loopback unconditionally.
 const NTFY = process.env.E2E_NTFY_URL ?? "http://172.17.0.1:4599";
@@ -386,8 +389,7 @@ test("live ack: assignment notifies through /api/zero/mutate, and one ack termin
 		await waitForNotification(
 			pa,
 			topicB,
-			(row) =>
-				row.title === TASK && row.body.includes("You were assigned this task"),
+			(row) => row.title === TASK && row.body.includes(ASSIGN_BODY),
 		);
 
 		// Both assignees are reminder recipients, so the scan creates two sibling

@@ -5,10 +5,12 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as tables from "../../db/schema.ts";
+import type { Locale } from "../../domain/locale.ts";
 import {
 	type QuietDecision,
 	quietHoursDecision,
 } from "../../domain/quiet-hours.ts";
+import { localeFromPref } from "../recipient-locale.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 type ChannelKind = (typeof tables.channelKindEnum.enumValues)[number];
@@ -17,12 +19,16 @@ export type Pref = {
 	timezone: string;
 	quietHours: unknown;
 	escalationDefaults: unknown;
+	// Carried on the enqueued payload so the send path renders in the recipient's
+	// language without a second lookup per outbox row.
+	locale: Locale;
 };
 
 export const DEFAULT_PREF: Pref = {
 	timezone: "UTC",
 	quietHours: null,
 	escalationDefaults: null,
+	locale: "en",
 };
 
 export async function loadPrefs(
@@ -37,6 +43,7 @@ export async function loadPrefs(
 			timezone: tables.userPref.timezone,
 			quietHours: tables.userPref.quietHours,
 			escalationDefaults: tables.userPref.escalationDefaults,
+			locale: tables.userPref.locale,
 		})
 		.from(tables.userPref)
 		.where(inArray(tables.userPref.id, userIds));
@@ -45,6 +52,7 @@ export async function loadPrefs(
 			timezone: row.timezone,
 			quietHours: row.quietHours,
 			escalationDefaults: row.escalationDefaults,
+			locale: localeFromPref(row.locale),
 		});
 	}
 	return prefs;
