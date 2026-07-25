@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { runMutation } from "@/lib/run-mutation";
 import { deriveConnections } from "../../../domain/connections.ts";
 import { parseMentions, personMatchesHandle } from "../../../domain/mention.ts";
+import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
@@ -16,10 +18,14 @@ const INVITE_ROLES = new Set(["owner", "admin", "member"]);
 type Person = { name: string; userId?: string; image?: string | null };
 type MentionInvite = { name: string; userId?: string };
 
-const stampFmt = new Intl.DateTimeFormat(undefined, {
-	dateStyle: "medium",
-	timeStyle: "short",
-});
+// Built per call: a cached formatter would freeze the import-time locale. No
+// timeZone pin -- a comment stamp is a real instant, read in the viewer's zone.
+function formatStamp(at: number): string {
+	return new Intl.DateTimeFormat(getLocale(), {
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(at);
+}
 
 // The active `@token` immediately left of the caret, or null. The `@` must sit
 // at the start or follow whitespace, and the token must be whitespace-free.
@@ -79,18 +85,21 @@ export function CommentThread({
 	);
 
 	const members = useMemo(
-		() => memberships.filter((m) => m.workspaceId === workspaceId),
+		() => memberships.filter((mem) => mem.workspaceId === workspaceId),
 		[memberships, workspaceId],
 	);
 	const memberIds = useMemo(
-		() => new Set(members.map((m) => m.userId)),
+		() => new Set(members.map((mem) => mem.userId)),
 		[members],
 	);
 	const userMap = useMemo(() => {
 		const map = new Map<string, { name: string; image: string | null }>();
-		for (const m of memberships) {
-			if (m.user && !map.has(m.userId)) {
-				map.set(m.userId, { name: m.user.name, image: m.user.image ?? null });
+		for (const mem of memberships) {
+			if (mem.user && !map.has(mem.userId)) {
+				map.set(mem.userId, {
+					name: mem.user.name,
+					image: mem.user.image ?? null,
+				});
 			}
 		}
 		return map;
@@ -98,10 +107,10 @@ export function CommentThread({
 
 	const memberPeople = useMemo<Person[]>(
 		() =>
-			members.map((m) => ({
-				name: m.user?.name ?? m.userId,
-				userId: m.userId,
-				image: m.user?.image,
+			members.map((mem) => ({
+				name: mem.user?.name ?? mem.userId,
+				userId: mem.userId,
+				image: mem.user?.image,
 			})),
 		[members],
 	);
@@ -117,7 +126,7 @@ export function CommentThread({
 		[memberships, me, memberIds, userMap],
 	);
 
-	const callerRole = members.find((m) => m.userId === me)?.role ?? null;
+	const callerRole = members.find((mem) => mem.userId === me)?.role ?? null;
 	const canInvite =
 		!restricted && callerRole != null && INVITE_ROLES.has(callerRole);
 
@@ -210,7 +219,10 @@ export function CommentThread({
 				if (!res.ok) {
 					setError(
 						(await res.text()).trim() ||
-							`Could not invite ${inv.name} (${res.status}).`,
+							m.mention_invite_failed_status({
+								name: inv.name,
+								status: res.status,
+							}),
 					);
 					return;
 				}
@@ -220,7 +232,7 @@ export function CommentThread({
 			setMentionInvites(null);
 		} catch (e) {
 			console.error(e);
-			setError(e instanceof Error ? e.message : "Could not create the invite.");
+			setError(e instanceof Error ? e.message : m.invite_create_failed());
 		} finally {
 			// Surface any links created before an early return so a partial batch is
 			// still deliverable rather than lost.
@@ -248,7 +260,7 @@ export function CommentThread({
 
 	return (
 		<div className="flex flex-col gap-2 text-sm" data-testid="comment-thread">
-			<span className="text-muted-foreground">Comments</span>
+			<span className="text-muted-foreground">{m.comments_heading()}</span>
 
 			{error && (
 				<p role="alert" className="text-xs text-destructive">
@@ -275,12 +287,12 @@ export function CommentThread({
 											dateTime={new Date(c.createdAt).toISOString()}
 											className="text-xs text-muted-foreground"
 										>
-											{stampFmt.format(c.createdAt)}
+											{formatStamp(c.createdAt)}
 										</time>
 									)}
 									{c.editedAt != null && (
 										<span className="text-xs text-muted-foreground">
-											(edited)
+											{m.comment_edited_marker()}
 										</span>
 									)}
 								</div>
@@ -288,7 +300,7 @@ export function CommentThread({
 								{editing === c.id ? (
 									<div className="flex flex-col gap-1.5">
 										<textarea
-											aria-label="Edit comment"
+											aria-label={m.comment_edit_label()}
 											rows={2}
 											value={editBody}
 											onChange={(e) => setEditBody(e.target.value)}
@@ -300,14 +312,14 @@ export function CommentThread({
 												onClick={() => saveEdit(c.id)}
 												disabled={!editBody.trim()}
 											>
-												Save
+												{m.comment_save()}
 											</Button>
 											<Button
 												size="sm"
 												variant="ghost"
 												onClick={() => setEditing(null)}
 											>
-												Cancel
+												{m.comment_cancel()}
 											</Button>
 										</div>
 									</div>
@@ -321,7 +333,7 @@ export function CommentThread({
 											<Button
 												variant="ghost"
 												size="icon-sm"
-												aria-label="Edit comment"
+												aria-label={m.comment_edit_label()}
 												data-testid="comment-edit"
 												onClick={() => {
 													setEditing(c.id);
@@ -334,7 +346,7 @@ export function CommentThread({
 										<Button
 											variant="ghost"
 											size="icon-sm"
-											aria-label="Delete comment"
+											aria-label={m.comment_delete_action()}
 											data-testid="comment-delete"
 											onClick={() =>
 												void run(
@@ -351,7 +363,9 @@ export function CommentThread({
 					);
 				})}
 				{thread.length === 0 && (
-					<li className="text-xs text-muted-foreground">No comments yet.</li>
+					<li className="text-xs text-muted-foreground">
+						{m.comments_empty()}
+					</li>
 				)}
 			</ul>
 
@@ -361,11 +375,12 @@ export function CommentThread({
 					className="flex flex-col gap-2 rounded-md border p-2"
 				>
 					<p>
-						Invite {mentionInvites.map((i) => i.name).join(", ")} to this
-						workspace?
+						{m.mention_invite_confirm({
+							names: mentionInvites.map((i) => i.name).join(", "),
+						})}
 					</p>
 					<p className="text-xs text-muted-foreground">
-						They join once they accept the invite.
+						{m.mention_invite_hint()}
 					</p>
 					<div className="flex justify-end gap-2">
 						<Button
@@ -373,7 +388,7 @@ export function CommentThread({
 							size="sm"
 							onClick={() => setMentionInvites(null)}
 						>
-							Not now
+							{m.mention_invite_not_now()}
 						</Button>
 						<Button
 							size="sm"
@@ -381,7 +396,7 @@ export function CommentThread({
 							disabled={busy}
 							onClick={() => void confirmMentionInvites()}
 						>
-							Invite
+							{m.mention_invite_submit()}
 						</Button>
 					</div>
 				</div>
@@ -390,9 +405,7 @@ export function CommentThread({
 			{invitedLinks && invitedLinks.length > 0 && (
 				<div className="flex flex-col gap-2 rounded-md border p-2">
 					<span className="text-xs text-muted-foreground">
-						{invitedLinks.length > 1 ? "Invites" : "Invite"} created. Share the{" "}
-						{invitedLinks.length > 1 ? "links" : "link"}; each person joins on
-						accept.
+						{m.mention_invite_created({ count: invitedLinks.length })}
 					</span>
 					{invitedLinks.map((l) => (
 						<div
@@ -405,14 +418,14 @@ export function CommentThread({
 								<Input
 									readOnly
 									value={l.link}
-									aria-label={`Invite link for ${l.name}`}
+									aria-label={m.invite_link_for_aria({ name: l.name })}
 									onFocus={(e) => e.currentTarget.select()}
 								/>
 								<Button
 									type="button"
 									variant="outline"
 									size="icon"
-									aria-label={`Copy invite link for ${l.name}`}
+									aria-label={m.invite_copy_link_for_aria({ name: l.name })}
 									onClick={() => void copyLink(l.link)}
 								>
 									<Copy />
@@ -420,7 +433,7 @@ export function CommentThread({
 							</div>
 							{copied === l.link && (
 								<span role="status" className="text-xs text-muted-foreground">
-									Copied to clipboard.
+									{m.copied_to_clipboard()}
 								</span>
 							)}
 						</div>
@@ -434,7 +447,7 @@ export function CommentThread({
 							setCopied(null);
 						}}
 					>
-						Done
+						{m.mention_invite_done()}
 					</Button>
 				</div>
 			)}
@@ -443,9 +456,9 @@ export function CommentThread({
 				<div className="relative flex-1">
 					<textarea
 						ref={textareaRef}
-						aria-label="Add a comment"
+						aria-label={m.comment_input_label()}
 						data-testid="comment-input"
-						placeholder="Add a comment"
+						placeholder={m.comment_input_label()}
 						rows={2}
 						value={body}
 						onChange={(e) => {
@@ -487,7 +500,7 @@ export function CommentThread({
 				</div>
 				<Button
 					size="icon"
-					aria-label="Send comment"
+					aria-label={m.comment_send_action()}
 					data-testid="comment-submit"
 					disabled={!body.trim() || busy}
 					onClick={() => void submit()}

@@ -1,5 +1,6 @@
 import { useQuery } from "@rocicorp/zero/react";
 import { useMemo } from "react";
+import { m } from "../../../paraglide/messages.js";
 import { queries } from "../../../zero/queries.ts";
 import { MemberAvatar } from "./avatar.tsx";
 
@@ -15,9 +16,12 @@ export function AssigneeChips({ taskId }: { taskId: string }) {
 
 	const users = useMemo(() => {
 		const map = new Map<string, { name: string; image: string | null }>();
-		for (const m of memberships) {
-			if (m.user && !map.has(m.userId)) {
-				map.set(m.userId, { name: m.user.name, image: m.user.image ?? null });
+		for (const mem of memberships) {
+			if (mem.user && !map.has(mem.userId)) {
+				map.set(mem.userId, {
+					name: mem.user.name,
+					image: mem.user.image ?? null,
+				});
 			}
 		}
 		return map;
@@ -32,21 +36,23 @@ export function AssigneeChips({ taskId }: { taskId: string }) {
 
 	const shown = mine.slice(0, MAX_SHOWN);
 	const overflow = mine.length - shown.length;
-	const names = mine.map((a) => users.get(a.userId)?.name ?? "Someone");
+	const names = mine.map(
+		(a) => users.get(a.userId)?.name ?? m.group_unknown_user(),
+	);
 
 	return (
 		<div
 			data-testid="assignee-chips"
 			role="img"
 			className="flex items-center -space-x-2"
-			aria-label={`Assigned to ${names.join(", ")}`}
+			aria-label={m.assignee_chips_aria({ names: names.join(", ") })}
 		>
 			{shown.map((a) => {
 				const u = users.get(a.userId);
 				return (
 					<MemberAvatar
 						key={a.userId}
-						name={u?.name ?? "Someone"}
+						name={u?.name ?? m.group_unknown_user()}
 						image={u?.image}
 						className="size-6 ring-2 ring-background"
 					/>

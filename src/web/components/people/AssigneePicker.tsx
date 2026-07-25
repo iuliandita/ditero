@@ -11,6 +11,7 @@ import {
 import { runMutation } from "@/lib/run-mutation";
 import { deriveConnections } from "../../../domain/connections.ts";
 import type { InviteMailStatus } from "../../../domain/invite.ts";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
@@ -54,29 +55,32 @@ export function AssigneePicker({
 
 	const userMap = useMemo(() => {
 		const map = new Map<string, { name: string; image: string | null }>();
-		for (const m of memberships) {
-			if (m.user && !map.has(m.userId)) {
-				map.set(m.userId, { name: m.user.name, image: m.user.image ?? null });
+		for (const mem of memberships) {
+			if (mem.user && !map.has(mem.userId)) {
+				map.set(mem.userId, {
+					name: mem.user.name,
+					image: mem.user.image ?? null,
+				});
 			}
 		}
 		return map;
 	}, [memberships]);
 
 	const members = useMemo(
-		() => memberships.filter((m) => m.workspaceId === workspaceId),
+		() => memberships.filter((mem) => mem.workspaceId === workspaceId),
 		[memberships, workspaceId],
 	);
 	const memberIds = useMemo(
-		() => new Set(members.map((m) => m.userId)),
+		() => new Set(members.map((mem) => mem.userId)),
 		[members],
 	);
 	const connectionIds = useMemo(
 		() => deriveConnections(memberships, me).filter((id) => !memberIds.has(id)),
 		[memberships, me, memberIds],
 	);
-	const callerRole = members.find((m) => m.userId === me)?.role ?? null;
+	const callerRole = members.find((mem) => mem.userId === me)?.role ?? null;
 	const canInvite = callerRole != null && INVITE_ROLES.has(callerRole);
-	const workspaceName = members[0]?.workspace?.name ?? "this workspace";
+	const workspaceName = members[0]?.workspace?.name ?? null;
 
 	const assignedIds = useMemo(
 		() =>
@@ -89,10 +93,10 @@ export function AssigneePicker({
 	function toggleMember(userId: string) {
 		setError(null);
 		const assigned = assignedIds.has(userId);
-		const m = assigned
+		const mutation = assigned
 			? mutators.task.unassign({ taskId: task.id, userId })
 			: mutators.task.assign({ taskId: task.id, userId });
-		void runMutation(zero.mutate(m), setError);
+		void runMutation(zero.mutate(mutation), setError);
 	}
 
 	function requestInvite(p: Pending) {
@@ -123,7 +127,7 @@ export function AssigneePicker({
 			if (!res.ok) {
 				setError(
 					(await res.text()).trim() ||
-						`Could not create the invite (${res.status}).`,
+						m.invite_create_failed_status({ status: res.status }),
 				);
 				return;
 			}
@@ -137,7 +141,7 @@ export function AssigneePicker({
 			setPending(null);
 		} catch (e) {
 			console.error(e);
-			setError(e instanceof Error ? e.message : "Could not create the invite.");
+			setError(e instanceof Error ? e.message : m.invite_create_failed());
 		} finally {
 			setBusy(false);
 		}
@@ -154,7 +158,7 @@ export function AssigneePicker({
 				{ credentials: "include" },
 			);
 			if (!res.ok) {
-				setError(`Lookup failed (${res.status}).`);
+				setError(m.assignee_lookup_failed_status({ status: res.status }));
 				setResults([]);
 				return;
 			}
@@ -162,7 +166,7 @@ export function AssigneePicker({
 			setResults(found.filter((u) => !memberIds.has(u.id)));
 		} catch (e) {
 			console.error(e);
-			setError(e instanceof Error ? e.message : "Lookup failed.");
+			setError(e instanceof Error ? e.message : m.assignee_lookup_failed());
 		} finally {
 			setBusy(false);
 		}
@@ -182,7 +186,7 @@ export function AssigneePicker({
 
 	return (
 		<div className="flex flex-col gap-1 text-sm">
-			<span className="text-muted-foreground">Assignees</span>
+			<span className="text-muted-foreground">{m.field_assignees()}</span>
 			<Popover
 				onOpenChange={(o) => {
 					if (!o) {
@@ -202,7 +206,9 @@ export function AssigneePicker({
 						data-testid="assignee-open"
 					>
 						<UserPlus />
-						{assignedCount > 0 ? `Assignees (${assignedCount})` : "Assign"}
+						{assignedCount > 0
+							? m.assignee_open_count({ count: assignedCount })
+							: m.assignee_open()}
 					</Button>
 				</PopoverTrigger>
 				<PopoverContent
@@ -223,10 +229,17 @@ export function AssigneePicker({
 								className="flex flex-col gap-2 rounded-md border p-2"
 							>
 								<p>
-									Invite {pending.name} to {workspaceName} and assign?
+									{workspaceName
+										? m.assignee_invite_confirm({
+												name: pending.name,
+												workspace: workspaceName,
+											})
+										: m.assignee_invite_confirm_no_workspace({
+												name: pending.name,
+											})}
 								</p>
 								<p className="text-xs text-muted-foreground">
-									They are assigned once they accept the invite.
+									{m.assignee_invite_hint()}
 								</p>
 								<div className="flex justify-end gap-2">
 									<Button
@@ -234,7 +247,7 @@ export function AssigneePicker({
 										size="sm"
 										onClick={() => setPending(null)}
 									>
-										Cancel
+										{m.assignee_invite_cancel()}
 									</Button>
 									<Button
 										size="sm"
@@ -242,7 +255,7 @@ export function AssigneePicker({
 										disabled={busy}
 										onClick={() => void confirmInvite()}
 									>
-										Invite & assign
+										{m.assignee_invite_submit()}
 									</Button>
 								</div>
 							</div>
@@ -250,13 +263,13 @@ export function AssigneePicker({
 							<div className="flex flex-col gap-2 rounded-md border p-2">
 								<InviteMailNotice mail={inviteMail} email={inviteMailTo} />
 								<span className="text-xs text-muted-foreground">
-									Invite created. Share this link; they are assigned on accept.
+									{m.assignee_invite_created()}
 								</span>
 								<div className="flex items-center gap-1.5">
 									<Input
 										readOnly
 										value={invitedLink}
-										aria-label="Invite link"
+										aria-label={m.invite_link_aria()}
 										data-testid="assignee-invite-link"
 										onFocus={(e) => e.currentTarget.select()}
 									/>
@@ -264,7 +277,7 @@ export function AssigneePicker({
 										type="button"
 										variant="outline"
 										size="icon"
-										aria-label="Copy invite link"
+										aria-label={m.invite_copy_link_aria()}
 										onClick={() => void copyLink()}
 									>
 										<Copy />
@@ -272,7 +285,7 @@ export function AssigneePicker({
 								</div>
 								{copied && (
 									<span role="status" className="text-xs text-muted-foreground">
-										Copied to clipboard.
+										{m.copied_to_clipboard()}
 									</span>
 								)}
 							</div>
@@ -280,30 +293,33 @@ export function AssigneePicker({
 
 						<section className="flex flex-col gap-0.5">
 							<h4 className="px-1 text-xs font-medium text-muted-foreground">
-								Members
+								{m.members_heading()}
 							</h4>
-							{members.map((m) => {
-								const name = m.user?.name ?? m.userId;
-								const assigned = assignedIds.has(m.userId);
+							{members.map((mem) => {
+								const name = mem.user?.name ?? mem.userId;
+								const assigned = assignedIds.has(mem.userId);
 								return (
 									<button
-										key={m.id}
+										key={mem.id}
 										type="button"
 										data-testid="assignee-option"
 										aria-pressed={assigned}
 										disabled={!canInvite}
-										onClick={() => toggleMember(m.userId)}
+										onClick={() => toggleMember(mem.userId)}
 										className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start hover:bg-muted disabled:opacity-60 disabled:hover:bg-transparent"
 									>
 										<MemberAvatar
 											name={name}
-											image={m.user?.image}
+											image={mem.user?.image}
 											className="size-6"
 										/>
 										<span className="min-w-0 flex-1 truncate">
 											{name}
-											{m.userId === me && (
-												<span className="text-muted-foreground"> (you)</span>
+											{mem.userId === me && (
+												<span className="text-muted-foreground">
+													{" "}
+													{m.person_you_suffix()}
+												</span>
 											)}
 										</span>
 										<span className="flex size-4 items-center justify-center">
@@ -317,7 +333,7 @@ export function AssigneePicker({
 						{connectionIds.length > 0 && (
 							<section className="flex flex-col gap-0.5">
 								<h4 className="px-1 text-xs font-medium text-muted-foreground">
-									Connections
+									{m.connections_section_heading()}
 								</h4>
 								{connectionIds.map((userId) => {
 									const u = userMap.get(userId);
@@ -338,7 +354,9 @@ export function AssigneePicker({
 											/>
 											<span className="min-w-0 flex-1 truncate">{name}</span>
 											<span className="text-xs text-muted-foreground">
-												{canInvite ? "Invite" : "Ask an admin"}
+												{canInvite
+													? m.assignee_row_invite()
+													: m.assignee_row_ask_admin()}
 											</span>
 										</button>
 									);
@@ -348,13 +366,13 @@ export function AssigneePicker({
 
 						<section className="flex flex-col gap-1.5 border-t pt-2">
 							<h4 className="px-1 text-xs font-medium text-muted-foreground">
-								Find by email
+								{m.assignee_find_by_email_heading()}
 							</h4>
 							<div className="flex items-center gap-1.5">
 								<Input
 									type="email"
-									placeholder="name@example.com"
-									aria-label="Find someone by email"
+									placeholder={m.email_placeholder()}
+									aria-label={m.assignee_find_by_email_aria()}
 									data-testid="assignee-email"
 									value={email}
 									onChange={(e) => setEmail(e.target.value)}
@@ -366,7 +384,7 @@ export function AssigneePicker({
 									type="button"
 									variant="outline"
 									size="icon"
-									aria-label="Search"
+									aria-label={m.assignee_search_action()}
 									disabled={busy || !email.trim()}
 									onClick={() => void lookup()}
 								>
@@ -375,7 +393,7 @@ export function AssigneePicker({
 							</div>
 							{results?.length === 0 && (
 								<span className="px-1 text-xs text-muted-foreground">
-									No match. An exact email is required.
+									{m.assignee_no_match()}
 								</span>
 							)}
 							{results?.map((u) => (
@@ -396,7 +414,9 @@ export function AssigneePicker({
 									/>
 									<span className="min-w-0 flex-1 truncate">{u.name}</span>
 									<span className="text-xs text-muted-foreground">
-										{canInvite ? "Invite" : "Ask an admin"}
+										{canInvite
+											? m.assignee_row_invite()
+											: m.assignee_row_ask_admin()}
 									</span>
 								</button>
 							))}

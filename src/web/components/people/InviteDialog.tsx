@@ -17,16 +17,11 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import type { InviteMailStatus } from "../../../domain/invite.ts";
+import { m } from "../../../paraglide/messages.js";
 import { InviteMailNotice } from "./InviteMailNotice";
+import { ROLE_LABELS } from "./role-labels.ts";
 
 export type Role = "owner" | "admin" | "member" | "viewer";
-
-const ROLE_LABELS: Record<Role, string> = {
-	owner: "Owner",
-	admin: "Admin",
-	member: "Member",
-	viewer: "Viewer",
-};
 
 // Roles a caller may grant, mirroring the server escalation gate in
 // auth/invite-create.ts (default policy): only an owner grants owner, admin+
@@ -97,7 +92,7 @@ export function InviteDialog({
 			});
 			if (!res.ok) {
 				const msg = (await res.text()).trim();
-				setError(msg || `Could not create the invite (${res.status}).`);
+				setError(msg || m.invite_create_failed_status({ status: res.status }));
 				return;
 			}
 			const data = (await res.json()) as {
@@ -112,7 +107,7 @@ export function InviteDialog({
 			onCreated({ id: data.id, link: data.link });
 		} catch (e) {
 			console.error(e);
-			setError(e instanceof Error ? e.message : "Could not create the invite.");
+			setError(e instanceof Error ? e.message : m.invite_create_failed());
 		} finally {
 			setBusy(false);
 		}
@@ -138,32 +133,29 @@ export function InviteDialog({
 		>
 			<DialogContent data-testid="invite-dialog">
 				<DialogHeader>
-					<DialogTitle>Invite people</DialogTitle>
-					<DialogDescription>
-						Add an email to send a targeted invite, or leave it blank to create
-						a shareable link.
-					</DialogDescription>
+					<DialogTitle>{m.invite_dialog_title()}</DialogTitle>
+					<DialogDescription>{m.invite_dialog_description()}</DialogDescription>
 				</DialogHeader>
 
 				{link ? (
 					<div className="flex flex-col gap-2">
 						<InviteMailNotice mail={mail} email={sentTo} />
 						<span className="text-sm text-muted-foreground">
-							Invite link (copy it now, it is shown only once):
+							{m.invite_link_once_hint()}
 						</span>
 						<div className="flex items-center gap-2">
 							<Input
 								data-testid="invite-link"
 								readOnly
 								value={link}
-								aria-label="Invite link"
+								aria-label={m.invite_link_aria()}
 								onFocus={(e) => e.currentTarget.select()}
 							/>
 							<Button
 								type="button"
 								variant="outline"
 								size="icon"
-								aria-label="Copy invite link"
+								aria-label={m.invite_copy_link_aria()}
 								data-testid="invite-copy"
 								onClick={() => void copyLink()}
 							>
@@ -172,7 +164,7 @@ export function InviteDialog({
 						</div>
 						{copied && (
 							<span role="status" className="text-sm text-muted-foreground">
-								Copied to clipboard.
+								{m.copied_to_clipboard()}
 							</span>
 						)}
 						<Button
@@ -181,30 +173,30 @@ export function InviteDialog({
 							className="self-end"
 							onClick={reset}
 						>
-							Create another
+							{m.invite_create_another()}
 						</Button>
 					</div>
 				) : (
 					<div className="flex flex-col gap-3">
 						<div className="flex flex-col gap-1.5">
 							<label htmlFor={emailId} className="text-sm font-medium">
-								Email (optional)
+								{m.invite_email_optional_label()}
 							</label>
 							<Input
 								id={emailId}
 								data-testid="invite-email"
 								type="email"
-								placeholder="name@example.com"
+								placeholder={m.email_placeholder()}
 								value={email}
 								onChange={(e) => setEmail(e.target.value)}
 							/>
 						</div>
 
 						<div className="flex flex-col gap-1.5">
-							<span className="text-sm font-medium">Role</span>
+							<span className="text-sm font-medium">{m.field_role()}</span>
 							<Select value={role} onValueChange={(v) => setRole(v as Role)}>
 								<SelectTrigger
-									aria-label="Role"
+									aria-label={m.field_role()}
 									data-testid="invite-role"
 									className="w-full"
 								>
@@ -213,7 +205,7 @@ export function InviteDialog({
 								<SelectContent>
 									{options.map((r) => (
 										<SelectItem key={r} value={r}>
-											{ROLE_LABELS[r]}
+											{ROLE_LABELS[r]()}
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -233,7 +225,7 @@ export function InviteDialog({
 							className="self-end"
 							onClick={() => void submit()}
 						>
-							{email.trim() ? "Send invite" : "Create link"}
+							{email.trim() ? m.invite_submit_send() : m.invite_submit_link()}
 						</Button>
 					</div>
 				)}

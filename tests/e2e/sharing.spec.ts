@@ -117,7 +117,7 @@ async function redeemViaAcceptPage(
 ): Promise<void> {
 	await page.goto(`/accept?token=${token}`);
 	await expect(page.getByTestId("accept-page")).toBeVisible({ timeout: 15000 });
-	await expect(page.getByTestId("accept-workspace-name")).toBeVisible();
+	await expect(page.getByTestId("accept-join-line")).toBeVisible();
 	if (opts.mode === "join") {
 		await page.getByTestId("accept-join").click();
 	} else {
