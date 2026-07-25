@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/sheet";
 import { useIsDesktop } from "@/lib/use-media-query";
 import {
+	MAX_PANEL_LIMIT,
+	MIN_PANEL_LIMIT,
 	PANEL_SPANS,
 	type Panel,
 	type PanelSize,
@@ -34,12 +36,18 @@ import type {
 	FilterGroup,
 	WorkspaceScope,
 } from "../../../domain/view-filter.ts";
+import { m } from "../../../paraglide/messages.js";
 import { FilterBuilder } from "../views/FilterBuilder.tsx";
+import { SORT_FIELD_LABELS, SORT_FIELDS } from "../views/filter-options.ts";
 import { SIZE_LABEL } from "./PanelFrame.tsx";
 
 type PanelType = Panel["type"];
+const MIN_STREAK_HABITS = 1;
 const MAX_STREAK_HABITS = 10;
 
+// Every `value` below is persisted panel config (panel.type / panel.size /
+// panel source sort field) and is never translated; only the labels are, and
+// they stay getters because this module resolves at import time.
 const TYPE_OPTIONS: {
 	value: PanelType;
 	label: string;
@@ -48,41 +56,47 @@ const TYPE_OPTIONS: {
 }[] = [
 	{
 		value: "tasks",
-		label: "Tasks",
-		hint: "A live list of matching tasks",
+		get label() {
+			return m.panel_type_tasks();
+		},
+		get hint() {
+			return m.panel_type_tasks_hint();
+		},
 		icon: ListChecks,
 	},
 	{
 		value: "counter",
-		label: "Counter",
-		hint: "A single count of matching tasks",
+		get label() {
+			return m.panel_type_counter();
+		},
+		get hint() {
+			return m.panel_type_counter_hint();
+		},
 		icon: Hash,
 	},
 	{
 		value: "streak",
-		label: "Streak",
-		hint: "Current streaks for picked habits",
+		get label() {
+			return m.panel_type_streak();
+		},
+		get hint() {
+			return m.panel_type_streak_hint();
+		},
 		icon: Flame,
 	},
 	{
 		value: "focus",
-		label: "Focus",
-		hint: "Your focus sessions and minutes",
+		get label() {
+			return m.panel_type_focus();
+		},
+		get hint() {
+			return m.panel_type_focus_hint();
+		},
 		icon: Timer,
 	},
 ];
 
-const SIZE_OPTIONS = (Object.keys(PANEL_SPANS) as PanelSize[]).map((v) => ({
-	value: v,
-	label: SIZE_LABEL[v],
-}));
-
-const SORT_FIELDS: { value: string; label: string }[] = [
-	{ value: "sortKey", label: "Manual" },
-	{ value: "due", label: "Due date" },
-	{ value: "priority", label: "Priority" },
-	{ value: "title", label: "Title" },
-];
+const SIZES = Object.keys(PANEL_SPANS) as PanelSize[];
 
 const EMPTY_FILTER: FilterGroup = { op: "and", conditions: [] };
 
@@ -194,7 +208,9 @@ export function AddPanelDialog({
 	const limitNum = limit.trim() === "" ? null : Number(limit);
 	const limitValid =
 		limitNum === null ||
-		(Number.isInteger(limitNum) && limitNum >= 1 && limitNum <= 50);
+		(Number.isInteger(limitNum) &&
+			limitNum >= MIN_PANEL_LIMIT &&
+			limitNum <= MAX_PANEL_LIMIT);
 	const sourceValid =
 		sourceMode === "view"
 			? viewId !== ""
@@ -258,7 +274,7 @@ export function AddPanelDialog({
 
 	const typeStep = (
 		<div className="flex flex-col gap-2 px-4 pb-4 md:px-6">
-			<p className="text-xs font-medium">Panel type</p>
+			<p className="text-xs font-medium">{m.panel_type_heading()}</p>
 			{TYPE_OPTIONS.map((o) => (
 				<button
 					key={o.value}
@@ -282,7 +298,7 @@ export function AddPanelDialog({
 
 	const sourceStep = (
 		<>
-			<Field label="Source" htmlFor={`${baseId}-source`}>
+			<Field label={m.panel_field_source()} htmlFor={`${baseId}-source`}>
 				<Select
 					value={sourceMode}
 					onValueChange={(v) =>
@@ -297,26 +313,26 @@ export function AddPanelDialog({
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value="view">Saved view</SelectItem>
-						<SelectItem value="inline">Custom filter</SelectItem>
+						<SelectItem value="view">{m.panel_source_view()}</SelectItem>
+						<SelectItem value="inline">{m.panel_source_inline()}</SelectItem>
 					</SelectContent>
 				</Select>
 			</Field>
 
 			{sourceMode === "view" ? (
-				<Field label="View" htmlFor={`${baseId}-view`}>
+				<Field label={m.panel_field_view()} htmlFor={`${baseId}-view`}>
 					<Select value={viewId} onValueChange={setViewId}>
 						<SelectTrigger
 							id={`${baseId}-view`}
 							size="sm"
 							data-testid="panel-view-pick"
 						>
-							<SelectValue placeholder="Select a view..." />
+							<SelectValue placeholder={m.panel_view_placeholder()} />
 						</SelectTrigger>
 						<SelectContent>
 							{views.length === 0 && (
 								<span className="block px-2 py-1.5 text-xs text-muted-foreground">
-									No saved views yet.
+									{m.panel_no_views()}
 								</span>
 							)}
 							{views.map((v) => (
@@ -329,7 +345,7 @@ export function AddPanelDialog({
 				</Field>
 			) : (
 				<>
-					<Field label="Filter">
+					<Field label={m.field_filter()}>
 						<FilterBuilder
 							value={filter}
 							onChange={setFilter}
@@ -340,7 +356,7 @@ export function AddPanelDialog({
 						/>
 					</Field>
 					<div className="grid grid-cols-2 gap-3">
-						<Field label="Sort by" htmlFor={`${baseId}-sortfield`}>
+						<Field label={m.field_sort_by()} htmlFor={`${baseId}-sortfield`}>
 							<Select
 								value={sort.field}
 								onValueChange={(field) => setSort((s) => ({ ...s, field }))}
@@ -349,15 +365,15 @@ export function AddPanelDialog({
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									{SORT_FIELDS.map((o) => (
-										<SelectItem key={o.value} value={o.value}>
-											{o.label}
+									{SORT_FIELDS.map((field) => (
+										<SelectItem key={field} value={field}>
+											{SORT_FIELD_LABELS[field]()}
 										</SelectItem>
 									))}
 								</SelectContent>
 							</Select>
 						</Field>
-						<Field label="Direction" htmlFor={`${baseId}-sortdir`}>
+						<Field label={m.field_direction()} htmlFor={`${baseId}-sortdir`}>
 							<Select
 								value={sort.dir}
 								onValueChange={(v) =>
@@ -368,12 +384,12 @@ export function AddPanelDialog({
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="asc">Ascending</SelectItem>
-									<SelectItem value="desc">Descending</SelectItem>
+									<SelectItem value="asc">{m.sort_asc()}</SelectItem>
+									<SelectItem value="desc">{m.sort_desc()}</SelectItem>
 								</SelectContent>
 							</Select>
 						</Field>
-						<Field label="Workspaces" htmlFor={`${baseId}-wsscope`}>
+						<Field label={m.field_workspaces()} htmlFor={`${baseId}-wsscope`}>
 							<Select
 								value={scope.mode === "one" ? "one" : "all"}
 								onValueChange={(v) =>
@@ -388,19 +404,24 @@ export function AddPanelDialog({
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="all">All workspaces</SelectItem>
-									<SelectItem value="one">One workspace</SelectItem>
+									<SelectItem value="all">
+										{m.scope_all_workspaces()}
+									</SelectItem>
+									<SelectItem value="one">{m.scope_one_workspace()}</SelectItem>
 								</SelectContent>
 							</Select>
 						</Field>
 						{scope.mode === "one" && (
-							<Field label="Workspace" htmlFor={`${baseId}-wsscope-one`}>
+							<Field
+								label={m.field_workspace()}
+								htmlFor={`${baseId}-wsscope-one`}
+							>
 								<Select
 									value={scopeWorkspaceId}
 									onValueChange={(id) => setScope({ mode: "one", id })}
 								>
 									<SelectTrigger id={`${baseId}-wsscope-one`} size="sm">
-										<SelectValue placeholder="Select..." />
+										<SelectValue placeholder={m.select_placeholder()} />
 									</SelectTrigger>
 									<SelectContent>
 										{workspaces.map((w) => (
@@ -424,7 +445,10 @@ export function AddPanelDialog({
 	const streakStep = (
 		<fieldset className="flex flex-col gap-1">
 			<legend className="mb-1 text-xs font-medium">
-				Habits (pick 1-{MAX_STREAK_HABITS})
+				{m.panel_habits_legend({
+					min: MIN_STREAK_HABITS,
+					max: MAX_STREAK_HABITS,
+				})}
 			</legend>
 			{missingHabitIds.map((id) => {
 				const inputId = `${baseId}-habit-${id}`;
@@ -445,7 +469,7 @@ export function AddPanelDialog({
 							htmlFor={inputId}
 							className="min-w-0 flex-1 truncate text-muted-foreground"
 						>
-							Missing habit (deleted or not shared with you)
+							{m.panel_habit_missing()}
 						</label>
 					</div>
 				);
@@ -455,7 +479,7 @@ export function AddPanelDialog({
 					data-testid="panel-no-habits"
 					className="text-sm text-muted-foreground"
 				>
-					No habits yet. Add tasks to a habits list first.
+					{m.panel_no_habits()}
 				</p>
 			) : (
 				habitTasks.map((h) => {
@@ -485,7 +509,9 @@ export function AddPanelDialog({
 
 	const focusStep = (
 		<fieldset className="flex flex-col gap-1">
-			<legend className="mb-1 text-xs font-medium">Range</legend>
+			<legend className="mb-1 text-xs font-medium">
+				{m.panel_field_range()}
+			</legend>
 			{(["today", "week"] as const).map((r) => (
 				<label
 					key={r}
@@ -500,7 +526,7 @@ export function AddPanelDialog({
 						onChange={() => setRange(r)}
 						className="size-4 accent-primary"
 					/>
-					{r === "today" ? "Today" : "Last 7 days"}
+					{r === "today" ? m.panel_range_today() : m.panel_range_week()}
 				</label>
 			))}
 		</fieldset>
@@ -513,7 +539,7 @@ export function AddPanelDialog({
 			{type === "focus" && focusStep}
 
 			<div className="grid grid-cols-2 gap-3">
-				<Field label="Size" htmlFor={`${baseId}-size`}>
+				<Field label={m.panel_field_size()} htmlFor={`${baseId}-size`}>
 					<Select value={size} onValueChange={(v) => setSize(v as PanelSize)}>
 						<SelectTrigger
 							id={`${baseId}-size`}
@@ -523,22 +549,28 @@ export function AddPanelDialog({
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							{SIZE_OPTIONS.map((o) => (
-								<SelectItem key={o.value} value={o.value}>
-									{o.label}
+							{SIZES.map((s) => (
+								<SelectItem key={s} value={s}>
+									{SIZE_LABEL[s]()}
 								</SelectItem>
 							))}
 						</SelectContent>
 					</Select>
 				</Field>
 				{type === "tasks" && (
-					<Field label="Limit (1-50)" htmlFor={`${baseId}-limit`}>
+					<Field
+						label={m.panel_field_limit({
+							min: MIN_PANEL_LIMIT,
+							max: MAX_PANEL_LIMIT,
+						})}
+						htmlFor={`${baseId}-limit`}
+					>
 						<Input
 							id={`${baseId}-limit`}
 							data-testid="panel-limit"
 							type="number"
-							min={1}
-							max={50}
+							min={MIN_PANEL_LIMIT}
+							max={MAX_PANEL_LIMIT}
 							placeholder="10"
 							aria-invalid={!limitValid}
 							value={limit}
@@ -548,26 +580,25 @@ export function AddPanelDialog({
 				)}
 			</div>
 
-			<Field label="Title (optional)" htmlFor={`${baseId}-title`}>
+			<Field label={m.panel_field_title()} htmlFor={`${baseId}-title`}>
 				<Input
 					id={`${baseId}-title`}
 					data-testid="panel-title"
 					maxLength={120}
-					placeholder="Panel title"
+					placeholder={m.panel_title_placeholder()}
 					value={title}
 					onChange={(e) => setTitle(e.target.value)}
 				/>
 			</Field>
 
-			<p className="text-xs text-muted-foreground">
-				On phones, panels stack in dashboard order.
-			</p>
+			<p className="text-xs text-muted-foreground">{m.panel_mobile_hint()}</p>
 		</div>
 	);
 
 	const showTypeStep = type === null;
 	const body = showTypeStep ? typeStep : configStep;
-	const dialogTitle = mode === "add" ? "Add panel" : "Edit panel";
+	const dialogTitle =
+		mode === "add" ? m.panel_dialog_add_title() : m.panel_dialog_edit_title();
 	const footer = !showTypeStep && (
 		<div className="flex w-full items-center gap-2">
 			{mode === "add" && (
@@ -577,7 +608,7 @@ export function AddPanelDialog({
 					data-testid="panel-back"
 					onClick={() => setType(null)}
 				>
-					Back
+					{m.panel_dialog_back()}
 				</Button>
 			)}
 			<Button
@@ -587,7 +618,7 @@ export function AddPanelDialog({
 				className="ms-auto"
 				onClick={submit}
 			>
-				{mode === "add" ? "Add panel" : "Save panel"}
+				{mode === "add" ? m.panel_add() : m.panel_submit_save()}
 			</Button>
 		</div>
 	);

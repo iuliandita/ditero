@@ -1,5 +1,6 @@
 import { type JSX, useMemo } from "react";
 import type { Panel } from "../../../domain/dashboard.ts";
+import { m } from "../../../paraglide/messages.js";
 import { useFocusSessions } from "../../hooks/useFocusSessions.ts";
 import { focusStats } from "./focus-stats.ts";
 
@@ -26,18 +27,20 @@ export function FocusPanel({
 			<p className="text-2xl font-semibold tabular-nums">
 				{stats.count}
 				<span className="ms-1.5 text-sm font-normal text-muted-foreground">
-					focus session{stats.count === 1 ? "" : "s"}
+					{m.panel_focus_sessions_unit({ count: stats.count })}
 				</span>
 			</p>
 			<p
 				data-testid="focus-minutes"
 				className="text-sm text-muted-foreground tabular-nums"
 			>
-				{stats.minutes} min focused
+				{m.panel_focus_minutes({ minutes: stats.minutes })}
 			</p>
 			{/* Full-strength muted token: the /70 variant fails the WCAG AA 4.5:1
 			    contrast gate (axe serious) at this size. */}
-			<p className="text-xs text-muted-foreground">Your sessions only</p>
+			<p className="text-xs text-muted-foreground">
+				{m.panel_focus_own_only()}
+			</p>
 		</div>
 	);
 }

@@ -188,6 +188,17 @@ export const FIELD_METAS: FieldMeta[] = [
 	},
 ];
 
+// Sort fields shared by the view display config and the dashboard panel inline
+// source. Keys are the persisted sort field (view.display.sort.field /
+// panel source sort.field); labels are thunks for the same reason as above.
+export const SORT_FIELD_LABELS: Record<string, () => string> = {
+	sortKey: m.sort_manual,
+	due: m.sort_due_date,
+	priority: m.task_field_priority,
+	title: m.field_title,
+};
+export const SORT_FIELDS = Object.keys(SORT_FIELD_LABELS);
+
 const META_BY_FIELD = new Map(FIELD_METAS.map((meta) => [meta.field, meta]));
 
 export function metaFor(field: FilterField): FieldMeta {

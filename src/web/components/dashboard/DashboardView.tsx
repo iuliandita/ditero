@@ -27,6 +27,7 @@ import {
 	type ResolvedSource,
 	resolvePanelSource,
 } from "../../../domain/dashboard.ts";
+import { m } from "../../../paraglide/messages.js";
 import type {
 	Dashboard,
 	Folder,
@@ -73,7 +74,7 @@ function ViewMissing({
 		>
 			<p className="flex items-start gap-1.5">
 				<TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-				This panel's saved view was deleted or isn't shared with you.
+				{m.panel_view_missing()}
 			</p>
 			{canEdit && (
 				<Button
@@ -82,7 +83,7 @@ function ViewMissing({
 					data-testid="panel-replace-view"
 					onClick={onReplace}
 				>
-					Replace view
+					{m.panel_replace_view()}
 				</Button>
 			)}
 		</div>
@@ -312,7 +313,7 @@ export function DashboardView({
 				data-testid="dashboard-panels-error"
 				className="rounded-lg border border-destructive/50 p-4 text-sm text-destructive"
 			>
-				This dashboard's panel data is invalid and can't be rendered.
+				{m.dashboard_panels_invalid()}
 			</div>
 		);
 	} else if (panels.length === 0 && !editing) {
@@ -323,7 +324,7 @@ export function DashboardView({
 			>
 				<LayoutDashboard aria-hidden className="size-8 text-muted-foreground" />
 				<p className="text-sm text-muted-foreground">
-					Dashboards are pages of panels over your tasks.
+					{m.dashboard_empty_hint()}
 				</p>
 				{canEdit && (
 					<Button
@@ -333,7 +334,7 @@ export function DashboardView({
 							setPanelDialog({ mode: "add" });
 						}}
 					>
-						<Plus /> Add panel
+						<Plus /> {m.panel_add()}
 					</Button>
 				)}
 			</div>
@@ -374,7 +375,7 @@ export function DashboardView({
 							data-testid="panel-limit-reached"
 							className="flex min-h-28 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground md:col-span-3"
 						>
-							Panel limit reached
+							{m.panel_limit_reached()}
 						</p>
 					) : (
 						<button
@@ -383,7 +384,7 @@ export function DashboardView({
 							onClick={() => setPanelDialog({ mode: "add" })}
 							className="flex min-h-28 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40 md:col-span-3"
 						>
-							<Plus className="size-4" /> Add panel
+							<Plus className="size-4" /> {m.panel_add()}
 						</button>
 					))}
 			</div>
@@ -412,7 +413,7 @@ export function DashboardView({
 				{!isDesktop && (
 					<button
 						type="button"
-						aria-label="Back"
+						aria-label={m.dashboard_back()}
 						onClick={onBack}
 						className="flex size-9 shrink-0 items-center justify-center rounded-lg"
 					>
@@ -430,7 +431,9 @@ export function DashboardView({
 						aria-pressed={editing}
 						onClick={() => setEditRequested(!editing)}
 					>
-						{editing ? "Done" : "Edit"}
+						{editing
+							? m.dashboard_edit_mode_done()
+							: m.dashboard_edit_mode_start()}
 					</Button>
 				)}
 				<DropdownMenu>
@@ -438,7 +441,7 @@ export function DashboardView({
 						<Button
 							variant="ghost"
 							size="icon-sm"
-							aria-label="Dashboard actions"
+							aria-label={m.dashboard_actions()}
 							data-testid="dashboard-actions"
 						>
 							<MoreHorizontal />
@@ -450,13 +453,13 @@ export function DashboardView({
 							checked={isHome}
 							onSelect={onSetHome}
 						>
-							<House /> Set as home
+							<House /> {m.dashboard_set_home()}
 						</DropdownMenuCheckboxItem>
 						<DropdownMenuItem
 							data-testid="dashboard-rename"
 							onSelect={onEditDashboard}
 						>
-							<Pencil /> Edit
+							<Pencil /> {m.dashboard_menu_edit()}
 						</DropdownMenuItem>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem
@@ -464,7 +467,7 @@ export function DashboardView({
 							className="text-destructive"
 							onSelect={onDeleteDashboard}
 						>
-							<Trash2 /> Delete
+							<Trash2 /> {m.dashboard_delete()}
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>

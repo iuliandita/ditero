@@ -31,6 +31,7 @@ import type {
 } from "../../../domain/view-filter.ts";
 import { m } from "../../../paraglide/messages.js";
 import { FilterBuilder } from "./FilterBuilder.tsx";
+import { SORT_FIELD_LABELS, SORT_FIELDS } from "./filter-options.ts";
 
 // Assembled form output; the caller (Workspace) turns this into a view.create or
 // view.update mutation, owning the id/sortKey/pin/open side effects.
@@ -69,16 +70,9 @@ const GROUP_BY_LABELS: Record<GroupBy, () => string> = {
 	list: m.field_list,
 	due: m.task_field_due,
 };
-const SORT_FIELD_LABELS: Record<string, () => string> = {
-	sortKey: m.view_sort_manual,
-	due: m.view_sort_due_date,
-	priority: m.task_field_priority,
-	title: m.field_title,
-};
 
 const LAYOUTS = Object.keys(LAYOUT_LABELS) as ViewLayout[];
 const GROUP_BYS = Object.keys(GROUP_BY_LABELS) as GroupBy[];
-const SORT_FIELDS = Object.keys(SORT_FIELD_LABELS);
 
 // With `htmlFor` the caption is a real <label> bound to one control; without it
 // (a composite like FilterBuilder) it is a plain section caption, not a label
@@ -207,7 +201,7 @@ export function ViewManager({
 				/>
 			</Field>
 
-			<Field label={m.view_field_filter()}>
+			<Field label={m.field_filter()}>
 				<FilterBuilder
 					value={filter}
 					onChange={setFilter}
@@ -253,7 +247,7 @@ export function ViewManager({
 						</SelectContent>
 					</Select>
 				</Field>
-				<Field label={m.view_field_sort_by()} htmlFor={`${baseId}-sortfield`}>
+				<Field label={m.field_sort_by()} htmlFor={`${baseId}-sortfield`}>
 					<Select value={display.sort.field} onValueChange={setSortField}>
 						<SelectTrigger id={`${baseId}-sortfield`} size="sm">
 							<SelectValue />
@@ -267,7 +261,7 @@ export function ViewManager({
 						</SelectContent>
 					</Select>
 				</Field>
-				<Field label={m.view_field_direction()} htmlFor={`${baseId}-sortdir`}>
+				<Field label={m.field_direction()} htmlFor={`${baseId}-sortdir`}>
 					<Select
 						value={display.sort.dir}
 						onValueChange={(v) => setSortDir(v as "asc" | "desc")}
@@ -276,12 +270,12 @@ export function ViewManager({
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="asc">{m.view_sort_asc()}</SelectItem>
-							<SelectItem value="desc">{m.view_sort_desc()}</SelectItem>
+							<SelectItem value="asc">{m.sort_asc()}</SelectItem>
+							<SelectItem value="desc">{m.sort_desc()}</SelectItem>
 						</SelectContent>
 					</Select>
 				</Field>
-				<Field label={m.view_field_workspaces()} htmlFor={`${baseId}-wsscope`}>
+				<Field label={m.field_workspaces()} htmlFor={`${baseId}-wsscope`}>
 					<Select
 						value={display.workspaceScope.mode === "one" ? "one" : "all"}
 						onValueChange={(v) => setScopeMode(v === "one" ? "one" : "all")}
@@ -290,12 +284,8 @@ export function ViewManager({
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="all">
-								{m.view_scope_all_workspaces()}
-							</SelectItem>
-							<SelectItem value="one">
-								{m.view_scope_one_workspace()}
-							</SelectItem>
+							<SelectItem value="all">{m.scope_all_workspaces()}</SelectItem>
+							<SelectItem value="one">{m.scope_one_workspace()}</SelectItem>
 						</SelectContent>
 					</Select>
 				</Field>
@@ -319,7 +309,7 @@ export function ViewManager({
 
 			{canSetScope && (
 				<div className="grid grid-cols-2 gap-3">
-					<Field label={m.view_field_visibility()} htmlFor={`${baseId}-scope`}>
+					<Field label={m.field_visibility()} htmlFor={`${baseId}-scope`}>
 						<Select
 							value={scope}
 							onValueChange={(v) =>
@@ -331,19 +321,16 @@ export function ViewManager({
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="personal">
-									{m.view_visibility_personal()}
+									{m.visibility_personal()}
 								</SelectItem>
 								<SelectItem value="workspace">
-									{m.view_visibility_workspace()}
+									{m.visibility_workspace()}
 								</SelectItem>
 							</SelectContent>
 						</Select>
 					</Field>
 					{scope === "workspace" && (
-						<Field
-							label={m.view_field_shared_in()}
-							htmlFor={`${baseId}-scope-ws`}
-						>
+						<Field label={m.field_shared_in()} htmlFor={`${baseId}-scope-ws`}>
 							<Select
 								value={workspaceId ?? ""}
 								onValueChange={(v) => setWorkspaceId(v)}
@@ -377,7 +364,7 @@ export function ViewManager({
 			disabled={!canSave}
 			onClick={submit}
 		>
-			{mode === "create" ? m.view_submit_create() : m.view_submit_save()}
+			{mode === "create" ? m.view_submit_create() : m.submit_save_changes()}
 		</Button>
 	);
 

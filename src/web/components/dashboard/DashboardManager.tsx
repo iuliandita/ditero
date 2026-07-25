@@ -22,6 +22,7 @@ import {
 	SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { m } from "../../../paraglide/messages.js";
 
 // Assembled form output; the caller (Workspace) turns this into a
 // dashboard.create or dashboard.update mutation, owning id/sortKey/panels.
@@ -98,19 +99,19 @@ export function DashboardManager({
 
 	const body = (
 		<div className="flex flex-col gap-4 overflow-y-auto px-4 pb-4 md:px-6">
-			<Field label="Name" htmlFor={`${baseId}-name`}>
+			<Field label={m.field_name()} htmlFor={`${baseId}-name`}>
 				<Input
 					id={`${baseId}-name`}
 					data-testid="dashboard-name"
 					value={name}
 					onChange={(e) => setName(e.target.value)}
-					placeholder="Dashboard name"
+					placeholder={m.dashboard_name_placeholder()}
 				/>
 			</Field>
 
 			{canSetScope && (
 				<div className="grid grid-cols-2 gap-3">
-					<Field label="Visibility" htmlFor={`${baseId}-scope`}>
+					<Field label={m.field_visibility()} htmlFor={`${baseId}-scope`}>
 						<Select
 							value={scope}
 							onValueChange={(v) =>
@@ -120,20 +121,25 @@ export function DashboardManager({
 							<SelectTrigger id={`${baseId}-scope`} size="sm">
 								<SelectValue />
 							</SelectTrigger>
+							{/* Values are the persisted dashboard scope; only labels translate. */}
 							<SelectContent>
-								<SelectItem value="personal">Personal</SelectItem>
-								<SelectItem value="workspace">Workspace</SelectItem>
+								<SelectItem value="personal">
+									{m.visibility_personal()}
+								</SelectItem>
+								<SelectItem value="workspace">
+									{m.visibility_workspace()}
+								</SelectItem>
 							</SelectContent>
 						</Select>
 					</Field>
 					{scope === "workspace" && (
-						<Field label="Shared in" htmlFor={`${baseId}-scope-ws`}>
+						<Field label={m.field_shared_in()} htmlFor={`${baseId}-scope-ws`}>
 							<Select
 								value={workspaceId ?? ""}
 								onValueChange={(v) => setWorkspaceId(v)}
 							>
 								<SelectTrigger id={`${baseId}-scope-ws`} size="sm">
-									<SelectValue placeholder="Select..." />
+									<SelectValue placeholder={m.select_placeholder()} />
 								</SelectTrigger>
 								<SelectContent>
 									{workspaces.map((w) => (
@@ -150,7 +156,10 @@ export function DashboardManager({
 		</div>
 	);
 
-	const title = mode === "create" ? "New dashboard" : "Edit dashboard";
+	const title =
+		mode === "create"
+			? m.dashboard_dialog_create_title()
+			: m.dashboard_dialog_edit_title();
 	const footer = (
 		<Button
 			type="button"
@@ -158,7 +167,9 @@ export function DashboardManager({
 			disabled={!canSave}
 			onClick={submit}
 		>
-			{mode === "create" ? "Create dashboard" : "Save changes"}
+			{mode === "create"
+				? m.dashboard_submit_create()
+				: m.submit_save_changes()}
 		</Button>
 	);
 

@@ -15,6 +15,7 @@ import {
 	type Panel,
 	type PanelSize,
 } from "../../../domain/dashboard.ts";
+import { m } from "../../../paraglide/messages.js";
 import { Button } from "../ui/button.tsx";
 import {
 	DropdownMenu,
@@ -32,13 +33,15 @@ import {
 function derivedLabel(panel: Panel): string {
 	switch (panel.type) {
 		case "tasks":
-			return "Tasks";
+			return m.panel_type_tasks();
 		case "counter":
-			return "Counter";
+			return m.panel_type_counter();
 		case "streak":
-			return `${panel.habitIds.length} habit${panel.habitIds.length === 1 ? "" : "s"}`;
+			return m.panel_label_habits({ count: panel.habitIds.length });
 		case "focus":
-			return panel.range === "today" ? "Focus today" : "Focus this week";
+			return panel.range === "today"
+				? m.panel_label_focus_today()
+				: m.panel_label_focus_week();
 		default:
 			return panel satisfies never;
 	}
@@ -50,11 +53,13 @@ export function panelLabel(panel: Panel, viewName?: string | null): string {
 }
 
 const SIZES = Object.keys(PANEL_SPANS) as PanelSize[];
-export const SIZE_LABEL: Record<PanelSize, string> = {
-	s: "Small",
-	m: "Medium",
-	l: "Large",
-	full: "Full width",
+// Keys are the persisted panel.size values; thunks, not resolved strings, so
+// this module-level map does not freeze the import-time locale.
+export const SIZE_LABEL: Record<PanelSize, () => string> = {
+	s: m.panel_size_small,
+	m: m.panel_size_medium,
+	l: m.panel_size_large,
+	full: m.panel_size_full,
 };
 
 // Slim always-on panel chrome (shell doc §1): the header is the accessible
@@ -94,7 +99,7 @@ export function PanelFrame({
 					<button
 						type="button"
 						data-testid="panel-drag"
-						aria-label={`Move ${label} panel`}
+						aria-label={m.panel_drag_label({ label })}
 						className="flex min-w-0 flex-1 cursor-grab touch-none items-center gap-1.5 rounded text-start focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 						{...handle.attributes}
 						{...handle.listeners}
@@ -115,7 +120,7 @@ export function PanelFrame({
 							<Button
 								variant="ghost"
 								size="icon-sm"
-								aria-label={`${label} panel actions`}
+								aria-label={m.panel_actions_label({ label })}
 								data-testid="panel-menu"
 							>
 								<MoreHorizontal />
@@ -124,12 +129,12 @@ export function PanelFrame({
 						<DropdownMenuContent align="end">
 							{onEdit && (
 								<DropdownMenuItem data-testid="panel-edit" onSelect={onEdit}>
-									<Pencil /> Edit panel
+									<Pencil /> {m.panel_menu_edit()}
 								</DropdownMenuItem>
 							)}
 							<DropdownMenuSub>
 								<DropdownMenuSubTrigger data-testid="panel-resize">
-									Resize
+									{m.panel_menu_resize()}
 								</DropdownMenuSubTrigger>
 								<DropdownMenuSubContent>
 									{SIZES.map((size) => (
@@ -138,7 +143,7 @@ export function PanelFrame({
 											data-testid={`panel-size-${size}`}
 											onSelect={() => onResize?.(size)}
 										>
-											{SIZE_LABEL[size]}
+											{SIZE_LABEL[size]()}
 											{panel.size === size && <Check className="ml-auto" />}
 										</DropdownMenuItem>
 									))}
@@ -149,10 +154,10 @@ export function PanelFrame({
 								data-testid="panel-remove"
 								className="text-destructive"
 								onSelect={() => {
-									if (window.confirm("Remove this panel?")) onRemove?.();
+									if (window.confirm(m.panel_remove_confirm())) onRemove?.();
 								}}
 							>
-								<Trash2 /> Remove
+								<Trash2 /> {m.panel_menu_remove()}
 							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>

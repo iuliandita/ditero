@@ -3,6 +3,7 @@ import { type JSX, useMemo, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
 import type { ResolvedSource } from "../../../domain/dashboard.ts";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type {
 	Label,
@@ -140,7 +141,7 @@ export function PanelExpandDialog({
 			<DialogContent className="flex max-h-[85dvh] max-w-lg flex-col gap-0 p-0">
 				<DialogHeader className="p-4 pb-2 md:px-6">
 					<DialogTitle>
-						{label} ({entries.length})
+						{m.panel_expand_title({ label, count: entries.length })}
 					</DialogTitle>
 				</DialogHeader>
 				<div className="overflow-y-auto px-4 pb-4 md:px-6">
