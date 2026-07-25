@@ -104,9 +104,9 @@ describe("auth mail", () => {
 	});
 
 	// The recipient of auth mail is a registered user, so their stored locale is
-	// honored. No translations exist yet, so a "de" recipient still receives
-	// English; what is asserted is that an explicit locale reaches every m.* call,
-	// which a threaded render proves by never consulting the ambient getLocale.
+	// honored: an explicit locale must reach every m.* call, which a threaded
+	// render proves by never consulting the ambient getLocale. The German subject
+	// is the observable half of that -- the ambient locale here is "en".
 	it("threads the recipient's locale rather than consulting the ambient locale", async () => {
 		const started = await sink();
 		const getLocale = vi.spyOn(paraglideRuntime, "getLocale");
@@ -126,9 +126,7 @@ describe("auth mail", () => {
 		await settled;
 		expect(getLocale).not.toHaveBeenCalled();
 		expect(started.messages).toHaveLength(1);
-		expect(started.messages[0]).toContain(
-			"Subject: Confirm your email address",
-		);
+		expect(decodeBody(started.messages[0])).toContain("Hallo Ada,");
 	});
 
 	it("builds the link from the configured public URL, not Better Auth's", async () => {
