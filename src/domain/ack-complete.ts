@@ -9,9 +9,9 @@
 // Pure by construction so it is safe for mutators.ts to import: that module is
 // bundled into the web client, and pulling in node:crypto or Drizzle here would
 // drag the server runtime with it.
+import { habitDay } from "./habit-day.ts";
 import { karmaForCompletion } from "./karma.ts";
 import { nextDue } from "./recurrence.ts";
-import { instantToWallClock } from "./zoned.ts";
 
 // Mirrors mutators.ts WRITE_ROLES. A viewer is deliberately excluded and
 // handled below rather than denied.
@@ -127,10 +127,7 @@ export async function completeForAck(
 	// that most need it.
 	if (task.listKind === "habits") {
 		const timeZone = await store.timezone(actorUserId);
-		const date = instantToWallClock(
-			new Date(reminder.occurrenceAt),
-			timeZone,
-		).date;
+		const date = habitDay(new Date(reminder.occurrenceAt), timeZone);
 		const existing = await store.habitLog(task.id, date);
 		// Idempotent per (habit, date), matching habit.log: an already-done date
 		// must not re-award Karma.

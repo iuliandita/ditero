@@ -1,15 +1,16 @@
 import { Flame } from "lucide-react";
 import { type JSX, useMemo } from "react";
-import { todayISO } from "@/lib/today";
 import type { Panel } from "../../../domain/dashboard.ts";
+import { habitDay } from "../../../domain/habit-day.ts";
 import { computeStreak, type HabitLogEntry } from "../../../domain/streak.ts";
 import type { Task } from "../../../zero/schema.gen.ts";
 import { useHabitLogs } from "../../hooks/useHabitLogs.ts";
+import { useUserPref } from "../../hooks/useUserPref.ts";
 import type { PanelData } from "./panel-shared.tsx";
 
 // One picked habit as a compact row: title + current streak + adherence (no
 // heatmap; that stays on HabitCard). Streak math is the same domain call
-// HabitCard makes, over the same synced habit_log rows and UTC today frame.
+// HabitCard makes, over the same synced habit_log rows and local-day frame.
 function StreakRow({
 	task,
 	onOpenTask,
@@ -18,7 +19,8 @@ function StreakRow({
 	onOpenTask: (task: Task) => void;
 }): JSX.Element {
 	const { logs } = useHabitLogs(task.id);
-	const today = todayISO();
+	const { pref } = useUserPref();
+	const today = habitDay(new Date(), pref.timezone);
 	const entries = useMemo<HabitLogEntry[]>(
 		() => logs.map((l) => ({ date: l.date, status: l.status })),
 		[logs],
