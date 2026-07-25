@@ -1,5 +1,6 @@
 import { type JSX, useState } from "react";
 import type { Panel, ResolvedSource } from "../../../domain/dashboard.ts";
+import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
 import {
 	type PanelData,
@@ -48,7 +49,7 @@ export function TasksPanel({
 					data-testid="panel-no-matches"
 					className="text-sm text-muted-foreground"
 				>
-					No matching tasks
+					{m.panel_no_matches()}
 				</p>
 			) : (
 				<PanelTaskList entries={capped} handlers={handlers} />
@@ -64,7 +65,7 @@ export function TasksPanel({
 					}
 					className="mt-1 rounded px-1 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
 				>
-					Show all ({entries.length})
+					{m.panel_show_all({ count: entries.length })}
 				</button>
 			)}
 			<PanelExpandDialog

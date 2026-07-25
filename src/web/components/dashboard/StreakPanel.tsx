@@ -3,6 +3,7 @@ import { type JSX, useMemo } from "react";
 import type { Panel } from "../../../domain/dashboard.ts";
 import { localDay } from "../../../domain/local-day.ts";
 import { computeStreak, type HabitLogEntry } from "../../../domain/streak.ts";
+import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
 import { useHabitLogs } from "../../hooks/useHabitLogs.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
@@ -32,13 +33,16 @@ function StreakRow({
 	);
 
 	const summary = streak
-		? `${streak.current} day streak, ${streak.adherencePct}% on track`
-		: "no recurrence set";
+		? m.panel_streak_summary({
+				count: streak.current,
+				pct: streak.adherencePct,
+			})
+		: m.panel_streak_no_recurrence_summary();
 	return (
 		<button
 			type="button"
 			data-testid="streak-row"
-			aria-label={`${task.title}: ${summary}. Open task`}
+			aria-label={m.panel_streak_row_aria({ title: task.title, summary })}
 			onClick={() => onOpenTask(task)}
 			className="flex w-full items-center gap-2 rounded px-1 py-1.5 text-start hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 		>
@@ -54,7 +58,9 @@ function StreakRow({
 					</span>
 				</>
 			) : (
-				<span className="text-xs text-muted-foreground">No recurrence</span>
+				<span className="text-xs text-muted-foreground">
+					{m.panel_streak_no_recurrence()}
+				</span>
 			)}
 		</button>
 	);
@@ -94,7 +100,7 @@ export function StreakPanel({
 								data-testid="streak-missing"
 								className="px-1 py-1.5 text-sm text-muted-foreground"
 							>
-								Habit missing (deleted or not shared with you)
+								{m.panel_streak_missing()}
 							</p>
 						)}
 					</li>

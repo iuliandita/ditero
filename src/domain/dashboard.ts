@@ -20,6 +20,9 @@ export const PANEL_SPANS: Record<PanelSize, number> = {
 };
 export const MAX_PANELS = 20;
 export const DEFAULT_PANEL_LIMIT = 10;
+// Tasks-panel row cap bounds; the editor renders and validates against these.
+export const MIN_PANEL_LIMIT = 1;
+export const MAX_PANEL_LIMIT = 50;
 
 export type PanelSource =
 	| { kind: "view"; viewId: string }
@@ -94,7 +97,12 @@ export const panelSchema: z.ZodType<Panel> = z.discriminatedUnion("type", [
 			source: panelSourceSchema,
 			size: panelSize,
 			title: panelTitle,
-			limit: z.number().int().min(1).max(50).optional(),
+			limit: z
+				.number()
+				.int()
+				.min(MIN_PANEL_LIMIT)
+				.max(MAX_PANEL_LIMIT)
+				.optional(),
 		})
 		.strict(),
 	z

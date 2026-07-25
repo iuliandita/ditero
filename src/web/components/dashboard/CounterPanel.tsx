@@ -1,5 +1,6 @@
 import { type JSX, useState } from "react";
 import type { Panel, ResolvedSource } from "../../../domain/dashboard.ts";
+import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
 import {
 	type PanelData,
@@ -40,7 +41,7 @@ export function CounterPanel({
 			<button
 				type="button"
 				data-testid="counter-tile"
-				aria-label={`${label}: ${entries.length} matching tasks. Show them`}
+				aria-label={m.panel_counter_aria({ label, count: entries.length })}
 				onClick={() =>
 					source.kind === "view" ? onOpenView(source.viewId) : setExpanded(true)
 				}
