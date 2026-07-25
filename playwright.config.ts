@@ -58,11 +58,19 @@ export default defineConfig({
 	use: {
 		baseURL: "http://localhost:5173",
 		trace: "on-first-retry",
+		// Negative-offset on purpose: CI runners are UTC, where a date rendered in
+		// the wrong zone looks correct. Keeps the weekday assertions load-bearing.
+		timezoneId: "America/New_York",
 	},
 	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 	webServer: [
 		{
-			command: "bun run dev:server",
+			// Not `dev:server`: under `--hot` bun re-imports on any watched-file
+			// change, and vite's paraglide plugin rewrites the generated
+			// src/paraglide tree (locale-modules in dev vs the CLI's
+			// message-modules) once it boots after these servers -- the deleted
+			// per-message files then kill the re-import.
+			command: "bun run src/server/index.ts",
 			port: 3000,
 			reuseExistingServer: false,
 			timeout: 60_000,
@@ -77,7 +85,7 @@ export default defineConfig({
 			// test drives it through an APIRequestContext and reads the wire off the
 			// sink, and the SMTP-less UI states render on the default web app against
 			// the shared DB.
-			command: "bun run dev:server",
+			command: "bun run src/server/index.ts",
 			port: 3001,
 			reuseExistingServer: false,
 			timeout: 60_000,

@@ -9,6 +9,7 @@ import { ICON_NAMES, ICONS } from "@/lib/list-icon";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { suggestIcon } from "../../../domain/icon-map.ts";
+import { m } from "../../../paraglide/messages.js";
 
 const EMOJI = [
 	"📝",
@@ -90,7 +91,7 @@ export function IconPicker({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle>Choose an icon</DialogTitle>
+					<DialogTitle>{m.icon_picker_title()}</DialogTitle>
 				</DialogHeader>
 
 				{SuggestedIcon && (
@@ -100,14 +101,14 @@ export function IconPicker({
 						className="flex items-center gap-2 self-start rounded-lg border px-2.5 py-1.5 text-sm text-muted-foreground hover:text-foreground"
 					>
 						<SuggestedIcon className="size-4" />
-						Suggested
+						{m.icon_picker_suggested()}
 					</button>
 				)}
 
 				<Tabs defaultValue="icons">
 					<TabsList>
-						<TabsTrigger value="icons">Icons</TabsTrigger>
-						<TabsTrigger value="emoji">Emoji</TabsTrigger>
+						<TabsTrigger value="icons">{m.icon_picker_tab_icons()}</TabsTrigger>
+						<TabsTrigger value="emoji">{m.icon_picker_tab_emoji()}</TabsTrigger>
 					</TabsList>
 					<TabsContent value="icons">
 						<div className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto p-0.5">

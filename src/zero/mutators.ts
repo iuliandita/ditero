@@ -28,6 +28,7 @@ import {
 } from "../domain/escalation-policy.ts";
 import type { ListKind } from "../domain/icon-map.ts";
 import { karmaForCompletion, karmaWrite } from "../domain/karma.ts";
+import { localDay } from "../domain/local-day.ts";
 import { LOCALES } from "../domain/locale.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
@@ -173,10 +174,16 @@ const dashboardPanelsArg = z.custom<ReadonlyJSONValue>(
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/; // YYYY-MM-DD
 
-// UTC calendar day of a ms timestamp, matching the domain modules (karma.ts /
-// recurrence.ts all reason in UTC), so a karma_event lands on the same day the
-// goal evaluator counts it.
-const ymd = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+// The caller's IANA zone, or the column default when they have no pref row --
+// the same "UTC" fallback recipients.ts DEFAULT_PREF uses. Karma and habit-log
+// days are keyed to this zone (localDay), never to UTC.
+async function callerTimeZone(
+	tx: Transaction<Schema>,
+	userId: string,
+): Promise<string> {
+	const pref = await tx.run(zql.userPref.where("id", userId).one());
+	return pref?.timezone ?? "UTC";
+}
 
 // Upsert the caller's karma aggregate and append a ledger event. `delta` may be
 // negative (undo/compensation); points floor at 0 and level is recomputed from
@@ -403,8 +410,7 @@ function zeroAckStore(tx: Transaction<Schema>): AckStore {
 			return (await roleInWorkspace(tx, userId, workspaceId)) ?? null;
 		},
 		async timezone(userId) {
-			const pref = await tx.run(zql.userPref.where("id", userId).one());
-			return pref?.timezone ?? "UTC";
+			return await callerTimeZone(tx, userId);
 		},
 		async updateTask(id, patch) {
 			await tx.mutate.task.update({
@@ -790,7 +796,7 @@ export const mutators = defineMutators({
 					ctx.id,
 					karmaForCompletion("task", task.priority ?? 0),
 					"task_complete",
-					ymd(now),
+					localDay(new Date(now), await callerTimeZone(tx, ctx.id)),
 				);
 			},
 		),

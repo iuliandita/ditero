@@ -4,12 +4,13 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ListIcon } from "@/lib/list-icon";
 import { runMutation } from "@/lib/run-mutation";
-import { todayISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
+import { localDay } from "../../../domain/local-day.ts";
 import { computeStreak, type HabitLogEntry } from "../../../domain/streak.ts";
 import { mutators } from "../../../zero/mutators.ts";
 import type { List, schema, Task } from "../../../zero/schema.gen.ts";
 import { useHabitLogs } from "../../hooks/useHabitLogs.ts";
+import { useUserPref } from "../../hooks/useUserPref.ts";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { HabitTracker } from "./HabitTracker.tsx";
 
@@ -19,7 +20,8 @@ type TodayStatus = "done" | "skipped" | "none";
 // + adherence + heatmap (HabitTracker), and a single large primary "done" control
 // with a secondary skip/undo pair. Completion is per-occurrence via habit_log,
 // not the task's done flag. Mutations go straight through Zero (mirrors
-// RecurrenceEditor); today is resolved in the same UTC frame as the streak math.
+// RecurrenceEditor); today is the user's local day (localDay), the same day an
+// ack writes.
 export function HabitCard({
 	task,
 	list,
@@ -31,7 +33,8 @@ export function HabitCard({
 }) {
 	const zero = useZero<typeof schema>();
 	const { logs } = useHabitLogs(task.id);
-	const today = todayISO();
+	const { pref } = useUserPref();
+	const today = localDay(new Date(), pref.timezone);
 
 	const entries = useMemo<HabitLogEntry[]>(
 		() => logs.map((l) => ({ date: l.date, status: l.status })),

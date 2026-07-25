@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
+import { browserToday, shiftDay } from "../support/browser-day.ts";
 
 // M-dash dashboards e2e. Exercises the dashboard lifecycle (create from the
 // sidebar, empty state, add view-ref/inline panels), live task completion from
@@ -161,11 +162,13 @@ async function addFocusPanel(
 // Seed a habits list + one daily habit with done logs (today + yesterday, so
 // current streak = 2) and two 10-minute work focus sessions, straight into the
 // user's personal workspace (views.spec seeding pattern; callers reload so the
-// client re-subscribes). Dates use the UTC "YYYY-MM-DD" frame the streak/focus
-// domain compares in.
+// client re-subscribes). `today` must be the BROWSER's local day: habit_log
+// dates are the user's local day (localDay), which this process's zone only
+// agrees with for part of the day.
 async function seedHabitAndFocus(
 	email: string,
 	habitTitle: string,
+	today: string,
 ): Promise<void> {
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
 	try {
@@ -189,11 +192,7 @@ async function seedHabitAndFocus(
 			 values ($1, $2, $3, 'a0', 'FREQ=DAILY')`,
 			[habitId, listId, habitTitle],
 		);
-		const today = new Date().toISOString().slice(0, 10);
-		const yesterday = new Date(Date.now() - 86_400_000)
-			.toISOString()
-			.slice(0, 10);
-		for (const date of [today, yesterday]) {
+		for (const date of [today, shiftDay(today, -1)]) {
 			await pool.query(
 				`insert into habit_log (id, habit_id, date, status)
 				 values ($1, $2, $3, 'done')`,
@@ -526,7 +525,7 @@ test("dashboard panels: streak shows seeded streak/adherence, focus shows count/
 
 	// Seed a habit (daily, done today + yesterday) and two 10-min work sessions;
 	// reload so the client syncs them before the panels are built.
-	await seedHabitAndFocus(email, HABIT);
+	await seedHabitAndFocus(email, HABIT, await browserToday(page));
 	await page.reload();
 	await waitWorkspaceReady(page);
 

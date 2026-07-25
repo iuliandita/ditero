@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { browserToday } from "../support/browser-day.ts";
 
 // M2 recurrence editor e2e. Exercises the preset-driven recurrence control in the
 // task detail surface: enable, set a weekly every-2-weeks Mon/Wed rule, verify the
@@ -193,9 +194,7 @@ test("recurring task: list checkbox advances the due date and stays pending", as
 	// browser-local calendar day so it reads back as "Today" (formatDue compares
 	// against local now; a UTC-derived string can be off by a day).
 	const detail = await openDetail(page, "Take out bins");
-	const now = new Date();
-	const pad = (n: number) => String(n).padStart(2, "0");
-	const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+	const today = await browserToday(page);
 	await detail.getByLabel("Due date").fill(today);
 	await detail.getByTestId("recurrence-enable").click();
 	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
@@ -238,9 +237,7 @@ test("recurring task: Skip control advances the due date without awarding Karma"
 
 	// Due today + a daily recurrence so the row reads "Today" and Skip is offered.
 	const detail = await openDetail(page, "Sweep floor");
-	const now = new Date();
-	const pad = (n: number) => String(n).padStart(2, "0");
-	const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+	const today = await browserToday(page);
 	await detail.getByLabel("Due date").fill(today);
 	await detail.getByTestId("recurrence-enable").click();
 	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
@@ -317,7 +314,9 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 		"false",
 	);
 
-	const today = new Date().toISOString().slice(0, 10);
+	// The heatmap cell is labelled with the user's LOCAL day (localDay), which is
+	// what the app both writes and reads -- not this process's UTC day.
+	const today = await browserToday(page);
 
 	// Mark done for today -> streak advances, primary reflects done, heatmap cell.
 	await card.getByTestId("habit-done").click();

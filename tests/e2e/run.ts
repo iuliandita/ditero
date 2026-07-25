@@ -25,6 +25,10 @@ function run(command: string, args: string[], allowFailure = false) {
 
 let status = 1;
 try {
+	// The api servers import src/paraglide (generated, gitignored) at boot, and
+	// they start before vite -- whose paraglide plugin would otherwise be the
+	// only thing generating it.
+	run("bun", ["run", "i18n:compile"]);
 	run("docker", [...compose, "up", "--detach", "--wait", "upstream-db"]);
 	run("bun", ["run", "db:migrate"]);
 	run("docker", [...compose, "up", "--detach", "--wait", "zero-cache"]);

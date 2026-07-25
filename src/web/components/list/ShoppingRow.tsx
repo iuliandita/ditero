@@ -1,5 +1,6 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
 
 export type ShoppingHandlers = {
@@ -46,8 +47,8 @@ export function ShoppingRow({
 				// key resets the field when the synced value changes underneath.
 				key={`q-${task.quantity ?? ""}`}
 				defaultValue={task.quantity ?? ""}
-				aria-label={`Quantity for ${task.title}`}
-				placeholder="Qty"
+				aria-label={m.shopping_quantity_for({ title: task.title })}
+				placeholder={m.shopping_qty_placeholder()}
 				inputMode="decimal"
 				className="h-7 w-12 rounded-md border bg-transparent px-1.5 text-center text-sm"
 				onBlur={(e) =>
@@ -59,8 +60,8 @@ export function ShoppingRow({
 			<input
 				key={`u-${task.unit ?? ""}`}
 				defaultValue={task.unit ?? ""}
-				aria-label={`Unit for ${task.title}`}
-				placeholder="Unit"
+				aria-label={m.shopping_unit_for({ title: task.title })}
+				placeholder={m.shopping_unit_placeholder()}
 				className="h-7 w-14 rounded-md border bg-transparent px-1.5 text-sm"
 				onBlur={(e) =>
 					commit(task.unit, e.target.value, (v) =>

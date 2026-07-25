@@ -1,9 +1,7 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
-
 	"toggle_on": "On",
 	"toggle_off": "Off",
-
 	"notifications_heading": "Notifications",
 	"notifications_channels_heading": "Channels",
 	"notifications_defaults_heading": "Defaults",
@@ -214,5 +212,182 @@
 	"security_error_remove_passkey": "Could not remove passkey",
 	"security_error_enable_2fa": "Could not enable two-factor authentication",
 	"security_error_disable_2fa": "Could not disable two-factor authentication",
-	"security_error_invalid_code": "Invalid authenticator code"
+	"security_error_invalid_code": "Invalid authenticator code",
+	"priority_none": "None",
+	"priority_low": "Low",
+	"priority_medium": "Medium",
+	"priority_medium_short": "Med",
+	"priority_high": "High",
+	"due_today": "Today",
+	"due_tomorrow": "Tomorrow",
+	"list_completed_count": "{count} completed",
+	"list_change_icon": "Change list icon",
+	"list_display_options": "List display options",
+	"list_completed_heading": "Completed tasks",
+	"list_completed_sink": "Sink completed",
+	"list_completed_keep": "Keep in place",
+	"list_completed_hide": "Hide completed",
+	"list_group_by_assignee": "Group by assignee",
+	"list_save_as_template": "Save as template",
+	"list_add_task_placeholder": "Add a task",
+	"list_add_task": "Add task",
+	"group_assigned_to_me": "Assigned to me",
+	"group_unassigned": "Unassigned",
+	"group_unknown_user": "Someone",
+	"icon_picker_title": "Choose an icon",
+	"icon_picker_suggested": "Suggested",
+	"icon_picker_tab_icons": "Icons",
+	"icon_picker_tab_emoji": "Emoji",
+	"schedule_sheet_title": "Schedule",
+	"schedule_sheet_title_task": "Schedule: {title}",
+	"schedule_today_evening": "Today evening",
+	"schedule_tomorrow": "Tomorrow",
+	"schedule_this_weekend": "This weekend",
+	"schedule_pick_date": "Pick a due date",
+	"shopping_qty_placeholder": "Qty",
+	"shopping_unit_placeholder": "Unit",
+	"shopping_quantity_for": "Quantity for {title}",
+	"shopping_unit_for": "Unit for {title}",
+	"shopping_category_other": "Other",
+	"task_reorder_handle": "Reorder task",
+	"task_priority_aria": "Priority: {priority}",
+	"task_subtask_progress": "{done}/{total}",
+	"subtasks_expand": "Expand subtasks",
+	"subtasks_collapse": "Collapse subtasks",
+	"task_detail_title": "Task details",
+	"task_detail_title_field": "Task title",
+	"task_field_notes": "Notes",
+	"task_field_due": "Due",
+	"task_field_priority": "Priority",
+	"task_field_labels": "Labels",
+	"task_field_subtasks": "Subtasks",
+	"task_due_date_aria": "Due date",
+	"task_due_time_aria": "Due time",
+	"task_due_clear": "Clear due date",
+	"task_no_focus_time": "No focus time yet",
+	"task_start_focus": "Start focus",
+	"task_skip_occurrence": "Skip this occurrence",
+	"task_no_labels": "No labels yet.",
+	"task_new_label_placeholder": "New label",
+	"task_create_label_failed": "Could not create label.",
+	"task_add_subtask_placeholder": "Add subtask",
+	"task_delete_named": "Delete {title}",
+	"task_move_to_list": "Move to list",
+	"task_delete": "Delete task",
+	"action_add": "Add",
+	"recurrence_repeat": "Repeat",
+	"recurrence_does_not_repeat": "Does not repeat",
+	"recurrence_clear": "Don't repeat",
+	"recurrence_frequency": "Frequency",
+	"recurrence_freq_daily": "Daily",
+	"recurrence_freq_weekly": "Weekly",
+	"recurrence_freq_monthly": "Monthly",
+	"recurrence_freq_yearly": "Yearly",
+	"recurrence_every": "Every",
+	"recurrence_interval": "Interval",
+	"recurrence_weekdays": "Weekdays",
+	"recurrence_on_day": "On day",
+	"recurrence_day_of_month": "Day of month",
+	"recurrence_relative_on": "After I complete it",
+	"recurrence_relative_off": "On schedule",
+	"recurrence_relative_on_hint": "Next due counts from completion",
+	"recurrence_relative_off_hint": "Next due follows the fixed schedule",
+	"recurrence_invalid": "Invalid recurrence.",
+	"recurrence_unit_daily": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "day",
+				"countPlural=other": "days"
+			}
+		}
+	],
+	"recurrence_unit_weekly": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "week",
+				"countPlural=other": "weeks"
+			}
+		}
+	],
+	"recurrence_unit_monthly": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "month",
+				"countPlural=other": "months"
+			}
+		}
+	],
+	"recurrence_unit_yearly": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "year",
+				"countPlural=other": "years"
+			}
+		}
+	],
+	"recurrence_summary_daily": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Every day",
+				"countPlural=other": "Every {count} days"
+			}
+		}
+	],
+	"recurrence_summary_weekly": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Every week on {days}",
+				"countPlural=other": "Every {count} weeks on {days}"
+			}
+		}
+	],
+	"recurrence_summary_monthly": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Every month on day {monthday}",
+				"countPlural=other": "Every {count} months on day {monthday}"
+			}
+		}
+	],
+	"recurrence_summary_yearly": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Every year",
+				"countPlural=other": "Every {count} years"
+			}
+		}
+	],
+	"reminder_time": "Reminder time",
+	"reminder_time_clear": "Clear reminder time",
+	"reminder_set_at": "Reminder set {time}",
+	"reminder_deferred_until": "Deferred until {when}",
+	"reminder_until_quiet_hours_end": "quiet hours end",
+	"reminder_escalating": "Escalating ({count} of {max})",
+	"reminder_max_unknown": "?",
+	"reminder_acked": "Acknowledged",
+	"reminder_failed": "Reminder failed",
+	"reminder_expired": "Reminder expired",
+	"reminder_ack_aria": "{status}. Acknowledge reminder",
+	"reminder_ack_chip": "{status} - Ack",
+	"reminder_channel_unverified": "delivery channel not verified",
+	"reminder_urgent_label": "Urgent (ignores quiet hours)",
+	"reminder_override_defaults": "Override defaults",
+	"escalation_inherit_default": "Inherit default",
+	"escalation_off": "off"
 }

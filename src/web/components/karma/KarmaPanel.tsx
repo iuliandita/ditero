@@ -1,9 +1,9 @@
 import { Palmtree } from "lucide-react";
 import type { ReactNode } from "react";
 import { evaluateGoals, levelForPoints } from "../../../domain/karma.ts";
+import { localDay } from "../../../domain/local-day.ts";
 import { useKarma } from "../../hooks/useKarma.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
-import { todayISO } from "../../lib/today.ts";
 import { cn } from "../../lib/utils.ts";
 import { KarmaLedger } from "./KarmaLedger.tsx";
 import { levelProgress, ringFraction } from "./karma-format.ts";
@@ -79,7 +79,8 @@ export function KarmaPanel() {
 	const level = levelForPoints(points);
 	const prog = levelProgress(points, level);
 
-	const today = todayISO();
+	// The user's local day, the frame every karma_event date is written in.
+	const today = localDay(new Date(), pref.timezone);
 	const { dailyDone, weeklyDone, dailyMet, weeklyMet } = evaluateGoals(
 		events,
 		goals,

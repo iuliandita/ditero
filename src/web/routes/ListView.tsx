@@ -19,6 +19,7 @@ import type { ListKind } from "../../domain/icon-map.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import type { CompletedDisplay } from "../../domain/task-sort.ts";
 import { snapshotList } from "../../domain/template.ts";
+import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { Label, schema, Task } from "../../zero/schema.gen.ts";
@@ -27,11 +28,14 @@ import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
 
-const DISPLAY_MODES: { value: CompletedDisplay; label: string }[] = [
-	{ value: "sink", label: "Sink completed" },
-	{ value: "keep", label: "Keep in place" },
-	{ value: "hide", label: "Hide completed" },
-];
+const DISPLAY_MODES: CompletedDisplay[] = ["sink", "keep", "hide"];
+
+// Thunks: resolving `m` at module scope would freeze the import-time locale.
+const DISPLAY_MODE_LABELS: Record<CompletedDisplay, () => string> = {
+	sink: m.list_completed_sink,
+	keep: m.list_completed_keep,
+	hide: m.list_completed_hide,
+};
 
 function lastKey(items: { sortKey: string }[]): string | null {
 	return items.reduce<string | null>(
@@ -141,10 +145,10 @@ export function ListView({ listId }: { listId: string }) {
 			key,
 			label:
 				key === me
-					? "Assigned to me"
+					? m.group_assigned_to_me()
 					: key === ""
-						? "Unassigned"
-						: (userNames.get(key) ?? "Someone"),
+						? m.group_unassigned()
+						: (userNames.get(key) ?? m.group_unknown_user()),
 			tasks: buckets.get(key) ?? [],
 		}));
 	}, [assignees, parents, userNames, zero.userID]);
@@ -227,7 +231,7 @@ export function ListView({ listId }: { listId: string }) {
 			<div className="mb-4 flex items-center gap-2">
 				<button
 					type="button"
-					aria-label="Change list icon"
+					aria-label={m.list_change_icon()}
 					onClick={() => setIconOpen(true)}
 					className="flex size-9 shrink-0 items-center justify-center rounded-lg border"
 				>
@@ -241,13 +245,13 @@ export function ListView({ listId }: { listId: string }) {
 						<Button
 							variant="ghost"
 							size="icon-sm"
-							aria-label="List display options"
+							aria-label={m.list_display_options()}
 						>
 							<SlidersHorizontal />
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
-						<DropdownMenuLabel>Completed tasks</DropdownMenuLabel>
+						<DropdownMenuLabel>{m.list_completed_heading()}</DropdownMenuLabel>
 						<DropdownMenuRadioGroup
 							value={mode}
 							onValueChange={(v) =>
@@ -261,9 +265,9 @@ export function ListView({ listId }: { listId: string }) {
 								)
 							}
 						>
-							{DISPLAY_MODES.map((m) => (
-								<DropdownMenuRadioItem key={m.value} value={m.value}>
-									{m.label}
+							{DISPLAY_MODES.map((value) => (
+								<DropdownMenuRadioItem key={value} value={value}>
+									{DISPLAY_MODE_LABELS[value]()}
 								</DropdownMenuRadioItem>
 							))}
 						</DropdownMenuRadioGroup>
@@ -274,14 +278,14 @@ export function ListView({ listId }: { listId: string }) {
 							onCheckedChange={setGroupByAssignee}
 							onSelect={(e) => e.preventDefault()}
 						>
-							Group by assignee
+							{m.list_group_by_assignee()}
 						</DropdownMenuCheckboxItem>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem
 							data-testid="save-as-template"
 							onSelect={saveAsTemplate}
 						>
-							Save as template
+							{m.list_save_as_template()}
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
@@ -291,7 +295,7 @@ export function ListView({ listId }: { listId: string }) {
 				<input
 					data-testid="new-task"
 					className="h-9 flex-1 rounded-lg border bg-transparent px-3 text-base md:text-sm"
-					placeholder="Add a task"
+					placeholder={m.list_add_task_placeholder()}
 					value={title}
 					onChange={(e) => setTitle(e.target.value)}
 					onKeyDown={(e) => {
@@ -303,7 +307,7 @@ export function ListView({ listId }: { listId: string }) {
 					type="button"
 					onClick={() => void createTask()}
 				>
-					Add task
+					{m.list_add_task()}
 				</Button>
 			</div>
 
