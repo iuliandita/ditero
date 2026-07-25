@@ -1,5 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
+import type { Locale } from "../../src/domain/locale.ts";
+import { m } from "../../src/paraglide/messages.js";
 
 // M-i18n language switcher: pre-auth (Login) + post-auth (settings) mounts,
 // user_pref.locale persistence + round-trip across a reload, dir/lang
@@ -42,6 +44,70 @@ async function selectLanguage(page: Page, nativeName: string): Promise<void> {
 	await page.getByRole("option", { name: nativeName }).click();
 }
 
+// Switch via the real switcher (writes the cookie the strategy chain reads
+// first) and wait out Paraglide's reload, so nothing here depends on whatever
+// navigator.languages a cold profile happens to advertise.
+async function switchTo(
+	page: Page,
+	nativeName: string,
+	locale: Locale,
+	dir: "ltr" | "rtl",
+): Promise<void> {
+	const reloaded = page.waitForEvent("load");
+	await selectLanguage(page, nativeName);
+	await reloaded;
+	await expect(page.locator("html")).toHaveAttribute("lang", locale);
+	await expect(page.locator("html")).toHaveAttribute("dir", dir);
+}
+
+// Expected text comes from the compiled catalog rather than a literal, so the
+// assertion tracks the translation instead of pinning a copy of it. The DOM
+// side still travels the whole chain (catalog -> compiler -> strategy -> render),
+// so this is not m() === m(). The differs-from-English guard is what stops it
+// degenerating: without it, a switcher that silently no-ops would still pass
+// every locale whose string happened to match the base.
+const LOGIN_SURFACE = [
+	["signup", m.login_signup] as const,
+	["signin", m.login_signin] as const,
+	["signin-passkey", m.login_signin_passkey] as const,
+];
+
+async function expectLoginRendersCatalog(
+	page: Page,
+	locale: Locale,
+): Promise<void> {
+	for (const [testId, message] of LOGIN_SURFACE) {
+		const translated = message({}, { locale });
+		expect(
+			translated,
+			`${testId} is untranslated in ${locale}; the assertion below would be vacuous`,
+		).not.toBe(message({}, { locale: "en" }));
+		await expect(page.getByTestId(testId)).toHaveText(translated);
+	}
+}
+
+test("renders the German catalog with lang=de and dir=ltr", async ({
+	page,
+}) => {
+	await page.goto("/");
+	await expect(page.getByTestId("language-switcher")).toBeVisible();
+
+	await switchTo(page, "Deutsch", "de", "ltr");
+	await expectLoginRendersCatalog(page, "de");
+	await expectNoSeriousA11y(page, "login (de)");
+});
+
+test("renders the Arabic catalog with lang=ar and dir=rtl", async ({
+	page,
+}) => {
+	await page.goto("/");
+	await expect(page.getByTestId("language-switcher")).toBeVisible();
+
+	await switchTo(page, "العربية", "ar", "rtl");
+	await expectLoginRendersCatalog(page, "ar");
+	await expectNoSeriousA11y(page, "login (ar)");
+});
+
 test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-trips", async ({
 	page,
 }) => {
@@ -71,6 +137,11 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	// no-op and the switcher (post-auth mount) still reflects ar.
 	await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
 	await expect(page.getByTestId("language-switcher")).toContainText("العربية");
+	// A real heading on the authed surface, so the catalog assertion covers a
+	// post-auth mount and not just the pre-auth one.
+	await expect(page.locator("#security-heading")).toHaveText(
+		m.security_heading({}, { locale: "ar" }),
+	);
 	await expectNoSeriousA11y(page, "settings (rtl)");
 
 	// Switching post-auth persists to user_pref.locale (not just the client
