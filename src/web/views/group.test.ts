@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { m } from "../../paraglide/messages.js";
 import type { GroupCtx, GroupTask } from "./group.ts";
 import { groupTasks } from "./group.ts";
 
+// Bucket labels are pinned to the English catalog literals rather than to
+// `m.*()`: an assertion with the same message on both sides still passes when
+// the catalog entry is emptied, which is exactly what would erase the
+// Open/Done and priority-tier distinctions these tests exist to prove.
 const NOW = new Date("2026-07-13T12:00:00Z");
 
 const ctx: GroupCtx = {
@@ -37,10 +40,7 @@ describe("groupTasks", () => {
 
 	it("status always emits Open then Done, including empty", () => {
 		const groups = groupTasks([task({ id: "a", done: false })], "status", ctx);
-		expect(groups.map((g) => g.label)).toEqual([
-			m.status_open(),
-			m.status_done(),
-		]);
+		expect(groups.map((g) => g.label)).toEqual(["Open", "Done"]);
 		expect(groups[0].tasks.map((t) => t.id)).toEqual(["a"]);
 		expect(groups[1].tasks).toEqual([]);
 	});
@@ -52,11 +52,7 @@ describe("groupTasks", () => {
 			task({ id: "none", priority: 0 }),
 		];
 		const groups = groupTasks(tasks, "priority", ctx);
-		expect(groups.map((g) => g.label)).toEqual([
-			m.priority_high(),
-			m.priority_low(),
-			m.priority_none(),
-		]);
+		expect(groups.map((g) => g.label)).toEqual(["High", "Low", "None"]);
 		expect(groups.map((g) => g.key)).toEqual(["3", "1", "0"]);
 	});
 
@@ -67,7 +63,7 @@ describe("groupTasks", () => {
 			ctx,
 		);
 		expect(groups).toHaveLength(1);
-		expect(groups[0].label).toBe(m.priority_none());
+		expect(groups[0].label).toBe("None");
 	});
 
 	it("assignee fans out multi-assignee tasks and trails Unassigned", () => {
@@ -78,11 +74,7 @@ describe("groupTasks", () => {
 		];
 		const groups = groupTasks(tasks, "assignee", ctx);
 		// Ann (u-1) before Bob (u-2) by name, Unassigned last.
-		expect(groups.map((g) => g.label)).toEqual([
-			"Ann",
-			"Bob",
-			m.group_unassigned(),
-		]);
+		expect(groups.map((g) => g.label)).toEqual(["Ann", "Bob", "Unassigned"]);
 		expect(groups[0].tasks.map((t) => t.id)).toEqual(["shared", "solo"]);
 		expect(groups[1].tasks.map((t) => t.id)).toEqual(["shared"]);
 		expect(groups[2].tasks.map((t) => t.id)).toEqual(["none"]);
@@ -103,11 +95,7 @@ describe("groupTasks", () => {
 			task({ id: "none" }),
 		];
 		const groups = groupTasks(tasks, "label", ctx);
-		expect(groups.map((g) => g.label)).toEqual([
-			"Green",
-			"Red",
-			m.group_no_label(),
-		]);
+		expect(groups.map((g) => g.label)).toEqual(["Green", "Red", "No label"]);
 		expect(groups[0].tasks.map((t) => t.id)).toEqual(["both"]);
 		expect(groups[1].tasks.map((t) => t.id)).toEqual(["both"]);
 	});
