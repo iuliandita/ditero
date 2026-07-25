@@ -13,21 +13,35 @@ import { type JSX, useMemo, useRef, useState } from "react";
 import { todayISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
 import { expand } from "../../../domain/recurrence.ts";
+import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
 import type { Task } from "../../../zero/schema.gen.ts";
 import type { ViewEntry } from "./ViewRenderer.tsx";
 
 const DAY_MS = 86_400_000;
 
-// Week starts Monday (matches the domain's 0=Mon weekday convention).
-const WEEKDAYS = [
-	{ short: "Mon", full: "Monday" },
-	{ short: "Tue", full: "Tuesday" },
-	{ short: "Wed", full: "Wednesday" },
-	{ short: "Thu", full: "Thursday" },
-	{ short: "Fri", full: "Friday" },
-	{ short: "Sat", full: "Saturday" },
-	{ short: "Sun", full: "Sunday" },
-];
+// Week starts Monday (matches the domain's 0=Mon weekday convention); the
+// reference week below starts on a UTC Monday.
+const WEEK_REF_MS = Date.UTC(2024, 0, 1);
+
+// Built per call, never cached: a module-scope formatter would freeze the
+// import-time locale. timeZone is pinned to UTC because the reference instants
+// are UTC midnights — without it a negative-offset viewer would see every
+// weekday name shifted back a day.
+function weekdayNames(): { key: string; short: string; full: string }[] {
+	const short = new Intl.DateTimeFormat(getLocale(), {
+		weekday: "short",
+		timeZone: "UTC",
+	});
+	const full = new Intl.DateTimeFormat(getLocale(), {
+		weekday: "long",
+		timeZone: "UTC",
+	});
+	return Array.from({ length: 7 }, (_, i) => {
+		const d = new Date(WEEK_REF_MS + i * DAY_MS);
+		return { key: String(i), short: short.format(d), full: full.format(d) };
+	});
+}
 
 // All date math is UTC to match the domain modules (recurrence.expand,
 // todayISO): a "YYYY-MM-DD" key is the UTC calendar day so occurrence dates and
@@ -42,14 +56,16 @@ function keyToUtcMs(key: string): number {
 
 type DayItem = { entry: ViewEntry; occurrence: boolean };
 
+// Same rule as weekdayNames: per call, and UTC-pinned because a day key is a UTC
+// calendar day.
 function longDate(ms: number): string {
-	return new Date(ms).toLocaleDateString("en-US", {
+	return new Intl.DateTimeFormat(getLocale(), {
 		weekday: "long",
 		year: "numeric",
 		month: "long",
 		day: "numeric",
 		timeZone: "UTC",
-	});
+	}).format(new Date(ms));
 }
 
 function Chip({
@@ -79,7 +95,11 @@ function Chip({
 			data-testid="calendar-chip"
 			style={style}
 			onClick={() => onOpen(task)}
-			aria-label={item.occurrence ? `${task.title}, recurring` : task.title}
+			aria-label={
+				item.occurrence
+					? m.calendar_chip_recurring({ title: task.title })
+					: task.title
+			}
 			className={cn(
 				"flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-start text-xs text-foreground",
 				"focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
@@ -124,7 +144,9 @@ function DayCell({
 	const key = utcKey(cellMs);
 	const { setNodeRef, isOver } = useDroppable({ id: `day:${key}` });
 	const dayNum = new Date(cellMs).getUTCDate();
-	const label = isToday ? `${longDate(cellMs)}, today` : longDate(cellMs);
+	const label = isToday
+		? m.calendar_day_today({ date: longDate(cellMs) })
+		: longDate(cellMs);
 	return (
 		<td
 			ref={setNodeRef}
@@ -177,7 +199,9 @@ function Agenda({
 }): JSX.Element {
 	if (groups.length === 0) {
 		return (
-			<p className="text-sm text-muted-foreground">Nothing scheduled here.</p>
+			<p className="text-sm text-muted-foreground">
+				{m.calendar_agenda_empty()}
+			</p>
 		);
 	}
 	return (
@@ -196,7 +220,9 @@ function Agenda({
 									onClick={() => onOpen(it.entry.task)}
 									aria-label={
 										it.occurrence
-											? `${it.entry.task.title}, recurring`
+											? m.calendar_chip_recurring({
+													title: it.entry.task.title,
+												})
 											: it.entry.task.title
 									}
 									className={cn(
@@ -243,6 +269,10 @@ export function CalendarLayout({
 		return Date.UTC(y, m - 1, 1);
 	});
 	const [activeIdx, setActiveIdx] = useState(0);
+	// changeLocale reloads the page, so locale is constant for this component's
+	// lifetime; without the memo DndContext's pointer-move renders would rebuild
+	// both formatters on every frame of a drag.
+	const weekdays = useMemo(() => weekdayNames(), []);
 	const dayRefs = useRef<(HTMLButtonElement | null)[]>([]);
 	const sensors = useSensors(
 		useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -268,11 +298,11 @@ export function CalendarLayout({
 		};
 	}, [monthMs]);
 
-	const monthLabel = new Date(monthMs).toLocaleDateString("en-US", {
+	const monthLabel = new Intl.DateTimeFormat(getLocale(), {
 		month: "long",
 		year: "numeric",
 		timeZone: "UTC",
-	});
+	}).format(new Date(monthMs));
 
 	const byDate = useMemo(() => {
 		const map = new Map<string, DayItem[]>();
@@ -372,7 +402,7 @@ export function CalendarLayout({
 			<div data-testid="calendar-surface">
 				<p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
 					<CalendarClock className="size-3.5" />
-					Viewing as agenda
+					{m.calendar_viewing_as_agenda()}
 				</p>
 				{agenda}
 			</div>
@@ -387,7 +417,7 @@ export function CalendarLayout({
 					<button
 						type="button"
 						data-testid="calendar-prev"
-						aria-label="Previous month"
+						aria-label={m.calendar_prev_month()}
 						onClick={() => shiftMonth(-1)}
 						className="flex size-7 items-center justify-center rounded border border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 					>
@@ -396,7 +426,7 @@ export function CalendarLayout({
 					<button
 						type="button"
 						data-testid="calendar-next"
-						aria-label="Next month"
+						aria-label={m.calendar_next_month()}
 						onClick={() => shiftMonth(1)}
 						className="flex size-7 items-center justify-center rounded border border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 					>
@@ -416,9 +446,9 @@ export function CalendarLayout({
 					<caption className="sr-only">{monthLabel}</caption>
 					<thead>
 						<tr>
-							{WEEKDAYS.map((w) => (
+							{weekdays.map((w) => (
 								<th
-									key={w.short}
+									key={w.key}
 									scope="col"
 									className="px-1 py-1 text-center text-xs font-medium text-muted-foreground"
 								>
@@ -454,9 +484,9 @@ export function CalendarLayout({
 					</tbody>
 				</table>
 			</DndContext>
-			<section aria-label="Agenda">
+			<section aria-label={m.calendar_agenda_heading()}>
 				<h3 className="mb-2 text-xs font-medium text-muted-foreground">
-					Agenda
+					{m.calendar_agenda_heading()}
 				</h3>
 				{agenda}
 			</section>

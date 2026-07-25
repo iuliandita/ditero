@@ -2,6 +2,7 @@ import { useZero } from "@rocicorp/zero/react";
 import { List as ListIcon } from "lucide-react";
 import { type JSX, useMemo, useRef, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
+import { priorityLabel } from "@/lib/task-display";
 import { useIsDesktop } from "@/lib/use-media-query";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { compareTasksBy } from "../../../domain/task-sort.ts";
@@ -15,6 +16,7 @@ import {
 	resolveWorkspaceScope,
 	taskMatchesFilter,
 } from "../../../domain/view-filter.ts";
+import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type {
 	Folder,
@@ -61,12 +63,14 @@ function sortEnriched(entries: Enriched[], sort: ViewSort): Enriched[] {
 // regroupable priority board needs every column present as a drop target. Pad
 // to the fixed 4 in High->None order, reusing populated columns as-is. Board
 // layer only; group.ts stays lean.
-const PRIORITY_COLUMNS = [
-	{ key: "3", label: "High" },
-	{ key: "2", label: "Medium" },
-	{ key: "1", label: "Low" },
-	{ key: "0", label: "None" },
-];
+// `label` is a getter: this array is module-level, so resolving the message
+// eagerly would freeze it at the import-time locale.
+const PRIORITY_COLUMNS = [3, 2, 1, 0].map((p) => ({
+	key: String(p),
+	get label() {
+		return priorityLabel(p);
+	},
+}));
 function padPriorityColumns(groups: ViewEntryGroup[]): ViewEntryGroup[] {
 	const byKey = new Map(groups.map((g) => [g.key, g]));
 	return PRIORITY_COLUMNS.map(
@@ -124,7 +128,7 @@ export function ViewRenderer(props: {
 		[labels],
 	);
 	const memberById = useMemo(
-		() => new Map(members.map((m) => [m.id, m.name])),
+		() => new Map(members.map((member) => [member.id, member.name])),
 		[members],
 	);
 	const labelIdsByTask = useMemo(() => {
@@ -215,9 +219,9 @@ export function ViewRenderer(props: {
 	const entryGroups = useMemo<ViewEntryGroup[]>(() => {
 		const groupCtx: GroupCtx = {
 			now: new Date(),
-			listTitle: (id) => listById.get(id)?.title ?? "List",
-			memberName: (id) => memberById.get(id) ?? "Someone",
-			labelName: (id) => labelById.get(id)?.name ?? "Label",
+			listTitle: (id) => listById.get(id)?.title ?? m.list_untitled_fallback(),
+			memberName: (id) => memberById.get(id) ?? m.group_unknown_user(),
+			labelName: (id) => labelById.get(id)?.name ?? m.group_unknown_label(),
 		};
 		const byId = new Map(sorted.map((e) => [e.task.id, e]));
 		const groups = groupTasks(
@@ -324,7 +328,7 @@ export function ViewRenderer(props: {
 			{asList && (
 				<p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
 					<ListIcon className="size-3.5" />
-					Viewing as list
+					{m.view_viewing_as_list()}
 				</p>
 			)}
 			{display.layout === "calendar" ? (
@@ -363,7 +367,9 @@ export function ViewRenderer(props: {
 					entries={sorted.map((e) => ({ task: e.task, labels: e.labels }))}
 					sort={localSort}
 					onSort={onSort}
-					listTitle={(id) => listById.get(id)?.title ?? "List"}
+					listTitle={(id) =>
+						listById.get(id)?.title ?? m.list_untitled_fallback()
+					}
 					onOpenTask={onOpenTask}
 				/>
 			)}
@@ -411,7 +417,7 @@ function ListLayout({
 							}))}
 							onMove={onReorder}
 							renderItem={(item) => renderRow(item.entry)}
-							handleLabel="Reorder task"
+							handleLabel={m.task_reorder_handle()}
 							handleTestId="view-reorder"
 						/>
 					) : (
