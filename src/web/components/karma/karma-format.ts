@@ -1,23 +1,27 @@
 import { LEVEL_THRESHOLDS } from "../../../domain/karma.ts";
+import { m } from "../../../paraglide/messages.js";
 
-// karma_event.reason -> human label. Unknown reasons fall back to a humanized
-// slug so a future reason never renders as a raw token.
-const REASON_LABELS: Record<string, string> = {
-	task_complete: "Completed a task",
-	habit_done: "Habit done",
-	habit_undo: "Habit undone",
-	daily_goal: "Daily goal reached",
-	weekly_goal: "Weekly goal reached",
-	streak_bonus: "Streak bonus",
+// karma_event.reason -> human label. The keys are the persisted reason values and
+// are never translated. Thunks: module-scope locale freeze. Unknown reasons fall
+// back to a humanized slug so a future reason never renders as a raw token.
+const REASON_LABELS: Record<string, () => string> = {
+	task_complete: m.karma_reason_task_complete,
+	habit_done: m.karma_reason_habit_done,
+	habit_undo: m.karma_reason_habit_undo,
+	daily_goal: m.karma_reason_daily_goal,
+	weekly_goal: m.karma_reason_weekly_goal,
+	streak_bonus: m.karma_reason_streak_bonus,
 };
 
 function humanize(reason: string): string {
 	const t = reason.replace(/[_-]+/g, " ").trim();
-	return t ? t[0].toUpperCase() + t.slice(1) : "Karma change";
+	return t ? t[0].toUpperCase() + t.slice(1) : m.karma_reason_fallback();
 }
 
 export function reasonLabel(reason: string): string {
-	return REASON_LABELS[reason] ?? humanize(reason);
+	return Object.hasOwn(REASON_LABELS, reason)
+		? REASON_LABELS[reason]()
+		: humanize(reason);
 }
 
 // Fraction 0..1 of value toward goal; 0 when goal is unset (<= 0) so an unset

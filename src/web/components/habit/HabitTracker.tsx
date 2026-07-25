@@ -1,6 +1,7 @@
 import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StreakResult } from "../../../domain/streak.ts";
+import { m } from "../../../paraglide/messages.js";
 
 type HeatCell = StreakResult["heatmap"][number];
 
@@ -14,11 +15,13 @@ const CELL_STYLE: Record<HeatCell["status"], string> = {
 	none: "border border-dotted border-muted-foreground/30 bg-transparent",
 };
 
-const STATUS_LABEL: Record<HeatCell["status"], string> = {
-	done: "done",
-	skipped: "skipped",
-	missed: "missed",
-	none: "upcoming",
+// Whole cell name per status, not a translated fragment concatenated onto the
+// date. Thunks: module-scope locale freeze.
+const CELL_LABEL: Record<HeatCell["status"], (date: string) => string> = {
+	done: (date) => m.habit_heatmap_done({ date }),
+	skipped: (date) => m.habit_heatmap_skipped({ date }),
+	missed: (date) => m.habit_heatmap_missed({ date }),
+	none: (date) => m.habit_heatmap_upcoming({ date }),
 };
 
 // Read-only streak + adherence + heatmap presentation for one habit. Pure: no
@@ -31,24 +34,27 @@ export function HabitTracker({ streak }: { streak: StreakResult }) {
 				<span className="inline-flex items-center gap-1 font-medium">
 					<Flame className="size-4 text-success" aria-hidden />
 					<span data-testid="habit-streak">
-						{current} day{current === 1 ? "" : "s"}
+						{m.habit_streak_days({ count: current })}
 					</span>
 				</span>
 				<span className="text-muted-foreground" data-testid="habit-adherence">
-					{adherencePct}% on track
+					{m.habit_adherence({ pct: adherencePct })}
 				</span>
 			</div>
 			{heatmap.length > 0 && (
 				<div className="flex flex-wrap gap-1" data-testid="habit-heatmap">
-					{heatmap.map((c) => (
-						<span
-							key={c.date}
-							role="img"
-							aria-label={`${c.date}: ${STATUS_LABEL[c.status]}`}
-							title={`${c.date}: ${STATUS_LABEL[c.status]}`}
-							className={cn("size-3 rounded-sm", CELL_STYLE[c.status])}
-						/>
-					))}
+					{heatmap.map((c) => {
+						const label = CELL_LABEL[c.status](c.date);
+						return (
+							<span
+								key={c.date}
+								role="img"
+								aria-label={label}
+								title={label}
+								className={cn("size-3 rounded-sm", CELL_STYLE[c.status])}
+							/>
+						);
+					})}
 				</div>
 			)}
 		</div>
