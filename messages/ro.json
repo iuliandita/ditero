@@ -113,7 +113,7 @@
 	],
 	"restricted_my_tasks_heading": "Sarcinile mele",
 	"restricted_nothing_assigned": "Momentan nu ai nimic de făcut.",
-	"restricted_detail_completed": "Finalizată",
+	"restricted_detail_completed": "Finalizat",
 	"restricted_detail_mark_done": "Marchează ca finalizată",
 	"restricted_detail_due": "Termen",
 	"restricted_detail_notes": "Notițe",
@@ -240,18 +240,18 @@
 			"declarations": ["input count", "local countPlural = count: plural"],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} finalizată",
-				"countPlural=few": "{count} finalizate",
-				"countPlural=other": "{count} de finalizate"
+				"countPlural=one": "{count} element finalizat",
+				"countPlural=few": "{count} elemente finalizate",
+				"countPlural=other": "{count} de elemente finalizate"
 			}
 		}
 	],
 	"list_change_icon": "Schimbă pictograma listei",
 	"list_display_options": "Opțiuni de afișare a listei",
-	"list_completed_heading": "Sarcini finalizate",
-	"list_completed_sink": "Mută finalizatele la final",
+	"list_completed_heading": "Elemente finalizate",
+	"list_completed_sink": "Mută elementele finalizate la final",
 	"list_completed_keep": "Lasă-le pe loc",
-	"list_completed_hide": "Ascunde finalizatele",
+	"list_completed_hide": "Ascunde elementele finalizate",
 	"list_group_by_assignee": "Grupează după responsabil",
 	"list_save_as_template": "Salvează ca șablon",
 	"list_add_task_placeholder": "Adaugă o sarcină",
@@ -443,9 +443,9 @@
 	"field_workspace": "Workspace",
 	"list_kind_habits": "Obiceiuri",
 	"status_open": "Deschisă",
-	"status_done": "Finalizată",
-	"status_not_done": "Nefinalizată",
-	"due_overdue": "Întârziate",
+	"status_done": "Finalizat",
+	"status_not_done": "Nefinalizat",
+	"due_overdue": "Întârziat",
 	"due_next7": "Următoarele 7 zile",
 	"due_later": "Mai târziu",
 	"due_no_date": "Fără dată",
@@ -889,7 +889,7 @@
 			}
 		}
 	],
-	"assignee_chips_aria": "Atribuită către {names}",
+	"assignee_chips_aria": "Responsabili: {names}",
 	"assignee_invite_confirm": "Inviți {name} în {workspace} și îi atribui sarcina?",
 	"assignee_invite_confirm_no_workspace": "Inviți {name} în acest workspace și îi atribui sarcina?",
 	"assignee_invite_hint": "Sarcina îi este atribuită imediat ce acceptă invitația.",

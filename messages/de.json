@@ -239,17 +239,17 @@
 			"declarations": ["input count", "local countPlural = count: plural"],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} erledigt",
-				"countPlural=other": "{count} erledigt"
+				"countPlural=one": "{count} Eintrag erledigt",
+				"countPlural=other": "{count} Einträge erledigt"
 			}
 		}
 	],
 	"list_change_icon": "Listensymbol ändern",
 	"list_display_options": "Anzeigeoptionen der Liste",
-	"list_completed_heading": "Erledigte Aufgaben",
-	"list_completed_sink": "Erledigte nach unten",
+	"list_completed_heading": "Erledigte Einträge",
+	"list_completed_sink": "Erledigte Einträge nach unten",
 	"list_completed_keep": "An Ort und Stelle",
-	"list_completed_hide": "Erledigte ausblenden",
+	"list_completed_hide": "Erledigte Einträge ausblenden",
 	"list_group_by_assignee": "Nach Zuständigkeit gruppieren",
 	"list_save_as_template": "Als Vorlage speichern",
 	"list_add_task_placeholder": "Aufgabe hinzufügen",
@@ -864,7 +864,7 @@
 			}
 		}
 	],
-	"assignee_chips_aria": "Zugewiesen an {names}",
+	"assignee_chips_aria": "Zuständige: {names}",
 	"assignee_invite_confirm": "{name} zu {workspace} einladen und zuweisen?",
 	"assignee_invite_confirm_no_workspace": "{name} zu diesem Workspace einladen und zuweisen?",
 	"assignee_invite_hint": "Die Zuweisung greift, sobald die Einladung angenommen wird.",

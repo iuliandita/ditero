@@ -239,17 +239,17 @@
 			"declarations": ["input count", "local countPlural = count: plural"],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} completed",
-				"countPlural=other": "{count} completed"
+				"countPlural=one": "{count} item completed",
+				"countPlural=other": "{count} items completed"
 			}
 		}
 	],
 	"list_change_icon": "Change list icon",
 	"list_display_options": "List display options",
-	"list_completed_heading": "Completed tasks",
-	"list_completed_sink": "Sink completed",
+	"list_completed_heading": "Completed items",
+	"list_completed_sink": "Sink completed items",
 	"list_completed_keep": "Keep in place",
-	"list_completed_hide": "Hide completed",
+	"list_completed_hide": "Hide completed items",
 	"list_group_by_assignee": "Group by assignee",
 	"list_save_as_template": "Save as template",
 	"list_add_task_placeholder": "Add a task",
@@ -864,7 +864,7 @@
 			}
 		}
 	],
-	"assignee_chips_aria": "Assigned to {names}",
+	"assignee_chips_aria": "Assignees: {names}",
 	"assignee_invite_confirm": "Invite {name} to {workspace} and assign?",
 	"assignee_invite_confirm_no_workspace": "Invite {name} to this workspace and assign?",
 	"assignee_invite_hint": "They are assigned once they accept the invite.",
