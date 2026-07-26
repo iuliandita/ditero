@@ -262,7 +262,7 @@ test("assign: owner assigns member -> assignee chip syncs to the member", async 
 	await expect(chip).toBeVisible({ timeout: 8000 });
 	await expect(chip).toHaveAttribute(
 		"aria-label",
-		new RegExp(`Assigned to .*${memberName}`),
+		new RegExp(`Assignees: .*${memberName}`),
 	);
 
 	await a.close();
@@ -319,7 +319,7 @@ test("invite-on-assign: pick a non-member by email -> accept resolves the assign
 	await expect(chip).toBeVisible({ timeout: 15000 });
 	await expect(chip).toHaveAttribute(
 		"aria-label",
-		new RegExp(`Assigned to .*${outsiderName}`),
+		new RegExp(`Assignees: .*${outsiderName}`),
 	);
 	// Newly joined user reaches the shared workspace.
 	await openSharedDesktop(pc);
