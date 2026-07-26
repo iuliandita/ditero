@@ -2,6 +2,7 @@ import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StreakResult } from "../../../domain/streak.ts";
 import { m } from "../../../paraglide/messages.js";
+import { formatDayKey } from "../../lib/intl-format.ts";
 
 type HeatCell = StreakResult["heatmap"][number];
 
@@ -44,7 +45,7 @@ export function HabitTracker({ streak }: { streak: StreakResult }) {
 			{heatmap.length > 0 && (
 				<div className="flex flex-wrap gap-1" data-testid="habit-heatmap">
 					{heatmap.map((c) => {
-						const label = CELL_LABEL[c.status](c.date);
+						const label = CELL_LABEL[c.status](formatDayKey(c.date));
 						return (
 							<span
 								key={c.date}

@@ -14,6 +14,7 @@ import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
+import { formatList } from "../../lib/intl-format.ts";
 
 type Freq = RecurrencePreset["freq"];
 
@@ -99,10 +100,12 @@ function describePreset(p: RecurrencePreset, weekdays: string[]): string {
 		case "weekly":
 			return m.recurrence_summary_weekly({
 				count: p.interval,
-				days: [...p.weekdays]
-					.sort((a, b) => a - b)
-					.map((d) => weekdays[d])
-					.join(", "),
+				// "unit", not "conjunction": this is a compact enumeration of days,
+				// so English stays "Mon, Wed" while Arabic still gets its own comma.
+				days: formatList(
+					[...p.weekdays].sort((a, b) => a - b).map((d) => weekdays[d] ?? ""),
+					"unit",
+				),
 			});
 		case "monthly":
 			return m.recurrence_summary_monthly({

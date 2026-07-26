@@ -101,13 +101,15 @@
 			"declarations": [
 				"input done",
 				"input total",
-				"local donePlural = done: plural"
+				"local doneNum = done: number",
+				"local donePlural = done: plural",
+				"local totalNum = total: number"
 			],
 			"selectors": ["donePlural"],
 			"match": {
-				"donePlural=one": "{done} din {total} finalizată",
-				"donePlural=few": "{done} din {total} finalizate",
-				"donePlural=other": "{done} din {total} finalizate"
+				"donePlural=one": "{doneNum} din {totalNum} finalizată",
+				"donePlural=few": "{doneNum} din {totalNum} finalizate",
+				"donePlural=other": "{doneNum} din {totalNum} finalizate"
 			}
 		}
 	],
@@ -237,12 +239,16 @@
 	"due_tomorrow": "Mâine",
 	"list_completed_count": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} element finalizat",
-				"countPlural=few": "{count} elemente finalizate",
-				"countPlural=other": "{count} de elemente finalizate"
+				"countPlural=one": "{countNum} element finalizat",
+				"countPlural=few": "{countNum} elemente finalizate",
+				"countPlural=other": "{countNum} de elemente finalizate"
 			}
 		}
 	],
@@ -284,7 +290,20 @@
 	"shopping_category_other": "Altele",
 	"task_reorder_handle": "Reordonează sarcina",
 	"task_priority_aria": "Prioritate: {priority}",
-	"task_subtask_progress": "{done}/{total}",
+	"task_subtask_progress": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "{doneNum}/{totalNum}"
+			}
+		}
+	],
 	"subtasks_expand": "Extinde subsarcinile",
 	"subtasks_collapse": "Restrânge subsarcinile",
 	"task_detail_title": "Detaliile sarcinii",
@@ -372,45 +391,64 @@
 	],
 	"recurrence_summary_daily": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "În fiecare zi",
-				"countPlural=few": "La fiecare {count} zile",
-				"countPlural=other": "La fiecare {count} de zile"
+				"countPlural=few": "La fiecare {countNum} zile",
+				"countPlural=other": "La fiecare {countNum} de zile"
 			}
 		}
 	],
 	"recurrence_summary_weekly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input days",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "În fiecare săptămână, {days}",
-				"countPlural=few": "La fiecare {count} săptămâni, {days}",
-				"countPlural=other": "La fiecare {count} de săptămâni, {days}"
+				"countPlural=few": "La fiecare {countNum} săptămâni, {days}",
+				"countPlural=other": "La fiecare {countNum} de săptămâni, {days}"
 			}
 		}
 	],
 	"recurrence_summary_monthly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input monthday",
+				"local countNum = count: number",
+				"local countPlural = count: plural",
+				"local monthdayNum = monthday: number"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "În fiecare lună, în ziua {monthday}",
-				"countPlural=few": "La fiecare {count} luni, în ziua {monthday}",
-				"countPlural=other": "La fiecare {count} de luni, în ziua {monthday}"
+				"countPlural=one": "În fiecare lună, în ziua {monthdayNum}",
+				"countPlural=few": "La fiecare {countNum} luni, în ziua {monthdayNum}",
+				"countPlural=other": "La fiecare {countNum} de luni, în ziua {monthdayNum}"
 			}
 		}
 	],
 	"recurrence_summary_yearly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "În fiecare an",
-				"countPlural=few": "La fiecare {count} ani",
-				"countPlural=other": "La fiecare {count} de ani"
+				"countPlural=few": "La fiecare {countNum} ani",
+				"countPlural=other": "La fiecare {countNum} de ani"
 			}
 		}
 	],
@@ -419,7 +457,19 @@
 	"reminder_set_at": "Memento setat {time}",
 	"reminder_deferred_until": "Amânat până la {when}",
 	"reminder_until_quiet_hours_end": "sfârșitul orelor de liniște",
-	"reminder_escalating": "Escaladare ({count} din {max})",
+	"reminder_escalating": [
+		{
+			"declarations": [
+				"input count",
+				"input max",
+				"local countNum = count: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Escaladare ({countNum} din {max})"
+			}
+		}
+	],
 	"reminder_max_unknown": "?",
 	"reminder_acked": "Confirmat",
 	"reminder_failed": "Mementoul a eșuat",
@@ -522,23 +572,31 @@
 	"calendar_day_today": "{date}, azi",
 	"filter_multi_selected": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} selectat",
-				"countPlural=few": "{count} selectate",
-				"countPlural=other": "{count} de selectate"
+				"countPlural=one": "{countNum} selectat",
+				"countPlural=few": "{countNum} selectate",
+				"countPlural=other": "{countNum} de selectate"
 			}
 		}
 	],
 	"board_column_count": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} element",
-				"countPlural=few": "{count} elemente",
-				"countPlural=other": "{count} de elemente"
+				"countPlural=one": "{countNum} element",
+				"countPlural=few": "{countNum} elemente",
+				"countPlural=other": "{countNum} de elemente"
 			}
 		}
 	],
@@ -561,12 +619,16 @@
 	"panel_replace_view": "Înlocuiește vizualizarea",
 	"panel_label_habits": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} obicei",
-				"countPlural=few": "{count} obiceiuri",
-				"countPlural=other": "{count} de obiceiuri"
+				"countPlural=one": "{countNum} obicei",
+				"countPlural=few": "{countNum} obiceiuri",
+				"countPlural=other": "{countNum} de obiceiuri"
 			}
 		}
 	],
@@ -601,28 +663,79 @@
 	"panel_field_view": "Vizualizare",
 	"panel_view_placeholder": "Alege o vizualizare...",
 	"panel_no_views": "Nicio vizualizare salvată încă.",
-	"panel_habits_legend": "Obiceiuri (alege {min}-{max})",
+	"panel_habits_legend": [
+		{
+			"declarations": [
+				"input max",
+				"input min",
+				"local maxNum = max: number",
+				"local minNum = min: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Obiceiuri (alege {minNum}-{maxNum})"
+			}
+		}
+	],
 	"panel_habit_missing": "Obicei lipsă (șters sau nepartajat cu tine)",
 	"panel_no_habits": "Niciun obicei încă. Adaugă mai întâi sarcini într-o listă de obiceiuri.",
 	"panel_field_range": "Interval",
 	"panel_range_today": "Azi",
 	"panel_range_week": "Ultimele 7 zile",
 	"panel_field_size": "Dimensiune",
-	"panel_field_limit": "Limită ({min}-{max})",
+	"panel_field_limit": [
+		{
+			"declarations": [
+				"input max",
+				"input min",
+				"local maxNum = max: number",
+				"local minNum = min: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Limită ({minNum}-{maxNum})"
+			}
+		}
+	],
 	"panel_field_title": "Titlu (opțional)",
 	"panel_title_placeholder": "Titlul panoului",
 	"panel_mobile_hint": "Pe telefon, panourile se așază unul sub altul, în ordinea din dashboard.",
 	"panel_no_matches": "Nicio sarcină potrivită",
-	"panel_show_all": "Arată tot ({count})",
-	"panel_expand_title": "{label} ({count})",
+	"panel_show_all": [
+		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Arată tot ({countNum})"
+			}
+		}
+	],
+	"panel_expand_title": [
+		{
+			"declarations": [
+				"input count",
+				"input label",
+				"local countNum = count: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "{label} ({countNum})"
+			}
+		}
+	],
 	"panel_counter_aria": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input label",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{label}: {count} sarcină potrivită. Afișează-le",
-				"countPlural=few": "{label}: {count} sarcini potrivite. Afișează-le",
-				"countPlural=other": "{label}: {count} de sarcini potrivite. Afișează-le"
+				"countPlural=one": "{label}: {countNum} sarcină potrivită. Afișează-le",
+				"countPlural=few": "{label}: {countNum} sarcini potrivite. Afișează-le",
+				"countPlural=other": "{label}: {countNum} de sarcini potrivite. Afișează-le"
 			}
 		}
 	],
@@ -631,13 +744,15 @@
 			"declarations": [
 				"input count",
 				"input pct",
-				"local countPlural = count: plural"
+				"local countNum = count: number",
+				"local countPlural = count: plural",
+				"local pctNum = pct: number"
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "Serie de {count} zi, {pct}% respectat",
-				"countPlural=few": "Serie de {count} zile, {pct}% respectat",
-				"countPlural=other": "Serie de {count} de zile, {pct}% respectat"
+				"countPlural=one": "Serie de {countNum} zi, {pctNum}% respectat",
+				"countPlural=few": "Serie de {countNum} zile, {pctNum}% respectat",
+				"countPlural=other": "Serie de {countNum} de zile, {pctNum}% respectat"
 			}
 		}
 	],
@@ -660,13 +775,14 @@
 		{
 			"declarations": [
 				"input minutes",
+				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
 			"selectors": ["minutesPlural"],
 			"match": {
-				"minutesPlural=one": "{minutes} min de concentrare",
-				"minutesPlural=few": "{minutes} min de concentrare",
-				"minutesPlural=other": "{minutes} min de concentrare"
+				"minutesPlural=one": "{minutesNum} min de concentrare",
+				"minutesPlural=few": "{minutesNum} min de concentrare",
+				"minutesPlural=other": "{minutesNum} min de concentrare"
 			}
 		}
 	],
@@ -680,16 +796,28 @@
 	"habit_done_today_aria": "Făcut azi",
 	"habit_streak_days": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} zi",
-				"countPlural=few": "{count} zile",
-				"countPlural=other": "{count} de zile"
+				"countPlural=one": "{countNum} zi",
+				"countPlural=few": "{countNum} zile",
+				"countPlural=other": "{countNum} de zile"
 			}
 		}
 	],
-	"habit_adherence": "{pct}% respectat",
+	"habit_adherence": [
+		{
+			"declarations": ["input pct", "local pctNum = pct: number"],
+			"selectors": [],
+			"match": {
+				"*": "{pctNum}% respectat"
+			}
+		}
+	],
 	"habit_heatmap_done": "{date}: făcut",
 	"habit_heatmap_skipped": "{date}: sărit",
 	"habit_heatmap_missed": "{date}: ratat",
@@ -698,7 +826,20 @@
 	"focus_phase_work": "Concentrare",
 	"focus_phase_break": "Pauză",
 	"focus_phase_long_break": "Pauză lungă",
-	"focus_round_of": "Runda {round} din {total}",
+	"focus_round_of": [
+		{
+			"declarations": [
+				"input round",
+				"input total",
+				"local roundNum = round: number",
+				"local totalNum = total: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Runda {roundNum} din {totalNum}"
+			}
+		}
+	],
 	"focus_start_action": "Pornește",
 	"focus_pause_action": "Pauzează",
 	"focus_skip_action": "Sari",
@@ -711,13 +852,14 @@
 		{
 			"declarations": [
 				"input seconds",
+				"local secondsNum = seconds: number",
 				"local secondsPlural = seconds: plural"
 			],
 			"selectors": ["secondsPlural"],
 			"match": {
-				"secondsPlural=one": "{seconds}s de concentrare",
-				"secondsPlural=few": "{seconds}s de concentrare",
-				"secondsPlural=other": "{seconds}s de concentrare"
+				"secondsPlural=one": "{secondsNum}s de concentrare",
+				"secondsPlural=few": "{secondsNum}s de concentrare",
+				"secondsPlural=other": "{secondsNum}s de concentrare"
 			}
 		}
 	],
@@ -725,13 +867,14 @@
 		{
 			"declarations": [
 				"input minutes",
+				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
 			"selectors": ["minutesPlural"],
 			"match": {
-				"minutesPlural=one": "{minutes}m de concentrare",
-				"minutesPlural=few": "{minutes}m de concentrare",
-				"minutesPlural=other": "{minutes}m de concentrare"
+				"minutesPlural=one": "{minutesNum}m de concentrare",
+				"minutesPlural=few": "{minutesNum}m de concentrare",
+				"minutesPlural=other": "{minutesNum}m de concentrare"
 			}
 		}
 	],
@@ -740,13 +883,14 @@
 			"declarations": [
 				"input hours",
 				"input minutes",
+				"local hoursNum = hours: number",
 				"local hoursPlural = hours: plural"
 			],
 			"selectors": ["hoursPlural"],
 			"match": {
-				"hoursPlural=one": "{hours}h {minutes}m de concentrare",
-				"hoursPlural=few": "{hours}h {minutes}m de concentrare",
-				"hoursPlural=other": "{hours}h {minutes}m de concentrare"
+				"hoursPlural=one": "{hoursNum}h {minutes}m de concentrare",
+				"hoursPlural=few": "{hoursNum}h {minutes}m de concentrare",
+				"hoursPlural=other": "{hoursNum}h {minutes}m de concentrare"
 			}
 		}
 	],
@@ -757,56 +901,126 @@
 	"karma_level_maxed_aria": [
 		{
 			"declarations": [
-				"input points",
 				"input level",
+				"input points",
+				"local levelNum = level: number",
+				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
 			"selectors": ["pointsPlural"],
 			"match": {
-				"pointsPlural=one": "Nivelul {level}, nivel maxim atins, {points} punct",
-				"pointsPlural=few": "Nivelul {level}, nivel maxim atins, {points} puncte",
-				"pointsPlural=other": "Nivelul {level}, nivel maxim atins, {points} de puncte"
+				"pointsPlural=one": "Nivelul {levelNum}, nivel maxim atins, {pointsNum} punct",
+				"pointsPlural=few": "Nivelul {levelNum}, nivel maxim atins, {pointsNum} puncte",
+				"pointsPlural=other": "Nivelul {levelNum}, nivel maxim atins, {pointsNum} de puncte"
 			}
 		}
 	],
 	"karma_level_progress_aria": [
 		{
 			"declarations": [
-				"input span",
 				"input into",
 				"input level",
 				"input next",
+				"input span",
+				"local intoNum = into: number",
+				"local levelNum = level: number",
+				"local nextNum = next: number",
+				"local spanNum = span: number",
 				"local spanPlural = span: plural"
 			],
 			"selectors": ["spanPlural"],
 			"match": {
-				"spanPlural=one": "Nivelul {level}, {into} din {span} punct până la nivelul {next}",
-				"spanPlural=few": "Nivelul {level}, {into} din {span} puncte până la nivelul {next}",
-				"spanPlural=other": "Nivelul {level}, {into} din {span} de puncte până la nivelul {next}"
+				"spanPlural=one": "Nivelul {levelNum}, {intoNum} din {spanNum} punct până la nivelul {nextNum}",
+				"spanPlural=few": "Nivelul {levelNum}, {intoNum} din {spanNum} puncte până la nivelul {nextNum}",
+				"spanPlural=other": "Nivelul {levelNum}, {intoNum} din {spanNum} de puncte până la nivelul {nextNum}"
 			}
 		}
 	],
 	"karma_points_short": [
 		{
-			"declarations": ["input points", "local pointsPlural = points: plural"],
+			"declarations": [
+				"input points",
+				"local pointsNum = points: number",
+				"local pointsPlural = points: plural"
+			],
 			"selectors": ["pointsPlural"],
 			"match": {
-				"pointsPlural=one": "{points} pct",
-				"pointsPlural=few": "{points} pct",
-				"pointsPlural=other": "{points} de pct"
+				"pointsPlural=one": "{pointsNum} pct",
+				"pointsPlural=few": "{pointsNum} pct",
+				"pointsPlural=other": "{pointsNum} de pct"
 			}
 		}
 	],
 	"karma_level_max": "Nivel maxim",
-	"karma_level_next": "Următorul: {points}",
+	"karma_level_next": [
+		{
+			"declarations": ["input points", "local pointsNum = points: number"],
+			"selectors": [],
+			"match": {
+				"*": "Următorul: {pointsNum}"
+			}
+		}
+	],
 	"karma_goal_daily_title": "Zilnic",
 	"karma_goal_weekly_title": "Săptămânal",
 	"karma_goal_daily_unset_aria": "Obiectivul zilnic nu este setat",
 	"karma_goal_weekly_unset_aria": "Obiectivul săptămânal nu este setat",
-	"karma_goal_daily_aria": "Obiectiv zilnic: {done} din {goal}",
-	"karma_goal_weekly_aria": "Obiectiv săptămânal: {done} din {goal}",
-	"karma_goal_daily_met_aria": "Obiectiv zilnic: {done} din {goal}, atins",
-	"karma_goal_weekly_met_aria": "Obiectiv săptămânal: {done} din {goal}, atins",
+	"karma_goal_daily_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Obiectiv zilnic: {doneNum} din {goalNum}"
+			}
+		}
+	],
+	"karma_goal_weekly_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Obiectiv săptămânal: {doneNum} din {goalNum}"
+			}
+		}
+	],
+	"karma_goal_daily_met_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Obiectiv zilnic: {doneNum} din {goalNum}, atins"
+			}
+		}
+	],
+	"karma_goal_weekly_met_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Obiectiv săptămânal: {doneNum} din {goalNum}, atins"
+			}
+		}
+	],
 	"karma_goal_unset_value": "Nesetat",
 	"karma_ledger_heading": "Modificări Karma",
 	"karma_ledger_loading": "Se încarcă…",
@@ -880,12 +1094,16 @@
 	"assignee_open": "Atribuie",
 	"assignee_open_count": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "Responsabili ({count})",
-				"countPlural=few": "Responsabili ({count})",
-				"countPlural=other": "Responsabili ({count})"
+				"countPlural=one": "Responsabili ({countNum})",
+				"countPlural=few": "Responsabili ({countNum})",
+				"countPlural=other": "Responsabili ({countNum})"
 			}
 		}
 	],
