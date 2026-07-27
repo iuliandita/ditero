@@ -101,12 +101,14 @@
 			"declarations": [
 				"input done",
 				"input total",
-				"local donePlural = done: plural"
+				"local doneNum = done: number",
+				"local donePlural = done: plural",
+				"local totalNum = total: number"
 			],
 			"selectors": ["donePlural"],
 			"match": {
-				"donePlural=one": "{done} von {total} erledigt",
-				"donePlural=other": "{done} von {total} erledigt"
+				"donePlural=one": "{doneNum} von {totalNum} erledigt",
+				"donePlural=other": "{doneNum} von {totalNum} erledigt"
 			}
 		}
 	],
@@ -236,11 +238,15 @@
 	"due_tomorrow": "Morgen",
 	"list_completed_count": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} Eintrag erledigt",
-				"countPlural=other": "{count} Einträge erledigt"
+				"countPlural=one": "{countNum} Eintrag erledigt",
+				"countPlural=other": "{countNum} Einträge erledigt"
 			}
 		}
 	],
@@ -282,7 +288,20 @@
 	"shopping_category_other": "Sonstiges",
 	"task_reorder_handle": "Aufgabe umsortieren",
 	"task_priority_aria": "Priorität: {priority}",
-	"task_subtask_progress": "{done}/{total}",
+	"task_subtask_progress": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "{doneNum}/{totalNum}"
+			}
+		}
+	],
 	"subtasks_expand": "Teilaufgaben ausklappen",
 	"subtasks_collapse": "Teilaufgaben einklappen",
 	"task_detail_title": "Aufgabendetails",
@@ -366,41 +385,60 @@
 	],
 	"recurrence_summary_daily": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Jeden Tag",
-				"countPlural=other": "Alle {count} Tage"
+				"countPlural=other": "Alle {countNum} Tage"
 			}
 		}
 	],
 	"recurrence_summary_weekly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input days",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Jede Woche am {days}",
-				"countPlural=other": "Alle {count} Wochen am {days}"
+				"countPlural=other": "Alle {countNum} Wochen am {days}"
 			}
 		}
 	],
 	"recurrence_summary_monthly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input monthday",
+				"local countNum = count: number",
+				"local countPlural = count: plural",
+				"local monthdayNum = monthday: number"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "Jeden Monat am Tag {monthday}",
-				"countPlural=other": "Alle {count} Monate am Tag {monthday}"
+				"countPlural=one": "Jeden Monat am Tag {monthdayNum}",
+				"countPlural=other": "Alle {countNum} Monate am Tag {monthdayNum}"
 			}
 		}
 	],
 	"recurrence_summary_yearly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Jedes Jahr",
-				"countPlural=other": "Alle {count} Jahre"
+				"countPlural=other": "Alle {countNum} Jahre"
 			}
 		}
 	],
@@ -409,7 +447,19 @@
 	"reminder_set_at": "Erinnerung um {time}",
 	"reminder_deferred_until": "Verschoben bis {when}",
 	"reminder_until_quiet_hours_end": "zum Ende der Ruhezeiten",
-	"reminder_escalating": "Eskaliert ({count} von {max})",
+	"reminder_escalating": [
+		{
+			"declarations": [
+				"input count",
+				"input max",
+				"local countNum = count: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Eskaliert ({countNum} von {max})"
+			}
+		}
+	],
 	"reminder_max_unknown": "?",
 	"reminder_acked": "Bestätigt",
 	"reminder_failed": "Erinnerung fehlgeschlagen",
@@ -512,21 +562,29 @@
 	"calendar_day_today": "{date}, heute",
 	"filter_multi_selected": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} ausgewählt",
-				"countPlural=other": "{count} ausgewählt"
+				"countPlural=one": "{countNum} ausgewählt",
+				"countPlural=other": "{countNum} ausgewählt"
 			}
 		}
 	],
 	"board_column_count": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} Eintrag",
-				"countPlural=other": "{count} Einträge"
+				"countPlural=one": "{countNum} Eintrag",
+				"countPlural=other": "{countNum} Einträge"
 			}
 		}
 	],
@@ -549,11 +607,15 @@
 	"panel_replace_view": "Ansicht ersetzen",
 	"panel_label_habits": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} Gewohnheit",
-				"countPlural=other": "{count} Gewohnheiten"
+				"countPlural=one": "{countNum} Gewohnheit",
+				"countPlural=other": "{countNum} Gewohnheiten"
 			}
 		}
 	],
@@ -588,27 +650,78 @@
 	"panel_field_view": "Ansicht",
 	"panel_view_placeholder": "Ansicht auswählen...",
 	"panel_no_views": "Noch keine gespeicherten Ansichten.",
-	"panel_habits_legend": "Gewohnheiten ({min}-{max} auswählen)",
+	"panel_habits_legend": [
+		{
+			"declarations": [
+				"input max",
+				"input min",
+				"local maxNum = max: number",
+				"local minNum = min: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Gewohnheiten ({minNum}-{maxNum} auswählen)"
+			}
+		}
+	],
 	"panel_habit_missing": "Gewohnheit fehlt (gelöscht oder nicht mit dir geteilt)",
 	"panel_no_habits": "Noch keine Gewohnheiten. Leg zuerst Aufgaben in einer Gewohnheitsliste an.",
 	"panel_field_range": "Zeitraum",
 	"panel_range_today": "Heute",
 	"panel_range_week": "Letzte 7 Tage",
 	"panel_field_size": "Größe",
-	"panel_field_limit": "Limit ({min}-{max})",
+	"panel_field_limit": [
+		{
+			"declarations": [
+				"input max",
+				"input min",
+				"local maxNum = max: number",
+				"local minNum = min: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Limit ({minNum}-{maxNum})"
+			}
+		}
+	],
 	"panel_field_title": "Titel (optional)",
 	"panel_title_placeholder": "Panel-Titel",
 	"panel_mobile_hint": "Auf dem Handy stapeln sich die Panels in der Reihenfolge des Dashboards.",
 	"panel_no_matches": "Keine passenden Aufgaben",
-	"panel_show_all": "Alle anzeigen ({count})",
-	"panel_expand_title": "{label} ({count})",
+	"panel_show_all": [
+		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Alle anzeigen ({countNum})"
+			}
+		}
+	],
+	"panel_expand_title": [
+		{
+			"declarations": [
+				"input count",
+				"input label",
+				"local countNum = count: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "{label} ({countNum})"
+			}
+		}
+	],
 	"panel_counter_aria": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input label",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{label}: {count} passende Aufgabe. Anzeigen",
-				"countPlural=other": "{label}: {count} passende Aufgaben. Anzeigen"
+				"countPlural=one": "{label}: {countNum} passende Aufgabe. Anzeigen",
+				"countPlural=other": "{label}: {countNum} passende Aufgaben. Anzeigen"
 			}
 		}
 	],
@@ -617,12 +730,14 @@
 			"declarations": [
 				"input count",
 				"input pct",
-				"local countPlural = count: plural"
+				"local countNum = count: number",
+				"local countPlural = count: plural",
+				"local pctNum = pct: number"
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} Tag Serie, {pct}% im Plan",
-				"countPlural=other": "{count} Tage Serie, {pct}% im Plan"
+				"countPlural=one": "{countNum} Tag Serie, {pctNum}% im Plan",
+				"countPlural=other": "{countNum} Tage Serie, {pctNum}% im Plan"
 			}
 		}
 	],
@@ -644,12 +759,13 @@
 		{
 			"declarations": [
 				"input minutes",
+				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
 			"selectors": ["minutesPlural"],
 			"match": {
-				"minutesPlural=one": "{minutes} Min. fokussiert",
-				"minutesPlural=other": "{minutes} Min. fokussiert"
+				"minutesPlural=one": "{minutesNum} Min. fokussiert",
+				"minutesPlural=other": "{minutesNum} Min. fokussiert"
 			}
 		}
 	],
@@ -663,15 +779,27 @@
 	"habit_done_today_aria": "Heute erledigt",
 	"habit_streak_days": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} Tag",
-				"countPlural=other": "{count} Tage"
+				"countPlural=one": "{countNum} Tag",
+				"countPlural=other": "{countNum} Tage"
 			}
 		}
 	],
-	"habit_adherence": "{pct}% im Plan",
+	"habit_adherence": [
+		{
+			"declarations": ["input pct", "local pctNum = pct: number"],
+			"selectors": [],
+			"match": {
+				"*": "{pctNum}% im Plan"
+			}
+		}
+	],
 	"habit_heatmap_done": "{date}: erledigt",
 	"habit_heatmap_skipped": "{date}: übersprungen",
 	"habit_heatmap_missed": "{date}: verpasst",
@@ -680,7 +808,20 @@
 	"focus_phase_work": "Fokus",
 	"focus_phase_break": "Pause",
 	"focus_phase_long_break": "Lange Pause",
-	"focus_round_of": "Runde {round} von {total}",
+	"focus_round_of": [
+		{
+			"declarations": [
+				"input round",
+				"input total",
+				"local roundNum = round: number",
+				"local totalNum = total: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Runde {roundNum} von {totalNum}"
+			}
+		}
+	],
 	"focus_start_action": "Start",
 	"focus_pause_action": "Pause",
 	"focus_skip_action": "Überspringen",
@@ -693,12 +834,13 @@
 		{
 			"declarations": [
 				"input seconds",
+				"local secondsNum = seconds: number",
 				"local secondsPlural = seconds: plural"
 			],
 			"selectors": ["secondsPlural"],
 			"match": {
-				"secondsPlural=one": "{seconds} s fokussiert",
-				"secondsPlural=other": "{seconds} s fokussiert"
+				"secondsPlural=one": "{secondsNum} s fokussiert",
+				"secondsPlural=other": "{secondsNum} s fokussiert"
 			}
 		}
 	],
@@ -706,12 +848,13 @@
 		{
 			"declarations": [
 				"input minutes",
+				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
 			"selectors": ["minutesPlural"],
 			"match": {
-				"minutesPlural=one": "{minutes} Min. fokussiert",
-				"minutesPlural=other": "{minutes} Min. fokussiert"
+				"minutesPlural=one": "{minutesNum} Min. fokussiert",
+				"minutesPlural=other": "{minutesNum} Min. fokussiert"
 			}
 		}
 	],
@@ -720,12 +863,13 @@
 			"declarations": [
 				"input hours",
 				"input minutes",
+				"local hoursNum = hours: number",
 				"local hoursPlural = hours: plural"
 			],
 			"selectors": ["hoursPlural"],
 			"match": {
-				"hoursPlural=one": "{hours} Std. {minutes} Min. fokussiert",
-				"hoursPlural=other": "{hours} Std. {minutes} Min. fokussiert"
+				"hoursPlural=one": "{hoursNum} Std. {minutes} Min. fokussiert",
+				"hoursPlural=other": "{hoursNum} Std. {minutes} Min. fokussiert"
 			}
 		}
 	],
@@ -736,53 +880,123 @@
 	"karma_level_maxed_aria": [
 		{
 			"declarations": [
-				"input points",
 				"input level",
+				"input points",
+				"local levelNum = level: number",
+				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
 			"selectors": ["pointsPlural"],
 			"match": {
-				"pointsPlural=one": "Level {level}, höchstes Level erreicht, {points} Punkt",
-				"pointsPlural=other": "Level {level}, höchstes Level erreicht, {points} Punkte"
+				"pointsPlural=one": "Level {levelNum}, höchstes Level erreicht, {pointsNum} Punkt",
+				"pointsPlural=other": "Level {levelNum}, höchstes Level erreicht, {pointsNum} Punkte"
 			}
 		}
 	],
 	"karma_level_progress_aria": [
 		{
 			"declarations": [
-				"input span",
 				"input into",
 				"input level",
 				"input next",
+				"input span",
+				"local intoNum = into: number",
+				"local levelNum = level: number",
+				"local nextNum = next: number",
+				"local spanNum = span: number",
 				"local spanPlural = span: plural"
 			],
 			"selectors": ["spanPlural"],
 			"match": {
-				"spanPlural=one": "Level {level}, {into} von {span} Punkt bis Level {next}",
-				"spanPlural=other": "Level {level}, {into} von {span} Punkten bis Level {next}"
+				"spanPlural=one": "Level {levelNum}, {intoNum} von {spanNum} Punkt bis Level {nextNum}",
+				"spanPlural=other": "Level {levelNum}, {intoNum} von {spanNum} Punkten bis Level {nextNum}"
 			}
 		}
 	],
 	"karma_points_short": [
 		{
-			"declarations": ["input points", "local pointsPlural = points: plural"],
+			"declarations": [
+				"input points",
+				"local pointsNum = points: number",
+				"local pointsPlural = points: plural"
+			],
 			"selectors": ["pointsPlural"],
 			"match": {
-				"pointsPlural=one": "{points} Pkt.",
-				"pointsPlural=other": "{points} Pkt."
+				"pointsPlural=one": "{pointsNum} Pkt.",
+				"pointsPlural=other": "{pointsNum} Pkt."
 			}
 		}
 	],
 	"karma_level_max": "Höchstes Level",
-	"karma_level_next": "Nächstes: {points}",
+	"karma_level_next": [
+		{
+			"declarations": ["input points", "local pointsNum = points: number"],
+			"selectors": [],
+			"match": {
+				"*": "Nächstes: {pointsNum}"
+			}
+		}
+	],
 	"karma_goal_daily_title": "Täglich",
 	"karma_goal_weekly_title": "Wöchentlich",
 	"karma_goal_daily_unset_aria": "Tagesziel nicht festgelegt",
 	"karma_goal_weekly_unset_aria": "Wochenziel nicht festgelegt",
-	"karma_goal_daily_aria": "Tagesziel {done} von {goal}",
-	"karma_goal_weekly_aria": "Wochenziel {done} von {goal}",
-	"karma_goal_daily_met_aria": "Tagesziel {done} von {goal}, erreicht",
-	"karma_goal_weekly_met_aria": "Wochenziel {done} von {goal}, erreicht",
+	"karma_goal_daily_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Tagesziel {doneNum} von {goalNum}"
+			}
+		}
+	],
+	"karma_goal_weekly_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Wochenziel {doneNum} von {goalNum}"
+			}
+		}
+	],
+	"karma_goal_daily_met_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Tagesziel {doneNum} von {goalNum}, erreicht"
+			}
+		}
+	],
+	"karma_goal_weekly_met_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Wochenziel {doneNum} von {goalNum}, erreicht"
+			}
+		}
+	],
 	"karma_goal_unset_value": "Nicht festgelegt",
 	"karma_ledger_heading": "Karma-Verlauf",
 	"karma_ledger_loading": "Wird geladen…",
@@ -856,11 +1070,15 @@
 	"assignee_open": "Zuweisen",
 	"assignee_open_count": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "Zuständige ({count})",
-				"countPlural=other": "Zuständige ({count})"
+				"countPlural=one": "Zuständige ({countNum})",
+				"countPlural=other": "Zuständige ({countNum})"
 			}
 		}
 	],

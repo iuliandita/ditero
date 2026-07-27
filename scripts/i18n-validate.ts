@@ -61,6 +61,10 @@ export const PROTECTED_TERMS = [
 
 const PLACEHOLDER = /\{\s*\$?([A-Za-z_][A-Za-z0-9_]*)\s*\}/g;
 const PLURAL_DECLARATION = /^local\s+([A-Za-z_]\w*)\s*=\s*.+:\s*plural\s*$/;
+// Any `local x = y: fn` form. Paraglide's registry ships plural, number,
+// datetime and relativetime.
+const LOCAL_DECLARATION =
+	/^local\s+[A-Za-z_]\w*\s*=\s*.+:\s*(plural|number|datetime|relativetime)\s*$/;
 const MATCH_PART = /^([A-Za-z_]\w*)=(\*|[A-Za-z0-9_]+)$/;
 
 function isMessageKey(key: string): boolean {
@@ -90,6 +94,14 @@ function isStringArray(value: unknown): value is string[] {
 	return Array.isArray(value) && value.every((v) => typeof v === "string");
 }
 
+/** True when the variant declares any `local x = y: fn` formatter. */
+function hasFormatDeclaration(variant: Variant): boolean {
+	if (!isStringArray(variant.declarations)) return false;
+	return variant.declarations.some((declaration) =>
+		LOCAL_DECLARATION.test(declaration.trim()),
+	);
+}
+
 /** Human-readable problem, or null when the variant array is well-formed. */
 function variantProblem(variants: Variant[]): string | null {
 	if (variants.length === 0) return "variant array is empty";
@@ -100,8 +112,16 @@ function variantProblem(variants: Variant[]): string | null {
 		if (!isStringArray(variant.declarations)) {
 			return "declarations must be an array of strings";
 		}
-		if (!isStringArray(variant.selectors) || variant.selectors.length === 0) {
-			return "selectors must be a non-empty array of strings";
+		if (!isStringArray(variant.selectors)) {
+			return "selectors must be an array of strings";
+		}
+		// A selector-less variant is legitimate only for a declaration-only
+		// message -- one that exists purely to annotate an input, e.g.
+		// `local pointsNum = points: number`. Without such a declaration the
+		// message carries no variance at all and belongs in the plain string
+		// form, so an empty `selectors` there is a mistake, not a shape.
+		if (variant.selectors.length === 0 && !hasFormatDeclaration(variant)) {
+			return "selectors is empty and no formatter is declared";
 		}
 		const entries = Object.entries(variant.match ?? {});
 		if (entries.length === 0) return "match has no variants";

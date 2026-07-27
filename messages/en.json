@@ -101,12 +101,14 @@
 			"declarations": [
 				"input done",
 				"input total",
-				"local donePlural = done: plural"
+				"local doneNum = done: number",
+				"local donePlural = done: plural",
+				"local totalNum = total: number"
 			],
 			"selectors": ["donePlural"],
 			"match": {
-				"donePlural=one": "{done} of {total} complete",
-				"donePlural=other": "{done} of {total} complete"
+				"donePlural=one": "{doneNum} of {totalNum} complete",
+				"donePlural=other": "{doneNum} of {totalNum} complete"
 			}
 		}
 	],
@@ -236,11 +238,15 @@
 	"due_tomorrow": "Tomorrow",
 	"list_completed_count": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} item completed",
-				"countPlural=other": "{count} items completed"
+				"countPlural=one": "{countNum} item completed",
+				"countPlural=other": "{countNum} items completed"
 			}
 		}
 	],
@@ -282,7 +288,20 @@
 	"shopping_category_other": "Other",
 	"task_reorder_handle": "Reorder task",
 	"task_priority_aria": "Priority: {priority}",
-	"task_subtask_progress": "{done}/{total}",
+	"task_subtask_progress": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "{doneNum}/{totalNum}"
+			}
+		}
+	],
 	"subtasks_expand": "Expand subtasks",
 	"subtasks_collapse": "Collapse subtasks",
 	"task_detail_title": "Task details",
@@ -366,41 +385,60 @@
 	],
 	"recurrence_summary_daily": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Every day",
-				"countPlural=other": "Every {count} days"
+				"countPlural=other": "Every {countNum} days"
 			}
 		}
 	],
 	"recurrence_summary_weekly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input days",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Every week on {days}",
-				"countPlural=other": "Every {count} weeks on {days}"
+				"countPlural=other": "Every {countNum} weeks on {days}"
 			}
 		}
 	],
 	"recurrence_summary_monthly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input monthday",
+				"local countNum = count: number",
+				"local countPlural = count: plural",
+				"local monthdayNum = monthday: number"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "Every month on day {monthday}",
-				"countPlural=other": "Every {count} months on day {monthday}"
+				"countPlural=one": "Every month on day {monthdayNum}",
+				"countPlural=other": "Every {countNum} months on day {monthdayNum}"
 			}
 		}
 	],
 	"recurrence_summary_yearly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Every year",
-				"countPlural=other": "Every {count} years"
+				"countPlural=other": "Every {countNum} years"
 			}
 		}
 	],
@@ -409,7 +447,19 @@
 	"reminder_set_at": "Reminder set {time}",
 	"reminder_deferred_until": "Deferred until {when}",
 	"reminder_until_quiet_hours_end": "quiet hours end",
-	"reminder_escalating": "Escalating ({count} of {max})",
+	"reminder_escalating": [
+		{
+			"declarations": [
+				"input count",
+				"input max",
+				"local countNum = count: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Escalating ({countNum} of {max})"
+			}
+		}
+	],
 	"reminder_max_unknown": "?",
 	"reminder_acked": "Acknowledged",
 	"reminder_failed": "Reminder failed",
@@ -512,21 +562,29 @@
 	"calendar_day_today": "{date}, today",
 	"filter_multi_selected": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} selected",
-				"countPlural=other": "{count} selected"
+				"countPlural=one": "{countNum} selected",
+				"countPlural=other": "{countNum} selected"
 			}
 		}
 	],
 	"board_column_count": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} item",
-				"countPlural=other": "{count} items"
+				"countPlural=one": "{countNum} item",
+				"countPlural=other": "{countNum} items"
 			}
 		}
 	],
@@ -549,11 +607,15 @@
 	"panel_replace_view": "Replace view",
 	"panel_label_habits": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} habit",
-				"countPlural=other": "{count} habits"
+				"countPlural=one": "{countNum} habit",
+				"countPlural=other": "{countNum} habits"
 			}
 		}
 	],
@@ -588,27 +650,78 @@
 	"panel_field_view": "View",
 	"panel_view_placeholder": "Select a view...",
 	"panel_no_views": "No saved views yet.",
-	"panel_habits_legend": "Habits (pick {min}-{max})",
+	"panel_habits_legend": [
+		{
+			"declarations": [
+				"input max",
+				"input min",
+				"local maxNum = max: number",
+				"local minNum = min: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Habits (pick {minNum}-{maxNum})"
+			}
+		}
+	],
 	"panel_habit_missing": "Missing habit (deleted or not shared with you)",
 	"panel_no_habits": "No habits yet. Add tasks to a habits list first.",
 	"panel_field_range": "Range",
 	"panel_range_today": "Today",
 	"panel_range_week": "Last 7 days",
 	"panel_field_size": "Size",
-	"panel_field_limit": "Limit ({min}-{max})",
+	"panel_field_limit": [
+		{
+			"declarations": [
+				"input max",
+				"input min",
+				"local maxNum = max: number",
+				"local minNum = min: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Limit ({minNum}-{maxNum})"
+			}
+		}
+	],
 	"panel_field_title": "Title (optional)",
 	"panel_title_placeholder": "Panel title",
 	"panel_mobile_hint": "On phones, panels stack in dashboard order.",
 	"panel_no_matches": "No matching tasks",
-	"panel_show_all": "Show all ({count})",
-	"panel_expand_title": "{label} ({count})",
+	"panel_show_all": [
+		{
+			"declarations": ["input count", "local countNum = count: number"],
+			"selectors": [],
+			"match": {
+				"*": "Show all ({countNum})"
+			}
+		}
+	],
+	"panel_expand_title": [
+		{
+			"declarations": [
+				"input count",
+				"input label",
+				"local countNum = count: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "{label} ({countNum})"
+			}
+		}
+	],
 	"panel_counter_aria": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"input label",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{label}: {count} matching task. Show them",
-				"countPlural=other": "{label}: {count} matching tasks. Show them"
+				"countPlural=one": "{label}: {countNum} matching task. Show them",
+				"countPlural=other": "{label}: {countNum} matching tasks. Show them"
 			}
 		}
 	],
@@ -617,12 +730,14 @@
 			"declarations": [
 				"input count",
 				"input pct",
-				"local countPlural = count: plural"
+				"local countNum = count: number",
+				"local countPlural = count: plural",
+				"local pctNum = pct: number"
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} day streak, {pct}% on track",
-				"countPlural=other": "{count} day streak, {pct}% on track"
+				"countPlural=one": "{countNum} day streak, {pctNum}% on track",
+				"countPlural=other": "{countNum} day streak, {pctNum}% on track"
 			}
 		}
 	],
@@ -644,12 +759,13 @@
 		{
 			"declarations": [
 				"input minutes",
+				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
 			"selectors": ["minutesPlural"],
 			"match": {
-				"minutesPlural=one": "{minutes} min focused",
-				"minutesPlural=other": "{minutes} min focused"
+				"minutesPlural=one": "{minutesNum} min focused",
+				"minutesPlural=other": "{minutesNum} min focused"
 			}
 		}
 	],
@@ -663,15 +779,27 @@
 	"habit_done_today_aria": "Done today",
 	"habit_streak_days": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{count} day",
-				"countPlural=other": "{count} days"
+				"countPlural=one": "{countNum} day",
+				"countPlural=other": "{countNum} days"
 			}
 		}
 	],
-	"habit_adherence": "{pct}% on track",
+	"habit_adherence": [
+		{
+			"declarations": ["input pct", "local pctNum = pct: number"],
+			"selectors": [],
+			"match": {
+				"*": "{pctNum}% on track"
+			}
+		}
+	],
 	"habit_heatmap_done": "{date}: done",
 	"habit_heatmap_skipped": "{date}: skipped",
 	"habit_heatmap_missed": "{date}: missed",
@@ -680,7 +808,20 @@
 	"focus_phase_work": "Focus",
 	"focus_phase_break": "Break",
 	"focus_phase_long_break": "Long break",
-	"focus_round_of": "Round {round} of {total}",
+	"focus_round_of": [
+		{
+			"declarations": [
+				"input round",
+				"input total",
+				"local roundNum = round: number",
+				"local totalNum = total: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Round {roundNum} of {totalNum}"
+			}
+		}
+	],
 	"focus_start_action": "Start",
 	"focus_pause_action": "Pause",
 	"focus_skip_action": "Skip",
@@ -693,12 +834,13 @@
 		{
 			"declarations": [
 				"input seconds",
+				"local secondsNum = seconds: number",
 				"local secondsPlural = seconds: plural"
 			],
 			"selectors": ["secondsPlural"],
 			"match": {
-				"secondsPlural=one": "{seconds}s focused",
-				"secondsPlural=other": "{seconds}s focused"
+				"secondsPlural=one": "{secondsNum}s focused",
+				"secondsPlural=other": "{secondsNum}s focused"
 			}
 		}
 	],
@@ -706,12 +848,13 @@
 		{
 			"declarations": [
 				"input minutes",
+				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
 			"selectors": ["minutesPlural"],
 			"match": {
-				"minutesPlural=one": "{minutes}m focused",
-				"minutesPlural=other": "{minutes}m focused"
+				"minutesPlural=one": "{minutesNum}m focused",
+				"minutesPlural=other": "{minutesNum}m focused"
 			}
 		}
 	],
@@ -720,12 +863,13 @@
 			"declarations": [
 				"input hours",
 				"input minutes",
+				"local hoursNum = hours: number",
 				"local hoursPlural = hours: plural"
 			],
 			"selectors": ["hoursPlural"],
 			"match": {
-				"hoursPlural=one": "{hours}h {minutes}m focused",
-				"hoursPlural=other": "{hours}h {minutes}m focused"
+				"hoursPlural=one": "{hoursNum}h {minutes}m focused",
+				"hoursPlural=other": "{hoursNum}h {minutes}m focused"
 			}
 		}
 	],
@@ -736,53 +880,123 @@
 	"karma_level_maxed_aria": [
 		{
 			"declarations": [
-				"input points",
 				"input level",
+				"input points",
+				"local levelNum = level: number",
+				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
 			"selectors": ["pointsPlural"],
 			"match": {
-				"pointsPlural=one": "Level {level}, max level reached, {points} point",
-				"pointsPlural=other": "Level {level}, max level reached, {points} points"
+				"pointsPlural=one": "Level {levelNum}, max level reached, {pointsNum} point",
+				"pointsPlural=other": "Level {levelNum}, max level reached, {pointsNum} points"
 			}
 		}
 	],
 	"karma_level_progress_aria": [
 		{
 			"declarations": [
-				"input span",
 				"input into",
 				"input level",
 				"input next",
+				"input span",
+				"local intoNum = into: number",
+				"local levelNum = level: number",
+				"local nextNum = next: number",
+				"local spanNum = span: number",
 				"local spanPlural = span: plural"
 			],
 			"selectors": ["spanPlural"],
 			"match": {
-				"spanPlural=one": "Level {level}, {into} of {span} point toward level {next}",
-				"spanPlural=other": "Level {level}, {into} of {span} points toward level {next}"
+				"spanPlural=one": "Level {levelNum}, {intoNum} of {spanNum} point toward level {nextNum}",
+				"spanPlural=other": "Level {levelNum}, {intoNum} of {spanNum} points toward level {nextNum}"
 			}
 		}
 	],
 	"karma_points_short": [
 		{
-			"declarations": ["input points", "local pointsPlural = points: plural"],
+			"declarations": [
+				"input points",
+				"local pointsNum = points: number",
+				"local pointsPlural = points: plural"
+			],
 			"selectors": ["pointsPlural"],
 			"match": {
-				"pointsPlural=one": "{points} pts",
-				"pointsPlural=other": "{points} pts"
+				"pointsPlural=one": "{pointsNum} pts",
+				"pointsPlural=other": "{pointsNum} pts"
 			}
 		}
 	],
 	"karma_level_max": "Max level",
-	"karma_level_next": "Next: {points}",
+	"karma_level_next": [
+		{
+			"declarations": ["input points", "local pointsNum = points: number"],
+			"selectors": [],
+			"match": {
+				"*": "Next: {pointsNum}"
+			}
+		}
+	],
 	"karma_goal_daily_title": "Daily",
 	"karma_goal_weekly_title": "Weekly",
 	"karma_goal_daily_unset_aria": "Daily goal not set",
 	"karma_goal_weekly_unset_aria": "Weekly goal not set",
-	"karma_goal_daily_aria": "Daily goal {done} of {goal}",
-	"karma_goal_weekly_aria": "Weekly goal {done} of {goal}",
-	"karma_goal_daily_met_aria": "Daily goal {done} of {goal}, met",
-	"karma_goal_weekly_met_aria": "Weekly goal {done} of {goal}, met",
+	"karma_goal_daily_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Daily goal {doneNum} of {goalNum}"
+			}
+		}
+	],
+	"karma_goal_weekly_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Weekly goal {doneNum} of {goalNum}"
+			}
+		}
+	],
+	"karma_goal_daily_met_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Daily goal {doneNum} of {goalNum}, met"
+			}
+		}
+	],
+	"karma_goal_weekly_met_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input goal",
+				"local doneNum = done: number",
+				"local goalNum = goal: number"
+			],
+			"selectors": [],
+			"match": {
+				"*": "Weekly goal {doneNum} of {goalNum}, met"
+			}
+		}
+	],
 	"karma_goal_unset_value": "Not set",
 	"karma_ledger_heading": "Karma updates",
 	"karma_ledger_loading": "Loading…",
@@ -856,11 +1070,15 @@
 	"assignee_open": "Assign",
 	"assignee_open_count": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "Assignees ({count})",
-				"countPlural=other": "Assignees ({count})"
+				"countPlural=one": "Assignees ({countNum})",
+				"countPlural=other": "Assignees ({countNum})"
 			}
 		}
 	],

@@ -2,6 +2,7 @@ import { useQuery } from "@rocicorp/zero/react";
 import { useMemo } from "react";
 import { m } from "../../../paraglide/messages.js";
 import { queries } from "../../../zero/queries.ts";
+import { formatList } from "../../lib/intl-format.ts";
 import { MemberAvatar } from "./avatar.tsx";
 
 const MAX_SHOWN = 3;
@@ -45,7 +46,7 @@ export function AssigneeChips({ taskId }: { taskId: string }) {
 			data-testid="assignee-chips"
 			role="img"
 			className="flex items-center -space-x-2"
-			aria-label={m.assignee_chips_aria({ names: names.join(", ") })}
+			aria-label={m.assignee_chips_aria({ names: formatList(names) })}
 		>
 			{shown.map((a) => {
 				const u = users.get(a.userId);

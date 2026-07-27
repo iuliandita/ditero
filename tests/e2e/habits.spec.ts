@@ -315,8 +315,16 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 	);
 
 	// The heatmap cell is labelled with the user's LOCAL day (localDay), which is
-	// what the app both writes and reads -- not this process's UTC day.
+	// what the app both writes and reads -- not this process's UTC day. The label
+	// renders that day through Intl in the active locale, so the raw key must not
+	// reach the DOM.
 	const today = await browserToday(page);
+	const [y, mo, d] = today.split("-").map(Number);
+	const todayLabel = new Intl.DateTimeFormat("en", {
+		month: "short",
+		day: "numeric",
+	}).format(new Date(y ?? 0, (mo ?? 1) - 1, d ?? 1));
+	expect(todayLabel).not.toBe(today);
 
 	// Mark done for today -> streak advances, primary reflects done, heatmap cell.
 	await card.getByTestId("habit-done").click();
@@ -325,7 +333,9 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 		"aria-pressed",
 		"true",
 	);
-	await expect(card.getByRole("img", { name: `${today}: done` })).toBeVisible();
+	await expect(
+		card.getByRole("img", { name: `${todayLabel}: done` }),
+	).toBeVisible();
 
 	// Undo -> back to unlogged (streak 0, primary not pressed).
 	await card.getByTestId("habit-undo").click();
@@ -342,7 +352,7 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 		"true",
 	);
 	await expect(
-		card.getByRole("img", { name: `${today}: skipped` }),
+		card.getByRole("img", { name: `${todayLabel}: skipped` }),
 	).toBeVisible();
 
 	// Axe the habit list surface.

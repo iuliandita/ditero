@@ -11,6 +11,7 @@ import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
+import { formatList } from "../../lib/intl-format.ts";
 import { MemberAvatar } from "./avatar.tsx";
 
 const INVITE_ROLES = new Set(["owner", "admin", "member"]);
@@ -376,7 +377,7 @@ export function CommentThread({
 				>
 					<p>
 						{m.mention_invite_confirm({
-							names: mentionInvites.map((i) => i.name).join(", "),
+							names: formatList(mentionInvites.map((i) => i.name)),
 						})}
 					</p>
 					<p className="text-xs text-muted-foreground">

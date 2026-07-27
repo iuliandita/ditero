@@ -313,6 +313,52 @@ describe("validateCatalogs", () => {
 		expect(issuesOf({ en: en(), de }, "shape")).toHaveLength(1);
 	});
 
+	test("a declaration-only number message needs no selector", () => {
+		const withNumber = (points: string): Catalog[string] => [
+			{
+				declarations: ["input points", "local pointsNum = points: number"],
+				selectors: [],
+				match: { "*": points },
+			},
+		];
+		const result = validateCatalogs({
+			en: { ...en(), karma_points_short: withNumber("{pointsNum} pts") },
+			de: {
+				...translated(),
+				karma_points_short: withNumber("{pointsNum} Pkt."),
+			},
+		});
+		expect(result.issues).toEqual([]);
+	});
+
+	test("an empty selector list without a formatter is still a shape fault", () => {
+		const de = translated({
+			board_column_count: [
+				{
+					declarations: ["input count"],
+					selectors: [],
+					match: { "*": "{count} Elemente" },
+				},
+			],
+		});
+		const found = issuesOf({ en: en(), de }, "shape");
+		expect(found).toHaveLength(1);
+		expect(found[0]?.detail).toMatch(/no formatter is declared/);
+	});
+
+	test("a selector-less variant still rejects a categorised match key", () => {
+		const de = translated({
+			board_column_count: [
+				{
+					declarations: ["input count", "local countNum = count: number"],
+					selectors: [],
+					match: { "countPlural=one": "{countNum} Element" },
+				},
+			],
+		});
+		expect(issuesOf({ en: en(), de }, "shape")).toHaveLength(1);
+	});
+
 	test("malformed variant objects are reported, not thrown", () => {
 		const de = translated({
 			board_column_count: [

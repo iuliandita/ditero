@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 import type { KarmaEvent } from "../../../zero/schema.gen.ts";
+import { formatDayKey } from "../../lib/intl-format.ts";
 import { reasonLabel } from "./karma-format.ts";
 
 // Reverse-chronological karma ledger (shell doc 5): every point traces to an
@@ -40,7 +41,9 @@ export function KarmaLedger({ events }: { events: KarmaEvent[] }) {
 					>
 						<span className="flex min-w-0 flex-col">
 							<span className="truncate">{reasonLabel(e.reason)}</span>
-							<span className="text-xs text-muted-foreground">{e.date}</span>
+							<span className="text-xs text-muted-foreground">
+								{formatDayKey(e.date)}
+							</span>
 						</span>
 						<span
 							data-testid="karma-ledger-delta"
