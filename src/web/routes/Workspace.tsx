@@ -705,7 +705,7 @@ function NormalWorkspace() {
 							{!isDesktop && !isLanding && (
 								<button
 									type="button"
-									aria-label={m.view_back()}
+									aria-label={m.action_back()}
 									onClick={() => setOpenViewId(null)}
 									className="flex size-9 shrink-0 items-center justify-center rounded-lg"
 								>
@@ -874,7 +874,7 @@ function NormalWorkspace() {
 							{isDesktop ? (
 								<h2 className="text-base font-semibold">
 									{workspaces.find((w) => w.id === activeId)?.name ??
-										m.workspace_heading_fallback()}
+										m.workspace_name_fallback()}
 								</h2>
 							) : (
 								// Mobile: the workspace name doubles as the switcher trigger.
@@ -885,7 +885,7 @@ function NormalWorkspace() {
 									className="text-base font-semibold"
 								>
 									{workspaces.find((w) => w.id === activeId)?.name ??
-										m.workspace_heading_fallback()}
+										m.workspace_name_fallback()}
 								</button>
 							)}
 						</div>

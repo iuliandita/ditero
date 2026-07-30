@@ -413,7 +413,7 @@ export function DashboardView({
 				{!isDesktop && (
 					<button
 						type="button"
-						aria-label={m.dashboard_back()}
+						aria-label={m.action_back()}
 						onClick={onBack}
 						className="flex size-9 shrink-0 items-center justify-center rounded-lg"
 					>
