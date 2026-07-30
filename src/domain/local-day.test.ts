@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localDay } from "./local-day.ts";
+import { localDay, shiftDay } from "./local-day.ts";
 
 describe("localDay", () => {
 	it("keeps an evening completion west of UTC on the local day", () => {
@@ -41,5 +41,39 @@ describe("localDay", () => {
 
 	it("throws rather than guessing when the zone is missing", () => {
 		expect(() => localDay(new Date(), "")).toThrow(/timezone/);
+	});
+});
+
+describe("shiftDay", () => {
+	it("moves by calendar days in both directions", () => {
+		expect(shiftDay("2026-07-16", 1)).toBe("2026-07-17");
+		expect(shiftDay("2026-07-16", -6)).toBe("2026-07-10");
+		expect(shiftDay("2026-07-16", 0)).toBe("2026-07-16");
+	});
+
+	it("rolls over month and year boundaries", () => {
+		expect(shiftDay("2026-07-31", 1)).toBe("2026-08-01");
+		expect(shiftDay("2026-01-01", -1)).toBe("2025-12-31");
+		expect(shiftDay("2028-02-28", 1)).toBe("2028-02-29"); // leap year
+	});
+
+	// The reason this is key arithmetic and not `ms + 86_400_000`: a DST day is
+	// 23 or 25 hours, so adding a fixed day to an instant inside such a day lands
+	// on the wrong local date. Day keys have no offset to get wrong.
+	it("crosses a DST transition without skipping or repeating a day", () => {
+		// US spring-forward 2026-03-08 (23h day).
+		expect(shiftDay("2026-03-07", 1)).toBe("2026-03-08");
+		expect(shiftDay("2026-03-08", 1)).toBe("2026-03-09");
+		// US fall-back 2026-11-01 (25h day).
+		expect(shiftDay("2026-10-31", 2)).toBe("2026-11-02");
+	});
+
+	it("spans a whole DST-containing week as exactly 7 days", () => {
+		expect(shiftDay("2026-11-03", -6)).toBe("2026-10-28");
+	});
+
+	it("rejects a malformed key rather than producing NaN", () => {
+		expect(() => shiftDay("2026-7-4", 1)).toThrow(/invalid day key/);
+		expect(() => shiftDay("not a date", 1)).toThrow(/invalid day key/);
 	});
 });

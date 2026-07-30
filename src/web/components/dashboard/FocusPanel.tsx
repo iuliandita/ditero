@@ -2,6 +2,7 @@ import { type JSX, useMemo } from "react";
 import type { Panel } from "../../../domain/dashboard.ts";
 import { m } from "../../../paraglide/messages.js";
 import { useFocusSessions } from "../../hooks/useFocusSessions.ts";
+import { useUserPref } from "../../hooks/useUserPref.ts";
 import { focusStats } from "./focus-stats.ts";
 
 // Own-user focus stats (shell doc: scaled-down stat treatment, label in the
@@ -13,11 +14,12 @@ export function FocusPanel({
 	panel: Extract<Panel, { type: "focus" }>;
 }): JSX.Element {
 	const { sessions } = useFocusSessions();
+	const { pref } = useUserPref();
 	// `now` derives inside the memo (not a dep) so stats refresh when the data
 	// changes without re-running on every render (M1c pattern).
 	const stats = useMemo(
-		() => focusStats(sessions, panel.range, new Date()),
-		[sessions, panel.range],
+		() => focusStats(sessions, panel.range, new Date(), pref.timezone),
+		[sessions, panel.range, pref.timezone],
 	);
 	return (
 		<div

@@ -37,6 +37,7 @@ import type {
 	WorkspaceScope,
 } from "../../../domain/view-filter.ts";
 import { m } from "../../../paraglide/messages.js";
+import { useUserPref } from "../../hooks/useUserPref.ts";
 import { FilterBuilder } from "../views/FilterBuilder.tsx";
 import { SORT_FIELD_LABELS, SORT_FIELDS } from "../views/filter-options.ts";
 import { SIZE_LABEL } from "./PanelFrame.tsx";
@@ -160,6 +161,7 @@ export function AddPanelDialog({
 }): JSX.Element {
 	const isDesktop = useIsDesktop();
 	const baseId = useId();
+	const { pref } = useUserPref();
 	const firstWorkspace = workspaces[0]?.id ?? "";
 
 	const [type, setType] = useState<PanelType | null>(initial?.type ?? null);
@@ -353,6 +355,7 @@ export function AddPanelDialog({
 							folders={folders}
 							labels={labels}
 							members={members}
+							timeZone={pref.timezone}
 						/>
 					</Field>
 					<div className="grid grid-cols-2 gap-3">
