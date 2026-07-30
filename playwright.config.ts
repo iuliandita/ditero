@@ -65,11 +65,10 @@ export default defineConfig({
 	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 	webServer: [
 		{
-			// Not `dev:server`: under `--hot` bun re-imports on any watched-file
-			// change, and vite's paraglide plugin rewrites the generated
-			// src/paraglide tree (locale-modules in dev vs the CLI's
-			// message-modules) once it boots after these servers -- the deleted
-			// per-message files then kill the re-import.
+			// Not `dev:server`: `--hot` orphans child processes, which then squat
+			// these ports on the next run. (It also used to die on vite's paraglide
+			// tree rewrite; that cause is gone since the output structure is pinned
+			// in paraglide.options.ts, but the orphaning stands on its own.)
 			command: "bun run src/server/index.ts",
 			port: 3000,
 			reuseExistingServer: false,
