@@ -725,9 +725,10 @@
 			}
 		}
 	],
-	"panel_streak_summary": [
+	"panel_streak_row_aria": [
 		{
 			"declarations": [
+				"input title",
 				"input count",
 				"input pct",
 				"local countNum = count: number",
@@ -736,13 +737,12 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{countNum} day streak, {pctNum}% on track",
-				"countPlural=other": "{countNum} day streak, {pctNum}% on track"
+				"countPlural=one": "{title}: {countNum} day streak, {pctNum}% on track. Open task",
+				"countPlural=other": "{title}: {countNum} day streak, {pctNum}% on track. Open task"
 			}
 		}
 	],
-	"panel_streak_no_recurrence_summary": "no recurrence set",
-	"panel_streak_row_aria": "{title}: {summary}. Open task",
+	"panel_streak_no_recurrence_row_aria": "{title}: no recurrence set. Open task",
 	"panel_streak_no_recurrence": "No recurrence",
 	"panel_streak_missing": "Habit missing (deleted or not shared with you)",
 	"panel_focus_sessions_unit": [

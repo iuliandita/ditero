@@ -739,9 +739,10 @@
 			}
 		}
 	],
-	"panel_streak_summary": [
+	"panel_streak_row_aria": [
 		{
 			"declarations": [
+				"input title",
 				"input count",
 				"input pct",
 				"local countNum = count: number",
@@ -750,14 +751,13 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "Racha de {countNum} día, {pctNum}% cumplido",
-				"countPlural=many": "Racha de {countNum} días, {pctNum}% cumplido",
-				"countPlural=other": "Racha de {countNum} días, {pctNum}% cumplido"
+				"countPlural=one": "{title}: racha de {countNum} día, {pctNum}% cumplido. Abrir la tarea",
+				"countPlural=many": "{title}: racha de {countNum} días, {pctNum}% cumplido. Abrir la tarea",
+				"countPlural=other": "{title}: racha de {countNum} días, {pctNum}% cumplido. Abrir la tarea"
 			}
 		}
 	],
-	"panel_streak_no_recurrence_summary": "sin repetición configurada",
-	"panel_streak_row_aria": "{title}: {summary}. Abrir la tarea",
+	"panel_streak_no_recurrence_row_aria": "{title}: sin repetición configurada. Abrir la tarea",
 	"panel_streak_no_recurrence": "Sin repetición",
 	"panel_streak_missing": "Falta el hábito (se eliminó o no está compartido contigo)",
 	"panel_focus_sessions_unit": [

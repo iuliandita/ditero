@@ -32,17 +32,20 @@ function StreakRow({
 		[task.rrule, entries, today],
 	);
 
-	const summary = streak
-		? m.panel_streak_summary({
+	// Whole message per case: the label must never be assembled from a
+	// translated fragment, since word order cannot move across that seam.
+	const label = streak
+		? m.panel_streak_row_aria({
+				title: task.title,
 				count: streak.current,
 				pct: streak.adherencePct,
 			})
-		: m.panel_streak_no_recurrence_summary();
+		: m.panel_streak_no_recurrence_row_aria({ title: task.title });
 	return (
 		<button
 			type="button"
 			data-testid="streak-row"
-			aria-label={m.panel_streak_row_aria({ title: task.title, summary })}
+			aria-label={label}
 			onClick={() => onOpenTask(task)}
 			className="flex w-full items-center gap-2 rounded px-1 py-1.5 text-start hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 		>
