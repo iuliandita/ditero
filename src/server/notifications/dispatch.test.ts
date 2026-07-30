@@ -106,6 +106,22 @@ describe("renderPayload locale threading", () => {
 		expect(seen.at(-1)).toBe("en");
 	});
 
+	// The adapters render the ack button themselves, so the resolved locale has
+	// to reach them on the payload, not just the already-rendered body.
+	it.each([
+		["a reminder", () => reminder("ro")],
+		[
+			"an event",
+			() => ({ kind: "assign", taskId: "t1", taskTitle: "x", locale: "ro" }),
+		],
+	])("carries the resolved locale onto %s payload", (_label, build) => {
+		expect(renderPayload(build())?.locale).toBe("ro");
+	});
+
+	it("carries the en fallback onto the payload too", () => {
+		expect(renderPayload(reminder("kl"))?.locale).toBe("en");
+	});
+
 	// An undefined `locale` option is exactly what sends Paraglide to its ambient
 	// getLocale, which is process-global and shared by concurrent sends.
 	it("never leaves the locale for the ambient runtime to resolve", () => {

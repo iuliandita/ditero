@@ -22,6 +22,7 @@ const payload: ChannelPayload = {
 	body: "Due 2026-08-01T09:00:00.000Z",
 	urgent: false,
 	ackUrl: "https://app.example.test/api/notifications/ack/abc123",
+	locale: "en" as const,
 };
 
 function context(

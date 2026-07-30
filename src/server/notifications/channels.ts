@@ -16,12 +16,14 @@ import {
 	maskChannelConfig,
 	restoreChannelConfig,
 } from "../../domain/notification-channel.ts";
+import { m } from "../../paraglide/messages.js";
 import {
 	channelKeyRing,
 	decryptChannelConfig,
 	encryptChannelConfig,
 } from "../../security/channel-config.ts";
 import type { safeFetch } from "../../security/safe-http.ts";
+import { resolveRecipientLocale } from "../recipient-locale.ts";
 import { discordAdapter } from "./adapters/discord.ts";
 import { emailAdapter } from "./adapters/email.ts";
 import { ntfyAdapter } from "./adapters/ntfy.ts";
@@ -496,6 +498,9 @@ export async function testChannel(
 		view.kind,
 		ackBaseUrl(env),
 	);
+	// The caller is the recipient here, so their stored preference is the one
+	// the test message renders in -- including the ack button the adapter adds.
+	const locale = await resolveRecipientLocale(database, userId);
 	const timing = workerTiming(env);
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timing.adapterDeadlineMs);
@@ -504,10 +509,11 @@ export async function testChannel(
 		result = await adapter.send(
 			config,
 			{
-				title: "Ditero test",
-				body: "Test notification from Ditero.",
+				title: m.notify_test_title({}, { locale }),
+				body: m.notify_test_body({}, { locale }),
 				urgent: false,
 				ackUrl,
+				locale,
 			},
 			{
 				allowedPrivateCIDRs: notifyAllowedPrivateCIDRs(

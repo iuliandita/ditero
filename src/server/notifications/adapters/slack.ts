@@ -1,8 +1,10 @@
+import type { Locale } from "../../../domain/locale.ts";
 import {
 	channelConfigSchema,
 	redactUrlsIn,
 } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
+import { m } from "../../../paraglide/messages.js";
 import { OutboundPolicyError, safeFetch } from "../../../security/safe-http.ts";
 import { retryAfterSeconds } from "./retry-after.ts";
 import type {
@@ -21,7 +23,6 @@ const ACK_URL_MAX = 3_000;
 export const ACTION_ID_MAX = 255;
 export const ACTION_VALUE_MAX = 2_000;
 const RESPONSE_MAX_BYTES = 64 * 1_024;
-const ACK_LABEL = "Done";
 
 // docs.slack.dev/reference/methods/chat.postMessage (checked 2026-07-23): POST,
 // JSON accepted, token "passed as an HTTP Authorization header".
@@ -89,7 +90,7 @@ function escapeSlackText(value: string): string {
 
 // Anything that would yield a 400 instead of a button yields no button: the
 // notification still arrives and stays ackable in-app.
-function ackButton(ackUrl: string | null): LinkButton | null {
+function ackButton(ackUrl: string | null, locale: Locale): LinkButton | null {
 	if (!ackUrl || ackUrl.length > ACK_URL_MAX) return null;
 	try {
 		const protocol = new URL(ackUrl).protocol;
@@ -99,7 +100,7 @@ function ackButton(ackUrl: string | null): LinkButton | null {
 	}
 	return {
 		type: "button",
-		text: { type: "plain_text", text: ACK_LABEL },
+		text: { type: "plain_text", text: m.notify_ack_label({}, { locale }) },
 		url: ackUrl,
 	};
 }
@@ -114,7 +115,7 @@ export function messageBlocks(payload: ChannelPayload): readonly SlackBlock[] {
 		0,
 		SECTION_TEXT_MAX,
 	);
-	const button = ackButton(payload.ackUrl);
+	const button = ackButton(payload.ackUrl, payload.locale);
 	return [
 		{ type: "section", text: { type: "plain_text", text } },
 		...(button ? [{ type: "actions" as const, elements: [button] }] : []),
@@ -194,7 +195,10 @@ export function appBlocks(payload: ChannelPayload): readonly AppBlock[] {
 						elements: [
 							{
 								type: "button" as const,
-								text: { type: "plain_text" as const, text: ACK_LABEL },
+								text: {
+									type: "plain_text" as const,
+									text: m.notify_ack_label({}, { locale: payload.locale }),
+								},
 								action_id: ACK_ACTION_ID,
 								value,
 							},

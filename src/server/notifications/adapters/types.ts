@@ -1,3 +1,4 @@
+import type { Locale } from "../../../domain/locale.ts";
 import type { ChannelKind } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
 import type { safeFetch } from "../../../security/safe-http.ts";
@@ -9,6 +10,12 @@ export type ChannelPayload = {
 	body: string;
 	urgent: boolean;
 	ackUrl: string | null;
+	// The body is rendered before it reaches the adapter, but the ack label is
+	// not: it is the adapter's own chrome, and each channel carries it
+	// differently (JSON body, text part, HTTP header). Carrying the locale rather
+	// than a rendered label keeps that choice with the channel that knows its
+	// encoding limits -- see ntfy.ts.
+	locale: Locale;
 };
 
 // The adapter receives its egress policy and its fetch explicitly (C16). A

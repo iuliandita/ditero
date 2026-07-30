@@ -1290,5 +1290,9 @@
 	"notify_assign_body": "Te han asignado esta tarea",
 	"notify_mention_body": "Te han mencionado en un comentario",
 	"notify_overdue_body": "Esta tarea está vencida",
-	"notify_overdue_body_due": "Esta tarea está vencida (vencía {due})"
+	"notify_overdue_body_due": "Esta tarea está vencida (vencía {due})",
+	"notify_ack_label": "Hecho",
+	"notify_ack_email_prefix": "Marcar como hecho:",
+	"notify_test_title": "Prueba de Ditero",
+	"notify_test_body": "Notificación de prueba de Ditero."
 }

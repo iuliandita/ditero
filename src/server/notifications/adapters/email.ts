@@ -9,6 +9,7 @@ import type {
 	ChannelErrorCode,
 	ProviderResult,
 } from "../../../domain/notification-retry.ts";
+import { m } from "../../../paraglide/messages.js";
 import { mailerFromEnv } from "../../mail/transport.ts";
 import type {
 	AdapterContext,
@@ -19,7 +20,6 @@ import { permanent } from "./types.ts";
 
 const SUBJECT_MAX = 200;
 const BODY_MAX = 4_000;
-const ACK_LABEL = "Mark it done:";
 
 // classifyRetry reads HTTP semantics, where 5xx retries and 4xx (bar 429) is
 // final. SMTP is the other way round, so a permanent SMTP rejection has to be
@@ -42,7 +42,10 @@ const PERMANENT_STATUS: Record<ChannelErrorCode, number> = {
 
 function body(payload: ChannelPayload): string {
 	const lines = [payload.title, "", payload.body];
-	if (payload.ackUrl) lines.push("", `${ACK_LABEL} ${payload.ackUrl}`);
+	if (payload.ackUrl) {
+		const prefix = m.notify_ack_email_prefix({}, { locale: payload.locale });
+		lines.push("", `${prefix} ${payload.ackUrl}`);
+	}
 	return lines.join("\n").slice(0, BODY_MAX);
 }
 

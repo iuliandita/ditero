@@ -1290,5 +1290,9 @@
 	"notify_assign_body": "Cette tâche t'a été assignée",
 	"notify_mention_body": "Tu as été mentionné dans un commentaire",
 	"notify_overdue_body": "Cette tâche est en retard",
-	"notify_overdue_body_due": "Cette tâche est en retard (échéance {due})"
+	"notify_overdue_body_due": "Cette tâche est en retard (échéance {due})",
+	"notify_ack_label": "Fait",
+	"notify_ack_email_prefix": "Marquer comme fait :",
+	"notify_test_title": "Test Ditero",
+	"notify_test_body": "Notification de test de Ditero."
 }
