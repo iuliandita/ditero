@@ -2,6 +2,7 @@ import { useState } from "react";
 import { m } from "../../paraglide/messages.js";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { authClient } from "../lib/auth-client.ts";
+import { authErrorMessage } from "../lib/auth-messages.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
 
 export function Login() {
@@ -17,7 +18,8 @@ export function Login() {
 		// Email verification is off, so signup yields an active session directly.
 		const name = email.split("@")[0] || email;
 		const res = await authClient.signUp.email({ email, password, name });
-		if (res.error) setError(res.error.message ?? m.login_error_signup_failed());
+		if (res.error)
+			setError(authErrorMessage(res.error, m.login_error_signup_failed));
 	}
 
 	async function signIn() {
@@ -32,13 +34,14 @@ export function Login() {
 		setError(null);
 		const res = await authClient.signIn.passkey();
 		if (res.error)
-			setError(res.error.message ?? m.login_error_passkey_failed());
+			setError(authErrorMessage(res.error, m.login_error_passkey_failed));
 	}
 
 	async function verifyTOTP() {
 		setError(null);
 		const res = await authClient.twoFactor.verifyTotp({ code: twoFactorCode });
-		if (res.error) setError(res.error.message ?? m.login_error_invalid_totp());
+		if (res.error)
+			setError(authErrorMessage(res.error, m.login_error_invalid_totp));
 	}
 
 	async function verifyBackupCode() {
@@ -47,7 +50,7 @@ export function Login() {
 			code: backupCode,
 		});
 		if (res.error)
-			setError(res.error.message ?? m.login_error_invalid_backup_code());
+			setError(authErrorMessage(res.error, m.login_error_invalid_backup_code));
 	}
 
 	if (needsTwoFactor) {

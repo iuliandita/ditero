@@ -1,4 +1,5 @@
 import { m } from "../../paraglide/messages.js";
+import { authErrorMessage } from "./auth-messages.ts";
 
 type SignInResult =
 	| { kind: "signed-in" }
@@ -23,12 +24,13 @@ export async function signInEmail(
 	});
 	const body = (await response.json().catch(() => ({}))) as {
 		message?: string;
+		code?: string;
 		twoFactorRedirect?: boolean;
 	};
 	if (!response.ok) {
 		return {
 			kind: "error",
-			message: body.message ?? m.login_error_sign_in_failed(),
+			message: authErrorMessage(body, m.login_error_sign_in_failed),
 		};
 	}
 	if (body.twoFactorRedirect) return { kind: "two-factor" };
