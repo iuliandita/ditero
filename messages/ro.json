@@ -265,6 +265,8 @@
 	"quickadd_input_label": "Adăugare rapidă de sarcină",
 	"quickadd_sheet_title": "Adăugare rapidă",
 	"quickadd_placeholder": "ex. Cumpără lapte {date} {priority} {label} {list}",
+	"quickadd_placeholder_nodate": "de ex. Cumpără lapte {priority} {label} {list}",
+	"quickadd_example_date": "mâine",
 	"quickadd_adding_to": "Se adaugă în {list}",
 	"quickadd_no_list": "Nicio listă disponibilă",
 	"quickadd_failed": "Nu am putut adăuga sarcina.",

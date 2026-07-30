@@ -263,6 +263,8 @@
 	"quickadd_input_label": "Aufgabe schnell hinzufügen",
 	"quickadd_sheet_title": "Schnell hinzufügen",
 	"quickadd_placeholder": "z. B. Milch kaufen {date} {priority} {label} {list}",
+	"quickadd_placeholder_nodate": "z. B. Milch kaufen {priority} {label} {list}",
+	"quickadd_example_date": "morgen",
 	"quickadd_adding_to": "Wird zu {list} hinzugefügt",
 	"quickadd_no_list": "Keine Liste verfügbar",
 	"quickadd_failed": "Die Aufgabe konnte nicht hinzugefügt werden.",

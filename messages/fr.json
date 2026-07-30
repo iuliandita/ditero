@@ -265,6 +265,8 @@
 	"quickadd_input_label": "Ajout rapide d'une tâche",
 	"quickadd_sheet_title": "Ajout rapide",
 	"quickadd_placeholder": "ex. Acheter du lait {date} {priority} {label} {list}",
+	"quickadd_placeholder_nodate": "p. ex. Acheter du lait {priority} {label} {list}",
+	"quickadd_example_date": "demain",
 	"quickadd_adding_to": "Ajout dans {list}",
 	"quickadd_no_list": "Aucune liste disponible",
 	"quickadd_failed": "Impossible d'ajouter la tâche.",

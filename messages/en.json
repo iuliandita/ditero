@@ -263,6 +263,8 @@
 	"quickadd_input_label": "Quick add task",
 	"quickadd_sheet_title": "Quick add",
 	"quickadd_placeholder": "e.g. Buy milk {date} {priority} {label} {list}",
+	"quickadd_placeholder_nodate": "e.g. Buy milk {priority} {label} {list}",
+	"quickadd_example_date": "tomorrow",
 	"quickadd_adding_to": "Adding to {list}",
 	"quickadd_no_list": "No list available",
 	"quickadd_failed": "Could not add the task.",

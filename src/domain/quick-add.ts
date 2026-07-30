@@ -1,5 +1,30 @@
 import * as chrono from "chrono-node";
 
+// chrono ships parsers for some locales and not others. Where one exists the
+// user writes dates in their own language; where none does, natural-language
+// dates are OFF rather than falling back to English.
+//
+// Falling back is not the safe default it looks like. The English parser reads
+// ordinary Romanian words as dates: "mergem in sat" (we go to the village)
+// matches "sat" -> Saturday, and "sun la 5" (I call at 5) matches "sun" ->
+// Sunday. That silently attaches a due date to a task the user never dated,
+// which is worse than not parsing at all. Users on those locales set dates with
+// the picker; the placeholder stops advertising a date example.
+type DateParser = { parse: typeof chrono.parse };
+
+const DATE_PARSERS: Record<string, DateParser> = {
+	en: chrono,
+	de: chrono.de,
+	es: chrono.es,
+	fr: chrono.fr,
+};
+
+// Exported so the input hint can drop its date example on locales with no
+// parser instead of promising syntax that will not work.
+export function dateParserFor(locale: string): DateParser | null {
+	return Object.hasOwn(DATE_PARSERS, locale) ? DATE_PARSERS[locale] : null;
+}
+
 export type QuickAddToken = {
 	type: "date" | "priority" | "label" | "list";
 	text: string;
@@ -17,8 +42,12 @@ export type QuickAddParse = {
 	tokens: QuickAddToken[];
 };
 
-const LABEL_RE = /#([\w-]+)/g;
-const LIST_RE = /~([\w-]+)/g;
+// The sigil is grammar; the word after it is user content, so the character
+// class has to be Unicode. `\w` is ASCII-only and truncated every non-English
+// label -- "#casă" captured "cas", "#Küche" captured "K", "#уборка" matched
+// nothing at all (#90). \p{L}\p{N} is a strict superset of the old behaviour.
+const LABEL_RE = /#([\p{L}\p{N}_-]+)/gu;
+const LIST_RE = /~([\p{L}\p{N}_-]+)/gu;
 const PRIORITY_RE = /\bp([1-4])\b(?!@)/g;
 const PRIORITY_RANK: Record<string, 0 | 1 | 2 | 3> = {
 	"1": 3,
@@ -40,6 +69,7 @@ const emptyParse = (): QuickAddParse => ({
 export function parseQuickAdd(
 	input: string,
 	now: Date = new Date(),
+	locale = "en",
 ): QuickAddParse {
 	// Task 10 feeds an onChange value; guard the never-throws contract.
 	if (typeof input !== "string") return emptyParse();
@@ -83,7 +113,10 @@ export function parseQuickAdd(
 		mask(start, end);
 	}
 
-	const dateResults = chrono.parse(chars.join(""), now, { forwardDate: true });
+	const parser = dateParserFor(locale);
+	const dateResults = parser
+		? parser.parse(chars.join(""), now, { forwardDate: true })
+		: [];
 	let dueAt: Date | null = null;
 	let dueAllDay = true;
 	if (dateResults.length > 0) {
