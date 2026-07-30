@@ -781,9 +781,10 @@
 			}
 		}
 	],
-	"panel_streak_summary": [
+	"panel_streak_row_aria": [
 		{
 			"declarations": [
+				"input title",
 				"input count",
 				"input pct",
 				"local countNum = count: number",
@@ -792,17 +793,16 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=zero": "لا سلسلة، {pctNum}% على المسار",
-				"countPlural=one": "سلسلة يوم واحد، {pctNum}% على المسار",
-				"countPlural=two": "سلسلة يومين، {pctNum}% على المسار",
-				"countPlural=few": "سلسلة {countNum} أيام، {pctNum}% على المسار",
-				"countPlural=many": "سلسلة {countNum} يومًا، {pctNum}% على المسار",
-				"countPlural=other": "سلسلة {countNum} يوم، {pctNum}% على المسار"
+				"countPlural=zero": "{title}: لا سلسلة، {pctNum}% على المسار. فتح المهمة",
+				"countPlural=one": "{title}: سلسلة يوم واحد، {pctNum}% على المسار. فتح المهمة",
+				"countPlural=two": "{title}: سلسلة يومين، {pctNum}% على المسار. فتح المهمة",
+				"countPlural=few": "{title}: سلسلة {countNum} أيام، {pctNum}% على المسار. فتح المهمة",
+				"countPlural=many": "{title}: سلسلة {countNum} يومًا، {pctNum}% على المسار. فتح المهمة",
+				"countPlural=other": "{title}: سلسلة {countNum} يوم، {pctNum}% على المسار. فتح المهمة"
 			}
 		}
 	],
-	"panel_streak_no_recurrence_summary": "لا تكرار محدد",
-	"panel_streak_row_aria": "{title}: {summary}. فتح المهمة",
+	"panel_streak_no_recurrence_row_aria": "{title}: لا تكرار محدد. فتح المهمة",
 	"panel_streak_no_recurrence": "بلا تكرار",
 	"panel_streak_missing": "عادة مفقودة (محذوفة أو غير مشتركة معك)",
 	"panel_focus_sessions_unit": [

@@ -739,9 +739,10 @@
 			}
 		}
 	],
-	"panel_streak_summary": [
+	"panel_streak_row_aria": [
 		{
 			"declarations": [
+				"input title",
 				"input count",
 				"input pct",
 				"local countNum = count: number",
@@ -750,14 +751,13 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "Série de {countNum} jour, {pctNum}% de régularité",
-				"countPlural=many": "Série de {countNum} jours, {pctNum}% de régularité",
-				"countPlural=other": "Série de {countNum} jours, {pctNum}% de régularité"
+				"countPlural=one": "{title} : série de {countNum} jour, {pctNum}% de régularité. Ouvrir la tâche",
+				"countPlural=many": "{title} : série de {countNum} jours, {pctNum}% de régularité. Ouvrir la tâche",
+				"countPlural=other": "{title} : série de {countNum} jours, {pctNum}% de régularité. Ouvrir la tâche"
 			}
 		}
 	],
-	"panel_streak_no_recurrence_summary": "aucune répétition définie",
-	"panel_streak_row_aria": "{title} : {summary}. Ouvrir la tâche",
+	"panel_streak_no_recurrence_row_aria": "{title} : aucune répétition définie. Ouvrir la tâche",
 	"panel_streak_no_recurrence": "Aucune répétition",
 	"panel_streak_missing": "Habitude manquante (supprimée ou non partagée avec toi)",
 	"panel_focus_sessions_unit": [

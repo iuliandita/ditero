@@ -725,9 +725,10 @@
 			}
 		}
 	],
-	"panel_streak_summary": [
+	"panel_streak_row_aria": [
 		{
 			"declarations": [
+				"input title",
 				"input count",
 				"input pct",
 				"local countNum = count: number",
@@ -736,13 +737,12 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{countNum} Tag Serie, {pctNum}% im Plan",
-				"countPlural=other": "{countNum} Tage Serie, {pctNum}% im Plan"
+				"countPlural=one": "{title}: {countNum} Tag Serie, {pctNum}% im Plan. Aufgabe öffnen",
+				"countPlural=other": "{title}: {countNum} Tage Serie, {pctNum}% im Plan. Aufgabe öffnen"
 			}
 		}
 	],
-	"panel_streak_no_recurrence_summary": "keine Wiederholung festgelegt",
-	"panel_streak_row_aria": "{title}: {summary}. Aufgabe öffnen",
+	"panel_streak_no_recurrence_row_aria": "{title}: keine Wiederholung festgelegt. Aufgabe öffnen",
 	"panel_streak_no_recurrence": "Keine Wiederholung",
 	"panel_streak_missing": "Gewohnheit fehlt (gelöscht oder nicht mit dir geteilt)",
 	"panel_focus_sessions_unit": [

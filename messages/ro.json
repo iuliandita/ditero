@@ -739,9 +739,10 @@
 			}
 		}
 	],
-	"panel_streak_summary": [
+	"panel_streak_row_aria": [
 		{
 			"declarations": [
+				"input title",
 				"input count",
 				"input pct",
 				"local countNum = count: number",
@@ -750,14 +751,13 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "Serie de {countNum} zi, {pctNum}% respectat",
-				"countPlural=few": "Serie de {countNum} zile, {pctNum}% respectat",
-				"countPlural=other": "Serie de {countNum} de zile, {pctNum}% respectat"
+				"countPlural=one": "{title}: serie de {countNum} zi, {pctNum}% respectat. Deschide sarcina",
+				"countPlural=few": "{title}: serie de {countNum} zile, {pctNum}% respectat. Deschide sarcina",
+				"countPlural=other": "{title}: serie de {countNum} de zile, {pctNum}% respectat. Deschide sarcina"
 			}
 		}
 	],
-	"panel_streak_no_recurrence_summary": "fără recurență setată",
-	"panel_streak_row_aria": "{title}: {summary}. Deschide sarcina",
+	"panel_streak_no_recurrence_row_aria": "{title}: fără recurență setată. Deschide sarcina",
 	"panel_streak_no_recurrence": "Fără recurență",
 	"panel_streak_missing": "Obicei lipsă (șters sau nepartajat cu tine)",
 	"panel_focus_sessions_unit": [
