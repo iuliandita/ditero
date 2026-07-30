@@ -5,7 +5,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ICON_NAMES, ICONS } from "@/lib/list-icon";
+import { ICON_NAMES, ICONS, iconLabel } from "@/lib/list-icon";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { suggestIcon } from "../../../domain/icon-map.ts";
@@ -118,7 +118,7 @@ export function IconPicker({
 									<button
 										key={name}
 										type="button"
-										aria-label={name}
+										aria-label={iconLabel(name)}
 										onClick={() => pick(name)}
 										className={cn(
 											"flex size-9 items-center justify-center rounded-lg border hover:bg-muted",
@@ -133,6 +133,10 @@ export function IconPicker({
 					</TabsContent>
 					<TabsContent value="emoji">
 						<div className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto p-0.5">
+							{/* The emoji character is deliberately its own label: a screen
+							    reader announces it by its CLDR short name in the READER's
+							    language. A keyed name would override that with the app's
+							    locale, which is worse when the two disagree. */}
 							{EMOJI.map((emoji) => (
 								<button
 									key={emoji}
