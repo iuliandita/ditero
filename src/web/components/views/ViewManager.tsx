@@ -30,6 +30,7 @@ import type {
 	WorkspaceScope,
 } from "../../../domain/view-filter.ts";
 import { m } from "../../../paraglide/messages.js";
+import { useUserPref } from "../../hooks/useUserPref.ts";
 import { FilterBuilder } from "./FilterBuilder.tsx";
 import { SORT_FIELD_LABELS, SORT_FIELDS } from "./filter-options.ts";
 
@@ -123,6 +124,7 @@ export function ViewManager({
 	workspaces: { id: string; name: string }[];
 	onSubmit: (value: ViewFormValue) => void;
 }): JSX.Element {
+	const { pref } = useUserPref();
 	const isDesktop = useIsDesktop();
 	const baseId = useId();
 	const firstWorkspace = workspaces[0]?.id ?? null;
@@ -209,6 +211,7 @@ export function ViewManager({
 					folders={folders}
 					labels={labels}
 					members={members}
+					timeZone={pref.timezone}
 				/>
 			</Field>
 

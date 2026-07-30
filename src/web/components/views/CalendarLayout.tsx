@@ -10,9 +10,13 @@ import {
 } from "@dnd-kit/core";
 import { CalendarClock, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 import { type JSX, useMemo, useRef, useState } from "react";
-import { todayISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
+import { localDay, shiftDay } from "../../../domain/local-day.ts";
 import { expand } from "../../../domain/recurrence.ts";
+import {
+	instantToWallClock,
+	wallClockToInstant,
+} from "../../../domain/zoned.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import type { Task } from "../../../zero/schema.gen.ts";
@@ -43,29 +47,46 @@ function weekdayNames(): { key: string; short: string; full: string }[] {
 	});
 }
 
-// All date math is UTC to match the domain modules (recurrence.expand,
-// todayISO): a "YYYY-MM-DD" key is the UTC calendar day so occurrence dates and
-// dueAt land on the same cell with no timezone off-by-one.
-function utcKey(ms: number): string {
-	return new Date(ms).toISOString().slice(0, 10);
+// A "YYYY-MM-DD" key is the user's LOCAL calendar day, the same frame habit
+// logs and karma events are written in. It used to be the UTC day, which put a
+// task due at 22:00 in New York on tomorrow's cell and highlighted the wrong
+// "today" every evening west of UTC. expand() returns real instants (seeded
+// from the task's dueAt), not date-only midnights, so zoning the key is a
+// straight substitution rather than a shift of the occurrence frame.
+//
+// Grid geometry is computed on the keys themselves (shiftDay), never by adding
+// 86_400_000 ms: a DST day is 23 or 25 hours, so instant arithmetic would skip
+// or repeat a cell on the weeks containing a transition.
+
+// Weekday index for a day key, Monday = 0. Pure calendar math on the key's own
+// parts -- Date.UTC here is not a timezone claim.
+function weekdayOf(dayKey: string): number {
+	const [y, m, d] = dayKey.split("-").map(Number);
+	return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
 }
-function keyToUtcMs(key: string): number {
-	const [y, m, d] = key.split("-").map(Number);
-	return Date.UTC(y, m - 1, d);
+
+function dayOfMonth(dayKey: string): number {
+	return Number(dayKey.slice(8, 10));
+}
+
+function monthOf(dayKey: string): number {
+	return Number(dayKey.slice(5, 7));
 }
 
 type DayItem = { entry: ViewEntry; occurrence: boolean };
 
-// Same rule as weekdayNames: per call, and UTC-pinned because a day key is a UTC
-// calendar day.
-function longDate(ms: number): string {
+// Same rule as weekdayNames: built per call. Formats the key's PARTS through a
+// local Date -- passing the key to `new Date()` would parse it as UTC midnight
+// and render the previous day anywhere west of UTC, which is the bug this file
+// is fixing.
+function longDate(dayKey: string): string {
+	const [y, m, d] = dayKey.split("-").map(Number);
 	return new Intl.DateTimeFormat(getLocale(), {
 		weekday: "long",
 		year: "numeric",
 		month: "long",
 		day: "numeric",
-		timeZone: "UTC",
-	}).format(new Date(ms));
+	}).format(new Date(y, m - 1, d));
 }
 
 function Chip({
@@ -121,7 +142,7 @@ function Chip({
 }
 
 function DayCell({
-	cellMs,
+	dayKey,
 	inMonth,
 	isToday,
 	items,
@@ -131,7 +152,7 @@ function DayCell({
 	onFocusDay,
 	onOpen,
 }: {
-	cellMs: number;
+	dayKey: string;
 	inMonth: boolean;
 	isToday: boolean;
 	items: DayItem[];
@@ -141,12 +162,11 @@ function DayCell({
 	onFocusDay: (i: number) => void;
 	onOpen: (task: Task) => void;
 }): JSX.Element {
-	const key = utcKey(cellMs);
-	const { setNodeRef, isOver } = useDroppable({ id: `day:${key}` });
-	const dayNum = new Date(cellMs).getUTCDate();
+	const { setNodeRef, isOver } = useDroppable({ id: `day:${dayKey}` });
+	const dayNum = dayOfMonth(dayKey);
 	const label = isToday
-		? m.calendar_day_today({ date: longDate(cellMs) })
-		: longDate(cellMs);
+		? m.calendar_day_today({ date: longDate(dayKey) })
+		: longDate(dayKey);
 	return (
 		<td
 			ref={setNodeRef}
@@ -179,7 +199,7 @@ function DayCell({
 						<Chip
 							key={it.entry.task.id}
 							item={it}
-							dragId={`chip:${it.entry.task.id}:${key}`}
+							dragId={`chip:${it.entry.task.id}:${dayKey}`}
 							dragEnabled
 							onOpen={onOpen}
 						/>
@@ -258,16 +278,17 @@ export function CalendarLayout({
 	isDesktop,
 	onOpenTask,
 	onReschedule,
+	timeZone,
 }: {
 	entries: ViewEntry[];
 	isDesktop: boolean;
 	onOpenTask: (task: Task) => void;
 	onReschedule: (taskId: string, dueAt: number) => void;
+	timeZone: string;
 }): JSX.Element {
-	const [monthMs, setMonthMs] = useState(() => {
-		const [y, m] = todayISO().split("-").map(Number);
-		return Date.UTC(y, m - 1, 1);
-	});
+	const today = localDay(new Date(), timeZone);
+	// First day of the displayed month, as a day key.
+	const [monthKey, setMonthKey] = useState(() => `${today.slice(0, 7)}-01`);
 	const [activeIdx, setActiveIdx] = useState(0);
 	// changeLocale reloads the page, so locale is constant for this component's
 	// lifetime; without the memo DndContext's pointer-move renders would rebuild
@@ -284,25 +305,29 @@ export function CalendarLayout({
 	);
 
 	const { weeks, monthIndex, gridStartMs, gridEndMs } = useMemo(() => {
-		const first = new Date(monthMs);
-		const lead = (first.getUTCDay() + 6) % 7; // days before the 1st (Mon start)
-		const start = monthMs - lead * DAY_MS;
-		const cells = Array.from({ length: 42 }, (_, i) => start + i * DAY_MS);
-		const rows: number[][] = [];
+		const lead = weekdayOf(monthKey); // days before the 1st (Mon start)
+		const start = shiftDay(monthKey, -lead);
+		const cells = Array.from({ length: 42 }, (_, i) => shiftDay(start, i));
+		const rows: string[][] = [];
 		for (let w = 0; w < 6; w++) rows.push(cells.slice(w * 7, w * 7 + 7));
 		return {
 			weeks: rows,
-			monthIndex: first.getUTCMonth(),
-			gridStartMs: start,
-			gridEndMs: start + 42 * DAY_MS,
+			monthIndex: monthOf(monthKey),
+			// Occurrence expansion still needs instants: the grid's first local
+			// midnight through the first local midnight past its last cell.
+			gridStartMs: wallClockToInstant(start, "00:00", timeZone).getTime(),
+			gridEndMs: wallClockToInstant(
+				shiftDay(start, 42),
+				"00:00",
+				timeZone,
+			).getTime(),
 		};
-	}, [monthMs]);
+	}, [monthKey, timeZone]);
 
 	const monthLabel = new Intl.DateTimeFormat(getLocale(), {
 		month: "long",
 		year: "numeric",
-		timeZone: "UTC",
-	}).format(new Date(monthMs));
+	}).format(new Date(Number(monthKey.slice(0, 4)), monthIndex - 1, 1));
 
 	const byDate = useMemo(() => {
 		const map = new Map<string, DayItem[]>();
@@ -325,41 +350,49 @@ export function CalendarLayout({
 					occ = [];
 				}
 				for (const d of occ)
-					push(utcKey(d.getTime()), { entry, occurrence: true });
+					push(localDay(d, timeZone), { entry, occurrence: true });
 			} else if (task.dueAt != null) {
-				push(utcKey(task.dueAt), { entry, occurrence: false });
+				push(localDay(new Date(task.dueAt), timeZone), {
+					entry,
+					occurrence: false,
+				});
 			}
 		}
 		return map;
-	}, [entries, gridStartMs, gridEndMs]);
+	}, [entries, gridStartMs, gridEndMs, timeZone]);
 
 	const agendaGroups = useMemo(
 		() =>
 			[...byDate.keys()].sort().map((key) => ({
 				key,
-				label: longDate(keyToUtcMs(key)),
+				label: longDate(key),
 				items: byDate.get(key) ?? [],
 			})),
 		[byDate],
 	);
 
 	function shiftMonth(delta: number) {
-		const d = new Date(monthMs);
-		setMonthMs(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + delta, 1));
+		const year = Number(monthKey.slice(0, 4));
+		const next = new Date(Date.UTC(year, monthIndex - 1 + delta, 1));
+		setMonthKey(next.toISOString().slice(0, 10));
 		setActiveIdx(0);
 	}
 
 	function reschedule(taskId: string, targetKey: string) {
 		const task = taskById.get(taskId);
 		if (!task) return;
-		const targetMid = keyToUtcMs(targetKey);
-		// Preserve time-of-day for a timed task; an all-day (or undated) task lands
-		// at UTC midnight and stays all-day (dueAllDay is left untouched).
-		const dueAt =
+		// Preserve the task's LOCAL time-of-day, then re-resolve it against the
+		// target day: carrying a raw ms offset across a DST boundary would move a
+		// 09:00 task to 08:00 or 10:00. An all-day (or undated) task lands at local
+		// midnight and stays all-day (dueAllDay is left untouched).
+		const time =
 			task.dueAt != null && !task.dueAllDay
-				? targetMid + (task.dueAt - keyToUtcMs(utcKey(task.dueAt)))
-				: targetMid;
-		onReschedule(taskId, dueAt);
+				? instantToWallClock(new Date(task.dueAt), timeZone).time
+				: "00:00";
+		onReschedule(
+			taskId,
+			wallClockToInstant(targetKey, time, timeZone).getTime(),
+		);
 	}
 
 	function onDragEnd(e: DragEndEvent) {
@@ -461,15 +494,14 @@ export function CalendarLayout({
 					</thead>
 					<tbody>
 						{weeks.map((week, wi) => (
-							<tr key={utcKey(week[0])}>
-								{week.map((cellMs, di) => {
-									const key = utcKey(cellMs);
+							<tr key={week[0]}>
+								{week.map((key, di) => {
 									return (
 										<DayCell
 											key={key}
-											cellMs={cellMs}
-											inMonth={new Date(cellMs).getUTCMonth() === monthIndex}
-											isToday={key === todayISO()}
+											dayKey={key}
+											inMonth={monthOf(key) === monthIndex}
+											isToday={key === today}
 											items={byDate.get(key) ?? []}
 											index={wi * 7 + di}
 											activeIdx={activeIdx}

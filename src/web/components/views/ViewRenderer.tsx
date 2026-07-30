@@ -27,6 +27,7 @@ import type {
 	TaskAssignee,
 	TaskLabel,
 } from "../../../zero/schema.gen.ts";
+import { useUserPref } from "../../hooks/useUserPref.ts";
 import type { GroupCtx, GroupTask } from "../../views/group.ts";
 import { groupTasks } from "../../views/group.ts";
 import { SortableList } from "../list/SortableList.tsx";
@@ -95,6 +96,7 @@ export function ViewRenderer(props: {
 	// view row. Absent -> the header toggles a local, unpersisted sort.
 	onSortChange?: (sort: ViewSort) => void;
 }): JSX.Element {
+	const { pref } = useUserPref();
 	const {
 		filter,
 		display,
@@ -341,6 +343,7 @@ export function ViewRenderer(props: {
 					isDesktop={isDesktop}
 					onOpenTask={onOpenTask}
 					onReschedule={onReschedule}
+					timeZone={pref.timezone}
 				/>
 			) : renderList ? (
 				<ListLayout

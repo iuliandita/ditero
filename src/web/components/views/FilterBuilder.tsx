@@ -15,8 +15,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { todayISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
+import { localDay } from "../../../domain/local-day.ts";
 import {
 	type FilterCondition,
 	type FilterField,
@@ -33,6 +33,9 @@ type BuilderData = {
 	folders: { id: string; name: string }[];
 	labels: { id: string; name: string; color?: string }[];
 	members: { id: string; name: string }[];
+	// The user's zone, so a date control defaults to THEIR today rather than
+	// UTC's -- an evening west of UTC would otherwise prefill tomorrow.
+	timeZone: string;
 };
 
 // "in" is the only multi-valued operator (emits string[]); all others emit a
@@ -76,7 +79,7 @@ function defaultValue(
 ): unknown {
 	const control = metaFor(field).controlFor(operator);
 	if (control.kind === "bool") return true;
-	if (control.kind === "date") return todayISO();
+	if (control.kind === "date") return localDay(new Date(), data.timeZone);
 	if (isMulti(operator)) return [];
 	const first = optionsFor(control, data)[0]?.value ?? "";
 	return field === "priority" ? Number(first || "0") : first;
@@ -221,7 +224,9 @@ function ConditionRow({
 					data-testid="value-control"
 					className="h-7 w-auto"
 					value={typeof condition.value === "string" ? condition.value : ""}
-					onChange={(e) => setValue(e.target.value || todayISO())}
+					onChange={(e) =>
+						setValue(e.target.value || localDay(new Date(), data.timeZone))
+					}
 				/>
 			);
 		}
@@ -466,12 +471,14 @@ export function FilterBuilder(props: {
 	folders: { id: string; name: string }[];
 	labels: { id: string; name: string; color?: string }[];
 	members: { id: string; name: string }[];
+	timeZone: string;
 }): React.JSX.Element {
 	const data: BuilderData = {
 		lists: props.lists,
 		folders: props.folders,
 		labels: props.labels,
 		members: props.members,
+		timeZone: props.timeZone,
 	};
 	return (
 		<GroupCard
