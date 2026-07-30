@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { m } from "../../paraglide/messages.js";
 import { authClient } from "../lib/auth-client.ts";
+import { authErrorMessage } from "../lib/auth-messages.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
 
 // Client accept page for `/accept?token=`. An invitee landing here previews the
@@ -116,7 +117,7 @@ export function AcceptInvite() {
 				const name = email.split("@")[0] || email;
 				const res = await authClient.signUp.email({ email, password, name });
 				if (res.error) {
-					setError(res.error.message ?? m.accept_signup_failed());
+					setError(authErrorMessage(res.error, m.accept_signup_failed));
 					return;
 				}
 			} else {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { m } from "../../paraglide/messages.js";
 import { authClient } from "../lib/auth-client.ts";
+import { authErrorMessage } from "../lib/auth-messages.ts";
 
 type PasskeyRecord = { id: string; name?: string | null };
 
@@ -19,7 +20,7 @@ export function SecurityPanel() {
 	const loadPasskeys = useCallback(async () => {
 		const result = await authClient.passkey.listUserPasskeys();
 		if (result.error) {
-			setError(result.error.message ?? m.security_error_load_passkeys());
+			setError(authErrorMessage(result.error, m.security_error_load_passkeys));
 			return;
 		}
 		setPasskeys(result.data ?? []);
@@ -35,7 +36,7 @@ export function SecurityPanel() {
 		// then render in that locale for every later session. Do not key it.
 		const result = await authClient.passkey.addPasskey({ name: "This device" });
 		if (result.error) {
-			setError(result.error.message ?? m.security_error_add_passkey());
+			setError(authErrorMessage(result.error, m.security_error_add_passkey));
 			return;
 		}
 		await loadPasskeys();
@@ -45,7 +46,7 @@ export function SecurityPanel() {
 		setError(null);
 		const result = await authClient.passkey.deletePasskey({ id });
 		if (result.error) {
-			setError(result.error.message ?? m.security_error_remove_passkey());
+			setError(authErrorMessage(result.error, m.security_error_remove_passkey));
 			return;
 		}
 		await loadPasskeys();
@@ -55,7 +56,7 @@ export function SecurityPanel() {
 		setError(null);
 		const result = await authClient.twoFactor.enable({ password });
 		if (result.error) {
-			setError(result.error.message ?? m.security_error_enable_2fa());
+			setError(authErrorMessage(result.error, m.security_error_enable_2fa));
 			return;
 		}
 		setPassword("");
@@ -67,7 +68,7 @@ export function SecurityPanel() {
 		setError(null);
 		const result = await authClient.twoFactor.verifyTotp({ code: totpCode });
 		if (result.error) {
-			setError(result.error.message ?? m.security_error_invalid_code());
+			setError(authErrorMessage(result.error, m.security_error_invalid_code));
 			return;
 		}
 		setTwoFactorEnabled(true);
@@ -79,7 +80,7 @@ export function SecurityPanel() {
 		setError(null);
 		const result = await authClient.twoFactor.disable({ password });
 		if (result.error) {
-			setError(result.error.message ?? m.security_error_disable_2fa());
+			setError(authErrorMessage(result.error, m.security_error_disable_2fa));
 			return;
 		}
 		setPassword("");
