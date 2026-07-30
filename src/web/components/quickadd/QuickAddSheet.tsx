@@ -8,11 +8,13 @@ import {
 	SheetTitle,
 } from "@/components/ui/sheet";
 import {
+	dateParserFor,
 	parseQuickAdd,
 	type QuickAddToken,
 } from "../../../domain/quick-add.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
 import { TokenChips } from "./TokenChips.tsx";
@@ -59,7 +61,14 @@ export function QuickAddSheet({
 		}
 	}, [open]);
 
-	const parse = useMemo(() => parseQuickAdd(raw), [raw]);
+	// changeLocale reloads the page, so this is constant for the component's
+	// lifetime; read it here rather than at module scope, which would freeze the
+	// import-time locale.
+	const locale = getLocale();
+	const parse = useMemo(
+		() => parseQuickAdd(raw, undefined, locale),
+		[raw, locale],
+	);
 	const resolvedList = parse.listName
 		? resolveList(lists, parse.listName)
 		: null;
@@ -167,15 +176,25 @@ export function QuickAddSheet({
 						data-testid="quickadd-input"
 						aria-label={m.quickadd_input_label()}
 						className="h-10 w-full rounded-lg border bg-transparent px-3 text-base md:text-sm"
-						// Parser grammar, passed in rather than translated: the
-						// `#`/`~`/`pN` sigils are literal syntax and chrono only
-						// parses English date words.
-						placeholder={m.quickadd_placeholder({
-							date: "tomorrow",
-							priority: "p2",
-							label: "#store",
-							list: "~groceries",
-						})}
+						// The `#`/`~`/`pN` sigils are literal parser grammar and stay
+						// untranslated. The date example is not grammar: it has to be
+						// a word the ACTIVE chrono parser accepts, and on locales with
+						// no parser the hint drops it rather than advertising a syntax
+						// that will not work there.
+						placeholder={
+							dateParserFor(locale)
+								? m.quickadd_placeholder({
+										date: m.quickadd_example_date(),
+										priority: "p2",
+										label: "#store",
+										list: "~groceries",
+									})
+								: m.quickadd_placeholder_nodate({
+										priority: "p2",
+										label: "#store",
+										list: "~groceries",
+									})
+						}
 						value={raw}
 						onChange={(e) => setRaw(e.target.value)}
 						onKeyDown={(e) => {

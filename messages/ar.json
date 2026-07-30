@@ -271,6 +271,8 @@
 	"quickadd_input_label": "إضافة مهمة سريعة",
 	"quickadd_sheet_title": "إضافة سريعة",
 	"quickadd_placeholder": "مثال: شراء الحليب {date} {priority} {label} {list}",
+	"quickadd_placeholder_nodate": "مثال: شراء الحليب {priority} {label} {list}",
+	"quickadd_example_date": "غدا",
 	"quickadd_adding_to": "الإضافة إلى {list}",
 	"quickadd_no_list": "لا توجد قائمة متاحة",
 	"quickadd_failed": "تعذّرت إضافة المهمة.",
