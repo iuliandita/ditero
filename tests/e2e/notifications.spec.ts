@@ -238,10 +238,15 @@ test.describe("notification settings", () => {
 	test("mobile renders the settings surface in one column", async ({
 		page,
 	}) => {
+		// The desktop shell already renders the keymap surface, whose per-command
+		// "Rebind Open settings" button substring-matches an accessible name of
+		// "Settings". Locating the tab by name was therefore ambiguous for as long
+		// as the resize re-render took to unmount it -- a strict-mode violation
+		// whenever the assertion won that race (#64). The tab has its own testid.
 		await page.setViewportSize({ width: 390, height: 844 });
 		// The shell swaps sidebar for bottom-nav on the resize; wait for the tab
 		// to mount rather than racing the re-render.
-		const settingsTab = page.getByRole("button", { name: "Settings" });
+		const settingsTab = page.getByTestId("nav-tab-settings");
 		await expect(settingsTab).toBeVisible({ timeout: 15_000 });
 		await settingsTab.click();
 		const panel = await settings(page);

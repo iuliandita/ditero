@@ -19,16 +19,23 @@ export function BottomNav({
 			className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] supports-backdrop-filter:bg-background/80 supports-backdrop-filter:backdrop-blur"
 		>
 			<Tab
+				testId="nav-tab-lists"
 				label={m.nav_lists()}
 				active={section === "lists"}
 				onClick={() => onSection("lists")}
 			>
 				<List className="size-5" />
 			</Tab>
-			<Tab label={m.nav_search()} disabled title={m.nav_search_disabled_hint()}>
+			<Tab
+				testId="nav-tab-search"
+				label={m.nav_search()}
+				disabled
+				title={m.nav_search_disabled_hint()}
+			>
 				<Search className="size-5" />
 			</Tab>
 			<Tab
+				testId="nav-tab-settings"
 				label={m.nav_settings()}
 				active={section === "settings"}
 				onClick={() => onSection("settings")}
@@ -40,6 +47,7 @@ export function BottomNav({
 }
 
 function Tab({
+	testId,
 	label,
 	active,
 	disabled,
@@ -47,6 +55,10 @@ function Tab({
 	onClick,
 	children,
 }: {
+	// A tab's only text is its translated label, so locating one by name is both
+	// locale-bound and ambiguous: an unscoped "Settings" also substring-matches
+	// the keymap surface's "Rebind Open settings" button (#64).
+	testId: string;
 	label: string;
 	active?: boolean;
 	disabled?: boolean;
@@ -57,6 +69,7 @@ function Tab({
 	return (
 		<button
 			type="button"
+			data-testid={testId}
 			// aria-disabled (not the native attribute) keeps the tab focusable and
 			// announced so a placeholder destination stays discoverable.
 			aria-disabled={disabled || undefined}
