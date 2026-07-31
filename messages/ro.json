@@ -1290,5 +1290,9 @@
 	"notify_assign_body": "Ți-a fost atribuită această sarcină",
 	"notify_mention_body": "Ai fost menționat într-un comentariu",
 	"notify_overdue_body": "Această sarcină este întârziată",
-	"notify_overdue_body_due": "Această sarcină este întârziată (termen {due})"
+	"notify_overdue_body_due": "Această sarcină este întârziată (termen {due})",
+	"notify_ack_label": "Gata",
+	"notify_ack_email_prefix": "Marchează ca finalizat:",
+	"notify_test_title": "Test Ditero",
+	"notify_test_body": "Notificare de test de la Ditero."
 }

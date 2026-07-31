@@ -54,6 +54,7 @@ const payload: ChannelPayload = {
 	body: "Due 2026-08-01T09:00:00.000Z",
 	urgent: false,
 	ackUrl: ACK_URL,
+	locale: "en" as const,
 };
 
 type Call = { url: string; options: Parameters<typeof safeFetch>[1] };
@@ -537,7 +538,7 @@ describe("discordAdapter", () => {
 // `components`, which is indistinguishable from the legitimate no-ack path.
 describe("ackLinkRow", () => {
 	it("builds a link-style row for a well-formed ack URL", () => {
-		expect(ackLinkRow(ACK_URL)).toEqual([
+		expect(ackLinkRow(ACK_URL, "en")).toEqual([
 			{
 				type: 1,
 				components: [{ type: 2, style: 5, label: "Done", url: ACK_URL }],
@@ -550,7 +551,7 @@ describe("ackLinkRow", () => {
 		["a non-HTTP scheme", `ditero://ack/${ACK_TOKEN}`],
 		["an unparseable URL", "not a url"],
 	])("yields no button for %s", (_case, ackUrl) => {
-		expect(ackLinkRow(ackUrl)).toBeNull();
+		expect(ackLinkRow(ackUrl, "en")).toBeNull();
 	});
 
 	// Discord's `url` cap is 512; one over is a 400 that loses the whole
@@ -559,10 +560,10 @@ describe("ackLinkRow", () => {
 		const base = "https://app.example.test/api/notifications/ack/";
 		const tooLong = base + "a".repeat(513 - base.length);
 		expect(tooLong).toHaveLength(513);
-		expect(ackLinkRow(tooLong)).toBeNull();
+		expect(ackLinkRow(tooLong, "en")).toBeNull();
 		// One shorter still passes, so the boundary is pinned rather than "long
 		// URLs are rejected".
-		expect(ackLinkRow(tooLong.slice(0, 512))).not.toBeNull();
+		expect(ackLinkRow(tooLong.slice(0, 512), "en")).not.toBeNull();
 	});
 });
 
@@ -821,7 +822,7 @@ describe("ackCustomId", () => {
 		["a segment too short to be one", "https://app.test/ack/abc"],
 	])("yields no button for %s", (_case, ackUrl) => {
 		expect(ackCustomId(ackUrl)).toBeNull();
-		expect(ackButtonRow(ackUrl)).toBeNull();
+		expect(ackButtonRow(ackUrl, "en")).toBeNull();
 	});
 });
 

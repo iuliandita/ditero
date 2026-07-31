@@ -1264,5 +1264,9 @@
 	"notify_assign_body": "You were assigned this task",
 	"notify_mention_body": "You were mentioned in a comment",
 	"notify_overdue_body": "This task is overdue",
-	"notify_overdue_body_due": "This task is overdue (due {due})"
+	"notify_overdue_body_due": "This task is overdue (due {due})",
+	"notify_ack_label": "Done",
+	"notify_ack_email_prefix": "Mark it done:",
+	"notify_test_title": "Ditero test",
+	"notify_test_body": "Test notification from Ditero."
 }

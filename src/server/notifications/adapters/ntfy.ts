@@ -5,6 +5,7 @@ import {
 	redactUrlsIn,
 } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
+import { m } from "../../../paraglide/messages.js";
 import { OutboundPolicyError, safeFetch } from "../../../security/safe-http.ts";
 import { retryAfterSeconds } from "./retry-after.ts";
 import type {
@@ -17,7 +18,6 @@ import { permanent } from "./types.ts";
 const TITLE_MAX = 200;
 const BODY_MAX = 4_000;
 const RESPONSE_MAX_BYTES = 64 * 1_024;
-const ACK_LABEL = "Done";
 
 // The worker redacts again before persisting; doing it here too means a caller
 // that only logs the ProviderResult still cannot leak a channel URL's
@@ -46,9 +46,19 @@ function buildHeaders(
 	if (payload.urgent) headers.set("Priority", "urgent");
 	if (token) headers.set("Authorization", `Bearer ${token}`);
 	if (payload.ackUrl) {
+		const label = m.notify_ack_label({}, { locale: payload.locale });
+		// An HTTP header value serializes as latin-1, so an Arabic label would
+		// throw out of `new Headers()` -- caught below and misreported as a
+		// permanent config error, silently killing delivery. ntfy decodes RFC 2047
+		// on every header it reads, before parsing: readParam -> readHeaderParam ->
+		// maybeDecodeHeader (server/util.go), and Actions goes through readParam
+		// like the rest. So the whole value is encoded as one encoded-word when it
+		// is not already ASCII, exactly as X-Title is.
 		headers.set(
 			"Actions",
-			`http, ${quoteAction(ACK_LABEL)}, ${quoteAction(payload.ackUrl)}, method=POST, clear=true`,
+			encodeHeaderValue(
+				`http, ${quoteAction(label)}, ${quoteAction(payload.ackUrl)}, method=POST, clear=true`,
+			),
 		);
 	}
 	return headers;

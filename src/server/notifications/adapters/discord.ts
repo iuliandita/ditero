@@ -1,9 +1,11 @@
+import type { Locale } from "../../../domain/locale.ts";
 import {
 	channelConfigSchema,
 	redactChannelUrl,
 	redactUrlsIn,
 } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
+import { m } from "../../../paraglide/messages.js";
 import { OutboundPolicyError, safeFetch } from "../../../security/safe-http.ts";
 import { retryAfterSeconds } from "./retry-after.ts";
 import type {
@@ -20,7 +22,6 @@ export const CONTENT_MAX = 2_000;
 // loses the whole notification rather than just the button.
 const ACK_URL_MAX = 512;
 const RESPONSE_MAX_BYTES = 64 * 1_024;
-const ACK_LABEL = "Done";
 
 // App mode posts as the bot, not through the pasted webhook URL.
 // POST /channels/{channel.id}/messages, `Authorization: Bot <token>`.
@@ -107,6 +108,7 @@ export type CreateMessageBody = {
 // notification still arrives and stays ackable in-app.
 export function ackLinkRow(
 	ackUrl: string | null,
+	locale: Locale,
 ): readonly WebhookActionRow[] | null {
 	if (!ackUrl || ackUrl.length > ACK_URL_MAX) return null;
 	try {
@@ -118,7 +120,14 @@ export function ackLinkRow(
 	return [
 		{
 			type: 1,
-			components: [{ type: 2, style: 5, label: ACK_LABEL, url: ackUrl }],
+			components: [
+				{
+					type: 2,
+					style: 5,
+					label: m.notify_ack_label({}, { locale }),
+					url: ackUrl,
+				},
+			],
 		},
 	];
 }
@@ -136,7 +145,7 @@ export function webhookRequest(
 	webhookUrl: string,
 	payload: ChannelPayload,
 ): { url: string; body: WebhookExecuteBody } {
-	const components = ackLinkRow(payload.ackUrl);
+	const components = ackLinkRow(payload.ackUrl, payload.locale);
 	const url = new URL(webhookUrl);
 	if (components) url.searchParams.set("with_components", "true");
 	else url.searchParams.delete("with_components");
@@ -174,6 +183,7 @@ export function ackCustomId(ackUrl: string | null): string | null {
 
 export function ackButtonRow(
 	ackUrl: string | null,
+	locale: Locale,
 ): readonly AppActionRow[] | null {
 	const customId = ackCustomId(ackUrl);
 	if (!customId) return null;
@@ -181,7 +191,12 @@ export function ackButtonRow(
 		{
 			type: 1,
 			components: [
-				{ type: 2, style: 3, label: ACK_LABEL, custom_id: customId },
+				{
+					type: 2,
+					style: 3,
+					label: m.notify_ack_label({}, { locale }),
+					custom_id: customId,
+				},
 			],
 		},
 	];
@@ -191,7 +206,7 @@ export function appRequest(
 	channelId: string,
 	payload: ChannelPayload,
 ): { url: string; body: CreateMessageBody } {
-	const components = ackButtonRow(payload.ackUrl);
+	const components = ackButtonRow(payload.ackUrl, payload.locale);
 	return {
 		// channelId is digits-only per the config schema; encoded anyway so a
 		// looser value stored before that schema existed cannot retarget the path.

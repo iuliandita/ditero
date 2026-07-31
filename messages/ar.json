@@ -1368,5 +1368,9 @@
 	"notify_assign_body": "أُسندت إليك هذه المهمة",
 	"notify_mention_body": "تمت الإشارة إليك في تعليق",
 	"notify_overdue_body": "هذه المهمة متأخرة",
-	"notify_overdue_body_due": "هذه المهمة متأخرة (استحقاقها {due})"
+	"notify_overdue_body_due": "هذه المهمة متأخرة (استحقاقها {due})",
+	"notify_ack_label": "تم",
+	"notify_ack_email_prefix": "وضع علامة كمنجز:",
+	"notify_test_title": "اختبار Ditero",
+	"notify_test_body": "إشعار اختباري من Ditero."
 }

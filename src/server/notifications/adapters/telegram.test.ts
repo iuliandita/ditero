@@ -28,6 +28,7 @@ const payload: ChannelPayload = {
 	body: "Due 2026-08-01T09:00:00.000Z",
 	urgent: false,
 	ackUrl: `https://app.example.test${ACK_PATH}/${ACK_TOKEN}`,
+	locale: "en" as const,
 };
 
 type Call = { url: string; options: Parameters<typeof safeFetch>[1] };

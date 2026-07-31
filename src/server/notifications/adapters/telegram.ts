@@ -4,6 +4,7 @@ import {
 	redactUrlsIn,
 } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
+import { m } from "../../../paraglide/messages.js";
 import { OutboundPolicyError, safeFetch } from "../../../security/safe-http.ts";
 import { retryAfterSeconds } from "./retry-after.ts";
 import type {
@@ -16,7 +17,6 @@ import { permanent } from "./types.ts";
 const API_ORIGIN = "https://api.telegram.org";
 const TEXT_MAX = 4_000;
 const RESPONSE_MAX_BYTES = 64 * 1_024;
-const ACK_LABEL = "Done";
 
 // Bot API hard limit on callback_data, in BYTES, not characters. `c:` + a
 // 32-byte base64url ack token is 45, so it fits with room to spare and no
@@ -140,7 +140,12 @@ export const telegramAdapter: ChannelAdapter = {
 				? {
 						reply_markup: {
 							inline_keyboard: [
-								[{ text: ACK_LABEL, callback_data: callbackData }],
+								[
+									{
+										text: m.notify_ack_label({}, { locale: payload.locale }),
+										callback_data: callbackData,
+									},
+								],
 							],
 						},
 					}

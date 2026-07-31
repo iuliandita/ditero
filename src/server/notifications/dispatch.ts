@@ -105,27 +105,31 @@ export function renderPayload(
 ): Omit<ChannelPayload, "ackUrl"> | null {
 	const reminder = reminderPayloadSchema.safeParse(raw);
 	if (reminder.success) {
+		// A row enqueued before the locale was carried, or one carrying an
+		// unsupported value, renders in en -- the one fallback there is.
+		const locale = localeFromPref(reminder.data.locale);
 		return {
 			title: reminder.data.taskTitle,
 			body: m.notify_reminder_body(
 				{ when: reminder.data.occurrenceAt },
-				// A row enqueued before the locale was carried, or one carrying an
-				// unsupported value, renders in en -- the one fallback there is.
-				{ locale: localeFromPref(reminder.data.locale) },
+				{ locale },
 			),
 			urgent: reminder.data.urgent === true,
+			locale,
 		};
 	}
 	const event = eventPayloadSchema.safeParse(raw);
 	if (!event.success) return null;
+	const locale = localeFromPref(event.data.locale);
 	return {
 		title: event.data.taskTitle,
 		body: eventBody(
 			event.data.kind,
 			event.data.kind === "overdue" ? event.data.dueAt : undefined,
-			localeFromPref(event.data.locale),
+			locale,
 		),
 		urgent: false,
+		locale,
 	};
 }
 

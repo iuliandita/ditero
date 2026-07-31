@@ -1264,5 +1264,9 @@
 	"notify_assign_body": "Dir wurde diese Aufgabe zugewiesen",
 	"notify_mention_body": "Du wurdest in einem Kommentar erwähnt",
 	"notify_overdue_body": "Diese Aufgabe ist überfällig",
-	"notify_overdue_body_due": "Diese Aufgabe ist überfällig (fällig {due})"
+	"notify_overdue_body_due": "Diese Aufgabe ist überfällig (fällig {due})",
+	"notify_ack_label": "Erledigt",
+	"notify_ack_email_prefix": "Als erledigt markieren:",
+	"notify_test_title": "Ditero-Test",
+	"notify_test_body": "Testbenachrichtigung von Ditero."
 }
