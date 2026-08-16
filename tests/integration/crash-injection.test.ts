@@ -129,11 +129,17 @@ afterAll(async () => {
 // its full budget for a recovery that was never set up, and blames the recovery
 // for a crash that never happened.
 const CRASH_ATTEMPTS = 3;
-// Clears the same allowance waitHealthy gives a boot (45s) twice over: an armed
-// replica has to BOOT before it can reach its crash point, and the old 60s was
-// a starved runner's difference between booting and not (#114). Bounded so
-// CRASH_ATTEMPTS x this still fits the tests' own timeout.
-const CRASH_EXIT_BUDGET_MS = 90_000;
+// Per attempt, and ESCALATING (attempt x this), because the observed failure is
+// a boot that never finishes: under a host oversubscribed ~2x the replica stays
+// alive for the whole budget with /health unreachable and stderr silent, and
+// three tries at one fixed budget then all hit the same wall. A retry helps a
+// transient stall; only a roomier one helps a sustained stall. The base clears
+// waitHealthy's own 45s boot allowance.
+//
+// No budget survives arbitrary oversubscription, and none of these waits claims
+// a latency bound -- the product promises eventual at-least-once delivery. What
+// the budget buys is a diagnosis that names which of the two it was.
+const CRASH_EXIT_BUDGET_MS = 60_000;
 
 async function crashThenRecover(
 	point: string,
@@ -155,7 +161,7 @@ async function crashThenRecover(
 		}
 		rig.launch(0, `DITERO_TEST_CRASH_POINT=${point}`);
 		try {
-			await rig.waitForExit(0, CRASH_EXIT_BUDGET_MS);
+			await rig.waitForExit(0, attempt * CRASH_EXIT_BUDGET_MS);
 		} catch (error) {
 			reason = error instanceof Error ? error.message : String(error);
 			// Still alive and still armed: take it down before relaunching, or the
@@ -223,7 +229,7 @@ describe("crash injection", () => {
 		// The lease reclaim bumped attempts and logged its own attempt row
 		// before the successful one.
 		expect(rows[0].attempts).toBeGreaterThanOrEqual(2);
-	}, 420_000);
+	}, 480_000);
 
 	// X3: this is the test that substantiates the at-least-once claim. It must
 	// NOT assert exactly-once.
@@ -250,7 +256,7 @@ describe("crash injection", () => {
 		// One outbox row, one idempotency key, TWO notifications on the wire.
 		expect(wireFor(taskId)).toHaveLength(2);
 		expect(rows[0].status).toBe("sent");
-	}, 420_000);
+	}, 480_000);
 
 	test("SIGKILL mid-claim: no row is lost or left stranded past the lease", async () => {
 		const taskId = `${PREFIX}-claim`;
@@ -319,7 +325,7 @@ describe("crash injection", () => {
 		const rows = await outboxFor([taskId]);
 		expect(rows.filter((row) => row.claimedBy !== null)).toHaveLength(0);
 		expect(wireFor(taskId).length).toBeGreaterThanOrEqual(N);
-	}, 420_000);
+	}, 480_000);
 
 	test("a restart inside the grace window fires the missed reminder once, late", async () => {
 		const late = `${PREFIX}-late`;
@@ -388,7 +394,7 @@ describe("crash injection", () => {
 		expect(rows[0].fireCount).toBe(1);
 		expect(rows[0].status).toBe("pending");
 		expect(wireFor(taskId)).toHaveLength(1);
-	}, 420_000);
+	}, 480_000);
 
 	// X7 / C3: the unbounded-ladder-against-a-real-phone case. maxRepeats 1, so
 	// the shape is exactly "maxRepeats deliveries, one fallback, then silence".
