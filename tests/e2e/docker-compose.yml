@@ -15,7 +15,7 @@ services:
       retries: 20
 
   zero-cache:
-    image: rocicorp/zero:1.7.0@sha256:114363cd8ae889862c283dabc88fdb62fe183a46fe4ed0ea35ebeca8d325dba3
+    image: rocicorp/zero:1.9.0@sha256:f80683bf3ddf08be26c68ddd94589fada29a0b8a4597668b090006c09041d4cd
     depends_on:
       upstream-db:
         condition: service_healthy
