@@ -18,6 +18,7 @@ import * as lib from "../../src/db/schema.ts";
 import { type NtfyTap, startNtfyTap } from "../support/ntfy-tap.ts";
 import { privateHost } from "../support/private-host.ts";
 import {
+	describePipeline,
 	ReplicaRig,
 	RIG_TIMING,
 	outboxFor as rigOutboxFor,
@@ -54,6 +55,19 @@ let scope: SeededScope;
 const wireFor = (taskId: string, topic?: string) =>
 	rigWireFor(tap, taskId, topic);
 const outboxFor = (taskIds: string[]) => rigOutboxFor(db, taskIds);
+
+// The wire count belongs in the dump alongside the durable state: "sent with no
+// delivery" and "never sent" are the two halves of #114 and look identical from
+// the database alone.
+const diagnose = (...taskIds: string[]) => ({
+	diagnose: async () =>
+		[
+			await describePipeline(db, taskIds),
+			`  ntfy tap: ${taskIds
+				.map((id) => `${id}=${wireFor(id).length}`)
+				.join(" ")}`,
+		].join("\n"),
+});
 
 // Drive the escalation ladder without waiting out repeat_every_min: what is
 // under test is the sweep's branch, not the clock.
@@ -113,7 +127,7 @@ describe("crash injection", () => {
 		await waitFor(
 			"the reclaimed row to be delivered",
 			async () => wireFor(taskId).length > 0,
-			60_000,
+			{ timeoutMs: 60_000, ...diagnose(taskId) },
 		);
 		await sleep(3_000);
 
@@ -138,7 +152,7 @@ describe("crash injection", () => {
 		await waitFor(
 			"the re-send after the reclaim",
 			async () => wireFor(taskId).length >= 2,
-			60_000,
+			{ timeoutMs: 60_000, ...diagnose(taskId) },
 		);
 		await sleep(3_000);
 
@@ -192,7 +206,7 @@ describe("crash injection", () => {
 				const rows = await outboxFor([taskId]);
 				return rows.length === N && rows.every((row) => row.status === "sent");
 			},
-			90_000,
+			{ timeoutMs: 90_000, ...diagnose(taskId) },
 		);
 		const rows = await outboxFor([taskId]);
 		expect(rows.filter((row) => row.claimedBy !== null)).toHaveLength(0);
@@ -213,7 +227,7 @@ describe("crash injection", () => {
 		await waitFor(
 			"both missed reminders to fire",
 			async () => wireFor(late).length > 0 && wireFor(fresh).length > 0,
-			60_000,
+			{ timeoutMs: 60_000, ...diagnose(late, fresh) },
 		);
 		await sleep(3_000);
 
@@ -246,7 +260,7 @@ describe("crash injection", () => {
 		await waitFor(
 			"the reminder to be created and delivered after the restart",
 			async () => wireFor(taskId).length > 0,
-			60_000,
+			{ timeoutMs: 60_000, ...diagnose(taskId) },
 		);
 		await sleep(3_000);
 
@@ -276,7 +290,7 @@ describe("crash injection", () => {
 		await waitFor(
 			"the primary recipient to be notified",
 			async () => wireFor(taskId, `rig-${USER_A}`).length > 0,
-			60_000,
+			{ timeoutMs: 60_000, ...diagnose(taskId) },
 		);
 
 		// Pull the repeat forward instead of waiting out repeat_every_min.
@@ -286,8 +300,7 @@ describe("crash injection", () => {
 				await dueNow(taskId);
 				return wireFor(taskId, `rig-${USER_B}`).length > 0;
 			},
-			60_000,
-			500,
+			{ timeoutMs: 60_000, intervalMs: 500, ...diagnose(taskId) },
 		);
 
 		// Keep pulling every pending row forward: if the ladder were unbounded
