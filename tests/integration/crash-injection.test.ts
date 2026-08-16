@@ -249,38 +249,57 @@ describe("crash injection", () => {
 		const taskId = `${PREFIX}-claim`;
 		const reminderId = randomUUID();
 		const N = 5;
-		await crashThenRecover("mid-claim", [taskId], async () => {
-			// Directly enqueued: a whole batch has to be in flight for
-			// "mid-claim" to differ from "before-send".
-			await seedReminderTask(db, scope, taskId, { minutesAgo: 180 });
-			await db.insert(lib.reminderState).values({
-				id: reminderId,
-				taskId,
-				occurrenceAt: new Date(),
-				recipientUserId: USER_A,
-				status: "pending",
-				fireCount: 1,
-				nextAttemptAt: null,
-			});
-			for (let i = 0; i < N; i++) {
-				await db.insert(lib.notificationOutbox).values({
-					id: randomUUID(),
-					reminderStateId: reminderId,
+		await crashThenRecover(
+			"mid-claim",
+			[taskId],
+			async () => {
+				// Directly enqueued: a whole batch has to be in flight for
+				// "mid-claim" to differ from "before-send".
+				await seedReminderTask(db, scope, taskId, { minutesAgo: 180 });
+				await db.insert(lib.reminderState).values({
+					id: reminderId,
+					taskId,
+					occurrenceAt: new Date(),
 					recipientUserId: USER_A,
-					channelKind: "ntfy",
-					payload: {
-						kind: "reminder",
-						taskId,
-						taskTitle: taskId,
-						occurrenceAt: new Date().toISOString(),
-						fireCount: 1,
-					},
-					idempotencyKey: `${reminderId}:ntfy:claim-${i}`,
-					status: "queued",
-					nextAttemptAt: new Date(),
+					status: "pending",
+					fireCount: 1,
+					nextAttemptAt: null,
 				});
-			}
-		});
+				for (let i = 0; i < N; i++) {
+					await db.insert(lib.notificationOutbox).values({
+						id: randomUUID(),
+						reminderStateId: reminderId,
+						recipientUserId: USER_A,
+						channelKind: "ntfy",
+						payload: {
+							kind: "reminder",
+							taskId,
+							taskTitle: taskId,
+							occurrenceAt: new Date().toISOString(),
+							fireCount: 1,
+						},
+						idempotencyKey: `${reminderId}:ntfy:claim-${i}`,
+						status: "queued",
+						nextAttemptAt: new Date(),
+					});
+				}
+			},
+			{
+				// The hook fires only when claimBatch returned rows (worker.ts), and
+				// batchSize is N, so a real mid-claim crash leaves the whole batch
+				// leased. Without this the test degenerates exactly like the send
+				// points did (#114): a replica that died early leaves N queued rows,
+				// the restart drains them normally, and the recovery under test --
+				// that a lease reclaim rescues a batch stranded mid-flight -- is
+				// never exercised while the test still passes.
+				label: "the batch leased",
+				holds: (rows) =>
+					rows.length === N &&
+					rows.every(
+						(row) => row.status === "sending" && row.claimedBy !== null,
+					),
+			},
+		);
 
 		await waitFor(
 			"every claimed row to be recovered and sent",
@@ -333,6 +352,13 @@ describe("crash injection", () => {
 	// The recovery under test is that those two are ONE transaction: commit the
 	// row before the enqueue and the crash strands it at fire_count 1 with no
 	// outbox row and no re-fire, which this test catches.
+	//
+	// Alone among the crash tests this one takes no precondition: a mid-scan
+	// crash is DEFINED by leaving nothing behind (the write and the enqueue share
+	// a transaction, so the kill rolls both back), which is indistinguishable
+	// from a replica that never scanned. The retry loop still covers the exit
+	// hang, and a crash that silently did not happen degrades this to a plain
+	// restart test rather than to a false pass.
 	test("the leader killed mid-scan strands no reminder_state row", async () => {
 		const taskId = `${PREFIX}-scan`;
 		await crashThenRecover("mid-scan", [taskId], async () => {
