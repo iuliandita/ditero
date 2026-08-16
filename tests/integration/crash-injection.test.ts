@@ -21,6 +21,7 @@ import {
 	describePipeline,
 	ReplicaRig,
 	RIG_TIMING,
+	recoveryBudgetMs,
 	outboxFor as rigOutboxFor,
 	wireFor as rigWireFor,
 	type SeededScope,
@@ -127,7 +128,10 @@ async function crashThenRecover(
 	await rig.stop(0);
 	await seed();
 	rig.launch(0, `DITERO_TEST_CRASH_POINT=${point}`);
-	await rig.waitForExit(0, 60_000);
+	// The armed replica has to BOOT before it can reach its crash point, so this
+	// budget must clear the same allowance waitHealthy gives a boot (45s) and not
+	// merely a tick: a starved runner missed the old 60s (#114).
+	await rig.waitForExit(0, 120_000);
 	if (left) {
 		const rows = await outboxFor(left.taskIds);
 		if (!left.holds(rows)) {
@@ -164,7 +168,7 @@ describe("crash injection", () => {
 		await waitFor(
 			"the reclaimed row to be delivered",
 			async () => wireFor(taskId).length > 0,
-			{ timeoutMs: 60_000, ...diagnose(taskId) },
+			{ timeoutMs: recoveryBudgetMs(), ...diagnose(taskId) },
 		);
 		await sleep(3_000);
 
@@ -176,7 +180,7 @@ describe("crash injection", () => {
 		// The lease reclaim bumped attempts and logged its own attempt row
 		// before the successful one.
 		expect(rows[0].attempts).toBeGreaterThanOrEqual(2);
-	}, 180_000);
+	}, 300_000);
 
 	// X3: this is the test that substantiates the at-least-once claim. It must
 	// NOT assert exactly-once.
@@ -193,7 +197,7 @@ describe("crash injection", () => {
 		await waitFor(
 			"the re-send after the reclaim",
 			async () => wireFor(taskId).length >= 2,
-			{ timeoutMs: 60_000, ...diagnose(taskId) },
+			{ timeoutMs: recoveryBudgetMs(), ...diagnose(taskId) },
 		);
 		await sleep(3_000);
 
@@ -202,7 +206,7 @@ describe("crash injection", () => {
 		// One outbox row, one idempotency key, TWO notifications on the wire.
 		expect(wireFor(taskId)).toHaveLength(2);
 		expect(rows[0].status).toBe("sent");
-	}, 180_000);
+	}, 300_000);
 
 	test("SIGKILL mid-claim: no row is lost or left stranded past the lease", async () => {
 		const taskId = `${PREFIX}-claim`;
@@ -252,7 +256,7 @@ describe("crash injection", () => {
 		const rows = await outboxFor([taskId]);
 		expect(rows.filter((row) => row.claimedBy !== null)).toHaveLength(0);
 		expect(wireFor(taskId).length).toBeGreaterThanOrEqual(N);
-	}, 180_000);
+	}, 300_000);
 
 	test("a restart inside the grace window fires the missed reminder once, late", async () => {
 		const late = `${PREFIX}-late`;
@@ -314,7 +318,7 @@ describe("crash injection", () => {
 		expect(rows[0].fireCount).toBe(1);
 		expect(rows[0].status).toBe("pending");
 		expect(wireFor(taskId)).toHaveLength(1);
-	}, 180_000);
+	}, 300_000);
 
 	// X7 / C3: the unbounded-ladder-against-a-real-phone case. maxRepeats 1, so
 	// the shape is exactly "maxRepeats deliveries, one fallback, then silence".

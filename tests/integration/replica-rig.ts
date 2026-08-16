@@ -70,7 +70,37 @@ export type Replica = {
 	port: number;
 	process: ChildProcess | null;
 	exited: boolean;
+	spawnedAt: number | null;
+	exit: { code: number | null; signal: NodeJS.Signals | null } | null;
+	// Ring buffer, kept for the exit diagnostic: stderr is echoed as it arrives,
+	// but a timeout needs it collated with the rest of the replica's state.
+	stderr: string[];
 };
+
+const STDERR_KEEP = 12;
+
+// How long a crash recovery can legitimately take, derived rather than picked:
+// the reclaim cannot start before the lease expires (worker.ts), the reclaimed
+// row then waits out one backoff step (2^attempts seconds plus up to 25%
+// jitter, <= 2 attempts on any crash path here), and the reclaim, the re-claim
+// and the send each cost a tick.
+//
+// SLOW is the runner allowance. #114's failures were all CPU starvation, and no
+// budget is provably enough on a host whose speed is not controlled -- these
+// waits assert that recovery HAPPENS, never how fast, since the product's claim
+// is eventual at-least-once delivery.
+const SLOW = 4;
+
+export function recoveryBudgetMs(timing: RigTiming = RIG_TIMING): number {
+	const backoffMs = 4_000 * 1.25;
+	return Math.ceil(
+		(timing.leaseMs +
+			backoffMs +
+			3 * timing.workerTickMs +
+			timing.adapterDeadlineMs) *
+			SLOW,
+	);
+}
 
 export const sleep = (ms: number) =>
 	new Promise((resolve) => setTimeout(resolve, ms));
@@ -137,6 +167,9 @@ export class ReplicaRig {
 			port: base + index,
 			process: null,
 			exited: true,
+			spawnedAt: null,
+			exit: null,
+			stderr: [],
 		}));
 		// afterAll covers a thrown test; it does NOT cover a hard-killed vitest
 		// worker (hook timeout, --test-timeout, CI cancel). A surviving replica is
@@ -213,16 +246,68 @@ export class ReplicaRig {
 		});
 		replica.process = child;
 		replica.exited = false;
-		child.once("exit", () => {
+		replica.spawnedAt = Date.now();
+		replica.exit = null;
+		replica.stderr = [];
+		child.once("exit", (code, signal) => {
 			replica.exited = true;
+			replica.exit = { code, signal };
 		});
 		// Surfaced on failure only: a replica that refuses to boot otherwise
 		// shows up as an opaque health-check timeout.
 		const tag = `[${replica.id}]`;
 		child.stderr?.on("data", (chunk: Buffer) => {
 			const text = chunk.toString().trim();
-			if (text) console.error(`${tag} ${text}`);
+			if (!text) return;
+			console.error(`${tag} ${text}`);
+			replica.stderr.push(...text.split("\n"));
+			if (replica.stderr.length > STDERR_KEEP) {
+				replica.stderr.splice(0, replica.stderr.length - STDERR_KEEP);
+			}
 		});
+	}
+
+	// What a wait on this replica's lifecycle needs and the label cannot say.
+	//
+	// The armed suicide and any other exit are indistinguishable from `exited`
+	// alone (#114), so an exit wait that expires has two candidates: the replica
+	// never booted, or it booted fine and a starved runner never let it tick as
+	// far as its crash point. The health probe separates them -- a replica that
+	// answers /health as itself is up and merely slow.
+	private async describeReplica(index: number): Promise<string> {
+		const replica = this.replicas[index];
+		const armed =
+			parseEnv(this.extraEnv[index]).DITERO_TEST_CRASH_POINT ?? "(disarmed)";
+		const age =
+			replica.spawnedAt === null
+				? "never spawned"
+				: `${Date.now() - replica.spawnedAt}ms ago`;
+		const exit = replica.exit
+			? `code=${replica.exit.code} signal=${replica.exit.signal}`
+			: "still running";
+		const lines = [
+			`  replica ${replica.id}: pid=${replica.process?.pid ?? "-"} spawned=${age} armed=${armed}`,
+			`  exit: ${exit}`,
+			`  health: ${await this.probeHealth(index)}`,
+		];
+		if (replica.stderr.length === 0) lines.push("  stderr: (silent)");
+		else
+			lines.push("  stderr:", ...replica.stderr.map((line) => `    ${line}`));
+		return lines.join("\n");
+	}
+
+	private async probeHealth(index: number): Promise<string> {
+		const replica = this.replicas[index];
+		try {
+			const response = await fetch(`http://localhost:${replica.port}/health`, {
+				signal: AbortSignal.timeout(2_000),
+			});
+			const body = (await response.json()) as { replica?: string | null };
+			return `:${replica.port} -> ${response.status}, replica=${body.replica ?? "unidentified"}`;
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error);
+			return `:${replica.port} unreachable (${reason})`;
+		}
 	}
 
 	// Ports are fixed, so /health alone is not proof this rig owns the listener:
@@ -271,7 +356,7 @@ export class ReplicaRig {
 		await waitFor(
 			`replica ${this.replicas[index].id} to exit`,
 			async () => this.replicas[index].exited,
-			timeoutMs,
+			{ timeoutMs, diagnose: () => this.describeReplica(index) },
 		);
 	}
 
