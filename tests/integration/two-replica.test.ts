@@ -246,9 +246,16 @@ describe("two replicas, one database", () => {
 		// (scheduler.ts builds it that way).
 		expect(new Set(keys).size).toBe(attempts);
 
-		// One recorded successful attempt per triple: a conflict swallowed as
+		// One recorded SUCCESSFUL attempt per triple: a conflict swallowed as
 		// success would leave a triple with zero, and a re-send would leave one
 		// with two.
+		//
+		// Counting attempts of every class instead would forbid the retry ladder
+		// from ever running. The rig's adapter deadline is 1.5s, so a loaded
+		// runner produces a `transport` attempt followed by an `ok` one -- correct
+		// at-least-once behavior, and the cause of the intermittent CI failure
+		// this replaced (#105). Only `ok` marks a send the provider accepted
+		// (domain/notification-retry.ts).
 		const attemptRows = await db
 			.select({
 				outboxId: tables.deliveryAttempt.outboxId,
@@ -261,9 +268,15 @@ describe("two replicas, one database", () => {
 					rows.map((row) => row.id),
 				),
 			);
-		expect(attemptRows).toHaveLength(attempts);
 		for (const row of rows) {
-			expect(attemptRows.filter((a) => a.outboxId === row.id)).toHaveLength(1);
+			const mine = attemptRows.filter((a) => a.outboxId === row.id);
+			// The classes go in the failure message: whether an extra attempt was
+			// a legitimate retry or a second delivery is exactly what a bare count
+			// discards, and that ambiguity is what made #105 hard to read.
+			expect(
+				mine.filter((a) => a.retryClass === "ok"),
+				`delivery attempts for ${row.key}: [${mine.map((a) => a.retryClass).join(", ")}]`,
+			).toHaveLength(1);
 		}
 
 		// And on the wire: exactly one notification per triple, no more.
