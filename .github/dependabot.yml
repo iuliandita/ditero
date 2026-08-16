@@ -1,65 +1,16 @@
+# No `npm` ecosystem here on purpose. Dependabot does not understand Bun's
+# `bun.lock`, so it rewrites package.json and leaves the lockfile stale; every
+# such PR then dies on `bun install --frozen-lockfile` in ~10s and can never be
+# merged. Its version reasoning is wrong without the lock too -- the queue
+# proposed several downgrades. npm currency comes from periodic `bun update`
+# sweeps instead, which is also the only mechanism that reaches the transitive
+# dependencies the security gate actually flags. Dependabot SECURITY ALERTS are
+# configured separately from update PRs and are unaffected by this file.
+#
+# Both remaining ecosystems target develop: deps land there and soak on
+# :nightly, and main only ever receives release merges.
 version: 2
 updates:
-  - package-ecosystem: npm
-    directory: /
-    # Deps land on develop and soak on :nightly; main only receives release merges.
-    target-branch: develop
-    schedule:
-      interval: daily
-    open-pull-requests-limit: 10
-    versioning-strategy: increase
-    groups:
-      production:
-        patterns:
-          - "@rocicorp/zero"
-          - "drizzle-*"
-          - "pg"
-          - "elysia"
-          - "@elysiajs/*"
-          - "better-auth"
-          - "zod"
-          - "croner"
-          - "jose"
-          - "rrule"
-      dev-tools:
-        patterns:
-          - "typescript"
-          - "vite"
-          - "vitest"
-          - "@vitest/*"
-          - "@biomejs/*"
-          - "drizzle-kit"
-          - "drizzle-zero"
-          - "@vitejs/*"
-          - "@types/*"
-      react:
-        patterns:
-          - "react"
-          - "react-dom"
-          - "react-router*"
-          - "@tanstack/*"
-      testing:
-        patterns:
-          - "@testing-library/*"
-          - "@playwright/*"
-          - "@axe-core/*"
-      frontend:
-        patterns:
-          - "tailwindcss"
-          - "@tailwindcss/*"
-          - "lucide-react"
-          - "sonner"
-          - "clsx"
-          - "class-variance-authority"
-          - "tailwind-merge"
-      native:
-        patterns:
-          - "@capacitor/*"
-          - "@tauri-apps/*"
-      misc:
-        patterns:
-          - "*"
-
   - package-ecosystem: docker
     directory: /deploy/docker
     target-branch: develop
