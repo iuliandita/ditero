@@ -359,13 +359,28 @@ export async function seedWorkspace(
 	return { workspaceId, listId, ownerId };
 }
 
-// "HH:MM" in UTC, `minutesAgo` in the past. Paired with dueAt = now, the scan
-// expands exactly one occurrence, that many minutes old, inside the grace
-// window.
-export function reminderTimeAgo(minutesAgo: number): string {
-	const at = new Date(Date.now() - minutesAgo * 60_000);
+export type ReminderAnchor = { dueAt: Date; reminderTime: string };
+
+// The dueAt/reminderTime pair for a reminder `minutesAgo` in the past, both
+// derived from ONE instant.
+//
+// That is the whole point of returning them together (#95). A non-recurring
+// task's occurrence is dueAt's CALENDAR DATE re-timed by reminderTime
+// (reminder-window.ts), so an "HH:MM" taken from `now - minutesAgo` against a
+// dueAt of `now` describes a different instant entirely whenever the two fall
+// on different UTC dates: just after midnight, "30 minutes ago" expands to
+// 23:40 TODAY, ~23.5h in the future, outside [now - grace, now), and no
+// reminder is ever created.
+export function reminderAnchor(
+	minutesAgo: number,
+	now: Date = new Date(),
+): ReminderAnchor {
+	const at = new Date(now.getTime() - minutesAgo * 60_000);
 	const pad = (n: number) => String(n).padStart(2, "0");
-	return `${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())}`;
+	return {
+		dueAt: at,
+		reminderTime: `${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())}`,
+	};
 }
 
 export type ReminderTaskFields = {
@@ -382,13 +397,14 @@ export async function seedReminderTask(
 	id: string,
 	fields: ReminderTaskFields = {},
 ): Promise<string> {
+	const anchor = reminderAnchor(fields.minutesAgo ?? 2);
 	await database.insert(tables.task).values({
 		id,
 		listId: scope.listId,
 		title: id,
 		sortKey: "a0",
-		dueAt: new Date(),
-		reminderTime: reminderTimeAgo(fields.minutesAgo ?? 2),
+		dueAt: anchor.dueAt,
+		reminderTime: anchor.reminderTime,
 		repeatEveryMin: fields.repeatEveryMin ?? null,
 		maxRepeats: fields.maxRepeats ?? null,
 		fallbackUserId: fields.fallbackUserId ?? null,
