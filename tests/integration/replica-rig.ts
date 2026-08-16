@@ -75,18 +75,44 @@ export type Replica = {
 export const sleep = (ms: number) =>
 	new Promise((resolve) => setTimeout(resolve, ms));
 
+export type WaitOptions = {
+	timeoutMs?: number;
+	intervalMs?: number;
+	// Appended to the timeout message. Runs ONLY after the deadline, so it can
+	// be as expensive as it needs to be (#114: a rig timeout otherwise throws a
+	// bare label, and the next occurrence is another round of inference over a
+	// flake that does not reproduce locally).
+	diagnose?: () => Promise<string>;
+};
+
 export async function waitFor(
 	label: string,
 	predicate: () => Promise<boolean>,
-	timeoutMs = 30_000,
-	intervalMs = 150,
+	options: number | WaitOptions = {},
 ): Promise<void> {
+	const opts: WaitOptions =
+		typeof options === "number" ? { timeoutMs: options } : options;
+	const { timeoutMs = 30_000, intervalMs = 150, diagnose } = opts;
 	const deadline = Date.now() + timeoutMs;
 	for (;;) {
 		if (await predicate()) return;
-		if (Date.now() > deadline)
-			throw new Error(`rig: timed out waiting: ${label}`);
+		if (Date.now() > deadline) {
+			throw new Error(
+				`rig: timed out waiting: ${label}${await explain(diagnose)}`,
+			);
+		}
 		await sleep(intervalMs);
+	}
+}
+
+// A broken diagnostic must never replace the timeout it exists to explain.
+async function explain(diagnose?: () => Promise<string>): Promise<string> {
+	if (!diagnose) return "";
+	try {
+		return `\n${await diagnose()}`;
+	} catch (error) {
+		const reason = error instanceof Error ? error.message : String(error);
+		return `\n(diagnostic failed: ${reason})`;
 	}
 }
 
@@ -457,6 +483,98 @@ export async function outboxFor(database: Database, taskIds: string[]) {
 		)
 		.where(inArray(tables.reminderState.taskId, taskIds));
 }
+
+// Everything the notification pipeline durably knows about a set of tasks, as
+// one block of text for a `waitFor` timeout.
+//
+// The three columns that discriminate the ways a rig wait can hang are the
+// reason this exists: an outbox row still holding `claimed_by` past its lease
+// means the reclaim never ran; climbing `attempts` with delivery_attempt rows
+// carrying a retry class means the re-send ran and failed; `status=sent` with
+// no matching delivery means it reached the provider and not the tap. A bare
+// label distinguishes none of those.
+export async function describePipeline(
+	database: Database,
+	taskIds: string[],
+): Promise<string> {
+	const reminders = await database
+		.select({
+			id: tables.reminderState.id,
+			taskId: tables.reminderState.taskId,
+			recipient: tables.reminderState.recipientUserId,
+			status: tables.reminderState.status,
+			fireCount: tables.reminderState.fireCount,
+			nextAttemptAt: tables.reminderState.nextAttemptAt,
+			deferredUntil: tables.reminderState.deferredUntil,
+			firedLate: tables.reminderState.firedLate,
+		})
+		.from(tables.reminderState)
+		.where(inArray(tables.reminderState.taskId, taskIds));
+
+	const outbox = await database
+		.select({
+			id: tables.notificationOutbox.id,
+			key: tables.notificationOutbox.idempotencyKey,
+			status: tables.notificationOutbox.status,
+			attempts: tables.notificationOutbox.attempts,
+			claimedBy: tables.notificationOutbox.claimedBy,
+			claimedAt: tables.notificationOutbox.claimedAt,
+			nextAttemptAt: tables.notificationOutbox.nextAttemptAt,
+		})
+		.from(tables.notificationOutbox)
+		.innerJoin(
+			tables.reminderState,
+			eq(tables.notificationOutbox.reminderStateId, tables.reminderState.id),
+		)
+		.where(inArray(tables.reminderState.taskId, taskIds));
+
+	const attempts = outbox.length
+		? await database
+				.select({
+					outboxId: tables.deliveryAttempt.outboxId,
+					attemptNo: tables.deliveryAttempt.attemptNo,
+					retryClass: tables.deliveryAttempt.retryClass,
+					providerStatus: tables.deliveryAttempt.providerStatus,
+					error: tables.deliveryAttempt.error,
+					createdAt: tables.deliveryAttempt.createdAt,
+				})
+				.from(tables.deliveryAttempt)
+				.where(
+					inArray(
+						tables.deliveryAttempt.outboxId,
+						outbox.map((row) => row.id),
+					),
+				)
+		: [];
+
+	const lines = [
+		`rig state at ${new Date().toISOString()} for ${taskIds.join(", ")}`,
+	];
+	lines.push(`  reminder_state (${reminders.length}):`);
+	for (const row of reminders) {
+		lines.push(
+			`    ${row.taskId} -> ${row.recipient} status=${row.status} fireCount=${row.fireCount}` +
+				` late=${row.firedLate} next=${iso(row.nextAttemptAt)} deferred=${iso(row.deferredUntil)}`,
+		);
+	}
+	lines.push(`  notification_outbox (${outbox.length}):`);
+	for (const row of outbox) {
+		lines.push(
+			`    ${row.key} status=${row.status} attempts=${row.attempts}` +
+				` claimedBy=${row.claimedBy ?? "-"} claimedAt=${iso(row.claimedAt)} next=${iso(row.nextAttemptAt)}`,
+		);
+		for (const attempt of attempts.filter((a) => a.outboxId === row.id)) {
+			lines.push(
+				`      attempt#${attempt.attemptNo} ${attempt.retryClass}` +
+					` provider=${attempt.providerStatus ?? "-"} at=${iso(attempt.createdAt)}` +
+					` error=${attempt.error ?? "-"}`,
+			);
+		}
+	}
+	return lines.join("\n");
+}
+
+const iso = (value: Date | null) => value?.toISOString() ?? "-";
 
 // Every replica ticks the moment it boots, so a leftover row from an earlier
 // file in this (serial) suite would be delivered to the rig's tap and counted.

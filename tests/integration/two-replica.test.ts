@@ -18,6 +18,7 @@ import * as tables from "../../src/db/schema.ts";
 import { type NtfyTap, startNtfyTap } from "../support/ntfy-tap.ts";
 import { privateHost } from "../support/private-host.ts";
 import {
+	describePipeline,
 	ReplicaRig,
 	outboxFor as rigOutboxFor,
 	wireFor as rigWireFor,
@@ -48,6 +49,19 @@ let scope: SeededScope;
 // Bound to this file's tap/db so the call sites stay unchanged.
 const wireFor = (taskId: string) => rigWireFor(tap, taskId);
 const outboxFor = (taskIds: string[]) => rigOutboxFor(db, taskIds);
+
+// A rig wait that expires here has the same blind spot as #114's: the label
+// alone cannot say whether the row was never claimed, never sent, or sent to a
+// provider the tap never heard from.
+const diagnose = (...taskIds: string[]) => ({
+	diagnose: async () =>
+		[
+			await describePipeline(db, taskIds),
+			`  ntfy tap: ${taskIds
+				.map((id) => `${id}=${wireFor(id).length}`)
+				.join(" ")}`,
+		].join("\n"),
+});
 
 // Which replica put a delivery on the wire: the ack link's origin is that
 // replica's DITERO_PUBLIC_URL.
@@ -103,7 +117,7 @@ describe("two replicas, one database", () => {
 		await waitFor(
 			"the reminder to be delivered",
 			async () => wireFor(taskId).length > 0,
-			30_000,
+			{ timeoutMs: 30_000, ...diagnose(taskId) },
 		);
 		// Both replicas keep scanning; give a couple more leader ticks a chance
 		// to create a duplicate before asserting there is none.
@@ -164,7 +178,7 @@ describe("two replicas, one database", () => {
 				const rows = await outboxFor([taskId]);
 				return rows.every((row) => row.status === "sent");
 			},
-			90_000,
+			{ timeoutMs: 90_000, ...diagnose(taskId) },
 		);
 
 		const rows = await outboxFor([taskId]);
@@ -205,7 +219,7 @@ describe("two replicas, one database", () => {
 		await waitFor(
 			"the survivor to scan and deliver",
 			async () => wireFor(taskId).length > 0,
-			45_000,
+			{ timeoutMs: 45_000, ...diagnose(taskId) },
 		);
 		const wire = wireFor(taskId);
 		expect(wire).toHaveLength(1);
@@ -237,7 +251,7 @@ describe("two replicas, one database", () => {
 					rows.length === attempts && rows.every((row) => row.status === "sent")
 				);
 			},
-			90_000,
+			{ timeoutMs: 90_000, ...diagnose(...taskIds) },
 		);
 
 		const rows = await outboxFor(taskIds);
