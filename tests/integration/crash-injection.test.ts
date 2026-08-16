@@ -146,6 +146,13 @@ async function crashThenRecover(
 
 	let reason = "";
 	for (let attempt = 1; attempt <= CRASH_ATTEMPTS; attempt++) {
+		// A silent retry hides a degrading runner: a run that needed two attempts
+		// would otherwise look exactly like a clean one.
+		if (attempt > 1) {
+			console.error(
+				`[rig] retrying the ${point} crash (${attempt}/${CRASH_ATTEMPTS}): ${reason.split("\n")[0]}`,
+			);
+		}
 		rig.launch(0, `DITERO_TEST_CRASH_POINT=${point}`);
 		try {
 			await rig.waitForExit(0, CRASH_EXIT_BUDGET_MS);
@@ -172,7 +179,7 @@ async function crashThenRecover(
 			await rig.restart(0, "");
 			return;
 		}
-		reason = `the ${point} crash left no ${left.label}\n${await describePipeline(db, taskIds)}`;
+		reason = `the ${point} crash did not leave ${left.label}\n${await describePipeline(db, taskIds)}`;
 	}
 	throw new Error(
 		`rig: the ${point} crash never set up its precondition in ${CRASH_ATTEMPTS} attempts, so the recovery under test was never reachable\n${reason}`,
