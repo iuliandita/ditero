@@ -507,9 +507,26 @@ describe("ack route: rejection", () => {
 		// least REJECT_FLOOR_MS regardless of which check failed.
 		expect(Math.min(...garbage)).toBeGreaterThanOrEqual(REJECT_FLOOR_MS - 5);
 		expect(Math.min(...misbound)).toBeGreaterThanOrEqual(REJECT_FLOOR_MS - 5);
-		// ...and the two ranges overlap, so neither class is separable by timing.
-		expect(Math.max(...garbage)).toBeGreaterThanOrEqual(Math.min(...misbound));
-		expect(Math.max(...misbound)).toBeGreaterThanOrEqual(Math.min(...garbage));
+
+		// ...and neither class is separable by timing. Asserted as "both land in
+		// the same quantization bucket", not as an overlap of the two raw
+		// intervals (#104): the route rounds UP to a whole multiple of the floor,
+		// so when the padding works both classes pile up within a fraction of a
+		// millisecond of the same value, and which interval's max exceeded the
+		// other's min was decided by scheduler noise -- the assertion was
+		// weakest exactly when the property held best, and failed CI on losses
+		// of 0.05ms.
+		//
+		// A class whose real work pushed it into the next bucket IS separable,
+		// and that is the failure this must catch. Buckets are 1-indexed: the
+		// route's `floor(elapsed / F) + 1` never returns 0, so a bucket of 0
+		// here would mean padding was skipped entirely.
+		const bucketOf = (ms: number) => Math.round(ms / REJECT_FLOOR_MS);
+		const buckets = new Set([...garbage, ...misbound].map(bucketOf));
+		expect(
+			[...buckets],
+			`garbage=[${garbage.map((n) => n.toFixed(1)).join(", ")}] misbound=[${misbound.map((n) => n.toFixed(1)).join(", ")}]`,
+		).toHaveLength(1);
 	});
 
 	// A denied completion is not a spent capability: rolling back leaves the
