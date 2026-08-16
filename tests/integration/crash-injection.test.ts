@@ -106,23 +106,60 @@ afterAll(async () => {
 
 // Seed while nothing is running, then boot armed, wait for the suicide, then
 // boot clean and watch the recovery.
+//
+// `left` is what the crash must have LEFT BEHIND, and it is not optional
+// bookkeeping (#114). The rig cannot tell the armed suicide from any other
+// exit, so a replica that dies before reaching its crash point -- reproducible
+// here under a saturated host -- silently turns the caller into a test whose
+// precondition never existed: it then waits out its full budget for a recovery
+// that was never set up, and reports a timeout on the recovery rather than on
+// the crash that never happened. Checked immediately, while the state that
+// explains it is still fresh.
 async function crashThenRecover(
 	point: string,
 	seed: () => Promise<void>,
+	left?: {
+		label: string;
+		taskIds: string[];
+		holds: (rows: OutboxSnapshot) => boolean;
+	},
 ): Promise<void> {
 	await rig.stop(0);
 	await seed();
 	rig.launch(0, `DITERO_TEST_CRASH_POINT=${point}`);
 	await rig.waitForExit(0, 60_000);
+	if (left) {
+		const rows = await outboxFor(left.taskIds);
+		if (!left.holds(rows)) {
+			throw new Error(
+				`rig: the ${point} crash did not leave ${left.label}, so the recovery under test never had a precondition\n` +
+					(await describePipeline(db, left.taskIds)),
+			);
+		}
+	}
 	await rig.restart(0, "");
 }
+
+type OutboxSnapshot = Awaited<ReturnType<typeof outboxFor>>;
+
+// Both send-point crashes die holding the row: claimBatch commits `sending`
+// with claimed_by before either hook can fire, and neither hook is reached
+// without that claim.
+const heldBySender = (rows: OutboxSnapshot) =>
+	rows.length === 1 &&
+	rows[0].status === "sending" &&
+	rows[0].claimedBy !== null;
 
 describe("crash injection", () => {
 	test("SIGKILL before the send: the row is reclaimed after the lease and delivered once", async () => {
 		const taskId = `${PREFIX}-before`;
-		await crashThenRecover("before-send", async () => {
-			await seedReminderTask(db, scope, taskId);
-		});
+		await crashThenRecover(
+			"before-send",
+			async () => {
+				await seedReminderTask(db, scope, taskId);
+			},
+			{ label: "a claimed row", taskIds: [taskId], holds: heldBySender },
+		);
 
 		await waitFor(
 			"the reclaimed row to be delivered",
@@ -145,9 +182,13 @@ describe("crash injection", () => {
 	// NOT assert exactly-once.
 	test("SIGKILL after the send but before the commit: the row is re-sent", async () => {
 		const taskId = `${PREFIX}-after`;
-		await crashThenRecover("after-send", async () => {
-			await seedReminderTask(db, scope, taskId);
-		});
+		await crashThenRecover(
+			"after-send",
+			async () => {
+				await seedReminderTask(db, scope, taskId);
+			},
+			{ label: "a claimed row", taskIds: [taskId], holds: heldBySender },
+		);
 
 		await waitFor(
 			"the re-send after the reclaim",
