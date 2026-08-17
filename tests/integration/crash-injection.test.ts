@@ -21,6 +21,7 @@ import {
 	describePipeline,
 	ReplicaRig,
 	RIG_TIMING,
+	recoveryBudgetMs,
 	outboxFor as rigOutboxFor,
 	wireFor as rigWireFor,
 	type SeededScope,
@@ -107,37 +108,88 @@ afterAll(async () => {
 // Seed while nothing is running, then boot armed, wait for the suicide, then
 // boot clean and watch the recovery.
 //
-// `left` is what the crash must have LEFT BEHIND, and it is not optional
-// bookkeeping (#114). The rig cannot tell the armed suicide from any other
-// exit, so a replica that dies before reaching its crash point -- reproducible
-// here under a saturated host -- silently turns the caller into a test whose
-// precondition never existed: it then waits out its full budget for a recovery
-// that was never set up, and reports a timeout on the recovery rather than on
-// the crash that never happened. Checked immediately, while the state that
-// explains it is still fresh.
+// The crash is SETUP, not the property under test -- the property is the
+// recovery that follows it -- and under a saturated host the setup is what
+// fails (#114): the armed replica exits before reaching its crash point, or
+// never gets scheduled far enough to exit at all. So the crash phase retries
+// rather than asserting, and only an exhausted retry is a failure.
+//
+// Retrying is sound because an ARMED replica can never leave a terminal row:
+// every crash point fires before the completion commit (worker.ts), so a row
+// this attempt touched is still queued or still leased, and the next armed
+// launch reclaims and re-crashes it. That is exactly why the same loop must
+// NOT accept the state left by a killed-on-timeout replica -- an external kill
+// between the claim and the send leaves a row indistinguishable from a
+// before-send crash, which would let the after-send test pass its precondition
+// having never sent anything.
+//
+// `left` is what the crash must have LEFT BEHIND. The rig cannot tell the armed
+// suicide from any other exit, so without it a replica that died early silently
+// turns the caller into a test whose precondition never existed: it waits out
+// its full budget for a recovery that was never set up, and blames the recovery
+// for a crash that never happened.
+const CRASH_ATTEMPTS = 3;
+// Per attempt, and ESCALATING (attempt x this), because the observed failure is
+// a boot that never finishes: under a host oversubscribed ~2x the replica stays
+// alive for the whole budget with /health unreachable and stderr silent, and
+// three tries at one fixed budget then all hit the same wall. A retry helps a
+// transient stall; only a roomier one helps a sustained stall. The base clears
+// waitHealthy's own 45s boot allowance.
+//
+// No budget survives arbitrary oversubscription, and none of these waits claims
+// a latency bound -- the product promises eventual at-least-once delivery. What
+// the budget buys is a diagnosis that names which of the two it was.
+const CRASH_EXIT_BUDGET_MS = 60_000;
+
 async function crashThenRecover(
 	point: string,
+	taskIds: string[],
 	seed: () => Promise<void>,
-	left?: {
-		label: string;
-		taskIds: string[];
-		holds: (rows: OutboxSnapshot) => boolean;
-	},
+	left?: { label: string; holds: (rows: OutboxSnapshot) => boolean },
 ): Promise<void> {
 	await rig.stop(0);
 	await seed();
-	rig.launch(0, `DITERO_TEST_CRASH_POINT=${point}`);
-	await rig.waitForExit(0, 60_000);
-	if (left) {
-		const rows = await outboxFor(left.taskIds);
-		if (!left.holds(rows)) {
-			throw new Error(
-				`rig: the ${point} crash did not leave ${left.label}, so the recovery under test never had a precondition\n` +
-					(await describePipeline(db, left.taskIds)),
+
+	let reason = "";
+	for (let attempt = 1; attempt <= CRASH_ATTEMPTS; attempt++) {
+		// A silent retry hides a degrading runner: a run that needed two attempts
+		// would otherwise look exactly like a clean one.
+		if (attempt > 1) {
+			console.error(
+				`[rig] retrying the ${point} crash (${attempt}/${CRASH_ATTEMPTS}): ${reason.split("\n")[0]}`,
 			);
 		}
+		rig.launch(0, `DITERO_TEST_CRASH_POINT=${point}`);
+		try {
+			await rig.waitForExit(0, attempt * CRASH_EXIT_BUDGET_MS);
+		} catch (error) {
+			reason = error instanceof Error ? error.message : String(error);
+			// Still alive and still armed: take it down before relaunching, or the
+			// next spawn races a process that may yet reach its crash point.
+			await rig.stop(0);
+			// Every caller asserts an EXACT delivery count, so a retry is only
+			// clean while the abandoned attempt put nothing on the wire. It should
+			// not have -- the send-point hooks fire immediately after the send, so
+			// a replica that got that far would have exited long before this
+			// budget -- but "should not" is not an invariant to silently bet an
+			// exact count on.
+			const stray = taskIds.filter((id) => wireFor(id).length > 0);
+			if (stray.length > 0) {
+				throw new Error(
+					`rig: the timed-out ${point} attempt already delivered ${stray.join(", ")}, so retrying it would inflate the wire count the caller asserts\n${reason}`,
+				);
+			}
+			continue;
+		}
+		if (!left || left.holds(await outboxFor(taskIds))) {
+			await rig.restart(0, "");
+			return;
+		}
+		reason = `the ${point} crash did not leave ${left.label}\n${await describePipeline(db, taskIds)}`;
 	}
-	await rig.restart(0, "");
+	throw new Error(
+		`rig: the ${point} crash never set up its precondition in ${CRASH_ATTEMPTS} attempts, so the recovery under test was never reachable\n${reason}`,
+	);
 }
 
 type OutboxSnapshot = Awaited<ReturnType<typeof outboxFor>>;
@@ -155,16 +207,17 @@ describe("crash injection", () => {
 		const taskId = `${PREFIX}-before`;
 		await crashThenRecover(
 			"before-send",
+			[taskId],
 			async () => {
 				await seedReminderTask(db, scope, taskId);
 			},
-			{ label: "a claimed row", taskIds: [taskId], holds: heldBySender },
+			{ label: "a claimed row", holds: heldBySender },
 		);
 
 		await waitFor(
 			"the reclaimed row to be delivered",
 			async () => wireFor(taskId).length > 0,
-			{ timeoutMs: 60_000, ...diagnose(taskId) },
+			{ timeoutMs: recoveryBudgetMs(), ...diagnose(taskId) },
 		);
 		await sleep(3_000);
 
@@ -176,7 +229,7 @@ describe("crash injection", () => {
 		// The lease reclaim bumped attempts and logged its own attempt row
 		// before the successful one.
 		expect(rows[0].attempts).toBeGreaterThanOrEqual(2);
-	}, 180_000);
+	}, 480_000);
 
 	// X3: this is the test that substantiates the at-least-once claim. It must
 	// NOT assert exactly-once.
@@ -184,16 +237,17 @@ describe("crash injection", () => {
 		const taskId = `${PREFIX}-after`;
 		await crashThenRecover(
 			"after-send",
+			[taskId],
 			async () => {
 				await seedReminderTask(db, scope, taskId);
 			},
-			{ label: "a claimed row", taskIds: [taskId], holds: heldBySender },
+			{ label: "a claimed row", holds: heldBySender },
 		);
 
 		await waitFor(
 			"the re-send after the reclaim",
 			async () => wireFor(taskId).length >= 2,
-			{ timeoutMs: 60_000, ...diagnose(taskId) },
+			{ timeoutMs: recoveryBudgetMs(), ...diagnose(taskId) },
 		);
 		await sleep(3_000);
 
@@ -202,44 +256,63 @@ describe("crash injection", () => {
 		// One outbox row, one idempotency key, TWO notifications on the wire.
 		expect(wireFor(taskId)).toHaveLength(2);
 		expect(rows[0].status).toBe("sent");
-	}, 180_000);
+	}, 480_000);
 
 	test("SIGKILL mid-claim: no row is lost or left stranded past the lease", async () => {
 		const taskId = `${PREFIX}-claim`;
 		const reminderId = randomUUID();
 		const N = 5;
-		await crashThenRecover("mid-claim", async () => {
-			// Directly enqueued: a whole batch has to be in flight for
-			// "mid-claim" to differ from "before-send".
-			await seedReminderTask(db, scope, taskId, { minutesAgo: 180 });
-			await db.insert(lib.reminderState).values({
-				id: reminderId,
-				taskId,
-				occurrenceAt: new Date(),
-				recipientUserId: USER_A,
-				status: "pending",
-				fireCount: 1,
-				nextAttemptAt: null,
-			});
-			for (let i = 0; i < N; i++) {
-				await db.insert(lib.notificationOutbox).values({
-					id: randomUUID(),
-					reminderStateId: reminderId,
+		await crashThenRecover(
+			"mid-claim",
+			[taskId],
+			async () => {
+				// Directly enqueued: a whole batch has to be in flight for
+				// "mid-claim" to differ from "before-send".
+				await seedReminderTask(db, scope, taskId, { minutesAgo: 180 });
+				await db.insert(lib.reminderState).values({
+					id: reminderId,
+					taskId,
+					occurrenceAt: new Date(),
 					recipientUserId: USER_A,
-					channelKind: "ntfy",
-					payload: {
-						kind: "reminder",
-						taskId,
-						taskTitle: taskId,
-						occurrenceAt: new Date().toISOString(),
-						fireCount: 1,
-					},
-					idempotencyKey: `${reminderId}:ntfy:claim-${i}`,
-					status: "queued",
-					nextAttemptAt: new Date(),
+					status: "pending",
+					fireCount: 1,
+					nextAttemptAt: null,
 				});
-			}
-		});
+				for (let i = 0; i < N; i++) {
+					await db.insert(lib.notificationOutbox).values({
+						id: randomUUID(),
+						reminderStateId: reminderId,
+						recipientUserId: USER_A,
+						channelKind: "ntfy",
+						payload: {
+							kind: "reminder",
+							taskId,
+							taskTitle: taskId,
+							occurrenceAt: new Date().toISOString(),
+							fireCount: 1,
+						},
+						idempotencyKey: `${reminderId}:ntfy:claim-${i}`,
+						status: "queued",
+						nextAttemptAt: new Date(),
+					});
+				}
+			},
+			{
+				// The hook fires only when claimBatch returned rows (worker.ts), and
+				// batchSize is N, so a real mid-claim crash leaves the whole batch
+				// leased. Without this the test degenerates exactly like the send
+				// points did (#114): a replica that died early leaves N queued rows,
+				// the restart drains them normally, and the recovery under test --
+				// that a lease reclaim rescues a batch stranded mid-flight -- is
+				// never exercised while the test still passes.
+				label: "the batch leased",
+				holds: (rows) =>
+					rows.length === N &&
+					rows.every(
+						(row) => row.status === "sending" && row.claimedBy !== null,
+					),
+			},
+		);
 
 		await waitFor(
 			"every claimed row to be recovered and sent",
@@ -252,7 +325,7 @@ describe("crash injection", () => {
 		const rows = await outboxFor([taskId]);
 		expect(rows.filter((row) => row.claimedBy !== null)).toHaveLength(0);
 		expect(wireFor(taskId).length).toBeGreaterThanOrEqual(N);
-	}, 180_000);
+	}, 480_000);
 
 	test("a restart inside the grace window fires the missed reminder once, late", async () => {
 		const late = `${PREFIX}-late`;
@@ -292,9 +365,16 @@ describe("crash injection", () => {
 	// The recovery under test is that those two are ONE transaction: commit the
 	// row before the enqueue and the crash strands it at fire_count 1 with no
 	// outbox row and no re-fire, which this test catches.
+	//
+	// Alone among the crash tests this one takes no precondition: a mid-scan
+	// crash is DEFINED by leaving nothing behind (the write and the enqueue share
+	// a transaction, so the kill rolls both back), which is indistinguishable
+	// from a replica that never scanned. The retry loop still covers the exit
+	// hang, and a crash that silently did not happen degrades this to a plain
+	// restart test rather than to a false pass.
 	test("the leader killed mid-scan strands no reminder_state row", async () => {
 		const taskId = `${PREFIX}-scan`;
-		await crashThenRecover("mid-scan", async () => {
+		await crashThenRecover("mid-scan", [taskId], async () => {
 			await seedReminderTask(db, scope, taskId);
 		});
 
@@ -314,7 +394,7 @@ describe("crash injection", () => {
 		expect(rows[0].fireCount).toBe(1);
 		expect(rows[0].status).toBe("pending");
 		expect(wireFor(taskId)).toHaveLength(1);
-	}, 180_000);
+	}, 480_000);
 
 	// X7 / C3: the unbounded-ladder-against-a-real-phone case. maxRepeats 1, so
 	// the shape is exactly "maxRepeats deliveries, one fallback, then silence".
