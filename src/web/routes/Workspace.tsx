@@ -43,6 +43,7 @@ import { ListProgress } from "../components/shell/ListProgress.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
 import { Button } from "../components/ui/button.tsx";
+import { useConfirm } from "../components/ui/confirm.tsx";
 import {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
@@ -135,6 +136,7 @@ function WorkspaceKeyboard() {
 function NormalWorkspace() {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
+	const confirm = useConfirm();
 	const persistLocale = useCallback(
 		(locale: Locale) => {
 			// Best-effort by design, not a swallowed error: changeLocale() already
@@ -495,8 +497,13 @@ function NormalWorkspace() {
 			.client.catch((e) => console.error("dashboard.update failed", e));
 	}
 
-	function deleteDashboard(id: string) {
-		if (!window.confirm(m.dashboard_delete_confirm())) return;
+	async function deleteDashboard(id: string) {
+		const ok = await confirm({
+			body: m.dashboard_delete_confirm(),
+			confirmLabel: m.action_delete(),
+			destructive: true,
+		});
+		if (!ok) return;
 		void zero
 			.mutate(mutators.dashboard.delete({ id }))
 			.client.catch((e) => console.error("dashboard.delete failed", e));
@@ -669,7 +676,9 @@ function NormalWorkspace() {
 							onEditDashboard={() =>
 								setDashboardManager({ mode: "edit", id: openDashboardRow.id })
 							}
-							onDeleteDashboard={() => deleteDashboard(openDashboardRow.id)}
+							onDeleteDashboard={() =>
+								void deleteDashboard(openDashboardRow.id)
+							}
 							onSetHome={() => setHome(dashboardHomeRef(openDashboardRow.id))}
 							isHome={
 								pref.homeViewRef === dashboardHomeRef(openDashboardRow.id)
