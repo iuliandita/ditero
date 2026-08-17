@@ -1272,5 +1272,7 @@
 	"notify_ack_label": "Done",
 	"notify_ack_email_prefix": "Mark it done:",
 	"notify_test_title": "Ditero test",
-	"notify_test_body": "Test notification from Ditero."
+	"notify_test_body": "Test notification from Ditero.",
+	"row_actions_label": "Actions",
+	"row_actions_for": "Actions for {name}"
 }

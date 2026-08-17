@@ -1376,5 +1376,7 @@
 	"notify_ack_label": "تم",
 	"notify_ack_email_prefix": "وضع علامة كمنجز:",
 	"notify_test_title": "اختبار Ditero",
-	"notify_test_body": "إشعار اختباري من Ditero."
+	"notify_test_body": "إشعار اختباري من Ditero.",
+	"row_actions_label": "إجراءات",
+	"row_actions_for": "إجراءات لـ {name}"
 }

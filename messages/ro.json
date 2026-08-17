@@ -1298,5 +1298,7 @@
 	"notify_ack_label": "Gata",
 	"notify_ack_email_prefix": "Marchează ca finalizat:",
 	"notify_test_title": "Test Ditero",
-	"notify_test_body": "Notificare de test de la Ditero."
+	"notify_test_body": "Notificare de test de la Ditero.",
+	"row_actions_label": "Acțiuni",
+	"row_actions_for": "Acțiuni pentru {name}"
 }
