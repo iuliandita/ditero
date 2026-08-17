@@ -22,8 +22,6 @@ import { m } from "../../../paraglide/messages.js";
 import { InviteMailNotice } from "./InviteMailNotice";
 import { ROLE_LABELS } from "./role-labels.ts";
 
-export type { Role } from "../../../domain/role.ts";
-
 // Roles a caller may grant, mirroring the server escalation gate in
 // auth/invite-create.ts (default policy): only an owner grants owner, admin+
 // grants admin, member+ grants member/viewer. The endpoint stays authoritative;

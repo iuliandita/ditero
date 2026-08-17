@@ -1,7 +1,6 @@
 // One definition of the membership role ladder, imported by the mutators
 // (authorization), ack-complete (delivery gating) and the web client (which
-// actions a row may offer). It was previously copied in all three, with
-// ack-complete carrying a "mirrors mutators.ts" comment as the only link.
+// actions a row may offer).
 
 export const ROLES = ["owner", "admin", "member", "viewer"] as const;
 
