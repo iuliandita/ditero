@@ -13,10 +13,7 @@
 import { karmaForCompletion } from "./karma.ts";
 import { localDay } from "./local-day.ts";
 import { nextDue } from "./recurrence.ts";
-
-// Mirrors mutators.ts WRITE_ROLES. A viewer is deliberately excluded and
-// handled below rather than denied.
-const WRITE_ROLES = new Set(["owner", "admin", "member"]);
+import { type Role, WRITE_ROLES } from "./role.ts";
 
 // Reminder statuses a sibling termination must not overwrite: already terminal,
 // or terminal for a reason acking does not undo.
@@ -41,7 +38,7 @@ export type AckHabitLog = {
 
 export type AckStore = {
 	task(taskId: string): Promise<AckTask | null>;
-	role(userId: string, workspaceId: string): Promise<string | null>;
+	role(userId: string, workspaceId: string): Promise<Role | null>;
 	timezone(userId: string): Promise<string>;
 	updateTask(
 		id: string,

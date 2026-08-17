@@ -17,11 +17,12 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import type { InviteMailStatus } from "../../../domain/invite.ts";
+import type { Role } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
 import { InviteMailNotice } from "./InviteMailNotice";
 import { ROLE_LABELS } from "./role-labels.ts";
 
-export type Role = "owner" | "admin" | "member" | "viewer";
+export type { Role } from "../../../domain/role.ts";
 
 // Roles a caller may grant, mirroring the server escalation gate in
 // auth/invite-create.ts (default policy): only an owner grants owner, admin+
