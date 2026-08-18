@@ -67,10 +67,28 @@ async function goToListsIndex(page: Page): Promise<void> {
 	});
 }
 
+// Attribute selector, NOT getByRole: a Radix modal surface (every row menu and
+// every confirm dialog here) mounts its content in a body portal and calls
+// hideOthers(), which sets aria-hidden="true" on the portal's siblings -- i.e.
+// on the whole app root. Playwright's role engine skips anything hidden for
+// aria (queryRole -> isElementHiddenForAria), so while a menu is open a
+// getByRole locator for ANYTHING outside it stops resolving: it reports
+// "element(s) not found", and a toHaveCount(0) against it passes vacuously.
+// Every locator that has to survive an open menu is therefore attribute-based.
+// The other specs may use getByRole for this nav because none of them queries
+// outside an open modal surface.
 function sidebarLists(page: Page, locale: Locale = "en"): Locator {
-	return page.getByRole("navigation", {
-		name: m.sidebar_lists_nav_label({}, { locale }),
-	});
+	return page.locator(
+		`nav[aria-label="${m.sidebar_lists_nav_label({}, { locale })}"]`,
+	);
+}
+
+// The kebab's accessible name IS its aria-label (row-actions.tsx:120), so the
+// attribute match is exact and equivalent to the role lookup it replaces.
+function kebabIn(scope: Locator, name: string, locale: Locale = "en"): Locator {
+	return scope.locator(
+		`button[aria-label="${m.row_actions_for({ name }, { locale })}"]`,
+	);
 }
 
 // The open list's header carries a second RowActions with the SAME aria-label
@@ -80,10 +98,7 @@ function listRowKebab(
 	name: string,
 	locale: Locale = "en",
 ): Locator {
-	return sidebarLists(page, locale).getByRole("button", {
-		name: m.row_actions_for({ name }, { locale }),
-		exact: true,
-	});
+	return kebabIn(sidebarLists(page, locale), name, locale);
 }
 
 function listRow(page: Page, name: string, locale: Locale = "en"): Locator {
@@ -387,10 +402,7 @@ test("blocked: a folder with lists shows Delete disabled with its reason, and de
 	await createFolder(page, folderName);
 	await moveListToFolder(page, listName, folderName);
 
-	const folderKebab = sidebarLists(page).getByRole("button", {
-		name: m.row_actions_for({ name: folderName }, { locale: "en" }),
-		exact: true,
-	});
+	const folderKebab = kebabIn(sidebarLists(page), folderName);
 	await openRowMenu(folderKebab);
 
 	const blockedDelete = page.getByTestId("row-action-delete");
@@ -512,10 +524,7 @@ test("roles: a Viewer is offered no Delete anywhere", async ({ page }) => {
 	// DOES get a menu there. Without this, an app that simply failed to sync
 	// would pass the absence checks above for the wrong reason.
 	await openListDesktop(page, names.list);
-	const taskKebab = page.getByTestId("list").getByRole("button", {
-		name: m.row_actions_for({ name: names.task }, { locale: "en" }),
-		exact: true,
-	});
+	const taskKebab = kebabIn(page.getByTestId("list"), names.task);
 	await openRowMenu(taskKebab);
 	await expect(page.getByTestId("row-action-open")).toBeVisible();
 	await expect(page.getByTestId("row-action-delete")).toHaveCount(0);
