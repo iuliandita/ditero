@@ -98,6 +98,7 @@ import {
 } from "../keyboard/roving.ts";
 import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
 import { useKeyBindings } from "../keyboard/useKeyBindings.ts";
+import { canCreateFolder, shareableWorkspaces } from "../lib/create-gates.ts";
 import { ICONS } from "../lib/list-icon.tsx";
 import type { Locale } from "../lib/locale.ts";
 import { runMutation } from "../lib/run-mutation.ts";
@@ -264,6 +265,13 @@ function NormalWorkspace() {
 		return map;
 	}, [memberships, zero.userID]);
 	const activeRole = activeId ? (roleByWorkspace.get(activeId) ?? null) : null;
+	// Share targets for views/dashboards: every user owns a personal workspace as
+	// owner, so this is never empty -- it only drops the workspaces the caller
+	// joined as Viewer.
+	const shareable = useMemo(
+		() => shareableWorkspaces(workspaces, roleByWorkspace),
+		[workspaces, roleByWorkspace],
+	);
 
 	function moveListToFolder(list: List, folderId: string | null) {
 		void zero
@@ -1278,6 +1286,7 @@ function NormalWorkspace() {
 								listActions={buildListActions}
 								folderActions={buildFolderActions}
 								onNewFolder={() => setFolderDialog({ mode: "create" })}
+								canCreateFolder={canCreateFolder(activeRole)}
 								builtinViews={BUILTIN_VIEWS}
 								pinnedViews={pinnedViews}
 								activeViewId={activeViewId}
@@ -1402,6 +1411,10 @@ function NormalWorkspace() {
 						}))}
 						members={members}
 						workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
+						shareableWorkspaces={shareable.map((w) => ({
+							id: w.id,
+							name: w.name,
+						}))}
 						onSubmit={submitView}
 					/>
 				)}
@@ -1430,7 +1443,10 @@ function NormalWorkspace() {
 									})()
 								: undefined
 						}
-						workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
+						shareableWorkspaces={shareable.map((w) => ({
+							id: w.id,
+							name: w.name,
+						}))}
 						onSubmit={submitDashboard}
 					/>
 				)}
