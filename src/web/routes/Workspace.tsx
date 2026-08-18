@@ -19,7 +19,7 @@ import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
-import type { List, schema } from "../../zero/schema.gen.ts";
+import type { Folder, List, schema } from "../../zero/schema.gen.ts";
 import {
 	type DashboardFormValue,
 	DashboardManager,
@@ -45,19 +45,17 @@ import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
 import { Fab } from "../components/shell/Fab.tsx";
+import {
+	type FolderActionHandlers,
+	folderActions,
+} from "../components/shell/folderActions.ts";
 import { groupLists } from "../components/shell/grouping.ts";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
+import { NameDialog } from "../components/shell/NameDialog.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { useConfirm } from "../components/ui/confirm.tsx";
-import {
-	Dialog,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "../components/ui/dialog.tsx";
 import {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
@@ -66,7 +64,6 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu.tsx";
-import { Input } from "../components/ui/input.tsx";
 import {
 	Sheet,
 	SheetContent,
@@ -201,7 +198,17 @@ function NormalWorkspace() {
 	const [homeApplied, setHomeApplied] = useState(false);
 	// Rename target for the list row-action; null when the dialog is closed.
 	const [renameTarget, setRenameTarget] = useState<List | null>(null);
-	const [renameValue, setRenameValue] = useState("");
+	// Folder create/rename dialog target; null when closed.
+	const [folderDialog, setFolderDialog] = useState<
+		{ mode: "create" } | { mode: "rename"; folder: Folder } | null
+	>(null);
+	// "New list here": preselects the folder in the create-list form. The nonce
+	// keys a remount, so picking the same folder twice re-seeds the select even
+	// after the user changed it by hand.
+	const [newListFolder, setNewListFolder] = useState<{
+		id: string;
+		nonce: number;
+	} | null>(null);
 
 	// Default active workspace is the user's personal one, so new lists stay private.
 	useEffect(() => {
@@ -304,10 +311,7 @@ function NormalWorkspace() {
 	}
 
 	const listActionHandlers: ListActionHandlers = {
-		rename: (list) => {
-			setRenameValue(list.title);
-			setRenameTarget(list);
-		},
+		rename: setRenameTarget,
 		moveToFolder: moveListToFolder,
 		saveAsTemplate: saveListAsTemplate,
 		remove: (list) => void deleteList(list),
@@ -322,14 +326,83 @@ function NormalWorkspace() {
 			handlers: listActionHandlers,
 		});
 
-	function submitRename() {
-		const next = renameValue.trim();
+	function submitRename(next: string) {
 		const target = renameTarget;
 		setRenameTarget(null);
-		if (!target || !next || next === target.title) return;
+		if (!target || next === target.title) return;
 		void zero
 			.mutate(mutators.list.update({ id: target.id, title: next }))
 			.client.catch((e) => console.error("list.update failed", e));
+	}
+
+	// --- Folder row actions ---------------------------------------------------
+	function createFolder(name: string) {
+		if (!activeId) return;
+		const lastKey = activeFolders.reduce<string | null>(
+			(max, f) => (max == null || f.sortKey > max ? f.sortKey : max),
+			null,
+		);
+		void zero
+			.mutate(
+				mutators.folder.create({
+					id: crypto.randomUUID(),
+					workspaceId: activeId,
+					name,
+					sortKey: keyBetween(lastKey, null),
+				}),
+			)
+			.client.catch((e) => console.error("folder.create failed", e));
+	}
+
+	function renameFolder(folder: Folder, name: string) {
+		if (name === folder.name) return;
+		void zero
+			.mutate(mutators.folder.update({ id: folder.id, name }))
+			.client.catch((e) => console.error("folder.update failed", e));
+	}
+
+	async function deleteFolder(folder: Folder) {
+		// Only reachable on an empty folder: folder.delete refuses a non-empty one,
+		// and the menu item carries that reason disabled, so the body states no count.
+		const ok = await confirm({
+			title: m.folder_delete_title(),
+			body: m.folder_delete_confirm({ name: folder.name }),
+			confirmLabel: m.action_delete(),
+			destructive: true,
+		});
+		if (!ok) return;
+		void zero
+			.mutate(mutators.folder.delete({ id: folder.id }))
+			.client.catch((e) => console.error("folder.delete failed", e));
+	}
+
+	const folderActionHandlers: FolderActionHandlers = {
+		newList: (folderId) => {
+			// The create-list form lives on the lists index, so land there first.
+			setOpenListId(null);
+			setOpenViewId(null);
+			setOpenDashboardId(null);
+			setSection("lists");
+			setNewListFolder({ id: folderId, nonce: Date.now() });
+		},
+		rename: (folder) => setFolderDialog({ mode: "rename", folder }),
+		remove: (folder) => void deleteFolder(folder),
+	};
+
+	const buildFolderActions = (folder: Folder) =>
+		folderActions({
+			folder,
+			role: roleByWorkspace.get(folder.workspaceId) ?? null,
+			listCount: activeLists.filter((l) => l.folderId === folder.id).length,
+			handlers: folderActionHandlers,
+		});
+
+	function submitFolderDialog(name: string) {
+		const target = folderDialog;
+		setFolderDialog(null);
+		if (!target) return;
+		if (target.mode === "create") createFolder(name);
+		else renameFolder(target.folder, name);
 	}
 
 	useEffect(() => {
@@ -1007,6 +1080,8 @@ function NormalWorkspace() {
 							)}
 						</div>
 						<CreateList
+							key={newListFolder?.nonce ?? "default"}
+							initialFolderId={newListFolder?.id ?? null}
 							workspaceId={activeId ?? ""}
 							lists={activeLists}
 							folders={activeFolders}
@@ -1082,6 +1157,8 @@ function NormalWorkspace() {
 								openListId={openListId}
 								onOpenList={openList}
 								listActions={buildListActions}
+								folderActions={buildFolderActions}
+								onNewFolder={() => setFolderDialog({ mode: "create" })}
 								builtinViews={BUILTIN_VIEWS}
 								pinnedViews={pinnedViews}
 								activeViewId={activeViewId}
@@ -1237,37 +1314,35 @@ function NormalWorkspace() {
 					/>
 				)}
 
-				<Dialog
+				<NameDialog
 					open={renameTarget !== null}
+					initialName={renameTarget?.title ?? ""}
+					title={m.action_rename()}
+					fieldLabel={m.field_name()}
+					testId="list-rename"
+					onSubmit={submitRename}
 					onOpenChange={(o) => {
 						if (!o) setRenameTarget(null);
 					}}
-				>
-					<DialogContent className="max-w-sm">
-						<DialogHeader>
-							<DialogTitle>{m.action_rename()}</DialogTitle>
-						</DialogHeader>
-						<Input
-							data-testid="list-rename-input"
-							aria-label={m.field_name()}
-							value={renameValue}
-							onChange={(e) => setRenameValue(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Enter") submitRename();
-							}}
-						/>
-						<DialogFooter>
-							<Button
-								type="button"
-								data-testid="list-rename-save"
-								disabled={renameValue.trim().length === 0}
-								onClick={submitRename}
-							>
-								{m.submit_save_changes()}
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
+				/>
+
+				<NameDialog
+					open={folderDialog !== null}
+					initialName={
+						folderDialog?.mode === "rename" ? folderDialog.folder.name : ""
+					}
+					title={
+						folderDialog?.mode === "rename"
+							? m.folder_rename_title()
+							: m.action_new_folder()
+					}
+					fieldLabel={m.folder_name_label()}
+					testId="folder-name"
+					onSubmit={submitFolderDialog}
+					onOpenChange={(o) => {
+						if (!o) setFolderDialog(null);
+					}}
+				/>
 
 				{/* View onOpenTask reuses the list TaskDetail sheet (design 2.20). */}
 				{detailTask && detailList && (

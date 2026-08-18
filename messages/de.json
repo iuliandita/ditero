@@ -1293,5 +1293,12 @@
 				"countPlural=other": "„{title}“ und {countNum} Einträge löschen? Das lässt sich nicht rückgängig machen."
 			}
 		}
-	]
+	],
+	"action_new_folder": "Neuer Ordner",
+	"action_new_list_here": "Neue Liste hier",
+	"folder_name_label": "Ordnername",
+	"folder_rename_title": "Ordner umbenennen",
+	"folder_delete_title": "Ordner löschen?",
+	"folder_delete_confirm": "Ordner „{name}“ löschen? Das lässt sich nicht rückgängig machen.",
+	"folder_delete_blocked": "Verschiebe oder lösche zuerst die Listen in diesem Ordner"
 }

@@ -1293,5 +1293,12 @@
 				"countPlural=other": "Delete “{title}” and its {countNum} items? This cannot be undone."
 			}
 		}
-	]
+	],
+	"action_new_folder": "New folder",
+	"action_new_list_here": "New list here",
+	"folder_name_label": "Folder name",
+	"folder_rename_title": "Rename folder",
+	"folder_delete_title": "Delete folder?",
+	"folder_delete_confirm": "Delete the folder “{name}”? This cannot be undone.",
+	"folder_delete_blocked": "Move or delete the lists inside this folder first"
 }

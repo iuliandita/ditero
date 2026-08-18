@@ -1320,5 +1320,12 @@
 				"countPlural=other": "Supprimer « {title} » et {countNum} éléments ? Cette action est irréversible."
 			}
 		}
-	]
+	],
+	"action_new_folder": "Nouveau dossier",
+	"action_new_list_here": "Nouvelle liste ici",
+	"folder_name_label": "Nom du dossier",
+	"folder_rename_title": "Renommer le dossier",
+	"folder_delete_title": "Supprimer le dossier ?",
+	"folder_delete_confirm": "Supprimer le dossier « {name} » ? Cette action est irréversible.",
+	"folder_delete_blocked": "Déplace ou supprime d'abord les listes de ce dossier"
 }

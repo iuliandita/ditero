@@ -81,12 +81,15 @@ export function CreateList({
 	lists,
 	folders,
 	templates,
+	initialFolderId,
 	onCreated,
 }: {
 	workspaceId: string;
 	lists: List[];
 	folders: Folder[];
 	templates: Template[];
+	/** Preselected folder, e.g. from a folder row's "New list here". */
+	initialFolderId?: string | null;
 	onCreated?: () => void;
 }) {
 	const isDesktop = useIsDesktop();
@@ -100,6 +103,7 @@ export function CreateList({
 					lists={lists}
 					folders={folders}
 					templates={templates}
+					initialFolderId={initialFolderId}
 					onCreated={onCreated}
 				/>
 			</div>
@@ -111,6 +115,7 @@ export function CreateList({
 			lists={lists}
 			folders={folders}
 			templates={templates}
+			initialFolderId={initialFolderId}
 			onCreated={onCreated}
 		/>
 	);
@@ -121,6 +126,7 @@ function MobileCreateList(props: {
 	lists: List[];
 	folders: Folder[];
 	templates: Template[];
+	initialFolderId?: string | null;
 	onCreated?: () => void;
 }) {
 	const [open, setOpen] = useState(false);
@@ -155,18 +161,20 @@ function Form({
 	lists,
 	folders,
 	templates,
+	initialFolderId,
 	onCreated,
 }: {
 	workspaceId: string;
 	lists: List[];
 	folders: Folder[];
 	templates: Template[];
+	initialFolderId?: string | null;
 	onCreated?: () => void;
 }) {
 	const zero = useZero<typeof schema>();
 	const [title, setTitle] = useState("");
 	const [kind, setKind] = useState<ListKind>("tasks");
-	const [folderId, setFolderId] = useState<string>(NONE);
+	const [folderId, setFolderId] = useState<string>(initialFolderId ?? NONE);
 	const [templateSel, setTemplateSel] = useState<string>(BLANK);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);

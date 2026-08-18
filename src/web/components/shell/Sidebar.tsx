@@ -1,4 +1,5 @@
 import {
+	FolderPlus,
 	List as ListFallback,
 	PanelLeft,
 	PanelLeftClose,
@@ -11,7 +12,12 @@ import { ICONS, ListIcon } from "@/lib/list-icon";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { m } from "../../../paraglide/messages.js";
-import type { Dashboard, List, Workspace } from "../../../zero/schema.gen.ts";
+import type {
+	Dashboard,
+	Folder,
+	List,
+	Workspace,
+} from "../../../zero/schema.gen.ts";
 import type { SavedView } from "../../hooks/useViews.ts";
 import type { BuiltinView } from "../../views/builtins.ts";
 import type { RowAction } from "../ui/row-action.ts";
@@ -92,6 +98,29 @@ function ListRow({
 	);
 }
 
+// A folder group heading. Own component for the same reason ListRow is one, and
+// it carries `group` for the same reason: nothing else in the tree does, and
+// without it RowActions' md:group-hover reveal never fires.
+function FolderHeading({
+	folder,
+	actions,
+}: {
+	folder: Folder;
+	actions: RowAction[];
+}) {
+	const label = m.row_actions_for({ name: folder.name });
+	const { rowProps, menu } = useRowContextMenu(actions, label);
+	return (
+		<div className="group flex items-center gap-1 px-2 py-1" {...rowProps}>
+			<span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
+				{folder.name}
+			</span>
+			<RowActions actions={actions} label={label} />
+			{menu}
+		</div>
+	);
+}
+
 // Persistent desktop rail (280px, collapsible to a 64px icon rail). Top:
 // workspace switcher. Then Views (built-in aggregates + pinned saved views).
 // Middle: folder/list tree with per-kind icons + accent. Bottom: Settings.
@@ -106,6 +135,8 @@ export function Sidebar({
 	openListId,
 	onOpenList,
 	listActions,
+	folderActions,
+	onNewFolder,
 	builtinViews,
 	pinnedViews,
 	activeViewId,
@@ -130,6 +161,8 @@ export function Sidebar({
 	openListId: string | null;
 	onOpenList: (id: string) => void;
 	listActions: (list: List) => RowAction[];
+	folderActions: (folder: Folder) => RowAction[];
+	onNewFolder: () => void;
 	builtinViews: BuiltinView[];
 	pinnedViews: SavedView[];
 	activeViewId: string | null;
@@ -301,11 +334,17 @@ export function Sidebar({
 
 				{groups.map((group) => (
 					<div key={group.folder?.id ?? "__ungrouped__"} className="mb-3">
-						{!collapsed && (
-							<div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-								{group.folder?.name ?? m.sidebar_ungrouped_lists()}
-							</div>
-						)}
+						{!collapsed &&
+							(group.folder ? (
+								<FolderHeading
+									folder={group.folder}
+									actions={folderActions(group.folder)}
+								/>
+							) : (
+								<div className="px-2 py-1 text-xs font-medium text-muted-foreground">
+									{m.sidebar_ungrouped_lists()}
+								</div>
+							))}
 						<ul className="flex flex-col gap-0.5">
 							{group.lists.map((l) => (
 								<ListRow
@@ -321,6 +360,24 @@ export function Sidebar({
 						</ul>
 					</div>
 				))}
+
+				<ul className="flex flex-col gap-0.5">
+					<li>
+						<button
+							type="button"
+							data-testid="new-folder"
+							onClick={onNewFolder}
+							title={m.action_new_folder()}
+							className={cn(
+								"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
+								collapsed && "justify-center px-0",
+							)}
+						>
+							<FolderPlus className="size-4 shrink-0" />
+							{!collapsed && m.action_new_folder()}
+						</button>
+					</li>
+				</ul>
 			</nav>
 
 			<div className="flex items-center gap-1 border-t p-2">

@@ -1320,5 +1320,12 @@
 				"countPlural=other": "Ștergi „{title}” și {countNum} de elemente? Această acțiune nu poate fi anulată."
 			}
 		}
-	]
+	],
+	"action_new_folder": "Folder nou",
+	"action_new_list_here": "Listă nouă aici",
+	"folder_name_label": "Numele folderului",
+	"folder_rename_title": "Redenumește folderul",
+	"folder_delete_title": "Ștergi folderul?",
+	"folder_delete_confirm": "Ștergi folderul „{name}”? Această acțiune nu poate fi anulată.",
+	"folder_delete_blocked": "Mută sau șterge mai întâi listele din acest folder"
 }
