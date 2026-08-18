@@ -5,14 +5,12 @@
 import { and, eq } from "drizzle-orm";
 import { db as defaultDb } from "../db/client.ts";
 import { managedAccount, membership } from "../db/schema.ts";
+import { ADMIN_ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import { auth as defaultAuth } from "./auth.ts";
 import {
-	ADMIN_ROLES,
 	type AppEnv,
 	memberInvitePolicy,
-	type Role,
 	roleInWorkspace,
-	WRITE_ROLES,
 } from "./membership-role.ts";
 import { withRegistrationBypass } from "./registration-bypass.ts";
 
