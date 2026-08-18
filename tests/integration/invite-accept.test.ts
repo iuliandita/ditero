@@ -18,6 +18,7 @@ import {
 } from "../../src/auth/invite-create.ts";
 import { createManagedAccount } from "../../src/auth/managed-account.ts";
 import * as tables from "../../src/db/schema.ts";
+import type { Role } from "../../src/domain/role.ts";
 import { lookupUsers } from "../../src/server/discovery.ts";
 
 const databaseURL = process.env.DATABASE_URL;
@@ -97,6 +98,21 @@ afterAll(async () => {
 });
 
 describe("createInvite role-escalation gate", () => {
+	test("a role outside the ladder is rejected (400, no row)", async () => {
+		// The enum gate runs before the escalation gate, so an owner caller -- who
+		// may grant every real role -- still gets 400 rather than 403.
+		await expect(
+			createInvite(
+				{ workspaceId: "shared", role: "superuser" as Role },
+				"owner",
+				db,
+				{},
+			),
+		).rejects.toMatchObject({ status: 400 });
+		const rows = await db.select().from(tables.invite);
+		expect(rows).toHaveLength(0);
+	});
+
 	test("member can mint a member invite (row persisted, token present)", async () => {
 		const res = await createInvite(
 			{ workspaceId: "shared", role: "member", email: "a@test.invalid" },
