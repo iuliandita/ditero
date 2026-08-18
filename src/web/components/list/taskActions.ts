@@ -1,5 +1,6 @@
 import {
 	CalendarClock,
+	Copy,
 	Flag,
 	SquareArrowOutUpRight,
 	Trash2,
@@ -22,6 +23,7 @@ export type TaskActionHandlers = {
 	/** Opens ScheduleSheet for an arbitrary date; absent on surfaces without it. */
 	pickDate: ((task: Task) => void) | undefined;
 	setPriority: (task: Task, priority: number) => void;
+	saveAsTemplate: (task: Task) => void;
 	remove: (task: Task) => void;
 };
 
@@ -92,6 +94,13 @@ export function taskActions({
 				hidden: (task.priority ?? 0) === level,
 				onSelect: () => handlers.setPriority(task, level),
 			})),
+		},
+		{
+			id: "save-as-template",
+			label: m.action_save_task_as_template(),
+			icon: Copy,
+			hidden: !canWrite,
+			onSelect: () => handlers.saveAsTemplate(task),
 		},
 		{
 			id: "delete",

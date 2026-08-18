@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import type { Role } from "../../../domain/role.ts";
+import { snapshotTask } from "../../../domain/template.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
@@ -232,6 +233,29 @@ export function TaskRow({
 			.client.catch((e) => console.error("task.delete failed", e));
 	}
 
+	// Snapshot this task with one level of subtasks into a workspace template; it
+	// then appears in the list header's add-from-template menu. Subtasks come from
+	// the synced set, not the `subtasks` prop, for the same reason removeTask
+	// counts there: three of the four TaskRow surfaces pass [].
+	function saveAsTemplate() {
+		const list = lists.find((l) => l.id === task.listId);
+		if (!list) return;
+		const subs = allTasks
+			.filter((t) => t.parentId === task.id)
+			.sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1));
+		void zero
+			.mutate(
+				mutators.template.save({
+					id: crypto.randomUUID(),
+					workspaceId: list.workspaceId,
+					name: task.title,
+					kind: "task",
+					content: snapshotTask(task, subs),
+				}),
+			)
+			.client.catch((e) => console.error("template.save failed", e));
+	}
+
 	const actions = taskActions({
 		task,
 		kind,
@@ -241,6 +265,7 @@ export function TaskRow({
 			schedule: (_t, due) => update(due),
 			pickDate: handlers.onSchedule,
 			setPriority: (_t, priority) => update({ priority }),
+			saveAsTemplate,
 			remove: () => void removeTask(),
 		},
 	});
