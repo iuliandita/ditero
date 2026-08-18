@@ -14,6 +14,13 @@
 	}
 }
 
+/* Radix sets data-state="open"/"closed"; the data-open:/data-closed: utilities
+   in components/ui/* key off it. shadcn/tailwind.css also ships these, but it
+   is a devDependency CLI internal -- owning them here keeps a bump from
+   silently killing every enter/exit animation. Later declaration wins. */
+@custom-variant data-open (&[data-state="open"]);
+@custom-variant data-closed (&[data-state="closed"]);
+
 @theme inline {
 	--font-heading: var(--font-sans);
 	--font-sans: "Geist Variable", sans-serif;
