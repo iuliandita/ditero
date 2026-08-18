@@ -11,6 +11,9 @@ import {
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ListIcon } from "@/lib/list-icon";
@@ -60,6 +63,7 @@ export function ListView({
 	const [taskLabels] = useQuery(queries.taskLabels.mine());
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
+	const [templates] = useQuery(queries.templates.mine());
 	const [title, setTitle] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [iconOpen, setIconOpen] = useState(false);
@@ -192,6 +196,9 @@ export function ListView({
 	if (!list) return null;
 	// Narrowed alias so nested function declarations keep the non-null type.
 	const openList = list;
+	const taskTemplates = templates.filter(
+		(t) => t.kind === "task" && t.workspaceId === openList.workspaceId,
+	);
 	const kind = (list.kind ?? "tasks") as ListKind;
 	const mode = (list.completedDisplay ?? "sink") as CompletedDisplay;
 
@@ -229,6 +236,22 @@ export function ListView({
 					kind: "list",
 					content,
 					...(openList.icon != null ? { icon: openList.icon } : {}),
+				}),
+			),
+		);
+	}
+
+	// Expand a saved task template into this list. The mirror of CreateList's
+	// list-template picker: applied from the surface that owns the target
+	// container, which for a task is the open list.
+	function addFromTemplate(templateId: string) {
+		void run(
+			zero.mutate(
+				mutators.template.instantiateTask({
+					templateId,
+					taskId: crypto.randomUUID(),
+					listId,
+					sortKey: keyBetween(lastKey(parents), null),
 				}),
 			),
 		);
@@ -290,6 +313,27 @@ export function ListView({
 							{m.list_group_by_assignee()}
 						</DropdownMenuCheckboxItem>
 						<DropdownMenuSeparator />
+						<DropdownMenuSub>
+							<DropdownMenuSubTrigger data-testid="add-from-template">
+								{m.list_add_from_template()}
+							</DropdownMenuSubTrigger>
+							<DropdownMenuSubContent>
+								{taskTemplates.length === 0 ? (
+									<DropdownMenuItem disabled>
+										{m.list_no_task_templates()}
+									</DropdownMenuItem>
+								) : (
+									taskTemplates.map((t) => (
+										<DropdownMenuItem
+											key={t.id}
+											onSelect={() => addFromTemplate(t.id)}
+										>
+											{t.name}
+										</DropdownMenuItem>
+									))
+								)}
+							</DropdownMenuSubContent>
+						</DropdownMenuSub>
 						<DropdownMenuItem
 							data-testid="save-as-template"
 							onSelect={saveAsTemplate}

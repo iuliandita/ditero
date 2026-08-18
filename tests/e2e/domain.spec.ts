@@ -405,6 +405,42 @@ test("save list as template then create-from-template reproduces items", async (
 	await ctx.close();
 });
 
+// --- Scenario 6b: save-task-as-template then add-from-template in another list ---
+test("save task as template then add it from another list", async ({
+	browser,
+}) => {
+	const ctx = await browser.newContext();
+	const page = await ctx.newPage();
+	await signUp(page, uniqueEmail("ttmpl"));
+
+	const source = `Src-${Date.now()}`;
+	const target = `Dst-${Date.now()}`;
+	await createListDesktop(page, source);
+	await createListDesktop(page, target);
+	await openListDesktop(page, source);
+	await addTask(page, "Water the plants");
+
+	const list = page.getByTestId("list");
+	await list
+		.getByRole("button", { name: "Actions for Water the plants" })
+		.click();
+	await page.getByTestId("row-action-save-as-template").click();
+	await expect(page.getByRole("menu")).toHaveCount(0);
+
+	await backToIndexDesktop(page);
+	await openListDesktop(page, target);
+	await page.getByRole("button", { name: "List display options" }).click();
+	await page.getByTestId("add-from-template").click();
+	await page
+		.getByRole("menuitem", { name: "Water the plants", exact: true })
+		.click();
+
+	await expect(
+		page.getByTestId("list").getByText("Water the plants", { exact: true }),
+	).toBeVisible({ timeout: 15000 });
+	await ctx.close();
+});
+
 // --- Scenario 7: isolation regression across list/folder/label tables ---
 async function personalWorkspaceId(userId: string): Promise<string> {
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
