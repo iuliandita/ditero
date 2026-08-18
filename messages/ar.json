@@ -1411,5 +1411,28 @@
 	"folder_rename_title": "إعادة تسمية المجلد",
 	"folder_delete_title": "حذف المجلد؟",
 	"folder_delete_confirm": "حذف المجلد «{name}»؟ لا يمكن التراجع عن هذا.",
-	"folder_delete_blocked": "انقل أو احذف القوائم داخل هذا المجلد أولاً"
+	"folder_delete_blocked": "انقل أو احذف القوائم داخل هذا المجلد أولاً",
+	"action_open": "فتح",
+	"command_row_menu": "فتح قائمة الصف",
+	"task_delete_title": "حذف المهمة؟",
+	"task_delete_confirm": "حذف «{title}»؟ لا يمكن التراجع عن هذا.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "حذف «{title}»؟ لا يمكن التراجع عن هذا.",
+				"countPlural=one": "حذف «{title}»؟ ستُحذف معها مهمة فرعية واحدة. لا يمكن التراجع عن هذا.",
+				"countPlural=two": "حذف «{title}»؟ ستُحذف معها مهمتان فرعيتان. لا يمكن التراجع عن هذا.",
+				"countPlural=few": "حذف «{title}»؟ ستُحذف معها {countNum} مهام فرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=many": "حذف «{title}»؟ ستُحذف معها {countNum} مهمة فرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=other": "حذف «{title}»؟ ستُحذف معها {countNum} مهمة فرعية. لا يمكن التراجع عن هذا."
+			}
+		}
+	]
 }

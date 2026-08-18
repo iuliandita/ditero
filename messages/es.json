@@ -1330,5 +1330,25 @@
 	"folder_rename_title": "Cambiar el nombre de la carpeta",
 	"folder_delete_title": "¿Eliminar la carpeta?",
 	"folder_delete_confirm": "¿Eliminar la carpeta «{name}»? Esto no se puede deshacer.",
-	"folder_delete_blocked": "Primero mueve o elimina las listas de esta carpeta"
+	"folder_delete_blocked": "Primero mueve o elimina las listas de esta carpeta",
+	"action_open": "Abrir",
+	"command_row_menu": "Abrir el menú de la fila",
+	"task_delete_title": "¿Eliminar la tarea?",
+	"task_delete_confirm": "¿Eliminar «{title}»? Esto no se puede deshacer.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "¿Eliminar «{title}»? También se eliminará {countNum} subtarea. Esto no se puede deshacer.",
+				"countPlural=many": "¿Eliminar «{title}»? También se eliminarán {countNum} subtareas. Esto no se puede deshacer.",
+				"countPlural=other": "¿Eliminar «{title}»? También se eliminarán {countNum} subtareas. Esto no se puede deshacer."
+			}
+		}
+	]
 }

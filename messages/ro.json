@@ -1330,5 +1330,25 @@
 	"folder_rename_title": "Redenumește folderul",
 	"folder_delete_title": "Ștergi folderul?",
 	"folder_delete_confirm": "Ștergi folderul „{name}”? Această acțiune nu poate fi anulată.",
-	"folder_delete_blocked": "Mută sau șterge mai întâi listele din acest folder"
+	"folder_delete_blocked": "Mută sau șterge mai întâi listele din acest folder",
+	"action_open": "Deschide",
+	"command_row_menu": "Deschide meniul rândului",
+	"task_delete_title": "Ștergi sarcina?",
+	"task_delete_confirm": "Ștergi „{title}”? Această acțiune nu poate fi anulată.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Ștergi „{title}”? Se șterge și {countNum} subsarcină. Această acțiune nu poate fi anulată.",
+				"countPlural=few": "Ștergi „{title}”? Se șterg și {countNum} subsarcini. Această acțiune nu poate fi anulată.",
+				"countPlural=other": "Ștergi „{title}”? Se șterg și {countNum} de subsarcini. Această acțiune nu poate fi anulată."
+			}
+		}
+	]
 }

@@ -1303,5 +1303,24 @@
 	"folder_rename_title": "Rename folder",
 	"folder_delete_title": "Delete folder?",
 	"folder_delete_confirm": "Delete the folder “{name}”? This cannot be undone.",
-	"folder_delete_blocked": "Move or delete the lists inside this folder first"
+	"folder_delete_blocked": "Move or delete the lists inside this folder first",
+	"action_open": "Open",
+	"command_row_menu": "Open row menu",
+	"task_delete_title": "Delete task?",
+	"task_delete_confirm": "Delete “{title}”? This cannot be undone.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Delete “{title}”? This also deletes {countNum} subtask. This cannot be undone.",
+				"countPlural=other": "Delete “{title}”? This also deletes {countNum} subtasks. This cannot be undone."
+			}
+		}
+	]
 }

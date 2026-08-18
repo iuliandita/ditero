@@ -1303,5 +1303,24 @@
 	"folder_rename_title": "Ordner umbenennen",
 	"folder_delete_title": "Ordner löschen?",
 	"folder_delete_confirm": "Ordner „{name}“ löschen? Das lässt sich nicht rückgängig machen.",
-	"folder_delete_blocked": "Verschiebe oder lösche zuerst die Listen in diesem Ordner"
+	"folder_delete_blocked": "Verschiebe oder lösche zuerst die Listen in diesem Ordner",
+	"action_open": "Öffnen",
+	"command_row_menu": "Zeilenmenü öffnen",
+	"task_delete_title": "Aufgabe löschen?",
+	"task_delete_confirm": "„{title}“ löschen? Das lässt sich nicht rückgängig machen.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "„{title}“ löschen? Damit wird auch {countNum} Teilaufgabe gelöscht. Das lässt sich nicht rückgängig machen.",
+				"countPlural=other": "„{title}“ löschen? Damit werden auch {countNum} Teilaufgaben gelöscht. Das lässt sich nicht rückgängig machen."
+			}
+		}
+	]
 }

@@ -2,9 +2,9 @@ import type { CommandDef } from "../../domain/keymap.ts";
 import { m } from "../../paraglide/messages.js";
 
 // Pure command registry: ids/labels/bindings/context, no handlers. Handlers are
-// injected at mount via CommandProvider so this stays testable. Task 9 EXTENDS
-// this array with movement + vim bindings; keep every id unique and every
-// command's `context` set (findConflicts guards the default profile in the test).
+// injected at mount via CommandProvider so this stays testable. Keep every id
+// unique and every command's `context` set (findConflicts guards the default
+// profile in the test).
 // `label` is a getter: this array is module-level, so resolving the message
 // eagerly would freeze it at the import-time locale.
 export const COMMANDS: CommandDef[] = [
@@ -127,7 +127,22 @@ export const COMMANDS: CommandDef[] = [
 		bindings: { default: [["x"]] },
 		context: "global",
 	},
-	// task.delete (Backspace / vim d d) is deferred until a task-delete UI exists
-	// to bind [data-kbd-action="delete"] to; advertising it with no target would be
-	// a dead binding.
+	{
+		id: "task.delete",
+		category: "task",
+		get label() {
+			return m.task_delete();
+		},
+		bindings: { default: [["Backspace"]], vim: [["d", "d"]] },
+		context: "global",
+	},
+	{
+		id: "row.menu",
+		category: "general",
+		get label() {
+			return m.command_row_menu();
+		},
+		bindings: { default: [["."]] },
+		context: "global",
+	},
 ];

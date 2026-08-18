@@ -1330,5 +1330,25 @@
 	"folder_rename_title": "Renommer le dossier",
 	"folder_delete_title": "Supprimer le dossier ?",
 	"folder_delete_confirm": "Supprimer le dossier « {name} » ? Cette action est irréversible.",
-	"folder_delete_blocked": "Déplace ou supprime d'abord les listes de ce dossier"
+	"folder_delete_blocked": "Déplace ou supprime d'abord les listes de ce dossier",
+	"action_open": "Ouvrir",
+	"command_row_menu": "Ouvrir le menu de la ligne",
+	"task_delete_title": "Supprimer la tâche ?",
+	"task_delete_confirm": "Supprimer « {title} » ? Cette action est irréversible.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Supprimer « {title} » ? Cela supprime aussi {countNum} sous-tâche. Cette action est irréversible.",
+				"countPlural=many": "Supprimer « {title} » ? Cela supprime aussi {countNum} sous-tâches. Cette action est irréversible.",
+				"countPlural=other": "Supprimer « {title} » ? Cela supprime aussi {countNum} sous-tâches. Cette action est irréversible."
+			}
+		}
+	]
 }

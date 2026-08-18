@@ -874,6 +874,8 @@ function NormalWorkspace() {
 			"nav.up": () => focusPrev(),
 			"nav.open": () => openFocused(),
 			"task.toggleDone": () => actOnFocused("toggle"),
+			"task.delete": () => actOnFocused("delete"),
+			"row.menu": () => actOnFocused("menu"),
 			"help.cheatSheet": () => setCheatOpen(true),
 			"nav.today": () => openView("today"),
 			"view.new": () => setViewManager({ mode: "create" }),
