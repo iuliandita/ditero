@@ -1300,5 +1300,25 @@
 	"notify_test_title": "Test Ditero",
 	"notify_test_body": "Notification de test de Ditero.",
 	"row_actions_label": "Actions",
-	"row_actions_for": "Actions pour {name}"
+	"row_actions_for": "Actions pour {name}",
+	"action_rename": "Renommer",
+	"action_move_to_folder": "Déplacer vers un dossier",
+	"action_no_folder": "Aucun dossier",
+	"list_delete_title": "Supprimer la liste ?",
+	"list_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Supprimer « {title} » et {countNum} élément ? Cette action est irréversible.",
+				"countPlural=many": "Supprimer « {title} » et {countNum} éléments ? Cette action est irréversible.",
+				"countPlural=other": "Supprimer « {title} » et {countNum} éléments ? Cette action est irréversible."
+			}
+		}
+	]
 }

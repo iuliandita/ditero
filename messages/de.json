@@ -1274,5 +1274,24 @@
 	"notify_test_title": "Ditero-Test",
 	"notify_test_body": "Testbenachrichtigung von Ditero.",
 	"row_actions_label": "Aktionen",
-	"row_actions_for": "Aktionen für {name}"
+	"row_actions_for": "Aktionen für {name}",
+	"action_rename": "Umbenennen",
+	"action_move_to_folder": "In Ordner verschieben",
+	"action_no_folder": "Kein Ordner",
+	"list_delete_title": "Liste löschen?",
+	"list_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "„{title}“ und {countNum} Eintrag löschen? Das lässt sich nicht rückgängig machen.",
+				"countPlural=other": "„{title}“ und {countNum} Einträge löschen? Das lässt sich nicht rückgängig machen."
+			}
+		}
+	]
 }

@@ -1378,5 +1378,28 @@
 	"notify_test_title": "اختبار Ditero",
 	"notify_test_body": "إشعار اختباري من Ditero.",
 	"row_actions_label": "إجراءات",
-	"row_actions_for": "إجراءات لـ {name}"
+	"row_actions_for": "إجراءات لـ {name}",
+	"action_rename": "إعادة تسمية",
+	"action_move_to_folder": "نقل إلى مجلد",
+	"action_no_folder": "بدون مجلد",
+	"list_delete_title": "حذف القائمة؟",
+	"list_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "حذف «{title}» وهي بلا عناصر؟ لا يمكن التراجع عن هذا.",
+				"countPlural=one": "حذف «{title}» وعنصر واحد بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=two": "حذف «{title}» وعنصرين بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=few": "حذف «{title}» و{countNum} عناصر بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=many": "حذف «{title}» و{countNum} عنصرًا بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=other": "حذف «{title}» و{countNum} عنصر بداخلها؟ لا يمكن التراجع عن هذا."
+			}
+		}
+	]
 }

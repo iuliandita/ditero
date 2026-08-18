@@ -1274,5 +1274,24 @@
 	"notify_test_title": "Ditero test",
 	"notify_test_body": "Test notification from Ditero.",
 	"row_actions_label": "Actions",
-	"row_actions_for": "Actions for {name}"
+	"row_actions_for": "Actions for {name}",
+	"action_rename": "Rename",
+	"action_move_to_folder": "Move to folder",
+	"action_no_folder": "No folder",
+	"list_delete_title": "Delete list?",
+	"list_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Delete “{title}” and its {countNum} item? This cannot be undone.",
+				"countPlural=other": "Delete “{title}” and its {countNum} items? This cannot be undone."
+			}
+		}
+	]
 }

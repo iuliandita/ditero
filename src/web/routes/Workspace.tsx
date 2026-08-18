@@ -11,12 +11,15 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Panel } from "../../domain/dashboard.ts";
+import type { ListKind } from "../../domain/icon-map.ts";
+import type { Role } from "../../domain/role.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
+import { snapshotList } from "../../domain/template.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
-import type { schema } from "../../zero/schema.gen.ts";
+import type { List, schema } from "../../zero/schema.gen.ts";
 import {
 	type DashboardFormValue,
 	DashboardManager,
@@ -25,6 +28,10 @@ import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
 import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
+import {
+	type ListActionHandlers,
+	listActions,
+} from "../components/list/listActions.ts";
 import { SortableList } from "../components/list/SortableList.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { MembersPanel } from "../components/people/MembersPanel.tsx";
@@ -45,6 +52,13 @@ import { Sidebar } from "../components/shell/Sidebar.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { useConfirm } from "../components/ui/confirm.tsx";
 import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "../components/ui/dialog.tsx";
+import {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
@@ -52,6 +66,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu.tsx";
+import { Input } from "../components/ui/input.tsx";
 import {
 	Sheet,
 	SheetContent,
@@ -184,6 +199,9 @@ function NormalWorkspace() {
 	const [cheatOpen, setCheatOpen] = useState(false);
 	// One-shot: a "dashboard:<id>" home ref lands on that dashboard after sync.
 	const [homeApplied, setHomeApplied] = useState(false);
+	// Rename target for the list row-action; null when the dialog is closed.
+	const [renameTarget, setRenameTarget] = useState<List | null>(null);
+	const [renameValue, setRenameValue] = useState("");
 
 	// Default active workspace is the user's personal one, so new lists stay private.
 	useEffect(() => {
@@ -223,6 +241,96 @@ function NormalWorkspace() {
 		}
 		return map;
 	}, [tasks, activeLists]);
+
+	// --- List row actions -----------------------------------------------------
+	// The caller's own role per workspace; the mutators re-check on write, this
+	// only keeps the menu from offering what would fail.
+	const roleByWorkspace = useMemo(() => {
+		const map = new Map<string, Role>();
+		for (const row of memberships) {
+			if (row.userId === zero.userID)
+				map.set(row.workspaceId, row.role as Role);
+		}
+		return map;
+	}, [memberships, zero.userID]);
+
+	function moveListToFolder(list: List, folderId: string | null) {
+		void zero
+			.mutate(mutators.list.update({ id: list.id, folderId }))
+			.client.catch((e) => console.error("list.update failed", e));
+	}
+
+	function saveListAsTemplate(list: List) {
+		const rows = tasks.filter((t) => t.listId === list.id);
+		const parents = rows.filter((t) => t.parentId == null);
+		const content = snapshotList(
+			{ kind: (list.kind ?? "tasks") as ListKind, icon: list.icon },
+			parents.map((p) => ({
+				...p,
+				subtasks: rows
+					.filter((t) => t.parentId === p.id)
+					.sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1)),
+			})),
+		);
+		void zero
+			.mutate(
+				mutators.template.save({
+					id: crypto.randomUUID(),
+					workspaceId: list.workspaceId,
+					name: list.title,
+					kind: "list",
+					content,
+					...(list.icon != null ? { icon: list.icon } : {}),
+				}),
+			)
+			.client.catch((e) => console.error("template.save failed", e));
+	}
+
+	async function deleteList(list: List) {
+		// list.delete removes every task in the list, subtasks included, so the
+		// count is over all of them -- the copy says "items", not "tasks".
+		const count = tasks.filter((t) => t.listId === list.id).length;
+		const ok = await confirm({
+			title: m.list_delete_title(),
+			body: m.list_delete_confirm({ title: list.title, count }),
+			confirmLabel: m.action_delete(),
+			destructive: true,
+		});
+		if (!ok) return;
+		void zero
+			.mutate(mutators.list.delete({ id: list.id }))
+			.client.catch((e) => console.error("list.delete failed", e));
+		if (openListId === list.id) setOpenListId(null);
+	}
+
+	const listActionHandlers: ListActionHandlers = {
+		rename: (list) => {
+			setRenameValue(list.title);
+			setRenameTarget(list);
+		},
+		moveToFolder: moveListToFolder,
+		saveAsTemplate: saveListAsTemplate,
+		remove: (list) => void deleteList(list),
+	};
+
+	const buildListActions = (list: List) =>
+		listActions({
+			list,
+			role: roleByWorkspace.get(list.workspaceId) ?? null,
+			userId: zero.userID ?? "",
+			folders: activeFolders,
+			handlers: listActionHandlers,
+		});
+
+	function submitRename() {
+		const next = renameValue.trim();
+		const target = renameTarget;
+		setRenameTarget(null);
+		if (!target || !next || next === target.title) return;
+		void zero
+			.mutate(mutators.list.update({ id: target.id, title: next }))
+			.client.catch((e) => console.error("list.update failed", e));
+	}
 
 	useEffect(() => {
 		if (!openSharedRequested) return;
@@ -651,7 +759,7 @@ function NormalWorkspace() {
 					</span>
 				</div>
 				<div className="p-4 md:p-6">
-					<ListView listId={openListId} />
+					<ListView listId={openListId} listActions={buildListActions} />
 				</div>
 			</div>
 		);
@@ -973,6 +1081,7 @@ function NormalWorkspace() {
 								progressByList={progressByList}
 								openListId={openListId}
 								onOpenList={openList}
+								listActions={buildListActions}
 								builtinViews={BUILTIN_VIEWS}
 								pinnedViews={pinnedViews}
 								activeViewId={activeViewId}
@@ -1127,6 +1236,38 @@ function NormalWorkspace() {
 						onSubmit={submitDashboard}
 					/>
 				)}
+
+				<Dialog
+					open={renameTarget !== null}
+					onOpenChange={(o) => {
+						if (!o) setRenameTarget(null);
+					}}
+				>
+					<DialogContent className="max-w-sm">
+						<DialogHeader>
+							<DialogTitle>{m.action_rename()}</DialogTitle>
+						</DialogHeader>
+						<Input
+							data-testid="list-rename-input"
+							aria-label={m.field_name()}
+							value={renameValue}
+							onChange={(e) => setRenameValue(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") submitRename();
+							}}
+						/>
+						<DialogFooter>
+							<Button
+								type="button"
+								data-testid="list-rename-save"
+								disabled={renameValue.trim().length === 0}
+								onClick={submitRename}
+							>
+								{m.submit_save_changes()}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
 
 				{/* View onOpenTask reuses the list TaskDetail sheet (design 2.20). */}
 				{detailTask && detailList && (

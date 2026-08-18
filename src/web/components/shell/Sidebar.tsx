@@ -11,9 +11,11 @@ import { ICONS, ListIcon } from "@/lib/list-icon";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { m } from "../../../paraglide/messages.js";
-import type { Dashboard, Workspace } from "../../../zero/schema.gen.ts";
+import type { Dashboard, List, Workspace } from "../../../zero/schema.gen.ts";
 import type { SavedView } from "../../hooks/useViews.ts";
 import type { BuiltinView } from "../../views/builtins.ts";
+import type { RowAction } from "../ui/row-action.ts";
+import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
 import type { Section } from "./BottomNav.tsx";
 import type { ListGroup } from "./grouping.ts";
 import { ListProgress } from "./ListProgress.tsx";
@@ -26,6 +28,68 @@ function ViewIcon({ icon }: { icon?: string | null }) {
 	const Icon =
 		(icon && Object.hasOwn(ICONS, icon) && ICONS[icon]) || ListFallback;
 	return <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />;
+}
+
+// One list row. Its own component because useRowContextMenu is a hook and the
+// rows are built in a map. The <li> carries `group`: that is what RowActions'
+// md:group-hover reveal keys off, and nothing else in the tree provides it.
+function ListRow({
+	list,
+	active,
+	onOpen,
+	progress,
+	collapsed,
+	actions,
+}: {
+	list: List;
+	active: boolean;
+	onOpen: () => void;
+	progress: { done: number; total: number } | undefined;
+	collapsed: boolean;
+	actions: RowAction[];
+}) {
+	const { rowProps, menu } = useRowContextMenu(
+		actions,
+		m.row_actions_for({ name: list.title }),
+	);
+	return (
+		<li className="group flex items-center gap-1" {...rowProps}>
+			<button
+				type="button"
+				aria-current={active ? "page" : undefined}
+				onClick={onOpen}
+				title={list.title}
+				className={cn(
+					"flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm",
+					active
+						? "bg-sidebar-accent font-medium"
+						: "hover:bg-sidebar-accent/60",
+					collapsed && "justify-center px-0",
+				)}
+			>
+				<ListIcon
+					icon={list.icon}
+					kind={(list.kind ?? "tasks") as ListKind}
+					title={list.title}
+				/>
+				{!collapsed && (
+					<span className="flex min-w-0 flex-1 flex-col">
+						<span className="truncate">{list.title}</span>
+						{list.kind === "project" && progress && (
+							<ListProgress done={progress.done} total={progress.total} />
+						)}
+					</span>
+				)}
+			</button>
+			{!collapsed && (
+				<RowActions
+					actions={actions}
+					label={m.row_actions_for({ name: list.title })}
+				/>
+			)}
+			{menu}
+		</li>
+	);
 }
 
 // Persistent desktop rail (280px, collapsible to a 64px icon rail). Top:
@@ -41,6 +105,7 @@ export function Sidebar({
 	progressByList,
 	openListId,
 	onOpenList,
+	listActions,
 	builtinViews,
 	pinnedViews,
 	activeViewId,
@@ -64,6 +129,7 @@ export function Sidebar({
 	progressByList: Map<string, { done: number; total: number }>;
 	openListId: string | null;
 	onOpenList: (id: string) => void;
+	listActions: (list: List) => RowAction[];
 	builtinViews: BuiltinView[];
 	pinnedViews: SavedView[];
 	activeViewId: string | null;
@@ -242,42 +308,15 @@ export function Sidebar({
 						)}
 						<ul className="flex flex-col gap-0.5">
 							{group.lists.map((l) => (
-								<li key={l.id}>
-									<button
-										type="button"
-										aria-current={
-											l.id === openListId && section === "lists"
-												? "page"
-												: undefined
-										}
-										onClick={() => onOpenList(l.id)}
-										title={l.title}
-										className={cn(
-											"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm",
-											l.id === openListId && section === "lists"
-												? "bg-sidebar-accent font-medium"
-												: "hover:bg-sidebar-accent/60",
-											collapsed && "justify-center px-0",
-										)}
-									>
-										<ListIcon
-											icon={l.icon}
-											kind={(l.kind ?? "tasks") as ListKind}
-											title={l.title}
-										/>
-										{!collapsed && (
-											<span className="flex min-w-0 flex-1 flex-col">
-												<span className="truncate">{l.title}</span>
-												{l.kind === "project" && progressByList.has(l.id) && (
-													<ListProgress
-														done={progressByList.get(l.id)?.done ?? 0}
-														total={progressByList.get(l.id)?.total ?? 0}
-													/>
-												)}
-											</span>
-										)}
-									</button>
-								</li>
+								<ListRow
+									key={l.id}
+									list={l}
+									active={l.id === openListId && section === "lists"}
+									onOpen={() => onOpenList(l.id)}
+									progress={progressByList.get(l.id)}
+									collapsed={collapsed}
+									actions={listActions(l)}
+								/>
 							))}
 						</ul>
 					</div>
