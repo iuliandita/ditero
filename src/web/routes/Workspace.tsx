@@ -12,14 +12,14 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Panel } from "../../domain/dashboard.ts";
 import type { ListKind } from "../../domain/icon-map.ts";
-import type { Role } from "../../domain/role.ts";
+import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import { snapshotList } from "../../domain/template.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
-import type { Folder, List, schema } from "../../zero/schema.gen.ts";
+import type { Dashboard, Folder, List, schema } from "../../zero/schema.gen.ts";
 import {
 	type DashboardFormValue,
 	DashboardManager,
@@ -64,6 +64,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu.tsx";
+import { canActOnOwned, type RowAction } from "../components/ui/row-action.ts";
 import {
 	Sheet,
 	SheetContent,
@@ -578,7 +579,15 @@ function NormalWorkspace() {
 	function setHome(id: string) {
 		setPref({ homeViewRef: id });
 	}
-	function deleteView(id: string) {
+	async function deleteView(view: SavedView) {
+		const id = view.id;
+		const ok = await confirm({
+			title: m.view_delete_title(),
+			body: m.view_delete_confirm({ name: view.name }),
+			confirmLabel: m.action_delete(),
+			destructive: true,
+		});
+		if (!ok) return;
 		void zero
 			.mutate(mutators.view.delete({ id }))
 			.client.catch((e) => console.error("view.delete failed", e));
@@ -591,6 +600,51 @@ function NormalWorkspace() {
 		if (Object.keys(patch).length) setPref(patch);
 		setOpenViewId(null);
 	}
+
+	// Mirrors requireViewEdit / the inlined view.delete gate in the mutators:
+	// personal is the owner's alone at both levels; workspace edit needs a write
+	// role, and workspace delete is admin-or-creator (canActOnOwned). "Set as
+	// home" is never gated -- it writes only the caller's own user_pref row, which
+	// every role including Viewer may do. Built-ins (no saved row) offer only that.
+	const buildViewActions = (id: string): RowAction[] => {
+		const saved = savedViews.find((v) => v.id === id) ?? null;
+		const isPersonal = saved?.scope === "personal";
+		const role = saved?.workspaceId
+			? (roleByWorkspace.get(saved.workspaceId) ?? null)
+			: null;
+		const userId = zero.userID ?? "";
+		const canEdit = isPersonal
+			? saved?.ownerId === userId
+			: role !== null && WRITE_ROLES.has(role);
+		const canDelete = isPersonal
+			? saved?.ownerId === userId
+			: canActOnOwned(role, saved?.ownerId ?? null, userId);
+		return [
+			{
+				id: "edit",
+				label: m.view_menu_edit(),
+				icon: Pencil,
+				hidden: !saved || !canEdit,
+				onSelect: () => setViewManager({ mode: "edit", id }),
+			},
+			{
+				id: "set-home",
+				label: m.view_set_home(),
+				icon: House,
+				onSelect: () => setHome(id),
+			},
+			{
+				id: "delete",
+				label: m.view_menu_delete(),
+				icon: Trash2,
+				destructive: true,
+				hidden: !saved || !canDelete,
+				onSelect: () => {
+					if (saved) void deleteView(saved);
+				},
+			},
+		];
+	};
 
 	function submitView(value: ViewFormValue) {
 		if (viewManager?.mode === "edit") {
@@ -678,9 +732,11 @@ function NormalWorkspace() {
 			.client.catch((e) => console.error("dashboard.update failed", e));
 	}
 
-	async function deleteDashboard(id: string) {
+	async function deleteDashboard(dashboard: Dashboard) {
+		const id = dashboard.id;
 		const ok = await confirm({
-			body: m.dashboard_delete_confirm(),
+			title: m.dashboard_delete_title(),
+			body: m.dashboard_delete_confirm({ name: dashboard.name }),
 			confirmLabel: m.action_delete(),
 			destructive: true,
 		});
@@ -693,6 +749,45 @@ function NormalWorkspace() {
 			setPref({ homeViewRef: null });
 		setOpenDashboardId(null);
 	}
+
+	// Twin of buildViewActions, against requireDashboardEdit and the inlined
+	// dashboard.delete gate.
+	const buildDashboardActions = (dashboard: Dashboard): RowAction[] => {
+		const isPersonal = dashboard.scope === "personal";
+		const role = dashboard.workspaceId
+			? (roleByWorkspace.get(dashboard.workspaceId) ?? null)
+			: null;
+		const userId = zero.userID ?? "";
+		const canEdit = isPersonal
+			? dashboard.ownerId === userId
+			: role !== null && WRITE_ROLES.has(role);
+		const canDelete = isPersonal
+			? dashboard.ownerId === userId
+			: canActOnOwned(role, dashboard.ownerId, userId);
+		return [
+			{
+				id: "edit",
+				label: m.dashboard_menu_edit(),
+				icon: Pencil,
+				hidden: !canEdit,
+				onSelect: () => setDashboardManager({ mode: "edit", id: dashboard.id }),
+			},
+			{
+				id: "set-home",
+				label: m.dashboard_set_home(),
+				icon: House,
+				onSelect: () => setHome(dashboardHomeRef(dashboard.id)),
+			},
+			{
+				id: "delete",
+				label: m.dashboard_delete(),
+				icon: Trash2,
+				destructive: true,
+				hidden: !canDelete,
+				onSelect: () => void deleteDashboard(dashboard),
+			},
+		];
+	};
 
 	// Stable prop objects for DashboardView's panel evaluation (same synced sets
 	// the ViewRenderer surface consumes).
@@ -857,9 +952,7 @@ function NormalWorkspace() {
 							onEditDashboard={() =>
 								setDashboardManager({ mode: "edit", id: openDashboardRow.id })
 							}
-							onDeleteDashboard={() =>
-								void deleteDashboard(openDashboardRow.id)
-							}
+							onDeleteDashboard={() => void deleteDashboard(openDashboardRow)}
 							onSetHome={() => setHome(dashboardHomeRef(openDashboardRow.id))}
 							isHome={
 								pref.homeViewRef === dashboardHomeRef(openDashboardRow.id)
@@ -961,7 +1054,10 @@ function NormalWorkspace() {
 											<DropdownMenuItem
 												data-testid="view-delete"
 												className="text-destructive"
-												onSelect={() => deleteView(activeView.id)}
+												onSelect={() => {
+													if (activeView.saved)
+														void deleteView(activeView.saved);
+												}}
 											>
 												<Trash2 /> {m.view_menu_delete()}
 											</DropdownMenuItem>
@@ -1164,10 +1260,12 @@ function NormalWorkspace() {
 								activeViewId={activeViewId}
 								onOpenView={openView}
 								onNewView={() => setViewManager({ mode: "create" })}
+								viewActions={buildViewActions}
 								dashboards={dashboards}
 								activeDashboardId={openDashboardId}
 								onOpenDashboard={openDashboard}
 								onNewDashboard={() => setDashboardManager({ mode: "create" })}
+								dashboardActions={buildDashboardActions}
 								section={section}
 								onOpenSettings={openSettings}
 								collapsed={collapsed}

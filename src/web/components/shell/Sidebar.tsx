@@ -98,6 +98,51 @@ function ListRow({
 	);
 }
 
+// A view or dashboard nav row. Both render identically (icon + name + active
+// state) and differ only in their action descriptor, so they share one
+// component. Carries `group` for the same reason ListRow does: without it
+// RowActions' md:group-hover reveal never fires.
+function NavRow({
+	name,
+	icon,
+	active,
+	onOpen,
+	collapsed,
+	actions,
+}: {
+	name: string;
+	icon?: string | null;
+	active: boolean;
+	onOpen: () => void;
+	collapsed: boolean;
+	actions: RowAction[];
+}) {
+	const label = m.row_actions_for({ name });
+	const { rowProps, menu } = useRowContextMenu(actions, label);
+	return (
+		<li className="group flex items-center gap-1" {...rowProps}>
+			<button
+				type="button"
+				aria-current={active ? "page" : undefined}
+				onClick={onOpen}
+				title={name}
+				className={cn(
+					"flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm",
+					active
+						? "bg-sidebar-accent font-medium"
+						: "hover:bg-sidebar-accent/60",
+					collapsed && "justify-center px-0",
+				)}
+			>
+				<ViewIcon icon={icon} />
+				{!collapsed && <span className="truncate">{name}</span>}
+			</button>
+			{!collapsed && <RowActions actions={actions} label={label} />}
+			{menu}
+		</li>
+	);
+}
+
 // A folder group heading. Own component for the same reason ListRow is one, and
 // it carries `group` for the same reason: nothing else in the tree does, and
 // without it RowActions' md:group-hover reveal never fires.
@@ -142,10 +187,12 @@ export function Sidebar({
 	activeViewId,
 	onOpenView,
 	onNewView,
+	viewActions,
 	dashboards,
 	activeDashboardId,
 	onOpenDashboard,
 	onNewDashboard,
+	dashboardActions,
 	section,
 	onOpenSettings,
 	collapsed,
@@ -168,10 +215,12 @@ export function Sidebar({
 	activeViewId: string | null;
 	onOpenView: (id: string) => void;
 	onNewView: () => void;
+	viewActions: (id: string) => RowAction[];
 	dashboards: Dashboard[];
 	activeDashboardId: string | null;
 	onOpenDashboard: (id: string) => void;
 	onNewDashboard: () => void;
+	dashboardActions: (dashboard: Dashboard) => RowAction[];
 	section: Section;
 	onOpenSettings: () => void;
 	collapsed: boolean;
@@ -184,24 +233,15 @@ export function Sidebar({
 	const dashboardActive = (id: string) =>
 		activeDashboardId === id && section === "lists";
 	const viewRow = (id: string, name: string, icon?: string | null) => (
-		<li key={id}>
-			<button
-				type="button"
-				aria-current={viewActive(id) ? "page" : undefined}
-				onClick={() => onOpenView(id)}
-				title={name}
-				className={cn(
-					"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm",
-					viewActive(id)
-						? "bg-sidebar-accent font-medium"
-						: "hover:bg-sidebar-accent/60",
-					collapsed && "justify-center px-0",
-				)}
-			>
-				<ViewIcon icon={icon} />
-				{!collapsed && <span className="truncate">{name}</span>}
-			</button>
-		</li>
+		<NavRow
+			key={id}
+			name={name}
+			icon={icon}
+			active={viewActive(id)}
+			onOpen={() => onOpenView(id)}
+			collapsed={collapsed}
+			actions={viewActions(id)}
+		/>
 	);
 	return (
 		<aside
@@ -295,24 +335,15 @@ export function Sidebar({
 					)}
 					<ul className="flex flex-col gap-0.5">
 						{dashboards.map((d) => (
-							<li key={d.id}>
-								<button
-									type="button"
-									aria-current={dashboardActive(d.id) ? "page" : undefined}
-									onClick={() => onOpenDashboard(d.id)}
-									title={d.name}
-									className={cn(
-										"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm",
-										dashboardActive(d.id)
-											? "bg-sidebar-accent font-medium"
-											: "hover:bg-sidebar-accent/60",
-										collapsed && "justify-center px-0",
-									)}
-								>
-									<ViewIcon icon={d.icon} />
-									{!collapsed && <span className="truncate">{d.name}</span>}
-								</button>
-							</li>
+							<NavRow
+								key={d.id}
+								name={d.name}
+								icon={d.icon}
+								active={dashboardActive(d.id)}
+								onOpen={() => onOpenDashboard(d.id)}
+								collapsed={collapsed}
+								actions={dashboardActions(d)}
+							/>
 						))}
 						<li>
 							<button
