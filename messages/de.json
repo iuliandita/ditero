@@ -1340,5 +1340,11 @@
 	"label_color_title": "Farbe auswählen",
 	"label_color_label": "Farbe",
 	"label_delete_title": "Label löschen?",
-	"label_delete_confirm": "Label „{name}“ löschen? Es wird von jeder Aufgabe entfernt und das lässt sich nicht rückgängig machen."
+	"label_delete_confirm": "Label „{name}“ löschen? Es wird von jeder Aufgabe entfernt und das lässt sich nicht rückgängig machen.",
+	"templates_heading": "Vorlagen",
+	"templates_empty": "Noch keine Vorlagen. Speichere eine Liste als Vorlage, um ihre Struktur wiederzuverwenden.",
+	"action_use_template": "Verwenden",
+	"template_use_needs_list": "Aufgabenvorlagen fügst du innerhalb einer Liste hinzu.",
+	"template_delete_title": "Vorlage löschen?",
+	"template_delete_confirm": "Vorlage „{name}“ löschen? Das lässt sich nicht rückgängig machen. Bereits daraus erstellte Listen bleiben unverändert."
 }

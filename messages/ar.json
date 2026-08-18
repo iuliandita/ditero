@@ -1452,5 +1452,11 @@
 	"label_color_title": "اختر لونًا",
 	"label_color_label": "اللون",
 	"label_delete_title": "حذف الوسم؟",
-	"label_delete_confirm": "حذف الوسم «{name}»؟ سيُزال من كل المهام ولا يمكن التراجع عن هذا."
+	"label_delete_confirm": "حذف الوسم «{name}»؟ سيُزال من كل المهام ولا يمكن التراجع عن هذا.",
+	"templates_heading": "القوالب",
+	"templates_empty": "لا توجد قوالب بعد. احفظ قائمة كقالب لإعادة استخدام بنيتها.",
+	"action_use_template": "استخدام",
+	"template_use_needs_list": "تُضاف قوالب المهام من داخل قائمة.",
+	"template_delete_title": "حذف القالب؟",
+	"template_delete_confirm": "حذف القالب «{name}»؟ لا يمكن التراجع عن هذا. القوائم المنشأة منه بالفعل تبقى كما هي."
 }

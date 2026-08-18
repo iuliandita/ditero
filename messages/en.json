@@ -1340,5 +1340,11 @@
 	"label_color_title": "Choose a color",
 	"label_color_label": "Color",
 	"label_delete_title": "Delete label?",
-	"label_delete_confirm": "Delete the label “{name}”? It will be removed from every task and this cannot be undone."
+	"label_delete_confirm": "Delete the label “{name}”? It will be removed from every task and this cannot be undone.",
+	"templates_heading": "Templates",
+	"templates_empty": "No templates yet. Save a list as a template to reuse its structure.",
+	"action_use_template": "Use",
+	"template_use_needs_list": "Task templates are added from inside a list.",
+	"template_delete_title": "Delete template?",
+	"template_delete_confirm": "Delete the template “{name}”? This cannot be undone. Lists already created from it are unaffected."
 }

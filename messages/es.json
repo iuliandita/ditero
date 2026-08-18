@@ -1368,5 +1368,11 @@
 	"label_color_title": "Elige un color",
 	"label_color_label": "Color",
 	"label_delete_title": "¿Eliminar la etiqueta?",
-	"label_delete_confirm": "¿Eliminar la etiqueta «{name}»? Se quitará de todas las tareas y esto no se puede deshacer."
+	"label_delete_confirm": "¿Eliminar la etiqueta «{name}»? Se quitará de todas las tareas y esto no se puede deshacer.",
+	"templates_heading": "Plantillas",
+	"templates_empty": "Aún no hay plantillas. Guarda una lista como plantilla para reutilizar su estructura.",
+	"action_use_template": "Usar",
+	"template_use_needs_list": "Las plantillas de tarea se añaden desde dentro de una lista.",
+	"template_delete_title": "¿Eliminar la plantilla?",
+	"template_delete_confirm": "¿Eliminar la plantilla «{name}»? Esto no se puede deshacer. Las listas ya creadas a partir de ella no cambian."
 }

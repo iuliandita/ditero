@@ -1368,5 +1368,11 @@
 	"label_color_title": "Alege o culoare",
 	"label_color_label": "Culoare",
 	"label_delete_title": "Ștergi eticheta?",
-	"label_delete_confirm": "Ștergi eticheta „{name}”? Va fi eliminată din toate sarcinile și acțiunea nu poate fi anulată."
+	"label_delete_confirm": "Ștergi eticheta „{name}”? Va fi eliminată din toate sarcinile și acțiunea nu poate fi anulată.",
+	"templates_heading": "Șabloane",
+	"templates_empty": "Încă nu ai șabloane. Salvează o listă ca șablon ca să îi refolosești structura.",
+	"action_use_template": "Folosește",
+	"template_use_needs_list": "Șabloanele de sarcină se adaugă din interiorul unei liste.",
+	"template_delete_title": "Ștergi șablonul?",
+	"template_delete_confirm": "Ștergi șablonul „{name}”? Această acțiune nu poate fi anulată. Listele deja create din el rămân neschimbate."
 }

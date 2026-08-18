@@ -42,6 +42,7 @@ import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
 import { LabelManager } from "../components/settings/LabelManager.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
+import { TemplateManager } from "../components/settings/TemplateManager.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
@@ -911,6 +912,13 @@ function NormalWorkspace() {
 				<KarmaSettings />
 				<LanguageSwitcher persistLocale={persistLocale} />
 				{activeId && <LabelManager workspaceId={activeId} role={activeRole} />}
+				{activeId && (
+					<TemplateManager
+						workspaceId={activeId}
+						role={activeRole}
+						onUsed={openList}
+					/>
+				)}
 				<FocusSettings />
 				<NotificationSettings />
 			</div>
@@ -1231,6 +1239,13 @@ function NormalWorkspace() {
 								<KeymapSettings />
 								{activeId && (
 									<LabelManager workspaceId={activeId} role={activeRole} />
+								)}
+								{activeId && (
+									<TemplateManager
+										workspaceId={activeId}
+										role={activeRole}
+										onUsed={openList}
+									/>
 								)}
 								<FocusSettings />
 								<NotificationSettings />

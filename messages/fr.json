@@ -1368,5 +1368,11 @@
 	"label_color_title": "Choisir une couleur",
 	"label_color_label": "Couleur",
 	"label_delete_title": "Supprimer l’étiquette ?",
-	"label_delete_confirm": "Supprimer l’étiquette « {name} » ? Elle sera retirée de toutes les tâches et cette action est irréversible."
+	"label_delete_confirm": "Supprimer l’étiquette « {name} » ? Elle sera retirée de toutes les tâches et cette action est irréversible.",
+	"templates_heading": "Modèles",
+	"templates_empty": "Pas encore de modèles. Enregistre une liste comme modèle pour réutiliser sa structure.",
+	"action_use_template": "Utiliser",
+	"template_use_needs_list": "Les modèles de tâche s’ajoutent depuis une liste.",
+	"template_delete_title": "Supprimer le modèle ?",
+	"template_delete_confirm": "Supprimer le modèle « {name} » ? Cette action est irréversible. Les listes déjà créées à partir de lui ne changent pas."
 }
