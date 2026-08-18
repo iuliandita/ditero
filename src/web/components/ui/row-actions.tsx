@@ -125,8 +125,8 @@ export function RowActions({
 						// grow.
 						"size-11 md:size-7",
 						"md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
-						// aria-expanded, not the sibling files' `data-open:`, which
-						// compiles to `[data-open]` -- an attribute Radix never sets.
+						// aria-expanded, not the sibling files' `data-open:`: a kebab
+						// has no Radix data-state of its own until its menu mounts.
 						"focus-visible:opacity-100 aria-expanded:opacity-100",
 						className,
 					)}
