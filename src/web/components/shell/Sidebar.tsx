@@ -182,6 +182,7 @@ export function Sidebar({
 	listActions,
 	folderActions,
 	onNewFolder,
+	canCreateFolder,
 	builtinViews,
 	pinnedViews,
 	activeViewId,
@@ -210,6 +211,7 @@ export function Sidebar({
 	listActions: (list: List) => RowAction[];
 	folderActions: (folder: Folder) => RowAction[];
 	onNewFolder: () => void;
+	canCreateFolder: boolean;
 	builtinViews: BuiltinView[];
 	pinnedViews: SavedView[];
 	activeViewId: string | null;
@@ -392,23 +394,25 @@ export function Sidebar({
 					</div>
 				))}
 
-				<ul className="flex flex-col gap-0.5">
-					<li>
-						<button
-							type="button"
-							data-testid="new-folder"
-							onClick={onNewFolder}
-							title={m.action_new_folder()}
-							className={cn(
-								"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
-								collapsed && "justify-center px-0",
-							)}
-						>
-							<FolderPlus className="size-4 shrink-0" />
-							{!collapsed && m.action_new_folder()}
-						</button>
-					</li>
-				</ul>
+				{canCreateFolder && (
+					<ul className="flex flex-col gap-0.5">
+						<li>
+							<button
+								type="button"
+								data-testid="new-folder"
+								onClick={onNewFolder}
+								title={m.action_new_folder()}
+								className={cn(
+									"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
+									collapsed && "justify-center px-0",
+								)}
+							>
+								<FolderPlus className="size-4 shrink-0" />
+								{!collapsed && m.action_new_folder()}
+							</button>
+						</li>
+					</ul>
+				)}
 			</nav>
 
 			<div className="flex items-center gap-1 border-t p-2">
