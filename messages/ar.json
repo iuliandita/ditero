@@ -1343,6 +1343,8 @@
 	"auth_error_failed_to_verify_registration": "تعذّر تسجيل مفتاح المرور.",
 	"auth_error_session_required": "سجّل الدخول قبل إضافة مفتاح مرور.",
 	"mutation_failed": "حدث خطأ ما.",
+	"mutator_error_denied": "ليس لديك إذن للقيام بذلك.",
+	"mutator_error_label_name_taken": "توجد بالفعل علامة بهذا الاسم.",
 	"modal_close_label": "إغلاق",
 	"action_close": "إغلاق",
 	"error_boundary_message": "تعذّر عرض هذه الشاشة.",

@@ -31,6 +31,7 @@ import {
 	channelSaveErrorMessage,
 	channelWarningMessage,
 } from "./lib/channel-messages.ts";
+import { mutationErrorMessage } from "./lib/mutator-messages.ts";
 import {
 	PRIORITIES,
 	priorityLabel,
@@ -179,6 +180,15 @@ const PROBES: [string, () => string, Message][] = [
 		"channel-messages.ts SAVE_ERROR_MESSAGES",
 		() => channelSaveErrorMessage("invalid_config"),
 		m.channel_save_invalid_config,
+	],
+	[
+		"mutator-messages.ts MUTATOR_ERROR_MESSAGES",
+		() =>
+			mutationErrorMessage(
+				new Error("x [code:label_name_taken]"),
+				m.mutation_failed,
+			),
+		m.mutator_error_label_name_taken,
 	],
 	["binding-label.ts WORD_LABELS", () => formatBinding([" "]), m.key_space],
 	[

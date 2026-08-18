@@ -12,6 +12,7 @@ import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { formatList } from "../../lib/intl-format.ts";
+import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { MemberAvatar } from "./avatar.tsx";
 
 const INVITE_ROLES = new Set(["owner", "admin", "member"]);
@@ -232,8 +233,7 @@ export function CommentThread({
 			}
 			setMentionInvites(null);
 		} catch (e) {
-			console.error(e);
-			setError(e instanceof Error ? e.message : m.invite_create_failed());
+			setError(mutationErrorMessage(e, m.invite_create_failed));
 		} finally {
 			// Surface any links created before an early return so a partial batch is
 			// still deliverable rather than lost.

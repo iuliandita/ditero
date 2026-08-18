@@ -364,6 +364,20 @@ describe("domain mutators", () => {
 		await expect(run()).rejects.toThrow(/access denied/);
 	});
 
+	// The client classifies a rejection by its `[code:...]` suffix alone, so the
+	// write gate's denial must carry one across the server path. The narrower
+	// denials (view owner, template creator, ...) stay uncoded and fall back to
+	// the caller's generic message.
+	test("the write gate denies with a classifiable code", async () => {
+		await expect(
+			call(
+				mutators.label.create,
+				{ id: "viewer" },
+				{ id: "coded-label", workspaceId: "w1", name: "coded" },
+			),
+		).rejects.toThrow(/access denied: need member\+ \[code:denied\]$/);
+	});
+
 	test("member can create a task", async () => {
 		await call(
 			mutators.task.create,
@@ -422,6 +436,18 @@ describe("domain mutators", () => {
 		);
 		const after = await db.query.taskLabel.findMany();
 		expect(after.filter((r) => r.taskId === "t1")).toHaveLength(1);
+	});
+
+	// The one test proving the mutator and the client agree on the code: the
+	// client classifies a rejection by the `[code:...]` suffix alone.
+	test("a duplicate label name rejects with a classifiable code", async () => {
+		await expect(
+			call(
+				mutators.label.create,
+				{ id: "member" },
+				{ id: "dup-label", workspaceId: "w1", name: "member-label" },
+			),
+		).rejects.toThrow(/\[code:label_name_taken\]$/);
 	});
 
 	test("toggling done sets and clears completedAt", async () => {

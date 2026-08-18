@@ -15,6 +15,7 @@ import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
+import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { MemberAvatar } from "./avatar.tsx";
 import { InviteMailNotice } from "./InviteMailNotice";
 
@@ -140,8 +141,7 @@ export function AssigneePicker({
 			setInvitedLink(data.link);
 			setPending(null);
 		} catch (e) {
-			console.error(e);
-			setError(e instanceof Error ? e.message : m.invite_create_failed());
+			setError(mutationErrorMessage(e, m.invite_create_failed));
 		} finally {
 			setBusy(false);
 		}
@@ -165,8 +165,7 @@ export function AssigneePicker({
 			const found = (await res.json()) as LookupUser[];
 			setResults(found.filter((u) => !memberIds.has(u.id)));
 		} catch (e) {
-			console.error(e);
-			setError(e instanceof Error ? e.message : m.assignee_lookup_failed());
+			setError(mutationErrorMessage(e, m.assignee_lookup_failed));
 		} finally {
 			setBusy(false);
 		}
