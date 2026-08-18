@@ -21,6 +21,7 @@ export function NameDialog({
 	title,
 	fieldLabel,
 	testId,
+	validate,
 	onSubmit,
 	onOpenChange,
 }: {
@@ -30,6 +31,12 @@ export function NameDialog({
 	fieldLabel: string;
 	/** `${testId}-input` / `${testId}-save`. */
 	testId: string;
+	/**
+	 * Field-level check run on submit. A returned message (already translated)
+	 * rejects the name and keeps the dialog open, so a caller whose mutator can
+	 * refuse a name never has to surface that mutator's untranslated error.
+	 */
+	validate?: (name: string) => string | null;
 	onSubmit: (name: string) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
@@ -38,14 +45,19 @@ export function NameDialog({
 	// reopening the same row after an edited-then-cancelled attempt starts from
 	// the stored name rather than the abandoned draft.
 	const [seed, setSeed] = useState({ open, initialName });
+	const [error, setError] = useState<string | null>(null);
 	if (seed.open !== open || seed.initialName !== initialName) {
 		setSeed({ open, initialName });
+		setError(null);
 		if (open) setValue(initialName);
 	}
 
 	const submit = () => {
 		const next = value.trim();
 		if (!next) return;
+		const problem = validate?.(next) ?? null;
+		setError(problem);
+		if (problem) return;
 		onSubmit(next);
 		onOpenChange(false);
 	};
@@ -59,12 +71,27 @@ export function NameDialog({
 				<Input
 					data-testid={`${testId}-input`}
 					aria-label={fieldLabel}
+					aria-invalid={error ? true : undefined}
+					aria-describedby={error ? `${testId}-error` : undefined}
 					value={value}
-					onChange={(e) => setValue(e.target.value)}
+					onChange={(e) => {
+						setValue(e.target.value);
+						setError(null);
+					}}
 					onKeyDown={(e) => {
 						if (e.key === "Enter") submit();
 					}}
 				/>
+				{error && (
+					<p
+						id={`${testId}-error`}
+						data-testid={`${testId}-error`}
+						role="alert"
+						className="text-xs text-destructive"
+					>
+						{error}
+					</p>
+				)}
 				<DialogFooter>
 					<Button
 						type="button"

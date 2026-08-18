@@ -39,6 +39,7 @@ import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
 import { FocusSettings } from "../components/settings/FocusSettings.tsx";
 import { KarmaSettings } from "../components/settings/KarmaSettings.tsx";
 import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
+import { LabelManager } from "../components/settings/LabelManager.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
@@ -261,6 +262,7 @@ function NormalWorkspace() {
 		}
 		return map;
 	}, [memberships, zero.userID]);
+	const activeRole = activeId ? (roleByWorkspace.get(activeId) ?? null) : null;
 
 	function moveListToFolder(list: List, folderId: string | null) {
 		void zero
@@ -908,6 +910,7 @@ function NormalWorkspace() {
 				<KarmaPanel />
 				<KarmaSettings />
 				<LanguageSwitcher persistLocale={persistLocale} />
+				{activeId && <LabelManager workspaceId={activeId} role={activeRole} />}
 				<FocusSettings />
 				<NotificationSettings />
 			</div>
@@ -1226,6 +1229,9 @@ function NormalWorkspace() {
 								{/* Keyboard is a desktop feature (design 2.18); the rebind
 								    surface lives beside Security on the desktop landing. */}
 								<KeymapSettings />
+								{activeId && (
+									<LabelManager workspaceId={activeId} role={activeRole} />
+								)}
 								<FocusSettings />
 								<NotificationSettings />
 							</div>

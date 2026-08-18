@@ -1322,5 +1322,23 @@
 				"countPlural=other": "„{title}“ löschen? Damit werden auch {countNum} Teilaufgaben gelöscht. Das lässt sich nicht rückgängig machen."
 			}
 		}
-	]
+	],
+	"color_gray": "Grau",
+	"color_red": "Rot",
+	"color_orange": "Orange",
+	"color_yellow": "Gelb",
+	"color_green": "Grün",
+	"color_teal": "Türkis",
+	"color_blue": "Blau",
+	"color_purple": "Lila",
+	"color_pink": "Rosa",
+	"action_recolor": "Farbe ändern",
+	"action_new_label": "Neues Label",
+	"labels_empty": "Noch keine Labels. Mit Labels filterst und gruppierst du Aufgaben über Listen hinweg.",
+	"label_name_taken": "Ein Label mit diesem Namen gibt es schon.",
+	"label_rename_title": "Label umbenennen",
+	"label_color_title": "Farbe auswählen",
+	"label_color_label": "Farbe",
+	"label_delete_title": "Label löschen?",
+	"label_delete_confirm": "Label „{name}“ löschen? Es wird von jeder Aufgabe entfernt und das lässt sich nicht rückgängig machen."
 }

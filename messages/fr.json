@@ -1350,5 +1350,23 @@
 				"countPlural=other": "Supprimer « {title} » ? Cela supprime aussi {countNum} sous-tâches. Cette action est irréversible."
 			}
 		}
-	]
+	],
+	"color_gray": "Gris",
+	"color_red": "Rouge",
+	"color_orange": "Orange",
+	"color_yellow": "Jaune",
+	"color_green": "Vert",
+	"color_teal": "Turquoise",
+	"color_blue": "Bleu",
+	"color_purple": "Violet",
+	"color_pink": "Rose",
+	"action_recolor": "Changer la couleur",
+	"action_new_label": "Nouvelle étiquette",
+	"labels_empty": "Pas encore d’étiquettes. Les étiquettes t’aident à filtrer et regrouper les tâches entre les listes.",
+	"label_name_taken": "Une étiquette porte déjà ce nom.",
+	"label_rename_title": "Renommer l’étiquette",
+	"label_color_title": "Choisir une couleur",
+	"label_color_label": "Couleur",
+	"label_delete_title": "Supprimer l’étiquette ?",
+	"label_delete_confirm": "Supprimer l’étiquette « {name} » ? Elle sera retirée de toutes les tâches et cette action est irréversible."
 }

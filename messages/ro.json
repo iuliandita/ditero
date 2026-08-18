@@ -1350,5 +1350,23 @@
 				"countPlural=other": "Ștergi „{title}”? Se șterg și {countNum} de subsarcini. Această acțiune nu poate fi anulată."
 			}
 		}
-	]
+	],
+	"color_gray": "Gri",
+	"color_red": "Roșu",
+	"color_orange": "Portocaliu",
+	"color_yellow": "Galben",
+	"color_green": "Verde",
+	"color_teal": "Turcoaz",
+	"color_blue": "Albastru",
+	"color_purple": "Mov",
+	"color_pink": "Roz",
+	"action_recolor": "Schimbă culoarea",
+	"action_new_label": "Etichetă nouă",
+	"labels_empty": "Încă nu ai etichete. Etichetele te ajută să filtrezi și să grupezi sarcini din mai multe liste.",
+	"label_name_taken": "Există deja o etichetă cu acest nume.",
+	"label_rename_title": "Redenumește eticheta",
+	"label_color_title": "Alege o culoare",
+	"label_color_label": "Culoare",
+	"label_delete_title": "Ștergi eticheta?",
+	"label_delete_confirm": "Ștergi eticheta „{name}”? Va fi eliminată din toate sarcinile și acțiunea nu poate fi anulată."
 }

@@ -1434,5 +1434,23 @@
 				"countPlural=other": "حذف «{title}»؟ ستُحذف معها {countNum} مهمة فرعية. لا يمكن التراجع عن هذا."
 			}
 		}
-	]
+	],
+	"color_gray": "رمادي",
+	"color_red": "أحمر",
+	"color_orange": "برتقالي",
+	"color_yellow": "أصفر",
+	"color_green": "أخضر",
+	"color_teal": "تركوازي",
+	"color_blue": "أزرق",
+	"color_purple": "بنفسجي",
+	"color_pink": "وردي",
+	"action_recolor": "تغيير اللون",
+	"action_new_label": "وسم جديد",
+	"labels_empty": "لا توجد وسوم بعد. تساعدك الوسوم على تصفية المهام وتجميعها عبر القوائم.",
+	"label_name_taken": "يوجد وسم بهذا الاسم بالفعل.",
+	"label_rename_title": "إعادة تسمية الوسم",
+	"label_color_title": "اختر لونًا",
+	"label_color_label": "اللون",
+	"label_delete_title": "حذف الوسم؟",
+	"label_delete_confirm": "حذف الوسم «{name}»؟ سيُزال من كل المهام ولا يمكن التراجع عن هذا."
 }

@@ -1322,5 +1322,23 @@
 				"countPlural=other": "Delete “{title}”? This also deletes {countNum} subtasks. This cannot be undone."
 			}
 		}
-	]
+	],
+	"color_gray": "Gray",
+	"color_red": "Red",
+	"color_orange": "Orange",
+	"color_yellow": "Yellow",
+	"color_green": "Green",
+	"color_teal": "Teal",
+	"color_blue": "Blue",
+	"color_purple": "Purple",
+	"color_pink": "Pink",
+	"action_recolor": "Recolor",
+	"action_new_label": "New label",
+	"labels_empty": "No labels yet. Labels help you filter and group tasks across lists.",
+	"label_name_taken": "A label with that name already exists.",
+	"label_rename_title": "Rename label",
+	"label_color_title": "Choose a color",
+	"label_color_label": "Color",
+	"label_delete_title": "Delete label?",
+	"label_delete_confirm": "Delete the label “{name}”? It will be removed from every task and this cannot be undone."
 }
