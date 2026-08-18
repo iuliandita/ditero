@@ -111,7 +111,15 @@ export function RowActions({
 	const visible = visibleActions(actions);
 	if (visible.length === 0) return null;
 	return (
-		<DropdownMenu>
+		// modal={false}: a Radix modal menu calls hideOthers(), which puts
+		// aria-hidden="true" on the whole app root while every control inside it
+		// stays tabbable -- a serious aria-hidden-focus violation. A dialog gets
+		// away with it because it also carries aria-modal, which AT (and axe)
+		// treat as the exclusion boundary; role="menu" carries no such promise. A
+		// row kebab is not modal anyway. Escape, outside-click dismissal, focus
+		// return to the trigger and Tab containment are all unchanged -- only the
+		// aria-hidden blanket and the background scroll lock go away.
+		<DropdownMenu modal={false}>
 			<DropdownMenuTrigger asChild>
 				<Button
 					variant="ghost"
@@ -161,6 +169,7 @@ export function useRowContextMenu(actions: RowAction[], label?: string) {
 			point && visible.length > 0 ? (
 				<DropdownMenu
 					open
+					modal={false}
 					onOpenChange={(open) => {
 						if (!open) setPoint(null);
 					}}

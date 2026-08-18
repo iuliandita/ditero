@@ -67,16 +67,15 @@ async function goToListsIndex(page: Page): Promise<void> {
 	});
 }
 
-// Attribute selector, NOT getByRole: a Radix modal surface (every row menu and
-// every confirm dialog here) mounts its content in a body portal and calls
-// hideOthers(), which sets aria-hidden="true" on the portal's siblings -- i.e.
-// on the whole app root. Playwright's role engine skips anything hidden for
-// aria (queryRole -> isElementHiddenForAria), so while a menu is open a
-// getByRole locator for ANYTHING outside it stops resolving: it reports
-// "element(s) not found", and a toHaveCount(0) against it passes vacuously.
-// Every locator that has to survive an open menu is therefore attribute-based.
-// The other specs may use getByRole for this nav because none of them queries
-// outside an open modal surface.
+// Attribute selector, NOT getByRole: the confirm dialog is a Radix modal, so it
+// mounts in a body portal and calls hideOthers(), which sets aria-hidden="true"
+// on the portal's siblings -- i.e. on the whole app root. Playwright's role
+// engine skips anything hidden for aria (queryRole -> isElementHiddenForAria),
+// so while it is open a getByRole locator for ANYTHING outside it stops
+// resolving: it reports "element(s) not found", and a toHaveCount(0) against it
+// passes vacuously. Every locator that has to survive an open modal surface is
+// therefore attribute-based. (The row menus are modal={false} and no longer
+// hide the root, but these locators are also used around the dialog.)
 function sidebarLists(page: Page, locale: Locale = "en"): Locator {
 	return page.locator(
 		`nav[aria-label="${m.sidebar_lists_nav_label({}, { locale })}"]`,
@@ -420,11 +419,24 @@ test("blocked: a folder with lists shows Delete disabled with its reason, and de
 	await expect(page.locator(`[id="${describedBy}"]`)).toHaveText(reason);
 	await expect(blockedDelete).toContainText(reason);
 
+	// Keyboard, not .click(): "menuitem" is in Playwright's kAriaDisabledRoles, so
+	// aria-disabled="true" makes its actionability check report "element is not
+	// enabled" forever and the click never resolves. Arrow navigation is the
+	// interaction the design turns on anyway -- Radix drops natively disabled
+	// items from both the roving focus order and its FIRST_LAST_KEYS candidate
+	// list, so arrowing onto this one is the behavioural proof that the attribute
+	// assertions above only stand in for.
+	await page.keyboard.press("ArrowDown"); // new-list
+	await page.keyboard.press("ArrowDown"); // rename
+	await page.keyboard.press("ArrowDown"); // delete, blocked but still reachable
+	await expect(blockedDelete).toBeFocused();
+
 	// A blocked item fires nothing and keeps the menu open, so a stale block can
 	// never reach the mutator and surface its untranslated error instead.
-	await blockedDelete.click();
+	await page.keyboard.press("Enter");
 	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
 	await expect(page.getByRole("menu").first()).toBeVisible();
+	await expect(blockedDelete).toBeFocused();
 	await closeRowMenu(page);
 
 	// Emptied, the same folder deletes.
