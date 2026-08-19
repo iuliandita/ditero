@@ -327,9 +327,10 @@ export function ViewRenderer(props: {
 	const renderList =
 		display.layout === "list" || (!isDesktop && display.layout !== "calendar");
 
-	// Calendar keeps its month grid when nothing matches -- an empty month is
-	// still the answer -- and owns its own agenda empty line.
-	const empty = sorted.length === 0 && display.layout !== "calendar";
+	// Only the row path. A board's columns (also the regroup drop targets), a
+	// table's headers and the calendar's month grid are each still an answer when
+	// nothing matches; replacing them with a card would remove the affordance.
+	const empty = sorted.length === 0 && renderList;
 
 	return (
 		<div data-testid="view-renderer">
