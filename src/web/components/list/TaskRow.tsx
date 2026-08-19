@@ -362,7 +362,7 @@ export function TaskRow({
 							<ChevronRight
 								className={cn(
 									"size-4 transition-transform",
-									expanded && "rotate-90",
+									expanded ? "rotate-90" : "rtl:rotate-180",
 								)}
 							/>
 						</button>
