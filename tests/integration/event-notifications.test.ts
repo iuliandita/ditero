@@ -774,8 +774,11 @@ describe("overdue sweep", () => {
 	test("delivers the overdue body with its due date", async () => {
 		await seedChannel(A, "ntfy");
 		await seedOverdue([A]);
-		// A past instant so the row is genuinely due for the worker's claim.
-		await sweep(NOW);
+		// SWEEP_AT, not a wall-clock-relative instant: it is in the real past so
+		// the row is genuinely claimable, AND two days after DUE so the task stays
+		// inside OVERDUE_LOOKBACK_MS. A `now - 1h` sweep silently stopped matching
+		// 30 days after the pinned DUE and the assertion below then saw no send.
+		await sweep(SWEEP_AT);
 		const { adapter, sent } = stubAdapter("ntfy");
 		await workerTick(db, {
 			send: createSendFn({
