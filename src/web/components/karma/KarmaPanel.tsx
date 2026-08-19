@@ -162,7 +162,10 @@ export function KarmaPanel() {
 				{m.karma_ledger_heading()}
 			</h3>
 			{loading ? (
-				<p className="text-sm text-muted-foreground">
+				<p
+					className="text-sm text-muted-foreground"
+					data-testid="karma-ledger-loading"
+				>
 					{m.karma_ledger_loading()}
 				</p>
 			) : (
