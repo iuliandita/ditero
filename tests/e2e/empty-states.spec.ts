@@ -156,3 +156,46 @@ test("boot: session and sync gates render skeletons, then hand off to the shell"
 	await expect(page.getByTestId("boot-skeleton")).toHaveCount(0);
 	await expect(page.getByTestId("shell-skeleton")).toHaveCount(0);
 });
+
+// --- Scenario 4: an unfinished initial sync is a skeleton, never an empty state ---
+// Zero delivers query completeness over the zero-cache websocket, so the only
+// way to hold a query at "unknown" is to mock that socket's peer: the client
+// connects, and the initial poke never arrives.
+test("sync: an incomplete query renders the row skeleton, not an empty state", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("e4"));
+
+	let hold = true;
+	await page.routeWebSocket(/\/sync\/v\d+\/connect/, (ws) => {
+		// Not connecting to the real server leaves Playwright as the peer: the
+		// socket opens and stays silent. Connecting forwards both directions.
+		if (!hold) ws.connectToServer();
+	});
+
+	await page.goto("/");
+	await expect(page.getByTestId("view-surface")).toBeVisible({
+		timeout: 30_000,
+	});
+	await expect(page.getByTestId("task-list-skeleton")).toBeVisible();
+	// The defect: with no rows and no completeness, the surface used to claim the
+	// user was new. Both empty states must stay away until the query settles.
+	await expect(page.getByTestId("view-empty-first-use")).toHaveCount(0);
+	await expect(page.getByTestId("view-empty-no-match")).toHaveCount(0);
+
+	// Presence half: released, the same surface settles into the first-use state,
+	// so the absences above were a held query and not a page that never rendered.
+	hold = false;
+	await page.reload();
+	await expect(page.getByTestId("view-empty-first-use")).toBeVisible({
+		timeout: 30_000,
+	});
+	await expect(page.getByTestId("task-list-skeleton")).toHaveCount(0);
+});
+
+// ListView's identical gate has no equivalent test on purpose. Reaching the
+// list surface means clicking a list in the sidebar, which needs lists.mine()
+// complete; ListView derives tasksLoading as `listsLoading || tasks not
+// complete` from the same two query instances Workspace holds, and zero-cache
+// answers both in one atomic poke. So the surface is only reachable once the
+// branch under test is already false.
