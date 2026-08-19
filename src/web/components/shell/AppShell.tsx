@@ -21,7 +21,7 @@ export function AppShell({
 		>
 			<div className="hidden md:block">{sidebar}</div>
 			<main className="pb-24 md:pb-0">
-				<div className="mx-auto w-full 2xl:max-w-[1200px]">{children}</div>
+				<div className="mx-auto w-full md:max-w-[1200px]">{children}</div>
 			</main>
 			<div className="md:hidden">
 				{fab}
