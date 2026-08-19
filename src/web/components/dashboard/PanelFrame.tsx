@@ -17,6 +17,7 @@ import {
 } from "../../../domain/dashboard.ts";
 import { m } from "../../../paraglide/messages.js";
 import { Button } from "../ui/button.tsx";
+import { useConfirm } from "../ui/confirm.tsx";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -87,6 +88,7 @@ export function PanelFrame({
 	onRemove?: () => void;
 	children: ReactNode;
 }): JSX.Element {
+	const confirm = useConfirm();
 	const label = panelLabel(panel, viewName);
 	return (
 		<section
@@ -154,7 +156,14 @@ export function PanelFrame({
 								data-testid="panel-remove"
 								className="text-destructive"
 								onSelect={() => {
-									if (window.confirm(m.panel_remove_confirm())) onRemove?.();
+									void (async () => {
+										const ok = await confirm({
+											body: m.panel_remove_confirm(),
+											confirmLabel: m.action_remove(),
+											destructive: true,
+										});
+										if (ok) onRemove?.();
+									})();
 								}}
 							>
 								<Trash2 /> {m.panel_menu_remove()}

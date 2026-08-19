@@ -1347,6 +1347,10 @@
 	"mutator_error_label_name_taken": "توجد بالفعل علامة بهذا الاسم.",
 	"modal_close_label": "إغلاق",
 	"action_close": "إغلاق",
+	"action_delete": "حذف",
+	"action_remove": "إزالة",
+	"confirm_cancel": "إلغاء",
+	"confirm_default_title": "هل أنت متأكد؟",
 	"error_boundary_message": "تعذّر عرض هذه الشاشة.",
 	"error_boundary_go_home": "الصفحة الرئيسية",
 	"list_back_to_lists": "العودة إلى القوائم",
@@ -1361,9 +1365,12 @@
 	"view_unpin": "إلغاء التثبيت",
 	"view_menu_edit": "تعديل",
 	"view_menu_delete": "حذف",
+	"view_delete_title": "حذف العرض؟",
+	"view_delete_confirm": "حذف العرض «{name}»؟ سيفقده كل من يشاركه، ومن يستخدمه كصفحة رئيسية سيعود إلى اليوم.",
 	"view_not_found": "طريقة العرض غير موجودة.",
 	"dashboard_not_found": "لوحة المعلومات غير موجودة.",
-	"dashboard_delete_confirm": "حذف لوحة المعلومات هذه؟",
+	"dashboard_delete_title": "حذف لوحة المعلومات؟",
+	"dashboard_delete_confirm": "حذف لوحة المعلومات «{name}»؟ سيفقدها كل من يشاركها، ومن يستخدمها كصفحة رئيسية سيعود إلى اليوم.",
 	"key_space": "مسافة",
 	"key_esc": "Esc",
 	"notify_reminder_body": "الاستحقاق {when}",
@@ -1374,5 +1381,84 @@
 	"notify_ack_label": "تم",
 	"notify_ack_email_prefix": "وضع علامة كمنجز:",
 	"notify_test_title": "اختبار Ditero",
-	"notify_test_body": "إشعار اختباري من Ditero."
+	"notify_test_body": "إشعار اختباري من Ditero.",
+	"row_actions_label": "إجراءات",
+	"row_actions_for": "إجراءات لـ {name}",
+	"action_rename": "إعادة تسمية",
+	"action_move_to_folder": "نقل إلى مجلد",
+	"action_no_folder": "بدون مجلد",
+	"list_delete_title": "حذف القائمة؟",
+	"list_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "حذف «{title}» وهي بلا عناصر؟ لا يمكن التراجع عن هذا.",
+				"countPlural=one": "حذف «{title}» وعنصر واحد بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=two": "حذف «{title}» وعنصرين بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=few": "حذف «{title}» و{countNum} عناصر بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=many": "حذف «{title}» و{countNum} عنصرًا بداخلها؟ لا يمكن التراجع عن هذا.",
+				"countPlural=other": "حذف «{title}» و{countNum} عنصر بداخلها؟ لا يمكن التراجع عن هذا."
+			}
+		}
+	],
+	"action_new_folder": "مجلد جديد",
+	"action_new_list_here": "قائمة جديدة هنا",
+	"folder_name_label": "اسم المجلد",
+	"folder_rename_title": "إعادة تسمية المجلد",
+	"folder_delete_title": "حذف المجلد؟",
+	"folder_delete_confirm": "حذف المجلد «{name}»؟ لا يمكن التراجع عن هذا.",
+	"folder_delete_blocked": "انقل أو احذف القوائم داخل هذا المجلد أولاً",
+	"action_open": "فتح",
+	"command_row_menu": "فتح قائمة الصف",
+	"task_delete_title": "حذف المهمة؟",
+	"task_delete_confirm": "حذف «{title}»؟ لا يمكن التراجع عن هذا.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "حذف «{title}»؟ لا يمكن التراجع عن هذا.",
+				"countPlural=one": "حذف «{title}»؟ ستُحذف معها مهمة فرعية واحدة. لا يمكن التراجع عن هذا.",
+				"countPlural=two": "حذف «{title}»؟ ستُحذف معها مهمتان فرعيتان. لا يمكن التراجع عن هذا.",
+				"countPlural=few": "حذف «{title}»؟ ستُحذف معها {countNum} مهام فرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=many": "حذف «{title}»؟ ستُحذف معها {countNum} مهمة فرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=other": "حذف «{title}»؟ ستُحذف معها {countNum} مهمة فرعية. لا يمكن التراجع عن هذا."
+			}
+		}
+	],
+	"color_gray": "رمادي",
+	"color_red": "أحمر",
+	"color_orange": "برتقالي",
+	"color_yellow": "أصفر",
+	"color_green": "أخضر",
+	"color_teal": "تركوازي",
+	"color_blue": "أزرق",
+	"color_purple": "بنفسجي",
+	"color_pink": "وردي",
+	"action_recolor": "تغيير اللون",
+	"action_new_label": "وسم جديد",
+	"labels_empty": "لا توجد وسوم بعد. تساعدك الوسوم على تصفية المهام وتجميعها عبر القوائم.",
+	"label_name_taken": "يوجد وسم بهذا الاسم بالفعل.",
+	"label_rename_title": "إعادة تسمية الوسم",
+	"label_color_title": "اختر لونًا",
+	"label_color_label": "اللون",
+	"label_delete_title": "حذف الوسم؟",
+	"label_delete_confirm": "حذف الوسم «{name}»؟ سيُزال من كل المهام ولا يمكن التراجع عن هذا.",
+	"templates_heading": "القوالب",
+	"templates_empty": "لا توجد قوالب بعد. احفظ قائمة كقالب لإعادة استخدام بنيتها.",
+	"action_use_template": "استخدام",
+	"template_use_needs_list": "تُضاف قوالب المهام من داخل قائمة.",
+	"template_delete_title": "حذف القالب؟",
+	"template_delete_confirm": "حذف القالب «{name}»؟ لا يمكن التراجع عن هذا. القوائم المنشأة منه بالفعل تبقى كما هي."
 }

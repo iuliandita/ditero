@@ -22,11 +22,13 @@ import { snapshotList } from "../../domain/template.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
-import type { Label, schema, Task } from "../../zero/schema.gen.ts";
+import type { Label, List, schema, Task } from "../../zero/schema.gen.ts";
 import { IconPicker } from "../components/list/IconPicker.tsx";
 import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
+import type { RowAction } from "../components/ui/row-action.ts";
+import { RowActions } from "../components/ui/row-actions.tsx";
 
 const DISPLAY_MODES: CompletedDisplay[] = ["sink", "keep", "hide"];
 
@@ -44,7 +46,13 @@ function lastKey(items: { sortKey: string }[]): string | null {
 	);
 }
 
-export function ListView({ listId }: { listId: string }) {
+export function ListView({
+	listId,
+	listActions,
+}: {
+	listId: string;
+	listActions: (list: List) => RowAction[];
+}) {
 	const zero = useZero<typeof schema>();
 	const [tasks] = useQuery(queries.tasks.mine());
 	const [lists] = useQuery(queries.lists.mine());
@@ -228,7 +236,8 @@ export function ListView({ listId }: { listId: string }) {
 
 	return (
 		<div data-testid="list">
-			<div className="mb-4 flex items-center gap-2">
+			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
+			<div className="group mb-4 flex items-center gap-2">
 				<button
 					type="button"
 					aria-label={m.list_change_icon()}
@@ -289,6 +298,10 @@ export function ListView({ listId }: { listId: string }) {
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
+				<RowActions
+					actions={listActions(openList)}
+					label={m.row_actions_for({ name: openList.title })}
+				/>
 			</div>
 
 			<div className="mb-3 flex gap-2">

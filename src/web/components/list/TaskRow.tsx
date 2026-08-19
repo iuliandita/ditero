@@ -1,9 +1,11 @@
+import { useQuery, useZero } from "@rocicorp/zero/react";
 import { CalendarClock, Check, ChevronRight, Flag } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import {
 	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
 	type PointerEvent as ReactPointerEvent,
+	useMemo,
 	useRef,
 	useState,
 } from "react";
@@ -18,9 +20,15 @@ import {
 } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import type { Role } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
-import type { Label, Task } from "../../../zero/schema.gen.ts";
+import { mutators } from "../../../zero/mutators.ts";
+import { queries } from "../../../zero/queries.ts";
+import type { Label, schema, Task } from "../../../zero/schema.gen.ts";
 import { ReminderChip } from "../task/ReminderChip.tsx";
+import { useConfirm } from "../ui/confirm.tsx";
+import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
+import { type Due, taskActions } from "./taskActions.ts";
 
 export type RowHandlers = {
 	onToggle: (id: string, done: boolean) => void;
@@ -176,10 +184,69 @@ export function TaskRow({
 	handlers: RowHandlers;
 }) {
 	const [expanded, setExpanded] = useState(false);
+	const zero = useZero<typeof schema>();
+	const confirm = useConfirm();
+	const [lists] = useQuery(queries.lists.mine());
+	const [memberships] = useQuery(queries.memberships.mine());
+	const [allTasks] = useQuery(queries.tasks.mine());
 	const bare = kind === "checklist";
 	const doneCount = subtasks.filter((s) => s.done).length;
 	const total = subtasks.length;
 	const progress = total > 0 ? doneCount / total : 0;
+
+	// The caller's role in the workspace owning this task's list. The mutators
+	// re-check on write; this only keeps the menu from offering a refusal.
+	const role = useMemo<Role | null>(() => {
+		const list = lists.find((l) => l.id === task.listId);
+		if (!list) return null;
+		const mine = memberships.find(
+			(mem) =>
+				mem.userId === zero.userID && mem.workspaceId === list.workspaceId,
+		);
+		return (mine?.role as Role) ?? null;
+	}, [lists, memberships, task.listId, zero.userID]);
+
+	function update(fields: Partial<Due> & { priority?: number }) {
+		void zero
+			.mutate(mutators.task.update({ id: task.id, ...fields }))
+			.client.catch((e) => console.error("task.update failed", e));
+	}
+
+	async function removeTask() {
+		// Counted from the synced task set, not the `subtasks` prop: three of the
+		// four TaskRow surfaces pass [], and task.delete cascades children, so the
+		// prop would understate the blast radius the confirm exists to state.
+		const count = allTasks.filter((t) => t.parentId === task.id).length;
+		const ok = await confirm({
+			title: m.task_delete_title(),
+			body:
+				count > 0
+					? m.task_delete_confirm_subtasks({ title: task.title, count })
+					: m.task_delete_confirm({ title: task.title }),
+			confirmLabel: m.action_delete(),
+			destructive: true,
+		});
+		if (!ok) return;
+		void zero
+			.mutate(mutators.task.delete({ id: task.id }))
+			.client.catch((e) => console.error("task.delete failed", e));
+	}
+
+	const actions = taskActions({
+		task,
+		kind,
+		role,
+		handlers: {
+			open: handlers.onOpenDetail,
+			schedule: (_t, due) => update(due),
+			pickDate: handlers.onSchedule,
+			setPriority: (_t, priority) => update({ priority }),
+			remove: () => void removeTask(),
+		},
+	});
+	const actionsLabel = m.row_actions_for({ name: task.title });
+	const canDelete = actions.some((a) => a.id === "delete" && !a.hidden);
+	const { rowProps, menu } = useRowContextMenu(actions, actionsLabel);
 
 	return (
 		<div className="rounded-lg">
@@ -189,9 +256,14 @@ export function TaskRow({
 					handlers.onSchedule ? () => handlers.onSchedule?.(task) : undefined
 				}
 			>
-				{/* data-kbd-row scopes the roving toggle action to this row; the open
-				    button carries data-kbd-nav (roving focus + open target). */}
-				<div className="flex items-start gap-2 py-1.5" data-kbd-row>
+				{/* data-kbd-row scopes the roving row actions to this row; the open
+				    button carries data-kbd-nav (roving focus + open target). `group`
+				    is what RowActions' md:group-hover reveal keys off. */}
+				<div
+					className="group flex items-start gap-2 py-1.5"
+					data-kbd-row
+					{...rowProps}
+				>
 					<Checkbox
 						aria-label={task.title}
 						checked={task.done ?? false}
@@ -267,8 +339,26 @@ export function TaskRow({
 							/>
 						</button>
 					)}
+					<RowActions actions={actions} label={actionsLabel} />
+					{/* The keyboard's delete target. It cannot be the menu item: Radix
+					    portals the menu content out of this row, and the item exists
+					    only while the menu is open, so actOnFocused could never find
+					    it. Same indirection data-kbd-action="toggle" already uses.
+					    Absent without the permission, so the binding no-ops rather
+					    than confirming a delete the mutator would refuse. */}
+					{canDelete && (
+						<button
+							type="button"
+							data-kbd-action="delete"
+							className="sr-only"
+							tabIndex={-1}
+							aria-hidden
+							onClick={() => void removeTask()}
+						/>
+					)}
 				</div>
 			</SwipeRow>
+			{menu}
 			{expanded && total > 0 && (
 				<ul className="ms-6 flex flex-col border-s ps-2">
 					{subtasks.map((s) => (

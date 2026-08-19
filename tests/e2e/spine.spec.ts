@@ -64,6 +64,10 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 	await pa.getByTestId("new-task-submit").click();
 	// Live cross-client sync: generous timeout for a cold zero-cache view.
 	await expect(pb.getByText("Buy milk")).toBeVisible({ timeout: 15000 });
-	await pa.getByLabel("Buy milk").check();
-	await expect(pb.getByLabel("Buy milk")).toBeChecked({ timeout: 15000 });
+	// exact: the row's kebab is labelled "Actions for Buy milk", and getByLabel
+	// substring-matches by default, so a loose locator now resolves to two nodes.
+	await pa.getByLabel("Buy milk", { exact: true }).check();
+	await expect(pb.getByLabel("Buy milk", { exact: true })).toBeChecked({
+		timeout: 15000,
+	});
 });

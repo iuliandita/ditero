@@ -1269,6 +1269,10 @@
 	"mutator_error_label_name_taken": "Ya existe una etiqueta con ese nombre.",
 	"modal_close_label": "Cerrar",
 	"action_close": "Cerrar",
+	"action_delete": "Eliminar",
+	"action_remove": "Quitar",
+	"confirm_cancel": "Cancelar",
+	"confirm_default_title": "¿Estás seguro?",
 	"error_boundary_message": "No se pudo mostrar esta vista.",
 	"error_boundary_go_home": "Ir al inicio",
 	"list_back_to_lists": "Volver a las listas",
@@ -1283,9 +1287,12 @@
 	"view_unpin": "Dejar de fijar",
 	"view_menu_edit": "Editar",
 	"view_menu_delete": "Eliminar",
+	"view_delete_title": "¿Eliminar la vista?",
+	"view_delete_confirm": "¿Eliminar la vista «{name}»? Todos los que la comparten la pierden, y quien la use como inicio vuelve a Hoy.",
 	"view_not_found": "No se encontró la vista.",
 	"dashboard_not_found": "No se encontró el dashboard.",
-	"dashboard_delete_confirm": "¿Eliminar este dashboard?",
+	"dashboard_delete_title": "¿Eliminar el dashboard?",
+	"dashboard_delete_confirm": "¿Eliminar el dashboard «{name}»? Todos los que lo comparten lo pierden, y quien lo use como inicio vuelve a Hoy.",
 	"key_space": "Espacio",
 	"key_esc": "Esc",
 	"notify_reminder_body": "Vence {when}",
@@ -1296,5 +1303,78 @@
 	"notify_ack_label": "Hecho",
 	"notify_ack_email_prefix": "Marcar como hecho:",
 	"notify_test_title": "Prueba de Ditero",
-	"notify_test_body": "Notificación de prueba de Ditero."
+	"notify_test_body": "Notificación de prueba de Ditero.",
+	"row_actions_label": "Acciones",
+	"row_actions_for": "Acciones para {name}",
+	"action_rename": "Cambiar el nombre",
+	"action_move_to_folder": "Mover a una carpeta",
+	"action_no_folder": "Sin carpeta",
+	"list_delete_title": "¿Eliminar la lista?",
+	"list_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "¿Eliminar «{title}» y {countNum} elemento? Esto no se puede deshacer.",
+				"countPlural=many": "¿Eliminar «{title}» y {countNum} elementos? Esto no se puede deshacer.",
+				"countPlural=other": "¿Eliminar «{title}» y {countNum} elementos? Esto no se puede deshacer."
+			}
+		}
+	],
+	"action_new_folder": "Nueva carpeta",
+	"action_new_list_here": "Nueva lista aquí",
+	"folder_name_label": "Nombre de la carpeta",
+	"folder_rename_title": "Cambiar el nombre de la carpeta",
+	"folder_delete_title": "¿Eliminar la carpeta?",
+	"folder_delete_confirm": "¿Eliminar la carpeta «{name}»? Esto no se puede deshacer.",
+	"folder_delete_blocked": "Primero mueve o elimina las listas de esta carpeta",
+	"action_open": "Abrir",
+	"command_row_menu": "Abrir el menú de la fila",
+	"task_delete_title": "¿Eliminar la tarea?",
+	"task_delete_confirm": "¿Eliminar «{title}»? Esto no se puede deshacer.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "¿Eliminar «{title}»? También se eliminará {countNum} subtarea. Esto no se puede deshacer.",
+				"countPlural=many": "¿Eliminar «{title}»? También se eliminarán {countNum} subtareas. Esto no se puede deshacer.",
+				"countPlural=other": "¿Eliminar «{title}»? También se eliminarán {countNum} subtareas. Esto no se puede deshacer."
+			}
+		}
+	],
+	"color_gray": "Gris",
+	"color_red": "Rojo",
+	"color_orange": "Naranja",
+	"color_yellow": "Amarillo",
+	"color_green": "Verde",
+	"color_teal": "Verde azulado",
+	"color_blue": "Azul",
+	"color_purple": "Morado",
+	"color_pink": "Rosa",
+	"action_recolor": "Cambiar color",
+	"action_new_label": "Nueva etiqueta",
+	"labels_empty": "Aún no hay etiquetas. Las etiquetas te ayudan a filtrar y agrupar tareas entre listas.",
+	"label_name_taken": "Ya existe una etiqueta con ese nombre.",
+	"label_rename_title": "Cambiar el nombre de la etiqueta",
+	"label_color_title": "Elige un color",
+	"label_color_label": "Color",
+	"label_delete_title": "¿Eliminar la etiqueta?",
+	"label_delete_confirm": "¿Eliminar la etiqueta «{name}»? Se quitará de todas las tareas y esto no se puede deshacer.",
+	"templates_heading": "Plantillas",
+	"templates_empty": "Aún no hay plantillas. Guarda una lista como plantilla para reutilizar su estructura.",
+	"action_use_template": "Usar",
+	"template_use_needs_list": "Las plantillas de tarea se añaden desde dentro de una lista.",
+	"template_delete_title": "¿Eliminar la plantilla?",
+	"template_delete_confirm": "¿Eliminar la plantilla «{name}»? Esto no se puede deshacer. Las listas ya creadas a partir de ella no cambian."
 }

@@ -1243,6 +1243,10 @@
 	"mutator_error_label_name_taken": "Ein Label mit diesem Namen gibt es schon.",
 	"modal_close_label": "Schließen",
 	"action_close": "Schließen",
+	"action_delete": "Löschen",
+	"action_remove": "Entfernen",
+	"confirm_cancel": "Abbrechen",
+	"confirm_default_title": "Bist du sicher?",
 	"error_boundary_message": "Diese Ansicht konnte nicht angezeigt werden.",
 	"error_boundary_go_home": "Zur Startseite",
 	"list_back_to_lists": "Zurück zu den Listen",
@@ -1257,9 +1261,12 @@
 	"view_unpin": "Lösen",
 	"view_menu_edit": "Bearbeiten",
 	"view_menu_delete": "Löschen",
+	"view_delete_title": "Ansicht löschen?",
+	"view_delete_confirm": "Ansicht „{name}“ löschen? Alle, die sie teilen, verlieren sie, und wer sie als Startseite nutzt, landet wieder auf Heute.",
 	"view_not_found": "Ansicht nicht gefunden.",
 	"dashboard_not_found": "Dashboard nicht gefunden.",
-	"dashboard_delete_confirm": "Dieses Dashboard löschen?",
+	"dashboard_delete_title": "Dashboard löschen?",
+	"dashboard_delete_confirm": "Dashboard „{name}“ löschen? Alle, die es teilen, verlieren es, und wer es als Startseite nutzt, landet wieder auf Heute.",
 	"key_space": "Leertaste",
 	"key_esc": "Esc",
 	"notify_reminder_body": "Fällig {when}",
@@ -1270,5 +1277,76 @@
 	"notify_ack_label": "Erledigt",
 	"notify_ack_email_prefix": "Als erledigt markieren:",
 	"notify_test_title": "Ditero-Test",
-	"notify_test_body": "Testbenachrichtigung von Ditero."
+	"notify_test_body": "Testbenachrichtigung von Ditero.",
+	"row_actions_label": "Aktionen",
+	"row_actions_for": "Aktionen für {name}",
+	"action_rename": "Umbenennen",
+	"action_move_to_folder": "In Ordner verschieben",
+	"action_no_folder": "Kein Ordner",
+	"list_delete_title": "Liste löschen?",
+	"list_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "„{title}“ und {countNum} Eintrag löschen? Das lässt sich nicht rückgängig machen.",
+				"countPlural=other": "„{title}“ und {countNum} Einträge löschen? Das lässt sich nicht rückgängig machen."
+			}
+		}
+	],
+	"action_new_folder": "Neuer Ordner",
+	"action_new_list_here": "Neue Liste hier",
+	"folder_name_label": "Ordnername",
+	"folder_rename_title": "Ordner umbenennen",
+	"folder_delete_title": "Ordner löschen?",
+	"folder_delete_confirm": "Ordner „{name}“ löschen? Das lässt sich nicht rückgängig machen.",
+	"folder_delete_blocked": "Verschiebe oder lösche zuerst die Listen in diesem Ordner",
+	"action_open": "Öffnen",
+	"command_row_menu": "Zeilenmenü öffnen",
+	"task_delete_title": "Aufgabe löschen?",
+	"task_delete_confirm": "„{title}“ löschen? Das lässt sich nicht rückgängig machen.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "„{title}“ löschen? Damit wird auch {countNum} Teilaufgabe gelöscht. Das lässt sich nicht rückgängig machen.",
+				"countPlural=other": "„{title}“ löschen? Damit werden auch {countNum} Teilaufgaben gelöscht. Das lässt sich nicht rückgängig machen."
+			}
+		}
+	],
+	"color_gray": "Grau",
+	"color_red": "Rot",
+	"color_orange": "Orange",
+	"color_yellow": "Gelb",
+	"color_green": "Grün",
+	"color_teal": "Türkis",
+	"color_blue": "Blau",
+	"color_purple": "Lila",
+	"color_pink": "Rosa",
+	"action_recolor": "Farbe ändern",
+	"action_new_label": "Neues Label",
+	"labels_empty": "Noch keine Labels. Mit Labels filterst und gruppierst du Aufgaben über Listen hinweg.",
+	"label_name_taken": "Ein Label mit diesem Namen gibt es schon.",
+	"label_rename_title": "Label umbenennen",
+	"label_color_title": "Farbe auswählen",
+	"label_color_label": "Farbe",
+	"label_delete_title": "Label löschen?",
+	"label_delete_confirm": "Label „{name}“ löschen? Es wird von jeder Aufgabe entfernt und das lässt sich nicht rückgängig machen.",
+	"templates_heading": "Vorlagen",
+	"templates_empty": "Noch keine Vorlagen. Speichere eine Liste als Vorlage, um ihre Struktur wiederzuverwenden.",
+	"action_use_template": "Verwenden",
+	"template_use_needs_list": "Aufgabenvorlagen fügst du innerhalb einer Liste hinzu.",
+	"template_delete_title": "Vorlage löschen?",
+	"template_delete_confirm": "Vorlage „{name}“ löschen? Das lässt sich nicht rückgängig machen. Bereits daraus erstellte Listen bleiben unverändert."
 }

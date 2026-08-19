@@ -22,6 +22,21 @@ describe("authRateLimitOptions", () => {
 		// the default limit, so it must have no customRule here.
 		expect(options.customRules["/get-session"]).toBeUndefined();
 	});
+
+	test("exempts the passkey list read from the ceremony ceiling, and orders it first", () => {
+		const options = authRateLimitOptions();
+		expect(options.customRules["/passkey/*"]).toEqual({ window: 60, max: 10 });
+		expect(options.customRules["/passkey/list-user-passkeys"]).toEqual({
+			window: 60,
+			max: 100,
+		});
+		// Better Auth picks the FIRST customRules key that matches the path, so the
+		// exact path is only reachable while it precedes the wildcard.
+		const keys = Object.keys(options.customRules);
+		expect(keys.indexOf("/passkey/list-user-passkeys")).toBeLessThan(
+			keys.indexOf("/passkey/*"),
+		);
+	});
 });
 
 describe("passkeyOptions", () => {

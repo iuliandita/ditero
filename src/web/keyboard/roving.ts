@@ -33,10 +33,12 @@ export function openFocused(): void {
 	items[i].click();
 }
 
-// Fire the focused row's inline toggle control ([data-kbd-action="toggle"]),
+// Fire the focused row's inline control for `action` ([data-kbd-action="..."]),
 // resolved from the row container so a sibling control (not a descendant of the
-// nav element) still matches. No-op when the focused row has none.
-export function actOnFocused(action: "toggle"): void {
+// nav element) still matches. No-op when the focused row has none. Menu ITEMS
+// are unreachable this way -- Radix portals the menu content out of the row's
+// subtree -- so "delete" targets a hidden in-row button, not the menu entry.
+export function actOnFocused(action: "toggle" | "delete" | "menu"): void {
 	const items = navItems();
 	const i = currentIndex(items);
 	if (i < 0) return;

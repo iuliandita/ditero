@@ -12,13 +12,14 @@ import {
 	SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsDesktop } from "@/lib/use-media-query";
+import type { Role } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import { runMutation } from "../../lib/run-mutation.ts";
 import { AddKid } from "./AddKid.tsx";
-import { InviteDialog, type Role } from "./InviteDialog.tsx";
+import { InviteDialog } from "./InviteDialog.tsx";
 import { ROLE_LABELS } from "./role-labels.ts";
 
 const ROLE_BADGE: Record<Role, "default" | "secondary" | "outline"> = {

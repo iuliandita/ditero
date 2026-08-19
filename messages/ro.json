@@ -1269,6 +1269,10 @@
 	"mutator_error_label_name_taken": "Există deja o etichetă cu acest nume.",
 	"modal_close_label": "Închide",
 	"action_close": "Închide",
+	"action_delete": "Șterge",
+	"action_remove": "Elimină",
+	"confirm_cancel": "Anulează",
+	"confirm_default_title": "Sigur?",
 	"error_boundary_message": "Această vizualizare nu a putut fi afișată.",
 	"error_boundary_go_home": "Mergi la pagina de start",
 	"list_back_to_lists": "Înapoi la liste",
@@ -1283,9 +1287,12 @@
 	"view_unpin": "Anulează fixarea",
 	"view_menu_edit": "Editează",
 	"view_menu_delete": "Șterge",
+	"view_delete_title": "Ștergi vizualizarea?",
+	"view_delete_confirm": "Ștergi vizualizarea „{name}”? Toți cei care o folosesc o pierd, iar cine o are ca pagină de start revine la Azi.",
 	"view_not_found": "Vizualizarea nu a fost găsită.",
 	"dashboard_not_found": "Dashboardul nu a fost găsit.",
-	"dashboard_delete_confirm": "Ștergi acest dashboard?",
+	"dashboard_delete_title": "Ștergi dashboardul?",
+	"dashboard_delete_confirm": "Ștergi dashboardul „{name}”? Toți cei care îl folosesc îl pierd, iar cine îl are ca pagină de start revine la Azi.",
 	"key_space": "Spațiu",
 	"key_esc": "Esc",
 	"notify_reminder_body": "Termen {when}",
@@ -1296,5 +1303,78 @@
 	"notify_ack_label": "Gata",
 	"notify_ack_email_prefix": "Marchează ca finalizat:",
 	"notify_test_title": "Test Ditero",
-	"notify_test_body": "Notificare de test de la Ditero."
+	"notify_test_body": "Notificare de test de la Ditero.",
+	"row_actions_label": "Acțiuni",
+	"row_actions_for": "Acțiuni pentru {name}",
+	"action_rename": "Redenumește",
+	"action_move_to_folder": "Mută în folder",
+	"action_no_folder": "Fără folder",
+	"list_delete_title": "Ștergi lista?",
+	"list_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Ștergi „{title}” și {countNum} element? Această acțiune nu poate fi anulată.",
+				"countPlural=few": "Ștergi „{title}” și {countNum} elemente? Această acțiune nu poate fi anulată.",
+				"countPlural=other": "Ștergi „{title}” și {countNum} de elemente? Această acțiune nu poate fi anulată."
+			}
+		}
+	],
+	"action_new_folder": "Folder nou",
+	"action_new_list_here": "Listă nouă aici",
+	"folder_name_label": "Numele folderului",
+	"folder_rename_title": "Redenumește folderul",
+	"folder_delete_title": "Ștergi folderul?",
+	"folder_delete_confirm": "Ștergi folderul „{name}”? Această acțiune nu poate fi anulată.",
+	"folder_delete_blocked": "Mută sau șterge mai întâi listele din acest folder",
+	"action_open": "Deschide",
+	"command_row_menu": "Deschide meniul rândului",
+	"task_delete_title": "Ștergi sarcina?",
+	"task_delete_confirm": "Ștergi „{title}”? Această acțiune nu poate fi anulată.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Ștergi „{title}”? Se șterge și {countNum} subsarcină. Această acțiune nu poate fi anulată.",
+				"countPlural=few": "Ștergi „{title}”? Se șterg și {countNum} subsarcini. Această acțiune nu poate fi anulată.",
+				"countPlural=other": "Ștergi „{title}”? Se șterg și {countNum} de subsarcini. Această acțiune nu poate fi anulată."
+			}
+		}
+	],
+	"color_gray": "Gri",
+	"color_red": "Roșu",
+	"color_orange": "Portocaliu",
+	"color_yellow": "Galben",
+	"color_green": "Verde",
+	"color_teal": "Turcoaz",
+	"color_blue": "Albastru",
+	"color_purple": "Mov",
+	"color_pink": "Roz",
+	"action_recolor": "Schimbă culoarea",
+	"action_new_label": "Etichetă nouă",
+	"labels_empty": "Încă nu ai etichete. Etichetele te ajută să filtrezi și să grupezi sarcini din mai multe liste.",
+	"label_name_taken": "Există deja o etichetă cu acest nume.",
+	"label_rename_title": "Redenumește eticheta",
+	"label_color_title": "Alege o culoare",
+	"label_color_label": "Culoare",
+	"label_delete_title": "Ștergi eticheta?",
+	"label_delete_confirm": "Ștergi eticheta „{name}”? Va fi eliminată din toate sarcinile și acțiunea nu poate fi anulată.",
+	"templates_heading": "Șabloane",
+	"templates_empty": "Încă nu ai șabloane. Salvează o listă ca șablon ca să îi refolosești structura.",
+	"action_use_template": "Folosește",
+	"template_use_needs_list": "Șabloanele de sarcină se adaugă din interiorul unei liste.",
+	"template_delete_title": "Ștergi șablonul?",
+	"template_delete_confirm": "Ștergi șablonul „{name}”? Această acțiune nu poate fi anulată. Listele deja create din el rămân neschimbate."
 }

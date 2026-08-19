@@ -1243,6 +1243,10 @@
 	"mutator_error_label_name_taken": "A label with that name already exists.",
 	"modal_close_label": "Close",
 	"action_close": "Close",
+	"action_delete": "Delete",
+	"action_remove": "Remove",
+	"confirm_cancel": "Cancel",
+	"confirm_default_title": "Are you sure?",
 	"error_boundary_message": "This view couldn't be rendered.",
 	"error_boundary_go_home": "Go home",
 	"list_back_to_lists": "Back to lists",
@@ -1257,9 +1261,12 @@
 	"view_unpin": "Unpin",
 	"view_menu_edit": "Edit",
 	"view_menu_delete": "Delete",
+	"view_delete_title": "Delete view?",
+	"view_delete_confirm": "Delete the view “{name}”? Everyone sharing it loses it, and anyone using it as their home view falls back to Today.",
 	"view_not_found": "View not found.",
 	"dashboard_not_found": "Dashboard not found.",
-	"dashboard_delete_confirm": "Delete this dashboard?",
+	"dashboard_delete_title": "Delete dashboard?",
+	"dashboard_delete_confirm": "Delete the dashboard “{name}”? Everyone sharing it loses it, and anyone using it as their home falls back to Today.",
 	"key_space": "Space",
 	"key_esc": "Esc",
 	"notify_reminder_body": "Due {when}",
@@ -1270,5 +1277,76 @@
 	"notify_ack_label": "Done",
 	"notify_ack_email_prefix": "Mark it done:",
 	"notify_test_title": "Ditero test",
-	"notify_test_body": "Test notification from Ditero."
+	"notify_test_body": "Test notification from Ditero.",
+	"row_actions_label": "Actions",
+	"row_actions_for": "Actions for {name}",
+	"action_rename": "Rename",
+	"action_move_to_folder": "Move to folder",
+	"action_no_folder": "No folder",
+	"list_delete_title": "Delete list?",
+	"list_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Delete “{title}” and its {countNum} item? This cannot be undone.",
+				"countPlural=other": "Delete “{title}” and its {countNum} items? This cannot be undone."
+			}
+		}
+	],
+	"action_new_folder": "New folder",
+	"action_new_list_here": "New list here",
+	"folder_name_label": "Folder name",
+	"folder_rename_title": "Rename folder",
+	"folder_delete_title": "Delete folder?",
+	"folder_delete_confirm": "Delete the folder “{name}”? This cannot be undone.",
+	"folder_delete_blocked": "Move or delete the lists inside this folder first",
+	"action_open": "Open",
+	"command_row_menu": "Open row menu",
+	"task_delete_title": "Delete task?",
+	"task_delete_confirm": "Delete “{title}”? This cannot be undone.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Delete “{title}”? This also deletes {countNum} subtask. This cannot be undone.",
+				"countPlural=other": "Delete “{title}”? This also deletes {countNum} subtasks. This cannot be undone."
+			}
+		}
+	],
+	"color_gray": "Gray",
+	"color_red": "Red",
+	"color_orange": "Orange",
+	"color_yellow": "Yellow",
+	"color_green": "Green",
+	"color_teal": "Teal",
+	"color_blue": "Blue",
+	"color_purple": "Purple",
+	"color_pink": "Pink",
+	"action_recolor": "Recolor",
+	"action_new_label": "New label",
+	"labels_empty": "No labels yet. Labels help you filter and group tasks across lists.",
+	"label_name_taken": "A label with that name already exists.",
+	"label_rename_title": "Rename label",
+	"label_color_title": "Choose a color",
+	"label_color_label": "Color",
+	"label_delete_title": "Delete label?",
+	"label_delete_confirm": "Delete the label “{name}”? It will be removed from every task and this cannot be undone.",
+	"templates_heading": "Templates",
+	"templates_empty": "No templates yet. Save a list as a template to reuse its structure.",
+	"action_use_template": "Use",
+	"template_use_needs_list": "Task templates are added from inside a list.",
+	"template_delete_title": "Delete template?",
+	"template_delete_confirm": "Delete the template “{name}”? This cannot be undone. Lists already created from it are unaffected."
 }

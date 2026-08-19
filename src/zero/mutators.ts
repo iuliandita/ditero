@@ -33,6 +33,7 @@ import { LOCALES } from "../domain/locale.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { MutatorError } from "../domain/mutator-error.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
+import { ADMIN_ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
 	type InstantiatedList,
@@ -51,9 +52,6 @@ import {
 	zql,
 } from "./schema.gen.ts";
 
-const WRITE_ROLES = new Set(["owner", "admin", "member"]); // may edit content
-const ADMIN_ROLES = new Set(["owner", "admin"]);
-
 const DENIED = "access denied: need member+";
 const denied = () => new MutatorError("denied", DENIED);
 
@@ -61,7 +59,7 @@ async function roleInWorkspace(
 	tx: Transaction<Schema>,
 	userId: string,
 	workspaceId: string,
-): Promise<string | null | undefined> {
+): Promise<Role | null | undefined> {
 	const rows = await tx.run(
 		zql.membership.where("userId", userId).where("workspaceId", workspaceId),
 	);

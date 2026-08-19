@@ -425,10 +425,12 @@ test("dashboard edit mode: drag reorder persists, size preset applies, remove wi
 		timeout: 15000,
 	});
 
-	// Remove Beta: window.confirm is accepted via the dialog handler.
-	page.once("dialog", (dialog) => void dialog.accept());
+	// Remove Beta, accepting the in-app AlertDialog. A page.once("dialog")
+	// handler would silently do nothing here: the confirm is a DOM dialog, not
+	// a native one, so the click must be driven like any other control.
 	await beta.getByTestId("panel-menu").click();
 	await page.getByTestId("panel-remove").click();
+	await page.getByTestId("confirm-accept").click();
 	await expect(page.getByRole("region", { name: "Beta" })).toHaveCount(0, {
 		timeout: 15000,
 	});
@@ -653,9 +655,9 @@ test("dashboard nav: g d and palette open it, home ref survives reload, delete f
 
 	// Delete the home dashboard (confirm accepted) -> falls back to Today, and
 	// the fallback survives a reload (home ref was cleared, not left dangling).
-	page.once("dialog", (dialog) => void dialog.accept());
 	await page.getByTestId("dashboard-actions").click();
 	await page.getByTestId("dashboard-delete").click();
+	await page.getByTestId("confirm-accept").click();
 	await expect(
 		page.getByRole("heading", { name: "Today", level: 1 }),
 	).toBeVisible({ timeout: 15000 });

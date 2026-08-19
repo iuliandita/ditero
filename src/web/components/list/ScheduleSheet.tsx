@@ -10,19 +10,21 @@ import type { Task } from "../../../zero/schema.gen.ts";
 
 // Quick due-date picker opened by a left-swipe on a task (design 2.6). Non-
 // destructive snooze targets; a full editor lives in TaskDetail. Buttons carry
-// all-day or timed semantics matching the parser/detail conventions.
-function todayEvening(): { dueAt: number; dueAllDay: boolean } {
+// all-day or timed semantics matching the parser/detail conventions. The three
+// presets are exported so the row-actions Schedule submenu offers the same
+// vocabulary instead of a second one.
+export function todayEvening(): { dueAt: number; dueAllDay: boolean } {
 	const d = new Date();
 	d.setHours(18, 0, 0, 0);
 	return { dueAt: d.getTime(), dueAllDay: false };
 }
-function tomorrow(): { dueAt: number; dueAllDay: boolean } {
+export function tomorrow(): { dueAt: number; dueAllDay: boolean } {
 	const d = new Date();
 	d.setDate(d.getDate() + 1);
 	d.setHours(0, 0, 0, 0);
 	return { dueAt: d.getTime(), dueAllDay: true };
 }
-function thisWeekend(): { dueAt: number; dueAllDay: boolean } {
+export function thisWeekend(): { dueAt: number; dueAllDay: boolean } {
 	const d = new Date();
 	// Next Saturday (day 6); if already Saturday, keep today.
 	const delta = (6 - d.getDay() + 7) % 7;

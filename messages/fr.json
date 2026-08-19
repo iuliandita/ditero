@@ -1269,6 +1269,10 @@
 	"mutator_error_label_name_taken": "Une étiquette portant ce nom existe déjà.",
 	"modal_close_label": "Fermer",
 	"action_close": "Fermer",
+	"action_delete": "Supprimer",
+	"action_remove": "Retirer",
+	"confirm_cancel": "Annuler",
+	"confirm_default_title": "Es-tu sûr ?",
 	"error_boundary_message": "Cette vue n'a pas pu s'afficher.",
 	"error_boundary_go_home": "Aller à l'accueil",
 	"list_back_to_lists": "Retour aux listes",
@@ -1283,9 +1287,12 @@
 	"view_unpin": "Détacher",
 	"view_menu_edit": "Modifier",
 	"view_menu_delete": "Supprimer",
+	"view_delete_title": "Supprimer la vue ?",
+	"view_delete_confirm": "Supprimer la vue « {name} » ? Tous ceux qui la partagent la perdent, et qui l'utilise comme accueil revient sur Aujourd'hui.",
 	"view_not_found": "Vue introuvable.",
 	"dashboard_not_found": "Dashboard introuvable.",
-	"dashboard_delete_confirm": "Supprimer ce dashboard ?",
+	"dashboard_delete_title": "Supprimer le dashboard ?",
+	"dashboard_delete_confirm": "Supprimer le dashboard « {name} » ? Tous ceux qui le partagent le perdent, et qui l'utilise comme accueil revient sur Aujourd'hui.",
 	"key_space": "Espace",
 	"key_esc": "Esc",
 	"notify_reminder_body": "Échéance {when}",
@@ -1296,5 +1303,78 @@
 	"notify_ack_label": "Fait",
 	"notify_ack_email_prefix": "Marquer comme fait :",
 	"notify_test_title": "Test Ditero",
-	"notify_test_body": "Notification de test de Ditero."
+	"notify_test_body": "Notification de test de Ditero.",
+	"row_actions_label": "Actions",
+	"row_actions_for": "Actions pour {name}",
+	"action_rename": "Renommer",
+	"action_move_to_folder": "Déplacer vers un dossier",
+	"action_no_folder": "Aucun dossier",
+	"list_delete_title": "Supprimer la liste ?",
+	"list_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Supprimer « {title} » et {countNum} élément ? Cette action est irréversible.",
+				"countPlural=many": "Supprimer « {title} » et {countNum} éléments ? Cette action est irréversible.",
+				"countPlural=other": "Supprimer « {title} » et {countNum} éléments ? Cette action est irréversible."
+			}
+		}
+	],
+	"action_new_folder": "Nouveau dossier",
+	"action_new_list_here": "Nouvelle liste ici",
+	"folder_name_label": "Nom du dossier",
+	"folder_rename_title": "Renommer le dossier",
+	"folder_delete_title": "Supprimer le dossier ?",
+	"folder_delete_confirm": "Supprimer le dossier « {name} » ? Cette action est irréversible.",
+	"folder_delete_blocked": "Déplace ou supprime d'abord les listes de ce dossier",
+	"action_open": "Ouvrir",
+	"command_row_menu": "Ouvrir le menu de la ligne",
+	"task_delete_title": "Supprimer la tâche ?",
+	"task_delete_confirm": "Supprimer « {title} » ? Cette action est irréversible.",
+	"task_delete_confirm_subtasks": [
+		{
+			"declarations": [
+				"input count",
+				"input title",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Supprimer « {title} » ? Cela supprime aussi {countNum} sous-tâche. Cette action est irréversible.",
+				"countPlural=many": "Supprimer « {title} » ? Cela supprime aussi {countNum} sous-tâches. Cette action est irréversible.",
+				"countPlural=other": "Supprimer « {title} » ? Cela supprime aussi {countNum} sous-tâches. Cette action est irréversible."
+			}
+		}
+	],
+	"color_gray": "Gris",
+	"color_red": "Rouge",
+	"color_orange": "Orange",
+	"color_yellow": "Jaune",
+	"color_green": "Vert",
+	"color_teal": "Turquoise",
+	"color_blue": "Bleu",
+	"color_purple": "Violet",
+	"color_pink": "Rose",
+	"action_recolor": "Changer la couleur",
+	"action_new_label": "Nouvelle étiquette",
+	"labels_empty": "Pas encore d’étiquettes. Les étiquettes t’aident à filtrer et regrouper les tâches entre les listes.",
+	"label_name_taken": "Une étiquette porte déjà ce nom.",
+	"label_rename_title": "Renommer l’étiquette",
+	"label_color_title": "Choisir une couleur",
+	"label_color_label": "Couleur",
+	"label_delete_title": "Supprimer l’étiquette ?",
+	"label_delete_confirm": "Supprimer l’étiquette « {name} » ? Elle sera retirée de toutes les tâches et cette action est irréversible.",
+	"templates_heading": "Modèles",
+	"templates_empty": "Pas encore de modèles. Enregistre une liste comme modèle pour réutiliser sa structure.",
+	"action_use_template": "Utiliser",
+	"template_use_needs_list": "Les modèles de tâche s’ajoutent depuis une liste.",
+	"template_delete_title": "Supprimer le modèle ?",
+	"template_delete_confirm": "Supprimer le modèle « {name} » ? Cette action est irréversible. Les listes déjà créées à partir de lui ne changent pas."
 }

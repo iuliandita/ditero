@@ -31,6 +31,7 @@ import {
 	channelSaveErrorMessage,
 	channelWarningMessage,
 } from "./lib/channel-messages.ts";
+import { labelColorName } from "./lib/label-color.ts";
 import { mutationErrorMessage } from "./lib/mutator-messages.ts";
 import {
 	PRIORITIES,
@@ -197,6 +198,11 @@ const PROBES: [string, () => string, Message][] = [
 		m.builtin_view_today,
 	],
 	["group.ts DUE_LABELS", () => dueGroupLabel("overdue"), m.due_overdue],
+	[
+		"label-color.ts COLOR_NAMES",
+		() => labelColorName("purple"),
+		m.color_purple,
+	],
 ];
 
 describe("module-level translated constants are not locale-frozen", () => {
