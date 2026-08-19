@@ -62,3 +62,39 @@ test("data-open/data-closed compile onto Radix's data-state, not a bare attribut
 	expect(css).toContain("@keyframes enter");
 	expect(css).toContain("@keyframes exit");
 });
+
+// Extracts the declaration block opened by `open`, balancing braces so a nested
+// block (the media query's `:root:not(.light)`) does not end it early.
+function blockAfter(css: string, open: string, from = 0): string {
+	const start = css.indexOf(open, from);
+	if (start === -1) throw new Error(`index.css no longer contains ${open}`);
+	let depth = 0;
+	for (let i = start + open.length - 1; i < css.length; i++) {
+		if (css[i] === "{") depth++;
+		else if (css[i] === "}" && --depth === 0)
+			return css.slice(start + open.length, i);
+	}
+	throw new Error(`unbalanced braces after ${open}`);
+}
+
+function customProps(block: string): Set<string> {
+	return new Set(block.match(/--[\w-]+(?=\s*:)/g) ?? []);
+}
+
+test("both dark palettes declare the same custom properties", () => {
+	const css = readFileSync(path.join(root, "src/web/index.css"), "utf8");
+	const darkAt = css.indexOf(".dark {");
+	const classBlock = customProps(blockAfter(css, ".dark {"));
+	// The @custom-variant at the top of the file opens an earlier
+	// prefers-color-scheme block; the palette one follows .dark.
+	const mediaBlock = customProps(
+		blockAfter(
+			blockAfter(css, "@media (prefers-color-scheme: dark) {", darkAt),
+			":root:not(.light) {",
+		),
+	);
+	// Guards the mirror comments on both blocks: a token added to one and not
+	// the other silently ships light-mode values to OS-dark users.
+	expect(classBlock.size).toBeGreaterThan(30);
+	expect([...mediaBlock].sort()).toEqual([...classBlock].sort());
+});

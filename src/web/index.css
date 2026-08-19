@@ -202,6 +202,9 @@
 		--kind-shopping: oklch(0.75 0.15 150);
 		--kind-checklist: oklch(0.8 0.13 85);
 		--kind-project: oklch(0.72 0.16 300);
+		--priority-1: oklch(0.72 0.12 250);
+		--priority-2: oklch(0.78 0.15 70);
+		--priority-3: oklch(0.7 0.19 22);
 	}
 }
 
