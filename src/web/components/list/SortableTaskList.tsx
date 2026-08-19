@@ -62,6 +62,7 @@ export function SortableTaskList({
 									id={task.id}
 									label={m.task_reorder_handle()}
 									testId="task-drag"
+									revealHandle
 								>
 									{renderRow(task)}
 								</SortableRow>

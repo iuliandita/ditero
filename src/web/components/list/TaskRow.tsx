@@ -285,7 +285,7 @@ export function TaskRow({
 				    button carries data-kbd-nav (roving focus + open target). `group`
 				    is what RowActions' md:group-hover reveal keys off. */}
 				<div
-					className="group flex items-start gap-2 py-1.5"
+					className="group flex items-start gap-2 rounded-lg py-1.5 transition-colors motion-reduce:transition-none hover:bg-muted/40 active:bg-muted/60"
 					data-kbd-row
 					{...rowProps}
 				>
@@ -306,7 +306,7 @@ export function TaskRow({
 					>
 						<span
 							className={cn(
-								"block truncate",
+								"block truncate text-sm",
 								task.done && "text-muted-foreground line-through",
 							)}
 						>
