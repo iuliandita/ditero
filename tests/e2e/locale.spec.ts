@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import type { Locale } from "../../src/domain/locale.ts";
 import { m } from "../../src/paraglide/messages.js";
+import { goToSettings } from "./helpers.ts";
 
 // M-i18n language switcher: pre-auth (Login) + post-auth (settings) mounts,
 // user_pref.locale persistence + round-trip across a reload, dir/lang
@@ -132,6 +133,7 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	await expect(page.getByTestId("workspace")).toBeVisible({
 		timeout: SIGNUP_TIMEOUT,
 	});
+	await goToSettings(page);
 
 	// The signed-up session has no stored locale yet, so login reconcile is a
 	// no-op and the switcher (post-auth mount) still reflects ar.
@@ -158,5 +160,6 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	});
 	await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
 	await expect(page.locator("html")).toHaveAttribute("lang", "en");
+	await goToSettings(page);
 	await expect(page.getByTestId("language-switcher")).toContainText("English");
 });

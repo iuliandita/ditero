@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { browserToday } from "../support/browser-day.ts";
+import { goToSettings } from "./helpers.ts";
 
 // M2 recurrence editor e2e. Exercises the preset-driven recurrence control in the
 // task detail surface: enable, set a weekly every-2-weeks Mon/Wed rule, verify the
@@ -263,7 +264,7 @@ test("recurring task: Skip control advances the due date without awarding Karma"
 
 	// No Karma: skip awards nothing, so the Progress ledger stays empty and points
 	// stay at 0 (a complete would have line-itemed a +5 gain here).
-	await page.getByRole("button", { name: /'s space/ }).click();
+	await goToSettings(page);
 	const panel = page.getByTestId("karma-panel");
 	await expect(panel).toBeVisible();
 	await expect(page.getByTestId("karma-ledger-empty")).toBeVisible();

@@ -3,6 +3,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import type { Locale } from "../../src/domain/locale.ts";
 import { m } from "../../src/paraglide/messages.js";
+import { goToSettings } from "./helpers.ts";
 
 // M-ui row-affordances e2e. One RowAction[] descriptor renders three ways
 // (kebab, right-click, keyboard), and every destructive action now runs through
@@ -57,14 +58,11 @@ async function waitWorkspaceReady(page: Page): Promise<void> {
 	});
 }
 
-// Clicking the workspace button clears openListId/openViewId, which is the only
-// way back to the lists index -- where LabelManager and TemplateManager mount on
-// desktop (Workspace.tsx isDesktop block).
+// Clicking the workspace button clears openListId/openViewId, which is the way
+// back to the lists index (where the create-list form mounts).
 async function goToListsIndex(page: Page): Promise<void> {
 	await page.getByRole("button", { name: /'s space/ }).click();
-	await expect(page.getByTestId("label-manager")).toBeVisible({
-		timeout: 15000,
-	});
+	await expect(page.getByTestId("new-list")).toBeVisible({ timeout: 15000 });
 }
 
 // Attribute selector, NOT getByRole: the confirm dialog is a Radix modal, so it
@@ -290,6 +288,7 @@ async function switchLocale(
 	locale: Locale,
 	dir: "ltr" | "rtl",
 ): Promise<void> {
+	await goToSettings(page);
 	const reloaded = page.waitForEvent("load");
 	await page.getByTestId("language-switcher").click();
 	await page.getByRole("option", { name: nativeName }).click();
@@ -642,6 +641,7 @@ test("a11y: open row menu, confirm dialog, label manager and template manager", 
 	await page.getByTestId("row-action-template").click();
 	await expect(page.getByRole("menu")).toHaveCount(0);
 
+	await goToSettings(page);
 	await page.getByTestId("label-new").click();
 	await page.getByTestId("label-name-input").fill(labelName);
 	await page.getByTestId("label-name-save").click();

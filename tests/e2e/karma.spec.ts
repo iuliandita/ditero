@@ -1,10 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { goToSettings } from "./helpers.ts";
 
 // M2 Karma display e2e (Task 12). Seeds karma by completing a task, opens the
 // own-user Progress panel and asserts the level ring + points + a ledger entry,
 // sets a daily goal and sees the goal ring reflect it, toggles vacation and sees
-// the note. Plus the axe merge gate on the panel + settings surface. Conventions
+// the note. Plus the axe merge gate on the settings surface. Conventions
 // (signUp/uniqueEmail/testid locators/frozen-frame axe) mirror habits.spec.
 test.describe.configure({ retries: 2, timeout: 90_000 });
 
@@ -118,8 +119,8 @@ test("karma: complete a habit, Progress panel shows level + points + ledger; set
 		{ timeout: 15000 },
 	);
 
-	// Back to the landing (Progress panel renders there on desktop).
-	await workspaceButton(page).click();
+	// The Progress panel lives on the settings surface.
+	await goToSettings(page);
 	const panel = page.getByTestId("karma-panel");
 	await expect(panel).toBeVisible();
 
@@ -151,7 +152,7 @@ test("karma: complete a habit, Progress panel shows level + points + ledger; set
 	);
 	await expect(page.getByTestId("karma-vacation-note")).toBeVisible();
 
-	// Axe the panel + settings surface (landing) while populated.
+	// Axe the settings surface while populated.
 	await expectNoSeriousA11y(page, "karma panel + settings");
 });
 
@@ -175,8 +176,7 @@ test("karma: completing a regular task via the list checkbox awards Karma", asyn
 		timeout: 15000,
 	});
 
-	// Landing renders the Progress panel on desktop.
-	await workspaceButton(page).click();
+	await goToSettings(page);
 	await expect(page.getByTestId("karma-panel")).toBeVisible();
 
 	// Ledger line-items the task completion as a +5 gain (base task, priority 0).
