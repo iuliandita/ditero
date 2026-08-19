@@ -9,10 +9,18 @@ services:
     ports:
       - "55432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ditero_e2e"]
+      # A real query over TCP, not pg_isready: initdb runs a temporary server on
+      # a unix socket, so pg_isready reports ready from inside the container
+      # before the real server has restarted to listen on TCP. Consumers then
+      # connect and get FATAL 57P03 "the database system is starting up".
+      test:
+        [
+          "CMD-SHELL",
+          "psql -h 127.0.0.1 -U postgres -d ditero_e2e -c 'select 1' > /dev/null",
+        ]
       interval: 2s
       timeout: 5s
-      retries: 20
+      retries: 30
 
   zero-cache:
     image: rocicorp/zero:1.9.0@sha256:f80683bf3ddf08be26c68ddd94589fada29a0b8a4597668b090006c09041d4cd
