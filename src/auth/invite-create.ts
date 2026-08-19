@@ -6,19 +6,16 @@ import { z } from "zod";
 import { db as defaultDb } from "../db/client.ts";
 import { invite, list, task } from "../db/schema.ts";
 import { newInviteToken } from "../domain/invite.ts";
+import { ADMIN_ROLES, ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import {
 	ackBaseUrl,
 	takeRateToken,
 } from "../server/notifications/capability.ts";
 import { isRestrictedAccount } from "./managed-account.ts";
 import {
-	ADMIN_ROLES,
 	type AppEnv,
 	memberInvitePolicy,
-	ROLES,
-	type Role,
 	roleInWorkspace,
-	WRITE_ROLES,
 } from "./membership-role.ts";
 
 export class InviteCreateError extends Error {
@@ -92,7 +89,7 @@ export async function createInvite(
 	database: typeof defaultDb = defaultDb,
 	env: AppEnv = process.env,
 ): Promise<{ id: string; token: string; link: string }> {
-	if (!ROLES.has(input.role)) {
+	if (!ROLES.includes(input.role)) {
 		throw new InviteCreateError(400, "invalid role");
 	}
 	// attachKind is set IFF attachTaskId is set.
