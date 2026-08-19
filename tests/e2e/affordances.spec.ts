@@ -426,9 +426,14 @@ test("blocked: a folder with lists shows Delete disabled with its reason, and de
 	// items from both the roving focus order and its FIRST_LAST_KEYS candidate
 	// list, so arrowing onto this one is the behavioural proof that the attribute
 	// assertions above only stand in for.
-	await page.keyboard.press("ArrowDown"); // new-list
-	await page.keyboard.press("ArrowDown"); // rename
-	await page.keyboard.press("ArrowDown"); // delete, blocked but still reachable
+	// One ArrowUp, not N ArrowDowns: the content-level handler
+	// (react-menu/dist/index.mjs:317-323) fires only while focus is still on the
+	// content, and LAST_KEYS reverses the candidate list -- so this lands on the
+	// last item whatever the menu's length, and Delete is always last. Counting
+	// ArrowDowns hardcodes the item count and breaks when the menu grows.
+	// The candidate filter is `!item.disabled`, Radix's native prop, so an
+	// aria-disabled item is still a candidate. That is the property under test.
+	await page.keyboard.press("ArrowUp");
 	await expect(blockedDelete).toBeFocused();
 
 	// A blocked item fires nothing and keeps the menu open, so a stale block can
