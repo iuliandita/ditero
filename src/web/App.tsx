@@ -1,3 +1,4 @@
+import { BootSkeleton } from "./components/shell/AppSkeleton.tsx";
 import { ConfirmProvider } from "./components/ui/confirm.tsx";
 import { authClient } from "./lib/auth-client.ts";
 import { AppZeroProvider } from "./lib/zero.tsx";
@@ -22,7 +23,7 @@ function Routes() {
 	// both logged-out and logged-in invitees. AcceptInvite runs its own session +
 	// preview logic; every other path stays on the normal session-gated flow.
 	if (window.location.pathname === "/accept") return <AcceptInvite />;
-	if (isPending) return null;
+	if (isPending) return <BootSkeleton />;
 	if (!session) return <Login />;
 	return (
 		<AppZeroProvider userID={session.user.id}>
