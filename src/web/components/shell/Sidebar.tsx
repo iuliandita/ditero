@@ -417,6 +417,7 @@ export function Sidebar({
 
 			<div className="flex items-center gap-1 border-t p-2">
 				<Button
+					data-testid="nav-settings"
 					variant={section === "settings" ? "secondary" : "ghost"}
 					size="sm"
 					className={cn(

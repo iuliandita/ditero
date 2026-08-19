@@ -465,12 +465,14 @@ function NormalWorkspace() {
 		setDetailTaskId(null);
 		setOpenDashboardId(id);
 	}, []);
-	function openSettings() {
+	// Fourth exclusive content mode: settings clears list/view/dashboard.
+	const openSettings = useCallback(() => {
 		setOpenListId(null);
 		setOpenViewId(null);
 		setOpenDashboardId(null);
+		setDetailTaskId(null);
 		setSection("settings");
-	}
+	}, []);
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
 	// of M1a scope: each group is its own DndContext, so a list can't leave it.
@@ -860,10 +862,12 @@ function NormalWorkspace() {
 		? (lists.find((l) => l.id === detailTask.listId) ?? null)
 		: null;
 
-	// The view shown when no list or dashboard is open: an explicitly opened one,
-	// else home.
+	// The view shown when no list, dashboard or settings surface is open: an
+	// explicitly opened one, else home.
 	const activeViewId =
-		openListId || openDashboardId ? null : (openViewId ?? homeRef);
+		openListId || openDashboardId || section === "settings"
+			? null
+			: (openViewId ?? homeRef);
 
 	// Command handlers injected into the palette/keyboard system. palette.open and
 	// search.open are owned by the provider (it holds the open state). Movement +
@@ -875,12 +879,7 @@ function NormalWorkspace() {
 	const commandHandlers = useMemo<CommandHandlers>(
 		() => ({
 			"task.create": () => setQuickAddOpen(true),
-			"settings.open": () => {
-				setOpenListId(null);
-				setOpenViewId(null);
-				setOpenDashboardId(null);
-				setSection("settings");
-			},
+			"settings.open": () => openSettings(),
 			"nav.down": () => focusNext(),
 			"nav.up": () => focusPrev(),
 			"nav.open": () => openFocused(),
@@ -897,7 +896,7 @@ function NormalWorkspace() {
 			},
 			"dashboard.new": () => setDashboardManager({ mode: "create" }),
 		}),
-		[firstDashboardId, openView, openDashboard],
+		[firstDashboardId, openView, openDashboard, openSettings],
 	);
 
 	const activeView = activeViewId ? resolveView(activeViewId) : null;
@@ -909,26 +908,41 @@ function NormalWorkspace() {
 			: null;
 
 	let content: React.ReactNode;
-	// Mobile keeps Settings on its own tab; desktop pins SecurityPanel to the
-	// list-index landing so it is always reachable (the auth-hardening e2e drives
-	// it right after signup without navigating).
-	if (!isDesktop && section === "settings") {
+	if (section === "settings") {
 		content = (
-			<div className="p-4">
-				<SecurityPanel />
-				<KarmaPanel />
-				<KarmaSettings />
-				<LanguageSwitcher persistLocale={persistLocale} />
-				{activeId && <LabelManager workspaceId={activeId} role={activeRole} />}
-				{activeId && (
-					<TemplateManager
-						workspaceId={activeId}
-						role={activeRole}
-						onUsed={openList}
-					/>
-				)}
-				<FocusSettings />
-				<NotificationSettings />
+			<div data-testid="settings-surface">
+				<div className="flex items-center gap-2 border-b p-3">
+					<button
+						type="button"
+						aria-label={m.action_back()}
+						data-testid="settings-back"
+						onClick={() => changeSection("lists")}
+						className="flex size-11 items-center justify-center rounded-lg"
+					>
+						<ChevronLeft className="size-5" />
+					</button>
+					<h1 className="truncate text-lg font-semibold">{m.nav_settings()}</h1>
+				</div>
+				<div className="p-4 md:p-6">
+					<SecurityPanel />
+					<KarmaPanel />
+					<KarmaSettings />
+					<LanguageSwitcher persistLocale={persistLocale} />
+					{/* Keyboard is a desktop feature (design 2.18). */}
+					{isDesktop && <KeymapSettings />}
+					{activeId && (
+						<LabelManager workspaceId={activeId} role={activeRole} />
+					)}
+					{activeId && (
+						<TemplateManager
+							workspaceId={activeId}
+							role={activeRole}
+							onUsed={openList}
+						/>
+					)}
+					<FocusSettings />
+					<NotificationSettings />
+				</div>
 			</div>
 		);
 	} else if (openListId) {
@@ -998,8 +1012,8 @@ function NormalWorkspace() {
 		);
 	} else {
 		// No list open: the view surface (an explicitly opened view, or the home
-		// view on the landing). On the landing the list-index/create/settings
-		// controls stay rendered below so those flows remain reachable.
+		// view on the landing). On the landing the workspace heading, create-list
+		// form and (mobile) navigation index stay rendered below.
 		const isLanding = openViewId == null;
 		content = (
 			<div className="flex flex-col gap-6 p-4 md:p-6">
@@ -1236,29 +1250,6 @@ function NormalWorkspace() {
 									/>
 								</div>
 							))}
-						{isDesktop && (
-							<div className="border-t pt-2">
-								<SecurityPanel />
-								<KarmaPanel />
-								<KarmaSettings />
-								<LanguageSwitcher persistLocale={persistLocale} />
-								{/* Keyboard is a desktop feature (design 2.18); the rebind
-								    surface lives beside Security on the desktop landing. */}
-								<KeymapSettings />
-								{activeId && (
-									<LabelManager workspaceId={activeId} role={activeRole} />
-								)}
-								{activeId && (
-									<TemplateManager
-										workspaceId={activeId}
-										role={activeRole}
-										onUsed={openList}
-									/>
-								)}
-								<FocusSettings />
-								<NotificationSettings />
-							</div>
-						)}
 					</div>
 				)}
 			</div>
