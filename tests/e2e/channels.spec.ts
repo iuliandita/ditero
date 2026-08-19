@@ -8,6 +8,7 @@ import {
 	test,
 } from "@playwright/test";
 import { Pool } from "pg";
+import { goToSettings } from "./helpers.ts";
 
 // M3b Task 16 e2e: the five-row channel settings surface, the SMTP mail path
 // against a real loopback sink, the test-send ack round trip (durable through a
@@ -72,6 +73,7 @@ function sidebarLists(page: Page): Locator {
 }
 
 async function settings(page: Page): Promise<Locator> {
+	await goToSettings(page);
 	const panel = page.getByTestId("notification-settings");
 	await expect(panel).toBeVisible({ timeout: 15_000 });
 	return panel;

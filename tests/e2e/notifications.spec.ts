@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { goToSettings, leaveSettings } from "./helpers.ts";
 
 // M3a Task 15 e2e (repaired for M3b Task 16): the notification settings surface
 // (channel config, masked secret round-trip, test send, quiet hours), the
@@ -50,6 +51,7 @@ async function waitWorkspaceReady(page: Page): Promise<void> {
 }
 
 async function settings(page: Page): Promise<Locator> {
+	await goToSettings(page);
 	const panel = page.getByTestId("notification-settings");
 	await expect(panel).toBeVisible({ timeout: 15_000 });
 	return panel;
@@ -274,6 +276,7 @@ test.describe("notification settings", () => {
 
 test.describe("per-task reminder policy and in-app ack", () => {
 	async function createList(page: Page, name: string) {
+		await leaveSettings(page);
 		await waitWorkspaceReady(page);
 		await page.getByTestId("new-list").fill(name);
 		await page.getByTestId("new-list-submit").click();
@@ -286,6 +289,7 @@ test.describe("per-task reminder policy and in-app ack", () => {
 	// habits kind is not in the blank-list picker; the starter template is the
 	// create path (mirrors habits.spec).
 	async function createHabitsList(page: Page) {
+		await leaveSettings(page);
 		await waitWorkspaceReady(page);
 		await page.getByRole("combobox", { name: "Start from template" }).click();
 		await page.getByRole("option", { name: "Habits", exact: true }).click();

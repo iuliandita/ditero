@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import { parseAckUrl } from "../support/ntfy-tap.ts";
+import { goToSettings, leaveSettings } from "./helpers.ts";
 
 // M3a Task 16 e2e: the live half of the durability gate.
 //
@@ -82,6 +83,7 @@ async function waitWorkspaceReady(page: Page): Promise<void> {
 // Configure this account's ntfy channel at its own topic, so the tap can be
 // read per recipient.
 async function configureNtfy(page: Page, topic: string): Promise<void> {
+	await goToSettings(page);
 	await expect(page.getByTestId("notification-settings")).toBeVisible({
 		timeout: 15_000,
 	});
@@ -99,6 +101,8 @@ async function configureNtfy(page: Page, topic: string): Promise<void> {
 		"true",
 		{ timeout: 15_000 },
 	);
+	// Callers continue on the landing (list creation, the shared-workspace jump).
+	await leaveSettings(page);
 }
 
 async function captured(page: Page, topic: string): Promise<Captured[]> {
