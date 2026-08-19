@@ -17,6 +17,7 @@ import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
+import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { TokenChips } from "./TokenChips.tsx";
 
 // Case-insensitive prefix match against visible lists. Ambiguous prefixes stay
@@ -158,7 +159,7 @@ export function QuickAddSheet({
 			setRaw("");
 			inputRef.current?.focus();
 		} catch (e) {
-			setError(e instanceof Error ? e.message : m.quickadd_failed());
+			setError(mutationErrorMessage(e, m.quickadd_failed));
 		} finally {
 			setBusy(false);
 		}

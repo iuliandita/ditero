@@ -1265,6 +1265,8 @@
 	"auth_error_failed_to_verify_registration": "Impossible d'enregistrer cette passkey.",
 	"auth_error_session_required": "Connecte-toi avant d'ajouter une passkey.",
 	"mutation_failed": "Un problème est survenu.",
+	"mutator_error_denied": "Tu n'as pas la permission de faire cela.",
+	"mutator_error_label_name_taken": "Une étiquette portant ce nom existe déjà.",
 	"modal_close_label": "Fermer",
 	"action_close": "Fermer",
 	"error_boundary_message": "Cette vue n'a pas pu s'afficher.",

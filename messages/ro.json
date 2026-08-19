@@ -1265,6 +1265,8 @@
 	"auth_error_failed_to_verify_registration": "Passkey-ul nu a putut fi înregistrat.",
 	"auth_error_session_required": "Autentifică-te înainte să adaugi un passkey.",
 	"mutation_failed": "Ceva n-a mers bine.",
+	"mutator_error_denied": "Nu ai permisiunea să faci asta.",
+	"mutator_error_label_name_taken": "Există deja o etichetă cu acest nume.",
 	"modal_close_label": "Închide",
 	"action_close": "Închide",
 	"error_boundary_message": "Această vizualizare nu a putut fi afișată.",

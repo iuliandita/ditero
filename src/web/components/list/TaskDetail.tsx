@@ -39,6 +39,7 @@ import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
 import { formatFocusedDuration } from "../../focus/timer-core.ts";
 import { useFocusTimer } from "../../focus/useFocusTimer.tsx";
 import { useFocusSessions } from "../../hooks/useFocusSessions.ts";
+import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
 import { CommentThread } from "../people/CommentThread.tsx";
 import { RecurrenceEditor } from "../task/RecurrenceEditor.tsx";
@@ -159,7 +160,7 @@ export function TaskDetail({
 			).client;
 			setNewLabel("");
 		} catch (e) {
-			setError(e instanceof Error ? e.message : m.task_create_label_failed());
+			setError(mutationErrorMessage(e, m.task_create_label_failed));
 		}
 	}
 

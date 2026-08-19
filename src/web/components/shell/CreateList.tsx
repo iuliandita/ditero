@@ -32,6 +32,7 @@ import type {
 	schema,
 	Template,
 } from "../../../zero/schema.gen.ts";
+import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 
 // Kinds offered in the picker. habits exists in the enum but is intentionally
 // hidden here (it is a recurring-by-nature kind, created elsewhere). `label` is a
@@ -232,8 +233,7 @@ function Form({
 			setTemplateSel(BLANK);
 			onCreated?.();
 		} catch (e) {
-			console.error(e);
-			setError(e instanceof Error ? e.message : m.create_list_failed());
+			setError(mutationErrorMessage(e, m.create_list_failed));
 		} finally {
 			inFlight.current = false;
 			setBusy(false);

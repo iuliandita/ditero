@@ -31,6 +31,7 @@ import { karmaForCompletion, karmaWrite } from "../domain/karma.ts";
 import { localDay } from "../domain/local-day.ts";
 import { LOCALES } from "../domain/locale.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
+import { MutatorError } from "../domain/mutator-error.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
@@ -54,6 +55,7 @@ const WRITE_ROLES = new Set(["owner", "admin", "member"]); // may edit content
 const ADMIN_ROLES = new Set(["owner", "admin"]);
 
 const DENIED = "access denied: need member+";
+const denied = () => new MutatorError("denied", DENIED);
 
 async function roleInWorkspace(
 	tx: Transaction<Schema>,
@@ -105,7 +107,7 @@ async function requireWrite(
 	workspaceId: string,
 ): Promise<void> {
 	const role = await roleInWorkspace(tx, userId, workspaceId);
-	if (!role || !WRITE_ROLES.has(role)) throw new Error(DENIED);
+	if (!role || !WRITE_ROLES.has(role)) throw denied();
 }
 
 // Update/reorder auth for a view: a personal view is the owner's alone; a
@@ -1139,7 +1141,11 @@ export const mutators = defineMutators({
 						.where("workspaceId", args.workspaceId)
 						.where("name", args.name),
 				);
-				if (existing.length > 0) throw new Error("label name already exists");
+				if (existing.length > 0)
+					throw new MutatorError(
+						"label_name_taken",
+						"label name already exists",
+					);
 				await tx.mutate.label.insert({
 					id: args.id,
 					workspaceId: args.workspaceId,
@@ -1164,7 +1170,11 @@ export const mutators = defineMutators({
 							.where("workspaceId", label.workspaceId)
 							.where("name", args.name),
 					);
-					if (existing.length > 0) throw new Error("label name already exists");
+					if (existing.length > 0)
+						throw new MutatorError(
+							"label_name_taken",
+							"label name already exists",
+						);
 				}
 				await tx.mutate.label.update({
 					id: args.id,
@@ -1286,7 +1296,7 @@ export const mutators = defineMutators({
 				if (!template) throw new Error("template not found");
 				// Only usable from a workspace the caller can see the template in.
 				const srcRole = await roleInWorkspace(tx, ctx.id, template.workspaceId);
-				if (!srcRole) throw new Error(DENIED);
+				if (!srcRole) throw denied();
 				const content = templateContentSchema.parse(template.content);
 				if (content.kind !== "list") throw new Error("not a list template");
 				const { list, tasks } = instantiate(
@@ -1352,7 +1362,7 @@ export const mutators = defineMutators({
 				);
 				if (!template) throw new Error("template not found");
 				const srcRole = await roleInWorkspace(tx, ctx.id, template.workspaceId);
-				if (!srcRole) throw new Error(DENIED);
+				if (!srcRole) throw denied();
 				const content = templateContentSchema.parse(template.content);
 				if (content.kind !== "task") throw new Error("not a task template");
 				const { tasks } = instantiate(
