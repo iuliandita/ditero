@@ -258,7 +258,7 @@ export function ListView({
 	}
 
 	return (
-		<div data-testid="list">
+		<div data-testid="list" className="max-w-3xl">
 			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
 			<div className="group mb-4 flex items-center gap-2">
 				<button

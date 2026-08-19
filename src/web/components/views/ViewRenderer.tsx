@@ -402,7 +402,9 @@ function ListLayout({
 	);
 
 	return (
-		<div className="flex flex-col gap-4">
+		// Reading measure: only the vertical row path. Board scrolls columns and
+		// calendar is a 7-column grid, so both keep the full content width.
+		<div className="flex max-w-3xl flex-col gap-4">
 			{groups.map((g) => (
 				<section key={g.key || "all"} aria-label={g.label || undefined}>
 					{g.label && (
