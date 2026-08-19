@@ -125,3 +125,34 @@ test("list: an empty list renders an empty state whose CTA focuses the input", a
 	).toBeVisible({ timeout: 15000 });
 	await expect(page.getByTestId("list-empty")).toHaveCount(0);
 });
+
+// --- Scenario 3: the boot gates render a silhouette, never a blank page ---
+test("boot: session and sync gates render skeletons, then hand off to the shell", async ({
+	page,
+}) => {
+	const email = uniqueEmail("e3");
+	await signUp(page, email);
+
+	// Both gates are normally sub-second, so the only way to observe them is to
+	// hold the request each one waits on: the session probe (App) and the account
+	// bootstrap the Zero provider awaits before it constructs a client.
+	await page.route("**/api/auth/get-session*", async (route) => {
+		await new Promise((r) => setTimeout(r, 2000));
+		await route.continue();
+	});
+	await page.route("**/api/bootstrap", async (route) => {
+		await new Promise((r) => setTimeout(r, 4000));
+		await route.continue();
+	});
+
+	await page.goto("/");
+	await expect(page.getByTestId("boot-skeleton")).toBeVisible();
+	await expect(page.getByTestId("shell-skeleton")).toBeVisible({
+		timeout: 15000,
+	});
+	// Paired with the two absences below: the shell really does arrive, so the
+	// skeletons going away is a handoff and not a page that never rendered.
+	await expect(page.getByTestId("workspace")).toBeVisible({ timeout: 30000 });
+	await expect(page.getByTestId("boot-skeleton")).toHaveCount(0);
+	await expect(page.getByTestId("shell-skeleton")).toHaveCount(0);
+});
