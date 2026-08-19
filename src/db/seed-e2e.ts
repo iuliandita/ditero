@@ -30,6 +30,10 @@ async function main() {
 	await db.delete(s.view);
 	await db.delete(s.dashboard);
 	await db.delete(s.membership);
+	// Reference `user` with NO ACTION and never cascade from workspace/list, so a
+	// kid account or a comment left by an earlier run blocks the user wipe below.
+	await db.delete(s.managedAccount);
+	await db.delete(s.comment);
 	await db.delete(s.workspace);
 	await db.delete(s.session);
 	await db.delete(s.account);
