@@ -167,14 +167,18 @@ function NormalWorkspace() {
 		[zero],
 	);
 	const [workspaces] = useQuery(queries.workspaces.mine());
-	const [lists] = useQuery(queries.lists.mine());
+	const [lists, listsDetails] = useQuery(queries.lists.mine());
 	const [folders] = useQuery(queries.folders.mine());
 	const [templates] = useQuery(queries.templates.mine());
-	const [tasks] = useQuery(queries.tasks.mine());
+	const [tasks, tasksDetails] = useQuery(queries.tasks.mine());
 	const [labels] = useQuery(queries.labels.mine());
 	const [taskLabels] = useQuery(queries.taskLabels.mine());
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
+	// The view surface joins tasks onto lists, so it is only settled once both
+	// queries are; until then "no rows" means "not synced", not "nothing here".
+	const viewRowsLoading =
+		tasksDetails.type !== "complete" || listsDetails.type !== "complete";
 	const { views: savedViews } = useViews();
 	const { dashboards, loading: dashboardsLoading } = useDashboards();
 	const { pref, setPref, loading: prefLoading } = useUserPref();
@@ -1120,6 +1124,7 @@ function NormalWorkspace() {
 								members={members}
 								currentUserId={zero.userID ?? ""}
 								membershipWorkspaceIds={membershipWorkspaceIds}
+								loading={viewRowsLoading}
 								onOpenTask={(t) => setDetailTaskId(t.id)}
 							/>
 						</ErrorBoundary>
