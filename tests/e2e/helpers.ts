@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 const surface = (page: Page) => page.getByTestId("settings-surface");
 
@@ -26,4 +26,42 @@ export async function leaveSettings(page: Page): Promise<void> {
 		await page.getByTestId("settings-back").click();
 	}
 	await expect(surface(page)).toHaveCount(0);
+}
+
+const PASSWORD = "pw-123456";
+const SIGNUP_TIMEOUT = 30_000;
+
+let emailSeq = 0;
+
+// Unique per call AND per run: the e2e database is seeded once and reused, so a
+// fixed address collides with a previous run's user.
+export function uniqueEmail(prefix: string): string {
+	emailSeq += 1;
+	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
+}
+
+// Signup (email verification is off) yields an active session directly. No
+// get-session round trip: only sign-in/up carry the relaxed E2E rate limit.
+export async function signUp(page: Page, email: string): Promise<void> {
+	await page.goto("/");
+	await page.getByTestId("email").fill(email);
+	await page.getByTestId("password").fill(PASSWORD);
+	await page.getByTestId("signup").click();
+	await expect(page.getByTestId("workspace")).toBeVisible({
+		timeout: SIGNUP_TIMEOUT,
+	});
+}
+
+// The workspace switcher button only renders once the workspace query has
+// synced, so it is the seam between "shell mounted" and "data usable".
+export async function waitWorkspaceReady(page: Page): Promise<void> {
+	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
+		timeout: SIGNUP_TIMEOUT,
+	});
+}
+
+// Desktop sidebar list/view nav: scopes clicks away from the mobile index and
+// the create-list controls that share their labels with list titles.
+export function sidebarLists(page: Page): Locator {
+	return page.getByRole("navigation", { name: "Lists" });
 }
