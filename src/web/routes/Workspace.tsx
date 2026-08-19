@@ -53,6 +53,7 @@ import {
 } from "../components/shell/folderActions.ts";
 import { groupLists } from "../components/shell/grouping.ts";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
+import { MobileSearch } from "../components/shell/MobileSearch.tsx";
 import { NameDialog } from "../components/shell/NameDialog.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
@@ -197,6 +198,7 @@ function NormalWorkspace() {
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 	const [openSharedRequested, setOpenSharedRequested] = useState(false);
 	const [section, setSection] = useState<Section>("lists");
+	const [searchOpen, setSearchOpen] = useState(false);
 	const [collapsed, setCollapsed] = useState(false);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
 	const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -1301,7 +1303,13 @@ function NormalWorkspace() {
 							/>
 						) : null
 					}
-					bottomNav={<BottomNav section={section} onSection={changeSection} />}
+					bottomNav={
+						<BottomNav
+							section={section}
+							onSection={changeSection}
+							onSearch={() => setSearchOpen(true)}
+						/>
+					}
 					fab={<Fab onOpen={() => setQuickAddOpen(true)} />}
 				>
 					{content}
@@ -1490,6 +1498,22 @@ function NormalWorkspace() {
 						allTasks={tasks}
 						allLabels={labels}
 						taskLabelIds={labelIdsByTask.get(detailTask.id) ?? []}
+					/>
+				)}
+
+				{/* Touch search: the palette's Search group without its keyboard
+			    command registry. Unmounted while closed so a stale layer never
+			    claims the Escape aimed at the task detail it just opened. */}
+				{!isDesktop && searchOpen && (
+					<MobileSearch
+						tasks={tasks}
+						lists={lists}
+						onSelect={(taskId, listId) => {
+							setSearchOpen(false);
+							openList(listId);
+							setDetailTaskId(taskId);
+						}}
+						onClose={() => setSearchOpen(false)}
 					/>
 				)}
 
