@@ -1265,6 +1265,8 @@
 	"auth_error_failed_to_verify_registration": "No se ha podido registrar la passkey.",
 	"auth_error_session_required": "Inicia sesión antes de añadir una passkey.",
 	"mutation_failed": "Algo ha salido mal.",
+	"mutator_error_denied": "No tienes permiso para hacer eso.",
+	"mutator_error_label_name_taken": "Ya existe una etiqueta con ese nombre.",
 	"modal_close_label": "Cerrar",
 	"action_close": "Cerrar",
 	"action_delete": "Eliminar",

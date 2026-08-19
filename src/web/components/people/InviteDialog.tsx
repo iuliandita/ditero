@@ -19,6 +19,7 @@ import {
 import type { InviteMailStatus } from "../../../domain/invite.ts";
 import type { Role } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
+import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { InviteMailNotice } from "./InviteMailNotice";
 import { ROLE_LABELS } from "./role-labels.ts";
 
@@ -105,8 +106,7 @@ export function InviteDialog({
 			setLink(data.link);
 			onCreated({ id: data.id, link: data.link });
 		} catch (e) {
-			console.error(e);
-			setError(e instanceof Error ? e.message : m.invite_create_failed());
+			setError(mutationErrorMessage(e, m.invite_create_failed));
 		} finally {
 			setBusy(false);
 		}

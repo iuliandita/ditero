@@ -1239,6 +1239,8 @@
 	"auth_error_failed_to_verify_registration": "Could not register that passkey.",
 	"auth_error_session_required": "Sign in before adding a passkey.",
 	"mutation_failed": "Something went wrong.",
+	"mutator_error_denied": "You do not have permission to do that.",
+	"mutator_error_label_name_taken": "A label with that name already exists.",
 	"modal_close_label": "Close",
 	"action_close": "Close",
 	"action_delete": "Delete",

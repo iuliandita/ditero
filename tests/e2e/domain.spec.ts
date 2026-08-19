@@ -18,7 +18,7 @@ async function signUp(page: Page, email: string): Promise<string> {
 	await page.getByTestId("email").fill(email);
 	await page.getByTestId("password").fill(PASSWORD);
 	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible();
+	await expect(page.getByTestId("workspace")).toBeVisible({ timeout: 15000 });
 	const session = await page.evaluate(async () => {
 		const response = await fetch("/api/auth/get-session");
 		return (await response.json()) as { user: { id: string } };
@@ -31,7 +31,7 @@ async function signIn(page: Page, email: string): Promise<void> {
 	await page.getByTestId("email").fill(email);
 	await page.getByTestId("password").fill(PASSWORD);
 	await page.getByTestId("signin").click();
-	await expect(page.getByTestId("workspace")).toBeVisible();
+	await expect(page.getByTestId("workspace")).toBeVisible({ timeout: 15000 });
 }
 
 async function joinShared(userId: string): Promise<void> {

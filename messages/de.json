@@ -1239,6 +1239,8 @@
 	"auth_error_failed_to_verify_registration": "Der Passkey konnte nicht registriert werden.",
 	"auth_error_session_required": "Melde dich an, bevor du einen Passkey hinzufügst.",
 	"mutation_failed": "Da ist etwas schiefgelaufen.",
+	"mutator_error_denied": "Dazu hast du keine Berechtigung.",
+	"mutator_error_label_name_taken": "Ein Label mit diesem Namen gibt es schon.",
 	"modal_close_label": "Schließen",
 	"action_close": "Schließen",
 	"action_delete": "Löschen",

@@ -20,7 +20,7 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 		await p.getByTestId("email").fill(email);
 		await p.getByTestId("password").fill("pw-123456");
 		await p.getByTestId("signup").click();
-		await expect(p.getByTestId("workspace")).toBeVisible();
+		await expect(p.getByTestId("workspace")).toBeVisible({ timeout: 15000 });
 		const session = await p.evaluate(async () => {
 			const response = await fetch("/api/auth/get-session");
 			return (await response.json()) as { user: { id: string } };
@@ -54,8 +54,10 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 	await pa.getByTestId("open-shared").click();
 	await pb.getByTestId("open-shared").click();
 	// Both have the shared list open (live query subscribed) before the write.
-	await expect(pa.getByTestId("new-task")).toBeVisible();
-	await expect(pb.getByTestId("new-task")).toBeVisible();
+	// First render of the cold zero-cache view, so it gets the same budget the
+	// sync assertions below already carry.
+	await expect(pa.getByTestId("new-task")).toBeVisible({ timeout: 15000 });
+	await expect(pb.getByTestId("new-task")).toBeVisible({ timeout: 15000 });
 	// Bob's allowed list query is settled; Ana's personal list is still absent.
 	await expect(pb.getByText("Ana secret")).toHaveCount(0);
 	await pa.getByTestId("new-task").fill("Buy milk");

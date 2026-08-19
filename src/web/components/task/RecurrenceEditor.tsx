@@ -15,6 +15,7 @@ import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { formatList } from "../../lib/intl-format.ts";
+import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 
 type Freq = RecurrencePreset["freq"];
 
@@ -144,7 +145,7 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 		try {
 			rrule = presetToRRule(p);
 		} catch (e) {
-			setError(e instanceof Error ? e.message : m.recurrence_invalid());
+			setError(mutationErrorMessage(e, m.recurrence_invalid));
 			return;
 		}
 		void runMutation(

@@ -17,6 +17,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { m } from "../../../paraglide/messages.js";
+import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { ROLE_LABELS } from "./role-labels.ts";
 
 // A kid is only ever granted member/viewer in the shared workspace (mirrors the
@@ -75,8 +76,7 @@ export function AddKid({
 			const data = (await res.json()) as { userId: string; email: string };
 			setHandle(data.email);
 		} catch (e) {
-			console.error(e);
-			setError(e instanceof Error ? e.message : m.add_kid_failed());
+			setError(mutationErrorMessage(e, m.add_kid_failed));
 		} finally {
 			setBusy(false);
 		}
