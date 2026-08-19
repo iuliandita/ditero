@@ -63,6 +63,16 @@ test("data-open/data-closed compile onto Radix's data-state, not a bare attribut
 	expect(css).toContain("@keyframes exit");
 });
 
+// Directional glyphs (BackButton, the calendar month pair) mirror only because
+// `rtl:` resolves against the `dir` attribute applyDocumentLocale() writes onto
+// <html>. A variant that compiled to `:dir(rtl)` alone would still be
+// well-formed and would still leave every chevron pointing the wrong way.
+test("rtl: resolves against the dir attribute, not only :dir()", async () => {
+	const css = await build(["rtl:rotate-180"]);
+	expect(css).toContain('[dir="rtl"]');
+	expect(css).toContain("rotate: 180deg");
+});
+
 // A shadow-*/duration-*/ease-* utility naming a token that does not exist emits
 // nothing at all -- the class stays in the markup and the elevation or timing
 // silently disappears. Same failure shape as the variant test above.

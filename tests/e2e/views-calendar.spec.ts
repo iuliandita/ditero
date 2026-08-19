@@ -223,6 +223,21 @@ test("calendar: occurrences span the month, one-off reschedules by drag", async 
 
 	// Axe the month grid + agenda.
 	await expectNoSeriousA11y(page, "calendar month + agenda");
+
+	// Both month-nav glyphs mirror under RTL: the time axis reverses, so
+	// previous points right and next points left. `dir` is flipped directly --
+	// the locale -> dir path is locale.spec's subject; the subject here is the
+	// compiled rtl: utility, asserted on computed rotate rather than the class,
+	// since a never-matching selector leaves the class in the DOM either way.
+	const prevGlyph = page.getByTestId("calendar-prev").locator("svg");
+	const nextGlyph = page.getByTestId("calendar-next").locator("svg");
+	await expect(prevGlyph).toHaveCSS("rotate", "none");
+	await expect(nextGlyph).toHaveCSS("rotate", "none");
+	await page.evaluate(() => {
+		document.documentElement.dir = "rtl";
+	});
+	await expect(prevGlyph).toHaveCSS("rotate", "180deg");
+	await expect(nextGlyph).toHaveCSS("rotate", "180deg");
 });
 
 // --- Mobile: the calendar collapses to a date-grouped agenda ---

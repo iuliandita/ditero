@@ -7,7 +7,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-	ChevronLeft,
 	House,
 	LayoutDashboard,
 	MoreHorizontal,
@@ -37,6 +36,7 @@ import type {
 import type { SavedView } from "../../hooks/useViews.ts";
 import { useIsDesktop } from "../../lib/use-media-query.ts";
 import { useReorderSensors } from "../list/SortableList.tsx";
+import { BackButton } from "../ui/back-button.tsx";
 import { Button } from "../ui/button.tsx";
 import {
 	DropdownMenu,
@@ -410,16 +410,7 @@ export function DashboardView({
 	return (
 		<section aria-label={dashboard.name} data-testid="dashboard-surface">
 			<div className="mb-3 flex items-center gap-2">
-				{!isDesktop && (
-					<button
-						type="button"
-						aria-label={m.action_back()}
-						onClick={onBack}
-						className="flex size-9 shrink-0 items-center justify-center rounded-lg"
-					>
-						<ChevronLeft className="size-5" />
-					</button>
-				)}
+				{!isDesktop && <BackButton size="compact" onClick={onBack} />}
 				<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
 					{dashboard.name}
 				</h1>

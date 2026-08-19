@@ -1,7 +1,6 @@
 import type { ReadonlyJSONValue } from "@rocicorp/zero";
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import {
-	ChevronLeft,
 	House,
 	MoreHorizontal,
 	Pencil,
@@ -57,6 +56,7 @@ import { MobileSearch } from "../components/shell/MobileSearch.tsx";
 import { NameDialog } from "../components/shell/NameDialog.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
+import { BackButton } from "../components/ui/back-button.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { useConfirm } from "../components/ui/confirm.tsx";
 import {
@@ -918,15 +918,10 @@ function NormalWorkspace() {
 		content = (
 			<div data-testid="settings-surface">
 				<div className="flex items-center gap-2 border-b p-3">
-					<button
-						type="button"
-						aria-label={m.action_back()}
+					<BackButton
 						data-testid="settings-back"
 						onClick={() => changeSection("lists")}
-						className="flex size-11 items-center justify-center rounded-lg"
-					>
-						<ChevronLeft className="size-5" />
-					</button>
+					/>
 					<h1 className="truncate text-lg font-semibold">{m.nav_settings()}</h1>
 				</div>
 				<div className="p-4 md:p-6">
@@ -955,14 +950,10 @@ function NormalWorkspace() {
 		content = (
 			<div>
 				<div className="flex items-center gap-2 border-b p-3 md:hidden">
-					<button
-						type="button"
+					<BackButton
 						aria-label={m.list_back_to_lists()}
 						onClick={() => setOpenListId(null)}
-						className="flex size-11 items-center justify-center rounded-lg"
-					>
-						<ChevronLeft className="size-5" />
-					</button>
+					/>
 					<span className="truncate font-medium">
 						{openListRow?.title ?? m.list_untitled_fallback()}
 					</span>
@@ -1027,14 +1018,10 @@ function NormalWorkspace() {
 					<section aria-label={activeView.name} data-testid="view-surface">
 						<div className="mb-3 flex items-center gap-2">
 							{!isDesktop && !isLanding && (
-								<button
-									type="button"
-									aria-label={m.action_back()}
+								<BackButton
+									size="compact"
 									onClick={() => setOpenViewId(null)}
-									className="flex size-9 shrink-0 items-center justify-center rounded-lg"
-								>
-									<ChevronLeft className="size-5" />
-								</button>
+								/>
 							)}
 							{HeaderIcon && (
 								<HeaderIcon

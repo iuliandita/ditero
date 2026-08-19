@@ -144,6 +144,12 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	await expect(page.locator("#security-heading")).toHaveText(
 		m.security_heading({}, { locale: "ar" }),
 	);
+	// The back chevron mirrors: the glyph means "reverse", and reverse is
+	// rightward when the reading direction is. Asserted on the computed rotate
+	// the rtl: variant emits, not on the class name -- a variant that compiled
+	// to a never-matching selector leaves the class in the DOM regardless.
+	const backGlyph = page.getByTestId("settings-back").locator("svg");
+	await expect(backGlyph).toHaveCSS("rotate", "180deg");
 	await expectNoSeriousA11y(page, "settings (rtl)");
 
 	// Switching post-auth persists to user_pref.locale (not just the client
@@ -162,4 +168,7 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	await expect(page.locator("html")).toHaveAttribute("lang", "en");
 	await goToSettings(page);
 	await expect(page.getByTestId("language-switcher")).toContainText("English");
+	// The LTR half of the pair: the same node the RTL assertion found, proving
+	// that assertion was not passing against an element that always rotates.
+	await expect(backGlyph).toHaveCSS("rotate", "none");
 });

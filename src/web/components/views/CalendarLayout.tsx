@@ -449,6 +449,8 @@ export function CalendarLayout({
 		<div data-testid="calendar-surface" className="flex flex-col gap-4">
 			<div className="flex items-center justify-between">
 				<h2 className="text-sm font-medium">{monthLabel}</h2>
+				{/* Both glyphs mirror: the time axis itself reverses under RTL, so
+				    previous points right and next points left. */}
 				<div className="flex items-center gap-1">
 					<button
 						type="button"
@@ -457,7 +459,7 @@ export function CalendarLayout({
 						onClick={() => shiftMonth(-1)}
 						className="flex size-7 items-center justify-center rounded border border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 					>
-						<ChevronLeft className="size-4" />
+						<ChevronLeft className="size-4 rtl:rotate-180" />
 					</button>
 					<button
 						type="button"
@@ -466,7 +468,7 @@ export function CalendarLayout({
 						onClick={() => shiftMonth(1)}
 						className="flex size-7 items-center justify-center rounded border border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 					>
-						<ChevronRight className="size-4" />
+						<ChevronRight className="size-4 rtl:rotate-180" />
 					</button>
 				</div>
 			</div>
