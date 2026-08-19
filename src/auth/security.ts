@@ -12,6 +12,17 @@ export function authRateLimitOptions() {
 		"/reset-password": { window: 300, max: 5 },
 		"/change-password": { window: 300, max: 5 },
 		"/two-factor/*": { window: 60, max: 5 },
+		// Listed BEFORE "/passkey/*": Better Auth resolves customRules with
+		// Object.keys(...).find(...), so the first matching key in insertion order
+		// wins and a wildcard placed first would swallow this exact path.
+		//
+		// The ceremony endpoints stay at 10/60s, but listing your own passkeys is a
+		// session-scoped read with no abuse surface, and SecurityPanel refetches it
+		// on every mount -- it sits on the desktop lists index, i.e. the app's
+		// landing surface -- so the ceremony ceiling throttled ordinary navigation
+		// and, worse, could 429 the refresh that runs right after a SUCCESSFUL
+		// enrollment, leaving the new passkey invisible.
+		"/passkey/list-user-passkeys": { window: 60, max: 100 },
 		"/passkey/*": { window: 60, max: 10 },
 	};
 	const options = {

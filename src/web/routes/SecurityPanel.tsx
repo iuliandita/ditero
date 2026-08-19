@@ -39,7 +39,18 @@ export function SecurityPanel() {
 			setError(authErrorMessage(result.error, m.security_error_add_passkey));
 			return;
 		}
-		await loadPasskeys();
+		// verify-registration returns the row it created, so render that rather than
+		// re-reading the list: a failed refresh must never make a passkey that IS
+		// registered look like a failed enrollment.
+		const created = result.data;
+		if (!created) {
+			await loadPasskeys();
+			return;
+		}
+		setPasskeys((current) => [
+			...current.filter((item) => item.id !== created.id),
+			{ id: created.id, name: created.name },
+		]);
 	}
 
 	async function removePasskey(id: string) {
