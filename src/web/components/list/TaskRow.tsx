@@ -135,7 +135,10 @@ function SwipeRow({
 				className="touch-pan-y bg-background"
 				style={{
 					transform: `translateX(${dx}px)`,
-					transition: active || reduce ? "none" : "transform 150ms ease",
+					transition:
+						active || reduce
+							? "none"
+							: "transform var(--motion-base) var(--motion-ease)",
 				}}
 			>
 				{children}
@@ -285,7 +288,7 @@ export function TaskRow({
 				    button carries data-kbd-nav (roving focus + open target). `group`
 				    is what RowActions' md:group-hover reveal keys off. */}
 				<div
-					className="group flex items-start gap-2 py-1.5"
+					className="group flex items-start gap-2 rounded-lg py-1.5 transition-colors duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none hover:bg-muted/40 active:bg-muted/60"
 					data-kbd-row
 					{...rowProps}
 				>
@@ -306,7 +309,7 @@ export function TaskRow({
 					>
 						<span
 							className={cn(
-								"block truncate",
+								"block truncate text-sm",
 								task.done && "text-muted-foreground line-through",
 							)}
 						>
@@ -359,7 +362,7 @@ export function TaskRow({
 							<ChevronRight
 								className={cn(
 									"size-4 transition-transform",
-									expanded && "rotate-90",
+									expanded ? "rotate-90" : "rtl:rotate-180",
 								)}
 							/>
 						</button>

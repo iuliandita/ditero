@@ -84,7 +84,8 @@
 	"nav_primary_label": "Primary",
 	"nav_lists": "Lists",
 	"nav_search": "Search",
-	"nav_search_disabled_hint": "Search — coming soon",
+	"search_placeholder": "Search tasks and lists",
+	"search_hint": "Type to search your tasks.",
 	"nav_settings": "Settings",
 	"fab_quick_add": "Quick add",
 	"sidebar_open_shared": "Open shared",
@@ -1351,5 +1352,12 @@
 	"action_use_template": "Use",
 	"template_use_needs_list": "Task templates are added from inside a list.",
 	"template_delete_title": "Delete template?",
-	"template_delete_confirm": "Delete the template “{name}”? This cannot be undone. Lists already created from it are unaffected."
+	"template_delete_confirm": "Delete the template “{name}”? This cannot be undone. Lists already created from it are unaffected.",
+	"app_loading": "Loading…",
+	"tasks_loading": "Loading tasks…",
+	"list_empty": "Nothing here yet.",
+	"list_empty_action": "Add an item",
+	"view_empty_welcome_title": "Welcome to Ditero",
+	"view_empty_welcome_hint": "Create a list below to add your first task.",
+	"view_empty_no_match": "Nothing matches this view right now."
 }

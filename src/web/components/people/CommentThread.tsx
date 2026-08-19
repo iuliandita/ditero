@@ -477,7 +477,7 @@ export function CommentThread({
 					{mention && suggestions.length > 0 && (
 						<ul
 							data-testid="mention-suggest"
-							className="absolute bottom-full left-0 z-10 mb-1 max-h-48 w-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-md"
+							className="absolute bottom-full left-0 z-10 mb-1 max-h-48 w-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-overlay"
 						>
 							{suggestions.map((p) => (
 								<li key={p.userId ?? p.name}>

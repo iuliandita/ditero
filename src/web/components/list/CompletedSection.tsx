@@ -23,7 +23,10 @@ export function CompletedSection({
 				className="flex w-full items-center gap-1.5 rounded-lg px-1 py-1.5 text-sm text-muted-foreground hover:text-foreground"
 			>
 				<ChevronRight
-					className={cn("size-4 transition-transform", open && "rotate-90")}
+					className={cn(
+						"size-4 transition-transform",
+						open ? "rotate-90" : "rtl:rotate-180",
+					)}
 				/>
 				{m.list_completed_count({ count })}
 			</button>

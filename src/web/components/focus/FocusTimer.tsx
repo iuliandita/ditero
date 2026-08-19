@@ -33,7 +33,7 @@ export function FocusTimer() {
 		<section
 			aria-label={m.focus_timer_region_aria()}
 			data-testid="focus-timer"
-			className="fixed inset-x-2 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-40 rounded-xl border bg-background/95 p-3 shadow-lg supports-backdrop-filter:bg-background/85 supports-backdrop-filter:backdrop-blur md:inset-x-auto md:right-4 md:bottom-4 md:w-72"
+			className="fixed inset-x-2 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-40 rounded-xl border bg-background/95 p-3 shadow-floating supports-backdrop-filter:bg-background/85 supports-backdrop-filter:backdrop-blur md:inset-x-auto md:right-4 md:bottom-4 md:w-72"
 		>
 			{/* Phase/round announcement: changes only on transitions, so screen
 			    readers get phase changes without a per-second flood. */}

@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { goToSettings, leaveSettings } from "./helpers.ts";
 
 // M2 focus/Pomodoro timer e2e. Configures the focus prefs (round-trips), starts a
 // task-bound focus session, and (via the dev-only time seam) lets the work interval
@@ -115,6 +116,7 @@ test("focus: settings round-trip, task-bound session logs + advances, axe", asyn
 	// --- Settings: edit focus config, turn auto-cycle off, verify round-trip. ---
 	// Auto-cycle off so exactly one work interval logs (no follow-on work session
 	// racing the time-on-task assertion).
+	await goToSettings(page);
 	await expect(page.getByTestId("focus-autocycle")).toHaveAttribute(
 		"aria-checked",
 		"true",
@@ -132,6 +134,7 @@ test("focus: settings round-trip, task-bound session logs + advances, axe", asyn
 	// Round-trip across a reload (pref is synced, not local).
 	await page.reload();
 	await waitWorkspaceReady(page);
+	await goToSettings(page);
 	await expect(page.getByTestId("focus-work-min")).toHaveValue("30");
 	await expect(page.getByTestId("focus-autocycle")).toHaveAttribute(
 		"aria-checked",
@@ -139,6 +142,7 @@ test("focus: settings round-trip, task-bound session logs + advances, axe", asyn
 	);
 
 	// --- Start a task-bound focus session. ---
+	await leaveSettings(page);
 	await createListDesktop(page, "Deep work");
 	await openListDesktop(page, "Deep work");
 	await addTask(page, "Write report");

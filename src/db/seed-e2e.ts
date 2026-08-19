@@ -21,9 +21,19 @@ async function main() {
 	// Clean slate, FK-safe order (session/account also cascade from user).
 	await db.delete(s.task);
 	await db.delete(s.list);
-	// dashboard.workspace_id has no cascade; drop rows before their workspace.
+	// Nothing referencing workspace cascades, so every such table has to be
+	// emptied here or a leftover row from an earlier run breaks the next seed.
+	await db.delete(s.folder);
+	await db.delete(s.label);
+	await db.delete(s.template);
+	await db.delete(s.invite);
+	await db.delete(s.view);
 	await db.delete(s.dashboard);
 	await db.delete(s.membership);
+	// Reference `user` with NO ACTION and never cascade from workspace/list, so a
+	// kid account or a comment left by an earlier run blocks the user wipe below.
+	await db.delete(s.managedAccount);
+	await db.delete(s.comment);
 	await db.delete(s.workspace);
 	await db.delete(s.session);
 	await db.delete(s.account);

@@ -1,5 +1,5 @@
 import { useZero } from "@rocicorp/zero/react";
-import { List as ListIcon } from "lucide-react";
+import { List as ListIcon, SearchX, Sparkles } from "lucide-react";
 import { type JSX, useMemo, useRef, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
 import { priorityLabel } from "@/lib/task-display";
@@ -32,6 +32,8 @@ import type { GroupCtx, GroupTask } from "../../views/group.ts";
 import { groupTasks } from "../../views/group.ts";
 import { SortableList } from "../list/SortableList.tsx";
 import { type RowHandlers, TaskRow } from "../list/TaskRow.tsx";
+import { TaskListSkeleton } from "../shell/AppSkeleton.tsx";
+import { EmptyState } from "../ui/empty-state.tsx";
 import { BoardLayout } from "./BoardLayout.tsx";
 import { CalendarLayout } from "./CalendarLayout.tsx";
 import { TableLayout } from "./TableLayout.tsx";
@@ -92,6 +94,10 @@ export function ViewRenderer(props: {
 	currentUserId: string;
 	membershipWorkspaceIds: string[];
 	onOpenTask: (task: Task) => void;
+	// Zero result completeness for the row sets above, resolved by the caller
+	// that owns the queries. Without it an unsynced surface is indistinguishable
+	// from an empty one and neither state can be rendered.
+	loading?: boolean;
 	// Optional: Task 13 threads this to persist a table header sort into the
 	// view row. Absent -> the header toggles a local, unpersisted sort.
 	onSortChange?: (sort: ViewSort) => void;
@@ -110,6 +116,7 @@ export function ViewRenderer(props: {
 		membershipWorkspaceIds,
 		onOpenTask,
 		onSortChange,
+		loading = false,
 	} = props;
 	const zero = useZero<typeof schema>();
 	const isDesktop = useIsDesktop();
@@ -320,6 +327,11 @@ export function ViewRenderer(props: {
 	const renderList =
 		display.layout === "list" || (!isDesktop && display.layout !== "calendar");
 
+	// Only the row path. A board's columns (also the regroup drop targets), a
+	// table's headers and the calendar's month grid are each still an answer when
+	// nothing matches; replacing them with a card would remove the affordance.
+	const empty = sorted.length === 0 && renderList;
+
 	return (
 		<div data-testid="view-renderer">
 			{error && (
@@ -327,13 +339,32 @@ export function ViewRenderer(props: {
 					{error}
 				</p>
 			)}
-			{asList && (
+			{asList && !loading && sorted.length > 0 && (
 				<p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
 					<ListIcon className="size-3.5" />
 					{m.view_viewing_as_list()}
 				</p>
 			)}
-			{display.layout === "calendar" ? (
+			{loading ? (
+				<TaskListSkeleton />
+			) : empty ? (
+				// A user with no tasks at all is new and gets onboarded; a user whose
+				// filter matched nothing is told so, calmly. Same frame, different job.
+				tasks.length === 0 ? (
+					<EmptyState
+						data-testid="view-empty-first-use"
+						icon={Sparkles}
+						title={m.view_empty_welcome_title()}
+						message={m.view_empty_welcome_hint()}
+					/>
+				) : (
+					<EmptyState
+						data-testid="view-empty-no-match"
+						icon={SearchX}
+						message={m.view_empty_no_match()}
+					/>
+				)
+			) : display.layout === "calendar" ? (
 				<CalendarLayout
 					entries={sorted.map((e) => ({
 						task: e.task,
@@ -402,7 +433,9 @@ function ListLayout({
 	);
 
 	return (
-		<div className="flex flex-col gap-4">
+		// Reading measure: only the vertical row path. Board scrolls columns and
+		// calendar is a 7-column grid, so both keep the full content width.
+		<div className="flex max-w-3xl flex-col gap-4">
 			{groups.map((g) => (
 				<section key={g.key || "all"} aria-label={g.label || undefined}>
 					{g.label && (

@@ -44,11 +44,15 @@ export function SortableRow({
 	id,
 	label,
 	testId,
+	revealHandle,
 	children,
 }: {
 	id: string;
 	label: string;
 	testId: string;
+	// Reveal the grip on hover/focus like RowActions' kebab. Below md there is no
+	// hover, so it stays visible there.
+	revealHandle?: boolean;
 	children: ReactNode;
 }) {
 	const {
@@ -67,13 +71,21 @@ export function SortableRow({
 				transition,
 				zIndex: isDragging ? 10 : undefined,
 			}}
-			className={cn("flex items-start gap-1", isDragging && "opacity-90")}
+			className={cn(
+				"flex items-start gap-1",
+				revealHandle && "group",
+				isDragging && "opacity-90",
+			)}
 		>
 			<button
 				type="button"
 				data-testid={testId}
 				aria-label={label}
-				className="mt-1.5 flex size-6 shrink-0 touch-none items-center justify-center rounded text-muted-foreground/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+				className={cn(
+					"mt-1.5 flex size-6 shrink-0 touch-none items-center justify-center rounded text-muted-foreground/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+					revealHandle &&
+						"transition-opacity duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+				)}
 				{...attributes}
 				{...listeners}
 			>
@@ -128,6 +140,7 @@ export function SortableList<T extends { id: string; sortKey: string }>({
 								id={item.id}
 								label={handleLabel}
 								testId={handleTestId}
+								revealHandle
 							>
 								{renderItem(item)}
 							</SortableRow>

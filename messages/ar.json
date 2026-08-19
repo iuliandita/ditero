@@ -84,7 +84,8 @@
 	"nav_primary_label": "الرئيسية",
 	"nav_lists": "القوائم",
 	"nav_search": "بحث",
-	"nav_search_disabled_hint": "البحث - قريبًا",
+	"search_placeholder": "ابحث في المهام والقوائم",
+	"search_hint": "اكتب للبحث في مهامك.",
 	"nav_settings": "الإعدادات",
 	"fab_quick_add": "إضافة سريعة",
 	"sidebar_open_shared": "فتح المشتركة",
@@ -1463,5 +1464,12 @@
 	"action_use_template": "استخدام",
 	"template_use_needs_list": "تُضاف قوالب المهام من داخل قائمة.",
 	"template_delete_title": "حذف القالب؟",
-	"template_delete_confirm": "حذف القالب «{name}»؟ لا يمكن التراجع عن هذا. القوائم المنشأة منه بالفعل تبقى كما هي."
+	"template_delete_confirm": "حذف القالب «{name}»؟ لا يمكن التراجع عن هذا. القوائم المنشأة منه بالفعل تبقى كما هي.",
+	"app_loading": "جارٍ التحميل…",
+	"tasks_loading": "جارٍ تحميل المهام…",
+	"list_empty": "لا يوجد شيء هنا بعد.",
+	"list_empty_action": "أضف عنصرًا",
+	"view_empty_welcome_title": "مرحبًا بك في Ditero",
+	"view_empty_welcome_hint": "أنشئ قائمة بالأسفل لإضافة مهمتك الأولى.",
+	"view_empty_no_match": "لا يوجد حاليًا ما يطابق هذا العرض."
 }

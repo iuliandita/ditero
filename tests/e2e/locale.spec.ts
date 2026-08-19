@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import type { Locale } from "../../src/domain/locale.ts";
 import { m } from "../../src/paraglide/messages.js";
+import { goToSettings } from "./helpers.ts";
 
 // M-i18n language switcher: pre-auth (Login) + post-auth (settings) mounts,
 // user_pref.locale persistence + round-trip across a reload, dir/lang
@@ -132,6 +133,7 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	await expect(page.getByTestId("workspace")).toBeVisible({
 		timeout: SIGNUP_TIMEOUT,
 	});
+	await goToSettings(page);
 
 	// The signed-up session has no stored locale yet, so login reconcile is a
 	// no-op and the switcher (post-auth mount) still reflects ar.
@@ -142,6 +144,20 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	await expect(page.locator("#security-heading")).toHaveText(
 		m.security_heading({}, { locale: "ar" }),
 	);
+	// The back chevron mirrors: the glyph means "reverse", and reverse is
+	// rightward when the reading direction is. Asserted on the computed rotate
+	// the rtl: variant emits, not on the class name -- a variant that compiled
+	// to a never-matching selector leaves the class in the DOM regardless.
+	const backGlyph = page.getByTestId("settings-back").locator("svg");
+	await expect(backGlyph).toHaveCSS("rotate", "180deg");
+	// A collapsed disclosure chevron is directional the same way: CSS Counter
+	// Styles 3 defines disclosure-closed as end-pointing (U+25B8 in ltr, U+25C2
+	// in rtl) and disclosure-open as down-pointing in both, so only the closed
+	// state mirrors. This row is closed on mount.
+	const disclosureGlyph = page
+		.getByTestId("channel-ntfy-disclosure")
+		.locator("svg");
+	await expect(disclosureGlyph).toHaveCSS("rotate", "180deg");
 	await expectNoSeriousA11y(page, "settings (rtl)");
 
 	// Switching post-auth persists to user_pref.locale (not just the client
@@ -158,5 +174,10 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	});
 	await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
 	await expect(page.locator("html")).toHaveAttribute("lang", "en");
+	await goToSettings(page);
 	await expect(page.getByTestId("language-switcher")).toContainText("English");
+	// The LTR half of the pair: the same node the RTL assertion found, proving
+	// that assertion was not passing against an element that always rotates.
+	await expect(backGlyph).toHaveCSS("rotate", "none");
+	await expect(disclosureGlyph).toHaveCSS("rotate", "none");
 });

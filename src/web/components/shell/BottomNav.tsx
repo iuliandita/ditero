@@ -4,14 +4,17 @@ import { m } from "../../../paraglide/messages.js";
 
 export type Section = "lists" | "settings";
 
-// Mobile bottom tab bar: exactly three destinations. Search is present but
-// disabled until M1c. Fixed to the bottom edge; 44px+ touch targets.
+// Mobile bottom tab bar: exactly three destinations. Fixed to the bottom edge;
+// 44px+ touch targets. Search opens an overlay rather than switching section,
+// so it never carries aria-current.
 export function BottomNav({
 	section,
 	onSection,
+	onSearch,
 }: {
 	section: Section;
 	onSection: (section: Section) => void;
+	onSearch: () => void;
 }) {
 	return (
 		<nav
@@ -26,12 +29,7 @@ export function BottomNav({
 			>
 				<List className="size-5" />
 			</Tab>
-			<Tab
-				testId="nav-tab-search"
-				label={m.nav_search()}
-				disabled
-				title={m.nav_search_disabled_hint()}
-			>
+			<Tab testId="nav-tab-search" label={m.nav_search()} onClick={onSearch}>
 				<Search className="size-5" />
 			</Tab>
 			<Tab
@@ -50,8 +48,6 @@ function Tab({
 	testId,
 	label,
 	active,
-	disabled,
-	title,
 	onClick,
 	children,
 }: {
@@ -61,25 +57,18 @@ function Tab({
 	testId: string;
 	label: string;
 	active?: boolean;
-	disabled?: boolean;
-	title?: string;
-	onClick?: () => void;
+	onClick: () => void;
 	children: React.ReactNode;
 }) {
 	return (
 		<button
 			type="button"
 			data-testid={testId}
-			// aria-disabled (not the native attribute) keeps the tab focusable and
-			// announced so a placeholder destination stays discoverable.
-			aria-disabled={disabled || undefined}
-			title={title}
 			aria-current={active ? "page" : undefined}
-			onClick={disabled ? undefined : onClick}
+			onClick={onClick}
 			className={cn(
-				"flex min-h-[44px] flex-col items-center justify-center gap-0.5 py-2 text-xs font-medium transition-colors",
+				"flex min-h-[44px] flex-col items-center justify-center gap-0.5 py-2 text-xs font-medium transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:text-foreground active:bg-muted/60",
 				active ? "text-foreground" : "text-muted-foreground",
-				disabled ? "opacity-40" : "hover:text-foreground active:bg-muted/60",
 			)}
 		>
 			{children}

@@ -64,6 +64,8 @@
 	--color-priority-1: var(--priority-1);
 	--color-priority-2: var(--priority-2);
 	--color-priority-3: var(--priority-3);
+	--shadow-overlay: var(--elevation-overlay);
+	--shadow-floating: var(--elevation-floating);
 	--radius-sm: calc(var(--radius) * 0.6);
 	--radius-md: calc(var(--radius) * 0.8);
 	--radius-lg: var(--radius);
@@ -116,6 +118,20 @@
 	--priority-1: oklch(0.6 0.12 250);
 	--priority-2: oklch(0.68 0.15 65);
 	--priority-3: oklch(0.58 0.22 25);
+	/* Motion is theme-invariant, so it is declared once here and never in the
+	   dark palettes. Plain custom properties, not @theme entries: Tailwind has no
+	   --duration-* namespace, and @theme inline drops the variable after inlining
+	   it -- inline styles and motion/react read these at runtime. */
+	--motion-fast: 100ms;
+	--motion-base: 150ms;
+	--motion-slow: 200ms;
+	--motion-ease: cubic-bezier(0.2, 0, 0, 1);
+	/* Elevation IS theme-dependent (a shadow tuned for white is invisible on
+	   near-black), so it is one of the tokens both dark palettes must mirror. */
+	--elevation-overlay:
+		0 4px 12px -2px oklch(0 0 0 / 0.1), 0 2px 4px -2px oklch(0 0 0 / 0.06);
+	--elevation-floating:
+		0 12px 28px -6px oklch(0 0 0 / 0.16), 0 4px 8px -4px oklch(0 0 0 / 0.08);
 }
 
 /* must mirror the prefers-color-scheme dark block below */
@@ -160,6 +176,10 @@
 	--priority-1: oklch(0.72 0.12 250);
 	--priority-2: oklch(0.78 0.15 70);
 	--priority-3: oklch(0.7 0.19 22);
+	--elevation-overlay:
+		0 4px 12px -2px oklch(0 0 0 / 0.5), 0 2px 4px -2px oklch(0 0 0 / 0.4);
+	--elevation-floating:
+		0 12px 28px -6px oklch(0 0 0 / 0.6), 0 4px 8px -4px oklch(0 0 0 / 0.45);
 }
 
 /* OS dark default (.light class wins); must mirror the .dark block above */
@@ -202,6 +222,13 @@
 		--kind-shopping: oklch(0.75 0.15 150);
 		--kind-checklist: oklch(0.8 0.13 85);
 		--kind-project: oklch(0.72 0.16 300);
+		--priority-1: oklch(0.72 0.12 250);
+		--priority-2: oklch(0.78 0.15 70);
+		--priority-3: oklch(0.7 0.19 22);
+		--elevation-overlay:
+			0 4px 12px -2px oklch(0 0 0 / 0.5), 0 2px 4px -2px oklch(0 0 0 / 0.4);
+		--elevation-floating:
+			0 12px 28px -6px oklch(0 0 0 / 0.6), 0 4px 8px -4px oklch(0 0 0 / 0.45);
 	}
 }
 

@@ -84,7 +84,8 @@
 	"nav_primary_label": "Principal",
 	"nav_lists": "Liste",
 	"nav_search": "Căutare",
-	"nav_search_disabled_hint": "Căutare — în curând",
+	"search_placeholder": "Caută sarcini și liste",
+	"search_hint": "Scrie pentru a-ți căuta sarcinile.",
 	"nav_settings": "Setări",
 	"fab_quick_add": "Adăugare rapidă",
 	"sidebar_open_shared": "Deschide partajatele",
@@ -1379,5 +1380,12 @@
 	"action_use_template": "Folosește",
 	"template_use_needs_list": "Șabloanele de sarcină se adaugă din interiorul unei liste.",
 	"template_delete_title": "Ștergi șablonul?",
-	"template_delete_confirm": "Ștergi șablonul „{name}”? Această acțiune nu poate fi anulată. Listele deja create din el rămân neschimbate."
+	"template_delete_confirm": "Ștergi șablonul „{name}”? Această acțiune nu poate fi anulată. Listele deja create din el rămân neschimbate.",
+	"app_loading": "Se încarcă…",
+	"tasks_loading": "Se încarcă sarcinile…",
+	"list_empty": "Încă nu e nimic aici.",
+	"list_empty_action": "Adaugă un element",
+	"view_empty_welcome_title": "Bine ai venit în Ditero",
+	"view_empty_welcome_hint": "Creează o listă mai jos ca să adaugi prima ta sarcină.",
+	"view_empty_no_match": "Momentan nimic nu corespunde acestei vizualizări."
 }

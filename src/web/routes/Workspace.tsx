@@ -1,7 +1,6 @@
 import type { ReadonlyJSONValue } from "@rocicorp/zero";
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import {
-	ChevronLeft,
 	House,
 	MoreHorizontal,
 	Pencil,
@@ -53,9 +52,11 @@ import {
 } from "../components/shell/folderActions.ts";
 import { groupLists } from "../components/shell/grouping.ts";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
+import { MobileSearch } from "../components/shell/MobileSearch.tsx";
 import { NameDialog } from "../components/shell/NameDialog.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
+import { BackButton } from "../components/ui/back-button.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { useConfirm } from "../components/ui/confirm.tsx";
 import {
@@ -167,14 +168,18 @@ function NormalWorkspace() {
 		[zero],
 	);
 	const [workspaces] = useQuery(queries.workspaces.mine());
-	const [lists] = useQuery(queries.lists.mine());
+	const [lists, listsDetails] = useQuery(queries.lists.mine());
 	const [folders] = useQuery(queries.folders.mine());
 	const [templates] = useQuery(queries.templates.mine());
-	const [tasks] = useQuery(queries.tasks.mine());
+	const [tasks, tasksDetails] = useQuery(queries.tasks.mine());
 	const [labels] = useQuery(queries.labels.mine());
 	const [taskLabels] = useQuery(queries.taskLabels.mine());
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
+	// The view surface joins tasks onto lists, so it is only settled once both
+	// queries are; until then "no rows" means "not synced", not "nothing here".
+	const viewRowsLoading =
+		tasksDetails.type !== "complete" || listsDetails.type !== "complete";
 	const { views: savedViews } = useViews();
 	const { dashboards, loading: dashboardsLoading } = useDashboards();
 	const { pref, setPref, loading: prefLoading } = useUserPref();
@@ -193,6 +198,7 @@ function NormalWorkspace() {
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 	const [openSharedRequested, setOpenSharedRequested] = useState(false);
 	const [section, setSection] = useState<Section>("lists");
+	const [searchOpen, setSearchOpen] = useState(false);
 	const [collapsed, setCollapsed] = useState(false);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
 	const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -465,12 +471,14 @@ function NormalWorkspace() {
 		setDetailTaskId(null);
 		setOpenDashboardId(id);
 	}, []);
-	function openSettings() {
+	// Fourth exclusive content mode: settings clears list/view/dashboard.
+	const openSettings = useCallback(() => {
 		setOpenListId(null);
 		setOpenViewId(null);
 		setOpenDashboardId(null);
+		setDetailTaskId(null);
 		setSection("settings");
-	}
+	}, []);
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
 	// of M1a scope: each group is its own DndContext, so a list can't leave it.
@@ -860,10 +868,12 @@ function NormalWorkspace() {
 		? (lists.find((l) => l.id === detailTask.listId) ?? null)
 		: null;
 
-	// The view shown when no list or dashboard is open: an explicitly opened one,
-	// else home.
+	// The view shown when no list, dashboard or settings surface is open: an
+	// explicitly opened one, else home.
 	const activeViewId =
-		openListId || openDashboardId ? null : (openViewId ?? homeRef);
+		openListId || openDashboardId || section === "settings"
+			? null
+			: (openViewId ?? homeRef);
 
 	// Command handlers injected into the palette/keyboard system. palette.open and
 	// search.open are owned by the provider (it holds the open state). Movement +
@@ -875,12 +885,7 @@ function NormalWorkspace() {
 	const commandHandlers = useMemo<CommandHandlers>(
 		() => ({
 			"task.create": () => setQuickAddOpen(true),
-			"settings.open": () => {
-				setOpenListId(null);
-				setOpenViewId(null);
-				setOpenDashboardId(null);
-				setSection("settings");
-			},
+			"settings.open": () => openSettings(),
 			"nav.down": () => focusNext(),
 			"nav.up": () => focusPrev(),
 			"nav.open": () => openFocused(),
@@ -897,7 +902,7 @@ function NormalWorkspace() {
 			},
 			"dashboard.new": () => setDashboardManager({ mode: "create" }),
 		}),
-		[firstDashboardId, openView, openDashboard],
+		[firstDashboardId, openView, openDashboard, openSettings],
 	);
 
 	const activeView = activeViewId ? resolveView(activeViewId) : null;
@@ -909,40 +914,46 @@ function NormalWorkspace() {
 			: null;
 
 	let content: React.ReactNode;
-	// Mobile keeps Settings on its own tab; desktop pins SecurityPanel to the
-	// list-index landing so it is always reachable (the auth-hardening e2e drives
-	// it right after signup without navigating).
-	if (!isDesktop && section === "settings") {
+	if (section === "settings") {
 		content = (
-			<div className="p-4">
-				<SecurityPanel />
-				<KarmaPanel />
-				<KarmaSettings />
-				<LanguageSwitcher persistLocale={persistLocale} />
-				{activeId && <LabelManager workspaceId={activeId} role={activeRole} />}
-				{activeId && (
-					<TemplateManager
-						workspaceId={activeId}
-						role={activeRole}
-						onUsed={openList}
+			<div data-testid="settings-surface">
+				<div className="flex items-center gap-2 border-b p-3">
+					<BackButton
+						data-testid="settings-back"
+						onClick={() => changeSection("lists")}
 					/>
-				)}
-				<FocusSettings />
-				<NotificationSettings />
+					<h1 className="truncate text-lg font-semibold">{m.nav_settings()}</h1>
+				</div>
+				<div className="p-4 md:p-6">
+					<SecurityPanel />
+					<KarmaPanel />
+					<KarmaSettings />
+					<LanguageSwitcher persistLocale={persistLocale} />
+					{/* Keyboard is a desktop feature (design 2.18). */}
+					{isDesktop && <KeymapSettings />}
+					{activeId && (
+						<LabelManager workspaceId={activeId} role={activeRole} />
+					)}
+					{activeId && (
+						<TemplateManager
+							workspaceId={activeId}
+							role={activeRole}
+							onUsed={openList}
+						/>
+					)}
+					<FocusSettings />
+					<NotificationSettings />
+				</div>
 			</div>
 		);
 	} else if (openListId) {
 		content = (
 			<div>
 				<div className="flex items-center gap-2 border-b p-3 md:hidden">
-					<button
-						type="button"
+					<BackButton
 						aria-label={m.list_back_to_lists()}
 						onClick={() => setOpenListId(null)}
-						className="flex size-11 items-center justify-center rounded-lg"
-					>
-						<ChevronLeft className="size-5" />
-					</button>
+					/>
 					<span className="truncate font-medium">
 						{openListRow?.title ?? m.list_untitled_fallback()}
 					</span>
@@ -998,8 +1009,8 @@ function NormalWorkspace() {
 		);
 	} else {
 		// No list open: the view surface (an explicitly opened view, or the home
-		// view on the landing). On the landing the list-index/create/settings
-		// controls stay rendered below so those flows remain reachable.
+		// view on the landing). On the landing the workspace heading, create-list
+		// form and (mobile) navigation index stay rendered below.
 		const isLanding = openViewId == null;
 		content = (
 			<div className="flex flex-col gap-6 p-4 md:p-6">
@@ -1007,14 +1018,10 @@ function NormalWorkspace() {
 					<section aria-label={activeView.name} data-testid="view-surface">
 						<div className="mb-3 flex items-center gap-2">
 							{!isDesktop && !isLanding && (
-								<button
-									type="button"
-									aria-label={m.action_back()}
+								<BackButton
+									size="compact"
 									onClick={() => setOpenViewId(null)}
-									className="flex size-9 shrink-0 items-center justify-center rounded-lg"
-								>
-									<ChevronLeft className="size-5" />
-								</button>
+								/>
 							)}
 							{HeaderIcon && (
 								<HeaderIcon
@@ -1106,6 +1113,7 @@ function NormalWorkspace() {
 								members={members}
 								currentUserId={zero.userID ?? ""}
 								membershipWorkspaceIds={membershipWorkspaceIds}
+								loading={viewRowsLoading}
 								onOpenTask={(t) => setDetailTaskId(t.id)}
 							/>
 						</ErrorBoundary>
@@ -1236,29 +1244,6 @@ function NormalWorkspace() {
 									/>
 								</div>
 							))}
-						{isDesktop && (
-							<div className="border-t pt-2">
-								<SecurityPanel />
-								<KarmaPanel />
-								<KarmaSettings />
-								<LanguageSwitcher persistLocale={persistLocale} />
-								{/* Keyboard is a desktop feature (design 2.18); the rebind
-								    surface lives beside Security on the desktop landing. */}
-								<KeymapSettings />
-								{activeId && (
-									<LabelManager workspaceId={activeId} role={activeRole} />
-								)}
-								{activeId && (
-									<TemplateManager
-										workspaceId={activeId}
-										role={activeRole}
-										onUsed={openList}
-									/>
-								)}
-								<FocusSettings />
-								<NotificationSettings />
-							</div>
-						)}
 					</div>
 				)}
 			</div>
@@ -1305,7 +1290,13 @@ function NormalWorkspace() {
 							/>
 						) : null
 					}
-					bottomNav={<BottomNav section={section} onSection={changeSection} />}
+					bottomNav={
+						<BottomNav
+							section={section}
+							onSection={changeSection}
+							onSearch={() => setSearchOpen(true)}
+						/>
+					}
 					fab={<Fab onOpen={() => setQuickAddOpen(true)} />}
 				>
 					{content}
@@ -1494,6 +1485,22 @@ function NormalWorkspace() {
 						allTasks={tasks}
 						allLabels={labels}
 						taskLabelIds={labelIdsByTask.get(detailTask.id) ?? []}
+					/>
+				)}
+
+				{/* Touch search: the palette's Search group without its keyboard
+			    command registry. Unmounted while closed so a stale layer never
+			    claims the Escape aimed at the task detail it just opened. */}
+				{!isDesktop && searchOpen && (
+					<MobileSearch
+						tasks={tasks}
+						lists={lists}
+						onSelect={(taskId, listId) => {
+							setSearchOpen(false);
+							openList(listId);
+							setDetailTaskId(taskId);
+						}}
+						onClose={() => setSearchOpen(false)}
 					/>
 				)}
 

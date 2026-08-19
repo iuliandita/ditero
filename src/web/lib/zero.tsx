@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { mutators } from "../../zero/mutators.ts";
 import { schema } from "../../zero/schema.gen.ts";
+import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { fetchZeroToken, watchZeroAuth } from "./zero-auth.ts";
 
 async function repairAccountBootstrap(): Promise<void> {
@@ -60,6 +61,6 @@ export function AppZeroProvider({
 		};
 	}, [userID]);
 
-	if (!zero) return null;
+	if (!zero) return <ShellSkeleton />;
 	return <ZeroProvider zero={zero}>{children}</ZeroProvider>;
 }

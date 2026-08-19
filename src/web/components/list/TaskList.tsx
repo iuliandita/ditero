@@ -1,5 +1,6 @@
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useMemo } from "react";
+import { FLIP_TRANSITION } from "@/lib/motion";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { sortTasks } from "../../../domain/task-sort.ts";
 import { m } from "../../../paraglide/messages.js";
@@ -103,7 +104,7 @@ export function TaskList({
 		<motion.li
 			key={task.id}
 			layout={!reduce}
-			transition={{ duration: 0.18, ease: "easeOut" }}
+			transition={FLIP_TRANSITION}
 			className={task.done ? "opacity-70" : undefined}
 		>
 			{row(task)}

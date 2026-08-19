@@ -215,7 +215,7 @@ export function ChannelRow({
 					{open ? (
 						<ChevronDown className="size-4 shrink-0" />
 					) : (
-						<ChevronRight className="size-4 shrink-0" />
+						<ChevronRight className="size-4 shrink-0 rtl:rotate-180" />
 					)}
 					<span id={`${rowId}-name`} className="text-sm font-medium">
 						{label}

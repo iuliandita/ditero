@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
+import { goToSettings, leaveSettings } from "./helpers.ts";
 
 // M1c views + keyboard e2e. Exercises the saved-view lifecycle (build/save/
 // round-trip), the layout switch + board regroup, the command palette, the
@@ -501,6 +502,7 @@ test("keymap: rebind persists across reload and fires; vim profile reflected", a
 	await waitWorkspaceReady(page);
 
 	// Rebind "New task" (task.create) to `n`.
+	await goToSettings(page);
 	const rebind = page.getByTestId("keymap-rebind-task.create");
 	await rebind.scrollIntoViewIfNeeded();
 	await rebind.click();
@@ -537,6 +539,7 @@ test("keymap: rebind persists across reload and fires; vim profile reflected", a
 
 	// Vim profile: selecting it flips the pressed state (movement stays j/k/o/x in
 	// both profiles, so there is no vim-only binding to assert post-M1c).
+	await goToSettings(page);
 	await page.getByTestId("keymap-profile-vim").click();
 	await expect(page.getByTestId("keymap-profile-vim")).toHaveAttribute(
 		"aria-pressed",
@@ -636,9 +639,11 @@ test("a11y: no serious/critical violations on views + keyboard surfaces", async 
 	await signUp(page, uniqueEmail("axe-views"));
 	await waitWorkspaceReady(page);
 
-	// Keymap settings live on the desktop landing (beside Security).
+	// Keymap settings live on the desktop settings surface.
+	await goToSettings(page);
 	await expect(page.getByTestId("keymap-profile-default")).toBeVisible();
-	await expectNoSeriousA11y(page, "keymap settings (landing)");
+	await expectNoSeriousA11y(page, "keymap settings");
+	await leaveSettings(page);
 
 	await createListDesktop(page, "AxeList");
 	await openListDesktop(page, "AxeList");

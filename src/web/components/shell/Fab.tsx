@@ -9,7 +9,7 @@ export function Fab({ onOpen }: { onOpen: () => void }) {
 			type="button"
 			aria-label={m.fab_quick_add()}
 			onClick={onOpen}
-			className="fixed end-4 bottom-20 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 motion-reduce:transition-none mb-[env(safe-area-inset-bottom)]"
+			className="fixed end-4 bottom-20 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-floating transition-transform duration-(--motion-fast) ease-(--motion-ease) active:scale-95 motion-reduce:transition-none mb-[env(safe-area-inset-bottom)]"
 		>
 			<Plus className="size-6" />
 		</button>

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { currentTOTP } from "../totp.ts";
+import { goToSettings } from "./helpers.ts";
 
 // Every assertion here that waits on an auth round trip carries an explicit
 // budget: the default only ever fit while this file happened to run first, so
@@ -20,6 +21,7 @@ async function signUp(page: import("@playwright/test").Page, email: string) {
 	await expect(page.getByTestId("workspace")).toBeVisible({
 		timeout: SIGNUP_TIMEOUT,
 	});
+	await goToSettings(page);
 }
 
 test("enrolls and signs in with a passkey", async ({ browser }) => {
@@ -90,6 +92,7 @@ test("supports TOTP enrollment, step-up, recovery, and disable", async ({
 	await expect(page.getByTestId("workspace")).toBeVisible({
 		timeout: SIGNUP_TIMEOUT,
 	});
+	await goToSettings(page);
 
 	await page.getByTestId("sign-out").click();
 	await page.getByTestId("email").fill(email);
@@ -100,6 +103,7 @@ test("supports TOTP enrollment, step-up, recovery, and disable", async ({
 	await expect(page.getByTestId("workspace")).toBeVisible({
 		timeout: SIGNUP_TIMEOUT,
 	});
+	await goToSettings(page);
 
 	await page.getByTestId("security-password").fill(password);
 	await page.getByTestId("disable-2fa").click();
