@@ -84,7 +84,7 @@ export function SortableRow({
 				className={cn(
 					"mt-1.5 flex size-6 shrink-0 touch-none items-center justify-center rounded text-muted-foreground/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
 					revealHandle &&
-						"transition-opacity motion-reduce:transition-none md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+						"transition-opacity duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
 				)}
 				{...attributes}
 				{...listeners}

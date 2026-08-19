@@ -63,6 +63,27 @@ test("data-open/data-closed compile onto Radix's data-state, not a bare attribut
 	expect(css).toContain("@keyframes exit");
 });
 
+// A shadow-*/duration-*/ease-* utility naming a token that does not exist emits
+// nothing at all -- the class stays in the markup and the elevation or timing
+// silently disappears. Same failure shape as the variant test above.
+test("the motion and elevation tokens back their utilities", async () => {
+	const css = await build([
+		"shadow-overlay",
+		"shadow-floating",
+		"duration-(--motion-fast)",
+		"ease-(--motion-ease)",
+	]);
+	expect(css).toContain("--tw-shadow: var(--elevation-overlay)");
+	expect(css).toContain("--tw-shadow: var(--elevation-floating)");
+	expect(css).toContain("transition-duration: var(--motion-fast)");
+	expect(css).toContain("transition-timing-function: var(--motion-ease)");
+	// @theme inline drops its variables after inlining them, so the motion tokens
+	// must reach :root as plain declarations or every var() above resolves to
+	// nothing.
+	for (const name of ["--motion-fast", "--motion-base", "--motion-slow"])
+		expect(css).toContain(`${name}: `);
+});
+
 // Extracts the declaration block opened by `open`, balancing braces so a nested
 // block (the media query's `:root:not(.light)`) does not end it early.
 function blockAfter(css: string, open: string, from = 0): string {

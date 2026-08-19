@@ -5,6 +5,7 @@ import {
 } from "@dnd-kit/sortable";
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import { FLIP_TRANSITION } from "@/lib/motion";
 import { reorderSortKey } from "@/lib/reorder";
 import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
@@ -52,7 +53,7 @@ export function SortableTaskList({
 						<motion.li
 							key={task.id}
 							layout={!reduce}
-							transition={{ duration: 0.18, ease: "easeOut" }}
+							transition={FLIP_TRANSITION}
 							className={task.done ? "opacity-70" : undefined}
 						>
 							{task.done ? (
