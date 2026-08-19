@@ -1379,5 +1379,12 @@
 	"action_use_template": "Utiliser",
 	"template_use_needs_list": "Les modèles de tâche s’ajoutent depuis une liste.",
 	"template_delete_title": "Supprimer le modèle ?",
-	"template_delete_confirm": "Supprimer le modèle « {name} » ? Cette action est irréversible. Les listes déjà créées à partir de lui ne changent pas."
+	"template_delete_confirm": "Supprimer le modèle « {name} » ? Cette action est irréversible. Les listes déjà créées à partir de lui ne changent pas.",
+	"app_loading": "Chargement…",
+	"tasks_loading": "Chargement des tâches…",
+	"list_empty": "Il n'y a encore rien ici.",
+	"list_empty_action": "Ajouter un élément",
+	"view_empty_welcome_title": "Bienvenue dans Ditero",
+	"view_empty_welcome_hint": "Crée une liste ci-dessous pour ajouter ta première tâche.",
+	"view_empty_no_match": "Rien ne correspond à cette vue pour le moment."
 }

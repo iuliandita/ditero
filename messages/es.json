@@ -1379,5 +1379,12 @@
 	"action_use_template": "Usar",
 	"template_use_needs_list": "Las plantillas de tarea se añaden desde dentro de una lista.",
 	"template_delete_title": "¿Eliminar la plantilla?",
-	"template_delete_confirm": "¿Eliminar la plantilla «{name}»? Esto no se puede deshacer. Las listas ya creadas a partir de ella no cambian."
+	"template_delete_confirm": "¿Eliminar la plantilla «{name}»? Esto no se puede deshacer. Las listas ya creadas a partir de ella no cambian.",
+	"app_loading": "Cargando…",
+	"tasks_loading": "Cargando tareas…",
+	"list_empty": "Aquí todavía no hay nada.",
+	"list_empty_action": "Añadir un elemento",
+	"view_empty_welcome_title": "Te damos la bienvenida a Ditero",
+	"view_empty_welcome_hint": "Crea una lista abajo para añadir tu primera tarea.",
+	"view_empty_no_match": "Ahora mismo no hay nada que coincida con esta vista."
 }
