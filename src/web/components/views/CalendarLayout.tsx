@@ -20,6 +20,7 @@ import {
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import type { Task } from "../../../zero/schema.gen.ts";
+import { EmptyState } from "../ui/empty-state.tsx";
 import type { ViewEntry } from "./ViewRenderer.tsx";
 
 const DAY_MS = 86_400_000;
@@ -219,9 +220,11 @@ function Agenda({
 }): JSX.Element {
 	if (groups.length === 0) {
 		return (
-			<p className="text-sm text-muted-foreground">
-				{m.calendar_agenda_empty()}
-			</p>
+			<EmptyState
+				data-testid="calendar-agenda-empty"
+				icon={CalendarClock}
+				message={m.calendar_agenda_empty()}
+			/>
 		);
 	}
 	return (
