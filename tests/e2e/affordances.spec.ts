@@ -552,6 +552,46 @@ test("roles: a Viewer is offered no Delete anywhere", async ({ page }) => {
 	await expect(page.getByTestId("row-action-delete")).toHaveCount(0);
 });
 
+// --- 6b: creation entry points follow the mutator, not the surface ---
+// folder.create is unconditionally requireWrite, so the button goes. But
+// view.create/dashboard.create only require a write role for scope "workspace",
+// and every user owns their personal workspace as owner -- so both buttons stay,
+// the Visibility->Workspace option stays reachable, and only the share-target
+// picker narrows. Hiding those two would delete a legitimate Viewer capability.
+test("roles: a Viewer keeps New view/New dashboard, loses New folder and this workspace as a share target", async ({
+	page,
+}) => {
+	const userId = await signUp(page, uniqueEmail("aff6b"));
+	const names = {
+		workspace: uniqueName("Aff gate ws"),
+		list: uniqueName("Aff gate list"),
+		task: uniqueName("Aff gate task"),
+	};
+	await seedViewerWorkspace(userId, names);
+
+	await page
+		.getByRole("button", { name: names.workspace, exact: true })
+		.click();
+	await expect(
+		sidebarLists(page).getByRole("button", { name: names.list, exact: true }),
+	).toBeVisible({ timeout: 15000 });
+
+	await expect(page.getByTestId("new-folder")).toHaveCount(0);
+	await expect(page.getByTestId("new-view")).toBeVisible();
+	await expect(page.getByTestId("new-dashboard")).toBeVisible();
+
+	await page.getByTestId("new-view").click();
+	await page.getByRole("combobox", { name: m.field_visibility() }).click();
+	await page.getByRole("option", { name: m.visibility_workspace() }).click();
+	await page.getByRole("combobox", { name: m.field_shared_in() }).click();
+	// Exactly the caller's own personal workspace: present proves the picker is
+	// populated at all, so the absence below is not vacuous.
+	await expect(page.getByRole("option")).toHaveCount(1);
+	await expect(
+		page.getByRole("option", { name: names.workspace, exact: true }),
+	).toHaveCount(0);
+});
+
 // --- 7: right-click is the same menu ---
 test("right-click opens the same row menu as the kebab", async ({ page }) => {
 	await signUp(page, uniqueEmail("aff7"));

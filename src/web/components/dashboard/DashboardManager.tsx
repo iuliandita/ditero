@@ -57,35 +57,38 @@ export function DashboardManager({
 	onOpenChange,
 	mode,
 	initial,
-	workspaces,
+	shareableWorkspaces,
 	onSubmit,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	mode: "create" | "edit";
 	initial?: Partial<DashboardFormValue>;
-	workspaces: { id: string; name: string }[];
+	shareableWorkspaces: { id: string; name: string }[];
 	onSubmit: (value: DashboardFormValue) => void;
 }): JSX.Element {
 	const isDesktop = useIsDesktop();
 	const baseId = useId();
-	const firstWorkspace = workspaces[0]?.id ?? null;
 
 	const [name, setName] = useState(initial?.name ?? "");
 	const [scope, setScope] = useState<"personal" | "workspace">(
 		initial?.scope ?? "personal",
 	);
 	const [workspaceId, setWorkspaceId] = useState<string | null>(
-		initial?.workspaceId ?? firstWorkspace,
+		initial?.workspaceId ?? shareableWorkspaces[0]?.id ?? null,
 	);
 
 	// Scope is fixed at create time (dashboard.update carries no
 	// scope/workspaceId), so the toggle only renders in create mode.
 	const canSetScope = mode === "create";
 
+	// A workspace-scoped dashboard needs a write role somewhere; dashboard.create
+	// only calls requireWrite for scope "workspace".
+	const canShare = shareableWorkspaces.length > 0;
 	const trimmed = name.trim();
 	const canSave =
-		trimmed.length > 0 && (scope === "personal" || workspaceId != null);
+		trimmed.length > 0 &&
+		(scope === "personal" || (canShare && workspaceId != null));
 
 	function submit() {
 		if (!canSave) return;
@@ -126,9 +129,11 @@ export function DashboardManager({
 								<SelectItem value="personal">
 									{m.visibility_personal()}
 								</SelectItem>
-								<SelectItem value="workspace">
-									{m.visibility_workspace()}
-								</SelectItem>
+								{canShare && (
+									<SelectItem value="workspace">
+										{m.visibility_workspace()}
+									</SelectItem>
+								)}
 							</SelectContent>
 						</Select>
 					</Field>
@@ -142,7 +147,7 @@ export function DashboardManager({
 									<SelectValue placeholder={m.select_placeholder()} />
 								</SelectTrigger>
 								<SelectContent>
-									{workspaces.map((w) => (
+									{shareableWorkspaces.map((w) => (
 										<SelectItem key={w.id} value={w.id}>
 											{w.name}
 										</SelectItem>
