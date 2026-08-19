@@ -1,6 +1,6 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { SlidersHorizontal } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ListTodo, SlidersHorizontal } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -30,6 +30,8 @@ import { IconPicker } from "../components/list/IconPicker.tsx";
 import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
+import { TaskListSkeleton } from "../components/shell/AppSkeleton.tsx";
+import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
 import { RowActions } from "../components/ui/row-actions.tsx";
 
@@ -57,8 +59,8 @@ export function ListView({
 	listActions: (list: List) => RowAction[];
 }) {
 	const zero = useZero<typeof schema>();
-	const [tasks] = useQuery(queries.tasks.mine());
-	const [lists] = useQuery(queries.lists.mine());
+	const [tasks, tasksDetails] = useQuery(queries.tasks.mine());
+	const [lists, listsDetails] = useQuery(queries.lists.mine());
 	const [labels] = useQuery(queries.labels.mine());
 	const [taskLabels] = useQuery(queries.taskLabels.mine());
 	const [assignees] = useQuery(queries.assignees.mine());
@@ -70,6 +72,12 @@ export function ListView({
 	const [groupByAssignee, setGroupByAssignee] = useState(false);
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 	const [scheduleTaskId, setScheduleTaskId] = useState<string | null>(null);
+	const titleInput = useRef<HTMLInputElement>(null);
+
+	// Zero reports per-query completeness; "no rows yet" and "no rows" are only
+	// distinguishable here, where the queries live. The row surface below is pure.
+	const listsLoading = listsDetails.type !== "complete";
+	const tasksLoading = listsLoading || tasksDetails.type !== "complete";
 
 	const list = lists.find((l) => l.id === listId);
 	const listTasks = useMemo(
@@ -193,7 +201,9 @@ export function ListView({
 		);
 	}
 
-	if (!list) return null;
+	// A list id from a stale nav ref stays blank once lists have synced; before
+	// that the id is simply not loaded yet.
+	if (!list) return listsLoading ? <TaskListSkeleton /> : null;
 	// Narrowed alias so nested function declarations keep the non-null type.
 	const openList = list;
 	const taskTemplates = templates.filter(
@@ -350,6 +360,7 @@ export function ListView({
 
 			<div className="mb-3 flex gap-2">
 				<input
+					ref={titleInput}
 					data-testid="new-task"
 					className="h-9 flex-1 rounded-lg border bg-transparent px-3 text-base md:text-sm"
 					placeholder={m.list_add_task_placeholder()}
@@ -374,7 +385,23 @@ export function ListView({
 				</p>
 			)}
 
-			{groupByAssignee ? (
+			{tasksLoading ? (
+				<TaskListSkeleton />
+			) : parents.length === 0 ? (
+				<EmptyState
+					data-testid="list-empty"
+					icon={ListTodo}
+					message={m.list_empty()}
+				>
+					<Button
+						data-testid="list-empty-add"
+						variant="outline"
+						onClick={() => titleInput.current?.focus()}
+					>
+						{m.list_empty_action()}
+					</Button>
+				</EmptyState>
+			) : groupByAssignee ? (
 				<div className="flex flex-col gap-4">
 					{assigneeGroups.map((g) => (
 						<section key={g.key || "unassigned"}>
