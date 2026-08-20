@@ -108,7 +108,34 @@ describe("wdkInfo", () => {
 		"recipientFingerprint",
 	] as const)("rejects a separator inside %s", (field) => {
 		expect(() => wdkInfo({ ...INFO, [field]: "a|b" })).toThrow(
-			new RegExp(`^hpke: ${field} must not contain`),
+			new RegExp(`^aad: ${field} must not contain`),
+		);
+	});
+
+	// String(NaN) is "NaN" and String(1.5) is "1.5": both serialize without
+	// collapsing, so the binding stays injective and the separator check passes
+	// -- and no rotation can ever reproduce the value, so any WDK sealed under
+	// such a binding is permanently unopenable.
+	it("rejects a key version that is not a positive integer", () => {
+		for (const keyVersion of [
+			Number.NaN,
+			1.5,
+			0,
+			-1,
+			Number.POSITIVE_INFINITY,
+		]) {
+			expect(() => wdkInfo({ ...INFO, keyVersion })).toThrow(
+				"aad: keyVersion must be a positive integer",
+			);
+		}
+	});
+
+	it("rejects an empty identifier", () => {
+		expect(() => wdkInfo({ ...INFO, workspaceId: "" })).toThrow(
+			"aad: workspaceId must not be empty",
+		);
+		expect(() => wdkInfo({ ...INFO, recipientFingerprint: "" })).toThrow(
+			"aad: recipientFingerprint must not be empty",
 		);
 	});
 

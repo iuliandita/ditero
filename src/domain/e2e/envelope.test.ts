@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	aad,
 	decryptWrapped,
+	ENVELOPE_OPENERS,
 	ENVELOPE_VERSION,
 	EnvelopeOpenError,
 	encryptWrapped,
@@ -67,37 +68,37 @@ describe("aad", () => {
 	// aad.dek("a", 1, "2|b") would authenticate each other's ciphertexts.
 	it("rejects a separator in a passphrase-wrap identifier", () => {
 		expect(() => aad.privateKeyPassphrase("u|1")).toThrow(
-			'envelope: userId must not contain "|"',
+			'aad: userId must not contain "|"',
 		);
 	});
 
 	it("rejects a separator in a recovery-wrap identifier", () => {
 		expect(() => aad.privateKeyRecovery("u|1")).toThrow(
-			'envelope: userId must not contain "|"',
+			'aad: userId must not contain "|"',
 		);
 	});
 
 	it("rejects a separator in a device-wrap identifier", () => {
 		expect(() => aad.privateKeyDevice("u|1", "d_1")).toThrow(
-			'envelope: userId must not contain "|"',
+			'aad: userId must not contain "|"',
 		);
 		expect(() => aad.privateKeyDevice("u_1", "d|1")).toThrow(
-			'envelope: deviceId must not contain "|"',
+			'aad: deviceId must not contain "|"',
 		);
 	});
 
 	it("rejects a separator in a DEK-wrap identifier", () => {
 		expect(() => aad.dek("ws|1", 1, "att_1")).toThrow(
-			'envelope: workspaceId must not contain "|"',
+			'aad: workspaceId must not contain "|"',
 		);
 		expect(() => aad.dek("ws_1", 1, "att|1")).toThrow(
-			'envelope: attachmentId must not contain "|"',
+			'aad: attachmentId must not contain "|"',
 		);
 	});
 
 	it("rejects a separator in a metadata-wrap identifier", () => {
 		expect(() => aad.metadata("att|1", "filename")).toThrow(
-			'envelope: attachmentId must not contain "|"',
+			'aad: attachmentId must not contain "|"',
 		);
 	});
 
@@ -105,13 +106,35 @@ describe("aad", () => {
 	// caller bug that would silently mint an AAD no rotation can ever reproduce.
 	it("rejects a key version that is not a positive integer", () => {
 		expect(() => aad.dek("ws_1", 1.5, "att_1")).toThrow(
-			"envelope: keyVersion must be a positive integer",
+			"aad: keyVersion must be a positive integer",
 		);
 		expect(() => aad.dek("ws_1", 0, "att_1")).toThrow(
-			"envelope: keyVersion must be a positive integer",
+			"aad: keyVersion must be a positive integer",
 		);
 		expect(() => aad.dek("ws_1", Number.NaN, "att_1")).toThrow(
-			"envelope: keyVersion must be a positive integer",
+			"aad: keyVersion must be a positive integer",
+		);
+	});
+
+	// Injectivity survives an empty id, so this is not a binding break -- it is a
+	// caller bug (an unresolved userId, a deviceId not yet minted) that would
+	// otherwise mint a storable wrap bound to nothing and fail much later,
+	// against the real id, looking like a wrong key.
+	it("rejects an empty identifier", () => {
+		expect(() => aad.privateKeyPassphrase("")).toThrow(
+			"aad: userId must not be empty",
+		);
+		expect(() => aad.privateKeyRecovery("")).toThrow(
+			"aad: userId must not be empty",
+		);
+		expect(() => aad.privateKeyDevice("u_1", "")).toThrow(
+			"aad: deviceId must not be empty",
+		);
+		expect(() => aad.dek("", 1, "att_1")).toThrow(
+			"aad: workspaceId must not be empty",
+		);
+		expect(() => aad.metadata("", "filename")).toThrow(
+			"aad: attachmentId must not be empty",
 		);
 	});
 
@@ -152,9 +175,16 @@ describe("encryptWrapped / decryptWrapped", () => {
 			k,
 			aad.metadata("att_1", "filename"),
 		);
-		await expect(
-			decryptWrapped(wrapped, k, aad.metadata("att_2", "filename")),
-		).rejects.toThrow(EnvelopeOpenError);
+		const opening = decryptWrapped(
+			wrapped,
+			k,
+			aad.metadata("att_2", "filename"),
+		);
+		// Class as well as reason here: toMatchObject alone is satisfied by any
+		// object carrying the field, including a plain Error the caller cannot
+		// discriminate on.
+		await expect(opening).rejects.toBeInstanceOf(EnvelopeOpenError);
+		await expect(opening).rejects.toMatchObject({ reason: "cannot-open" });
 	});
 
 	it("refuses a ciphertext transplanted to another field of the same attachment", async () => {
@@ -166,7 +196,7 @@ describe("encryptWrapped / decryptWrapped", () => {
 		);
 		await expect(
 			decryptWrapped(wrapped, k, aad.metadata("att_1", "contentType")),
-		).rejects.toThrow(EnvelopeOpenError);
+		).rejects.toMatchObject({ reason: "cannot-open" });
 	});
 
 	it("refuses a DEK wrap replayed under another key version", async () => {
@@ -178,7 +208,7 @@ describe("encryptWrapped / decryptWrapped", () => {
 		);
 		await expect(
 			decryptWrapped(wrapped, k, aad.dek("ws_1", 2, "att_1")),
-		).rejects.toThrow(EnvelopeOpenError);
+		).rejects.toMatchObject({ reason: "cannot-open" });
 	});
 
 	it("refuses a DEK wrap replayed onto another workspace", async () => {
@@ -190,7 +220,7 @@ describe("encryptWrapped / decryptWrapped", () => {
 		);
 		await expect(
 			decryptWrapped(wrapped, k, aad.dek("ws_2", 1, "att_1")),
-		).rejects.toThrow(EnvelopeOpenError);
+		).rejects.toMatchObject({ reason: "cannot-open" });
 	});
 
 	it("uses a fresh nonce per call", async () => {
@@ -366,9 +396,113 @@ describe("encryptWrapped / decryptWrapped", () => {
 		const view = big.subarray(32, 64);
 		expect(view.byteLength).toBeLessThan(view.buffer.byteLength);
 		const copy = Uint8Array.from(view);
+		expect(copy.byteLength).toBe(copy.buffer.byteLength);
 		const pt = bytes();
 		expect(
 			await decryptWrapped(await encryptWrapped(pt, k, view), k, copy),
 		).toEqual(pt);
+	});
+
+	// No valid AES-GCM output is shorter than its tag, so a short ciphertext is a
+	// truncated column, not a key problem. Without this a bad backup restore
+	// tells the user their passphrase is wrong; they then burn the recovery code
+	// and fail identically.
+	it("reports a ciphertext shorter than the tag as malformed", async () => {
+		const k = key();
+		const a = aad.dek("ws_1", 1, "att_1");
+		const wrapped = await encryptWrapped(bytes(), k, a);
+		for (const length of [0, TAG_BYTES - 1]) {
+			await expect(
+				decryptWrapped(
+					{ ...wrapped, ciphertext: new Uint8Array(length) },
+					k,
+					a,
+				),
+			).rejects.toMatchObject({ reason: "malformed" });
+		}
+		// The boundary itself is a possible record (an empty plaintext), so it
+		// must NOT be classified as malformed.
+		await expect(
+			decryptWrapped(
+				{ ...wrapped, ciphertext: new Uint8Array(TAG_BYTES) },
+				k,
+				a,
+			),
+		).rejects.toMatchObject({ reason: "cannot-open" });
+	});
+
+	it("round-trips an empty plaintext", async () => {
+		const k = key();
+		const a = aad.metadata("att_1", "filename");
+		const wrapped = await encryptWrapped(new Uint8Array(0), k, a);
+		expect(wrapped.ciphertext.length).toBe(TAG_BYTES);
+		expect(await decryptWrapped(wrapped, k, a)).toEqual(new Uint8Array(0));
+	});
+
+	// The module's premise is that nothing is wrapped without stating its
+	// context. Every aad.* helper returns non-empty, but nothing forces a caller
+	// through them, and an empty AAD wraps successfully and silently unbound.
+	it("rejects an empty AAD on encrypt", async () => {
+		await expect(
+			encryptWrapped(bytes(), key(), new Uint8Array(0)),
+		).rejects.toThrow("envelope: additionalData must not be empty");
+	});
+
+	it("rejects an empty AAD on decrypt", async () => {
+		const k = key();
+		const wrapped = await encryptWrapped(bytes(), k, aad.dek("ws_1", 1, "a_1"));
+		await expect(decryptWrapped(wrapped, k, new Uint8Array(0))).rejects.toThrow(
+			"envelope: additionalData must not be empty",
+		);
+	});
+
+	// WebCrypto rejects shared-memory views, and the narrowing must fail loud
+	// rather than cast past it.
+	it("rejects a shared-memory backed plaintext", async () => {
+		const shared = new Uint8Array(new SharedArrayBuffer(32));
+		await expect(
+			encryptWrapped(shared, key(), aad.dek("ws_1", 1, "att_1")),
+		).rejects.toThrow("envelope: byte views must not be shared-memory backed");
+	});
+
+	it("rejects a shared-memory backed key", async () => {
+		const shared = new Uint8Array(new SharedArrayBuffer(KEY_BYTES));
+		await expect(
+			encryptWrapped(bytes(), shared, aad.dek("ws_1", 1, "att_1")),
+		).rejects.toThrow("envelope: byte views must not be shared-memory backed");
+	});
+});
+
+describe("ENVELOPE_OPENERS", () => {
+	// Bumping ENVELOPE_VERSION without leaving the old opener in place makes
+	// every stored wrap at that version unrecoverable by any route, and nothing
+	// else in the suite would go red.
+	it("keeps an opener for v1 forever", () => {
+		expect(ENVELOPE_OPENERS[1]).toBeTypeOf("function");
+	});
+
+	it("can open what encryptWrapped currently writes", () => {
+		expect(ENVELOPE_OPENERS[ENVELOPE_VERSION]).toBeTypeOf("function");
+	});
+
+	// Behaviour, not shape: proves decryptWrapped is a registry lookup rather
+	// than a comparison against the constant, which is what makes leaving an old
+	// opener in place actually keep old wraps readable.
+	it("dispatches decryptWrapped through the registry", async () => {
+		const opened = new Uint8Array([1, 2, 3]);
+		const k = key();
+		const a = aad.dek("ws_1", 1, "att_1");
+		const wrapped = await encryptWrapped(bytes(), k, a);
+		ENVELOPE_OPENERS[99] = async () => opened;
+		try {
+			expect(await decryptWrapped({ ...wrapped, version: 99 }, k, a)).toBe(
+				opened,
+			);
+		} finally {
+			delete ENVELOPE_OPENERS[99];
+		}
+		await expect(
+			decryptWrapped({ ...wrapped, version: 99 }, k, a),
+		).rejects.toMatchObject({ reason: "unsupported-version" });
 	});
 });

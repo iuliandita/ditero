@@ -1,6 +1,7 @@
 import { Chacha20Poly1305 } from "@hpke/chacha20poly1305";
 import { CipherSuite, HkdfSha256 } from "@hpke/core";
 import { DhkemX25519HkdfSha256 } from "@hpke/dhkem-x25519";
+import { aadId, aadKeyVersion, joinAad } from "./envelope.ts";
 
 export type WdkInfo = {
 	workspaceId: string;
@@ -72,26 +73,17 @@ export async function exportPublicKey(key: CryptoKey): Promise<Uint8Array> {
 // NOT authenticate the sender -- HPKE base mode has none -- which is why the
 // commitment in wdk-commitment.ts exists.
 export function wdkInfo(info: WdkInfo): Uint8Array {
-	// The separator is what makes the binding unambiguous; a field carrying one
-	// would let two distinct contexts serialize identically.
-	for (const [field, value] of [
-		["workspaceId", info.workspaceId],
-		["recipientUserId", info.recipientUserId],
-		["recipientFingerprint", info.recipientFingerprint],
-	] as const) {
-		if (value.includes("|")) {
-			throw new Error(`hpke: ${field} must not contain "|"`);
-		}
-	}
-	return new TextEncoder().encode(
-		[
-			"ditero:wdk:v1",
-			info.workspaceId,
-			String(info.keyVersion),
-			info.recipientUserId,
-			info.recipientFingerprint,
-		].join("|"),
-	);
+	// Shared with envelope.ts rather than re-checked here: the hand-rolled copy
+	// this replaces validated the separator but not the key version, so
+	// `String(info.keyVersion)` emitted "NaN" or "1.5" into a binding that no
+	// rotation could ever reproduce, leaving the WDK permanently unopenable.
+	return joinAad([
+		"ditero:wdk:v1",
+		aadId("workspaceId", info.workspaceId),
+		aadKeyVersion(info.keyVersion),
+		aadId("recipientUserId", info.recipientUserId),
+		aadId("recipientFingerprint", info.recipientFingerprint),
+	]);
 }
 
 export async function sealWdk(
