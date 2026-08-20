@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-07-10 | Status: pre-v1, building on `develop`
+> Updated: 2026-08-20 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
