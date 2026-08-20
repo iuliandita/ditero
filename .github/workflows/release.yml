@@ -61,7 +61,9 @@ jobs:
       - run: bun run typecheck
       - run: bun run test
       - run: bun run test:integration
-      - run: bunx playwright install --with-deps chromium
+      # firefox and webkit carry one spec only (crypto-vectors.spec.ts, the
+      # three-engine crypto vector gate); every other spec stays on chromium.
+      - run: bunx playwright install --with-deps chromium firefox webkit
       - run: bun run test:e2e
       - run: tests/container/compose.sh
       - run: tests/container/zero.sh

@@ -51,6 +51,8 @@ const appEnv = {
 	DITERO_SCHEDULER_LATE_THRESHOLD_MS: "5000",
 };
 
+const CROSS_ENGINE_SPEC = /crypto-vectors\.spec\.ts$/;
+
 export default defineConfig({
 	testDir: "tests/e2e",
 	globalSetup: "./tests/e2e/global-setup.ts",
@@ -67,7 +69,25 @@ export default defineConfig({
 		// the wrong zone looks correct. Keeps the weekday assertions load-bearing.
 		timezoneId: "America/New_York",
 	},
-	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+	projects: [
+		{ name: "chromium", use: { ...devices["Desktop Chrome"] } },
+		// The crypto vector gate (design 13) is the only spec that must clear all
+		// three engines: it re-runs the key layer's vectors in the runtimes that
+		// actually hold user keys, and WebKit is the strict one about ArrayBuffer
+		// vs ArrayBufferView at crypto.subtle. testMatch keeps the other specs on
+		// Chromium alone -- a three-engine run is not a cost every future e2e test
+		// should pay.
+		{
+			name: "firefox",
+			use: { ...devices["Desktop Firefox"] },
+			testMatch: CROSS_ENGINE_SPEC,
+		},
+		{
+			name: "webkit",
+			use: { ...devices["Desktop Safari"] },
+			testMatch: CROSS_ENGINE_SPEC,
+		},
+	],
 	webServer: [
 		{
 			// Not `dev:server`: `--hot` orphans child processes, which then squat
