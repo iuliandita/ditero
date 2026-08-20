@@ -9,20 +9,62 @@ export type WdkInfo = {
 	recipientFingerprint: string;
 };
 
+// Framing is deliberately the caller's: the DB stores enc and ciphertext as two
+// separate base64url columns, so there is nothing here to concatenate or parse.
 export type SealedWdk = {
 	enc: Uint8Array;
 	ciphertext: Uint8Array;
 };
 
-// One suite instance per call is deliberate: a module-scope suite is fine here
-// today, but the browser bundle shares this module across tabs and a stateful
-// suite would be a foot-gun the moment the library gains per-context state.
-export function hpkeSuite(): CipherSuite {
-	return new CipherSuite({
-		kem: new DhkemX25519HkdfSha256(),
-		kdf: new HkdfSha256(),
-		aead: new Chacha20Poly1305(),
+export type WdkOpenFailure = "cannot-open" | "malformed";
+
+// The UI must tell "this member is not a recipient of this key" apart from
+// "this wrap is corrupt", and the leaf package signals them as two unrelated
+// error classes from two different call sites.
+export class WdkOpenError extends Error {
+	constructor(
+		readonly reason: WdkOpenFailure,
+		cause: unknown,
+	) {
+		super(
+			reason === "malformed"
+				? "hpke: malformed WDK wrap"
+				: "hpke: cannot open WDK wrap",
+			{ cause },
+		);
+		this.name = "WdkOpenError";
+	}
+}
+
+const suite = new CipherSuite({
+	kem: new DhkemX25519HkdfSha256(),
+	kdf: new HkdfSha256(),
+	aead: new Chacha20Poly1305(),
+});
+
+/** Test-only. The RFC 9180 vector proof needs the suite ids and raw key primitives. */
+export function hpkeSuiteForTests(): CipherSuite {
+	return suite;
+}
+
+export function importRecipientPublicKey(
+	bytes: Uint8Array,
+): Promise<CryptoKey> {
+	return suite.kem.deserializePublicKey(bytes).catch((cause: unknown) => {
+		throw new Error("hpke: malformed public key", { cause });
 	});
+}
+
+export function importRecipientPrivateKey(
+	bytes: Uint8Array,
+): Promise<CryptoKey> {
+	return suite.kem.deserializePrivateKey(bytes).catch((cause: unknown) => {
+		throw new Error("hpke: malformed private key", { cause });
+	});
+}
+
+export async function exportPublicKey(key: CryptoKey): Promise<Uint8Array> {
+	return new Uint8Array(await suite.kem.serializePublicKey(key));
 }
 
 // Binds the wrap to exactly one (workspace, version, recipient, key). Without
@@ -30,6 +72,17 @@ export function hpkeSuite(): CipherSuite {
 // NOT authenticate the sender -- HPKE base mode has none -- which is why the
 // commitment in wdk-commitment.ts exists.
 export function wdkInfo(info: WdkInfo): Uint8Array {
+	// The separator is what makes the binding unambiguous; a field carrying one
+	// would let two distinct contexts serialize identically.
+	for (const [field, value] of [
+		["workspaceId", info.workspaceId],
+		["recipientUserId", info.recipientUserId],
+		["recipientFingerprint", info.recipientFingerprint],
+	] as const) {
+		if (value.includes("|")) {
+			throw new Error(`hpke: ${field} must not contain "|"`);
+		}
+	}
 	return new TextEncoder().encode(
 		[
 			"ditero:wdk:v1",
@@ -46,15 +99,13 @@ export async function sealWdk(
 	recipientPublicKey: CryptoKey,
 	info: WdkInfo,
 ): Promise<SealedWdk> {
-	const suite = hpkeSuite();
 	const sender = await suite.createSenderContext({
 		recipientPublicKey,
-		info: wdkInfo(info).buffer as ArrayBuffer,
+		info: wdkInfo(info),
 	});
-	const ciphertext = await sender.seal(wdk.buffer as ArrayBuffer);
 	return {
 		enc: new Uint8Array(sender.enc),
-		ciphertext: new Uint8Array(ciphertext),
+		ciphertext: new Uint8Array(await sender.seal(wdk)),
 	};
 }
 
@@ -63,13 +114,23 @@ export async function openWdk(
 	recipientKey: CryptoKey,
 	info: WdkInfo,
 ): Promise<Uint8Array> {
-	const suite = hpkeSuite();
-	const recipient = await suite.createRecipientContext({
-		recipientKey,
-		enc: sealed.enc.buffer as ArrayBuffer,
-		info: wdkInfo(info).buffer as ArrayBuffer,
-	});
-	return new Uint8Array(
-		await recipient.open(sealed.ciphertext.buffer as ArrayBuffer),
-	);
+	// Split by phase, not by error class: a wrap that cannot even be decapsulated
+	// is structurally broken, while everything reaching open() is well-formed and
+	// simply not addressed to this holder.
+	const binding = wdkInfo(info);
+	let recipient: Awaited<ReturnType<typeof suite.createRecipientContext>>;
+	try {
+		recipient = await suite.createRecipientContext({
+			recipientKey,
+			enc: sealed.enc,
+			info: binding,
+		});
+	} catch (cause) {
+		throw new WdkOpenError("malformed", cause);
+	}
+	try {
+		return new Uint8Array(await recipient.open(sealed.ciphertext));
+	} catch (cause) {
+		throw new WdkOpenError("cannot-open", cause);
+	}
 }
