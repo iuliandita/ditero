@@ -18,8 +18,11 @@ import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import { runMutation } from "../../lib/run-mutation.ts";
+import { useConfirm } from "../ui/confirm.tsx";
+import { RowActions } from "../ui/row-actions.tsx";
 import { AddKid } from "./AddKid.tsx";
 import { InviteDialog } from "./InviteDialog.tsx";
+import { memberActions } from "./memberActions.ts";
 import { ROLE_LABELS } from "./role-labels.ts";
 
 const ROLE_BADGE: Record<Role, "default" | "secondary" | "outline"> = {
@@ -49,6 +52,7 @@ export function MembersPanel({
 }) {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
+	const confirm = useConfirm();
 	const [memberships] = useQuery(queries.memberships.mine());
 	const [invites] = useQuery(queries.invites.forWorkspace());
 	const [error, setError] = useState<string | null>(null);
@@ -78,9 +82,32 @@ export function MembersPanel({
 	);
 	const canInvite =
 		callerRole === "owner" || callerRole === "admin" || callerRole === "member";
+	const ownerCount = useMemo(
+		() => members.filter((mem) => mem.role === "owner").length,
+		[members],
+	);
 
 	async function revoke(id: string) {
 		await runMutation(zero.mutate(mutators.invite.revoke({ id })), setError);
+	}
+	async function setRole(id: string, role: Role) {
+		await runMutation(
+			zero.mutate(mutators.membership.setRole({ id, role })),
+			setError,
+		);
+	}
+	async function removeMember(id: string, name: string) {
+		const ok = await confirm({
+			title: m.member_remove_confirm_title({ name }),
+			body: m.member_remove_confirm_body({ name, workspace: workspaceName }),
+			confirmLabel: m.member_remove_confirm_action(),
+			destructive: true,
+		});
+		if (!ok) return;
+		await runMutation(
+			zero.mutate(mutators.membership.remove({ id })),
+			setError,
+		);
 	}
 	async function copy(id: string, link: string) {
 		try {
@@ -116,7 +143,8 @@ export function MembersPanel({
 									return (
 										<li
 											key={mem.id}
-											className="flex items-center gap-3 rounded-lg border p-2"
+											data-testid="member-row"
+											className="group flex items-center gap-3 rounded-lg border p-2"
 										>
 											<span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-medium">
 												{mem.user?.image ? (
@@ -141,6 +169,21 @@ export function MembersPanel({
 											<Badge variant={ROLE_BADGE[role]}>
 												{ROLE_LABELS[role]()}
 											</Badge>
+											<RowActions
+												label={m.row_actions_for({ name })}
+												actions={memberActions({
+													membershipId: mem.id,
+													memberName: name,
+													memberRole: role,
+													isSelf: mem.userId === zero.userID,
+													callerRole,
+													ownerCount,
+													handlers: {
+														setRole: (id, r) => void setRole(id, r),
+														remove: (id, n) => void removeMember(id, n),
+													},
+												})}
+											/>
 										</li>
 									);
 								})}
