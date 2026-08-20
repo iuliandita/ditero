@@ -84,6 +84,24 @@ async function* pooledSource(
 	}
 }
 
+// A producer reading into ONE reused buffer: a ReadableStreamBYOBReader, or a
+// manual pooled read. Retaining these chunks by reference seals whatever the
+// producer overwrote them with, and the GCM tag is then valid over the
+// corruption -- no integrity check further down can ever catch it. Chunk sizes
+// that divide the segment evenly do not trigger it, so the size here matters.
+async function* recyclingSource(
+	data: Uint8Array,
+	chunk: number,
+): AsyncIterable<Uint8Array> {
+	const scratch = new Uint8Array(chunk);
+	for (let at = 0; at < data.length; at += chunk) {
+		const slice = data.subarray(at, at + chunk);
+		scratch.fill(0xa5);
+		scratch.set(slice);
+		yield scratch.subarray(0, slice.length);
+	}
+}
+
 const seal = (pt: Uint8Array, dek: Uint8Array, segmentSize = SEG) =>
 	collect(encryptStream(source(pt, 97), dek, "content", segmentSize));
 
@@ -399,6 +417,54 @@ describe("encryptStream / decryptStream round trip", () => {
 		expect(Buffer.compare(back, pt)).toBe(0);
 	});
 
+	// 333 does not divide 1024; a chunk size that does (1024, 2048) hits only
+	// the whole-chunk path and passes even when chunks are retained by
+	// reference, which would make this test vacuous.
+	it.each([
+		333, 512,
+	])("round-trips a producer recycling one buffer at chunk size %i", async (chunk) => {
+		const dek = DEK();
+		const pt = randomBytes(SEG * 2 + 700);
+		const ct = await collect(
+			encryptStream(recyclingSource(pt, chunk), dek, "content", SEG),
+		);
+		expect(await open(ct, dek)).toEqual(pt);
+	});
+
+	it("round-trips a ciphertext source recycling one buffer", async () => {
+		const dek = DEK();
+		const pt = randomBytes(SEG * 2 + 700);
+		const ct = await seal(pt, dek);
+		expect(
+			await collect(decryptStream(recyclingSource(ct, 333), dek, "content")),
+		).toEqual(pt);
+	});
+
+	it("round-trips one byte at a time", async () => {
+		const dek = DEK();
+		const pt = randomBytes(SEG + 3);
+		const ct = await collect(encryptStream(source(pt, 1), dek, "content", SEG));
+		expect(await collect(decryptStream(source(ct, 1), dek, "content"))).toEqual(
+			pt,
+		);
+	});
+
+	it("ignores empty chunks from either side", async () => {
+		const dek = DEK();
+		const pt = randomBytes(SEG + 3);
+		async function* padded(data: Uint8Array): AsyncIterable<Uint8Array> {
+			yield new Uint8Array(0);
+			for await (const c of source(data, 97)) {
+				yield c;
+				yield new Uint8Array(0);
+			}
+		}
+		const ct = await collect(encryptStream(padded(pt), dek, "content", SEG));
+		expect(await collect(decryptStream(padded(ct), dek, "content"))).toEqual(
+			pt,
+		);
+	});
+
 	it("round-trips a thumbnail stream", async () => {
 		const dek = DEK();
 		const pt = randomBytes(200);
@@ -653,6 +719,30 @@ describe("decryptStream refusals", () => {
 			HEADER_BYTES,
 		);
 		expect((await failure(open(spliced, dek))).reason).toBe("cannot-open");
+	});
+
+	it("refuses an unknown purpose before pulling from the source", async () => {
+		let pulled = false;
+		async function* watched(): AsyncIterable<Uint8Array> {
+			pulled = true;
+			yield new Uint8Array(1);
+		}
+		await expect(
+			collect(decryptStream(watched(), DEK(), "other" as StreamPurpose)),
+		).rejects.toThrow('stream: unknown purpose "other"');
+		// deriveStreamKey re-checks the purpose, so asserting only the throw
+		// passes with the early check deleted; the difference is that the early
+		// one refuses without consuming a stream it can never decrypt.
+		expect(pulled).toBe(false);
+	});
+
+	it("refuses a plaintext chunk that is not bytes", async () => {
+		async function* bad(): AsyncIterable<Uint8Array> {
+			yield "hello" as unknown as Uint8Array;
+		}
+		await expect(
+			collect(encryptStream(bad(), DEK(), "content", SEG)),
+		).rejects.toThrow("stream: plaintext chunks must be byte views");
 	});
 
 	it("refuses a source chunk that is not bytes", async () => {

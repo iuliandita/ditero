@@ -1,5 +1,6 @@
-// AES-GCM-HKDF-STREAMING, the Tink streaming-AEAD shape, adopted rather than
-// invented (design 5).
+// AES-GCM-HKDF-STREAMING (design 5). Key derivation and nonce layout follow
+// Tink's streaming AEAD; the FRAMING DELIBERATELY DIVERGES from it, and a
+// second encoder written against a real Tink library will not interoperate.
 //
 //   header  = magic(5) || version(1) || segmentSize(4 BE) || salt(16) || noncePrefix(7)
 //   fileKey = HKDF-SHA256(DEK, salt, "ditero:stream:<purpose>:v1")
@@ -16,6 +17,33 @@
 // segment costing one extra tag. That is what lets the decoder treat any full
 // sealed segment as non-final on sight -- and what lets it report a stream cut
 // on a segment boundary as a truncation rather than as a tag failure.
+//
+// Tink does the opposite: its spec requires every non-last segment to be
+// maximal and every non-first segment to hold at least one byte, so an empty
+// trailing segment is illegal there except for empty plaintext. Its writers
+// carry one full segment of lookahead to achieve that -- Go breaks out of the
+// flush loop at `pos == len(p)`, Java loops on a strict `>`, and the C++ source
+// says outright that it holds the buffer back "as we don't know yet whether it
+// will be the last segment or not". This format drops that lookahead on
+// purpose: withholding a segment makes a boundary truncation detectable only
+// as a tag failure, indistinguishable from tampering, whereas a mandatory
+// short final segment makes it a structural error with no key material
+// involved. The cost is 16 bytes on an exact multiple.
+//
+// Two further divergences, both consequences of dropping the lookahead:
+//   - `segmentSize` in the header is the PLAINTEXT segment size; Tink declares
+//     the ciphertext one. Here `sealedSize = segmentSize + TAG_BYTES`.
+//   - There is no first-segment offset. Tink shortens segment 0 by the header
+//     length so header+segment0 aligns to a ciphertext segment boundary; this
+//     format does not, so every segment is the same size.
+//
+// CHUNK OWNERSHIP: ChunkQueue COPIES on push, so a producer may reuse one
+// buffer between yields. That is the point -- a ReadableStreamBYOBReader or a
+// manual read into a pooled buffer is the constant-memory way to feed this, and
+// retaining a caller chunk by reference across an await would seal whatever the
+// producer overwrote it with. The GCM tag would then be valid over the
+// corruption, the ciphertext hash recorded at finalize would match, and nothing
+// downstream could ever detect it.
 //
 // PARTIAL PLAINTEXT: decryptStream yields each segment as it authenticates, so
 // segments 1..n-1 reach the caller before the final segment proves the stream
@@ -195,17 +223,28 @@ class ChunkQueue {
 		return this.#bytes;
 	}
 
+	// Copies rather than retaining the caller's chunk, so a producer reading
+	// into one recycled buffer -- the constant-memory idiom this module exists
+	// to serve -- cannot overwrite bytes that are still queued. One memcpy per
+	// chunk, linear in the payload; this does NOT reintroduce the O(n^2)
+	// whole-buffer reconcatenation it replaced. `set` honours byteOffset, so a
+	// view over a larger buffer copies only its own bytes.
 	push(chunk: Uint8Array): void {
+		// take() already tolerates a zero-length head, so this is not a
+		// correctness guard and no test pins it. It bounds a source that yields
+		// empty chunks indefinitely to a hang instead of unbounded #chunks growth.
 		if (chunk.length === 0) return;
-		this.#chunks.push(chunk);
+		const owned = new Uint8Array(chunk.length);
+		owned.set(chunk);
+		this.#chunks.push(owned);
 		this.#bytes += chunk.length;
 	}
 
 	take(n: number): Uint8Array {
 		if (n > this.#bytes) throw new Error("stream: take beyond buffered bytes");
 		const first = this.#chunks[0];
-		// Fast path: hand the caller's own chunk through untouched. It may be a
-		// view over a much larger buffer, which every consumer here must honour.
+		// Fast path: the queue owns every chunk it holds, so an exactly-sized
+		// one can be handed on without a second copy.
 		if (first && first.length === n) {
 			this.#chunks.shift();
 			this.#bytes -= n;
@@ -244,6 +283,14 @@ function buildHeader(
 	salt: Uint8Array,
 	prefix: Uint8Array,
 ): Uint8Array {
+	// STREAM_FORMATS is a READ-side registry. The encoder only ever emits v1
+	// framing, so bumping STREAM_VERSION and adding a v2 reader -- the exact
+	// procedure that registry prescribes -- would stamp v2 on v1 bytes while
+	// STREAM_FORMATS[STREAM_VERSION] stayed green. This comparison narrows to
+	// literal types, so raising the constant fails typecheck here first.
+	if (STREAM_VERSION !== 1) {
+		throw new Error("stream: encoder writes v1 framing only");
+	}
 	const header = new Uint8Array(HEADER_BYTES);
 	header.set(MAGIC, 0);
 	header[VERSION_OFFSET] = STREAM_VERSION;
@@ -323,8 +370,11 @@ async function* decryptV1(
 	purpose: StreamPurpose,
 ): AsyncIterable<Uint8Array> {
 	const declared = view(header).getUint32(SEGMENT_SIZE_OFFSET, false);
-	// Checked before anything sized by it is allocated or buffered: an
-	// unbounded declared size is an allocation DoS from a hostile header alone.
+	// Checked before anything is sized by it. This is not an allocation DoS from
+	// the header alone -- fill() returns false without buffering and take()
+	// allocates only after the attacker actually delivered the bytes -- but it
+	// bounds how much of a hostile body is ever buffered, and gives the right
+	// error class instead of a confusing truncation.
 	if (declared < MIN_SEGMENT_BYTES || declared > MAX_SEGMENT_BYTES) {
 		throw new StreamError(
 			"segment-size-out-of-range",
@@ -384,6 +434,14 @@ async function* decryptV1(
 // would go red. Per-version record validation lives inside the reader, because
 // a later version may use a different header width, segment range or nonce
 // layout; only the magic and the version byte are fixed across versions.
+//
+// WHEN ADDING A HEADER FIELD, read this first: dropping `additionalData` from
+// both seal and open breaks no decoder-path test today, because every v1 header
+// field already feeds key derivation (salt), nonce derivation (prefix),
+// framing (segmentSize) or a structural check (magic, version). The AAD only
+// LOOKS redundant. A field that feeds none of those -- a content-type hint, a
+// plaintext length, a compression flag -- would be completely unauthenticated
+// with nothing going red, so it needs its own tamper test the day it lands.
 export const STREAM_FORMATS: Record<number, StreamFormat> = {
 	1: { headerBytes: HEADER_BYTES, decrypt: decryptV1 },
 };
