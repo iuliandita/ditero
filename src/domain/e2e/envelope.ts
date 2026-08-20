@@ -1,3 +1,4 @@
+import { byteNarrower } from "./bytes.ts";
 // Every wrap in the system routes through here, so the wire shape is a one-way
 // door: `version` selects the FORMAT, not a cost parameter, which is why
 // encryptWrapped takes no version argument the way deriveKek does. Old wraps
@@ -59,12 +60,31 @@ const SEPARATOR = "|";
 // Shared with every other AAD builder in this directory (hpke.ts, and the
 // invite fragment later). Hand-rolling the checks per module is how hpke.ts
 // ended up binding a "NaN" key version that no rotation could reproduce.
+// Ids reaching here are server-issued, but design 4.5 puts one into a URL
+// fragment, and an AAD is rebuilt on every open of every stored record.
+export const MAX_AAD_ID_LENGTH = 256;
+
+// Lone surrogates are the one input that breaks joinAad's injectivity:
+// TextEncoder folds each to U+FFFD, so "\uD800", "\uDC00" and a literal
+// "\uFFFD" all serialize to the same AAD context. Pairs are left alone -- an
+// astral character is well-formed and encodes injectively.
+const UNPAIRED_SURROGATE =
+	/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
 export function aadId(field: string, value: string): string {
 	// The separator is the whole binding: an identifier carrying one lets two
 	// distinct contexts serialize identically, so a ciphertext bound to one
 	// would authenticate under the other.
 	if (value.includes(SEPARATOR)) {
 		throw new Error(`aad: ${field} must not contain "${SEPARATOR}"`);
+	}
+	if (value.length > MAX_AAD_ID_LENGTH) {
+		throw new Error(
+			`aad: ${field} must be at most ${MAX_AAD_ID_LENGTH} characters`,
+		);
+	}
+	if (UNPAIRED_SURROGATE.test(value)) {
+		throw new Error(`aad: ${field} must not contain an unpaired surrogate`);
 	}
 	// Injectivity survives an empty id, but an unresolved id is always a caller
 	// bug and the wrap it mints only fails later, against the real id.
@@ -127,19 +147,7 @@ export const aad = {
 	},
 };
 
-// WebCrypto rejects a SharedArrayBuffer-backed view, and the DOM types say so;
-// this narrows to that contract without copying, so byteOffset is preserved.
-// Passing `.buffer` instead of the view would seal the whole backing store.
-// Deliberately `instanceof ArrayBuffer` and NOT `!(x instanceof
-// SharedArrayBuffer)`: a cross-realm ArrayBuffer fails this check, which costs
-// a caller one copy, whereas the inverted form passes anything unrecognised
-// straight through. Same check, and only this direction fails safe.
-function bytes(view: Uint8Array): Uint8Array<ArrayBuffer> {
-	if (!(view.buffer instanceof ArrayBuffer)) {
-		throw new Error("envelope: byte views must not be shared-memory backed");
-	}
-	return view as Uint8Array<ArrayBuffer>;
-}
+const bytes = byteNarrower("envelope");
 
 // importKey also accepts 16 and 24 bytes, silently downgrading this module from
 // AES-256 to AES-128 with every test still green.
@@ -168,6 +176,15 @@ export async function encryptWrapped(
 	additionalData: Uint8Array,
 ): Promise<Wrapped> {
 	requireAad(additionalData);
+	// ENVELOPE_OPENERS is a READ-side registry. The encoder only ever emits v1
+	// records, so bumping ENVELOPE_VERSION and adding openV2 -- the exact
+	// procedure that registry prescribes -- would stamp v2 onto v1-shaped
+	// wraps while ENVELOPE_OPENERS[ENVELOPE_VERSION] stayed green. This
+	// comparison narrows to literal types, so raising the constant fails
+	// typecheck here first.
+	if (ENVELOPE_VERSION !== 1) {
+		throw new Error("envelope: encoder writes v1 wraps only");
+	}
 	const aesKey = await importAesKey(key);
 	const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
 	const ciphertext = await crypto.subtle.encrypt(

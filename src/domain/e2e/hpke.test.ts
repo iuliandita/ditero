@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { KEY_BYTES } from "./envelope.ts";
 import {
 	exportPublicKey,
 	hpkeSuiteForTests,
@@ -154,6 +155,23 @@ describe("sealWdk / openWdk", () => {
 
 	// .buffer is the WHOLE backing store, so any view over a larger buffer used
 	// to seal allocator residue instead of the WDK -- and still round-trip.
+	// B3. HPKE seals any payload, so a 16-byte WDK sealed and round-tripped
+	// cleanly and only failed later at commitWdk -- producing a wrap no
+	// recipient can ever commit to, from a call site that looked fine.
+	it("refuses to seal a WDK that is not the full key length", async () => {
+		const pair = await suite.kem.generateKeyPair();
+		for (const bad of [new Uint8Array(16), new Uint8Array(0)]) {
+			await expect(
+				sealWdk(bad, pair.publicKey, {
+					workspaceId: "ws_1",
+					keyVersion: 1,
+					recipientUserId: "u_1",
+					recipientFingerprint: "fp_1",
+				}),
+			).rejects.toThrow(`hpke: WDK must be ${KEY_BYTES} bytes`);
+		}
+	});
+
 	it("seals a subarray view, not its whole backing buffer", async () => {
 		const backing = crypto.getRandomValues(new Uint8Array(1024));
 		const wdk = backing.subarray(32, 64);

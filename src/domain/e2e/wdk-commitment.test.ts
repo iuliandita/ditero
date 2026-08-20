@@ -49,12 +49,27 @@ describe("commitWdk", () => {
 	// than a caller convention -- and it is also what keeps the hashed layout
 	// injective, since the WDK is the only variable-length-looking tail.
 	it("refuses a WDK that is not the full key length", async () => {
-		await expect(commitWdk(new Uint8Array(16), "ws_1", 1)).rejects.toThrow(
-			`wdk-commitment: WDK must be ${KEY_BYTES} bytes`,
-		);
-		await expect(commitWdk(new Uint8Array(33), "ws_1", 1)).rejects.toThrow(
-			`wdk-commitment: WDK must be ${KEY_BYTES} bytes`,
-		);
+		for (const bad of [new Uint8Array(16), new Uint8Array(33)]) {
+			const committing = commitWdk(bad, "ws_1", 1);
+			await expect(committing).rejects.toThrow(
+				`wdk-commitment: WDK must be ${KEY_BYTES} bytes`,
+			);
+			// B4. A bare Error slips past the instanceof + reason shape every
+			// caller of this module is told to write, and B3 makes it reachable.
+			await expect(committing).rejects.toBeInstanceOf(WdkCommitmentError);
+			await expect(committing).rejects.toMatchObject({ reason: "invalid-key" });
+		}
+	});
+
+	// The precondition belongs to the committer, not the dispatcher:
+	// WDK_COMMITTERS is exported, so the injectivity argument has to hold for a
+	// direct caller too.
+	it("enforces the key length inside the committer itself", async () => {
+		const committer = WDK_COMMITTERS[1];
+		expect(committer).toBeDefined();
+		await expect(
+			committer?.commit(new Uint8Array(5), "ws_1", 1),
+		).rejects.toMatchObject({ reason: "invalid-key" });
 	});
 
 	// Routed through the shared AAD primitives rather than interpolated: a
@@ -186,19 +201,45 @@ describe("verifyWdkCommitment", () => {
 		);
 	});
 
-	it("rejects a commitment that carries no format version", async () => {
+	// Every one of these is reachable from a stored column and every one of
+	// them reported `mismatch` before the digest half was validated -- telling
+	// the user a granter had substituted their workspace key, the highest-alarm
+	// state the system has, when the actual fault was a truncated restore or a
+	// migration that upper-cased a column. `mismatch` must mean one thing.
+	it("classifies a corrupt commitment as malformed, never as a fork", async () => {
 		const k = wdk();
 		const commitment = await commitWdk(k, "ws_1", 1);
+		const digest = commitment.slice(2);
 		for (const broken of [
-			commitment.slice(2),
 			"",
 			".",
-			`v1.${commitment.slice(2)}`,
-			`1.`,
+			"1.",
+			`.${digest}`,
+			digest,
+			`v1.${digest}`,
+			`1.2.${digest}`,
+			`1.${digest.toUpperCase()}`,
+			`01.${digest}`,
+			`1.${digest.slice(0, -1)}`,
+			`1.${digest}0`,
+			`1.0${digest}`,
+			"1.zzzz",
 		]) {
+			const verifying = verifyWdkCommitment(k, "ws_1", 1, broken);
+			await expect(verifying).rejects.toBeInstanceOf(WdkCommitmentError);
+			await expect(verifying).rejects.toMatchObject({ reason: "malformed" });
+		}
+	});
+
+	// C1. The version half is still parsed first, so a format this client has
+	// never heard of stays distinguishable from a corrupt one.
+	it("still reports an unknown format version as unsupported", async () => {
+		const k = wdk();
+		const digest = (await commitWdk(k, "ws_1", 1)).slice(2);
+		for (const future of [`2.${digest}`, `99999999999999999999.${digest}`]) {
 			await expect(
-				verifyWdkCommitment(k, "ws_1", 1, broken),
-			).rejects.toMatchObject({ reason: "malformed" });
+				verifyWdkCommitment(k, "ws_1", 1, future),
+			).rejects.toMatchObject({ reason: "unsupported-version" });
 		}
 	});
 });

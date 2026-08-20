@@ -17,6 +17,7 @@ const VERSION_SEPARATOR = ".";
 export type WdkCommitmentFailure =
 	| "unsupported-version"
 	| "malformed"
+	| "invalid-key"
 	| "mismatch";
 
 // "the stored commitment is from a newer client" and "this granter handed me a
@@ -32,11 +33,18 @@ export class WdkCommitmentError extends Error {
 	}
 }
 
-type WdkCommitter = (
-	wdk: Uint8Array,
-	workspaceId: string,
-	keyVersion: number,
-) => Promise<string>;
+export type WdkCommitter = {
+	// The digest half's exact printed shape. Verify must decide "this column is
+	// corrupt" before "this granter substituted the key", and the only way to
+	// do that without assuming v1's 64 lowercase hex characters forever is for
+	// each format to state its own.
+	digest: RegExp;
+	commit: (
+		wdk: Uint8Array,
+		workspaceId: string,
+		keyVersion: number,
+	) => Promise<string>;
+};
 
 function hex(digest: ArrayBuffer): string {
 	return Array.from(new Uint8Array(digest), (b) =>
@@ -49,6 +57,15 @@ async function commitV1(
 	workspaceId: string,
 	keyVersion: number,
 ): Promise<string> {
+	// Inside the committer, not the dispatcher: WDK_COMMITTERS is exported, so
+	// a direct caller must meet the same precondition. Both arguments for it
+	// are below.
+	if (wdk.length !== KEY_BYTES) {
+		throw new WdkCommitmentError(
+			"invalid-key",
+			`wdk-commitment: WDK must be ${KEY_BYTES} bytes`,
+		);
+	}
 	// A bare hash, not an HMAC or an HKDF: the value is published to the server,
 	// so the only thing hiding the WDK is the WDK's own 256 bits of entropy, and
 	// keying the hash with the very value it commits to would add nothing. The
@@ -75,7 +92,7 @@ async function commitV1(
 
 // Every version ever written needs an entry here forever.
 export const WDK_COMMITTERS: Record<number, WdkCommitter> = {
-	1: commitV1,
+	1: { digest: /^[0-9a-f]{64}$/, commit: commitV1 },
 };
 
 export async function commitWdk(
@@ -84,33 +101,56 @@ export async function commitWdk(
 	keyVersion: number,
 	version: number = CURRENT_WDK_COMMITMENT_VERSION,
 ): Promise<string> {
-	if (wdk.length !== KEY_BYTES) {
-		throw new Error(`wdk-commitment: WDK must be ${KEY_BYTES} bytes`);
-	}
-	const commit = WDK_COMMITTERS[version];
-	if (!commit) {
+	const committer = WDK_COMMITTERS[version];
+	if (!committer) {
 		throw new WdkCommitmentError(
 			"unsupported-version",
 			`wdk-commitment: unsupported commitment version ${version}`,
 		);
 	}
-	return `${version}${VERSION_SEPARATOR}${await commit(wdk, workspaceId, keyVersion)}`;
+	const digest = await committer.commit(wdk, workspaceId, keyVersion);
+	return `${version}${VERSION_SEPARATOR}${digest}`;
 }
 
-function parseVersion(commitment: string): number {
+// Total over every string a column can hold. Anything this does not fully
+// recognise is `malformed`, so `mismatch` is left meaning one thing only: a
+// well-formed commitment of a known format that pins a different key.
+function parseCommitment(commitment: string): number {
 	const separator = commitment.indexOf(VERSION_SEPARATOR);
-	const version = commitment.slice(0, separator);
-	if (
-		separator <= 0 ||
-		separator === commitment.length - 1 ||
-		!/^\d+$/.test(version)
-	) {
+	if (separator <= 0) {
 		throw new WdkCommitmentError(
 			"malformed",
 			"wdk-commitment: malformed commitment",
 		);
 	}
-	return Number(version);
+	// No leading zeros: "01." parses to 1 and then fails the whole-string
+	// compare, which reported a canonicalisation difference as a substituted
+	// key.
+	if (!/^[1-9]\d*$/.test(commitment.slice(0, separator))) {
+		throw new WdkCommitmentError(
+			"malformed",
+			"wdk-commitment: malformed commitment",
+		);
+	}
+	const version = Number(commitment.slice(0, separator));
+	// Before the digest check, because the digest's shape is a property of the
+	// format and an unknown format has no shape to check against.
+	const committer = WDK_COMMITTERS[version];
+	if (!committer) {
+		throw new WdkCommitmentError(
+			"unsupported-version",
+			`wdk-commitment: unsupported commitment version ${version}`,
+		);
+	}
+	// Everything past the first separator, so a second one ("1.2.3") is a
+	// digest that fails its own pattern rather than a version that parses.
+	if (!committer.digest.test(commitment.slice(separator + 1))) {
+		throw new WdkCommitmentError(
+			"malformed",
+			"wdk-commitment: malformed commitment",
+		);
+	}
+	return version;
 }
 
 export async function verifyWdkCommitment(
@@ -123,7 +163,7 @@ export async function verifyWdkCommitment(
 	// properties of the row; reported as a mismatch instead, a client holding
 	// the correct key is told the workspace forked and refuses a grant that a
 	// format migration -- not a new key -- would have fixed.
-	const version = parseVersion(expected);
+	const version = parseCommitment(expected);
 	// No constant-time compare: both operands are public. The commitment is
 	// server-readable by design and the WDK is never compared, only hashed.
 	if ((await commitWdk(wdk, workspaceId, keyVersion, version)) !== expected) {

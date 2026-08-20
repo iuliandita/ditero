@@ -4,6 +4,7 @@ import {
 	deriveKek,
 	generateSalt,
 	KDF_PARAMS,
+	KdfError,
 	type KekPurpose,
 	MAX_SECRET_LENGTH,
 } from "./kdf.ts";
@@ -12,13 +13,31 @@ describe("KDF_PARAMS", () => {
 	// Direction, which the known-answer vector cannot express: it fails
 	// identically for a weakening and for a strengthening.
 	it("keeps the v1 cost at or above the RFC 9106 second recommended option", () => {
-		expect(KDF_PARAMS[1].memorySizeKiB).toBeGreaterThanOrEqual(65536);
-		expect(KDF_PARAMS[1].iterations).toBeGreaterThanOrEqual(3);
-		expect(KDF_PARAMS[1].hashLength).toBe(32);
+		const v1 = KDF_PARAMS[1];
+		expect(v1).toBeDefined();
+		expect(v1?.memorySizeKiB).toBeGreaterThanOrEqual(65536);
+		expect(v1?.iterations).toBeGreaterThanOrEqual(3);
+		expect(v1?.hashLength).toBe(32);
 	});
 
 	it("derives by default at the current version", () => {
 		expect(CURRENT_KDF_VERSION).toBe(1);
+		expect(KDF_PARAMS[CURRENT_KDF_VERSION]).toBeDefined();
+	});
+
+	// B1. `user_key.format_version` is a smallint the unlock path reads back
+	// and passes straight here. Unguarded this was a bare
+	// "TypeError: Cannot read properties of undefined (reading 'memorySizeKiB')"
+	// -- no reason, nothing a UI can classify, on the one path a user hits when
+	// their key predates the client.
+	it("rejects a version with no parameters instead of throwing a TypeError", async () => {
+		expect(KDF_PARAMS[2]).toBeUndefined();
+		const deriving = deriveKek("s", generateSalt(), "passphrase", 2);
+		await expect(deriving).rejects.toBeInstanceOf(KdfError);
+		await expect(deriving).rejects.toMatchObject({
+			reason: "unsupported-version",
+		});
+		await expect(deriving).rejects.toThrow("kdf: unsupported KDF version 2");
 	});
 });
 
@@ -92,9 +111,9 @@ describe("deriveKek", { timeout: 30_000 }, () => {
 	});
 
 	it("rejects an empty secret", async () => {
-		await expect(deriveKek("", generateSalt(), "passphrase")).rejects.toThrow(
-			"kdf: E2E secret must not be empty",
-		);
+		const deriving = deriveKek("", generateSalt(), "passphrase");
+		await expect(deriving).rejects.toThrow("kdf: E2E secret must not be empty");
+		await expect(deriving).rejects.toMatchObject({ reason: "invalid-input" });
 	});
 
 	it("rejects a secret past the length cap", async () => {

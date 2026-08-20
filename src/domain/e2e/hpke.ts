@@ -1,7 +1,7 @@
 import { Chacha20Poly1305 } from "@hpke/chacha20poly1305";
 import { CipherSuite, HkdfSha256 } from "@hpke/core";
 import { DhkemX25519HkdfSha256 } from "@hpke/dhkem-x25519";
-import { aadId, aadKeyVersion, joinAad } from "./envelope.ts";
+import { aadId, aadKeyVersion, joinAad, KEY_BYTES } from "./envelope.ts";
 
 export type WdkInfo = {
 	workspaceId: string;
@@ -91,6 +91,12 @@ export async function sealWdk(
 	recipientPublicKey: CryptoKey,
 	info: WdkInfo,
 ): Promise<SealedWdk> {
+	// HPKE seals any payload, so a short WDK round-trips perfectly and only
+	// fails later, at commitWdk, which requires the full length -- producing a
+	// wrap no recipient can ever commit to. Same constant the commitment uses.
+	if (wdk.length !== KEY_BYTES) {
+		throw new Error(`hpke: WDK must be ${KEY_BYTES} bytes`);
+	}
 	const sender = await suite.createSenderContext({
 		recipientPublicKey,
 		info: wdkInfo(info),

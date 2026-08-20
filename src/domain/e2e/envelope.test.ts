@@ -7,6 +7,7 @@ import {
 	EnvelopeOpenError,
 	encryptWrapped,
 	KEY_BYTES,
+	MAX_AAD_ID_LENGTH,
 	type MetadataField,
 	NONCE_BYTES,
 	TAG_BYTES,
@@ -17,7 +18,46 @@ const key = () => crypto.getRandomValues(new Uint8Array(KEY_BYTES));
 const bytes = () => crypto.getRandomValues(new Uint8Array(48));
 const text = (b: Uint8Array) => new TextDecoder().decode(b);
 
+describe("ENVELOPE_OPENERS", () => {
+	// B2. The registry is read-side only and encryptWrapped stamps the constant
+	// unconditionally, so adding openV2 and bumping ENVELOPE_VERSION -- the
+	// procedure that registry prescribes -- would stamp v2 onto v1-shaped
+	// records with nothing going red. The literal-narrowed guard in
+	// encryptWrapped fails typecheck first; this fails the suite second.
+	it("can open every version the encoder is allowed to write", () => {
+		expect(ENVELOPE_OPENERS[ENVELOPE_VERSION]).toBeDefined();
+	});
+});
+
 describe("aad", () => {
+	// C4. The only unbounded string input in the layer, rebuilt on every open of
+	// every stored record, and design 4.5 puts one of these into a URL fragment.
+	it("rejects an id past the length cap", () => {
+		expect(() =>
+			aad.privateKeyPassphrase("u".repeat(MAX_AAD_ID_LENGTH + 1)),
+		).toThrow(`aad: userId must be at most ${MAX_AAD_ID_LENGTH} characters`);
+		expect(() =>
+			aad.privateKeyPassphrase("u".repeat(MAX_AAD_ID_LENGTH)),
+		).not.toThrow();
+	});
+
+	// C5. TextEncoder folds every unpaired surrogate to U+FFFD, so these three
+	// ids serialized to ONE AAD context and joinAad's injectivity claim was
+	// false for them. A paired surrogate is well-formed and stays accepted.
+	it("rejects an unpaired surrogate, which would collapse three ids into one", () => {
+		for (const bad of ["\uD800", "\uDC00", "a\uD800b", "\uDBFFx"]) {
+			expect(() => aad.privateKeyPassphrase(bad)).toThrow(
+				"aad: userId must not contain an unpaired surrogate",
+			);
+		}
+		expect(text(aad.privateKeyPassphrase("\uD800\uDC00"))).toBe(
+			"ditero:sk-pass:v1|\uD800\uDC00",
+		);
+		expect(text(aad.privateKeyPassphrase("\uFFFD"))).toBe(
+			"ditero:sk-pass:v1|\uFFFD",
+		);
+	});
+
 	it("builds the private-key passphrase binding", () => {
 		expect(text(aad.privateKeyPassphrase("u_1"))).toBe("ditero:sk-pass:v1|u_1");
 	});

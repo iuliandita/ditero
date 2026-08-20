@@ -1,3 +1,4 @@
+import { byteNarrower } from "./bytes.ts";
 // AES-GCM-HKDF-STREAMING (design 5). Key derivation and nonce layout follow
 // Tink's streaming AEAD; the FRAMING DELIBERATELY DIVERGES from it, and a
 // second encoder written against a real Tink library will not interoperate.
@@ -63,6 +64,12 @@ export const MAGIC = new Uint8Array([0x44, 0x54, 0x52, 0x4f, 0x31]); // "DTRO1"
 export const STREAM_VERSION = 1;
 
 export const DEK_BYTES = 32;
+// The per-file key HKDF derives from the DEK. Distinct concept from DEK_BYTES
+// even though both are 32 today, so neither literal is spelled twice.
+export const FILE_KEY_BYTES = 32;
+// SALT_BYTES, NONCE_BYTES and TAG_BYTES are each declared by this module AND
+// by envelope.ts. The values coincide today, which is exactly what makes an
+// import from the wrong module harmless now and a silent format break later.
 export const SALT_BYTES = 16;
 export const NONCE_PREFIX_BYTES = 7;
 export const NONCE_BYTES = 12;
@@ -111,20 +118,7 @@ export class StreamError extends Error {
 	}
 }
 
-// WebCrypto rejects a SharedArrayBuffer-backed view, and the DOM types say so;
-// this narrows to that contract without copying, so byteOffset is preserved.
-// Passing `.buffer` instead of the view would seal the whole backing store --
-// the hazard this module is most exposed to, since every segment is a view over
-// a larger buffer by construction. Deliberately `instanceof ArrayBuffer` and
-// NOT `!(x instanceof SharedArrayBuffer)`: a cross-realm ArrayBuffer fails this
-// check, costing one copy, whereas the inverted form passes anything
-// unrecognised straight through.
-function bytes(view: Uint8Array): Uint8Array<ArrayBuffer> {
-	if (!(view.buffer instanceof ArrayBuffer)) {
-		throw new Error("stream: byte views must not be shared-memory backed");
-	}
-	return view as Uint8Array<ArrayBuffer>;
-}
+const bytes = byteNarrower("stream");
 
 function view(v: Uint8Array): DataView {
 	return new DataView(v.buffer, v.byteOffset, v.byteLength);
@@ -166,7 +160,7 @@ export async function deriveStreamKey(
 			info: new TextEncoder().encode(`ditero:stream:${purpose}:v1`),
 		},
 		base,
-		256,
+		FILE_KEY_BYTES * 8,
 	);
 	return new Uint8Array(bits);
 }
@@ -174,7 +168,9 @@ export async function deriveStreamKey(
 // importKey also accepts 16 and 24 bytes, silently downgrading this module from
 // AES-256 to AES-128 with every test still green.
 function importAesKey(raw: Uint8Array): Promise<CryptoKey> {
-	if (raw.length !== 32) throw new Error("stream: file key must be 32 bytes");
+	if (raw.length !== FILE_KEY_BYTES) {
+		throw new Error(`stream: file key must be ${FILE_KEY_BYTES} bytes`);
+	}
 	return crypto.subtle.importKey("raw", bytes(raw), "AES-GCM", false, [
 		"encrypt",
 		"decrypt",

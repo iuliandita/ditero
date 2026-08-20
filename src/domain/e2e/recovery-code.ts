@@ -46,6 +46,18 @@ export const CURRENT_RECOVERY_FORMAT = V1;
 // dozen symbols plus separators.
 export const MAX_RECOVERY_INPUT_LENGTH = 256;
 
+declare const canonicalBrand: unique symbol;
+
+/**
+ * The separator-free form, and the ONLY string a recovery KEK may be derived
+ * from. Branded because `deriveKek` accepts any non-empty string: the 41-char
+ * display form and the 35-char canonical form are both valid secrets and
+ * derive different KEKs, so enrolling under one and unlocking with the other
+ * is permanent key loss with no admin escrow behind it. Obtainable only from
+ * `generateRecoveryCode().canonical` or `normaliseRecoveryCode`.
+ */
+export type RecoveryCode = string & { readonly [canonicalBrand]: true };
+
 export type RecoveryCodeFailure = "malformed" | "length" | "checksum";
 
 // The UI must tell "that is not a recovery code" from "you mistyped a
@@ -90,15 +102,21 @@ async function checksumOf(
 	for (let i = 0; i < format.checksumLength; i++) {
 		const offset = i * BITS_PER_SYMBOL;
 		const byte = offset >> 3;
-		const window =
-			((digest[byte] as number) << 8) | ((digest[byte + 1] as number) ?? 0);
+		const hi = digest[byte];
+		const lo = digest[byte + 1];
+		// `?? 0` here would let a future checksumLength read past the digest and
+		// evaluate as a real symbol rather than failing.
+		if (hi === undefined || lo === undefined) {
+			throw new Error("recovery-code: checksum reads past the digest");
+		}
+		const window = (hi << 8) | lo;
 		const index = (window >> (11 - (offset & 7))) & 31;
 		out += RECOVERY_ALPHABET[index] as string;
 	}
 	return out;
 }
 
-export function formatRecoveryCode(canonical: string): string {
+export function formatRecoveryCode(canonical: RecoveryCode): string {
 	const format = RECOVERY_FORMATS[canonical.length];
 	if (!format) throw new RecoveryCodeError("length", "length");
 	const groups: string[] = [];
@@ -108,7 +126,14 @@ export function formatRecoveryCode(canonical: string): string {
 	return groups.join("-");
 }
 
-export async function generateRecoveryCode(): Promise<string> {
+export type GeneratedRecoveryCode = {
+	/** Grouped for printing. NEVER the input to a key derivation. */
+	display: string;
+	/** The derivation input. */
+	canonical: RecoveryCode;
+};
+
+export async function generateRecoveryCode(): Promise<GeneratedRecoveryCode> {
 	const format = CURRENT_RECOVERY_FORMAT;
 	// One byte per symbol and the low 5 bits of each: uniform over the alphabet
 	// with no modulo bias, and far under getRandomValues' 65536-byte cap.
@@ -117,7 +142,13 @@ export async function generateRecoveryCode(): Promise<string> {
 	for (const b of raw) {
 		payload += RECOVERY_ALPHABET[b & 31] as string;
 	}
-	return formatRecoveryCode(`${payload}${await checksumOf(payload, format)}`);
+	const canonical =
+		`${payload}${await checksumOf(payload, format)}` as RecoveryCode;
+	// Both forms, named, rather than one string the caller has to know the
+	// meaning of: handing the display form to a KEK derivation is now a type
+	// error at `deriveRecoveryKek` and a visibly wrong field name everywhere
+	// else.
+	return { display: formatRecoveryCode(canonical), canonical };
 }
 
 /**
@@ -125,7 +156,9 @@ export async function generateRecoveryCode(): Promise<string> {
  * form -- the exact string to hand to `deriveKek`, so there is only ever one
  * form a KEK can be derived from.
  */
-export async function normaliseRecoveryCode(input: string): Promise<string> {
+export async function normaliseRecoveryCode(
+	input: string,
+): Promise<RecoveryCode> {
 	// Distinguishable from the format dispatch below on purpose: both are
 	// "length", and sharing the detail string made a test asserting the cap
 	// pass with the cap deleted, since an over-long input reaches the registry
@@ -135,10 +168,19 @@ export async function normaliseRecoveryCode(input: string): Promise<string> {
 		throw new RecoveryCodeError("length", "too long");
 	}
 	let canonical = "";
-	for (const char of input.toUpperCase()) {
+	// Each code point is upper-cased on its own rather than the whole string at
+	// once: `toUpperCase` EXPANDS some of them (U+FB01 "fi" -> "FI", "ss" ->
+	// "SS"), so a ligature pasted from a styled document would otherwise become
+	// two perfectly valid symbols and reach the checksum stage as a length or
+	// checksum failure instead of the character failure it is.
+	for (const raw of input) {
 		// Crockford ignores inserted hyphens, and a user reading off paper types
 		// spaces and newlines just as readily.
-		if (char === "-" || /\s/.test(char)) continue;
+		if (raw === "-" || /\s/.test(raw)) continue;
+		const char = raw.toUpperCase();
+		if (char.length !== 1) {
+			throw new RecoveryCodeError("malformed", "unrecognised character");
+		}
 		const mapped = LOOK_ALIKES[char] ?? char;
 		// Ahead of the length check on purpose: a separator this pass does not
 		// strip -- an en dash pasted from a styled document -- would otherwise be
@@ -158,8 +200,8 @@ export async function normaliseRecoveryCode(input: string): Promise<string> {
 		throw new RecoveryCodeError("checksum", "checksum");
 	}
 	// NFC, which kdf.ts applies to every secret, is the identity on this string:
-	// the alphabet is ASCII and everything else was rejected above. A code
-	// pasted in fullwidth or with a look-alike from another script fails loudly
-	// at entry, which is what this function is for.
-	return canonical;
+	// the alphabet is ASCII and everything else was rejected above. Fullwidth
+	// forms, ligatures and look-alikes from other scripts all fail loudly at
+	// entry as `malformed`, which is what this function is for.
+	return canonical as RecoveryCode;
 }
