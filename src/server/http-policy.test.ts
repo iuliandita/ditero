@@ -48,4 +48,23 @@ describe("securityHeaders", () => {
 	test("does not force production policy in development", () => {
 		expect(securityHeaders({ NODE_ENV: "development" })).toEqual({});
 	});
+
+	test("allows WebAssembly compilation without allowing eval", () => {
+		const csp = securityHeaders({
+			NODE_ENV: "production",
+			PUBLIC_ZERO_URL: "https://sync.example.test",
+		})["content-security-policy"];
+		expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval'");
+		// The narrow directive only. 'unsafe-eval' would re-open the script
+		// injection the rest of this policy exists to close.
+		expect(csp).not.toMatch(/(?:^|[; ])'unsafe-eval'/);
+	});
+
+	test("allows blob: images for decrypted previews", () => {
+		const csp = securityHeaders({
+			NODE_ENV: "production",
+			PUBLIC_ZERO_URL: "https://sync.example.test",
+		})["content-security-policy"];
+		expect(csp).toContain("img-src 'self' data: blob:");
+	});
 });

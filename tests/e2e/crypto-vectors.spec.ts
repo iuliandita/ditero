@@ -15,6 +15,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
+import { securityHeaders } from "../../src/server/http-policy.ts";
 
 type Rfc9180Vector = {
 	kem_id: number;
@@ -515,4 +516,61 @@ test("recovery-code: the canonical form derives the KEK pinned under Bun", async
 	expect(result.badChecksum).toBe("checksum");
 	expect(result.wrongLength).toBe("length");
 	expect(result.badCharacter).toBe("malformed");
+});
+
+// The production header set is never applied to any other test: securityHeaders()
+// returns {} unless NODE_ENV === "production" (src/server/http-policy.ts:33) and
+// every test process runs as "test". So the policy that actually ships has never
+// met a browser. This serves it to one.
+//
+// The oracle is the derived key, not the absence of a console error: if
+// 'wasm-unsafe-eval' is missing, hash-wasm cannot compile and deriveKek throws,
+// so the KAT comparison is what goes red. A CSP violation listener is added on
+// top only to name the blocked directive when it does.
+test("Argon2id derives under the production CSP", async ({ page }) => {
+	test.setTimeout(ARGON2_TIMEOUT);
+	const csp = securityHeaders({
+		NODE_ENV: "production",
+		PUBLIC_ZERO_URL: "http://localhost:4849",
+	})["content-security-policy"];
+
+	await page.route("**/__csp-gate", async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: "text/html",
+			headers: { "content-security-policy": csp },
+			body:
+				'<!doctype html><html><head><meta charset="utf-8"></head><body>' +
+				'<script type="module" src="/src/web/dev/csp-gate.ts"></script>' +
+				"</body></html>",
+		});
+	});
+
+	await page.addInitScript(() => {
+		(window as unknown as { __cspViolations: string[] }).__cspViolations = [];
+		document.addEventListener("securitypolicyviolation", (e) => {
+			(window as unknown as { __cspViolations: string[] }).__cspViolations.push(
+				`${e.violatedDirective}: ${e.blockedURI}`,
+			);
+		});
+	});
+
+	await page.goto("/__csp-gate");
+	await page.waitForFunction(() => window.__diteroCrypto !== undefined);
+
+	const derived = await page.evaluate(async () => {
+		const kdf = window.__diteroCrypto?.kdf;
+		if (!kdf) throw new Error("harness missing");
+		const salt = new Uint8Array(16).fill(0x42);
+		const kek = await kdf.deriveKek("correct horse", salt, "passphrase");
+		return Array.from(kek, (b) => b.toString(16).padStart(2, "0")).join("");
+	});
+
+	expect(
+		await page.evaluate(
+			() =>
+				(window as unknown as { __cspViolations: string[] }).__cspViolations,
+		),
+	).toEqual([]);
+	expect(derived).toBe(KDF_KAT);
 });
