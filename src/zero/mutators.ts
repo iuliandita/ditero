@@ -108,9 +108,29 @@ async function requireWrite(
 	if (!role || !WRITE_ROLES.has(role)) throw denied();
 }
 
+// Shared creator-or-admin delete gate, used by list/template/comment/view/
+// dashboard deletion. Admin+ may delete any row; a write-role holder may delete
+// only one they own. `ownerLabel` is the noun the rejection names, so each
+// caller's message reads as it did when this was five copies. A null ownerId is
+// unclaimable and therefore admin-only.
+async function requireCreatorOrAdminDelete(
+	tx: Transaction<Schema>,
+	userId: string,
+	workspaceId: string,
+	ownerId: string | null | undefined,
+	ownerLabel: string,
+): Promise<void> {
+	const role = await roleInWorkspace(tx, userId, workspaceId);
+	const canDelete =
+		(role != null && ADMIN_ROLES.has(role)) ||
+		(ownerId === userId && role != null && WRITE_ROLES.has(role));
+	if (!canDelete)
+		throw new Error(`access denied: need admin+ or ${ownerLabel}`);
+}
+
 // Update/reorder auth for a view: a personal view is the owner's alone; a
-// workspace view follows the workspace write gate. (Delete is stricter and
-// inlined: workspace-view delete is creator-or-admin, like template.delete.)
+// workspace view follows the workspace write gate. (Delete is stricter:
+// workspace-view delete goes through requireCreatorOrAdminDelete.)
 async function requireViewEdit(
 	tx: Transaction<Schema>,
 	userId: string,
@@ -126,7 +146,8 @@ async function requireViewEdit(
 }
 
 // Twin of requireViewEdit for dashboards: personal is owner-only; workspace
-// follows the workspace write gate. (Delete is stricter and inlined, like view.)
+// follows the workspace write gate. (Delete is stricter, like view: it goes
+// through requireCreatorOrAdminDelete.)
 async function requireDashboardEdit(
 	tx: Transaction<Schema>,
 	userId: string,
@@ -1056,13 +1077,13 @@ export const mutators = defineMutators({
 			async ({ tx, ctx, args }) => {
 				const list = await tx.run(zql.list.where("id", args.id).one());
 				if (!list) throw new Error("list not found");
-				const role = await roleInWorkspace(tx, ctx.id, list.workspaceId);
-				// member+ may delete their own list; deleting others' needs admin+.
-				const canDelete =
-					(role != null && ADMIN_ROLES.has(role)) ||
-					(list.ownerId === ctx.id && role != null && WRITE_ROLES.has(role));
-				if (!canDelete)
-					throw new Error("access denied: need admin+ or list owner");
+				await requireCreatorOrAdminDelete(
+					tx,
+					ctx.id,
+					list.workspaceId,
+					list.ownerId,
+					"list owner",
+				);
 				// list_id FK is `no action`: delete tasks first (children before
 				// parents), task_label cascades on task delete.
 				const tasks = await tx.run(zql.task.where("listId", args.id));
@@ -1264,15 +1285,13 @@ export const mutators = defineMutators({
 			async ({ tx, ctx, args }) => {
 				const template = await tx.run(zql.template.where("id", args.id).one());
 				if (!template) throw new Error("template not found");
-				const role = await roleInWorkspace(tx, ctx.id, template.workspaceId);
-				// Creator (member+) may delete their own; deleting others' needs admin+.
-				const canDelete =
-					(role != null && ADMIN_ROLES.has(role)) ||
-					(template.createdBy === ctx.id &&
-						role != null &&
-						WRITE_ROLES.has(role));
-				if (!canDelete)
-					throw new Error("access denied: need admin+ or template creator");
+				await requireCreatorOrAdminDelete(
+					tx,
+					ctx.id,
+					template.workspaceId,
+					template.createdBy,
+					"template creator",
+				);
 				await tx.mutate.template.delete({ id: args.id });
 			},
 		),
@@ -1461,13 +1480,13 @@ export const mutators = defineMutators({
 				);
 				if (!task) throw new Error("task not found");
 				const list = task.list as List;
-				const role = await roleInWorkspace(tx, ctx.id, list.workspaceId);
-				// Author (member+) may delete their own; deleting others' needs admin+.
-				const canDelete =
-					(role != null && ADMIN_ROLES.has(role)) ||
-					(c.authorId === ctx.id && role != null && WRITE_ROLES.has(role));
-				if (!canDelete)
-					throw new Error("access denied: need admin+ or comment author");
+				await requireCreatorOrAdminDelete(
+					tx,
+					ctx.id,
+					list.workspaceId,
+					c.authorId,
+					"comment author",
+				);
 				await tx.mutate.comment.delete({ id: args.id });
 			},
 		),
@@ -1550,13 +1569,13 @@ export const mutators = defineMutators({
 				} else {
 					if (!view.workspaceId)
 						throw new Error("workspace view missing workspaceId");
-					const role = await roleInWorkspace(tx, ctx.id, view.workspaceId);
-					// Creator (member+) may delete their own; deleting others' needs admin+.
-					const canDelete =
-						(role != null && ADMIN_ROLES.has(role)) ||
-						(view.ownerId === ctx.id && role != null && WRITE_ROLES.has(role));
-					if (!canDelete)
-						throw new Error("access denied: need admin+ or view owner");
+					await requireCreatorOrAdminDelete(
+						tx,
+						ctx.id,
+						view.workspaceId,
+						view.ownerId,
+						"view owner",
+					);
 				}
 				await tx.mutate.view.delete({ id: args.id });
 			},
@@ -1647,15 +1666,13 @@ export const mutators = defineMutators({
 				} else {
 					if (!dashboard.workspaceId)
 						throw new Error("workspace dashboard missing workspaceId");
-					const role = await roleInWorkspace(tx, ctx.id, dashboard.workspaceId);
-					// Creator (member+) may delete their own; deleting others' needs admin+.
-					const canDelete =
-						(role != null && ADMIN_ROLES.has(role)) ||
-						(dashboard.ownerId === ctx.id &&
-							role != null &&
-							WRITE_ROLES.has(role));
-					if (!canDelete)
-						throw new Error("access denied: need admin+ or dashboard owner");
+					await requireCreatorOrAdminDelete(
+						tx,
+						ctx.id,
+						dashboard.workspaceId,
+						dashboard.ownerId,
+						"dashboard owner",
+					);
 				}
 				await tx.mutate.dashboard.delete({ id: args.id });
 			},
