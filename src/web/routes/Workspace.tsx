@@ -42,6 +42,7 @@ import { LabelManager } from "../components/settings/LabelManager.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
 import { TemplateManager } from "../components/settings/TemplateManager.tsx";
+import { ThemeSwitcher } from "../components/settings/ThemeSwitcher.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
@@ -929,6 +930,7 @@ function NormalWorkspace() {
 					<KarmaPanel />
 					<KarmaSettings />
 					<LanguageSwitcher persistLocale={persistLocale} />
+					<ThemeSwitcher />
 					{/* Keyboard is a desktop feature (design 2.18). */}
 					{isDesktop && <KeymapSettings />}
 					{activeId && (

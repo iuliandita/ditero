@@ -38,6 +38,7 @@ export type UserPrefState = {
 	quietHours: QuietHours; // null => not configured
 	escalationDefaults: EscalationDefaults | null; // null => not configured
 	locale: Locale | null; // null => no preference set (Accept-Language fallback)
+	theme: "light" | "dark" | null; // null => follow the OS
 };
 
 const DEFAULTS: UserPrefState = {
@@ -52,6 +53,7 @@ const DEFAULTS: UserPrefState = {
 	quietHours: null,
 	escalationDefaults: null,
 	locale: null,
+	theme: null,
 };
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -154,6 +156,7 @@ export function useUserPref(): {
 				typeof row.locale === "string" && isSupportedLocale(row.locale)
 					? row.locale
 					: null,
+			theme: row.theme === "light" || row.theme === "dark" ? row.theme : null,
 		};
 	}, [rows]);
 
