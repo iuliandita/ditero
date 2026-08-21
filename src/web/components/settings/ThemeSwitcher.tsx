@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useId } from "react";
 import {
 	Select,
 	SelectContent,
@@ -13,28 +13,23 @@ import {
 	fromStored,
 	isTheme,
 	readLocalTheme,
-	type Theme,
 	toStored,
 	writeLocalTheme,
 } from "../../lib/theme.ts";
 
+// A control, not an applier: useSyncedTheme() owns applying the synced choice
+// so it also reaches devices whose user never opens this surface (#160). The
+// write below is still done here, so the document changes on the click rather
+// than one round trip later.
 export function ThemeSwitcher() {
-	const { pref, setPref } = useUserPref();
-	const [value, setValue] = useState<Theme>(readLocalTheme());
+	const { pref, setPref, loading } = useUserPref();
 	const labelId = useId();
-
-	// The synced preference wins once it arrives: it is the cross-device answer,
-	// while localStorage is only the boot-time hint that avoids the flash.
-	useEffect(() => {
-		const synced = fromStored(pref.theme);
-		setValue(synced);
-		writeLocalTheme(synced);
-		applyTheme(synced, document.documentElement);
-	}, [pref.theme]);
+	// Until the row lands pref.theme is the DEFAULTS null, which would display
+	// "system" to a user whose document is already dark from the boot hint.
+	const value = loading ? readLocalTheme() : fromStored(pref.theme);
 
 	function onChange(next: string) {
 		if (!isTheme(next)) return;
-		setValue(next);
 		writeLocalTheme(next);
 		applyTheme(next, document.documentElement);
 		setPref({ theme: toStored(next) });
