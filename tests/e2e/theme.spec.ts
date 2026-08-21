@@ -45,12 +45,42 @@ test("switches light/dark/system and the computed background actually changes", 
 	await expect(page.locator("html")).not.toHaveClass(/(^|\s)dark(\s|$)/);
 	await expect(page.locator("html")).not.toHaveClass(/(^|\s)light(\s|$)/);
 
-	// Cross-device persistence: reload and confirm the choice round-tripped
-	// through user_pref rather than only the in-page class toggle.
+	// Same-device persistence across a reload. This does NOT prove the choice
+	// round-tripped through user_pref -- localStorage survives a reload, so the
+	// boot hint alone would satisfy it. The cross-device test below is the one
+	// that reaches the synced column.
 	await selectTheme(page, m.theme_dark());
 	await expect(page.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
 	await page.reload();
 	await expect(page.getByTestId("workspace")).toBeVisible();
 	await expect(page.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
 	await expect(await bodyBackground(page)).toBe(darkBg);
+});
+
+// #160: a second device has the same user_pref row and an empty localStorage.
+// Dropping the boot hint reproduces that without a second browser context, and
+// asserting it on the landing -- where ThemeSwitcher is not mounted -- is what
+// makes it a test of the synced reader rather than of the switcher's own effect.
+test("applies the synced theme on a device with no local hint", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("theme-sync"));
+	await goToSettings(page);
+	await selectTheme(page, m.theme_dark());
+	await expect(page.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
+	const darkBg = await bodyBackground(page);
+
+	// Key mirrors STORAGE_KEY in src/web/lib/theme.ts. Only that entry: a full
+	// clear would also take Zero's client state with it.
+	await page.evaluate(() => localStorage.removeItem("ditero-theme"));
+	await page.reload();
+	await expect(page.getByTestId("workspace")).toBeVisible();
+
+	// The absence assertions are the point of the test, so they are paired with
+	// the presence one above: the shell is up, and the only other reader of
+	// user_pref.theme is provably not mounted while the class check passes.
+	await expect(page.getByTestId("settings-surface")).toHaveCount(0);
+	await expect(page.getByTestId("theme-switcher")).toHaveCount(0);
+	await expect(page.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
+	expect(await bodyBackground(page)).toBe(darkBg);
 });

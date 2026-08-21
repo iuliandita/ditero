@@ -44,6 +44,7 @@ import type { ViewFormValue } from "../components/views/ViewManager.tsx";
 import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
 import { useDashboards } from "../hooks/useDashboards.ts";
+import { useSyncedTheme } from "../hooks/useSyncedTheme.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import type { SavedView } from "../hooks/useViews.ts";
 import { useViews } from "../hooks/useViews.ts";
@@ -93,6 +94,8 @@ type ResolvedView = {
 // and their shell mounts unchanged.
 export function Workspace() {
 	const zero = useZero<typeof schema>();
+	// Above the restricted/normal split so both shells get the synced theme.
+	useSyncedTheme();
 	const [managed] = useQuery(queries.managedAccounts.mine());
 	const restricted = managed.some(
 		(row) => row.userId === zero.userID && row.restricted,
