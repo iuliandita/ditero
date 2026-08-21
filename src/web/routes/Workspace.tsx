@@ -10,51 +10,23 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Panel } from "../../domain/dashboard.ts";
-import type { ListKind } from "../../domain/icon-map.ts";
-import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
-import { snapshotList } from "../../domain/template.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { Dashboard, Folder, List, schema } from "../../zero/schema.gen.ts";
-import {
-	type DashboardFormValue,
-	DashboardManager,
-} from "../components/dashboard/DashboardManager.tsx";
+import type { DashboardFormValue } from "../components/dashboard/DashboardManager.tsx";
 import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
-import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
-import {
-	type ListActionHandlers,
-	listActions,
-} from "../components/list/listActions.ts";
 import { SortableList } from "../components/list/SortableList.tsx";
-import { TaskDetail } from "../components/list/TaskDetail.tsx";
-import { MembersPanel } from "../components/people/MembersPanel.tsx";
-import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
-import { FocusSettings } from "../components/settings/FocusSettings.tsx";
-import { KarmaSettings } from "../components/settings/KarmaSettings.tsx";
-import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
-import { LabelManager } from "../components/settings/LabelManager.tsx";
-import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
-import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
-import { TemplateManager } from "../components/settings/TemplateManager.tsx";
-import { ThemeSwitcher } from "../components/settings/ThemeSwitcher.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
 import { Fab } from "../components/shell/Fab.tsx";
-import {
-	type FolderActionHandlers,
-	folderActions,
-} from "../components/shell/folderActions.ts";
 import { groupLists } from "../components/shell/grouping.ts";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
-import { MobileSearch } from "../components/shell/MobileSearch.tsx";
-import { NameDialog } from "../components/shell/NameDialog.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
@@ -68,39 +40,26 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu.tsx";
-import { canActOnOwned, type RowAction } from "../components/ui/row-action.ts";
-import {
-	Sheet,
-	SheetContent,
-	SheetHeader,
-	SheetTitle,
-} from "../components/ui/sheet.tsx";
-import {
-	type ViewFormValue,
-	ViewManager,
-} from "../components/views/ViewManager.tsx";
+import type { ViewFormValue } from "../components/views/ViewManager.tsx";
 import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
 import { useDashboards } from "../hooks/useDashboards.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import type { SavedView } from "../hooks/useViews.ts";
 import { useViews } from "../hooks/useViews.ts";
-import { CheatSheet } from "../keyboard/CheatSheet.tsx";
+import { useWorkspaceData } from "../hooks/useWorkspaceData.ts";
+import { useWorkspaceRowActions } from "../hooks/useWorkspaceRowActions.ts";
 import {
 	type CommandHandlers,
 	CommandProvider,
-	useCommands,
 } from "../keyboard/CommandContext.tsx";
-import { CommandPalette } from "../keyboard/CommandPalette.tsx";
 import {
 	actOnFocused,
 	focusNext,
 	focusPrev,
 	openFocused,
 } from "../keyboard/roving.ts";
-import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
-import { useKeyBindings } from "../keyboard/useKeyBindings.ts";
-import { canCreateFolder, shareableWorkspaces } from "../lib/create-gates.ts";
+import { canCreateFolder } from "../lib/create-gates.ts";
 import { ICONS } from "../lib/list-icon.tsx";
 import type { Locale } from "../lib/locale.ts";
 import { runMutation } from "../lib/run-mutation.ts";
@@ -113,7 +72,8 @@ import {
 } from "../views/builtins.ts";
 import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
 import { ListView } from "./ListView.tsx";
-import { SecurityPanel } from "./SecurityPanel.tsx";
+import { SettingsSurface } from "./SettingsSurface.tsx";
+import { WorkspaceOverlays } from "./WorkspaceOverlays.tsx";
 
 // Resolved view descriptor: a built-in aggregate or a saved row, unified for the
 // renderer/header. `saved` is set only for editable saved views.
@@ -141,16 +101,6 @@ export function Workspace() {
 	return <NormalWorkspace />;
 }
 
-// Installs the global key handler inside CommandProvider scope so `run` and the
-// effective keymap resolve against live provider/pref state. Renders nothing;
-// mounted desktop-only (design 2.18).
-function WorkspaceKeyboard() {
-	const { run } = useCommands();
-	const keymap = useEffectiveKeymap();
-	useKeyBindings(keymap, run);
-	return null;
-}
-
 function NormalWorkspace() {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
@@ -168,19 +118,23 @@ function NormalWorkspace() {
 		},
 		[zero],
 	);
-	const [workspaces] = useQuery(queries.workspaces.mine());
-	const [lists, listsDetails] = useQuery(queries.lists.mine());
-	const [folders] = useQuery(queries.folders.mine());
-	const [templates] = useQuery(queries.templates.mine());
-	const [tasks, tasksDetails] = useQuery(queries.tasks.mine());
-	const [labels] = useQuery(queries.labels.mine());
-	const [taskLabels] = useQuery(queries.taskLabels.mine());
-	const [assignees] = useQuery(queries.assignees.mine());
-	const [memberships] = useQuery(queries.memberships.mine());
-	// The view surface joins tasks onto lists, so it is only settled once both
-	// queries are; until then "no rows" means "not synced", not "nothing here".
-	const viewRowsLoading =
-		tasksDetails.type !== "complete" || listsDetails.type !== "complete";
+	const {
+		workspaces,
+		lists,
+		folders,
+		templates,
+		tasks,
+		labels,
+		taskLabels,
+		assignees,
+		memberships,
+		viewRowsLoading,
+		roleByWorkspace,
+		shareable,
+		members,
+		membershipWorkspaceIds,
+		labelIdsByTask,
+	} = useWorkspaceData();
 	const { views: savedViews } = useViews();
 	const { dashboards, loading: dashboardsLoading } = useDashboards();
 	const { pref, setPref, loading: prefLoading } = useUserPref();
@@ -261,89 +215,33 @@ function NormalWorkspace() {
 	}, [tasks, activeLists]);
 
 	// --- List row actions -----------------------------------------------------
-	// The caller's own role per workspace; the mutators re-check on write, this
-	// only keeps the menu from offering what would fail.
-	const roleByWorkspace = useMemo(() => {
-		const map = new Map<string, Role>();
-		for (const row of memberships) {
-			if (row.userId === zero.userID)
-				map.set(row.workspaceId, row.role as Role);
-		}
-		return map;
-	}, [memberships, zero.userID]);
 	const activeRole = activeId ? (roleByWorkspace.get(activeId) ?? null) : null;
-	// Share targets for views/dashboards: every user owns a personal workspace as
-	// owner, so this is never empty -- it only drops the workspaces the caller
-	// joined as Viewer.
-	const shareable = useMemo(
-		() => shareableWorkspaces(workspaces, roleByWorkspace),
-		[workspaces, roleByWorkspace],
-	);
 
-	function moveListToFolder(list: List, folderId: string | null) {
-		void zero
-			.mutate(mutators.list.update({ id: list.id, folderId }))
-			.client.catch((e) => console.error("list.update failed", e));
-	}
-
-	function saveListAsTemplate(list: List) {
-		const rows = tasks.filter((t) => t.listId === list.id);
-		const parents = rows.filter((t) => t.parentId == null);
-		const content = snapshotList(
-			{ kind: (list.kind ?? "tasks") as ListKind, icon: list.icon },
-			parents.map((p) => ({
-				...p,
-				subtasks: rows
-					.filter((t) => t.parentId === p.id)
-					.sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1)),
-			})),
-		);
-		void zero
-			.mutate(
-				mutators.template.save({
-					id: crypto.randomUUID(),
-					workspaceId: list.workspaceId,
-					name: list.title,
-					kind: "list",
-					content,
-					...(list.icon != null ? { icon: list.icon } : {}),
-				}),
-			)
-			.client.catch((e) => console.error("template.save failed", e));
-	}
-
-	async function deleteList(list: List) {
-		// list.delete removes every task in the list, subtasks included, so the
-		// count is over all of them -- the copy says "items", not "tasks".
-		const count = tasks.filter((t) => t.listId === list.id).length;
-		const ok = await confirm({
-			title: m.list_delete_title(),
-			body: m.list_delete_confirm({ title: list.title, count }),
-			confirmLabel: m.action_delete(),
-			destructive: true,
-		});
-		if (!ok) return;
-		void zero
-			.mutate(mutators.list.delete({ id: list.id }))
-			.client.catch((e) => console.error("list.delete failed", e));
-		if (openListId === list.id) setOpenListId(null);
-	}
-
-	const listActionHandlers: ListActionHandlers = {
-		rename: setRenameTarget,
-		moveToFolder: moveListToFolder,
-		saveAsTemplate: saveListAsTemplate,
-		remove: (list) => void deleteList(list),
-	};
-
-	const buildListActions = (list: List) =>
-		listActions({
-			list,
-			role: roleByWorkspace.get(list.workspaceId) ?? null,
-			userId: zero.userID ?? "",
-			folders: activeFolders,
-			handlers: listActionHandlers,
-		});
+	const {
+		buildListActions,
+		buildFolderActions,
+		buildViewActions,
+		buildDashboardActions,
+	} = useWorkspaceRowActions({
+		tasks,
+		activeLists,
+		activeFolders,
+		roleByWorkspace,
+		savedViews,
+		openListId,
+		setOpenListId,
+		setOpenViewId,
+		setOpenDashboardId,
+		setSection,
+		setNewListFolder,
+		setRenameTarget,
+		setFolderDialog,
+		setViewManager,
+		setDashboardManager,
+		setHome,
+		onDeleteView: (view) => void deleteView(view),
+		onDeleteDashboard: (dashboard) => void deleteDashboard(dashboard),
+	});
 
 	function submitRename(next: string) {
 		const target = renameTarget;
@@ -379,42 +277,6 @@ function NormalWorkspace() {
 			.mutate(mutators.folder.update({ id: folder.id, name }))
 			.client.catch((e) => console.error("folder.update failed", e));
 	}
-
-	async function deleteFolder(folder: Folder) {
-		// Only reachable on an empty folder: folder.delete refuses a non-empty one,
-		// and the menu item carries that reason disabled, so the body states no count.
-		const ok = await confirm({
-			title: m.folder_delete_title(),
-			body: m.folder_delete_confirm({ name: folder.name }),
-			confirmLabel: m.action_delete(),
-			destructive: true,
-		});
-		if (!ok) return;
-		void zero
-			.mutate(mutators.folder.delete({ id: folder.id }))
-			.client.catch((e) => console.error("folder.delete failed", e));
-	}
-
-	const folderActionHandlers: FolderActionHandlers = {
-		newList: (folderId) => {
-			// The create-list form lives on the lists index, so land there first.
-			setOpenListId(null);
-			setOpenViewId(null);
-			setOpenDashboardId(null);
-			setSection("lists");
-			setNewListFolder({ id: folderId, nonce: Date.now() });
-		},
-		rename: (folder) => setFolderDialog({ mode: "rename", folder }),
-		remove: (folder) => void deleteFolder(folder),
-	};
-
-	const buildFolderActions = (folder: Folder) =>
-		folderActions({
-			folder,
-			role: roleByWorkspace.get(folder.workspaceId) ?? null,
-			listCount: activeLists.filter((l) => l.folderId === folder.id).length,
-			handlers: folderActionHandlers,
-		});
 
 	function submitFolderDialog(name: string) {
 		const target = folderDialog;
@@ -502,23 +364,6 @@ function NormalWorkspace() {
 		: null;
 
 	// --- Views wiring ---------------------------------------------------------
-	// Members for the renderer/filter-builder pickers: one entry per co-member.
-	const members = useMemo(() => {
-		const seen = new Set<string>();
-		const out: { id: string; name: string }[] = [];
-		for (const row of memberships) {
-			if (row.user && !seen.has(row.userId)) {
-				seen.add(row.userId);
-				out.push({ id: row.userId, name: row.user.name });
-			}
-		}
-		return out;
-	}, [memberships]);
-	// The renderer scopes to workspaces the user actually belongs to.
-	const membershipWorkspaceIds = useMemo(
-		() => workspaces.map((w) => w.id),
-		[workspaces],
-	);
 	// Home ref resolution: builtin/saved view, "dashboard:<id>", or (dangling/
 	// garbage) DEFAULT_HOME — pure helper, unit-tested.
 	const homeTarget = useMemo(
@@ -620,51 +465,6 @@ function NormalWorkspace() {
 		if (Object.keys(patch).length) setPref(patch);
 		setOpenViewId(null);
 	}
-
-	// Mirrors requireViewEdit / the inlined view.delete gate in the mutators:
-	// personal is the owner's alone at both levels; workspace edit needs a write
-	// role, and workspace delete is admin-or-creator (canActOnOwned). "Set as
-	// home" is never gated -- it writes only the caller's own user_pref row, which
-	// every role including Viewer may do. Built-ins (no saved row) offer only that.
-	const buildViewActions = (id: string): RowAction[] => {
-		const saved = savedViews.find((v) => v.id === id) ?? null;
-		const isPersonal = saved?.scope === "personal";
-		const role = saved?.workspaceId
-			? (roleByWorkspace.get(saved.workspaceId) ?? null)
-			: null;
-		const userId = zero.userID ?? "";
-		const canEdit = isPersonal
-			? saved?.ownerId === userId
-			: role !== null && WRITE_ROLES.has(role);
-		const canDelete = isPersonal
-			? saved?.ownerId === userId
-			: canActOnOwned(role, saved?.ownerId ?? null, userId);
-		return [
-			{
-				id: "edit",
-				label: m.view_menu_edit(),
-				icon: Pencil,
-				hidden: !saved || !canEdit,
-				onSelect: () => setViewManager({ mode: "edit", id }),
-			},
-			{
-				id: "set-home",
-				label: m.view_set_home(),
-				icon: House,
-				onSelect: () => setHome(id),
-			},
-			{
-				id: "delete",
-				label: m.view_menu_delete(),
-				icon: Trash2,
-				destructive: true,
-				hidden: !saved || !canDelete,
-				onSelect: () => {
-					if (saved) void deleteView(saved);
-				},
-			},
-		];
-	};
 
 	function submitView(value: ViewFormValue) {
 		if (viewManager?.mode === "edit") {
@@ -770,45 +570,6 @@ function NormalWorkspace() {
 		setOpenDashboardId(null);
 	}
 
-	// Twin of buildViewActions, against requireDashboardEdit and the inlined
-	// dashboard.delete gate.
-	const buildDashboardActions = (dashboard: Dashboard): RowAction[] => {
-		const isPersonal = dashboard.scope === "personal";
-		const role = dashboard.workspaceId
-			? (roleByWorkspace.get(dashboard.workspaceId) ?? null)
-			: null;
-		const userId = zero.userID ?? "";
-		const canEdit = isPersonal
-			? dashboard.ownerId === userId
-			: role !== null && WRITE_ROLES.has(role);
-		const canDelete = isPersonal
-			? dashboard.ownerId === userId
-			: canActOnOwned(role, dashboard.ownerId, userId);
-		return [
-			{
-				id: "edit",
-				label: m.dashboard_menu_edit(),
-				icon: Pencil,
-				hidden: !canEdit,
-				onSelect: () => setDashboardManager({ mode: "edit", id: dashboard.id }),
-			},
-			{
-				id: "set-home",
-				label: m.dashboard_set_home(),
-				icon: House,
-				onSelect: () => setHome(dashboardHomeRef(dashboard.id)),
-			},
-			{
-				id: "delete",
-				label: m.dashboard_delete(),
-				icon: Trash2,
-				destructive: true,
-				hidden: !canDelete,
-				onSelect: () => void deleteDashboard(dashboard),
-			},
-		];
-	};
-
 	// Stable prop objects for DashboardView's panel evaluation (same synced sets
 	// the ViewRenderer surface consumes).
 	const panelData = useMemo(
@@ -852,16 +613,6 @@ function NormalWorkspace() {
 		setDashboardManager(null);
 	}
 
-	// Label ids per task -> TaskDetail (view onOpenTask reuses the list sheet).
-	const labelIdsByTask = useMemo(() => {
-		const map = new Map<string, string[]>();
-		for (const tl of taskLabels) {
-			const bucket = map.get(tl.taskId);
-			if (bucket) bucket.push(tl.labelId);
-			else map.set(tl.taskId, [tl.labelId]);
-		}
-		return map;
-	}, [taskLabels]);
 	const detailTask = detailTaskId
 		? (tasks.find((t) => t.id === detailTaskId) ?? null)
 		: null;
@@ -917,36 +668,14 @@ function NormalWorkspace() {
 	let content: React.ReactNode;
 	if (section === "settings") {
 		content = (
-			<div data-testid="settings-surface">
-				<div className="flex items-center gap-2 border-b p-3">
-					<BackButton
-						data-testid="settings-back"
-						onClick={() => changeSection("lists")}
-					/>
-					<h1 className="truncate text-lg font-semibold">{m.nav_settings()}</h1>
-				</div>
-				<div className="p-4 md:p-6">
-					<SecurityPanel />
-					<KarmaPanel />
-					<KarmaSettings />
-					<LanguageSwitcher persistLocale={persistLocale} />
-					<ThemeSwitcher />
-					{/* Keyboard is a desktop feature (design 2.18). */}
-					{isDesktop && <KeymapSettings />}
-					{activeId && (
-						<LabelManager workspaceId={activeId} role={activeRole} />
-					)}
-					{activeId && (
-						<TemplateManager
-							workspaceId={activeId}
-							role={activeRole}
-							onUsed={openList}
-						/>
-					)}
-					<FocusSettings />
-					<NotificationSettings />
-				</div>
-			</div>
+			<SettingsSurface
+				activeId={activeId}
+				activeRole={activeRole}
+				isDesktop={isDesktop}
+				persistLocale={persistLocale}
+				onBack={() => changeSection("lists")}
+				onOpenList={openList}
+			/>
 		);
 	} else if (openListId) {
 		content = (
@@ -1304,222 +1033,57 @@ function NormalWorkspace() {
 					{content}
 				</AppShell>
 
-				{/* Mobile workspace switcher: Lists-header title tap -> bottom sheet. */}
-				<Sheet open={switcherOpen} onOpenChange={setSwitcherOpen}>
-					<SheetContent side="bottom">
-						<SheetHeader>
-							<SheetTitle>{m.workspace_switcher_title()}</SheetTitle>
-						</SheetHeader>
-						<div className="flex flex-col gap-1 p-4 pt-0">
-							{workspaces.map((w) => (
-								<button
-									key={w.id}
-									type="button"
-									onClick={() => selectWorkspace(w.id)}
-									className={`rounded-lg px-3 py-2 text-start ${
-										w.id === activeId ? "bg-muted font-medium" : ""
-									}`}
-								>
-									{w.name}
-								</button>
-							))}
-							<button
-								type="button"
-								onClick={() => {
-									setOpenSharedRequested(true);
-									setSwitcherOpen(false);
-								}}
-								className="rounded-lg px-3 py-2 text-start text-muted-foreground"
-							>
-								{m.sidebar_open_shared()}
-							</button>
-							<button
-								type="button"
-								data-testid="open-members"
-								disabled={!activeId}
-								onClick={() => {
-									setSwitcherOpen(false);
-									setMembersOpen(true);
-								}}
-								className="rounded-lg px-3 py-2 text-start text-muted-foreground disabled:opacity-50"
-							>
-								{m.sidebar_members()}
-							</button>
-						</div>
-					</SheetContent>
-				</Sheet>
-
-				{activeId && (
-					<MembersPanel
-						workspaceId={activeId}
-						workspaceName={
-							workspaces.find((w) => w.id === activeId)?.name ??
-							m.workspace_name_fallback()
-						}
-						open={membersOpen}
-						onOpenChange={setMembersOpen}
-					/>
-				)}
-
-				<QuickAddSheet
-					open={quickAddOpen}
-					onOpenChange={setQuickAddOpen}
-					lists={activeLists}
+				<WorkspaceOverlays
+					isDesktop={isDesktop}
+					activeId={activeId}
+					openListId={openListId}
+					workspaces={workspaces}
+					lists={lists}
+					activeLists={activeLists}
+					folders={folders}
 					labels={labels}
 					tasks={tasks}
-					currentListId={openListId}
-					workspaceId={activeId ?? ""}
-				/>
-
-				{viewManager && (
-					<ViewManager
-						open
-						onOpenChange={(o) => {
-							if (!o) setViewManager(null);
-						}}
-						mode={viewManager.mode}
-						initial={
-							viewManager.mode === "edit"
-								? (() => {
-										const s = savedViews.find((v) => v.id === viewManager.id);
-										return s
-											? {
-													name: s.name,
-													icon: s.icon ?? null,
-													scope: s.scope ?? "personal",
-													workspaceId: s.workspaceId,
-													filter: s.filter,
-													display: s.display,
-												}
-											: undefined;
-									})()
-								: undefined
-						}
-						lists={lists.map((l) => ({ id: l.id, title: l.title }))}
-						folders={folders.map((f) => ({ id: f.id, name: f.name }))}
-						labels={labels.map((l) => ({
-							id: l.id,
-							name: l.name,
-							color: l.color ?? undefined,
-						}))}
-						members={members}
-						workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
-						shareableWorkspaces={shareable.map((w) => ({
-							id: w.id,
-							name: w.name,
-						}))}
-						onSubmit={submitView}
-					/>
-				)}
-
-				{dashboardManager && (
-					<DashboardManager
-						open
-						onOpenChange={(o) => {
-							if (!o) setDashboardManager(null);
-						}}
-						mode={dashboardManager.mode}
-						initial={
-							dashboardManager.mode === "edit"
-								? (() => {
-										const d = dashboards.find(
-											(row) => row.id === dashboardManager.id,
-										);
-										return d
-											? {
-													name: d.name,
-													icon: d.icon ?? null,
-													scope: d.scope ?? "personal",
-													workspaceId: d.workspaceId ?? null,
-												}
-											: undefined;
-									})()
-								: undefined
-						}
-						shareableWorkspaces={shareable.map((w) => ({
-							id: w.id,
-							name: w.name,
-						}))}
-						onSubmit={submitDashboard}
-					/>
-				)}
-
-				<NameDialog
-					open={renameTarget !== null}
-					initialName={renameTarget?.title ?? ""}
-					title={m.action_rename()}
-					fieldLabel={m.field_name()}
-					testId="list-rename"
-					onSubmit={submitRename}
-					onOpenChange={(o) => {
-						if (!o) setRenameTarget(null);
+					savedViews={savedViews}
+					dashboards={dashboards}
+					shareable={shareable}
+					members={members}
+					labelIdsByTask={labelIdsByTask}
+					switcherOpen={switcherOpen}
+					onSwitcherOpenChange={setSwitcherOpen}
+					onSelectWorkspace={selectWorkspace}
+					onOpenShared={() => setOpenSharedRequested(true)}
+					membersOpen={membersOpen}
+					onMembersOpenChange={setMembersOpen}
+					quickAddOpen={quickAddOpen}
+					onQuickAddOpenChange={setQuickAddOpen}
+					viewManager={viewManager}
+					onViewManagerClose={() => setViewManager(null)}
+					onSubmitView={submitView}
+					dashboardManager={dashboardManager}
+					onDashboardManagerClose={() => setDashboardManager(null)}
+					onSubmitDashboard={submitDashboard}
+					renameTarget={renameTarget}
+					onRenameClose={() => setRenameTarget(null)}
+					onSubmitRename={submitRename}
+					folderDialog={folderDialog}
+					onFolderDialogClose={() => setFolderDialog(null)}
+					onSubmitFolderDialog={submitFolderDialog}
+					detailTask={detailTask}
+					detailList={detailList}
+					onDetailClose={() => setDetailTaskId(null)}
+					searchOpen={searchOpen}
+					onSearchSelect={(taskId, listId) => {
+						setSearchOpen(false);
+						openList(listId);
+						setDetailTaskId(taskId);
 					}}
+					onSearchClose={() => setSearchOpen(false)}
+					cheatOpen={cheatOpen}
+					onCheatOpenChange={setCheatOpen}
+					onOpenList={openList}
+					onOpenView={openView}
+					onOpenDashboard={openDashboard}
 				/>
-
-				<NameDialog
-					open={folderDialog !== null}
-					initialName={
-						folderDialog?.mode === "rename" ? folderDialog.folder.name : ""
-					}
-					title={
-						folderDialog?.mode === "rename"
-							? m.folder_rename_title()
-							: m.action_new_folder()
-					}
-					fieldLabel={m.folder_name_label()}
-					testId="folder-name"
-					onSubmit={submitFolderDialog}
-					onOpenChange={(o) => {
-						if (!o) setFolderDialog(null);
-					}}
-				/>
-
-				{/* View onOpenTask reuses the list TaskDetail sheet (design 2.20). */}
-				{detailTask && detailList && (
-					<TaskDetail
-						task={detailTask}
-						open
-						onOpenChange={(o) => {
-							if (!o) setDetailTaskId(null);
-						}}
-						list={detailList}
-						allLists={lists}
-						allTasks={tasks}
-						allLabels={labels}
-						taskLabelIds={labelIdsByTask.get(detailTask.id) ?? []}
-					/>
-				)}
-
-				{/* Touch search: the palette's Search group without its keyboard
-			    command registry. Unmounted while closed so a stale layer never
-			    claims the Escape aimed at the task detail it just opened. */}
-				{!isDesktop && searchOpen && (
-					<MobileSearch
-						tasks={tasks}
-						lists={lists}
-						onSelect={(taskId, listId) => {
-							setSearchOpen(false);
-							openList(listId);
-							setDetailTaskId(taskId);
-						}}
-						onClose={() => setSearchOpen(false)}
-					/>
-				)}
-
-				{/* Keyboard system is desktop-only (design 2.18): the global handler,
-			    ⌘K palette, and ? cheat-sheet. RestrictedShell never mounts these. */}
-				{isDesktop && (
-					<>
-						<WorkspaceKeyboard />
-						<CommandPalette
-							onNavigateList={openList}
-							onNavigateView={openView}
-							onNavigateDashboard={openDashboard}
-						/>
-						<CheatSheet open={cheatOpen} onOpenChange={setCheatOpen} />
-					</>
-				)}
-
 				<FocusTimer />
 			</CommandProvider>
 		</FocusProvider>
