@@ -57,6 +57,18 @@ async function joinShared(
 	}
 }
 
+// The list title renders on three surfaces at once -- the sidebar button, the
+// mobile/desktop index row, and the open list's own heading -- so a bare
+// getByText is a strict-mode violation the moment sync has finished. It only
+// ever passed by racing the render (#157). The heading inside [data-testid=
+// "list"] is the one that carries the assertion's actual meaning: this client
+// has the shared list open.
+function openListHeading(page: Page, title: string) {
+	return page
+		.getByTestId("list")
+		.getByRole("heading", { name: title, exact: true });
+}
+
 async function openSharedDesktop(page: Page): Promise<void> {
 	await page.getByTestId("open-shared").click();
 	await expect(page.getByTestId("new-task")).toBeVisible({ timeout: 15000 });
@@ -204,7 +216,7 @@ test("invite: email invite accepted -> member syncs to both, pending drops", asy
 
 	// Member on both clients: invitee's client gains the shared workspace + list.
 	await openSharedDesktop(pb);
-	await expect(pb.getByText("Shared list", { exact: true })).toBeVisible({
+	await expect(openListHeading(pb, "Shared list")).toBeVisible({
 		timeout: 15000,
 	});
 	// Owner's panel: the invitee now shows as a member (co-member membership synced
@@ -323,7 +335,7 @@ test("invite-on-assign: pick a non-member by email -> accept resolves the assign
 	);
 	// Newly joined user reaches the shared workspace.
 	await openSharedDesktop(pc);
-	await expect(pc.getByText("Shared list", { exact: true })).toBeVisible({
+	await expect(openListHeading(pc, "Shared list")).toBeVisible({
 		timeout: 15000,
 	});
 
