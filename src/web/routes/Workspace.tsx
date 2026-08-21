@@ -10,10 +10,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Panel } from "../../domain/dashboard.ts";
-import type { ListKind } from "../../domain/icon-map.ts";
-import { WRITE_ROLES } from "../../domain/role.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
-import { snapshotList } from "../../domain/template.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
@@ -23,19 +20,11 @@ import type { DashboardFormValue } from "../components/dashboard/DashboardManage
 import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
-import {
-	type ListActionHandlers,
-	listActions,
-} from "../components/list/listActions.ts";
 import { SortableList } from "../components/list/SortableList.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
 import { Fab } from "../components/shell/Fab.tsx";
-import {
-	type FolderActionHandlers,
-	folderActions,
-} from "../components/shell/folderActions.ts";
 import { groupLists } from "../components/shell/grouping.ts";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
@@ -51,7 +40,6 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu.tsx";
-import { canActOnOwned, type RowAction } from "../components/ui/row-action.ts";
 import type { ViewFormValue } from "../components/views/ViewManager.tsx";
 import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
@@ -60,6 +48,7 @@ import { useUserPref } from "../hooks/useUserPref.ts";
 import type { SavedView } from "../hooks/useViews.ts";
 import { useViews } from "../hooks/useViews.ts";
 import { useWorkspaceData } from "../hooks/useWorkspaceData.ts";
+import { useWorkspaceRowActions } from "../hooks/useWorkspaceRowActions.ts";
 import {
 	type CommandHandlers,
 	CommandProvider,
@@ -228,70 +217,31 @@ function NormalWorkspace() {
 	// --- List row actions -----------------------------------------------------
 	const activeRole = activeId ? (roleByWorkspace.get(activeId) ?? null) : null;
 
-	function moveListToFolder(list: List, folderId: string | null) {
-		void zero
-			.mutate(mutators.list.update({ id: list.id, folderId }))
-			.client.catch((e) => console.error("list.update failed", e));
-	}
-
-	function saveListAsTemplate(list: List) {
-		const rows = tasks.filter((t) => t.listId === list.id);
-		const parents = rows.filter((t) => t.parentId == null);
-		const content = snapshotList(
-			{ kind: (list.kind ?? "tasks") as ListKind, icon: list.icon },
-			parents.map((p) => ({
-				...p,
-				subtasks: rows
-					.filter((t) => t.parentId === p.id)
-					.sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1)),
-			})),
-		);
-		void zero
-			.mutate(
-				mutators.template.save({
-					id: crypto.randomUUID(),
-					workspaceId: list.workspaceId,
-					name: list.title,
-					kind: "list",
-					content,
-					...(list.icon != null ? { icon: list.icon } : {}),
-				}),
-			)
-			.client.catch((e) => console.error("template.save failed", e));
-	}
-
-	async function deleteList(list: List) {
-		// list.delete removes every task in the list, subtasks included, so the
-		// count is over all of them -- the copy says "items", not "tasks".
-		const count = tasks.filter((t) => t.listId === list.id).length;
-		const ok = await confirm({
-			title: m.list_delete_title(),
-			body: m.list_delete_confirm({ title: list.title, count }),
-			confirmLabel: m.action_delete(),
-			destructive: true,
-		});
-		if (!ok) return;
-		void zero
-			.mutate(mutators.list.delete({ id: list.id }))
-			.client.catch((e) => console.error("list.delete failed", e));
-		if (openListId === list.id) setOpenListId(null);
-	}
-
-	const listActionHandlers: ListActionHandlers = {
-		rename: setRenameTarget,
-		moveToFolder: moveListToFolder,
-		saveAsTemplate: saveListAsTemplate,
-		remove: (list) => void deleteList(list),
-	};
-
-	const buildListActions = (list: List) =>
-		listActions({
-			list,
-			role: roleByWorkspace.get(list.workspaceId) ?? null,
-			userId: zero.userID ?? "",
-			folders: activeFolders,
-			handlers: listActionHandlers,
-		});
+	const {
+		buildListActions,
+		buildFolderActions,
+		buildViewActions,
+		buildDashboardActions,
+	} = useWorkspaceRowActions({
+		tasks,
+		activeLists,
+		activeFolders,
+		roleByWorkspace,
+		savedViews,
+		openListId,
+		setOpenListId,
+		setOpenViewId,
+		setOpenDashboardId,
+		setSection,
+		setNewListFolder,
+		setRenameTarget,
+		setFolderDialog,
+		setViewManager,
+		setDashboardManager,
+		setHome,
+		onDeleteView: (view) => void deleteView(view),
+		onDeleteDashboard: (dashboard) => void deleteDashboard(dashboard),
+	});
 
 	function submitRename(next: string) {
 		const target = renameTarget;
@@ -327,42 +277,6 @@ function NormalWorkspace() {
 			.mutate(mutators.folder.update({ id: folder.id, name }))
 			.client.catch((e) => console.error("folder.update failed", e));
 	}
-
-	async function deleteFolder(folder: Folder) {
-		// Only reachable on an empty folder: folder.delete refuses a non-empty one,
-		// and the menu item carries that reason disabled, so the body states no count.
-		const ok = await confirm({
-			title: m.folder_delete_title(),
-			body: m.folder_delete_confirm({ name: folder.name }),
-			confirmLabel: m.action_delete(),
-			destructive: true,
-		});
-		if (!ok) return;
-		void zero
-			.mutate(mutators.folder.delete({ id: folder.id }))
-			.client.catch((e) => console.error("folder.delete failed", e));
-	}
-
-	const folderActionHandlers: FolderActionHandlers = {
-		newList: (folderId) => {
-			// The create-list form lives on the lists index, so land there first.
-			setOpenListId(null);
-			setOpenViewId(null);
-			setOpenDashboardId(null);
-			setSection("lists");
-			setNewListFolder({ id: folderId, nonce: Date.now() });
-		},
-		rename: (folder) => setFolderDialog({ mode: "rename", folder }),
-		remove: (folder) => void deleteFolder(folder),
-	};
-
-	const buildFolderActions = (folder: Folder) =>
-		folderActions({
-			folder,
-			role: roleByWorkspace.get(folder.workspaceId) ?? null,
-			listCount: activeLists.filter((l) => l.folderId === folder.id).length,
-			handlers: folderActionHandlers,
-		});
 
 	function submitFolderDialog(name: string) {
 		const target = folderDialog;
@@ -552,51 +466,6 @@ function NormalWorkspace() {
 		setOpenViewId(null);
 	}
 
-	// Mirrors requireViewEdit / the inlined view.delete gate in the mutators:
-	// personal is the owner's alone at both levels; workspace edit needs a write
-	// role, and workspace delete is admin-or-creator (canActOnOwned). "Set as
-	// home" is never gated -- it writes only the caller's own user_pref row, which
-	// every role including Viewer may do. Built-ins (no saved row) offer only that.
-	const buildViewActions = (id: string): RowAction[] => {
-		const saved = savedViews.find((v) => v.id === id) ?? null;
-		const isPersonal = saved?.scope === "personal";
-		const role = saved?.workspaceId
-			? (roleByWorkspace.get(saved.workspaceId) ?? null)
-			: null;
-		const userId = zero.userID ?? "";
-		const canEdit = isPersonal
-			? saved?.ownerId === userId
-			: role !== null && WRITE_ROLES.has(role);
-		const canDelete = isPersonal
-			? saved?.ownerId === userId
-			: canActOnOwned(role, saved?.ownerId ?? null, userId);
-		return [
-			{
-				id: "edit",
-				label: m.view_menu_edit(),
-				icon: Pencil,
-				hidden: !saved || !canEdit,
-				onSelect: () => setViewManager({ mode: "edit", id }),
-			},
-			{
-				id: "set-home",
-				label: m.view_set_home(),
-				icon: House,
-				onSelect: () => setHome(id),
-			},
-			{
-				id: "delete",
-				label: m.view_menu_delete(),
-				icon: Trash2,
-				destructive: true,
-				hidden: !saved || !canDelete,
-				onSelect: () => {
-					if (saved) void deleteView(saved);
-				},
-			},
-		];
-	};
-
 	function submitView(value: ViewFormValue) {
 		if (viewManager?.mode === "edit") {
 			void zero
@@ -700,45 +569,6 @@ function NormalWorkspace() {
 			setPref({ homeViewRef: null });
 		setOpenDashboardId(null);
 	}
-
-	// Twin of buildViewActions, against requireDashboardEdit and the inlined
-	// dashboard.delete gate.
-	const buildDashboardActions = (dashboard: Dashboard): RowAction[] => {
-		const isPersonal = dashboard.scope === "personal";
-		const role = dashboard.workspaceId
-			? (roleByWorkspace.get(dashboard.workspaceId) ?? null)
-			: null;
-		const userId = zero.userID ?? "";
-		const canEdit = isPersonal
-			? dashboard.ownerId === userId
-			: role !== null && WRITE_ROLES.has(role);
-		const canDelete = isPersonal
-			? dashboard.ownerId === userId
-			: canActOnOwned(role, dashboard.ownerId, userId);
-		return [
-			{
-				id: "edit",
-				label: m.dashboard_menu_edit(),
-				icon: Pencil,
-				hidden: !canEdit,
-				onSelect: () => setDashboardManager({ mode: "edit", id: dashboard.id }),
-			},
-			{
-				id: "set-home",
-				label: m.dashboard_set_home(),
-				icon: House,
-				onSelect: () => setHome(dashboardHomeRef(dashboard.id)),
-			},
-			{
-				id: "delete",
-				label: m.dashboard_delete(),
-				icon: Trash2,
-				destructive: true,
-				hidden: !canDelete,
-				onSelect: () => void deleteDashboard(dashboard),
-			},
-		];
-	};
 
 	// Stable prop objects for DashboardView's panel evaluation (same synced sets
 	// the ViewRenderer surface consumes).
