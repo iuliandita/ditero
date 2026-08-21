@@ -11,7 +11,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Panel } from "../../domain/dashboard.ts";
 import type { ListKind } from "../../domain/icon-map.ts";
-import { type Role, WRITE_ROLES } from "../../domain/role.ts";
+import { WRITE_ROLES } from "../../domain/role.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import { snapshotList } from "../../domain/template.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
@@ -59,6 +59,7 @@ import { useDashboards } from "../hooks/useDashboards.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import type { SavedView } from "../hooks/useViews.ts";
 import { useViews } from "../hooks/useViews.ts";
+import { useWorkspaceData } from "../hooks/useWorkspaceData.ts";
 import {
 	type CommandHandlers,
 	CommandProvider,
@@ -69,7 +70,7 @@ import {
 	focusPrev,
 	openFocused,
 } from "../keyboard/roving.ts";
-import { canCreateFolder, shareableWorkspaces } from "../lib/create-gates.ts";
+import { canCreateFolder } from "../lib/create-gates.ts";
 import { ICONS } from "../lib/list-icon.tsx";
 import type { Locale } from "../lib/locale.ts";
 import { runMutation } from "../lib/run-mutation.ts";
@@ -128,19 +129,23 @@ function NormalWorkspace() {
 		},
 		[zero],
 	);
-	const [workspaces] = useQuery(queries.workspaces.mine());
-	const [lists, listsDetails] = useQuery(queries.lists.mine());
-	const [folders] = useQuery(queries.folders.mine());
-	const [templates] = useQuery(queries.templates.mine());
-	const [tasks, tasksDetails] = useQuery(queries.tasks.mine());
-	const [labels] = useQuery(queries.labels.mine());
-	const [taskLabels] = useQuery(queries.taskLabels.mine());
-	const [assignees] = useQuery(queries.assignees.mine());
-	const [memberships] = useQuery(queries.memberships.mine());
-	// The view surface joins tasks onto lists, so it is only settled once both
-	// queries are; until then "no rows" means "not synced", not "nothing here".
-	const viewRowsLoading =
-		tasksDetails.type !== "complete" || listsDetails.type !== "complete";
+	const {
+		workspaces,
+		lists,
+		folders,
+		templates,
+		tasks,
+		labels,
+		taskLabels,
+		assignees,
+		memberships,
+		viewRowsLoading,
+		roleByWorkspace,
+		shareable,
+		members,
+		membershipWorkspaceIds,
+		labelIdsByTask,
+	} = useWorkspaceData();
 	const { views: savedViews } = useViews();
 	const { dashboards, loading: dashboardsLoading } = useDashboards();
 	const { pref, setPref, loading: prefLoading } = useUserPref();
@@ -221,24 +226,7 @@ function NormalWorkspace() {
 	}, [tasks, activeLists]);
 
 	// --- List row actions -----------------------------------------------------
-	// The caller's own role per workspace; the mutators re-check on write, this
-	// only keeps the menu from offering what would fail.
-	const roleByWorkspace = useMemo(() => {
-		const map = new Map<string, Role>();
-		for (const row of memberships) {
-			if (row.userId === zero.userID)
-				map.set(row.workspaceId, row.role as Role);
-		}
-		return map;
-	}, [memberships, zero.userID]);
 	const activeRole = activeId ? (roleByWorkspace.get(activeId) ?? null) : null;
-	// Share targets for views/dashboards: every user owns a personal workspace as
-	// owner, so this is never empty -- it only drops the workspaces the caller
-	// joined as Viewer.
-	const shareable = useMemo(
-		() => shareableWorkspaces(workspaces, roleByWorkspace),
-		[workspaces, roleByWorkspace],
-	);
 
 	function moveListToFolder(list: List, folderId: string | null) {
 		void zero
@@ -462,23 +450,6 @@ function NormalWorkspace() {
 		: null;
 
 	// --- Views wiring ---------------------------------------------------------
-	// Members for the renderer/filter-builder pickers: one entry per co-member.
-	const members = useMemo(() => {
-		const seen = new Set<string>();
-		const out: { id: string; name: string }[] = [];
-		for (const row of memberships) {
-			if (row.user && !seen.has(row.userId)) {
-				seen.add(row.userId);
-				out.push({ id: row.userId, name: row.user.name });
-			}
-		}
-		return out;
-	}, [memberships]);
-	// The renderer scopes to workspaces the user actually belongs to.
-	const membershipWorkspaceIds = useMemo(
-		() => workspaces.map((w) => w.id),
-		[workspaces],
-	);
 	// Home ref resolution: builtin/saved view, "dashboard:<id>", or (dangling/
 	// garbage) DEFAULT_HOME — pure helper, unit-tested.
 	const homeTarget = useMemo(
@@ -812,16 +783,6 @@ function NormalWorkspace() {
 		setDashboardManager(null);
 	}
 
-	// Label ids per task -> TaskDetail (view onOpenTask reuses the list sheet).
-	const labelIdsByTask = useMemo(() => {
-		const map = new Map<string, string[]>();
-		for (const tl of taskLabels) {
-			const bucket = map.get(tl.taskId);
-			if (bucket) bucket.push(tl.labelId);
-			else map.set(tl.taskId, [tl.labelId]);
-		}
-		return map;
-	}, [taskLabels]);
 	const detailTask = detailTaskId
 		? (tasks.find((t) => t.id === detailTaskId) ?? null)
 		: null;
