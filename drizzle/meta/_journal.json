@@ -141,6 +141,13 @@
       "when": 1787297997059,
       "tag": "0019_big_jasper_sitwell",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787350877362,
+      "tag": "0020_aspiring_lethal_legion",
+      "breakpoints": true
     }
   ]
 }

@@ -95,6 +95,10 @@ export const workspace = pgTable(
 			.notNull()
 			.references(() => user.id),
 		kind: workspaceKindEnum("kind").notNull().default("shared"),
+		// Set atomically when a member is removed, cleared when the next WDK
+		// version is minted and granted. While set, the server refuses attachment
+		// reserves here: the removed member still holds the current key.
+		rotationRequired: boolean("rotation_required").notNull().default(false),
 	},
 	(t) => [
 		uniqueIndex("workspace_personal_owner")
@@ -802,3 +806,146 @@ export const ackCapabilityRelations = relations(ackCapability, ({ one }) => ({
 		references: [user.id],
 	}),
 }));
+
+// --- M-E2E: operator-blind key material (design 9.1) -----------------------
+//
+// Backend-owned and deliberately absent from drizzle-zero.config.ts. Every
+// table below carries FORCE RLS in its migration, so even the owning role is
+// held to the policy; the app reaches these only through withUserContext.
+
+export const keyEnrollmentStateEnum = pgEnum("key_enrollment_state", [
+	"unenrolled",
+	"ready",
+	"failed",
+]);
+
+export const keyGrantStateEnum = pgEnum("key_grant_state", [
+	"key_pending",
+	"ready",
+	"failed",
+	"revoked",
+]);
+
+export const userKey = pgTable("user_key", {
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" })
+		.unique(),
+	// Immutable for the lifetime of one identity. Identity rotation writes a NEW
+	// row and retires this one; it never edits the public key in place.
+	publicKey: text("public_key").notNull(),
+	passphraseWrapped: text("passphrase_wrapped").notNull(),
+	recoveryWrapped: text("recovery_wrapped").notNull(),
+	passphraseSalt: text("passphrase_salt").notNull(),
+	recoverySalt: text("recovery_salt").notNull(),
+	formatVersion: smallint("format_version").notNull().default(1),
+	state: keyEnrollmentStateEnum("state").notNull().default("unenrolled"),
+	retiredAt: timestamp("retired_at", { withTimezone: true }),
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
+
+export const workspaceKey = pgTable(
+	"workspace_key",
+	{
+		id: text("id").primaryKey(),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => workspace.id, { onDelete: "cascade" }),
+		version: integer("version").notNull(),
+		// Public pin on which key IS this version. Recipients verify their
+		// unwrapped WDK against it and refuse a mismatch, which is what stops a
+		// granter forking the workspace into two key universes.
+		commitment: text("commitment").notNull(),
+		mintedBy: text("minted_by")
+			.notNull()
+			.references(() => user.id),
+		active: boolean("active").notNull().default(true),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		retiredAt: timestamp("retired_at", { withTimezone: true }),
+	},
+	(t) => [unique("workspace_key_version").on(t.workspaceId, t.version)],
+);
+
+export const membershipKey = pgTable(
+	"membership_key",
+	{
+		id: text("id").primaryKey(),
+		membershipId: text("membership_id")
+			.notNull()
+			.references(() => membership.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => workspace.id, { onDelete: "cascade" }),
+		keyVersion: integer("key_version").notNull(),
+		// HPKE encapsulated key and ciphertext, base64url.
+		enc: text("enc").notNull(),
+		ciphertext: text("ciphertext").notNull(),
+		// The public key this wrap was addressed to. An identity rotation between
+		// request and fulfilment must invalidate the wrap rather than silently
+		// deliver a key the recipient can no longer open.
+		recipientPublicKey: text("recipient_public_key").notNull(),
+		grantedBy: text("granted_by")
+			.notNull()
+			.references(() => user.id),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [unique("membership_key_version").on(t.membershipId, t.keyVersion)],
+);
+
+export const keyGrantRequest = pgTable(
+	"key_grant_request",
+	{
+		id: text("id").primaryKey(),
+		membershipId: text("membership_id")
+			.notNull()
+			.references(() => membership.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => workspace.id, { onDelete: "cascade" }),
+		requestedVersion: integer("requested_version").notNull(),
+		state: keyGrantStateEnum("state").notNull().default("key_pending"),
+		failureReason: text("failure_reason"),
+		requestedAt: timestamp("requested_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		grantedAt: timestamp("granted_at", { withTimezone: true }),
+	},
+	(t) => [
+		uniqueIndex("key_grant_request_active")
+			.on(t.membershipId, t.requestedVersion)
+			.where(sql`state = 'key_pending'`),
+	],
+);
+
+export const userDevice = pgTable("user_device", {
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	label: text("label").notNull(),
+	// Metadata only. Revoking a device kills its sessions and clears its stored
+	// key; it is NOT cryptographic revocation. Identity rotation is.
+	firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+	lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+	revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});
