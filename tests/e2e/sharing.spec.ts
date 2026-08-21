@@ -57,16 +57,24 @@ async function joinShared(
 	}
 }
 
-// The list title renders on three surfaces at once -- the sidebar button, the
-// mobile/desktop index row, and the open list's own heading -- so a bare
-// getByText is a strict-mode violation the moment sync has finished. It only
-// ever passed by racing the render (#157). The heading inside [data-testid=
-// "list"] is the one that carries the assertion's actual meaning: this client
-// has the shared list open.
-function openListHeading(page: Page, title: string) {
+// The list title renders on several surfaces at once -- the sidebar entry, the
+// index row, and (only when it happens to be the open list) the list heading --
+// so a bare getByText is ambiguous exactly when the shared list is the one
+// open (#157).
+//
+// The sidebar entry is the node that carries the assertion's meaning: this
+// client's membership-gated sync delivered the list row. It does NOT depend on
+// which list is open, and that matters -- openSharedDesktop opens the FIRST
+// list in the shared workspace (Workspace.tsx), and that workspace accumulates
+// lists across the whole run, so in a full suite the open list is whichever one
+// an earlier spec ordered first, not necessarily this one.
+//
+// Attribute selector rather than getByRole: the role engine skips aria-hidden
+// subtrees, which any open Radix modal surface produces.
+function sidebarListEntry(page: Page, title: string) {
 	return page
-		.getByTestId("list")
-		.getByRole("heading", { name: title, exact: true });
+		.locator('nav[aria-label="Lists"]')
+		.getByText(title, { exact: true });
 }
 
 async function openSharedDesktop(page: Page): Promise<void> {
@@ -216,7 +224,7 @@ test("invite: email invite accepted -> member syncs to both, pending drops", asy
 
 	// Member on both clients: invitee's client gains the shared workspace + list.
 	await openSharedDesktop(pb);
-	await expect(openListHeading(pb, "Shared list")).toBeVisible({
+	await expect(sidebarListEntry(pb, "Shared list")).toBeVisible({
 		timeout: 15000,
 	});
 	// Owner's panel: the invitee now shows as a member (co-member membership synced
@@ -335,7 +343,7 @@ test("invite-on-assign: pick a non-member by email -> accept resolves the assign
 	);
 	// Newly joined user reaches the shared workspace.
 	await openSharedDesktop(pc);
-	await expect(openListHeading(pc, "Shared list")).toBeVisible({
+	await expect(sidebarListEntry(pc, "Shared list")).toBeVisible({
 		timeout: 15000,
 	});
 
