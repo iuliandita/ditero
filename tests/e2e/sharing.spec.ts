@@ -565,6 +565,81 @@ test("isolation: an outsider sees no shared invites, assignees, comments, or man
 	await o.close();
 });
 
+// --- Scenario 7: role change then removal (plan 004) ---
+test("membership: owner changes a member's role, then removes them", async ({
+	browser,
+}) => {
+	test.setTimeout(90000);
+	const a = await browser.newContext();
+	const b = await browser.newContext();
+	const pa = await a.newPage();
+	const pb = await b.newPage();
+	const consoleErrors: string[] = [];
+	pb.on("console", (msg) => {
+		if (msg.type() === "error") consoleErrors.push(msg.text());
+	});
+
+	const ownerEmail = uniqueEmail("s7-owner");
+	const memberEmail = uniqueEmail("s7-member");
+	const memberName = nameOf(memberEmail);
+
+	const ownerId = await signUp(pa, ownerEmail);
+	await joinShared(ownerId, "owner");
+	const memberId = await signUp(pb, memberEmail);
+	await joinShared(memberId, "member");
+
+	await openSharedDesktop(pa);
+	await pa.getByTestId("open-members").click();
+	await expect(pa.getByTestId("members-panel")).toBeVisible();
+
+	// The member's own client stays open (unattended) through the whole flow,
+	// so a removal that breaks a synced query for OTHER members would surface
+	// here as a console error rather than passing silently.
+	await openSharedDesktop(pb);
+
+	const panel = pa.getByTestId("members-panel");
+	const memberRow = panel
+		.getByTestId("member-row")
+		.filter({ hasText: memberName });
+	await expect(memberRow).toBeVisible({ timeout: 15000 });
+	await expect(memberRow.getByText("Member", { exact: true })).toBeVisible();
+
+	// Change role: kebab -> "Change role" submenu -> "Viewer".
+	await memberRow.getByTestId("row-actions").click();
+	await memberRow
+		.page()
+		.locator('[data-slot="dropdown-menu-sub-trigger"]')
+		.click();
+	await memberRow.page().getByTestId("row-action-role:viewer").click();
+	await expect(memberRow.getByText("Viewer", { exact: true })).toBeVisible({
+		timeout: 15000,
+	});
+	// Wait for the first menu's close (unmount) to fully settle before reopening
+	// it -- otherwise the second kebab click can land while Radix's dismiss
+	// animation is still in flight and miss the panel entirely.
+	await expect(
+		memberRow.page().locator('[data-slot="dropdown-menu-content"]'),
+	).toHaveCount(0);
+
+	// Remove: kebab -> "Remove from workspace" -> confirm names the blast radius
+	// -> accept. Present-then-absent on the SAME locator guards against a
+	// vacuous pass from an aria-hidden-gated query.
+	await memberRow.getByTestId("row-actions").click();
+	await expect(memberRow.page().getByTestId("row-action-remove")).toBeVisible();
+	await memberRow.page().getByTestId("row-action-remove").click();
+	const confirmDialog = pa.getByTestId("confirm-dialog");
+	await expect(confirmDialog).toBeVisible();
+	await expect(confirmDialog).toContainText(memberName);
+	await pa.getByTestId("confirm-accept").click();
+	await expect(confirmDialog).toBeHidden();
+	await expect(memberRow).toHaveCount(0, { timeout: 15000 });
+
+	expect(consoleErrors).toEqual([]);
+
+	await a.close();
+	await b.close();
+});
+
 // --- Step 2: axe merge gate on the four sharing surfaces ---
 test("a11y: no serious/critical violations on the sharing surfaces", async ({
 	browser,

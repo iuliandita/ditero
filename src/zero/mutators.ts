@@ -33,7 +33,7 @@ import { LOCALES } from "../domain/locale.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { MutatorError } from "../domain/mutator-error.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
-import { ADMIN_ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
+import { ADMIN_ROLES, ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
 	type InstantiatedList,
@@ -46,9 +46,11 @@ import { collectEvent } from "./event-sink.ts";
 import {
 	type Dashboard,
 	type List,
+	type Membership,
 	type Schema,
 	type User,
 	type View,
+	type Workspace,
 	zql,
 } from "./schema.gen.ts";
 
@@ -161,6 +163,52 @@ async function requireDashboardEdit(
 	if (!dashboard.workspaceId)
 		throw new Error("workspace dashboard missing workspaceId");
 	await requireWrite(tx, userId, dashboard.workspaceId);
+}
+
+// Shared preamble for the two membership admin mutators (setRole, remove).
+// Returns the target row once every guard has passed. The owner-count query is
+// what makes "the last owner cannot be demoted or removed" hold; without it a
+// workspace can be left with no one able to administer it and no way back.
+//
+// The owner-count check runs BEFORE the self-target check, not after: rule 3
+// (only an owner may act on an owner row) plus rule 5/self-target together mean
+// a non-self caller can never actually reach ownerCount === 1 for an owner
+// target -- if the caller is a different owner, they are themselves counted,
+// so the count is at least 2. The only caller who can ever hit ownerCount === 1
+// is the sole owner acting on themselves, which the self-check would otherwise
+// intercept first and mask with a different, less specific message. Checking
+// owner-count first keeps the "last owner" rejection independently observable
+// (and mutation-testable) without changing what is actually blocked.
+async function requireMembershipAdmin(
+	tx: Transaction<Schema>,
+	callerId: string,
+	membershipId: string,
+	lastOwnerMessage: string,
+): Promise<{ target: Membership; callerRole: Role; ownerCount: number }> {
+	const target = await tx.run(zql.membership.where("id", membershipId).one());
+	if (!target) throw new Error("membership not found");
+	const workspace = await tx.run(
+		zql.workspace.where("id", target.workspaceId).one(),
+	);
+	if (!workspace) throw new Error("workspace not found");
+	if ((workspace as Workspace).kind === "personal")
+		throw new Error("personal workspace membership is fixed");
+	const callerRole = await roleInWorkspace(tx, callerId, target.workspaceId);
+	if (!callerRole || !ADMIN_ROLES.has(callerRole))
+		throw new Error("access denied: need admin+");
+	if (target.role === "owner" && callerRole !== "owner")
+		throw new Error("access denied: only an owner may change an owner");
+	const owners = await tx.run(
+		zql.membership
+			.where("workspaceId", target.workspaceId)
+			.where("role", "owner"),
+	);
+	const ownerCount = owners.length;
+	if (target.role === "owner" && ownerCount === 1)
+		throw new Error(lastOwnerMessage);
+	if (target.userId === callerId)
+		throw new Error("access denied: cannot change your own membership");
+	return { target, callerRole, ownerCount };
 }
 
 // `satisfies` ties the tuple to ListKind so a typo or removed kind fails to
@@ -1405,6 +1453,48 @@ export const mutators = defineMutators({
 				if (!role || !ADMIN_ROLES.has(role))
 					throw new Error("access denied: need admin+");
 				await tx.mutate.invite.update({ id: args.id, status: "revoked" });
+			},
+		),
+	},
+	membership: {
+		setRole: defineMutator(
+			z.object({ id: z.string(), role: z.enum(ROLES) }),
+			async ({ tx, ctx, args }) => {
+				const { callerRole } = await requireMembershipAdmin(
+					tx,
+					ctx.id,
+					args.id,
+					"cannot demote the last owner",
+				);
+				if (args.role === "owner" && callerRole !== "owner")
+					throw new Error("access denied: only an owner may grant owner");
+				await tx.mutate.membership.update({ id: args.id, role: args.role });
+			},
+		),
+		remove: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				const { target } = await requireMembershipAdmin(
+					tx,
+					ctx.id,
+					args.id,
+					"cannot remove the last owner",
+				);
+				// Assignment implies membership everywhere in this codebase (that is
+				// the premise of invite-on-assign), so an assignee row for a
+				// non-member is a row no query syncs and no UI can clear.
+				const assignments = await tx.run(
+					zql.taskAssignee.where("userId", target.userId),
+				);
+				for (const a of assignments) {
+					const task = await tx.run(
+						zql.task.where("id", a.taskId).related("list").one(),
+					);
+					const list = task?.list as List | undefined;
+					if (list?.workspaceId === target.workspaceId)
+						await tx.mutate.taskAssignee.delete({ id: a.id });
+				}
+				await tx.mutate.membership.delete({ id: args.id });
 			},
 		),
 	},
