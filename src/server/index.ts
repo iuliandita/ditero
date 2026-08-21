@@ -24,7 +24,6 @@ import {
 	ManagedAccountError,
 } from "../auth/managed-account.ts";
 import { trustedAuthOrigins } from "../auth/origins.ts";
-import { requireSameOrigin } from "../auth/security.ts";
 import { mailConfig } from "../config/mail.ts";
 import { notifyAllowedPrivateCIDRs } from "../config/notify-egress.ts";
 import { workerTiming } from "../config/worker.ts";
@@ -36,6 +35,8 @@ import { queries } from "../zero/queries.ts";
 import { schema } from "../zero/schema.gen.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
+import { e2eRoutes } from "./e2e/routes.ts";
+import { makeGuards } from "./guards.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
 import { sendInviteMail } from "./mail/invite-mail.ts";
 import { ackBaseUrl } from "./notifications/capability.ts";
@@ -72,47 +73,10 @@ const requestOrigins = [
 // Shared write DB provider (the ZQLDatabase path handleMutateRequest drives).
 const zdb = zeroNodePg(schema, pool);
 
-// Same-origin + session, the shape every authenticated POST here shares.
-// Deliberately NOT applied to the ack route (C24): that one is reached by push
-// clients with no session and, from ntfy's web UI, cross-origin.
-type Session = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
-
-function guardedPost(
-	handler: (request: Request, session: Session) => Promise<unknown>,
-) {
-	return async ({ request }: { request: Request }) => {
-		try {
-			requireSameOrigin(request, requestOrigins);
-		} catch {
-			return new Response("Forbidden", { status: 403 });
-		}
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) return new Response("Unauthorized", { status: 401 });
-		return await handler(request, session);
-	};
-}
-
-// GET counterpart to guardedPost. Reads use the looser origin check rather
-// than requireSameOrigin: a same-origin GET carries no Origin header at all, so
-// only a present-and-foreign origin is refused.
-function foreignOrigin(request: Request): boolean {
-	const origin = request.headers.get("origin");
-	return (
-		origin !== null && !requestOrigins.some((o) => new URL(o).origin === origin)
-	);
-}
-
-function guardedGet(
-	handler: (request: Request, session: Session) => Promise<unknown>,
-) {
-	return async ({ request }: { request: Request }) => {
-		if (foreignOrigin(request))
-			return new Response("Forbidden", { status: 403 });
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) return new Response("Unauthorized", { status: 401 });
-		return await handler(request, session);
-	};
-}
+const { guardedPost, guardedGet, foreignOrigin } = makeGuards(
+	requestOrigins,
+	(headers) => auth.api.getSession({ headers }),
+);
 
 // Shared JSON-body + ChannelError shape for the three channel writes. The body
 // is the error's stable CODE, never its prose: the prose named deployment env
@@ -154,6 +118,9 @@ const routes = new Elysia()
 	// Same placement and reason again: Slack posts interactions with no session
 	// and no Origin header, authenticating with a v0 HMAC signature.
 	.use(slackInteractionRoutes(db))
+	// Authenticated E2E key endpoints. Mounted unconditionally; each handler
+	// checks DITERO_E2E_ENABLED per request and answers 404 when it is off.
+	.use(e2eRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	.use(cors(corsPolicy(process.env)))
 	.onRequest(({ set }) => {
 		Object.assign(set.headers, responseHeaders);
