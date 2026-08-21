@@ -19,10 +19,7 @@ import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { Dashboard, Folder, List, schema } from "../../zero/schema.gen.ts";
-import {
-	type DashboardFormValue,
-	DashboardManager,
-} from "../components/dashboard/DashboardManager.tsx";
+import type { DashboardFormValue } from "../components/dashboard/DashboardManager.tsx";
 import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
@@ -31,9 +28,6 @@ import {
 	listActions,
 } from "../components/list/listActions.ts";
 import { SortableList } from "../components/list/SortableList.tsx";
-import { TaskDetail } from "../components/list/TaskDetail.tsx";
-import { MembersPanel } from "../components/people/MembersPanel.tsx";
-import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
@@ -44,8 +38,6 @@ import {
 } from "../components/shell/folderActions.ts";
 import { groupLists } from "../components/shell/grouping.ts";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
-import { MobileSearch } from "../components/shell/MobileSearch.tsx";
-import { NameDialog } from "../components/shell/NameDialog.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
@@ -60,37 +52,23 @@ import {
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu.tsx";
 import { canActOnOwned, type RowAction } from "../components/ui/row-action.ts";
-import {
-	Sheet,
-	SheetContent,
-	SheetHeader,
-	SheetTitle,
-} from "../components/ui/sheet.tsx";
-import {
-	type ViewFormValue,
-	ViewManager,
-} from "../components/views/ViewManager.tsx";
+import type { ViewFormValue } from "../components/views/ViewManager.tsx";
 import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
 import { useDashboards } from "../hooks/useDashboards.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import type { SavedView } from "../hooks/useViews.ts";
 import { useViews } from "../hooks/useViews.ts";
-import { CheatSheet } from "../keyboard/CheatSheet.tsx";
 import {
 	type CommandHandlers,
 	CommandProvider,
-	useCommands,
 } from "../keyboard/CommandContext.tsx";
-import { CommandPalette } from "../keyboard/CommandPalette.tsx";
 import {
 	actOnFocused,
 	focusNext,
 	focusPrev,
 	openFocused,
 } from "../keyboard/roving.ts";
-import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
-import { useKeyBindings } from "../keyboard/useKeyBindings.ts";
 import { canCreateFolder, shareableWorkspaces } from "../lib/create-gates.ts";
 import { ICONS } from "../lib/list-icon.tsx";
 import type { Locale } from "../lib/locale.ts";
@@ -105,6 +83,7 @@ import {
 import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
 import { ListView } from "./ListView.tsx";
 import { SettingsSurface } from "./SettingsSurface.tsx";
+import { WorkspaceOverlays } from "./WorkspaceOverlays.tsx";
 
 // Resolved view descriptor: a built-in aggregate or a saved row, unified for the
 // renderer/header. `saved` is set only for editable saved views.
@@ -130,16 +109,6 @@ export function Workspace() {
 	);
 	if (restricted) return <RestrictedShell />;
 	return <NormalWorkspace />;
-}
-
-// Installs the global key handler inside CommandProvider scope so `run` and the
-// effective keymap resolve against live provider/pref state. Renders nothing;
-// mounted desktop-only (design 2.18).
-function WorkspaceKeyboard() {
-	const { run } = useCommands();
-	const keymap = useEffectiveKeymap();
-	useKeyBindings(keymap, run);
-	return null;
 }
 
 function NormalWorkspace() {
@@ -1273,222 +1242,57 @@ function NormalWorkspace() {
 					{content}
 				</AppShell>
 
-				{/* Mobile workspace switcher: Lists-header title tap -> bottom sheet. */}
-				<Sheet open={switcherOpen} onOpenChange={setSwitcherOpen}>
-					<SheetContent side="bottom">
-						<SheetHeader>
-							<SheetTitle>{m.workspace_switcher_title()}</SheetTitle>
-						</SheetHeader>
-						<div className="flex flex-col gap-1 p-4 pt-0">
-							{workspaces.map((w) => (
-								<button
-									key={w.id}
-									type="button"
-									onClick={() => selectWorkspace(w.id)}
-									className={`rounded-lg px-3 py-2 text-start ${
-										w.id === activeId ? "bg-muted font-medium" : ""
-									}`}
-								>
-									{w.name}
-								</button>
-							))}
-							<button
-								type="button"
-								onClick={() => {
-									setOpenSharedRequested(true);
-									setSwitcherOpen(false);
-								}}
-								className="rounded-lg px-3 py-2 text-start text-muted-foreground"
-							>
-								{m.sidebar_open_shared()}
-							</button>
-							<button
-								type="button"
-								data-testid="open-members"
-								disabled={!activeId}
-								onClick={() => {
-									setSwitcherOpen(false);
-									setMembersOpen(true);
-								}}
-								className="rounded-lg px-3 py-2 text-start text-muted-foreground disabled:opacity-50"
-							>
-								{m.sidebar_members()}
-							</button>
-						</div>
-					</SheetContent>
-				</Sheet>
-
-				{activeId && (
-					<MembersPanel
-						workspaceId={activeId}
-						workspaceName={
-							workspaces.find((w) => w.id === activeId)?.name ??
-							m.workspace_name_fallback()
-						}
-						open={membersOpen}
-						onOpenChange={setMembersOpen}
-					/>
-				)}
-
-				<QuickAddSheet
-					open={quickAddOpen}
-					onOpenChange={setQuickAddOpen}
-					lists={activeLists}
+				<WorkspaceOverlays
+					isDesktop={isDesktop}
+					activeId={activeId}
+					openListId={openListId}
+					workspaces={workspaces}
+					lists={lists}
+					activeLists={activeLists}
+					folders={folders}
 					labels={labels}
 					tasks={tasks}
-					currentListId={openListId}
-					workspaceId={activeId ?? ""}
-				/>
-
-				{viewManager && (
-					<ViewManager
-						open
-						onOpenChange={(o) => {
-							if (!o) setViewManager(null);
-						}}
-						mode={viewManager.mode}
-						initial={
-							viewManager.mode === "edit"
-								? (() => {
-										const s = savedViews.find((v) => v.id === viewManager.id);
-										return s
-											? {
-													name: s.name,
-													icon: s.icon ?? null,
-													scope: s.scope ?? "personal",
-													workspaceId: s.workspaceId,
-													filter: s.filter,
-													display: s.display,
-												}
-											: undefined;
-									})()
-								: undefined
-						}
-						lists={lists.map((l) => ({ id: l.id, title: l.title }))}
-						folders={folders.map((f) => ({ id: f.id, name: f.name }))}
-						labels={labels.map((l) => ({
-							id: l.id,
-							name: l.name,
-							color: l.color ?? undefined,
-						}))}
-						members={members}
-						workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
-						shareableWorkspaces={shareable.map((w) => ({
-							id: w.id,
-							name: w.name,
-						}))}
-						onSubmit={submitView}
-					/>
-				)}
-
-				{dashboardManager && (
-					<DashboardManager
-						open
-						onOpenChange={(o) => {
-							if (!o) setDashboardManager(null);
-						}}
-						mode={dashboardManager.mode}
-						initial={
-							dashboardManager.mode === "edit"
-								? (() => {
-										const d = dashboards.find(
-											(row) => row.id === dashboardManager.id,
-										);
-										return d
-											? {
-													name: d.name,
-													icon: d.icon ?? null,
-													scope: d.scope ?? "personal",
-													workspaceId: d.workspaceId ?? null,
-												}
-											: undefined;
-									})()
-								: undefined
-						}
-						shareableWorkspaces={shareable.map((w) => ({
-							id: w.id,
-							name: w.name,
-						}))}
-						onSubmit={submitDashboard}
-					/>
-				)}
-
-				<NameDialog
-					open={renameTarget !== null}
-					initialName={renameTarget?.title ?? ""}
-					title={m.action_rename()}
-					fieldLabel={m.field_name()}
-					testId="list-rename"
-					onSubmit={submitRename}
-					onOpenChange={(o) => {
-						if (!o) setRenameTarget(null);
+					savedViews={savedViews}
+					dashboards={dashboards}
+					shareable={shareable}
+					members={members}
+					labelIdsByTask={labelIdsByTask}
+					switcherOpen={switcherOpen}
+					onSwitcherOpenChange={setSwitcherOpen}
+					onSelectWorkspace={selectWorkspace}
+					onOpenShared={() => setOpenSharedRequested(true)}
+					membersOpen={membersOpen}
+					onMembersOpenChange={setMembersOpen}
+					quickAddOpen={quickAddOpen}
+					onQuickAddOpenChange={setQuickAddOpen}
+					viewManager={viewManager}
+					onViewManagerClose={() => setViewManager(null)}
+					onSubmitView={submitView}
+					dashboardManager={dashboardManager}
+					onDashboardManagerClose={() => setDashboardManager(null)}
+					onSubmitDashboard={submitDashboard}
+					renameTarget={renameTarget}
+					onRenameClose={() => setRenameTarget(null)}
+					onSubmitRename={submitRename}
+					folderDialog={folderDialog}
+					onFolderDialogClose={() => setFolderDialog(null)}
+					onSubmitFolderDialog={submitFolderDialog}
+					detailTask={detailTask}
+					detailList={detailList}
+					onDetailClose={() => setDetailTaskId(null)}
+					searchOpen={searchOpen}
+					onSearchSelect={(taskId, listId) => {
+						setSearchOpen(false);
+						openList(listId);
+						setDetailTaskId(taskId);
 					}}
+					onSearchClose={() => setSearchOpen(false)}
+					cheatOpen={cheatOpen}
+					onCheatOpenChange={setCheatOpen}
+					onOpenList={openList}
+					onOpenView={openView}
+					onOpenDashboard={openDashboard}
 				/>
-
-				<NameDialog
-					open={folderDialog !== null}
-					initialName={
-						folderDialog?.mode === "rename" ? folderDialog.folder.name : ""
-					}
-					title={
-						folderDialog?.mode === "rename"
-							? m.folder_rename_title()
-							: m.action_new_folder()
-					}
-					fieldLabel={m.folder_name_label()}
-					testId="folder-name"
-					onSubmit={submitFolderDialog}
-					onOpenChange={(o) => {
-						if (!o) setFolderDialog(null);
-					}}
-				/>
-
-				{/* View onOpenTask reuses the list TaskDetail sheet (design 2.20). */}
-				{detailTask && detailList && (
-					<TaskDetail
-						task={detailTask}
-						open
-						onOpenChange={(o) => {
-							if (!o) setDetailTaskId(null);
-						}}
-						list={detailList}
-						allLists={lists}
-						allTasks={tasks}
-						allLabels={labels}
-						taskLabelIds={labelIdsByTask.get(detailTask.id) ?? []}
-					/>
-				)}
-
-				{/* Touch search: the palette's Search group without its keyboard
-			    command registry. Unmounted while closed so a stale layer never
-			    claims the Escape aimed at the task detail it just opened. */}
-				{!isDesktop && searchOpen && (
-					<MobileSearch
-						tasks={tasks}
-						lists={lists}
-						onSelect={(taskId, listId) => {
-							setSearchOpen(false);
-							openList(listId);
-							setDetailTaskId(taskId);
-						}}
-						onClose={() => setSearchOpen(false)}
-					/>
-				)}
-
-				{/* Keyboard system is desktop-only (design 2.18): the global handler,
-			    ⌘K palette, and ? cheat-sheet. RestrictedShell never mounts these. */}
-				{isDesktop && (
-					<>
-						<WorkspaceKeyboard />
-						<CommandPalette
-							onNavigateList={openList}
-							onNavigateView={openView}
-							onNavigateDashboard={openDashboard}
-						/>
-						<CheatSheet open={cheatOpen} onOpenChange={setCheatOpen} />
-					</>
-				)}
-
 				<FocusTimer />
 			</CommandProvider>
 		</FocusProvider>
