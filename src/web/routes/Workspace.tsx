@@ -26,7 +26,6 @@ import {
 import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
-import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
 import {
 	type ListActionHandlers,
 	listActions,
@@ -35,14 +34,6 @@ import { SortableList } from "../components/list/SortableList.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { MembersPanel } from "../components/people/MembersPanel.tsx";
 import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
-import { FocusSettings } from "../components/settings/FocusSettings.tsx";
-import { KarmaSettings } from "../components/settings/KarmaSettings.tsx";
-import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
-import { LabelManager } from "../components/settings/LabelManager.tsx";
-import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
-import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
-import { TemplateManager } from "../components/settings/TemplateManager.tsx";
-import { ThemeSwitcher } from "../components/settings/ThemeSwitcher.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
@@ -113,7 +104,7 @@ import {
 } from "../views/builtins.ts";
 import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
 import { ListView } from "./ListView.tsx";
-import { SecurityPanel } from "./SecurityPanel.tsx";
+import { SettingsSurface } from "./SettingsSurface.tsx";
 
 // Resolved view descriptor: a built-in aggregate or a saved row, unified for the
 // renderer/header. `saved` is set only for editable saved views.
@@ -917,36 +908,14 @@ function NormalWorkspace() {
 	let content: React.ReactNode;
 	if (section === "settings") {
 		content = (
-			<div data-testid="settings-surface">
-				<div className="flex items-center gap-2 border-b p-3">
-					<BackButton
-						data-testid="settings-back"
-						onClick={() => changeSection("lists")}
-					/>
-					<h1 className="truncate text-lg font-semibold">{m.nav_settings()}</h1>
-				</div>
-				<div className="p-4 md:p-6">
-					<SecurityPanel />
-					<KarmaPanel />
-					<KarmaSettings />
-					<LanguageSwitcher persistLocale={persistLocale} />
-					<ThemeSwitcher />
-					{/* Keyboard is a desktop feature (design 2.18). */}
-					{isDesktop && <KeymapSettings />}
-					{activeId && (
-						<LabelManager workspaceId={activeId} role={activeRole} />
-					)}
-					{activeId && (
-						<TemplateManager
-							workspaceId={activeId}
-							role={activeRole}
-							onUsed={openList}
-						/>
-					)}
-					<FocusSettings />
-					<NotificationSettings />
-				</div>
-			</div>
+			<SettingsSurface
+				activeId={activeId}
+				activeRole={activeRole}
+				isDesktop={isDesktop}
+				persistLocale={persistLocale}
+				onBack={() => changeSection("lists")}
+				onOpenList={openList}
+			/>
 		);
 	} else if (openListId) {
 		content = (
