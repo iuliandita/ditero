@@ -145,7 +145,7 @@ async function crashThenRecover(
 	point: string,
 	taskIds: string[],
 	seed: () => Promise<void>,
-	left?: { label: string; holds: (rows: OutboxSnapshot) => boolean },
+	left?: CrashLeft,
 ): Promise<void> {
 	await rig.stop(0);
 	await seed();
@@ -181,11 +181,12 @@ async function crashThenRecover(
 			}
 			continue;
 		}
-		if (!left || left.holds(await outboxFor(taskIds))) {
+		const wire = taskIds.reduce((n, id) => n + wireFor(id).length, 0);
+		if (!left || left.holds(await outboxFor(taskIds), wire)) {
 			await rig.restart(0, "");
 			return;
 		}
-		reason = `the ${point} crash did not leave ${left.label}\n${await describePipeline(db, taskIds)}`;
+		reason = `the ${point} crash did not leave ${left.label}\n${await diagnose(...taskIds).diagnose()}`;
 	}
 	throw new Error(
 		`rig: the ${point} crash never set up its precondition in ${CRASH_ATTEMPTS} attempts, so the recovery under test was never reachable\n${reason}`,
@@ -194,6 +195,12 @@ async function crashThenRecover(
 
 type OutboxSnapshot = Awaited<ReturnType<typeof outboxFor>>;
 
+// `wire` is the total number of copies the tap saw for this crash's task ids.
+type CrashLeft = {
+	label: string;
+	holds: (rows: OutboxSnapshot, wire: number) => boolean;
+};
+
 // Both send-point crashes die holding the row: claimBatch commits `sending`
 // with claimed_by before either hook can fire, and neither hook is reached
 // without that claim.
@@ -201,6 +208,20 @@ const heldBySender = (rows: OutboxSnapshot) =>
 	rows.length === 1 &&
 	rows[0].status === "sending" &&
 	rows[0].claimedBy !== null;
+
+// after-send needs more than the claim (#154). The hook fires when
+// sendWithDeadline RETURNS -- including on a failed send or one that blew the
+// adapter deadline -- and a failed send still leaves the row `sending` with
+// claimed_by, because claimBatch commits that first. So the claim alone reads
+// the same for "crashed after a delivery landed" and "crashed after a send
+// that never arrived", and it is that first copy the asserted duplicate is
+// counted against: without it the recovery re-sends correctly, reaches one,
+// and gets blamed for a second that was never possible.
+//
+// Exactly one, not at least one: two copies already on the wire would mean the
+// recovery under test has run before the recovery phase began.
+const heldAfterDelivery = (rows: OutboxSnapshot, wire: number) =>
+	heldBySender(rows) && wire === 1;
 
 describe("crash injection", () => {
 	test("SIGKILL before the send: the row is reclaimed after the lease and delivered once", async () => {
@@ -241,7 +262,10 @@ describe("crash injection", () => {
 			async () => {
 				await seedReminderTask(db, scope, taskId);
 			},
-			{ label: "a claimed row", holds: heldBySender },
+			{
+				label: "a claimed row and one copy on the wire",
+				holds: heldAfterDelivery,
+			},
 		);
 
 		await waitFor(
