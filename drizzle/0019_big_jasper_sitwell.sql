@@ -1,0 +1,1 @@
+ALTER TABLE "user_pref" ADD COLUMN "theme" text;

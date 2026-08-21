@@ -109,6 +109,7 @@ export default drizzleZeroConfig(schema, {
 			quietHours: true,
 			escalationDefaults: true,
 			locale: true,
+			theme: true,
 			createdAt: true,
 			updatedAt: true,
 		},

@@ -333,6 +333,7 @@ const timezoneArg = z.string().max(100).refine(isValidTimeZone, {
 const localeArg = z
 	.enum(LOCALES as unknown as [string, ...string[]])
 	.nullable();
+const themeArg = z.enum(["light", "dark"]).nullable();
 // S5: equal start and end is rejected, not reinterpreted. The domain reads it
 // as "never quiet" (the opposite of what a user setting both to 22:00 intends),
 // and the alternative reading -- quiet all day -- would park every non-urgent
@@ -1798,6 +1799,9 @@ export const mutators = defineMutators({
 				escalationDefaults: escalationDefaultsArg.optional(),
 				// M-i18n: null means "no preference set" (falls back to Accept-Language).
 				locale: localeArg.optional(),
+				// null means "follow the OS", which is the default and is not the
+				// same as a stored "light".
+				theme: themeArg.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				if (args.escalationDefaults) {
@@ -1829,6 +1833,7 @@ export const mutators = defineMutators({
 						quietHours: args.quietHours ?? null,
 						escalationDefaults: args.escalationDefaults ?? null,
 						locale: args.locale ?? null,
+						theme: args.theme ?? null,
 					});
 			},
 		),
