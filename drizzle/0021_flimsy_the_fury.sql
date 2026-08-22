@@ -1,0 +1,1 @@
+ALTER TABLE "user_key" ALTER COLUMN "format_version" DROP DEFAULT;

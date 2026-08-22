@@ -839,7 +839,11 @@ export const userKey = pgTable("user_key", {
 	recoveryWrapped: text("recovery_wrapped").notNull(),
 	passphraseSalt: text("passphrase_salt").notNull(),
 	recoverySalt: text("recovery_salt").notNull(),
-	formatVersion: smallint("format_version").notNull().default(1),
+	// No default, deliberately. This records the KDF version the CLIENT
+	// derived its wraps under, so a server that forgets to pass it must fail
+	// the insert rather than silently stamp a version the wrap was not made
+	// with -- which produces an unlock failure no passphrase can fix.
+	formatVersion: smallint("format_version").notNull(),
 	state: keyEnrollmentStateEnum("state").notNull().default("unenrolled"),
 	retiredAt: timestamp("retired_at", { withTimezone: true }),
 	createdAt: timestamp("created_at", { withTimezone: true })
