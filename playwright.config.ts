@@ -32,6 +32,11 @@ const appEnv = {
 	DATABASE_URL: databaseURL,
 	NODE_ENV: "test",
 	DITERO_E2E: "1",
+	// The milestone's own feature flag (config/e2e.ts), distinct from
+	// DITERO_E2E above, which relaxes auth rate limits for the suite. Without
+	// it every /api/e2e/* route answers 404 and the enrollment surface renders
+	// nothing at all -- an absence that reads as a broken selector.
+	DITERO_E2E_ENABLED: "true",
 	BETTER_AUTH_SECRET: "e2e-only-better-auth-secret-32-bytes",
 	DITERO_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString("base64"),
 	DITERO_PASSKEY_ORIGIN: "http://localhost:5173",

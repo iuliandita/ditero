@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { m } from "../../paraglide/messages.js";
+import { EncryptedFilesPanel } from "../components/e2e/EncryptedFilesPanel.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { authErrorMessage } from "../lib/auth-messages.ts";
 
@@ -220,6 +221,8 @@ export function SecurityPanel() {
 					</ul>
 				) : null}
 			</div>
+
+			<EncryptedFilesPanel />
 
 			{error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
 		</section>
