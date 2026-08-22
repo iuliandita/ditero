@@ -68,6 +68,31 @@ export async function exportPublicKey(key: CryptoKey): Promise<Uint8Array> {
 	return new Uint8Array(await suite.kem.serializePublicKey(key));
 }
 
+export type IdentityKeyPair = {
+	publicKey: Uint8Array;
+	privateKey: Uint8Array;
+};
+
+/**
+ * The enrollment path's keypair. Returned as raw bytes rather than CryptoKeys
+ * because the private key's only destinations are `encryptWrapped` and the
+ * keyring, both of which take bytes -- and because a CryptoKey handed out here
+ * would be extractable, which is the property device-store.ts exists to avoid.
+ */
+export async function generateIdentityKeyPair(): Promise<IdentityKeyPair> {
+	const pair = await suite.kem.generateKeyPair();
+	const privateKey = new Uint8Array(
+		await suite.kem.serializePrivateKey(pair.privateKey),
+	);
+	// X25519 scalars are 32 bytes and the wrap records no length. A short or
+	// long serialization would wrap cleanly and only fail at deserialize, on
+	// the unlock path, long after the passphrase that could have been retyped.
+	if (privateKey.length !== KEY_BYTES) {
+		throw new Error(`hpke: identity private key must be ${KEY_BYTES} bytes`);
+	}
+	return { publicKey: await exportPublicKey(pair.publicKey), privateKey };
+}
+
 // Binds the wrap to exactly one (workspace, version, recipient, key). Without
 // this a wrap can be replayed onto another workspace or another member. It does
 // NOT authenticate the sender -- HPKE base mode has none -- which is why the

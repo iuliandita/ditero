@@ -9,7 +9,12 @@ import { expect, test } from "vitest";
 
 // auth-messages.ts falls back to Better Auth's prose deliberately; its own
 // header explains why losing the reason is worse than losing the language.
-const ALLOWED = new Set(["lib/auth-messages.ts"]);
+// lib/e2e/kdf-worker.ts crosses a worker boundary, not a render boundary:
+// structured clone erases the Error subclass, so the string is copied across
+// purely so console.error on the page still says what failed. Every UI path
+// branches on the `failure` discriminant beside it and renders a translated
+// key -- verified: no e2e component reads KdfError.message.
+const ALLOWED = new Set(["lib/auth-messages.ts", "lib/e2e/kdf-worker.ts"]);
 const LEAK = /instanceof Error \? \w+\.message/;
 
 test("no component renders a raw Error message to the user", () => {

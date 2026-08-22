@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { KEY_BYTES } from "./envelope.ts";
 import {
 	exportPublicKey,
+	generateIdentityKeyPair,
 	hpkeSuiteForTests,
 	importRecipientPublicKey,
 	openWdk,
@@ -268,5 +269,35 @@ describe("openWdk rejections", () => {
 		);
 		expect(e.reason).toBe("malformed");
 		expect(e.message).toMatch(/^hpke:/);
+	});
+});
+
+describe("generateIdentityKeyPair", () => {
+	it("produces a 32-byte X25519 pair that seals and opens", async () => {
+		const identity = await generateIdentityKeyPair();
+		expect(identity.publicKey).toHaveLength(KEY_BYTES);
+		expect(identity.privateKey).toHaveLength(KEY_BYTES);
+
+		// The two halves must be each other's, which byte lengths alone would
+		// not catch: two independently generated pairs are both well-formed.
+		const wdk = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
+		const sealed = await sealWdk(
+			wdk,
+			await importRecipientPublicKey(identity.publicKey),
+			INFO,
+		);
+		const opened = await openWdk(
+			sealed,
+			await suite.kem.deserializePrivateKey(identity.privateKey),
+			INFO,
+		);
+		expect(opened).toEqual(wdk);
+	});
+
+	it("produces a different pair every call", async () => {
+		const a = await generateIdentityKeyPair();
+		const b = await generateIdentityKeyPair();
+		expect(a.privateKey).not.toEqual(b.privateKey);
+		expect(a.publicKey).not.toEqual(b.publicKey);
 	});
 });
