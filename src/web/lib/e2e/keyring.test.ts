@@ -131,7 +131,25 @@ describe("keyring", () => {
 // Walks every record in every store of every database and looks for the bytes.
 // A targeted read of the device store would pass even if a WDK were written
 // somewhere else entirely, which is the failure this is guarding against.
-async function indexedDbHolds(needle: Uint8Array): Promise<boolean> {
+//
+// Polled, because IndexedDB writes are asynchronous and a leak would not be
+// awaited by the code that caused it. A single scan races the write it is
+// looking for and reports "clean" for a store that is about to hold the key --
+// verified: a probe that persisted the WDK passed a single-scan version of
+// this helper.
+async function indexedDbHolds(
+	needle: Uint8Array,
+	windowMs = 250,
+): Promise<boolean> {
+	const deadline = Date.now() + windowMs;
+	do {
+		if (await scanOnce(needle)) return true;
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	} while (Date.now() < deadline);
+	return false;
+}
+
+async function scanOnce(needle: Uint8Array): Promise<boolean> {
 	const databases = await indexedDB.databases();
 	for (const { name } of databases) {
 		if (!name) continue;
