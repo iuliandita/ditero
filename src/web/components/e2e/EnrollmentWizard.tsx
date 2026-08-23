@@ -61,7 +61,7 @@ export function EnrollmentWizard({
 	 */
 	onEnrolled?: () => void;
 }) {
-	const { afterEnroll } = useKeyring();
+	const { adoptPrivateKey } = useKeyring();
 	const [pane, setPane] = useState<Pane>("passphrase");
 	const [passphrase, setPassphrase] = useState("");
 	const [confirmPassphrase, setConfirmPassphrase] = useState("");
@@ -212,7 +212,7 @@ export function EnrollmentWizard({
 			// The private key is already in hand here, so enrollment leaves the
 			// device unlocked and remembered rather than immediately prompting
 			// for the passphrase that was typed two panes ago.
-			await afterEnroll(current.privateKey, true);
+			await adoptPrivateKey(current.privateKey, true);
 			onEnrolled?.();
 		} catch (error) {
 			console.error(error);

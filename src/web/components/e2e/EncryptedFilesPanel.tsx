@@ -16,6 +16,10 @@ import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { EnrollmentWizard } from "./EnrollmentWizard.tsx";
+import {
+	PassphraseDialog,
+	type PassphraseDialogMode,
+} from "./PassphraseDialog.tsx";
 import { UnlockDialog } from "./UnlockDialog.tsx";
 
 // Discrete keys rather than a number plus a unit, so no locale has to inflect
@@ -34,6 +38,9 @@ export function EncryptedFilesPanel({ userId }: { userId: string }) {
 	const [enrolling, setEnrolling] = useState(false);
 	const [unlocking, setUnlocking] = useState(false);
 	const [announceLock, setAnnounceLock] = useState(false);
+	const [rewrapping, setRewrapping] = useState<PassphraseDialogMode | null>(
+		null,
+	);
 
 	// Nothing at all while the deployment has the feature off, and nothing until
 	// the first identity fetch settles -- a flash of "not set up" for an enrolled
@@ -133,6 +140,32 @@ export function EncryptedFilesPanel({ userId }: { userId: string }) {
 					</div>
 
 					{/*
+					  Both demand the current passphrase, so neither is reachable
+					  from a browser that merely holds a stored key. They live
+					  beside the auto-lock control rather than behind an "advanced"
+					  disclosure: a recovery code people cannot find is one they
+					  will not replace after it leaks.
+					*/}
+					<div className="flex flex-wrap gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							data-testid="e2e-change-passphrase"
+							onClick={() => setRewrapping("change")}
+						>
+							{m.e2e_change_passphrase()}
+						</Button>
+						<Button
+							type="button"
+							variant="outline"
+							data-testid="e2e-regenerate-recovery"
+							onClick={() => setRewrapping("regenerate")}
+						>
+							{m.e2e_regenerate_recovery()}
+						</Button>
+					</div>
+
+					{/*
 					  Repeated verbatim from the wizard, and the only string in the
 					  milestone deliberately shown twice: it is the one sentence a user
 					  is most likely to want to re-read.
@@ -155,7 +188,21 @@ export function EncryptedFilesPanel({ userId }: { userId: string }) {
 				onOpenChange={setEnrolling}
 				userId={userId}
 			/>
-			<UnlockDialog open={unlocking} onOpenChange={setUnlocking} />
+			<UnlockDialog
+				open={unlocking}
+				onOpenChange={setUnlocking}
+				userId={userId}
+			/>
+			{rewrapping && (
+				<PassphraseDialog
+					mode={rewrapping}
+					open
+					onOpenChange={(next) => {
+						if (!next) setRewrapping(null);
+					}}
+					userId={userId}
+				/>
+			)}
 		</section>
 	);
 }

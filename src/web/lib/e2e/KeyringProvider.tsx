@@ -25,7 +25,14 @@ export type KeyringContextValue = {
 	lockedByTimeout: boolean;
 	unlock: (secret: string, remember: boolean) => Promise<void>;
 	lockNow: () => void;
-	afterEnroll: (privateKey: Uint8Array, remember: boolean) => Promise<void>;
+	/**
+	 * Re-reads the identity and takes an already-unwrapped private key
+	 * against it. Enrollment has one; so does a recovery reset, which ends
+	 * holding the key it just re-wrapped. Named for what it does rather than
+	 * for the first caller, which is what it was called until the second
+	 * arrived.
+	 */
+	adoptPrivateKey: (privateKey: Uint8Array, remember: boolean) => Promise<void>;
 	refresh: () => Promise<void>;
 };
 
@@ -157,7 +164,7 @@ export function KeyringProvider({
 				session.lockNow();
 				sync();
 			},
-			async afterEnroll(privateKey, remember) {
+			async adoptPrivateKey(privateKey, remember) {
 				const response = await fetch("/api/e2e/identity", {
 					credentials: "include",
 				});
