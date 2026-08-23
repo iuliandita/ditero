@@ -5,6 +5,7 @@ import { e2eEnabled } from "../../config/e2e.ts";
 import { withUserContext } from "../../db/user-context.ts";
 import { KDF_PARAMS } from "../../domain/e2e/kdf.ts";
 import type { Guards } from "../guards.ts";
+import { type RotationFailure, rotateIdentity } from "./identity-rotation.ts";
 
 // Wrapped blobs and salts are opaque to the server, so the only checks it can
 // make are shape and size. 64 KiB is far above any real envelope and far below
@@ -65,6 +66,43 @@ const rewrapBody = z
 		"at least one wrap must be replaced",
 	);
 
+const rotateBody = z.object({
+	publicKey,
+	// The identity being replaced, as a compare-and-set token. Same reasoning as
+	// the rewrap endpoint's previousWrapped: a client that computed a rotation
+	// against one identity must not have it applied to a different one, and the
+	// public key is exact, clock-free and already in the client's hand.
+	previousPublicKey: publicKey,
+	passphraseWrapped: blob,
+	recoveryWrapped: blob,
+	passphraseSalt: blob,
+	recoverySalt: blob,
+	formatVersion,
+	rewraps: z
+		.array(
+			z.object({
+				membershipKeyId: z.string().min(1).max(128),
+				enc: blob,
+				ciphertext: blob,
+			}),
+		)
+		// A workspace count, not a payload size: the cap exists so one request
+		// cannot be used as bulk storage, and is far above any plausible number
+		// of workspace key versions a single user holds.
+		.max(1000),
+});
+
+// Two failures mean "you changed nothing and may retry after re-reading", and
+// two mean "this request is wrong". Splitting them here rather than in the
+// module keeps the HTTP vocabulary out of code that has no other reason to
+// know it.
+const ROTATION_STATUS: Record<RotationFailure, number> = {
+	"not-enrolled": 409,
+	"stale-previous-key": 409,
+	"unchanged-key": 400,
+	"incomplete-rewraps": 400,
+};
+
 const enrollBody = z.object({
 	publicKey,
 	passphraseWrapped: blob,
@@ -88,7 +126,8 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 						passphrase_salt: string;
 					}>(
 						`select public_key, format_version, passphrase_wrapped,
-						 passphrase_salt from user_key where user_id = $1`,
+						 passphrase_salt from user_key
+						 where user_id = $1 and retired_at is null`,
 						[session.user.id],
 					);
 					const row = stored.rows[0];
@@ -144,7 +183,7 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 					 recovery_wrapped, passphrase_salt, recovery_salt, format_version,
 					 state)
 					 values ($1, $2, $3, $4, $5, $6, $7, $8, 'ready')
-					 on conflict (user_id) do nothing`,
+					 on conflict (user_id) where retired_at is null do nothing`,
 						[
 							`uk_${crypto.randomUUID()}`,
 							userId,
@@ -160,9 +199,11 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 					const stored = await client.query<{
 						public_key: string;
 						state: string;
-					}>("select public_key, state from user_key where user_id = $1", [
-						userId,
-					]);
+					}>(
+						`select public_key, state from user_key
+						 where user_id = $1 and retired_at is null`,
+						[userId],
+					);
 					const row = stored.rows[0];
 					if (!row) return new Response("Conflict", { status: 409 });
 
@@ -196,7 +237,7 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 						format_version: number;
 					}>(
 						`select recovery_wrapped, recovery_salt, format_version
-						 from user_key where user_id = $1`,
+						 from user_key where user_id = $1 and retired_at is null`,
 						[session.user.id],
 					);
 					const row = stored.rows[0];
@@ -238,7 +279,8 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 				return await withUserContext(pool, userId, async (client) => {
 					const stored = await client.query<{ format_version: number }>(
 						`select format_version from user_key
-						 where user_id = $1 and state = 'ready'`,
+						 where user_id = $1 and state = 'ready'
+						 and retired_at is null`,
 						[userId],
 					);
 					const row = stored.rows[0];
@@ -290,7 +332,7 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 					// has just typed into a field and been told is dead.
 					const updated = await client.query(
 						`update user_key set ${sets.join(", ")}
-						 where user_id = $1 and state = 'ready'
+						 where user_id = $1 and state = 'ready' and retired_at is null
 						 and ${guardsSql.join(" and ")}`,
 						params,
 					);
@@ -301,6 +343,34 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 						return new Response("Conflict", { status: 409 });
 					}
 					return { formatVersion: parsed.formatVersion };
+				});
+			}),
+		)
+		.post(
+			"/api/e2e/identity/rotate",
+			guards.guardedPost(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+
+				let parsed: z.infer<typeof rotateBody>;
+				try {
+					parsed = rotateBody.parse(await request.json());
+				} catch {
+					return new Response("Bad Request", { status: 400 });
+				}
+
+				const userId = session.user.id;
+				// withUserContext is already one transaction, which is what makes
+				// the retire, the insert and the wrap moves atomic without this
+				// route arranging anything.
+				return await withUserContext(pool, userId, async (client) => {
+					const result = await rotateIdentity(client, userId, parsed);
+					if (!result.ok) {
+						const status = ROTATION_STATUS[result.reason];
+						return new Response(status === 409 ? "Conflict" : "Bad Request", {
+							status,
+						});
+					}
+					return { publicKey: result.publicKey, rewrapped: result.rewrapped };
 				});
 			}),
 		);

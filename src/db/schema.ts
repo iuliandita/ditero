@@ -831,33 +831,45 @@ export const keyGrantStateEnum = pgEnum("key_grant_state", [
 	"revoked",
 ]);
 
-export const userKey = pgTable("user_key", {
-	id: text("id").primaryKey(),
-	userId: text("user_id")
-		.notNull()
-		.references(() => user.id, { onDelete: "cascade" })
-		.unique(),
-	// Immutable for the lifetime of one identity. Identity rotation writes a NEW
-	// row and retires this one; it never edits the public key in place.
-	publicKey: text("public_key").notNull(),
-	passphraseWrapped: text("passphrase_wrapped").notNull(),
-	recoveryWrapped: text("recovery_wrapped").notNull(),
-	passphraseSalt: text("passphrase_salt").notNull(),
-	recoverySalt: text("recovery_salt").notNull(),
-	// No default, deliberately. This records the KDF version the CLIENT
-	// derived its wraps under, so a server that forgets to pass it must fail
-	// the insert rather than silently stamp a version the wrap was not made
-	// with -- which produces an unlock failure no passphrase can fix.
-	formatVersion: smallint("format_version").notNull(),
-	state: keyEnrollmentStateEnum("state").notNull().default("unenrolled"),
-	retiredAt: timestamp("retired_at", { withTimezone: true }),
-	createdAt: timestamp("created_at", { withTimezone: true })
-		.defaultNow()
-		.notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true })
-		.defaultNow()
-		.notNull(),
-});
+export const userKey = pgTable(
+	"user_key",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		// Immutable for the lifetime of one identity. Identity rotation writes a
+		// NEW row and retires this one; it never edits the public key in place.
+		publicKey: text("public_key").notNull(),
+		passphraseWrapped: text("passphrase_wrapped").notNull(),
+		recoveryWrapped: text("recovery_wrapped").notNull(),
+		passphraseSalt: text("passphrase_salt").notNull(),
+		recoverySalt: text("recovery_salt").notNull(),
+		// No default, deliberately. This records the KDF version the CLIENT
+		// derived its wraps under, so a server that forgets to pass it must fail
+		// the insert rather than silently stamp a version the wrap was not made
+		// with -- which produces an unlock failure no passphrase can fix.
+		formatVersion: smallint("format_version").notNull(),
+		state: keyEnrollmentStateEnum("state").notNull().default("unenrolled"),
+		retiredAt: timestamp("retired_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	// Partial, not a plain unique on user_id: identity rotation retires a row and
+	// writes a new one, so a user legitimately accumulates rows over time. What
+	// must stay unique is the ACTIVE identity -- exactly one row per user with a
+	// null retired_at -- because every read here resolves "this user's public
+	// key" and a second live row would make that answer arbitrary. Retired rows
+	// are kept rather than deleted so a wrap addressed to a superseded key can be
+	// diagnosed as stale instead of looking like corruption.
+	(t) => [
+		uniqueIndex("user_key_active").on(t.userId).where(sql`retired_at is null`),
+	],
+);
 
 export const workspaceKey = pgTable(
 	"workspace_key",

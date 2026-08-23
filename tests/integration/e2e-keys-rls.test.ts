@@ -181,7 +181,9 @@ describe.each(USER_SCOPED)("$table is user-isolated", ({
 		// The presence half is beforeEach: it runs this same builder as Alice and
 		// every test in the suite depends on that row, so a malformed insert
 		// could not reach this assertion. A second insert here cannot serve that
-		// purpose anyway -- user_key.user_id is unique, one identity per user.
+		// purpose anyway -- user_key_active is unique on user_id where retired_at
+		// is null, so a user has at most one LIVE identity and the builder writes
+		// live rows.
 	});
 });
 
