@@ -56,7 +56,21 @@ export type Keyring = {
 	state: () => KeyringState;
 	discover: (identity: EnrolledIdentity | null) => void;
 	unlock: (secret: string) => Promise<void>;
+	/**
+	 * Takes an already-unwrapped private key -- the device-store restore path
+	 * and the moment just after enrollment, neither of which has a passphrase to
+	 * derive from. Starts the max-age clock exactly as `unlock` does: a restored
+	 * key that never aged would make "lock automatically" a no-op on precisely
+	 * the devices that keep a key around.
+	 */
+	adopt: (privateKey: Uint8Array) => void;
 	lockNow: () => void;
+	/**
+	 * Live, because the auto-lock Select changes it while the keyring is open.
+	 * Rebuilding the keyring instead would drop the unlocked key, so choosing a
+	 * LONGER timeout would lock the user out -- the opposite of the request.
+	 */
+	setMaxAge: (ms: number) => void;
 	clear: () => Promise<void>;
 	privateKey: () => Uint8Array;
 	putWdk: (workspaceId: string, version: number, wdk: Uint8Array) => void;
@@ -72,6 +86,7 @@ export function createKeyring(options: KeyringOptions): Keyring {
 	let identity: EnrolledIdentity | null = null;
 	let privateKey: Uint8Array | null = null;
 	let unlockedAt = 0;
+	let maxAgeMs = options.maxAgeMs;
 	const wdks = new Map<string, Uint8Array>();
 
 	const forget = () => {
@@ -84,7 +99,7 @@ export function createKeyring(options: KeyringOptions): Keyring {
 	// (a backgrounded tab, a suspended laptop) would leave the keyring readable
 	// past its max age, which is the one case the max age exists for.
 	const expired = () =>
-		privateKey !== null && options.now() - unlockedAt >= options.maxAgeMs;
+		privateKey !== null && options.now() - unlockedAt >= maxAgeMs;
 
 	const state = (): KeyringState => {
 		if (!identity) return "unenrolled";
@@ -129,7 +144,17 @@ export function createKeyring(options: KeyringOptions): Keyring {
 			}
 			unlockedAt = options.now();
 		},
+		adopt(restored) {
+			if (!identity) {
+				throw new KeyringError("unenrolled", "keyring: no identity to adopt");
+			}
+			privateKey = restored;
+			unlockedAt = options.now();
+		},
 		lockNow: forget,
+		setMaxAge(ms) {
+			maxAgeMs = ms;
+		},
 		async clear() {
 			identity = null;
 			forget();

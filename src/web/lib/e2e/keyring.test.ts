@@ -177,3 +177,67 @@ async function scanOnce(needle: Uint8Array): Promise<boolean> {
 	}
 	return false;
 }
+
+// Task 11. Both additions exist for surfaces that have no passphrase in hand:
+// the device-store restore on boot, and the auto-lock Select.
+describe("keyring: adopt and setMaxAge", () => {
+	it("adopts a restored key and reports ready", async () => {
+		const ring = keyring();
+		ring.discover(await enrolled());
+		expect(ring.state()).toBe("locked");
+		ring.adopt(PRIVATE_KEY);
+		expect(ring.state()).toBe("ready");
+		expect(ring.privateKey()).toEqual(PRIVATE_KEY);
+	});
+
+	it("starts the max-age clock on adopt, not only on unlock", async () => {
+		const ring = keyring(60_000);
+		ring.discover(await enrolled());
+		clock = 1_000_000;
+		ring.adopt(PRIVATE_KEY);
+		expect(ring.state()).toBe("ready");
+		// A restored key that never ages makes "lock automatically" a no-op on
+		// exactly the devices that keep a key around -- the ones it is for.
+		clock += 60_000;
+		expect(ring.state()).toBe("locked");
+	});
+
+	it("refuses to adopt without an identity", () => {
+		const ring = keyring();
+		expect(() => ring.adopt(PRIVATE_KEY)).toThrow(KeyringError);
+		expect(ring.state()).toBe("unenrolled");
+	});
+
+	it("applies a new max age to an already-unlocked key", async () => {
+		const ring = keyring(60_000);
+		ring.discover(await enrolled());
+		await ring.unlock("correct-horse");
+		clock += 120_000;
+		// Presence assertion: the old age really has expired, so the extension
+		// below is observed against a live transition rather than a static one.
+		expect(ring.state()).toBe("locked");
+
+		await ring.unlock("correct-horse");
+		ring.setMaxAge(600_000);
+		clock += 120_000;
+		expect(ring.state()).toBe("ready");
+	});
+
+	it("shortening the max age can lock a key that was already ready", async () => {
+		const ring = keyring(600_000);
+		ring.discover(await enrolled());
+		await ring.unlock("correct-horse");
+		clock += 120_000;
+		expect(ring.state()).toBe("ready");
+		ring.setMaxAge(60_000);
+		expect(ring.state()).toBe("locked");
+	});
+
+	it("never expires at an infinite max age", async () => {
+		const ring = keyring(Number.POSITIVE_INFINITY);
+		ring.discover(await enrolled());
+		await ring.unlock("correct-horse");
+		clock += 365 * 24 * 3600 * 1000;
+		expect(ring.state()).toBe("ready");
+	});
+});
