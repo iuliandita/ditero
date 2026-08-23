@@ -134,8 +134,14 @@ test("enrollment: passphrase floor, recovery code, confirm, and the identity lan
 	await expectNoSeriousA11y(page, "enroll pane 3");
 
 	await page.locator('[data-testid="e2e-enroll-close"]').click();
+	// DERIVE_TIMEOUT, not the 7s default: this sits downstream of the enroll
+	// POST, the adoptPrivateKey re-read and the IndexedDB store, all of which
+	// run while the close click is being handled. It timed out at 7000ms once
+	// in a loaded full-suite run and never in an isolated one -- position-
+	// dependent, like #128, not flaky.
 	await expect(page.locator('[data-testid="e2e-enroll-dialog"]')).toHaveCount(
 		0,
+		{ timeout: DERIVE_TIMEOUT },
 	);
 
 	// The panel re-reads /api/e2e/identity and stops offering setup, which is
@@ -170,8 +176,14 @@ test("enrollment: abandoning at the recovery pane persists nothing", async ({
 	await reachRecoveryPane(page);
 
 	await page.keyboard.press("Escape");
+	// DERIVE_TIMEOUT, not the 7s default: this sits downstream of the enroll
+	// POST, the adoptPrivateKey re-read and the IndexedDB store, all of which
+	// run while the close click is being handled. It timed out at 7000ms once
+	// in a loaded full-suite run and never in an isolated one -- position-
+	// dependent, like #128, not flaky.
 	await expect(page.locator('[data-testid="e2e-enroll-dialog"]')).toHaveCount(
 		0,
+		{ timeout: DERIVE_TIMEOUT },
 	);
 
 	// Reopening starts from pane 1, and the setup entry point is still offered

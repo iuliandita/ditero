@@ -49,8 +49,14 @@ async function enroll(page: Page): Promise<void> {
 	await page.locator('[data-testid="e2e-enroll-close"]').click({
 		timeout: DERIVE_TIMEOUT,
 	});
+	// DERIVE_TIMEOUT, not the 7s default: this sits downstream of the enroll
+	// POST, the adoptPrivateKey re-read and the IndexedDB store, all of which
+	// run while the close click is being handled. It timed out at 7000ms once
+	// in a loaded full-suite run and never in an isolated one -- position-
+	// dependent, like #128, not flaky.
 	await expect(page.locator('[data-testid="e2e-enroll-dialog"]')).toHaveCount(
 		0,
+		{ timeout: DERIVE_TIMEOUT },
 	);
 }
 

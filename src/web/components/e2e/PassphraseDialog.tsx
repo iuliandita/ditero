@@ -205,10 +205,7 @@ export function PassphraseDialog({
 				onOpenChange(value);
 			}}
 		>
-			<DialogContent
-				data-testid={`e2e-${mode}-dialog`}
-				{...(dismissable ? {} : { onEscapeKeyDown: preventDefault })}
-			>
+			<DialogContent data-testid={`e2e-${mode}-dialog`}>
 				{pane === "verify" && (
 					<>
 						<DialogHeader>
@@ -401,8 +398,4 @@ export function PassphraseDialog({
 			</DialogContent>
 		</Dialog>
 	);
-}
-
-function preventDefault(event: Event) {
-	event.preventDefault();
 }

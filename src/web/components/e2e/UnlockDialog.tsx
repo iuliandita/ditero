@@ -81,15 +81,16 @@ export function UnlockDialog({
 	return (
 		<Dialog
 			open={open}
+			// The single close gate. Radix routes Escape, the overlay click and
+			// the corner button all through onOpenChange, so guarding here covers
+			// every exit; an onEscapeKeyDown handler beside it changed nothing
+			// observable and was removed rather than kept as decoration.
 			onOpenChange={(value) => {
 				if (!value && !dismissable) return;
 				onOpenChange(value);
 			}}
 		>
-			<DialogContent
-				data-testid="e2e-unlock-dialog"
-				{...(dismissable ? {} : { onEscapeKeyDown: preventDefault })}
-			>
+			<DialogContent data-testid="e2e-unlock-dialog">
 				{recovering ? (
 					<RecoverDialog
 						userId={userId}
@@ -192,8 +193,4 @@ export function UnlockDialog({
 			</DialogContent>
 		</Dialog>
 	);
-}
-
-function preventDefault(event: Event) {
-	event.preventDefault();
 }
