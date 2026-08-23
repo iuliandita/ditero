@@ -93,6 +93,41 @@ export async function generateIdentityKeyPair(): Promise<IdentityKeyPair> {
 	return { publicKey: await exportPublicKey(pair.publicKey), privateKey };
 }
 
+/**
+ * The `recipientFingerprint` half of the WDK binding (design 4.3): a canonical,
+ * fixed-size stand-in for a recipient's public key.
+ *
+ * A fingerprint rather than the key itself because the key has several faithful
+ * encodings -- raw bytes, base64, base64url -- and the binding must not depend
+ * on which one a caller happened to hold. Hashing pins exactly one. It buys no
+ * secrecy: a public key is public, and this is a hash of it.
+ *
+ * The ":v1" lives in the prefix and there is deliberately no version marker on
+ * the output. This value is baked into the AAD of every wrap ever made, so the
+ * construction can never be re-cut in place; changing it means a new prefix and
+ * a full re-wrap, which is identity rotation's job, not a version negotiation.
+ */
+export async function publicKeyFingerprint(
+	publicKey: Uint8Array,
+): Promise<string> {
+	// Checked rather than assumed: a wrong-length input still hashes and still
+	// binds, so the wrap would be minted happily and fail only at unwrap, on
+	// the recipient's machine, with nothing left to point at the cause.
+	if (publicKey.length !== KEY_BYTES) {
+		throw new Error(`hpke: public key must be ${KEY_BYTES} bytes`);
+	}
+	const prefix = new TextEncoder().encode("ditero:pk-fp:v1");
+	const input = new Uint8Array(prefix.length + publicKey.length);
+	input.set(prefix, 0);
+	// `set` honours byteOffset; hashing `publicKey.buffer` would pin whatever
+	// else shares the backing store and no recipient could reproduce it.
+	input.set(publicKey, prefix.length);
+	const digest = await crypto.subtle.digest("SHA-256", input);
+	return Array.from(new Uint8Array(digest), (b) =>
+		b.toString(16).padStart(2, "0"),
+	).join("");
+}
+
 // Binds the wrap to exactly one (workspace, version, recipient, key). Without
 // this a wrap can be replayed onto another workspace or another member. It does
 // NOT authenticate the sender -- HPKE base mode has none -- which is why the

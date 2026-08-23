@@ -4,8 +4,14 @@ import { z } from "zod";
 import { e2eEnabled } from "../../config/e2e.ts";
 import { withUserContext } from "../../db/user-context.ts";
 import { KDF_PARAMS } from "../../domain/e2e/kdf.ts";
+import { isWellFormedCommitment } from "../../domain/e2e/wdk-commitment.ts";
 import type { Guards } from "../guards.ts";
 import { type RotationFailure, rotateIdentity } from "./identity-rotation.ts";
+import {
+	type ProvisionFailure,
+	pendingProvisions,
+	provisionWorkspace,
+} from "./provision.ts";
 
 // Wrapped blobs and salts are opaque to the server, so the only checks it can
 // make are shape and size. 64 KiB is far above any real envelope and far below
@@ -101,6 +107,29 @@ const ROTATION_STATUS: Record<RotationFailure, number> = {
 	"stale-previous-key": 409,
 	"unchanged-key": 400,
 	"incomplete-rewraps": 400,
+};
+
+// Delegated to the domain recognizer rather than restated as a regex here. The
+// server can only ever check a commitment's SHAPE -- it holds no WDK -- and a
+// hand-written pattern would quietly stop matching the day a v2 committer lands
+// with a different digest shape, refusing correct commitments outright.
+const commitment = z
+	.string()
+	.max(256)
+	.refine(isWellFormedCommitment, "malformed WDK commitment");
+
+const provisionBody = z.object({
+	workspaceId: z.string().min(1).max(128),
+	commitment,
+	enc: blob,
+	ciphertext: blob,
+});
+
+const PROVISION_STATUS: Record<ProvisionFailure, number> = {
+	// Deliberately the same status for "not a member" and "wrong role": the
+	// distinction tells a stranger the workspace exists.
+	"not-permitted": 403,
+	"not-enrolled": 409,
 };
 
 const enrollBody = z.object({
@@ -371,6 +400,44 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 						});
 					}
 					return { publicKey: result.publicKey, rewrapped: result.rewrapped };
+				});
+			}),
+		)
+		.get(
+			"/api/e2e/provision/pending",
+			guards.guardedGet(async (_request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				return await withUserContext(pool, session.user.id, async (client) => ({
+					workspaces: await pendingProvisions(client, session.user.id),
+				}));
+			}),
+		)
+		.post(
+			"/api/e2e/provision",
+			guards.guardedPost(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+
+				let parsed: z.infer<typeof provisionBody>;
+				try {
+					parsed = provisionBody.parse(await request.json());
+				} catch {
+					return new Response("Bad Request", { status: 400 });
+				}
+
+				const userId = session.user.id;
+				return await withUserContext(pool, userId, async (client) => {
+					const result = await provisionWorkspace(client, userId, parsed);
+					if (!result.ok) {
+						const status = PROVISION_STATUS[result.reason];
+						return new Response(status === 403 ? "Forbidden" : "Conflict", {
+							status,
+						});
+					}
+					return {
+						workspaceId: result.workspaceId,
+						version: result.version,
+						outcome: result.outcome,
+					};
 				});
 			}),
 		);

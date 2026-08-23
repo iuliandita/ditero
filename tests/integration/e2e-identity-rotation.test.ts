@@ -6,6 +6,7 @@ import {
 	importRecipientPrivateKey,
 	importRecipientPublicKey,
 	openWdk,
+	publicKeyFingerprint,
 	sealWdk,
 } from "../../src/domain/e2e/hpke.ts";
 import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
@@ -29,10 +30,8 @@ const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
 const unb64 = (value: string) =>
 	new Uint8Array(Buffer.from(value, "base64url"));
 
-// Task 14/15 own the canonical fingerprint derivation; nothing here depends on
-// its shape. What the AAD binding needs is only that it DIFFERS between two
-// identities, which using the public key itself guarantees by construction.
-const fingerprintOf = (publicKey: string) => publicKey;
+const fingerprintOf = (publicKey: string) =>
+	publicKeyFingerprint(unb64(publicKey));
 
 const WRAP = "d3JhcHBlZC1ibG9i";
 const SALT = "c2FsdA";
@@ -156,7 +155,10 @@ async function seal(
 	const sealed = await sealWdk(
 		wdk,
 		await importRecipientPublicKey(unb64(identity.publicKey)),
-		{ ...info, recipientFingerprint: fingerprintOf(identity.publicKey) },
+		{
+			...info,
+			recipientFingerprint: await fingerprintOf(identity.publicKey),
+		},
 	);
 	return { enc: b64(sealed.enc), ciphertext: b64(sealed.ciphertext) };
 }
@@ -173,7 +175,7 @@ async function open(
 			workspaceId: held.workspaceId,
 			keyVersion: held.keyVersion,
 			recipientUserId,
-			recipientFingerprint: fingerprintOf(identity.publicKey),
+			recipientFingerprint: await fingerprintOf(identity.publicKey),
 		},
 	);
 }

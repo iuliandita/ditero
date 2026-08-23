@@ -3,6 +3,7 @@ import { KEY_BYTES } from "./envelope.ts";
 import {
 	CURRENT_WDK_COMMITMENT_VERSION,
 	commitWdk,
+	isWellFormedCommitment,
 	verifyWdkCommitment,
 	WDK_COMMITTERS,
 	WdkCommitmentError,
@@ -241,5 +242,45 @@ describe("verifyWdkCommitment", () => {
 				verifyWdkCommitment(k, "ws_1", 1, future),
 			).rejects.toMatchObject({ reason: "unsupported-version" });
 		}
+	});
+});
+
+describe("isWellFormedCommitment", () => {
+	it("accepts what commitWdk produces", async () => {
+		expect(isWellFormedCommitment(await commitWdk(wdk(), "ws_1", 1))).toBe(
+			true,
+		);
+	});
+
+	it("rejects every way the shape can be wrong", () => {
+		for (const value of [
+			"",
+			"not-a-commitment",
+			// No separator at position 0, so a bare digest is not a v-less form.
+			"a".repeat(64),
+			// Unregistered version, checked before the digest because an unknown
+			// format has no digest shape to check against.
+			"9.".concat("a".repeat(64)),
+			// Registered version, digest that is not v1's 64 lowercase hex.
+			"1.zz",
+			"1.".concat("A".repeat(64)),
+			"1.".concat("a".repeat(63)),
+			// Leading zero: parses to 1 but is not the canonical printing, and
+			// treating it as v1 would report a canonicalisation difference as a
+			// substituted key.
+			"01.".concat("a".repeat(64)),
+			// Second separator lands in the digest, which then fails its pattern.
+			"1.1.".concat("a".repeat(62)),
+		]) {
+			expect(isWellFormedCommitment(value), JSON.stringify(value)).toBe(false);
+		}
+	});
+
+	it("says nothing about which key the commitment pins", async () => {
+		// The whole point of the split: the server stores commitments it can
+		// never verify, because it holds no WDK. A recognizer that also passed
+		// judgement on the key would be a check the server cannot make.
+		const other = await commitWdk(wdk(), "ws_other", 7);
+		expect(isWellFormedCommitment(other)).toBe(true);
 	});
 });

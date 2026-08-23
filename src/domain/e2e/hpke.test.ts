@@ -6,6 +6,7 @@ import {
 	hpkeSuiteForTests,
 	importRecipientPublicKey,
 	openWdk,
+	publicKeyFingerprint,
 	sealWdk,
 	type WdkInfo,
 	WdkOpenError,
@@ -299,5 +300,48 @@ describe("generateIdentityKeyPair", () => {
 		const b = await generateIdentityKeyPair();
 		expect(a.privateKey).not.toEqual(b.privateKey);
 		expect(a.publicKey).not.toEqual(b.publicKey);
+	});
+});
+
+describe("publicKeyFingerprint", () => {
+	const KEY = new Uint8Array(KEY_BYTES).map((_, i) => (i * 3 + 1) & 0xff);
+
+	it("is stable and 64 lowercase hex characters", async () => {
+		const first = await publicKeyFingerprint(KEY);
+		expect(first).toMatch(/^[0-9a-f]{64}$/);
+		expect(await publicKeyFingerprint(KEY)).toBe(first);
+	});
+
+	it("separates two keys that differ in one bit", async () => {
+		const other = Uint8Array.from(KEY);
+		other[0] = (other[0] as number) ^ 1;
+		expect(await publicKeyFingerprint(other)).not.toBe(
+			await publicKeyFingerprint(KEY),
+		);
+	});
+
+	it("refuses a key that is not the KEM's public key length", async () => {
+		// The fingerprint goes into the WDK binding, where a wrong-length input
+		// would still hash and still bind -- producing a wrap the real recipient
+		// can never reproduce, and only at unwrap time.
+		for (const length of [0, KEY_BYTES - 1, KEY_BYTES + 1]) {
+			await expect(
+				publicKeyFingerprint(new Uint8Array(length)),
+			).rejects.toThrow(/32 bytes/);
+		}
+	});
+
+	it("does not simply hash the key bytes", async () => {
+		// Domain separation is what stops a fingerprint colliding with any other
+		// SHA-256 this codebase publishes over the same 32 bytes. There is no
+		// version prefix on the OUTPUT deliberately: the value is baked into the
+		// AAD of every wrap ever made, so it can never be re-cut in place --
+		// changing the construction means a new prefix and a re-wrap, not a
+		// version bump the verifier tolerates.
+		const bare = await crypto.subtle.digest("SHA-256", KEY);
+		const hexBare = Array.from(new Uint8Array(bare), (b) =>
+			b.toString(16).padStart(2, "0"),
+		).join("");
+		expect(await publicKeyFingerprint(KEY)).not.toBe(hexBare);
 	});
 });

@@ -153,6 +153,26 @@ function parseCommitment(commitment: string): number {
 	return version;
 }
 
+/**
+ * Shape-only recognizer: the version is registered and the digest matches THAT
+ * version's pattern. Says nothing about which key the commitment pins.
+ *
+ * Exists for the server, which stores commitments it can never verify -- it
+ * holds no WDK. The column is immutable and every future grant is checked
+ * against it, so a malformed value is only discoverable much later, as every
+ * recipient failing to adopt a key that is in fact correct. Reusing the parser
+ * rather than restating its shape is what keeps a v2 committer from silently
+ * making the server's check wrong.
+ */
+export function isWellFormedCommitment(commitment: string): boolean {
+	try {
+		parseCommitment(commitment);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export async function verifyWdkCommitment(
 	wdk: Uint8Array,
 	workspaceId: string,
