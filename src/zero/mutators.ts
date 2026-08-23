@@ -22,6 +22,7 @@ import {
 	completeForAck,
 } from "../domain/ack-complete.ts";
 import { panelsSchema } from "../domain/dashboard.ts";
+import { AUTO_LOCK_CHOICES } from "../domain/e2e/auto-lock.ts";
 import {
 	MAX_REPEAT_EVERY_MIN,
 	MAX_REPEATS_CAP,
@@ -335,6 +336,17 @@ const localeArg = z
 	.enum(LOCALES as unknown as [string, ...string[]])
 	.nullable();
 const themeArg = z.enum(["light", "dark"]).nullable();
+// M-E2E: minutes the keyring stays unlocked. Constrained to the four offered
+// choices rather than a numeric range -- a stored 7 has no label in the Select,
+// so it would render as an empty control the user cannot correct.
+const autoLockArg = z
+	.union([
+		z.literal(AUTO_LOCK_CHOICES[0]),
+		z.literal(AUTO_LOCK_CHOICES[1]),
+		z.literal(AUTO_LOCK_CHOICES[2]),
+		z.literal(AUTO_LOCK_CHOICES[3]),
+	])
+	.nullable();
 // S5: equal start and end is rejected, not reinterpreted. The domain reads it
 // as "never quiet" (the opposite of what a user setting both to 22:00 intends),
 // and the alternative reading -- quiet all day -- would park every non-urgent
@@ -1803,6 +1815,9 @@ export const mutators = defineMutators({
 				// null means "follow the OS", which is the default and is not the
 				// same as a stored "light".
 				theme: themeArg.optional(),
+				// null means "unset"; domain/e2e/auto-lock.ts resolves it. 0 is a
+				// real choice ("never"), not an absence.
+				e2eAutoLockMinutes: autoLockArg.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				if (args.escalationDefaults) {
@@ -1835,6 +1850,7 @@ export const mutators = defineMutators({
 						escalationDefaults: args.escalationDefaults ?? null,
 						locale: args.locale ?? null,
 						theme: args.theme ?? null,
+						e2eAutoLockMinutes: args.e2eAutoLockMinutes ?? null,
 					});
 			},
 		),

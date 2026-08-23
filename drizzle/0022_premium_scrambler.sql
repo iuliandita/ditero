@@ -1,0 +1,1 @@
+ALTER TABLE "user_pref" ADD COLUMN "e2e_auto_lock_minutes" smallint;

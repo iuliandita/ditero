@@ -110,6 +110,7 @@ export default drizzleZeroConfig(schema, {
 			escalationDefaults: true,
 			locale: true,
 			theme: true,
+			e2eAutoLockMinutes: true,
 			createdAt: true,
 			updatedAt: true,
 		},

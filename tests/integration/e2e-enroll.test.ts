@@ -23,6 +23,9 @@ const KEY_A = Buffer.alloc(32, 1).toString("base64url");
 const KEY_B = Buffer.alloc(32, 2).toString("base64url");
 
 const WRAPPED = "d3JhcHBlZC1ibG9i";
+// Distinct from WRAPPED so "the recovery wrap is withheld" cannot pass by the
+// two blobs happening to be the same string.
+const RECOVERY_WRAPPED = "cmVjb3ZlcnktYmxvYg";
 const SALT = "c2FsdA";
 
 function body(publicKey: string, over?: Record<string, unknown>) {
@@ -245,21 +248,40 @@ describe("POST /api/e2e/enroll", () => {
 			enrolled: false,
 			publicKey: null,
 			formatVersion: null,
+			passphraseWrapped: null,
+			passphraseSalt: null,
 		});
 
 		expect((await enroll(body(KEY_A), { cookie })).status).toBe(200);
 
 		const after = await identity({ cookie });
 		expect(after.status).toBe(200);
-		const text = await after.text();
-		expect(JSON.parse(text)).toEqual({
+		expect(await after.json()).toEqual({
 			enrolled: true,
 			publicKey: KEY_A,
 			formatVersion: CURRENT_KDF_VERSION,
+			// Task 11: the unlock path's input. Returned to its owner only.
+			passphraseWrapped: WRAPPED,
+			passphraseSalt: SALT,
 		});
-		// The wraps and salts are the whole point of not widening this route.
-		expect(text).not.toContain(WRAPPED);
-		expect(text).not.toContain(SALT);
+	});
+
+	// The recovery wrap opens the same private key under a secret the user is
+	// told to keep offline. A route answering "can I unlock here?" has no reason
+	// to hand it out, and Task 12's recover path fetches it separately.
+	test("identity withholds the recovery wrap", async () => {
+		expect(
+			(
+				await enroll(body(KEY_A, { recoveryWrapped: RECOVERY_WRAPPED }), {
+					cookie,
+				})
+			).status,
+		).toBe(200);
+		const text = await (await identity({ cookie })).text();
+		// Presence assertion first: the passphrase wrap IS there, so the absence
+		// below is about which field was withheld and not about an empty body.
+		expect(text).toContain(WRAPPED);
+		expect(text).not.toContain(RECOVERY_WRAPPED);
 	});
 
 	test("identity requires a session", async () => {

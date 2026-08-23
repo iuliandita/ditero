@@ -60,21 +60,36 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 					const stored = await client.query<{
 						public_key: string;
 						format_version: number;
+						passphrase_wrapped: string;
+						passphrase_salt: string;
 					}>(
-						"select public_key, format_version from user_key where user_id = $1",
+						`select public_key, format_version, passphrase_wrapped,
+						 passphrase_salt from user_key where user_id = $1`,
 						[session.user.id],
 					);
 					const row = stored.rows[0];
-					// Never the wraps or the salts. Enrollment state is what the
-					// setup entry point needs; handing back key material on a read
-					// that only asks "is this on?" widens the route for no caller.
+					// The passphrase wrap and its salt are the unlock path's input and
+					// are returned to their owner only -- withUserContext plus the
+					// row's RLS policy make that structural. The RECOVERY wrap is
+					// deliberately withheld: it opens the same private key under a
+					// secret the user is told to keep offline, so a read that only
+					// asks "can I unlock here?" has no reason to carry it. Task 12's
+					// recover path fetches it on its own route.
 					return row
 						? {
 								enrolled: true,
 								publicKey: row.public_key,
 								formatVersion: row.format_version,
+								passphraseWrapped: row.passphrase_wrapped,
+								passphraseSalt: row.passphrase_salt,
 							}
-						: { enrolled: false, publicKey: null, formatVersion: null };
+						: {
+								enrolled: false,
+								publicKey: null,
+								formatVersion: null,
+								passphraseWrapped: null,
+								passphraseSalt: null,
+							};
 				});
 			}),
 		)
