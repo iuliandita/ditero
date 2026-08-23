@@ -23,6 +23,7 @@ const runtimePool = new Pool({ connectionString: databaseURL });
 
 const KEY_TABLES = [
 	"user_key",
+	"user_key_secret",
 	"workspace_key",
 	"membership_key",
 	"key_grant_request",
@@ -87,9 +88,8 @@ const asBob = <T extends QueryResultRow>(sql: string, values?: unknown[]) =>
 // `insert ... select` reads zero rows under Bob's policy and then inserts
 // nothing, succeeding without ever reaching the WITH CHECK clause.
 const insertUserKey = (id: string, userId: string) =>
-	`insert into user_key (id, user_id, public_key, passphrase_wrapped, recovery_wrapped,
-	 passphrase_salt, recovery_salt, format_version, state)
-	 values ('${id}', '${userId}', 'pk_a', 'w_a', 'r_a', 's_a', 's_a2', 1, 'ready')`;
+	`insert into user_key (id, user_id, public_key, state)
+	 values ('${id}', '${userId}', 'pk_a', 'ready')`;
 
 const insertMembershipKey = (id: string, userId: string) =>
 	`insert into membership_key (id, membership_id, user_id, workspace_id, key_version,
@@ -184,6 +184,10 @@ describe.each(USER_SCOPED)("$table is user-isolated", ({
 		// purpose anyway -- user_key_active is unique on user_id where retired_at
 		// is null, so a user has at most one LIVE identity and the builder writes
 		// live rows.
+		//
+		// Reads are no longer in this suite FOR user_key: since the secret split
+		// its SELECT policy also admits workspace co-members, and Bob is
+		// deliberately not one here. The co-member half has its own suite below.
 	});
 });
 
@@ -241,4 +245,78 @@ test("no key table is exposed to Zero", () => {
 	// Presence assertion: the allowlist is populated, so the absences mean
 	// something. Without it this passes against an empty config.
 	expect(exposed).toContain("task");
+});
+
+// The split's whole justification, asserted rather than assumed: a granter must
+// read a co-member's public key to address a WDK wrap to it, and Postgres RLS
+// is row-level, so before the split the only policy that could expose the key
+// exposed the passphrase wrap beside it -- an offline Argon2id target for
+// someone else's passphrase.
+describe("user_key is co-member readable, user_key_secret is not", () => {
+	beforeEach(async () => {
+		await pool.query(
+			`insert into membership (id, user_id, workspace_id, role)
+			 values ('m_bob', 'u_bob', 'ws_alice', 'member')`,
+		);
+		await asAlice(insertUserKey("uk_alice", "u_alice"));
+		await asAlice(
+			`insert into user_key_secret (user_key_id, user_id, passphrase_wrapped,
+			 recovery_wrapped, passphrase_salt, recovery_salt, format_version)
+			 values ('uk_alice', 'u_alice', 'w_a', 'r_a', 's_a', 's_a2', 1)`,
+		);
+	});
+
+	test("a co-member reads the public key", async () => {
+		const theirs = await asBob<{ public_key: string }>(
+			"select public_key from user_key where user_id = 'u_alice'",
+		);
+		expect(theirs.rows[0]?.public_key).toBe("pk_a");
+	});
+
+	test("a co-member reads no wrap", async () => {
+		const theirs = await asBob(
+			"select passphrase_wrapped from user_key_secret where user_id = 'u_alice'",
+		);
+		expect(theirs.rowCount).toBe(0);
+		// Presence half: the owner does read it, so the zero above is the policy
+		// and not a table that is empty or a column that does not exist.
+		const mine = await asAlice<{ passphrase_wrapped: string }>(
+			"select passphrase_wrapped from user_key_secret where user_id = 'u_alice'",
+		);
+		expect(mine.rows[0]?.passphrase_wrapped).toBe("w_a");
+	});
+
+	test("a co-member cannot overwrite the public key", async () => {
+		const written = await asBob(
+			"update user_key set public_key = 'evil' where user_id = 'u_alice'",
+		);
+		// Readable is not writable: the read policy is SELECT-only and UPDATE
+		// stayed owner-scoped, so a co-member sees the key and cannot move it.
+		expect(written.rowCount).toBe(0);
+		const after = await asAlice<{ public_key: string }>(
+			"select public_key from user_key where user_id = 'u_alice'",
+		);
+		expect(after.rows[0]?.public_key).toBe("pk_a");
+	});
+
+	test("a co-member cannot write a secret row claiming another user", async () => {
+		await expect(
+			asBob(
+				`insert into user_key_secret (user_key_id, user_id, passphrase_wrapped,
+				 recovery_wrapped, passphrase_salt, recovery_salt, format_version)
+				 values ('uk_evil', 'u_alice', 'w_e', 'r_e', 's_e', 's_e2', 1)`,
+			),
+		).rejects.toThrow(/row-level security/i);
+	});
+
+	test("a stranger reads neither half", async () => {
+		await pool.query("delete from membership where id = 'm_bob'");
+		const key = await asBob(
+			"select public_key from user_key where user_id = 'u_alice'",
+		);
+		const secret = await asBob(
+			"select passphrase_wrapped from user_key_secret where user_id = 'u_alice'",
+		);
+		expect([key.rowCount, secret.rowCount]).toEqual([0, 0]);
+	});
 });

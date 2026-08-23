@@ -841,15 +841,6 @@ export const userKey = pgTable(
 		// Immutable for the lifetime of one identity. Identity rotation writes a
 		// NEW row and retires this one; it never edits the public key in place.
 		publicKey: text("public_key").notNull(),
-		passphraseWrapped: text("passphrase_wrapped").notNull(),
-		recoveryWrapped: text("recovery_wrapped").notNull(),
-		passphraseSalt: text("passphrase_salt").notNull(),
-		recoverySalt: text("recovery_salt").notNull(),
-		// No default, deliberately. This records the KDF version the CLIENT
-		// derived its wraps under, so a server that forgets to pass it must fail
-		// the insert rather than silently stamp a version the wrap was not made
-		// with -- which produces an unlock failure no passphrase can fix.
-		formatVersion: smallint("format_version").notNull(),
 		state: keyEnrollmentStateEnum("state").notNull().default("unenrolled"),
 		retiredAt: timestamp("retired_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true })
@@ -870,6 +861,37 @@ export const userKey = pgTable(
 		uniqueIndex("user_key_active").on(t.userId).where(sql`retired_at is null`),
 	],
 );
+
+// Split from user_key, not merged into it, because the two halves have opposite
+// audiences. A public key IS public: a granter must read the recipient's to
+// address a WDK wrap to it, and Postgres RLS is row-level, so one policy over
+// one row cannot show a co-member the key while hiding the passphrase wrap
+// beside it. Widening user_key would have handed every co-member an offline
+// Argon2id target for someone else's passphrase.
+export const userKeySecret = pgTable("user_key_secret", {
+	// Keyed by the identity, not the user: identity rotation writes a new
+	// user_key row and retires the old one, and each carries its own wraps.
+	userKeyId: text("user_key_id")
+		.primaryKey()
+		.references(() => userKey.id, { onDelete: "cascade" }),
+	// Denormalised from user_key so the owner-only policy is a plain column
+	// compare rather than a join back to the table it is protecting.
+	userId: text("user_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	passphraseWrapped: text("passphrase_wrapped").notNull(),
+	recoveryWrapped: text("recovery_wrapped").notNull(),
+	passphraseSalt: text("passphrase_salt").notNull(),
+	recoverySalt: text("recovery_salt").notNull(),
+	// No default, deliberately. This records the KDF version the CLIENT derived
+	// its wraps under, so a server that forgets to pass it must fail the insert
+	// rather than silently stamp a version the wrap was not made with -- which
+	// produces an unlock failure no passphrase can fix.
+	formatVersion: smallint("format_version").notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true })
+		.defaultNow()
+		.notNull(),
+});
 
 export const workspaceKey = pgTable(
 	"workspace_key",

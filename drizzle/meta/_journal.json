@@ -169,6 +169,13 @@
       "when": 1787506437287,
       "tag": "0023_glorious_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787527757429,
+      "tag": "0024_keen_groot",
+      "breakpoints": true
     }
   ]
 }

@@ -121,8 +121,10 @@ async function storedWraps(): Promise<Wraps> {
 		recovery_salt: string;
 		format_version: number;
 	}>(
-		`select public_key, passphrase_wrapped, recovery_wrapped, passphrase_salt,
-		 recovery_salt, format_version from user_key where user_id = $1`,
+		`select k.public_key, s.passphrase_wrapped, s.recovery_wrapped,
+		 s.passphrase_salt, s.recovery_salt, s.format_version
+		 from user_key k join user_key_secret s on s.user_key_id = k.id
+		 where k.user_id = $1 and k.retired_at is null`,
 		[userId],
 	);
 	const row = rows.rows[0];

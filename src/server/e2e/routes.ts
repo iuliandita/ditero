@@ -154,9 +154,13 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 						passphrase_wrapped: string;
 						passphrase_salt: string;
 					}>(
-						`select public_key, format_version, passphrase_wrapped,
-						 passphrase_salt from user_key
-						 where user_id = $1 and retired_at is null`,
+						// An inner join, so a user_key row whose secret half is
+						// unreadable reports "not enrolled" rather than an identity
+						// with null wraps the unlock path would try to derive from.
+						`select k.public_key, s.format_version, s.passphrase_wrapped,
+						 s.passphrase_salt
+						 from user_key k join user_key_secret s on s.user_key_id = k.id
+						 where k.user_id = $1 and k.retired_at is null`,
 						[session.user.id],
 					);
 					const row = stored.rows[0];
@@ -207,12 +211,21 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 					// enrollments both reach the insert, one wins, and both then read
 					// the same winning row. The read-first order would let both decide
 					// they are the first and race on the write.
+					// One statement across both tables, so a first enrolment cannot
+					// commit an identity whose wraps are missing -- a state with no
+					// recovery path, since the public key is then immutable and no
+					// passphrase opens anything. The CTE returns no row when the
+					// conflict fires, so the second insert is skipped for free.
 					await client.query(
-						`insert into user_key (id, user_id, public_key, passphrase_wrapped,
-					 recovery_wrapped, passphrase_salt, recovery_salt, format_version,
-					 state)
-					 values ($1, $2, $3, $4, $5, $6, $7, $8, 'ready')
-					 on conflict (user_id) where retired_at is null do nothing`,
+						`with identity as (
+						 insert into user_key (id, user_id, public_key, state)
+						 values ($1, $2, $3, 'ready')
+						 on conflict (user_id) where retired_at is null do nothing
+						 returning id, user_id)
+					 insert into user_key_secret (user_key_id, user_id,
+					 passphrase_wrapped, recovery_wrapped, passphrase_salt,
+					 recovery_salt, format_version)
+					 select id, user_id, $4, $5, $6, $7, $8 from identity`,
 						[
 							`uk_${crypto.randomUUID()}`,
 							userId,
@@ -265,8 +278,9 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 						recovery_salt: string;
 						format_version: number;
 					}>(
-						`select recovery_wrapped, recovery_salt, format_version
-						 from user_key where user_id = $1 and retired_at is null`,
+						`select s.recovery_wrapped, s.recovery_salt, s.format_version
+						 from user_key k join user_key_secret s on s.user_key_id = k.id
+						 where k.user_id = $1 and k.retired_at is null`,
 						[session.user.id],
 					);
 					const row = stored.rows[0];
@@ -307,9 +321,10 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 				const userId = session.user.id;
 				return await withUserContext(pool, userId, async (client) => {
 					const stored = await client.query<{ format_version: number }>(
-						`select format_version from user_key
-						 where user_id = $1 and state = 'ready'
-						 and retired_at is null`,
+						`select s.format_version
+						 from user_key k join user_key_secret s on s.user_key_id = k.id
+						 where k.user_id = $1 and k.state = 'ready'
+						 and k.retired_at is null`,
 						[userId],
 					);
 					const row = stored.rows[0];
@@ -360,8 +375,10 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 					// which would leave the account reachable by a code the user
 					// has just typed into a field and been told is dead.
 					const updated = await client.query(
-						`update user_key set ${sets.join(", ")}
-						 where user_id = $1 and state = 'ready' and retired_at is null
+						`update user_key_secret s set ${sets.join(", ")}
+						 from user_key k
+						 where k.id = s.user_key_id and s.user_id = $1
+						 and k.state = 'ready' and k.retired_at is null
 						 and ${guardsSql.join(" and ")}`,
 						params,
 					);

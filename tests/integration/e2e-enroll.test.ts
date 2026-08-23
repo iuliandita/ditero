@@ -109,7 +109,7 @@ async function storedKeys(): Promise<{ publicKey: string; state: string }[]> {
 
 async function storedFormatVersions(): Promise<number[]> {
 	const rows = await pool.query<{ format_version: number }>(
-		"select format_version from user_key",
+		"select format_version from user_key_secret",
 	);
 	return rows.rows.map((r) => r.format_version);
 }

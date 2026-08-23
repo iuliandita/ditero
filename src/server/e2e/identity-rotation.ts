@@ -111,10 +111,17 @@ export async function rotateIdentity(
 	if (retired.rowCount !== 1)
 		return { ok: false, reason: "stale-previous-key" };
 
+	// Both halves in one statement. A new identity whose secret half never
+	// landed is unrecoverable: its public key is immutable, no wrap opens it,
+	// and the old identity has already been retired.
 	await client.query(
-		`insert into user_key (id, user_id, public_key, passphrase_wrapped,
-		 recovery_wrapped, passphrase_salt, recovery_salt, format_version, state)
-		 values ($1, $2, $3, $4, $5, $6, $7, $8, 'ready')`,
+		`with identity as (
+		 insert into user_key (id, user_id, public_key, state)
+		 values ($1, $2, $3, 'ready')
+		 returning id, user_id)
+		 insert into user_key_secret (user_key_id, user_id, passphrase_wrapped,
+		 recovery_wrapped, passphrase_salt, recovery_salt, format_version)
+		 select id, user_id, $4, $5, $6, $7, $8 from identity`,
 		[
 			`uk_${crypto.randomUUID()}`,
 			userId,
