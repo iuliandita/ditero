@@ -19,6 +19,7 @@ import {
 import { encodeBytes, encodeWrapped } from "../../../domain/e2e/wire.ts";
 import { m } from "../../../paraglide/messages.js";
 import { createDeriver } from "../../lib/e2e/derive.ts";
+import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { RecoveryCodeCard } from "./RecoveryCodeCard.tsx";
 
 // Design 3.1 / shell flow 1. A floor, not a strength meter: a meter invites
@@ -39,6 +40,9 @@ type Material = {
 	formatVersion: number;
 	display: string;
 	canonical: string;
+	// Kept for the handover to the keyring on the done pane. It never leaves
+	// this component and is dropped with the rest of the material on reset.
+	privateKey: Uint8Array;
 };
 
 export function EnrollmentWizard({
@@ -57,6 +61,7 @@ export function EnrollmentWizard({
 	 */
 	onEnrolled?: () => void;
 }) {
+	const { afterEnroll } = useKeyring();
 	const [pane, setPane] = useState<Pane>("passphrase");
 	const [passphrase, setPassphrase] = useState("");
 	const [confirmPassphrase, setConfirmPassphrase] = useState("");
@@ -147,6 +152,7 @@ export function EnrollmentWizard({
 				formatVersion: CURRENT_KDF_VERSION,
 				display: recovery.display,
 				canonical: recovery.canonical,
+				privateKey: identity.privateKey,
 			});
 			setPane("recovery");
 		} catch (error) {
@@ -203,6 +209,10 @@ export function EnrollmentWizard({
 				return;
 			}
 			setPane("done");
+			// The private key is already in hand here, so enrollment leaves the
+			// device unlocked and remembered rather than immediately prompting
+			// for the passphrase that was typed two panes ago.
+			await afterEnroll(current.privateKey, true);
 			onEnrolled?.();
 		} catch (error) {
 			console.error(error);

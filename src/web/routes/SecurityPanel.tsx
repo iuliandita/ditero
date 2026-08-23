@@ -222,7 +222,7 @@ export function SecurityPanel() {
 				) : null}
 			</div>
 
-			<EncryptedFilesPanel />
+			{session?.user.id && <EncryptedFilesPanel userId={session.user.id} />}
 
 			{error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
 		</section>
