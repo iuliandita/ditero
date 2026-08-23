@@ -1420,7 +1420,6 @@
 	"e2e_unlock_stale": "This device cannot open that record. It was saved by a newer version of the app.",
 	"e2e_unlock_remember_label": "Stay unlocked on this device",
 	"e2e_unlock_remember_hint": "Keeps the key in this browser so you are not asked again. Turn it off on a shared computer.",
-	"e2e_unlock_cancelled": "Locked — unlock to open encrypted files.",
 	"e2e_lock_now": "Lock now",
 	"e2e_locked_announcement": "Locked. Your passphrase is needed to open encrypted files again.",
 	"e2e_autolock_label": "Lock automatically",

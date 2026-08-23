@@ -1420,7 +1420,6 @@
 	"e2e_unlock_stale": "Dieses Gerät kann diesen Eintrag nicht öffnen. Er wurde mit einer neueren Version der App gespeichert.",
 	"e2e_unlock_remember_label": "Auf diesem Gerät entsperrt bleiben",
 	"e2e_unlock_remember_hint": "Behält den Schlüssel in diesem Browser, damit du nicht erneut gefragt wirst. Schalte es auf einem gemeinsam genutzten Computer aus.",
-	"e2e_unlock_cancelled": "Gesperrt — entsperren, um verschlüsselte Dateien zu öffnen.",
 	"e2e_lock_now": "Jetzt sperren",
 	"e2e_locked_announcement": "Gesperrt. Zum erneuten Öffnen verschlüsselter Dateien wird deine Passphrase benötigt.",
 	"e2e_autolock_label": "Automatisch sperren",

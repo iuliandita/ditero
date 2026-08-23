@@ -1448,7 +1448,6 @@
 	"e2e_unlock_stale": "Cet appareil ne peut pas ouvrir cet enregistrement. Il a été enregistré par une version plus récente de l’application.",
 	"e2e_unlock_remember_label": "Rester déverrouillé sur cet appareil",
 	"e2e_unlock_remember_hint": "Conserve la clé dans ce navigateur pour ne plus te la redemander. Désactive-le sur un ordinateur partagé.",
-	"e2e_unlock_cancelled": "Verrouillé — déverrouille pour ouvrir les fichiers chiffrés.",
 	"e2e_lock_now": "Verrouiller maintenant",
 	"e2e_locked_announcement": "Verrouillé. Ta phrase secrète est nécessaire pour rouvrir les fichiers chiffrés.",
 	"e2e_autolock_label": "Verrouiller automatiquement",

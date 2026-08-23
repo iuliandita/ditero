@@ -1448,7 +1448,6 @@
 	"e2e_unlock_stale": "Acest dispozitiv nu poate deschide acea înregistrare. A fost salvată de o versiune mai nouă a aplicației.",
 	"e2e_unlock_remember_label": "Rămâi deblocat pe acest dispozitiv",
 	"e2e_unlock_remember_hint": "Păstrează cheia în acest browser ca să nu ți se mai ceară. Dezactiveaz-o pe un calculator folosit în comun.",
-	"e2e_unlock_cancelled": "Blocat — deblochează pentru a deschide fișierele criptate.",
 	"e2e_lock_now": "Blochează acum",
 	"e2e_locked_announcement": "Blocat. Este nevoie de fraza ta de acces pentru a redeschide fișierele criptate.",
 	"e2e_autolock_label": "Blochează automat",

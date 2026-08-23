@@ -1448,7 +1448,6 @@
 	"e2e_unlock_stale": "Este dispositivo no puede abrir ese registro. Se guardó con una versión más reciente de la aplicación.",
 	"e2e_unlock_remember_label": "Mantener desbloqueado en este dispositivo",
 	"e2e_unlock_remember_hint": "Guarda la clave en este navegador para que no se te vuelva a preguntar. Desactívalo en un ordenador compartido.",
-	"e2e_unlock_cancelled": "Bloqueado: desbloquea para abrir los archivos cifrados.",
 	"e2e_lock_now": "Bloquear ahora",
 	"e2e_locked_announcement": "Bloqueado. Se necesita tu frase de contraseña para volver a abrir los archivos cifrados.",
 	"e2e_autolock_label": "Bloquear automáticamente",
