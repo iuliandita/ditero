@@ -41,6 +41,30 @@ const formatVersion = z
 		"formatVersion must be a registered KDF version",
 	);
 
+// One wrap being replaced, plus the value it is replacing. The previous wrap
+// is the compare-and-set token rather than the row's `updatedAt`: a timestamptz
+// carries microseconds that JSON's millisecond Date does not, so a timestamp
+// token either loses precision on the way out and never matches again, or
+// matches a DIFFERENT write that landed inside the same millisecond. The wrap
+// is exact, needs no clock, and the client already holds it -- it just
+// decrypted the thing.
+const wrapReplacement = z.object({
+	wrapped: blob,
+	salt: blob,
+	previousWrapped: blob,
+});
+
+const rewrapBody = z
+	.object({
+		passphrase: wrapReplacement.optional(),
+		recovery: wrapReplacement.optional(),
+		formatVersion,
+	})
+	.refine(
+		(value) => value.passphrase !== undefined || value.recovery !== undefined,
+		"at least one wrap must be replaced",
+	);
+
 const enrollBody = z.object({
 	publicKey,
 	passphraseWrapped: blob,
@@ -154,6 +178,129 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 					// Never echo a wrapped blob or a salt: the response is the state,
 					// not the material.
 					return { publicKey: row.public_key, state: row.state };
+				});
+			}),
+		)
+		.get(
+			"/api/e2e/identity/recovery",
+			guards.guardedGet(async (_request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				return await withUserContext(pool, session.user.id, async (client) => {
+					// Its own route, so that the ordinary "can I unlock here?" read
+					// never carries the recovery wrap. Same owner, same RLS policy --
+					// the separation is about not handing the offline-secret wrap to
+					// every page load, not about a stronger check being possible.
+					const stored = await client.query<{
+						recovery_wrapped: string;
+						recovery_salt: string;
+						format_version: number;
+					}>(
+						`select recovery_wrapped, recovery_salt, format_version
+						 from user_key where user_id = $1`,
+						[session.user.id],
+					);
+					const row = stored.rows[0];
+					return row
+						? {
+								enrolled: true,
+								recoveryWrapped: row.recovery_wrapped,
+								recoverySalt: row.recovery_salt,
+								formatVersion: row.format_version,
+							}
+						: {
+								enrolled: false,
+								recoveryWrapped: null,
+								recoverySalt: null,
+								formatVersion: null,
+							};
+				});
+			}),
+		)
+		.post(
+			"/api/e2e/rewrap",
+			guards.guardedPost(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+
+				let parsed: z.infer<typeof rewrapBody>;
+				try {
+					parsed = rewrapBody.parse(await request.json());
+				} catch {
+					return new Response("Bad Request", { status: 400 });
+				}
+
+				// The server cannot check that these wraps open to the private key
+				// matching the immutable public key -- they are opaque to it. A
+				// session that has been taken over can therefore destroy an
+				// identity by overwriting both wraps with junk. It cannot READ
+				// anything by doing so: every WDK is wrapped to the public key,
+				// which no request can change. Availability, not confidentiality.
+				const userId = session.user.id;
+				return await withUserContext(pool, userId, async (client) => {
+					const stored = await client.query<{ format_version: number }>(
+						`select format_version from user_key
+						 where user_id = $1 and state = 'ready'`,
+						[userId],
+					);
+					const row = stored.rows[0];
+					if (!row) return new Response("Conflict", { status: 409 });
+
+					// One column holds the version for BOTH wraps, so only a rewrap
+					// that replaces both may move it. Letting a partial rewrap change
+					// it would re-stamp the untouched wrap with a version it was never
+					// derived under -- #168 exactly, one endpoint later, and equally
+					// unfixable by any secret the user knows.
+					const partial = !parsed.passphrase || !parsed.recovery;
+					if (partial && parsed.formatVersion !== row.format_version) {
+						return new Response("Bad Request", { status: 400 });
+					}
+
+					const params: unknown[] = [userId];
+					const bind = (value: unknown) => {
+						params.push(value);
+						return `$${params.length}`;
+					};
+					const sets: string[] = [];
+					const guardsSql: string[] = [];
+					if (parsed.passphrase) {
+						sets.push(
+							`passphrase_wrapped = ${bind(parsed.passphrase.wrapped)}`,
+							`passphrase_salt = ${bind(parsed.passphrase.salt)}`,
+						);
+						guardsSql.push(
+							`passphrase_wrapped = ${bind(parsed.passphrase.previousWrapped)}`,
+						);
+					}
+					if (parsed.recovery) {
+						sets.push(
+							`recovery_wrapped = ${bind(parsed.recovery.wrapped)}`,
+							`recovery_salt = ${bind(parsed.recovery.salt)}`,
+						);
+						guardsSql.push(
+							`recovery_wrapped = ${bind(parsed.recovery.previousWrapped)}`,
+						);
+					}
+					sets.push(
+						`format_version = ${bind(parsed.formatVersion)}`,
+						"updated_at = now()",
+					);
+
+					// One statement, so the recovery reset cannot land its new
+					// passphrase and then fail to land its new recovery code --
+					// which would leave the account reachable by a code the user
+					// has just typed into a field and been told is dead.
+					const updated = await client.query(
+						`update user_key set ${sets.join(", ")}
+						 where user_id = $1 and state = 'ready'
+						 and ${guardsSql.join(" and ")}`,
+						params,
+					);
+					// Zero rows means the wrap moved under this caller since it was
+					// read. The loser of a race must not retry blindly: its
+					// replacement was built over a wrap that no longer exists.
+					if (updated.rowCount !== 1) {
+						return new Response("Conflict", { status: 409 });
+					}
+					return { formatVersion: parsed.formatVersion };
 				});
 			}),
 		);
