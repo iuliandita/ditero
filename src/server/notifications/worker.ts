@@ -117,6 +117,43 @@ function interval(ms: number) {
 // The row locks are taken in the subplan before the outer update evaluates, so
 // two workers never claim the same row; `, id` is only a deterministic
 // tiebreak. One statement, therefore its own transaction.
+/**
+ * `as materialized` is load-bearing, and the shape it replaces was wrong.
+ *
+ * `where id in (select ... limit N for update skip locked)` does NOT bound the
+ * claim. Postgres is free to plan it as a nested-loop semi join with the
+ * subquery on the inner side, and then it RESCANS that subquery once per outer
+ * row -- each rescan taking a fresh N rows past the ones it already locked. A
+ * claim of 5 against ten queued rows returned all ten. Which plan it picks
+ * depends on the table's statistics, so the bug is invisible on a small table
+ * and appears when the outbox has grown, which is exactly when a worker
+ * claiming without bound does the most damage: the batch is the unit the
+ * bounded-concurrency drain and the lease timeout are both sized against.
+ */
+/**
+ * Exported so a test can EXPLAIN exactly the statement that ships. Asserting
+ * the plan is the only honest guard here: whether the broken shape actually
+ * over-claims depends on which join the planner picks, so a behavioural test
+ * passes on the days the planner is kind.
+ */
+export function claimBatchSql(limit: number, replicaId: string) {
+	return sql`
+		with claimed as materialized (
+			select id from notification_outbox
+			where status = 'queued' and next_attempt_at <= now()
+			order by next_attempt_at, id
+			for update skip locked
+			limit ${limit}
+		)
+		update notification_outbox o
+		set status = 'sending', claimed_at = now(), claimed_by = ${replicaId}
+		from claimed c
+		where o.id = c.id
+		returning o.id, o.reminder_state_id, o.recipient_user_id, o.channel_kind,
+		          o.payload, o.attempts
+	`;
+}
+
 export async function claimBatch(
 	database: Database | Transaction,
 	limit: number,
@@ -129,18 +166,7 @@ export async function claimBatch(
 		channel_kind: ChannelKind;
 		payload: unknown;
 		attempts: number;
-	}>(sql`
-		update notification_outbox
-		set status = 'sending', claimed_at = now(), claimed_by = ${replicaId}
-		where id in (
-			select id from notification_outbox
-			where status = 'queued' and next_attempt_at <= now()
-			order by next_attempt_at, id
-			for update skip locked
-			limit ${limit}
-		)
-		returning id, reminder_state_id, recipient_user_id, channel_kind, payload, attempts
-	`);
+	}>(claimBatchSql(limit, replicaId));
 	return rows.map((row) => ({
 		id: row.id,
 		reminderStateId: row.reminder_state_id,

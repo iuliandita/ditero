@@ -21,6 +21,7 @@ import { MAX_ATTEMPTS } from "../../src/domain/notification-retry.ts";
 import { enqueueOutbox } from "../../src/server/notifications/outbox.ts";
 import {
 	claimBatch,
+	claimBatchSql,
 	completeDelivery,
 	LEASE_EXPIRED,
 	pruneTerminal,
@@ -245,6 +246,32 @@ describe("claiming", () => {
 		expect(claimedByA.filter((id) => claimedByB.includes(id))).toEqual([]);
 		// A serializing claim cannot return before release(), which runs after.
 		expect(elapsed).toBeLessThan(1_000);
+	});
+
+	test("the row selection is evaluated once, whatever the planner does", async () => {
+		for (let i = 0; i < 8; i++) await seedOutbox(`wk-nl-${i}`);
+		const plan = (
+			await db.execute<{ "QUERY PLAN": string }>(
+				sql`explain (costs off) ${claimBatchSql(2, A)}`,
+			)
+		).rows
+			.map((row) => row["QUERY PLAN"])
+			.join("\n");
+
+		// The shape this replaced -- `where id in (select ... limit N for update
+		// skip locked)` -- does not bound the claim. Postgres may plan it as a
+		// nested-loop semi join with the subquery on the INNER side and rescan
+		// it once per outer row, each rescan taking a fresh N rows past the ones
+		// it already locked. A claim of 5 against ten queued rows returned all
+		// ten, in this suite, on a table whose statistics happened to favour
+		// that plan.
+		//
+		// Asserted as a plan and not as a row count on purpose: whether the
+		// broken shape over-claims depends on which join the planner picks, so
+		// the behavioural version of this test passes on the days it is kind.
+		// A materialized CTE cannot be rescanned by any plan.
+		expect(plan).toContain("CTE claimed");
+		expect(plan).not.toContain("ANY_subquery");
 	});
 
 	test("a claimed row is invisible to a second claimer while sending", async () => {
