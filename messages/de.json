@@ -1446,5 +1446,6 @@
 	"e2e_regenerate_warning": "Der Code, den du jetzt hast, funktioniert nicht mehr, sobald der neue erzeugt ist.",
 	"e2e_regenerate_done": "Neuer Wiederherstellungscode gespeichert. Der alte Code funktioniert nicht mehr.",
 	"e2e_rewrap_conflict": "Deine Verschlüsselungseinstellungen wurden an anderer Stelle geändert. Lade neu und versuche es erneut.",
-	"e2e_rewrap_failed": "Das konnte nicht gespeichert werden. Versuche es erneut."
+	"e2e_rewrap_failed": "Das konnte nicht gespeichert werden. Versuche es erneut.",
+	"notify_key_grant_body": "Jemand wartet auf einen Schlüssel für diesen Arbeitsbereich"
 }

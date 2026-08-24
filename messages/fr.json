@@ -1474,5 +1474,6 @@
 	"e2e_regenerate_warning": "Le code que tu as actuellement cesse de fonctionner dès que le nouveau est créé.",
 	"e2e_regenerate_done": "Nouveau code de récupération enregistré. L'ancien code ne fonctionne plus.",
 	"e2e_rewrap_conflict": "Tes paramètres de chiffrement ont changé ailleurs. Recharge et réessaie.",
-	"e2e_rewrap_failed": "Impossible d'enregistrer. Réessaie."
+	"e2e_rewrap_failed": "Impossible d'enregistrer. Réessaie.",
+	"notify_key_grant_body": "Quelqu'un attend une clé pour cet espace de travail"
 }

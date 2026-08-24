@@ -1474,5 +1474,6 @@
 	"e2e_regenerate_warning": "El código que tienes ahora deja de funcionar en cuanto se cree el nuevo.",
 	"e2e_regenerate_done": "Nuevo código de recuperación guardado. El código anterior ya no funciona.",
 	"e2e_rewrap_conflict": "Tu configuración de cifrado cambió en otro lugar. Recarga e inténtalo de nuevo.",
-	"e2e_rewrap_failed": "No se pudo guardar. Inténtalo de nuevo."
+	"e2e_rewrap_failed": "No se pudo guardar. Inténtalo de nuevo.",
+	"notify_key_grant_body": "Alguien espera una clave para este espacio de trabajo"
 }

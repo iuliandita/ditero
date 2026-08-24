@@ -6,6 +6,13 @@ import { withUserContext } from "../../db/user-context.ts";
 import { KDF_PARAMS } from "../../domain/e2e/kdf.ts";
 import { isWellFormedCommitment } from "../../domain/e2e/wdk-commitment.ts";
 import type { Guards } from "../guards.ts";
+import {
+	type GrantFailure,
+	markGrantFailed,
+	myGrants,
+	pendingGrants,
+	submitGrant,
+} from "./grants.ts";
 import { type RotationFailure, rotateIdentity } from "./identity-rotation.ts";
 import {
 	type ProvisionFailure,
@@ -130,6 +137,31 @@ const PROVISION_STATUS: Record<ProvisionFailure, number> = {
 	// distinction tells a stranger the workspace exists.
 	"not-permitted": 403,
 	"not-enrolled": 409,
+};
+
+const grantBody = z.object({
+	requestId: z.string().min(1).max(128),
+	recipientPublicKey: publicKey,
+	enc: blob,
+	ciphertext: blob,
+});
+
+const grantFailBody = z.object({
+	requestId: z.string().min(1).max(128),
+	// A short free-text reason from the recipient's own client, shown back to
+	// them. Capped because it is stored verbatim.
+	reason: z.string().min(1).max(200),
+});
+
+const GRANT_STATUS: Record<GrantFailure, number> = {
+	// Absent rather than forbidden: a request id the caller cannot fulfil and a
+	// request id that does not exist must look the same, or the endpoint
+	// enumerates other workspaces' pending grants.
+	"no-request": 404,
+	"not-ready": 409,
+	"inactive-version": 409,
+	"stale recipient key": 409,
+	conflict: 409,
 };
 
 const enrollBody = z.object({
@@ -455,6 +487,73 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 						version: result.version,
 						outcome: result.outcome,
 					};
+				});
+			}),
+		)
+		.get(
+			"/api/e2e/grants/pending",
+			guards.guardedGet(async (_request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				return await withUserContext(pool, session.user.id, async (client) => ({
+					requests: await pendingGrants(client, session.user.id),
+				}));
+			}),
+		)
+		.get(
+			"/api/e2e/grants/mine",
+			guards.guardedGet(async (_request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				return await withUserContext(pool, session.user.id, async (client) => ({
+					requests: await myGrants(client, session.user.id),
+				}));
+			}),
+		)
+		.post(
+			"/api/e2e/grants",
+			guards.guardedPost(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+
+				let parsed: z.infer<typeof grantBody>;
+				try {
+					parsed = grantBody.parse(await request.json());
+				} catch {
+					return new Response("Bad Request", { status: 400 });
+				}
+
+				const userId = session.user.id;
+				return await withUserContext(pool, userId, async (client) => {
+					const result = await submitGrant(client, userId, parsed);
+					if (!result.ok) {
+						return new Response(result.reason, {
+							status: GRANT_STATUS[result.reason],
+						});
+					}
+					return { requestId: result.requestId, outcome: result.outcome };
+				});
+			}),
+		)
+		.post(
+			"/api/e2e/grants/fail",
+			guards.guardedPost(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+
+				let parsed: z.infer<typeof grantFailBody>;
+				try {
+					parsed = grantFailBody.parse(await request.json());
+				} catch {
+					return new Response("Bad Request", { status: 400 });
+				}
+
+				const userId = session.user.id;
+				return await withUserContext(pool, userId, async (client) => {
+					const marked = await markGrantFailed(
+						client,
+						userId,
+						parsed.requestId,
+						parsed.reason,
+					);
+					if (!marked) return new Response("Not Found", { status: 404 });
+					return { requestId: parsed.requestId, state: "failed" };
 				});
 			}),
 		);

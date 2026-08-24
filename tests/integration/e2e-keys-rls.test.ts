@@ -320,3 +320,103 @@ describe("user_key is co-member readable, user_key_secret is not", () => {
 		expect([key.rowCount, secret.rowCount]).toEqual([0, 0]);
 	});
 });
+
+// Task 15 widened three policies so a granter can write a row the RECIPIENT
+// owns. None of that is exercised by the grant endpoint's own tests: those go
+// through the app pool, which connects as a superuser and bypasses RLS
+// entirely. Asserted here, under the non-bypassing role, or the widening is
+// only as correct as it looks.
+describe("grant writes cross the owner boundary under RLS", () => {
+	beforeEach(async () => {
+		await pool.query(
+			`insert into membership (id, user_id, workspace_id, role)
+			 values ('m_bob', 'u_bob', 'ws_alice', 'member')`,
+		);
+	});
+
+	const grantRow = (id: string, grantedBy: string) =>
+		`insert into membership_key (id, membership_id, user_id, workspace_id,
+		 key_version, enc, ciphertext, recipient_public_key, granted_by)
+		 values ('${id}', 'm_bob', 'u_bob', 'ws_alice', 1, 'enc', 'ct', 'pk_b',
+		 '${grantedBy}')`;
+
+	test("a co-member writes a wrap the recipient owns", async () => {
+		await expect(
+			asAlice(grantRow("mk_grant", "u_alice")),
+		).resolves.toBeTruthy();
+		const theirs = await asBob<{ id: string }>(
+			"select id from membership_key where user_id = 'u_bob'",
+		);
+		expect(theirs.rows[0]?.id).toBe("mk_grant");
+	});
+
+	test("a granter cannot attribute the grant to someone else", async () => {
+		// granted_by is the only thing tying a row to the person who wrote it.
+		// Left unchecked, a substituting granter could sign the delivery with a
+		// co-member's name and the audit trail would name the wrong account.
+		await expect(asAlice(grantRow("mk_forged", "u_bob"))).rejects.toThrow(
+			/row-level security/i,
+		);
+	});
+
+	test("a non-member writes nothing", async () => {
+		await pool.query("delete from membership where id = 'm_bob'");
+		await pool.query(
+			`insert into membership (id, user_id, workspace_id, role)
+			 values ('m_bob', 'u_bob', 'ws_alice', 'member')`,
+		);
+		await pool.query("delete from membership where id = 'm_alice'");
+		await expect(asAlice(grantRow("mk_outsider", "u_alice"))).rejects.toThrow(
+			/row-level security/i,
+		);
+	});
+
+	test("a granter cannot move a wrap after writing it", async () => {
+		await asAlice(grantRow("mk_move", "u_alice"));
+		const moved = await asAlice(
+			"update membership_key set ciphertext = 'evil' where id = 'mk_move'",
+		);
+		// Create-for-someone is not edit-for-someone: UPDATE stayed owner-only,
+		// so a delivered wrap can be refused by its recipient but never swapped
+		// underneath them.
+		expect(moved.rowCount).toBe(0);
+		const after = await asBob<{ ciphertext: string }>(
+			"select ciphertext from membership_key where id = 'mk_move'",
+		);
+		expect(after.rows[0]?.ciphertext).toBe("ct");
+	});
+
+	test("a co-member reads and fulfils a request, a stranger does neither", async () => {
+		await asBob(
+			`insert into key_grant_request (id, membership_id, user_id, workspace_id,
+			 requested_version) values ('kgr_1', 'm_bob', 'u_bob', 'ws_alice', 1)`,
+		);
+		const seen = await asAlice<{ id: string }>(
+			"select id from key_grant_request where id = 'kgr_1'",
+		);
+		expect(seen.rows[0]?.id).toBe("kgr_1");
+		const fulfilled = await asAlice(
+			"update key_grant_request set state = 'ready' where id = 'kgr_1'",
+		);
+		expect(fulfilled.rowCount).toBe(1);
+
+		await pool.query("delete from membership where id = 'm_alice'");
+		const gone = await asAlice(
+			"select id from key_grant_request where id = 'kgr_1'",
+		);
+		expect(gone.rowCount).toBe(0);
+	});
+
+	test("a co-member cannot open a request naming someone else", async () => {
+		// Reads and fulfilment widened; creation did not. Otherwise any member
+		// could manufacture a request in another member's name and the queue
+		// would carry entries nobody asked for.
+		await expect(
+			asAlice(
+				`insert into key_grant_request (id, membership_id, user_id,
+				 workspace_id, requested_version)
+				 values ('kgr_forged', 'm_bob', 'u_bob', 'ws_alice', 1)`,
+			),
+		).rejects.toThrow(/row-level security/i);
+	});
+});

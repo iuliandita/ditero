@@ -1446,5 +1446,6 @@
 	"e2e_regenerate_warning": "The code you have now stops working as soon as the new one is created.",
 	"e2e_regenerate_done": "New recovery code saved. The old code no longer works.",
 	"e2e_rewrap_conflict": "Your encryption settings changed somewhere else. Reload and try again.",
-	"e2e_rewrap_failed": "That could not be saved. Try again."
+	"e2e_rewrap_failed": "That could not be saved. Try again.",
+	"notify_key_grant_body": "Someone is waiting for a key to this workspace"
 }

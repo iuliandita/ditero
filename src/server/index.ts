@@ -35,6 +35,7 @@ import { queries } from "../zero/queries.ts";
 import { schema } from "../zero/schema.gen.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
+import { notifyGrantCapable } from "./e2e/grants.ts";
 import { e2eRoutes } from "./e2e/routes.ts";
 import { makeGuards } from "./guards.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
@@ -235,12 +236,23 @@ const routes = new Elysia()
 				return new Response("Bad Request", { status: 400 });
 			}
 			try {
-				return await acceptInvite(
+				const accepted = await acceptInvite(
 					body.token,
 					session.user.id,
 					session.user.email,
 					db,
 				);
+				if (accepted.grantRequestId) {
+					// After the accept has committed, and never fatal to it: an
+					// unsent notification costs a granter a nudge, while a failed
+					// acceptance would cost the newcomer their membership.
+					await notifyGrantCapable(db, accepted.grantRequestId).catch(
+						(error: unknown) => {
+							console.error("e2e: grant notification failed:", error);
+						},
+					);
+				}
+				return { workspaceId: accepted.workspaceId };
 			} catch (error) {
 				if (error instanceof InviteAcceptError) {
 					// Distinct 4xx per reason; the token is never echoed back.

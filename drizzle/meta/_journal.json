@@ -176,6 +176,13 @@
       "when": 1787527757429,
       "tag": "0024_keen_groot",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787527757430,
+      "tag": "0025_grant_visibility",
+      "breakpoints": true
     }
   ]
 }

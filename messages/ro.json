@@ -1474,5 +1474,6 @@
 	"e2e_regenerate_warning": "Codul pe care îl ai acum nu mai funcționează de îndată ce este creat cel nou.",
 	"e2e_regenerate_done": "Cod de recuperare nou salvat. Codul vechi nu mai funcționează.",
 	"e2e_rewrap_conflict": "Setările tale de criptare s-au schimbat în altă parte. Reîncarcă și încearcă din nou.",
-	"e2e_rewrap_failed": "Nu s-a putut salva. Încearcă din nou."
+	"e2e_rewrap_failed": "Nu s-a putut salva. Încearcă din nou.",
+	"notify_key_grant_body": "Cineva așteaptă o cheie pentru acest spațiu de lucru"
 }
