@@ -2,6 +2,7 @@
 
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useMemo } from "react";
+import { randomId } from "../../../domain/random-id.ts";
 import type { Role } from "../../../domain/role.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import { m } from "../../../paraglide/messages.js";
@@ -56,7 +57,7 @@ export function TemplateManager({
 	}, [allLists, workspaceId]);
 
 	function instantiate(template: Template) {
-		const listId = crypto.randomUUID();
+		const listId = randomId();
 		void zero
 			.mutate(
 				mutators.template.instantiateList({

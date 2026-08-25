@@ -1,6 +1,7 @@
 import { useZero } from "@rocicorp/zero/react";
 import { House, Pencil, Trash2 } from "lucide-react";
 import type { ListKind } from "../../domain/icon-map.ts";
+import { randomId } from "../../domain/random-id.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 import { snapshotList } from "../../domain/template.ts";
 import { m } from "../../paraglide/messages.js";
@@ -95,7 +96,7 @@ export function useWorkspaceRowActions({
 		void zero
 			.mutate(
 				mutators.template.save({
-					id: crypto.randomUUID(),
+					id: randomId(),
 					workspaceId: list.workspaceId,
 					name: list.title,
 					kind: "list",

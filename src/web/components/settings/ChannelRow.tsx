@@ -16,6 +16,7 @@ import {
 	channelModeSummary,
 	channelWarningMessage,
 } from "../../lib/channel-messages.ts";
+import { copyText } from "../../lib/clipboard.ts";
 import {
 	appModeDisabled,
 	CHANNEL_MODES,
@@ -176,9 +177,11 @@ export function ChannelRow({
 		setValues(formValues(kind, next, stored));
 	}
 
-	function onCopy() {
+	async function onCopy() {
 		if (interactionsUrl === null) return;
-		void navigator.clipboard?.writeText(interactionsUrl);
+		// The optional chain this replaced reported a copy that never happened on
+		// any origin without the async clipboard API.
+		if (!(await copyText(interactionsUrl))) return;
 		setCopied(true);
 		if (copiedTimer.current) clearTimeout(copiedTimer.current);
 		copiedTimer.current = setTimeout(() => setCopied(false), COPIED_RESET_MS);

@@ -17,6 +17,7 @@ import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
+import { copyText } from "../../lib/clipboard.ts";
 import { runMutation } from "../../lib/run-mutation.ts";
 import { useConfirm } from "../ui/confirm.tsx";
 import { RowActions } from "../ui/row-actions.tsx";
@@ -110,12 +111,7 @@ export function MembersPanel({
 		);
 	}
 	async function copy(id: string, link: string) {
-		try {
-			await navigator.clipboard.writeText(link);
-			setCopiedId(id);
-		} catch (e) {
-			console.error(e);
-		}
+		if (await copyText(link)) setCopiedId(id);
 	}
 
 	return (

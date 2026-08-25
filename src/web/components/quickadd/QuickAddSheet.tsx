@@ -12,6 +12,7 @@ import {
 	parseQuickAdd,
 	type QuickAddToken,
 } from "../../../domain/quick-add.ts";
+import { randomId } from "../../../domain/random-id.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
@@ -115,7 +116,7 @@ export function QuickAddSheet({
 		setBusy(true);
 		setError(null);
 		try {
-			const id = crypto.randomUUID();
+			const id = randomId();
 			const openKeys = tasks.filter(
 				(x) => x.listId === targetList.id && x.parentId == null && !x.done,
 			);
@@ -145,7 +146,7 @@ export function QuickAddSheet({
 					const existing = wsLabels.find((l) => l.name.toLowerCase() === lower);
 					if (existing) labelIds.push(existing.id);
 					else {
-						const lid = crypto.randomUUID();
+						const lid = randomId();
 						await zero.mutate(
 							mutators.label.create({ id: lid, workspaceId: targetWs, name }),
 						).client;

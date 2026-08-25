@@ -15,6 +15,7 @@ import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
+import { copyText } from "../../lib/clipboard.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { MemberAvatar } from "./avatar.tsx";
 import { InviteMailNotice } from "./InviteMailNotice";
@@ -173,12 +174,7 @@ export function AssigneePicker({
 
 	async function copyLink() {
 		if (!invitedLink) return;
-		try {
-			await navigator.clipboard.writeText(invitedLink);
-			setCopied(true);
-		} catch (e) {
-			console.error(e);
-		}
+		if (await copyText(invitedLink)) setCopied(true);
 	}
 
 	const assignedCount = assignedIds.size;

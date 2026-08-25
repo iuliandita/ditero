@@ -32,6 +32,7 @@ import {
 	type PanelSize,
 	type PanelSource,
 } from "../../../domain/dashboard.ts";
+import { randomId } from "../../../domain/random-id.ts";
 import type {
 	FilterGroup,
 	WorkspaceScope,
@@ -246,7 +247,7 @@ export function AddPanelDialog({
 		if (!canSave || type === null) return;
 		const trimmed = title.trim();
 		const base = {
-			id: initial?.id ?? crypto.randomUUID(),
+			id: initial?.id ?? randomId(),
 			size,
 			...(trimmed ? { title: trimmed } : {}),
 		};

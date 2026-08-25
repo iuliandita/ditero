@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { runMutation } from "@/lib/run-mutation";
 import { deriveConnections } from "../../../domain/connections.ts";
 import { parseMentions, personMatchesHandle } from "../../../domain/mention.ts";
+import { randomId } from "../../../domain/random-id.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
+import { copyText } from "../../lib/clipboard.ts";
 import { formatList } from "../../lib/intl-format.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { MemberAvatar } from "./avatar.tsx";
@@ -187,7 +189,7 @@ export function CommentThread({
 		await run(
 			zero.mutate(
 				mutators.comment.add({
-					id: crypto.randomUUID(),
+					id: randomId(),
 					taskId: task.id,
 					body: text,
 				}),
@@ -243,12 +245,7 @@ export function CommentThread({
 	}
 
 	async function copyLink(link: string) {
-		try {
-			await navigator.clipboard.writeText(link);
-			setCopied(link);
-		} catch (e) {
-			console.error(e);
-		}
+		if (await copyText(link)) setCopied(link);
 	}
 
 	function saveEdit(id: string) {

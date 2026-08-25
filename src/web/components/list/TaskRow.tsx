@@ -20,6 +20,7 @@ import {
 } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import { randomId } from "../../../domain/random-id.ts";
 import type { Role } from "../../../domain/role.ts";
 import { snapshotTask } from "../../../domain/template.ts";
 import { m } from "../../../paraglide/messages.js";
@@ -249,7 +250,7 @@ export function TaskRow({
 		void zero
 			.mutate(
 				mutators.template.save({
-					id: crypto.randomUUID(),
+					id: randomId(),
 					workspaceId: list.workspaceId,
 					name: task.title,
 					kind: "task",

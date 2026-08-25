@@ -32,6 +32,7 @@ import { localDay } from "../domain/local-day.ts";
 import { LOCALES } from "../domain/locale.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { MutatorError } from "../domain/mutator-error.ts";
+import { randomId } from "../domain/random-id.ts";
 import { nextDue, parseRule } from "../domain/recurrence.ts";
 import { ADMIN_ROLES, ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import { keyBetween } from "../domain/sort-key.ts";
@@ -274,7 +275,7 @@ async function awardKarma(
 		await tx.mutate.karma.insert({ userId, ...next, updatedAt: now });
 	}
 	await tx.mutate.karmaEvent.insert({
-		id: crypto.randomUUID(),
+		id: randomId(),
 		userId,
 		date: dateStr,
 		delta,
@@ -509,7 +510,7 @@ function zeroAckStore(tx: Transaction<Schema>): AckStore {
 				return;
 			}
 			await tx.mutate.habitLog.insert({
-				id: crypto.randomUUID(),
+				id: randomId(),
 				habitId: row.habitId,
 				date: row.date,
 				status: "done",
@@ -939,7 +940,7 @@ export const mutators = defineMutators({
 					});
 				} else {
 					await tx.mutate.habitLog.insert({
-						id: crypto.randomUUID(),
+						id: randomId(),
 						habitId: args.habitId,
 						date: args.date,
 						status: args.status,
@@ -1058,7 +1059,7 @@ export const mutators = defineMutators({
 				),
 			async ({ tx, ctx, args }) => {
 				await tx.mutate.focusSession.insert({
-					id: crypto.randomUUID(),
+					id: randomId(),
 					userId: ctx.id,
 					kind: args.kind,
 					startedAt: args.startedAt,
