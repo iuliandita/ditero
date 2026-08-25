@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-08-20 | Status: pre-v1, building on `develop`
+> Updated: 2026-08-26 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -14,9 +14,9 @@ with a public API and push to Discord/Slack/Telegram/ntfy.
 The design is locked. Workspace/membership read isolation and role-gated writes are proven in
 the real application. The notification engine has landed: durable at-least-once delivery with a
 single-leader scheduler, an every-replica outbox worker, quiet hours, escalation, and
-acknowledgement from in-app or an ntfy button — validated by a rig that runs real replicas and
-kills them mid-send. ntfy is the only channel so far; Telegram, Discord, Slack, and email
-follow. The application
+acknowledgement from in-app or from the message itself — validated by a rig that runs real
+replicas and kills them mid-send. All five channels deliver: ntfy, Telegram, Discord, Slack,
+and email. The application
 spine has landed on `develop` (auth issuing JWTs, live sync between two users with workspace
 isolation, a list with tasks that create and toggle live, deployable via Docker Compose).
 The rest of v1 is being built milestone by milestone, each producing working, testable

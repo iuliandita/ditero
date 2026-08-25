@@ -130,9 +130,16 @@ non-pooled, and able to create replication slots. See [security architecture](do
 
 Reminders for due tasks and habits, plus assignment, mention, and overdue
 notices, delivered through a durable outbox with retries, escalation, quiet
-hours, and one-tap acknowledgement. **ntfy is the only channel implemented
-today**; Telegram, Discord, Slack, and email are listed in the UI but rejected
-by the server until their adapters land.
+hours, and one-tap acknowledgement. ntfy, Telegram, Discord, Slack, and email
+all deliver today.
+
+One-tap acknowledgement from the message itself works on ntfy and Telegram, and
+on Discord and Slack in app mode. A pasted incoming webhook cannot carry an
+interactive button on either platform, so Discord and Slack each offer a webhook
+mode (send-only) and an app mode; app mode requires a public base URL for the
+inbound listener and is refused at save time without one, rather than saved and
+left quietly non-interactive. Telegram defaults to polling, which is outbound
+only and needs no public URL, certificate, or forwarded port.
 
 Delivery is **at-least-once, never exactly-once** — you can receive a duplicate —
 and there are bounded conditions under which a notification is dropped entirely.
@@ -160,8 +167,8 @@ the build, and both are now settled in the application itself:
 - **Permissions** — Zero expresses multi-workspace read isolation and role-gated writes.
 - **Notifications** — durable at-least-once delivery, a single-leader scheduler, quiet hours,
   escalation, and acknowledgement from in-app or a channel button. Validated by a test rig that
-  runs real replicas and kills them mid-send. ntfy is the only channel so far; Telegram,
-  Discord, Slack, and email follow.
+  runs real replicas and kills them mid-send. All five channels — ntfy, Telegram, Discord,
+  Slack, and email — deliver.
 
 Both spikes have been removed now that the production code supersedes them. The build proceeds
 through a milestone roadmap on `develop`.
