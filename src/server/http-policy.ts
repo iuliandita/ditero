@@ -1,4 +1,5 @@
 import type { CORSConfig } from "@elysiajs/cors";
+import { zeroPublicURL } from "./public-config.ts";
 
 type HttpEnvironment = {
 	NODE_ENV?: string;
@@ -32,7 +33,7 @@ export function corsPolicy(env: HttpEnvironment): CORSConfig {
 export function securityHeaders(env: HttpEnvironment): Record<string, string> {
 	if (env.NODE_ENV !== "production") return {};
 
-	const zeroURL = new URL(env.PUBLIC_ZERO_URL ?? "http://localhost:4848");
+	const zeroURL = new URL(zeroPublicURL(env));
 	const websocketURL = new URL(zeroURL);
 	websocketURL.protocol = zeroURL.protocol === "https:" ? "wss:" : "ws:";
 	const contentSecurityPolicy = [

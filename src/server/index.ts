@@ -60,6 +60,7 @@ import { slackInteractionRoutes } from "./notifications/slack-interactions.ts";
 import { startTelegramPoller } from "./notifications/telegram-poll.ts";
 import { telegramWebhookRoutes } from "./notifications/telegram-webhook.ts";
 import { startWorker } from "./notifications/worker.ts";
+import { publicConfig } from "./public-config.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
 const responseHeaders = securityHeaders(process.env);
@@ -164,6 +165,10 @@ const routes = new Elysia()
 		ok: true,
 		replica: process.env.DITERO_REPLICA_ID ?? null,
 	}))
+	// Runtime config for the web bundle. Unauthenticated because it carries only
+	// the zero-cache origin, which the CSP header already publishes to anyone
+	// who fetches the page.
+	.get("/api/config", () => publicConfig(process.env))
 	// Better Auth catch-all: serves JWKS (GET) and all auth POSTs.
 	.all("/api/auth/*", ({ request, server }) =>
 		handleAuthRequest(request, server?.requestIP(request)?.address),

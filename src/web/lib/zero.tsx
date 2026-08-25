@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { mutators } from "../../zero/mutators.ts";
 import { schema } from "../../zero/schema.gen.ts";
 import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
+import { fetchPublicConfig } from "./public-config.ts";
 import { fetchZeroToken, watchZeroAuth } from "./zero-auth.ts";
 
 async function repairAccountBootstrap(): Promise<void> {
@@ -18,9 +19,9 @@ async function repairAccountBootstrap(): Promise<void> {
 // Client-side context ({ id }) is passed for optimistic synced-query evaluation;
 // the server re-derives the authoritative ctx from the JWT. Let TS infer the full
 // Zero generic from the constructor rather than restating it.
-function createZeroClient(userID: string, token: string) {
+function createZeroClient(userID: string, token: string, cacheURL: string) {
 	return new Zero({
-		cacheURL: import.meta.env.VITE_ZERO_URL ?? "http://localhost:4848",
+		cacheURL,
 		userID,
 		schema,
 		mutators,
@@ -45,9 +46,12 @@ export function AppZeroProvider({
 		let cancelled = false;
 		void (async () => {
 			await repairAccountBootstrap();
-			const token = await fetchZeroToken();
+			const [config, token] = await Promise.all([
+				fetchPublicConfig(),
+				fetchZeroToken(),
+			]);
 			if (cancelled) return;
-			instance = createZeroClient(userID, token);
+			instance = createZeroClient(userID, token, config.zeroURL);
 			stopAuthRefresh = watchZeroAuth(instance);
 			setZero(instance);
 		})().catch((error) => {

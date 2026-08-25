@@ -23,12 +23,12 @@
 
 services:
   app:
+    # Published images are used as-is; `up --build` rebuilds from this tree
+    # instead. Pin DITERO_IMAGE_TAG to a release rather than tracking :nightly.
+    image: ghcr.io/iuliandita/ditero:${DITERO_IMAGE_TAG:-nightly}
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
-      args:
-        # Baked into the web bundle at build time; rebuild to change it.
-        VITE_ZERO_URL: ${VITE_ZERO_URL:-http://localhost:4848}
     environment:
       DATABASE_URL: ${DITERO_DATABASE_URL:-}
       DATABASE_URL_FILE: ${DITERO_DATABASE_URL_FILE:-}
@@ -50,7 +50,10 @@ services:
       DITERO_TRUSTED_PROXIES: ${DITERO_TRUSTED_PROXIES:-}
       API_PORT: "3000"
       SERVE_STATIC_DIR: /app/dist
-      PUBLIC_ZERO_URL: ${VITE_ZERO_URL:-http://localhost:4848}
+      # The address browsers dial zero-cache on, and the only origin the CSP
+      # permits them to reach. Served to the client from /api/config, so a
+      # deployment behind a real hostname needs no rebuild.
+      PUBLIC_ZERO_URL: ${PUBLIC_ZERO_URL:-http://localhost:4848}
       DITERO_REGISTRATION_MODE: ${DITERO_REGISTRATION_MODE:-bootstrap}
       DITERO_ZERO_SHARD_SCHEMA: ${DITERO_ZERO_SHARD_SCHEMA:-zero_0}
     ports:
@@ -90,6 +93,10 @@ services:
     restart: unless-stopped
 
   zero-cache:
+    # Upstream zero-cache plus this repo's secret-file entrypoint. Published
+    # alongside the app image so the stack runs without a checkout; `up --build`
+    # builds it from this tree instead.
+    image: ghcr.io/iuliandita/ditero:${DITERO_IMAGE_TAG:-nightly}-zero
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
