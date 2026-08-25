@@ -1,7 +1,4 @@
-import {
-	DEFAULT_ZERO_URL,
-	type PublicConfig,
-} from "../../server/public-config.ts";
+import type { PublicConfig } from "../../server/public-config.ts";
 
 // Fetched at startup rather than read from import.meta.env: the bundle is built
 // once and served from whatever origin the operator runs it on, so a build-time
@@ -13,5 +10,3 @@ export async function fetchPublicConfig(): Promise<PublicConfig> {
 	if (!body.zeroURL) throw new Error("config carried no zeroURL");
 	return { zeroURL: body.zeroURL };
 }
-
-export { DEFAULT_ZERO_URL };
