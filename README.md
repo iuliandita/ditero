@@ -98,6 +98,7 @@ All configuration is environment-driven. The common variables:
 | `POSTGRES_PASSWORD` | _(required, bundled)_ | Password for bundled PostgreSQL and Zero's bundled connection. |
 | `DITERO_TRUSTED_PROXIES` | empty | Comma-separated CIDRs allowed to supply forwarding headers. |
 | `VITE_ZERO_URL` | `http://localhost:4848` | zero-cache URL baked into the web bundle at **build** time. |
+| `DITERO_ZERO_SHARD_SCHEMA` | `zero_0` | Schema zero-cache keeps sync bookkeeping in. Both app roles need access to it; see [database roles](docs/runbooks/database-roles.md). |
 | `DITERO_REGISTRATION_MODE` | `bootstrap` | `open`, `bootstrap` (first account only), or `closed`. Invitations extend bootstrap mode in M1. |
 
 > **Note:** `VITE_ZERO_URL` is compiled into the browser bundle when the image is

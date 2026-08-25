@@ -52,6 +52,7 @@ services:
       SERVE_STATIC_DIR: /app/dist
       PUBLIC_ZERO_URL: ${VITE_ZERO_URL:-http://localhost:4848}
       DITERO_REGISTRATION_MODE: ${DITERO_REGISTRATION_MODE:-bootstrap}
+      DITERO_ZERO_SHARD_SCHEMA: ${DITERO_ZERO_SHARD_SCHEMA:-zero_0}
     ports:
       - "3000:3000"
     depends_on:
@@ -72,6 +73,9 @@ services:
       DITERO_RUNTIME_DB_PASSWORD_FILE: ${DITERO_RUNTIME_DB_PASSWORD_FILE:-}
       DITERO_MIGRATION_DB_PASSWORD: ${DITERO_MIGRATION_DB_PASSWORD:-}
       DITERO_MIGRATION_DB_PASSWORD_FILE: ${DITERO_MIGRATION_DB_PASSWORD_FILE:-}
+      # Must match the shard schema zero-cache uses, or the app's push endpoint
+      # cannot record lastMutationID and every mutation fails.
+      DITERO_ZERO_SHARD_SCHEMA: ${DITERO_ZERO_SHARD_SCHEMA:-zero_0}
     # Logical replication is required by zero-cache.
     command: postgres -c wal_level=logical
     healthcheck:

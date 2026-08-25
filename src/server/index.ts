@@ -30,6 +30,7 @@ import { notifyAllowedPrivateCIDRs } from "../config/notify-egress.ts";
 import { workerTiming } from "../config/worker.ts";
 import { db, pool } from "../db/client.ts";
 import { verifyRuntimeDatabaseRole } from "../db/runtime-role.ts";
+import { verifyZeroShardAccess, zeroShardSchema } from "../db/zero-shard.ts";
 import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
 import { schema } from "../zero/schema.gen.ts";
@@ -450,6 +451,7 @@ const app = staticDir
 if (import.meta.main) {
 	if (process.env.NODE_ENV === "production") {
 		await verifyRuntimeDatabaseRole(pool);
+		await verifyZeroShardAccess(pool, zeroShardSchema(process.env));
 	}
 	// Validated here so a malformed SMTP setting fails at boot rather than on the
 	// first reminder. Absent config is legal: it disables the email channel.
