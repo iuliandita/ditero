@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Panel } from "../../domain/dashboard.ts";
+import { randomId } from "../../domain/random-id.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { m } from "../../paraglide/messages.js";
@@ -265,7 +266,7 @@ function NormalWorkspace() {
 		void zero
 			.mutate(
 				mutators.folder.create({
-					id: crypto.randomUUID(),
+					id: randomId(),
 					workspaceId: activeId,
 					name,
 					sortKey: keyBetween(lastKey, null),
@@ -483,7 +484,7 @@ function NormalWorkspace() {
 				)
 				.client.catch((e) => console.error("view.update failed", e));
 		} else {
-			const id = crypto.randomUUID();
+			const id = randomId();
 			const lastKey = pinnedViews.reduce<string | null>(
 				(max, v) => (max == null || v.sortKey > max ? v.sortKey : max),
 				null,
@@ -596,7 +597,7 @@ function NormalWorkspace() {
 				)
 				.client.catch((e) => console.error("dashboard.update failed", e));
 		} else {
-			const id = crypto.randomUUID();
+			const id = randomId();
 			const lastKey = dashboards.at(-1)?.sortKey ?? null;
 			void zero
 				.mutate(

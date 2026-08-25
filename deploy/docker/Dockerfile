@@ -17,10 +17,8 @@ RUN bun install --frozen-lockfile
 # App sources.
 COPY . .
 
-# The web client's zero-cache URL is baked at build time (SPA limitation for
-# M0). Override with --build-arg VITE_ZERO_URL=... to point elsewhere.
-ARG VITE_ZERO_URL=http://localhost:4848
-ENV VITE_ZERO_URL=${VITE_ZERO_URL}
+# The bundle carries no deployment addresses: the web client fetches the
+# zero-cache URL from /api/config at startup, so one image serves any hostname.
 RUN bunx vite build
 
 FROM ${RUNTIME_IMAGE} AS prod-deps

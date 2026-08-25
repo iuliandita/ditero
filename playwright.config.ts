@@ -36,6 +36,11 @@ const appEnv = {
 	DITERO_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString("base64"),
 	DITERO_PASSKEY_ORIGIN: "http://localhost:5173",
 	DITERO_REGISTRATION_MODE: "open",
+	// Served to the web client from /api/config. tests/e2e/docker-compose.yml
+	// publishes zero-cache on 4849, not the 4848 default, and the browser reaches
+	// this through vite's /api proxy -- so it belongs on the API server, not the
+	// web one.
+	PUBLIC_ZERO_URL: "http://localhost:4849",
 	// Allows exactly the one private address the ntfy stub binds. Both servers
 	// drain the shared outbox under SKIP LOCKED, so the SMTP server must carry the
 	// same allowlist or it would fail an ntfy delivery it happens to claim.
@@ -124,7 +129,6 @@ export default defineConfig({
 			port: 5173,
 			reuseExistingServer: false,
 			timeout: 60_000,
-			env: { VITE_ZERO_URL: "http://localhost:4849" },
 		},
 	],
 });

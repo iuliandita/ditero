@@ -67,6 +67,9 @@ Every incumbent gates or breaks something. Ditero's design targets the gaps dire
 The `deploy/docker` stack runs the whole spine: the app (web UI + API served
 same-origin on one port), PostgreSQL, and the Zero sync cache.
 
+Published images are on GHCR, so no checkout is needed to run it — but the
+Compose file is in this repo, so either clone it or download that one file.
+
 ```sh
 # From the repo root.
 POSTGRES_PASSWORD=$(openssl rand -hex 24) \
@@ -75,10 +78,18 @@ DITERO_RUNTIME_DB_PASSWORD=$(openssl rand -hex 24) \
 BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
 DITERO_ENCRYPTION_KEY=$(openssl rand -base64 32) \
 ZERO_ADMIN_PASSWORD=$(openssl rand -hex 32) \
-  docker compose -f deploy/docker/docker-compose.yml --profile bundled up --build
+  docker compose -f deploy/docker/docker-compose.yml --profile bundled up
 ```
 
-Then open http://localhost:3000 and sign up.
+Then open http://localhost:3000 and sign up. The first account becomes the
+owner; later ones need an invitation.
+
+That pulls `ghcr.io/iuliandita/ditero:nightly`. Set `DITERO_IMAGE_TAG` to pin a
+different tag, or add `--build` to build from this checkout instead.
+
+To reach it from anything other than the machine it runs on, set
+`BETTER_AUTH_URL` and `PUBLIC_ZERO_URL` to addresses that machine's browsers can
+resolve.
 
 ### Configuration
 
@@ -97,12 +108,15 @@ All configuration is environment-driven. The common variables:
 | `DITERO_ZERO_DATABASE_URL` | bundled Postgres | Direct, replication-capable Zero DSN. |
 | `POSTGRES_PASSWORD` | _(required, bundled)_ | Password for bundled PostgreSQL and Zero's bundled connection. |
 | `DITERO_TRUSTED_PROXIES` | empty | Comma-separated CIDRs allowed to supply forwarding headers. |
-| `VITE_ZERO_URL` | `http://localhost:4848` | zero-cache URL baked into the web bundle at **build** time. |
+| `PUBLIC_ZERO_URL` | `http://localhost:4848` | Address browsers dial zero-cache on. Served to the web client at runtime and used for the CSP. |
+| `DITERO_ZERO_SHARD_SCHEMA` | `zero_0` | Schema zero-cache keeps sync bookkeeping in. Both app roles need access to it; see [database roles](docs/runbooks/database-roles.md). |
+| `DITERO_IMAGE_TAG` | `nightly` | Image tag the Compose stack runs. The zero-cache image is that tag plus `-zero`. |
 | `DITERO_REGISTRATION_MODE` | `bootstrap` | `open`, `bootstrap` (first account only), or `closed`. Invitations extend bootstrap mode in M1. |
 
-> **Note:** `VITE_ZERO_URL` is compiled into the browser bundle when the image is
-> built (a single-page-app limitation for this milestone). To change the
-> zero-cache URL, rebuild the image with `--build-arg VITE_ZERO_URL=...`.
+> **Note:** the web client fetches `PUBLIC_ZERO_URL` from `/api/config` at
+> startup, so one built image serves any hostname. Set it to the address
+> **browsers** reach zero-cache on, not an internal service name — and expose
+> that address, or sync cannot connect.
 
 ### Bundled vs. external Postgres
 
@@ -129,9 +143,16 @@ non-pooled, and able to create replication slots. See [security architecture](do
 
 Reminders for due tasks and habits, plus assignment, mention, and overdue
 notices, delivered through a durable outbox with retries, escalation, quiet
-hours, and one-tap acknowledgement. **ntfy is the only channel implemented
-today**; Telegram, Discord, Slack, and email are listed in the UI but rejected
-by the server until their adapters land.
+hours, and one-tap acknowledgement. ntfy, Telegram, Discord, Slack, and email
+all deliver today.
+
+One-tap acknowledgement from the message itself works on ntfy and Telegram, and
+on Discord and Slack in app mode. A pasted incoming webhook cannot carry an
+interactive button on either platform, so Discord and Slack each offer a webhook
+mode (send-only) and an app mode; app mode requires a public base URL for the
+inbound listener and is refused at save time without one, rather than saved and
+left quietly non-interactive. Telegram defaults to polling, which is outbound
+only and needs no public URL, certificate, or forwarded port.
 
 Delivery is **at-least-once, never exactly-once** — you can receive a duplicate —
 and there are bounded conditions under which a notification is dropped entirely.
@@ -159,8 +180,8 @@ the build, and both are now settled in the application itself:
 - **Permissions** — Zero expresses multi-workspace read isolation and role-gated writes.
 - **Notifications** — durable at-least-once delivery, a single-leader scheduler, quiet hours,
   escalation, and acknowledgement from in-app or a channel button. Validated by a test rig that
-  runs real replicas and kills them mid-send. ntfy is the only channel so far; Telegram,
-  Discord, Slack, and email follow.
+  runs real replicas and kills them mid-send. All five channels — ntfy, Telegram, Discord,
+  Slack, and email — deliver.
 
 Both spikes have been removed now that the production code supersedes them. The build proceeds
 through a milestone roadmap on `develop`.

@@ -1,4 +1,5 @@
 import type { ChannelErrorCode } from "./notification-retry.ts";
+import { randomId } from "./random-id.ts";
 
 // Reported to the inviter alongside the created invite, so it is a wire
 // contract both halves read: the server mail path produces it, the invite
@@ -45,5 +46,5 @@ export function canRedeem(inv: InviteRow, now: number): boolean {
 }
 
 export function newInviteToken(): string {
-	return crypto.randomUUID();
+	return randomId();
 }

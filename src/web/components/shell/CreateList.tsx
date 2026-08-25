@@ -19,6 +19,7 @@ import {
 import { ListIcon } from "@/lib/list-icon";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { type ListKind, suggestIcon } from "../../../domain/icon-map.ts";
+import { randomId } from "../../../domain/random-id.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import {
 	STARTER_TEMPLATES,
@@ -208,7 +209,7 @@ function Form({
 						mutators.template.instantiateContent({
 							content,
 							workspaceId,
-							listId: crypto.randomUUID(),
+							listId: randomId(),
 							sortKey,
 							name: t || defaultName(content),
 							...(folder ? { folderId: folder } : {}),
@@ -220,14 +221,14 @@ function Form({
 					mutators.template.instantiateList({
 						templateId: templateSel.slice(3),
 						workspaceId,
-						listId: crypto.randomUUID(),
+						listId: randomId(),
 						sortKey,
 					}),
 				).client;
 			} else {
 				await zero.mutate(
 					mutators.list.create({
-						id: crypto.randomUUID(),
+						id: randomId(),
 						workspaceId,
 						title: t,
 						kind,

@@ -19,6 +19,7 @@ import {
 import { ListIcon } from "@/lib/list-icon";
 import { runMutation } from "@/lib/run-mutation";
 import type { ListKind } from "../../domain/icon-map.ts";
+import { randomId } from "../../domain/random-id.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import type { CompletedDisplay } from "../../domain/task-sort.ts";
 import { snapshotList } from "../../domain/template.ts";
@@ -192,7 +193,7 @@ export function ListView({
 		await run(
 			zero.mutate(
 				mutators.task.create({
-					id: crypto.randomUUID(),
+					id: randomId(),
 					listId,
 					title: t,
 					sortKey: keyBetween(lastKey(parents), null),
@@ -240,7 +241,7 @@ export function ListView({
 		void run(
 			zero.mutate(
 				mutators.template.save({
-					id: crypto.randomUUID(),
+					id: randomId(),
 					workspaceId: openList.workspaceId,
 					name: openList.title,
 					kind: "list",
@@ -259,7 +260,7 @@ export function ListView({
 			zero.mutate(
 				mutators.template.instantiateTask({
 					templateId,
-					taskId: crypto.randomUUID(),
+					taskId: randomId(),
 					listId,
 					sortKey: keyBetween(lastKey(parents), null),
 				}),

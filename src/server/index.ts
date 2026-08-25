@@ -30,6 +30,7 @@ import { notifyAllowedPrivateCIDRs } from "../config/notify-egress.ts";
 import { workerTiming } from "../config/worker.ts";
 import { db, pool } from "../db/client.ts";
 import { verifyRuntimeDatabaseRole } from "../db/runtime-role.ts";
+import { verifyZeroShardAccess, zeroShardSchema } from "../db/zero-shard.ts";
 import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
 import { schema } from "../zero/schema.gen.ts";
@@ -59,6 +60,7 @@ import { slackInteractionRoutes } from "./notifications/slack-interactions.ts";
 import { startTelegramPoller } from "./notifications/telegram-poll.ts";
 import { telegramWebhookRoutes } from "./notifications/telegram-webhook.ts";
 import { startWorker } from "./notifications/worker.ts";
+import { publicConfig } from "./public-config.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
 const responseHeaders = securityHeaders(process.env);
@@ -163,6 +165,10 @@ const routes = new Elysia()
 		ok: true,
 		replica: process.env.DITERO_REPLICA_ID ?? null,
 	}))
+	// Runtime config for the web bundle. Unauthenticated because it carries only
+	// the zero-cache origin, which the CSP header already publishes to anyone
+	// who fetches the page.
+	.get("/api/config", () => publicConfig(process.env))
 	// Better Auth catch-all: serves JWKS (GET) and all auth POSTs.
 	.all("/api/auth/*", ({ request, server }) =>
 		handleAuthRequest(request, server?.requestIP(request)?.address),
@@ -450,6 +456,7 @@ const app = staticDir
 if (import.meta.main) {
 	if (process.env.NODE_ENV === "production") {
 		await verifyRuntimeDatabaseRole(pool);
+		await verifyZeroShardAccess(pool, zeroShardSchema(process.env));
 	}
 	// Validated here so a malformed SMTP setting fails at boot rather than on the
 	// first reminder. Absent config is legal: it disables the email channel.

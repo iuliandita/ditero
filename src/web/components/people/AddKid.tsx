@@ -17,6 +17,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { m } from "../../../paraglide/messages.js";
+import { copyText } from "../../lib/clipboard.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { ROLE_LABELS } from "./role-labels.ts";
 
@@ -84,12 +85,7 @@ export function AddKid({
 
 	async function copyHandle() {
 		if (!handle) return;
-		try {
-			await navigator.clipboard.writeText(handle);
-			setCopied(true);
-		} catch (e) {
-			console.error(e);
-		}
+		if (await copyText(handle)) setCopied(true);
 	}
 
 	return (

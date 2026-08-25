@@ -11,6 +11,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { randomId } from "../../../domain/random-id.ts";
 import { type Role, WRITE_ROLES } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
@@ -75,7 +76,7 @@ export function LabelManager({
 		const mutation =
 			target.mode === "create"
 				? mutators.label.create({
-						id: crypto.randomUUID(),
+						id: randomId(),
 						workspaceId,
 						name,
 						color: DEFAULT_LABEL_COLOR,

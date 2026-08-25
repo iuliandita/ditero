@@ -19,6 +19,7 @@ import {
 import type { InviteMailStatus } from "../../../domain/invite.ts";
 import type { Role } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
+import { copyText } from "../../lib/clipboard.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { InviteMailNotice } from "./InviteMailNotice";
 import { ROLE_LABELS } from "./role-labels.ts";
@@ -114,12 +115,7 @@ export function InviteDialog({
 
 	async function copyLink() {
 		if (!link) return;
-		try {
-			await navigator.clipboard.writeText(link);
-			setCopied(true);
-		} catch (e) {
-			console.error(e);
-		}
+		if (await copyText(link)) setCopied(true);
 	}
 
 	return (

@@ -32,6 +32,7 @@ import {
 } from "@/lib/task-display";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
+import { randomId } from "../../../domain/random-id.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
@@ -142,7 +143,7 @@ export function TaskDetail({
 	async function createLabel() {
 		const name = newLabel.trim();
 		if (!name) return;
-		const id = crypto.randomUUID();
+		const id = randomId();
 		// Two sequential mutators (create the label, then attach it): not one atomic
 		// tx. Both are optimistic and local, so a partial state is momentary; the
 		// worst case is an orphan label if the second write fails, which the label
@@ -170,7 +171,7 @@ export function TaskDetail({
 		void run(
 			zero.mutate(
 				mutators.task.create({
-					id: crypto.randomUUID(),
+					id: randomId(),
 					listId: t.listId,
 					title,
 					sortKey: tailKey(subtasks),

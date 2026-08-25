@@ -1,0 +1,8 @@
+# The shard test reaches every service through `compose exec`, so publishing
+# ports only creates collisions -- with a Ditero instance running on the same
+# host, or with anything else already on 3000 or 4848.
+services:
+  app:
+    ports: !override []
+  zero-cache:
+    ports: !override []

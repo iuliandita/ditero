@@ -57,3 +57,19 @@ jobs:
             DITERO_CHANNEL=nightly
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # The Compose stack needs zero-cache too. Published so a self-hoster can
+      # run the stack from the Compose file alone, without a checkout to build.
+      - name: Build and push :nightly-zero
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          target: zero-runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:nightly-zero
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:nightly-zero-${{ steps.sha.outputs.short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
