@@ -8,6 +8,7 @@ set -eu
 
 project=ditero-zero-shard-$$
 compose_file=deploy/docker/docker-compose.yml
+override_file=tests/container/no-ports.override.yml
 schema=zero_0
 
 export POSTGRES_PASSWORD=zero-shard-postgres-password
@@ -18,7 +19,8 @@ export DITERO_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 export ZERO_ADMIN_PASSWORD=zero-shard-admin-password
 
 compose() {
-	docker compose --file "$compose_file" --project-name "$project" --profile bundled "$@"
+	docker compose --file "$compose_file" --file "$override_file" \
+		--project-name "$project" --profile bundled "$@"
 }
 
 cleanup() {
@@ -51,6 +53,25 @@ await() {
 	done
 }
 
+# psql exits 0 on a query that matches no rows, so a wait built on its exit
+# status alone passes immediately and asserts nothing. This one waits for
+# output.
+await_value() {
+	label=$1
+	attempts=$2
+	shift 2
+	n=0
+	until [ -n "$("$@" 2>/dev/null)" ]; do
+		n=$((n + 1))
+		if [ "$n" -ge "$attempts" ]; then
+			echo "timed out waiting for $label" >&2
+			compose logs --tail 40 >&2
+			exit 1
+		fi
+		sleep 2
+	done
+}
+
 compose up --build --detach >/dev/null
 
 await "the app to serve traffic" 90 \
@@ -58,23 +79,46 @@ await "the app to serve traffic" 90 \
 
 # zero-cache creates the shard tables on its first pass over upstream. Until
 # they exist there is nothing to assert a grant against.
-await "zero-cache to create $schema.clients" 90 \
-	psql_as postgres "$POSTGRES_PASSWORD" \
-	--command "select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = '$schema' and c.relname = 'clients'"
+tables_query="select count(*) from pg_class c
+	join pg_namespace n on n.oid = c.relnamespace
+	where n.nspname = '$schema' and c.relkind = 'r'"
+await_value "zero-cache to create tables in $schema" 90 \
+	psql_as postgres "$POSTGRES_PASSWORD" --command "$tables_query having count(*) > 0"
 
-usable=$(psql_as ditero_runtime "$DITERO_RUNTIME_DB_PASSWORD" \
-	--command "select has_schema_privilege('$schema', 'USAGE')")
-if [ "$usable" != "t" ]; then
-	echo "the runtime role cannot use schema $schema; every mutation would fail" >&2
-	exit 1
-fi
+for role in ditero_runtime ditero_migrator; do
+	case $role in
+	ditero_runtime) password=$DITERO_RUNTIME_DB_PASSWORD ;;
+	*) password=$DITERO_MIGRATION_DB_PASSWORD ;;
+	esac
 
-writable=$(psql_as ditero_runtime "$DITERO_RUNTIME_DB_PASSWORD" \
-	--command "select has_table_privilege('$schema.clients', 'SELECT, INSERT, UPDATE')")
-if [ "$writable" != "t" ]; then
-	echo "the runtime role cannot write $schema.clients; every mutation would fail" >&2
-	exit 1
-fi
+	case $role in
+	ditero_runtime) consequence="every mutation would fail" ;;
+	*) consequence="every migration would fail once zero-cache's DDL trigger exists" ;;
+	esac
+
+	usable=$(psql_as "$role" "$password" \
+		--command "select has_schema_privilege('$schema', 'USAGE')")
+	if [ "$usable" != "t" ]; then
+		echo "$role cannot use schema $schema; $consequence" >&2
+		exit 1
+	fi
+
+	# Every table, not a named one: an operator granting by hand covers one and
+	# misses another, which is the mistake the app's boot check exists to catch.
+	# One call per privilege: the comma-separated form of has_table_privilege is
+	# true when ANY of them is held, so a read-only grant would pass it.
+	unwritable=$(psql_as "$role" "$password" --command \
+		"select coalesce(string_agg(c.relname, ', '), '')
+		 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+		 where n.nspname = '$schema' and c.relkind = 'r'
+		   and not (has_table_privilege(c.oid, 'SELECT')
+		        and has_table_privilege(c.oid, 'INSERT')
+		        and has_table_privilege(c.oid, 'UPDATE'))")
+	if [ -n "$unwritable" ]; then
+		echo "$role cannot write $schema tables: $unwritable; $consequence" >&2
+		exit 1
+	fi
+done
 
 # The grants above are what the app's boot check reads. Revoking them must stop
 # the app from starting, or the check is decorative and this test proves nothing

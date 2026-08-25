@@ -10,7 +10,7 @@ const usable: ShardAccess = {
 	schema: "zero_0",
 	schemaExists: true,
 	schemaUsable: true,
-	clientsWritable: true,
+	unwritableTables: [],
 };
 
 describe("zeroShardSchema", () => {
@@ -42,31 +42,33 @@ describe("assertZeroShardAccess", () => {
 				...usable,
 				schemaExists: false,
 				schemaUsable: false,
-				clientsWritable: null,
 			}),
 		).not.toThrow();
 	});
 
 	it("accepts a created schema whose tables do not exist yet", () => {
-		expect(() =>
-			assertZeroShardAccess({ ...usable, clientsWritable: null }),
-		).not.toThrow();
+		expect(() => assertZeroShardAccess(usable)).not.toThrow();
 	});
 
 	it("rejects a schema the runtime role cannot use", () => {
 		expect(() =>
-			assertZeroShardAccess({
-				...usable,
-				schemaUsable: false,
-				clientsWritable: null,
-			}),
-		).toThrow(/cannot use Zero's shard schema/);
+			assertZeroShardAccess({ ...usable, schemaUsable: false }),
+		).toThrow(/cannot use the schema/);
 	});
 
-	it("rejects a clients table the runtime role cannot write", () => {
+	it("rejects a schema holding any table the role cannot write", () => {
 		expect(() =>
-			assertZeroShardAccess({ ...usable, clientsWritable: false }),
-		).toThrow(/write the clients table in/);
+			assertZeroShardAccess({ ...usable, unwritableTables: ["mutations"] }),
+		).toThrow(/write mutations/);
+	});
+
+	it("names every unwritable table, not just the first", () => {
+		expect(() =>
+			assertZeroShardAccess({
+				...usable,
+				unwritableTables: ["clients", "mutations"],
+			}),
+		).toThrow(/write clients, mutations/);
 	});
 
 	it("names the schema and the runbook so the operator can act on it", () => {
