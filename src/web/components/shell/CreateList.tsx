@@ -35,10 +35,8 @@ import type {
 } from "../../../zero/schema.gen.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 
-// Kinds offered in the picker. habits exists in the enum but is intentionally
-// hidden here (it is a recurring-by-nature kind, created elsewhere). `label` is a
-// getter: this array is module-level, so resolving the message eagerly would
-// freeze it at the import-time locale.
+// Kinds offered in the picker. `label` is a getter: this array is module-level,
+// so resolving the message eagerly would freeze it at the import-time locale.
 const PICKABLE_KINDS: { kind: ListKind; label: string }[] = [
 	{
 		kind: "tasks",
@@ -62,6 +60,12 @@ const PICKABLE_KINDS: { kind: ListKind; label: string }[] = [
 		kind: "project",
 		get label() {
 			return m.list_kind_project();
+		},
+	},
+	{
+		kind: "habits",
+		get label() {
+			return m.list_kind_habits();
 		},
 	},
 ];
