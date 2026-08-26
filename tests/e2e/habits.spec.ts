@@ -359,3 +359,31 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 	// Axe the habit list surface.
 	await expectNoSeriousA11y(page, "habit list");
 });
+
+// The habits surface was shipped in M2 behind a create path that only the starter
+// template reached: M1a hid `habits` from the blank-list kind picker while the
+// surface did not exist yet, and M2 never unhid it. This drives the picker path.
+test("habits: a blank habits list is creatable from the kind picker", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("habit-kind"));
+	await waitWorkspaceReady(page);
+
+	await page.getByTestId("new-list").fill("Chores");
+	await page.getByRole("button", { name: "Habits", exact: true }).click();
+	await page.getByTestId("new-list-submit").click();
+
+	await expect(
+		sidebarLists(page).getByRole("button", { name: "Chores", exact: true }),
+	).toBeVisible({ timeout: 15000 });
+	await openListDesktop(page, "Chores");
+
+	// Habit mechanics, not task rows: the list renders cards, and a habit with no
+	// RRULE yet shows the recurrence hint instead of a streak.
+	await page.getByTestId("new-task").fill("Walk the dog");
+	await page.getByTestId("new-task-submit").click();
+
+	const card = habitCard(page, "Walk the dog");
+	await expect(card).toBeVisible({ timeout: 15000 });
+	await expect(card.getByTestId("habit-no-recurrence")).toBeVisible();
+});

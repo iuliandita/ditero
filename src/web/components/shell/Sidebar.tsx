@@ -1,6 +1,7 @@
 import {
 	FolderPlus,
 	List as ListFallback,
+	ListPlus,
 	PanelLeft,
 	PanelLeftClose,
 	Plus,
@@ -181,6 +182,8 @@ export function Sidebar({
 	onOpenList,
 	listActions,
 	folderActions,
+	onNewList,
+	canCreateList,
 	onNewFolder,
 	canCreateFolder,
 	builtinViews,
@@ -210,6 +213,8 @@ export function Sidebar({
 	onOpenList: (id: string) => void;
 	listActions: (list: List) => RowAction[];
 	folderActions: (folder: Folder) => RowAction[];
+	onNewList: () => void;
+	canCreateList: boolean;
 	onNewFolder: () => void;
 	canCreateFolder: boolean;
 	builtinViews: BuiltinView[];
@@ -394,23 +399,42 @@ export function Sidebar({
 					</div>
 				))}
 
-				{canCreateFolder && (
+				{(canCreateList || canCreateFolder) && (
 					<ul className="flex flex-col gap-0.5">
-						<li>
-							<button
-								type="button"
-								data-testid="new-folder"
-								onClick={onNewFolder}
-								title={m.action_new_folder()}
-								className={cn(
-									"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
-									collapsed && "justify-center px-0",
-								)}
-							>
-								<FolderPlus className="size-4 shrink-0" />
-								{!collapsed && m.action_new_folder()}
-							</button>
-						</li>
+						{canCreateList && (
+							<li>
+								<button
+									type="button"
+									data-testid="sidebar-new-list"
+									onClick={onNewList}
+									title={m.create_list_new_list()}
+									className={cn(
+										"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
+										collapsed && "justify-center px-0",
+									)}
+								>
+									<ListPlus className="size-4 shrink-0" />
+									{!collapsed && m.create_list_new_list()}
+								</button>
+							</li>
+						)}
+						{canCreateFolder && (
+							<li>
+								<button
+									type="button"
+									data-testid="new-folder"
+									onClick={onNewFolder}
+									title={m.action_new_folder()}
+									className={cn(
+										"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
+										collapsed && "justify-center px-0",
+									)}
+								>
+									<FolderPlus className="size-4 shrink-0" />
+									{!collapsed && m.action_new_folder()}
+								</button>
+							</li>
+						)}
 					</ul>
 				)}
 			</nav>

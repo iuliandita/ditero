@@ -61,7 +61,7 @@ import {
 	focusPrev,
 	openFocused,
 } from "../keyboard/roving.ts";
-import { canCreateFolder } from "../lib/create-gates.ts";
+import { canCreateFolder, canCreateList } from "../lib/create-gates.ts";
 import { ICONS } from "../lib/list-icon.tsx";
 import type { Locale } from "../lib/locale.ts";
 import { runMutation } from "../lib/run-mutation.ts";
@@ -175,9 +175,21 @@ function NormalWorkspace() {
 	// keys a remount, so picking the same folder twice re-seeds the select even
 	// after the user changed it by hand.
 	const [newListFolder, setNewListFolder] = useState<{
-		id: string;
+		id: string | null;
 		nonce: number;
 	} | null>(null);
+
+	// Sidebar "New list": the create-list form lives on the lists index, so land
+	// there first (same move as the folder row's "New list here", minus the
+	// preselected folder). The nonce remounts the form so it focuses even when
+	// the index is already the open section.
+	const startNewList = () => {
+		setOpenListId(null);
+		setOpenViewId(null);
+		setOpenDashboardId(null);
+		setSection("lists");
+		setNewListFolder({ id: null, nonce: Date.now() });
+	};
 
 	// Default active workspace is the user's personal one, so new lists stay private.
 	useEffect(() => {
@@ -941,6 +953,7 @@ function NormalWorkspace() {
 						</div>
 						<CreateList
 							key={newListFolder?.nonce ?? "default"}
+							autoFocus={newListFolder !== null}
 							initialFolderId={newListFolder?.id ?? null}
 							workspaceId={activeId ?? ""}
 							lists={activeLists}
@@ -1005,6 +1018,8 @@ function NormalWorkspace() {
 								onOpenList={openList}
 								listActions={buildListActions}
 								folderActions={buildFolderActions}
+								onNewList={startNewList}
+								canCreateList={canCreateList(activeRole)}
 								onNewFolder={() => setFolderDialog({ mode: "create" })}
 								canCreateFolder={canCreateFolder(activeRole)}
 								builtinViews={BUILTIN_VIEWS}

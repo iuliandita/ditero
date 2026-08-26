@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { ROLES } from "../../domain/role.ts";
-import { canCreateFolder, shareableWorkspaces } from "./create-gates.ts";
+import {
+	canCreateFolder,
+	canCreateList,
+	shareableWorkspaces,
+} from "./create-gates.ts";
 
 describe("create gates", () => {
 	test("only write roles may create a folder", () => {
@@ -11,6 +15,16 @@ describe("create gates", () => {
 		]);
 		expect(canCreateFolder("viewer")).toBe(false);
 		expect(canCreateFolder(null)).toBe(false);
+	});
+
+	test("only write roles may create a list", () => {
+		expect(ROLES.filter((r) => canCreateList(r))).toEqual([
+			"owner",
+			"admin",
+			"member",
+		]);
+		expect(canCreateList("viewer")).toBe(false);
+		expect(canCreateList(null)).toBe(false);
 	});
 
 	test("a viewer's workspace is not offered as a share target", () => {

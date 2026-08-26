@@ -699,3 +699,24 @@ test("rtl: the row menu and the confirm dialog behave the same in Arabic", async
 
 	await expectNoSeriousA11y(page, "row menu + confirm (ar)");
 });
+
+// The create-list form lives on the lists index, so before this the only way
+// back to it from an open list was the workspace-name heading. The sidebar entry
+// point navigates AND focuses the title, which is what makes it usable without
+// a second click.
+test("affordances: sidebar New list returns to the index with the title focused", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("sidebar-new-list"));
+	const name = uniqueName("Groceries");
+	await createListDesktop(page, name);
+	await openListDesktop(page, name);
+	// Precondition: the create form is not on screen while a list is open.
+	await expect(page.getByTestId("new-list")).toBeHidden();
+
+	await page.getByTestId("sidebar-new-list").click();
+
+	const title = page.getByTestId("new-list");
+	await expect(title).toBeVisible();
+	await expect(title).toBeFocused();
+});
