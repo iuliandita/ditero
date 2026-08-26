@@ -1,6 +1,6 @@
 import { useZero } from "@rocicorp/zero/react";
 import { Plus } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Select,
@@ -88,6 +88,7 @@ export function CreateList({
 	folders,
 	templates,
 	initialFolderId,
+	autoFocus,
 	onCreated,
 }: {
 	workspaceId: string;
@@ -96,6 +97,9 @@ export function CreateList({
 	templates: Template[];
 	/** Preselected folder, e.g. from a folder row's "New list here". */
 	initialFolderId?: string | null;
+	/** Focus the title on mount. Only set when an explicit "new list" action
+	 * navigated here, never on a plain landing render. */
+	autoFocus?: boolean;
 	onCreated?: () => void;
 }) {
 	const isDesktop = useIsDesktop();
@@ -110,6 +114,7 @@ export function CreateList({
 					folders={folders}
 					templates={templates}
 					initialFolderId={initialFolderId}
+					autoFocus={autoFocus}
 					onCreated={onCreated}
 				/>
 			</div>
@@ -122,6 +127,7 @@ export function CreateList({
 			folders={folders}
 			templates={templates}
 			initialFolderId={initialFolderId}
+			autoFocus={autoFocus}
 			onCreated={onCreated}
 		/>
 	);
@@ -133,9 +139,10 @@ function MobileCreateList(props: {
 	folders: Folder[];
 	templates: Template[];
 	initialFolderId?: string | null;
+	autoFocus?: boolean;
 	onCreated?: () => void;
 }) {
-	const [open, setOpen] = useState(false);
+	const [open, setOpen] = useState(props.autoFocus ?? false);
 	return (
 		<Sheet open={open} onOpenChange={setOpen}>
 			<SheetTrigger asChild>
@@ -168,6 +175,7 @@ function Form({
 	folders,
 	templates,
 	initialFolderId,
+	autoFocus,
 	onCreated,
 }: {
 	workspaceId: string;
@@ -175,6 +183,7 @@ function Form({
 	folders: Folder[];
 	templates: Template[];
 	initialFolderId?: string | null;
+	autoFocus?: boolean;
 	onCreated?: () => void;
 }) {
 	const zero = useZero<typeof schema>();
@@ -188,6 +197,12 @@ function Form({
 	// state re-render lands, so the ref (not stale state) blocks the second submit.
 	const inFlight = useRef(false);
 	const titleId = useId();
+	const titleRef = useRef<HTMLInputElement>(null);
+
+	// Runs once per mount; the caller remounts (nonce key) to re-trigger it.
+	useEffect(() => {
+		if (autoFocus) titleRef.current?.focus();
+	}, [autoFocus]);
 
 	const fromTemplate = templateSel !== BLANK;
 	const listTemplates = templates.filter((t) => t.kind === "list");
@@ -261,6 +276,7 @@ function Form({
 				</span>
 				<input
 					id={titleId}
+					ref={titleRef}
 					data-testid="new-list"
 					className="h-9 flex-1 rounded-lg border bg-transparent px-3 text-base md:text-sm"
 					placeholder={m.create_list_name_placeholder()}

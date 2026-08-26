@@ -17,6 +17,13 @@ export function canCreateFolder(role: Role | null): boolean {
 	return hasWriteRole(role);
 }
 
+// Same predicate as canCreateFolder today (list.create is also unconditionally
+// requireWrite, mutators.ts:1086), named separately because they mirror two
+// different mutators and only one of them has to move for these to diverge.
+export function canCreateList(role: Role | null): boolean {
+	return hasWriteRole(role);
+}
+
 /** Workspaces the caller may share a view or dashboard into. */
 export function shareableWorkspaces<T extends { id: string }>(
 	workspaces: readonly T[],
