@@ -207,315 +207,340 @@ export function TaskDetail({
 		/>
 	);
 
+	// Desktop splits into two columns: the tall scheduling stack on the left, the
+	// short classification controls on the right, so a wide viewport stops
+	// scrolling a 13-section column. The groups below are in the old
+	// single-column order, so the mobile sheet reads exactly as before.
 	const body = (
-		<div className="flex flex-col gap-4 p-4 pt-2">
+		<div
+			className={cn(
+				"gap-4 p-4 pt-2",
+				isDesktop ? "grid grid-cols-2 items-start gap-x-6" : "flex flex-col",
+			)}
+		>
 			{error && (
-				<p role="alert" className="text-sm text-destructive">
+				<p
+					role="alert"
+					className={cn("text-sm text-destructive", isDesktop && "col-span-2")}
+				>
 					{error}
 				</p>
 			)}
 
-			<label className="flex flex-col gap-1 text-sm">
-				<span className="text-muted-foreground">{m.task_field_notes()}</span>
-				<textarea
-					key={`notes-${task.id}`}
-					defaultValue={task.notes ?? ""}
-					rows={3}
-					className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none focus-visible:border-ring"
-					onBlur={(e) => {
-						const v = e.target.value;
-						if (v !== (task.notes ?? ""))
-							update({ id: task.id, notes: v || null });
-					}}
-				/>
-			</label>
-
-			<div className="flex flex-col gap-1 text-sm">
-				<span className="text-muted-foreground">{m.task_field_due()}</span>
-				<div className="flex items-center gap-2">
-					<input
-						type="date"
-						value={due.date}
-						aria-label={m.task_due_date_aria()}
-						className="h-8 rounded-lg border bg-transparent px-2 text-sm"
-						onChange={(e) => setDue(e.target.value, due.time)}
+			<div className="flex min-w-0 flex-col gap-4">
+				<label className="flex flex-col gap-1 text-sm">
+					<span className="text-muted-foreground">{m.task_field_notes()}</span>
+					<textarea
+						key={`notes-${task.id}`}
+						defaultValue={task.notes ?? ""}
+						rows={3}
+						className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none focus-visible:border-ring"
+						onBlur={(e) => {
+							const v = e.target.value;
+							if (v !== (task.notes ?? ""))
+								update({ id: task.id, notes: v || null });
+						}}
 					/>
-					<input
-						type="time"
-						value={due.time}
-						aria-label={m.task_due_time_aria()}
-						disabled={!due.date}
-						className="h-8 rounded-lg border bg-transparent px-2 text-sm disabled:opacity-50"
-						onChange={(e) => setDue(due.date, e.target.value)}
-					/>
-					{task.dueAt != null && (
-						<Button
-							variant="ghost"
-							size="icon-sm"
-							aria-label={m.task_due_clear()}
-							onClick={() => update({ id: task.id, dueAt: null })}
-						>
-							<X />
-						</Button>
-					)}
-					<ReminderChip task={t} />
-				</div>
-			</div>
+				</label>
 
-			<div className="flex items-center justify-between gap-2 text-sm">
-				<span className="text-muted-foreground" data-testid="task-time-on-task">
-					{focusedSec > 0
-						? formatFocusedDuration(focusedSec)
-						: m.task_no_focus_time()}
-				</span>
-				<Button
-					variant="outline"
-					size="sm"
-					data-testid="task-focus-start"
-					onClick={() => focus.startForTask(t.id, t.title)}
-				>
-					<Timer /> {m.task_start_focus()}
-				</Button>
-			</div>
-
-			{!isSubtask && <RecurrenceEditor key={t.id} task={t} />}
-
-			{!isSubtask && (
-				<ReminderPolicy
-					key={`reminder-${t.id}`}
-					task={t}
-					workspaceId={list.workspaceId}
-				/>
-			)}
-
-			{!isSubtask && t.rrule != null && kind !== "habits" && (
-				<Button
-					variant="outline"
-					size="sm"
-					className="self-start"
-					data-testid="recurrence-skip"
-					aria-label={m.task_skip_occurrence()}
-					onClick={() =>
-						void run(zero.mutate(mutators.task.skipOccurrence({ id: t.id })))
-					}
-				>
-					<SkipForward /> {m.task_skip_occurrence()}
-				</Button>
-			)}
-
-			{kind !== "checklist" && (
 				<div className="flex flex-col gap-1 text-sm">
-					<span className="text-muted-foreground">
-						{m.task_field_priority()}
-					</span>
-					<div className="flex gap-1.5">
-						{PRIORITY_OPTIONS.map((level) => {
-							const meta = priorityMeta(level);
-							const active = (task.priority ?? 0) === level;
-							return (
-								<button
-									key={level}
-									type="button"
-									aria-pressed={active}
-									onClick={() => update({ id: task.id, priority: level })}
-									className={cn(
-										"flex-1 rounded-lg border px-2 py-1 text-sm",
-										active
-											? "border-ring bg-muted font-medium"
-											: "text-muted-foreground",
-										active && meta ? meta.color : "",
-									)}
-								>
-									{priorityLabelShort(level)}
-								</button>
-							);
-						})}
+					<span className="text-muted-foreground">{m.task_field_due()}</span>
+					<div className="flex items-center gap-2">
+						<input
+							type="date"
+							value={due.date}
+							aria-label={m.task_due_date_aria()}
+							className="h-8 rounded-lg border bg-transparent px-2 text-sm"
+							onChange={(e) => setDue(e.target.value, due.time)}
+						/>
+						<input
+							type="time"
+							value={due.time}
+							aria-label={m.task_due_time_aria()}
+							disabled={!due.date}
+							className="h-8 rounded-lg border bg-transparent px-2 text-sm disabled:opacity-50"
+							onChange={(e) => setDue(due.date, e.target.value)}
+						/>
+						{task.dueAt != null && (
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								aria-label={m.task_due_clear()}
+								onClick={() => update({ id: task.id, dueAt: null })}
+							>
+								<X />
+							</Button>
+						)}
+						<ReminderChip task={t} />
 					</div>
 				</div>
-			)}
 
-			{kind !== "checklist" && (
-				<div className="flex flex-col gap-1 text-sm">
-					<span className="text-muted-foreground">{m.task_field_labels()}</span>
-					<div className="flex flex-wrap items-center gap-1.5">
-						{currentLabels.map((l) => (
-							<Badge key={l.id} variant="secondary">
-								{l.name}
-							</Badge>
-						))}
-						<Popover>
-							<PopoverTrigger asChild>
-								<Button variant="outline" size="sm">
-									<Plus /> {m.task_field_labels()}
-								</Button>
-							</PopoverTrigger>
-							<PopoverContent align="start" className="w-64">
-								<div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
-									{allLabels.map((l) => (
-										<button
-											key={l.id}
-											type="button"
-											aria-pressed={selected.has(l.id)}
-											onClick={() => toggleLabel(l.id)}
-											className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start text-sm hover:bg-muted"
-										>
-											<span className="flex size-4 items-center justify-center">
-												{selected.has(l.id) && <Check className="size-3.5" />}
+				<div className="flex items-center justify-between gap-2 text-sm">
+					<span
+						className="text-muted-foreground"
+						data-testid="task-time-on-task"
+					>
+						{focusedSec > 0
+							? formatFocusedDuration(focusedSec)
+							: m.task_no_focus_time()}
+					</span>
+					<Button
+						variant="outline"
+						size="sm"
+						data-testid="task-focus-start"
+						onClick={() => focus.startForTask(t.id, t.title)}
+					>
+						<Timer /> {m.task_start_focus()}
+					</Button>
+				</div>
+
+				{!isSubtask && <RecurrenceEditor key={t.id} task={t} />}
+
+				{!isSubtask && (
+					<ReminderPolicy
+						key={`reminder-${t.id}`}
+						task={t}
+						workspaceId={list.workspaceId}
+					/>
+				)}
+
+				{!isSubtask && t.rrule != null && kind !== "habits" && (
+					<Button
+						variant="outline"
+						size="sm"
+						className="self-start"
+						data-testid="recurrence-skip"
+						aria-label={m.task_skip_occurrence()}
+						onClick={() =>
+							void run(zero.mutate(mutators.task.skipOccurrence({ id: t.id })))
+						}
+					>
+						<SkipForward /> {m.task_skip_occurrence()}
+					</Button>
+				)}
+			</div>
+
+			<div className="flex min-w-0 flex-col gap-4">
+				{kind !== "checklist" && (
+					<div className="flex flex-col gap-1 text-sm">
+						<span className="text-muted-foreground">
+							{m.task_field_priority()}
+						</span>
+						<div className="flex gap-1.5">
+							{PRIORITY_OPTIONS.map((level) => {
+								const meta = priorityMeta(level);
+								const active = (task.priority ?? 0) === level;
+								return (
+									<button
+										key={level}
+										type="button"
+										aria-pressed={active}
+										onClick={() => update({ id: task.id, priority: level })}
+										className={cn(
+											"flex-1 rounded-lg border px-2 py-1 text-sm",
+											active
+												? "border-ring bg-muted font-medium"
+												: "text-muted-foreground",
+											active && meta ? meta.color : "",
+										)}
+									>
+										{priorityLabelShort(level)}
+									</button>
+								);
+							})}
+						</div>
+					</div>
+				)}
+
+				{kind !== "checklist" && (
+					<div className="flex flex-col gap-1 text-sm">
+						<span className="text-muted-foreground">
+							{m.task_field_labels()}
+						</span>
+						<div className="flex flex-wrap items-center gap-1.5">
+							{currentLabels.map((l) => (
+								<Badge key={l.id} variant="secondary">
+									{l.name}
+								</Badge>
+							))}
+							<Popover>
+								<PopoverTrigger asChild>
+									<Button variant="outline" size="sm">
+										<Plus /> {m.task_field_labels()}
+									</Button>
+								</PopoverTrigger>
+								<PopoverContent align="start" className="w-64">
+									<div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+										{allLabels.map((l) => (
+											<button
+												key={l.id}
+												type="button"
+												aria-pressed={selected.has(l.id)}
+												onClick={() => toggleLabel(l.id)}
+												className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start text-sm hover:bg-muted"
+											>
+												<span className="flex size-4 items-center justify-center">
+													{selected.has(l.id) && <Check className="size-3.5" />}
+												</span>
+												{l.name}
+											</button>
+										))}
+										{allLabels.length === 0 && (
+											<span className="px-1.5 py-1 text-xs text-muted-foreground">
+												{m.task_no_labels()}
 											</span>
-											{l.name}
-										</button>
-									))}
-									{allLabels.length === 0 && (
-										<span className="px-1.5 py-1 text-xs text-muted-foreground">
-											{m.task_no_labels()}
-										</span>
-									)}
-								</div>
-								<div className="flex items-center gap-1.5 border-t pt-2">
-									<Input
-										value={newLabel}
-										placeholder={m.task_new_label_placeholder()}
-										onChange={(e) => setNewLabel(e.target.value)}
-										onKeyDown={(e) => {
-											if (e.key === "Enter") void createLabel();
+										)}
+									</div>
+									<div className="flex items-center gap-1.5 border-t pt-2">
+										<Input
+											value={newLabel}
+											placeholder={m.task_new_label_placeholder()}
+											onChange={(e) => setNewLabel(e.target.value)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter") void createLabel();
+											}}
+										/>
+										<Button
+											size="sm"
+											onClick={() => void createLabel()}
+											disabled={!newLabel.trim()}
+										>
+											{m.action_add()}
+										</Button>
+									</div>
+								</PopoverContent>
+							</Popover>
+						</div>
+					</div>
+				)}
+
+				<AssigneePicker task={t} workspaceId={list.workspaceId} />
+
+				{!isSubtask && (
+					<div className="flex flex-col gap-1 text-sm">
+						<span className="text-muted-foreground">
+							{m.task_field_subtasks()}
+						</span>
+						<ul className="flex flex-col">
+							{subtasks.map((s) => (
+								<li key={s.id} className="flex items-center gap-2 py-1">
+									<Checkbox
+										aria-label={s.title}
+										checked={s.done ?? false}
+										onCheckedChange={() => {
+											if (s.done) update({ id: s.id, done: false });
+											else
+												void run(
+													zero.mutate(mutators.task.complete({ id: s.id })),
+												);
 										}}
 									/>
-									<Button
-										size="sm"
-										onClick={() => void createLabel()}
-										disabled={!newLabel.trim()}
+									<span
+										className={cn(
+											"min-w-0 flex-1 truncate",
+											s.done && "text-muted-foreground line-through",
+										)}
 									>
-										{m.action_add()}
+										{s.title}
+									</span>
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										aria-label={m.task_delete_named({ title: s.title })}
+										onClick={() =>
+											void run(zero.mutate(mutators.task.delete({ id: s.id })))
+										}
+									>
+										<Trash2 />
 									</Button>
-								</div>
-							</PopoverContent>
-						</Popover>
-					</div>
-				</div>
-			)}
-
-			<AssigneePicker task={t} workspaceId={list.workspaceId} />
-
-			{!isSubtask && (
-				<div className="flex flex-col gap-1 text-sm">
-					<span className="text-muted-foreground">
-						{m.task_field_subtasks()}
-					</span>
-					<ul className="flex flex-col">
-						{subtasks.map((s) => (
-							<li key={s.id} className="flex items-center gap-2 py-1">
-								<Checkbox
-									aria-label={s.title}
-									checked={s.done ?? false}
-									onCheckedChange={() => {
-										if (s.done) update({ id: s.id, done: false });
-										else
-											void run(
-												zero.mutate(mutators.task.complete({ id: s.id })),
-											);
-									}}
-								/>
-								<span
-									className={cn(
-										"min-w-0 flex-1 truncate",
-										s.done && "text-muted-foreground line-through",
-									)}
-								>
-									{s.title}
-								</span>
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									aria-label={m.task_delete_named({ title: s.title })}
-									onClick={() =>
-										void run(zero.mutate(mutators.task.delete({ id: s.id })))
-									}
-								>
-									<Trash2 />
-								</Button>
-							</li>
-						))}
-					</ul>
-					<div className="flex items-center gap-1.5">
-						<Input
-							value={newSubtask}
-							placeholder={m.task_add_subtask_placeholder()}
-							onChange={(e) => setNewSubtask(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Enter") addSubtask();
-							}}
-						/>
-						<Button
-							size="sm"
-							onClick={addSubtask}
-							disabled={!newSubtask.trim()}
-						>
-							{m.action_add()}
-						</Button>
-					</div>
-				</div>
-			)}
-
-			{!isSubtask && moveTargets.length > 0 && (
-				<div className="flex flex-col gap-1 text-sm">
-					<span className="text-muted-foreground">{m.task_move_to_list()}</span>
-					<Select
-						value={list.id}
-						onValueChange={(target) => {
-							const targetTasks = allTasks.filter(
-								(t) => t.listId === target && t.parentId == null,
-							);
-							void run(
-								zero.mutate(
-									mutators.task.move({
-										id: task.id,
-										listId: target,
-										sortKey: tailKey(targetTasks),
-									}),
-								),
-							);
-							onOpenChange(false);
-						}}
-					>
-						<SelectTrigger
-							aria-label={m.task_move_to_list()}
-							className="w-full"
-						>
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value={list.id}>{list.title}</SelectItem>
-							{moveTargets.map((l) => (
-								<SelectItem key={l.id} value={l.id}>
-									{l.title}
-								</SelectItem>
+								</li>
 							))}
-						</SelectContent>
-					</Select>
-				</div>
-			)}
+						</ul>
+						<div className="flex items-center gap-1.5">
+							<Input
+								value={newSubtask}
+								placeholder={m.task_add_subtask_placeholder()}
+								onChange={(e) => setNewSubtask(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter") addSubtask();
+								}}
+							/>
+							<Button
+								size="sm"
+								onClick={addSubtask}
+								disabled={!newSubtask.trim()}
+							>
+								{m.action_add()}
+							</Button>
+						</div>
+					</div>
+				)}
 
-			<div className="border-t pt-3">
-				<CommentThread task={t} workspaceId={list.workspaceId} />
+				{!isSubtask && moveTargets.length > 0 && (
+					<div className="flex flex-col gap-1 text-sm">
+						<span className="text-muted-foreground">
+							{m.task_move_to_list()}
+						</span>
+						<Select
+							value={list.id}
+							onValueChange={(target) => {
+								const targetTasks = allTasks.filter(
+									(t) => t.listId === target && t.parentId == null,
+								);
+								void run(
+									zero.mutate(
+										mutators.task.move({
+											id: task.id,
+											listId: target,
+											sortKey: tailKey(targetTasks),
+										}),
+									),
+								);
+								onOpenChange(false);
+							}}
+						>
+							<SelectTrigger
+								aria-label={m.task_move_to_list()}
+								className="w-full"
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value={list.id}>{list.title}</SelectItem>
+								{moveTargets.map((l) => (
+									<SelectItem key={l.id} value={l.id}>
+										{l.title}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+				)}
 			</div>
 
-			<Button
-				variant="destructive"
-				className="self-start"
-				onClick={() => {
-					void run(zero.mutate(mutators.task.delete({ id: task.id })));
-					onOpenChange(false);
-				}}
-			>
-				<Trash2 /> {m.task_delete()}
-			</Button>
+			<div className={cn("flex flex-col gap-4", isDesktop && "col-span-2")}>
+				<div className="border-t pt-3">
+					<CommentThread task={t} workspaceId={list.workspaceId} />
+				</div>
+
+				<Button
+					variant="destructive"
+					className="self-start"
+					onClick={() => {
+						void run(zero.mutate(mutators.task.delete({ id: task.id })));
+						onOpenChange(false);
+					}}
+				>
+					<Trash2 /> {m.task_delete()}
+				</Button>
+			</div>
 		</div>
 	);
 
 	if (isDesktop) {
 		return (
 			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="flex max-h-[85dvh] max-w-2xl flex-col gap-0 p-0">
+				<DialogContent className="flex max-h-[85dvh] flex-col gap-0 p-0 sm:max-w-4xl">
 					<DialogHeader className="p-4 pb-0">
 						<DialogTitle className="sr-only">
 							{m.task_detail_title()}
