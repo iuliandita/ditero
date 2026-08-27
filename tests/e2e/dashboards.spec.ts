@@ -743,3 +743,54 @@ test("a11y: no serious/critical violations on dashboard view, edit mode, add-pan
 		timeout: 15000,
 	});
 });
+
+// --- Scenario: a blocked Add panel states its reason ---
+// On a fresh account there are no saved views, and Source defaults to "Saved
+// view" -- so the only hint that the picker is empty used to live inside the
+// closed dropdown while the Add button sat greyed out with nothing on screen
+// explaining it.
+test("add panel: the disabled save states why, and clears when the block does", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("d-reason"));
+	await waitWorkspaceReady(page);
+	await createDashboard(page, `Reasons ${Date.now()}`);
+
+	await page.getByTestId("dashboard-empty-add").click();
+	await page.getByTestId("panel-type-tasks").click();
+
+	const reason = page.getByTestId("panel-blocked-reason");
+	const save = page.getByTestId("panel-save");
+	await expect(save).toBeDisabled();
+	await expect(reason).toBeVisible();
+	await expect(reason).toContainText("No saved views yet");
+
+	// Switching to a custom filter removes the block: an empty filter group is a
+	// legal source, so the reason must disappear rather than change.
+	await pickSelect(
+		page,
+		page.getByTestId("panel-source-mode"),
+		"Custom filter",
+	);
+	await expect(reason).toBeHidden();
+	await expect(save).toBeEnabled();
+
+	// DialogFooter carries -mx-4 -mb-4 to offset a padded DialogContent; this
+	// dialog uses p-0, so nothing offset them and the footer hung 16px past the
+	// dialog on both sides and the bottom. Measured, not eyeballed -- a declared
+	// rule can be inert, so this asserts the resolved geometry.
+	const overhang = await page.evaluate(() => {
+		const footer = document.querySelector('[data-slot="dialog-footer"]');
+		const panel = footer?.closest('[role="dialog"]');
+		if (!footer || !panel) return null;
+		const f = footer.getBoundingClientRect();
+		const p = panel.getBoundingClientRect();
+		return {
+			start: Math.round(p.left - f.left),
+			end: Math.round(f.right - p.right),
+			bottom: Math.round(f.bottom - p.bottom),
+		};
+	});
+	expect(overhang).not.toBeNull();
+	expect(overhang).toEqual({ start: 0, end: 0, bottom: 0 });
+});
