@@ -274,7 +274,9 @@ export class ReplicaRig {
 	// never booted, or it booted fine and a starved runner never let it tick as
 	// far as its crash point. The health probe separates them -- a replica that
 	// answers /health as itself is up and merely slow.
-	private async describeReplica(index: number): Promise<string> {
+	// Public: the crash-injection loop reports it when its retries are exhausted,
+	// which is a path no `waitFor` diagnose callback covers (#186).
+	async describeReplica(index: number): Promise<string> {
 		const replica = this.replicas[index];
 		const armed =
 			parseEnv(this.extraEnv[index]).DITERO_TEST_CRASH_POINT ?? "(disarmed)";

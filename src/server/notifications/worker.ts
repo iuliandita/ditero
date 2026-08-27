@@ -440,7 +440,14 @@ export async function workerTick(
 		// The provider has accepted; the local commit has not happened. This
 		// window is sub-millisecond and is exactly where at-least-once stops
 		// being exactly-once.
-		options.crash?.("after-send");
+		//
+		// Gated on the result (#186). sendWithDeadline also returns for a send
+		// that failed or blew the deadline, and nothing reached the provider
+		// then, so crashing there simulates a window that does not exist -- and
+		// it strands the rig with a claimed row and nothing on the wire, a state
+		// no retry of the crash can repair because every retry re-runs the same
+		// one-shot send.
+		if (result.ok) options.crash?.("after-send");
 		let outcome: Awaited<ReturnType<typeof completeDelivery>>;
 		try {
 			outcome = await completeDelivery(database, row, result, replicaId);
