@@ -47,6 +47,9 @@ services:
       DITERO_ENCRYPTION_KEY_NEXT: ${DITERO_ENCRYPTION_KEY_NEXT:-}
       DITERO_ENCRYPTION_KEY_NEXT_FILE: ${DITERO_ENCRYPTION_KEY_NEXT_FILE:-}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      # Extra origins auth routes accept, on top of BETTER_AUTH_URL. Without
+      # them every auth request from any other address is rejected 403.
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
       DITERO_TRUSTED_PROXIES: ${DITERO_TRUSTED_PROXIES:-}
       API_PORT: "3000"
       SERVE_STATIC_DIR: /app/dist
