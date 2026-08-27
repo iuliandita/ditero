@@ -202,7 +202,7 @@ export function LabelManager({
 					if (!open) setColorTarget(null);
 				}}
 			>
-				<DialogContent className="max-w-sm">
+				<DialogContent className="sm:max-w-sm">
 					<DialogHeader>
 						<DialogTitle>{m.label_color_title()}</DialogTitle>
 					</DialogHeader>

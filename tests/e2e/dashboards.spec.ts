@@ -793,4 +793,13 @@ test("add panel: the disabled save states why, and clears when the block does", 
 	});
 	expect(overhang).not.toBeNull();
 	expect(overhang).toEqual({ start: 0, end: 0, bottom: 0 });
+
+	// Same class of defect one layer up: this dialog asked for max-w-lg (512px)
+	// unprefixed, which tailwind-merge keeps alongside the base sm:max-w-sm, and
+	// the variant wins at every width >= 640px -- so it rendered at 384px. A
+	// class assertion passes against that inert form; only the resolved box
+	// distinguishes them.
+	const box = await page.getByRole("dialog").boundingBox();
+	expect(box).not.toBeNull();
+	expect(box?.width).toBeGreaterThan(500);
 });

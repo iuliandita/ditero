@@ -58,6 +58,9 @@ function DialogContent({
 	return (
 		<DialogPortal>
 			<DialogOverlay />
+			{/* Width overrides must be sm:-prefixed: tailwind-merge treats an
+			    unprefixed max-w-* as a different utility than sm:max-w-sm below,
+			    keeps both, and the variant then wins above 640px. */}
 			<DialogPrimitive.Content
 				data-slot="dialog-content"
 				className={cn(
