@@ -91,6 +91,20 @@ To reach it from anything other than the machine it runs on, set
 `BETTER_AUTH_URL` and `PUBLIC_ZERO_URL` to addresses that machine's browsers can
 resolve.
 
+`BETTER_AUTH_URL` names exactly one origin, and auth routes reject every other
+one with `403`. To serve the same instance at more than one address — a LAN
+name and `localhost`, say — list the extras in `TRUSTED_ORIGINS`:
+
+```sh
+BETTER_AUTH_URL=http://ditero.example.lan:3000 \
+TRUSTED_ORIGINS=http://localhost:3000 \
+  docker compose -f deploy/docker/docker-compose.yml --profile bundled up
+```
+
+The same variable is the CORS allowlist **outside** production, where it also
+grants those origins cross-origin API access. Production disables CORS outright,
+so in the Compose stack it only widens the auth trusted-origin list.
+
 ### Configuration
 
 All configuration is environment-driven. The common variables:
@@ -103,6 +117,7 @@ All configuration is environment-driven. The common variables:
 | `DITERO_MIGRATION_DB_PASSWORD` | _(required, bundled)_ | Password for the schema-owner role. |
 | `DITERO_RUNTIME_DB_PASSWORD` | _(required, bundled)_ | Password for the non-owner application role. |
 | `BETTER_AUTH_URL` | `http://localhost:3000` | Public base URL the app is served from. |
+| `TRUSTED_ORIGINS` | empty | Comma-separated extra origins auth routes accept, on top of `BETTER_AUTH_URL`. Also the CORS allowlist outside production. |
 | `DITERO_DATABASE_URL` | bundled Postgres | Non-owner application Postgres DSN. |
 | `DITERO_MIGRATION_DATABASE_URL` | bundled Postgres | Schema-owner migration DSN. |
 | `DITERO_ZERO_DATABASE_URL` | bundled Postgres | Direct, replication-capable Zero DSN. |
