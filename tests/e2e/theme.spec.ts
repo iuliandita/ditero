@@ -90,6 +90,23 @@ test("applies the synced theme on a device with no local hint", async ({
 	expect(await bodyBackground(page)).toBe(darkBg);
 });
 
+// Both ends of the menu lifecycle are waited on deliberately. Clicking the
+// trigger again while the previous menu is still closing lets the role query
+// resolve against the detached one, which fails as an unactionable click --
+// the same race openRowMenu guards in affordances.spec. aria-expanded is the
+// trigger's own state, so it cannot pass off a stale menu.
+async function pickTheme(page: Page, label: string): Promise<void> {
+	const trigger = page.getByTestId("theme-menu");
+	await trigger.click();
+	await expect(trigger).toHaveAttribute("aria-expanded", "true");
+	await page.getByRole("menuitemradio", { name: label }).click();
+	await expect(trigger).toHaveAttribute("aria-expanded", "false");
+	// aria-expanded flips at the START of the close, while Radix's dismiss
+	// guard is still live -- a reopening click inside that window toggles
+	// straight back to closed. Wait for the content to actually detach.
+	await expect(page.getByRole("menu")).toHaveCount(0);
+}
+
 // The reachability half: the same three states, one click from the sidebar
 // rather than buried in Settings. Also pins that both controls read one source
 // -- a choice made in the sidebar must be what Settings shows.
@@ -103,13 +120,11 @@ test("the sidebar theme menu sets the theme and agrees with Settings", async ({
 	await expect(menu).toBeVisible();
 
 	// Presence first, so the later absence assertion cannot pass vacuously.
-	await menu.click();
-	await page.getByRole("menuitemradio", { name: m.theme_dark() }).click();
+	await pickTheme(page, m.theme_dark());
 	await expect(page.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
 	const darkBg = await bodyBackground(page);
 
-	await menu.click();
-	await page.getByRole("menuitemradio", { name: m.theme_light() }).click();
+	await pickTheme(page, m.theme_light());
 	await expect(page.locator("html")).not.toHaveClass(/(^|\s)dark(\s|$)/);
 	expect(await bodyBackground(page)).not.toBe(darkBg);
 
