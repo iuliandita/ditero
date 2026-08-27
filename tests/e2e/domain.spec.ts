@@ -581,3 +581,39 @@ test("a11y: no serious/critical violations on core surfaces", async ({
 	await expectNoSeriousA11y(mp, "quick-add sheet");
 	await mctx.close();
 });
+
+// The task detail used to be a right-anchored rail. Asserts the placement the
+// request actually named -- horizontally centered -- by measuring the resolved
+// box, because a right-anchored panel is also "visible" and a class check would
+// not tell the two apart.
+test("task detail opens centered on desktop, not against the right edge", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("detail-center"));
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, "Centered");
+	await openListDesktop(page, "Centered");
+	await addTask(page, "Measure me");
+
+	await page
+		.getByTestId("list")
+		.locator("[data-kbd-nav]")
+		.filter({ hasText: "Measure me" })
+		.first()
+		.click();
+	const detail = page.getByRole("dialog");
+	await expect(detail.getByLabel("Task title")).toBeVisible();
+
+	const box = await detail.boundingBox();
+	expect(box).not.toBeNull();
+	const viewport = page.viewportSize();
+	expect(viewport).not.toBeNull();
+	if (!box || !viewport) return;
+
+	const startGap = box.x;
+	const endGap = viewport.width - (box.x + box.width);
+	// A rail sits flush against one edge, so its far gap is ~0 and the two gaps
+	// differ by roughly the panel width. Centered means they match.
+	expect(Math.abs(startGap - endGap)).toBeLessThanOrEqual(2);
+	expect(startGap).toBeGreaterThan(20);
+});
