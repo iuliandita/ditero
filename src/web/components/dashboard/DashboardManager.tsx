@@ -186,7 +186,9 @@ export function DashboardManager({
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>
 					{body}
-					<DialogFooter className="border-t p-4 md:px-6">{footer}</DialogFooter>
+					<DialogFooter className="mx-0 mb-0 border-t p-4 md:px-6">
+						{footer}
+					</DialogFooter>
 				</DialogContent>
 			</Dialog>
 		);

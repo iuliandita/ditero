@@ -214,24 +214,45 @@ export function AddPanelDialog({
 		(Number.isInteger(limitNum) &&
 			limitNum >= MIN_PANEL_LIMIT &&
 			limitNum <= MAX_PANEL_LIMIT);
-	const sourceValid =
-		sourceMode === "view"
-			? viewId !== ""
-			: scope.mode !== "one" || scope.id !== "";
 	// Ids carried in from an edited panel that no longer resolve to a synced
 	// habit task (deleted/unshared). Shown as explicit removable rows (StreakPanel
 	// philosophy: never silent); they count toward the cap until dropped, and a
 	// pick that holds ONLY missing ids does not validate.
 	const habitTaskIds = new Set(habitTasks.map((h) => h.id));
 	const missingHabitIds = habitIds.filter((id) => !habitTaskIds.has(id));
-	const configValid =
-		type === "tasks" || type === "counter"
-			? sourceValid && limitValid
-			: type === "streak"
-				? habitIds.some((id) => habitTaskIds.has(id)) &&
-					habitIds.length <= MAX_STREAK_HABITS
-				: true; // focus: range always set
-	const canSave = type !== null && configValid && !(mode === "add" && atCap);
+	// Why save is blocked, or null when it is not. `canSave` derives from this so
+	// the two cannot drift into a button that is disabled for an unstated reason
+	// -- the state the owner hit on a fresh instance, where Source defaults to
+	// "Saved view" and the only hint that none exist lives inside the closed
+	// dropdown.
+	const blockedReason: string | null = (() => {
+		if (type === null) return null;
+		if (mode === "add" && atCap) return m.panel_limit_reached();
+		if (type === "tasks" || type === "counter") {
+			if (sourceMode === "view" && viewId === "") {
+				return views.length === 0
+					? m.panel_blocked_no_views()
+					: m.panel_blocked_pick_view();
+			}
+			if (sourceMode === "inline" && scope.mode === "one" && scope.id === "") {
+				return m.panel_blocked_pick_workspace();
+			}
+			if (!limitValid) return m.panel_blocked_limit();
+			return null;
+		}
+		if (type === "streak") {
+			if (habitIds.length > MAX_STREAK_HABITS)
+				return m.panel_blocked_pick_habit();
+			if (!habitIds.some((id) => habitTaskIds.has(id))) {
+				return habitTasks.length === 0
+					? m.panel_no_habits()
+					: m.panel_blocked_pick_habit();
+			}
+			return null;
+		}
+		return null; // focus: range always set
+	})();
+	const canSave = type !== null && blockedReason === null;
 
 	function toggleHabit(id: string, checked: boolean) {
 		setHabitIds((ids) =>
@@ -603,8 +624,11 @@ export function AddPanelDialog({
 	const body = showTypeStep ? typeStep : configStep;
 	const dialogTitle =
 		mode === "add" ? m.panel_dialog_add_title() : m.panel_dialog_edit_title();
+	// The reason sits in reading order immediately before the button, so the
+	// native `disabled` prop stays (unlike RowActions, where the reason lives
+	// inside the item and a natively disabled item could never be reached).
 	const footer = !showTypeStep && (
-		<div className="flex w-full items-center gap-2">
+		<div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1">
 			{mode === "add" && (
 				<Button
 					type="button"
@@ -615,11 +639,19 @@ export function AddPanelDialog({
 					{m.panel_dialog_back()}
 				</Button>
 			)}
+			{blockedReason && (
+				<p
+					data-testid="panel-blocked-reason"
+					className="order-last w-full text-xs text-muted-foreground sm:order-none sm:w-auto sm:flex-1 sm:text-end"
+				>
+					{blockedReason}
+				</p>
+			)}
 			<Button
 				type="button"
 				data-testid="panel-save"
 				disabled={!canSave}
-				className="ms-auto"
+				className={blockedReason ? undefined : "ms-auto"}
 				onClick={submit}
 			>
 				{mode === "add" ? m.panel_add() : m.panel_submit_save()}
@@ -636,7 +668,7 @@ export function AddPanelDialog({
 					</DialogHeader>
 					{body}
 					{footer && (
-						<DialogFooter className="border-t p-4 md:px-6">
+						<DialogFooter className="mx-0 mb-0 border-t p-4 md:px-6">
 							{footer}
 						</DialogFooter>
 					)}
