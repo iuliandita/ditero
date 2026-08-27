@@ -3,6 +3,7 @@ set -eu
 
 image=$1
 expected_variant=$2
+expected_revision=${3:-}
 
 actual_id=$(docker run --rm --entrypoint sh "$image" -c '. /etc/os-release; printf %s "$ID"')
 case "$expected_variant:$actual_id" in
@@ -12,6 +13,17 @@ case "$expected_variant:$actual_id" in
     exit 1
     ;;
 esac
+
+# An undeclared ARG is dropped without a warning, so the only proof the build
+# args survived is reading the stamp back off the image.
+if [ -n "$expected_revision" ]; then
+  actual_revision=$(docker image inspect \
+    --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")
+  if [ "$actual_revision" != "$expected_revision" ]; then
+    echo "expected revision $expected_revision, got $actual_revision" >&2
+    exit 1
+  fi
+fi
 
 configured_user=$(docker image inspect --format '{{.Config.User}}' "$image")
 if [ "$configured_user" != "bun" ]; then

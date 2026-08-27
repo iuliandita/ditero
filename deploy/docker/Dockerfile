@@ -81,3 +81,17 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 # Run migrations, then start the server.
 ENTRYPOINT ["./entrypoint.sh"]
+
+# Without these the image inherits the base image's OCI labels, so asking a
+# published image which commit it is answers with a bun revision. An empty
+# value means the build passed none, which beats a confidently wrong one.
+ARG DITERO_GIT_SHA=""
+ARG DITERO_CHANNEL=""
+LABEL org.opencontainers.image.title="Ditero" \
+      org.opencontainers.image.description="Self-hosted, local-first, group-scale todo app" \
+      org.opencontainers.image.source="https://github.com/iuliandita/ditero" \
+      org.opencontainers.image.url="https://github.com/iuliandita/ditero" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.revision="${DITERO_GIT_SHA}" \
+      org.opencontainers.image.version="${DITERO_CHANNEL}" \
+      ditero.channel="${DITERO_CHANNEL}"

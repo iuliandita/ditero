@@ -153,12 +153,14 @@ jobs:
         env:
           RUNTIME_IMAGE: ${{ matrix.runtime-image }}
           VARIANT: ${{ matrix.variant }}
+          GIT_SHA: ${{ steps.sha.outputs.sha }}
         run: |
           docker build -f deploy/docker/Dockerfile \
             --build-arg "RUNTIME_IMAGE=${RUNTIME_IMAGE}" \
             --build-arg "RUNTIME_VARIANT=${VARIANT}" \
+            --build-arg "DITERO_GIT_SHA=${GIT_SHA}" \
             -t ditero-smoke .
-          tests/container/smoke.sh ditero-smoke "$VARIANT"
+          tests/container/smoke.sh ditero-smoke "$VARIANT" "$GIT_SHA"
 
       - name: Pre-push image security gate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
