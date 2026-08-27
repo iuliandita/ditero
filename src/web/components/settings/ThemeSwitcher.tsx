@@ -7,40 +7,20 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { m } from "../../../paraglide/messages.js";
-import { useUserPref } from "../../hooks/useUserPref.ts";
-import {
-	applyTheme,
-	fromStored,
-	isTheme,
-	readLocalTheme,
-	toStored,
-	writeLocalTheme,
-} from "../../lib/theme.ts";
+import { useThemeChoice } from "../../hooks/useThemeChoice.ts";
 
 // A control, not an applier: useSyncedTheme() owns applying the synced choice
-// so it also reaches devices whose user never opens this surface (#160). The
-// write below is still done here, so the document changes on the click rather
-// than one round trip later.
+// so it also reaches devices whose user never opens this surface (#160).
 export function ThemeSwitcher() {
-	const { pref, setPref, loading } = useUserPref();
+	const { theme, setTheme } = useThemeChoice();
 	const labelId = useId();
-	// Until the row lands pref.theme is the DEFAULTS null, which would display
-	// "system" to a user whose document is already dark from the boot hint.
-	const value = loading ? readLocalTheme() : fromStored(pref.theme);
-
-	function onChange(next: string) {
-		if (!isTheme(next)) return;
-		writeLocalTheme(next);
-		applyTheme(next, document.documentElement);
-		setPref({ theme: toStored(next) });
-	}
 
 	return (
 		<div className="flex flex-col gap-1 text-sm">
 			<span id={labelId} className="text-muted-foreground">
 				{m.theme_switcher_label()}
 			</span>
-			<Select value={value} onValueChange={onChange}>
+			<Select value={theme} onValueChange={setTheme}>
 				<SelectTrigger
 					aria-labelledby={labelId}
 					data-testid="theme-switcher"

@@ -26,6 +26,7 @@ import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
 import type { Section } from "./BottomNav.tsx";
 import type { ListGroup } from "./grouping.ts";
 import { ListProgress } from "./ListProgress.tsx";
+import { ThemeMenu } from "./ThemeMenu.tsx";
 
 // View row icon: built-ins carry a lucide key; saved views/dashboards may have
 // none. Object.hasOwn guards the client-controlled key so a prototype key
@@ -453,6 +454,7 @@ export function Sidebar({
 					<Settings className="size-4" />
 					{!collapsed && m.nav_settings()}
 				</Button>
+				<ThemeMenu collapsed={collapsed} />
 				<Button
 					variant="ghost"
 					size="icon-sm"
