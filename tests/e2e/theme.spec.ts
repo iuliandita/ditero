@@ -77,10 +77,46 @@ test("applies the synced theme on a device with no local hint", async ({
 	await expect(page.getByTestId("workspace")).toBeVisible();
 
 	// The absence assertions are the point of the test, so they are paired with
-	// the presence one above: the shell is up, and the only other reader of
-	// user_pref.theme is provably not mounted while the class check passes.
+	// a presence one: the shell is up and the Settings surface is provably not
+	// mounted while the class check passes. ThemeMenu IS mounted here (sidebar
+	// footer) and does read user_pref.theme, but it is a control only -- it
+	// applies a class solely from setTheme, on a click that never happens in
+	// this test -- so useSyncedTheme remains the only thing that could have put
+	// the class back.
+	await expect(page.getByTestId("theme-menu")).toBeVisible();
 	await expect(page.getByTestId("settings-surface")).toHaveCount(0);
 	await expect(page.getByTestId("theme-switcher")).toHaveCount(0);
 	await expect(page.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
 	expect(await bodyBackground(page)).toBe(darkBg);
+});
+
+// The reachability half: the same three states, one click from the sidebar
+// rather than buried in Settings. Also pins that both controls read one source
+// -- a choice made in the sidebar must be what Settings shows.
+test("the sidebar theme menu sets the theme and agrees with Settings", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("theme-menu"));
+	await expect(page.getByTestId("workspace")).toBeVisible();
+
+	const menu = page.getByTestId("theme-menu");
+	await expect(menu).toBeVisible();
+
+	// Presence first, so the later absence assertion cannot pass vacuously.
+	await menu.click();
+	await page.getByRole("menuitemradio", { name: m.theme_dark() }).click();
+	await expect(page.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
+	const darkBg = await bodyBackground(page);
+
+	await menu.click();
+	await page.getByRole("menuitemradio", { name: m.theme_light() }).click();
+	await expect(page.locator("html")).not.toHaveClass(/(^|\s)dark(\s|$)/);
+	expect(await bodyBackground(page)).not.toBe(darkBg);
+
+	// One source of truth: the Settings select must already show the sidebar's
+	// choice, not a stale default.
+	await goToSettings(page);
+	await expect(page.getByTestId("theme-switcher")).toContainText(
+		m.theme_light(),
+	);
 });
