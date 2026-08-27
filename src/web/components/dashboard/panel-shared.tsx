@@ -138,7 +138,7 @@ export function PanelExpandDialog({
 }): JSX.Element {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="flex max-h-[85dvh] max-w-lg flex-col gap-0 p-0">
+			<DialogContent className="flex max-h-[85dvh] flex-col gap-0 p-0 sm:max-w-lg">
 				<DialogHeader className="p-4 pb-2 md:px-6">
 					<DialogTitle>
 						{m.panel_expand_title({ label, count: entries.length })}

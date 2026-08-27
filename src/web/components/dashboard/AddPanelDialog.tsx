@@ -662,7 +662,7 @@ export function AddPanelDialog({
 	if (isDesktop) {
 		return (
 			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="max-h-[85dvh] max-w-lg gap-0 p-0">
+				<DialogContent className="max-h-[85dvh] gap-0 p-0 sm:max-w-lg">
 					<DialogHeader className="p-4 pb-2 md:px-6">
 						<DialogTitle>{dialogTitle}</DialogTitle>
 					</DialogHeader>

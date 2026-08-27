@@ -193,7 +193,7 @@ export function CommandPalette({
 				showCloseButton={false}
 				aria-describedby={undefined}
 				data-testid="command-palette"
-				className="top-24 max-w-lg translate-y-0 gap-0 p-0 sm:max-w-lg"
+				className="top-24 translate-y-0 gap-0 p-0 sm:max-w-lg"
 				onKeyDown={(e) => {
 					if (e.key === "ArrowDown") {
 						e.preventDefault();

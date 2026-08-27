@@ -41,7 +41,7 @@ export function CheatSheet({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-md sm:max-w-md">
+			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle>{m.cheatsheet_title()}</DialogTitle>
 					<DialogDescription>{m.cheatsheet_description()}</DialogDescription>
