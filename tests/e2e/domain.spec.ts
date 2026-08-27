@@ -659,3 +659,43 @@ test("task detail opens centered on desktop, not against the right edge", async 
 	expect(Math.abs(startGap - endGap)).toBeLessThanOrEqual(2);
 	expect(startGap).toBeGreaterThan(20);
 });
+
+// #189: the same modal used to stack all 13 sections in one narrow column.
+// Measures the resolved boxes of two section labels that sit in different
+// columns -- a class check cannot tell a grid that collapsed from one that did
+// not, and in a single column these two labels share an x and are ~450px apart
+// vertically, so both assertions below discriminate.
+test("task detail lays out in two columns on desktop", async ({ page }) => {
+	await signUp(page, uniqueEmail("detail-cols"));
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, "Columns");
+	await openListDesktop(page, "Columns");
+	await addTask(page, "Wide me");
+
+	await page
+		.getByTestId("list")
+		.locator("[data-kbd-nav]")
+		.filter({ hasText: "Wide me" })
+		.first()
+		.click();
+	const detail = page.getByRole("dialog");
+	await expect(detail.getByLabel("Task title")).toBeVisible();
+
+	// English literals, matching the neighbouring tests in this file.
+	const notesLabel = detail.getByText("Notes", { exact: true });
+	const priorityLabel = detail.getByText("Priority", { exact: true });
+	await expect(notesLabel).toBeVisible();
+	await expect(priorityLabel).toBeVisible();
+
+	const notes = await notesLabel.boundingBox();
+	const priority = await priorityLabel.boundingBox();
+	expect(notes).not.toBeNull();
+	expect(priority).not.toBeNull();
+	if (!notes || !priority) return;
+
+	// Right column: strictly right of the left one, by far more than any
+	// rounding. Single column puts these at an identical x.
+	expect(priority.x).toBeGreaterThan(notes.x + 100);
+	// And side by side, not merely indented: the two bands overlap vertically.
+	expect(priority.y).toBeLessThan(notes.y + 100);
+});
