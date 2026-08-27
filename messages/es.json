@@ -268,6 +268,7 @@
 	"list_add_from_template": "Añadir desde plantilla",
 	"list_no_task_templates": "Aún no hay plantillas de tareas",
 	"list_add_task_placeholder": "Añade una tarea",
+	"title_suggest_label": "Sugerencias de tus elementos anteriores",
 	"list_add_task": "Añadir tarea",
 	"quickadd_input_label": "Añadir tarea rápida",
 	"quickadd_sheet_title": "Añadir rápido",
