@@ -268,6 +268,7 @@
 	"list_add_from_template": "Ajouter depuis un modèle",
 	"list_no_task_templates": "Pas encore de modèles de tâche",
 	"list_add_task_placeholder": "Ajouter une tâche",
+	"title_suggest_label": "Suggestions issues de vos éléments précédents",
 	"list_add_task": "Ajouter la tâche",
 	"quickadd_input_label": "Ajout rapide d'une tâche",
 	"quickadd_sheet_title": "Ajout rapide",

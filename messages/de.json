@@ -266,6 +266,7 @@
 	"list_add_from_template": "Aus Vorlage hinzufügen",
 	"list_no_task_templates": "Noch keine Aufgabenvorlagen",
 	"list_add_task_placeholder": "Aufgabe hinzufügen",
+	"title_suggest_label": "Vorschläge aus deinen früheren Einträgen",
 	"list_add_task": "Aufgabe hinzufügen",
 	"quickadd_input_label": "Aufgabe schnell hinzufügen",
 	"quickadd_sheet_title": "Schnell hinzufügen",

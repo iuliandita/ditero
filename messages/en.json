@@ -266,6 +266,7 @@
 	"list_add_from_template": "Add from template",
 	"list_no_task_templates": "No task templates yet",
 	"list_add_task_placeholder": "Add a task",
+	"title_suggest_label": "Suggestions from your earlier items",
 	"list_add_task": "Add task",
 	"quickadd_input_label": "Quick add task",
 	"quickadd_sheet_title": "Quick add",

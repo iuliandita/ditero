@@ -31,6 +31,7 @@ import { IconPicker } from "../components/list/IconPicker.tsx";
 import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
+import { TitleSuggestInput } from "../components/list/TitleSuggestInput.tsx";
 import { TaskListSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
@@ -88,6 +89,16 @@ export function ListView({
 	const parents = useMemo(
 		() => listTasks.filter((t) => t.parentId == null),
 		[listTasks],
+	);
+
+	// Suggestion pool: every task title already synced to this client. Subtasks
+	// are excluded -- they are steps inside one task, not items a user re-adds.
+	const titleCandidates = useMemo(
+		() =>
+			tasks
+				.filter((t) => t.parentId == null)
+				.map((t) => ({ title: t.title, listId: t.listId })),
+		[tasks],
 	);
 	const subtasksByParent = useMemo(() => {
 		const map = new Map<string, typeof listTasks>();
@@ -360,16 +371,15 @@ export function ListView({
 			</div>
 
 			<div className="mb-3 flex gap-2">
-				<input
-					ref={titleInput}
+				<TitleSuggestInput
+					inputRef={titleInput}
 					data-testid="new-task"
-					className="h-9 flex-1 rounded-lg border bg-transparent px-3 text-base md:text-sm"
 					placeholder={m.list_add_task_placeholder()}
 					value={title}
-					onChange={(e) => setTitle(e.target.value)}
-					onKeyDown={(e) => {
-						if (e.key === "Enter") void createTask();
-					}}
+					onChange={setTitle}
+					onSubmit={() => void createTask()}
+					candidates={titleCandidates}
+					listId={listId}
 				/>
 				<Button
 					data-testid="new-task-submit"

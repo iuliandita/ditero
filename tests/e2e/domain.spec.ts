@@ -581,3 +581,45 @@ test("a11y: no serious/critical violations on core surfaces", async ({
 	await expectNoSeriousA11y(mp, "quick-add sheet");
 	await mctx.close();
 });
+
+// Autocomplete from history: suggestions come from titles already synced to
+// this client, so nothing new is fetched and nothing is offered that the user
+// could not already read.
+test("new-item field suggests earlier titles and fills on click", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("suggest"));
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, "Pantry");
+	await openListDesktop(page, "Pantry");
+	await addTask(page, "Oat milk");
+	await addTask(page, "Olive oil");
+
+	const field = page.getByTestId("new-task");
+	const listbox = page.getByTestId("title-suggestions");
+
+	// Below the minimum query length nothing is offered. Paired with the
+	// presence assertion below so this cannot pass for lack of any data.
+	await field.fill("o");
+	await expect(listbox).toBeHidden();
+
+	await field.fill("oi");
+	await expect(listbox).toBeVisible();
+	const options = page.getByTestId("title-suggestion");
+	await expect(options).toHaveCount(1);
+
+	// The combobox markup only exists while the listbox is open, so the gate has
+	// to run here rather than on the settled list surface.
+	await expectNoSeriousA11y(page, "title suggestions");
+	await options.first().click();
+	await expect(field).toHaveValue("Olive oil");
+
+	// Accepting must not immediately re-offer the text it just filled.
+	await expect(listbox).toBeHidden();
+
+	// And the filled value is ordinary input: submitting adds it like typed text.
+	await page.getByTestId("new-task-submit").click();
+	await expect(
+		page.getByTestId("list").getByText("Olive oil", { exact: true }),
+	).toHaveCount(2);
+});
