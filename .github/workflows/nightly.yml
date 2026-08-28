@@ -71,5 +71,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:nightly-zero
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:nightly-zero-${{ steps.sha.outputs.short }}
+          build-args: |
+            DITERO_GIT_SHA=${{ github.sha }}
+            DITERO_CHANNEL=nightly
           cache-from: type=gha
           cache-to: type=gha,mode=max
