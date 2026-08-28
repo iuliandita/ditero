@@ -962,36 +962,39 @@ function NormalWorkspace() {
 						/>
 						{/* Desktop nav lives in the sidebar; render the list index only on
 						    mobile so a list title never appears twice at once. */}
-						{!isDesktop &&
-							groups.map((group) => (
-								<div key={group.folder?.id ?? "__ungrouped__"}>
-									<div className="mb-1 px-1 text-xs font-medium text-muted-foreground">
-										{group.folder?.name ?? m.sidebar_ungrouped_lists()}
+						{!isDesktop && (
+							<div data-testid="list-index" className="flex flex-col gap-4">
+								{groups.map((group) => (
+									<div key={group.folder?.id ?? "__ungrouped__"}>
+										<div className="mb-1 px-1 text-xs font-medium text-muted-foreground">
+											{group.folder?.name ?? m.sidebar_ungrouped_lists()}
+										</div>
+										<SortableList
+											items={group.lists}
+											onMove={moveList}
+											handleLabel={m.list_reorder_handle()}
+											handleTestId="list-drag"
+											className="gap-1"
+											renderItem={(l) => (
+												<button
+													type="button"
+													onClick={() => openList(l.id)}
+													className="w-full rounded-lg border p-3 text-start"
+												>
+													{l.title}
+													{l.kind === "project" && progressByList.has(l.id) && (
+														<ListProgress
+															done={progressByList.get(l.id)?.done ?? 0}
+															total={progressByList.get(l.id)?.total ?? 0}
+														/>
+													)}
+												</button>
+											)}
+										/>
 									</div>
-									<SortableList
-										items={group.lists}
-										onMove={moveList}
-										handleLabel={m.list_reorder_handle()}
-										handleTestId="list-drag"
-										className="gap-1"
-										renderItem={(l) => (
-											<button
-												type="button"
-												onClick={() => openList(l.id)}
-												className="w-full rounded-lg border p-3 text-start"
-											>
-												{l.title}
-												{l.kind === "project" && progressByList.has(l.id) && (
-													<ListProgress
-														done={progressByList.get(l.id)?.done ?? 0}
-														total={progressByList.get(l.id)?.total ?? 0}
-													/>
-												)}
-											</button>
-										)}
-									/>
-								</div>
-							))}
+								))}
+							</div>
+						)}
 					</div>
 				)}
 			</div>
