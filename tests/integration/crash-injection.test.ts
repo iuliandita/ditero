@@ -139,14 +139,23 @@ const CRASH_ATTEMPTS = 3;
 // No budget survives arbitrary oversubscription, and none of these waits claims
 // a latency bound -- the product promises eventual at-least-once delivery. What
 // the budget buys is a diagnosis that names which of the two it was.
+//
+// #186 did not move these numbers, and was not a budget failure: all three
+// attempts exited promptly (23s of the 360s available) and failed on the state
+// they left behind, which is a precondition problem, not a wait problem.
 const CRASH_EXIT_BUDGET_MS = 60_000;
 
+// Returns the number of copies the tap held when the crash landed: the caller's
+// own count is relative to it, never to zero (#186). An earlier attempt whose
+// send blew the adapter deadline can still have been recorded -- the tap counts
+// a request on receipt, before it responds -- so the crash-phase total is a
+// baseline, not a constant.
 async function crashThenRecover(
 	point: string,
 	taskIds: string[],
 	seed: () => Promise<void>,
 	left?: CrashLeft,
-): Promise<void> {
+): Promise<number> {
 	await rig.stop(0);
 	await seed();
 
@@ -167,13 +176,16 @@ async function crashThenRecover(
 			// Still alive and still armed: take it down before relaunching, or the
 			// next spawn races a process that may yet reach its crash point.
 			await rig.stop(0);
-			// Every caller asserts an EXACT delivery count, so a retry is only
-			// clean while the abandoned attempt put nothing on the wire. It should
-			// not have -- the send-point hooks fire immediately after the send, so
-			// a replica that got that far would have exited long before this
-			// budget -- but "should not" is not an invariant to silently bet an
-			// exact count on.
-			const stray = taskIds.filter((id) => wireFor(id).length > 0);
+			// A caller counting from zero asserts an EXACT delivery count, so a
+			// retry is only clean while the abandoned attempt put nothing on the
+			// wire. It should not have -- the send-point hooks fire immediately
+			// after the send, so a replica that got that far would have exited long
+			// before this budget -- but "should not" is not an invariant to
+			// silently bet an exact count on. A caller that counts from the
+			// crash-phase baseline (`delivers`) already absorbs those copies.
+			const stray = left?.delivers
+				? []
+				: taskIds.filter((id) => wireFor(id).length > 0);
 			if (stray.length > 0) {
 				throw new Error(
 					`rig: the timed-out ${point} attempt already delivered ${stray.join(", ")}, so retrying it would inflate the wire count the caller asserts\n${reason}`,
@@ -184,12 +196,18 @@ async function crashThenRecover(
 		const wire = taskIds.reduce((n, id) => n + wireFor(id).length, 0);
 		if (!left || left.holds(await outboxFor(taskIds), wire)) {
 			await rig.restart(0, "");
-			return;
+			return wire;
 		}
 		reason = `the ${point} crash did not leave ${left.label}\n${await diagnose(...taskIds).diagnose()}`;
 	}
+	// The last attempt's replica, which `reason` carries only when that attempt
+	// ended in the exit timeout: a precondition that failed on the state instead
+	// says nothing about whether the replica booted, armed, or died quietly.
+	const replica = await rig
+		.describeReplica(0)
+		.catch((error) => `  (replica diagnostic failed: ${error})`);
 	throw new Error(
-		`rig: the ${point} crash never set up its precondition in ${CRASH_ATTEMPTS} attempts, so the recovery under test was never reachable\n${reason}`,
+		`rig: the ${point} crash never set up its precondition in ${CRASH_ATTEMPTS} attempts, so the recovery under test was never reachable\n${reason}\n${replica}`,
 	);
 }
 
@@ -199,6 +217,9 @@ type OutboxSnapshot = Awaited<ReturnType<typeof outboxFor>>;
 type CrashLeft = {
 	label: string;
 	holds: (rows: OutboxSnapshot, wire: number) => boolean;
+	// This crash point delivers before it crashes, so a copy left by an
+	// abandoned attempt is expected rather than a count the retry would inflate.
+	delivers?: true;
 };
 
 // Both send-point crashes die holding the row: claimBatch commits `sending`
@@ -218,10 +239,13 @@ const heldBySender = (rows: OutboxSnapshot) =>
 // counted against: without it the recovery re-sends correctly, reaches one,
 // and gets blamed for a second that was never possible.
 //
-// Exactly one, not at least one: two copies already on the wire would mean the
-// recovery under test has run before the recovery phase began.
+// At least one, and the caller counts from it: the crash fires only on an
+// accepted send (worker.ts), so a copy has landed, but a send that blew the
+// adapter deadline can have been recorded by the tap and then retried, leaving
+// two. Pinning it to one would fail on a slow runner for a pipeline behaving
+// exactly as documented.
 const heldAfterDelivery = (rows: OutboxSnapshot, wire: number) =>
-	heldBySender(rows) && wire === 1;
+	heldBySender(rows) && wire >= 1;
 
 describe("crash injection", () => {
 	test("SIGKILL before the send: the row is reclaimed after the lease and delivered once", async () => {
@@ -256,29 +280,31 @@ describe("crash injection", () => {
 	// NOT assert exactly-once.
 	test("SIGKILL after the send but before the commit: the row is re-sent", async () => {
 		const taskId = `${PREFIX}-after`;
-		await crashThenRecover(
+		const delivered = await crashThenRecover(
 			"after-send",
 			[taskId],
 			async () => {
 				await seedReminderTask(db, scope, taskId);
 			},
 			{
-				label: "a claimed row and one copy on the wire",
+				label: "a claimed row and a copy on the wire",
 				holds: heldAfterDelivery,
+				delivers: true,
 			},
 		);
 
 		await waitFor(
 			"the re-send after the reclaim",
-			async () => wireFor(taskId).length >= 2,
+			async () => wireFor(taskId).length > delivered,
 			{ timeoutMs: recoveryBudgetMs(), ...diagnose(taskId) },
 		);
 		await sleep(3_000);
 
 		const rows = await outboxFor([taskId]);
 		expect(rows).toHaveLength(1);
-		// One outbox row, one idempotency key, TWO notifications on the wire.
-		expect(wireFor(taskId)).toHaveLength(2);
+		// One outbox row, one idempotency key, and exactly one copy on the wire
+		// beyond what the crash had already delivered.
+		expect(wireFor(taskId)).toHaveLength(delivered + 1);
 		expect(rows[0].status).toBe("sent");
 	}, 480_000);
 
