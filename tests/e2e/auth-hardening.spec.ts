@@ -111,3 +111,63 @@ test("supports TOTP enrollment, step-up, recovery, and disable", async ({
 		timeout: ENROLL_TIMEOUT,
 	});
 });
+
+// #193: two different 403s used to render the same flat "sign up failed".
+// The app's own same-origin guard (src/auth/auth.ts) runs ahead of Better Auth,
+// so this is the failure a self-hoster meets first: the browser reached the app
+// on an address that is not BETTER_AUTH_URL and is not in TRUSTED_ORIGINS. The
+// suite's servers trust localhost:5173 only; the request is re-sent with another
+// origin rather than fulfilled, so the 403 is the real guard's answer.
+test("an untrusted origin says so instead of failing blankly", async ({
+	page,
+}) => {
+	// Re-issued from node rather than route.continue(): Chromium will not let a
+	// page rewrite its own Origin. The server still produces the response.
+	await page.route("**/api/auth/sign-up/email", async (route) => {
+		const response = await route.fetch({
+			headers: { ...route.request().headers(), origin: "http://10.0.0.5:5173" },
+		});
+		await route.fulfill({ response });
+	});
+	await page.goto("/");
+	await page.getByTestId("email").fill(`origin-${Date.now()}@t.dev`);
+	await page.getByTestId("password").fill("pw-123456");
+	await page.getByTestId("signup").click();
+
+	await expect(
+		page.getByText(
+			"This address is not trusted by the server. Ask the operator to add it to the instance's trusted origins.",
+		),
+	).toBeVisible({ timeout: ENROLL_TIMEOUT });
+	await expect(page.getByText("sign up failed")).toHaveCount(0);
+});
+
+// The gate needs an instance in bootstrap/closed mode, which this suite's
+// servers are not (DITERO_REGISTRATION_MODE=open), so the refusal is injected.
+// The body is not invented: tests/integration/auth-error-codes.test.ts pins
+// that the server emits exactly this code and message.
+test("the invite-only gate names itself instead of failing blankly", async ({
+	page,
+}) => {
+	await page.route("**/api/auth/sign-up/email", (route) =>
+		route.fulfill({
+			status: 403,
+			contentType: "application/json",
+			body: JSON.stringify({
+				message: "Registration requires an invitation",
+				code: "REGISTRATION_INVITE_REQUIRED",
+			}),
+		}),
+	);
+	await page.goto("/");
+	await page.getByTestId("email").fill(`gate-${Date.now()}@t.dev`);
+	await page.getByTestId("password").fill("pw-123456");
+	await page.getByTestId("signup").click();
+
+	await expect(
+		page.getByText(
+			"This instance only accepts new accounts by invitation. Ask an admin to invite you.",
+		),
+	).toBeVisible({ timeout: ENROLL_TIMEOUT });
+	await expect(page.getByText("sign up failed")).toHaveCount(0);
+});

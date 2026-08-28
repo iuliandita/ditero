@@ -18,6 +18,7 @@ import { trustedAuthOrigins } from "./origins.ts";
 import { socialProvidersFromEnv } from "./providers.ts";
 import {
 	assertRegistrationAllowed,
+	RegistrationDeniedError,
 	resolveRegistrationMode,
 } from "./registration.ts";
 import { registrationBypassActive } from "./registration-bypass.ts";
@@ -103,6 +104,13 @@ export const auth = betterAuth({
 						throw new APIError("FORBIDDEN", {
 							message:
 								error instanceof Error ? error.message : "Registration denied",
+							// Only the deliberate refusals carry a code; anything else
+							// reaching here (a failed invite lookup, say) is a fault, and
+							// labelling it as policy would mislead the client.
+							code:
+								error instanceof RegistrationDeniedError
+									? error.code
+									: undefined,
 						});
 					}
 				},
@@ -150,7 +158,14 @@ export async function handleAuthRequest(
 		try {
 			requireSameOrigin(request, authOrigins);
 		} catch {
-			return new Response("Forbidden", { status: 403 });
+			// This guard fires ahead of Better Auth, so its own INVALID_ORIGIN is
+			// never reached; answer in the same JSON shape and reuse the code, or
+			// the client has nothing but a 403 indistinguishable from the
+			// registration gate. Says nothing about the allowlist.
+			return Response.json(
+				{ message: "Request origin is not trusted", code: "INVALID_ORIGIN" },
+				{ status: 403 },
+			);
 		}
 	}
 

@@ -43,6 +43,14 @@ const AUTH_ERROR_MESSAGES: Record<string, () => string> = {
 	AUTH_CANCELLED: m.auth_error_auth_cancelled,
 	FAILED_TO_VERIFY_REGISTRATION: m.auth_error_failed_to_verify_registration,
 	SESSION_REQUIRED: m.auth_error_session_required,
+	// Ditero's own registration gate (src/auth/registration.ts) rides the same
+	// map: its refusals are configuration, and an operator reading "sign up
+	// failed" concludes the app is broken.
+	REGISTRATION_INVITE_REQUIRED: m.auth_error_registration_invite_required,
+	REGISTRATION_DISABLED: m.auth_error_registration_disabled,
+	// Same 403 as the gate, wholly different cause: the browser reached the app
+	// on an address the server does not trust (TRUSTED_ORIGINS / BETTER_AUTH_URL).
+	INVALID_ORIGIN: m.auth_error_invalid_origin,
 };
 
 // Precedence is deliberate. An unmapped code still yields the server's English
