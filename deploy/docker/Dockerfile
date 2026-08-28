@@ -32,6 +32,19 @@ COPY --chmod=755 deploy/docker/zero-entrypoint.sh /usr/local/bin/ditero-zero-ent
 ENTRYPOINT ["/usr/local/bin/ditero-zero-entrypoint"]
 CMD ["zero-cache"]
 
+# Same reason as the runtime stage below: without these the image answers with
+# rocicorp/zero's labels instead of this repo's.
+ARG DITERO_GIT_SHA=""
+ARG DITERO_CHANNEL=""
+LABEL org.opencontainers.image.title="Ditero zero-cache" \
+      org.opencontainers.image.description="zero-cache for Ditero, with the Ditero secret-file entrypoint" \
+      org.opencontainers.image.source="https://github.com/iuliandita/ditero" \
+      org.opencontainers.image.url="https://github.com/iuliandita/ditero" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.revision="${DITERO_GIT_SHA}" \
+      org.opencontainers.image.version="${DITERO_CHANNEL}" \
+      ditero.channel="${DITERO_CHANNEL}"
+
 # --- runtime bases ----------------------------------------------------------
 FROM ${RUNTIME_IMAGE} AS runtime-alpine
 
