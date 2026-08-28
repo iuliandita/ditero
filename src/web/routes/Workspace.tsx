@@ -1,4 +1,3 @@
-import type { ReadonlyJSONValue } from "@rocicorp/zero";
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import {
 	House,
@@ -9,14 +8,12 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Panel } from "../../domain/dashboard.ts";
 import { randomId } from "../../domain/random-id.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
-import type { Dashboard, Folder, List, schema } from "../../zero/schema.gen.ts";
-import type { DashboardFormValue } from "../components/dashboard/DashboardManager.tsx";
+import type { Folder, List, schema } from "../../zero/schema.gen.ts";
 import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
@@ -31,7 +28,6 @@ import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import { Button } from "../components/ui/button.tsx";
-import { useConfirm } from "../components/ui/confirm.tsx";
 import {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
@@ -46,6 +42,7 @@ import { useDashboards } from "../hooks/useDashboards.ts";
 import { useSyncedTheme } from "../hooks/useSyncedTheme.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import { useViews } from "../hooks/useViews.ts";
+import { useWorkspaceDashboards } from "../hooks/useWorkspaceDashboards.ts";
 import { useWorkspaceData } from "../hooks/useWorkspaceData.ts";
 import { useWorkspaceRowActions } from "../hooks/useWorkspaceRowActions.ts";
 import { useWorkspaceViews } from "../hooks/useWorkspaceViews.ts";
@@ -90,7 +87,6 @@ export function Workspace() {
 function NormalWorkspace() {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
-	const confirm = useConfirm();
 	const persistLocale = useCallback(
 		(locale: Locale) => {
 			// Best-effort by design, not a swallowed error: changeLocale() already
@@ -411,48 +407,22 @@ function NormalWorkspace() {
 		setOpenDashboardId(null);
 	}, [openDashboardRow, dashboardsLoading, openDashboardId]);
 
-	// Mirrors requireDashboardEdit in the mutators: personal -> owner only,
-	// workspace -> role in the write set. The server re-checks on write.
-	const canEditDashboard = useMemo(() => {
-		if (!openDashboardRow) return false;
-		if (openDashboardRow.scope === "personal")
-			return openDashboardRow.ownerId === zero.userID;
-		return memberships.some(
-			(row) =>
-				row.userId === zero.userID &&
-				row.workspaceId === openDashboardRow.workspaceId &&
-				(row.role === "owner" || row.role === "admin" || row.role === "member"),
-		);
-	}, [openDashboardRow, memberships, zero.userID]);
-
-	function updateDashboardPanels(id: string, panels: Panel[]) {
-		void zero
-			.mutate(
-				mutators.dashboard.update({
-					id,
-					panels: panels as ReadonlyJSONValue,
-				}),
-			)
-			.client.catch((e) => console.error("dashboard.update failed", e));
-	}
-
-	async function deleteDashboard(dashboard: Dashboard) {
-		const id = dashboard.id;
-		const ok = await confirm({
-			title: m.dashboard_delete_title(),
-			body: m.dashboard_delete_confirm({ name: dashboard.name }),
-			confirmLabel: m.action_delete(),
-			destructive: true,
-		});
-		if (!ok) return;
-		void zero
-			.mutate(mutators.dashboard.delete({ id }))
-			.client.catch((e) => console.error("dashboard.delete failed", e));
-		// Mirror deleteView: never leave the home ref dangling.
-		if (pref.homeViewRef === dashboardHomeRef(id))
-			setPref({ homeViewRef: null });
-		setOpenDashboardId(null);
-	}
+	const {
+		canEditDashboard,
+		updateDashboardPanels,
+		deleteDashboard,
+		submitDashboard,
+	} = useWorkspaceDashboards({
+		dashboards,
+		openDashboardRow,
+		memberships,
+		pref,
+		setPref,
+		dashboardManager,
+		setDashboardManager,
+		setOpenDashboardId,
+		openDashboard,
+	});
 
 	// Stable prop objects for DashboardView's panel evaluation (same synced sets
 	// the ViewRenderer surface consumes).
@@ -464,38 +434,6 @@ function NormalWorkspace() {
 		() => ({ currentUserId: zero.userID ?? "", membershipWorkspaceIds }),
 		[zero.userID, membershipWorkspaceIds],
 	);
-
-	function submitDashboard(value: DashboardFormValue) {
-		if (dashboardManager?.mode === "edit") {
-			void zero
-				.mutate(
-					mutators.dashboard.update({
-						id: dashboardManager.id,
-						name: value.name,
-						icon: value.icon,
-					}),
-				)
-				.client.catch((e) => console.error("dashboard.update failed", e));
-		} else {
-			const id = randomId();
-			const lastKey = dashboards.at(-1)?.sortKey ?? null;
-			void zero
-				.mutate(
-					mutators.dashboard.create({
-						id,
-						name: value.name,
-						...(value.icon != null ? { icon: value.icon } : {}),
-						scope: value.scope,
-						workspaceId: value.workspaceId,
-						panels: [],
-						sortKey: keyBetween(lastKey, null),
-					}),
-				)
-				.client.catch((e) => console.error("dashboard.create failed", e));
-			openDashboard(id);
-		}
-		setDashboardManager(null);
-	}
 
 	const {
 		buildListActions,
