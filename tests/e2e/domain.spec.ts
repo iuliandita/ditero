@@ -47,20 +47,16 @@ async function joinShared(userId: string): Promise<void> {
 	}
 }
 
-// Vertical order of two task rows on a page: true when Beta sits above Alpha.
+// Vertical order of two task rows in the open list: true when Beta sits above
+// Alpha. Scoped to the list surface -- a bare page-wide name locator is a
+// strict-mode violation waiting for a second element carrying the same text.
 async function betaAboveAlpha(page: Page): Promise<boolean> {
-	const alpha = await page.getByText("Alpha", { exact: true }).boundingBox();
-	const beta = await page.getByText("Beta", { exact: true }).boundingBox();
-	return alpha != null && beta != null ? beta.y < alpha.y : false;
+	return isAbove(page.getByTestId("list"), "Beta", "Alpha");
 }
 
 // Vertical order of two list-index rows: true when Zeta sits above Shared list.
 async function zetaAboveShared(page: Page): Promise<boolean> {
-	const zeta = await page.getByText("Zeta", { exact: true }).boundingBox();
-	const shared = await page
-		.getByText("Shared list", { exact: true })
-		.boundingBox();
-	return zeta != null && shared != null ? zeta.y < shared.y : false;
+	return isAbove(page.getByTestId("list-index"), "Zeta", "Shared list");
 }
 
 let emailSeq = 0;
@@ -186,16 +182,19 @@ test("quick-add chips + drag reorder sync across clients", async ({
 		await pa.getByTestId("new-task").fill(titleText);
 		await pa.getByTestId("new-task-submit").click();
 	}
-	await expect(pb.getByText("Beta", { exact: true })).toBeVisible({
-		timeout: 15000,
-	});
+	await expect(
+		pb.getByTestId("list").getByText("Beta", { exact: true }),
+	).toBeVisible({ timeout: 15000 });
 	expect(await betaAboveAlpha(pa)).toBe(false);
 
 	// Drag Alpha's grip handle down onto Beta. Intermediate pointer steps clear
 	// the sensor's activation distance; only the dragged row's sortKey is written
 	// and the synced-query re-sort drives the new order (design 2.8).
 	const grip = await pa.getByTestId("task-drag").first().boundingBox();
-	const beta = await pa.getByText("Beta", { exact: true }).boundingBox();
+	const beta = await pa
+		.getByTestId("list")
+		.getByText("Beta", { exact: true })
+		.boundingBox();
 	if (!grip || !beta) throw new Error("missing drag targets");
 	await pa.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
 	await pa.mouse.down();
@@ -235,13 +234,13 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	await pa.getByRole("button", { name: "New list" }).click();
 	await pa.getByTestId("new-list").fill("Zeta");
 	await pa.getByTestId("new-list-submit").click();
-	await expect(pa.getByText("Zeta", { exact: true })).toBeVisible({
-		timeout: 15000,
-	});
+	await expect(
+		pa.getByTestId("list-index").getByText("Zeta", { exact: true }),
+	).toBeVisible({ timeout: 15000 });
 	// The new list synced to the other client.
-	await expect(pb.getByText("Zeta", { exact: true })).toBeVisible({
-		timeout: 15000,
-	});
+	await expect(sidebarLists(pb).getByText("Zeta", { exact: true })).toBeVisible(
+		{ timeout: 15000 },
+	);
 	expect(await zetaAboveShared(pa)).toBe(false);
 
 	// Keyboard reorder (a11y path): lift Shared list's grip, move below Zeta,
