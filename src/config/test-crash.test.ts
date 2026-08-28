@@ -66,6 +66,55 @@ describe("crashHook", () => {
 		}
 	});
 
+	// The outbox worker fires the send points once per row, and a batch carries
+	// rows the caller never asked about (#186). Unscoped, the hook kills on
+	// whichever row's send returns first.
+	test("kills for any row when no subject is named", () => {
+		const kill = vi.fn();
+		const hook = crashHook(
+			{ NODE_ENV: "test", DITERO_TEST_CRASH_POINT: "after-send" },
+			kill,
+		);
+		hook?.("after-send", "some-other-task");
+		expect(kill).toHaveBeenCalledTimes(1);
+	});
+
+	test("kills only for the named subject when one is set", () => {
+		const kill = vi.fn();
+		const hook = crashHook(
+			{
+				NODE_ENV: "test",
+				DITERO_TEST_CRASH_POINT: "after-send",
+				DITERO_TEST_CRASH_SUBJECT: "wanted",
+			},
+			kill,
+		);
+		hook?.("after-send", "other");
+		hook?.("after-send", null);
+		hook?.("after-send");
+		expect(kill).not.toHaveBeenCalled();
+		hook?.("after-send", "wanted");
+		expect(kill).toHaveBeenCalledTimes(1);
+	});
+
+	// Otherwise an empty variable would scope the hook to rows with no id at all,
+	// which is the opposite of what an unset-looking value reads as.
+	test.each([
+		"",
+		"   ",
+	])("treats a blank subject (%j) as unscoped", (subject) => {
+		const kill = vi.fn();
+		crashHook(
+			{
+				NODE_ENV: "test",
+				DITERO_TEST_CRASH_POINT: "after-send",
+				DITERO_TEST_CRASH_SUBJECT: subject,
+			},
+			kill,
+		)?.("after-send", "anything");
+		expect(kill).toHaveBeenCalledTimes(1);
+	});
+
 	test("rejects an unknown point at boot rather than silently ignoring it", () => {
 		expect(() =>
 			crashHook({ NODE_ENV: "test", DITERO_TEST_CRASH_POINT: "whenever" }),

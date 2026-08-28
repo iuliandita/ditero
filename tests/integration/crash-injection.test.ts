@@ -60,12 +60,22 @@ const outboxFor = (taskIds: string[]) => rigOutboxFor(db, taskIds);
 // The wire count belongs in the dump alongside the durable state: "sent with no
 // delivery" and "never sent" are the two halves of #114 and look identical from
 // the database alone.
+// The unacked count is printed beside it because `wireFor` drops deliveries
+// with no ack action, which is exactly the shape of an overdue event
+// notification for the same task -- the row that made #186 unreadable.
 const diagnose = (...taskIds: string[]) => ({
 	diagnose: async () =>
 		[
 			await describePipeline(db, taskIds),
 			`  ntfy tap: ${taskIds
-				.map((id) => `${id}=${wireFor(id).length}`)
+				.map(
+					(id) =>
+						`${id}=${wireFor(id).length} (+${
+							tap.deliveries.filter(
+								(delivery) => delivery.title === id && delivery.ackUrl === null,
+							).length
+						} with no ack action)`,
+				)
 				.join(" ")}`,
 		].join("\n"),
 });
@@ -129,6 +139,14 @@ afterAll(async () => {
 // its full budget for a recovery that was never set up, and blames the recovery
 // for a crash that never happened.
 const CRASH_ATTEMPTS = 3;
+// The two points that fire once per outbox row. A claimed batch carries rows the
+// test never asked about -- the overdue sweep every replica runs at boot enqueues
+// an event notification for the same task, invisible to `outboxFor` (which joins
+// reminder_state) and to `wireFor` (which needs an ack action) -- and a crash on
+// one of those kills the replica at a point no assertion here can see (#186). So
+// these crashes are scoped to the reminder for the task under test, which is why
+// the subject carries the payload kind: the overdue row shares its taskId.
+const SEND_POINTS = new Set(["before-send", "after-send"]);
 // Per attempt, and ESCALATING (attempt x this), because the observed failure is
 // a boot that never finishes: under a host oversubscribed ~2x the replica stays
 // alive for the whole budget with /health unreachable and stderr silent, and
@@ -159,6 +177,15 @@ async function crashThenRecover(
 	await rig.stop(0);
 	await seed();
 
+	if (SEND_POINTS.has(point) && taskIds.length !== 1) {
+		throw new Error(
+			`rig: a ${point} crash must name exactly one task to scope to`,
+		);
+	}
+	const scope = SEND_POINTS.has(point)
+		? `,DITERO_TEST_CRASH_SUBJECT=reminder:${taskIds[0]}`
+		: "";
+
 	let reason = "";
 	for (let attempt = 1; attempt <= CRASH_ATTEMPTS; attempt++) {
 		// A silent retry hides a degrading runner: a run that needed two attempts
@@ -168,7 +195,7 @@ async function crashThenRecover(
 				`[rig] retrying the ${point} crash (${attempt}/${CRASH_ATTEMPTS}): ${reason.split("\n")[0]}`,
 			);
 		}
-		rig.launch(0, `DITERO_TEST_CRASH_POINT=${point}`);
+		rig.launch(0, `DITERO_TEST_CRASH_POINT=${point}${scope}`);
 		try {
 			await rig.waitForExit(0, attempt * CRASH_EXIT_BUDGET_MS);
 		} catch (error) {
@@ -230,20 +257,19 @@ const heldBySender = (rows: OutboxSnapshot) =>
 	rows[0].status === "sending" &&
 	rows[0].claimedBy !== null;
 
-// after-send needs more than the claim (#154). The hook fires when
-// sendWithDeadline RETURNS -- including on a failed send or one that blew the
-// adapter deadline -- and a failed send still leaves the row `sending` with
-// claimed_by, because claimBatch commits that first. So the claim alone reads
-// the same for "crashed after a delivery landed" and "crashed after a send
-// that never arrived", and it is that first copy the asserted duplicate is
-// counted against: without it the recovery re-sends correctly, reaches one,
-// and gets blamed for a second that was never possible.
+// after-send needs more than the claim (#154): a failed send leaves the row
+// `sending` with claimed_by too, because claimBatch commits that first, so the
+// claim alone reads the same for "crashed after a delivery landed" and "crashed
+// after a send that never arrived" -- and it is that first copy the asserted
+// duplicate is counted against.
 //
-// At least one, and the caller counts from it: the crash fires only on an
-// accepted send (worker.ts), so a copy has landed, but a send that blew the
-// adapter deadline can have been recorded by the tap and then retried, leaving
-// two. Pinning it to one would fail on a slow runner for a pipeline behaving
-// exactly as documented.
+// The hook now fires only for an ACCEPTED send (#197) of THIS task's reminder
+// (#186), so by the time the process dies the tap has recorded that copy: it
+// records a request on receipt, before responding, and the send only returned
+// because the tap responded. At least one rather than exactly one, and the
+// caller counts from it: a send that blew the adapter deadline can also have
+// been recorded and then retried, so pinning it to one would fail on a slow
+// runner for a pipeline behaving exactly as documented.
 const heldAfterDelivery = (rows: OutboxSnapshot, wire: number) =>
 	heldBySender(rows) && wire >= 1;
 
