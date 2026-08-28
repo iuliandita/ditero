@@ -634,6 +634,24 @@ export async function describePipeline(
 				)
 		: [];
 
+	// Outbox rows for the same tasks that carry NO reminder_state: overdue and
+	// other event notifications. The join above cannot reach them, and they ride
+	// in the same claimed batch as the reminder, so a crash can fire on one of
+	// them and leave the reminder row looking inexplicably stranded (#186).
+	const events = (
+		await database.execute<{
+			key: string;
+			status: string;
+			attempts: number;
+			claimed_by: string | null;
+		}>(sql`
+			select idempotency_key as key, status, attempts, claimed_by
+			from notification_outbox
+			where reminder_state_id is null
+				and payload->>'taskId' in ${taskIds}
+		`)
+	).rows;
+
 	const lines = [
 		`rig state at ${new Date().toISOString()} for ${taskIds.join(", ")}`,
 	];
@@ -657,6 +675,13 @@ export async function describePipeline(
 					` error=${attempt.error ?? "-"}`,
 			);
 		}
+	}
+	lines.push(`  event outbox, no reminder_state (${events.length}):`);
+	for (const row of events) {
+		lines.push(
+			`    ${row.key} status=${row.status} attempts=${row.attempts}` +
+				` claimedBy=${row.claimed_by ?? "-"}`,
+		);
 	}
 	return lines.join("\n");
 }

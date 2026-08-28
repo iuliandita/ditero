@@ -23,7 +23,12 @@ export const CRASH_POINTS = [
 
 export type CrashPoint = (typeof CRASH_POINTS)[number];
 
-export type CrashHook = (point: CrashPoint) => void;
+// `subject` names the row the hook is being offered, where the point has one.
+// A crash point inside the outbox worker fires per row, and a batch carries rows
+// the caller never asked about -- an overdue event notification for a task rides
+// in the same batch as that task's reminder -- so an unscoped kill lands on a
+// row the test has no way to observe (#186).
+export type CrashHook = (point: CrashPoint, subject?: string | null) => void;
 
 function isCrashPoint(value: string): value is CrashPoint {
 	return (CRASH_POINTS as readonly string[]).includes(value);
@@ -48,7 +53,12 @@ export function crashHook(
 			`DITERO_TEST_CRASH_POINT: expected one of ${CRASH_POINTS.join(", ")}, got "${raw}"`,
 		);
 	}
-	return (point) => {
-		if (point === raw) kill();
+	// Empty is not a subject: an unset variable and one set to "" both mean
+	// "any row", never "only the row with no id".
+	const only = env.DITERO_TEST_CRASH_SUBJECT?.trim() || undefined;
+	return (point, subject) => {
+		if (point !== raw) return;
+		if (only !== undefined && subject !== only) return;
+		kill();
 	};
 }

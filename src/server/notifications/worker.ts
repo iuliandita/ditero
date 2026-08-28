@@ -392,6 +392,19 @@ async function dispatchBatch(
 	await Promise.all(lanes);
 }
 
+// What a row is about, for the rig's row-scoped crash points (#186): the task
+// AND the notification kind, because one task's reminder and its overdue notice
+// are separate rows in the same batch carrying the same taskId. Only evaluated
+// when a hook is armed -- `crash?.(...)` does not evaluate its arguments when
+// the hook is absent, which is every production send.
+function crashSubject(row: OutboxRow): string | null {
+	const payload = row.payload;
+	if (payload === null || typeof payload !== "object") return null;
+	const { kind, taskId } = payload as { kind?: unknown; taskId?: unknown };
+	if (typeof kind !== "string" || typeof taskId !== "string") return null;
+	return `${kind}:${taskId}`;
+}
+
 export async function workerTick(
 	database: Database,
 	options: WorkerOptions,
@@ -431,7 +444,7 @@ export async function workerTick(
 	};
 
 	await dispatchBatch(claimed, timing.sendConcurrency, async (row) => {
-		options.crash?.("before-send");
+		options.crash?.("before-send", crashSubject(row));
 		const result = await sendWithDeadline(
 			options.send,
 			row,
@@ -447,7 +460,7 @@ export async function workerTick(
 		// it strands the rig with a claimed row and nothing on the wire, a state
 		// no retry of the crash can repair because every retry re-runs the same
 		// one-shot send.
-		if (result.ok) options.crash?.("after-send");
+		if (result.ok) options.crash?.("after-send", crashSubject(row));
 		let outcome: Awaited<ReturnType<typeof completeDelivery>>;
 		try {
 			outcome = await completeDelivery(database, row, result, replicaId);
