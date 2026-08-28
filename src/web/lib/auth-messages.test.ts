@@ -60,6 +60,39 @@ describe("authErrorMessage", () => {
 		).toBe("FALLBACK");
 	});
 
+	// #193: both are 403s and neither carried a code before, so the form showed
+	// the same flat string for a working invite-only instance and a genuinely
+	// misconfigured one.
+	test("names the invite-only gate rather than a generic failure", () => {
+		expect(
+			authErrorMessage(
+				{
+					code: "REGISTRATION_INVITE_REQUIRED",
+					message: "Registration requires an invitation",
+				},
+				fallback,
+			),
+		).toBe(
+			"This instance only accepts new accounts by invitation. Ask an admin to invite you.",
+		);
+	});
+
+	test("distinguishes an untrusted origin from the registration gate", () => {
+		const origin = authErrorMessage(
+			{ code: "INVALID_ORIGIN", message: "Invalid origin" },
+			fallback,
+		);
+		const gate = authErrorMessage(
+			{ code: "REGISTRATION_DISABLED", message: "Registration is disabled" },
+			fallback,
+		);
+		expect(origin).toBe(
+			"This address is not trusted by the server. Ask the operator to add it to the instance's trusted origins.",
+		);
+		expect(gate).toBe("New accounts are turned off on this instance.");
+		expect(origin).not.toBe(gate);
+	});
+
 	test("resolves in the caller's locale, not the import-time one", () => {
 		expect(m.auth_error_invalid_email_or_password({}, { locale: "de" })).toBe(
 			"E-Mail-Adresse oder Passwort ist falsch.",

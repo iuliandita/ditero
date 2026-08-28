@@ -17,13 +17,18 @@ if (!databaseURL) throw new Error("DATABASE_URL is required");
 const pool = new Pool({ connectionString: databaseURL });
 const db = drizzle(pool, { schema: tables });
 
-async function post(path: string, body: unknown, ip = "203.0.113.77") {
+async function post(
+	path: string,
+	body: unknown,
+	ip = "203.0.113.77",
+	origin = "http://localhost:5173",
+) {
 	const response = await handleAuthRequest(
 		new Request(`http://localhost:3000/api/auth${path}`, {
 			method: "POST",
 			headers: {
 				"content-type": "application/json",
-				origin: "http://localhost:5173",
+				origin,
 				"x-forwarded-for": ip,
 			},
 			body: JSON.stringify(body),
@@ -80,6 +85,44 @@ describe("Better Auth error codes", () => {
 			password: "x",
 		});
 		expect(short.code).toBe("PASSWORD_TOO_SHORT");
+	});
+
+	// #193: the two 403s an operator actually meets. Both were code-less, so the
+	// form rendered one flat string for an invite-only instance working exactly
+	// as configured and for a server that distrusts the address in the URL bar.
+	test("the registration gate names itself, not just a 403", async () => {
+		const email = "codes-gate@test.invalid";
+		const seedEmail = "codes-gate-seed@test.invalid";
+		await db.delete(tables.user).where(eq(tables.user.email, email));
+		await db.delete(tables.user).where(eq(tables.user.email, seedEmail));
+		// The gate only refuses once an account exists; bootstrap mode hands the
+		// very first sign-up through.
+		await db
+			.insert(tables.user)
+			.values({ id: "codes-gate-seed", name: "Seed", email: seedEmail });
+
+		const refused = await post("/sign-up/email", {
+			name: "Gate",
+			email,
+			password: "pw-123456",
+		});
+		expect(refused.code).toBe("REGISTRATION_INVITE_REQUIRED");
+		expect(refused.message).toBe("Registration requires an invitation");
+
+		await db.delete(tables.user).where(eq(tables.user.email, seedEmail));
+	});
+
+	// Better Auth's own rejection, pinned for the same reason as the codes
+	// above: the mapper localizes it, and an upgrade that drops the code
+	// silently returns the form to an unexplained failure.
+	test("an untrusted origin answers INVALID_ORIGIN", async () => {
+		const refused = await post(
+			"/sign-in/email",
+			{ email: "nobody@test.invalid", password: "wrong-password" },
+			"203.0.113.78",
+			"http://evil.test.invalid",
+		);
+		expect(refused.code).toBe("INVALID_ORIGIN");
 	});
 
 	// Not a BASE_ERROR_CODES entry -- it comes from the HTTP status -- but it is
