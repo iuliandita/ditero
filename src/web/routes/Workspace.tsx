@@ -1,4 +1,3 @@
-import type { ReadonlyJSONValue } from "@rocicorp/zero";
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import {
 	House,
@@ -9,15 +8,12 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Panel } from "../../domain/dashboard.ts";
 import { randomId } from "../../domain/random-id.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
-import type { FilterGroup, ViewDisplay } from "../../domain/view-filter.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
-import type { Dashboard, Folder, List, schema } from "../../zero/schema.gen.ts";
-import type { DashboardFormValue } from "../components/dashboard/DashboardManager.tsx";
+import type { Folder, List, schema } from "../../zero/schema.gen.ts";
 import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
@@ -32,7 +28,6 @@ import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import { Button } from "../components/ui/button.tsx";
-import { useConfirm } from "../components/ui/confirm.tsx";
 import {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
@@ -41,16 +36,16 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu.tsx";
-import type { ViewFormValue } from "../components/views/ViewManager.tsx";
 import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
 import { useDashboards } from "../hooks/useDashboards.ts";
 import { useSyncedTheme } from "../hooks/useSyncedTheme.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
-import type { SavedView } from "../hooks/useViews.ts";
 import { useViews } from "../hooks/useViews.ts";
+import { useWorkspaceDashboards } from "../hooks/useWorkspaceDashboards.ts";
 import { useWorkspaceData } from "../hooks/useWorkspaceData.ts";
 import { useWorkspaceRowActions } from "../hooks/useWorkspaceRowActions.ts";
+import { useWorkspaceViews } from "../hooks/useWorkspaceViews.ts";
 import {
 	type CommandHandlers,
 	CommandProvider,
@@ -66,27 +61,11 @@ import { ICONS } from "../lib/list-icon.tsx";
 import type { Locale } from "../lib/locale.ts";
 import { runMutation } from "../lib/run-mutation.ts";
 import { useIsDesktop } from "../lib/use-media-query.ts";
-import {
-	BUILTIN_VIEWS,
-	type BuiltinViewId,
-	DEFAULT_HOME,
-	getBuiltin,
-} from "../views/builtins.ts";
+import { BUILTIN_VIEWS, DEFAULT_HOME } from "../views/builtins.ts";
 import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
 import { ListView } from "./ListView.tsx";
 import { SettingsSurface } from "./SettingsSurface.tsx";
 import { WorkspaceOverlays } from "./WorkspaceOverlays.tsx";
-
-// Resolved view descriptor: a built-in aggregate or a saved row, unified for the
-// renderer/header. `saved` is set only for editable saved views.
-type ResolvedView = {
-	id: string;
-	name: string;
-	icon: string | null;
-	filter: FilterGroup;
-	display: ViewDisplay;
-	saved: SavedView | null;
-};
 
 // A restricted managed ("kid") account gets a wholly separate shell -- never the
 // normal workspace UI. Branch here, before any normal-shell hook runs, keying off
@@ -108,7 +87,6 @@ export function Workspace() {
 function NormalWorkspace() {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
-	const confirm = useConfirm();
 	const persistLocale = useCallback(
 		(locale: Locale) => {
 			// Best-effort by design, not a swallowed error: changeLocale() already
@@ -232,32 +210,6 @@ function NormalWorkspace() {
 
 	// --- List row actions -----------------------------------------------------
 	const activeRole = activeId ? (roleByWorkspace.get(activeId) ?? null) : null;
-
-	const {
-		buildListActions,
-		buildFolderActions,
-		buildViewActions,
-		buildDashboardActions,
-	} = useWorkspaceRowActions({
-		tasks,
-		activeLists,
-		activeFolders,
-		roleByWorkspace,
-		savedViews,
-		openListId,
-		setOpenListId,
-		setOpenViewId,
-		setOpenDashboardId,
-		setSection,
-		setNewListFolder,
-		setRenameTarget,
-		setFolderDialog,
-		setViewManager,
-		setDashboardManager,
-		setHome,
-		onDeleteView: (view) => void deleteView(view),
-		onDeleteDashboard: (dashboard) => void deleteDashboard(dashboard),
-	});
 
 	function submitRename(next: string) {
 		const target = renameTarget;
@@ -416,111 +368,23 @@ function NormalWorkspace() {
 		openDashboardId,
 		section,
 	]);
-	const pinnedViews = useMemo(() => {
-		const set = new Set(pref.pinnedViews);
-		return savedViews
-			.filter((v) => set.has(v.id))
-			.sort((a, b) =>
-				a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0,
-			);
-	}, [savedViews, pref.pinnedViews]);
-
-	function resolveView(id: string): ResolvedView | null {
-		const b = getBuiltin(id as BuiltinViewId);
-		if (b)
-			return {
-				id,
-				name: b.name,
-				icon: b.icon,
-				filter: b.filter,
-				display: b.display,
-				saved: null,
-			};
-		const s = savedViews.find((v) => v.id === id);
-		if (s)
-			return {
-				id,
-				name: s.name,
-				icon: s.icon ?? null,
-				filter: s.filter,
-				display: s.display,
-				saved: s,
-			};
-		return null;
-	}
-
-	const isPinned = (id: string) => pref.pinnedViews.includes(id);
-	function togglePin(id: string) {
-		setPref({
-			pinnedViews: isPinned(id)
-				? pref.pinnedViews.filter((v) => v !== id)
-				: [...pref.pinnedViews, id],
-		});
-	}
-	function setHome(id: string) {
-		setPref({ homeViewRef: id });
-	}
-	async function deleteView(view: SavedView) {
-		const id = view.id;
-		const ok = await confirm({
-			title: m.view_delete_title(),
-			body: m.view_delete_confirm({ name: view.name }),
-			confirmLabel: m.action_delete(),
-			destructive: true,
-		});
-		if (!ok) return;
-		void zero
-			.mutate(mutators.view.delete({ id }))
-			.client.catch((e) => console.error("view.delete failed", e));
-		// Drop it from pins, and fall the home ref back to the default if it pointed
-		// here (both are one pref write when both apply).
-		const patch: Parameters<typeof setPref>[0] = {};
-		if (isPinned(id))
-			patch.pinnedViews = pref.pinnedViews.filter((v) => v !== id);
-		if (pref.homeViewRef === id) patch.homeViewRef = null;
-		if (Object.keys(patch).length) setPref(patch);
-		setOpenViewId(null);
-	}
-
-	function submitView(value: ViewFormValue) {
-		if (viewManager?.mode === "edit") {
-			void zero
-				.mutate(
-					mutators.view.update({
-						id: viewManager.id,
-						name: value.name,
-						icon: value.icon,
-						filter: value.filter as ReadonlyJSONValue,
-						display: value.display as ReadonlyJSONValue,
-					}),
-				)
-				.client.catch((e) => console.error("view.update failed", e));
-		} else {
-			const id = randomId();
-			const lastKey = pinnedViews.reduce<string | null>(
-				(max, v) => (max == null || v.sortKey > max ? v.sortKey : max),
-				null,
-			);
-			void zero
-				.mutate(
-					mutators.view.create({
-						id,
-						name: value.name,
-						...(value.icon != null ? { icon: value.icon } : {}),
-						scope: value.scope,
-						workspaceId: value.workspaceId,
-						filter: value.filter as ReadonlyJSONValue,
-						display: value.display as ReadonlyJSONValue,
-						sortKey: keyBetween(lastKey, null),
-					}),
-				)
-				.client.catch((e) => console.error("view.create failed", e));
-			// Pin so it appears in the sidebar, and land on it.
-			setPref({ pinnedViews: [...pref.pinnedViews, id] });
-			openView(id);
-		}
-		setViewManager(null);
-	}
+	const {
+		pinnedViews,
+		resolveView,
+		isPinned,
+		togglePin,
+		setHome,
+		deleteView,
+		submitView,
+	} = useWorkspaceViews({
+		savedViews,
+		pref,
+		setPref,
+		viewManager,
+		setViewManager,
+		setOpenViewId,
+		openView,
+	});
 
 	// --- Dashboards wiring ------------------------------------------------------
 	const openDashboardRow = openDashboardId
@@ -543,48 +407,22 @@ function NormalWorkspace() {
 		setOpenDashboardId(null);
 	}, [openDashboardRow, dashboardsLoading, openDashboardId]);
 
-	// Mirrors requireDashboardEdit in the mutators: personal -> owner only,
-	// workspace -> role in the write set. The server re-checks on write.
-	const canEditDashboard = useMemo(() => {
-		if (!openDashboardRow) return false;
-		if (openDashboardRow.scope === "personal")
-			return openDashboardRow.ownerId === zero.userID;
-		return memberships.some(
-			(row) =>
-				row.userId === zero.userID &&
-				row.workspaceId === openDashboardRow.workspaceId &&
-				(row.role === "owner" || row.role === "admin" || row.role === "member"),
-		);
-	}, [openDashboardRow, memberships, zero.userID]);
-
-	function updateDashboardPanels(id: string, panels: Panel[]) {
-		void zero
-			.mutate(
-				mutators.dashboard.update({
-					id,
-					panels: panels as ReadonlyJSONValue,
-				}),
-			)
-			.client.catch((e) => console.error("dashboard.update failed", e));
-	}
-
-	async function deleteDashboard(dashboard: Dashboard) {
-		const id = dashboard.id;
-		const ok = await confirm({
-			title: m.dashboard_delete_title(),
-			body: m.dashboard_delete_confirm({ name: dashboard.name }),
-			confirmLabel: m.action_delete(),
-			destructive: true,
-		});
-		if (!ok) return;
-		void zero
-			.mutate(mutators.dashboard.delete({ id }))
-			.client.catch((e) => console.error("dashboard.delete failed", e));
-		// Mirror deleteView: never leave the home ref dangling.
-		if (pref.homeViewRef === dashboardHomeRef(id))
-			setPref({ homeViewRef: null });
-		setOpenDashboardId(null);
-	}
+	const {
+		canEditDashboard,
+		updateDashboardPanels,
+		deleteDashboard,
+		submitDashboard,
+	} = useWorkspaceDashboards({
+		dashboards,
+		openDashboardRow,
+		memberships,
+		pref,
+		setPref,
+		dashboardManager,
+		setDashboardManager,
+		setOpenDashboardId,
+		openDashboard,
+	});
 
 	// Stable prop objects for DashboardView's panel evaluation (same synced sets
 	// the ViewRenderer surface consumes).
@@ -597,37 +435,31 @@ function NormalWorkspace() {
 		[zero.userID, membershipWorkspaceIds],
 	);
 
-	function submitDashboard(value: DashboardFormValue) {
-		if (dashboardManager?.mode === "edit") {
-			void zero
-				.mutate(
-					mutators.dashboard.update({
-						id: dashboardManager.id,
-						name: value.name,
-						icon: value.icon,
-					}),
-				)
-				.client.catch((e) => console.error("dashboard.update failed", e));
-		} else {
-			const id = randomId();
-			const lastKey = dashboards.at(-1)?.sortKey ?? null;
-			void zero
-				.mutate(
-					mutators.dashboard.create({
-						id,
-						name: value.name,
-						...(value.icon != null ? { icon: value.icon } : {}),
-						scope: value.scope,
-						workspaceId: value.workspaceId,
-						panels: [],
-						sortKey: keyBetween(lastKey, null),
-					}),
-				)
-				.client.catch((e) => console.error("dashboard.create failed", e));
-			openDashboard(id);
-		}
-		setDashboardManager(null);
-	}
+	const {
+		buildListActions,
+		buildFolderActions,
+		buildViewActions,
+		buildDashboardActions,
+	} = useWorkspaceRowActions({
+		tasks,
+		activeLists,
+		activeFolders,
+		roleByWorkspace,
+		savedViews,
+		openListId,
+		setOpenListId,
+		setOpenViewId,
+		setOpenDashboardId,
+		setSection,
+		setNewListFolder,
+		setRenameTarget,
+		setFolderDialog,
+		setViewManager,
+		setDashboardManager,
+		setHome,
+		onDeleteView: (view) => void deleteView(view),
+		onDeleteDashboard: (dashboard) => void deleteDashboard(dashboard),
+	});
 
 	const detailTask = detailTaskId
 		? (tasks.find((t) => t.id === detailTaskId) ?? null)
