@@ -17,7 +17,6 @@ import {
 	type ListActionHandlers,
 	listActions,
 } from "../components/list/listActions.ts";
-import type { Section } from "../components/shell/BottomNav.tsx";
 import {
 	type FolderActionHandlers,
 	folderActions,
@@ -37,11 +36,8 @@ export function useWorkspaceRowActions({
 	activeFolders,
 	roleByWorkspace,
 	savedViews,
-	openListId,
-	setOpenListId,
-	setOpenViewId,
-	setOpenDashboardId,
-	setSection,
+	onOpenHome,
+	onCloseList,
 	setNewListFolder,
 	setRenameTarget,
 	setFolderDialog,
@@ -56,11 +52,8 @@ export function useWorkspaceRowActions({
 	activeFolders: Folder[];
 	roleByWorkspace: Map<string, Role>;
 	savedViews: SavedView[];
-	openListId: string | null;
-	setOpenListId: (id: string | null) => void;
-	setOpenViewId: (id: string | null) => void;
-	setOpenDashboardId: (id: string | null) => void;
-	setSection: (section: Section) => void;
+	onOpenHome: () => void;
+	onCloseList: (id: string) => void;
 	setNewListFolder: (value: { id: string; nonce: number } | null) => void;
 	setRenameTarget: (list: List | null) => void;
 	setFolderDialog: (
@@ -121,7 +114,7 @@ export function useWorkspaceRowActions({
 		void zero
 			.mutate(mutators.list.delete({ id: list.id }))
 			.client.catch((e) => console.error("list.delete failed", e));
-		if (openListId === list.id) setOpenListId(null);
+		onCloseList(list.id);
 	}
 
 	const listActionHandlers: ListActionHandlers = {
@@ -158,10 +151,7 @@ export function useWorkspaceRowActions({
 	const folderActionHandlers: FolderActionHandlers = {
 		newList: (folderId) => {
 			// The create-list form lives on the lists index, so land there first.
-			setOpenListId(null);
-			setOpenViewId(null);
-			setOpenDashboardId(null);
-			setSection("lists");
+			onOpenHome();
 			setNewListFolder({ id: folderId, nonce: Date.now() });
 		},
 		rename: (folder) => setFolderDialog({ mode: "rename", folder }),

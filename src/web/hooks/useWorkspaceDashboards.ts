@@ -22,7 +22,7 @@ export function useWorkspaceDashboards({
 	setPref,
 	dashboardManager,
 	setDashboardManager,
-	setOpenDashboardId,
+	onCloseDashboard,
 	openDashboard,
 }: {
 	dashboards: Dashboard[];
@@ -34,7 +34,7 @@ export function useWorkspaceDashboards({
 	setDashboardManager: (
 		next: { mode: "create" } | { mode: "edit"; id: string } | null,
 	) => void;
-	setOpenDashboardId: (id: string | null) => void;
+	onCloseDashboard: (id: string) => void;
 	openDashboard: (id: string) => void;
 }) {
 	const zero = useZero<typeof schema>();
@@ -80,7 +80,7 @@ export function useWorkspaceDashboards({
 		// Mirror deleteView: never leave the home ref dangling.
 		if (pref.homeViewRef === dashboardHomeRef(id))
 			setPref({ homeViewRef: null });
-		setOpenDashboardId(null);
+		onCloseDashboard(id);
 	}
 
 	function submitDashboard(value: DashboardFormValue) {

@@ -32,7 +32,7 @@ export function useWorkspaceViews({
 	setPref,
 	viewManager,
 	setViewManager,
-	setOpenViewId,
+	onCloseView,
 	openView,
 }: {
 	savedViews: SavedView[];
@@ -42,7 +42,7 @@ export function useWorkspaceViews({
 	setViewManager: (
 		next: { mode: "create" } | { mode: "edit"; id: string } | null,
 	) => void;
-	setOpenViewId: (id: string | null) => void;
+	onCloseView: (id: string) => void;
 	openView: (id: string) => void;
 }) {
 	const zero = useZero<typeof schema>();
@@ -111,7 +111,7 @@ export function useWorkspaceViews({
 			patch.pinnedViews = pref.pinnedViews.filter((v) => v !== id);
 		if (pref.homeViewRef === id) patch.homeViewRef = null;
 		if (Object.keys(patch).length) setPref(patch);
-		setOpenViewId(null);
+		onCloseView(id);
 	}
 
 	function submitView(value: ViewFormValue) {

@@ -7,7 +7,14 @@ import {
 	PinOff,
 	Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useReducer,
+	useRef,
+	useState,
+} from "react";
 import { randomId } from "../../domain/random-id.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import { m } from "../../paraglide/messages.js";
@@ -66,6 +73,7 @@ import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
 import { ListView } from "./ListView.tsx";
 import { SettingsSurface } from "./SettingsSurface.tsx";
 import { WorkspaceOverlays } from "./WorkspaceOverlays.tsx";
+import { workspaceContentReducer } from "./workspace-content.ts";
 
 // A restricted managed ("kid") account gets a wholly separate shell -- never the
 // normal workspace UI. Branch here, before any normal-shell hook runs, keying off
@@ -121,20 +129,22 @@ function NormalWorkspace() {
 	const { dashboards, loading: dashboardsLoading } = useDashboards();
 	const { pref, setPref, loading: prefLoading } = useUserPref();
 	const [activeId, setActiveId] = useState<string | null>(null);
-	const [openListId, setOpenListId] = useState<string | null>(null);
-	// null on the landing (home view); a built-in id or saved view.id otherwise.
-	const [openViewId, setOpenViewId] = useState<string | null>(null);
+	const [contentState, dispatchContent] = useReducer(workspaceContentReducer, {
+		kind: "home",
+	});
+	const openListId = contentState.kind === "list" ? contentState.id : null;
+	const openDashboardId =
+		contentState.kind === "dashboard" ? contentState.id : null;
+	const section: Section =
+		contentState.kind === "settings" ? "settings" : "lists";
 	const [viewManager, setViewManager] = useState<
 		{ mode: "create" } | { mode: "edit"; id: string } | null
 	>(null);
-	// A third content mode besides list/view; exclusive with both.
-	const [openDashboardId, setOpenDashboardId] = useState<string | null>(null);
 	const [dashboardManager, setDashboardManager] = useState<
 		{ mode: "create" } | { mode: "edit"; id: string } | null
 	>(null);
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 	const [openSharedRequested, setOpenSharedRequested] = useState(false);
-	const [section, setSection] = useState<Section>("lists");
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [collapsed, setCollapsed] = useState(false);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -156,16 +166,26 @@ function NormalWorkspace() {
 		id: string | null;
 		nonce: number;
 	} | null>(null);
+	const openHome = useCallback(() => dispatchContent({ kind: "home" }), []);
+	const closeList = useCallback(
+		(id: string) => dispatchContent({ kind: "close", target: "list", id }),
+		[],
+	);
+	const closeView = useCallback(
+		(id: string) => dispatchContent({ kind: "close", target: "view", id }),
+		[],
+	);
+	const closeDashboard = useCallback(
+		(id: string) => dispatchContent({ kind: "close", target: "dashboard", id }),
+		[],
+	);
 
 	// Sidebar "New list": the create-list form lives on the lists index, so land
 	// there first (same move as the folder row's "New list here", minus the
 	// preselected folder). The nonce remounts the form so it focuses even when
 	// the index is already the open section.
 	const startNewList = () => {
-		setOpenListId(null);
-		setOpenViewId(null);
-		setOpenDashboardId(null);
-		setSection("lists");
+		openHome();
 		setNewListFolder({ id: null, nonce: Date.now() });
 	};
 
@@ -260,55 +280,34 @@ function NormalWorkspace() {
 		if (!shared) return;
 		if (activeId !== shared.id) {
 			setActiveId(shared.id);
-			setOpenListId(null);
+			openHome();
 		}
 		const firstList = lists.find((l) => l.workspaceId === shared.id);
 		if (!firstList) return;
-		setSection("lists");
-		setOpenDashboardId(null);
-		setOpenListId(firstList.id);
+		dispatchContent({ kind: "list", id: firstList.id });
 		setOpenSharedRequested(false);
-	}, [openSharedRequested, workspaces, lists, activeId]);
+	}, [openSharedRequested, workspaces, lists, activeId, openHome]);
 
 	function selectWorkspace(id: string) {
 		setActiveId(id);
-		setOpenListId(null);
-		setOpenViewId(null);
-		setOpenDashboardId(null);
+		openHome();
 		setSwitcherOpen(false);
 	}
-	function openList(id: string) {
-		setSection("lists");
-		setOpenViewId(null);
-		setOpenDashboardId(null);
+	const openList = useCallback((id: string) => {
 		setDetailTaskId(null);
-		setOpenListId(id);
-	}
-	// Alternate content mode to a list: a view (built-in or saved) clears the open
-	// list and vice-versa (they never render together). useCallback (setters only)
-	// so the command-handler memo can depend on these.
+		dispatchContent({ kind: "list", id });
+	}, []);
 	const openView = useCallback((id: string) => {
-		setSection("lists");
-		setOpenListId(null);
-		setOpenDashboardId(null);
 		setDetailTaskId(null);
-		setOpenViewId(id);
+		dispatchContent({ kind: "view", id });
 	}, []);
-	// Third exclusive content mode: a dashboard clears list/view and vice-versa.
 	const openDashboard = useCallback((id: string) => {
-		setSection("lists");
-		setOpenListId(null);
-		setOpenViewId(null);
 		setDetailTaskId(null);
-		setOpenDashboardId(id);
+		dispatchContent({ kind: "dashboard", id });
 	}, []);
-	// Fourth exclusive content mode: settings clears list/view/dashboard.
 	const openSettings = useCallback(() => {
-		setOpenListId(null);
-		setOpenViewId(null);
-		setOpenDashboardId(null);
 		setDetailTaskId(null);
-		setSection("settings");
+		dispatchContent({ kind: "settings" });
 	}, []);
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
@@ -319,12 +318,7 @@ function NormalWorkspace() {
 			.client.catch((e) => console.error("list reorder failed", e));
 	}
 	function changeSection(next: Section) {
-		setSection(next);
-		if (next === "lists") {
-			setOpenListId(null);
-			setOpenViewId(null);
-			setOpenDashboardId(null);
-		}
+		dispatchContent({ kind: next === "settings" ? "settings" : "home" });
 	}
 
 	const openListRow = openListId
@@ -354,20 +348,10 @@ function NormalWorkspace() {
 		if (homeApplied || prefLoading || dashboardsLoading) return;
 		setHomeApplied(true);
 		if (homeTarget.kind !== "dashboard") return;
-		if (openListId || openViewId || openDashboardId) return;
-		if (section !== "lists") return;
+		if (contentState.kind !== "home") return;
 		setDetailTaskId(null);
-		setOpenDashboardId(homeTarget.id);
-	}, [
-		homeApplied,
-		prefLoading,
-		dashboardsLoading,
-		homeTarget,
-		openListId,
-		openViewId,
-		openDashboardId,
-		section,
-	]);
+		dispatchContent({ kind: "dashboard", id: homeTarget.id });
+	}, [homeApplied, prefLoading, dashboardsLoading, homeTarget, contentState]);
 	const {
 		pinnedViews,
 		resolveView,
@@ -382,7 +366,7 @@ function NormalWorkspace() {
 		setPref,
 		viewManager,
 		setViewManager,
-		setOpenViewId,
+		onCloseView: closeView,
 		openView,
 	});
 
@@ -404,8 +388,8 @@ function NormalWorkspace() {
 		}
 		if (dashboardsLoading || !openDashboardId) return;
 		if (seenDashboardId.current !== openDashboardId) return;
-		setOpenDashboardId(null);
-	}, [openDashboardRow, dashboardsLoading, openDashboardId]);
+		closeDashboard(openDashboardId);
+	}, [openDashboardRow, dashboardsLoading, openDashboardId, closeDashboard]);
 
 	const {
 		canEditDashboard,
@@ -420,7 +404,7 @@ function NormalWorkspace() {
 		setPref,
 		dashboardManager,
 		setDashboardManager,
-		setOpenDashboardId,
+		onCloseDashboard: closeDashboard,
 		openDashboard,
 	});
 
@@ -446,11 +430,8 @@ function NormalWorkspace() {
 		activeFolders,
 		roleByWorkspace,
 		savedViews,
-		openListId,
-		setOpenListId,
-		setOpenViewId,
-		setOpenDashboardId,
-		setSection,
+		onOpenHome: openHome,
+		onCloseList: closeList,
 		setNewListFolder,
 		setRenameTarget,
 		setFolderDialog,
@@ -471,9 +452,11 @@ function NormalWorkspace() {
 	// The view shown when no list, dashboard or settings surface is open: an
 	// explicitly opened one, else home.
 	const activeViewId =
-		openListId || openDashboardId || section === "settings"
-			? null
-			: (openViewId ?? homeRef);
+		contentState.kind === "home"
+			? homeRef
+			: contentState.kind === "view"
+				? contentState.id
+				: null;
 
 	// Command handlers injected into the palette/keyboard system. palette.open and
 	// search.open are owned by the provider (it holds the open state). Movement +
@@ -514,7 +497,7 @@ function NormalWorkspace() {
 			: null;
 
 	let content: React.ReactNode;
-	if (section === "settings") {
+	if (contentState.kind === "settings") {
 		content = (
 			<SettingsSurface
 				activeId={activeId}
@@ -531,7 +514,7 @@ function NormalWorkspace() {
 				<div className="flex items-center gap-2 border-b p-3 md:hidden">
 					<BackButton
 						aria-label={m.list_back_to_lists()}
-						onClick={() => setOpenListId(null)}
+						onClick={() => closeList(openListId)}
 					/>
 					<span className="truncate font-medium">
 						{openListRow?.title ?? m.list_untitled_fallback()}
@@ -552,7 +535,7 @@ function NormalWorkspace() {
 					<ErrorBoundary
 						key={openDashboardRow.id}
 						resetKey={openDashboardRow.id}
-						onReset={() => setOpenDashboardId(null)}
+						onReset={() => closeDashboard(openDashboardRow.id)}
 					>
 						<DashboardView
 							dashboard={openDashboardRow}
@@ -568,7 +551,7 @@ function NormalWorkspace() {
 							isHome={
 								pref.homeViewRef === dashboardHomeRef(openDashboardRow.id)
 							}
-							onBack={() => setOpenDashboardId(null)}
+							onBack={() => closeDashboard(openDashboardRow.id)}
 							data={panelData}
 							ids={panelIds}
 							views={savedViews}
@@ -590,7 +573,7 @@ function NormalWorkspace() {
 		// No list open: the view surface (an explicitly opened view, or the home
 		// view on the landing). On the landing the workspace heading, create-list
 		// form and (mobile) navigation index stay rendered below.
-		const isLanding = openViewId == null;
+		const isLanding = contentState.kind === "home";
 		content = (
 			<div className="flex flex-col gap-6 p-4 md:p-6">
 				{activeView ? (
@@ -599,7 +582,7 @@ function NormalWorkspace() {
 							{!isDesktop && !isLanding && (
 								<BackButton
 									size="compact"
-									onClick={() => setOpenViewId(null)}
+									onClick={() => closeView(activeView.id)}
 								/>
 							)}
 							{HeaderIcon && (
@@ -678,7 +661,7 @@ function NormalWorkspace() {
 						    white-screening. resetKey clears the error on view switch. */}
 						<ErrorBoundary
 							resetKey={activeView.id}
-							onReset={() => setOpenViewId(null)}
+							onReset={() => closeView(activeView.id)}
 						>
 							<ViewRenderer
 								filter={activeView.filter}
