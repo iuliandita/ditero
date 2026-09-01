@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 
@@ -11,11 +12,25 @@ export function QuietHoursEditor() {
 	const { pref, setPref, timezoneDetected } = useUserPref();
 	const quiet = pref.quietHours;
 	const equal = quiet != null && quiet.start === quiet.end;
+	const saveSequence = useRef(0);
+	const [saveState, setSaveState] = useState<
+		"idle" | "saving" | "saved" | "error"
+	>("idle");
+
+	function save(quietHours: typeof quiet) {
+		const sequence = ++saveSequence.current;
+		setSaveState("saving");
+		void setPref({ quietHours }).then((succeeded) => {
+			if (sequence === saveSequence.current) {
+				setSaveState(succeeded ? "saved" : "error");
+			}
+		});
+	}
 
 	// Equal start/end is written through and rejected server-side; the warning
 	// below explains it rather than the field silently reverting.
 	function set(patch: Partial<{ start: string; end: string }>) {
-		setPref({ quietHours: { ...(quiet ?? DEFAULT_QUIET), ...patch } });
+		save({ ...(quiet ?? DEFAULT_QUIET), ...patch });
 	}
 
 	return (
@@ -54,12 +69,28 @@ export function QuietHoursEditor() {
 						type="button"
 						data-testid="quiet-clear"
 						className="h-8 rounded-lg border px-2 text-sm"
-						onClick={() => setPref({ quietHours: null })}
+						onClick={() => save(null)}
 					>
 						{m.quiet_hours_clear()}
 					</button>
 				)}
 			</div>
+
+			{saveState !== "idle" && (
+				<p
+					role={saveState === "error" ? "alert" : "status"}
+					data-testid="quiet-save-status"
+					className={`mt-2 text-xs ${
+						saveState === "error" ? "text-destructive" : "text-muted-foreground"
+					}`}
+				>
+					{saveState === "saving"
+						? m.quiet_hours_saving()
+						: saveState === "saved"
+							? m.quiet_hours_saved()
+							: m.mutation_failed()}
+				</p>
+			)}
 
 			<p className="mt-2 text-xs text-muted-foreground" data-testid="quiet-tz">
 				{timezoneDetected

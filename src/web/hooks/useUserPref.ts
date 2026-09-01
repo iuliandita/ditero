@@ -15,7 +15,7 @@ import {
 	isSupportedLocale,
 	type Locale,
 } from "../lib/locale.ts";
-import { runMutation } from "../lib/run-mutation.ts";
+import { mutationServerSucceeded } from "../lib/pref-mutation.ts";
 
 export type KarmaGoals = { daily: number; weekly: number };
 export type Vacation = { active: boolean; until?: string };
@@ -129,7 +129,7 @@ function readVacation(v: unknown): Vacation {
 // command registry is available (Task 9). Writes upsert via userPref.set.
 export function useUserPref(): {
 	pref: UserPrefState;
-	setPref: (patch: Partial<UserPrefState>) => void;
+	setPref: (patch: Partial<UserPrefState>) => Promise<boolean>;
 	loading: boolean;
 	// True when this session's detection supplied the zone, so the settings
 	// surface can ask "is this right?" instead of stating it as settled.
@@ -161,7 +161,7 @@ export function useUserPref(): {
 	}, [rows]);
 
 	const setPref = useCallback(
-		(patch: Partial<UserPrefState>) => {
+		async (patch: Partial<UserPrefState>) => {
 			// Typed objects here, ReadonlyJSONValue at the mutator boundary; goals are
 			// re-clamped so a write can never exceed the server caps.
 			const {
@@ -197,9 +197,11 @@ export function useUserPref(): {
 						}
 					: {}),
 			};
-			void runMutation(zero.mutate(mutators.userPref.set(arg)), (m) =>
-				console.error("userPref.set failed", m),
+			const succeeded = await mutationServerSucceeded(
+				zero.mutate(mutators.userPref.set(arg)),
 			);
+			if (!succeeded) console.error("userPref.set failed");
+			return succeeded;
 		},
 		[zero],
 	);
@@ -220,7 +222,7 @@ export function useUserPref(): {
 		detectionAttemptedForUserId = zero.userID;
 		detectionWrote = true;
 		forceRender((n) => n + 1);
-		setPref({ timezone: zone });
+		void setPref({ timezone: zone });
 	}, [loading, pref.timezone, setPref, zero.userID]);
 
 	useEffect(() => {

@@ -209,6 +209,9 @@ test.describe("notification settings", () => {
 		const panel = await settings(page);
 		await page.getByTestId("quiet-start").fill("22:00");
 		await page.getByTestId("quiet-end").fill("07:00");
+		await expect(page.getByTestId("quiet-save-status")).toHaveText("Saved", {
+			timeout: 15_000,
+		});
 		await expect(panel.getByTestId("quiet-tz")).toContainText(/UTC|\//, {
 			timeout: 15_000,
 		});

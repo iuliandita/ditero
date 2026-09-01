@@ -181,6 +181,8 @@
 	"quiet_hours_start_aria": "Quiet hours start",
 	"quiet_hours_end_aria": "Quiet hours end",
 	"quiet_hours_clear": "Clear",
+	"quiet_hours_saving": "Saving...",
+	"quiet_hours_saved": "Saved",
 	"quiet_hours_timezone_detected": "Detected as {timezone} - is this right?",
 	"quiet_hours_timezone": "Times are in {timezone}.",
 	"quiet_hours_equal_warning": "Start and end must differ. To stop notifications entirely, turn your channels off above.",
