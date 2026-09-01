@@ -99,6 +99,14 @@ async function openTaskDetail(page: Page, title: string): Promise<Page> {
 	return page;
 }
 
+async function closeTaskDetail(page: Page): Promise<void> {
+	// A prior nested Popover can consume Escape after it closes. This scenario is
+	// testing isolation, so use the dialog's explicit close boundary and await it.
+	const detail = page.getByRole("dialog", { name: "Task details" });
+	await detail.getByRole("button", { name: "Close" }).click();
+	await expect(detail).toBeHidden();
+}
+
 // The seeded shared workspace + list persist across the whole run (global-setup
 // seeds once), so its list accumulates tasks from earlier tests. Scope the chip
 // lookup to a single task's row (chips render inside the row's title button) to
@@ -524,7 +532,7 @@ test("isolation: an outsider sees no shared invites, assignees, comments, or man
 	await expect(
 		pa.getByTestId("comment-item").filter({ hasText: secretComment }),
 	).toBeVisible({ timeout: 15000 });
-	await pa.keyboard.press("Escape"); // close detail
+	await closeTaskDetail(pa);
 	// pending invite + kid via members panel
 	await pa.getByTestId("open-members").click();
 	await expect(pa.getByTestId("members-panel")).toBeVisible();
