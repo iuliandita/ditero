@@ -182,6 +182,8 @@
 	"quiet_hours_start_aria": "Începutul orelor de liniște",
 	"quiet_hours_end_aria": "Sfârșitul orelor de liniște",
 	"quiet_hours_clear": "Șterge",
+	"quiet_hours_saving": "Se salvează...",
+	"quiet_hours_saved": "Salvat",
 	"quiet_hours_timezone_detected": "Am detectat {timezone} - e corect?",
 	"quiet_hours_timezone": "Orele sunt în {timezone}.",
 	"quiet_hours_equal_warning": "Ora de început și cea de sfârșit trebuie să fie diferite. Ca să oprești complet notificările, dezactivează canalele de mai sus.",

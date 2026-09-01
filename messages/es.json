@@ -182,6 +182,8 @@
 	"quiet_hours_start_aria": "Inicio del horario de silencio",
 	"quiet_hours_end_aria": "Fin del horario de silencio",
 	"quiet_hours_clear": "Borrar",
+	"quiet_hours_saving": "Guardando...",
+	"quiet_hours_saved": "Guardado",
 	"quiet_hours_timezone_detected": "Hemos detectado {timezone}, ¿es correcto?",
 	"quiet_hours_timezone": "Las horas están en {timezone}.",
 	"quiet_hours_equal_warning": "El inicio y el fin deben ser distintos. Para dejar de recibir notificaciones del todo, desactiva tus canales aquí arriba.",

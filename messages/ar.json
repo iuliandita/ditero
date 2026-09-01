@@ -185,6 +185,8 @@
 	"quiet_hours_start_aria": "بداية ساعات الهدوء",
 	"quiet_hours_end_aria": "نهاية ساعات الهدوء",
 	"quiet_hours_clear": "مسح",
+	"quiet_hours_saving": "جارٍ الحفظ...",
+	"quiet_hours_saved": "تم الحفظ",
 	"quiet_hours_timezone_detected": "تم اكتشاف {timezone} - هل هذا صحيح؟",
 	"quiet_hours_timezone": "الأوقات بتوقيت {timezone}.",
 	"quiet_hours_equal_warning": "يجب أن تختلف البداية عن النهاية. لإيقاف الإشعارات تمامًا، عطّل قنواتك بالأعلى.",

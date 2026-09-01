@@ -181,6 +181,8 @@
 	"quiet_hours_start_aria": "Beginn der Ruhezeiten",
 	"quiet_hours_end_aria": "Ende der Ruhezeiten",
 	"quiet_hours_clear": "Löschen",
+	"quiet_hours_saving": "Wird gespeichert...",
+	"quiet_hours_saved": "Gespeichert",
 	"quiet_hours_timezone_detected": "Erkannt als {timezone} - stimmt das?",
 	"quiet_hours_timezone": "Die Zeiten gelten in {timezone}.",
 	"quiet_hours_equal_warning": "Beginn und Ende müssen sich unterscheiden. Wenn du gar keine Benachrichtigungen willst, schalte oben deine Kanäle aus.",

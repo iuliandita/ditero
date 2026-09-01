@@ -182,6 +182,8 @@
 	"quiet_hours_start_aria": "Début des heures calmes",
 	"quiet_hours_end_aria": "Fin des heures calmes",
 	"quiet_hours_clear": "Effacer",
+	"quiet_hours_saving": "Enregistrement...",
+	"quiet_hours_saved": "Enregistré",
 	"quiet_hours_timezone_detected": "Détecté : {timezone} - c'est bien ça ?",
 	"quiet_hours_timezone": "Les heures sont en {timezone}.",
 	"quiet_hours_equal_warning": "Le début et la fin doivent être différents. Pour ne plus rien recevoir du tout, désactive tes canaux ci-dessus.",
