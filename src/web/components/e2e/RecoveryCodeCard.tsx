@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { RECOVERY_GROUP_SIZE } from "../../../domain/e2e/recovery-code.ts";
 import { m } from "../../../paraglide/messages.js";
+import { copyText } from "../../lib/clipboard.ts";
 
 const DOWNLOAD_NAME = "ditero-recovery-code.txt";
 
@@ -26,14 +27,7 @@ export function RecoveryCodeCard({
 	}, []);
 
 	async function copy() {
-		try {
-			await navigator.clipboard.writeText(display);
-			setCopied(true);
-		} catch (error) {
-			// A denied clipboard must not look like a copied code: leaving the
-			// announcement unset is what keeps the user reading the block instead.
-			console.error(error);
-		}
+		if (await copyText(display)) setCopied(true);
 	}
 
 	function download() {

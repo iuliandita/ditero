@@ -1,3 +1,5 @@
+import { randomId } from "../../../domain/random-id.ts";
+
 const STORAGE_KEY = "ditero-device-id";
 
 // The private key's device wrap binds userId AND deviceId as additional data,
@@ -11,7 +13,7 @@ export function deviceId(storage: Storage = localStorage): string {
 	// empty deviceId would still bind, consistently, and would silently make
 	// every browser that hit the same bug share one AAD context.
 	if (existing?.trim()) return existing;
-	const minted = crypto.randomUUID();
+	const minted = randomId();
 	storage.setItem(STORAGE_KEY, minted);
 	return minted;
 }
