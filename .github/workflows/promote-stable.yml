@@ -85,23 +85,30 @@ jobs:
           version="${TAG#v}"
           docker buildx imagetools create --tag "${GHCR_IMAGE}:stable" "${GHCR_IMAGE}:${version}"
           docker buildx imagetools create --tag "${DOCKER_IMAGE}:stable" "${DOCKER_IMAGE}:${version}"
+          docker buildx imagetools create --tag "${GHCR_IMAGE}:stable-zero" "${GHCR_IMAGE}:${version}-zero"
+          docker buildx imagetools create --tag "${DOCKER_IMAGE}:stable-zero" "${DOCKER_IMAGE}:${version}-zero"
           docker buildx imagetools create --tag "${GHCR_IMAGE}:stable-debian" "${GHCR_IMAGE}:${version}-debian"
           docker buildx imagetools create --tag "${DOCKER_IMAGE}:stable-debian" "${DOCKER_IMAGE}:${version}-debian"
 
-      - name: Resolve promoted digest
+      - name: Resolve promoted digests
         id: digest
         env:
           GHCR_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         run: |
           set -euo pipefail
-          digest=$(docker buildx imagetools inspect "${GHCR_IMAGE}:stable" --format '{{ .Manifest.Digest }}')
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          app=$(docker buildx imagetools inspect "${GHCR_IMAGE}:stable" --format '{{ .Manifest.Digest }}')
+          zero=$(docker buildx imagetools inspect "${GHCR_IMAGE}:stable-zero" --format '{{ .Manifest.Digest }}')
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "zero=$zero" >> "$GITHUB_OUTPUT"
 
-      - name: Sign :stable (cosign keyless)
+      - name: Sign :stable images (cosign keyless)
         env:
           GHCR_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           DOCKER_IMAGE: docker.io/iuliandita/ditero
-          DIGEST: ${{ steps.digest.outputs.digest }}
+          APP_DIGEST: ${{ steps.digest.outputs.app }}
+          ZERO_DIGEST: ${{ steps.digest.outputs.zero }}
         run: |
-          cosign sign --yes "${GHCR_IMAGE}@${DIGEST}"
-          cosign sign --yes "${DOCKER_IMAGE}@${DIGEST}"
+          cosign sign --yes "${GHCR_IMAGE}@${APP_DIGEST}"
+          cosign sign --yes "${DOCKER_IMAGE}@${APP_DIGEST}"
+          cosign sign --yes "${GHCR_IMAGE}@${ZERO_DIGEST}"
+          cosign sign --yes "${DOCKER_IMAGE}@${ZERO_DIGEST}"

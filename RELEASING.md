@@ -22,7 +22,8 @@ Images publish to `ghcr.io/iuliandita/ditero` and `docker.io/iuliandita/ditero`.
 | `:latest` | The newest release | `release.yml` |
 | `:stable` | A release that soaked without a follow-up patch | `promote-stable.yml` |
 
-Each tag has a `-debian` counterpart (e.g. `:latest-debian`). Unsuffixed images are Alpine.
+Each app tag has a `-debian` counterpart (e.g. `:latest-debian`) and each channel has a
+`-zero` counterpart for the zero-cache service. Unsuffixed app images are Alpine.
 
 ## Flow
 
@@ -31,11 +32,12 @@ Each tag has a `-debian` counterpart (e.g. `:latest-debian`). Unsuffixed images 
 2. **Soak.** Let `develop` run on `:nightly` for a few days.
 3. **Release.** Merge `develop` into `main`, then push a tag `vX.Y.Z`. `release.yml` runs the
    quality gate, builds the Alpine (default) and `-debian` images multi-arch, signs them with
-   cosign, generates SBOMs, publishes a GitHub release, and moves `:latest`.
+   cosign, generates SBOMs, publishes the zero-cache image, creates a GitHub release, and moves
+   `:latest` and `:latest-zero`.
 4. **Promote to stable.** One week after a `:latest` release with no follow-up patch, run the
    **Promote :stable** workflow (manual dispatch) with the tag. It retags that release as
-   `:stable` (and `:stable-debian`). The workflow soft-checks the 7-day age; younger releases
-   need an explicit override.
+   `:stable`, `:stable-debian`, and `:stable-zero`. The workflow soft-checks the 7-day age;
+   younger releases need an explicit override.
 
 ## Versioning
 
