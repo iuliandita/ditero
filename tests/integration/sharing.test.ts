@@ -307,6 +307,30 @@ describe("sharing write-permission mutators", () => {
 		expect(rows[0]?.status).toBe("revoked");
 	});
 
+	test("invite.revoke refuses a completed fast-path claim", async () => {
+		await db.insert(tables.invite).values({
+			id: "invite-claimed",
+			workspaceId: "shared",
+			role: "member",
+			email: "member@test.invalid",
+			token: "token-claimed",
+			status: "pending",
+			createdBy: "owner",
+			claimedBy: "member",
+		});
+		await expect(
+			call(mutators.invite.revoke, { id: "admin" }, { id: "invite-claimed" }),
+		).rejects.toThrow(/already claimed/);
+		const rows = await db
+			.select()
+			.from(tables.invite)
+			.where(eq(tables.invite.id, "invite-claimed"));
+		expect(rows[0]?.status).toBe("pending");
+		await db
+			.delete(tables.invite)
+			.where(eq(tables.invite.id, "invite-claimed"));
+	});
+
 	test("task.assign of a non-member is rejected", async () => {
 		await expect(
 			call(

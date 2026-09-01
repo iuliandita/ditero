@@ -1466,6 +1466,7 @@ export const mutators = defineMutators({
 				const role = await roleInWorkspace(tx, ctx.id, inv.workspaceId);
 				if (!role || !ADMIN_ROLES.has(role))
 					throw new Error("access denied: need admin+");
+				if (inv.claimedBy) throw new Error("invite already claimed");
 				await tx.mutate.invite.update({ id: args.id, status: "revoked" });
 			},
 		),

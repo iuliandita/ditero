@@ -19,11 +19,13 @@ import {
 	InviteCreateError,
 	spendInviteCreateBudget,
 } from "../auth/invite-create.ts";
+import { FAST_INVITE_TTL_MS } from "../auth/invite-fast-path.ts";
 import {
 	createManagedAccount,
 	ManagedAccountError,
 } from "../auth/managed-account.ts";
 import { trustedAuthOrigins } from "../auth/origins.ts";
+import { e2eEnabled } from "../config/e2e.ts";
 import { mailConfig } from "../config/mail.ts";
 import { notifyAllowedPrivateCIDRs } from "../config/notify-egress.ts";
 import { workerTiming } from "../config/worker.ts";
@@ -36,6 +38,7 @@ import { schema } from "../zero/schema.gen.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
 import { notifyGrantCapable } from "./e2e/grants.ts";
+import { e2eInviteRoutes } from "./e2e/invite-routes.ts";
 import { e2eRoutes } from "./e2e/routes.ts";
 import { makeGuards } from "./guards.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
@@ -121,7 +124,8 @@ const routes = new Elysia()
 	.use(slackInteractionRoutes(db))
 	// Authenticated E2E key endpoints. Mounted unconditionally; each handler
 	// checks DITERO_E2E_ENABLED per request and answers 404 when it is off.
-	.use(e2eRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
+	.use(e2eRoutes(pool, db, { guardedPost, guardedGet, foreignOrigin }))
+	.use(e2eInviteRoutes(pool, db, { guardedPost, guardedGet, foreignOrigin }))
 	.use(cors(corsPolicy(process.env)))
 	.onRequest(({ set }) => {
 		Object.assign(set.headers, responseHeaders);
@@ -171,16 +175,29 @@ const routes = new Elysia()
 				// create: bounds both the invite rows and the real mail the send
 				// below now fires at a caller-supplied address.
 				await spendInviteCreateBudget(session.user.id, db);
+				// The server owns the fast-link expiry so the AAD and eligibility
+				// checks use one clock. Ten minutes leaves five minutes of tolerance
+				// under the hard 15-minute eligibility cap.
+				const fastE2e = body.e2eFast === true && email != null && e2eEnabled();
+				const fastExpiresAt = fastE2e
+					? Date.now() + Math.floor((FAST_INVITE_TTL_MS * 2) / 3)
+					: null;
 				const result = await createInvite(
 					{
 						workspaceId: body.workspaceId,
 						role: body.role as never,
 						email,
-						expiresAt: (body.expiresAt as number | null | undefined) ?? null,
+						expiresAt:
+							fastExpiresAt ??
+							(body.expiresAt as number | null | undefined) ??
+							null,
 						// Only an explicit numeric cap is honored; otherwise leave undefined so
 						// createInvite applies its default (email invite -> 1, link -> null).
-						maxUses:
-							typeof body.maxUses === "number" ? body.maxUses : undefined,
+						maxUses: fastE2e
+							? 1
+							: typeof body.maxUses === "number"
+								? body.maxUses
+								: undefined,
 						attachTaskId:
 							(body.attachTaskId as string | null | undefined) ?? null,
 						attachKind: (body.attachKind as never) ?? null,
@@ -211,7 +228,13 @@ const routes = new Elysia()
 				}
 				// { id, token, link } -- token returned once, not synced -- plus the
 				// delivery status, so "I invited them" is not a silent lie.
-				return { ...result, mail };
+				return {
+					...result,
+					mail,
+					expiresAt: fastExpiresAt
+						? new Date(fastExpiresAt).toISOString()
+						: null,
+				};
 			} catch (error) {
 				if (error instanceof InviteCreateError) {
 					return new Response(error.message, { status: error.status });

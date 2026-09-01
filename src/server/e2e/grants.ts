@@ -23,6 +23,68 @@ export type PendingGrant = {
 	requestedAt: string;
 };
 
+export type OwnWorkspaceKey = {
+	membershipKeyId: string;
+	workspaceId: string;
+	keyVersion: number;
+	enc: string;
+	ciphertext: string;
+	recipientPublicKey: string;
+	commitment: string;
+	active: boolean;
+	requestId: string | null;
+};
+
+/**
+ * Every WDK wrap addressed to the caller's current or retained identity.
+ *
+ * This is an explicit server read rather than a Zero query: key tables are
+ * deliberately absent from the synced schema, and the client only requests
+ * ciphertext after its in-memory private key is ready to open it. Retired
+ * workspace versions stay listed because old attachments remain encrypted to
+ * the version that created them.
+ */
+export async function myWorkspaceKeys(
+	client: PoolClient,
+	userId: string,
+): Promise<OwnWorkspaceKey[]> {
+	const rows = await client.query<{
+		id: string;
+		workspace_id: string;
+		key_version: number;
+		enc: string;
+		ciphertext: string;
+		recipient_public_key: string;
+		commitment: string;
+		active: boolean;
+		request_id: string | null;
+	}>(
+		`select mk.id, mk.workspace_id, mk.key_version, mk.enc, mk.ciphertext,
+		        mk.recipient_public_key, wk.commitment, wk.active,
+		        (select r.id from key_grant_request r
+		         where r.membership_id = mk.membership_id
+		           and r.requested_version = mk.key_version
+		         order by r.requested_at desc, r.id desc limit 1) as request_id
+		 from membership_key mk
+		 join workspace_key wk
+		   on wk.workspace_id = mk.workspace_id and wk.version = mk.key_version
+		 where mk.user_id = $1
+		 order by mk.workspace_id, mk.key_version`,
+		[userId],
+	);
+	return rows.rows.map((row) => ({
+		membershipKeyId: row.id,
+		workspaceId: row.workspace_id,
+		keyVersion: row.key_version,
+		enc: row.enc,
+		ciphertext: row.ciphertext,
+		recipientPublicKey: row.recipient_public_key,
+		commitment: row.commitment,
+		active: row.active,
+		requestId: row.request_id,
+	}));
+}
+
 /**
  * Requests this caller could actually fulfil.
  *
@@ -80,6 +142,53 @@ export type MyGrant = {
 	state: MyGrantState;
 	failureReason: string | null;
 };
+
+export async function requestWorkspaceKey(
+	client: PoolClient,
+	userId: string,
+	workspaceId: string,
+): Promise<{
+	requestId: string;
+	keyVersion: number;
+	state: "pending" | "ready";
+} | null> {
+	await client.query(
+		`insert into key_grant_request (id, membership_id, user_id, workspace_id,
+		 requested_version)
+		 select $1, m.id, $2, $3, wk.version
+		 from membership m
+		 join workspace_key wk on wk.workspace_id = $3 and wk.active
+		 where m.workspace_id = $3 and m.user_id = $2
+		   and not exists (
+			select 1 from membership_key mk
+			where mk.membership_id = m.id and mk.key_version = wk.version)
+		 on conflict do nothing`,
+		[`kgr_${crypto.randomUUID()}`, userId, workspaceId],
+	);
+	const found = await client.query<{
+		id: string;
+		requested_version: number;
+		state: "key_pending" | "ready";
+	}>(
+		`select r.id, r.requested_version, r.state
+		 from key_grant_request r
+		 join workspace_key wk
+		   on wk.workspace_id = r.workspace_id
+		  and wk.version = r.requested_version and wk.active
+		 where r.user_id = $1 and r.workspace_id = $2
+		   and r.state in ('key_pending', 'ready')
+		 order by r.requested_at desc, r.id desc limit 1`,
+		[userId, workspaceId],
+	);
+	const row = found.rows[0];
+	return row
+		? {
+				requestId: row.id,
+				keyVersion: row.requested_version,
+				state: row.state === "key_pending" ? "pending" : "ready",
+			}
+		: null;
+}
 
 /**
  * The recipient's own view of what they are waiting for.

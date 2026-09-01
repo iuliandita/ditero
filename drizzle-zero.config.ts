@@ -62,6 +62,9 @@ export default drizzleZeroConfig(schema, {
 			expiresAt: true,
 			maxUses: true,
 			uses: true,
+			// A claimed fast-path invite is already past the revocation boundary,
+			// even though token consumption waits for its durable WDK grant.
+			claimedBy: true,
 			attachTaskId: true,
 			attachKind: true,
 			createdBy: true,

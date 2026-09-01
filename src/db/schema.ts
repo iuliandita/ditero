@@ -242,6 +242,14 @@ export const invite = pgTable(
 		expiresAt: timestamp("expires_at", { withTimezone: true }), // null => no expiry
 		maxUses: smallint("max_uses"), // null => unlimited (link/code)
 		uses: smallint("uses").notNull().default(0),
+		// A short-lived, single-use email invite may reserve its seat before
+		// redemption while the client enrolls and durably stores its workspace-key
+		// wrap. The ordinary accept path ignores claimed invites so it cannot race
+		// that two-phase flow and consume the token before the wrap lands.
+		claimedBy: text("claimed_by").references(() => user.id, {
+			onDelete: "set null",
+		}),
+		claimedAt: timestamp("claimed_at", { withTimezone: true }),
 		attachTaskId: text("attach_task_id").references(() => task.id, {
 			onDelete: "set null",
 		}),

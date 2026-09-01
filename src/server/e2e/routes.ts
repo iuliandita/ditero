@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { e2eEnabled } from "../../config/e2e.ts";
+import type { db as defaultDb } from "../../db/client.ts";
 import { withUserContext } from "../../db/user-context.ts";
 import { KDF_PARAMS } from "../../domain/e2e/kdf.ts";
 import { isWellFormedCommitment } from "../../domain/e2e/wdk-commitment.ts";
@@ -10,36 +11,22 @@ import {
 	type GrantFailure,
 	markGrantFailed,
 	myGrants,
+	myWorkspaceKeys,
+	notifyGrantCapable,
 	pendingGrants,
+	requestWorkspaceKey,
 	submitGrant,
 } from "./grants.ts";
 import { type RotationFailure, rotateIdentity } from "./identity-rotation.ts";
+import {
+	e2eBlobSchema as blob,
+	e2ePublicKeySchema as publicKey,
+} from "./input.ts";
 import {
 	type ProvisionFailure,
 	pendingProvisions,
 	provisionWorkspace,
 } from "./provision.ts";
-
-// Wrapped blobs and salts are opaque to the server, so the only checks it can
-// make are shape and size. 64 KiB is far above any real envelope and far below
-// anything that would let a caller use enrollment as storage.
-const MAX_BLOB = 64 * 1024;
-const blob = z.string().min(1).max(MAX_BLOB);
-
-// An X25519 public key is exactly 32 bytes. Checking the decoded length rather
-// than the string length is what rejects a 43-character string that happens to
-// be valid base64url of the wrong size.
-const publicKey = z
-	.string()
-	.max(64)
-	.refine((value) => {
-		if (!/^[A-Za-z0-9_-]+$/.test(value)) return false;
-		try {
-			return Buffer.from(value, "base64url").length === 32;
-		} catch {
-			return false;
-		}
-	}, "publicKey must be 32 bytes base64url");
 
 // #168. The version the CLIENT derived its wraps under, validated against the
 // registry and then stored verbatim. The server must never substitute its own
@@ -146,6 +133,10 @@ const grantBody = z.object({
 	ciphertext: blob,
 });
 
+const requestGrantBody = z.object({
+	workspaceId: z.string().min(1).max(128),
+});
+
 const grantFailBody = z.object({
 	requestId: z.string().min(1).max(128),
 	// A short free-text reason from the recipient's own client, shown back to
@@ -173,7 +164,11 @@ const enrollBody = z.object({
 	formatVersion,
 });
 
-export function e2eRoutes(pool: Pool, guards: Guards) {
+export function e2eRoutes(
+	pool: Pool,
+	database: typeof defaultDb,
+	guards: Guards,
+) {
 	return new Elysia()
 		.get(
 			"/api/e2e/identity",
@@ -491,12 +486,52 @@ export function e2eRoutes(pool: Pool, guards: Guards) {
 			}),
 		)
 		.get(
+			"/api/e2e/keys/mine",
+			guards.guardedGet(async (_request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				return await withUserContext(pool, session.user.id, async (client) => ({
+					keys: await myWorkspaceKeys(client, session.user.id),
+				}));
+			}),
+		)
+		.get(
 			"/api/e2e/grants/pending",
 			guards.guardedGet(async (_request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				return await withUserContext(pool, session.user.id, async (client) => ({
 					requests: await pendingGrants(client, session.user.id),
 				}));
+			}),
+		)
+		.post(
+			"/api/e2e/grants/request",
+			guards.guardedPost(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				let parsed: z.infer<typeof requestGrantBody>;
+				try {
+					parsed = requestGrantBody.parse(await request.json());
+				} catch {
+					return new Response("Bad Request", { status: 400 });
+				}
+				const result = await withUserContext(
+					pool,
+					session.user.id,
+					async (client) =>
+						await requestWorkspaceKey(
+							client,
+							session.user.id,
+							parsed.workspaceId,
+						),
+				);
+				if (!result) return new Response("Not Found", { status: 404 });
+				if (result.state === "pending") {
+					await notifyGrantCapable(database, result.requestId).catch(
+						(error: unknown) => {
+							console.error("e2e: grant notification failed:", error);
+						},
+					);
+				}
+				return result;
 			}),
 		)
 		.get(

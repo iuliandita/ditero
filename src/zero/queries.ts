@@ -97,6 +97,7 @@ export const queries = defineQueries({
 		forWorkspace: defineQuery(({ ctx }) =>
 			zql.invite
 				.where("status", "pending")
+				.where("claimedBy", "IS", null)
 				.where(({ exists }) =>
 					exists("workspace", (w) =>
 						w.where(({ exists: e }) =>

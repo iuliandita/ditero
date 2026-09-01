@@ -74,6 +74,13 @@ export async function acceptInvite(
 				"this invite is for a different email",
 			);
 		}
+		// A fragment flow reserves its single-use seat before it enrolls and stores
+		// the WDK grant. Only /finalize may consume that reservation; letting this
+		// legacy endpoint race it would recreate the exact membership-without-key
+		// window the fast path closes.
+		if (inv.claimedBy != null) {
+			throw new InviteAcceptError("exhausted", "invite already claimed");
+		}
 
 		// Authoritative + atomic claim: one conditional UPDATE increments uses and
 		// flips to 'accepted' at the cap. The WHERE re-checks status/uses/expiry, so
@@ -89,6 +96,7 @@ export async function acceptInvite(
 				and(
 					eq(invite.id, inv.id),
 					eq(invite.status, "pending"),
+					isNull(invite.claimedBy),
 					or(isNull(invite.maxUses), lt(invite.uses, invite.maxUses)),
 					or(isNull(invite.expiresAt), gt(invite.expiresAt, new Date(now))),
 				),
