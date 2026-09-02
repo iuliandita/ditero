@@ -2,6 +2,7 @@
 // The `user` table is owned by Better Auth (see ./auth-schema); domain FKs point at it.
 import { relations, sql } from "drizzle-orm";
 import {
+	bigint,
 	boolean,
 	foreignKey,
 	index,
@@ -36,6 +37,18 @@ export const completedDisplayEnum = pgEnum("completed_display", [
 	"sink",
 	"keep",
 	"hide",
+]);
+export const attachmentStateEnum = pgEnum("attachment_state", [
+	"reserved",
+	"uploading",
+	"committed",
+	"aborted",
+	"deleting",
+]);
+export const attachmentParentEnum = pgEnum("attachment_parent", [
+	"task",
+	"comment",
+	"list",
 ]);
 export const templateKindEnum = pgEnum("template_kind", ["list", "task"]);
 export const inviteStatusEnum = pgEnum("invite_status", [
@@ -148,6 +161,48 @@ export const list = pgTable("list", {
 		.notNull()
 		.default("sink"),
 });
+
+export const attachment = pgTable(
+	"attachment",
+	{
+		id: text("id").primaryKey(),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => workspace.id, { onDelete: "cascade" }),
+		parentKind: attachmentParentEnum("parent_kind").notNull(),
+		parentId: text("parent_id").notNull(),
+		// Rotation is forward-only: old rows keep their WDK version, while
+		// members retain the corresponding keyring entry.
+		keyVersion: integer("key_version").notNull(),
+		state: attachmentStateEnum("state").notNull().default("reserved"),
+		// Both values are DEK-encrypted because names and types can disclose the
+		// file's contents just as readily as the blob itself.
+		filenameCiphertext: text("filename_ciphertext").notNull(),
+		contentTypeCiphertext: text("content_type_ciphertext").notNull(),
+		dekWrapped: text("dek_wrapped").notNull(),
+		// These remain server-readable for quota enforcement and integrity.
+		declaredBytes: bigint("declared_bytes", { mode: "number" }).notNull(),
+		observedBytes: bigint("observed_bytes", { mode: "number" }),
+		ciphertextSha256: text("ciphertext_sha256"),
+		storageKey: text("storage_key").notNull(),
+		thumbnailStorageKey: text("thumbnail_storage_key"),
+		uploadedBy: text("uploaded_by")
+			.notNull()
+			.references(() => user.id),
+		reservationExpiresAt: timestamp("reservation_expires_at", {
+			withTimezone: true,
+		}),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		committedAt: timestamp("committed_at", { withTimezone: true }),
+		deletedAt: timestamp("deleted_at", { withTimezone: true }),
+	},
+	(t) => [
+		index("attachment_parent").on(t.parentKind, t.parentId),
+		index("attachment_sweep").on(t.state, t.reservationExpiresAt),
+	],
+);
 
 export const task = pgTable(
 	"task",
@@ -626,6 +681,7 @@ export const userMembershipRelations = relations(user, ({ many }) => ({
 export const workspaceRelations = relations(workspace, ({ many }) => ({
 	memberships: many(membership),
 	lists: many(list),
+	attachments: many(attachment),
 	folders: many(folder),
 	labels: many(label),
 	templates: many(template),
@@ -654,6 +710,17 @@ export const listRelations = relations(list, ({ one, many }) => ({
 	}),
 	folder: one(folder, { fields: [list.folderId], references: [folder.id] }),
 	tasks: many(task),
+}));
+
+export const attachmentRelations = relations(attachment, ({ one }) => ({
+	workspace: one(workspace, {
+		fields: [attachment.workspaceId],
+		references: [workspace.id],
+	}),
+	uploader: one(user, {
+		fields: [attachment.uploadedBy],
+		references: [user.id],
+	}),
 }));
 
 export const taskRelations = relations(task, ({ one, many }) => ({

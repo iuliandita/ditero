@@ -24,6 +24,7 @@ const workspaceVisible =
 	(ctx: AuthCtx) =>
 	<
 		T extends
+			| "attachment"
 			| "dashboard"
 			| "folder"
 			| "label"
@@ -51,6 +52,11 @@ export const queries = defineQueries({
 	},
 	lists: {
 		mine: defineQuery(({ ctx }) => zql.list.where(workspaceVisible(ctx))),
+	},
+	attachments: {
+		mine: defineQuery(({ ctx }) =>
+			zql.attachment.where("state", "committed").where(workspaceVisible(ctx)),
+		),
 	},
 	folders: {
 		mine: defineQuery(({ ctx }) => zql.folder.where(workspaceVisible(ctx))),
