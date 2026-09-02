@@ -31,17 +31,33 @@ const identifier = z
 	.max(128)
 	.regex(/^[A-Za-z0-9_-]+$/);
 
-const reserveBody = z.object({
-	id: identifier,
-	workspaceId: identifier,
-	parentKind: z.enum(["task", "comment", "list"]),
-	parentId: identifier,
-	keyVersion: z.number().int().positive().max(2_147_483_647),
-	filenameCiphertext: e2eBlobSchema,
-	contentTypeCiphertext: e2eBlobSchema,
-	dekWrapped: e2eBlobSchema,
-	declaredBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-});
+const byteCount = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+
+const reserveBody = z
+	.object({
+		id: identifier,
+		workspaceId: identifier,
+		parentKind: z.enum(["task", "comment", "list"]),
+		parentId: identifier,
+		keyVersion: z.number().int().positive().max(2_147_483_647),
+		filenameCiphertext: e2eBlobSchema,
+		contentTypeCiphertext: e2eBlobSchema,
+		dekWrapped: e2eBlobSchema,
+		declaredBytes: byteCount,
+		thumbnailDeclaredBytes: byteCount.nullable().optional().default(null),
+	})
+	.superRefine((body, context) => {
+		if (
+			!Number.isSafeInteger(
+				body.declaredBytes + (body.thumbnailDeclaredBytes ?? 0),
+			)
+		) {
+			context.addIssue({
+				code: "custom",
+				message: "combined attachment bytes exceed the safe integer range",
+			});
+		}
+	});
 
 const finalizeBody = z.object({ id: identifier });
 
@@ -51,14 +67,18 @@ type AttachmentRow = AttachmentContext & {
 	declaredBytes: number;
 	observedBytes: number | null;
 	ciphertextSha256: string | null;
+	thumbnailDeclaredBytes: number | null;
+	thumbnailObservedBytes: number | null;
+	thumbnailCiphertextSha256: string | null;
 	storageKey: string;
+	thumbnailStorageKey: string | null;
 	uploadedBy: string;
 	reservationExpiresAt: Date | null;
 };
 
 type RouteResult = {
 	response: Response | Record<string, unknown>;
-	cleanupKey?: string;
+	cleanupKeys?: string[];
 };
 
 class UploadTooLargeError extends Error {}
@@ -78,7 +98,7 @@ function errorForInvalidation(failure: AttachmentAccessFailure): Response {
 
 function attachmentIdFromPath(
 	request: Request,
-	action: "upload" | "download",
+	action: "upload" | "download" | "thumbnail",
 ): string | null {
 	const match = new RegExp(`^/api/attachments/([^/]+)/${action}$`).exec(
 		new URL(request.url).pathname,
@@ -143,12 +163,18 @@ async function attachmentForUpdate(
 		declared_bytes: string;
 		observed_bytes: string | null;
 		ciphertext_sha256: string | null;
+		thumbnail_declared_bytes: string | null;
+		thumbnail_observed_bytes: string | null;
+		thumbnail_ciphertext_sha256: string | null;
 		storage_key: string;
+		thumbnail_storage_key: string | null;
 		uploaded_by: string;
 		reservation_expires_at: Date | null;
 	}>(
 		`select id, workspace_id, parent_kind, parent_id, key_version, state,
-		 declared_bytes, observed_bytes, ciphertext_sha256, storage_key,
+		 declared_bytes, observed_bytes, ciphertext_sha256,
+		 thumbnail_declared_bytes, thumbnail_observed_bytes,
+		 thumbnail_ciphertext_sha256, storage_key, thumbnail_storage_key,
 		 uploaded_by, reservation_expires_at
 		 from attachment where id = $1 for update`,
 		[id],
@@ -158,9 +184,21 @@ async function attachmentForUpdate(
 	const declaredBytes = Number(row.declared_bytes);
 	const observedBytes =
 		row.observed_bytes === null ? null : Number(row.observed_bytes);
+	const thumbnailDeclaredBytes =
+		row.thumbnail_declared_bytes === null
+			? null
+			: Number(row.thumbnail_declared_bytes);
+	const thumbnailObservedBytes =
+		row.thumbnail_observed_bytes === null
+			? null
+			: Number(row.thumbnail_observed_bytes);
 	if (
 		!Number.isSafeInteger(declaredBytes) ||
-		(observedBytes !== null && !Number.isSafeInteger(observedBytes))
+		(observedBytes !== null && !Number.isSafeInteger(observedBytes)) ||
+		(thumbnailDeclaredBytes !== null &&
+			!Number.isSafeInteger(thumbnailDeclaredBytes)) ||
+		(thumbnailObservedBytes !== null &&
+			!Number.isSafeInteger(thumbnailObservedBytes))
 	) {
 		throw new Error("attachment byte count exceeds the safe integer range");
 	}
@@ -174,7 +212,11 @@ async function attachmentForUpdate(
 		declaredBytes,
 		observedBytes,
 		ciphertextSha256: row.ciphertext_sha256,
+		thumbnailDeclaredBytes,
+		thumbnailObservedBytes,
+		thumbnailCiphertextSha256: row.thumbnail_ciphertext_sha256,
 		storageKey: row.storage_key,
+		thumbnailStorageKey: row.thumbnail_storage_key,
 		uploadedBy: row.uploaded_by,
 		reservationExpiresAt: row.reservation_expires_at,
 	};
@@ -230,8 +272,57 @@ async function cleanupAndReturn(
 	store: BlobStore,
 	result: RouteResult,
 ): Promise<Response | Record<string, unknown>> {
-	if (result.cleanupKey) await store.delete(result.cleanupKey);
+	for (const key of result.cleanupKeys ?? []) await store.delete(key);
 	return result.response;
+}
+
+function storageKeys(row: AttachmentRow): string[] {
+	return row.thumbnailStorageKey
+		? [row.storageKey, row.thumbnailStorageKey]
+		: [row.storageKey];
+}
+
+async function downloadResponse(
+	pool: Pool,
+	store: BlobStore,
+	id: string,
+	userId: string,
+	kind: "content" | "thumbnail",
+): Promise<Response> {
+	const storageColumn =
+		kind === "content" ? "a.storage_key" : "a.thumbnail_storage_key";
+	const row = await withUserContext(pool, userId, async (client) => {
+		const result = await client.query<{
+			storage_key: string | null;
+			state: AttachmentState;
+			deleted_at: Date | null;
+			is_member: boolean;
+		}>(
+			`select ${storageColumn} as storage_key, a.state, a.deleted_at,
+			 exists(select 1 from membership m
+			        where m.workspace_id = a.workspace_id
+			          and m.user_id = $2) as is_member
+			 from attachment a where a.id = $1`,
+			[id, userId],
+		);
+		return result.rows[0] ?? null;
+	});
+	if (!row) return new Response("Not Found", { status: 404 });
+	if (!row.is_member) return new Response("Forbidden", { status: 403 });
+	if (
+		row.state !== "committed" ||
+		row.deleted_at !== null ||
+		row.storage_key === null
+	) {
+		return new Response("Not Found", { status: 404 });
+	}
+	return new Response(responseBody(await store.get(row.storage_key)), {
+		headers: {
+			"content-type": "application/octet-stream",
+			"content-disposition": "attachment",
+			"x-content-type-options": "nosniff",
+		},
+	});
 }
 
 export function attachmentRoutes(
@@ -273,7 +364,7 @@ export function attachmentRoutes(
 						await attachmentQuotaWouldExceed(
 							client,
 							body.workspaceId,
-							body.declaredBytes,
+							body.declaredBytes + (body.thumbnailDeclaredBytes ?? 0),
 							quotaBytes,
 						)
 					) {
@@ -282,15 +373,19 @@ export function attachmentRoutes(
 
 					const expiresAt = new Date(now().getTime() + reservationTtlMs);
 					const storageKey = storageKeyFor(body.workspaceId, body.id);
+					const thumbnailStorageKey = body.thumbnailDeclaredBytes
+						? storageKeyFor(body.workspaceId, body.id, "thumbnail")
+						: null;
 					try {
 						await client.query(
 							`insert into attachment
 							 (id, workspace_id, parent_kind, parent_id, key_version,
 							  state, filename_ciphertext, content_type_ciphertext,
-							  dek_wrapped, declared_bytes, storage_key, uploaded_by,
+							  dek_wrapped, declared_bytes, thumbnail_declared_bytes,
+							  storage_key, thumbnail_storage_key, uploaded_by,
 							  reservation_expires_at)
 							 values ($1, $2, $3, $4, $5, 'reserved', $6, $7, $8,
-							  $9, $10, $11, $12)`,
+							  $9, $10, $11, $12, $13, $14)`,
 							[
 								body.id,
 								body.workspaceId,
@@ -301,7 +396,9 @@ export function attachmentRoutes(
 								body.contentTypeCiphertext,
 								body.dekWrapped,
 								body.declaredBytes,
+								body.thumbnailDeclaredBytes,
 								storageKey,
+								thumbnailStorageKey,
 								session.user.id,
 								expiresAt,
 							],
@@ -319,6 +416,9 @@ export function attachmentRoutes(
 					return {
 						id: body.id,
 						uploadUrl: `/api/attachments/${body.id}/upload`,
+						thumbnailUploadUrl: thumbnailStorageKey
+							? `/api/attachments/${body.id}/thumbnail`
+							: null,
 					};
 				});
 			}),
@@ -357,7 +457,7 @@ export function attachmentRoutes(
 								await abortAttachment(client, row);
 								return {
 									response: new Response("Gone", { status: 410 }),
-									cleanupKey: row.storageKey,
+									cleanupKeys: storageKeys(row),
 								};
 							}
 							let failure = await validateAttachmentWrite(
@@ -369,7 +469,7 @@ export function attachmentRoutes(
 								await abortAttachment(client, row);
 								return {
 									response: errorForInvalidation(failure),
-									cleanupKey: row.storageKey,
+									cleanupKeys: storageKeys(row),
 								};
 							}
 
@@ -384,7 +484,7 @@ export function attachmentRoutes(
 								await abortAttachment(client, row);
 								return {
 									response: new Response("Payload Too Large", { status: 413 }),
-									cleanupKey: row.storageKey,
+									cleanupKeys: storageKeys(row),
 								};
 							}
 							if (
@@ -394,7 +494,7 @@ export function attachmentRoutes(
 								await abortAttachment(client, row);
 								return {
 									response: new Response("Gone", { status: 410 }),
-									cleanupKey: row.storageKey,
+									cleanupKeys: storageKeys(row),
 								};
 							}
 							failure = await validateAttachmentWrite(
@@ -407,7 +507,7 @@ export function attachmentRoutes(
 								await abortAttachment(client, row);
 								return {
 									response: errorForInvalidation(failure),
-									cleanupKey: row.storageKey,
+									cleanupKeys: storageKeys(row),
 								};
 							}
 
@@ -417,6 +517,120 @@ export function attachmentRoutes(
 								 set state = 'uploading', observed_bytes = $2,
 								     ciphertext_sha256 = $3
 								 where id = $1 and state = 'reserved'`,
+								[row.id, observed.bytes, observed.sha256],
+							);
+							return {
+								response: {
+									id: row.id,
+									state: "uploading",
+									bytes: observed.bytes,
+									sha256: observed.sha256,
+								},
+							};
+						},
+					);
+					return await cleanupAndReturn(store, result);
+				} catch (error) {
+					if (error instanceof UploadTooLargeError) {
+						return new Response("Payload Too Large", { status: 413 });
+					}
+					throw error;
+				}
+			}),
+			{ parse: "none" },
+		)
+		.post(
+			"/api/attachments/:id/thumbnail",
+			guards.guardedPost(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				const id = attachmentIdFromPath(request, "thumbnail");
+				if (!id) return new Response("Bad Request", { status: 400 });
+				try {
+					const result = await withUserContext(
+						pool,
+						session.user.id,
+						async (client): Promise<RouteResult> => {
+							const row = await attachmentForUpdate(client, id);
+							if (!row || row.uploadedBy !== session.user.id) {
+								return {
+									response: new Response("Not Found", { status: 404 }),
+								};
+							}
+							if (
+								row.state !== "uploading" ||
+								row.thumbnailDeclaredBytes === null ||
+								row.thumbnailStorageKey === null
+							) {
+								return {
+									response: new Response("Conflict", { status: 409 }),
+								};
+							}
+							if (
+								!row.reservationExpiresAt ||
+								row.reservationExpiresAt.getTime() <= now().getTime()
+							) {
+								await abortAttachment(client, row);
+								return {
+									response: new Response("Gone", { status: 410 }),
+									cleanupKeys: storageKeys(row),
+								};
+							}
+							let failure = await validateAttachmentWrite(
+								client,
+								session.user.id,
+								row,
+							);
+							if (failure) {
+								await abortAttachment(client, row);
+								return {
+									response: errorForInvalidation(failure),
+									cleanupKeys: storageKeys(row),
+								};
+							}
+
+							let observed: { bytes: number; sha256: string };
+							try {
+								observed = await store.put(
+									row.thumbnailStorageKey,
+									requestBytes(request, row.thumbnailDeclaredBytes),
+								);
+							} catch (error) {
+								if (!(error instanceof UploadTooLargeError)) throw error;
+								await abortAttachment(client, row);
+								return {
+									response: new Response("Payload Too Large", { status: 413 }),
+									cleanupKeys: storageKeys(row),
+								};
+							}
+							if (
+								!row.reservationExpiresAt ||
+								row.reservationExpiresAt.getTime() <= now().getTime()
+							) {
+								await abortAttachment(client, row);
+								return {
+									response: new Response("Gone", { status: 410 }),
+									cleanupKeys: storageKeys(row),
+								};
+							}
+							failure = await validateAttachmentWrite(
+								client,
+								session.user.id,
+								row,
+								{ lockContext: true },
+							);
+							if (failure) {
+								await abortAttachment(client, row);
+								return {
+									response: errorForInvalidation(failure),
+									cleanupKeys: storageKeys(row),
+								};
+							}
+
+							await client.query(
+								`update attachment
+								 set thumbnail_observed_bytes = $2,
+								     thumbnail_ciphertext_sha256 = $3
+								 where id = $1 and state = 'uploading'`,
 								[row.id, observed.bytes, observed.sha256],
 							);
 							return {
@@ -490,7 +704,7 @@ export function attachmentRoutes(
 							await abortAttachment(client, row);
 							return {
 								response: new Response("Gone", { status: 410 }),
-								cleanupKey: row.storageKey,
+								cleanupKeys: storageKeys(row),
 							};
 						}
 						const failure = await validateAttachmentWrite(
@@ -503,17 +717,24 @@ export function attachmentRoutes(
 							await abortAttachment(client, row);
 							return {
 								response: errorForInvalidation(failure),
-								cleanupKey: row.storageKey,
+								cleanupKeys: storageKeys(row),
 							};
 						}
 						if (
 							row.observedBytes === null ||
-							row.observedBytes !== row.declaredBytes
+							row.observedBytes !== row.declaredBytes ||
+							(row.thumbnailDeclaredBytes === null
+								? row.thumbnailObservedBytes !== null ||
+									row.thumbnailStorageKey !== null ||
+									row.thumbnailCiphertextSha256 !== null
+								: row.thumbnailObservedBytes !== row.thumbnailDeclaredBytes ||
+									row.thumbnailStorageKey === null ||
+									row.thumbnailCiphertextSha256 === null)
 						) {
 							await abortAttachment(client, row);
 							return {
 								response: new Response("Conflict", { status: 409 }),
-								cleanupKey: row.storageKey,
+								cleanupKeys: storageKeys(row),
 							};
 						}
 						assertAttachmentTransition(row.state, "committed");
@@ -529,48 +750,69 @@ export function attachmentRoutes(
 				return await cleanupAndReturn(store, result);
 			}),
 		)
+		.post(
+			"/api/attachments/abort",
+			guards.guardedPost(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				const body = await parseJson(request, finalizeBody);
+				if (!body) return new Response("Bad Request", { status: 400 });
+				const result = await withUserContext(
+					pool,
+					session.user.id,
+					async (client): Promise<RouteResult> => {
+						const row = await attachmentForUpdate(client, body.id);
+						if (!row || row.uploadedBy !== session.user.id) {
+							return {
+								response: new Response("Not Found", { status: 404 }),
+							};
+						}
+						if (
+							row.state !== "reserved" &&
+							row.state !== "uploading" &&
+							row.state !== "aborted"
+						) {
+							return {
+								response: new Response("Conflict", { status: 409 }),
+							};
+						}
+						await abortAttachment(client, row);
+						return {
+							response: { id: row.id, state: "aborted" },
+							cleanupKeys: storageKeys(row),
+						};
+					},
+				);
+				return await cleanupAndReturn(store, result);
+			}),
+		)
 		.get(
 			"/api/attachments/:id/download",
 			guards.guardedGet(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				const id = attachmentIdFromPath(request, "download");
 				if (!id) return new Response("Bad Request", { status: 400 });
-
-				const row = await withUserContext(
+				return await downloadResponse(
 					pool,
+					store,
+					id,
 					session.user.id,
-					async (client) => {
-						const result = await client.query<{
-							storage_key: string;
-							state: AttachmentState;
-							deleted_at: Date | null;
-							is_member: boolean;
-						}>(
-							`select a.storage_key, a.state, a.deleted_at,
-							 exists(select 1 from membership m
-							        where m.workspace_id = a.workspace_id
-							          and m.user_id = $2) as is_member
-							 from attachment a where a.id = $1`,
-							[id, session.user.id],
-						);
-						return result.rows[0] ?? null;
-					},
+					"content",
 				);
-				if (!row) return new Response("Not Found", { status: 404 });
-				if (!row.is_member) {
-					return new Response("Forbidden", { status: 403 });
-				}
-				if (row.state !== "committed" || row.deleted_at !== null) {
-					return new Response("Not Found", { status: 404 });
-				}
-
-				return new Response(responseBody(await store.get(row.storage_key)), {
-					headers: {
-						"content-type": "application/octet-stream",
-						"content-disposition": "attachment",
-						"x-content-type-options": "nosniff",
-					},
-				});
+			}),
+		)
+		.get(
+			"/api/attachments/:id/thumbnail",
+			guards.guardedGet(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				const id = attachmentIdFromPath(request, "thumbnail");
+				if (!id) return new Response("Bad Request", { status: 400 });
+				return await downloadResponse(
+					pool,
+					store,
+					id,
+					session.user.id,
+					"thumbnail",
+				);
 			}),
 		);
 }

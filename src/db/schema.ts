@@ -184,6 +184,13 @@ export const attachment = pgTable(
 		declaredBytes: bigint("declared_bytes", { mode: "number" }).notNull(),
 		observedBytes: bigint("observed_bytes", { mode: "number" }),
 		ciphertextSha256: text("ciphertext_sha256"),
+		thumbnailDeclaredBytes: bigint("thumbnail_declared_bytes", {
+			mode: "number",
+		}),
+		thumbnailObservedBytes: bigint("thumbnail_observed_bytes", {
+			mode: "number",
+		}),
+		thumbnailCiphertextSha256: text("thumbnail_ciphertext_sha256"),
 		storageKey: text("storage_key").notNull(),
 		thumbnailStorageKey: text("thumbnail_storage_key"),
 		uploadedBy: text("uploaded_by")

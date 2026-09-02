@@ -169,6 +169,33 @@ function upload(id: string, body: Uint8Array, userId = "upload-owner") {
 	);
 }
 
+function uploadThumbnail(
+	id: string,
+	body: Uint8Array,
+	userId = "upload-owner",
+) {
+	const copy = new Uint8Array(body.byteLength);
+	copy.set(body);
+	return app.handle(
+		new Request(`http://localhost/api/attachments/${id}/thumbnail`, {
+			method: "POST",
+			headers: {
+				"content-type": "application/octet-stream",
+				"x-test-user": userId,
+			},
+			body: copy.buffer,
+		}),
+	);
+}
+
+function downloadThumbnail(id: string, userId = "upload-owner") {
+	return app.handle(
+		new Request(`http://localhost/api/attachments/${id}/thumbnail`, {
+			headers: { "x-test-user": userId },
+		}),
+	);
+}
+
 const reserve = (
 	id: string,
 	overrides?: Record<string, unknown>,
@@ -178,6 +205,9 @@ const reserve = (
 const finalize = (id: string, userId?: string) =>
 	postJson("/api/attachments/finalize", { id }, userId);
 
+const abort = (id: string, userId?: string) =>
+	postJson("/api/attachments/abort", { id }, userId);
+
 async function row(id: string) {
 	return (
 		await pool.query<{
@@ -186,11 +216,17 @@ async function row(id: string) {
 			observed_bytes: string | null;
 			ciphertext_sha256: string | null;
 			storage_key: string;
+			thumbnail_declared_bytes: string | null;
+			thumbnail_observed_bytes: string | null;
+			thumbnail_ciphertext_sha256: string | null;
+			thumbnail_storage_key: string | null;
 			reservation_expires_at: Date | null;
 			committed_at: Date | null;
 		}>(
 			`select state, declared_bytes, observed_bytes, ciphertext_sha256,
-			 storage_key, reservation_expires_at, committed_at
+			 storage_key, thumbnail_declared_bytes, thumbnail_observed_bytes,
+			 thumbnail_ciphertext_sha256, thumbnail_storage_key,
+			 reservation_expires_at, committed_at
 			 from attachment where id = $1`,
 			[id],
 		)
@@ -201,18 +237,23 @@ async function seedUsage(
 	id: string,
 	state: "reserved" | "committed",
 	bytes: number,
+	thumbnailBytes = 0,
 ) {
 	await pool.query(
 		`insert into attachment (id, workspace_id, parent_kind, parent_id,
 		 key_version, state, filename_ciphertext, content_type_ciphertext,
 		 dek_wrapped, declared_bytes, observed_bytes, ciphertext_sha256,
-		 storage_key, uploaded_by, reservation_expires_at, committed_at)
+		 storage_key, thumbnail_declared_bytes, thumbnail_observed_bytes,
+		 thumbnail_storage_key, uploaded_by, reservation_expires_at, committed_at)
 		 values ($1, $2, 'task', $3, 1, $4::attachment_state, 'name', 'type', 'dek', $5::bigint,
 		 case when $4::attachment_state = 'committed' then $5::bigint else null end,
 		 case when $4::attachment_state = 'committed' then repeat('a', 64) else null end,
-		 $6, 'upload-owner',
-		 case when $4::attachment_state = 'reserved' then $7::timestamptz else null end,
-		 case when $4::attachment_state = 'committed' then $8::timestamptz else null end)`,
+		 $6, nullif($7::bigint, 0),
+		 case when $4::attachment_state = 'committed' then nullif($7::bigint, 0) else null end,
+		 case when $7::bigint > 0 then $6 || '.thumbnail' else null end,
+		 'upload-owner',
+		 case when $4::attachment_state = 'reserved' then $8::timestamptz else null end,
+		 case when $4::attachment_state = 'committed' then $9::timestamptz else null end)`,
 		[
 			id,
 			WORKSPACE,
@@ -220,6 +261,7 @@ async function seedUsage(
 			state,
 			bytes,
 			`upload-w/00/${id}`,
+			thumbnailBytes,
 			new Date(NOW.getTime() + 600_000),
 			NOW,
 		],
@@ -308,12 +350,47 @@ describe("attachment reserve", () => {
 		expect(await response.json()).toEqual({
 			id: "att-reserve",
 			uploadUrl: "/api/attachments/att-reserve/upload",
+			thumbnailUploadUrl: null,
 		});
 		expect(await row("att-reserve")).toMatchObject({
 			state: "reserved",
 			declared_bytes: "10",
 			reservation_expires_at: new Date(NOW.getTime() + 600_000),
 		});
+	});
+
+	test("reserves thumbnail bytes and returns a separate upload target", async () => {
+		const response = await reserve("att-thumbnail-reserve", {
+			declaredBytes: 10,
+			thumbnailDeclaredBytes: 5,
+		});
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			id: "att-thumbnail-reserve",
+			uploadUrl: "/api/attachments/att-thumbnail-reserve/upload",
+			thumbnailUploadUrl: "/api/attachments/att-thumbnail-reserve/thumbnail",
+		});
+		expect(await row("att-thumbnail-reserve")).toMatchObject({
+			thumbnail_declared_bytes: "5",
+			thumbnail_storage_key: expect.stringMatching(/\.thumbnail$/),
+		});
+	});
+
+	test("counts incoming and existing thumbnail bytes against quota", async () => {
+		expect(
+			(
+				await reserve("att-thumbnail-over", {
+					declaredBytes: 15,
+					thumbnailDeclaredBytes: 6,
+				})
+			).status,
+		).toBe(409);
+
+		await seedUsage("att-thumbnail-used", "committed", 10, 6);
+		expect(
+			(await reserve("att-thumbnail-existing", { declaredBytes: 5 })).status,
+		).toBe(409);
 	});
 
 	test("counts both reserved and committed bytes against quota", async () => {
@@ -456,6 +533,141 @@ describe("attachment upload and finalize", () => {
 			observed_bytes: String(payload.length),
 			ciphertext_sha256: createHash("sha256").update(payload).digest("hex"),
 		});
+	});
+
+	test("uploads a separately encrypted thumbnail and includes it in finalize", async () => {
+		const content = new TextEncoder().encode("ciphertext");
+		const thumbnail = new TextEncoder().encode("thumbnail");
+		await reserve("att-thumbnail", {
+			declaredBytes: content.length,
+			thumbnailDeclaredBytes: thumbnail.length,
+		});
+		await upload("att-thumbnail", content);
+
+		expect((await uploadThumbnail("att-thumbnail", thumbnail)).status).toBe(
+			200,
+		);
+		expect(await row("att-thumbnail")).toMatchObject({
+			state: "uploading",
+			thumbnail_observed_bytes: String(thumbnail.length),
+			thumbnail_ciphertext_sha256: createHash("sha256")
+				.update(thumbnail)
+				.digest("hex"),
+		});
+		expect((await finalize("att-thumbnail")).status).toBe(200);
+		expect(await row("att-thumbnail")).toMatchObject({ state: "committed" });
+	});
+
+	test("aborts finalize when a declared thumbnail was not uploaded", async () => {
+		const content = new TextEncoder().encode("ciphertext");
+		await reserve("att-thumbnail-missing", {
+			declaredBytes: content.length,
+			thumbnailDeclaredBytes: 4,
+		});
+		await upload("att-thumbnail-missing", content);
+		const contentKey = (await row("att-thumbnail-missing"))?.storage_key ?? "";
+
+		expect((await finalize("att-thumbnail-missing")).status).toBe(409);
+		expect(await row("att-thumbnail-missing")).toMatchObject({
+			state: "aborted",
+		});
+		expect(await store.exists(contentKey)).toBe(false);
+	});
+
+	test("aborts an oversized thumbnail and removes both blobs", async () => {
+		await reserve("att-thumbnail-large", {
+			declaredBytes: 4,
+			thumbnailDeclaredBytes: 4,
+		});
+		await upload("att-thumbnail-large", new Uint8Array(4));
+		const keys = await row("att-thumbnail-large");
+
+		expect(
+			(await uploadThumbnail("att-thumbnail-large", new Uint8Array(5))).status,
+		).toBe(413);
+		expect(await row("att-thumbnail-large")).toMatchObject({
+			state: "aborted",
+		});
+		expect(await store.exists(keys?.storage_key ?? "")).toBe(false);
+		expect(await store.exists(keys?.thumbnail_storage_key ?? "")).toBe(false);
+	});
+
+	test("client abort is uploader-scoped, idempotent, and removes both blobs", async () => {
+		await reserve("att-client-abort", {
+			declaredBytes: 4,
+			thumbnailDeclaredBytes: 4,
+		});
+		await upload("att-client-abort", new Uint8Array(4));
+		await uploadThumbnail("att-client-abort", new Uint8Array(4));
+		const keys = await row("att-client-abort");
+
+		expect((await abort("att-client-abort", "upload-member")).status).toBe(404);
+		expect((await abort("att-client-abort")).status).toBe(200);
+		expect((await abort("att-client-abort")).status).toBe(200);
+		expect(await row("att-client-abort")).toMatchObject({ state: "aborted" });
+		expect(await store.exists(keys?.storage_key ?? "")).toBe(false);
+		expect(await store.exists(keys?.thumbnail_storage_key ?? "")).toBe(false);
+	});
+
+	test("serves only committed thumbnails to current members with forced headers", async () => {
+		const content = new Uint8Array(4);
+		const thumbnail = new TextEncoder().encode("thumb");
+		await reserve("att-thumbnail-download", {
+			declaredBytes: content.length,
+			thumbnailDeclaredBytes: thumbnail.length,
+		});
+		await upload("att-thumbnail-download", content);
+		await uploadThumbnail("att-thumbnail-download", thumbnail);
+		expect((await downloadThumbnail("att-thumbnail-download")).status).toBe(
+			404,
+		);
+		await finalize("att-thumbnail-download");
+
+		const response = await downloadThumbnail(
+			"att-thumbnail-download",
+			"upload-member",
+		);
+		expect(response.status).toBe(200);
+		expect(new Uint8Array(await response.arrayBuffer())).toEqual(thumbnail);
+		expect(response.headers.get("content-type")).toBe(
+			"application/octet-stream",
+		);
+		expect(response.headers.get("content-disposition")).toBe("attachment");
+		expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+		expect(
+			(await downloadThumbnail("att-thumbnail-download", "upload-outsider"))
+				.status,
+		).toBe(403);
+	});
+
+	test("membership removal during thumbnail upload aborts and removes both blobs", async () => {
+		await reserve(
+			"att-thumbnail-member-gone",
+			{ declaredBytes: 4, thumbnailDeclaredBytes: 4 },
+			"upload-member",
+		);
+		await upload(
+			"att-thumbnail-member-gone",
+			new Uint8Array(4),
+			"upload-member",
+		);
+		const keys = await row("att-thumbnail-member-gone");
+		const pause = store.pauseNextPut();
+		const response = uploadThumbnail(
+			"att-thumbnail-member-gone",
+			new Uint8Array(4),
+			"upload-member",
+		);
+		await pause.started.promise;
+		await pool.query("delete from membership where id = 'upload-m-member'");
+		pause.release.resolve();
+
+		expect((await response).status).toBe(403);
+		expect(await row("att-thumbnail-member-gone")).toMatchObject({
+			state: "aborted",
+		});
+		expect(await store.exists(keys?.storage_key ?? "")).toBe(false);
+		expect(await store.exists(keys?.thumbnail_storage_key ?? "")).toBe(false);
 	});
 
 	test("does not reveal another uploader's reservation", async () => {

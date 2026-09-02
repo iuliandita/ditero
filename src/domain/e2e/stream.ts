@@ -274,6 +274,27 @@ function requireSegmentSize(segmentSize: number): void {
 	}
 }
 
+export function encryptedStreamLength(
+	plaintextBytes: number,
+	segmentSize: number = DEFAULT_SEGMENT_BYTES,
+): number {
+	requireSegmentSize(segmentSize);
+	if (!Number.isSafeInteger(plaintextBytes) || plaintextBytes < 0) {
+		throw new Error(
+			`stream: plaintextBytes must be a non-negative safe integer, got ${plaintextBytes}`,
+		);
+	}
+	const segments = Math.floor(plaintextBytes / segmentSize) + 1;
+	if (segments > MAX_COUNTER + 1) {
+		throw new Error("stream: plaintext exceeds the segment counter capacity");
+	}
+	const result = HEADER_BYTES + plaintextBytes + segments * TAG_BYTES;
+	if (!Number.isSafeInteger(result)) {
+		throw new Error("stream: ciphertext length exceeds the safe integer range");
+	}
+	return result;
+}
+
 function buildHeader(
 	segmentSize: number,
 	salt: Uint8Array,

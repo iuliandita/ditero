@@ -3,6 +3,7 @@ import {
 	DEK_BYTES,
 	decryptStream,
 	deriveStreamKey,
+	encryptedStreamLength,
 	encryptStream,
 	HEADER_BYTES,
 	MAGIC,
@@ -219,6 +220,29 @@ describe("deriveStreamKey", () => {
 		const shared = new Uint8Array(new SharedArrayBuffer(DEK_BYTES));
 		await expect(deriveStreamKey(shared, SALT(), "content")).rejects.toThrow(
 			"stream: byte views must not be shared-memory backed",
+		);
+	});
+});
+
+describe("encryptedStreamLength", () => {
+	it("matches the encoder including the mandatory short final segment", async () => {
+		for (const length of [0, 1, SEG - 1, SEG, SEG + 1, 2 * SEG]) {
+			const plaintext = randomBytes(length);
+			const ciphertext = await collect(
+				encryptStream(source(plaintext), DEK(), "content", SEG),
+			);
+			expect(encryptedStreamLength(length, SEG)).toBe(ciphertext.length);
+		}
+	});
+
+	it("refuses invalid and overflowing plaintext lengths", () => {
+		expect(() => encryptedStreamLength(-1, SEG)).toThrow(/plaintextBytes/);
+		expect(() => encryptedStreamLength(1.5, SEG)).toThrow(/plaintextBytes/);
+		expect(() => encryptedStreamLength(0x1_0000_0000 * SEG, SEG)).toThrow(
+			/counter capacity/,
+		);
+		expect(() => encryptedStreamLength(Number.MAX_SAFE_INTEGER, SEG)).toThrow(
+			/counter capacity/,
 		);
 	});
 });
