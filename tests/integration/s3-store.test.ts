@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { S3Client } from "bun";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+	attachmentStorageConfig,
+	createAttachmentBlobStore,
+} from "../../src/config/attachment-storage.ts";
 import { BlobNotFoundError } from "../../src/server/storage/blob-store.ts";
 import { S3BlobStore } from "../../src/server/storage/s3-store.ts";
 
@@ -80,6 +84,27 @@ describe("S3BlobStore", () => {
 		});
 		expect(await collect(await store.get(objectKey))).toEqual(
 			encoder.encode("ciphertext"),
+		);
+	});
+
+	it("constructs the S3 driver through the runtime storage selector", async () => {
+		const selected = await createAttachmentBlobStore(
+			attachmentStorageConfig({
+				DITERO_ATTACHMENT_STORAGE_DRIVER: "s3",
+				DITERO_ATTACHMENT_S3_ACCESS_KEY_ID: required("S3_ACCESS_KEY_ID"),
+				DITERO_ATTACHMENT_S3_SECRET_ACCESS_KEY: required(
+					"S3_SECRET_ACCESS_KEY",
+				),
+				DITERO_ATTACHMENT_S3_BUCKET: required("S3_BUCKET"),
+				DITERO_ATTACHMENT_S3_ENDPOINT: required("S3_ENDPOINT"),
+				DITERO_ATTACHMENT_S3_REGION: required("S3_REGION"),
+			}),
+		);
+		const objectKey = key("runtime-selector");
+		await selected.put(objectKey, chunks(encoder.encode("selected")));
+
+		expect(await collect(await selected.get(objectKey))).toEqual(
+			encoder.encode("selected"),
 		);
 	});
 

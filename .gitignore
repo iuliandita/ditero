@@ -48,6 +48,7 @@ npm-debug.log*
 .cache/
 *.tmp
 .tmp/
+/data/attachments/
 
 # --- sync engine local state ---
 .zero/

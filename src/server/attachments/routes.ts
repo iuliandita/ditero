@@ -76,8 +76,11 @@ function errorForInvalidation(failure: AttachmentAccessFailure): Response {
 	});
 }
 
-function attachmentIdFromUploadPath(request: Request): string | null {
-	const match = /^\/api\/attachments\/([^/]+)\/upload$/.exec(
+function attachmentIdFromPath(
+	request: Request,
+	action: "upload" | "download",
+): string | null {
+	const match = new RegExp(`^/api/attachments/([^/]+)/${action}$`).exec(
 		new URL(request.url).pathname,
 	);
 	if (!match) return null;
@@ -87,6 +90,32 @@ function attachmentIdFromUploadPath(request: Request): string | null {
 	} catch {
 		return null;
 	}
+}
+
+function responseBody(
+	source: AsyncIterable<Uint8Array>,
+): ReadableStream<Uint8Array> {
+	const iterator = source[Symbol.asyncIterator]();
+	return new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			try {
+				const next = await iterator.next();
+				if (next.done) {
+					controller.close();
+					return;
+				}
+				if (!(next.value instanceof Uint8Array)) {
+					throw new Error("blob body must yield Uint8Array chunks");
+				}
+				controller.enqueue(next.value);
+			} catch (error) {
+				controller.error(error);
+			}
+		},
+		async cancel() {
+			await iterator.return?.();
+		},
+	});
 }
 
 async function parseJson<T>(
@@ -298,7 +327,7 @@ export function attachmentRoutes(
 			"/api/attachments/:id/upload",
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
-				const id = attachmentIdFromUploadPath(request);
+				const id = attachmentIdFromPath(request, "upload");
 				if (!id) return new Response("Bad Request", { status: 400 });
 				try {
 					const result = await withUserContext(
@@ -498,6 +527,50 @@ export function attachmentRoutes(
 					},
 				);
 				return await cleanupAndReturn(store, result);
+			}),
+		)
+		.get(
+			"/api/attachments/:id/download",
+			guards.guardedGet(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				const id = attachmentIdFromPath(request, "download");
+				if (!id) return new Response("Bad Request", { status: 400 });
+
+				const row = await withUserContext(
+					pool,
+					session.user.id,
+					async (client) => {
+						const result = await client.query<{
+							storage_key: string;
+							state: AttachmentState;
+							deleted_at: Date | null;
+							is_member: boolean;
+						}>(
+							`select a.storage_key, a.state, a.deleted_at,
+							 exists(select 1 from membership m
+							        where m.workspace_id = a.workspace_id
+							          and m.user_id = $2) as is_member
+							 from attachment a where a.id = $1`,
+							[id, session.user.id],
+						);
+						return result.rows[0] ?? null;
+					},
+				);
+				if (!row) return new Response("Not Found", { status: 404 });
+				if (!row.is_member) {
+					return new Response("Forbidden", { status: 403 });
+				}
+				if (row.state !== "committed" || row.deleted_at !== null) {
+					return new Response("Not Found", { status: 404 });
+				}
+
+				return new Response(responseBody(await store.get(row.storage_key)), {
+					headers: {
+						"content-type": "application/octet-stream",
+						"content-disposition": "attachment",
+						"x-content-type-options": "nosniff",
+					},
+				});
 			}),
 		);
 }

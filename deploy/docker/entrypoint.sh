@@ -19,6 +19,8 @@ load_secret BETTER_AUTH_SECRET required
 load_secret GOOGLE_CLIENT_SECRET optional
 load_secret DITERO_ENCRYPTION_KEY required
 load_secret DITERO_ENCRYPTION_KEY_NEXT optional
+load_secret DITERO_ATTACHMENT_S3_ACCESS_KEY_ID optional
+load_secret DITERO_ATTACHMENT_S3_SECRET_ACCESS_KEY optional
 
 echo "ditero: running database migrations..."
 DATABASE_URL="$DATABASE_MIGRATION_URL" bun run db:migrate

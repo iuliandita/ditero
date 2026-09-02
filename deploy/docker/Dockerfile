@@ -47,6 +47,7 @@ LABEL org.opencontainers.image.title="Ditero zero-cache" \
 
 # --- runtime bases ----------------------------------------------------------
 FROM ${RUNTIME_IMAGE} AS runtime-alpine
+RUN mkdir -p /data/attachments && chown bun:bun /data/attachments
 
 # Debian fallback: distroless is the only Debian base whose packages scan clean
 # of unfixed HIGH/CRITICAL CVEs (debian:*-slim carries them in essential
@@ -55,12 +56,12 @@ FROM ${RUNTIME_IMAGE} AS runtime-alpine
 # entrypoint.sh/secret-file.sh invoke. Requires RUNTIME_IMAGE=oven/bun:*-slim
 # when RUNTIME_VARIANT=debian.
 FROM ${RUNTIME_IMAGE} AS debian-prep
-RUN mkdir -p /rootfs/etc /rootfs/usr/bin /rootfs/usr/local/bin /rootfs/home/bun \
+RUN mkdir -p /rootfs/etc /rootfs/usr/bin /rootfs/usr/local/bin /rootfs/home/bun /rootfs/data/attachments \
 	&& cp /etc/passwd /etc/group /rootfs/etc/ \
 	&& cp /bin/sh /rootfs/usr/bin/sh \
 	&& cp /bin/cat /rootfs/usr/bin/cat \
 	&& cp /usr/local/bin/bun /rootfs/usr/local/bin/bun \
-	&& chown 1000:1000 /rootfs/home/bun
+	&& chown 1000:1000 /rootfs/home/bun /rootfs/data/attachments
 
 # gcr.io/distroless/base-debian13 (multi-arch index digest)
 FROM gcr.io/distroless/base-debian13@sha256:9ef50bca108839d5986e4d84b7f7b2d79024c9293b7c35b162c6c55485bd5868 AS runtime-debian

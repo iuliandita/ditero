@@ -25,6 +25,10 @@ import {
 	ManagedAccountError,
 } from "../auth/managed-account.ts";
 import { trustedAuthOrigins } from "../auth/origins.ts";
+import {
+	attachmentStorageConfig,
+	createAttachmentBlobStore,
+} from "../config/attachment-storage.ts";
 import { e2eEnabled } from "../config/e2e.ts";
 import { mailConfig } from "../config/mail.ts";
 import { notifyAllowedPrivateCIDRs } from "../config/notify-egress.ts";
@@ -35,6 +39,7 @@ import { verifyZeroShardAccess, zeroShardSchema } from "../db/zero-shard.ts";
 import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
 import { schema } from "../zero/schema.gen.ts";
+import { attachmentRoutes } from "./attachments/routes.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
 import { notifyGrantCapable } from "./e2e/grants.ts";
@@ -81,6 +86,8 @@ const { guardedPost, guardedGet, foreignOrigin } = makeGuards(
 	requestOrigins,
 	(headers) => auth.api.getSession({ headers }),
 );
+const attachmentConfig = attachmentStorageConfig(process.env);
+const attachmentStore = await createAttachmentBlobStore(attachmentConfig);
 
 // Shared JSON-body + ChannelError shape for the three channel writes. The body
 // is the error's stable CODE, never its prose: the prose named deployment env
@@ -126,6 +133,14 @@ const routes = new Elysia()
 	// checks DITERO_E2E_ENABLED per request and answers 404 when it is off.
 	.use(e2eRoutes(pool, db, { guardedPost, guardedGet, foreignOrigin }))
 	.use(e2eInviteRoutes(pool, db, { guardedPost, guardedGet, foreignOrigin }))
+	.use(
+		attachmentRoutes(
+			pool,
+			{ guardedPost, guardedGet, foreignOrigin },
+			attachmentStore,
+			{ quotaBytes: attachmentConfig.quotaBytes },
+		),
+	)
 	.use(cors(corsPolicy(process.env)))
 	.onRequest(({ set }) => {
 		Object.assign(set.headers, responseHeaders);

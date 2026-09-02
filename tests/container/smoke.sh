@@ -32,6 +32,11 @@ if [ "$configured_user" != "bun" ]; then
 fi
 
 docker run --rm --entrypoint bun "$image" --version >/dev/null
+docker run --rm --entrypoint bun "$image" -e '
+  const path = "/data/attachments/.write-smoke";
+  await Bun.write(path, "ciphertext");
+  if (await Bun.file(path).text() !== "ciphertext") process.exit(1);
+' >/dev/null
 
 suffix=$$
 network="ditero-smoke-$suffix"
