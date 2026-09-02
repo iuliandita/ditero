@@ -43,8 +43,12 @@ beforeAll(async () => {
 			`grant select, insert, update, delete on ${table} to ditero_runtime_test`,
 		);
 	}
-	// workspace_key's policy reads membership, so the querying role needs it.
-	await pool.query("grant select on membership to ditero_runtime_test");
+	// Key-table policies read these ordinary tables. Production's default-table
+	// grants already include them; the hand-built non-owner fixture must mirror
+	// that or PostgreSQL fails policy planning before evaluating the predicate.
+	await pool.query(
+		"grant select on membership, workspace to ditero_runtime_test",
+	);
 	runtimePool.on("connect", (client) => {
 		void client.query("set role ditero_runtime_test");
 	});
@@ -416,6 +420,56 @@ describe("grant writes cross the owner boundary under RLS", () => {
 				`insert into key_grant_request (id, membership_id, user_id,
 				 workspace_id, requested_version)
 				 values ('kgr_forged', 'm_bob', 'u_bob', 'ws_alice', 1)`,
+			),
+		).rejects.toThrow(/row-level security/i);
+	});
+
+	test("an own request must name the caller's exact membership tuple", async () => {
+		await asAlice(
+			`insert into workspace_key (id, workspace_id, version, commitment, minted_by)
+			 values ('wk_request_v1', 'ws_alice', 1, 'commit_1', 'u_alice')`,
+		);
+		await expect(
+			asAlice(
+				`insert into key_grant_request (id, membership_id, user_id,
+				 workspace_id, requested_version)
+				 values ('kgr_wrong_seat', 'm_bob', 'u_alice', 'ws_alice', 1)`,
+			),
+		).rejects.toThrow(/row-level security/i);
+		await expect(
+			asAlice(
+				`insert into key_grant_request (id, membership_id, user_id,
+				 workspace_id, requested_version)
+				 values ('kgr_own', 'm_alice', 'u_alice', 'ws_alice', 1)`,
+			),
+		).resolves.toBeTruthy();
+	});
+
+	test("an Owner creates the next-version request for an unenrolled member only during rotation", async () => {
+		await pool.query(
+			"update workspace set rotation_required = true where id = 'ws_alice'",
+		);
+		await asAlice(
+			`insert into workspace_key (id, workspace_id, version, commitment, minted_by)
+			 values ('wk_rotation_v2', 'ws_alice', 2, 'commit_2', 'u_alice')`,
+		);
+		await expect(
+			asAlice(
+				`insert into key_grant_request (id, membership_id, user_id,
+				 workspace_id, requested_version)
+				 values ('kgr_rotation', 'm_bob', 'u_bob', 'ws_alice', 2)`,
+			),
+		).resolves.toBeTruthy();
+
+		await pool.query("delete from key_grant_request where id = 'kgr_rotation'");
+		await pool.query(
+			"update membership set role = 'member' where id = 'm_alice'",
+		);
+		await expect(
+			asAlice(
+				`insert into key_grant_request (id, membership_id, user_id,
+				 workspace_id, requested_version)
+				 values ('kgr_rotation_member', 'm_bob', 'u_bob', 'ws_alice', 2)`,
 			),
 		).rejects.toThrow(/row-level security/i);
 	});

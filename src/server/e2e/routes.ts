@@ -27,6 +27,11 @@ import {
 	pendingProvisions,
 	provisionWorkspace,
 } from "./provision.ts";
+import {
+	rotateWorkspace,
+	type WorkspaceRotationFailure,
+	workspaceRotationPlan,
+} from "./rotation.ts";
 
 // #168. The version the CLIENT derived its wraps under, validated against the
 // registry and then stored verbatim. The server must never substitute its own
@@ -112,6 +117,50 @@ const commitment = z
 	.max(256)
 	.refine(isWellFormedCommitment, "malformed WDK commitment");
 
+const workspaceRotateBody = z.object({
+	previousVersion: z.number().int().positive().max(2_147_483_646),
+	commitment,
+	grants: z
+		.array(
+			z.object({
+				membershipId: z.string().min(1).max(128),
+				userId: z.string().min(1).max(128),
+				recipientPublicKey: publicKey,
+				enc: blob,
+				ciphertext: blob,
+			}),
+		)
+		.max(1000),
+});
+
+const WORKSPACE_ROTATION_STATUS: Record<WorkspaceRotationFailure, number> = {
+	"not-found": 404,
+	"not-permitted": 403,
+	"not-enrolled": 409,
+	"not-required": 409,
+	"no-active-key": 409,
+	"stale-version": 409,
+	"incomplete-grants": 409,
+	"stale-recipient-key": 409,
+};
+
+function workspaceIdFromPath(
+	request: Request,
+	prefix: string,
+	suffix: string,
+): string | null {
+	const path = new URL(request.url).pathname;
+	if (!path.startsWith(prefix) || !path.endsWith(suffix)) return null;
+	const encoded = path.slice(prefix.length, path.length - suffix.length);
+	if (!encoded || encoded.includes("/")) return null;
+	try {
+		const decoded = decodeURIComponent(encoded);
+		return decoded.length <= 128 && !decoded.includes("/") ? decoded : null;
+	} catch {
+		return null;
+	}
+}
+
 const provisionBody = z.object({
 	workspaceId: z.string().min(1).max(128),
 	commitment,
@@ -170,6 +219,63 @@ export function e2eRoutes(
 	guards: Guards,
 ) {
 	return new Elysia()
+		.get(
+			"/api/e2e/members/:workspaceId/keys",
+			guards.guardedGet(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				const workspaceId = workspaceIdFromPath(
+					request,
+					"/api/e2e/members/",
+					"/keys",
+				);
+				if (!workspaceId) return new Response("Bad Request", { status: 400 });
+				return await withUserContext(pool, session.user.id, async (client) => {
+					const plan = await workspaceRotationPlan(
+						client,
+						session.user.id,
+						workspaceId,
+					);
+					return plan ?? new Response("Not Found", { status: 404 });
+				});
+			}),
+		)
+		.post(
+			"/api/e2e/workspaces/:workspaceId/rotate",
+			guards.guardedPost(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				const workspaceId = workspaceIdFromPath(
+					request,
+					"/api/e2e/workspaces/",
+					"/rotate",
+				);
+				if (!workspaceId) return new Response("Bad Request", { status: 400 });
+				let parsed: z.infer<typeof workspaceRotateBody>;
+				try {
+					parsed = workspaceRotateBody.parse(await request.json());
+				} catch {
+					return new Response("Bad Request", { status: 400 });
+				}
+				return await withUserContext(pool, session.user.id, async (client) => {
+					const result = await rotateWorkspace(
+						client,
+						session.user.id,
+						workspaceId,
+						parsed,
+					);
+					if (!result.ok) {
+						return new Response(result.reason, {
+							status: WORKSPACE_ROTATION_STATUS[result.reason],
+						});
+					}
+					return {
+						workspaceId: result.workspaceId,
+						version: result.version,
+						commitment: result.commitment,
+						outcome: result.outcome,
+					};
+				});
+			}),
+		)
 		.get(
 			"/api/e2e/identity",
 			guards.guardedGet(async (_request, session) => {

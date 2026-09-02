@@ -1509,6 +1509,10 @@ export const mutators = defineMutators({
 					if (list?.workspaceId === target.workspaceId)
 						await tx.mutate.taskAssignee.delete({ id: a.id });
 				}
+				await tx.mutate.workspace.update({
+					id: target.workspaceId,
+					rotationRequired: true,
+				});
 				await tx.mutate.membership.delete({ id: args.id });
 			},
 		),

@@ -4,7 +4,13 @@ import * as schema from "./src/db/schema.ts";
 export default drizzleZeroConfig(schema, {
 	tables: {
 		user: { id: true, name: true, image: true },
-		workspace: { id: true, name: true, ownerId: true, kind: true },
+		workspace: {
+			id: true,
+			name: true,
+			ownerId: true,
+			kind: true,
+			rotationRequired: true,
+		},
 		membership: { id: true, userId: true, workspaceId: true, role: true },
 		list: {
 			id: true,
