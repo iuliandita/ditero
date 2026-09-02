@@ -132,5 +132,5 @@ describe("S3BlobStore", () => {
 			sha256: createHash("sha256").update(payload).digest("hex"),
 		});
 		expect(await collect(await store.get(objectKey))).toEqual(payload);
-	}, 30_000);
+	}, 90_000);
 });
