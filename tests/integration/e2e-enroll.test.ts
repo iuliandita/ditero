@@ -1,10 +1,9 @@
-import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { handleAuthRequest } from "../../src/auth/auth.ts";
-import * as tables from "../../src/db/schema.ts";
 import { CURRENT_KDF_VERSION, KDF_PARAMS } from "../../src/domain/e2e/kdf.ts";
 import { app } from "../../src/server/index.ts";
+import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 8. Enrollment is the one write that establishes an identity, so
 // the property that matters is immutability: a second enroll with a different
@@ -14,7 +13,6 @@ const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
 
 const pool = new Pool({ connectionString: databaseURL });
-const db = drizzle(pool, { schema: tables });
 
 const ORIGIN = "http://localhost:5173";
 
@@ -83,21 +81,19 @@ let cookie: string;
 let seq = 0;
 
 beforeEach(async () => {
-	await db.delete(tables.membership);
-	await db.delete(tables.workspace);
-	// Signup is rate-limited per IP and this file signs up once per test.
-	await db.delete(tables.rateLimit);
-	await db.delete(tables.session);
-	await db.delete(tables.account);
-	await db.delete(tables.user);
+	await resetAuthFixture(pool);
 	seq += 1;
 	cookie = await signUp(`enroll-${Date.now()}-${seq}@test.invalid`);
 	process.env.DITERO_E2E_ENABLED = "true";
 });
 
 afterAll(async () => {
-	process.env.DITERO_E2E_ENABLED = undefined;
-	await pool.end();
+	try {
+		await resetAuthFixture(pool);
+	} finally {
+		process.env.DITERO_E2E_ENABLED = undefined;
+		await pool.end();
+	}
 });
 
 async function storedKeys(): Promise<{ publicKey: string; state: string }[]> {

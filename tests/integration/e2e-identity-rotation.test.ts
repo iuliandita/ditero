@@ -12,6 +12,7 @@ import {
 import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
 import { activeRecipientKeyGuard } from "../../src/server/e2e/identity-rotation.ts";
 import { app } from "../../src/server/index.ts";
+import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 13. Rotation is the design's answer to a compromised device
 // (design 12): the user rewraps every WDK they already hold to a fresh keypair
@@ -228,12 +229,7 @@ let bobKey: Identity;
 let seq = 0;
 
 beforeEach(async () => {
-	await pool.query("delete from membership");
-	await pool.query("delete from workspace");
-	await pool.query("delete from rate_limit");
-	await pool.query("delete from session");
-	await pool.query("delete from account");
-	await pool.query('delete from "user"');
+	await resetAuthFixture(pool);
 	seq += 1;
 	process.env.DITERO_E2E_ENABLED = "true";
 
@@ -310,8 +306,12 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-	process.env.DITERO_E2E_ENABLED = undefined;
-	await pool.end();
+	try {
+		await resetAuthFixture(pool);
+	} finally {
+		process.env.DITERO_E2E_ENABLED = undefined;
+		await pool.end();
+	}
 });
 
 describe("POST /api/e2e/identity/rotate", () => {

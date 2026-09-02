@@ -14,6 +14,7 @@ import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
 import { commitWdk } from "../../src/domain/e2e/wdk-commitment.ts";
 import { rotateWorkspace } from "../../src/server/e2e/rotation.ts";
 import { app } from "../../src/server/index.ts";
+import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
@@ -235,12 +236,7 @@ async function openRow(
 }
 
 beforeEach(async () => {
-	await pool.query("delete from membership");
-	await pool.query("delete from workspace");
-	await pool.query("delete from rate_limit");
-	await pool.query("delete from session");
-	await pool.query("delete from account");
-	await pool.query('delete from "user"');
+	await resetAuthFixture(pool);
 	process.env.DITERO_E2E_ENABLED = "true";
 	seq += 1;
 	const stamp = `${Date.now()}-${seq}`;
@@ -335,8 +331,12 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-	process.env.DITERO_E2E_ENABLED = undefined;
-	await pool.end();
+	try {
+		await resetAuthFixture(pool);
+	} finally {
+		process.env.DITERO_E2E_ENABLED = undefined;
+		await pool.end();
+	}
 });
 
 describe("workspace removal rotation", () => {

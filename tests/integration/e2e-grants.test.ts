@@ -21,6 +21,7 @@ import {
 import { notifyGrantCapable } from "../../src/server/e2e/grants.ts";
 import { app } from "../../src/server/index.ts";
 import { renderPayload } from "../../src/server/notifications/dispatch.ts";
+import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 15. A grant is the first write in this subsystem where the writer
 // and the row's owner are different people. The properties that matter are that
@@ -166,16 +167,7 @@ async function makeInvite(token: string, role = "member") {
 }
 
 beforeEach(async () => {
-	await pool.query("delete from notification_outbox");
-	await pool.query("delete from notification_channel");
-	await pool.query("delete from list");
-	await pool.query("delete from invite");
-	await pool.query("delete from membership");
-	await pool.query("delete from workspace");
-	await pool.query("delete from rate_limit");
-	await pool.query("delete from session");
-	await pool.query("delete from account");
-	await pool.query('delete from "user"');
+	await resetAuthFixture(pool);
 	seq += 1;
 	process.env.DITERO_E2E_ENABLED = "true";
 
@@ -224,8 +216,12 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-	process.env.DITERO_E2E_ENABLED = undefined;
-	await pool.end();
+	try {
+		await resetAuthFixture(pool);
+	} finally {
+		process.env.DITERO_E2E_ENABLED = undefined;
+		await pool.end();
+	}
 });
 
 describe("invite acceptance", () => {

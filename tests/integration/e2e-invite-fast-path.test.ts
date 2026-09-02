@@ -15,6 +15,7 @@ import {
 import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
 import { commitWdk } from "../../src/domain/e2e/wdk-commitment.ts";
 import { app } from "../../src/server/index.ts";
+import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
@@ -145,16 +146,7 @@ async function finalize(token: string, mode: "fast" | "fallback") {
 }
 
 beforeEach(async () => {
-	await pool.query("delete from notification_outbox");
-	await pool.query("delete from notification_channel");
-	await pool.query("delete from list");
-	await pool.query("delete from invite");
-	await pool.query("delete from membership");
-	await pool.query("delete from workspace");
-	await pool.query("delete from rate_limit");
-	await pool.query("delete from session");
-	await pool.query("delete from account");
-	await pool.query('delete from "user"');
+	await resetAuthFixture(pool);
 	process.env.DITERO_E2E_ENABLED = "true";
 	seq += 1;
 
@@ -199,15 +191,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
 	try {
-		await pool.query("delete from notification_outbox");
-		await pool.query("delete from notification_channel");
-		await pool.query("delete from invite");
-		await pool.query("delete from membership");
-		await pool.query("delete from workspace");
-		await pool.query("delete from rate_limit");
-		await pool.query("delete from session");
-		await pool.query("delete from account");
-		await pool.query('delete from "user"');
+		await resetAuthFixture(pool);
 	} finally {
 		process.env.DITERO_E2E_ENABLED = undefined;
 		await pool.end();

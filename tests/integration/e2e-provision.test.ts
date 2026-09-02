@@ -13,6 +13,7 @@ import {
 import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
 import { commitWdk } from "../../src/domain/e2e/wdk-commitment.ts";
 import { app } from "../../src/server/index.ts";
+import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 14. Provisioning mints workspace_key v1 and the owner's own grant
 // in one step. The WDK never reaches the server -- only the commitment (design
@@ -169,12 +170,7 @@ let PERSONAL = "";
 let MEMBER_PERSONAL = "";
 
 beforeEach(async () => {
-	await pool.query("delete from membership");
-	await pool.query("delete from workspace");
-	await pool.query("delete from rate_limit");
-	await pool.query("delete from session");
-	await pool.query("delete from account");
-	await pool.query('delete from "user"');
+	await resetAuthFixture(pool);
 	seq += 1;
 	process.env.DITERO_E2E_ENABLED = "true";
 
@@ -221,8 +217,12 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-	process.env.DITERO_E2E_ENABLED = undefined;
-	await pool.end();
+	try {
+		await resetAuthFixture(pool);
+	} finally {
+		process.env.DITERO_E2E_ENABLED = undefined;
+		await pool.end();
+	}
 });
 
 describe("POST /api/e2e/provision", () => {

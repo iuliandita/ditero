@@ -1,4 +1,3 @@
-import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
 	afterAll,
@@ -9,7 +8,6 @@ import {
 	test,
 } from "vitest";
 import { handleAuthRequest } from "../../src/auth/auth.ts";
-import * as tables from "../../src/db/schema.ts";
 import {
 	aad,
 	decryptWrapped,
@@ -33,6 +31,7 @@ import {
 	encodeWrapped,
 } from "../../src/domain/e2e/wire.ts";
 import { app } from "../../src/server/index.ts";
+import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 12. The properties here are all about what a rewrap must NOT
 // touch: recovery restores the SAME keypair (a new one would orphan every
@@ -43,7 +42,6 @@ const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
 
 const pool = new Pool({ connectionString: databaseURL });
-const db = drizzle(pool, { schema: tables });
 
 const ORIGIN = "http://localhost:5173";
 const ACCOUNT_PASSWORD = "pw-123456";
@@ -215,12 +213,7 @@ async function enrollFixture(): Promise<void> {
 }
 
 beforeEach(async () => {
-	await db.delete(tables.membership);
-	await db.delete(tables.workspace);
-	await db.delete(tables.rateLimit);
-	await db.delete(tables.session);
-	await db.delete(tables.account);
-	await db.delete(tables.user);
+	await resetAuthFixture(pool);
 	seq += 1;
 	({ cookie, userId } = await signUp(
 		`recover-${Date.now()}-${seq}@test.invalid`,
@@ -230,8 +223,12 @@ beforeEach(async () => {
 }, 30_000);
 
 afterAll(async () => {
-	process.env.DITERO_E2E_ENABLED = undefined;
-	await pool.end();
+	try {
+		await resetAuthFixture(pool);
+	} finally {
+		process.env.DITERO_E2E_ENABLED = undefined;
+		await pool.end();
+	}
 });
 
 describe("GET /api/e2e/identity/recovery", () => {

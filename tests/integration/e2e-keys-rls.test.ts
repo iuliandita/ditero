@@ -9,6 +9,7 @@ import {
 } from "vitest";
 import zeroConfig from "../../drizzle-zero.config.ts";
 import { withUserContext } from "../../src/db/user-context.ts";
+import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 7. The key tables are backend-owned and must never be readable
 // across users, so isolation is asserted the way 0004 established it: through a
@@ -58,9 +59,7 @@ beforeAll(async () => {
 // FORCE RLS applies to the owner too, and with no ditero.user_id set the policy
 // evaluates NULL and silently deletes nothing.
 beforeEach(async () => {
-	await pool.query("delete from membership");
-	await pool.query("delete from workspace");
-	await pool.query('delete from "user"');
+	await resetAuthFixture(pool);
 	await pool.query(
 		`insert into "user" (id, name, email, email_verified, created_at, updated_at)
 		 values
@@ -78,8 +77,12 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-	await runtimePool.end();
-	await pool.end();
+	try {
+		await resetAuthFixture(pool);
+	} finally {
+		await runtimePool.end();
+		await pool.end();
+	}
 });
 
 const asAlice = <T extends QueryResultRow>(sql: string, values?: unknown[]) =>
