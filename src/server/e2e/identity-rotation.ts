@@ -4,11 +4,11 @@ import type { PoolClient } from "pg";
  * SQL predicate: the recipient's CURRENT identity is `$publicKeyParam`.
  *
  * Returned as a fragment rather than run as its own query because a grant must
- * carry this check INSIDE its write. A read-then-insert has already decided by
- * the time it inserts, so a rotation committing in between delivers a wrap
- * addressed to a key the recipient has just revoked -- an orphan row nobody can
- * open and nothing later notices. Task 15's grant endpoint is the consumer;
- * the fragment ships with rotation because rotation is what makes a key stale.
+ * carry this check INSIDE its write. The share lock also stays through commit:
+ * an identity rotation that runs second then sees and rewraps this grant,
+ * instead of scanning before the uncommitted row becomes visible. Task 15's
+ * grant endpoint is the consumer; the fragment ships with rotation because
+ * rotation is what makes a key stale.
  */
 export function activeRecipientKeyGuard(
 	userIdParam: number,
@@ -19,7 +19,8 @@ export function activeRecipientKeyGuard(
 		where uk.user_id = $${userIdParam}
 		  and uk.public_key = $${publicKeyParam}
 		  and uk.retired_at is null
-		  and uk.state = 'ready')`;
+		  and uk.state = 'ready'
+		for share of uk)`;
 }
 
 export type Rewrap = {

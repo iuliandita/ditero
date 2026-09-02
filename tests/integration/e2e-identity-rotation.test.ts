@@ -487,6 +487,36 @@ describe("POST /api/e2e/identity/rotate", () => {
 		expect(await heldKeys(alice)).toHaveLength(2);
 	});
 
+	test("a landed grant holds the recipient identity stable through commit", async () => {
+		const granter = await pool.connect();
+		const rotator = await pool.connect();
+		try {
+			await granter.query("begin");
+			const landed = await granter.query(
+				`insert into membership_key (id, membership_id, user_id, workspace_id,
+				 key_version, enc, ciphertext, recipient_public_key, granted_by)
+				 select 'mk_overlap', 'm_alice', $1, 'ws_1', 3, 'enc', 'ct', $2, $1
+				 where ${activeRecipientKeyGuard(1, 2)}`,
+				[alice, aliceKey.publicKey],
+			);
+			expect(landed.rowCount).toBe(1);
+
+			await rotator.query("begin");
+			await rotator.query("set local lock_timeout = '100ms'");
+			await expect(
+				rotator.query(
+					"update user_key set retired_at = now() where user_id = $1 and retired_at is null",
+					[alice],
+				),
+			).rejects.toThrow(/lock timeout/i);
+		} finally {
+			await granter.query("rollback").catch(() => undefined);
+			await rotator.query("rollback").catch(() => undefined);
+			granter.release();
+			rotator.release();
+		}
+	});
+
 	test("refuses a rotation whose previous key is not the active one", async () => {
 		const next = await newIdentity();
 		const other = await newIdentity();

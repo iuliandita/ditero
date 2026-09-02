@@ -10,6 +10,7 @@ import {
 	loadChannels,
 	loadPrefs,
 } from "../notifications/recipients.ts";
+import { activeRecipientKeyGuard } from "./identity-rotation.ts";
 
 export type PendingGrant = {
 	requestId: string;
@@ -342,10 +343,7 @@ export async function submitGrant(
 		`insert into membership_key (id, membership_id, user_id, workspace_id,
 		 key_version, enc, ciphertext, recipient_public_key, granted_by)
 		 select $1, $2, $3, $4, $5, $6, $7, $8, $9
-		 where exists (
-			select 1 from user_key uk
-			where uk.user_id = $3 and uk.public_key = $8
-			  and uk.retired_at is null and uk.state = 'ready')`,
+		 where ${activeRecipientKeyGuard(3, 8)}`,
 		[
 			`mk_${crypto.randomUUID()}`,
 			request.membership_id,
