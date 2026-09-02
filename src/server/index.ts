@@ -40,6 +40,7 @@ import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
 import { schema } from "../zero/schema.gen.ts";
 import { attachmentRoutes } from "./attachments/routes.ts";
+import { startAttachmentSweep } from "./attachments/sweep.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
 import { notifyGrantCapable } from "./e2e/grants.ts";
@@ -489,6 +490,9 @@ if (import.meta.main) {
 		// Every replica starts one; the advisory lock elects the leader per tick.
 		// Timing is validated here so a bad interval fails at boot, not at 03:00.
 		startScheduler(db, pool);
+		// Reuses the scheduler's advisory-lock mechanism under a distinct key:
+		// remote object-store latency must never hold the reminder leader hostage.
+		startAttachmentSweep(pool, attachmentStore);
 		// Leader-elected like the scan: a periodic table sweep, not a
 		// request-driven event.
 		startOverdueSweep(db, pool);

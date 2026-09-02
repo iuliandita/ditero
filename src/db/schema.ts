@@ -201,6 +201,7 @@ export const attachment = pgTable(
 	(t) => [
 		index("attachment_parent").on(t.parentKind, t.parentId),
 		index("attachment_sweep").on(t.state, t.reservationExpiresAt),
+		index("attachment_delete_sweep").on(t.state, t.deletedAt),
 	],
 );
 
