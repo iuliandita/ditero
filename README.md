@@ -179,6 +179,22 @@ before pointing a channel at a host on your own network.
 All scheduler and worker knobs, with their defaults and the boot-validated
 ordering constraints between them, are documented in [.env.example](.env.example).
 
+### Encrypted attachments
+
+Files attached to tasks, comments, and lists are encrypted in the browser before upload.
+The server stores and proxies only ciphertext, including encrypted filenames, declared media
+types, and thumbnails. It can still see the parent record, uploader, byte counts, lifecycle
+state, and storage location because authorization, quota enforcement, and garbage collection
+depend on them.
+
+The Compose default stores ciphertext on a persistent filesystem volume. S3-compatible storage
+is also supported without exposing the bucket to browsers. Uploads require a live connection,
+and the server cannot scan encrypted files for malware. Read the
+[security boundary](docs/security.md#operator-blind-attachments),
+[storage and backup runbook](docs/runbooks/attachment-storage.md), and
+[key-loss runbook](docs/runbooks/e2e-key-loss.md) before enabling attachments for data that has
+no other copy. All attachment configuration is documented in [.env.example](.env.example).
+
 ### Planned distribution
 
 Ditero will also ship as multi-arch container images on GHCR and Docker Hub, with
@@ -197,6 +213,9 @@ the build, and both are now settled in the application itself:
   escalation, and acknowledgement from in-app or a channel button. Validated by a test rig that
   runs real replicas and kills them mid-send. All five channels — ntfy, Telegram, Discord,
   Slack, and email — deliver.
+- **Operator-blind attachments** — browser-side key enrollment, recovery, workspace grants and
+  forward-only rotation protect file content and names from the server and storage backend;
+  filesystem and S3-compatible ciphertext stores share one authenticated transport.
 
 Both spikes have been removed now that the production code supersedes them. The build proceeds
 through a milestone roadmap on `develop`.

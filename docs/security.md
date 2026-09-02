@@ -19,6 +19,85 @@ TOTP seeds, backup codes, OAuth tokens, JWT private keys, and backend integratio
 
 Set secrets directly or with the corresponding `_FILE` variable. When `_FILE` is used, the direct variable must be empty. Container secret files must be mounted into each service that reads them.
 
+## Operator-Blind Attachments
+
+Attachment content, thumbnails, filenames, declared media types, per-file data keys, and
+workspace data keys are encrypted in the browser. The server and blob store receive ciphertext
+and cannot decrypt it. The server deliberately retains the parent reference, workspace, uploader,
+key version, lifecycle state, observed byte counts, ciphertext hash, storage key, and timestamps;
+those fields are required for authorization, quota enforcement, integrity checks, and garbage
+collection. Task and comment text remain server-readable so sync, filters, and reminders work.
+Notification payloads may contain the server-readable parent task title, but never a decrypted
+attachment filename.
+
+Each user has an X25519 identity keypair. The private key is wrapped independently under an
+encryption-passphrase key and a recovery-code key. Each workspace and key version has a random
+256-bit workspace data key, distributed to members with RFC 9180 HPKE base mode using
+DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, and ChaCha20-Poly1305. Each attachment has a fresh
+256-bit data-encryption key. These stored formats are versioned and context-bound:
+
+| Protected value | Construction | Context binding |
+| --- | --- | --- |
+| Private key under passphrase | AES-256-GCM | `ditero:sk-pass:v1 \| userId` |
+| Private key under recovery code | AES-256-GCM | `ditero:sk-recovery:v1 \| userId` |
+| Private key on a remembered device | AES-256-GCM with a non-extractable local key | `ditero:sk-device:v1 \| userId \| deviceId` |
+| Workspace data key for a member | RFC 9180 HPKE base mode | `ditero:wdk:v1 \| workspaceId \| keyVersion \| recipientUserId \| recipientPublicKeyFingerprint` |
+| Attachment data key | AES-256-GCM | `ditero:dek:v1 \| workspaceId \| keyVersion \| attachmentId` |
+| Filename or declared media type | AES-256-GCM | `ditero:meta:v1 \| attachmentId \| fieldName` |
+
+The passphrase and recovery-code keys use Argon2id with independent 16-byte salts, NFC text
+normalization, 64 MiB memory, three iterations, parallelism 1, and a 32-byte output. The purpose is
+also included in the KDF input, so one wrap does not help attack the other. Changing the account
+password does not change either E2E wrap.
+
+File and thumbnail streams use separate AES-256-GCM keys derived with HKDF-SHA256 from the
+attachment data key. Every segment binds the versioned stream header as additional data, and the
+counter plus final flag form the 96-bit nonce. Downloads authenticate the complete stream before
+exposing any plaintext to the user.
+
+### Client storage and active-origin risk
+
+Checking "remember on this device" stores the private key encrypted in IndexedDB under a
+non-extractable WebCrypto key. Workspace keys remain memory-only. This is a deliberate weakening
+from memory-only storage: code executing in the unlocked origin can ask the browser to decrypt,
+but cannot export a reusable device key. It avoids repeated mobile passphrase prompts that train
+users to choose weaker secrets. Account deletion clears the record in the browser performing the
+deletion, but the server cannot remotely erase IndexedDB on another offline browser. Ordinary
+sign-out does not yet clear a remembered record ([issue #254](https://github.com/iuliandita/ditero/issues/254));
+use a separate browser profile on a shared machine until that is fixed.
+
+A device-registry entry or session revocation is not cryptographic revocation. A compromised E2E
+identity must be replaced and every held workspace-key wrap moved to the new identity. Rotation
+after workspace-member removal protects future uploads only. A removed member may retain old keys
+or plaintext already downloaded, and Ditero cannot claw either back.
+
+The hosted web client cannot defend against its own origin serving modified JavaScript that
+captures a passphrase or plaintext while the keyring is unlocked. HPKE also provides no
+out-of-band identity authentication: a malicious server can substitute a recipient public key and
+receive a future grant. Public-key fingerprint verification is deferred.
+
+### Irrecoverable states and account deletion
+
+There is no administrator escrow or server-side reset. Losing both the encryption passphrase and
+recovery code is permanent unless a remembered browser can still open the files. If every holder
+of a workspace key is gone, the existing encrypted files are permanently unreadable. Database and
+blob backups do not change that unless they also restore a usable member identity and that member
+still has its passphrase, recovery code, or remembered browser. See
+[E2E Key Loss](runbooks/e2e-key-loss.md).
+
+Account deletion moves personal attachments into the retention-aware deletion path and preserves
+shared-workspace attachments for remaining members. A sole shared-workspace owner must transfer
+ownership first. Deleting the last member able to open shared encrypted files requires an explicit
+key-loss acknowledgement. The account is tombstoned rather than physically removed so shared
+history can retain stable author references; credentials, sessions, memberships, private settings,
+notification data, and E2E key material are removed. See
+[Attachment Storage](runbooks/attachment-storage.md).
+
+Because the server cannot inspect plaintext, it cannot scan attachments for malware. Passive
+raster previews are decoded and re-encoded in the client; SVG and HTML are never rendered inline.
+No external human cryptographer has reviewed this implementation. Independent review remains a
+release requirement for `v1.0.0`.
+
 ## Database Roles
 
 Bundled PostgreSQL creates:
