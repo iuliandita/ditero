@@ -142,6 +142,7 @@ export type MyGrant = {
 	keyVersion: number;
 	state: MyGrantState;
 	failureReason: string | null;
+	holders: Array<{ userId: string; name: string }>;
 };
 
 export async function requestWorkspaceKey(
@@ -211,16 +212,25 @@ export async function myGrants(
 		requested_version: number;
 		state: string;
 		failure_reason: string | null;
-		holders: string;
+		holders: Array<{ userId: string; name: string }>;
 	}>(
 		`select r.id, r.workspace_id, r.requested_version, r.state,
 		        r.failure_reason,
-		        (select count(*) from membership_key mk
-		         join membership m on m.id = mk.membership_id
-		         join user_key uk on uk.user_id = m.user_id
-		          and uk.retired_at is null and uk.state = 'ready'
-		         where mk.workspace_id = r.workspace_id
-		           and mk.key_version = r.requested_version) as holders
+		        coalesce((
+		          select jsonb_agg(
+		            jsonb_build_object('userId', h.user_id, 'name', h.name)
+		            order by h.name, h.user_id)
+		          from (
+		            select distinct m.user_id, u.name
+		            from membership_key mk
+		            join membership m on m.id = mk.membership_id
+		            join "user" u on u.id = m.user_id
+		            join user_key uk on uk.user_id = m.user_id
+		             and uk.retired_at is null and uk.state = 'ready'
+		            where mk.workspace_id = r.workspace_id
+		              and mk.key_version = r.requested_version
+		          ) h
+		        ), '[]'::jsonb) as holders
 		 from key_grant_request r
 		 where r.user_id = $1
 		 order by r.requested_at, r.id`,
@@ -235,10 +245,11 @@ export async function myGrants(
 		state:
 			row.state !== "key_pending"
 				? (row.state as MyGrantState)
-				: Number(row.holders) === 0
+				: row.holders.length === 0
 					? "unrecoverable"
 					: "pending",
 		failureReason: row.failure_reason,
+		holders: row.holders,
 	}));
 }
 

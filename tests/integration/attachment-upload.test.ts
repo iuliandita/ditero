@@ -121,6 +121,7 @@ const guards: Guards = {
 const app = new Elysia().use(
 	attachmentRoutes(pool, guards, store, {
 		quotaBytes: 20,
+		maxFileBytes: 19,
 		reservationTtlMs: 10 * 60_000,
 		now: () => new Date(currentNow),
 	}),
@@ -196,6 +197,14 @@ function downloadThumbnail(id: string, userId = "upload-owner") {
 	);
 }
 
+function attachmentConfig(userId = "upload-owner") {
+	return app.handle(
+		new Request("http://localhost/api/attachments/config", {
+			headers: { "x-test-user": userId },
+		}),
+	);
+}
+
 const reserve = (
 	id: string,
 	overrides?: Record<string, unknown>,
@@ -207,6 +216,9 @@ const finalize = (id: string, userId?: string) =>
 
 const abort = (id: string, userId?: string) =>
 	postJson("/api/attachments/abort", { id }, userId);
+
+const remove = (id: string, userId?: string) =>
+	postJson("/api/attachments/delete", { id }, userId);
 
 async function row(id: string) {
 	return (
@@ -222,11 +234,12 @@ async function row(id: string) {
 			thumbnail_storage_key: string | null;
 			reservation_expires_at: Date | null;
 			committed_at: Date | null;
+			deleted_at: Date | null;
 		}>(
 			`select state, declared_bytes, observed_bytes, ciphertext_sha256,
 			 storage_key, thumbnail_declared_bytes, thumbnail_observed_bytes,
 			 thumbnail_ciphertext_sha256, thumbnail_storage_key,
-			 reservation_expires_at, committed_at
+				 reservation_expires_at, committed_at, deleted_at
 			 from attachment where id = $1`,
 			[id],
 		)
@@ -336,6 +349,28 @@ afterAll(async () => {
 });
 
 describe("attachment reserve", () => {
+	test("publishes the effective per-file ciphertext limit", async () => {
+		const response = await attachmentConfig();
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ maxFileBytes: 19 });
+	});
+
+	test("distinguishes a file over the effective limit from exhausted quota", async () => {
+		const tooLarge = await reserve("att-too-large", {
+			declaredBytes: 16,
+			thumbnailDeclaredBytes: 4,
+		});
+		expect(tooLarge.status).toBe(413);
+		expect(await tooLarge.text()).toBe("file-too-large");
+		expect(await row("att-too-large")).toBeUndefined();
+
+		await seedUsage("att-nearly-full", "committed", 15);
+		const quotaFull = await reserve("att-quota-full", { declaredBytes: 6 });
+		expect(quotaFull.status).toBe(409);
+		expect(await quotaFull.text()).toBe("quota-exceeded");
+	});
+
 	test("stays hidden while end-to-end encryption is disabled", async () => {
 		process.env.DITERO_E2E_ENABLED = "false";
 
@@ -385,7 +420,7 @@ describe("attachment reserve", () => {
 					thumbnailDeclaredBytes: 6,
 				})
 			).status,
-		).toBe(409);
+		).toBe(413);
 
 		await seedUsage("att-thumbnail-used", "committed", 10, 6);
 		expect(
@@ -504,9 +539,9 @@ describe("attachment reserve", () => {
 	});
 
 	test("refuses a key version the caller cannot unwrap", async () => {
-		expect((await reserve("att-key-missing", { keyVersion: 2 })).status).toBe(
-			409,
-		);
+		const response = await reserve("att-key-missing", { keyVersion: 2 });
+		expect(response.status).toBe(409);
+		expect(await response.text()).toBe("key-unavailable");
 	});
 
 	test("refuses while workspace-key rotation is required", async () => {
@@ -515,7 +550,61 @@ describe("attachment reserve", () => {
 			[WORKSPACE],
 		);
 
-		expect((await reserve("att-rotation")).status).toBe(409);
+		const response = await reserve("att-rotation");
+		expect(response.status).toBe(409);
+		expect(await response.text()).toBe("rotation-required");
+	});
+});
+
+describe("attachment delete", () => {
+	async function committed(id: string, uploadedBy = "upload-owner") {
+		await reserve(id, { declaredBytes: 4 }, uploadedBy);
+		await upload(id, new Uint8Array(4), uploadedBy);
+		await finalize(id, uploadedBy);
+		return (await row(id))?.storage_key ?? "";
+	}
+
+	test("soft-deletes a committed file and leaves its blob for the retention sweep", async () => {
+		const storageKey = await committed("att-delete");
+
+		const response = await remove("att-delete", "upload-member");
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			id: "att-delete",
+			state: "deleting",
+		});
+		expect(await row("att-delete")).toMatchObject({
+			state: "deleting",
+			deleted_at: NOW,
+		});
+		expect(await store.exists(storageKey)).toBe(true);
+	});
+
+	test("is idempotent while the row awaits its retention sweep", async () => {
+		await committed("att-delete-twice");
+
+		expect((await remove("att-delete-twice")).status).toBe(200);
+		expect((await remove("att-delete-twice")).status).toBe(200);
+	});
+
+	test("re-derives the current write role without revealing rows to outsiders", async () => {
+		await committed("att-delete-role");
+
+		expect((await remove("att-delete-role", "upload-viewer")).status).toBe(404);
+		expect((await remove("att-delete-role", "upload-outsider")).status).toBe(
+			404,
+		);
+		expect(await row("att-delete-role")).toMatchObject({ state: "committed" });
+	});
+
+	test("refuses deleting a reservation through the committed-file endpoint", async () => {
+		await reserve("att-delete-reserved");
+
+		expect((await remove("att-delete-reserved")).status).toBe(409);
+		expect(await row("att-delete-reserved")).toMatchObject({
+			state: "reserved",
+		});
 	});
 });
 
@@ -634,6 +723,9 @@ describe("attachment upload and finalize", () => {
 		);
 		expect(response.headers.get("content-disposition")).toBe("attachment");
 		expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+		expect(response.headers.get("content-length")).toBe(
+			String(thumbnail.length),
+		);
 		expect(
 			(await downloadThumbnail("att-thumbnail-download", "upload-outsider"))
 				.status,

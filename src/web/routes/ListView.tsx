@@ -1,5 +1,5 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { ListTodo, SlidersHorizontal } from "lucide-react";
+import { ListTodo, Paperclip, SlidersHorizontal } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,7 @@ import { ListIcon } from "@/lib/list-icon";
 import { runMutation } from "@/lib/run-mutation";
 import type { ListKind } from "../../domain/icon-map.ts";
 import { randomId } from "../../domain/random-id.ts";
+import { WRITE_ROLES } from "../../domain/role.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import type { CompletedDisplay } from "../../domain/task-sort.ts";
 import { snapshotList } from "../../domain/template.ts";
@@ -27,6 +28,10 @@ import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { Label, List, schema, Task } from "../../zero/schema.gen.ts";
+import {
+	AttachmentList,
+	type AttachmentListHandle,
+} from "../components/attachments/AttachmentList.tsx";
 import { IconPicker } from "../components/list/IconPicker.tsx";
 import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
@@ -75,6 +80,8 @@ export function ListView({
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 	const [scheduleTaskId, setScheduleTaskId] = useState<string | null>(null);
 	const titleInput = useRef<HTMLInputElement>(null);
+	const attachmentsRef = useRef<AttachmentListHandle>(null);
+	const listHeaderRef = useRef<HTMLDivElement>(null);
 
 	// Zero reports per-query completeness; "no rows yet" and "no rows" are only
 	// distinguishable here, where the queries live. The row surface below is pure.
@@ -223,6 +230,22 @@ export function ListView({
 	);
 	const kind = (list.kind ?? "tasks") as ListKind;
 	const mode = (list.completedDisplay ?? "sink") as CompletedDisplay;
+	const callerRole = memberships.find(
+		(member) =>
+			member.workspaceId === openList.workspaceId &&
+			member.userId === zero.userID,
+	)?.role;
+	const canAttach = callerRole != null && WRITE_ROLES.has(callerRole);
+	const rowActions: RowAction[] = [
+		...listActions(openList),
+		{
+			id: "attachment-add",
+			label: m.attachment_add(),
+			icon: Paperclip,
+			hidden: !canAttach,
+			onSelect: () => attachmentsRef.current?.openPicker(),
+		},
+	];
 
 	const handlers = {
 		onToggle: (id: string, done: boolean) =>
@@ -282,7 +305,7 @@ export function ListView({
 	return (
 		<div data-testid="list" className="max-w-3xl">
 			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
-			<div className="group mb-4 flex items-center gap-2">
+			<div ref={listHeaderRef} className="group mb-4 flex items-center gap-2">
 				<button
 					type="button"
 					aria-label={m.list_change_icon()}
@@ -365,10 +388,22 @@ export function ListView({
 					</DropdownMenuContent>
 				</DropdownMenu>
 				<RowActions
-					actions={listActions(openList)}
+					actions={rowActions}
 					label={m.row_actions_for({ name: openList.title })}
 				/>
 			</div>
+
+			<AttachmentList
+				ref={attachmentsRef}
+				workspaceId={openList.workspaceId}
+				parentKind="list"
+				parentId={openList.id}
+				onEmptyFocus={() =>
+					listHeaderRef.current
+						?.querySelector<HTMLButtonElement>('[data-testid="row-actions"]')
+						?.focus()
+				}
+			/>
 
 			<div className="mb-3 flex gap-2">
 				<TitleSuggestInput

@@ -28,6 +28,13 @@ export type AttachmentDownloadOptions = {
 	createSink?: () => Promise<PlaintextSink>;
 	urls?: Pick<typeof URL, "createObjectURL" | "revokeObjectURL">;
 	signal?: AbortSignal;
+	onProgress?: (progress: AttachmentDownloadProgress) => void;
+};
+
+export type AttachmentDownloadProgress = {
+	phase: "transferring" | "decrypting";
+	loaded: number;
+	total: number;
 };
 
 export type DecryptedAttachmentMetadata = {
@@ -86,6 +93,7 @@ export async function decryptAttachmentMetadata(
 
 async function* responseBytes(
 	stream: ReadableStream<Uint8Array>,
+	onChunk: (bytes: number) => void,
 ): AsyncIterable<Uint8Array> {
 	const reader = stream.getReader();
 	let complete = false;
@@ -96,6 +104,7 @@ async function* responseBytes(
 				complete = true;
 				return;
 			}
+			onChunk(next.value.byteLength);
 			yield next.value;
 		}
 	} finally {
@@ -148,16 +157,33 @@ async function download(
 	}
 	if (!response.body)
 		throw new Error("attachment download: response has no body");
+	const rawLength = response.headers.get("content-length");
+	const total =
+		rawLength !== null &&
+		/^\d+$/.test(rawLength) &&
+		Number.isSafeInteger(Number(rawLength))
+			? Number(rawLength)
+			: 0;
+	let loaded = 0;
+	options.onProgress?.({ phase: "transferring", loaded, total });
 
 	const sink = await (options.createSink ?? memorySink)();
 	try {
 		for await (const chunk of decryptStream(
-			responseBytes(response.body),
+			responseBytes(response.body, (bytes) => {
+				loaded += bytes;
+				options.onProgress?.({ phase: "transferring", loaded, total });
+			}),
 			dek,
 			purpose,
 		)) {
 			await sink.write(chunk);
 		}
+		options.onProgress?.({
+			phase: "decrypting",
+			loaded,
+			total: total || loaded,
+		});
 		const blobType =
 			purpose === "thumbnail"
 				? "image/png"

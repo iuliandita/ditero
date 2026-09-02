@@ -50,6 +50,8 @@ export function EnrollmentWizard({
 	onOpenChange,
 	userId,
 	onEnrolled,
+	pendingFileName,
+	onCancelled,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -60,6 +62,8 @@ export function EnrollmentWizard({
 	 * the upload so closing the dialog never cancels it.
 	 */
 	onEnrolled?: () => void;
+	pendingFileName?: string | null;
+	onCancelled?: () => void;
 }) {
 	const { adoptPrivateKey } = useKeyring();
 	const [pane, setPane] = useState<Pane>("passphrase");
@@ -93,6 +97,14 @@ export function EnrollmentWizard({
 		// Abandoning at pane 2 discards a code that was never authoritative --
 		// nothing is persisted until pane 3, so there is no half-enrolled state.
 		setMaterial(null);
+	}
+
+	function changeOpen(next: boolean) {
+		if (!next) {
+			if (pane !== "done" || enrollError !== null) onCancelled?.();
+			reset();
+		}
+		onOpenChange(next);
 	}
 
 	async function buildMaterial(): Promise<void> {
@@ -224,13 +236,7 @@ export function EnrollmentWizard({
 	}
 
 	return (
-		<Dialog
-			open={open}
-			onOpenChange={(next) => {
-				if (!next) reset();
-				onOpenChange(next);
-			}}
-		>
+		<Dialog open={open} onOpenChange={changeOpen}>
 			<DialogContent data-testid="e2e-enroll-dialog">
 				{pane === "passphrase" && (
 					<>
@@ -313,7 +319,7 @@ export function EnrollmentWizard({
 									type="button"
 									variant="outline"
 									data-testid="e2e-enroll-cancel"
-									onClick={() => onOpenChange(false)}
+									onClick={() => changeOpen(false)}
 								>
 									{m.e2e_enroll_cancel()}
 								</Button>
@@ -396,6 +402,11 @@ export function EnrollmentWizard({
 							<DialogTitle>{m.e2e_enroll_done_heading()}</DialogTitle>
 							<DialogDescription>{m.e2e_enroll_done_body()}</DialogDescription>
 						</DialogHeader>
+						{pendingFileName && !enrollError && (
+							<p className="text-sm" data-testid="e2e-enroll-pending-upload">
+								{m.e2e_enroll_done_upload({ name: pendingFileName })}
+							</p>
+						)}
 
 						<div className="flex flex-col gap-3">
 							{enrollError ? (
@@ -426,7 +437,7 @@ export function EnrollmentWizard({
 									type="button"
 									className="self-end"
 									data-testid="e2e-enroll-close"
-									onClick={() => onOpenChange(false)}
+									onClick={() => changeOpen(false)}
 								>
 									{m.e2e_enroll_done_close()}
 								</Button>

@@ -110,11 +110,17 @@ describe("downloadAttachment", () => {
 			return "blob:attachment";
 		});
 		const revokeObjectURL = vi.fn();
+		const progress: Array<{ phase: string; loaded: number; total: number }> =
+			[];
 
 		const result = await downloadAttachment(row, wdk, {
-			fetcher: async () => response(ciphertext),
+			fetcher: async () =>
+				new Response(response(ciphertext).body, {
+					headers: { "content-length": String(ciphertext.length) },
+				}),
 			createSink: async () => temporary.sink,
 			urls: { createObjectURL, revokeObjectURL },
+			onProgress: (event) => progress.push(event),
 		});
 
 		expect(result.url).toBe("blob:attachment");
@@ -122,6 +128,21 @@ describe("downloadAttachment", () => {
 		expect(result.contentType).toBe("image/png");
 		expect(new Uint8Array(await result.blob.arrayBuffer())).toEqual(plaintext);
 		expect(events).toEqual(["reveal"]);
+		expect(progress.at(0)).toEqual({
+			phase: "transferring",
+			loaded: 0,
+			total: ciphertext.length,
+		});
+		expect(progress).toContainEqual({
+			phase: "transferring",
+			loaded: ciphertext.length,
+			total: ciphertext.length,
+		});
+		expect(progress.at(-1)).toEqual({
+			phase: "decrypting",
+			loaded: ciphertext.length,
+			total: ciphertext.length,
+		});
 		result.revoke();
 		expect(revokeObjectURL).toHaveBeenCalledWith("blob:attachment");
 	});

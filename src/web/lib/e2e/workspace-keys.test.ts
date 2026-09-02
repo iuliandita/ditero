@@ -1,13 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	generateIdentityKeyPair,
+	importRecipientPrivateKey,
 	importRecipientPublicKey,
+	openWdk,
 	publicKeyFingerprint,
 	sealWdk,
 } from "../../../domain/e2e/hpke.ts";
-import { commitWdk } from "../../../domain/e2e/wdk-commitment.ts";
-import { encodeBytes } from "../../../domain/e2e/wire.ts";
-import { loadWorkspaceKeys, reconcileWorkspaceKeys } from "./workspace-keys.ts";
+import {
+	commitWdk,
+	verifyWdkCommitment,
+} from "../../../domain/e2e/wdk-commitment.ts";
+import { decodeBytes, encodeBytes } from "../../../domain/e2e/wire.ts";
+import {
+	loadWorkspaceKeys,
+	reconcileWorkspaceKeys,
+	rotateWorkspaceKey,
+} from "./workspace-keys.ts";
 
 const WORKSPACE = "ws_load";
 const USER = "user_load";
@@ -265,5 +274,129 @@ describe("reconcileWorkspaceKeys", () => {
 		);
 		expect(called).toContain("/api/e2e/grants/request");
 		expect(called).not.toContain("/api/e2e/provision");
+	});
+});
+
+describe("rotateWorkspaceKey", () => {
+	it("mints one candidate and seals it to every enrolled remaining member", async () => {
+		const owner = await generateIdentityKeyPair();
+		const member = await generateIdentityKeyPair();
+		const publicKeys = [owner.publicKey, member.publicKey].map(encodeBytes);
+		let submitted: Record<string, unknown> | null = null;
+		const fetcher = vi.fn(
+			async (input: RequestInfo | URL, init?: RequestInit) => {
+				const path = String(input);
+				if (path === `/api/e2e/members/${WORKSPACE}/keys`) {
+					return Response.json({
+						workspaceId: WORKSPACE,
+						currentVersion: 1,
+						currentCommitment: await commitWdk(WDK, WORKSPACE, 1),
+						rotationRequired: true,
+						canRotate: true,
+						members: [
+							{
+								membershipId: "membership-owner",
+								userId: USER,
+								name: "Owner",
+								role: "owner",
+								recipientPublicKey: publicKeys[0],
+							},
+							{
+								membershipId: "membership-member",
+								userId: "user-member",
+								name: "Member",
+								role: "member",
+								recipientPublicKey: publicKeys[1],
+							},
+							{
+								membershipId: "membership-waiting",
+								userId: "user-waiting",
+								name: "Waiting",
+								role: "viewer",
+								recipientPublicKey: null,
+							},
+						],
+					});
+				}
+				if (path === `/api/e2e/workspaces/${WORKSPACE}/rotate`) {
+					submitted = JSON.parse(String(init?.body));
+					return Response.json({
+						workspaceId: WORKSPACE,
+						version: 2,
+						commitment: (submitted as { commitment: string }).commitment,
+						outcome: "rotated",
+					});
+				}
+				throw new Error(`unexpected request ${path}`);
+			},
+		);
+
+		const result = await rotateWorkspaceKey(WORKSPACE, fetcher);
+
+		expect(result.outcome).toBe("rotated");
+		expect(result.wdk).toHaveLength(32);
+		expect(submitted).toMatchObject({ previousVersion: 1 });
+		if (submitted === null) throw new Error("rotation was not submitted");
+		const body = submitted as unknown as {
+			commitment: string;
+			grants: Array<{
+				userId: string;
+				recipientPublicKey: string;
+				enc: string;
+				ciphertext: string;
+			}>;
+		};
+		expect(body.grants).toHaveLength(2);
+		await verifyWdkCommitment(
+			result.wdk as Uint8Array,
+			WORKSPACE,
+			2,
+			body.commitment,
+		);
+		for (const [index, identity] of [owner, member].entries()) {
+			const grant = body.grants[index];
+			if (!grant) throw new Error("missing rotation grant");
+			const opened = await openWdk(
+				{
+					enc: decodeBytes(grant.enc),
+					ciphertext: decodeBytes(grant.ciphertext),
+				},
+				await importRecipientPrivateKey(identity.privateKey),
+				{
+					workspaceId: WORKSPACE,
+					keyVersion: 2,
+					recipientUserId: grant.userId,
+					recipientFingerprint: await publicKeyFingerprint(
+						decodeBytes(grant.recipientPublicKey),
+					),
+				},
+			);
+			expect(opened).toEqual(result.wdk);
+		}
+	});
+
+	it("does not expose the losing candidate when another client already rotated", async () => {
+		const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+			if (String(input).endsWith("/keys")) {
+				return Response.json({
+					workspaceId: WORKSPACE,
+					currentVersion: 1,
+					currentCommitment: await commitWdk(WDK, WORKSPACE, 1),
+					rotationRequired: true,
+					canRotate: true,
+					members: [],
+				});
+			}
+			return Response.json({
+				workspaceId: WORKSPACE,
+				version: 2,
+				commitment: await commitWdk(new Uint8Array(32), WORKSPACE, 2),
+				outcome: "already",
+			});
+		});
+
+		const result = await rotateWorkspaceKey(WORKSPACE, fetcher);
+
+		expect(result).toMatchObject({ outcome: "already", wdk: null });
 	});
 });

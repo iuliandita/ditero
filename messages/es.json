@@ -1425,6 +1425,8 @@
 	"e2e_enroll_failed": "No se pudo configurar el cifrado. Inténtalo de nuevo.",
 	"e2e_enroll_done_heading": "El cifrado está activado",
 	"e2e_enroll_done_body": "Los archivos que adjuntes a partir de ahora se cifran antes de salir de este dispositivo.",
+	"e2e_enroll_done_upload": "\"{name}\" se está subiendo ahora.",
+	"e2e_enroll_discard_notice": "No se configuró el cifrado, así que el archivo no se adjuntó.",
 	"e2e_enroll_done_close": "Listo",
 	"e2e_recovery_heading": "Guarda tu código de recuperación",
 	"e2e_recovery_intro": "Es la única forma de volver a tus archivos si olvidas la frase de contraseña. Se muestra una sola vez y nunca más.",
@@ -1475,5 +1477,89 @@
 	"e2e_regenerate_done": "Nuevo código de recuperación guardado. El código anterior ya no funciona.",
 	"e2e_rewrap_conflict": "Tu configuración de cifrado cambió en otro lugar. Recarga e inténtalo de nuevo.",
 	"e2e_rewrap_failed": "No se pudo guardar. Inténtalo de nuevo.",
+	"e2e_grant_who_overflow": [
+		{
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural",
+				"local countNum = count: number"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "y {countNum} persona más",
+				"countPlural=many": "y {countNum} personas más",
+				"countPlural=other": "y {countNum} personas más"
+			}
+		}
+	],
+	"e2e_rotation_blocked_title": "Los archivos nuevos están en pausa para este espacio de trabajo.",
+	"e2e_rotation_blocked_body": "Se eliminó a alguien de {workspace}, así que los archivos necesitan una clave nueva antes de poder añadir más.",
+	"e2e_rotation_blocked_unaffected": "Los archivos que ya están aquí no se ven afectados y siguen abriéndose con normalidad.",
+	"e2e_rotation_blocked_who": "{names} pueden crear la clave nueva al abrir Ditero.",
+	"e2e_rotation_action": "Crear la clave nueva",
+	"e2e_rotation_confirm_title": "¿Crear una clave nueva para {workspace}?",
+	"e2e_rotation_confirm_body": "La clave nueva protege los archivos que se añadan a partir de ahora. Los archivos anteriores siguen siendo legibles para quienes ya podían abrirlos, incluida la persona eliminada si los abrió antes de salir.",
+	"e2e_rotation_confirm_submit": "Crear clave",
+	"e2e_rotation_working": "Creando la clave nueva...",
+	"e2e_rotation_done": "Se creó la clave nueva. Ya se pueden añadir archivos.",
+	"e2e_rotation_already_done": "Otra persona ya creó la clave nueva.",
+	"e2e_rotation_failed": "No se pudo crear la clave nueva. Inténtalo de nuevo.",
+	"attachment_section_heading": "Archivos",
+	"attachment_add": "Añadir archivo",
+	"attachment_add_to_comment": "Adjuntar un archivo",
+	"attachment_count_label": [
+		{
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural",
+				"local countNum = count: number"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} archivo",
+				"countPlural=many": "{countNum} archivos",
+				"countPlural=other": "{countNum} archivos"
+			}
+		}
+	],
+	"attachment_empty": "Todavía no hay archivos.",
+	"attachment_dropzone_hint": "Suelta archivos aquí o usa Añadir archivo.",
+	"attachment_dropzone_active": "Suelta para adjuntar.",
+	"attachment_dropzone_aria": "Archivos adjuntos",
+	"attachment_added": "Añadido el {date}",
+	"attachment_open": "Abrir",
+	"attachment_open_named": "Abrir {name}",
+	"attachment_download": "Descargar",
+	"attachment_delete": "Eliminar archivo",
+	"attachment_delete_title": "¿Eliminar el archivo?",
+	"attachment_delete_confirm": "¿Eliminar \"{name}\"? Se quitará para todos en {workspace} y no se puede deshacer.",
+	"attachment_error_delete_failed": "No se pudo eliminar el archivo. Inténtalo de nuevo.",
+	"attachment_thumbnail_alt": "Vista previa de {name}",
+	"attachment_preview_unavailable": "No hay vista previa para este tipo de archivo. Descárgalo para abrirlo.",
+	"attachment_encrypting": "Cifrando...",
+	"attachment_uploading": "Subiendo...",
+	"attachment_decrypting": "Descifrando...",
+	"attachment_upload_progress_aria": "Subiendo {name}",
+	"attachment_download_progress_aria": "Descargando {name}",
+	"attachment_cancel_upload": "Cancelar subida",
+	"attachment_upload_cancelled": "Subida cancelada.",
+	"attachment_ready_to_upload": "Listo: se subirá cuando envíes el comentario.",
+	"attachment_error_too_large": "Ese archivo supera el límite de {limit}.",
+	"attachment_error_quota": "Este espacio de trabajo no tiene almacenamiento disponible. Elimina algunos archivos para añadir más.",
+	"attachment_error_offline": "Las subidas necesitan conexión. Inténtalo de nuevo cuando vuelvas a tener conexión.",
+	"attachment_error_reserve_failed": "No se pudo añadir ese archivo. Inténtalo de nuevo.",
+	"attachment_error_upload_failed": "Esa subida no terminó. Inténtalo de nuevo.",
+	"attachment_error_download_failed": "No se pudo descargar ese archivo. Inténtalo de nuevo.",
+	"attachment_error_integrity": "Este archivo no superó la comprobación de integridad y no se abrió. Está dañado o se modificó después de subirlo.",
+	"attachment_error_rotation_required": "Los archivos nuevos están en pausa para este espacio de trabajo hasta que se cree una clave nueva.",
+	"attachment_locked_name": "Archivo cifrado",
+	"attachment_locked_meta": "{size}, añadido el {date}",
+	"attachment_date_unknown": "fecha desconocida",
+	"attachment_key_pending": "Esperando acceso a los archivos de este espacio de trabajo.",
+	"attachment_key_pending_who": "{names} pueden concederlo la próxima vez que abran Ditero.",
+	"attachment_key_pending_self": "Configura el cifrado para abrir este archivo.",
+	"attachment_unreadable": "Este archivo no se puede volver a abrir.",
+	"attachment_unreadable_body": "Todas las personas que tenían la clave de estos archivos han dejado {workspace}. Nadie puede descifrarlos: ni los miembros actuales ni quien administra este servidor. Solo se pueden eliminar.",
+	"attachment_unreadable_delete_confirm": "¿Eliminar \"{name}\"? Nadie puede abrirlo y la eliminación no se puede deshacer.",
 	"notify_key_grant_body": "Alguien espera una clave para este espacio de trabajo"
 }

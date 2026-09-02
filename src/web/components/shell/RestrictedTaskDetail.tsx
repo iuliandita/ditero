@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
+import { AttachmentList } from "../attachments/AttachmentList.tsx";
 import { CommentThread } from "../people/CommentThread.tsx";
 
 // Read-only task detail for the restricted ("kid") shell. The only write a kid may
@@ -103,6 +104,13 @@ export function RestrictedTaskDetail({
 							<p className="whitespace-pre-wrap break-words">{t.notes}</p>
 						</div>
 					)}
+
+					<AttachmentList
+						workspaceId={workspaceId}
+						parentKind="task"
+						parentId={t.id}
+						showAdd={false}
+					/>
 
 					<div className="border-t pt-3">
 						<CommentThread task={t} workspaceId={workspaceId} restricted />

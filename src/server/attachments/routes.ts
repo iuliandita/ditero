@@ -18,6 +18,7 @@ import { type AttachmentState, assertAttachmentTransition } from "./state.ts";
 
 export type AttachmentRouteOptions = {
 	quotaBytes?: number;
+	maxFileBytes?: number;
 	reservationTtlMs?: number;
 	now?: () => Date;
 };
@@ -87,11 +88,11 @@ function errorForAccess(failure: AttachmentAccessFailure): Response {
 	if (failure === "not-permitted" || failure === "parent-mismatch") {
 		return new Response("Forbidden", { status: 403 });
 	}
-	return new Response("Conflict", { status: 409 });
+	return new Response(failure, { status: 409 });
 }
 
 function errorForInvalidation(failure: AttachmentAccessFailure): Response {
-	return new Response(failure === "not-permitted" ? "Forbidden" : "Conflict", {
+	return new Response(failure === "not-permitted" ? "Forbidden" : failure, {
 		status: failure === "not-permitted" ? 403 : 409,
 	});
 }
@@ -291,14 +292,18 @@ async function downloadResponse(
 ): Promise<Response> {
 	const storageColumn =
 		kind === "content" ? "a.storage_key" : "a.thumbnail_storage_key";
+	const bytesColumn =
+		kind === "content" ? "a.observed_bytes" : "a.thumbnail_observed_bytes";
 	const row = await withUserContext(pool, userId, async (client) => {
 		const result = await client.query<{
 			storage_key: string | null;
 			state: AttachmentState;
 			deleted_at: Date | null;
 			is_member: boolean;
+			observed_bytes: string | null;
 		}>(
-			`select ${storageColumn} as storage_key, a.state, a.deleted_at,
+			`select ${storageColumn} as storage_key, ${bytesColumn} as observed_bytes,
+			 a.state, a.deleted_at,
 			 exists(select 1 from membership m
 			        where m.workspace_id = a.workspace_id
 			          and m.user_id = $2) as is_member
@@ -312,7 +317,8 @@ async function downloadResponse(
 	if (
 		row.state !== "committed" ||
 		row.deleted_at !== null ||
-		row.storage_key === null
+		row.storage_key === null ||
+		row.observed_bytes === null
 	) {
 		return new Response("Not Found", { status: 404 });
 	}
@@ -321,6 +327,7 @@ async function downloadResponse(
 			"content-type": "application/octet-stream",
 			"content-disposition": "attachment",
 			"x-content-type-options": "nosniff",
+			"content-length": row.observed_bytes,
 		},
 	});
 }
@@ -332,11 +339,21 @@ export function attachmentRoutes(
 	options: AttachmentRouteOptions = {},
 ) {
 	const quotaBytes = options.quotaBytes ?? DEFAULT_QUOTA_BYTES;
+	const maxFileBytes = options.maxFileBytes ?? quotaBytes;
 	const reservationTtlMs =
 		options.reservationTtlMs ?? DEFAULT_RESERVATION_TTL_MS;
 	const now = options.now ?? (() => new Date());
 	if (!Number.isSafeInteger(quotaBytes) || quotaBytes <= 0) {
 		throw new Error("attachment quota must be a positive safe integer");
+	}
+	if (
+		!Number.isSafeInteger(maxFileBytes) ||
+		maxFileBytes <= 0 ||
+		maxFileBytes > quotaBytes
+	) {
+		throw new Error(
+			"attachment file limit must be a positive safe integer no larger than the quota",
+		);
 	}
 	if (!Number.isSafeInteger(reservationTtlMs) || reservationTtlMs <= 0) {
 		throw new Error(
@@ -345,6 +362,13 @@ export function attachmentRoutes(
 	}
 
 	return new Elysia()
+		.get(
+			"/api/attachments/config",
+			guards.guardedGet(async () => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				return { maxFileBytes };
+			}),
+		)
 		.post(
 			"/api/attachments/reserve",
 			guards.guardedPost(async (request, session) => {
@@ -361,6 +385,12 @@ export function attachmentRoutes(
 					);
 					if (failure) return errorForAccess(failure);
 					if (
+						body.declaredBytes + (body.thumbnailDeclaredBytes ?? 0) >
+						maxFileBytes
+					) {
+						return new Response("file-too-large", { status: 413 });
+					}
+					if (
 						await attachmentQuotaWouldExceed(
 							client,
 							body.workspaceId,
@@ -368,7 +398,7 @@ export function attachmentRoutes(
 							quotaBytes,
 						)
 					) {
-						return new Response("Conflict", { status: 409 });
+						return new Response("quota-exceeded", { status: 409 });
 					}
 
 					const expiresAt = new Date(now().getTime() + reservationTtlMs);
@@ -783,6 +813,39 @@ export function attachmentRoutes(
 					},
 				);
 				return await cleanupAndReturn(store, result);
+			}),
+		)
+		.post(
+			"/api/attachments/delete",
+			guards.guardedPost(async (request, session) => {
+				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
+				const body = await parseJson(request, finalizeBody);
+				if (!body) return new Response("Bad Request", { status: 400 });
+				return await withUserContext(pool, session.user.id, async (client) => {
+					const row = await attachmentForUpdate(client, body.id);
+					if (!row) return new Response("Not Found", { status: 404 });
+					if (
+						!(await hasAttachmentWriteRole(
+							client,
+							session.user.id,
+							row.workspaceId,
+						))
+					) {
+						return new Response("Not Found", { status: 404 });
+					}
+					const result = { id: row.id, state: "deleting" as const };
+					if (row.state === "deleting") return result;
+					if (row.state !== "committed") {
+						return new Response("Conflict", { status: 409 });
+					}
+					assertAttachmentTransition(row.state, "deleting");
+					await client.query(
+						`update attachment set state = 'deleting', deleted_at = $2
+						 where id = $1 and state = 'committed'`,
+						[row.id, now()],
+					);
+					return result;
+				});
 			}),
 		)
 		.get(

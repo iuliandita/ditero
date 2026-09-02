@@ -706,13 +706,19 @@ describe("liveness", () => {
 	});
 
 	test("a workspace with no living key holder reports unrecoverable", async () => {
-		expect((await mineFor(newcomerCookie))[0].state).toBe("pending");
+		expect((await mineFor(newcomerCookie))[0]).toMatchObject({
+			state: "pending",
+			holders: [{ userId: owner, name: "Grant" }],
+		});
 
 		// The last grant-capable member leaves. Design 8.3, second case: a
 		// spinner forever is the wrong answer, and the state is derived rather
 		// than written by a hook so it cannot go stale if someone re-enrolls.
 		await pool.query("delete from membership where user_id = $1", [owner]);
-		expect((await mineFor(newcomerCookie))[0].state).toBe("unrecoverable");
+		expect((await mineFor(newcomerCookie))[0]).toMatchObject({
+			state: "unrecoverable",
+			holders: [],
+		});
 	});
 
 	test("a recovered identity still opens every existing wrap", async () => {

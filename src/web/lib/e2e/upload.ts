@@ -42,6 +42,24 @@ export type UploadedAttachment = {
 	state: "committed";
 };
 
+export type AttachmentUploadFailure =
+	| "file-too-large"
+	| "quota-exceeded"
+	| "rotation-required"
+	| "key-unavailable"
+	| "unknown";
+
+export class AttachmentUploadError extends Error {
+	constructor(
+		readonly stage: AttachmentUploadPhase | "reserve" | "abort",
+		readonly status: number,
+		readonly reason: AttachmentUploadFailure,
+	) {
+		super(`attachment upload: ${stage} failed (${status}, ${reason})`);
+		this.name = "AttachmentUploadError";
+	}
+}
+
 const defaultFetcher: E2eFetcher = (input, init) => fetch(input, init);
 const textEncoder = new TextEncoder();
 
@@ -99,7 +117,16 @@ async function expectOk(
 	stage: AttachmentUploadPhase | "reserve" | "abort",
 ): Promise<Response> {
 	if (!response.ok) {
-		throw new Error(`attachment upload: ${stage} failed (${response.status})`);
+		const detail = await response.text().catch(() => "");
+		const reason: AttachmentUploadFailure = [
+			"file-too-large",
+			"quota-exceeded",
+			"rotation-required",
+			"key-unavailable",
+		].includes(detail)
+			? (detail as AttachmentUploadFailure)
+			: "unknown";
+		throw new AttachmentUploadError(stage, response.status, reason);
 	}
 	return response;
 }
@@ -122,6 +149,22 @@ async function uploadCiphertext(
 	total: number,
 	options: AttachmentUploadOptions,
 ): Promise<number> {
+	if (
+		options.fetcher === undefined &&
+		typeof navigator !== "undefined" &&
+		navigator.storage !== undefined &&
+		"getDirectory" in navigator.storage
+	) {
+		return await uploadCiphertextFromPrivateFile(
+			url,
+			plaintext,
+			dek,
+			purpose,
+			loadedBefore,
+			total,
+			options,
+		);
+	}
 	let loaded = loadedBefore;
 	const body = streamBody(
 		encryptStream(blobBytes(plaintext), dek, purpose),
@@ -138,6 +181,103 @@ async function uploadCiphertext(
 		"uploading",
 	);
 	return loaded;
+}
+
+function xhrUpload(
+	url: string,
+	body: File,
+	signal: AbortSignal | undefined,
+	onProgress: (loaded: number) => void,
+): Promise<Response> {
+	return new Promise((resolve, reject) => {
+		const request = new XMLHttpRequest();
+		let settled = false;
+		const finish = (action: () => void) => {
+			if (settled) return;
+			settled = true;
+			signal?.removeEventListener("abort", abort);
+			action();
+		};
+		const abort = () => request.abort();
+		request.open("POST", url);
+		request.withCredentials = true;
+		request.setRequestHeader("content-type", "application/octet-stream");
+		request.upload.onprogress = (event) => onProgress(event.loaded);
+		request.onload = () =>
+			finish(() =>
+				resolve(
+					new Response(request.responseText, {
+						status: request.status,
+						statusText: request.statusText,
+					}),
+				),
+			);
+		request.onerror = () =>
+			finish(() => reject(new TypeError("attachment upload: network failure")));
+		request.onabort = () =>
+			finish(() => reject(new DOMException("Upload aborted", "AbortError")));
+		if (signal?.aborted) {
+			request.abort();
+			return;
+		}
+		signal?.addEventListener("abort", abort, { once: true });
+		request.send(body);
+	});
+}
+
+async function uploadCiphertextFromPrivateFile(
+	url: string,
+	plaintext: Blob,
+	dek: Uint8Array,
+	purpose: "content" | "thumbnail",
+	loadedBefore: number,
+	total: number,
+	options: AttachmentUploadOptions,
+): Promise<number> {
+	const storage = navigator.storage as StorageManager & {
+		getDirectory(): Promise<FileSystemDirectoryHandle>;
+	};
+	const root = await storage.getDirectory();
+	const name = `ditero-upload-${randomId()}`;
+	const handle = await root.getFileHandle(name, { create: true });
+	const writable = await handle.createWritable();
+	let encrypted = 0;
+	try {
+		for await (const chunk of encryptStream(
+			blobBytes(plaintext),
+			dek,
+			purpose,
+		)) {
+			if (options.signal?.aborted) {
+				throw new DOMException("Upload aborted", "AbortError");
+			}
+			await writable.write(chunk.slice());
+			encrypted += chunk.byteLength;
+			options.onProgress?.({
+				phase: "encrypting",
+				loaded: loadedBefore + encrypted,
+				total,
+			});
+		}
+		await writable.close();
+		const ciphertext = await handle.getFile();
+		await expectOk(
+			await xhrUpload(url, ciphertext, options.signal, (loaded) => {
+				options.onProgress?.({
+					phase: "uploading",
+					loaded: loadedBefore + loaded,
+					total,
+				});
+			}),
+			"uploading",
+		);
+		return loadedBefore + ciphertext.size;
+	} catch (error) {
+		await writable.abort().catch(() => undefined);
+		throw error;
+	} finally {
+		await root.removeEntry(name).catch(() => undefined);
+	}
 }
 
 export async function uploadAttachment(

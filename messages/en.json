@@ -1397,6 +1397,8 @@
 	"e2e_enroll_failed": "Encryption could not be set up. Try again.",
 	"e2e_enroll_done_heading": "Encryption is on",
 	"e2e_enroll_done_body": "Files you attach from now on are encrypted before they leave this device.",
+	"e2e_enroll_done_upload": "\"{name}\" is uploading now.",
+	"e2e_enroll_discard_notice": "Encryption was not set up, so the file was not attached.",
 	"e2e_enroll_done_close": "Done",
 	"e2e_recovery_heading": "Save your recovery code",
 	"e2e_recovery_intro": "This is the only way back to your files if you forget your passphrase. It is shown once and never again.",
@@ -1447,5 +1449,87 @@
 	"e2e_regenerate_done": "New recovery code saved. The old code no longer works.",
 	"e2e_rewrap_conflict": "Your encryption settings changed somewhere else. Reload and try again.",
 	"e2e_rewrap_failed": "That could not be saved. Try again.",
+	"e2e_grant_who_overflow": [
+		{
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural",
+				"local countNum = count: number"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "and {countNum} other",
+				"countPlural=other": "and {countNum} others"
+			}
+		}
+	],
+	"e2e_rotation_blocked_title": "New files are paused for this workspace.",
+	"e2e_rotation_blocked_body": "Someone was removed from {workspace}, so the files need a new key before more can be added.",
+	"e2e_rotation_blocked_unaffected": "Files already here are not affected and still open normally.",
+	"e2e_rotation_blocked_who": "{names} can create the new key by opening Ditero.",
+	"e2e_rotation_action": "Create the new key",
+	"e2e_rotation_confirm_title": "Create a new key for {workspace}?",
+	"e2e_rotation_confirm_body": "The new key protects files added from now on. Files added before it stay readable to everyone who could already open them, including the person who was removed if they opened them before leaving.",
+	"e2e_rotation_confirm_submit": "Create key",
+	"e2e_rotation_working": "Creating the new key...",
+	"e2e_rotation_done": "New key created. Files can be added again.",
+	"e2e_rotation_already_done": "Someone else already created the new key.",
+	"e2e_rotation_failed": "The new key could not be created. Try again.",
+	"attachment_section_heading": "Files",
+	"attachment_add": "Add file",
+	"attachment_add_to_comment": "Attach a file",
+	"attachment_count_label": [
+		{
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural",
+				"local countNum = count: number"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} file",
+				"countPlural=other": "{countNum} files"
+			}
+		}
+	],
+	"attachment_empty": "No files yet.",
+	"attachment_dropzone_hint": "Drop files here or use Add file.",
+	"attachment_dropzone_active": "Drop to attach.",
+	"attachment_dropzone_aria": "File attachments",
+	"attachment_added": "Added {date}",
+	"attachment_open": "Open",
+	"attachment_open_named": "Open {name}",
+	"attachment_download": "Download",
+	"attachment_delete": "Delete file",
+	"attachment_delete_title": "Delete file?",
+	"attachment_delete_confirm": "Delete \"{name}\"? It is removed for everyone in {workspace} and this cannot be undone.",
+	"attachment_error_delete_failed": "That file could not be deleted. Try again.",
+	"attachment_thumbnail_alt": "Preview of {name}",
+	"attachment_preview_unavailable": "No preview for this file type. Download it to open it.",
+	"attachment_encrypting": "Encrypting...",
+	"attachment_uploading": "Uploading...",
+	"attachment_decrypting": "Decrypting...",
+	"attachment_upload_progress_aria": "Uploading {name}",
+	"attachment_download_progress_aria": "Downloading {name}",
+	"attachment_cancel_upload": "Cancel upload",
+	"attachment_upload_cancelled": "Upload cancelled.",
+	"attachment_ready_to_upload": "Ready - uploads when you send the comment.",
+	"attachment_error_too_large": "That file is over the {limit} limit.",
+	"attachment_error_quota": "This workspace is out of storage. Delete some files to add more.",
+	"attachment_error_offline": "Uploads need a connection. Try again when you are back online.",
+	"attachment_error_reserve_failed": "That file could not be added. Try again.",
+	"attachment_error_upload_failed": "That upload did not finish. Try again.",
+	"attachment_error_download_failed": "That file could not be downloaded. Try again.",
+	"attachment_error_integrity": "This file failed its integrity check and was not opened. It is damaged or was changed after it was uploaded.",
+	"attachment_error_rotation_required": "New files are paused for this workspace until a new key is created.",
+	"attachment_locked_name": "Encrypted file",
+	"attachment_locked_meta": "{size}, added {date}",
+	"attachment_date_unknown": "date unknown",
+	"attachment_key_pending": "Waiting for access to this workspace's files.",
+	"attachment_key_pending_who": "{names} can grant it next time they open Ditero.",
+	"attachment_key_pending_self": "Set up encryption to open this file.",
+	"attachment_unreadable": "This file cannot be opened again.",
+	"attachment_unreadable_body": "Everyone who held the key for these files has left {workspace}. Nobody can decrypt them - not the members here, and not whoever runs this server. They can only be deleted.",
+	"attachment_unreadable_delete_confirm": "Delete \"{name}\"? Nobody can open it, and deleting it cannot be undone.",
 	"notify_key_grant_body": "Someone is waiting for a key to this workspace"
 }

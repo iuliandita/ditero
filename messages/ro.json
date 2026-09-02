@@ -1425,6 +1425,8 @@
 	"e2e_enroll_failed": "Criptarea nu a putut fi configurată. Încearcă din nou.",
 	"e2e_enroll_done_heading": "Criptarea este activă",
 	"e2e_enroll_done_body": "Fișierele pe care le atașezi de acum înainte sunt criptate înainte să părăsească acest dispozitiv.",
+	"e2e_enroll_done_upload": "„{name}” se încarcă acum.",
+	"e2e_enroll_discard_notice": "Criptarea nu a fost configurată, deci fișierul nu a fost atașat.",
 	"e2e_enroll_done_close": "Gata",
 	"e2e_recovery_heading": "Salvează codul de recuperare",
 	"e2e_recovery_intro": "Este singura cale înapoi la fișierele tale dacă îți uiți fraza de acces. Se afișează o singură dată și niciodată din nou.",
@@ -1475,5 +1477,89 @@
 	"e2e_regenerate_done": "Cod de recuperare nou salvat. Codul vechi nu mai funcționează.",
 	"e2e_rewrap_conflict": "Setările tale de criptare s-au schimbat în altă parte. Reîncarcă și încearcă din nou.",
 	"e2e_rewrap_failed": "Nu s-a putut salva. Încearcă din nou.",
+	"e2e_grant_who_overflow": [
+		{
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural",
+				"local countNum = count: number"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "și încă {countNum} persoană",
+				"countPlural=few": "și încă {countNum} persoane",
+				"countPlural=other": "și încă {countNum} de persoane"
+			}
+		}
+	],
+	"e2e_rotation_blocked_title": "Fișierele noi sunt suspendate pentru acest spațiu de lucru.",
+	"e2e_rotation_blocked_body": "Cineva a fost eliminat din {workspace}, așa că fișierele au nevoie de o cheie nouă înainte de a putea fi adăugate altele.",
+	"e2e_rotation_blocked_unaffected": "Fișierele deja existente nu sunt afectate și se deschid în continuare normal.",
+	"e2e_rotation_blocked_who": "{names} pot crea cheia nouă deschizând Ditero.",
+	"e2e_rotation_action": "Creează cheia nouă",
+	"e2e_rotation_confirm_title": "Creezi o cheie nouă pentru {workspace}?",
+	"e2e_rotation_confirm_body": "Cheia nouă protejează fișierele adăugate de acum înainte. Fișierele mai vechi rămân accesibile tuturor celor care le puteau deschide deja, inclusiv persoanei eliminate dacă le-a deschis înainte să plece.",
+	"e2e_rotation_confirm_submit": "Creează cheia",
+	"e2e_rotation_working": "Se creează cheia nouă...",
+	"e2e_rotation_done": "Cheie nouă creată. Fișierele pot fi adăugate din nou.",
+	"e2e_rotation_already_done": "Altcineva a creat deja cheia nouă.",
+	"e2e_rotation_failed": "Cheia nouă nu a putut fi creată. Încearcă din nou.",
+	"attachment_section_heading": "Fișiere",
+	"attachment_add": "Adaugă fișier",
+	"attachment_add_to_comment": "Atașează un fișier",
+	"attachment_count_label": [
+		{
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural",
+				"local countNum = count: number"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} fișier",
+				"countPlural=few": "{countNum} fișiere",
+				"countPlural=other": "{countNum} de fișiere"
+			}
+		}
+	],
+	"attachment_empty": "Niciun fișier încă.",
+	"attachment_dropzone_hint": "Plasează fișiere aici sau folosește Adaugă fișier.",
+	"attachment_dropzone_active": "Plasează pentru atașare.",
+	"attachment_dropzone_aria": "Fișiere atașate",
+	"attachment_added": "Adăugat la {date}",
+	"attachment_open": "Deschide",
+	"attachment_open_named": "Deschide {name}",
+	"attachment_download": "Descarcă",
+	"attachment_delete": "Șterge fișierul",
+	"attachment_delete_title": "Ștergi fișierul?",
+	"attachment_delete_confirm": "Ștergi „{name}”? Fișierul este eliminat pentru toată lumea din {workspace}, iar acțiunea nu poate fi anulată.",
+	"attachment_error_delete_failed": "Fișierul nu a putut fi șters. Încearcă din nou.",
+	"attachment_thumbnail_alt": "Previzualizare pentru {name}",
+	"attachment_preview_unavailable": "Acest tip de fișier nu are previzualizare. Descarcă-l pentru a-l deschide.",
+	"attachment_encrypting": "Se criptează...",
+	"attachment_uploading": "Se încarcă...",
+	"attachment_decrypting": "Se decriptează...",
+	"attachment_upload_progress_aria": "Se încarcă {name}",
+	"attachment_download_progress_aria": "Se descarcă {name}",
+	"attachment_cancel_upload": "Anulează încărcarea",
+	"attachment_upload_cancelled": "Încărcare anulată.",
+	"attachment_ready_to_upload": "Pregătit - se încarcă atunci când trimiți comentariul.",
+	"attachment_error_too_large": "Fișierul depășește limita de {limit}.",
+	"attachment_error_quota": "Acest spațiu de lucru nu mai are spațiu de stocare. Șterge câteva fișiere pentru a adăuga altele.",
+	"attachment_error_offline": "Încărcările necesită o conexiune. Încearcă din nou când revii online.",
+	"attachment_error_reserve_failed": "Fișierul nu a putut fi adăugat. Încearcă din nou.",
+	"attachment_error_upload_failed": "Încărcarea nu s-a finalizat. Încearcă din nou.",
+	"attachment_error_download_failed": "Fișierul nu a putut fi descărcat. Încearcă din nou.",
+	"attachment_error_integrity": "Fișierul nu a trecut verificarea integrității și nu a fost deschis. Este deteriorat sau a fost modificat după încărcare.",
+	"attachment_error_rotation_required": "Fișierele noi sunt suspendate pentru acest spațiu de lucru până la crearea unei chei noi.",
+	"attachment_locked_name": "Fișier criptat",
+	"attachment_locked_meta": "{size}, adăugat la {date}",
+	"attachment_date_unknown": "dată necunoscută",
+	"attachment_key_pending": "Se așteaptă accesul la fișierele acestui spațiu de lucru.",
+	"attachment_key_pending_who": "{names} pot acorda acces data viitoare când deschid Ditero.",
+	"attachment_key_pending_self": "Configurează criptarea pentru a deschide acest fișier.",
+	"attachment_unreadable": "Acest fișier nu mai poate fi deschis.",
+	"attachment_unreadable_body": "Toți cei care dețineau cheia acestor fișiere au părăsit {workspace}. Nimeni nu le poate decripta, nici membrii de aici și nici persoana care administrează serverul. Pot fi doar șterse.",
+	"attachment_unreadable_delete_confirm": "Ștergi „{name}”? Nimeni nu îl poate deschide, iar ștergerea nu poate fi anulată.",
 	"notify_key_grant_body": "Cineva așteaptă o cheie pentru acest spațiu de lucru"
 }

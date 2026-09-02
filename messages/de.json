@@ -1397,6 +1397,8 @@
 	"e2e_enroll_failed": "Die Verschlüsselung konnte nicht eingerichtet werden. Versuche es erneut.",
 	"e2e_enroll_done_heading": "Verschlüsselung ist aktiv",
 	"e2e_enroll_done_body": "Dateien, die du ab jetzt anhängst, werden verschlüsselt, bevor sie dieses Gerät verlassen.",
+	"e2e_enroll_done_upload": "\"{name}\" wird jetzt hochgeladen.",
+	"e2e_enroll_discard_notice": "Die Verschlüsselung wurde nicht eingerichtet, daher wurde die Datei nicht angehängt.",
 	"e2e_enroll_done_close": "Fertig",
 	"e2e_recovery_heading": "Speichere deinen Wiederherstellungscode",
 	"e2e_recovery_intro": "Das ist der einzige Weg zurück zu deinen Dateien, wenn du deine Passphrase vergisst. Er wird einmal angezeigt und danach nie wieder.",
@@ -1447,5 +1449,87 @@
 	"e2e_regenerate_done": "Neuer Wiederherstellungscode gespeichert. Der alte Code funktioniert nicht mehr.",
 	"e2e_rewrap_conflict": "Deine Verschlüsselungseinstellungen wurden an anderer Stelle geändert. Lade neu und versuche es erneut.",
 	"e2e_rewrap_failed": "Das konnte nicht gespeichert werden. Versuche es erneut.",
+	"e2e_grant_who_overflow": [
+		{
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural",
+				"local countNum = count: number"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "und {countNum} weitere Person",
+				"countPlural=other": "und {countNum} weitere Personen"
+			}
+		}
+	],
+	"e2e_rotation_blocked_title": "Neue Dateien sind für diesen Arbeitsbereich pausiert.",
+	"e2e_rotation_blocked_body": "Jemand wurde aus {workspace} entfernt. Daher brauchen die Dateien einen neuen Schlüssel, bevor weitere hinzugefügt werden können.",
+	"e2e_rotation_blocked_unaffected": "Bereits vorhandene Dateien sind nicht betroffen und lassen sich weiterhin normal öffnen.",
+	"e2e_rotation_blocked_who": "{names} können den neuen Schlüssel erstellen, indem sie Ditero öffnen.",
+	"e2e_rotation_action": "Neuen Schlüssel erstellen",
+	"e2e_rotation_confirm_title": "Neuen Schlüssel für {workspace} erstellen?",
+	"e2e_rotation_confirm_body": "Der neue Schlüssel schützt Dateien, die ab jetzt hinzugefügt werden. Frühere Dateien bleiben für alle lesbar, die sie bereits öffnen konnten, einschließlich der entfernten Person, falls sie sie vor dem Verlassen geöffnet hat.",
+	"e2e_rotation_confirm_submit": "Schlüssel erstellen",
+	"e2e_rotation_working": "Neuer Schlüssel wird erstellt...",
+	"e2e_rotation_done": "Neuer Schlüssel erstellt. Dateien können wieder hinzugefügt werden.",
+	"e2e_rotation_already_done": "Jemand anderes hat den neuen Schlüssel bereits erstellt.",
+	"e2e_rotation_failed": "Der neue Schlüssel konnte nicht erstellt werden. Versuche es erneut.",
+	"attachment_section_heading": "Dateien",
+	"attachment_add": "Datei hinzufügen",
+	"attachment_add_to_comment": "Datei anhängen",
+	"attachment_count_label": [
+		{
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural",
+				"local countNum = count: number"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Datei",
+				"countPlural=other": "{countNum} Dateien"
+			}
+		}
+	],
+	"attachment_empty": "Noch keine Dateien.",
+	"attachment_dropzone_hint": "Lege Dateien hier ab oder verwende Datei hinzufügen.",
+	"attachment_dropzone_active": "Zum Anhängen ablegen.",
+	"attachment_dropzone_aria": "Dateianhänge",
+	"attachment_added": "Hinzugefügt am {date}",
+	"attachment_open": "Öffnen",
+	"attachment_open_named": "{name} öffnen",
+	"attachment_download": "Herunterladen",
+	"attachment_delete": "Datei löschen",
+	"attachment_delete_title": "Datei löschen?",
+	"attachment_delete_confirm": "\"{name}\" löschen? Die Datei wird für alle in {workspace} entfernt. Dies kann nicht rückgängig gemacht werden.",
+	"attachment_error_delete_failed": "Die Datei konnte nicht gelöscht werden. Versuche es erneut.",
+	"attachment_thumbnail_alt": "Vorschau von {name}",
+	"attachment_preview_unavailable": "Für diesen Dateityp gibt es keine Vorschau. Lade ihn zum Öffnen herunter.",
+	"attachment_encrypting": "Wird verschlüsselt...",
+	"attachment_uploading": "Wird hochgeladen...",
+	"attachment_decrypting": "Wird entschlüsselt...",
+	"attachment_upload_progress_aria": "{name} wird hochgeladen",
+	"attachment_download_progress_aria": "{name} wird heruntergeladen",
+	"attachment_cancel_upload": "Upload abbrechen",
+	"attachment_upload_cancelled": "Upload abgebrochen.",
+	"attachment_ready_to_upload": "Bereit - wird beim Senden des Kommentars hochgeladen.",
+	"attachment_error_too_large": "Diese Datei überschreitet das Limit von {limit}.",
+	"attachment_error_quota": "Dieser Arbeitsbereich hat keinen freien Speicher mehr. Lösche Dateien, um weitere hinzuzufügen.",
+	"attachment_error_offline": "Uploads brauchen eine Verbindung. Versuche es erneut, wenn du wieder online bist.",
+	"attachment_error_reserve_failed": "Die Datei konnte nicht hinzugefügt werden. Versuche es erneut.",
+	"attachment_error_upload_failed": "Der Upload wurde nicht abgeschlossen. Versuche es erneut.",
+	"attachment_error_download_failed": "Die Datei konnte nicht heruntergeladen werden. Versuche es erneut.",
+	"attachment_error_integrity": "Die Integritätsprüfung dieser Datei ist fehlgeschlagen und sie wurde nicht geöffnet. Sie ist beschädigt oder wurde nach dem Hochladen verändert.",
+	"attachment_error_rotation_required": "Neue Dateien sind für diesen Arbeitsbereich pausiert, bis ein neuer Schlüssel erstellt wurde.",
+	"attachment_locked_name": "Verschlüsselte Datei",
+	"attachment_locked_meta": "{size}, hinzugefügt am {date}",
+	"attachment_date_unknown": "Datum unbekannt",
+	"attachment_key_pending": "Warten auf Zugriff auf die Dateien dieses Arbeitsbereichs.",
+	"attachment_key_pending_who": "{names} können den Zugriff gewähren, wenn sie Ditero das nächste Mal öffnen.",
+	"attachment_key_pending_self": "Richte die Verschlüsselung ein, um diese Datei zu öffnen.",
+	"attachment_unreadable": "Diese Datei kann nicht mehr geöffnet werden.",
+	"attachment_unreadable_body": "Alle, die den Schlüssel für diese Dateien hatten, haben {workspace} verlassen. Niemand kann sie entschlüsseln - weder die Mitglieder hier noch die Person, die diesen Server betreibt. Sie können nur gelöscht werden.",
+	"attachment_unreadable_delete_confirm": "\"{name}\" löschen? Niemand kann die Datei öffnen, und das Löschen kann nicht rückgängig gemacht werden.",
 	"notify_key_grant_body": "Jemand wartet auf einen Schlüssel für diesen Arbeitsbereich"
 }

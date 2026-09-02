@@ -1425,6 +1425,8 @@
 	"e2e_enroll_failed": "Le chiffrement n’a pas pu être configuré. Réessaie.",
 	"e2e_enroll_done_heading": "Le chiffrement est activé",
 	"e2e_enroll_done_body": "Les fichiers que tu joins désormais sont chiffrés avant de quitter cet appareil.",
+	"e2e_enroll_done_upload": "« {name} » est en cours d'envoi.",
+	"e2e_enroll_discard_notice": "Le chiffrement n’a pas été configuré, donc le fichier n’a pas été joint.",
 	"e2e_enroll_done_close": "Terminé",
 	"e2e_recovery_heading": "Enregistre ton code de récupération",
 	"e2e_recovery_intro": "C’est le seul moyen de retrouver tes fichiers si tu oublies ta phrase secrète. Il s’affiche une seule fois et jamais plus.",
@@ -1475,5 +1477,89 @@
 	"e2e_regenerate_done": "Nouveau code de récupération enregistré. L'ancien code ne fonctionne plus.",
 	"e2e_rewrap_conflict": "Tes paramètres de chiffrement ont changé ailleurs. Recharge et réessaie.",
 	"e2e_rewrap_failed": "Impossible d'enregistrer. Réessaie.",
+	"e2e_grant_who_overflow": [
+		{
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural",
+				"local countNum = count: number"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "et {countNum} autre personne",
+				"countPlural=many": "et {countNum} autres personnes",
+				"countPlural=other": "et {countNum} autres personnes"
+			}
+		}
+	],
+	"e2e_rotation_blocked_title": "Les nouveaux fichiers sont suspendus pour cet espace de travail.",
+	"e2e_rotation_blocked_body": "Une personne a été retirée de {workspace}. Les fichiers ont donc besoin d'une nouvelle clé avant tout nouvel ajout.",
+	"e2e_rotation_blocked_unaffected": "Les fichiers déjà présents ne sont pas concernés et s'ouvrent toujours normalement.",
+	"e2e_rotation_blocked_who": "{names} peuvent créer la nouvelle clé en ouvrant Ditero.",
+	"e2e_rotation_action": "Créer la nouvelle clé",
+	"e2e_rotation_confirm_title": "Créer une nouvelle clé pour {workspace} ?",
+	"e2e_rotation_confirm_body": "La nouvelle clé protège les fichiers ajoutés à partir de maintenant. Les fichiers plus anciens restent lisibles par toutes les personnes qui pouvaient déjà les ouvrir, y compris la personne retirée si elle les a ouverts avant son départ.",
+	"e2e_rotation_confirm_submit": "Créer la clé",
+	"e2e_rotation_working": "Création de la nouvelle clé...",
+	"e2e_rotation_done": "Nouvelle clé créée. Les fichiers peuvent à nouveau être ajoutés.",
+	"e2e_rotation_already_done": "Une autre personne a déjà créé la nouvelle clé.",
+	"e2e_rotation_failed": "Impossible de créer la nouvelle clé. Réessaie.",
+	"attachment_section_heading": "Fichiers",
+	"attachment_add": "Ajouter un fichier",
+	"attachment_add_to_comment": "Joindre un fichier",
+	"attachment_count_label": [
+		{
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural",
+				"local countNum = count: number"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} fichier",
+				"countPlural=many": "{countNum} fichiers",
+				"countPlural=other": "{countNum} fichiers"
+			}
+		}
+	],
+	"attachment_empty": "Aucun fichier pour le moment.",
+	"attachment_dropzone_hint": "Dépose des fichiers ici ou utilise Ajouter un fichier.",
+	"attachment_dropzone_active": "Dépose pour joindre.",
+	"attachment_dropzone_aria": "Pièces jointes",
+	"attachment_added": "Ajouté le {date}",
+	"attachment_open": "Ouvrir",
+	"attachment_open_named": "Ouvrir {name}",
+	"attachment_download": "Télécharger",
+	"attachment_delete": "Supprimer le fichier",
+	"attachment_delete_title": "Supprimer le fichier ?",
+	"attachment_delete_confirm": "Supprimer « {name} » ? Le fichier sera retiré pour tout le monde dans {workspace} et cette action est irréversible.",
+	"attachment_error_delete_failed": "Impossible de supprimer ce fichier. Réessaie.",
+	"attachment_thumbnail_alt": "Aperçu de {name}",
+	"attachment_preview_unavailable": "Aucun aperçu pour ce type de fichier. Télécharge-le pour l'ouvrir.",
+	"attachment_encrypting": "Chiffrement...",
+	"attachment_uploading": "Envoi...",
+	"attachment_decrypting": "Déchiffrement...",
+	"attachment_upload_progress_aria": "Envoi de {name}",
+	"attachment_download_progress_aria": "Téléchargement de {name}",
+	"attachment_cancel_upload": "Annuler l'envoi",
+	"attachment_upload_cancelled": "Envoi annulé.",
+	"attachment_ready_to_upload": "Prêt - sera envoyé avec le commentaire.",
+	"attachment_error_too_large": "Ce fichier dépasse la limite de {limit}.",
+	"attachment_error_quota": "Cet espace de travail n'a plus de stockage disponible. Supprime des fichiers pour en ajouter d'autres.",
+	"attachment_error_offline": "Les envois nécessitent une connexion. Réessaie lorsque tu seras de nouveau en ligne.",
+	"attachment_error_reserve_failed": "Impossible d'ajouter ce fichier. Réessaie.",
+	"attachment_error_upload_failed": "Cet envoi ne s'est pas terminé. Réessaie.",
+	"attachment_error_download_failed": "Impossible de télécharger ce fichier. Réessaie.",
+	"attachment_error_integrity": "Ce fichier a échoué au contrôle d'intégrité et n'a pas été ouvert. Il est endommagé ou a été modifié après son envoi.",
+	"attachment_error_rotation_required": "Les nouveaux fichiers sont suspendus pour cet espace de travail jusqu'à la création d'une nouvelle clé.",
+	"attachment_locked_name": "Fichier chiffré",
+	"attachment_locked_meta": "{size}, ajouté le {date}",
+	"attachment_date_unknown": "date inconnue",
+	"attachment_key_pending": "En attente d'accès aux fichiers de cet espace de travail.",
+	"attachment_key_pending_who": "{names} pourront accorder l'accès à leur prochaine ouverture de Ditero.",
+	"attachment_key_pending_self": "Configure le chiffrement pour ouvrir ce fichier.",
+	"attachment_unreadable": "Ce fichier ne pourra plus être ouvert.",
+	"attachment_unreadable_body": "Toutes les personnes qui détenaient la clé de ces fichiers ont quitté {workspace}. Personne ne peut les déchiffrer, ni les membres présents ni la personne qui exploite ce serveur. Ils peuvent seulement être supprimés.",
+	"attachment_unreadable_delete_confirm": "Supprimer « {name} » ? Personne ne peut l'ouvrir et la suppression est irréversible.",
 	"notify_key_grant_body": "Quelqu'un attend une clé pour cet espace de travail"
 }

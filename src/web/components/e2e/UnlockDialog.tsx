@@ -21,10 +21,12 @@ export function UnlockDialog({
 	open,
 	onOpenChange,
 	userId,
+	onUnlocked,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	userId: string;
+	onUnlocked?: () => void;
 }) {
 	const { unlock, lockedByTimeout } = useKeyring();
 	const [passphrase, setPassphrase] = useState("");
@@ -60,6 +62,7 @@ export function UnlockDialog({
 		setError(null);
 		try {
 			await unlock(passphrase, remember);
+			onUnlocked?.();
 			onOpenChange(false);
 		} catch (caught) {
 			// "stale" and "wrong-secret" are not the same message: no passphrase

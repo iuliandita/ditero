@@ -174,6 +174,107 @@ const pendingGrantsSchema = z.object({
 	),
 });
 
+const rotationMemberSchema = z.object({
+	membershipId: z.string(),
+	userId: z.string(),
+	name: z.string(),
+	role: z.enum(["owner", "admin", "member", "viewer"]),
+	recipientPublicKey: z.string().nullable(),
+});
+
+const rotationPlanSchema = z.object({
+	workspaceId: z.string(),
+	currentVersion: z.number().int().positive().nullable(),
+	currentCommitment: z.string().nullable(),
+	rotationRequired: z.boolean(),
+	canRotate: z.boolean(),
+	members: z.array(rotationMemberSchema),
+});
+
+const rotationResultSchema = z.object({
+	workspaceId: z.string(),
+	version: z.number().int().positive(),
+	commitment: z.string(),
+	outcome: z.enum(["rotated", "already"]),
+});
+
+export type WorkspaceRotationPlan = z.infer<typeof rotationPlanSchema>;
+
+export async function fetchWorkspaceRotationPlan(
+	workspaceId: string,
+	fetcher: E2eFetcher = defaultFetcher,
+): Promise<WorkspaceRotationPlan> {
+	return await jsonRequest(
+		fetcher,
+		`/api/e2e/members/${encodeURIComponent(workspaceId)}/keys`,
+		rotationPlanSchema,
+	);
+}
+
+export async function rotateWorkspaceKey(
+	workspaceId: string,
+	fetcher: E2eFetcher = defaultFetcher,
+): Promise<{
+	workspaceId: string;
+	version: number;
+	commitment: string;
+	outcome: "rotated" | "already";
+	wdk: Uint8Array | null;
+}> {
+	const plan = await fetchWorkspaceRotationPlan(workspaceId, fetcher);
+	if (!plan.rotationRequired) {
+		throw new Error("workspace-keys: rotation is not required");
+	}
+	if (!plan.canRotate) {
+		throw new Error("workspace-keys: rotation is not permitted");
+	}
+	if (plan.currentVersion === null || plan.currentCommitment === null) {
+		throw new Error("workspace-keys: active workspace key is missing");
+	}
+	const nextVersion = plan.currentVersion + 1;
+	const wdk = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
+	const commitment = await commitWdk(wdk, workspaceId, nextVersion);
+	const grants = await Promise.all(
+		plan.members
+			.filter(
+				(member): member is typeof member & { recipientPublicKey: string } =>
+					member.recipientPublicKey !== null,
+			)
+			.map(async (member) => ({
+				membershipId: member.membershipId,
+				userId: member.userId,
+				recipientPublicKey: member.recipientPublicKey,
+				...(await sealedFor(
+					wdk,
+					member.recipientPublicKey,
+					workspaceId,
+					nextVersion,
+					member.userId,
+				)),
+			})),
+	);
+	const result = await jsonRequest(
+		fetcher,
+		`/api/e2e/workspaces/${encodeURIComponent(workspaceId)}/rotate`,
+		rotationResultSchema,
+		jsonPost({
+			previousVersion: plan.currentVersion,
+			commitment,
+			grants,
+		}),
+	);
+	if (result.workspaceId !== workspaceId || result.version !== nextVersion) {
+		throw new Error(
+			"workspace-keys: rotation returned a different workspace version",
+		);
+	}
+	if (result.outcome === "already") return { ...result, wdk: null };
+	if (result.commitment !== commitment) {
+		throw new Error("workspace-keys: rotation returned a different commitment");
+	}
+	return { ...result, wdk };
+}
+
 async function jsonRequest<T>(
 	fetcher: E2eFetcher,
 	path: string,

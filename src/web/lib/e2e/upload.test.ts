@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import { aad, decryptWrapped } from "../../../domain/e2e/envelope.ts";
 import { decryptStream } from "../../../domain/e2e/stream.ts";
 import { decodeWrapped } from "../../../domain/e2e/wire.ts";
-import { uploadAttachment } from "./upload.ts";
+import { AttachmentUploadError, uploadAttachment } from "./upload.ts";
 
 async function collect(source: AsyncIterable<Uint8Array>): Promise<Uint8Array> {
 	const chunks: Uint8Array[] = [];
@@ -274,5 +274,34 @@ describe("uploadAttachment", () => {
 			"/api/attachments/reserve",
 			"/api/attachments/abort",
 		]);
+	});
+
+	test.each([
+		[413, "file-too-large"],
+		[409, "quota-exceeded"],
+		[409, "rotation-required"],
+		[409, "key-unavailable"],
+	] as const)("preserves a %s reserve failure as %s", async (status, reason) => {
+		const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+			String(input) === "/api/attachments/reserve"
+				? new Response(reason, { status })
+				: Response.json({ state: "aborted" }),
+		);
+		const failure = await uploadAttachment(
+			{
+				file: new File(["private"], "private.txt", {
+					type: "text/plain",
+				}),
+				workspaceId: "workspace-1",
+				parentKind: "task",
+				parentId: "task-1",
+				keyVersion: 1,
+				wdk: crypto.getRandomValues(new Uint8Array(32)),
+			},
+			{ id: `attachment-${reason}`, fetcher },
+		).catch((error: unknown) => error);
+
+		expect(failure).toBeInstanceOf(AttachmentUploadError);
+		expect(failure).toMatchObject({ stage: "reserve", reason, status });
 	});
 });

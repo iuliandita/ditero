@@ -47,7 +47,10 @@ export type KeyringContextValue = {
 	/** Re-opens and commitment-checks the caller's durable WDK wraps. */
 	refreshWorkspaceKeys: () => Promise<void>;
 	/** The active, verified key for invite/file encryption, or null while absent. */
-	workspaceKey: (workspaceId: string) => Promise<WorkspaceKeyMaterial | null>;
+	workspaceKey: (
+		workspaceId: string,
+		keyVersion?: number,
+	) => Promise<WorkspaceKeyMaterial | null>;
 	/** Fast-invite handoff after its fragment has passed the commitment check. */
 	cacheWorkspaceKey: (
 		workspaceId: string,
@@ -268,11 +271,14 @@ export function KeyringProvider({
 			async refreshWorkspaceKeys() {
 				await hydrateWorkspaceKeys(identity?.publicKey ?? null);
 			},
-			async workspaceKey(workspaceId) {
+			async workspaceKey(workspaceId, keyVersion) {
 				await hydrateWorkspaceKeys(identity?.publicKey ?? null);
 				const row = workspaceKeys.current.find(
 					(candidate) =>
-						candidate.workspaceId === workspaceId && candidate.active,
+						candidate.workspaceId === workspaceId &&
+						(keyVersion === undefined
+							? candidate.active
+							: candidate.keyVersion === keyVersion),
 				);
 				if (!row) return null;
 				const wdk = keyring.wdkFor(row.workspaceId, row.keyVersion);

@@ -1,5 +1,5 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { Copy, Pencil, Send, Trash2 } from "lucide-react";
+import { Copy, Paperclip, Pencil, Send, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,20 +7,42 @@ import { runMutation } from "@/lib/run-mutation";
 import { deriveConnections } from "../../../domain/connections.ts";
 import { parseMentions, personMatchesHandle } from "../../../domain/mention.ts";
 import { randomId } from "../../../domain/random-id.ts";
+import { WRITE_ROLES } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { copyText } from "../../lib/clipboard.ts";
-import { formatList } from "../../lib/intl-format.ts";
+import type { WorkspaceKeyMaterial } from "../../lib/e2e/KeyringProvider.tsx";
+import { uploadAttachment } from "../../lib/e2e/upload.ts";
+import { formatBytes, formatList } from "../../lib/intl-format.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
+import { mutationServerSucceeded } from "../../lib/pref-mutation.ts";
+import {
+	AttachmentDropzone,
+	type AttachmentDropzoneHandle,
+} from "../attachments/AttachmentDropzone.tsx";
+import { AttachmentList } from "../attachments/AttachmentList.tsx";
+import {
+	type AttachmentProgress,
+	PendingAttachmentTile,
+} from "../attachments/AttachmentTile.tsx";
+import { useAttachmentGate } from "../attachments/states.tsx";
 import { MemberAvatar } from "./avatar.tsx";
 
 const INVITE_ROLES = new Set(["owner", "admin", "member"]);
 
 type Person = { name: string; userId?: string; image?: string | null };
 type MentionInvite = { name: string; userId?: string };
+type PendingCommentFile = {
+	id: string;
+	file: File;
+	commentId?: string;
+	controller?: AbortController;
+	progress?: AttachmentProgress;
+	error?: string;
+};
 
 // Built per call: a cached formatter would freeze the import-time locale. No
 // timeZone pin -- a comment stamp is a real instant, read in the viewer's zone.
@@ -63,6 +85,8 @@ export function CommentThread({
 	const me = zero.userID ?? "";
 	const [comments] = useQuery(queries.comments.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
+	const [attachments] = useQuery(queries.attachments.mine());
+	const gate = useAttachmentGate(workspaceId);
 
 	const [error, setError] = useState<string | null>(null);
 	const [body, setBody] = useState("");
@@ -77,7 +101,10 @@ export function CommentThread({
 	>(null);
 	const [copied, setCopied] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
+	const [pendingFiles, setPendingFiles] = useState<PendingCommentFile[]>([]);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const attachmentPicker = useRef<AttachmentDropzoneHandle>(null);
+	const attachmentButton = useRef<HTMLButtonElement>(null);
 
 	const thread = useMemo(
 		() =>
@@ -133,6 +160,19 @@ export function CommentThread({
 	const callerRole = members.find((mem) => mem.userId === me)?.role ?? null;
 	const canInvite =
 		!restricted && callerRole != null && INVITE_ROLES.has(callerRole);
+	const canAttach = callerRole != null && WRITE_ROLES.has(callerRole);
+	const workspaceName =
+		members.find((member) => member.workspace)?.workspace?.name ??
+		m.field_workspace();
+	const commentIdsWithAttachments = useMemo(
+		() =>
+			new Set(
+				attachments
+					.filter((row) => row.parentKind === "comment")
+					.map((row) => row.parentId),
+			),
+		[attachments],
+	);
 
 	const mention = activeMention(body, caret);
 	const suggestions = useMemo(() => {
@@ -182,9 +222,124 @@ export function CommentThread({
 		return out;
 	}
 
+	function updatePendingFile(id: string, patch: Partial<PendingCommentFile>) {
+		setPendingFiles((files) =>
+			files.map((file) => (file.id === id ? { ...file, ...patch } : file)),
+		);
+	}
+
+	function queueFiles(files: File[]) {
+		setPendingFiles((current) => [
+			...current,
+			...files.map((file) => ({ id: randomId(), file })),
+		]);
+	}
+
+	async function uploadCommentFiles(
+		files: PendingCommentFile[],
+		commentId: string,
+		key: WorkspaceKeyMaterial,
+	) {
+		for (const pending of files) {
+			const controller = new AbortController();
+			updatePendingFile(pending.id, {
+				commentId,
+				controller,
+				error: undefined,
+			});
+			try {
+				await uploadAttachment(
+					{
+						file: pending.file,
+						workspaceId,
+						parentKind: "comment",
+						parentId: commentId,
+						keyVersion: key.keyVersion,
+						wdk: key.wdk,
+					},
+					{
+						id: pending.id,
+						signal: controller.signal,
+						onProgress: (progress) =>
+							updatePendingFile(pending.id, {
+								progress: {
+									phase:
+										progress.phase === "encrypting"
+											? "encrypting"
+											: "uploading",
+									loaded: progress.loaded,
+									total: progress.total,
+								},
+							}),
+					},
+				);
+				setPendingFiles((current) =>
+					current.filter((file) => file.id !== pending.id),
+				);
+			} catch (caught) {
+				if (controller.signal.aborted) continue;
+				console.error("attachments: comment upload failed", caught);
+				gate.reportUploadFailure(caught);
+				updatePendingFile(pending.id, {
+					commentId,
+					error: m.attachment_error_upload_failed(),
+					progress: undefined,
+				});
+			}
+		}
+	}
+
+	async function submitWithFiles(
+		text: string,
+		files: PendingCommentFile[],
+		key: WorkspaceKeyMaterial,
+	) {
+		setBusy(true);
+		setError(null);
+		const existingCommentId = files.find((file) => file.commentId)?.commentId;
+		const commentId = existingCommentId ?? randomId();
+		try {
+			if (!existingCommentId) {
+				const mutation = zero.mutate(
+					mutators.comment.add({ id: commentId, taskId: task.id, body: text }),
+				);
+				await mutation.client;
+				// Attachments use a direct HTTP transaction. Wait for the Zero
+				// mutation's server result so reserve cannot race the parent row.
+				if (!(await mutationServerSucceeded(mutation))) {
+					throw new Error("comment.add did not reach the server");
+				}
+				setBody("");
+				setCaret(0);
+				setPendingFiles((current) =>
+					current.map((file) =>
+						files.some((candidate) => candidate.id === file.id)
+							? { ...file, commentId }
+							: file,
+					),
+				);
+				const invites = resolveNonMemberInvites(text);
+				if (invites.length > 0) setMentionInvites(invites);
+			}
+			await uploadCommentFiles(files, commentId, key);
+		} catch (caught) {
+			setError(mutationErrorMessage(caught, m.mutation_failed));
+		} finally {
+			setBusy(false);
+		}
+	}
+
 	async function submit() {
 		const text = body.trim();
-		if (!text || busy) return;
+		if ((!text && pendingFiles.length === 0) || busy) return;
+		if (pendingFiles.length > 0) {
+			const snapshot = [...pendingFiles];
+			await gate.runWithFiles(
+				snapshot.map((file) => file.file),
+				(key) => submitWithFiles(text, snapshot, key),
+			);
+			return;
+		}
 		setError(null);
 		await run(
 			zero.mutate(
@@ -325,6 +480,15 @@ export function CommentThread({
 									<p className="whitespace-pre-wrap break-words">{c.body}</p>
 								)}
 
+								{commentIdsWithAttachments.has(c.id) && (
+									<AttachmentList
+										workspaceId={workspaceId}
+										parentKind="comment"
+										parentId={c.id}
+										onEmptyFocus={() => attachmentButton.current?.focus()}
+									/>
+								)}
+
 								{editing !== c.id && (
 									<div className="flex gap-1">
 										{mine && (
@@ -450,62 +614,107 @@ export function CommentThread({
 				</div>
 			)}
 
-			<div className="relative flex items-end gap-1.5">
-				<div className="relative flex-1">
-					<textarea
-						ref={textareaRef}
-						aria-label={m.comment_input_label()}
-						data-testid="comment-input"
-						placeholder={m.comment_input_label()}
-						rows={2}
-						value={body}
-						onChange={(e) => {
-							setBody(e.target.value);
-							setCaret(e.target.selectionStart ?? e.target.value.length);
-						}}
-						onKeyUp={(e) =>
-							setCaret(e.currentTarget.selectionStart ?? body.length)
-						}
-						onClick={(e) =>
-							setCaret(e.currentTarget.selectionStart ?? body.length)
-						}
-						className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none focus-visible:border-ring"
-					/>
-					{mention && suggestions.length > 0 && (
-						<ul
-							data-testid="mention-suggest"
-							className="absolute bottom-full left-0 z-10 mb-1 max-h-48 w-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-overlay"
+			<AttachmentDropzone
+				ref={attachmentPicker}
+				gate={gate}
+				workspaceName={workspaceName}
+				enabled={canAttach}
+				onFilesReady={(files) => queueFiles(files)}
+				showButton={false}
+				compact
+			>
+				{pendingFiles.length > 0 && (
+					<ul
+						className="flex flex-col gap-2"
+						data-testid="comment-pending-files"
+					>
+						{pendingFiles.map((pending) => (
+							<PendingAttachmentTile
+								key={pending.id}
+								name={pending.file.name}
+								size={formatBytes(pending.file.size)}
+								progress={pending.progress}
+								error={pending.error}
+								ready={!pending.progress && !pending.error}
+								onCancel={() => {
+									pending.controller?.abort();
+									setPendingFiles((files) =>
+										files.filter((file) => file.id !== pending.id),
+									);
+								}}
+							/>
+						))}
+					</ul>
+				)}
+				<div className="relative flex items-end gap-1.5">
+					<div className="relative flex-1">
+						<textarea
+							ref={textareaRef}
+							aria-label={m.comment_input_label()}
+							data-testid="comment-input"
+							placeholder={m.comment_input_label()}
+							rows={2}
+							value={body}
+							onChange={(e) => {
+								setBody(e.target.value);
+								setCaret(e.target.selectionStart ?? e.target.value.length);
+							}}
+							onKeyUp={(e) =>
+								setCaret(e.currentTarget.selectionStart ?? body.length)
+							}
+							onClick={(e) =>
+								setCaret(e.currentTarget.selectionStart ?? body.length)
+							}
+							className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none focus-visible:border-ring"
+						/>
+						{mention && suggestions.length > 0 && (
+							<ul
+								data-testid="mention-suggest"
+								className="absolute bottom-full left-0 z-10 mb-1 max-h-48 w-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-overlay"
+							>
+								{suggestions.map((p) => (
+									<li key={p.userId ?? p.name}>
+										<button
+											type="button"
+											data-testid="mention-suggest-option"
+											onClick={() => insertMention(p.name)}
+											className="flex w-full items-center gap-2 rounded-sm px-1.5 py-1 text-start hover:bg-muted"
+										>
+											<MemberAvatar
+												name={p.name}
+												image={p.image}
+												className="size-5"
+											/>
+											<span className="min-w-0 flex-1 truncate">{p.name}</span>
+										</button>
+									</li>
+								))}
+							</ul>
+						)}
+					</div>
+					{canAttach && (
+						<Button
+							ref={attachmentButton}
+							type="button"
+							variant="outline"
+							size="icon"
+							aria-label={m.attachment_add_to_comment()}
+							onClick={() => attachmentPicker.current?.openPicker()}
 						>
-							{suggestions.map((p) => (
-								<li key={p.userId ?? p.name}>
-									<button
-										type="button"
-										data-testid="mention-suggest-option"
-										onClick={() => insertMention(p.name)}
-										className="flex w-full items-center gap-2 rounded-sm px-1.5 py-1 text-start hover:bg-muted"
-									>
-										<MemberAvatar
-											name={p.name}
-											image={p.image}
-											className="size-5"
-										/>
-										<span className="min-w-0 flex-1 truncate">{p.name}</span>
-									</button>
-								</li>
-							))}
-						</ul>
+							<Paperclip />
+						</Button>
 					)}
+					<Button
+						size="icon"
+						aria-label={m.comment_send_action()}
+						data-testid="comment-submit"
+						disabled={(!body.trim() && pendingFiles.length === 0) || busy}
+						onClick={() => void submit()}
+					>
+						<Send />
+					</Button>
 				</div>
-				<Button
-					size="icon"
-					aria-label={m.comment_send_action()}
-					data-testid="comment-submit"
-					disabled={!body.trim() || busy}
-					onClick={() => void submit()}
-				>
-					<Send />
-				</Button>
-			</div>
+			</AttachmentDropzone>
 		</div>
 	);
 }
