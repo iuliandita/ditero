@@ -17,9 +17,10 @@ const buttonVariants = cva(
 				ghost:
 					"hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
 				// The pale light-mode tint needs the normal foreground for contrast;
-				// plain --destructive reaches only ~3:1. Dark mode keeps the token.
+				// plain --destructive reaches only ~3:1. Disabled destructive buttons
+				// need opaque colors too: fading the whole control drops below 4.5:1.
 				destructive:
-					"bg-destructive/10 text-foreground hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+					"bg-destructive/10 text-foreground hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 disabled:bg-muted disabled:text-foreground disabled:opacity-100 dark:bg-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40 dark:disabled:bg-muted dark:disabled:text-foreground",
 				link: "text-primary underline-offset-4 hover:underline",
 			},
 			size: {
