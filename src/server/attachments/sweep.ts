@@ -163,6 +163,17 @@ export async function attachmentSweep(
 
 			await options.onAfterBlobDelete?.(row);
 			await client.query("delete from attachment where id = $1", [row.id]);
+			await client.query(
+				`delete from workspace w
+				 using "user" owner_user
+				 where w.owner_id = owner_user.id
+				   and w.kind = 'personal'
+				   and owner_user.deleted_at is not null
+				   and not exists (
+				     select 1 from attachment remaining
+				     where remaining.workspace_id = w.id
+				   )`,
+			);
 			await client.query("commit");
 			summary.deleted++;
 		} catch (error) {

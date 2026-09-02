@@ -16,10 +16,10 @@ const buttonVariants = cva(
 					"bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
 				ghost:
 					"hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
-				// Light text is darkened for 4.5:1 contrast on the tinted background
-				// (plain --destructive only reaches ~3:1); dark mode keeps the token.
+				// The pale light-mode tint needs the normal foreground for contrast;
+				// plain --destructive reaches only ~3:1. Dark mode keeps the token.
 				destructive:
-					"bg-destructive/10 text-[color-mix(in_oklch,var(--destructive),black_50%)] hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+					"bg-destructive/10 text-foreground hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:text-destructive dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
 				link: "text-primary underline-offset-4 hover:underline",
 			},
 			size: {

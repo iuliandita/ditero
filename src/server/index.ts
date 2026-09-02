@@ -39,6 +39,7 @@ import { verifyZeroShardAccess, zeroShardSchema } from "../db/zero-shard.ts";
 import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
 import { schema } from "../zero/schema.gen.ts";
+import { accountDeletionRoutes } from "./account-deletion.ts";
 import { attachmentRoutes } from "./attachments/routes.ts";
 import { startAttachmentSweep } from "./attachments/sweep.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
@@ -141,6 +142,13 @@ const routes = new Elysia()
 			attachmentStore,
 			{ quotaBytes: attachmentConfig.quotaBytes },
 		),
+	)
+	.use(
+		accountDeletionRoutes(pool, {
+			guardedPost,
+			guardedGet,
+			foreignOrigin,
+		}),
 	)
 	.use(cors(corsPolicy(process.env)))
 	.onRequest(({ set }) => {

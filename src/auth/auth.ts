@@ -2,7 +2,7 @@ import { passkey } from "@better-auth/passkey";
 import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt, twoFactor } from "better-auth/plugins";
-import { count } from "drizzle-orm";
+import { count, isNull } from "drizzle-orm";
 import { db, pool } from "../db/client.ts";
 import { user } from "../db/schema.ts";
 import { createFieldKeyRing } from "../security/field-encryption.ts";
@@ -53,7 +53,10 @@ const authDatabase = encryptionKey
 	: authAdapter;
 
 async function registeredUserCount(): Promise<number> {
-	const [result] = await db.select({ value: count() }).from(user);
+	const [result] = await db
+		.select({ value: count() })
+		.from(user)
+		.where(isNull(user.deletedAt));
 	return result.value;
 }
 
