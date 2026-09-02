@@ -3,6 +3,7 @@ import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { BlobNotFoundError } from "./blob-store.ts";
 import { FsBlobStore } from "./fs-store.ts";
 
 const encoder = new TextEncoder();
@@ -54,6 +55,12 @@ describe("FsBlobStore", () => {
 		await store.delete(key);
 
 		expect(await store.exists(key)).toBe(false);
+	});
+
+	it("throws a typed error for a missing blob", async () => {
+		await expect(store.get("ws_1/a4/missing")).rejects.toBeInstanceOf(
+			BlobNotFoundError,
+		);
 	});
 
 	it("leaves no final or temporary file when the input fails", async () => {

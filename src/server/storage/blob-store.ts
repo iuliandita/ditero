@@ -1,3 +1,10 @@
+export class BlobNotFoundError extends Error {
+	constructor(readonly key: string) {
+		super(`blob not found: ${key}`);
+		this.name = "BlobNotFoundError";
+	}
+}
+
 export type BlobStore = {
 	put(
 		key: string,

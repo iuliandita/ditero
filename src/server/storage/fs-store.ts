@@ -4,7 +4,11 @@ import { mkdir, rename, rm, stat } from "node:fs/promises";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import type { BlobStore } from "./blob-store.ts";
+import { BlobNotFoundError, type BlobStore } from "./blob-store.ts";
+
+function isMissing(error: unknown): boolean {
+	return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
 
 function invalidKey(key: string): Error {
 	return new Error(`invalid blob key: ${JSON.stringify(key)}`);
@@ -93,7 +97,10 @@ export class FsBlobStore implements BlobStore {
 
 	async get(key: string): Promise<AsyncIterable<Uint8Array>> {
 		const path = this.#path(key);
-		const metadata = await stat(path);
+		const metadata = await stat(path).catch((error: unknown) => {
+			if (isMissing(error)) throw new BlobNotFoundError(key);
+			throw error;
+		});
 		if (!metadata.isFile()) throw new Error(`blob is not a file: ${key}`);
 		return createReadStream(path);
 	}
@@ -106,13 +113,7 @@ export class FsBlobStore implements BlobStore {
 		try {
 			return (await stat(this.#path(key))).isFile();
 		} catch (error) {
-			if (
-				error instanceof Error &&
-				"code" in error &&
-				error.code === "ENOENT"
-			) {
-				return false;
-			}
+			if (isMissing(error)) return false;
 			throw error;
 		}
 	}
