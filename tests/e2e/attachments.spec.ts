@@ -1,7 +1,16 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { Pool } from "pg";
 import { m } from "../../src/paraglide/messages.js";
-import { signUp, uniqueEmail, waitWorkspaceReady } from "./helpers.ts";
+import {
+	goToSettings,
+	leaveSettings,
+	signUp,
+	uniqueEmail,
+	waitWorkspaceReady,
+} from "./helpers.ts";
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -52,7 +61,11 @@ function inputFor(scope: Locator): Locator {
 		.getByTestId("attachment-input");
 }
 
-async function finishEnrollment(page: Page, filename: string): Promise<void> {
+async function finishEnrollment(
+	page: Page,
+	filename?: string,
+	acceptingInvite = false,
+): Promise<void> {
 	await expect(page.getByTestId("e2e-enroll-dialog")).toBeVisible();
 	await page.getByTestId("e2e-passphrase").fill(PASSPHRASE);
 	await page.getByTestId("e2e-passphrase-confirm").fill(PASSPHRASE);
@@ -62,10 +75,18 @@ async function finishEnrollment(page: Page, filename: string): Promise<void> {
 	const code = (await recovery.innerText()).replace(/\s+/g, "-");
 	await page.getByTestId("e2e-recovery-confirm").fill(code);
 	await page.getByTestId("e2e-recovery-submit").click();
-	await expect(page.getByTestId("e2e-enroll-pending-upload")).toContainText(
-		filename,
-		{ timeout: DERIVE_TIMEOUT },
-	);
+	if (acceptingInvite) {
+		await expect(page.getByTestId("workspace")).toBeVisible({
+			timeout: DERIVE_TIMEOUT,
+		});
+		return;
+	}
+	if (filename) {
+		await expect(page.getByTestId("e2e-enroll-pending-upload")).toContainText(
+			filename,
+			{ timeout: DERIVE_TIMEOUT },
+		);
+	}
 	await page.getByTestId("e2e-enroll-close").click();
 	await expect(page.getByTestId("e2e-enroll-dialog")).toHaveCount(0, {
 		timeout: DERIVE_TIMEOUT,
@@ -196,4 +217,253 @@ test("attachments render on task, comment, and list surfaces", async ({
 	await page.getByTestId("confirm-accept").click();
 	await expect(listTile).toHaveCount(0);
 	await expect(listHeaderMenu).toBeFocused();
+});
+
+async function closeTask(page: Page): Promise<void> {
+	const detail = page.getByRole("dialog", { name: m.task_detail_title() });
+	await detail.getByRole("button", { name: m.modal_close_label() }).click();
+	await expect(detail).toBeHidden();
+}
+
+async function openTask(page: Page, listName: string, taskName: string) {
+	await page
+		.locator('nav[aria-label="Lists"]')
+		.getByRole("button", { name: listName, exact: true })
+		.first()
+		.click();
+	await page
+		.getByTestId("list")
+		.getByRole("button", { name: taskName, exact: true })
+		.click();
+	await expect(page.getByTestId("task-attachments")).toBeVisible();
+}
+
+async function createInvite(page: Page, email: string): Promise<URL> {
+	await page.getByTestId("open-members").click();
+	await page.getByTestId("invite-open").click();
+	await page.getByTestId("invite-email").fill(email);
+	await page.getByTestId("invite-submit").click();
+	await expect(page.getByTestId("invite-link")).toBeVisible();
+	const link = new URL(await page.getByTestId("invite-link").inputValue());
+	await page.keyboard.press("Escape");
+	await page
+		.getByTestId("members-panel")
+		.getByRole("button", { name: m.modal_close_label() })
+		.click();
+	await expect(page.getByTestId("members-panel")).toBeHidden();
+	return link;
+}
+
+async function expectDownload(page: Page, name: string, plaintext: Buffer) {
+	const tile = page
+		.getByTestId("task-attachments")
+		.getByRole("listitem")
+		.filter({ hasText: name });
+	await expect(tile).toBeVisible({ timeout: 20_000 });
+	await tile.getByTestId("row-actions").click();
+	const downloading = page.waitForEvent("download");
+	await page.getByTestId("row-action-download").click();
+	const download = await downloading;
+	expect(download.suggestedFilename()).toBe(name);
+	const path = await download.path();
+	expect(path).not.toBeNull();
+	expect(await readFile(path as string)).toEqual(plaintext);
+}
+
+test("attachment canary: ciphertext, fragment grant, removal, rotation, and pending access", async ({
+	browser,
+}) => {
+	test.setTimeout(180_000);
+	const ownerContext = await browser.newContext();
+	const memberContext = await browser.newContext();
+	const outsiderContext = await browser.newContext();
+	const owner = await ownerContext.newPage();
+	const member = await memberContext.newPage();
+	const outsider = await outsiderContext.newPage();
+	for (const page of [owner, member, outsider]) page.setDefaultTimeout(20_000);
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		const stamp = `${Date.now()}`;
+		const listName = `Canary files ${stamp}`;
+		const taskName = `Canary task ${stamp}`;
+		const memberEmail = uniqueEmail("canary-member");
+		const outsiderEmail = uniqueEmail("canary-outsider");
+		const ownerEmail = uniqueEmail("canary-owner");
+		const workspaceName = `Canary household ${stamp}`;
+		const oldName = `private-before-${stamp}.txt`;
+		const newName = `private-after-${stamp}.txt`;
+		const oldBytes = Buffer.from(`Confidential original attachment ${stamp}`);
+		const newBytes = Buffer.from(`Confidential rotated attachment ${stamp}`);
+		await signUp(owner, ownerEmail);
+		// Workspace creation has no UI yet. Only this fixture is seeded; keys,
+		// files, invitations, membership removal, and rotation use real UI flows.
+		const workspaceId = `w_canary_${stamp}`;
+		const ownerId = (
+			await pool.query<{ id: string }>(
+				'select id from "user" where email = $1',
+				[ownerEmail],
+			)
+		).rows[0].id;
+		await pool.query(
+			"insert into workspace (id, name, owner_id, kind) values ($1, $2, $3, 'shared')",
+			[workspaceId, workspaceName, ownerId],
+		);
+		await pool.query(
+			"insert into membership (id, user_id, workspace_id, role) values ($1, $2, $3, 'owner')",
+			[`m_canary_${stamp}`, ownerId, workspaceId],
+		);
+		await owner
+			.getByRole("button", { name: workspaceName, exact: true })
+			.click();
+		await createListAndTask(owner, listName, taskName);
+		const committed = owner.waitForResponse("**/api/attachments/finalize");
+		await inputFor(owner.getByTestId("task-attachments")).setInputFiles({
+			name: oldName,
+			mimeType: "text/plain",
+			buffer: oldBytes,
+		});
+		await finishEnrollment(owner, oldName);
+		const finalized = await committed;
+		expect(finalized.ok()).toBe(true);
+		const { id: oldId } = (await finalized.json()) as { id: string };
+		const stored = await pool.query<{
+			storage_key: string;
+			key_version: number;
+			filename_ciphertext: string;
+		}>(
+			"select storage_key, key_version, filename_ciphertext from attachment where id = $1 and state = 'committed'",
+			[oldId],
+		);
+		expect(stored.rowCount).toBe(1);
+		const ciphertext = await readFile(
+			resolve("data/attachments", stored.rows[0].storage_key),
+		);
+		expect(ciphertext.length).toBeGreaterThan(oldBytes.length);
+		expect(ciphertext.includes(oldBytes)).toBe(false);
+		expect(stored.rows[0].filename_ciphertext).not.toContain(oldName);
+		await expectDownload(owner, oldName, oldBytes);
+		await expect(
+			owner
+				.getByTestId("task-attachments")
+				.locator("xpath=ancestor::fieldset")
+				.getByRole("button", { name: m.attachment_add(), exact: true }),
+		).toBeVisible();
+		await closeTask(owner);
+
+		const link = await createInvite(owner, memberEmail);
+		expect(new URLSearchParams(link.hash.slice(1)).get("e2e")).toBeTruthy();
+		await member.goto(`${link.pathname}${link.search}${link.hash}`);
+		await member.getByTestId("accept-email").fill(memberEmail);
+		await member.getByTestId("accept-password").fill("pw-123456");
+		await member.getByTestId("accept-submit").click();
+		await finishEnrollment(member, undefined, true);
+		await member
+			.getByRole("button", { name: workspaceName, exact: true })
+			.click();
+		await openTask(member, listName, taskName);
+		await expectDownload(member, oldName, oldBytes);
+
+		await signUp(outsider, outsiderEmail);
+		const oldUrl = `/api/attachments/${encodeURIComponent(oldId)}/download`;
+		expect((await outsider.request.get(oldUrl)).status()).toBe(403);
+		await goToSettings(outsider);
+		await outsider.getByTestId("e2e-setup").click();
+		await finishEnrollment(outsider);
+
+		await owner.getByTestId("open-members").click();
+		const memberRow = owner
+			.getByTestId("member-row")
+			.filter({ hasText: memberEmail.split("@")[0] });
+		await expect(memberRow).toBeVisible();
+		await memberRow.getByTestId("row-actions").click();
+		await owner.getByTestId("row-action-remove").click();
+		await owner.getByTestId("confirm-accept").click();
+		await expect(memberRow).toHaveCount(0);
+		await owner
+			.getByTestId("members-panel")
+			.getByRole("button", { name: m.modal_close_label() })
+			.click();
+		await openTask(owner, listName, taskName);
+		const blocked = owner
+			.getByTestId("task-attachments")
+			.locator("xpath=ancestor::fieldset")
+			.getByTestId("attachment-rotation-blocked");
+		await expect(blocked).toBeVisible();
+		await expect(blocked).toContainText(m.e2e_rotation_blocked_title());
+		await expect(
+			owner
+				.getByTestId("task-attachments")
+				.locator("xpath=ancestor::fieldset")
+				.getByRole("button", { name: m.attachment_add(), exact: true }),
+		).toHaveCount(0);
+		await expectNoSeriousA11y(owner, "rotation required");
+		await blocked
+			.getByRole("button", { name: m.e2e_rotation_action() })
+			.click();
+		await owner
+			.getByTestId("attachment-rotation-dialog")
+			.getByRole("button", { name: m.e2e_rotation_confirm_submit() })
+			.click();
+		await expect(blocked).toHaveCount(0, { timeout: 20_000 });
+		await expectDownload(owner, oldName, oldBytes);
+		const newCommitted = owner.waitForResponse("**/api/attachments/finalize");
+		await inputFor(owner.getByTestId("task-attachments")).setInputFiles({
+			name: newName,
+			mimeType: "text/plain",
+			buffer: newBytes,
+		});
+		const newFinalized = await newCommitted;
+		expect(newFinalized.ok()).toBe(true);
+		const { id: newId } = (await newFinalized.json()) as { id: string };
+		await expectDownload(owner, newName, newBytes);
+		const rotated = await pool.query<{ key_version: number }>(
+			"select key_version from attachment where id = $1",
+			[newId],
+		);
+		expect(rotated.rows[0].key_version).toBe(stored.rows[0].key_version + 1);
+		expect((await member.request.get(oldUrl)).status()).toBe(403);
+		expect(
+			(
+				await member.request.get(
+					`/api/attachments/${encodeURIComponent(newId)}/download`,
+				)
+			).status(),
+		).toBe(403);
+
+		await closeTask(owner);
+		const pendingLink = await createInvite(owner, outsiderEmail);
+		await goToSettings(owner);
+		await owner.getByTestId("e2e-lock-now").click();
+		await expect(owner.getByTestId("e2e-status")).toHaveText(
+			m.e2e_status_locked(),
+		);
+		await leaveSettings(outsider);
+		await outsider.goto(
+			`/accept?token=${encodeURIComponent(pendingLink.searchParams.get("token") as string)}`,
+		);
+		await outsider.getByTestId("accept-join").click();
+		await expect(outsider.getByTestId("workspace")).toBeVisible();
+		await outsider
+			.getByRole("button", { name: workspaceName, exact: true })
+			.click();
+		await openTask(outsider, listName, taskName);
+		const pending = outsider.getByTestId("task-attachments");
+		await expect(
+			pending.getByText(m.attachment_key_pending()).first(),
+		).toBeVisible();
+		await expect(pending).not.toContainText(oldName);
+		await expect(pending).not.toContainText(newName);
+		await expectNoSeriousA11y(outsider, "pending attachment keys");
+	} catch (error) {
+		await test.info().attach("owner-surface", {
+			body: await owner.locator("body").innerText(),
+			contentType: "text/plain",
+		});
+		throw error;
+	} finally {
+		await pool.end();
+		await ownerContext.close();
+		await memberContext.close();
+		await outsiderContext.close();
+	}
 });
