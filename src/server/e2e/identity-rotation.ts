@@ -67,9 +67,11 @@ export async function rotateIdentity(
 	userId: string,
 	input: RotationInput,
 ): Promise<RotationResult> {
+	// Wait for grants before scanning wraps. Locking only at retirement lets
+	// a grant commit after the scan and leaves its wrap on the retired key.
 	const current = await client.query<{ id: string; public_key: string }>(
 		`select id, public_key from user_key
-		 where user_id = $1 and state = 'ready' and retired_at is null`,
+		 where user_id = $1 and state = 'ready' and retired_at is null for update`,
 		[userId],
 	);
 	const active = current.rows[0];

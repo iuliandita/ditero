@@ -284,6 +284,7 @@ beforeEach(async () => {
 		body: {
 			workspaceId: WORKSPACE,
 			commitment: await commitWdk(v1, WORKSPACE, 1),
+			recipientPublicKey: owner.identity?.publicKey,
 			...(await sealFor(v1, owner, 1)),
 		},
 	});

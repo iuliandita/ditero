@@ -142,6 +142,48 @@ test("unlock: a remembered device does not re-prompt after a reload", async ({
 	);
 });
 
+test("sign-out clears the remembered key and requires unlocking after sign-in", async ({
+	page,
+}) => {
+	const email = uniqueEmail("e2e-sign-out");
+	await signUp(page, email);
+	await goToSettings(page);
+	await enroll(page);
+	await expect(status(page)).toHaveText(m.e2e_status_ready());
+	const deviceRecords = () =>
+		page.evaluate(async () => {
+			const db = await new Promise<IDBDatabase>((resolve, reject) => {
+				const request = indexedDB.open("ditero-e2e");
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			try {
+				return await new Promise<number>((resolve, reject) => {
+					const request = db
+						.transaction("device")
+						.objectStore("device")
+						.count();
+					request.onsuccess = () => resolve(request.result);
+					request.onerror = () => reject(request.error);
+				});
+			} finally {
+				db.close();
+			}
+		});
+	expect(await deviceRecords()).toBe(1);
+	await page.getByTestId("sign-out").click();
+	await expect(page.getByTestId("email")).toBeVisible();
+	expect(await deviceRecords()).toBe(0);
+	await page.getByTestId("email").fill(email);
+	await page.getByTestId("password").fill("pw-123456");
+	await page.getByTestId("signin").click();
+	await expect(page.getByTestId("workspace")).toBeVisible();
+	await goToSettings(page);
+	await expect(status(page)).toHaveText(m.e2e_status_locked(), {
+		timeout: DERIVE_TIMEOUT,
+	});
+});
+
 test("unlock: lock now survives a reload as locked, not as unenrolled", async ({
 	page,
 }) => {

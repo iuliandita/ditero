@@ -218,6 +218,7 @@
 	"keymap_reset_label": "Reset {command} to default",
 	"security_heading": "Security",
 	"security_sign_out": "Sign out",
+	"security_error_sign_out": "Could not finish signing out. Try again.",
 	"security_passkeys_heading": "Passkeys",
 	"security_add_passkey": "Add passkey",
 	"security_passkey_unnamed": "Passkey",

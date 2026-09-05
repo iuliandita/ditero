@@ -219,6 +219,7 @@
 	"keymap_reset_label": "Rétablir {command} par défaut",
 	"security_heading": "Sécurité",
 	"security_sign_out": "Se déconnecter",
+	"security_error_sign_out": "La déconnexion n'a pas pu se terminer. Réessaie.",
 	"security_passkeys_heading": "Passkeys",
 	"security_add_passkey": "Ajouter une passkey",
 	"security_passkey_unnamed": "Passkey",

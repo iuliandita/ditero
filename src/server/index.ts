@@ -293,11 +293,13 @@ const routes = new Elysia()
 					// After the accept has committed, and never fatal to it: an
 					// unsent notification costs a granter a nudge, while a failed
 					// acceptance would cost the newcomer their membership.
-					await notifyGrantCapable(db, accepted.grantRequestId).catch(
-						(error: unknown) => {
-							console.error("e2e: grant notification failed:", error);
-						},
-					);
+					await notifyGrantCapable(
+						db,
+						accepted.grantRequestId,
+						session.user.id,
+					).catch((error: unknown) => {
+						console.error("e2e: grant notification failed:", error);
+					});
 				}
 				return { workspaceId: accepted.workspaceId };
 			} catch (error) {

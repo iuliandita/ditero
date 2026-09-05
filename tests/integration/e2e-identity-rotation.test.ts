@@ -10,7 +10,11 @@ import {
 	sealWdk,
 } from "../../src/domain/e2e/hpke.ts";
 import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
-import { activeRecipientKeyGuard } from "../../src/server/e2e/identity-rotation.ts";
+import { submitGrant } from "../../src/server/e2e/grants.ts";
+import {
+	activeRecipientKeyGuard,
+	rotateIdentity,
+} from "../../src/server/e2e/identity-rotation.ts";
 import { app } from "../../src/server/index.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
@@ -512,6 +516,69 @@ describe("POST /api/e2e/identity/rotate", () => {
 		} finally {
 			await granter.query("rollback").catch(() => undefined);
 			await rotator.query("rollback").catch(() => undefined);
+			granter.release();
+			rotator.release();
+		}
+	});
+
+	test("rotation includes a grant that commits while it waits for the recipient identity", async () => {
+		await pool.query("delete from membership_key where id = 'mk_alice_v1'");
+		await pool.query(
+			`insert into key_grant_request
+			 (id, membership_id, user_id, workspace_id, requested_version)
+			 values ('kgr_overlap', 'm_alice', $1, 'ws_1', 1)`,
+			[alice],
+		);
+		const next = await newIdentity();
+		const body = rotateBody(
+			next,
+			aliceKey,
+			await rewrapAll(alice, aliceKey, next),
+		);
+		const granter = await pool.connect();
+		const rotator = await pool.connect();
+		let rotation: ReturnType<typeof rotateIdentity> | undefined;
+		try {
+			await granter.query("begin");
+			expect(
+				await submitGrant(granter, bob, {
+					requestId: "kgr_overlap",
+					recipientPublicKey: aliceKey.publicKey,
+					...(await seal(WDK_V1, aliceKey, {
+						workspaceId: "ws_1",
+						keyVersion: 1,
+						recipientUserId: alice,
+					})),
+				}),
+			).toMatchObject({ ok: true, outcome: "granted" });
+			await rotator.query("begin");
+			const pid = (
+				await rotator.query<{ pid: number }>("select pg_backend_pid() as pid")
+			).rows[0]?.pid;
+			rotation = rotateIdentity(rotator, alice, body);
+			await expect
+				.poll(async () => {
+					const waiting = await pool.query(
+						"select wait_event_type from pg_stat_activity where pid = $1",
+						[pid],
+					);
+					return waiting.rows[0]?.wait_event_type;
+				})
+				.toBe("Lock");
+			await granter.query("commit");
+			expect(await rotation).toEqual({
+				ok: false,
+				reason: "incomplete-rewraps",
+			});
+			await rotator.query("commit");
+			expect(await identityRows(alice)).toEqual([
+				{ publicKey: aliceKey.publicKey, retired: false },
+			]);
+			expect(await heldKeys(alice)).toHaveLength(2);
+		} finally {
+			await granter.query("rollback");
+			await rotation;
+			await rotator.query("rollback");
 			granter.release();
 			rotator.release();
 		}

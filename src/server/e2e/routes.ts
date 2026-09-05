@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { e2eEnabled } from "../../config/e2e.ts";
 import type { db as defaultDb } from "../../db/client.ts";
-import { withUserContext } from "../../db/user-context.ts";
+import { withLiveUserContext, withUserContext } from "../../db/user-context.ts";
 import { KDF_PARAMS } from "../../domain/e2e/kdf.ts";
 import { isWellFormedCommitment } from "../../domain/e2e/wdk-commitment.ts";
 import type { Guards } from "../guards.ts";
@@ -163,6 +163,7 @@ function workspaceIdFromPath(
 
 const provisionBody = z.object({
 	workspaceId: z.string().min(1).max(128),
+	recipientPublicKey: publicKey,
 	commitment,
 	enc: blob,
 	ciphertext: blob,
@@ -173,6 +174,7 @@ const PROVISION_STATUS: Record<ProvisionFailure, number> = {
 	// distinction tells a stranger the workspace exists.
 	"not-permitted": 403,
 	"not-enrolled": 409,
+	"stale-recipient-key": 409,
 };
 
 const grantBody = z.object({
@@ -255,25 +257,29 @@ export function e2eRoutes(
 				} catch {
 					return new Response("Bad Request", { status: 400 });
 				}
-				return await withUserContext(pool, session.user.id, async (client) => {
-					const result = await rotateWorkspace(
-						client,
-						session.user.id,
-						workspaceId,
-						parsed,
-					);
-					if (!result.ok) {
-						return new Response(result.reason, {
-							status: WORKSPACE_ROTATION_STATUS[result.reason],
-						});
-					}
-					return {
-						workspaceId: result.workspaceId,
-						version: result.version,
-						commitment: result.commitment,
-						outcome: result.outcome,
-					};
-				});
+				return await withLiveUserContext(
+					pool,
+					session.user.id,
+					async (client) => {
+						const result = await rotateWorkspace(
+							client,
+							session.user.id,
+							workspaceId,
+							parsed,
+						);
+						if (!result.ok) {
+							return new Response(result.reason, {
+								status: WORKSPACE_ROTATION_STATUS[result.reason],
+							});
+						}
+						return {
+							workspaceId: result.workspaceId,
+							version: result.version,
+							commitment: result.commitment,
+							outcome: result.outcome,
+						};
+					},
+				);
 			}),
 		)
 		.get(
@@ -339,7 +345,7 @@ export function e2eRoutes(
 				}
 
 				const userId = session.user.id;
-				return await withUserContext(pool, userId, async (client) => {
+				return await withLiveUserContext(pool, userId, async (client) => {
 					// Insert-then-read, not read-then-insert: two concurrent first
 					// enrollments both reach the insert, one wins, and both then read
 					// the same winning row. The read-first order would let both decide
@@ -452,7 +458,7 @@ export function e2eRoutes(
 				// anything by doing so: every WDK is wrapped to the public key,
 				// which no request can change. Availability, not confidentiality.
 				const userId = session.user.id;
-				return await withUserContext(pool, userId, async (client) => {
+				return await withLiveUserContext(pool, userId, async (client) => {
 					const stored = await client.query<{ format_version: number }>(
 						`select s.format_version
 						 from user_key k join user_key_secret s on s.user_key_id = k.id
@@ -541,7 +547,7 @@ export function e2eRoutes(
 				// withUserContext is already one transaction, which is what makes
 				// the retire, the insert and the wrap moves atomic without this
 				// route arranging anything.
-				return await withUserContext(pool, userId, async (client) => {
+				return await withLiveUserContext(pool, userId, async (client) => {
 					const result = await rotateIdentity(client, userId, parsed);
 					if (!result.ok) {
 						const status = ROTATION_STATUS[result.reason];
@@ -575,7 +581,7 @@ export function e2eRoutes(
 				}
 
 				const userId = session.user.id;
-				return await withUserContext(pool, userId, async (client) => {
+				return await withLiveUserContext(pool, userId, async (client) => {
 					const result = await provisionWorkspace(client, userId, parsed);
 					if (!result.ok) {
 						const status = PROVISION_STATUS[result.reason];
@@ -619,7 +625,7 @@ export function e2eRoutes(
 				} catch {
 					return new Response("Bad Request", { status: 400 });
 				}
-				const result = await withUserContext(
+				const result = await withLiveUserContext(
 					pool,
 					session.user.id,
 					async (client) =>
@@ -631,11 +637,13 @@ export function e2eRoutes(
 				);
 				if (!result) return new Response("Not Found", { status: 404 });
 				if (result.state === "pending") {
-					await notifyGrantCapable(database, result.requestId).catch(
-						(error: unknown) => {
-							console.error("e2e: grant notification failed:", error);
-						},
-					);
+					await notifyGrantCapable(
+						database,
+						result.requestId,
+						session.user.id,
+					).catch((error: unknown) => {
+						console.error("e2e: grant notification failed:", error);
+					});
 				}
 				return result;
 			}),
@@ -662,7 +670,7 @@ export function e2eRoutes(
 				}
 
 				const userId = session.user.id;
-				return await withUserContext(pool, userId, async (client) => {
+				return await withLiveUserContext(pool, userId, async (client) => {
 					const result = await submitGrant(client, userId, parsed);
 					if (!result.ok) {
 						return new Response(result.reason, {
@@ -686,7 +694,7 @@ export function e2eRoutes(
 				}
 
 				const userId = session.user.id;
-				return await withUserContext(pool, userId, async (client) => {
+				return await withLiveUserContext(pool, userId, async (client) => {
 					const marked = await markGrantFailed(
 						client,
 						userId,

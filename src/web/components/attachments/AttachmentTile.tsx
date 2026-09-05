@@ -170,7 +170,6 @@ export function AttachmentTile({
 				"group min-w-0 rounded-xl border bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring",
 				preview ? "overflow-hidden" : "flex items-start gap-2 p-2",
 			)}
-			{...(state !== "ready" ? { role: "group" } : {})}
 		>
 			{preview ? (
 				<>

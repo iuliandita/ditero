@@ -4,10 +4,13 @@ import { EncryptedFilesPanel } from "../components/e2e/EncryptedFilesPanel.tsx";
 import { AccountDeletionPanel } from "../components/settings/AccountDeletionPanel.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { authErrorMessage } from "../lib/auth-messages.ts";
+import { useKeyring } from "../lib/e2e/KeyringProvider.tsx";
 
 type PasskeyRecord = { id: string; name?: string | null };
 
 export function SecurityPanel() {
+	const { signOut } = useKeyring();
+	const [signingOut, setSigningOut] = useState(false);
 	const { data: session } = authClient.useSession();
 	const [passkeys, setPasskeys] = useState<PasskeyRecord[]>([]);
 	const [password, setPassword] = useState("");
@@ -18,6 +21,18 @@ export function SecurityPanel() {
 		Boolean(session?.user.twoFactorEnabled),
 	);
 	const [error, setError] = useState<string | null>(null);
+
+	async function endSession() {
+		setSigningOut(true);
+		setError(null);
+		try {
+			await signOut();
+		} catch {
+			setError(m.security_error_sign_out());
+		} finally {
+			setSigningOut(false);
+		}
+	}
 
 	const loadPasskeys = useCallback(async () => {
 		const result = await authClient.passkey.listUserPasskeys();
@@ -111,7 +126,8 @@ export function SecurityPanel() {
 					data-testid="sign-out"
 					type="button"
 					className="border px-2 py-1"
-					onClick={() => authClient.signOut()}
+					disabled={signingOut}
+					onClick={endSession}
 				>
 					{m.security_sign_out()}
 				</button>

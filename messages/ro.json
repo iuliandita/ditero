@@ -219,6 +219,7 @@
 	"keymap_reset_label": "Resetează {command} la valoarea implicită",
 	"security_heading": "Securitate",
 	"security_sign_out": "Deconectează-te",
+	"security_error_sign_out": "Deconectarea nu s-a putut finaliza. Încearcă din nou.",
 	"security_passkeys_heading": "Passkey-uri",
 	"security_add_passkey": "Adaugă un passkey",
 	"security_passkey_unnamed": "Passkey",

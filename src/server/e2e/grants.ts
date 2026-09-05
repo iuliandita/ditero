@@ -312,6 +312,14 @@ export async function submitGrant(
 	const request = found.rows[0];
 	if (!request) return { ok: false, reason: "no-request" };
 
+	// Account deletion locks the user before memberships and identity keys.
+	// Take the same order before the key guard or any recipient write.
+	const recipient = await client.query(
+		'select id from "user" where id = $1 and deleted_at is null for key share',
+		[request.user_id],
+	);
+	if (recipient.rowCount !== 1) return { ok: false, reason: "no-request" };
+
 	// The granter's own wrap for this version IS the evidence they hold the WDK.
 	// No role check: Owner and Admin mint versions, but any ready member can
 	// pass on a key they already have, and a member who cannot open it has
@@ -424,14 +432,20 @@ export async function markGrantFailed(
 export async function notifyGrantCapable(
 	database: NodePgDatabase<typeof tables>,
 	requestId: string,
+	requesterId: string,
 	now: Date = new Date(),
 ): Promise<number> {
-	const found = await database.execute<{
-		workspace_id: string;
-		workspace_name: string;
-		requested_version: number;
-		recipient: string;
-	}>(sql`
+	const found = await database.transaction(async (tx) => {
+		// Key-table reads enforce RLS even for the runtime table owner.
+		await tx.execute(
+			sql`select set_config('ditero.user_id', ${requesterId}, true)`,
+		);
+		return tx.execute<{
+			workspace_id: string;
+			workspace_name: string;
+			requested_version: number;
+			recipient: string;
+		}>(sql`
 		select r.workspace_id, w.name as workspace_name, r.requested_version,
 		       m.user_id as recipient
 		from key_grant_request r
@@ -443,7 +457,8 @@ export async function notifyGrantCapable(
 		join user_key uk
 		  on uk.user_id = m.user_id and uk.retired_at is null
 		 and uk.state = 'ready'
-		where r.id = ${requestId} and r.state = 'key_pending'
+		where r.id = ${requestId} and r.user_id = ${requesterId}
+		  and r.state = 'key_pending'
 		  -- Unreachable today and kept anyway: a request only exists because the
 		  -- member held no wrap for that version, and it leaves key_pending the
 		  -- moment they get one. It stops being unreachable as soon as a second
@@ -451,6 +466,7 @@ export async function notifyGrantCapable(
 		  -- invite fast path is exactly that shape -- and the failure it
 		  -- prevents is telling someone they are waiting on themselves.
 		  and m.user_id <> r.user_id`);
+	});
 	const rows = found.rows ?? [];
 	if (rows.length === 0) return 0;
 

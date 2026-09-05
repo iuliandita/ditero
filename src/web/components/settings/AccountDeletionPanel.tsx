@@ -1,8 +1,6 @@
 import { useRef, useState } from "react";
 import { z } from "zod";
 import { m } from "../../../paraglide/messages.js";
-import { authClient } from "../../lib/auth-client.ts";
-import { clearDeviceKey } from "../../lib/e2e/device-store.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { formatList } from "../../lib/intl-format.ts";
 import {
@@ -24,7 +22,7 @@ const previewSchema = z.object({
 type DeletionPreview = z.infer<typeof previewSchema>;
 
 export function AccountDeletionPanel() {
-	const { lockNow } = useKeyring();
+	const { signOut } = useKeyring();
 	const [open, setOpen] = useState(false);
 	const [preview, setPreview] = useState<DeletionPreview | null>(null);
 	const [acknowledged, setAcknowledged] = useState(false);
@@ -83,9 +81,7 @@ export function AccountDeletionPanel() {
 			}
 			if (!response.ok)
 				throw new Error(`account delete failed: ${response.status}`);
-			lockNow();
-			await clearDeviceKey();
-			await authClient.signOut();
+			await signOut();
 			window.location.assign("/");
 		} catch (failure) {
 			console.error(failure);

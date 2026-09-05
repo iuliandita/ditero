@@ -1,5 +1,6 @@
 import type { auth } from "../auth/auth.ts";
 import { requireSameOrigin } from "../auth/security.ts";
+import { UserContextError } from "../db/user-context.ts";
 
 // Same-origin + session, the shape every authenticated route here shares.
 // Extracted from index.ts so route groups can reuse it without importing the
@@ -48,7 +49,13 @@ export function makeGuards(
 				}
 				const session = await getSession(request.headers);
 				if (!session) return new Response("Unauthorized", { status: 401 });
-				return await handler(request, session);
+				try {
+					return await handler(request, session);
+				} catch (error) {
+					if (error instanceof UserContextError)
+						return new Response("Unauthorized", { status: 401 });
+					throw error;
+				}
 			};
 		},
 		guardedGet(handler) {

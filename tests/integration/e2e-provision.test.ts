@@ -12,6 +12,7 @@ import {
 } from "../../src/domain/e2e/hpke.ts";
 import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
 import { commitWdk } from "../../src/domain/e2e/wdk-commitment.ts";
+import { provisionWorkspace } from "../../src/server/e2e/provision.ts";
 import { app } from "../../src/server/index.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
@@ -121,6 +122,7 @@ async function mint(
 		wdk,
 		body: {
 			workspaceId,
+			recipientPublicKey: identity.publicKey,
 			commitment: await commitWdk(wdk, workspaceId, 1),
 			enc: b64(sealed.enc),
 			ciphertext: b64(sealed.ciphertext),
@@ -226,6 +228,113 @@ afterAll(async () => {
 });
 
 describe("POST /api/e2e/provision", () => {
+	test.each([
+		[
+			"workspace",
+			"update workspace set name = 'Changed' where id = $1",
+			() => SHARED,
+		],
+		[
+			"membership",
+			"update membership set role = 'viewer' where id = $1",
+			() => "m_own_s",
+		],
+		[
+			"identity",
+			"update user_key set retired_at = now() where user_id = $1 and retired_at is null",
+			() => owner,
+		],
+	])("holds the %s stable until its provision transaction commits", async (_resource, sql, target) => {
+		const { body } = await mint(SHARED, ownerKey, owner);
+		const minter = await pool.connect();
+		const writer = await pool.connect();
+		try {
+			await minter.query("begin");
+			expect(await provisionWorkspace(minter, owner, body)).toMatchObject({
+				ok: true,
+				outcome: "minted",
+			});
+			await writer.query("begin");
+			await writer.query("set local lock_timeout = '100ms'");
+			// A successful update here could commit a demotion or retirement
+			// while the mint remains invisible to the competing transaction.
+			const update = await writer.query(sql, [target()]).then(
+				() => "updated",
+				(error: { code?: string }) => error.code,
+			);
+			expect(update).toBe("55P03");
+		} finally {
+			await writer.query("rollback");
+			await minter.query("rollback");
+			writer.release();
+			minter.release();
+		}
+	});
+
+	test("rejects a wrap sealed before the recipient identity changed", async () => {
+		const { body } = await mint(SHARED, ownerKey, owner);
+		const replacement = await newIdentity();
+		await pool.query(
+			"update user_key set public_key = $1 where user_id = $2 and retired_at is null",
+			[replacement.publicKey, owner],
+		);
+		const response = await provision(body, ownerCookie);
+		expect(response.status).toBe(409);
+		expect(await workspaceKeys(SHARED)).toEqual([]);
+		expect(await membershipKeys(owner, SHARED)).toEqual([]);
+	});
+
+	test("requires the public key used to seal the grant", async () => {
+		const { body } = await mint(SHARED, ownerKey, owner);
+		const response = await provision(
+			{ ...body, recipientPublicKey: undefined },
+			ownerCookie,
+		);
+		expect(response.status).toBe(400);
+		expect(await workspaceKeys(SHARED)).toEqual([]);
+	});
+
+	test("rechecks a demotion that commits while provisioning is waiting", async () => {
+		const { body } = await mint(SHARED, ownerKey, owner);
+		const writer = await pool.connect();
+		const minter = await pool.connect();
+		let minting: ReturnType<typeof provisionWorkspace> | undefined;
+		try {
+			await writer.query("begin");
+			await writer.query(
+				"update membership set role = 'viewer' where id = 'm_own_s'",
+			);
+			await minter.query("begin");
+			const pid = (
+				await minter.query<{ pid: number }>("select pg_backend_pid() as pid")
+			).rows[0]?.pid;
+			let settled = false;
+			minting = provisionWorkspace(minter, owner, body).finally(() => {
+				settled = true;
+			});
+			await expect
+				.poll(async () => {
+					const blocked = await pool.query<{ blocked: boolean }>(
+						"select cardinality(pg_blocking_pids($1)) > 0 as blocked",
+						[pid],
+					);
+					return settled || blocked.rows[0]?.blocked;
+				})
+				.toBe(true);
+			await writer.query("commit");
+			expect(await minting).toEqual({ ok: false, reason: "not-permitted" });
+			await minter.query("commit");
+			expect(await workspaceKeys(SHARED)).toEqual([]);
+			expect(await membershipKeys(owner, SHARED)).toEqual([]);
+		} finally {
+			await writer.query("rollback");
+			await minting;
+			await minter.query("rollback");
+			writer.release();
+			minter.release();
+		}
+	});
+
 	test("mints v1 with the client's commitment and the owner's own grant", async () => {
 		const { wdk, body } = await mint(PERSONAL, ownerKey, owner);
 		const response = await provision(body, ownerCookie);
@@ -425,6 +534,64 @@ describe("POST /api/e2e/provision", () => {
 });
 
 describe("GET /api/e2e/provision/pending", () => {
+	test("uses the active version after rotation, including a missing current grant", async () => {
+		const { body } = await mint(SHARED, ownerKey, owner);
+		expect((await provision(body, ownerCookie)).status).toBe(200);
+		await pool.query(
+			"update workspace set rotation_required = true where id = $1",
+			[SHARED],
+		);
+		const wdk = crypto.getRandomValues(new Uint8Array(32));
+		const commitment = await commitWdk(wdk, SHARED, 2);
+		const sealed = await sealWdk(
+			wdk,
+			await importRecipientPublicKey(unb64(ownerKey.publicKey)),
+			{
+				workspaceId: SHARED,
+				keyVersion: 2,
+				recipientUserId: owner,
+				recipientFingerprint: await publicKeyFingerprint(
+					unb64(ownerKey.publicKey),
+				),
+			},
+		);
+		const rotated = await request(
+			"POST",
+			`/api/e2e/workspaces/${SHARED}/rotate`,
+			{
+				cookie: ownerCookie,
+				body: {
+					previousVersion: 1,
+					commitment,
+					grants: [
+						{
+							membershipId: "m_own_s",
+							userId: owner,
+							recipientPublicKey: ownerKey.publicKey,
+							enc: b64(sealed.enc),
+							ciphertext: b64(sealed.ciphertext),
+						},
+					],
+				},
+			},
+		);
+		expect(rotated.status).toBe(200);
+		const listed = (await (await pending(ownerCookie)).json()).workspaces;
+		expect(listed.find((w: { id: string }) => w.id === SHARED)).toBeUndefined();
+
+		await pool.query(
+			"delete from membership_key where workspace_id = $1 and user_id = $2 and key_version = 2",
+			[SHARED, owner],
+		);
+		const missing = (await (await pending(ownerCookie)).json()).workspaces;
+		expect(missing.find((w: { id: string }) => w.id === SHARED)).toEqual({
+			id: SHARED,
+			version: 2,
+			reason: "no-grant",
+			commitment,
+		});
+	});
+
 	test("enumerates every workspace the caller owns, not just one", async () => {
 		const response = await pending(ownerCookie);
 		expect(response.status).toBe(200);

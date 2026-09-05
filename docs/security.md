@@ -59,12 +59,11 @@ exposing any plaintext to the user.
 
 Checking "remember on this device" stores the private key encrypted in IndexedDB under a
 non-extractable WebCrypto key. Workspace keys remain memory-only. This is a deliberate weakening
-from memory-only storage: code executing in the unlocked origin can ask the browser to decrypt,
-but cannot export a reusable device key. It avoids repeated mobile passphrase prompts that train
-users to choose weaker secrets. Account deletion clears the record in the browser performing the
-deletion, but the server cannot remotely erase IndexedDB on another offline browser. Ordinary
-sign-out does not yet clear a remembered record ([issue #254](https://github.com/iuliandita/ditero/issues/254));
-use a separate browser profile on a shared machine until that is fixed.
+from memory-only storage: same-origin code can decrypt the stored record and copy the reusable
+private identity key, even while the UI is locked. Non-extractability protects the wrapping key
+from export, not the identity it decrypts. It avoids repeated mobile passphrase prompts that train
+users to choose weaker secrets. Sign-out and account deletion clear the record in the browser
+performing the action, but the server cannot remotely erase IndexedDB on another offline browser.
 
 A device-registry entry or session revocation is not cryptographic revocation. A compromised E2E
 identity must be replaced and every held workspace-key wrap moved to the new identity. Rotation

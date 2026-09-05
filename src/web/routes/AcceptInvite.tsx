@@ -342,7 +342,11 @@ function AcceptInvitePage({
 		void (async () => {
 			try {
 				let grant = fastGrant;
-				if (!grant || grant.requestId !== grantRequestId) {
+				if (
+					!grant ||
+					grant.requestId !== grantRequestId ||
+					grant.recipientPublicKey !== recipientPublicKey
+				) {
 					const publicKeyBytes = decodeBytes(recipientPublicKey);
 					const sealed = await sealWdk(
 						fastWdk,
@@ -376,6 +380,10 @@ function AcceptInvitePage({
 					headers: { "content-type": "application/json" },
 					body: JSON.stringify({ token, ...grant }),
 				});
+				if (response.status === 409) {
+					await fallBackAfterClaim();
+					return;
+				}
 				if (!response.ok) {
 					setError(m.accept_error_generic());
 					return;

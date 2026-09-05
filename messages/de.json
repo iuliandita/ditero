@@ -218,6 +218,7 @@
 	"keymap_reset_label": "{command} auf Standard zurücksetzen",
 	"security_heading": "Sicherheit",
 	"security_sign_out": "Abmelden",
+	"security_error_sign_out": "Die Abmeldung konnte nicht abgeschlossen werden. Versuch es noch einmal.",
 	"security_passkeys_heading": "Passkeys",
 	"security_add_passkey": "Passkey hinzufügen",
 	"security_passkey_unnamed": "Passkey",

@@ -111,6 +111,46 @@ async function storedFormatVersions(): Promise<number[]> {
 }
 
 describe("POST /api/e2e/enroll", () => {
+	test("rejects enrollment waiting behind account deletion without recreating keys", async () => {
+		const blocker = await pool.connect();
+		let pending: ReturnType<typeof enroll> | undefined;
+		try {
+			await blocker.query("begin");
+			const {
+				rows: [user],
+			} = await blocker.query<{ id: string }>(
+				'select id from "user" for update',
+			);
+			const {
+				rows: [backend],
+			} = await blocker.query<{ pid: number }>(
+				"select pg_backend_pid() as pid",
+			);
+			pending = enroll(body(KEY_A), { cookie });
+			await expect
+				.poll(async () => {
+					const result = await pool.query(
+						"select 1 from pg_stat_activity where $1 = any(pg_blocking_pids(pid))",
+						[backend.pid],
+					);
+					return result.rowCount;
+				})
+				.toBe(1);
+			await blocker.query(
+				'update "user" set deleted_at = now() where id = $1',
+				[user.id],
+			);
+			await blocker.query("commit");
+			expect((await pending).status).toBe(401);
+			expect(await storedKeys()).toEqual([]);
+			expect(await storedFormatVersions()).toEqual([]);
+		} finally {
+			await blocker.query("rollback");
+			blocker.release();
+			await pending;
+		}
+	});
+
 	test("creates one ready identity", async () => {
 		const response = await enroll(body(KEY_A), { cookie });
 		expect(response.status).toBe(200);

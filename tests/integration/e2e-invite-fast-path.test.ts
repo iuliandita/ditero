@@ -4,6 +4,7 @@ import { handleAuthRequest } from "../../src/auth/auth.ts";
 import {
 	claimFastInvite,
 	finalizeFastInvite,
+	grantFastInvite,
 } from "../../src/auth/invite-fast-path.ts";
 import { withRegistrationBypass } from "../../src/auth/registration-bypass.ts";
 import {
@@ -14,6 +15,7 @@ import {
 } from "../../src/domain/e2e/hpke.ts";
 import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
 import { commitWdk } from "../../src/domain/e2e/wdk-commitment.ts";
+import { rotateIdentity } from "../../src/server/e2e/identity-rotation.ts";
 import { app } from "../../src/server/index.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
@@ -183,6 +185,7 @@ beforeEach(async () => {
 		body: {
 			workspaceId: WORKSPACE,
 			commitment: await commitWdk(WDK, WORKSPACE, 1),
+			recipientPublicKey: ownerKey.publicKey,
 			...(await sealedFor(ownerKey, ownerId)),
 		},
 	});
@@ -255,6 +258,116 @@ describe("fragment invite state machine", () => {
 			[newcomerId, WORKSPACE],
 		);
 		expect(requests.rows).toEqual([{ state: "key_pending" }]);
+	});
+
+	test("a fast claim waiting behind account deletion cannot reserve the invite or recreate membership", async () => {
+		await makeInvite("deleted-claim");
+		const blocker = await pool.connect();
+		let pending: Promise<unknown> | undefined;
+		try {
+			await blocker.query("begin");
+			await blocker.query('select id from "user" where id = $1 for update', [
+				newcomerId,
+			]);
+			const {
+				rows: [backend],
+			} = await blocker.query<{ pid: number }>(
+				"select pg_backend_pid() as pid",
+			);
+			pending = claimFastInvite(
+				pool,
+				"deleted-claim",
+				newcomerId,
+				newcomerEmail,
+			).catch((error) => error);
+			await expect
+				.poll(async () => {
+					const result = await pool.query(
+						"select 1 from pg_stat_activity where $1 = any(pg_blocking_pids(pid))",
+						[backend.pid],
+					);
+					return result.rowCount;
+				})
+				.toBe(1);
+			await blocker.query(
+				'update "user" set deleted_at = now() where id = $1',
+				[newcomerId],
+			);
+			await blocker.query("commit");
+			expect(await pending).toMatchObject({ name: "UserContextError" });
+			expect(
+				(
+					await pool.query(
+						"select id from membership where user_id = $1 and workspace_id = $2",
+						[newcomerId, WORKSPACE],
+					)
+				).rows,
+			).toEqual([]);
+			expect(
+				(
+					await pool.query(
+						"select claimed_by, uses from invite where token = 'deleted-claim'",
+					)
+				).rows,
+			).toEqual([{ claimed_by: null, uses: 0 }]);
+		} finally {
+			await blocker.query("rollback");
+			blocker.release();
+			await pending;
+		}
+	});
+
+	test("a fast self-grant waits for an uncommitted identity rotation", async () => {
+		expect((await enroll(newcomerKey, newcomerCookie)).status).toBe(200);
+		await makeInvite("rotation-overlap");
+		const claimed = await claimFastInvite(
+			pool,
+			"rotation-overlap",
+			newcomerId,
+			newcomerEmail,
+		);
+		expect(claimed.grantRequestId).toBeTruthy();
+		const next = await identity();
+		const rotator = await pool.connect();
+		const grantPool = new Pool({
+			connectionString: databaseURL,
+			options: "-c lock_timeout=100ms",
+		});
+		try {
+			await rotator.query("begin");
+			expect(
+				await rotateIdentity(rotator, newcomerId, {
+					publicKey: next.publicKey,
+					previousPublicKey: newcomerKey.publicKey,
+					passphraseWrapped: WRAP,
+					recoveryWrapped: WRAP,
+					passphraseSalt: SALT,
+					recoverySalt: SALT,
+					formatVersion: CURRENT_KDF_VERSION,
+					rewraps: [],
+				}),
+			).toMatchObject({ ok: true });
+			await expect(
+				grantFastInvite(grantPool, newcomerId, {
+					token: "rotation-overlap",
+					requestId: claimed.grantRequestId ?? "",
+					recipientPublicKey: newcomerKey.publicKey,
+					...(await sealedFor(newcomerKey, newcomerId)),
+				}),
+			).rejects.toMatchObject({ code: "55P03" });
+			await rotator.query("commit");
+			expect(
+				(
+					await pool.query("select id from membership_key where user_id = $1", [
+						newcomerId,
+					])
+				).rows,
+			).toEqual([]);
+		} finally {
+			await rotator.query("rollback");
+			rotator.release();
+			await grantPool.end();
+		}
 	});
 
 	test("persists the self-grant before finalize consumes the invite", async () => {

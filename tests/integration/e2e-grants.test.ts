@@ -1,9 +1,18 @@
+import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	test,
+} from "vitest";
 import { handleAuthRequest } from "../../src/auth/auth.ts";
 import { acceptInvite } from "../../src/auth/invite-accept.ts";
 import { withRegistrationBypass } from "../../src/auth/registration-bypass.ts";
 import { db } from "../../src/db/client.ts";
+import * as schema from "../../src/db/schema.ts";
 import {
 	generateIdentityKeyPair,
 	importRecipientPrivateKey,
@@ -209,7 +218,12 @@ beforeEach(async () => {
 		(
 			await call("POST", "/api/e2e/provision", {
 				cookie: ownerCookie,
-				body: { workspaceId: WORKSPACE, commitment, ...sealed },
+				body: {
+					workspaceId: WORKSPACE,
+					commitment,
+					recipientPublicKey: ownerKey.publicKey,
+					...sealed,
+				},
 			})
 		).status,
 	).toBe(200);
@@ -517,6 +531,66 @@ describe("POST /api/e2e/grants", () => {
 		).toBe(404);
 	});
 
+	test("a grant overlapping recipient deletion completes without deadlock", async () => {
+		const grant = await goodGrant();
+		const blocker = await pool.connect();
+		let deleting: Promise<Response> | undefined;
+		let granting: Promise<Response> | undefined;
+		try {
+			await blocker.query("begin");
+			await blocker.query(
+				"select id from membership where user_id = $1 and workspace_id = $2 for update",
+				[newcomer, WORKSPACE],
+			);
+			const blockerPid = (
+				await blocker.query<{ pid: number }>("select pg_backend_pid() as pid")
+			).rows[0]?.pid;
+			deleting = call("POST", "/api/account/delete", {
+				cookie: newcomerCookie,
+				body: { acknowledgeKeyLoss: true },
+			});
+			let deletionPid: number | undefined;
+			// Deletion locks the user first, then waits on the held membership.
+			await expect
+				.poll(async () => {
+					const blocked = await pool.query<{ pid: number }>(
+						"select pid from pg_stat_activity where $1 = any(pg_blocking_pids(pid))",
+						[blockerPid],
+					);
+					deletionPid = blocked.rows[0]?.pid;
+					return deletionPid !== undefined;
+				})
+				.toBe(true);
+			granting = submit(grant);
+			await expect
+				.poll(async () => {
+					const blocked = await pool.query(
+						`select pid from pg_stat_activity
+						 where pid <> $1 and (
+						   $1 = any(pg_blocking_pids(pid)) or
+						   $2 = any(pg_blocking_pids(pid)))`,
+						[deletionPid, blockerPid],
+					);
+					return blocked.rowCount;
+				})
+				.toBe(1);
+			await blocker.query("commit");
+			const [deleted, granted] = await Promise.all([deleting, granting]);
+			expect(deleted.status, await deleted.text()).toBe(200);
+			expect(granted.status, await granted.clone().text()).toBe(404);
+			expect(await granted.text()).toBe("no-request");
+			const remaining = await pool.query(
+				"select id from membership_key where user_id = $1",
+				[newcomer],
+			);
+			expect(remaining.rows).toEqual([]);
+		} finally {
+			await blocker.query("rollback");
+			await Promise.allSettled([deleting, granting]);
+			blocker.release();
+		}
+	});
+
 	test("requires a session, rejects a foreign origin, and is absent while off", async () => {
 		const grant = await goodGrant();
 		expect(
@@ -613,6 +687,36 @@ describe("recipient-side substitution check", () => {
 });
 
 describe("notification", () => {
+	const runtimePool = new Pool({
+		connectionString: databaseURL,
+		options: "-c role=ditero_grants_runtime_test",
+		max: 1,
+	});
+	const runtimeDb = drizzle(runtimePool, { schema });
+
+	beforeAll(async () => {
+		await pool.query(`do $$
+		begin
+			if not exists (select from pg_roles where rolname = 'ditero_grants_runtime_test') then
+				create role ditero_grants_runtime_test nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+			end if;
+		end $$`);
+		await pool.query(
+			"grant usage on schema public to ditero_grants_runtime_test",
+		);
+		await pool.query(`grant select on key_grant_request, workspace,
+			membership_key, membership, user_key, user_pref, notification_channel
+			to ditero_grants_runtime_test`);
+		await pool.query(`grant select, insert on notification_outbox
+			to ditero_grants_runtime_test`);
+		const role = await runtimePool.query(
+			"select rolsuper, rolbypassrls from pg_roles where rolname = current_user",
+		);
+		expect(role.rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
+	});
+
+	afterAll(() => runtimePool.end());
+
 	async function outboxRows() {
 		const rows = await pool.query<{
 			recipient_user_id: string;
@@ -635,7 +739,7 @@ describe("notification", () => {
 		const accepted = await accept("tok_n", newcomer, "gr-new@test.invalid");
 		expect(accepted.grantRequestId).toBeTruthy();
 		expect(
-			await notifyGrantCapable(db, accepted.grantRequestId as string),
+			await notifyGrantCapable(db, accepted.grantRequestId as string, newcomer),
 		).toBe(1);
 
 		const rows = await outboxRows();
@@ -679,7 +783,7 @@ describe("notification", () => {
 		await makeInvite("tok_n2");
 		const accepted = await accept("tok_n2", newcomer, "gr-new@test.invalid");
 		expect(
-			await notifyGrantCapable(db, accepted.grantRequestId as string),
+			await notifyGrantCapable(db, accepted.grantRequestId as string, newcomer),
 		).toBe(0);
 		// The only holder is no longer enrolled, so nobody can act; a nudge here
 		// would have no possible response. The newcomer has a channel precisely
@@ -692,9 +796,50 @@ describe("notification", () => {
 		await makeInvite("tok_n3");
 		const accepted = await accept("tok_n3", newcomer, "gr-new@test.invalid");
 		const id = accepted.grantRequestId as string;
-		expect(await notifyGrantCapable(db, id)).toBe(1);
-		expect(await notifyGrantCapable(db, id)).toBe(0);
+		expect(await notifyGrantCapable(db, id, newcomer)).toBe(1);
+		expect(await notifyGrantCapable(db, id, newcomer)).toBe(0);
 		expect(await outboxRows()).toHaveLength(1);
+	});
+
+	test("a pending request notifies once under runtime RLS and clears its user context", async () => {
+		await makeInvite("tok_runtime");
+		const accepted = await accept(
+			"tok_runtime",
+			newcomer,
+			"gr-new@test.invalid",
+		);
+		const id = accepted.grantRequestId as string;
+		expect(id).toBeTruthy();
+		expect(await notifyGrantCapable(runtimeDb, id, newcomer)).toBe(1);
+		expect(await notifyGrantCapable(runtimeDb, id, newcomer)).toBe(0);
+		expect(await outboxRows()).toEqual([
+			{
+				recipient_user_id: owner,
+				payload: { kind: "key_grant", workspaceName: "Grants", locale: "en" },
+			},
+		]);
+		// The one-connection pool reuses the discovery connection after commit.
+		const unscoped = await runtimePool.query(
+			"select id from key_grant_request",
+		);
+		expect(unscoped.rows).toEqual([]);
+	});
+
+	test("a stranger or misbound co-member cannot trigger another user's request", async () => {
+		await makeInvite("tok_misbound");
+		const accepted = await accept(
+			"tok_misbound",
+			newcomer,
+			"gr-new@test.invalid",
+		);
+		const id = accepted.grantRequestId as string;
+		for (const caller of [stranger, owner]) {
+			expect(await notifyGrantCapable(runtimeDb, id, caller)).toBe(0);
+			// Ownership must also hold when the connection bypasses RLS.
+			expect(await notifyGrantCapable(db, id, caller)).toBe(0);
+		}
+		expect(await outboxRows()).toEqual([]);
+		expect(await notifyGrantCapable(runtimeDb, id, newcomer)).toBe(1);
 	});
 });
 

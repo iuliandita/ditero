@@ -1,14 +1,12 @@
 import { byteNarrower } from "../../../domain/e2e/bytes.ts";
 import { aad } from "../../../domain/e2e/envelope.ts";
 
-// Device-local persistence of the user's unwrapped private key (design 3.2,
-// 11). The record is encrypted under a key generated with extractable:false,
-// so the plaintext key never exists as bytes anywhere the page can read: an
-// XSS payload can ask this module to decrypt while it runs in the origin, but
-// cannot exfiltrate a key it can reuse later or elsewhere.
+// Device-local persistence of the private key. The wrapping CryptoKey is
+// non-extractable, but same-origin code can decrypt the stored record and
+// exfiltrate the resulting private-key bytes, even while the UI is locked.
 //
 // This deliberately does NOT go through envelope.ts. encryptWrapped takes the
-// key as a Uint8Array, which is exactly the thing that must not exist here;
+// wrapping key as a Uint8Array, while this store retains a CryptoKey;
 // only the AAD builder is shared.
 const DB_NAME = "ditero-e2e";
 const DB_VERSION = 1;
@@ -146,9 +144,8 @@ export async function loadWrappedPrivateKey(
 	}
 }
 
-// Logout and identity rotation both call this. Deleting the record drops the
-// only reference to the device key, and an unexported non-extractable key has
-// no other copy to revoke.
+// Logout and identity rotation clear this browser's record. This cannot erase
+// key material already copied by same-origin code or another browser.
 export async function clearDeviceKey(): Promise<void> {
 	await withStore("readwrite", async (store) => {
 		store.delete(RECORD_KEY);

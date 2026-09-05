@@ -24,6 +24,11 @@ through Ditero so current membership and role checks are applied at request time
 
 ## Quota and retention
 
+Browser downloads currently buffer authenticated plaintext in memory until the complete file
+has been verified. Large files can exhaust browser memory even when the server accepts them.
+The per-workspace quota also caps individual uploads, but it is not a tested browser download
+limit. Increasing it does not establish that browsers can download files of that size (issue #264).
+
 `DITERO_ATTACHMENT_QUOTA_BYTES` is a per-workspace ciphertext quota. Accounting includes reserved
 uploads, committed files, and encrypted thumbnails. It is based on bytes observed by the server,
 not the client's declared size.

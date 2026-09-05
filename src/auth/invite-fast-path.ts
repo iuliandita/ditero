@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
-import { withUserContext } from "../db/user-context.ts";
+import { withLiveUserContext } from "../db/user-context.ts";
 import { inviteState } from "../domain/invite.ts";
+import { activeRecipientKeyGuard } from "../server/e2e/identity-rotation.ts";
 
 export const FAST_INVITE_TTL_MS = 15 * 60_000;
 
@@ -134,7 +135,7 @@ export async function claimFastInvite(
 	userEmail: string,
 	now = new Date(),
 ): Promise<FastInviteClaim> {
-	return await withUserContext(pool, userId, async (client) => {
+	return await withLiveUserContext(pool, userId, async (client) => {
 		const invite = await lockedInvite(client, token);
 		assertFastEligible(invite);
 		const completedByCaller =
@@ -226,7 +227,7 @@ export async function grantFastInvite(
 	userId: string,
 	input: FastInviteGrantInput,
 ): Promise<"granted" | "already"> {
-	return await withUserContext(pool, userId, async (client) => {
+	return await withLiveUserContext(pool, userId, async (client) => {
 		const found = await client.query<{
 			membership_id: string;
 			workspace_id: string;
@@ -272,9 +273,7 @@ export async function grantFastInvite(
 			`insert into membership_key (id, membership_id, user_id, workspace_id,
 			 key_version, enc, ciphertext, recipient_public_key, granted_by)
 			 select $1, $2, $3, $4, $5, $6, $7, $8, $3
-			 where exists (
-				select 1 from user_key uk where uk.user_id = $3
-				 and uk.public_key = $8 and uk.retired_at is null and uk.state = 'ready')
+			 where ${activeRecipientKeyGuard(3, 8)}
 			 on conflict (membership_id, key_version) do nothing`,
 			[
 				`mk_${crypto.randomUUID()}`,
@@ -311,7 +310,7 @@ export async function finalizeFastInvite(
 	mode: "fast" | "fallback",
 	now = new Date(),
 ): Promise<{ workspaceId: string; grantRequestId: string | null }> {
-	return await withUserContext(pool, userId, async (client) => {
+	return await withLiveUserContext(pool, userId, async (client) => {
 		const invite = await lockedInvite(client, token);
 		if (
 			invite.status === "accepted" &&

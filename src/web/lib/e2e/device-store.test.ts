@@ -8,10 +8,9 @@ import {
 	storeWrappedPrivateKey,
 } from "./device-store.ts";
 
-// M-E2E Task 9. Persisting a private key at all is only defensible because the
-// key that protects it cannot be exported: an XSS payload can decrypt while it
-// runs in the origin, but cannot carry a reusable key away. That is the
-// property this file exists to pin.
+// The wrapping key cannot be exported, but the private-key round trip below
+// is available to any same-origin code. Persistence does not isolate secrets
+// from an attacker executing in the origin.
 const secret = () => crypto.getRandomValues(new Uint8Array(32));
 
 beforeEach(async () => {

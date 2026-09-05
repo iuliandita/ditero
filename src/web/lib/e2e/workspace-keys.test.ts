@@ -217,7 +217,10 @@ describe("reconcileWorkspaceKeys", () => {
 			fetcher,
 		);
 
-		expect(provisionBody).toMatchObject({ workspaceId: WORKSPACE });
+		expect(provisionBody).toMatchObject({
+			workspaceId: WORKSPACE,
+			recipientPublicKey: publicKey,
+		});
 		expect(cached.get(`${WORKSPACE}:1`)).toHaveLength(32);
 		expect(rows).toEqual([
 			expect.objectContaining({

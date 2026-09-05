@@ -113,11 +113,13 @@ export function e2eInviteRoutes(
 						parsed.mode,
 					);
 					if (parsed.mode === "fallback" && result.grantRequestId) {
-						await notifyGrantCapable(database, result.grantRequestId).catch(
-							(error: unknown) => {
-								console.error("e2e: grant notification failed:", error);
-							},
-						);
+						await notifyGrantCapable(
+							database,
+							result.grantRequestId,
+							session.user.id,
+						).catch((error: unknown) => {
+							console.error("e2e: grant notification failed:", error);
+						});
 					}
 					return { workspaceId: result.workspaceId };
 				} catch (error) {

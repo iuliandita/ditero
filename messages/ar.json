@@ -222,6 +222,7 @@
 	"keymap_reset_label": "استعادة {command} إلى الافتراضي",
 	"security_heading": "الأمان",
 	"security_sign_out": "تسجيل الخروج",
+	"security_error_sign_out": "تعذّر إكمال تسجيل الخروج. حاول مرة أخرى.",
 	"security_passkeys_heading": "مفاتيح المرور",
 	"security_add_passkey": "إضافة مفتاح مرور",
 	"security_passkey_unnamed": "مفتاح مرور",

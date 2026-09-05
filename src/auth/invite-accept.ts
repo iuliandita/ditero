@@ -5,6 +5,7 @@
 import { and, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import { db as defaultDb } from "../db/client.ts";
 import { invite, membership, taskAssignee, workspace } from "../db/schema.ts";
+import { UserContextError } from "../db/user-context.ts";
 import { canRedeem, type InviteRow, inviteState } from "../domain/invite.ts";
 
 export type AcceptFailure =
@@ -46,6 +47,12 @@ export async function acceptInvite(
 	now: number = Date.now(),
 ): Promise<{ workspaceId: string; grantRequestId: string | null }> {
 	return database.transaction(async (tx) => {
+		// Account deletion holds FOR UPDATE until the tombstone commits. Recheck
+		// after waiting, before consuming the invite or restoring membership.
+		const live = await tx.execute(sql`
+			select id from "user"
+			where id = ${userId} and deleted_at is null for key share`);
+		if (live.rowCount !== 1) throw new UserContextError();
 		const [inv] = await tx
 			.select()
 			.from(invite)

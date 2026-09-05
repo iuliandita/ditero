@@ -219,6 +219,7 @@
 	"keymap_reset_label": "Restablecer {command} al valor predeterminado",
 	"security_heading": "Seguridad",
 	"security_sign_out": "Cerrar sesión",
+	"security_error_sign_out": "No se pudo completar el cierre de sesión. Inténtalo de nuevo.",
 	"security_passkeys_heading": "Claves de acceso",
 	"security_add_passkey": "Añadir clave de acceso",
 	"security_passkey_unnamed": "Clave de acceso",

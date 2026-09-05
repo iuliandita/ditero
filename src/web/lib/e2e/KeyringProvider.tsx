@@ -9,6 +9,7 @@ import {
 	useState,
 } from "react";
 import { autoLockMaxAgeMs } from "../../../domain/e2e/auto-lock.ts";
+import { authClient } from "../auth-client.ts";
 import { createDeriver } from "./derive.ts";
 import { deviceId } from "./device-id.ts";
 import { createKeyring, type KeyringState } from "./keyring.ts";
@@ -36,6 +37,7 @@ export type KeyringContextValue = {
 	lockedByTimeout: boolean;
 	unlock: (secret: string, remember: boolean) => Promise<void>;
 	lockNow: () => void;
+	signOut: () => Promise<void>;
 	/**
 	 * Re-reads the identity and takes an already-unwrapped private key
 	 * against it. Enrollment has one; so does a recovery reset, which ends
@@ -256,6 +258,18 @@ export function KeyringProvider({
 				userLocked.current = true;
 				session.lockNow();
 				sync();
+			},
+			async signOut() {
+				refreshAbort.current?.abort();
+				hydrationAbort.current?.abort();
+				workspaceKeys.current = [];
+				try {
+					await session.signOut();
+				} finally {
+					sync();
+				}
+				const result = await authClient.signOut();
+				if (result.error) throw result.error;
 			},
 			async adoptPrivateKey(privateKey, remember) {
 				const response = await fetch("/api/e2e/identity", {

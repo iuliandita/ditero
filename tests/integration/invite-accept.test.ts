@@ -401,6 +401,66 @@ describe("acceptInvite", () => {
 		expect(rows.find((r) => r.workspaceId === "shared")?.role).toBe("member");
 	});
 
+	test("acceptance waiting behind account deletion cannot recreate membership or consume the invite", async () => {
+		const { id, token } = await makeInvite({
+			maxUses: 1,
+			attachTaskId: "shared-task",
+			attachKind: "assign",
+		});
+		const blocker = await pool.connect();
+		let pending: Promise<unknown> | undefined;
+		try {
+			await blocker.query("begin");
+			await blocker.query('select id from "user" where id = $1 for update', [
+				"joiner",
+			]);
+			const {
+				rows: [backend],
+			} = await blocker.query<{ pid: number }>(
+				"select pg_backend_pid() as pid",
+			);
+			pending = acceptInvite(token, "joiner", "joiner@test.invalid", db).catch(
+				(error) => error,
+			);
+			await expect
+				.poll(async () => {
+					const result = await pool.query(
+						"select 1 from pg_stat_activity where $1 = any(pg_blocking_pids(pid))",
+						[backend.pid],
+					);
+					return result.rowCount;
+				})
+				.toBe(1);
+			await blocker.query(
+				'update "user" set deleted_at = now() where id = $1',
+				["joiner"],
+			);
+			await blocker.query("commit");
+			expect(await pending).toMatchObject({ name: "UserContextError" });
+			expect(
+				await db
+					.select()
+					.from(tables.membership)
+					.where(eq(tables.membership.userId, "joiner")),
+			).toEqual([]);
+			expect(
+				await db
+					.select()
+					.from(tables.taskAssignee)
+					.where(eq(tables.taskAssignee.userId, "joiner")),
+			).toEqual([]);
+			expect(
+				(
+					await db.select().from(tables.invite).where(eq(tables.invite.id, id))
+				)[0],
+			).toMatchObject({ uses: 0, status: "pending" });
+		} finally {
+			await blocker.query("rollback");
+			blocker.release();
+			await pending;
+		}
+	});
+
 	test("'assign' attach resolves into a task_assignee row in one tx", async () => {
 		const { token } = await makeInvite({
 			attachTaskId: "shared-task",

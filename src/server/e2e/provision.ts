@@ -6,12 +6,16 @@ const MINT_ROLES = new Set(["owner", "admin"]);
 
 export type ProvisionInput = {
 	workspaceId: string;
+	recipientPublicKey: string;
 	commitment: string;
 	enc: string;
 	ciphertext: string;
 };
 
-export type ProvisionFailure = "not-permitted" | "not-enrolled";
+export type ProvisionFailure =
+	| "not-permitted"
+	| "not-enrolled"
+	| "stale-recipient-key";
 
 export type ProvisionOutcome = "minted" | "already" | "repaired" | "exists";
 
@@ -61,17 +65,17 @@ export async function pendingProvisions(
 		 from workspace w
 		 join membership m on m.workspace_id = w.id and m.user_id = $1
 		 left join workspace_key wk
-		   on wk.workspace_id = w.id and wk.version = $2 and wk.active
+		   on wk.workspace_id = w.id and wk.active
 		 left join membership_key mk
-		   on mk.membership_id = m.id and mk.key_version = $2
-		 where m.role = any($3)
+		   on mk.membership_id = m.id and mk.key_version = wk.version
+		 where m.role = any($2)
 		   and (wk.id is null or mk.id is null)
 		 order by w.id`,
-		[userId, FIRST_VERSION, [...MINT_ROLES]],
+		[userId, [...MINT_ROLES]],
 	);
 	return rows.rows.map((row) => ({
 		id: row.id,
-		version: FIRST_VERSION,
+		version: row.version ?? FIRST_VERSION,
 		// The two reasons demand different client behaviour and must not be
 		// collapsed: no-key means mint a fresh WDK, no-grant means resubmit the
 		// commitment already published. A client that minted on no-grant would
@@ -96,8 +100,13 @@ export async function provisionWorkspace(
 	userId: string,
 	input: ProvisionInput,
 ): Promise<ProvisionResult> {
+	// Match membership removal's lock order, and keep the authorization seat
+	// stable until the key and grant are committed.
+	await client.query("select id from workspace where id = $1 for update", [
+		input.workspaceId,
+	]);
 	const membership = await client.query<{ id: string; role: string }>(
-		"select id, role from membership where workspace_id = $1 and user_id = $2",
+		"select id, role from membership where workspace_id = $1 and user_id = $2 for update",
 		[input.workspaceId, userId],
 	);
 	const seat = membership.rows[0];
@@ -109,7 +118,8 @@ export async function provisionWorkspace(
 
 	const identity = await client.query<{ public_key: string }>(
 		`select public_key from user_key
-		 where user_id = $1 and state = 'ready' and retired_at is null`,
+		 where user_id = $1 and state = 'ready' and retired_at is null
+		 for share`,
 		[userId],
 	);
 	const publicKey = identity.rows[0]?.public_key;
@@ -117,6 +127,11 @@ export async function provisionWorkspace(
 	// caller's word for that would let a grant name a key the recipient never
 	// enrolled -- which the stale-key guard would then read as current.
 	if (!publicKey) return { ok: false, reason: "not-enrolled" };
+	// Rotation must wait for this grant to commit so it can include it in its
+	// rewrap set. A wrap sealed before a completed rotation needs a fresh retry.
+	if (publicKey !== input.recipientPublicKey) {
+		return { ok: false, reason: "stale-recipient-key" };
+	}
 
 	const minted = await client.query(
 		`insert into workspace_key (id, workspace_id, version, commitment, minted_by)

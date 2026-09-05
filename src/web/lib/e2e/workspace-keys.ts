@@ -367,6 +367,7 @@ export async function reconcileWorkspaceKeys(
 			provisionResultSchema,
 			jsonPost({
 				workspaceId: workspace.id,
+				recipientPublicKey: publicKey,
 				commitment,
 				...sealed,
 			}),
