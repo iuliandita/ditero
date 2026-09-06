@@ -4,7 +4,7 @@
 // even in closed/bootstrap mode. The kid is added to the guardian's workspace.
 import { and, eq } from "drizzle-orm";
 import { db as defaultDb } from "../db/client.ts";
-import { managedAccount, membership } from "../db/schema.ts";
+import { managedAccount, membership, workspace } from "../db/schema.ts";
 import { ADMIN_ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import { auth as defaultAuth } from "./auth.ts";
 import {
@@ -94,6 +94,17 @@ export async function createManagedAccount(
 	);
 	if (!guardianRole) {
 		throw new ManagedAccountError(403, "guardian is not a workspace member");
+	}
+	const [targetWorkspace] = await database
+		.select({ kind: workspace.kind })
+		.from(workspace)
+		.where(eq(workspace.id, input.workspaceId))
+		.limit(1);
+	if (targetWorkspace?.kind !== "shared") {
+		throw new ManagedAccountError(
+			403,
+			"managed accounts require a shared workspace",
+		);
 	}
 	// Honor the same member-invite lever as createInvite: provisioning a kid drops a
 	// new account into the shared workspace, so a strict ("admin") instance must not

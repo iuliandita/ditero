@@ -12,6 +12,7 @@ import {
 	InviteAcceptError,
 	previewInvite,
 } from "../../src/auth/invite-accept.ts";
+import { emailHasRedeemableInvite } from "../../src/auth/invite-bypass.ts";
 import {
 	createInvite,
 	InviteCreateError,
@@ -98,6 +99,39 @@ afterAll(async () => {
 });
 
 describe("createInvite role-escalation gate", () => {
+	test("personal workspace rejects invitations and managed admissions without creating accounts", async () => {
+		await db
+			.update(tables.workspace)
+			.set({ kind: "personal" })
+			.where(eq(tables.workspace.id, "shared"));
+		await expect
+			.soft(
+				createInvite(
+					{ workspaceId: "shared", role: "member" },
+					"owner",
+					db,
+					{},
+				),
+			)
+			.rejects.toMatchObject({ status: 403 });
+		await expect
+			.soft(
+				createManagedAccount(
+					{
+						guardianId: "owner",
+						workspaceId: "shared",
+						displayName: "Kid",
+						password: "password123",
+					},
+					db,
+					auth,
+					{},
+				),
+			)
+			.rejects.toMatchObject({ status: 403 });
+		expect(await db.select().from(tables.invite)).toEqual([]);
+		expect(await db.select().from(tables.user)).toHaveLength(6);
+	});
 	test("a role outside the ladder is rejected (400, no row)", async () => {
 		// The enum gate runs before the escalation gate, so an owner caller -- who
 		// may grant every real role -- still gets 400 rather than 403.
@@ -388,6 +422,39 @@ describe("acceptInvite", () => {
 		});
 		return { id, token };
 	}
+
+	test("outstanding personal invites cannot preview, bypass registration, accept, or attach", async () => {
+		const { token, id } = await makeInvite({
+			email: "joiner@test.invalid",
+			attachTaskId: "shared-task",
+			attachKind: "assign",
+		});
+		await db
+			.update(tables.workspace)
+			.set({ kind: "personal" })
+			.where(eq(tables.workspace.id, "shared"));
+		expect.soft(await previewInvite(token, db)).toEqual({ valid: false });
+		expect
+			.soft(
+				await emailHasRedeemableInvite("joiner@test.invalid", db, Date.now()),
+			)
+			.toBe(false);
+		await expect
+			.soft(acceptInvite(token, "joiner", "joiner@test.invalid", db))
+			.rejects.toMatchObject({ reason: "not_found" });
+		expect(
+			await db
+				.select()
+				.from(tables.membership)
+				.where(eq(tables.membership.userId, "joiner")),
+		).toEqual([]);
+		expect(await db.select().from(tables.taskAssignee)).toEqual([]);
+		expect(
+			(
+				await db.select().from(tables.invite).where(eq(tables.invite.id, id))
+			)[0],
+		).toMatchObject({ uses: 0, status: "pending" });
+	});
 
 	test("existing user accepts -> membership created", async () => {
 		const { token } = await makeInvite({});

@@ -81,7 +81,9 @@ export function AssigneePicker({
 		[memberships, me, memberIds],
 	);
 	const callerRole = members.find((mem) => mem.userId === me)?.role ?? null;
-	const canInvite = callerRole != null && INVITE_ROLES.has(callerRole);
+	const canAssign = callerRole != null && INVITE_ROLES.has(callerRole);
+	const isShared = members[0]?.workspace?.kind === "shared";
+	const canInvite = isShared && canAssign;
 	const workspaceName = members[0]?.workspace?.name ?? null;
 
 	const assignedIds = useMemo(
@@ -299,7 +301,7 @@ export function AssigneePicker({
 										type="button"
 										data-testid="assignee-option"
 										aria-pressed={assigned}
-										disabled={!canInvite}
+										disabled={!canAssign}
 										onClick={() => toggleMember(mem.userId)}
 										className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start hover:bg-muted disabled:opacity-60 disabled:hover:bg-transparent"
 									>
@@ -325,7 +327,7 @@ export function AssigneePicker({
 							})}
 						</section>
 
-						{connectionIds.length > 0 && (
+						{isShared && connectionIds.length > 0 && (
 							<section className="flex flex-col gap-0.5">
 								<h4 className="px-1 text-xs font-medium text-muted-foreground">
 									{m.connections_section_heading()}
@@ -359,63 +361,65 @@ export function AssigneePicker({
 							</section>
 						)}
 
-						<section className="flex flex-col gap-1.5 border-t pt-2">
-							<h4 className="px-1 text-xs font-medium text-muted-foreground">
-								{m.assignee_find_by_email_heading()}
-							</h4>
-							<div className="flex items-center gap-1.5">
-								<Input
-									type="email"
-									placeholder={m.email_placeholder()}
-									aria-label={m.assignee_find_by_email_aria()}
-									data-testid="assignee-email"
-									value={email}
-									onChange={(e) => setEmail(e.target.value)}
-									onKeyDown={(e) => {
-										if (e.key === "Enter") void lookup();
-									}}
-								/>
-								<Button
-									type="button"
-									variant="outline"
-									size="icon"
-									aria-label={m.assignee_search_action()}
-									disabled={busy || !email.trim()}
-									onClick={() => void lookup()}
-								>
-									<Search />
-								</Button>
-							</div>
-							{results?.length === 0 && (
-								<span className="px-1 text-xs text-muted-foreground">
-									{m.assignee_no_match()}
-								</span>
-							)}
-							{results?.map((u) => (
-								<button
-									key={u.id}
-									type="button"
-									data-testid="assignee-option"
-									disabled={!canInvite}
-									onClick={() =>
-										requestInvite({ name: u.name, email: email.trim() })
-									}
-									className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start hover:bg-muted disabled:opacity-60 disabled:hover:bg-transparent"
-								>
-									<MemberAvatar
-										name={u.name}
-										image={u.image}
-										className="size-6"
+						{isShared && (
+							<section className="flex flex-col gap-1.5 border-t pt-2">
+								<h4 className="px-1 text-xs font-medium text-muted-foreground">
+									{m.assignee_find_by_email_heading()}
+								</h4>
+								<div className="flex items-center gap-1.5">
+									<Input
+										type="email"
+										placeholder={m.email_placeholder()}
+										aria-label={m.assignee_find_by_email_aria()}
+										data-testid="assignee-email"
+										value={email}
+										onChange={(e) => setEmail(e.target.value)}
+										onKeyDown={(e) => {
+											if (e.key === "Enter") void lookup();
+										}}
 									/>
-									<span className="min-w-0 flex-1 truncate">{u.name}</span>
-									<span className="text-xs text-muted-foreground">
-										{canInvite
-											? m.assignee_row_invite()
-											: m.assignee_row_ask_admin()}
+									<Button
+										type="button"
+										variant="outline"
+										size="icon"
+										aria-label={m.assignee_search_action()}
+										disabled={busy || !email.trim()}
+										onClick={() => void lookup()}
+									>
+										<Search />
+									</Button>
+								</div>
+								{results?.length === 0 && (
+									<span className="px-1 text-xs text-muted-foreground">
+										{m.assignee_no_match()}
 									</span>
-								</button>
-							))}
-						</section>
+								)}
+								{results?.map((u) => (
+									<button
+										key={u.id}
+										type="button"
+										data-testid="assignee-option"
+										disabled={!canInvite}
+										onClick={() =>
+											requestInvite({ name: u.name, email: email.trim() })
+										}
+										className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start hover:bg-muted disabled:opacity-60 disabled:hover:bg-transparent"
+									>
+										<MemberAvatar
+											name={u.name}
+											image={u.image}
+											className="size-6"
+										/>
+										<span className="min-w-0 flex-1 truncate">{u.name}</span>
+										<span className="text-xs text-muted-foreground">
+											{canInvite
+												? m.assignee_row_invite()
+												: m.assignee_row_ask_admin()}
+										</span>
+									</button>
+								))}
+							</section>
+						)}
 					</div>
 				</PopoverContent>
 			</Popover>

@@ -202,6 +202,72 @@ afterAll(async () => {
 });
 
 describe("fragment invite state machine", () => {
+	test("personal workspace rejects a new fast claim without reserving a seat", async () => {
+		await makeInvite("personal-claim");
+		await pool.query(
+			"update workspace set kind = 'shared' where owner_id = $1 and kind = 'personal'",
+			[ownerId],
+		);
+		await pool.query("update workspace set kind = 'personal' where id = $1", [
+			WORKSPACE,
+		]);
+		expect((await claim("personal-claim")).status).toBe(404);
+		expect(
+			(
+				await pool.query(
+					"select claimed_by, uses from invite where token = 'personal-claim'",
+				)
+			).rows,
+		).toEqual([{ claimed_by: null, uses: 0 }]);
+		expect(
+			(
+				await pool.query(
+					"select id from membership where user_id = $1 and workspace_id = $2",
+					[newcomerId, WORKSPACE],
+				)
+			).rows,
+		).toEqual([]);
+	});
+
+	test("outstanding personal claim cannot resume, self-grant, or finalize", async () => {
+		await makeInvite("personal-reserved");
+		const claimed = await claimFastInvite(
+			pool,
+			"personal-reserved",
+			newcomerId,
+			newcomerEmail,
+		);
+		expect((await enroll(newcomerKey, newcomerCookie)).status).toBe(200);
+		await pool.query(
+			"update workspace set kind = 'shared' where owner_id = $1 and kind = 'personal'",
+			[ownerId],
+		);
+		await pool.query("update workspace set kind = 'personal' where id = $1", [
+			WORKSPACE,
+		]);
+		expect.soft((await claim("personal-reserved")).status).toBe(404);
+		expect
+			.soft(
+				(await grant("personal-reserved", claimed.grantRequestId ?? "")).status,
+			)
+			.toBe(404);
+		for (const mode of ["fast", "fallback"] as const)
+			expect.soft((await finalize("personal-reserved", mode)).status).toBe(404);
+		expect(
+			(
+				await pool.query(
+					"select status, uses from invite where token = 'personal-reserved'",
+				)
+			).rows,
+		).toEqual([{ status: "pending", uses: 0 }]);
+		expect(
+			(
+				await pool.query("select id from membership_key where user_id = $1", [
+					newcomerId,
+				])
+			).rows,
+		).toEqual([]);
+	});
 	test("preview consumes and claims nothing", async () => {
 		await makeInvite("preview");
 		const response = await call("GET", "/api/invite/preview?token=preview");

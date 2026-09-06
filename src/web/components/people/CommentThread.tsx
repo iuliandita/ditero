@@ -159,7 +159,10 @@ export function CommentThread({
 
 	const callerRole = members.find((mem) => mem.userId === me)?.role ?? null;
 	const canInvite =
-		!restricted && callerRole != null && INVITE_ROLES.has(callerRole);
+		members[0]?.workspace?.kind === "shared" &&
+		!restricted &&
+		callerRole != null &&
+		INVITE_ROLES.has(callerRole);
 	const canAttach = callerRole != null && WRITE_ROLES.has(callerRole);
 	const workspaceName =
 		members.find((member) => member.workspace)?.workspace?.name ??
@@ -178,11 +181,12 @@ export function CommentThread({
 	const suggestions = useMemo(() => {
 		if (!mention || restricted) return [];
 		const q = mention.query.toLowerCase();
-		const ranked = [...memberPeople, ...connectionPeople].filter((p) =>
-			p.name.toLowerCase().startsWith(q),
-		);
+		const ranked = [
+			...memberPeople,
+			...(canInvite ? connectionPeople : []),
+		].filter((p) => p.name.toLowerCase().startsWith(q));
 		return ranked.slice(0, 6);
-	}, [mention, memberPeople, connectionPeople, restricted]);
+	}, [mention, memberPeople, connectionPeople, restricted, canInvite]);
 
 	function run(mutation: { client: Promise<unknown> }) {
 		setError(null);

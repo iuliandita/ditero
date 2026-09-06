@@ -13,6 +13,11 @@ Email/password, passkeys, TOTP, and recovery codes are supported. Cookie-authent
 
 Production defaults to `DITERO_REGISTRATION_MODE=bootstrap`: only the first account can register without an invitation. Use `closed` after provisioning when invitations are not needed.
 
+Invitations and managed-account admission require a shared workspace. Outstanding personal-workspace
+invites cannot be redeemed or used to bypass registration restrictions. A personal workspace's
+owner can remove legacy members, but cannot transfer its ownership or change membership roles.
+Removing a member still requires key rotation before new encrypted uploads.
+
 ## Stored Secrets
 
 TOTP seeds, backup codes, OAuth tokens, JWT private keys, and backend integration credentials use AES-256-GCM envelopes. A key fingerprint identifies rotation state without storing key material. PATs are high-entropy bearer tokens and are stored only as SHA-256 hashes.

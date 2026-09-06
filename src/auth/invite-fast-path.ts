@@ -100,7 +100,9 @@ async function lockedInvite(
 	const found = await client.query<StoredInvite>(
 		`select id, workspace_id, role, email, status, expires_at, max_uses,
 		        uses, attach_task_id, attach_kind, created_at, claimed_by
-		 from invite where token = $1 for update`,
+		 from invite where token = $1
+		 and exists (select 1 from workspace w where w.id = invite.workspace_id and w.kind = 'shared')
+		 for update`,
 		[token],
 	);
 	const invite = found.rows[0];
@@ -237,6 +239,7 @@ export async function grantFastInvite(
 			`select r.membership_id, r.workspace_id, r.requested_version,
 			        uk.public_key
 			 from invite i
+			 join workspace w on w.id = i.workspace_id and w.kind = 'shared'
 			 join key_grant_request r
 			   on r.id = $2 and r.user_id = $3 and r.workspace_id = i.workspace_id
 			  and r.state in ('key_pending', 'ready')

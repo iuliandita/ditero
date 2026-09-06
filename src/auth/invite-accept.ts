@@ -59,6 +59,14 @@ export async function acceptInvite(
 			.where(eq(invite.token, token))
 			.limit(1);
 		if (!inv) throw new InviteAcceptError("not_found", "invite not found");
+		const [targetWorkspace] = await tx
+			.select({ kind: workspace.kind })
+			.from(workspace)
+			.where(eq(workspace.id, inv.workspaceId))
+			.limit(1);
+		if (targetWorkspace?.kind !== "shared") {
+			throw new InviteAcceptError("not_found", "invite not found");
+		}
 
 		// Friendly, distinct pre-check (revoked/accepted/expired/exhausted) BEFORE any
 		// write; the authoritative guard is the conditional UPDATE below.
@@ -216,7 +224,7 @@ export async function previewInvite(
 		})
 		.from(invite)
 		.innerJoin(workspace, eq(invite.workspaceId, workspace.id))
-		.where(eq(invite.token, token))
+		.where(and(eq(invite.token, token), eq(workspace.kind, "shared")))
 		.limit(1);
 	if (!row || !canRedeem(domainRow(row), now)) return { valid: false };
 	return { valid: true, workspaceName: row.workspaceName, email: row.email };

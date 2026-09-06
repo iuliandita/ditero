@@ -81,8 +81,12 @@ export function MembersPanel({
 				| undefined) ?? null,
 		[members, zero.userID],
 	);
+	const workspace = members.find((mem) => mem.workspace)?.workspace;
 	const canInvite =
-		callerRole === "owner" || callerRole === "admin" || callerRole === "member";
+		workspace?.kind === "shared" &&
+		(callerRole === "owner" ||
+			callerRole === "admin" ||
+			callerRole === "member");
 	const ownerCount = useMemo(
 		() => members.filter((mem) => mem.role === "owner").length,
 		[members],
@@ -174,6 +178,9 @@ export function MembersPanel({
 													isSelf: mem.userId === zero.userID,
 													callerRole,
 													ownerCount,
+													workspaceKind: workspace?.kind,
+													callerOwnsWorkspace:
+														workspace?.ownerId === zero.userID,
 													handlers: {
 														setRole: (id, r) => void setRole(id, r),
 														remove: (id, n) => void removeMember(id, n),

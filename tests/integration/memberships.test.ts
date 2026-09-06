@@ -349,6 +349,50 @@ describe("membership.setRole", () => {
 });
 
 describe("membership.remove", () => {
+	test.each([
+		"member",
+		"admin",
+		"owner",
+	] as const)("true personal owner can remove a legacy %s but peers and outsiders cannot", async (role) => {
+		const id = `personal-legacy-${role}`;
+		await db
+			.insert(tables.membership)
+			.values({ id, userId: "mem-owner2", workspaceId: "mem-personal", role });
+		try {
+			for (const caller of ["mem-owner2", "mem-admin"]) {
+				await expect(
+					call(mutators.membership.remove, { id: caller }, { id }),
+				).rejects.toThrow(/personal/);
+				await expect(
+					call(
+						mutators.membership.remove,
+						{ id: caller },
+						{ id: membershipIds.personal },
+					),
+				).rejects.toThrow(/personal/);
+			}
+			await expect(
+				call(
+					mutators.membership.setRole,
+					{ id: "mem-owner" },
+					{ id, role: "viewer" },
+				),
+			).rejects.toThrow(/personal/);
+			await call(mutators.membership.remove, { id: "mem-owner" }, { id });
+			expect(await membershipRow(id)).toBeUndefined();
+			expect(await membershipRow(membershipIds.personal)).toBeDefined();
+			expect(
+				(
+					await db
+						.select()
+						.from(tables.workspace)
+						.where(eq(tables.workspace.id, "mem-personal"))
+				)[0].rotationRequired,
+			).toBe(true);
+		} finally {
+			await db.delete(tables.membership).where(eq(tables.membership.id, id));
+		}
+	});
 	test("a rolled-back removal keeps both the membership and rotation flag", async () => {
 		await expect(
 			zdb.transaction(async (tx) => {

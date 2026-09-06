@@ -15,6 +15,88 @@ import { Pool } from "pg";
 const SHARED_WORKSPACE_ID = "w_shared_e2e";
 const PASSWORD = "pw-123456";
 
+test("personal workspace hides admission controls and lets its owner remove a legacy member", async ({
+	browser,
+}) => {
+	test.setTimeout(60_000);
+	const ownerContext = await browser.newContext();
+	const legacyContext = await browser.newContext();
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		const owner = await ownerContext.newPage();
+		const legacy = await legacyContext.newPage();
+		const ownerId = await signUp(owner, uniqueEmail("personal-owner"));
+		const legacyEmail = uniqueEmail("personal-legacy");
+		const legacyId = await signUp(legacy, legacyEmail);
+		await joinShared(ownerId);
+		await joinShared(legacyId);
+		const workspace = await pool.query<{ id: string }>(
+			"select id from workspace where owner_id = $1 and kind = 'personal'",
+			[ownerId],
+		);
+		// Existing installations can contain these rows; new admission is refused.
+		await pool.query(
+			"insert into membership (id,user_id,workspace_id,role) values ($1,$2,$3,'member')",
+			[crypto.randomUUID(), legacyId, workspace.rows[0].id],
+		);
+		await owner.getByTestId("new-list").fill("Personal policy");
+		await owner.getByTestId("new-list-submit").click();
+		await owner
+			.locator('nav[aria-label="Lists"]')
+			.getByRole("button", { name: "Personal policy", exact: true })
+			.click();
+		await addTask(owner, "Still assignable");
+		await openTaskDetail(owner, "Still assignable");
+		await owner.getByTestId("assignee-open").click();
+		const picker = owner.getByTestId("assignee-picker");
+		await expect(picker.getByTestId("assignee-email")).toHaveCount(0);
+		const option = picker
+			.getByTestId("assignee-option")
+			.filter({ hasText: nameOf(legacyEmail) });
+		await expect(option).toBeEnabled();
+		await option.click();
+		await expect(option).toHaveAttribute("aria-pressed", "true");
+		await owner.keyboard.press("Escape");
+		await closeTaskDetail(owner);
+		await owner.getByTestId("open-members").click();
+		const panel = owner.getByTestId("members-panel");
+		await expect(panel).toBeVisible();
+		await expect(panel.getByTestId("invite-open")).toHaveCount(0);
+		await expect(panel.getByTestId("add-kid-open")).toHaveCount(0);
+		const row = panel
+			.getByTestId("member-row")
+			.filter({ hasText: nameOf(legacyEmail) });
+		await expect(row).toBeVisible();
+		await row.getByTestId("row-actions").click();
+		await expect(owner.getByTestId("row-action-role")).toHaveCount(0);
+		await owner.getByTestId("row-action-remove").click();
+		await owner.getByTestId("confirm-accept").click();
+		await expect(row).toHaveCount(0);
+		await expect
+			.poll(
+				async () =>
+					(
+						await pool.query(
+							"select id from membership where workspace_id = $1 and user_id = $2",
+							[workspace.rows[0].id, legacyId],
+						)
+					).rowCount,
+			)
+			.toBe(0);
+		await expectNoSeriousA11y(owner, "personal membership recovery");
+		await closeMembersPanel(owner);
+		await openTaskDetail(owner, "Still assignable");
+		await owner.getByTestId("comment-input").fill(`@${nameOf(legacyEmail)}`);
+		await expect(owner.getByTestId("mention-suggest-option")).toHaveCount(0);
+		await owner.getByTestId("comment-input").fill("@personal-owner");
+		await expect(owner.getByTestId("mention-suggest-option")).toHaveCount(1);
+	} finally {
+		await pool.end();
+		await ownerContext.close();
+		await legacyContext.close();
+	}
+});
+
 let emailSeq = 0;
 function uniqueEmail(prefix: string): string {
 	emailSeq += 1;

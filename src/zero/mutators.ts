@@ -186,6 +186,7 @@ async function requireMembershipAdmin(
 	callerId: string,
 	membershipId: string,
 	lastOwnerMessage: string,
+	allowPersonalRemoval = false,
 ): Promise<{ target: Membership; callerRole: Role; ownerCount: number }> {
 	const target = await tx.run(zql.membership.where("id", membershipId).one());
 	if (!target) throw new Error("membership not found");
@@ -193,8 +194,16 @@ async function requireMembershipAdmin(
 		zql.workspace.where("id", target.workspaceId).one(),
 	);
 	if (!workspace) throw new Error("workspace not found");
-	if ((workspace as Workspace).kind === "personal")
+	if ((workspace as Workspace).kind === "personal") {
+		if (
+			allowPersonalRemoval &&
+			workspace.ownerId === callerId &&
+			target.userId !== workspace.ownerId
+		) {
+			return { target, callerRole: "owner", ownerCount: 1 };
+		}
 		throw new Error("personal workspace membership is fixed");
+	}
 	const callerRole = await roleInWorkspace(tx, callerId, target.workspaceId);
 	if (!callerRole || !ADMIN_ROLES.has(callerRole))
 		throw new Error("access denied: need admin+");
@@ -1494,6 +1503,7 @@ export const mutators = defineMutators({
 					ctx.id,
 					args.id,
 					"cannot remove the last owner",
+					true,
 				);
 				// Assignment implies membership everywhere in this codebase (that is
 				// the premise of invite-on-assign), so an assignee row for a
