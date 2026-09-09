@@ -24,10 +24,21 @@ through Ditero so current membership and role checks are applied at request time
 
 ## Quota and retention
 
-Browser downloads currently buffer authenticated plaintext in memory until the complete file
-has been verified. Large files can exhaust browser memory even when the server accepts them.
-The per-workspace quota also caps individual uploads, but it is not a tested browser download
-limit. Increasing it does not establish that browsers can download files of that size (issue #264).
+Browser previews and ordinary downloads are limited to 64 MiB in memory. Larger downloads
+require a browser with the File System Access save picker, OPFS, and Web Locks. The client asks
+for a destination, stages ciphertext in browser storage, verifies the entire stream without
+retaining plaintext, then decrypts the same file snapshot again into the selected destination.
+This uses bounded memory but requires enough temporary browser storage for the ciphertext and
+two decryption passes. Unsupported browsers refuse large files with an explanatory message.
+The server quota does not imply browser support for an equally large preview.
+
+Only ciphertext is staged in OPFS. New stages are protected by per-file Web Locks while active;
+startup and subsequent transfers recover abandoned stages after a renderer crash. Legacy
+`ditero-upload-` stages are left alone because an older open tab does not hold these locks.
+Close all Ditero tabs before clearing legacy site storage, and preserve any remembered-key or
+recovery material first. Storage quota or destination write failures stop the download; they do
+not fall back to buffering the entire file. Canceling after choosing a new destination can leave
+an empty file, but unauthenticated content is never written to it.
 
 `DITERO_ATTACHMENT_QUOTA_BYTES` is a per-workspace ciphertext quota. Accounting includes reserved
 uploads, committed files, and encrypted thumbnails. It is based on bytes observed by the server,

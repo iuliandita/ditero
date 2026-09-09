@@ -1654,6 +1654,8 @@
 	"attachment_error_reserve_failed": "تعذّرت إضافة هذا الملف. حاول مرة أخرى.",
 	"attachment_error_upload_failed": "لم يكتمل هذا الرفع. حاول مرة أخرى.",
 	"attachment_error_download_failed": "تعذّر تنزيل هذا الملف. حاول مرة أخرى.",
+	"attachment_download_memory_limit": "لا يمكن فتح الملفات التي يزيد حجمها عن {limit} في الذاكرة. لتنزيل هذا الملف، استخدم متصفحًا يدعم الحفظ مباشرةً في ملف.",
+	"attachment_preview_too_large": "لا يمكن معاينة الملفات التي يزيد حجمها عن {limit}. اختر تنزيل لحفظ هذا الملف.",
 	"attachment_error_integrity": "فشل هذا الملف في التحقق من سلامته ولم يُفتح. إنه تالف أو تم تغييره بعد رفعه.",
 	"attachment_error_rotation_required": "تم إيقاف الملفات الجديدة مؤقتًا لمساحة العمل هذه حتى يتم إنشاء مفتاح جديد.",
 	"attachment_locked_name": "ملف مشفّر",

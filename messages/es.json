@@ -1564,6 +1564,8 @@
 	"attachment_error_reserve_failed": "No se pudo añadir ese archivo. Inténtalo de nuevo.",
 	"attachment_error_upload_failed": "Esa subida no terminó. Inténtalo de nuevo.",
 	"attachment_error_download_failed": "No se pudo descargar ese archivo. Inténtalo de nuevo.",
+	"attachment_download_memory_limit": "Los archivos de más de {limit} no se pueden abrir en memoria. Para descargar este archivo, usa un navegador que permita guardarlo directamente en un archivo.",
+	"attachment_preview_too_large": "No se pueden previsualizar archivos de más de {limit}. Elige Descargar para guardar este archivo.",
 	"attachment_error_integrity": "Este archivo no superó la comprobación de integridad y no se abrió. Está dañado o se modificó después de subirlo.",
 	"attachment_error_rotation_required": "Los archivos nuevos están en pausa para este espacio de trabajo hasta que se cree una clave nueva.",
 	"attachment_locked_name": "Archivo cifrado",

@@ -265,9 +265,10 @@ async function expectDownload(page: Page, name: string, plaintext: Buffer) {
 	await page.getByTestId("row-action-download").click();
 	const download = await downloading;
 	expect(download.suggestedFilename()).toBe(name);
-	const path = await download.path();
-	expect(path).not.toBeNull();
-	expect(await readFile(path as string)).toEqual(plaintext);
+	const stream = await download.createReadStream();
+	const chunks: Buffer[] = [];
+	for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+	expect(Buffer.concat(chunks)).toEqual(plaintext);
 }
 
 test("attachment canary: ciphertext, fragment grant, removal, rotation, and pending access", async ({
@@ -341,6 +342,68 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		expect(ciphertext.length).toBeGreaterThan(oldBytes.length);
 		expect(ciphertext.includes(oldBytes)).toBe(false);
 		expect(stored.rows[0].filename_ciphertext).not.toContain(oldName);
+		const downloadProbe = await owner.evaluateHandle(() => {
+			const probe = { originalFetch: window.fetch, aborts: 0, requests: 0 };
+			const fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+				const url = input instanceof Request ? input.url : String(input);
+				if (!/\/api\/attachments\/[^/]+\/download$/.test(url))
+					return probe.originalFetch.call(window, input, init);
+				probe.requests += 1;
+				return new Promise<Response>((_resolve, reject) => {
+					const signal = init?.signal;
+					if (!signal) {
+						reject(new Error("download did not receive an AbortSignal"));
+						return;
+					}
+					const abort = () => {
+						probe.aborts += 1;
+						reject(new DOMException("Cancelled", "AbortError"));
+					};
+					if (signal.aborted) abort();
+					else signal.addEventListener("abort", abort, { once: true });
+				});
+			};
+			Object.assign(window, { fetch });
+			return probe;
+		});
+		try {
+			const tile = owner
+				.getByTestId("task-attachments")
+				.getByRole("listitem")
+				.filter({ hasText: oldName });
+			await tile.getByTestId("row-actions").click();
+			await owner.getByTestId("row-action-download").click();
+			await expect(
+				owner.getByRole("menu", { includeHidden: true }),
+			).toHaveCount(0);
+			await expect(tile.getByRole("progressbar")).toBeVisible();
+			await expect
+				.poll(() => downloadProbe.evaluate((p) => p.requests))
+				.toBe(1);
+			expect(await downloadProbe.evaluate((p) => p.aborts)).toBe(0);
+			await tile
+				.getByRole("button", { name: m.confirm_cancel(), exact: true })
+				.click();
+			await expect.poll(() => downloadProbe.evaluate((p) => p.aborts)).toBe(1);
+			await expect(tile.getByRole("progressbar")).toHaveCount(0);
+			await tile.getByTestId("row-actions").click();
+			await owner.getByTestId("row-action-download").click();
+			await expect(
+				owner.getByRole("menu", { includeHidden: true }),
+			).toHaveCount(0);
+			await expect(tile.getByRole("progressbar")).toBeVisible();
+			await expect
+				.poll(() => downloadProbe.evaluate((p) => p.requests))
+				.toBe(2);
+			await closeTask(owner);
+			await expect.poll(() => downloadProbe.evaluate((p) => p.aborts)).toBe(2);
+			await openTask(owner, listName, taskName);
+		} finally {
+			await downloadProbe.evaluate((p) => {
+				window.fetch = p.originalFetch;
+			});
+			await downloadProbe.dispose();
+		}
 		await expectDownload(owner, oldName, oldBytes);
 		await expect(
 			owner

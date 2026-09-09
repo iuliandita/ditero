@@ -1564,6 +1564,8 @@
 	"attachment_error_reserve_failed": "Impossible d'ajouter ce fichier. Réessaie.",
 	"attachment_error_upload_failed": "Cet envoi ne s'est pas terminé. Réessaie.",
 	"attachment_error_download_failed": "Impossible de télécharger ce fichier. Réessaie.",
+	"attachment_download_memory_limit": "Les fichiers de plus de {limit} ne peuvent pas être ouverts en mémoire. Pour télécharger ce fichier, utilise un navigateur qui permet de l’enregistrer directement dans un fichier.",
+	"attachment_preview_too_large": "Les fichiers de plus de {limit} ne peuvent pas être prévisualisés. Choisis Télécharger pour enregistrer ce fichier.",
 	"attachment_error_integrity": "Ce fichier a échoué au contrôle d'intégrité et n'a pas été ouvert. Il est endommagé ou a été modifié après son envoi.",
 	"attachment_error_rotation_required": "Les nouveaux fichiers sont suspendus pour cet espace de travail jusqu'à la création d'une nouvelle clé.",
 	"attachment_locked_name": "Fichier chiffré",

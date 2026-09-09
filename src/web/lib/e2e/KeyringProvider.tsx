@@ -10,6 +10,7 @@ import {
 } from "react";
 import { autoLockMaxAgeMs } from "../../../domain/e2e/auto-lock.ts";
 import { authClient } from "../auth-client.ts";
+import { recoverCiphertextStages } from "./ciphertext-staging.ts";
 import { createDeriver } from "./derive.ts";
 import { deviceId } from "./device-id.ts";
 import { createKeyring, type KeyringState } from "./keyring.ts";
@@ -86,6 +87,12 @@ export function KeyringProvider({
 	// CALLED on unlock, so a later declaration happens to work, but it reads as
 	// a use-before-define and the next edit to either is where that stops being
 	// true.
+	useEffect(() => {
+		void recoverCiphertextStages().catch((error) => {
+			console.error("attachments: staging recovery failed", error);
+		});
+	}, []);
+
 	const deriver = useMemo(() => createDeriver(), []);
 	useEffect(() => () => deriver.dispose(), [deriver]);
 
