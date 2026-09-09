@@ -37,18 +37,53 @@ COPY deploy/docker/zero-runtime/patches ./patches
 RUN pnpm install --prod --frozen-lockfile
 COPY deploy/docker/zero-runtime/verify.mjs ./
 
-FROM zero-base AS zero-runtime
-RUN rm -rf /opt/app
+# Rebuild the exact backup sources Zero ships, preserving both backup formats.
+FROM golang:1.26.8-alpine3.23@sha256:33ce311e5eecedee48ec1b84419c1306e9fbd71009f0d5c3f2a6904b579c1ecc AS litestream-build
+RUN apk add --no-cache build-base
+ENV GOTOOLCHAIN=local
+WORKDIR /src
+
+FROM litestream-build AS litestream-legacy
+ADD --checksum=sha256:977ce9aa14a3d1e68e2b8cec6369dda7528c230401236c804543606c1d661d16 https://codeload.github.com/rocicorp/litestream/tar.gz/5efae7df64aebc3247a739360232f908d2bc47e2 /tmp/source.tar.gz
+RUN tar -xzf /tmp/source.tar.gz --strip-components=1 -C /src
+COPY deploy/docker/zero-runtime/litestream/legacy/go.mod deploy/docker/zero-runtime/litestream/legacy/go.sum ./
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    go build -mod=readonly -trimpath -ldflags "-s -w -X main.Version=v0.3.13+z0.0.9-ditero.1 -extldflags '-static'" \
+    -tags osusergo,netgo,sqlite_omit_load_extension -o /out/litestream ./cmd/litestream
+
+FROM litestream-build AS litestream-v5
+ADD --checksum=sha256:6d5a3adaf237c2d60923f11a2d834b796ba6ab770aaa86fa10b61673fa243f4d https://codeload.github.com/benbjohnson/litestream/tar.gz/4e3f0c0f98a8808788c721b3637b41e7f9ce4a9c /tmp/source.tar.gz
+RUN tar -xzf /tmp/source.tar.gz --strip-components=1 -C /src
+COPY deploy/docker/zero-runtime/litestream/v5/go.mod deploy/docker/zero-runtime/litestream/v5/go.sum ./
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    go build -mod=readonly -trimpath -ldflags "-s -w -X main.Version=v0.5.15-ditero.1 -extldflags '-static'" \
+    -tags osusergo,netgo,sqlite_omit_load_extension -o /out/litestream-v5 ./cmd/litestream
+
+FROM alpine:3.23.5@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40 AS zero-runtime
+RUN apk upgrade --no-cache \
+	&& apk add --no-cache ca-certificates 'curl>=8.22.0-r0' \
+		'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' libstdc++ readline
+COPY --from=zero-base /usr/local/bin/node /usr/local/bin/node
+COPY --from=litestream-legacy /out/litestream /usr/local/bin/litestream
+COPY --from=litestream-v5 /out/litestream-v5 /usr/local/bin/litestream-v5
+COPY --from=zero-base /etc/litestream.yml /etc/litestream.yml
 COPY --from=zero-deps /opt/zero-deps /opt/app
 WORKDIR /opt/app
+ENV PATH="/opt/app/node_modules/.bin:${PATH}" \
+    ZERO_IN_CONTAINER=1 \
+    ZERO_LITESTREAM_CONFIG_PATH=/etc/litestream.yml \
+    ZERO_LITESTREAM_EXECUTABLE=/usr/local/bin/litestream \
+    ZERO_LITESTREAM_EXECUTABLE_V5=/usr/local/bin/litestream-v5 \
+    ZERO_LOG_FORMAT=json \
+    ZERO_SERVER_VERSION=1.9.0
 RUN node verify.mjs
 COPY --chmod=755 deploy/docker/secret-file.sh /usr/local/lib/ditero/secret-file.sh
 COPY --chmod=755 deploy/docker/zero-entrypoint.sh /usr/local/bin/ditero-zero-entrypoint
 ENTRYPOINT ["/usr/local/bin/ditero-zero-entrypoint"]
 CMD ["zero-cache"]
 
-# Same reason as the runtime stage below: without these the image answers with
-# rocicorp/zero's labels instead of this repo's.
 ARG DITERO_GIT_SHA=""
 ARG DITERO_CHANNEL=""
 LABEL org.opencontainers.image.title="Ditero zero-cache" \
