@@ -283,6 +283,81 @@ function storageKeys(row: AttachmentRow): string[] {
 		: [row.storageKey];
 }
 
+async function transferAttachment({
+	client,
+	store,
+	request,
+	userId,
+	row,
+	storageKey,
+	declaredBytes,
+	now,
+}: {
+	client: PoolClient;
+	store: BlobStore;
+	request: Request;
+	userId: string;
+	row: AttachmentRow;
+	storageKey: string;
+	declaredBytes: number;
+	now: () => Date;
+}): Promise<{ bytes: number; sha256: string } | RouteResult> {
+	if (
+		!row.reservationExpiresAt ||
+		row.reservationExpiresAt.getTime() <= now().getTime()
+	) {
+		await abortAttachment(client, row);
+		return {
+			response: new Response("Gone", { status: 410 }),
+			cleanupKeys: storageKeys(row),
+		};
+	}
+	let failure = await validateAttachmentWrite(client, userId, row);
+	if (failure) {
+		await abortAttachment(client, row);
+		return {
+			response: errorForInvalidation(failure),
+			cleanupKeys: storageKeys(row),
+		};
+	}
+
+	let observed: { bytes: number; sha256: string };
+	try {
+		observed = await store.put(
+			storageKey,
+			requestBytes(request, declaredBytes),
+		);
+	} catch (error) {
+		if (!(error instanceof UploadTooLargeError)) throw error;
+		await abortAttachment(client, row);
+		return {
+			response: new Response("Payload Too Large", { status: 413 }),
+			cleanupKeys: storageKeys(row),
+		};
+	}
+	if (
+		!row.reservationExpiresAt ||
+		row.reservationExpiresAt.getTime() <= now().getTime()
+	) {
+		await abortAttachment(client, row);
+		return {
+			response: new Response("Gone", { status: 410 }),
+			cleanupKeys: storageKeys(row),
+		};
+	}
+	failure = await validateAttachmentWrite(client, userId, row, {
+		lockContext: true,
+	});
+	if (failure) {
+		await abortAttachment(client, row);
+		return {
+			response: errorForInvalidation(failure),
+			cleanupKeys: storageKeys(row),
+		};
+	}
+	return observed;
+}
+
 async function downloadResponse(
 	pool: Pool,
 	store: BlobStore,
@@ -480,66 +555,17 @@ export function attachmentRoutes(
 									response: new Response("Conflict", { status: 409 }),
 								};
 							}
-							if (
-								!row.reservationExpiresAt ||
-								row.reservationExpiresAt.getTime() <= now().getTime()
-							) {
-								await abortAttachment(client, row);
-								return {
-									response: new Response("Gone", { status: 410 }),
-									cleanupKeys: storageKeys(row),
-								};
-							}
-							let failure = await validateAttachmentWrite(
+							const observed = await transferAttachment({
 								client,
-								session.user.id,
+								store,
+								request,
+								userId: session.user.id,
 								row,
-							);
-							if (failure) {
-								await abortAttachment(client, row);
-								return {
-									response: errorForInvalidation(failure),
-									cleanupKeys: storageKeys(row),
-								};
-							}
-
-							let observed: { bytes: number; sha256: string };
-							try {
-								observed = await store.put(
-									row.storageKey,
-									requestBytes(request, row.declaredBytes),
-								);
-							} catch (error) {
-								if (!(error instanceof UploadTooLargeError)) throw error;
-								await abortAttachment(client, row);
-								return {
-									response: new Response("Payload Too Large", { status: 413 }),
-									cleanupKeys: storageKeys(row),
-								};
-							}
-							if (
-								!row.reservationExpiresAt ||
-								row.reservationExpiresAt.getTime() <= now().getTime()
-							) {
-								await abortAttachment(client, row);
-								return {
-									response: new Response("Gone", { status: 410 }),
-									cleanupKeys: storageKeys(row),
-								};
-							}
-							failure = await validateAttachmentWrite(
-								client,
-								session.user.id,
-								row,
-								{ lockContext: true },
-							);
-							if (failure) {
-								await abortAttachment(client, row);
-								return {
-									response: errorForInvalidation(failure),
-									cleanupKeys: storageKeys(row),
-								};
-							}
+								storageKey: row.storageKey,
+								declaredBytes: row.declaredBytes,
+								now,
+							});
+							if ("response" in observed) return observed;
 
 							assertAttachmentTransition(row.state, "uploading");
 							await client.query(
@@ -595,66 +621,17 @@ export function attachmentRoutes(
 									response: new Response("Conflict", { status: 409 }),
 								};
 							}
-							if (
-								!row.reservationExpiresAt ||
-								row.reservationExpiresAt.getTime() <= now().getTime()
-							) {
-								await abortAttachment(client, row);
-								return {
-									response: new Response("Gone", { status: 410 }),
-									cleanupKeys: storageKeys(row),
-								};
-							}
-							let failure = await validateAttachmentWrite(
+							const observed = await transferAttachment({
 								client,
-								session.user.id,
+								store,
+								request,
+								userId: session.user.id,
 								row,
-							);
-							if (failure) {
-								await abortAttachment(client, row);
-								return {
-									response: errorForInvalidation(failure),
-									cleanupKeys: storageKeys(row),
-								};
-							}
-
-							let observed: { bytes: number; sha256: string };
-							try {
-								observed = await store.put(
-									row.thumbnailStorageKey,
-									requestBytes(request, row.thumbnailDeclaredBytes),
-								);
-							} catch (error) {
-								if (!(error instanceof UploadTooLargeError)) throw error;
-								await abortAttachment(client, row);
-								return {
-									response: new Response("Payload Too Large", { status: 413 }),
-									cleanupKeys: storageKeys(row),
-								};
-							}
-							if (
-								!row.reservationExpiresAt ||
-								row.reservationExpiresAt.getTime() <= now().getTime()
-							) {
-								await abortAttachment(client, row);
-								return {
-									response: new Response("Gone", { status: 410 }),
-									cleanupKeys: storageKeys(row),
-								};
-							}
-							failure = await validateAttachmentWrite(
-								client,
-								session.user.id,
-								row,
-								{ lockContext: true },
-							);
-							if (failure) {
-								await abortAttachment(client, row);
-								return {
-									response: errorForInvalidation(failure),
-									cleanupKeys: storageKeys(row),
-								};
-							}
+								storageKey: row.thumbnailStorageKey,
+								declaredBytes: row.thumbnailDeclaredBytes,
+								now,
+							});
+							if ("response" in observed) return observed;
 
 							await client.query(
 								`update attachment

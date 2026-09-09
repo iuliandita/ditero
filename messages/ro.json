@@ -1564,6 +1564,8 @@
 	"attachment_error_reserve_failed": "Fișierul nu a putut fi adăugat. Încearcă din nou.",
 	"attachment_error_upload_failed": "Încărcarea nu s-a finalizat. Încearcă din nou.",
 	"attachment_error_download_failed": "Fișierul nu a putut fi descărcat. Încearcă din nou.",
+	"attachment_download_memory_limit": "Fișierele mai mari de {limit} nu pot fi deschise în memorie. Pentru a descărca acest fișier, folosește un browser care permite salvarea directă într-un fișier.",
+	"attachment_preview_too_large": "Fișierele mai mari de {limit} nu pot fi previzualizate. Alege Descarcă pentru a salva acest fișier.",
 	"attachment_error_integrity": "Fișierul nu a trecut verificarea integrității și nu a fost deschis. Este deteriorat sau a fost modificat după încărcare.",
 	"attachment_error_rotation_required": "Fișierele noi sunt suspendate pentru acest spațiu de lucru până la crearea unei chei noi.",
 	"attachment_locked_name": "Fișier criptat",

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Elysia } from "elysia";
 import { Pool } from "pg";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { validateAttachmentWrite } from "../../src/server/attachments/quota.ts";
 import { attachmentRoutes } from "../../src/server/attachments/routes.ts";
 import {
@@ -837,6 +837,53 @@ describe("attachment upload and finalize", () => {
 
 		expect(await expireAttachmentReservations(pool, NOW)).toBe(1);
 		expect(await row("att-expired")).toMatchObject({ state: "aborted" });
+	});
+
+	test.each([
+		["content", upload],
+		["thumbnail", uploadThumbnail],
+	] as const)("refuses expired %s before writing bytes", async (kind, transfer) => {
+		const id = `att-expired-before-${kind}`;
+		expect(
+			(await reserve(id, { declaredBytes: 4, thumbnailDeclaredBytes: 4 }))
+				.status,
+		).toBe(200);
+		if (kind === "thumbnail") {
+			expect((await upload(id, new Uint8Array(4))).status).toBe(200);
+		}
+		currentNow = new Date(NOW.getTime() + 600_000);
+		const put = vi.spyOn(store, "put");
+		try {
+			expect((await transfer(id, new Uint8Array(4))).status).toBe(410);
+			expect(put).not.toHaveBeenCalled();
+			expect(await row(id)).toMatchObject({ state: "aborted" });
+			expect(store.objects.size).toBe(0);
+		} finally {
+			put.mockRestore();
+		}
+	});
+
+	test.each([
+		["content", upload],
+		["thumbnail", uploadThumbnail],
+	] as const)("aborts %s expiring during transfer and removes both blobs", async (kind, transfer) => {
+		const id = `att-expired-during-${kind}`;
+		expect(
+			(await reserve(id, { declaredBytes: 4, thumbnailDeclaredBytes: 4 }))
+				.status,
+		).toBe(200);
+		if (kind === "thumbnail") {
+			expect((await upload(id, new Uint8Array(4))).status).toBe(200);
+		}
+		const pause = store.pauseNextPut();
+		const response = transfer(id, new Uint8Array(4));
+		await pause.started.promise;
+		currentNow = new Date(NOW.getTime() + 600_000);
+		pause.release.resolve();
+
+		expect((await response).status).toBe(410);
+		expect(await row(id)).toMatchObject({ state: "aborted" });
+		expect(store.objects.size).toBe(0);
 	});
 
 	test("refuses finalize after the reservation expires", async () => {

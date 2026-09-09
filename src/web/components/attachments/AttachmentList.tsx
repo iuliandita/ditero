@@ -24,9 +24,14 @@ import {
 } from "../../lib/e2e/attachment-api.ts";
 import {
 	type DecryptedAttachmentMetadata,
+	DownloadMemoryLimitError,
 	decryptAttachmentMetadata,
 	downloadAttachment,
 	downloadAttachmentThumbnail,
+	MEMORY_DOWNLOAD_BYTES,
+	pickDownloadFile,
+	saveAttachmentToFile,
+	supportsFileDownload,
 } from "../../lib/e2e/download.ts";
 import {
 	useKeyring,
@@ -158,6 +163,7 @@ export const AttachmentList = forwardRef<
 	const [accessRevision, setAccessRevision] = useState(0);
 	const [pending, setPending] = useState<PendingUpload[]>([]);
 	const pendingRef = useRef<PendingUpload[]>([]);
+	const downloadControllers = useRef(new Map<string, AbortController>());
 	const [rowErrors, setRowErrors] = useState(new Map<string, string>());
 	const [rowProgress, setRowProgress] = useState(
 		new Map<string, AttachmentProgress>(),
@@ -195,6 +201,8 @@ export const AttachmentList = forwardRef<
 
 	useEffect(() => {
 		if (keyring.state === "ready") return;
+		for (const controller of downloadControllers.current.values())
+			controller.abort();
 		for (const thumbnail of thumbnailRef.current.values()) thumbnail.revoke();
 		thumbnailRef.current.clear();
 		thumbnailLoads.current.clear();
@@ -210,12 +218,17 @@ export const AttachmentList = forwardRef<
 		() => () => {
 			for (const thumbnail of thumbnailRef.current.values()) thumbnail.revoke();
 			for (const upload of pendingRef.current) upload.controller.abort();
+			for (const controller of downloadControllers.current.values())
+				controller.abort();
 		},
 		[],
 	);
 
 	useEffect(() => {
 		const liveIds = new Set(attachments.map((row) => row.id));
+		for (const [id, controller] of downloadControllers.current) {
+			if (!liveIds.has(id)) controller.abort();
+		}
 		for (const [id, thumbnail] of thumbnailRef.current) {
 			if (liveIds.has(id)) continue;
 			thumbnail.revoke();
@@ -411,7 +424,18 @@ export const AttachmentList = forwardRef<
 		row: Attachment,
 		mode: "open" | "download",
 		key: WorkspaceKeyMaterial,
+		destination?: FileSystemFileHandle,
 	) {
+		if (downloadControllers.current.has(row.id)) return;
+		const controller = new AbortController();
+		downloadControllers.current.set(row.id, controller);
+		setRowProgress((current) =>
+			new Map(current).set(row.id, {
+				phase: "transferring",
+				loaded: 0,
+				total: row.declaredBytes,
+			}),
+		);
 		setRowError(row.id, null);
 		try {
 			if (mode === "open") {
@@ -421,24 +445,36 @@ export const AttachmentList = forwardRef<
 					return;
 				}
 			}
-			const result = await downloadAttachment(row, key.wdk, {
-				onProgress: (progress) =>
+			const options = {
+				signal: controller.signal,
+				onProgress: (progress: AttachmentProgress) =>
 					setRowProgress((current) => {
 						const next = new Map(current);
 						next.set(row.id, progress);
 						return next;
 					}),
-			});
-			triggerBlob(result, mode === "download");
+			};
+			if (destination) {
+				await saveAttachmentToFile(row, key.wdk, destination, options);
+			} else {
+				const result = await downloadAttachment(row, key.wdk, options);
+				triggerBlob(result, mode === "download");
+			}
 		} catch (caught) {
+			if (controller.signal.aborted) return;
 			console.error("attachments: download failed", caught);
 			setRowError(
 				row.id,
-				caught instanceof StreamError
-					? m.attachment_error_integrity()
-					: m.attachment_error_download_failed(),
+				caught instanceof DownloadMemoryLimitError
+					? m.attachment_download_memory_limit({
+							limit: formatBytes(MEMORY_DOWNLOAD_BYTES),
+						})
+					: caught instanceof StreamError
+						? m.attachment_error_integrity()
+						: m.attachment_error_download_failed(),
 			);
 		} finally {
+			downloadControllers.current.delete(row.id);
 			setRowProgress((current) => {
 				const next = new Map(current);
 				next.delete(row.id);
@@ -448,8 +484,41 @@ export const AttachmentList = forwardRef<
 	}
 
 	async function openRow(row: Attachment, mode: "open" | "download") {
+		if (downloadControllers.current.has(row.id)) return;
+		let destination: FileSystemFileHandle | undefined;
+		if (row.declaredBytes > MEMORY_DOWNLOAD_BYTES) {
+			if (mode === "open") {
+				setRowError(
+					row.id,
+					m.attachment_preview_too_large({
+						limit: formatBytes(MEMORY_DOWNLOAD_BYTES),
+					}),
+				);
+				return;
+			}
+			if (!supportsFileDownload()) {
+				setRowError(
+					row.id,
+					m.attachment_download_memory_limit({
+						limit: formatBytes(MEMORY_DOWNLOAD_BYTES),
+					}),
+				);
+				return;
+			}
+			try {
+				destination = await pickDownloadFile(
+					resolved.get(row.id)?.metadata?.filename ?? "attachment",
+				);
+			} catch (caught) {
+				if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+					console.error("attachments: file picker failed", caught);
+					setRowError(row.id, m.attachment_error_download_failed());
+				}
+				return;
+			}
+		}
 		await gate.runWithKey(row.keyVersion, (key) =>
-			withDownload(row, mode, key),
+			withDownload(row, mode, key, destination),
 		);
 	}
 
@@ -485,6 +554,7 @@ export const AttachmentList = forwardRef<
 		name: string,
 		index: number,
 	): RowAction[] {
+		const downloading = rowProgress.has(row.id);
 		const readable = state === "ready" || state === "locked";
 		const mayDelete =
 			state === "unrecoverable"
@@ -495,14 +565,14 @@ export const AttachmentList = forwardRef<
 				id: "open",
 				label: m.attachment_open(),
 				icon: ExternalLink,
-				hidden: !readable,
+				hidden: !readable || downloading,
 				onSelect: () => void openRow(row, "open"),
 			},
 			{
 				id: "download",
 				label: m.attachment_download(),
 				icon: Download,
-				hidden: !readable,
+				hidden: !readable || downloading,
 				onSelect: () => void openRow(row, "download"),
 			},
 			{
@@ -556,6 +626,9 @@ export const AttachmentList = forwardRef<
 							onOpen={() => void openRow(tile.row, "open")}
 							error={rowErrors.get(tile.row.id)}
 							progress={rowProgress.get(tile.row.id)}
+							onCancelDownload={() =>
+								downloadControllers.current.get(tile.row.id)?.abort()
+							}
 							itemRef={(node) => {
 								if (node) itemRefs.current.set(tile.row.id, node);
 								else itemRefs.current.delete(tile.row.id);
@@ -592,6 +665,9 @@ export const AttachmentList = forwardRef<
 							}
 							error={rowErrors.get(tile.row.id)}
 							progress={rowProgress.get(tile.row.id)}
+							onCancelDownload={() =>
+								downloadControllers.current.get(tile.row.id)?.abort()
+							}
 							itemRef={(node) => {
 								if (node) itemRefs.current.set(tile.row.id, node);
 								else itemRefs.current.delete(tile.row.id);

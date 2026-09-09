@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-09-02 | Status: pre-v1, building on `develop`
+> Updated: 2026-09-10 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -16,13 +16,14 @@ the real application. The notification engine has landed: durable at-least-once 
 single-leader scheduler, an every-replica outbox worker, quiet hours, escalation, and
 acknowledgement from in-app or from the message itself — validated by a rig that runs real
 replicas and kills them mid-send. All five channels deliver: ntfy, Telegram, Discord, Slack,
-and email. The current development milestone adds browser-encrypted attachments, E2E key
+and email. The completed attachment milestone delivers browser-encrypted attachments, E2E key
 enrollment and recovery, workspace grants and forward-only removal rotation, filesystem and
 S3-compatible ciphertext storage, and account-deletion safeguards. The application spine has
 landed on `develop` (auth issuing JWTs, live sync between two users with workspace
 isolation, a list with tasks that create and toggle live, deployable via Docker Compose).
 The rest of v1 is being built milestone by milestone, each producing working, testable
-software on its own.
+software on its own. Import, export, and capture are next; their scope is outlined, with the
+detailed execution plan still to be written.
 
 Nothing is released yet. Development happens on `develop` with `0.x.y` pre-release images;
 `1.0.0` cuts to `main` when the full v1 set lands.
@@ -159,5 +160,9 @@ guarantee. Reminders are not medical-grade: on non-highly-available home infrast
 that is down will not fire a reminder, and ditero is never marketed otherwise.
 
 ## Shipped Highlights
+
+- Browser-encrypted attachments, key enrollment and recovery, workspace grants and rotation,
+  filesystem/S3 storage, and account-deletion safeguards landed on `develop` in PR #271.
+- The milestone passed CI and Security; post-merge CI, Security, and Nightly also passed.
 
 For release-by-release detail once releases begin, see [CHANGELOG.md](../CHANGELOG.md).
