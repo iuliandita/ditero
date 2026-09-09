@@ -32,6 +32,11 @@ const appEnv = {
 	DATABASE_URL: databaseURL,
 	NODE_ENV: "test",
 	DITERO_E2E: "1",
+	// The milestone's own feature flag (config/e2e.ts), distinct from
+	// DITERO_E2E above, which relaxes auth rate limits for the suite. Without
+	// it every /api/e2e/* route answers 404 and the enrollment surface renders
+	// nothing at all -- an absence that reads as a broken selector.
+	DITERO_E2E_ENABLED: "true",
 	BETTER_AUTH_SECRET: "e2e-only-better-auth-secret-32-bytes",
 	DITERO_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString("base64"),
 	DITERO_PASSKEY_ORIGIN: "http://localhost:5173",
@@ -51,6 +56,8 @@ const appEnv = {
 	DITERO_SCHEDULER_LATE_THRESHOLD_MS: "5000",
 };
 
+const CROSS_ENGINE_SPEC = /crypto-vectors\.spec\.ts$/;
+
 export default defineConfig({
 	testDir: "tests/e2e",
 	globalSetup: "./tests/e2e/global-setup.ts",
@@ -62,12 +69,31 @@ export default defineConfig({
 	reporter: [["list"]],
 	use: {
 		baseURL: "http://localhost:5173",
-		trace: "on-first-retry",
+		trace: "retain-on-failure",
+		screenshot: "only-on-failure",
 		// Negative-offset on purpose: CI runners are UTC, where a date rendered in
 		// the wrong zone looks correct. Keeps the weekday assertions load-bearing.
 		timezoneId: "America/New_York",
 	},
-	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+	projects: [
+		{ name: "chromium", use: { ...devices["Desktop Chrome"] } },
+		// The crypto vector gate (design 13) is the only spec that must clear all
+		// three engines: it re-runs the key layer's vectors in the runtimes that
+		// actually hold user keys, and WebKit is the strict one about ArrayBuffer
+		// vs ArrayBufferView at crypto.subtle. testMatch keeps the other specs on
+		// Chromium alone -- a three-engine run is not a cost every future e2e test
+		// should pay.
+		{
+			name: "firefox",
+			use: { ...devices["Desktop Firefox"] },
+			testMatch: CROSS_ENGINE_SPEC,
+		},
+		{
+			name: "webkit",
+			use: { ...devices["Desktop Safari"] },
+			testMatch: CROSS_ENGINE_SPEC,
+		},
+	],
 	webServer: [
 		{
 			// Not `dev:server`: `--hot` orphans child processes, which then squat

@@ -4,7 +4,7 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db as defaultDb } from "../db/client.ts";
-import { invite, list, task } from "../db/schema.ts";
+import { invite, list, task, workspace } from "../db/schema.ts";
 import { newInviteToken } from "../domain/invite.ts";
 import { ADMIN_ROLES, ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import {
@@ -114,6 +114,14 @@ export async function createInvite(
 		input.workspaceId,
 	);
 	if (!callerRole) throw new InviteCreateError(403, "not a workspace member");
+	const [targetWorkspace] = await database
+		.select({ kind: workspace.kind })
+		.from(workspace)
+		.where(eq(workspace.id, input.workspaceId))
+		.limit(1);
+	if (targetWorkspace?.kind !== "shared") {
+		throw new InviteCreateError(403, "invitations require a shared workspace");
+	}
 
 	// Role-escalation gate, from most-privileged grant down:
 	// - owner: only an owner may grant owner (workspace lifecycle/transfer); an

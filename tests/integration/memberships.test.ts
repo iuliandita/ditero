@@ -121,6 +121,13 @@ beforeAll(async () => {
 			role: "owner",
 		},
 	]);
+	await db.insert(tables.keyGrantRequest).values({
+		id: "mem-request-member",
+		membershipId: membershipIds.member,
+		userId: "mem-member",
+		workspaceId: "mem-w",
+		requestedVersion: 1,
+	});
 	// Owned by mem-member so "removing them does not delete content they own"
 	// is a real assertion, not a vacuous one.
 	await db.insert(tables.list).values({
@@ -183,6 +190,24 @@ async function listRow(id: string) {
 
 async function taskRow(id: string) {
 	return (await db.select().from(tables.task).where(eq(tables.task.id, id)))[0];
+}
+
+async function rotationRequired() {
+	return (
+		await db
+			.select({ value: tables.workspace.rotationRequired })
+			.from(tables.workspace)
+			.where(eq(tables.workspace.id, "mem-w"))
+	)[0]?.value;
+}
+
+async function grantRequestRow(id: string) {
+	return (
+		await db
+			.select()
+			.from(tables.keyGrantRequest)
+			.where(eq(tables.keyGrantRequest.id, id))
+	)[0];
 }
 
 describe("membership.setRole", () => {
@@ -324,6 +349,65 @@ describe("membership.setRole", () => {
 });
 
 describe("membership.remove", () => {
+	test.each([
+		"member",
+		"admin",
+		"owner",
+	] as const)("true personal owner can remove a legacy %s but peers and outsiders cannot", async (role) => {
+		const id = `personal-legacy-${role}`;
+		await db
+			.insert(tables.membership)
+			.values({ id, userId: "mem-owner2", workspaceId: "mem-personal", role });
+		try {
+			for (const caller of ["mem-owner2", "mem-admin"]) {
+				await expect(
+					call(mutators.membership.remove, { id: caller }, { id }),
+				).rejects.toThrow(/personal/);
+				await expect(
+					call(
+						mutators.membership.remove,
+						{ id: caller },
+						{ id: membershipIds.personal },
+					),
+				).rejects.toThrow(/personal/);
+			}
+			await expect(
+				call(
+					mutators.membership.setRole,
+					{ id: "mem-owner" },
+					{ id, role: "viewer" },
+				),
+			).rejects.toThrow(/personal/);
+			await call(mutators.membership.remove, { id: "mem-owner" }, { id });
+			expect(await membershipRow(id)).toBeUndefined();
+			expect(await membershipRow(membershipIds.personal)).toBeDefined();
+			expect(
+				(
+					await db
+						.select()
+						.from(tables.workspace)
+						.where(eq(tables.workspace.id, "mem-personal"))
+				)[0].rotationRequired,
+			).toBe(true);
+		} finally {
+			await db.delete(tables.membership).where(eq(tables.membership.id, id));
+		}
+	});
+	test("a rolled-back removal keeps both the membership and rotation flag", async () => {
+		await expect(
+			zdb.transaction(async (tx) => {
+				await mutators.membership.remove.fn({
+					tx,
+					ctx: { id: "mem-admin" },
+					args: { id: membershipIds.viewer },
+				});
+				throw new Error("simulated rollback");
+			}),
+		).rejects.toThrow("simulated rollback");
+		expect(await membershipRow(membershipIds.viewer)).toBeDefined();
+		expect(await rotationRequired()).toBe(false);
+	});
+
 	test("admin cannot remove an owner", async () => {
 		await expect(
 			call(
@@ -390,6 +474,8 @@ describe("membership.remove", () => {
 		);
 
 		expect(await membershipRow(membershipIds.member)).toBeUndefined();
+		expect(await rotationRequired()).toBe(true);
+		expect(await grantRequestRow("mem-request-member")).toBeUndefined();
 		expect(await assigneeRow("mem-task:mem-member")).toBeUndefined();
 		// Another member's assignee row is untouched.
 		expect(await assigneeRow("mem-task:mem-owner2")).toBeDefined();

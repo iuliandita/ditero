@@ -31,8 +31,16 @@ try {
 	run("bun", ["run", "i18n:compile"]);
 	run("docker", [...compose, "up", "--detach", "--wait", "upstream-db"]);
 	run("bun", ["run", "db:migrate"]);
-	run("docker", [...compose, "up", "--detach", "--wait", "zero-cache"]);
-	status = run("bunx", ["playwright", "test"], true);
+	run("docker", [
+		...compose,
+		"up",
+		"--build",
+		"--detach",
+		"--wait",
+		"zero-cache",
+	]);
+	// Forwards filters and flags: `bun run test:e2e crypto-vectors --project=webkit`.
+	status = run("bunx", ["playwright", "test", ...process.argv.slice(2)], true);
 } finally {
 	run("docker", [...compose, "down", "--volumes", "--remove-orphans"], true);
 }

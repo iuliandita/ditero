@@ -23,3 +23,5 @@ if ! printf '%s\n' "$output" | grep -q "POSTGRES_PASSWORD is required"; then
 	printf '%s\n' "$output" >&2
 	exit 1
 fi
+
+tests/container/zero-backup.sh "$image"

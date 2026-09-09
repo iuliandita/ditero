@@ -39,3 +39,25 @@ export function formatList(
 		items,
 	);
 }
+
+const BYTE_UNITS = ["byte", "kilobyte", "megabyte", "gigabyte"] as const;
+
+export function formatBytes(bytes: number): string {
+	if (!Number.isSafeInteger(bytes) || bytes < 0) {
+		throw new Error(
+			"formatBytes: byte count must be a non-negative safe integer",
+		);
+	}
+	let value = bytes;
+	let unit = 0;
+	while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+		value /= 1024;
+		unit += 1;
+	}
+	return new Intl.NumberFormat(getLocale(), {
+		style: "unit",
+		unit: BYTE_UNITS[unit],
+		unitDisplay: "short",
+		maximumFractionDigits: value < 10 && unit > 0 ? 1 : 0,
+	}).format(value);
+}

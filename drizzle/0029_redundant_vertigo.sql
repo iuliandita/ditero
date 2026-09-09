@@ -1,0 +1,1 @@
+CREATE INDEX "attachment_delete_sweep" ON "attachment" USING btree ("state","deleted_at");

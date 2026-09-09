@@ -44,3 +44,8 @@ Keep subjects plain ASCII and at most 72 characters. Put detail in the body.
 
 Once the toolchain lands, PRs are expected to pass lint, typecheck, and tests. The PR
 template lists the checks. CI runs them too.
+
+Run host Chromium E2E tests separately from container lifecycle checks. Starting or stopping
+unrelated containers can change host network interfaces and interrupt browser requests with
+`net::ERR_NETWORK_CHANGED`. Use an idle Docker host or a dedicated CI runner. Failed browser
+tests retain screenshots and traces under `test-results/`; inspect these before retrying.

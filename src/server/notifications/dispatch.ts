@@ -64,6 +64,19 @@ const eventPayloadSchema = z
 	})
 	.loose();
 
+// A key grant waiting on this member (design 8.1). It carries a workspace name
+// and nothing else -- no wrap, no commitment, no public key -- because this row
+// is rendered by five channel adapters and lands in ntfy servers, Telegram,
+// Discord, Slack and mail spools. It has no task, which is why it cannot reuse
+// the event schema above.
+const keyGrantPayloadSchema = z
+	.object({
+		kind: z.literal("key_grant"),
+		workspaceName: z.string(),
+		locale: z.string().optional().catch(undefined),
+	})
+	.loose();
+
 // A function, not a constant map: every render takes the recipient's locale
 // explicitly. Reading Paraglide's ambient locale here would be process-global
 // state shared by concurrent sends, and a module-scope render would freeze one
@@ -115,6 +128,16 @@ export function renderPayload(
 				{ locale },
 			),
 			urgent: reminder.data.urgent === true,
+			locale,
+		};
+	}
+	const keyGrant = keyGrantPayloadSchema.safeParse(raw);
+	if (keyGrant.success) {
+		const locale = localeFromPref(keyGrant.data.locale);
+		return {
+			title: keyGrant.data.workspaceName,
+			body: m.notify_key_grant_body({}, { locale }),
+			urgent: false,
 			locale,
 		};
 	}

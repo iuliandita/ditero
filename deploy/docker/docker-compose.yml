@@ -59,8 +59,23 @@ services:
       PUBLIC_ZERO_URL: ${PUBLIC_ZERO_URL:-http://localhost:4848}
       DITERO_REGISTRATION_MODE: ${DITERO_REGISTRATION_MODE:-bootstrap}
       DITERO_ZERO_SHARD_SCHEMA: ${DITERO_ZERO_SHARD_SCHEMA:-zero_0}
+      DITERO_ATTACHMENT_STORAGE_DRIVER: ${DITERO_ATTACHMENT_STORAGE_DRIVER:-filesystem}
+      DITERO_ATTACHMENT_FS_PATH: ${DITERO_ATTACHMENT_FS_PATH-/data/attachments}
+      DITERO_ATTACHMENT_QUOTA_BYTES: ${DITERO_ATTACHMENT_QUOTA_BYTES:-10737418240}
+      DITERO_ATTACHMENT_RETENTION_MS: ${DITERO_ATTACHMENT_RETENTION_MS:-2592000000}
+      DITERO_ATTACHMENT_SWEEP_BATCH_SIZE: ${DITERO_ATTACHMENT_SWEEP_BATCH_SIZE:-100}
+      DITERO_ATTACHMENT_SWEEP_MS: ${DITERO_ATTACHMENT_SWEEP_MS:-3600000}
+      DITERO_ATTACHMENT_S3_BUCKET: ${DITERO_ATTACHMENT_S3_BUCKET:-}
+      DITERO_ATTACHMENT_S3_REGION: ${DITERO_ATTACHMENT_S3_REGION:-}
+      DITERO_ATTACHMENT_S3_ENDPOINT: ${DITERO_ATTACHMENT_S3_ENDPOINT:-}
+      DITERO_ATTACHMENT_S3_ACCESS_KEY_ID: ${DITERO_ATTACHMENT_S3_ACCESS_KEY_ID:-}
+      DITERO_ATTACHMENT_S3_ACCESS_KEY_ID_FILE: ${DITERO_ATTACHMENT_S3_ACCESS_KEY_ID_FILE:-}
+      DITERO_ATTACHMENT_S3_SECRET_ACCESS_KEY: ${DITERO_ATTACHMENT_S3_SECRET_ACCESS_KEY:-}
+      DITERO_ATTACHMENT_S3_SECRET_ACCESS_KEY_FILE: ${DITERO_ATTACHMENT_S3_SECRET_ACCESS_KEY_FILE:-}
     ports:
       - "3000:3000"
+    volumes:
+      - ditero-attachments:/data/attachments
     depends_on:
       upstream-db:
         condition: service_healthy
@@ -96,7 +111,7 @@ services:
     restart: unless-stopped
 
   zero-cache:
-    # Upstream zero-cache plus this repo's secret-file entrypoint. Published
+    # Stable zero-cache with patched dependencies and a secret-file entrypoint. Published
     # alongside the app image so the stack runs without a checkout; `up --build`
     # builds it from this tree instead.
     image: ghcr.io/iuliandita/ditero:${DITERO_IMAGE_TAG:-nightly}-zero
@@ -135,5 +150,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  ditero-attachments:
   ditero-pg:
   ditero-zero:

@@ -42,9 +42,11 @@ export function securityHeaders(env: HttpEnvironment): Record<string, string> {
 		"object-src 'none'",
 		"frame-ancestors 'none'",
 		"form-action 'self'",
-		"img-src 'self' data:",
+		"img-src 'self' data: blob:",
 		"style-src 'self' 'unsafe-inline'",
-		"script-src 'self'",
+		// hash-wasm compiles WebAssembly for Argon2id. Without this narrow
+		// directive deriveKek throws in production only. NOT 'unsafe-eval'.
+		"script-src 'self' 'wasm-unsafe-eval'",
 		`connect-src 'self' ${zeroURL.origin} ${websocketURL.origin}`,
 	].join("; ");
 

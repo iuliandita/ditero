@@ -22,6 +22,7 @@ import {
 	completeForAck,
 } from "../domain/ack-complete.ts";
 import { panelsSchema } from "../domain/dashboard.ts";
+import { AUTO_LOCK_CHOICES } from "../domain/e2e/auto-lock.ts";
 import {
 	MAX_REPEAT_EVERY_MIN,
 	MAX_REPEATS_CAP,
@@ -185,6 +186,7 @@ async function requireMembershipAdmin(
 	callerId: string,
 	membershipId: string,
 	lastOwnerMessage: string,
+	allowPersonalRemoval = false,
 ): Promise<{ target: Membership; callerRole: Role; ownerCount: number }> {
 	const target = await tx.run(zql.membership.where("id", membershipId).one());
 	if (!target) throw new Error("membership not found");
@@ -192,8 +194,16 @@ async function requireMembershipAdmin(
 		zql.workspace.where("id", target.workspaceId).one(),
 	);
 	if (!workspace) throw new Error("workspace not found");
-	if ((workspace as Workspace).kind === "personal")
+	if ((workspace as Workspace).kind === "personal") {
+		if (
+			allowPersonalRemoval &&
+			workspace.ownerId === callerId &&
+			target.userId !== workspace.ownerId
+		) {
+			return { target, callerRole: "owner", ownerCount: 1 };
+		}
 		throw new Error("personal workspace membership is fixed");
+	}
 	const callerRole = await roleInWorkspace(tx, callerId, target.workspaceId);
 	if (!callerRole || !ADMIN_ROLES.has(callerRole))
 		throw new Error("access denied: need admin+");
@@ -335,6 +345,17 @@ const localeArg = z
 	.enum(LOCALES as unknown as [string, ...string[]])
 	.nullable();
 const themeArg = z.enum(["light", "dark"]).nullable();
+// M-E2E: minutes the keyring stays unlocked. Constrained to the four offered
+// choices rather than a numeric range -- a stored 7 has no label in the Select,
+// so it would render as an empty control the user cannot correct.
+const autoLockArg = z
+	.union([
+		z.literal(AUTO_LOCK_CHOICES[0]),
+		z.literal(AUTO_LOCK_CHOICES[1]),
+		z.literal(AUTO_LOCK_CHOICES[2]),
+		z.literal(AUTO_LOCK_CHOICES[3]),
+	])
+	.nullable();
 // S5: equal start and end is rejected, not reinterpreted. The domain reads it
 // as "never quiet" (the opposite of what a user setting both to 22:00 intends),
 // and the alternative reading -- quiet all day -- would park every non-urgent
@@ -1454,6 +1475,7 @@ export const mutators = defineMutators({
 				const role = await roleInWorkspace(tx, ctx.id, inv.workspaceId);
 				if (!role || !ADMIN_ROLES.has(role))
 					throw new Error("access denied: need admin+");
+				if (inv.claimedBy) throw new Error("invite already claimed");
 				await tx.mutate.invite.update({ id: args.id, status: "revoked" });
 			},
 		),
@@ -1481,6 +1503,7 @@ export const mutators = defineMutators({
 					ctx.id,
 					args.id,
 					"cannot remove the last owner",
+					true,
 				);
 				// Assignment implies membership everywhere in this codebase (that is
 				// the premise of invite-on-assign), so an assignee row for a
@@ -1496,6 +1519,10 @@ export const mutators = defineMutators({
 					if (list?.workspaceId === target.workspaceId)
 						await tx.mutate.taskAssignee.delete({ id: a.id });
 				}
+				await tx.mutate.workspace.update({
+					id: target.workspaceId,
+					rotationRequired: true,
+				});
 				await tx.mutate.membership.delete({ id: args.id });
 			},
 		),
@@ -1803,6 +1830,9 @@ export const mutators = defineMutators({
 				// null means "follow the OS", which is the default and is not the
 				// same as a stored "light".
 				theme: themeArg.optional(),
+				// null means "unset"; domain/e2e/auto-lock.ts resolves it. 0 is a
+				// real choice ("never"), not an absence.
+				e2eAutoLockMinutes: autoLockArg.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
 				if (args.escalationDefaults) {
@@ -1835,6 +1865,7 @@ export const mutators = defineMutators({
 						escalationDefaults: args.escalationDefaults ?? null,
 						locale: args.locale ?? null,
 						theme: args.theme ?? null,
+						e2eAutoLockMinutes: args.e2eAutoLockMinutes ?? null,
 					});
 			},
 		),

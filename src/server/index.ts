@@ -19,12 +19,17 @@ import {
 	InviteCreateError,
 	spendInviteCreateBudget,
 } from "../auth/invite-create.ts";
+import { FAST_INVITE_TTL_MS } from "../auth/invite-fast-path.ts";
 import {
 	createManagedAccount,
 	ManagedAccountError,
 } from "../auth/managed-account.ts";
 import { trustedAuthOrigins } from "../auth/origins.ts";
-import { requireSameOrigin } from "../auth/security.ts";
+import {
+	attachmentStorageConfig,
+	createAttachmentBlobStore,
+} from "../config/attachment-storage.ts";
+import { e2eEnabled } from "../config/e2e.ts";
 import { mailConfig } from "../config/mail.ts";
 import { notifyAllowedPrivateCIDRs } from "../config/notify-egress.ts";
 import { workerTiming } from "../config/worker.ts";
@@ -34,8 +39,15 @@ import { verifyZeroShardAccess, zeroShardSchema } from "../db/zero-shard.ts";
 import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
 import { schema } from "../zero/schema.gen.ts";
+import { accountDeletionRoutes } from "./account-deletion.ts";
+import { attachmentRoutes } from "./attachments/routes.ts";
+import { startAttachmentSweep } from "./attachments/sweep.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
+import { notifyGrantCapable } from "./e2e/grants.ts";
+import { e2eInviteRoutes } from "./e2e/invite-routes.ts";
+import { e2eRoutes } from "./e2e/routes.ts";
+import { makeGuards } from "./guards.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
 import { sendInviteMail } from "./mail/invite-mail.ts";
 import { ackBaseUrl } from "./notifications/capability.ts";
@@ -72,47 +84,12 @@ const requestOrigins = [
 // Shared write DB provider (the ZQLDatabase path handleMutateRequest drives).
 const zdb = zeroNodePg(schema, pool);
 
-// Same-origin + session, the shape every authenticated POST here shares.
-// Deliberately NOT applied to the ack route (C24): that one is reached by push
-// clients with no session and, from ntfy's web UI, cross-origin.
-type Session = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
-
-function guardedPost(
-	handler: (request: Request, session: Session) => Promise<unknown>,
-) {
-	return async ({ request }: { request: Request }) => {
-		try {
-			requireSameOrigin(request, requestOrigins);
-		} catch {
-			return new Response("Forbidden", { status: 403 });
-		}
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) return new Response("Unauthorized", { status: 401 });
-		return await handler(request, session);
-	};
-}
-
-// GET counterpart to guardedPost. Reads use the looser origin check rather
-// than requireSameOrigin: a same-origin GET carries no Origin header at all, so
-// only a present-and-foreign origin is refused.
-function foreignOrigin(request: Request): boolean {
-	const origin = request.headers.get("origin");
-	return (
-		origin !== null && !requestOrigins.some((o) => new URL(o).origin === origin)
-	);
-}
-
-function guardedGet(
-	handler: (request: Request, session: Session) => Promise<unknown>,
-) {
-	return async ({ request }: { request: Request }) => {
-		if (foreignOrigin(request))
-			return new Response("Forbidden", { status: 403 });
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) return new Response("Unauthorized", { status: 401 });
-		return await handler(request, session);
-	};
-}
+const { guardedPost, guardedGet, foreignOrigin } = makeGuards(
+	requestOrigins,
+	(headers) => auth.api.getSession({ headers }),
+);
+const attachmentConfig = attachmentStorageConfig(process.env);
+const attachmentStore = await createAttachmentBlobStore(attachmentConfig);
 
 // Shared JSON-body + ChannelError shape for the three channel writes. The body
 // is the error's stable CODE, never its prose: the prose named deployment env
@@ -154,6 +131,25 @@ const routes = new Elysia()
 	// Same placement and reason again: Slack posts interactions with no session
 	// and no Origin header, authenticating with a v0 HMAC signature.
 	.use(slackInteractionRoutes(db))
+	// Authenticated E2E key endpoints. Mounted unconditionally; each handler
+	// checks DITERO_E2E_ENABLED per request and answers 404 when it is off.
+	.use(e2eRoutes(pool, db, { guardedPost, guardedGet, foreignOrigin }))
+	.use(e2eInviteRoutes(pool, db, { guardedPost, guardedGet, foreignOrigin }))
+	.use(
+		attachmentRoutes(
+			pool,
+			{ guardedPost, guardedGet, foreignOrigin },
+			attachmentStore,
+			{ quotaBytes: attachmentConfig.quotaBytes },
+		),
+	)
+	.use(
+		accountDeletionRoutes(pool, {
+			guardedPost,
+			guardedGet,
+			foreignOrigin,
+		}),
+	)
 	.use(cors(corsPolicy(process.env)))
 	.onRequest(({ set }) => {
 		Object.assign(set.headers, responseHeaders);
@@ -203,16 +199,29 @@ const routes = new Elysia()
 				// create: bounds both the invite rows and the real mail the send
 				// below now fires at a caller-supplied address.
 				await spendInviteCreateBudget(session.user.id, db);
+				// The server owns the fast-link expiry so the AAD and eligibility
+				// checks use one clock. Ten minutes leaves five minutes of tolerance
+				// under the hard 15-minute eligibility cap.
+				const fastE2e = body.e2eFast === true && email != null && e2eEnabled();
+				const fastExpiresAt = fastE2e
+					? Date.now() + Math.floor((FAST_INVITE_TTL_MS * 2) / 3)
+					: null;
 				const result = await createInvite(
 					{
 						workspaceId: body.workspaceId,
 						role: body.role as never,
 						email,
-						expiresAt: (body.expiresAt as number | null | undefined) ?? null,
+						expiresAt:
+							fastExpiresAt ??
+							(body.expiresAt as number | null | undefined) ??
+							null,
 						// Only an explicit numeric cap is honored; otherwise leave undefined so
 						// createInvite applies its default (email invite -> 1, link -> null).
-						maxUses:
-							typeof body.maxUses === "number" ? body.maxUses : undefined,
+						maxUses: fastE2e
+							? 1
+							: typeof body.maxUses === "number"
+								? body.maxUses
+								: undefined,
 						attachTaskId:
 							(body.attachTaskId as string | null | undefined) ?? null,
 						attachKind: (body.attachKind as never) ?? null,
@@ -243,7 +252,13 @@ const routes = new Elysia()
 				}
 				// { id, token, link } -- token returned once, not synced -- plus the
 				// delivery status, so "I invited them" is not a silent lie.
-				return { ...result, mail };
+				return {
+					...result,
+					mail,
+					expiresAt: fastExpiresAt
+						? new Date(fastExpiresAt).toISOString()
+						: null,
+				};
 			} catch (error) {
 				if (error instanceof InviteCreateError) {
 					return new Response(error.message, { status: error.status });
@@ -268,12 +283,25 @@ const routes = new Elysia()
 				return new Response("Bad Request", { status: 400 });
 			}
 			try {
-				return await acceptInvite(
+				const accepted = await acceptInvite(
 					body.token,
 					session.user.id,
 					session.user.email,
 					db,
 				);
+				if (accepted.grantRequestId) {
+					// After the accept has committed, and never fatal to it: an
+					// unsent notification costs a granter a nudge, while a failed
+					// acceptance would cost the newcomer their membership.
+					await notifyGrantCapable(
+						db,
+						accepted.grantRequestId,
+						session.user.id,
+					).catch((error: unknown) => {
+						console.error("e2e: grant notification failed:", error);
+					});
+				}
+				return { workspaceId: accepted.workspaceId };
 			} catch (error) {
 				if (error instanceof InviteAcceptError) {
 					// Distinct 4xx per reason; the token is never echoed back.
@@ -472,6 +500,9 @@ if (import.meta.main) {
 		// Every replica starts one; the advisory lock elects the leader per tick.
 		// Timing is validated here so a bad interval fails at boot, not at 03:00.
 		startScheduler(db, pool);
+		// Reuses the scheduler's advisory-lock mechanism under a distinct key:
+		// remote object-store latency must never hold the reminder leader hostage.
+		startAttachmentSweep(pool, attachmentStore);
 		// Leader-elected like the scan: a periodic table sweep, not a
 		// request-driven event.
 		startOverdueSweep(db, pool);

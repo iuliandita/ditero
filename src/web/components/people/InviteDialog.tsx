@@ -16,10 +16,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { sealInviteFragment } from "../../../domain/e2e/invite-fragment.ts";
 import type { InviteMailStatus } from "../../../domain/invite.ts";
 import type { Role } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
 import { copyText } from "../../lib/clipboard.ts";
+import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { InviteMailNotice } from "./InviteMailNotice";
 import { ROLE_LABELS } from "./role-labels.ts";
@@ -54,6 +56,7 @@ export function InviteDialog({
 	onOpenChange: (open: boolean) => void;
 	onCreated: (invite: { id: string; link: string }) => void;
 }) {
+	const { workspaceKey } = useKeyring();
 	const options = grantableRoles(callerRole);
 	const [email, setEmail] = useState("");
 	const [role, setRole] = useState<Role>(
@@ -81,6 +84,10 @@ export function InviteDialog({
 		setBusy(true);
 		setError(null);
 		try {
+			const intendedEmail = email.trim();
+			// A locked or unprovisioned inviter still creates the ordinary async
+			// invite. The fragment is an optimization over that path, never a gate.
+			const key = intendedEmail ? await workspaceKey(workspaceId) : null;
 			const res = await fetch("/api/invite/create", {
 				method: "POST",
 				credentials: "include",
@@ -88,7 +95,8 @@ export function InviteDialog({
 				body: JSON.stringify({
 					workspaceId,
 					role,
-					...(email.trim() ? { email: email.trim() } : {}),
+					...(intendedEmail ? { email: intendedEmail } : {}),
+					...(key ? { e2eFast: true } : {}),
 				}),
 			});
 			if (!res.ok) {
@@ -100,12 +108,34 @@ export function InviteDialog({
 				id: string;
 				token: string;
 				link: string;
+				expiresAt: string | null;
 				mail?: InviteMailStatus;
 			};
-			setSentTo(email.trim());
+			let createdLink = data.link;
+			if (key && data.expiresAt) {
+				try {
+					const sealed = await sealInviteFragment(key.wdk, {
+						inviteId: data.id,
+						workspaceId,
+						keyVersion: key.keyVersion,
+						intendedEmail,
+						expiresAt: data.expiresAt,
+					});
+					const url = new URL(data.link, window.location.origin);
+					url.searchParams.set("e2e", sealed.payload);
+					url.hash = new URLSearchParams({ e2e: sealed.fragment }).toString();
+					createdLink = url.toString();
+				} catch (error) {
+					// The row and its emailed async link already exist. Preserve that
+					// correct fallback rather than turning a convenience failure into a
+					// phantom "invite failed" message.
+					console.error("e2e: invite fragment unavailable", error);
+				}
+			}
+			setSentTo(intendedEmail);
 			setMail(data.mail);
-			setLink(data.link);
-			onCreated({ id: data.id, link: data.link });
+			setLink(createdLink);
+			onCreated({ id: data.id, link: createdLink });
 		} catch (e) {
 			setError(mutationErrorMessage(e, m.invite_create_failed));
 		} finally {

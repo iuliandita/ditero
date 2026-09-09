@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-08-26 | Status: pre-v1, building on `develop`
+> Updated: 2026-09-02 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -16,8 +16,10 @@ the real application. The notification engine has landed: durable at-least-once 
 single-leader scheduler, an every-replica outbox worker, quiet hours, escalation, and
 acknowledgement from in-app or from the message itself — validated by a rig that runs real
 replicas and kills them mid-send. All five channels deliver: ntfy, Telegram, Discord, Slack,
-and email. The application
-spine has landed on `develop` (auth issuing JWTs, live sync between two users with workspace
+and email. The current development milestone adds browser-encrypted attachments, E2E key
+enrollment and recovery, workspace grants and forward-only removal rotation, filesystem and
+S3-compatible ciphertext storage, and account-deletion safeguards. The application spine has
+landed on `develop` (auth issuing JWTs, live sync between two users with workspace
 isolation, a list with tasks that create and toggle live, deployable via Docker Compose).
 The rest of v1 is being built milestone by milestone, each producing working, testable
 software on its own.
@@ -144,8 +146,9 @@ Security is a first-class goal, not an afterthought.
   a separate E2E passphrase and there is no admin backdoor, an independent **recovery code** is
   issued at E2E enrollment; losing both means encrypted files cannot be recovered.
 - **Hardening:** strict content-security-policy and security headers, rate limiting,
-  request-time DNS pinning to prevent server-side request forgery, non-root signed container
-  images, and a recurring automated security-audit pipeline.
+  pre-request address validation for outbound requests (with the documented Bun DNS-pinning
+  limitation), non-root signed container images, and a recurring automated security-audit
+  pipeline.
 
 Honest scope: on a self-hosted install you are the operator and own the box, so the server can
 read the task content it needs to run sync, filters, and reminders. True "even the admin cannot

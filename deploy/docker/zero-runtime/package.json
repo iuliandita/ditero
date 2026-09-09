@@ -1,0 +1,8 @@
+{
+	"name": "zero-runtime",
+	"private": true,
+	"dependencies": {
+		"@rocicorp/zero": "1.9.0"
+	},
+	"packageManager": "pnpm@11.11.0"
+}

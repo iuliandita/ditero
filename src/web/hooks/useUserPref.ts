@@ -1,6 +1,10 @@
 import type { ReadonlyJSONValue } from "@rocicorp/zero";
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+	type AutoLockMinutes,
+	isAutoLockMinutes,
+} from "../../domain/e2e/auto-lock.ts";
 import { getLocale, setLocale } from "../../paraglide/runtime.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
@@ -39,6 +43,9 @@ export type UserPrefState = {
 	escalationDefaults: EscalationDefaults | null; // null => not configured
 	locale: Locale | null; // null => no preference set (Accept-Language fallback)
 	theme: "light" | "dark" | null; // null => follow the OS
+	// null => unset; domain/e2e/auto-lock.ts resolves it. 0 is the real choice
+	// "never", not an absence, so it must not be collapsed into null here.
+	e2eAutoLockMinutes: AutoLockMinutes | null;
 };
 
 const DEFAULTS: UserPrefState = {
@@ -54,6 +61,7 @@ const DEFAULTS: UserPrefState = {
 	escalationDefaults: null,
 	locale: null,
 	theme: null,
+	e2eAutoLockMinutes: null,
 };
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -157,6 +165,12 @@ export function useUserPref(): {
 					? row.locale
 					: null,
 			theme: row.theme === "light" || row.theme === "dark" ? row.theme : null,
+			// Anything not on the offered list reads as unset: a stored 7 has no
+			// label in the Select and would render an empty control the user
+			// cannot correct.
+			e2eAutoLockMinutes: isAutoLockMinutes(row.e2eAutoLockMinutes)
+				? row.e2eAutoLockMinutes
+				: null,
 		};
 	}, [rows]);
 

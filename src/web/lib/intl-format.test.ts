@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import * as runtime from "../../paraglide/runtime.js";
-import { formatDayKey, formatList } from "./intl-format.ts";
+import { formatBytes, formatDayKey, formatList } from "./intl-format.ts";
 
 function withLocale(locale: string) {
 	vi.spyOn(runtime, "getLocale").mockReturnValue(
@@ -76,5 +76,21 @@ describe("formatList", () => {
 		withLocale("en");
 		expect(formatList(["Ana"])).toBe("Ana");
 		expect(formatList([])).toBe("");
+	});
+});
+
+describe("formatBytes", () => {
+	test("formats a binary-sized value with the active locale's unit spelling", () => {
+		withLocale("en");
+		expect(formatBytes(1_048_576)).toMatch(/^1\sMB$/);
+		withLocale("fr");
+		expect(formatBytes(1_048_576)).toMatch(/^1\sMo$/);
+	});
+
+	test("rejects negative and unsafe byte counts", () => {
+		expect(() => formatBytes(-1)).toThrow(/byte count/);
+		expect(() => formatBytes(Number.MAX_SAFE_INTEGER + 1)).toThrow(
+			/byte count/,
+		);
 	});
 });

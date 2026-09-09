@@ -47,6 +47,7 @@ import { formatFocusedDuration } from "../../focus/timer-core.ts";
 import { useFocusTimer } from "../../focus/useFocusTimer.tsx";
 import { useFocusSessions } from "../../hooks/useFocusSessions.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
+import { AttachmentList } from "../attachments/AttachmentList.tsx";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
 import { CommentThread } from "../people/CommentThread.tsx";
 import { RecurrenceEditor } from "../task/RecurrenceEditor.tsx";
@@ -519,6 +520,12 @@ export function TaskDetail({
 			</div>
 
 			<div className={cn("flex flex-col gap-4", isDesktop && "col-span-2")}>
+				<AttachmentList
+					workspaceId={list.workspaceId}
+					parentKind="task"
+					parentId={t.id}
+				/>
+
 				<div className="border-t pt-3">
 					<CommentThread task={t} workspaceId={list.workspaceId} />
 				</div>

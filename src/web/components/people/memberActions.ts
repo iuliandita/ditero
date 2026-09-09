@@ -20,6 +20,8 @@ export function memberActions({
 	isSelf,
 	callerRole,
 	ownerCount,
+	workspaceKind,
+	callerOwnsWorkspace = false,
 	handlers,
 }: {
 	membershipId: string;
@@ -28,6 +30,8 @@ export function memberActions({
 	isSelf: boolean;
 	callerRole: Role | null;
 	ownerCount: number;
+	workspaceKind: "personal" | "shared" | null | undefined;
+	callerOwnsWorkspace?: boolean;
 	handlers: MemberActionHandlers;
 }): RowAction[] {
 	const isAdmin = callerRole !== null && ADMIN_ROLES.has(callerRole);
@@ -36,13 +40,17 @@ export function memberActions({
 	// touch an owner, the last owner is immovable.
 	const mayAct = isAdmin && !isSelf && (memberRole !== "owner" || isOwner);
 	const lastOwner = memberRole === "owner" && ownerCount === 1;
+	const personal = workspaceKind === "personal";
+	const mayRemove = personal
+		? callerOwnsWorkspace && !isSelf
+		: workspaceKind === "shared" && mayAct;
 
 	return [
 		{
 			id: "role",
 			label: m.member_action_change_role(),
 			icon: Shield,
-			hidden: !mayAct,
+			hidden: workspaceKind !== "shared" || !mayAct,
 			disabledReason: lastOwner ? m.member_last_owner_reason() : undefined,
 			submenu: ROLES.map((r) => ({
 				id: `role:${r}`,
@@ -57,8 +65,9 @@ export function memberActions({
 			label: m.member_action_remove(),
 			icon: UserMinus,
 			destructive: true,
-			hidden: !mayAct,
-			disabledReason: lastOwner ? m.member_last_owner_reason() : undefined,
+			hidden: !mayRemove,
+			disabledReason:
+				!personal && lastOwner ? m.member_last_owner_reason() : undefined,
 			onSelect: () => handlers.remove(membershipId, memberName),
 		},
 	];

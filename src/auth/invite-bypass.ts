@@ -3,7 +3,7 @@
 // null) MUST NOT mint accounts in a closed/bootstrap instance.
 import { and, eq } from "drizzle-orm";
 import type { db } from "../db/client.ts";
-import { invite } from "../db/schema.ts";
+import { invite, workspace } from "../db/schema.ts";
 import { canRedeem } from "../domain/invite.ts";
 
 type InviteQueryDb = Pick<typeof db, "select">;
@@ -25,7 +25,14 @@ export async function emailHasRedeemableInvite(
 			uses: invite.uses,
 		})
 		.from(invite)
-		.where(and(eq(invite.email, email), eq(invite.status, "pending")));
+		.innerJoin(workspace, eq(invite.workspaceId, workspace.id))
+		.where(
+			and(
+				eq(invite.email, email),
+				eq(invite.status, "pending"),
+				eq(workspace.kind, "shared"),
+			),
+		);
 	return rows.some((row) =>
 		canRedeem(
 			{

@@ -141,6 +141,90 @@
       "when": 1787297997059,
       "tag": "0019_big_jasper_sitwell",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787350877362,
+      "tag": "0020_aspiring_lethal_legion",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787433638565,
+      "tag": "0021_flimsy_the_fury",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1787473831100,
+      "tag": "0022_premium_scrambler",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787506437287,
+      "tag": "0023_glorious_medusa",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787527757429,
+      "tag": "0024_keen_groot",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787527757430,
+      "tag": "0025_grant_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788296628622,
+      "tag": "0026_blushing_johnny_blaze",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788306316273,
+      "tag": "0027_rotation_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788308582573,
+      "tag": "0028_attachment",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788342504561,
+      "tag": "0029_redundant_vertigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788345710354,
+      "tag": "0030_noisy_vertigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788358155245,
+      "tag": "0031_safe_killer_shrike",
+      "breakpoints": true
     }
   ]
 }

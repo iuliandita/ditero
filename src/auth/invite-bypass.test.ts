@@ -9,10 +9,11 @@ type Row = {
 	uses: number;
 };
 
-// Stub the drizzle select chain: `.select(cols).from(t).where(cond)` awaits to rows.
+// Query filtering is covered against PostgreSQL in invite-accept.test.ts.
 function fakeDb(rows: Row[], onQuery?: () => void): typeof db {
 	const chain = {
-		from: () => ({
+		from: () => chain,
+		innerJoin: () => ({
 			where: async () => {
 				onQuery?.();
 				return rows;
