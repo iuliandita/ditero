@@ -18,7 +18,10 @@ services:
       - ditero-pg:/var/lib/postgresql
 
   zero-cache:
-    image: rocicorp/zero:1.9.0
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+      target: zero-runtime
     depends_on:
       upstream-db:
         condition: service_healthy

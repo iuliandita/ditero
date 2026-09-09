@@ -23,7 +23,10 @@ services:
       retries: 30
 
   zero-cache:
-    image: rocicorp/zero:1.9.0@sha256:f80683bf3ddf08be26c68ddd94589fada29a0b8a4597668b090006c09041d4cd
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      target: zero-runtime
     depends_on:
       upstream-db:
         condition: service_healthy

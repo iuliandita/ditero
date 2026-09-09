@@ -69,7 +69,8 @@ export default defineConfig({
 	reporter: [["list"]],
 	use: {
 		baseURL: "http://localhost:5173",
-		trace: "on-first-retry",
+		trace: "retain-on-failure",
+		screenshot: "only-on-failure",
 		// Negative-offset on purpose: CI runners are UTC, where a date rendered in
 		// the wrong zone looks correct. Keeps the weekday assertions load-bearing.
 		timezoneId: "America/New_York",

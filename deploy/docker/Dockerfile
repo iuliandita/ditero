@@ -26,7 +26,22 @@ WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production --omit=optional --omit=peer
 
-FROM rocicorp/zero:1.9.0@sha256:f80683bf3ddf08be26c68ddd94589fada29a0b8a4597668b090006c09041d4cd AS zero-runtime
+FROM rocicorp/zero:1.9.0@sha256:f80683bf3ddf08be26c68ddd94589fada29a0b8a4597668b090006c09041d4cd AS zero-base
+
+# Keep upstream's runtime and PostgreSQL patch, but rebuild its dependency tree
+# from the reviewed lock so the vulnerable packages are actually replaced.
+FROM zero-base AS zero-deps
+WORKDIR /opt/zero-deps
+COPY deploy/docker/zero-runtime/package.json deploy/docker/zero-runtime/pnpm-lock.yaml deploy/docker/zero-runtime/pnpm-workspace.yaml ./
+COPY deploy/docker/zero-runtime/patches ./patches
+RUN pnpm install --prod --frozen-lockfile
+COPY deploy/docker/zero-runtime/verify.mjs ./
+
+FROM zero-base AS zero-runtime
+RUN rm -rf /opt/app
+COPY --from=zero-deps /opt/zero-deps /opt/app
+WORKDIR /opt/app
+RUN node verify.mjs
 COPY --chmod=755 deploy/docker/secret-file.sh /usr/local/lib/ditero/secret-file.sh
 COPY --chmod=755 deploy/docker/zero-entrypoint.sh /usr/local/bin/ditero-zero-entrypoint
 ENTRYPOINT ["/usr/local/bin/ditero-zero-entrypoint"]

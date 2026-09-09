@@ -111,7 +111,7 @@ services:
     restart: unless-stopped
 
   zero-cache:
-    # Upstream zero-cache plus this repo's secret-file entrypoint. Published
+    # Stable zero-cache with patched dependencies and a secret-file entrypoint. Published
     # alongside the app image so the stack runs without a checkout; `up --build`
     # builds it from this tree instead.
     image: ghcr.io/iuliandita/ditero:${DITERO_IMAGE_TAG:-nightly}-zero

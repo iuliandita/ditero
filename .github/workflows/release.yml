@@ -40,12 +40,7 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - name: Dependency audit
-        run: |
-          set -euo pipefail
-          report=$(bun audit --json 2>/dev/null || true)
-          echo "$report"
-          count=$(printf '%s' "$report" | jq '[.vulnerabilities[]? | select(.severity == "high" or .severity == "critical")] | length')
-          test "$count" -eq 0
+        run: bun audit --audit-level=high
       - name: Filesystem security gate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -55,7 +50,7 @@ jobs:
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           exit-code: "1"
-          trivy-version: "0.70.0"
+          version: "v0.70.0"
       - run: bun run lint
       - run: bun run i18n:compile && bun run i18n:validate
       - run: bun run typecheck
@@ -171,7 +166,7 @@ jobs:
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           exit-code: "0"
-          trivy-version: "0.70.0"
+          version: "v0.70.0"
 
       - name: Attest build provenance (GHCR)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -311,7 +306,7 @@ jobs:
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           exit-code: "1"
-          trivy-version: "0.70.0"
+          version: "v0.70.0"
 
       - name: Build and push
         id: build
@@ -338,7 +333,7 @@ jobs:
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           exit-code: "1"
-          trivy-version: "0.70.0"
+          version: "v0.70.0"
 
       - name: Attest build provenance (GHCR)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
