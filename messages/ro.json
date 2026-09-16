@@ -1577,5 +1577,12 @@
 	"attachment_unreadable": "Acest fișier nu mai poate fi deschis.",
 	"attachment_unreadable_body": "Toți cei care dețineau cheia acestor fișiere au părăsit {workspace}. Nimeni nu le poate decripta, nici membrii de aici și nici persoana care administrează serverul. Pot fi doar șterse.",
 	"attachment_unreadable_delete_confirm": "Ștergi „{name}”? Nimeni nu îl poate deschide, iar ștergerea nu poate fi anulată.",
-	"notify_key_grant_body": "Cineva așteaptă o cheie pentru acest spațiu de lucru"
+	"notify_key_grant_body": "Cineva așteaptă o cheie pentru acest spațiu de lucru",
+	"portability_heading": "Exportă datele tale",
+	"portability_description": "Descarcă în format JSON conținutul spațiilor de lucru la care ai acces, setările personale și istoricul tău.",
+	"portability_boundary": "Fișierele atașate, cheile de criptare și datele de autentificare nu sunt incluse. Importul nu este încă disponibil, deci acest fișier nu este o copie de siguranță care poate fi restaurată.",
+	"portability_download": "Descarcă JSON",
+	"portability_exporting": "Se pregătește exportul…",
+	"portability_failed": "Datele tale nu au putut fi exportate. Încearcă din nou.",
+	"portability_limit": "Acest export depășește limita de descărcare. Nu a fost creat niciun fișier parțial."
 }

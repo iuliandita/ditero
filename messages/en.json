@@ -1547,5 +1547,12 @@
 	"attachment_unreadable": "This file cannot be opened again.",
 	"attachment_unreadable_body": "Everyone who held the key for these files has left {workspace}. Nobody can decrypt them - not the members here, and not whoever runs this server. They can only be deleted.",
 	"attachment_unreadable_delete_confirm": "Delete \"{name}\"? Nobody can open it, and deleting it cannot be undone.",
-	"notify_key_grant_body": "Someone is waiting for a key to this workspace"
+	"notify_key_grant_body": "Someone is waiting for a key to this workspace",
+	"portability_heading": "Export your data",
+	"portability_description": "Download the workspace content you can access and your personal settings and history as JSON.",
+	"portability_boundary": "Attachment files, encryption keys, and login credentials are not included. Import is not available yet, so this file is not a restorable backup.",
+	"portability_download": "Download JSON",
+	"portability_exporting": "Preparing export…",
+	"portability_failed": "Could not export your data. Try again.",
+	"portability_limit": "This export exceeds the download limit. No partial file was created."
 }
