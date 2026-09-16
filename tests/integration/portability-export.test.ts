@@ -3,7 +3,9 @@ import { Elysia } from "elysia";
 import { Client, Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import * as tables from "../../src/db/schema.ts";
+import { validateImportGraph } from "../../src/domain/portability/graph.ts";
 import type { PortableExportV1 } from "../../src/domain/portability/v1.ts";
+import { parsePortableExportV1 } from "../../src/domain/portability/validate.ts";
 import { makeGuards, type Session } from "../../src/server/guards.ts";
 import type { ExportOptions } from "../../src/server/portability/export.ts";
 import { portabilityRoutes } from "../../src/server/portability/routes.ts";
@@ -127,6 +129,7 @@ beforeEach(async () => {
 			workspaceId: id,
 			ownerId: id === "foreign" ? "outsider" : "alice",
 			title: id,
+			kind: id === "private" ? ("tasks" as const) : ("habits" as const),
 			sortKey: "a",
 			folderId: id === "shared" ? "folder" : null,
 		})),
@@ -219,7 +222,7 @@ beforeEach(async () => {
 			taskId: "shared-task",
 			kind: "work",
 			startedAt: now,
-			endedAt: now,
+			endedAt: new Date(now.getTime() + 10_000),
 			durationSec: 10,
 		},
 		{
@@ -228,7 +231,7 @@ beforeEach(async () => {
 			taskId: "foreign-task",
 			kind: "work",
 			startedAt: now,
-			endedAt: now,
+			endedAt: new Date(now.getTime() + 10_000),
 			durationSec: 10,
 		},
 		{
@@ -236,7 +239,7 @@ beforeEach(async () => {
 			userId: "bob",
 			kind: "work",
 			startedAt: now,
-			endedAt: now,
+			endedAt: new Date(now.getTime() + 10_000),
 			durationSec: 10,
 		},
 	]);
@@ -392,6 +395,38 @@ afterAll(async () => {
 });
 
 describe("portable export", () => {
+	test("produces a file accepted by native format and graph validation", async () => {
+		const response = await request();
+		expect(response.status).toBe(200);
+		const body = await response.text();
+		const parsed = parsePortableExportV1(body);
+		expect(parsed).toEqual(JSON.parse(body));
+		expect(validateImportGraph(parsed)).toEqual({
+			valid: true,
+			errors: [],
+			warnings: [],
+		});
+	});
+	test("reports an unresolved saved reference without looking up its principal", async () => {
+		await pool.query("update view set filter = $1::jsonb where id = 'own'", [
+			JSON.stringify({
+				op: "and",
+				conditions: [
+					{ field: "assignee", operator: "includes", value: "outsider" },
+				],
+			}),
+		]);
+		const response = await request();
+		expect(response.status).toBe(200);
+		const parsed = parsePortableExportV1(await response.text());
+		expect(parsed.data.principals.some((row) => row.id === "outsider")).toBe(
+			false,
+		);
+		const report = validateImportGraph(parsed);
+		expect(report.valid).toBe(true);
+		expect(report.errors).toEqual([]);
+		expect(report.warnings).toHaveLength(1);
+	});
 	test("bounds compressed JSON before serialization while accepting ordinary compressed templates", async () => {
 		const observed = new Pool({ connectionString: databaseURL, max: 1 });
 		const client = await observed.connect();
