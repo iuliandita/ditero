@@ -1,6 +1,7 @@
 import type { Role } from "../../domain/role.ts";
 import { m } from "../../paraglide/messages.js";
 import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
+import { DataPortabilityPanel } from "../components/settings/DataPortabilityPanel.tsx";
 import { FocusSettings } from "../components/settings/FocusSettings.tsx";
 import { KarmaSettings } from "../components/settings/KarmaSettings.tsx";
 import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
@@ -36,6 +37,7 @@ export function SettingsSurface({
 			</div>
 			<div className="p-4 md:p-6">
 				<SecurityPanel />
+				<DataPortabilityPanel />
 				<KarmaPanel />
 				<KarmaSettings />
 				<LanguageSwitcher persistLocale={persistLocale} />

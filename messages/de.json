@@ -1547,5 +1547,12 @@
 	"attachment_unreadable": "Diese Datei kann nicht mehr geöffnet werden.",
 	"attachment_unreadable_body": "Alle, die den Schlüssel für diese Dateien hatten, haben {workspace} verlassen. Niemand kann sie entschlüsseln - weder die Mitglieder hier noch die Person, die diesen Server betreibt. Sie können nur gelöscht werden.",
 	"attachment_unreadable_delete_confirm": "\"{name}\" löschen? Niemand kann die Datei öffnen, und das Löschen kann nicht rückgängig gemacht werden.",
-	"notify_key_grant_body": "Jemand wartet auf einen Schlüssel für diesen Arbeitsbereich"
+	"notify_key_grant_body": "Jemand wartet auf einen Schlüssel für diesen Arbeitsbereich",
+	"portability_heading": "Deine Daten exportieren",
+	"portability_description": "Lade die für dich zugänglichen Workspace-Inhalte sowie deine persönlichen Einstellungen und deinen Verlauf als JSON herunter.",
+	"portability_boundary": "Anhangsdateien, Verschlüsselungsschlüssel und Anmeldedaten sind nicht enthalten. Ein Import ist noch nicht möglich; diese Datei ist daher kein wiederherstellbares Backup.",
+	"portability_download": "JSON herunterladen",
+	"portability_exporting": "Export wird vorbereitet…",
+	"portability_failed": "Deine Daten konnten nicht exportiert werden. Versuch es erneut.",
+	"portability_limit": "Dieser Export überschreitet das Downloadlimit. Es wurde keine unvollständige Datei erstellt."
 }

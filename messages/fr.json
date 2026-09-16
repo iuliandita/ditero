@@ -1577,5 +1577,12 @@
 	"attachment_unreadable": "Ce fichier ne pourra plus être ouvert.",
 	"attachment_unreadable_body": "Toutes les personnes qui détenaient la clé de ces fichiers ont quitté {workspace}. Personne ne peut les déchiffrer, ni les membres présents ni la personne qui exploite ce serveur. Ils peuvent seulement être supprimés.",
 	"attachment_unreadable_delete_confirm": "Supprimer « {name} » ? Personne ne peut l'ouvrir et la suppression est irréversible.",
-	"notify_key_grant_body": "Quelqu'un attend une clé pour cet espace de travail"
+	"notify_key_grant_body": "Quelqu'un attend une clé pour cet espace de travail",
+	"portability_heading": "Exporter tes données",
+	"portability_description": "Télécharge au format JSON le contenu des espaces de travail auxquels tu as accès, tes réglages personnels et ton historique.",
+	"portability_boundary": "Les fichiers joints, les clés de chiffrement et les identifiants de connexion ne sont pas inclus. L’importation n’est pas encore disponible : ce fichier n’est donc pas une sauvegarde restaurable.",
+	"portability_download": "Télécharger le JSON",
+	"portability_exporting": "Préparation de l’export…",
+	"portability_failed": "Impossible d’exporter tes données. Réessaie.",
+	"portability_limit": "Cet export dépasse la limite de téléchargement. Aucun fichier partiel n’a été créé."
 }

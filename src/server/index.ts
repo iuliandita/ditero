@@ -72,6 +72,7 @@ import { slackInteractionRoutes } from "./notifications/slack-interactions.ts";
 import { startTelegramPoller } from "./notifications/telegram-poll.ts";
 import { telegramWebhookRoutes } from "./notifications/telegram-webhook.ts";
 import { startWorker } from "./notifications/worker.ts";
+import { portabilityRoutes } from "./portability/routes.ts";
 import { publicConfig } from "./public-config.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
@@ -116,6 +117,7 @@ async function channelWrite(
 }
 
 const routes = new Elysia()
+	.use(portabilityRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	// Public capability ack, mounted AHEAD of the global CORS plugin: the button
 	// is pressed from ntfy's web UI, a genuine cross-origin request the global
 	// policy rejects (and which `origin: false` rejects outright in production).

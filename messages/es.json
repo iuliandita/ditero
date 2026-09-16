@@ -1577,5 +1577,12 @@
 	"attachment_unreadable": "Este archivo no se puede volver a abrir.",
 	"attachment_unreadable_body": "Todas las personas que tenían la clave de estos archivos han dejado {workspace}. Nadie puede descifrarlos: ni los miembros actuales ni quien administra este servidor. Solo se pueden eliminar.",
 	"attachment_unreadable_delete_confirm": "¿Eliminar \"{name}\"? Nadie puede abrirlo y la eliminación no se puede deshacer.",
-	"notify_key_grant_body": "Alguien espera una clave para este espacio de trabajo"
+	"notify_key_grant_body": "Alguien espera una clave para este espacio de trabajo",
+	"portability_heading": "Exporta tus datos",
+	"portability_description": "Descarga en JSON el contenido de los espacios de trabajo a los que tienes acceso, tus ajustes personales y tu historial.",
+	"portability_boundary": "No se incluyen los archivos adjuntos, las claves de cifrado ni las credenciales de acceso. La importación aún no está disponible, así que este archivo no es una copia de seguridad que puedas restaurar.",
+	"portability_download": "Descargar JSON",
+	"portability_exporting": "Preparando exportación…",
+	"portability_failed": "No se han podido exportar tus datos. Inténtalo de nuevo.",
+	"portability_limit": "Esta exportación supera el límite de descarga. No se ha creado ningún archivo parcial."
 }
