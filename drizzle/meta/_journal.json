@@ -225,6 +225,20 @@
       "when": 1788358155245,
       "tag": "0031_safe_killer_shrike",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789592460354,
+      "tag": "0032_closed_hairball",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789592461034,
+      "tag": "0033_import_ledger_rls",
+      "breakpoints": true
     }
   ]
 }

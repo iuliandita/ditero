@@ -4,12 +4,14 @@ import { relations, sql } from "drizzle-orm";
 import {
 	bigint,
 	boolean,
+	check,
 	foreignKey,
 	index,
 	integer,
 	jsonb,
 	pgEnum,
 	pgTable,
+	primaryKey,
 	smallint,
 	text,
 	timestamp,
@@ -1075,3 +1077,81 @@ export const userDevice = pgTable("user_device", {
 		.notNull(),
 	revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
+
+export const importSource = pgTable(
+	"import_source",
+	{
+		id: text("id").primaryKey(),
+		ownerUserId: text("owner_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		label: text("label").notNull(),
+		format: text("format").notNull(),
+		schemaVersion: integer("schema_version").notNull(),
+		sourceUserId: text("source_user_id").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		index("import_source_owner_idx").on(t.ownerUserId),
+		check(
+			"import_source_label_length",
+			sql`char_length(${t.label}) between 1 and 100`,
+		),
+	],
+);
+
+export const importJob = pgTable(
+	"import_job",
+	{
+		id: text("id").primaryKey(),
+		sourceId: text("source_id")
+			.notNull()
+			.references(() => importSource.id, { onDelete: "cascade" }),
+		ownerUserId: text("owner_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		documentDigest: text("document_digest").notNull(),
+		mappingDigest: text("mapping_digest").notNull(),
+		planDigest: text("plan_digest").notNull(),
+		report: jsonb("report").notNull(),
+		createdTxid: bigint("created_txid", { mode: "bigint" })
+			.default(sql`txid_current()`)
+			.notNull(),
+		payloadBytes: integer("payload_bytes").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		index("import_job_owner_idx").on(t.ownerUserId),
+		index("import_job_source_idx").on(t.sourceId),
+		check("import_job_payload_bytes", sql`${t.payloadBytes} >= 0`),
+	],
+);
+
+export const importItem = pgTable(
+	"import_item",
+	{
+		jobId: text("job_id")
+			.notNull()
+			.references(() => importJob.id, { onDelete: "cascade" }),
+		ordinal: integer("ordinal").notNull(),
+		collection: text("collection").notNull(),
+		sourceId: text("source_id").notNull(),
+		sourceKey: text("source_key").notNull(),
+		itemDigest: text("item_digest").notNull(),
+		targetId: text("target_id"),
+		disposition: text("disposition").notNull(),
+		payload: jsonb("payload").notNull(),
+		codes: jsonb("codes").notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.jobId, t.ordinal] }),
+		check(
+			"import_item_disposition",
+			sql`${t.disposition} in ('ensure', 'ignored', 'blocked')`,
+		),
+	],
+);
