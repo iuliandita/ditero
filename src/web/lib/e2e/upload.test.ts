@@ -1,8 +1,10 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { aad, decryptWrapped } from "../../../domain/e2e/envelope.ts";
 import { decryptStream } from "../../../domain/e2e/stream.ts";
 import { decodeWrapped } from "../../../domain/e2e/wire.ts";
 import { AttachmentUploadError, uploadAttachment } from "./upload.ts";
+
+afterEach(() => vi.unstubAllGlobals());
 
 async function collect(source: AsyncIterable<Uint8Array>): Promise<Uint8Array> {
 	const chunks: Uint8Array[] = [];
@@ -304,4 +306,134 @@ describe("uploadAttachment", () => {
 		expect(failure).toBeInstanceOf(AttachmentUploadError);
 		expect(failure).toMatchObject({ stage: "reserve", reason, status });
 	});
+});
+
+test("OPFS stores only ciphertext and removes the stage after uploading", async () => {
+	const chunks: Uint8Array[] = [];
+	const files = new Set<string>();
+	let reservation: Record<string, unknown> = {};
+	let sent: File | undefined;
+	const wdk = crypto.getRandomValues(new Uint8Array(32));
+	const plaintext = new TextEncoder().encode("private staged contents");
+	const writable = {
+		write: async (chunk: Uint8Array) => {
+			chunks.push(chunk);
+		},
+		close: async () => {},
+		abort: async () => {},
+	};
+	const root = {
+		async *entries() {},
+		async getFileHandle(name: string) {
+			files.add(name);
+			return {
+				createWritable: async () => writable,
+				getFile: async () =>
+					new File(
+						chunks.map((chunk) => chunk.slice()),
+						name,
+					),
+			};
+		},
+		async removeEntry(name: string) {
+			files.delete(name);
+		},
+	};
+	vi.stubGlobal("navigator", {
+		storage: { getDirectory: async () => root },
+		locks: {
+			request: async (_name: string, use: () => Promise<unknown>) =>
+				await use(),
+		},
+	});
+	vi.stubGlobal(
+		"XMLHttpRequest",
+		class {
+			upload = {};
+			status = 200;
+			statusText = "OK";
+			responseText = "";
+			onload?: () => void;
+			open() {}
+			setRequestHeader() {}
+			send(file: File) {
+				sent = file;
+				this.onload?.();
+			}
+		},
+	);
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input) === "/api/attachments/reserve") {
+				reservation = JSON.parse(String(init?.body));
+				return Response.json({
+					id: "staged",
+					uploadUrl: "/api/attachments/staged/upload",
+					thumbnailUploadUrl: null,
+				});
+			}
+			return Response.json({ id: "staged", state: "committed" });
+		}),
+	);
+	await uploadAttachment(
+		{
+			file: new File([plaintext], "secret.txt", { type: "text/plain" }),
+			workspaceId: "workspace-1",
+			parentKind: "task",
+			parentId: "task-1",
+			keyVersion: 1,
+			wdk,
+		},
+		{ id: "staged" },
+	);
+	expect(files.size).toBe(0);
+	expect(sent).toBeDefined();
+	const ciphertext = new Uint8Array(await (sent as File).arrayBuffer());
+	expect(ciphertext).not.toEqual(plaintext);
+	const dek = await decryptWrapped(
+		decodeWrapped(String(reservation.dekWrapped)),
+		wdk,
+		aad.dek("workspace-1", 1, "staged"),
+	);
+	expect(
+		await collect(decryptStream(source(ciphertext), dek, "content")),
+	).toEqual(plaintext);
+});
+
+test("streams ciphertext without staging when Web Locks are unavailable", async () => {
+	const getDirectory = vi.fn();
+	vi.stubGlobal("navigator", { storage: { getDirectory } });
+	let streamed = false;
+	vi.stubGlobal(
+		"fetch",
+		async (input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input) === "/api/attachments/reserve")
+				return Response.json({
+					id: "streamed",
+					uploadUrl: "/api/attachments/streamed/upload",
+					thumbnailUploadUrl: null,
+				});
+			if (String(input).endsWith("/upload")) {
+				expect(init?.body).toBeInstanceOf(ReadableStream);
+				await requestBytes(init?.body);
+				streamed = true;
+				return new Response();
+			}
+			return Response.json({ id: "streamed", state: "committed" });
+		},
+	);
+	await uploadAttachment(
+		{
+			file: new File(["private"], "secret.txt", { type: "text/plain" }),
+			workspaceId: "workspace-1",
+			parentKind: "task",
+			parentId: "task-1",
+			keyVersion: 1,
+			wdk: crypto.getRandomValues(new Uint8Array(32)),
+		},
+		{ id: "streamed" },
+	);
+	expect(streamed).toBe(true);
+	expect(getDirectory).not.toHaveBeenCalled();
 });

@@ -1,4 +1,26 @@
 services:
+  browser:
+    profiles: [browser]
+    image: mcr.microsoft.com/playwright:v1.61.1-noble@sha256:5b8f294aff9041b7191c34a4bab3ac270157a28774d4b0660e9743297b697e48
+    init: true
+    user: pwuser
+    shm_size: 1gb
+    ports:
+      - "127.0.0.1:53000:3000"
+    volumes:
+      - ../../node_modules/playwright-core:/opt/playwright-core:ro
+    command:
+      [node, /opt/playwright-core/cli.js, run-server, --host, 0.0.0.0, --port, "3000"]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "const s = require('node:net').connect(3000, '127.0.0.1', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));"
+      interval: 1s
+      timeout: 5s
+      retries: 30
+
   upstream-db:
     image: postgres:18@sha256:4aabea78cf39b90e834caf3af7d602a18565f6fe2508705c8d01aa63245c2e20
     environment:

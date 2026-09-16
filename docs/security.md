@@ -58,7 +58,11 @@ password does not change either E2E wrap.
 File and thumbnail streams use separate AES-256-GCM keys derived with HKDF-SHA256 from the
 attachment data key. Every segment binds the versioned stream header as additional data, and the
 counter plus final flag form the 96-bit nonce. Downloads authenticate the complete stream before
-exposing any plaintext to the user.
+exposing any plaintext to the user. In-memory downloads and previews have a 64 MiB cap.
+Larger downloads use a user-selected file destination where the browser supports it: ciphertext
+is staged in OPFS and fully authenticated in a first pass, then the same File snapshot is
+decrypted again into the destination. No plaintext is staged in origin storage. A failed write
+aborts the destination stream instead of committing a partial file.
 
 ### Client storage and active-origin risk
 

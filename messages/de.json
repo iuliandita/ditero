@@ -1534,6 +1534,8 @@
 	"attachment_error_reserve_failed": "Die Datei konnte nicht hinzugefügt werden. Versuche es erneut.",
 	"attachment_error_upload_failed": "Der Upload wurde nicht abgeschlossen. Versuche es erneut.",
 	"attachment_error_download_failed": "Die Datei konnte nicht heruntergeladen werden. Versuche es erneut.",
+	"attachment_download_memory_limit": "Dateien über {limit} können nicht im Arbeitsspeicher geöffnet werden. Verwende zum Herunterladen einen Browser, der direkt in eine Datei speichern kann.",
+	"attachment_preview_too_large": "Dateien über {limit} können nicht in der Vorschau angezeigt werden. Wähle Herunterladen, um diese Datei zu speichern.",
 	"attachment_error_integrity": "Die Integritätsprüfung dieser Datei ist fehlgeschlagen und sie wurde nicht geöffnet. Sie ist beschädigt oder wurde nach dem Hochladen verändert.",
 	"attachment_error_rotation_required": "Neue Dateien sind für diesen Arbeitsbereich pausiert, bis ein neuer Schlüssel erstellt wurde.",
 	"attachment_locked_name": "Verschlüsselte Datei",

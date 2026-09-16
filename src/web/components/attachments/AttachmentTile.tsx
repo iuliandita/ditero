@@ -63,9 +63,11 @@ function FileGlyph({ contentType }: { contentType?: string | null }) {
 function Progress({
 	progress,
 	name,
+	onCancel,
 }: {
 	progress: AttachmentProgress;
 	name: string;
+	onCancel?: () => void;
 }) {
 	const maximum = Math.max(1, progress.total);
 	const current = Math.min(maximum, Math.max(0, progress.loaded));
@@ -97,7 +99,14 @@ function Progress({
 					style={{ width: `${(current / maximum) * 100}%` }}
 				/>
 			</div>
-			<span className="text-xs text-muted-foreground">{phase}</span>
+			<div className="flex items-center justify-between gap-2">
+				<span className="text-xs text-muted-foreground">{phase}</span>
+				{onCancel && (
+					<Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+						{m.confirm_cancel()}
+					</Button>
+				)}
+			</div>
 		</div>
 	);
 }
@@ -113,6 +122,7 @@ export function AttachmentTile({
 	actions,
 	onOpen,
 	onSetup,
+	onCancelDownload,
 	progress,
 	error,
 	itemRef,
@@ -128,6 +138,7 @@ export function AttachmentTile({
 	actions: RowAction[];
 	onOpen?: () => void;
 	onSetup?: () => void;
+	onCancelDownload?: () => void;
 	progress?: AttachmentProgress;
 	error?: string | null;
 	itemRef?: Ref<HTMLLIElement>;
@@ -190,7 +201,13 @@ export function AttachmentTile({
 							<span className="sr-only">{displayName}</span>
 							<Filename value={displayName} />
 							<span className="text-xs text-muted-foreground">{size}</span>
-							{progress && <Progress progress={progress} name={displayName} />}
+							{progress && (
+								<Progress
+									progress={progress}
+									name={displayName}
+									onCancel={onCancelDownload}
+								/>
+							)}
 							{error && (
 								<p role="alert" className="mt-1 text-xs text-destructive">
 									{error}
@@ -256,7 +273,13 @@ export function AttachmentTile({
 								{m.e2e_unlock_submit()}
 							</Button>
 						)}
-						{progress && <Progress progress={progress} name={displayName} />}
+						{progress && (
+							<Progress
+								progress={progress}
+								name={displayName}
+								onCancel={onCancelDownload}
+							/>
+						)}
 						{error && (
 							<p role="alert" className="mt-1 text-xs text-destructive">
 								{error}

@@ -1534,6 +1534,8 @@
 	"attachment_error_reserve_failed": "That file could not be added. Try again.",
 	"attachment_error_upload_failed": "That upload did not finish. Try again.",
 	"attachment_error_download_failed": "That file could not be downloaded. Try again.",
+	"attachment_download_memory_limit": "Files above {limit} cannot be opened in memory. To download this file, use a browser that supports saving directly to a file.",
+	"attachment_preview_too_large": "Files above {limit} cannot be previewed. Choose Download to save this file.",
 	"attachment_error_integrity": "This file failed its integrity check and was not opened. It is damaged or was changed after it was uploaded.",
 	"attachment_error_rotation_required": "New files are paused for this workspace until a new key is created.",
 	"attachment_locked_name": "Encrypted file",
