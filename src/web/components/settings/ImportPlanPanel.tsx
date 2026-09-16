@@ -1,6 +1,7 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PortableExportV1 } from "../../../domain/portability/v1.ts";
+import { randomId } from "../../../domain/random-id.ts";
 import { type Role, WRITE_ROLES } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
@@ -33,7 +34,7 @@ export function ImportPlanPanel() {
 	const mounted = useRef(true);
 	const [sources, setSources] = useState<Source[]>([]);
 	const [source, setSource] = useState("");
-	const [newId, setNewId] = useState(() => crypto.randomUUID());
+	const [newId, setNewId] = useState(() => randomId());
 	const [label, setLabel] = useState("");
 	const [loaded, setLoaded] = useState<Loaded | null>(null);
 	const [workspaceMap, setWorkspaceMap] = useState<Record<string, string>>({});
@@ -180,7 +181,7 @@ export function ImportPlanPanel() {
 				if (!controller.signal.aborted) {
 					setReport(result);
 					setSource(result.sourceId);
-					setNewId(crypto.randomUUID());
+					setNewId(randomId());
 				}
 			} else if (!controller.signal.aborted) setReport(null);
 			await refresh(controller.signal);
@@ -206,7 +207,7 @@ export function ImportPlanPanel() {
 		);
 		if (discarded && kind === "sources" && source === id) {
 			setSource("");
-			setNewId(crypto.randomUUID());
+			setNewId(randomId());
 		}
 	}
 	const ready =
@@ -245,7 +246,7 @@ export function ImportPlanPanel() {
 						className={control}
 						value={source}
 						onChange={(e) => {
-							if (source && !e.target.value) setNewId(crypto.randomUUID());
+							if (source && !e.target.value) setNewId(randomId());
 							setSource(e.target.value);
 							changed();
 						}}
@@ -266,7 +267,7 @@ export function ImportPlanPanel() {
 							className={control}
 							value={label}
 							onChange={(e) => {
-								setNewId(crypto.randomUUID());
+								setNewId(randomId());
 								setLabel(e.target.value);
 								changed();
 							}}
