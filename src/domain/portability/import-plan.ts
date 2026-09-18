@@ -1,4 +1,8 @@
 import { validateImportGraph } from "./graph.ts";
+import {
+	canonicalImportJson as canonical,
+	hashImportValue as hash,
+} from "./import-digest.ts";
 import type { PortableExportV1, PortableJson, PortableRows } from "./v1.ts";
 
 export type ImportMappings = {
@@ -42,34 +46,6 @@ function object(value: PortableJson): JsonObject {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
 		? value
 		: {};
-}
-function canonical(value: PortableJson, checkpoint?: () => void): string {
-	checkpoint?.();
-	if (Array.isArray(value))
-		return `[${value.map((child) => canonical(child, checkpoint)).join(",")}]`;
-	if (value !== null && typeof value === "object")
-		return `{${Object.keys(value)
-			.sort()
-			.map(
-				(key) => `${JSON.stringify(key)}:${canonical(value[key], checkpoint)}`,
-			)
-			.join(",")}}`;
-	return JSON.stringify(value);
-}
-async function hash(
-	domain: string,
-	value: PortableJson,
-	checkpoint: () => void,
-): Promise<string> {
-	checkpoint();
-	const bytes = await crypto.subtle.digest(
-		"SHA-256",
-		new TextEncoder().encode(canonical([domain, value], checkpoint)),
-	);
-	checkpoint();
-	return Array.from(new Uint8Array(bytes), (byte) =>
-		byte.toString(16).padStart(2, "0"),
-	).join("");
 }
 function rowId(row: PortableRows[Collection]): string {
 	return "id" in row ? row.id : row.userId;

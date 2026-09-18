@@ -1115,6 +1115,8 @@ export const importJob = pgTable(
 		documentDigest: text("document_digest").notNull(),
 		mappingDigest: text("mapping_digest").notNull(),
 		planDigest: text("plan_digest").notNull(),
+		plannerVersion: integer("planner_version").notNull().default(1),
+		applySupported: boolean("apply_supported").notNull().default(false),
 		report: jsonb("report").notNull(),
 		createdTxid: bigint("created_txid", { mode: "bigint" })
 			.default(sql`txid_current()`)
@@ -1142,6 +1144,10 @@ export const importItem = pgTable(
 		sourceId: text("source_id").notNull(),
 		sourceKey: text("source_key").notNull(),
 		itemDigest: text("item_digest").notNull(),
+		phase: text("phase"),
+		contentDigest: text("content_digest"),
+		targetPrecondition: jsonb("target_precondition"),
+		dependencyProof: jsonb("dependency_proof"),
 		targetId: text("target_id"),
 		disposition: text("disposition").notNull(),
 		payload: jsonb("payload").notNull(),
@@ -1153,5 +1159,96 @@ export const importItem = pgTable(
 			"import_item_disposition",
 			sql`${t.disposition} in ('ensure', 'ignored', 'blocked')`,
 		),
+	],
+);
+
+export const importRun = pgTable(
+	"import_run",
+	{
+		jobId: text("job_id")
+			.primaryKey()
+			.references(() => importJob.id, { onDelete: "cascade" }),
+		ownerUserId: text("owner_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		state: text("state").notNull().default("pending"),
+		nextOrdinal: integer("next_ordinal").notNull().default(0),
+		appliedCount: integer("applied_count").notNull().default(0),
+		noopCount: integer("noop_count").notNull().default(0),
+		conflictCode: text("conflict_code"),
+		conflictOrdinal: integer("conflict_ordinal"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		completedAt: timestamp("completed_at", { withTimezone: true }),
+	},
+	(t) => [
+		index("import_run_owner_idx").on(t.ownerUserId),
+		check(
+			"import_run_state",
+			sql`${t.state} in ('pending', 'running', 'conflict', 'completed')`,
+		),
+		check("import_run_next_ordinal", sql`${t.nextOrdinal} >= 0`),
+		check("import_run_applied_count", sql`${t.appliedCount} >= 0`),
+		check("import_run_noop_count", sql`${t.noopCount} >= 0`),
+		check("import_run_conflict_ordinal", sql`${t.conflictOrdinal} >= 0`),
+	],
+);
+
+export const importSourceMap = pgTable(
+	"import_source_map",
+	{
+		sourceId: text("source_id")
+			.notNull()
+			.references(() => importSource.id, { onDelete: "cascade" }),
+		sourceKey: text("source_key").notNull(),
+		ownerUserId: text("owner_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		collection: text("collection").notNull(),
+		sourceRowId: text("source_row_id").notNull(),
+		// No target FK: deletion must retain evidence and prevent duplicate imports.
+		targetId: text("target_id").notNull(),
+		targetWorkspaceId: text("target_workspace_id").notNull(),
+		contentDigest: text("content_digest").notNull(),
+		lastTargetDigest: text("last_target_digest").notNull(),
+		lastPlanDigest: text("last_plan_digest").notNull(),
+		version: integer("version").notNull().default(1),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.sourceId, t.sourceKey] }),
+		unique("import_source_map_target").on(t.sourceId, t.collection, t.targetId),
+		index("import_source_map_owner_idx").on(t.ownerUserId),
+		check("import_source_map_version", sql`${t.version} >= 1`),
+	],
+);
+
+export const importWorkspaceMap = pgTable(
+	"import_workspace_map",
+	{
+		sourceId: text("source_id")
+			.notNull()
+			.references(() => importSource.id, { onDelete: "cascade" }),
+		sourceWorkspaceId: text("source_workspace_id").notNull(),
+		ownerUserId: text("owner_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		targetWorkspaceId: text("target_workspace_id").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.sourceId, t.sourceWorkspaceId] }),
+		index("import_workspace_map_owner_idx").on(t.ownerUserId),
 	],
 );
