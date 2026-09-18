@@ -63,7 +63,10 @@ Application currently supports folders, the exporting user's own lists, labels,
 tasks without notification settings, and task-label links. Mapping another owner
 to your account does not make their lists eligible. Tasks with a reminder time,
 repeat interval, repeat limit, fallback recipient, or urgent flag are blocked;
-these settings are never silently removed. Assignments, comments, templates,
+these settings are never silently removed.
+Unfinished tasks with a due date are also blocked, including habits: automatic
+overdue alerts do not require a reminder setting. Completed dated tasks and
+undated tasks remain eligible when they have no reminder settings. Assignments, comments, templates,
 views, dashboards, focus records, preferences, Karma, and habit logs remain
 blocked pending their import policies. Attachment files remain excluded.
 Unresolved references and mapping conflicts block affected records and their

@@ -110,7 +110,8 @@ export function projectImportApply(
 					row.repeatEveryMin !== null ||
 					row.maxRepeats !== null ||
 					row.fallbackUserId !== null ||
-					row.urgent
+					row.urgent ||
+					(!row.done && row.dueAt !== null)
 				)
 					block(item, "notification-bearing-task");
 				dependency("lists", row.listId);

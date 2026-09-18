@@ -1616,7 +1616,7 @@
 	"import_plan_quota": "Simulările salvate au atins limita de stocare. Elimină simulările vechi sau sursele nefolosite, apoi încearcă din nou.",
 	"import_apply_intro": "Salvează o simulare, verifică intrările acceptate și excluse, apoi confirmă înainte de a importa ceva.",
 	"import_apply_report": "Plan de import salvat",
-	"import_apply_boundary": "Pot fi importate doar dosarele acceptate, listele tale, etichetele, sarcinile fără mementouri și asocierile lor cu etichete. Intrările excluse nu se importă. Intrările existente nu sunt suprascrise niciodată.",
+	"import_apply_boundary": "Pot fi importate doar dosarele acceptate, listele tale, etichetele, sarcinile fără mementouri și asocierile lor cu etichete. Sarcinile nefinalizate cu termen sunt excluse pentru a evita alertele automate de întârziere. Intrările existente nu sunt suprascrise niciodată.",
 	"import_apply_eligible": "Intrări eligibile",
 	"import_apply_confirm": "Eligibile: {eligible}. Ignorate: {ignored}. Blocate: {blocked}. Imporți doar intrările eligibile? Intrările existente neschimbate vor fi păstrate. Intrările excluse nu se importă.",
 	"import_apply_action": "Aplică importul",

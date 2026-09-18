@@ -343,6 +343,8 @@ describe("import apply eligibility", () => {
 		{ maxRepeats: 1 },
 		{ fallbackUserId: "former" },
 		{ urgent: true },
+		{ dueAt: "2020-01-01T00:00:00.000Z" },
+		{ dueAt: "2100-01-01T00:00:00.000Z" },
 	])("excludes reminder policy %j and descendants but keeps unrelated tasks", async (policy) => {
 		const source = fixture();
 		Object.assign(source.data.tasks[0], policy);
@@ -362,6 +364,23 @@ describe("import apply eligibility", () => {
 		).toBe("ensure");
 		expect(result.items.find((i) => i.sourceId === "task")?.payload).toEqual(
 			source.data.tasks[0],
+		);
+	});
+	test("keeps completed dated tasks eligible but blocks dated unfinished habits", async () => {
+		const source = fixture();
+		source.data.lists[0].kind = "habits";
+		Object.assign(source.data.tasks[0], {
+			done: true,
+			dueAt: date,
+			completedAt: date,
+		});
+		source.data.tasks[1].dueAt = date;
+		const result = await project(source);
+		expect(result.items.find((i) => i.sourceId === "task")?.disposition).toBe(
+			"ensure",
+		);
+		expect(result.items.find((i) => i.sourceId === "child")?.codes).toContain(
+			"notification-bearing-task",
 		);
 	});
 	test("closes folder and label dependencies independent of input order", async () => {

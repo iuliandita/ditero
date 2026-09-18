@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import * as tables from "../../src/db/schema.ts";
 import type { ImportMappings } from "../../src/domain/portability/import-plan.ts";
 import type { PortableExportV1 } from "../../src/domain/portability/v1.ts";
+import { overdueSweep } from "../../src/server/notifications/events.ts";
 import { scanTick } from "../../src/server/notifications/scheduler.ts";
 import { exportPortableJson } from "../../src/server/portability/export.ts";
 import {
@@ -172,6 +173,7 @@ function addBulk(count = 115) {
 			title: `Bulk ${i}`,
 			parentId: null,
 			done: false,
+			dueAt: null,
 			completedAt: null,
 		});
 }
@@ -648,13 +650,32 @@ test("large ASCII notes within the document limit survive apply and unchanged re
 	expect(repeated.noopCount).toBe(6);
 }, 30_000);
 
-test("production scheduler leaves due imported tasks inert with a working reminder channel", async () => {
-	for (const task of document.data.tasks) {
-		task.done = false;
-		task.completedAt = null;
-		task.dueAt = now.toISOString();
-		task.rrule = null;
+test.each([
+	"shopping",
+	"habits",
+] as const)("production notification scans leave eligible imports inert and exclude unfinished dated %s tasks", async (kind) => {
+	await pool.query("update list set kind = $1 where id = 'list'", [kind]);
+	for (const [id, dueAt] of [
+		["blocked-past", new Date("2026-09-17T10:00:00.000Z")],
+		["blocked-future", new Date("2026-09-19T10:00:00.000Z")],
+	] as const) {
+		await db
+			.insert(tables.task)
+			.values({ id, listId: "list", title: id, sortKey: "b0", dueAt });
+		await db.insert(tables.task).values({
+			id: `${id}-child`,
+			listId: "list",
+			title: `${id} child`,
+			sortKey: "b1",
+			parentId: id,
+		});
+		await db
+			.insert(tables.taskLabel)
+			.values({ id: `${id}-link`, taskId: id, labelId: "label" });
 	}
+	document = JSON.parse(
+		await exportPortableJson(pool, "alice"),
+	) as PortableExportV1;
 	await db.insert(tables.userPref).values({ id: "alice", timezone: "UTC" });
 	await db.insert(tables.notificationChannel).values({
 		id: "scheduler-channel",
@@ -662,12 +683,42 @@ test("production scheduler leaves due imported tasks inert with a working remind
 		kind: "ntfy",
 		config: { topic: "import-test", server: "https://ntfy.invalid" },
 	});
-	await finish(await save());
+	const job = await save();
+	const rows = await dispositions(job);
+	for (const id of ["blocked-past", "blocked-future"]) {
+		for (const sourceId of [id, `${id}-child`, `${id}-link`])
+			expect(
+				rows.find((row) => row.source_id === sourceId)?.disposition,
+				sourceId,
+			).toBe("blocked");
+	}
+	await finish(job);
+	expect((await targetCounts()).tasks).toBe(2);
+	expect(
+		(
+			await pool.query(
+				"select source_row_id from import_source_map where collection = 'tasks' order by source_row_id",
+			)
+		).rows,
+	).toEqual([{ source_row_id: "a-root" }, { source_row_id: "z-child" }]);
+	const targetList = await targetId("lists", "list");
+	const targetBefore = (
+		await pool.query("select * from task where list_id = $1 order by id", [
+			targetList,
+		])
+	).rows;
+	// Source fixtures must not enqueue notifications that would mask target behavior.
+	await pool.query(
+		"update task set done = true, due_at = null, reminder_time = null where list_id = 'list'",
+	);
 	const options = {
 		now: new Date("2026-09-18T10:00:30.000Z"),
 		timing: { tickMs: 1000, graceMs: 3_600_000, lateThresholdMs: 60_000 },
 	};
-	await scanTick(db, options);
+	for (const scanAt of [options.now, new Date("2026-09-20T10:00:30.000Z")]) {
+		await scanTick(db, { ...options, now: scanAt });
+		expect((await overdueSweep(db, { now: scanAt })).enqueued).toBe(0);
+	}
 	for (const table of [
 		"notification_outbox",
 		"reminder_state",
@@ -677,14 +728,31 @@ test("production scheduler leaves due imported tasks inert with a working remind
 		expect((await pool.query(`select * from ${table}`)).rows, table).toEqual(
 			[],
 		);
-	await db.insert(tables.task).values({
-		id: "scheduler-positive-control",
-		listId: "list",
-		title: "Explicitly enabled reminder",
+	await db.insert(tables.list).values({
+		id: "control-list",
+		workspaceId: "source",
+		ownerId: "alice",
+		title: "Controls",
 		sortKey: "b0",
-		dueAt: now,
-		reminderTime: "10:00",
+		kind: "tasks",
 	});
+	await db.insert(tables.task).values([
+		{
+			id: "scheduler-positive-control",
+			listId: "control-list",
+			title: "Explicit reminder",
+			sortKey: "b0",
+			dueAt: new Date("2026-09-18T11:00:00.000Z"),
+			reminderTime: "10:00",
+		},
+		{
+			id: "overdue-positive-control",
+			listId: "control-list",
+			title: "Owner fallback overdue",
+			sortKey: "b1",
+			dueAt: new Date("2026-09-17T10:00:00.000Z"),
+		},
+	]);
 	await scanTick(db, options);
 	expect(
 		(await pool.query("select task_id, recipient_user_id from reminder_state"))
@@ -696,10 +764,28 @@ test("production scheduler leaves due imported tasks inert with a working remind
 		(await pool.query("select count(*)::int as count from notification_outbox"))
 			.rows,
 	).toEqual([{ count: 1 }]);
+	expect((await overdueSweep(db, { now: options.now })).enqueued).toBe(1);
+	expect(
+		(
+			await pool.query(
+				"select payload->>'taskId' as task_id, recipient_user_id from notification_outbox order by payload->>'taskId'",
+			)
+		).rows,
+	).toEqual([
+		{ task_id: "overdue-positive-control", recipient_user_id: "alice" },
+		{ task_id: "scheduler-positive-control", recipient_user_id: "alice" },
+	]);
 	for (const table of ["karma", "karma_event"])
 		expect((await pool.query(`select * from ${table}`)).rows, table).toEqual(
 			[],
 		);
+	expect(
+		(
+			await pool.query("select * from task where list_id = $1 order by id", [
+				targetList,
+			])
+		).rows,
+	).toEqual(targetBefore);
 });
 
 test("a concurrent list move holds apply at the real dependency lock then conflicts", async () => {

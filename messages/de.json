@@ -1586,7 +1586,7 @@
 	"import_plan_quota": "Die gespeicherten Probeläufe haben das Speicherlimit erreicht. Verwirf ältere Probeläufe oder ungenutzte Quellen und versuche es erneut.",
 	"import_apply_intro": "Speichere einen Probelauf, prüfe die unterstützten und ausgeschlossenen Einträge und bestätige dann den Import.",
 	"import_apply_report": "Gespeicherter Importplan",
-	"import_apply_boundary": "Importiert werden nur unterstützte Ordner, deine Listen, Labels, Aufgaben ohne Erinnerungen und ihre Label-Zuordnungen. Ausgeschlossene Einträge werden nicht importiert. Bestehende Einträge werden nie überschrieben.",
+	"import_apply_boundary": "Importiert werden nur unterstützte Ordner, deine Listen, Labels, Aufgaben ohne Erinnerungen und ihre Label-Zuordnungen. Offene Aufgaben mit Fälligkeitsdatum sind ausgeschlossen, damit keine automatischen Überfälligkeitsmeldungen entstehen. Bestehende Einträge werden nie überschrieben.",
 	"import_apply_eligible": "Importierbare Einträge",
 	"import_apply_confirm": "Importierbar: {eligible}. Ignoriert: {ignored}. Blockiert: {blocked}. Nur importierbare Einträge importieren? Unveränderte bestehende Einträge bleiben erhalten. Ausgeschlossene Einträge werden nicht importiert.",
 	"import_apply_action": "Import anwenden",

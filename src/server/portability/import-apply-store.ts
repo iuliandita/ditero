@@ -344,7 +344,8 @@ export async function applyImportBatch(
 							"maxRepeats",
 							"fallbackUserId",
 						].some((key) => payload[key] !== null) ||
-							payload.urgent !== false)
+							payload.urgent !== false ||
+							(payload.done !== true && payload.dueAt !== null))
 					)
 						conflict("notification-bearing-task");
 					const workspace = proof.workspace.targetId;

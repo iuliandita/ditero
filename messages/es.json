@@ -1616,7 +1616,7 @@
 	"import_plan_quota": "Las simulaciones guardadas han alcanzado el límite de almacenamiento. Descarta simulaciones antiguas u orígenes sin usar y vuelve a intentarlo.",
 	"import_apply_intro": "Guarda una simulación, revisa las entradas admitidas y excluidas y confirma antes de importar nada.",
 	"import_apply_report": "Plan de importación guardado",
-	"import_apply_boundary": "Solo se pueden importar carpetas admitidas, tus listas, etiquetas, tareas sin recordatorios y sus vínculos con etiquetas. Las entradas excluidas no se importan. Las entradas existentes nunca se sobrescriben.",
+	"import_apply_boundary": "Solo se pueden importar carpetas admitidas, tus listas, etiquetas, tareas sin recordatorios y sus vínculos con etiquetas. Se excluyen las tareas pendientes con fecha de vencimiento para evitar avisos automáticos de retraso. Las entradas existentes nunca se sobrescriben.",
 	"import_apply_eligible": "Entradas aptas",
 	"import_apply_confirm": "Aptas: {eligible}. Ignoradas: {ignored}. Bloqueadas: {blocked}. ¿Importar solo las entradas aptas? Las entradas existentes sin cambios se conservarán. Las entradas excluidas no se importan.",
 	"import_apply_action": "Aplicar importación",
