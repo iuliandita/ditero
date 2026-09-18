@@ -1,0 +1,156 @@
+import { ImportPlanError, type ImportPlanItem } from "./import-plan.ts";
+import type { PortableExportV1, PortableJson, PortableRows } from "./v1.ts";
+
+export type ImportApplyPhase =
+	| "folders"
+	| "lists"
+	| "labels"
+	| "root-tasks"
+	| "child-tasks"
+	| "task-labels";
+
+export interface ImportApplyDependency {
+	collection: keyof PortableRows;
+	sourceId: string;
+	sourceKey: string;
+}
+
+// Candidates are not sealed plans: eligibility changes invalidate the v1 item digest.
+export interface ImportApplyCandidate
+	extends Omit<ImportPlanItem, "itemDigest"> {
+	phase: ImportApplyPhase | null;
+	dependencies: ImportApplyDependency[];
+}
+
+// Both inputs must come from the same validated document and buildImportPlan call.
+// Live authority, target preconditions and new digests must be frozen separately.
+export function projectImportApply(
+	document: PortableExportV1,
+	planItems: readonly ImportPlanItem[],
+	context: { signal?: AbortSignal; deadline?: number } = {},
+) {
+	const deadline = context.deadline ?? performance.now() + 15_000;
+	function checkpoint() {
+		if (context.signal?.aborted)
+			throw new ImportPlanError("planning-cancelled");
+		if (performance.now() >= deadline)
+			throw new ImportPlanError("planning-timeout");
+	}
+	checkpoint();
+	type Collection = keyof PortableRows;
+	const originals = new Map<
+		Collection,
+		Map<string, PortableRows[Collection]>
+	>();
+	for (const collection of Object.keys(document.data) as Collection[]) {
+		const rows = new Map<string, PortableRows[Collection]>();
+		for (const row of document.data[collection]) {
+			checkpoint();
+			rows.set("id" in row ? row.id : row.userId, row);
+		}
+		originals.set(collection, rows);
+	}
+	const indexes = new Map<Collection, Map<string, ImportApplyCandidate>>();
+	const items = planItems.map((item): ImportApplyCandidate => {
+		checkpoint();
+		const { itemDigest: _itemDigest, ...candidate } = item;
+		const copy = {
+			...structuredClone(candidate),
+			phase: null,
+			dependencies: [],
+		};
+		const index =
+			indexes.get(item.collection) ?? new Map<string, ImportApplyCandidate>();
+		if (index.has(item.sourceId)) throw new ImportPlanError("invalid-graph");
+		index.set(item.sourceId, copy);
+		indexes.set(item.collection, index);
+		return copy;
+	});
+	const dependents = new Map<ImportApplyCandidate, ImportApplyCandidate[]>();
+	function block(item: ImportApplyCandidate, code: string) {
+		item.disposition = "blocked";
+		if (!item.codes.includes(code)) item.codes.push(code);
+	}
+	for (const item of items) {
+		checkpoint();
+		const original = originals.get(item.collection)?.get(item.sourceId);
+		if (!original) throw new ImportPlanError("invalid-graph");
+		if (item.disposition !== "ensure") continue;
+		function dependency(collection: Collection, sourceId: string | null) {
+			if (sourceId === null) return;
+			const target = indexes.get(collection)?.get(sourceId);
+			if (!target) throw new ImportPlanError("invalid-graph");
+			item.dependencies.push({
+				collection,
+				sourceId,
+				sourceKey: target.sourceKey,
+			});
+			const users = dependents.get(target) ?? [];
+			users.push(item);
+			dependents.set(target, users);
+		}
+		switch (item.collection) {
+			case "folders":
+			case "labels":
+				item.phase = item.collection;
+				break;
+			case "lists": {
+				const row = original as PortableRows["lists"];
+				item.phase = "lists";
+				if (row.ownerId !== document.sourceUserId)
+					block(item, "foreign-list-owner");
+				dependency("folders", row.folderId);
+				break;
+			}
+			case "tasks": {
+				const row = original as PortableRows["tasks"];
+				item.phase = row.parentId === null ? "root-tasks" : "child-tasks";
+				if (
+					row.reminderTime !== null ||
+					row.repeatEveryMin !== null ||
+					row.maxRepeats !== null ||
+					row.fallbackUserId !== null ||
+					row.urgent ||
+					(!row.done && row.dueAt !== null)
+				)
+					block(item, "notification-bearing-task");
+				dependency("lists", row.listId);
+				dependency("tasks", row.parentId);
+				break;
+			}
+			case "taskLabels": {
+				const row = original as PortableRows["taskLabels"];
+				item.phase = "task-labels";
+				dependency("tasks", row.taskId);
+				dependency("labels", row.labelId);
+				break;
+			}
+			default:
+				block(item, "unsupported-collection");
+		}
+	}
+	const queue = items.filter((item) => item.disposition !== "ensure");
+	for (let i = 0; i < queue.length; i++) {
+		checkpoint();
+		for (const dependent of dependents.get(queue[i]) ?? []) {
+			checkpoint();
+			if (dependent.disposition !== "ensure") continue;
+			block(dependent, "blocked-dependency");
+			queue.push(dependent);
+		}
+	}
+	const counts = { ensure: 0, ignored: 0, blocked: 0 };
+	for (const item of items) {
+		checkpoint();
+		if (item.disposition === "blocked") {
+			item.phase = null;
+			item.targetId = null;
+			item.payload = structuredClone(
+				originals.get(item.collection)?.get(item.sourceId),
+			) as PortableJson;
+		}
+		counts[item.disposition]++;
+	}
+	checkpoint();
+	return { items, counts };
+}

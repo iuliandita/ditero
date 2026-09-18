@@ -14,7 +14,7 @@ test("downloads a versioned account export with explicit limits", async ({
 	await waitWorkspaceReady(page);
 	await goToSettings(page);
 	const panel = page.getByRole("region", { name: "Export your data" });
-	await expect(panel).toContainText("not a restorable backup");
+	await expect(panel).toContainText("not a complete restorable backup");
 	const screenshotPath = test.info().outputPath("data-export-settings.png");
 	await panel.screenshot({ path: screenshotPath });
 	await test.info().attach("data-export-settings", {

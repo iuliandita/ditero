@@ -73,7 +73,9 @@ test("saves and deduplicates a dry run without changing tasks, then discards it"
 	);
 	await panel.getByRole("button", { name: "Save dry run" }).click();
 	expect((await (await retry).json()).id).toBe(firstId);
-	await expect(panel.getByRole("status")).toContainText("Nothing is imported");
+	await expect(panel.getByRole("status").first()).toContainText(
+		"Only supported folders",
+	);
 	await expect(
 		panel.getByRole("button", { name: "Discard dry run", exact: true }),
 	).toHaveCount(1);
@@ -123,4 +125,98 @@ test("rejects malformed files locally without saving a plan", async ({
 	await expect(
 		panel.getByRole("button", { name: "Save dry run" }),
 	).toBeDisabled();
+});
+
+test("requires confirmation and recovers a lost apply response without duplicates", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("import-apply"));
+	await waitWorkspaceReady(page);
+	await page.getByTestId("new-list").fill("Import execution check");
+	await page.getByTestId("new-list-submit").click();
+	await sidebarLists(page)
+		.getByRole("button", { name: "Import execution check", exact: true })
+		.last()
+		.click();
+	await page.getByTestId("new-task").fill("A task to import");
+	await page.getByTestId("new-task-submit").click();
+	await expect(
+		page.getByTestId("list").getByText("A task to import", { exact: true }),
+	).toBeVisible();
+	const original = await (
+		await page.request.get("/api/portability/export")
+	).json();
+	expect(original.data.tasks).toHaveLength(1);
+	await goToSettings(page);
+	const panel = page.getByRole("region", { name: "Plan an import" });
+	await panel.getByLabel("Native JSON export").setInputFiles({
+		name: "export.json",
+		mimeType: "application/json",
+		buffer: Buffer.from(JSON.stringify(original)),
+	});
+	await panel.getByLabel("Source label").fill("Confirmed import source");
+	await expect(panel.getByTestId("import-workspace")).toHaveCount(
+		original.data.workspaces.length,
+	);
+	for (const select of await panel.getByTestId("import-workspace").all())
+		await select.selectOption(original.data.workspaces[0].id);
+	await panel
+		.getByRole("button", { name: "Save dry run", exact: true })
+		.click();
+	const apply = panel.getByRole("button", {
+		name: "Apply import",
+		exact: true,
+	});
+	await expect(apply).toBeEnabled();
+	await apply.click();
+	await page.getByTestId("confirm-cancel").click();
+	expect(
+		(await (await page.request.get("/api/portability/export")).json()).data
+			.tasks,
+	).toEqual(original.data.tasks);
+	await page.route(
+		"**/api/portability/import/plans/*/apply",
+		async (route) => {
+			const response = await route.fetch();
+			expect(response.ok()).toBeTruthy();
+			expect((await response.json()).state).toBe("completed");
+			await route.fulfill({
+				status: 503,
+				contentType: "application/json",
+				body: JSON.stringify({ code: "unavailable" }),
+			});
+		},
+		{ times: 1 },
+	);
+	await apply.click();
+	await page.getByTestId("confirm-accept").click();
+	await expect(panel.getByRole("alert")).toBeVisible();
+	await panel
+		.getByRole("button", { name: "Resume import", exact: true })
+		.click();
+	await expect(panel.getByTestId("import-apply-status")).toContainText(
+		"completed",
+	);
+	const after = await (
+		await page.request.get("/api/portability/export")
+	).json();
+	expect(after.data.tasks).toHaveLength(2);
+	expect(
+		new Set(after.data.tasks.map((row: { id: string }) => row.id)).size,
+	).toBe(2);
+	expect(
+		after.data.tasks.every(
+			(row: { title: string }) => row.title === "A task to import",
+		),
+	).toBe(true);
+	const screenshot = test.info().outputPath("import-apply-completed.png");
+	await panel.screenshot({ path: screenshot });
+	await test.info().attach("import-apply-completed", {
+		path: screenshot,
+		contentType: "image/png",
+	});
+	expect(
+		(await new AxeBuilder({ page }).include("#import-plan").analyze())
+			.violations,
+	).toEqual([]);
 });

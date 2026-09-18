@@ -9,9 +9,10 @@ The version 1 file uses `format: "ditero"`, `schemaVersion: 1`, stable source ID
 camelCase fields, ISO timestamps, and ordered entity arrays under `data`. It records
 the export time, source user, and explicit exclusions in `boundaries`.
 
-This is a data export, not yet a restorable backup. Import is not available in this
-first delivery. Keep normal database and attachment-storage backups for disaster
-recovery.
+This is a data export, not a restorable backup. Settings supports reviewed,
+resumable import of a subset of native content; see [Native data format](native-format.md)
+for supported records and exclusions. Keep normal database and attachment-storage
+backups for disaster recovery.
 
 ## Included and excluded data
 
@@ -24,8 +25,8 @@ Memberships describe the source data; they are not portable authorization grants
 Saved filters, dashboard panels, home-page preferences, and escalation preferences
 can retain IDs for people or content that are no longer accessible. These are source
 references, not proof of access or a guarantee that the referenced record is included.
-Attachment references can likewise outlive their parent. A future importer must report
-unresolved references and map or omit them explicitly, without creating permissions.
+Attachment references can likewise outlive their parent. Import planning reports
+unresolved references and maps or omits them explicitly, without creating permissions.
 
 Tasks retain their current completion state and timestamp. Habit logs preserve recorded
 occurrences. A full past completion ledger for recurring tasks is not currently stored
