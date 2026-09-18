@@ -38,7 +38,7 @@ RUN pnpm install --prod --frozen-lockfile
 COPY deploy/docker/zero-runtime/verify.mjs ./
 
 # Rebuild the exact backup sources Zero ships, preserving both backup formats.
-FROM golang:1.27.1-alpine3.23@sha256:d9e2f2f07b10cc922da3e80e035c3058810b328d5aef82d2c63680967c5e2ec9 AS litestream-build
+FROM golang:1.27.1-alpine3.23@sha256:96a6b037cd95ee2d72dc63fec59ad8250110fe795111d783d97aa980ec59ec32 AS litestream-build
 RUN apk add --no-cache build-base
 ENV GOTOOLCHAIN=local
 WORKDIR /src
@@ -61,7 +61,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -mod=readonly -trimpath -ldflags "-s -w -X main.Version=v0.5.15-ditero.1 -extldflags '-static'" \
     -tags osusergo,netgo,sqlite_omit_load_extension -o /out/litestream-v5 ./cmd/litestream
 
-FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS zero-runtime
+FROM alpine:3.24.2@sha256:31b6477333eb8257db9e5d7c3a7264fd0467928756f0bbcc27d35bea5d28cdbd AS zero-runtime
 RUN apk upgrade --no-cache \
 	&& apk add --no-cache ca-certificates 'curl>=8.22.0-r0' \
 		'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' libstdc++ readline
