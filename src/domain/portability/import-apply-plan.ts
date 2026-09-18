@@ -9,12 +9,19 @@ export type ImportTargetPrecondition =
 			naturalKey:
 				| { kind: "label-name"; workspaceId: string; name: string }
 				| { kind: "task-label-pair"; taskId: string; labelId: string }
+				| { kind: "task-assignee-pair"; taskId: string; userId: string }
 				| null;
 	  }
 	| { kind: "mapped"; mapVersion: number; targetDigest: string };
 
 export type ImportDependencyProof = {
 	workspace: { sourceId: string; targetId: string };
+	assignee?: {
+		sourceUserId: string;
+		targetUserId: string;
+		workspaceId: string;
+		membershipId: string;
+	};
 	rows: {
 		collection: "folders" | "lists" | "tasks" | "labels";
 		sourceKey: string;
@@ -34,7 +41,7 @@ export type FrozenImportItem = Omit<ImportApplyCandidate, "dependencies"> & {
 };
 
 export type ImportApplyReport = {
-	plannerVersion: 2;
+	plannerVersion: 2 | 3;
 	applySupported: true;
 	counts: { ensure: number; ignored: number; blocked: number };
 	findings: { code: string; path: string }[];
@@ -65,6 +72,7 @@ export async function sealImportApplyPlan(
 	candidates: readonly ImportApplyCandidate[],
 	snapshots: ReadonlyMap<string, ImportTargetSnapshot>,
 	context: {
+		plannerVersion?: 2 | 3;
 		ownerUserId: string;
 		sourceId: string;
 		documentDigest: string;
@@ -73,6 +81,9 @@ export async function sealImportApplyPlan(
 		deadline?: number;
 	},
 ) {
+	const plannerVersion = context.plannerVersion ?? 2;
+	if (plannerVersion !== 2 && plannerVersion !== 3)
+		throw new ImportPlanError("invalid-mappings");
 	const deadline = context.deadline ?? performance.now() + 15_000;
 	function checkpoint() {
 		if (context.signal?.aborted)
@@ -84,7 +95,7 @@ export async function sealImportApplyPlan(
 		hashImportValue(domain, value, checkpoint);
 	checkpoint();
 	const report: ImportApplyReport = {
-		plannerVersion: 2,
+		plannerVersion,
 		applySupported: true,
 		counts: { ensure: 0, ignored: 0, blocked: 0 },
 		findings: [],
@@ -102,6 +113,34 @@ export async function sealImportApplyPlan(
 			(candidate.disposition !== "ensure" && snapshot)
 		)
 			throw new ImportPlanError("invalid-mappings");
+		if (plannerVersion === 3 && snapshot) {
+			const assignee = snapshot.dependencyProof.assignee;
+			if (candidate.collection === "assignments") {
+				const payload = candidate.payload;
+				const precondition = snapshot.targetPrecondition;
+				if (
+					!assignee?.sourceUserId ||
+					!assignee.membershipId ||
+					!payload ||
+					typeof payload !== "object" ||
+					Array.isArray(payload) ||
+					typeof payload.taskId !== "string" ||
+					typeof payload.userId !== "string" ||
+					candidate.phase !== "assignments" ||
+					candidate.targetId !== `${payload.taskId}:${payload.userId}` ||
+					payload.id !== candidate.targetId ||
+					assignee.targetUserId !== payload.userId ||
+					assignee.workspaceId !==
+						snapshot.dependencyProof.workspace.targetId ||
+					(precondition.kind === "absent" &&
+						(precondition.naturalKey?.kind !== "task-assignee-pair" ||
+							precondition.naturalKey.taskId !== payload.taskId ||
+							precondition.naturalKey.userId !== payload.userId))
+				)
+					throw new ImportPlanError("invalid-mappings");
+			} else if (assignee !== undefined)
+				throw new ImportPlanError("invalid-mappings");
+		}
 		report.counts[candidate.disposition]++;
 		for (const code of candidate.codes) {
 			if (report.findings.length === 1000)
@@ -141,7 +180,7 @@ export async function sealImportApplyPlan(
 				item.contentDigest = await digestImportContent(item, checkpoint);
 				const { itemDigest: _itemDigest, ...evidence } = item;
 				item.itemDigest = await digest(
-					"ditero-import-item-v2",
+					`ditero-import-item-v${plannerVersion}`,
 					evidence as unknown as PortableJson,
 				);
 			}),
@@ -149,7 +188,7 @@ export async function sealImportApplyPlan(
 		for (const result of results)
 			if (result.status === "rejected") throw result.reason;
 	}
-	const planDigest = await digest("ditero-import-plan-v2", {
+	const planDigest = await digest(`ditero-import-plan-v${plannerVersion}`, {
 		ownerUserId: context.ownerUserId,
 		sourceId: context.sourceId,
 		documentDigest: context.documentDigest,

@@ -7,7 +7,8 @@ export type ImportApplyPhase =
 	| "labels"
 	| "root-tasks"
 	| "child-tasks"
-	| "task-labels";
+	| "task-labels"
+	| "assignments";
 
 export interface ImportApplyDependency {
 	collection: keyof PortableRows;
@@ -27,8 +28,15 @@ export interface ImportApplyCandidate
 export function projectImportApply(
 	document: PortableExportV1,
 	planItems: readonly ImportPlanItem[],
-	context: { signal?: AbortSignal; deadline?: number } = {},
+	context: {
+		plannerVersion?: 2 | 3;
+		signal?: AbortSignal;
+		deadline?: number;
+	} = {},
 ) {
+	const plannerVersion = context.plannerVersion ?? 2;
+	if (plannerVersion !== 2 && plannerVersion !== 3)
+		throw new ImportPlanError("invalid-mappings");
 	const deadline = context.deadline ?? performance.now() + 15_000;
 	function checkpoint() {
 		if (context.signal?.aborted)
@@ -123,6 +131,28 @@ export function projectImportApply(
 				item.phase = "task-labels";
 				dependency("tasks", row.taskId);
 				dependency("labels", row.labelId);
+				break;
+			}
+			case "assignments": {
+				if (plannerVersion === 2) {
+					block(item, "unsupported-collection");
+					break;
+				}
+				const row = original as PortableRows["assignments"];
+				const mapped = item.payload;
+				if (
+					!mapped ||
+					typeof mapped !== "object" ||
+					Array.isArray(mapped) ||
+					typeof mapped.taskId !== "string" ||
+					typeof mapped.userId !== "string"
+				)
+					throw new ImportPlanError("invalid-graph");
+				item.phase = "assignments";
+				dependency("tasks", row.taskId);
+				// Ordinary assign/unassign looks up this pair, not an import hash.
+				item.targetId = `${mapped.taskId}:${mapped.userId}`;
+				mapped.id = item.targetId;
 				break;
 			}
 			default:

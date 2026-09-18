@@ -1586,6 +1586,8 @@
 	"import_plan_quota": "Saved dry runs have reached the storage limit. Discard older dry runs or unused sources, then retry.",
 	"import_apply_intro": "Save a dry run, review supported and excluded entries, then confirm before importing anything.",
 	"import_apply_report": "Saved import plan",
+	"import_apply_boundary_assignments": "Only supported folders, your lists, labels, tasks without reminders, task-label links, and assignments to explicitly mapped current members can be imported. Unfinished tasks with a due date are excluded to prevent automatic overdue alerts. No invitations or assignment notifications are sent. Existing entries are never overwritten.",
+	"import_plan_assignment_membership": "Each mapped person must belong to every target workspace where their assigned tasks will be imported.",
 	"import_apply_boundary": "Only supported folders, your lists, labels, tasks without reminders, and task-label links can be imported. Unfinished tasks with a due date are excluded to prevent automatic overdue alerts. Existing entries are never overwritten.",
 	"import_apply_eligible": "Eligible entries",
 	"import_apply_confirm": "Eligible: {eligible}. Ignored: {ignored}. Blocked: {blocked}. Import only eligible entries? Existing unchanged entries will be kept. Excluded entries are not imported.",

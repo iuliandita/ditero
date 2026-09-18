@@ -18,7 +18,7 @@ type Status = {
 	sourceLabel: string;
 	createdAt: string;
 	report: {
-		plannerVersion: 1 | 2;
+		plannerVersion: 1 | 2 | 3;
 		applySupported: boolean;
 		counts: { ensure: number; ignored: number; blocked: number };
 		findings: { code: string; path: string }[];
@@ -227,6 +227,9 @@ export function ImportPlanPanel() {
 			writable.some((target) => target.id === workspaceMap[w.id]),
 		) &&
 		(source || label.trim());
+	const applicable =
+		report?.report.applySupported &&
+		(report.report.plannerVersion === 2 || report.report.plannerVersion === 3);
 	return (
 		<section
 			id="import-plan"
@@ -330,7 +333,8 @@ export function ImportPlanPanel() {
 						))}
 						<h3 className="text-sm font-medium">{m.import_plan_people()}</h3>
 						<p className="text-xs text-muted-foreground">
-							{m.import_plan_people_help()}
+							{m.import_plan_people_help()}{" "}
+							{m.import_plan_assignment_membership()}
 						</p>
 						{loaded.document.data.principals.map((p) => (
 							<label key={p.id} className="block text-sm">
@@ -399,13 +403,13 @@ export function ImportPlanPanel() {
 			{report && (
 				<div role="status" className="mt-4 rounded-md border p-3">
 					<h3 className="font-medium">
-						{report.report.plannerVersion === 2 && report.report.applySupported
-							? m.import_apply_report()
-							: m.import_plan_report()}
+						{applicable ? m.import_apply_report() : m.import_plan_report()}
 					</h3>
 					<p className="text-sm">
-						{report.report.plannerVersion === 2 && report.report.applySupported
-							? m.import_apply_boundary()
+						{applicable
+							? report.report.plannerVersion === 3
+								? m.import_apply_boundary_assignments()
+								: m.import_apply_boundary()
 							: m.import_plan_boundary()}
 					</p>
 					<dl className="mt-2 text-sm">
@@ -413,8 +417,7 @@ export function ImportPlanPanel() {
 							[
 								[
 									"ensure",
-									report.report.plannerVersion === 2 &&
-									report.report.applySupported
+									applicable
 										? m.import_apply_eligible()
 										: m.import_plan_ensure(),
 								],
@@ -433,7 +436,7 @@ export function ImportPlanPanel() {
 						))}
 					</dl>
 					<p className="mt-2 text-xs text-muted-foreground">
-						{report.report.plannerVersion === 2 && report.report.applySupported
+						{applicable
 							? m.import_apply_retention()
 							: m.import_plan_report_help()}
 					</p>
@@ -451,7 +454,7 @@ export function ImportPlanPanel() {
 					)}
 				</div>
 			)}
-			{report?.report.plannerVersion === 2 && report.report.applySupported && (
+			{report && applicable && (
 				<ImportApplyPanel
 					key={report.id}
 					plan={report}

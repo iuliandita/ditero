@@ -253,6 +253,13 @@
       "when": 1789763912940,
       "tag": "0035_import_apply_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789767612672,
+      "tag": "0036_import_assignment_version_gates",
+      "breakpoints": true
     }
   ]
 }

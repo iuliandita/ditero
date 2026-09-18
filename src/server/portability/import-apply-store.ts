@@ -135,7 +135,11 @@ export async function applyImportBatch(
 				)
 			).rows[0];
 			if (!job) fail("plan-not-found", 404);
-			if (job.planner_version !== 2 || !job.apply_supported)
+			if (
+				![2, 3].includes(job.planner_version) ||
+				!job.apply_supported ||
+				job.report.plannerVersion !== job.planner_version
+			)
 				fail("import-apply-unsupported");
 			if (
 				confirmation?.planDigest !== job.plan_digest ||
@@ -170,7 +174,7 @@ export async function applyImportBatch(
 				if (
 					item.ordinal !== start + index ||
 					(await hashImportValue(
-						"ditero-import-item-v2",
+						`ditero-import-item-v${job.planner_version}`,
 						evidence as unknown as PortableJson,
 						checkpoint,
 					)) !== itemDigest
@@ -178,6 +182,69 @@ export async function applyImportBatch(
 					fail("invalid-plan-evidence");
 			}
 			const supported = items.filter((item) => item.disposition === "ensure");
+			const assignments = supported.filter(
+				(item) => item.collection === "assignments",
+			);
+			for (const item of assignments) {
+				const assignee = item.dependencyProof?.assignee;
+				const payload = payloadOf(item);
+				if (
+					job.planner_version !== 3 ||
+					!assignee ||
+					![
+						assignee.sourceUserId,
+						assignee.targetUserId,
+						assignee.workspaceId,
+						assignee.membershipId,
+					].every((id) => typeof id === "string" && id.length > 0) ||
+					assignee.targetUserId !== payload.userId ||
+					assignee.workspaceId !== item.dependencyProof?.workspace.targetId ||
+					typeof payload.taskId !== "string" ||
+					item.targetId !== `${payload.taskId}:${payload.userId}` ||
+					payload.id !== item.targetId
+				)
+					fail("invalid-plan-evidence");
+			}
+			// Lock assignee users before any workspace/membership authority locks,
+			// matching account deletion. The owner is already locked by the transaction.
+			const assigneeIds = [
+				...new Set(
+					assignments.map(
+						(item) => item.dependencyProof?.assignee?.targetUserId,
+					),
+				),
+			].sort();
+			const activeAssignees = new Set(
+				assignments.length
+					? (
+							await client.query<{ id: string }>(
+								'select id from "user" where id = any($1::text[]) and deleted_at is null order by id for share',
+								[assigneeIds],
+							)
+						).rows.map((row) => row.id)
+					: [],
+			);
+			const membershipIds = [
+				...new Set(
+					assignments.map(
+						(item) => item.dependencyProof?.assignee?.membershipId,
+					),
+				),
+			].sort();
+			const assigneeSeats = new Map(
+				assignments.length
+					? (
+							await client.query<{
+								id: string;
+								user_id: string;
+								workspace_id: string;
+							}>(
+								"select id, user_id, workspace_id from membership where id = any($1::text[]) order by id for share",
+								[membershipIds],
+							)
+						).rows.map((row) => [row.id, row] as const)
+					: [],
+			);
 			const workspaces = [
 				...new Set(
 					supported.map((item) => item.dependencyProof?.workspace.targetId),
@@ -331,6 +398,18 @@ export async function applyImportBatch(
 						conflict("invalid-plan-evidence");
 					const collection = collectionOf(item);
 					const payload = payloadOf(item);
+					if (collection === "assignments") {
+						const assignee = proof?.assignee;
+						const seat = assignee && assigneeSeats.get(assignee.membershipId);
+						if (
+							!assignee ||
+							!activeAssignees.has(assignee.targetUserId) ||
+							!seat ||
+							seat.user_id !== assignee.targetUserId ||
+							seat.workspace_id !== assignee.workspaceId
+						)
+							conflict("assignee-membership-conflict");
+					}
 					if (
 						payload.id !== item.targetId ||
 						(collection === "lists" && payload.ownerId !== ownerId)
@@ -425,6 +504,8 @@ export async function applyImportBatch(
 						requireProof("tasks", payload.taskId);
 						requireProof("labels", payload.labelId);
 					}
+					if (collection === "assignments")
+						requireProof("tasks", payload.taskId);
 					const map = maps.get(item.sourceKey);
 					const target = live.get(rowKey(collection, item.targetId));
 					const targetDigest = await digestImportTarget(
@@ -491,6 +572,28 @@ export async function applyImportBatch(
 										entry.collection === collection &&
 										payloadOf(entry.item).taskId === payload.taskId &&
 										payloadOf(entry.item).labelId === payload.labelId,
+								)
+							)
+								conflict("natural-key-conflict");
+						} else if (collection === "assignments") {
+							if (
+								pre.naturalKey?.kind !== "task-assignee-pair" ||
+								pre.naturalKey.taskId !== payload.taskId ||
+								pre.naturalKey.userId !== payload.userId
+							)
+								conflict("invalid-plan-evidence");
+							if (
+								(
+									await client.query(
+										"select id from task_assignee where task_id = $1 and user_id = $2 for share",
+										[payload.taskId, payload.userId],
+									)
+								).rowCount ||
+								prepared.some(
+									(entry) =>
+										entry.collection === collection &&
+										payloadOf(entry.item).taskId === payload.taskId &&
+										payloadOf(entry.item).userId === payload.userId,
 								)
 							)
 								conflict("natural-key-conflict");

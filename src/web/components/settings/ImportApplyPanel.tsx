@@ -16,7 +16,11 @@ type Run = {
 type Plan = {
 	id: string;
 	planDigest: string;
-	report: { counts: { ensure: number; ignored: number; blocked: number } };
+	report: {
+		plannerVersion: 1 | 2 | 3;
+		applySupported: boolean;
+		counts: { ensure: number; ignored: number; blocked: number };
+	};
 };
 
 // The parent keys this component by plan ID so confirmation never crosses plans.
@@ -40,6 +44,9 @@ export function ImportApplyPanel({
 	const [error, setError] = useState<"status" | "apply" | null>(null);
 	const [reload, setReload] = useState(0);
 	const path = `/api/portability/import/plans/${encodeURIComponent(plan.id)}`;
+	const supported =
+		plan.report.applySupported &&
+		(plan.report.plannerVersion === 2 || plan.report.plannerVersion === 3);
 	const counts = plan.report.counts;
 	const total = counts.ensure + counts.ignored + counts.blocked;
 	const number = (value: number) =>
@@ -77,6 +84,7 @@ export function ImportApplyPanel({
 
 	async function apply() {
 		if (
+			!supported ||
 			disabled ||
 			active.current ||
 			loading ||
@@ -192,7 +200,9 @@ export function ImportApplyPanel({
 				</Button>
 			) : (
 				<Button
-					disabled={disabled || loading || terminal || counts.ensure === 0}
+					disabled={
+						!supported || disabled || loading || terminal || counts.ensure === 0
+					}
 					onClick={() => void apply()}
 				>
 					{run || approved.current
