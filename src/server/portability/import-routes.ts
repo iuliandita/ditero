@@ -11,6 +11,7 @@ import {
 	parsePortableExportV1,
 } from "../../domain/portability/validate.ts";
 import type { Guards } from "../guards.ts";
+import { applyImportBatch, getImportRunStatus } from "./import-apply-store.ts";
 import {
 	discardImportPlan,
 	discardImportSource,
@@ -37,6 +38,14 @@ const sourceSchema = z.discriminatedUnion("mode", [
 	}),
 	z.strictObject({ mode: z.literal("existing"), id: z.uuid() }),
 ]);
+const confirmationSchema = z.strictObject({
+	planDigest: z.string().regex(/^[a-f0-9]{64}$/),
+	counts: z.strictObject({
+		ensure: z.number().int().min(0).max(50_000),
+		ignored: z.number().int().min(0).max(50_000),
+		blocked: z.number().int().min(0).max(50_000),
+	}),
+});
 
 class ImportRequestError extends Error {
 	constructor(
@@ -89,13 +98,17 @@ function mappings(value: unknown): ImportMappings {
 	};
 }
 
-async function readRequest(request: Request): Promise<string> {
+async function readRequest(
+	request: Request,
+	maxBytes = MAX_REQUEST_BYTES,
+	timeoutMs = BODY_TIMEOUT_MS,
+): Promise<string> {
 	const declared = request.headers.get("content-length");
 	if (
 		declared !== null &&
 		(!/^\d+$/.test(declared) ||
 			!Number.isSafeInteger(Number(declared)) ||
-			Number(declared) > MAX_REQUEST_BYTES)
+			Number(declared) > maxBytes)
 	)
 		throw new ImportRequestError("request-limit", 413);
 	if (!request.body) throw new ImportRequestError("invalid-request", 400);
@@ -113,7 +126,7 @@ async function readRequest(request: Request): Promise<string> {
 	const abort = () => stop(new ImportRequestError("request-cancelled", 408));
 	const timer = setTimeout(
 		() => stop(new ImportRequestError("request-timeout", 408)),
-		BODY_TIMEOUT_MS,
+		timeoutMs,
 	);
 	request.signal.addEventListener("abort", abort, { once: true });
 	if (request.signal.aborted) abort();
@@ -126,7 +139,7 @@ async function readRequest(request: Request): Promise<string> {
 				break;
 			}
 			total += value.byteLength;
-			if (total > MAX_REQUEST_BYTES) {
+			if (total > maxBytes) {
 				stop(new ImportRequestError("request-limit", 413));
 				break;
 			}
@@ -201,6 +214,64 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 	const activeUsers = new Set<string>();
 	return new Elysia()
 		.get(
+			"/api/portability/import/plans/:id/run",
+			guards.guardedGet((request, session) =>
+				handled(async () => {
+					const result = await getImportRunStatus(
+						pool,
+						session.user.id,
+						pathId(request, true),
+					);
+					return response({ run: result });
+				}),
+			),
+		)
+		.post(
+			"/api/portability/import/plans/:id/apply",
+			guards.guardedPost((request, session) =>
+				handled(async () => {
+					if (activeUsers.size >= 2 || activeUsers.has(session.user.id))
+						return Response.json(
+							{ code: "import-busy" },
+							{ status: 429, headers: { ...headers, "retry-after": "5" } },
+						);
+					activeUsers.add(session.user.id);
+					try {
+						const deadline = performance.now() + 20_000;
+						if (
+							(request.headers.get("content-type") ?? "")
+								.split(";")[0]
+								?.trim()
+								.toLowerCase() !== "application/json"
+						)
+							throw new ImportRequestError("invalid-request", 415);
+						let raw: unknown;
+						try {
+							raw = JSON.parse(await readRequest(request, 4096, 5000));
+						} catch (error) {
+							if (error instanceof ImportRequestError) throw error;
+							throw new ImportRequestError("invalid-request", 400);
+						}
+						const confirmation = confirmationSchema.safeParse(raw);
+						if (!confirmation.success)
+							throw new ImportRequestError("invalid-confirmation", 400);
+						return response(
+							await applyImportBatch(
+								pool,
+								session.user.id,
+								pathId(request, true),
+								confirmation.data,
+								{ signal: request.signal, deadline },
+							),
+						);
+					} finally {
+						activeUsers.delete(session.user.id);
+					}
+				}),
+			),
+			{ parse: "none" },
+		)
+		.get(
 			"/api/portability/import/sources",
 			guards.guardedGet((_, session) =>
 				handled(async () =>
@@ -263,7 +334,7 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 								source.data,
 								document,
 								mapping,
-								{ signal: request.signal, deadline },
+								{ signal: request.signal, deadline, plannerVersion: 2 },
 							),
 						);
 					} finally {

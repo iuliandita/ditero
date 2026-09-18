@@ -46,8 +46,9 @@ report cannot authorize an incomplete import plan.
 ## Saved dry runs
 
 Settings can validate a native file, map its workspaces and people, and save a
-dry-run report. Saving does not import content. Reports always state
-`applySupported: false`; there is no apply endpoint or control.
+dry-run report. Saving does not import content. New plans use planner version 2
+and freeze destination checks for later application. Older version 1 plans remain
+non-applicable; upload their file again to create a current plan.
 
 Create a named import source for the first file. Explicitly select that same
 source for later exports from the same account and installation. Native v1 has
@@ -58,23 +59,31 @@ its original format, schema version, and source user. It cannot be reassigned.
 Every source workspace needs an existing writable destination. The exporting
 user maps to the caller; other people can remain unmapped or map to applicable
 current members. Source roles and memberships never create permissions.
-Historical comments and templates authored by someone else remain blocked,
-even if that person maps to a destination account. Personal preferences, Karma,
-and habit logs await an explicit merge policy. Attachment files remain excluded.
+Application currently supports folders, the exporting user's own lists, labels,
+tasks without notification settings, and task-label links. Mapping another owner
+to your account does not make their lists eligible. Tasks with a reminder time,
+repeat interval, repeat limit, fallback recipient, or urgent flag are blocked;
+these settings are never silently removed. Assignments, comments, templates,
+views, dashboards, focus records, preferences, Karma, and habit logs remain
+blocked pending their import policies. Attachment files remain excluded.
 Unresolved references and mapping conflicts block affected records and their
 dependents. The report distinguishes candidate records, excluded metadata, and
 blocked records. Candidates are not a promise that an eventual apply will pass
 its authorization and conflict checks.
 
 Plans store immutable ordered items and a versioned planner report. Identical
-content and mappings under the same source return the same plan, regardless of
-export timestamp or JSON key order. Changed content creates a new plan while
+content, mappings, and destination checks under the same source return the same
+plan, regardless of export timestamp or JSON key order. Changed evidence creates a new plan while
 retaining stable source identities. Missing source records never imply deletion.
 The dry-run API returns counts, codes, and identifiers, not stored item payloads.
 
 Each account may retain ten sources, ten plans, and 64 MiB of serialized plan
-items and reports. Discard a plan or a whole source to free storage. Account
-deletion removes these payloads. Files remain limited to 32 MiB; the settings
+items and reports. Unstarted, completed, and terminal-conflict plans can be
+discarded to free this storage; running plans cannot. Completed source mappings
+survive plan discard, and a source with retained mappings cannot be discarded.
+Each account also has separate limits of 100,000 source mappings, 1,000 workspace
+pins, and 64 MiB of combined retained mapping records. Account deletion removes
+the import payloads and mappings. Files remain limited to 32 MiB; the settings
 mapping form additionally supports up to 50 workspaces and 100 people. Request
 mapping data is limited to 2 MiB. Oversized requests fail without partial plans.
 
@@ -85,5 +94,27 @@ contains `source` (`mode: "new"`, a UUID `id`, and `label`, or
 `mode: "existing"` and `id`), the original JSON file as a `document` string,
 and `mappings.workspaces`/`mappings.principals` keyed by source IDs. Unmapped
 principals use explicit `null`. All routes require a session, and writes require
-a same-origin request. Content application remains a separate implementation
-step. The settings download remains an export, not a restorable backup.
+a same-origin request. The settings download remains an export, not a restorable backup.
+
+## Applying a saved plan
+
+Review the eligible, ignored, and blocked counts, then confirm application.
+`POST /api/portability/import/plans/:id/apply` accepts exactly `planDigest` and
+`counts` with `ensure`, `ignored`, and `blocked`. The digest and counts must match
+the saved report. Each request advances at most 100 immutable items in one
+transaction. `GET /api/portability/import/plans/:id/run` returns `{run: null}`
+before execution, or progress with `state`, `nextOrdinal`, `appliedCount`,
+`noopCount`, and optional conflict code/ordinal. The settings screen sends
+successive batches after confirmation and can resume an interrupted run.
+
+Every batch rechecks current write access and locks destination relationships.
+An edited, deleted, moved, or conflicting target stops application; it is never
+overwritten or redirected. Earlier committed batches remain after a conflict or
+pause. A terminal conflict requires a fresh plan. Losing permission before the
+first batch refuses the request; losing it during a run stops that run.
+
+Repeated unchanged imports under the same source leave already imported rows
+unchanged. Source content changes require a future explicit merge policy; they
+do not overwrite edits. Applied workspace mappings remain pinned, while a later
+export may add unrelated source workspaces. Existing completion state is copied
+without replaying completion events, Karma awards, or notifications.

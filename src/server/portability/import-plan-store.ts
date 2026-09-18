@@ -1,5 +1,10 @@
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
+import { projectImportApply } from "../../domain/portability/import-apply.ts";
+import {
+	type ImportApplyReport,
+	sealImportApplyPlan,
+} from "../../domain/portability/import-apply-plan.ts";
 import {
 	buildImportPlan,
 	type ImportMappings,
@@ -7,6 +12,10 @@ import {
 } from "../../domain/portability/import-plan.ts";
 import type { PortableExportV1 } from "../../domain/portability/v1.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
+import {
+	freezeImportTargets,
+	ImportFreezeLimitError,
+} from "./import-freeze.ts";
 
 export type ImportSourceSelection =
 	| { mode: "new"; id: string; label: string }
@@ -19,7 +28,9 @@ export type ImportPlanStatus = {
 	documentDigest: string;
 	mappingDigest: string;
 	planDigest: string;
-	report: Awaited<ReturnType<typeof buildImportPlan>>["report"];
+	report:
+		| Awaited<ReturnType<typeof buildImportPlan>>["report"]
+		| ImportApplyReport;
 };
 export type ImportSourceStatus = {
 	id: string;
@@ -35,7 +46,7 @@ export class ImportPlanStoreError extends Error {
 		readonly code: string,
 		readonly status: number,
 	) {
-		super("Import dry-run request could not be completed");
+		super("Import request could not be completed");
 		this.name = "ImportPlanStoreError";
 	}
 }
@@ -56,7 +67,7 @@ const sourceSchema = z.discriminatedUnion("mode", [
 // Pool acquisition cannot be removed from pg's queue after cancellation.
 const pendingAcquisitions = new WeakMap<Pool, number>();
 
-async function transaction<T>(
+export async function importTransaction<T>(
 	pool: Pool,
 	ownerId: string,
 	run: (client: PoolClient) => Promise<T>,
@@ -271,7 +282,11 @@ export async function saveImportPlan(
 	sourceSelection: ImportSourceSelection,
 	document: PortableExportV1,
 	mappings: ImportMappings,
-	options: { signal?: AbortSignal; deadline?: number } = {},
+	options: {
+		signal?: AbortSignal;
+		deadline?: number;
+		plannerVersion?: 1 | 2;
+	} = {},
 ): Promise<ImportPlanStatus> {
 	const deadline = Math.min(
 		options.deadline ?? Number.POSITIVE_INFINITY,
@@ -280,7 +295,7 @@ export async function saveImportPlan(
 	const parsed = sourceSchema.safeParse(sourceSelection);
 	if (!parsed.success) fail("invalid-source", 400);
 	const selection = parsed.data;
-	const plan = await buildImportPlan(document, {
+	const basePlan = await buildImportPlan(document, {
 		ownerUserId: ownerId,
 		sourceId: selection.id,
 		mappings,
@@ -293,11 +308,7 @@ export async function saveImportPlan(
 			fail("import-cancelled", 408);
 		throw error;
 	});
-	const serialized = JSON.stringify(plan.items);
-	const payloadBytes =
-		Buffer.byteLength(serialized) +
-		Buffer.byteLength(JSON.stringify(plan.report));
-	return transaction(
+	return importTransaction(
 		pool,
 		ownerId,
 		async (client) => {
@@ -322,8 +333,38 @@ export async function saveImportPlan(
 					(selection.mode === "new" && source.label !== selection.label))
 			)
 				fail("source-binding-conflict");
+			let plan:
+				| typeof basePlan
+				| Awaited<ReturnType<typeof sealImportApplyPlan>> = basePlan;
+			if (options.plannerVersion === 2) {
+				const candidates = projectImportApply(document, basePlan.items, {
+					signal: options.signal,
+					deadline,
+				});
+				const frozen = await freezeImportTargets(
+					client,
+					ownerId,
+					selection.id,
+					document,
+					mappings,
+					candidates.items,
+					{ signal: options.signal, deadline },
+				);
+				plan = await sealImportApplyPlan(frozen.items, frozen.snapshots, {
+					ownerUserId: ownerId,
+					sourceId: selection.id,
+					documentDigest: basePlan.documentDigest,
+					mappingDigest: basePlan.mappingDigest,
+					signal: options.signal,
+					deadline,
+				});
+			}
 			const duplicate = await findStatus(client, ownerId, plan.planDigest);
 			if (duplicate) return duplicate;
+			const serialized = JSON.stringify(plan.items);
+			const payloadBytes =
+				Buffer.byteLength(serialized) +
+				Buffer.byteLength(JSON.stringify(plan.report));
 			const quota = await client.query<{
 				sources: number;
 				jobs: number;
@@ -355,7 +396,7 @@ export async function saveImportPlan(
 				if (created.rowCount !== 1) fail("source-binding-conflict");
 			}
 			await client.query(
-				`insert into import_job (id, source_id, owner_user_id, document_digest, mapping_digest, plan_digest, report, payload_bytes) values ($1,$2,$3,$4,$5,$1,$6::jsonb,$7)`,
+				`insert into import_job (id, source_id, owner_user_id, document_digest, mapping_digest, plan_digest, report, payload_bytes, planner_version, apply_supported) values ($1,$2,$3,$4,$5,$1,$6::jsonb,$7,$8,$9)`,
 				[
 					plan.planDigest,
 					selection.id,
@@ -364,10 +405,12 @@ export async function saveImportPlan(
 					plan.mappingDigest,
 					JSON.stringify(plan.report),
 					payloadBytes,
+					plan.report.plannerVersion,
+					plan.report.applySupported,
 				],
 			);
 			await client.query(
-				`insert into import_item (job_id, ordinal, collection, source_id, source_key, item_digest, target_id, disposition, payload, codes) select $1, ordinal, collection, "sourceId", "sourceKey", "itemDigest", "targetId", disposition, payload, codes from jsonb_to_recordset($2::jsonb) as i(ordinal integer, collection text, "sourceId" text, "sourceKey" text, "itemDigest" text, "targetId" text, disposition text, payload jsonb, codes jsonb)`,
+				`insert into import_item (job_id, ordinal, collection, source_id, source_key, item_digest, target_id, disposition, payload, codes, phase, content_digest, target_precondition, dependency_proof) select $1, ordinal, collection, "sourceId", "sourceKey", "itemDigest", "targetId", disposition, payload, codes, phase, "contentDigest", "targetPrecondition", "dependencyProof" from jsonb_to_recordset($2::jsonb) as i(ordinal integer, collection text, "sourceId" text, "sourceKey" text, "itemDigest" text, "targetId" text, disposition text, payload jsonb, codes jsonb, phase text, "contentDigest" text, "targetPrecondition" jsonb, "dependencyProof" jsonb)`,
 				[plan.planDigest, serialized],
 			);
 			const saved = await findStatus(client, ownerId, plan.planDigest);
@@ -376,14 +419,21 @@ export async function saveImportPlan(
 		},
 		options.signal,
 		deadline,
-	);
+	).catch((error: unknown) => {
+		if (error instanceof ImportFreezeLimitError) fail(error.code, error.status);
+		if (error instanceof ImportPlanError && error.code === "planning-timeout")
+			fail("import-timeout", 503);
+		if (error instanceof ImportPlanError && error.code === "planning-cancelled")
+			fail("import-cancelled", 408);
+		throw error;
+	});
 }
 
 export async function listImportSources(
 	pool: Pool,
 	ownerId: string,
 ): Promise<ImportSourceStatus[]> {
-	return transaction(pool, ownerId, async (client) => {
+	return importTransaction(pool, ownerId, async (client) => {
 		const sources = await client.query<
 			Omit<ImportSourceStatus, "createdAt" | "jobs"> & { createdAt: Date }
 		>(
@@ -406,7 +456,7 @@ export async function getImportPlanStatus(
 	ownerId: string,
 	jobId: string,
 ): Promise<ImportPlanStatus | null> {
-	return transaction(pool, ownerId, (client) =>
+	return importTransaction(pool, ownerId, (client) =>
 		findStatus(client, ownerId, jobId),
 	);
 }
@@ -415,32 +465,57 @@ export async function discardImportSource(
 	ownerId: string,
 	sourceId: string,
 ): Promise<boolean> {
-	return transaction(
-		pool,
-		ownerId,
-		async (client) =>
+	return importTransaction(pool, ownerId, async (client) => {
+		const source = await client.query(
+			"select id from import_source where id = $1 and owner_user_id = $2",
+			[sourceId, ownerId],
+		);
+		if (source.rowCount !== 1) return false;
+		const retained = await client.query<{ mapped: boolean; active: boolean }>(
+			`select exists(select 1 from import_source_map where source_id = $1) or exists(select 1 from import_workspace_map where source_id = $1) as mapped,
+				exists(select 1 from import_run r join import_job j on j.id = r.job_id where j.source_id = $1 and r.state in ('pending', 'running')) as active`,
+			[sourceId],
+		);
+		if (retained.rows[0]?.mapped) fail("import-source-retained");
+		if (retained.rows[0]?.active) fail("import-run-incomplete");
+		return (
 			(
 				await client.query(
 					"delete from import_source where id = $1 and owner_user_id = $2 returning id",
 					[sourceId, ownerId],
 				)
-			).rowCount === 1,
-	);
+			).rowCount === 1
+		);
+	});
 }
 export async function discardImportPlan(
 	pool: Pool,
 	ownerId: string,
 	jobId: string,
 ): Promise<boolean> {
-	return transaction(
-		pool,
-		ownerId,
-		async (client) =>
+	return importTransaction(pool, ownerId, async (client) => {
+		const job = await client.query<{ source_id: string }>(
+			"select source_id from import_job where id = $1 and owner_user_id = $2",
+			[jobId, ownerId],
+		);
+		if (!job.rows[0]) return false;
+		await client.query(
+			"select id from import_source where id = $1 and owner_user_id = $2",
+			[job.rows[0].source_id, ownerId],
+		);
+		const run = await client.query<{ state: string }>(
+			"select state from import_run where job_id = $1 and owner_user_id = $2 for update",
+			[jobId, ownerId],
+		);
+		if (run.rows[0] && ["pending", "running"].includes(run.rows[0].state))
+			fail("import-run-incomplete");
+		return (
 			(
 				await client.query(
 					"delete from import_job where id = $1 and owner_user_id = $2 returning id",
 					[jobId, ownerId],
 				)
-			).rowCount === 1,
-	);
+			).rowCount === 1
+		);
+	});
 }
