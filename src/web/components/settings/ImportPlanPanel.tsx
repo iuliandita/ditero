@@ -9,13 +9,17 @@ import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import { Button } from "../ui/button.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
+import { ImportApplyPanel } from "./ImportApplyPanel.tsx";
 
 type Status = {
 	id: string;
+	planDigest: string;
 	sourceId: string;
 	sourceLabel: string;
 	createdAt: string;
 	report: {
+		plannerVersion: 1 | 2;
+		applySupported: boolean;
 		counts: { ensure: number; ignored: number; blocked: number };
 		findings: { code: string; path: string }[];
 	};
@@ -43,9 +47,11 @@ export function ImportPlanPanel() {
 	>({});
 	const [report, setReport] = useState<Status | null>(null);
 	const [busy, setBusy] = useState(false);
+	const [applying, setApplying] = useState(false);
+	const locked = busy || applying;
 	const [parsing, setParsing] = useState(false);
 	const [error, setError] = useState<
-		"failed" | "invalid" | "limit" | "quota" | null
+		"failed" | "invalid" | "limit" | "quota" | "retained" | "incomplete" | null
 	>(null);
 	const writable = workspaces.filter((w) =>
 		memberships.some(
@@ -148,7 +154,7 @@ export function ImportPlanPanel() {
 		parser.postMessage(file);
 	}
 	async function request(path: string, body?: unknown) {
-		if (active.current) return;
+		if (active.current || applying) return;
 		const controller = new AbortController();
 		active.current = controller;
 		setBusy(true);
@@ -163,16 +169,21 @@ export function ImportPlanPanel() {
 			});
 			if (!response.ok) {
 				const failure: unknown = await response.json().catch(() => null);
+				const code =
+					failure && typeof failure === "object" && "code" in failure
+						? failure.code
+						: null;
 				if (!controller.signal.aborted)
 					setError(
-						failure &&
-							typeof failure === "object" &&
-							"code" in failure &&
-							failure.code === "import-quota-exceeded"
-							? "quota"
-							: response.status === 413
-								? "limit"
-								: "failed",
+						code === "import-source-retained"
+							? "retained"
+							: code === "import-run-incomplete"
+								? "incomplete"
+								: code === "import-quota-exceeded"
+									? "quota"
+									: response.status === 413
+										? "limit"
+										: "failed",
 					);
 				return;
 			}
@@ -196,6 +207,7 @@ export function ImportPlanPanel() {
 		}
 	}
 	async function discard(kind: "sources" | "plans", id: string) {
+		if (locked) return;
 		const ok = await confirm({
 			body: m.import_plan_discard_body(),
 			confirmLabel: m.import_plan_discard(),
@@ -225,9 +237,9 @@ export function ImportPlanPanel() {
 				{m.import_plan_heading()}
 			</h2>
 			<p className="mt-2 text-sm text-muted-foreground">
-				{m.import_plan_boundary()}
+				{m.import_apply_intro()}
 			</p>
-			<fieldset disabled={busy} className="mt-3 space-y-3">
+			<fieldset disabled={locked} className="mt-3 space-y-3">
 				<label className="block text-sm">
 					{m.import_plan_file()}
 					<input
@@ -371,23 +383,41 @@ export function ImportPlanPanel() {
 			</fieldset>
 			{error && (
 				<p role="alert" className="mt-2 text-sm text-destructive">
-					{error === "quota"
-						? m.import_plan_quota()
-						: error === "limit"
-							? m.import_plan_limits()
-							: error === "invalid"
-								? m.import_plan_invalid()
-								: m.import_plan_failed()}
+					{error === "retained"
+						? m.import_apply_source_retained()
+						: error === "incomplete"
+							? m.import_apply_run_active()
+							: error === "quota"
+								? m.import_plan_quota()
+								: error === "limit"
+									? m.import_plan_limits()
+									: error === "invalid"
+										? m.import_plan_invalid()
+										: m.import_plan_failed()}
 				</p>
 			)}
 			{report && (
 				<div role="status" className="mt-4 rounded-md border p-3">
-					<h3 className="font-medium">{m.import_plan_report()}</h3>
-					<p className="text-sm">{m.import_plan_boundary()}</p>
+					<h3 className="font-medium">
+						{report.report.plannerVersion === 2 && report.report.applySupported
+							? m.import_apply_report()
+							: m.import_plan_report()}
+					</h3>
+					<p className="text-sm">
+						{report.report.plannerVersion === 2 && report.report.applySupported
+							? m.import_apply_boundary()
+							: m.import_plan_boundary()}
+					</p>
 					<dl className="mt-2 text-sm">
 						{(
 							[
-								["ensure", m.import_plan_ensure()],
+								[
+									"ensure",
+									report.report.plannerVersion === 2 &&
+									report.report.applySupported
+										? m.import_apply_eligible()
+										: m.import_plan_ensure(),
+								],
 								["ignored", m.import_plan_ignored()],
 								["blocked", m.import_plan_blocked()],
 							] as const
@@ -403,7 +433,9 @@ export function ImportPlanPanel() {
 						))}
 					</dl>
 					<p className="mt-2 text-xs text-muted-foreground">
-						{m.import_plan_report_help()}
+						{report.report.plannerVersion === 2 && report.report.applySupported
+							? m.import_apply_retention()
+							: m.import_plan_report_help()}
 					</p>
 					{report.report.findings.length > 0 && (
 						<details className="mt-2 text-xs">
@@ -419,6 +451,14 @@ export function ImportPlanPanel() {
 					)}
 				</div>
 			)}
+			{report?.report.plannerVersion === 2 && report.report.applySupported && (
+				<ImportApplyPanel
+					key={report.id}
+					plan={report}
+					onBusy={setApplying}
+					disabled={busy}
+				/>
+			)}
 			<h3 className="mt-5 text-sm font-medium">{m.import_plan_saved()}</h3>
 			{sources.map((s) => (
 				<div key={s.id} className="mt-2 rounded-md border p-3">
@@ -426,7 +466,7 @@ export function ImportPlanPanel() {
 						<span>{s.label}</span>
 						<Button
 							variant="outline"
-							disabled={busy}
+							disabled={locked}
 							onClick={() => void discard("sources", s.id)}
 						>
 							{m.import_plan_discard_source()}
@@ -439,7 +479,7 @@ export function ImportPlanPanel() {
 						>
 							<Button
 								variant="outline"
-								disabled={busy}
+								disabled={locked}
 								onClick={() => {
 									setReport(job);
 									setError(null);
@@ -452,7 +492,7 @@ export function ImportPlanPanel() {
 							</Button>
 							<Button
 								variant="outline"
-								disabled={busy}
+								disabled={locked}
 								onClick={() => void discard("plans", job.id)}
 							>
 								{m.import_plan_discard()}

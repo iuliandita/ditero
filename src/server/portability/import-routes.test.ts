@@ -10,6 +10,12 @@ const store = vi.hoisted(() => ({
 	get: vi.fn(),
 	discardPlan: vi.fn(),
 	discardSource: vi.fn(),
+	apply: vi.fn(),
+	run: vi.fn(),
+}));
+vi.mock("./import-apply-store.ts", () => ({
+	applyImportBatch: store.apply,
+	getImportRunStatus: store.run,
 }));
 vi.mock("./import-plan-store.ts", () => ({
 	saveImportPlan: store.save,
@@ -100,12 +106,14 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	store.save.mockResolvedValue({
 		id: "saved",
-		report: { applySupported: false },
+		report: { plannerVersion: 2, applySupported: true },
 	});
 	store.list.mockResolvedValue([]);
 	store.get.mockResolvedValue(null);
 	store.discardPlan.mockResolvedValue(false);
 	store.discardSource.mockResolvedValue(false);
+	store.apply.mockResolvedValue({ state: "completed" });
+	store.run.mockResolvedValue(null);
 });
 
 describe("native import plan transport", () => {
@@ -128,10 +136,14 @@ describe("native import plan transport", () => {
 			payload().source,
 			document(),
 			payload().mappings,
-			{ signal: expect.any(AbortSignal), deadline: expect.any(Number) },
+			{
+				signal: expect.any(AbortSignal),
+				deadline: expect.any(Number),
+				plannerVersion: 2,
+			},
 		);
 		expect(await result.json()).toMatchObject({
-			report: { applySupported: false },
+			report: { plannerVersion: 2, applySupported: true },
 		});
 	});
 	test("refuses malformed, unknown-field and invalid native requests before storage", async () => {
@@ -249,13 +261,12 @@ describe("native import plan transport", () => {
 		expect((await pending).status).toBe(408);
 		expect((await api.handle(request())).status).toBe(200);
 	});
-	test("returns private not-found for unknown plans and discards, with no apply route", async () => {
+	test("returns private not-found for unknown plans and discards", async () => {
 		const api = app();
 		for (const [path, method] of [
 			["plans/unknown", "GET"],
 			["plans/unknown/discard", "POST"],
 			["sources/unknown/discard", "POST"],
-			["plans/unknown/apply", "POST"],
 		]) {
 			const result = await api.handle(
 				new Request(`http://localhost/api/portability/import/${path}`, {
@@ -265,5 +276,106 @@ describe("native import plan transport", () => {
 			);
 			expect(result.status).toBe(404);
 		}
+	});
+});
+
+const confirmation = {
+	planDigest: "a".repeat(64),
+	counts: { ensure: 4, ignored: 2, blocked: 1 },
+};
+function applyRequest(
+	body: BodyInit = JSON.stringify(confirmation),
+	extra: Record<string, string> = {},
+) {
+	return new Request(
+		"http://localhost/api/portability/import/plans/saved/apply",
+		{
+			method: "POST",
+			headers: {
+				origin: "http://localhost",
+				"x-user": "caller",
+				"content-type": "application/json",
+				...extra,
+			},
+			body,
+		},
+	);
+}
+
+describe("native import execution transport", () => {
+	test("authenticates and checks origin before execution", async () => {
+		const api = app();
+		expect((await api.handle(applyRequest("{", { "x-user": "" }))).status).toBe(
+			401,
+		);
+		expect(
+			(await api.handle(applyRequest("{", { origin: "https://foreign.test" })))
+				.status,
+		).toBe(403);
+		expect(store.apply).not.toHaveBeenCalled();
+	});
+	test("passes exact confirmation and caller identity under a private response", async () => {
+		const result = await app().handle(applyRequest());
+		expect(result.status).toBe(200);
+		expect(result.headers.get("cache-control")).toBe("no-store");
+		expect(store.apply).toHaveBeenCalledWith(
+			expect.anything(),
+			"caller",
+			"saved",
+			confirmation,
+			{ signal: expect.any(AbortSignal), deadline: expect.any(Number) },
+		);
+	});
+	test("rejects malformed, oversized and extra confirmation fields before execution", async () => {
+		for (const body of [
+			"{",
+			"{}",
+			JSON.stringify({ ...confirmation, extra: true }),
+			JSON.stringify({
+				...confirmation,
+				counts: { ...confirmation.counts, ensure: -1 },
+			}),
+		])
+			expect((await app().handle(applyRequest(body))).status).toBe(400);
+		expect((await app().handle(applyRequest(" ".repeat(4097)))).status).toBe(
+			413,
+		);
+		expect(
+			(await app().handle(applyRequest("{}", { "content-length": "4097" })))
+				.status,
+		).toBe(413);
+		expect(store.apply).not.toHaveBeenCalled();
+	});
+	test("shares request admission with planning until the batch settles", async () => {
+		let finish: ((value: unknown) => void) | undefined;
+		store.apply.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					finish = resolve;
+				}),
+		);
+		const api = app();
+		const first = api.handle(applyRequest());
+		await vi.waitFor(() => expect(store.apply).toHaveBeenCalledTimes(1));
+		expect((await api.handle(applyRequest())).status).toBe(429);
+		expect((await api.handle(request())).status).toBe(429);
+		finish?.({ state: "running" });
+		expect((await first).status).toBe(200);
+		expect((await api.handle(applyRequest())).status).toBe(200);
+	});
+	test("reads owner-scoped run status without caching", async () => {
+		const result = await app().handle(
+			new Request("http://localhost/api/portability/import/plans/saved/run", {
+				headers: { "x-user": "caller" },
+			}),
+		);
+		expect(result.status).toBe(200);
+		expect(result.headers.get("cache-control")).toBe("no-store");
+		expect(await result.json()).toEqual({ run: null });
+		expect(store.run).toHaveBeenCalledWith(
+			expect.anything(),
+			"caller",
+			"saved",
+		);
 	});
 });
