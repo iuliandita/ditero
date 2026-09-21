@@ -123,6 +123,54 @@ describe("sealed import apply plan", () => {
 			"dd0a219d6f71748ebd2201966a0632ec73a3a7e0b4c245d8f563b56009f6e026",
 		);
 	});
+	test("preserves the captured v3 fixture", async () => {
+		const golden = JSON.parse(
+			readFileSync(
+				new URL(
+					"../../../tests/fixtures/portability/import-v3-golden.json",
+					import.meta.url,
+				),
+				"utf8",
+			),
+		) as {
+			input: {
+				document: PortableExportV1;
+				context: Parameters<typeof buildImportPlan>[1];
+			};
+			basePlanV1: Awaited<ReturnType<typeof buildImportPlan>>;
+			projectedV3: ReturnType<typeof projectImportApply>;
+			sealInput: {
+				context: Parameters<typeof sealImportApplyPlan>[2];
+				snapshots: (ImportTargetSnapshot & { sourceKey: string })[];
+			};
+			expectedSealedV3: Awaited<ReturnType<typeof sealImportApplyPlan>>;
+		};
+		const document = parsePortableExportV1(
+			JSON.stringify(golden.input.document),
+		);
+		const base = await buildImportPlan(document, golden.input.context);
+		expect(base).toEqual(golden.basePlanV1);
+		const projected = projectImportApply(document, base.items, {
+			plannerVersion: 3,
+		});
+		expect(projected).toEqual(golden.projectedV3);
+		const snapshots = new Map(
+			golden.sealInput.snapshots.map(({ sourceKey, ...snapshot }) => [
+				sourceKey,
+				snapshot,
+			]),
+		);
+		const sealed = await sealImportApplyPlan(projected.items, snapshots, {
+			...golden.sealInput.context,
+			plannerVersion: 3,
+		});
+		expect(JSON.stringify(sealed)).toBe(
+			JSON.stringify(golden.expectedSealedV3),
+		);
+		expect(sealed.planDigest).toBe(
+			"f76817713bb8ba6e72643191fc41c1a42615f0ba92c5f1f19c09b62fd35d69cb",
+		);
+	});
 	test("v3 changes execution identity while preserving existing source-map content identity", async () => {
 		const item = candidate();
 		const snapshots = new Map([[item.sourceKey, snapshot()]]);

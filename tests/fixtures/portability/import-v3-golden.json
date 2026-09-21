@@ -1,0 +1,1488 @@
+{
+	"fixtureVersion": 1,
+	"provenance": {
+		"commit": "6c69e32a7b17c50c86cc2fdee86d50c334946a6f",
+		"sourceBlobs": {
+			"src/domain/portability/graph.ts": "53887c2d3323622003086df1e45882da16405ea8",
+			"src/domain/portability/import-apply-plan.ts": "efed6b5cfbfd1974d7a239fd6e059537a8d23383",
+			"src/domain/portability/import-apply.ts": "7dc5294d5419d7339a99a073c0053ece3a1826d9",
+			"src/domain/portability/import-digest.ts": "fed860856b23d34ccf08630891eac07ce02f7208",
+			"src/domain/portability/import-plan.ts": "19afb6d7d70ad5ed4f263f2ea5081dc7a3e3902b",
+			"src/domain/portability/v1.ts": "1ba0eee7801789556a8214d75b82a8e32b3ac38f",
+			"src/domain/portability/validate.ts": "8b09e5706ac8b932c562fa7ae9efda4b108b1973"
+		},
+		"note": "Synthetic native v1 input; literal pre-v4 planner-v3 oracle. Absent snapshots are explicit synthetic evidence, not a database-lock test. Preserve expected output unchanged in future compatibility tests."
+	},
+	"input": {
+		"document": {
+			"format": "ditero",
+			"schemaVersion": 1,
+			"exportedAt": "2026-09-18T12:00:00.000Z",
+			"sourceUserId": "source-owner",
+			"boundaries": {
+				"attachmentContent": "excluded",
+				"encryptionKeys": "excluded",
+				"credentials": "excluded",
+				"managedAccounts": "excluded",
+				"restoreSupported": false,
+				"taskHistory": "current-state-and-habit-logs"
+			},
+			"data": {
+				"principals": [
+					{
+						"id": "source-owner",
+						"name": "Example Owner"
+					},
+					{
+						"id": "source-member",
+						"name": "Example Member"
+					}
+				],
+				"workspaces": [
+					{
+						"id": "source-workspace",
+						"name": "Example Workspace",
+						"ownerId": "source-owner",
+						"kind": "shared"
+					}
+				],
+				"memberships": [
+					{
+						"id": "source-seat-owner",
+						"userId": "source-owner",
+						"workspaceId": "source-workspace",
+						"role": "owner"
+					},
+					{
+						"id": "source-seat-member",
+						"userId": "source-member",
+						"workspaceId": "source-workspace",
+						"role": "viewer"
+					}
+				],
+				"folders": [
+					{
+						"id": "source-folder",
+						"workspaceId": "source-workspace",
+						"name": "Outings",
+						"sortKey": "a0"
+					}
+				],
+				"lists": [
+					{
+						"id": "source-list",
+						"workspaceId": "source-workspace",
+						"ownerId": "source-owner",
+						"title": "Picnic",
+						"kind": "tasks",
+						"icon": null,
+						"folderId": "source-folder",
+						"sortKey": "a0",
+						"completedDisplay": "sink"
+					}
+				],
+				"tasks": [
+					{
+						"id": "z-child",
+						"listId": "source-list",
+						"title": "Pack the reusable cup",
+						"done": false,
+						"notes": "Synthetic fixture: café\nBring water.",
+						"dueAt": null,
+						"dueAllDay": false,
+						"priority": 2,
+						"completedAt": null,
+						"sortKey": "b0",
+						"parentId": "a-root",
+						"quantity": null,
+						"unit": null,
+						"category": null,
+						"rrule": null,
+						"recurrenceRelative": false,
+						"reminderTime": null,
+						"repeatEveryMin": null,
+						"maxRepeats": null,
+						"fallbackUserId": null,
+						"urgent": false
+					},
+					{
+						"id": "a-root",
+						"listId": "source-list",
+						"title": "Prepare the picnic",
+						"done": true,
+						"notes": "Synthetic fixture: café\nBring water.",
+						"dueAt": "2026-09-17T12:30:00.000Z",
+						"dueAllDay": false,
+						"priority": 2,
+						"completedAt": "2026-09-17T12:00:00.000Z",
+						"sortKey": "a0",
+						"parentId": null,
+						"quantity": null,
+						"unit": null,
+						"category": null,
+						"rrule": null,
+						"recurrenceRelative": false,
+						"reminderTime": null,
+						"repeatEveryMin": null,
+						"maxRepeats": null,
+						"fallbackUserId": null,
+						"urgent": false
+					}
+				],
+				"labels": [
+					{
+						"id": "source-label",
+						"workspaceId": "source-workspace",
+						"name": "Outdoors",
+						"color": "green"
+					}
+				],
+				"taskLabels": [
+					{
+						"id": "source-task-label",
+						"taskId": "z-child",
+						"labelId": "source-label"
+					}
+				],
+				"templates": [],
+				"assignments": [
+					{
+						"id": "source-assignment",
+						"taskId": "z-child",
+						"userId": "source-member"
+					}
+				],
+				"comments": [],
+				"habitLogs": [],
+				"views": [],
+				"dashboards": [],
+				"userPrefs": [],
+				"focusSessions": [],
+				"karma": [],
+				"karmaEvents": [],
+				"attachments": []
+			}
+		},
+		"context": {
+			"ownerUserId": "target-owner",
+			"sourceId": "00000000-0000-4000-8000-000000000222",
+			"mappings": {
+				"workspaces": {
+					"source-workspace": "target-workspace"
+				},
+				"principals": {
+					"source-owner": "target-owner",
+					"source-member": "target-member"
+				}
+			}
+		}
+	},
+	"basePlanV1": {
+		"documentDigest": "c9bc705cd56b66ef0cb0a98d3ae2922e205d078cbe020a27a45eb427b894ea51",
+		"mappingDigest": "20c80cae27f45fe211b20f834b6c18cfccab5c6982e4eab62914dbc20b39cf1c",
+		"planDigest": "d438ec7aa12f8890d005a1a29abfe983ea9a2a7eb0047c056d0a39f25d2e086d",
+		"items": [
+			{
+				"ordinal": 0,
+				"collection": "principals",
+				"sourceId": "source-member",
+				"sourceKey": "db60b5bc7c7255ae1921091143f99d8ea3b2eac3c5b23692db0c4aaa413f9376",
+				"itemDigest": "1e01e6939a76414c64bde60c9aab89b056d9fc912a643026e8b929ad7138fcc3",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-member",
+					"name": "Example Member"
+				},
+				"codes": ["authority-not-imported"]
+			},
+			{
+				"ordinal": 1,
+				"collection": "principals",
+				"sourceId": "source-owner",
+				"sourceKey": "4476d2d51fb6c4b36601459d662ecd26137fbe7e225f5aaf43ddbbea1f8ede0d",
+				"itemDigest": "fcb646006a0fa78b3f1ece13e526ba532afea7d0e283c5d4367e9ea8cd151e31",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-owner",
+					"name": "Example Owner"
+				},
+				"codes": ["authority-not-imported"]
+			},
+			{
+				"ordinal": 2,
+				"collection": "workspaces",
+				"sourceId": "source-workspace",
+				"sourceKey": "ddb532a5fe51d01ce9207ac5a83da5bd7f0d5ed3f193f835f8e3923382f2b4ef",
+				"itemDigest": "4173d94a0f71abca4b99207b0a6af7c459fbb081401e23970f235bb680f9288d",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-workspace",
+					"name": "Example Workspace",
+					"ownerId": "source-owner",
+					"kind": "shared"
+				},
+				"codes": ["authority-not-imported"]
+			},
+			{
+				"ordinal": 3,
+				"collection": "memberships",
+				"sourceId": "source-seat-member",
+				"sourceKey": "3e6fb7e064a95c14d0e512b7ea30166231e025309368930677681a30cb25862b",
+				"itemDigest": "b82f3975acd9a5366730da1aa46c017de5ec4a08bdbdbdc8d7d6a2b909902b06",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-seat-member",
+					"userId": "source-member",
+					"workspaceId": "source-workspace",
+					"role": "viewer"
+				},
+				"codes": ["authority-not-imported"]
+			},
+			{
+				"ordinal": 4,
+				"collection": "memberships",
+				"sourceId": "source-seat-owner",
+				"sourceKey": "3c1923d11605fd498235942053135f1142ce2a24d3182d12fcacdebaf87c8153",
+				"itemDigest": "83fe50720f7661d6390437a55f3a39fc58fea87d7f30740d62f7a81a360742c1",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-seat-owner",
+					"userId": "source-owner",
+					"workspaceId": "source-workspace",
+					"role": "owner"
+				},
+				"codes": ["authority-not-imported"]
+			},
+			{
+				"ordinal": 5,
+				"collection": "folders",
+				"sourceId": "source-folder",
+				"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+				"itemDigest": "30793351c720c969b19aa24e8592ef4311de43e110ec7ed1fce610befd08c5f4",
+				"targetId": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+				"disposition": "ensure",
+				"payload": {
+					"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+					"workspaceId": "target-workspace",
+					"name": "Outings",
+					"sortKey": "a0"
+				},
+				"codes": []
+			},
+			{
+				"ordinal": 6,
+				"collection": "lists",
+				"sourceId": "source-list",
+				"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+				"itemDigest": "d290e2b6ef52127809f98c3c4da61b79b7f7f5d3b0201f23cfc31e00259b2c30",
+				"targetId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+				"disposition": "ensure",
+				"payload": {
+					"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+					"workspaceId": "target-workspace",
+					"ownerId": "target-owner",
+					"title": "Picnic",
+					"kind": "tasks",
+					"icon": null,
+					"folderId": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+					"sortKey": "a0",
+					"completedDisplay": "sink"
+				},
+				"codes": []
+			},
+			{
+				"ordinal": 7,
+				"collection": "labels",
+				"sourceId": "source-label",
+				"sourceKey": "bc6bf7c409ad91a3a025783b431e21f8887e50d15bf5e0b7a6014caaffef66f3",
+				"itemDigest": "3661d775495d7ff3b8c10a411754001660c392fdc107909399973ea44271cec9",
+				"targetId": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7",
+				"disposition": "ensure",
+				"payload": {
+					"id": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7",
+					"workspaceId": "target-workspace",
+					"name": "Outdoors",
+					"color": "green"
+				},
+				"codes": []
+			},
+			{
+				"ordinal": 8,
+				"collection": "tasks",
+				"sourceId": "a-root",
+				"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358",
+				"itemDigest": "6d37f71c4c8c6898c700706d7ba37748b767b00fd8c89148f762f4efd09b3096",
+				"targetId": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+				"disposition": "ensure",
+				"payload": {
+					"id": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+					"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+					"title": "Prepare the picnic",
+					"done": true,
+					"notes": "Synthetic fixture: café\nBring water.",
+					"dueAt": "2026-09-17T12:30:00.000Z",
+					"dueAllDay": false,
+					"priority": 2,
+					"completedAt": "2026-09-17T12:00:00.000Z",
+					"sortKey": "a0",
+					"parentId": null,
+					"quantity": null,
+					"unit": null,
+					"category": null,
+					"rrule": null,
+					"recurrenceRelative": false,
+					"reminderTime": null,
+					"repeatEveryMin": null,
+					"maxRepeats": null,
+					"fallbackUserId": null,
+					"urgent": false
+				},
+				"codes": []
+			},
+			{
+				"ordinal": 9,
+				"collection": "tasks",
+				"sourceId": "z-child",
+				"sourceKey": "d2f3412fb84a9e503a0a2bde679f6c7a5851f17c66f0221b6f1df1e34e235ba5",
+				"itemDigest": "60b55ddd3b7c0d7e56266c32c5820be70dd3507687dfd8537434a314d33b6aad",
+				"targetId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+				"disposition": "ensure",
+				"payload": {
+					"id": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+					"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+					"title": "Pack the reusable cup",
+					"done": false,
+					"notes": "Synthetic fixture: café\nBring water.",
+					"dueAt": null,
+					"dueAllDay": false,
+					"priority": 2,
+					"completedAt": null,
+					"sortKey": "b0",
+					"parentId": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+					"quantity": null,
+					"unit": null,
+					"category": null,
+					"rrule": null,
+					"recurrenceRelative": false,
+					"reminderTime": null,
+					"repeatEveryMin": null,
+					"maxRepeats": null,
+					"fallbackUserId": null,
+					"urgent": false
+				},
+				"codes": []
+			},
+			{
+				"ordinal": 10,
+				"collection": "taskLabels",
+				"sourceId": "source-task-label",
+				"sourceKey": "5e0d569b9fdb6fce984110ddde344b29b41d60c980e2953d3733c26949737e05",
+				"itemDigest": "7ca00d70ebb2b208c527b061a687060769a748d4c7bfa65e9c4418e3e2eb879b",
+				"targetId": "09e058ddc14311d3c160094bb13c9b54f66d5b40e13e5479163da00495e708d2",
+				"disposition": "ensure",
+				"payload": {
+					"id": "09e058ddc14311d3c160094bb13c9b54f66d5b40e13e5479163da00495e708d2",
+					"taskId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+					"labelId": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7"
+				},
+				"codes": []
+			},
+			{
+				"ordinal": 11,
+				"collection": "assignments",
+				"sourceId": "source-assignment",
+				"sourceKey": "de9d14574cbc6a1adeac913143864d539cc075ebc64a6887921d701958e0fb60",
+				"itemDigest": "a37037beaab87cbf436587fed37826034b9952010cee86fab1047717740cc323",
+				"targetId": "7c3ddb576a0aa4282fc8c565211d2c10a4c01d6f6a0dc9b70f34db80baf93234",
+				"disposition": "ensure",
+				"payload": {
+					"id": "7c3ddb576a0aa4282fc8c565211d2c10a4c01d6f6a0dc9b70f34db80baf93234",
+					"taskId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+					"userId": "target-member"
+				},
+				"codes": []
+			}
+		],
+		"report": {
+			"plannerVersion": 1,
+			"applySupported": false,
+			"counts": {
+				"ensure": 7,
+				"ignored": 5,
+				"blocked": 0
+			},
+			"findings": [
+				{
+					"code": "authority-not-imported",
+					"path": "items[0]"
+				},
+				{
+					"code": "authority-not-imported",
+					"path": "items[1]"
+				},
+				{
+					"code": "authority-not-imported",
+					"path": "items[2]"
+				},
+				{
+					"code": "authority-not-imported",
+					"path": "items[3]"
+				},
+				{
+					"code": "authority-not-imported",
+					"path": "items[4]"
+				}
+			]
+		}
+	},
+	"projectedV3": {
+		"items": [
+			{
+				"ordinal": 0,
+				"collection": "principals",
+				"sourceId": "source-member",
+				"sourceKey": "db60b5bc7c7255ae1921091143f99d8ea3b2eac3c5b23692db0c4aaa413f9376",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-member",
+					"name": "Example Member"
+				},
+				"codes": ["authority-not-imported"],
+				"phase": null,
+				"dependencies": []
+			},
+			{
+				"ordinal": 1,
+				"collection": "principals",
+				"sourceId": "source-owner",
+				"sourceKey": "4476d2d51fb6c4b36601459d662ecd26137fbe7e225f5aaf43ddbbea1f8ede0d",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-owner",
+					"name": "Example Owner"
+				},
+				"codes": ["authority-not-imported"],
+				"phase": null,
+				"dependencies": []
+			},
+			{
+				"ordinal": 2,
+				"collection": "workspaces",
+				"sourceId": "source-workspace",
+				"sourceKey": "ddb532a5fe51d01ce9207ac5a83da5bd7f0d5ed3f193f835f8e3923382f2b4ef",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-workspace",
+					"name": "Example Workspace",
+					"ownerId": "source-owner",
+					"kind": "shared"
+				},
+				"codes": ["authority-not-imported"],
+				"phase": null,
+				"dependencies": []
+			},
+			{
+				"ordinal": 3,
+				"collection": "memberships",
+				"sourceId": "source-seat-member",
+				"sourceKey": "3e6fb7e064a95c14d0e512b7ea30166231e025309368930677681a30cb25862b",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-seat-member",
+					"userId": "source-member",
+					"workspaceId": "source-workspace",
+					"role": "viewer"
+				},
+				"codes": ["authority-not-imported"],
+				"phase": null,
+				"dependencies": []
+			},
+			{
+				"ordinal": 4,
+				"collection": "memberships",
+				"sourceId": "source-seat-owner",
+				"sourceKey": "3c1923d11605fd498235942053135f1142ce2a24d3182d12fcacdebaf87c8153",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-seat-owner",
+					"userId": "source-owner",
+					"workspaceId": "source-workspace",
+					"role": "owner"
+				},
+				"codes": ["authority-not-imported"],
+				"phase": null,
+				"dependencies": []
+			},
+			{
+				"ordinal": 5,
+				"collection": "folders",
+				"sourceId": "source-folder",
+				"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+				"targetId": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+				"disposition": "ensure",
+				"payload": {
+					"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+					"workspaceId": "target-workspace",
+					"name": "Outings",
+					"sortKey": "a0"
+				},
+				"codes": [],
+				"phase": "folders",
+				"dependencies": []
+			},
+			{
+				"ordinal": 6,
+				"collection": "lists",
+				"sourceId": "source-list",
+				"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+				"targetId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+				"disposition": "ensure",
+				"payload": {
+					"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+					"workspaceId": "target-workspace",
+					"ownerId": "target-owner",
+					"title": "Picnic",
+					"kind": "tasks",
+					"icon": null,
+					"folderId": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+					"sortKey": "a0",
+					"completedDisplay": "sink"
+				},
+				"codes": [],
+				"phase": "lists",
+				"dependencies": [
+					{
+						"collection": "folders",
+						"sourceId": "source-folder",
+						"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd"
+					}
+				]
+			},
+			{
+				"ordinal": 7,
+				"collection": "labels",
+				"sourceId": "source-label",
+				"sourceKey": "bc6bf7c409ad91a3a025783b431e21f8887e50d15bf5e0b7a6014caaffef66f3",
+				"targetId": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7",
+				"disposition": "ensure",
+				"payload": {
+					"id": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7",
+					"workspaceId": "target-workspace",
+					"name": "Outdoors",
+					"color": "green"
+				},
+				"codes": [],
+				"phase": "labels",
+				"dependencies": []
+			},
+			{
+				"ordinal": 8,
+				"collection": "tasks",
+				"sourceId": "a-root",
+				"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358",
+				"targetId": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+				"disposition": "ensure",
+				"payload": {
+					"id": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+					"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+					"title": "Prepare the picnic",
+					"done": true,
+					"notes": "Synthetic fixture: café\nBring water.",
+					"dueAt": "2026-09-17T12:30:00.000Z",
+					"dueAllDay": false,
+					"priority": 2,
+					"completedAt": "2026-09-17T12:00:00.000Z",
+					"sortKey": "a0",
+					"parentId": null,
+					"quantity": null,
+					"unit": null,
+					"category": null,
+					"rrule": null,
+					"recurrenceRelative": false,
+					"reminderTime": null,
+					"repeatEveryMin": null,
+					"maxRepeats": null,
+					"fallbackUserId": null,
+					"urgent": false
+				},
+				"codes": [],
+				"phase": "root-tasks",
+				"dependencies": [
+					{
+						"collection": "lists",
+						"sourceId": "source-list",
+						"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487"
+					}
+				]
+			},
+			{
+				"ordinal": 9,
+				"collection": "tasks",
+				"sourceId": "z-child",
+				"sourceKey": "d2f3412fb84a9e503a0a2bde679f6c7a5851f17c66f0221b6f1df1e34e235ba5",
+				"targetId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+				"disposition": "ensure",
+				"payload": {
+					"id": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+					"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+					"title": "Pack the reusable cup",
+					"done": false,
+					"notes": "Synthetic fixture: café\nBring water.",
+					"dueAt": null,
+					"dueAllDay": false,
+					"priority": 2,
+					"completedAt": null,
+					"sortKey": "b0",
+					"parentId": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+					"quantity": null,
+					"unit": null,
+					"category": null,
+					"rrule": null,
+					"recurrenceRelative": false,
+					"reminderTime": null,
+					"repeatEveryMin": null,
+					"maxRepeats": null,
+					"fallbackUserId": null,
+					"urgent": false
+				},
+				"codes": [],
+				"phase": "child-tasks",
+				"dependencies": [
+					{
+						"collection": "lists",
+						"sourceId": "source-list",
+						"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487"
+					},
+					{
+						"collection": "tasks",
+						"sourceId": "a-root",
+						"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358"
+					}
+				]
+			},
+			{
+				"ordinal": 10,
+				"collection": "taskLabels",
+				"sourceId": "source-task-label",
+				"sourceKey": "5e0d569b9fdb6fce984110ddde344b29b41d60c980e2953d3733c26949737e05",
+				"targetId": "09e058ddc14311d3c160094bb13c9b54f66d5b40e13e5479163da00495e708d2",
+				"disposition": "ensure",
+				"payload": {
+					"id": "09e058ddc14311d3c160094bb13c9b54f66d5b40e13e5479163da00495e708d2",
+					"taskId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+					"labelId": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7"
+				},
+				"codes": [],
+				"phase": "task-labels",
+				"dependencies": [
+					{
+						"collection": "tasks",
+						"sourceId": "z-child",
+						"sourceKey": "d2f3412fb84a9e503a0a2bde679f6c7a5851f17c66f0221b6f1df1e34e235ba5"
+					},
+					{
+						"collection": "labels",
+						"sourceId": "source-label",
+						"sourceKey": "bc6bf7c409ad91a3a025783b431e21f8887e50d15bf5e0b7a6014caaffef66f3"
+					}
+				]
+			},
+			{
+				"ordinal": 11,
+				"collection": "assignments",
+				"sourceId": "source-assignment",
+				"sourceKey": "de9d14574cbc6a1adeac913143864d539cc075ebc64a6887921d701958e0fb60",
+				"targetId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501:target-member",
+				"disposition": "ensure",
+				"payload": {
+					"id": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501:target-member",
+					"taskId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+					"userId": "target-member"
+				},
+				"codes": [],
+				"phase": "assignments",
+				"dependencies": [
+					{
+						"collection": "tasks",
+						"sourceId": "z-child",
+						"sourceKey": "d2f3412fb84a9e503a0a2bde679f6c7a5851f17c66f0221b6f1df1e34e235ba5"
+					}
+				]
+			}
+		],
+		"counts": {
+			"ensure": 7,
+			"ignored": 5,
+			"blocked": 0
+		}
+	},
+	"sealInput": {
+		"context": {
+			"plannerVersion": 3,
+			"ownerUserId": "target-owner",
+			"sourceId": "00000000-0000-4000-8000-000000000222",
+			"documentDigest": "c9bc705cd56b66ef0cb0a98d3ae2922e205d078cbe020a27a45eb427b894ea51",
+			"mappingDigest": "20c80cae27f45fe211b20f834b6c18cfccab5c6982e4eab62914dbc20b39cf1c"
+		},
+		"snapshots": [
+			{
+				"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": null
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": []
+				}
+			},
+			{
+				"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": null
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": [
+						{
+							"collection": "folders",
+							"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+							"itemOrdinal": 5,
+							"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+							"workspaceId": "target-workspace"
+						}
+					]
+				}
+			},
+			{
+				"sourceKey": "bc6bf7c409ad91a3a025783b431e21f8887e50d15bf5e0b7a6014caaffef66f3",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": {
+						"kind": "label-name",
+						"workspaceId": "target-workspace",
+						"name": "Outdoors"
+					}
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": []
+				}
+			},
+			{
+				"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": null
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": [
+						{
+							"collection": "lists",
+							"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+							"itemOrdinal": 6,
+							"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "folders",
+							"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+							"itemOrdinal": 5,
+							"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+							"workspaceId": "target-workspace"
+						}
+					]
+				}
+			},
+			{
+				"sourceKey": "d2f3412fb84a9e503a0a2bde679f6c7a5851f17c66f0221b6f1df1e34e235ba5",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": null
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": [
+						{
+							"collection": "lists",
+							"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+							"itemOrdinal": 6,
+							"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "folders",
+							"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+							"itemOrdinal": 5,
+							"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "tasks",
+							"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358",
+							"itemOrdinal": 8,
+							"id": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+							"workspaceId": "target-workspace",
+							"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"parentId": null
+						}
+					]
+				}
+			},
+			{
+				"sourceKey": "5e0d569b9fdb6fce984110ddde344b29b41d60c980e2953d3733c26949737e05",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": {
+						"kind": "task-label-pair",
+						"taskId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+						"labelId": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7"
+					}
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": [
+						{
+							"collection": "tasks",
+							"sourceKey": "d2f3412fb84a9e503a0a2bde679f6c7a5851f17c66f0221b6f1df1e34e235ba5",
+							"itemOrdinal": 9,
+							"id": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+							"workspaceId": "target-workspace",
+							"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"parentId": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe"
+						},
+						{
+							"collection": "lists",
+							"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+							"itemOrdinal": 6,
+							"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "folders",
+							"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+							"itemOrdinal": 5,
+							"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "tasks",
+							"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358",
+							"itemOrdinal": 8,
+							"id": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+							"workspaceId": "target-workspace",
+							"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"parentId": null
+						},
+						{
+							"collection": "labels",
+							"sourceKey": "bc6bf7c409ad91a3a025783b431e21f8887e50d15bf5e0b7a6014caaffef66f3",
+							"itemOrdinal": 7,
+							"id": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7",
+							"workspaceId": "target-workspace"
+						}
+					]
+				}
+			},
+			{
+				"sourceKey": "de9d14574cbc6a1adeac913143864d539cc075ebc64a6887921d701958e0fb60",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": {
+						"kind": "task-assignee-pair",
+						"taskId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+						"userId": "target-member"
+					}
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": [
+						{
+							"collection": "tasks",
+							"sourceKey": "d2f3412fb84a9e503a0a2bde679f6c7a5851f17c66f0221b6f1df1e34e235ba5",
+							"itemOrdinal": 9,
+							"id": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+							"workspaceId": "target-workspace",
+							"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"parentId": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe"
+						},
+						{
+							"collection": "lists",
+							"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+							"itemOrdinal": 6,
+							"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "folders",
+							"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+							"itemOrdinal": 5,
+							"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "tasks",
+							"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358",
+							"itemOrdinal": 8,
+							"id": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+							"workspaceId": "target-workspace",
+							"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"parentId": null
+						}
+					],
+					"assignee": {
+						"sourceUserId": "source-member",
+						"targetUserId": "target-member",
+						"workspaceId": "target-workspace",
+						"membershipId": "target-seat-member"
+					}
+				}
+			}
+		]
+	},
+	"expectedSealedV3": {
+		"documentDigest": "c9bc705cd56b66ef0cb0a98d3ae2922e205d078cbe020a27a45eb427b894ea51",
+		"mappingDigest": "20c80cae27f45fe211b20f834b6c18cfccab5c6982e4eab62914dbc20b39cf1c",
+		"planDigest": "f76817713bb8ba6e72643191fc41c1a42615f0ba92c5f1f19c09b62fd35d69cb",
+		"items": [
+			{
+				"ordinal": 0,
+				"collection": "principals",
+				"sourceId": "source-member",
+				"sourceKey": "db60b5bc7c7255ae1921091143f99d8ea3b2eac3c5b23692db0c4aaa413f9376",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-member",
+					"name": "Example Member"
+				},
+				"codes": ["authority-not-imported"],
+				"phase": null,
+				"contentDigest": "0689b1adb191a64106f41d3ac439b0045af46c6d8de5bd54e0b29a05fd77acbe",
+				"itemDigest": "6315bd3a3514d2070cf6851e95f6ca25edc6351313314b57eaf4d60891310f5e",
+				"targetPrecondition": null,
+				"dependencyProof": null
+			},
+			{
+				"ordinal": 1,
+				"collection": "principals",
+				"sourceId": "source-owner",
+				"sourceKey": "4476d2d51fb6c4b36601459d662ecd26137fbe7e225f5aaf43ddbbea1f8ede0d",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-owner",
+					"name": "Example Owner"
+				},
+				"codes": ["authority-not-imported"],
+				"phase": null,
+				"contentDigest": "c1e3babd66350145d1b2d5e8102fa96bebcc11766c468fd295c7f8baaba9181d",
+				"itemDigest": "e9241e349a28ad7927dbfe216602897952cbc7e07c0ba21555f5730149e9eb45",
+				"targetPrecondition": null,
+				"dependencyProof": null
+			},
+			{
+				"ordinal": 2,
+				"collection": "workspaces",
+				"sourceId": "source-workspace",
+				"sourceKey": "ddb532a5fe51d01ce9207ac5a83da5bd7f0d5ed3f193f835f8e3923382f2b4ef",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-workspace",
+					"name": "Example Workspace",
+					"ownerId": "source-owner",
+					"kind": "shared"
+				},
+				"codes": ["authority-not-imported"],
+				"phase": null,
+				"contentDigest": "368d837b8c174f48d553b13639911f1097dbeb4cab13e189540998dd6f4baaaa",
+				"itemDigest": "b6c9430aa61ecda2a69a10665df63c0570d7f60ed6d4c472501cd0e8b6b1794e",
+				"targetPrecondition": null,
+				"dependencyProof": null
+			},
+			{
+				"ordinal": 3,
+				"collection": "memberships",
+				"sourceId": "source-seat-member",
+				"sourceKey": "3e6fb7e064a95c14d0e512b7ea30166231e025309368930677681a30cb25862b",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-seat-member",
+					"userId": "source-member",
+					"workspaceId": "source-workspace",
+					"role": "viewer"
+				},
+				"codes": ["authority-not-imported"],
+				"phase": null,
+				"contentDigest": "58ffff3611eb671531a4d9229c6417563bed75096bd9e042b855cf99856b00b2",
+				"itemDigest": "66d5e6c3709cd08cd8093919fb85675ef2428339de49da810677897280cc18c1",
+				"targetPrecondition": null,
+				"dependencyProof": null
+			},
+			{
+				"ordinal": 4,
+				"collection": "memberships",
+				"sourceId": "source-seat-owner",
+				"sourceKey": "3c1923d11605fd498235942053135f1142ce2a24d3182d12fcacdebaf87c8153",
+				"targetId": null,
+				"disposition": "ignored",
+				"payload": {
+					"id": "source-seat-owner",
+					"userId": "source-owner",
+					"workspaceId": "source-workspace",
+					"role": "owner"
+				},
+				"codes": ["authority-not-imported"],
+				"phase": null,
+				"contentDigest": "c3c33977a79068b25e6719320d4ef3cbeacb8b09c12f25be637a6e9dcc807083",
+				"itemDigest": "0b902c68b68c40845b4392ba0e8699ac31635c9f666b6946b3505159a3887f52",
+				"targetPrecondition": null,
+				"dependencyProof": null
+			},
+			{
+				"ordinal": 5,
+				"collection": "folders",
+				"sourceId": "source-folder",
+				"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+				"targetId": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+				"disposition": "ensure",
+				"payload": {
+					"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+					"workspaceId": "target-workspace",
+					"name": "Outings",
+					"sortKey": "a0"
+				},
+				"codes": [],
+				"phase": "folders",
+				"contentDigest": "54b6ee658ded8a101dae839fe221960a75ab1e3868cc2937b4036426f39f8b8c",
+				"itemDigest": "d5240abde5aebd4387162fd3885aee993329da5dc4a8ad2c7bdfb4f4d988d537",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": null
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": []
+				}
+			},
+			{
+				"ordinal": 6,
+				"collection": "lists",
+				"sourceId": "source-list",
+				"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+				"targetId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+				"disposition": "ensure",
+				"payload": {
+					"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+					"workspaceId": "target-workspace",
+					"ownerId": "target-owner",
+					"title": "Picnic",
+					"kind": "tasks",
+					"icon": null,
+					"folderId": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+					"sortKey": "a0",
+					"completedDisplay": "sink"
+				},
+				"codes": [],
+				"phase": "lists",
+				"contentDigest": "562eec9f5e6c4323f81de0d6bbfd2269e733b1d5feedfa6f5d30cd7491ad86f8",
+				"itemDigest": "4837b8501ddc82e21392622bce6b33e7f50785bd6cf264c2f7b99ec1e6b6721c",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": null
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": [
+						{
+							"collection": "folders",
+							"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+							"itemOrdinal": 5,
+							"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+							"workspaceId": "target-workspace"
+						}
+					]
+				}
+			},
+			{
+				"ordinal": 7,
+				"collection": "labels",
+				"sourceId": "source-label",
+				"sourceKey": "bc6bf7c409ad91a3a025783b431e21f8887e50d15bf5e0b7a6014caaffef66f3",
+				"targetId": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7",
+				"disposition": "ensure",
+				"payload": {
+					"id": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7",
+					"workspaceId": "target-workspace",
+					"name": "Outdoors",
+					"color": "green"
+				},
+				"codes": [],
+				"phase": "labels",
+				"contentDigest": "b32537915a873fecd904563b3a370fffdf1966d3bc0decb60f09e84c86bf6652",
+				"itemDigest": "62ca43cded3314536a31e4a003fc164d40061ee4a26bc6eb76d40b72cb2f9260",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": {
+						"kind": "label-name",
+						"workspaceId": "target-workspace",
+						"name": "Outdoors"
+					}
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": []
+				}
+			},
+			{
+				"ordinal": 8,
+				"collection": "tasks",
+				"sourceId": "a-root",
+				"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358",
+				"targetId": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+				"disposition": "ensure",
+				"payload": {
+					"id": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+					"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+					"title": "Prepare the picnic",
+					"done": true,
+					"notes": "Synthetic fixture: café\nBring water.",
+					"dueAt": "2026-09-17T12:30:00.000Z",
+					"dueAllDay": false,
+					"priority": 2,
+					"completedAt": "2026-09-17T12:00:00.000Z",
+					"sortKey": "a0",
+					"parentId": null,
+					"quantity": null,
+					"unit": null,
+					"category": null,
+					"rrule": null,
+					"recurrenceRelative": false,
+					"reminderTime": null,
+					"repeatEveryMin": null,
+					"maxRepeats": null,
+					"fallbackUserId": null,
+					"urgent": false
+				},
+				"codes": [],
+				"phase": "root-tasks",
+				"contentDigest": "25e246c3dfa993db6b1d7bda8edd230e8013054a7f73884023fc02d11b41e262",
+				"itemDigest": "f3d675f0ae46b080a16a428622ecc8902e4e2299cc8fc75886585bd7b8bcb194",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": null
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": [
+						{
+							"collection": "folders",
+							"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+							"itemOrdinal": 5,
+							"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "lists",
+							"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+							"itemOrdinal": 6,
+							"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"workspaceId": "target-workspace"
+						}
+					]
+				}
+			},
+			{
+				"ordinal": 9,
+				"collection": "tasks",
+				"sourceId": "z-child",
+				"sourceKey": "d2f3412fb84a9e503a0a2bde679f6c7a5851f17c66f0221b6f1df1e34e235ba5",
+				"targetId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+				"disposition": "ensure",
+				"payload": {
+					"id": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+					"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+					"title": "Pack the reusable cup",
+					"done": false,
+					"notes": "Synthetic fixture: café\nBring water.",
+					"dueAt": null,
+					"dueAllDay": false,
+					"priority": 2,
+					"completedAt": null,
+					"sortKey": "b0",
+					"parentId": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+					"quantity": null,
+					"unit": null,
+					"category": null,
+					"rrule": null,
+					"recurrenceRelative": false,
+					"reminderTime": null,
+					"repeatEveryMin": null,
+					"maxRepeats": null,
+					"fallbackUserId": null,
+					"urgent": false
+				},
+				"codes": [],
+				"phase": "child-tasks",
+				"contentDigest": "d53dbb93015ccb7c4fba68b57a8673bb9ddf0147885c835527449366b0873652",
+				"itemDigest": "9362ad1bfbfc611b864346acafbba58b3c8e0ebcecfc17a95974ee5020020d96",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": null
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": [
+						{
+							"collection": "folders",
+							"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+							"itemOrdinal": 5,
+							"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "lists",
+							"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+							"itemOrdinal": 6,
+							"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "tasks",
+							"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358",
+							"itemOrdinal": 8,
+							"id": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+							"workspaceId": "target-workspace",
+							"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"parentId": null
+						}
+					]
+				}
+			},
+			{
+				"ordinal": 10,
+				"collection": "taskLabels",
+				"sourceId": "source-task-label",
+				"sourceKey": "5e0d569b9fdb6fce984110ddde344b29b41d60c980e2953d3733c26949737e05",
+				"targetId": "09e058ddc14311d3c160094bb13c9b54f66d5b40e13e5479163da00495e708d2",
+				"disposition": "ensure",
+				"payload": {
+					"id": "09e058ddc14311d3c160094bb13c9b54f66d5b40e13e5479163da00495e708d2",
+					"taskId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+					"labelId": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7"
+				},
+				"codes": [],
+				"phase": "task-labels",
+				"contentDigest": "7d28cc0e49459b36ecb64274d623f1f6c17417f1be5c446b50f622cb6e935275",
+				"itemDigest": "4a132eb2b03f270403804cb4278d1f6f67b634d1b9dde37bed3584f135168eba",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": {
+						"kind": "task-label-pair",
+						"taskId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+						"labelId": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7"
+					}
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": [
+						{
+							"collection": "folders",
+							"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+							"itemOrdinal": 5,
+							"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "lists",
+							"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+							"itemOrdinal": 6,
+							"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "labels",
+							"sourceKey": "bc6bf7c409ad91a3a025783b431e21f8887e50d15bf5e0b7a6014caaffef66f3",
+							"itemOrdinal": 7,
+							"id": "993821650159c12edace4c4dd960d062a37a9773ad1ad56e420d644e06fd6bf7",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "tasks",
+							"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358",
+							"itemOrdinal": 8,
+							"id": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+							"workspaceId": "target-workspace",
+							"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"parentId": null
+						},
+						{
+							"collection": "tasks",
+							"sourceKey": "d2f3412fb84a9e503a0a2bde679f6c7a5851f17c66f0221b6f1df1e34e235ba5",
+							"itemOrdinal": 9,
+							"id": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+							"workspaceId": "target-workspace",
+							"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"parentId": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe"
+						}
+					]
+				}
+			},
+			{
+				"ordinal": 11,
+				"collection": "assignments",
+				"sourceId": "source-assignment",
+				"sourceKey": "de9d14574cbc6a1adeac913143864d539cc075ebc64a6887921d701958e0fb60",
+				"targetId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501:target-member",
+				"disposition": "ensure",
+				"payload": {
+					"id": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501:target-member",
+					"taskId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+					"userId": "target-member"
+				},
+				"codes": [],
+				"phase": "assignments",
+				"contentDigest": "ff5ac964d8121da810fc0f6aa1dd6b1a91e850df4e1c8c99fd504869ad74997e",
+				"itemDigest": "64b00a1c2c54a55bc1826691e70fddd90291c95df49da20129ee0539689411d5",
+				"targetPrecondition": {
+					"kind": "absent",
+					"naturalKey": {
+						"kind": "task-assignee-pair",
+						"taskId": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+						"userId": "target-member"
+					}
+				},
+				"dependencyProof": {
+					"workspace": {
+						"sourceId": "source-workspace",
+						"targetId": "target-workspace"
+					},
+					"rows": [
+						{
+							"collection": "folders",
+							"sourceKey": "39eaaff2f9e78f284854f6fdb529a02bac010b2480189cb84df811ec36a5e8cd",
+							"itemOrdinal": 5,
+							"id": "0b9a6b25a6adbfd4248687da1d01747a2074f0c98ae72a82a69d8ac187332f9f",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "lists",
+							"sourceKey": "e5b003f79f3700c02603fb8e42732657c87a3e8137e8501d1f00a2919bdf2487",
+							"itemOrdinal": 6,
+							"id": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"workspaceId": "target-workspace"
+						},
+						{
+							"collection": "tasks",
+							"sourceKey": "92efa7fe82500d443128d5ee9887834b5d4f7653405707aca6b74b178d270358",
+							"itemOrdinal": 8,
+							"id": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe",
+							"workspaceId": "target-workspace",
+							"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"parentId": null
+						},
+						{
+							"collection": "tasks",
+							"sourceKey": "d2f3412fb84a9e503a0a2bde679f6c7a5851f17c66f0221b6f1df1e34e235ba5",
+							"itemOrdinal": 9,
+							"id": "490197fa716e555fcd707392be0701b32d034af6662837fa445068630fd6c501",
+							"workspaceId": "target-workspace",
+							"listId": "a918b47331a58140e92aad4062c1599dfaf7fa965a45c77f6c011ba50c169678",
+							"parentId": "b048c9c868dce31e8bceae2eb448c6e42e1fe4b27392ff91913a767259eb01fe"
+						}
+					],
+					"assignee": {
+						"sourceUserId": "source-member",
+						"targetUserId": "target-member",
+						"workspaceId": "target-workspace",
+						"membershipId": "target-seat-member"
+					}
+				}
+			}
+		],
+		"report": {
+			"plannerVersion": 3,
+			"applySupported": true,
+			"counts": {
+				"ensure": 7,
+				"ignored": 5,
+				"blocked": 0
+			},
+			"findings": [
+				{
+					"code": "authority-not-imported",
+					"path": "items[0]"
+				},
+				{
+					"code": "authority-not-imported",
+					"path": "items[1]"
+				},
+				{
+					"code": "authority-not-imported",
+					"path": "items[2]"
+				},
+				{
+					"code": "authority-not-imported",
+					"path": "items[3]"
+				},
+				{
+					"code": "authority-not-imported",
+					"path": "items[4]"
+				}
+			]
+		}
+	}
+}
