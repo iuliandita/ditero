@@ -28,6 +28,15 @@ test("saves and deduplicates a dry run without changing tasks, then discards it"
 			.getByTestId("list")
 			.getByText("Keep this task unchanged", { exact: true }),
 	).toBeVisible();
+	await expect
+		.poll(async () => {
+			const response = await page.request.get("/api/portability/export");
+			expect(response.ok()).toBeTruthy();
+			return (await response.json()).data.tasks.map(
+				(task: { title: string }) => task.title,
+			);
+		})
+		.toEqual(["Keep this task unchanged"]);
 	await goToSettings(page);
 	const downloadEvent = page.waitForEvent("download");
 	await page.getByRole("button", { name: "Download JSON" }).click();
