@@ -1336,6 +1336,16 @@ export const taskNotificationActivation = pgTable(
 	],
 );
 
+export const taskNotificationActivationRelations = relations(
+	taskNotificationActivation,
+	({ one }) => ({
+		task: one(task, {
+			fields: [taskNotificationActivation.taskId],
+			references: [task.id],
+		}),
+	}),
+);
+
 export const taskNotificationRecipient = pgTable(
 	"task_notification_recipient",
 	{
