@@ -16,8 +16,10 @@ import { applyDocumentLocale, type Locale } from "../../lib/locale.ts";
 // `user_pref.locale`; its absence is exactly "not authed" for this switcher.
 export function LanguageSwitcher({
 	persistLocale,
+	compact = false,
 }: {
 	persistLocale?: (locale: Locale) => void;
+	compact?: boolean;
 }) {
 	const [value, setValue] = useState<Locale>(getLocale() as Locale);
 	const labelId = useId();
@@ -29,7 +31,13 @@ export function LanguageSwitcher({
 	}
 
 	return (
-		<div className="flex flex-col gap-1 text-sm">
+		<div
+			className={
+				compact
+					? "flex items-center justify-between gap-3 text-sm"
+					: "flex flex-col gap-1 text-sm"
+			}
+		>
 			<span id={labelId} className="text-muted-foreground">
 				{m.language_switcher_label()}
 			</span>
@@ -37,7 +45,11 @@ export function LanguageSwitcher({
 				<SelectTrigger
 					aria-labelledby={labelId}
 					data-testid="language-switcher"
-					className="w-full sm:w-56"
+					className={
+						compact
+							? "w-auto min-w-36 data-[size=default]:h-11"
+							: "w-full sm:w-56"
+					}
 				>
 					<SelectValue />
 				</SelectTrigger>

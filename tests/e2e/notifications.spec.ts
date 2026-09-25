@@ -281,6 +281,7 @@ test.describe("per-task reminder policy and in-app ack", () => {
 	async function createList(page: Page, name: string) {
 		await leaveSettings(page);
 		await waitWorkspaceReady(page);
+		await page.getByTestId("create-list-open").click();
 		await page.getByTestId("new-list").fill(name);
 		await page.getByTestId("new-list-submit").click();
 		await expect(
@@ -294,6 +295,7 @@ test.describe("per-task reminder policy and in-app ack", () => {
 	async function createHabitsList(page: Page) {
 		await leaveSettings(page);
 		await waitWorkspaceReady(page);
+		await page.getByTestId("create-list-open").click();
 		await page.getByRole("combobox", { name: "Start from template" }).click();
 		await page.getByRole("option", { name: "Habits", exact: true }).click();
 		await page.getByTestId("new-list-submit").click();

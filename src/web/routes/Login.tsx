@@ -10,23 +10,21 @@ import { signInEmail } from "../lib/email-sign-in.ts";
 
 function AuthShell({ children }: { children: ReactNode }) {
 	return (
-		<main className="flex min-h-dvh items-center justify-center bg-muted/30 px-4 py-4 text-foreground">
-			<div className="w-full max-w-[27.5rem]">
-				<div className="mb-4 flex items-center justify-center gap-2.5">
-					<div className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+		<main className="flex min-h-dvh items-center justify-center bg-background px-6 py-8 text-foreground">
+			<div className="w-full max-w-sm">
+				<div className="mb-7 flex items-center gap-2.5">
+					<div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
 						<ListChecks
 							aria-hidden="true"
 							className="size-4"
 							strokeWidth={2.2}
 						/>
 					</div>
-					<span className="text-sm font-semibold tracking-wide">Ditero</span>
+					<span className="text-sm font-semibold">Ditero</span>
 				</div>
-				<section className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-					{children}
-				</section>
-				<div className="mx-auto mt-4 w-full max-w-56">
-					<LanguageSwitcher />
+				{children}
+				<div className="mt-6">
+					<LanguageSwitcher compact />
 				</div>
 			</div>
 		</main>
@@ -138,7 +136,7 @@ export function Login() {
 						{m.login_two_factor_description()}
 					</p>
 					<form
-						className="mt-6 space-y-3"
+						className="mt-7 space-y-4"
 						onSubmit={(event) => {
 							event.preventDefault();
 							verifyTOTP();
@@ -173,46 +171,46 @@ export function Login() {
 							{m.login_verify_code()}
 						</Button>
 					</form>
-					<div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-						<span className="h-px flex-1 bg-border" />
-						<span>{m.login_backup_option()}</span>
-						<span className="h-px flex-1 bg-border" />
-					</div>
-					<form
-						className="space-y-3"
-						onSubmit={(event) => {
-							event.preventDefault();
-							verifyBackupCode();
-						}}
-					>
-						<div className="space-y-2">
-							<label
-								htmlFor="login-backup-code"
-								className="text-sm font-medium"
-							>
-								{m.login_backup_code_label()}
-							</label>
-							<Input
-								id="login-backup-code"
-								data-testid="backup-code-input"
-								className="h-11"
-								placeholder={m.login_backup_code_placeholder()}
-								value={backupCode}
-								onChange={(event) => setBackupCode(event.target.value)}
-								disabled={pending}
-								required
-							/>
-						</div>
-						<Button
-							data-testid="verify-backup-code"
-							type="submit"
-							variant="outline"
-							className="h-11 w-full"
-							disabled={pending}
+					<div className="mt-8 border-t border-border/70 pt-5">
+						<p className="mb-3 text-sm text-muted-foreground">
+							{m.login_backup_option()}
+						</p>
+						<form
+							className="space-y-4"
+							onSubmit={(event) => {
+								event.preventDefault();
+								verifyBackupCode();
+							}}
 						>
-							{m.login_use_backup_code()}
-						</Button>
-					</form>
+							<div className="space-y-2">
+								<label
+									htmlFor="login-backup-code"
+									className="text-sm font-medium"
+								>
+									{m.login_backup_code_label()}
+								</label>
+								<Input
+									id="login-backup-code"
+									data-testid="backup-code-input"
+									className="h-11"
+									placeholder={m.login_backup_code_placeholder()}
+									value={backupCode}
+									onChange={(event) => setBackupCode(event.target.value)}
+									disabled={pending}
+									required
+								/>
+							</div>
+							<Button
+								data-testid="verify-backup-code"
+								type="submit"
+								variant="secondary"
+								className="h-11 w-full"
+								disabled={pending}
+							>
+								{m.login_use_backup_code()}
+							</Button>
+						</form>
+					</div>
 					{error ? <div className="mt-4">{errorMessage}</div> : null}
 				</div>
 			</AuthShell>
@@ -224,9 +222,6 @@ export function Login() {
 			<h1 className="text-2xl font-semibold tracking-tight">
 				{m.login_heading()}
 			</h1>
-			<p className="mt-2 text-sm leading-6 text-muted-foreground">
-				{m.login_description()}
-			</p>
 			<form
 				className="mt-6 space-y-3"
 				onSubmit={(event) => {
@@ -269,7 +264,7 @@ export function Login() {
 					/>
 				</div>
 				{errorMessage}
-				<div className="space-y-2 pt-2">
+				<div className="space-y-1 pt-2">
 					<Button
 						data-testid="signin"
 						type="submit"
@@ -281,8 +276,8 @@ export function Login() {
 					<Button
 						data-testid="signup"
 						type="button"
-						variant="outline"
-						className="h-11 w-full"
+						variant="link"
+						className="h-11 w-full text-muted-foreground hover:text-foreground"
 						onClick={(event) => {
 							if (event.currentTarget.form?.reportValidity()) signUp();
 						}}
@@ -292,31 +287,29 @@ export function Login() {
 					</Button>
 				</div>
 			</form>
-			<div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-				<span className="h-px flex-1 bg-border" />
-				<span>{m.login_other_options()}</span>
-				<span className="h-px flex-1 bg-border" />
-			</div>
-			<div className="grid gap-2">
-				<Button
-					data-testid="signin-passkey"
-					type="button"
-					variant="outline"
-					className="h-11 w-full"
-					onClick={signInPasskey}
-					disabled={pending}
-				>
-					{m.login_signin_passkey()}
-				</Button>
-				<Button
-					type="button"
-					variant="outline"
-					className="h-11 w-full"
-					onClick={signInGoogle}
-					disabled={pending}
-				>
-					{m.login_continue_google()}
-				</Button>
+			<div className="mt-5 border-t border-border/70 pt-4">
+				<p className="sr-only">{m.login_other_options()}</p>
+				<div className="divide-y divide-border/70 rounded-lg bg-muted/50">
+					<Button
+						data-testid="signin-passkey"
+						type="button"
+						variant="ghost"
+						className="h-11 w-full rounded-none first:rounded-t-xl"
+						onClick={signInPasskey}
+						disabled={pending}
+					>
+						{m.login_signin_passkey()}
+					</Button>
+					<Button
+						type="button"
+						variant="ghost"
+						className="h-11 w-full rounded-none last:rounded-b-xl"
+						onClick={signInGoogle}
+						disabled={pending}
+					>
+						{m.login_continue_google()}
+					</Button>
+				</div>
 			</div>
 		</AuthShell>
 	);

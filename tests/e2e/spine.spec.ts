@@ -46,6 +46,7 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 	}
 
 	// Ana creates a list in her personal workspace -> Bob must never see it.
+	await pa.getByTestId("create-list-open").click();
 	await pa.getByTestId("new-list").fill("Ana secret");
 	await pa.getByTestId("new-list-submit").click();
 	await expect(pa.getByText("Ana secret")).toBeVisible();

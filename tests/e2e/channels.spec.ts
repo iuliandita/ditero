@@ -530,6 +530,7 @@ test("interactive ack: a signed Discord POST acks a live reminder and terminates
 
 	// A habits reminder just in the past, materialised by the real scheduler.
 	await waitWorkspaceReady(pageA);
+	await pageA.getByTestId("create-list-open").click();
 	await pageA.getByRole("combobox", { name: "Start from template" }).click();
 	await pageA.getByRole("option", { name: "Habits", exact: true }).click();
 	await pageA.getByTestId("new-list-submit").click();

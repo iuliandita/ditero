@@ -41,6 +41,7 @@ async function waitWorkspaceReady(page: Page): Promise<void> {
 
 async function createListDesktop(page: Page, name: string): Promise<void> {
 	await waitWorkspaceReady(page);
+	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	await expect(
@@ -275,6 +276,7 @@ test("recurring task: Skip control advances the due date without awarding Karma"
 // blank-list picker; the starter is the create path).
 async function createHabitsList(page: Page): Promise<void> {
 	await waitWorkspaceReady(page);
+	await page.getByTestId("create-list-open").click();
 	await page.getByRole("combobox", { name: "Start from template" }).click();
 	await page.getByRole("option", { name: "Habits", exact: true }).click();
 	await page.getByTestId("new-list-submit").click();
@@ -369,6 +371,7 @@ test("habits: a blank habits list is creatable from the kind picker", async ({
 	await signUp(page, uniqueEmail("habit-kind"));
 	await waitWorkspaceReady(page);
 
+	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").fill("Chores");
 	await page.getByRole("button", { name: "Habits", exact: true }).click();
 	await page.getByTestId("new-list-submit").click();

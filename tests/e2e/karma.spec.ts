@@ -50,6 +50,7 @@ async function openListDesktop(page: Page, name: string): Promise<void> {
 
 async function createListDesktop(page: Page, name: string): Promise<void> {
 	await waitWorkspaceReady(page);
+	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	await expect(
@@ -69,6 +70,7 @@ async function addTask(page: Page, title: string): Promise<void> {
 // blank-list picker; the starter is the create path) -- mirrors habits.spec.
 async function createHabitsList(page: Page): Promise<void> {
 	await waitWorkspaceReady(page);
+	await page.getByTestId("create-list-open").click();
 	await page.getByRole("combobox", { name: "Start from template" }).click();
 	await page.getByRole("option", { name: "Habits", exact: true }).click();
 	await page.getByTestId("new-list-submit").click();

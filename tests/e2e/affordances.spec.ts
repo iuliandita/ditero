@@ -62,7 +62,9 @@ async function waitWorkspaceReady(page: Page): Promise<void> {
 // back to the lists index (where the create-list form mounts).
 async function goToListsIndex(page: Page): Promise<void> {
 	await page.getByRole("button", { name: /'s space/ }).click();
-	await expect(page.getByTestId("new-list")).toBeVisible({ timeout: 15000 });
+	await expect(page.getByTestId("create-list-open")).toBeVisible({
+		timeout: 15000,
+	});
 }
 
 // Attribute selector, NOT getByRole: the confirm dialog is a Radix modal, so it
@@ -112,6 +114,8 @@ async function createListDesktop(
 	locale: Locale = "en",
 ): Promise<void> {
 	await waitWorkspaceReady(page);
+	await page.getByTestId("sidebar-create").click();
+	await page.getByTestId("sidebar-new-list").click();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	await expect(
@@ -148,6 +152,7 @@ async function closeRowMenu(page: Page): Promise<void> {
 }
 
 async function createFolder(page: Page, name: string): Promise<void> {
+	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("new-folder").click();
 	await page.getByTestId("folder-name-input").fill(name);
 	await page.getByTestId("folder-name-save").click();
@@ -575,6 +580,7 @@ test("roles: a Viewer keeps New view/New dashboard, loses New folder and this wo
 		sidebarLists(page).getByRole("button", { name: names.list, exact: true }),
 	).toBeVisible({ timeout: 15000 });
 
+	await page.getByTestId("sidebar-create").click();
 	await expect(page.getByTestId("new-folder")).toHaveCount(0);
 	await expect(page.getByTestId("new-view")).toBeVisible();
 	await expect(page.getByTestId("new-dashboard")).toBeVisible();
@@ -708,15 +714,24 @@ test("affordances: sidebar New list returns to the index with the title focused"
 	page,
 }) => {
 	await signUp(page, uniqueEmail("sidebar-new-list"));
+	await waitWorkspaceReady(page);
+	await expect(page.getByTestId("create-list-open")).toBeVisible();
+	await expect(page.getByTestId("new-list")).toBeHidden();
 	const name = uniqueName("Groceries");
 	await createListDesktop(page, name);
 	await openListDesktop(page, name);
 	// Precondition: the create form is not on screen while a list is open.
 	await expect(page.getByTestId("new-list")).toBeHidden();
 
+	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("sidebar-new-list").click();
 
 	const title = page.getByTestId("new-list");
 	await expect(title).toBeVisible();
 	await expect(title).toBeFocused();
+	await page
+		.getByRole("button", { name: m.confirm_cancel(), exact: true })
+		.click();
+	await expect(title).toBeHidden();
+	await expect(page.getByTestId("create-list-open")).toBeFocused();
 });

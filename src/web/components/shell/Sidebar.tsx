@@ -9,6 +9,12 @@ import {
 	Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ICONS, ListIcon } from "@/lib/list-icon";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
@@ -317,21 +323,6 @@ export function Sidebar({
 					<ul className="flex flex-col gap-0.5">
 						{builtinViews.map((v) => viewRow(v.id, v.name, v.icon))}
 						{pinnedViews.map((v) => viewRow(v.id, v.name, v.icon))}
-						<li>
-							<button
-								type="button"
-								data-testid="new-view"
-								onClick={onNewView}
-								title={m.action_new_view()}
-								className={cn(
-									"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
-									collapsed && "justify-center px-0",
-								)}
-							>
-								<Plus className="size-4 shrink-0" />
-								{!collapsed && m.action_new_view()}
-							</button>
-						</li>
 					</ul>
 				</div>
 
@@ -353,21 +344,6 @@ export function Sidebar({
 								actions={dashboardActions(d)}
 							/>
 						))}
-						<li>
-							<button
-								type="button"
-								data-testid="new-dashboard"
-								onClick={onNewDashboard}
-								title={m.action_new_dashboard()}
-								className={cn(
-									"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
-									collapsed && "justify-center px-0",
-								)}
-							>
-								<Plus className="size-4 shrink-0" />
-								{!collapsed && m.action_new_dashboard()}
-							</button>
-						</li>
 					</ul>
 				</div>
 
@@ -399,46 +375,64 @@ export function Sidebar({
 						</ul>
 					</div>
 				))}
+			</nav>
 
-				{(canCreateList || canCreateFolder) && (
-					<ul className="flex flex-col gap-0.5">
+			<div className="border-t p-2">
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button
+							data-testid="sidebar-create"
+							variant="ghost"
+							className={cn(
+								"h-11 w-full justify-start",
+								collapsed && "justify-center px-0",
+							)}
+							aria-label={m.sidebar_create()}
+						>
+							<Plus className="size-4" />
+							{!collapsed && m.sidebar_create()}
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent side={collapsed ? "right" : "top"} align="start">
+						<DropdownMenuItem
+							data-testid="new-view"
+							className="min-h-11"
+							onSelect={onNewView}
+						>
+							<Plus className="size-4" />
+							{m.action_new_view()}
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							data-testid="new-dashboard"
+							className="min-h-11"
+							onSelect={onNewDashboard}
+						>
+							<Plus className="size-4" />
+							{m.action_new_dashboard()}
+						</DropdownMenuItem>
 						{canCreateList && (
-							<li>
-								<button
-									type="button"
-									data-testid="sidebar-new-list"
-									onClick={onNewList}
-									title={m.create_list_new_list()}
-									className={cn(
-										"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
-										collapsed && "justify-center px-0",
-									)}
-								>
-									<ListPlus className="size-4 shrink-0" />
-									{!collapsed && m.create_list_new_list()}
-								</button>
-							</li>
+							<DropdownMenuItem
+								data-testid="sidebar-new-list"
+								className="min-h-11"
+								onSelect={onNewList}
+							>
+								<ListPlus className="size-4" />
+								{m.create_list_new_list()}
+							</DropdownMenuItem>
 						)}
 						{canCreateFolder && (
-							<li>
-								<button
-									type="button"
-									data-testid="new-folder"
-									onClick={onNewFolder}
-									title={m.action_new_folder()}
-									className={cn(
-										"flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-sidebar-accent/60",
-										collapsed && "justify-center px-0",
-									)}
-								>
-									<FolderPlus className="size-4 shrink-0" />
-									{!collapsed && m.action_new_folder()}
-								</button>
-							</li>
+							<DropdownMenuItem
+								data-testid="new-folder"
+								className="min-h-11"
+								onSelect={onNewFolder}
+							>
+								<FolderPlus className="size-4" />
+								{m.action_new_folder()}
+							</DropdownMenuItem>
 						)}
-					</ul>
-				)}
-			</nav>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
 
 			<div className="flex items-center gap-1 border-t p-2">
 				<Button

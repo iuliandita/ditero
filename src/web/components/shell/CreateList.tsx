@@ -90,6 +90,7 @@ export function CreateList({
 	initialFolderId,
 	autoFocus,
 	onCreated,
+	onCancel,
 }: {
 	workspaceId: string;
 	lists: List[];
@@ -101,23 +102,21 @@ export function CreateList({
 	 * navigated here, never on a plain landing render. */
 	autoFocus?: boolean;
 	onCreated?: () => void;
+	onCancel?: () => void;
 }) {
 	const isDesktop = useIsDesktop();
-	// Below md the form lives in a bottom sheet; at/above md it is inline so it
-	// is always reachable (the spine e2e drives new-list without opening a menu).
 	if (isDesktop) {
 		return (
-			<div className="rounded-xl border p-3">
-				<Form
-					workspaceId={workspaceId}
-					lists={lists}
-					folders={folders}
-					templates={templates}
-					initialFolderId={initialFolderId}
-					autoFocus={autoFocus}
-					onCreated={onCreated}
-				/>
-			</div>
+			<DesktopCreateList
+				workspaceId={workspaceId}
+				lists={lists}
+				folders={folders}
+				templates={templates}
+				initialFolderId={initialFolderId}
+				autoFocus={autoFocus}
+				onCreated={onCreated}
+				onCancel={onCancel}
+			/>
 		);
 	}
 	return (
@@ -129,11 +128,12 @@ export function CreateList({
 			initialFolderId={initialFolderId}
 			autoFocus={autoFocus}
 			onCreated={onCreated}
+			onCancel={onCancel}
 		/>
 	);
 }
 
-function MobileCreateList(props: {
+type CreateListProps = {
 	workspaceId: string;
 	lists: List[];
 	folders: Folder[];
@@ -141,12 +141,65 @@ function MobileCreateList(props: {
 	initialFolderId?: string | null;
 	autoFocus?: boolean;
 	onCreated?: () => void;
-}) {
+	onCancel?: () => void;
+};
+
+function DesktopCreateList(props: CreateListProps) {
+	const [open, setOpen] = useState(props.autoFocus ?? false);
+	function close() {
+		setOpen(false);
+		// An explicit sidebar action remounts this component when its intent clears.
+		requestAnimationFrame(() =>
+			document
+				.querySelector<HTMLButtonElement>("[data-create-list-trigger]")
+				?.focus(),
+		);
+	}
+	if (!open) {
+		return (
+			<Button
+				type="button"
+				data-testid="create-list-open"
+				data-create-list-trigger
+				variant="ghost"
+				className="h-11 justify-start text-muted-foreground"
+				onClick={() => setOpen(true)}
+			>
+				<Plus className="size-4" />
+				{m.create_list_new_list()}
+			</Button>
+		);
+	}
+	return (
+		<div className="rounded-xl border p-3">
+			<Form
+				{...props}
+				autoFocus
+				onCancel={() => {
+					close();
+					props.onCancel?.();
+				}}
+				onCreated={() => {
+					close();
+					props.onCreated?.();
+				}}
+			/>
+		</div>
+	);
+}
+
+function MobileCreateList(props: CreateListProps) {
 	const [open, setOpen] = useState(props.autoFocus ?? false);
 	return (
-		<Sheet open={open} onOpenChange={setOpen}>
+		<Sheet
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				if (!next) props.onCancel?.();
+			}}
+		>
 			<SheetTrigger asChild>
-				<Button variant="outline" className="w-full justify-start">
+				<Button variant="outline" className="h-11 w-full justify-start">
 					<Plus className="size-4" />
 					{m.create_list_new_list()}
 				</Button>
@@ -158,6 +211,7 @@ function MobileCreateList(props: {
 				<div className="p-4 pt-0">
 					<Form
 						{...props}
+						onCancel={undefined}
 						onCreated={() => {
 							props.onCreated?.();
 							setOpen(false);
@@ -177,6 +231,7 @@ function Form({
 	initialFolderId,
 	autoFocus,
 	onCreated,
+	onCancel,
 }: {
 	workspaceId: string;
 	lists: List[];
@@ -185,6 +240,7 @@ function Form({
 	initialFolderId?: string | null;
 	autoFocus?: boolean;
 	onCreated?: () => void;
+	onCancel?: () => void;
 }) {
 	const zero = useZero<typeof schema>();
 	const [title, setTitle] = useState("");
@@ -357,15 +413,26 @@ function Form({
 					{error}
 				</p>
 			)}
-			<Button
-				data-testid="new-list-submit"
-				type="button"
-				onClick={() => void submit()}
-				disabled={busy}
-				className="self-end"
-			>
-				{m.create_list_submit()}
-			</Button>
+			<div className="flex justify-end gap-2">
+				{onCancel && (
+					<Button
+						type="button"
+						variant="ghost"
+						onClick={onCancel}
+						disabled={busy}
+					>
+						{m.confirm_cancel()}
+					</Button>
+				)}
+				<Button
+					data-testid="new-list-submit"
+					type="button"
+					onClick={() => void submit()}
+					disabled={busy}
+				>
+					{m.create_list_submit()}
+				</Button>
+			</div>
 		</div>
 	);
 }

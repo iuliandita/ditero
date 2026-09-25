@@ -86,6 +86,7 @@ async function createListDesktop(
 	kindLabel?: string,
 ): Promise<void> {
 	await waitWorkspaceReady(page);
+	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").fill(name);
 	if (kindLabel)
 		await page.getByRole("button", { name: kindLabel, exact: true }).click();
@@ -105,7 +106,7 @@ async function openListDesktop(page: Page, name: string): Promise<void> {
 
 async function backToIndexDesktop(page: Page): Promise<void> {
 	await page.getByRole("button", { name: /'s space/ }).click();
-	await expect(page.getByTestId("new-list")).toBeVisible();
+	await expect(page.getByTestId("create-list-open")).toBeVisible();
 }
 
 async function addTask(page: Page, title: string): Promise<void> {
@@ -417,6 +418,7 @@ test("save list as template then create-from-template reproduces items", async (
 	await page.getByTestId("save-as-template").click();
 
 	await backToIndexDesktop(page);
+	await page.getByTestId("create-list-open").click();
 	await page.locator('[data-slot="select-trigger"]').nth(1).click();
 	await page.getByRole("option", { name: listName, exact: true }).click();
 	await page.getByTestId("new-list-submit").click();
@@ -527,6 +529,7 @@ test("isolation: B never sees A's personal list, folder, or label", async ({
 
 	// A puts its list inside the folder, so the folder header renders for A.
 	await reloadToIndex(pa);
+	await pa.getByTestId("create-list-open").click();
 	await pa.getByTestId("new-list").fill(listName);
 	await pa.locator('[data-slot="select-trigger"]').first().click();
 	await pa.getByRole("option", { name: folderName, exact: true }).click();
@@ -557,7 +560,9 @@ test("isolation: B never sees A's personal list, folder, or label", async ({
 // it up before it is selected in the create-list form.
 async function reloadToIndex(page: Page): Promise<void> {
 	await page.reload();
-	await expect(page.getByTestId("new-list")).toBeVisible({ timeout: 15000 });
+	await expect(page.getByTestId("create-list-open")).toBeVisible({
+		timeout: 15000,
+	});
 	await waitWorkspaceReady(page);
 }
 
@@ -571,7 +576,7 @@ test("a11y: no serious/critical violations on core surfaces", async ({
 	const page = await ctx.newPage();
 	await signUp(page, email);
 
-	await expect(page.getByTestId("new-list")).toBeVisible();
+	await expect(page.getByTestId("create-list-open")).toBeVisible();
 	await expectNoSeriousA11y(page, "workspace index");
 
 	const kinds: [string, string | undefined][] = [

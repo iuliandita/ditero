@@ -268,6 +268,7 @@ test("live ack: a real tap's action URL acks a habit and the open client sees it
 
 	// habits kind is not in the blank-list picker; the starter template is the
 	// create path (mirrors habits.spec / notifications.spec).
+	await page.getByTestId("create-list-open").click();
 	await page.getByRole("combobox", { name: "Start from template" }).click();
 	await page.getByRole("option", { name: "Habits", exact: true }).click();
 	await page.getByTestId("new-list-submit").click();

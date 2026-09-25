@@ -548,6 +548,7 @@ function NormalWorkspace() {
 					listId={openListId}
 					listActions={buildListActions}
 					onBack={!isDesktop ? () => closeList(openListId) : undefined}
+					onQuickAdd={() => setQuickAddOpen(true)}
 				/>
 			</div>
 		);
@@ -800,6 +801,8 @@ function NormalWorkspace() {
 							lists={activeLists}
 							folders={activeFolders}
 							templates={activeTemplates}
+							onCreated={() => setNewListFolder(null)}
+							onCancel={() => setNewListFolder(null)}
 						/>
 						{/* Desktop nav lives in the sidebar; render the list index only on
 						    mobile so a list title never appears twice at once. */}
