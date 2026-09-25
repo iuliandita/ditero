@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { currentTOTP } from "../totp.ts";
 import { goToSettings } from "./helpers.ts";
@@ -23,6 +24,52 @@ async function signUp(page: import("@playwright/test").Page, email: string) {
 	});
 	await goToSettings(page);
 }
+
+test("login form accepts Enter and has no serious accessibility violations", async ({
+	page,
+}) => {
+	await page.goto("/");
+	await expect(page.getByLabel("Email address")).toBeVisible();
+	await page.addStyleTag({
+		content:
+			"*,*::before,*::after{animation:none!important;transition:none!important}",
+	});
+	const { violations } = await new AxeBuilder({ page }).analyze();
+	expect(
+		violations.filter((v) => v.impact === "serious" || v.impact === "critical"),
+	).toEqual([]);
+
+	const email = `enter-login-${Date.now()}@t.dev`;
+	await signUp(page, email);
+	await page.getByTestId("sign-out").click();
+	await page.getByTestId("email").fill(email);
+	await page.getByTestId("password").fill("pw-123456");
+	await page.getByTestId("password").press("Enter");
+	await expect(page.getByTestId("workspace")).toBeVisible({
+		timeout: SIGNUP_TIMEOUT,
+	});
+});
+
+test("sign up validates the form before making an auth request", async ({
+	page,
+}) => {
+	const requests: string[] = [];
+	page.on("request", (request) => {
+		if (request.url().includes("/api/auth/sign-up/email"))
+			requests.push(request.url());
+	});
+	await page.goto("/");
+	await page.getByTestId("email").fill("invalid-email");
+	await page.getByTestId("password").fill("pw-123456");
+	await page.getByTestId("signup").click();
+	await expect(page.getByTestId("email")).toBeFocused();
+	expect(
+		await page
+			.getByTestId("email")
+			.evaluate((input: HTMLInputElement) => input.validity.valid),
+	).toBe(false);
+	expect(requests).toEqual([]);
+});
 
 test("enrolls and signs in with a passkey", async ({ browser }) => {
 	const context = await browser.newContext();
@@ -88,7 +135,7 @@ test("supports TOTP enrollment, step-up, recovery, and disable", async ({
 		timeout: ENROLL_TIMEOUT,
 	});
 	await page.getByTestId("two-factor-code").fill(currentTOTP(secret));
-	await page.getByTestId("verify-totp").click();
+	await page.getByTestId("two-factor-code").press("Enter");
 	await expect(page.getByTestId("workspace")).toBeVisible({
 		timeout: SIGNUP_TIMEOUT,
 	});
