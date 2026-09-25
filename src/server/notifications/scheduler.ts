@@ -32,13 +32,17 @@ import type { Locale } from "../../domain/locale.ts";
 import { reminderWindow } from "../../domain/reminder-window.ts";
 import { type EnqueueOptions, enqueueOutbox } from "./outbox.ts";
 import {
+	type ProducerAuthority,
+	retryProducerCandidate,
+	withProducerAuthority,
+} from "./producer-authority.ts";
+import {
 	DEFAULT_PREF,
 	decideQuietHours,
-	loadChannels,
-	loadMemberships,
 	loadPrefs,
 	type Pref,
 } from "./recipients.ts";
+import { withDrizzleProducerActivationScan } from "./task-activation-drizzle.ts";
 
 export const SCHEDULER_LOCK_KEY = 918274;
 
@@ -67,13 +71,20 @@ export type ScanOptions = {
 	// callers pass their own; startScheduler wires the process-suicide hook,
 	// which is a no-op unless DITERO_TEST_CRASH_POINT armed it outside
 	// production (config/test-crash).
-	onBeforeEnqueue?: () => void | Promise<void>;
+	onBeforeEnqueue?: (tx: Transaction) => void | Promise<void>;
+	onBeforeFallbackHandoff?: () => void | Promise<void>;
+	onAfterAuthorityDiscovery?: () => void | Promise<void>;
 	maxQueuedPerUser?: number;
 };
 
 // Options plus the per-tick enqueue cap state, so the refusal warning dedupes
 // per user per tick rather than per refused row.
 type TickOptions = ScanOptions & { cap: EnqueueOptions };
+
+const producerVisible = sql`not exists (
+	select 1 from task_notification_activation activation
+	where activation.task_id = ${tables.task.id} and activation.status <> 'active'
+)`;
 
 export async function withLeaderLock<T>(
 	pool: Pool,
@@ -232,7 +243,7 @@ async function fire(
 	locale: Locale,
 	now: Date,
 	cap: EnqueueOptions,
-	onBeforeEnqueue?: () => void | Promise<void>,
+	onBeforeEnqueue?: (tx: Transaction) => void | Promise<void>,
 ): Promise<number> {
 	await tx
 		.update(tables.reminderState)
@@ -243,7 +254,7 @@ async function fire(
 			deferredUntil: null,
 		})
 		.where(eq(tables.reminderState.id, reminderStateId));
-	await onBeforeEnqueue?.();
+	await onBeforeEnqueue?.(tx);
 	return await enqueue(
 		tx,
 		reminderStateId,
@@ -297,7 +308,7 @@ export async function scanTick(
 }
 
 async function loadTasks(
-	database: Database,
+	database: Database | Transaction,
 	from: Date,
 	to: Date,
 ): Promise<TaskRow[]> {
@@ -321,6 +332,7 @@ async function loadTasks(
 		.innerJoin(tables.list, eq(tables.task.listId, tables.list.id))
 		.where(
 			and(
+				producerVisible,
 				isNotNull(tables.task.reminderTime),
 				isNotNull(tables.task.dueAt),
 				or(
@@ -343,7 +355,11 @@ async function createDueReminders(
 	summary: TickSummary,
 	options: TickOptions,
 ): Promise<void> {
-	const taskRows = await loadTasks(database, from, now);
+	const taskRows = await database.transaction((tx) =>
+		withDrizzleProducerActivationScan(tx, (scoped) =>
+			loadTasks(scoped, from, now),
+		),
+	);
 	if (taskRows.length === 0) return;
 
 	const assignees = await database
@@ -367,17 +383,11 @@ async function createDueReminders(
 
 	const recipientsFor = (task: TaskRow) =>
 		byTask.get(task.id) ?? [task.listOwnerId];
-	const everyone = new Set<string>();
-	for (const task of taskRows) {
-		everyone.add(task.listOwnerId);
-		for (const userId of recipientsFor(task)) everyone.add(userId);
-	}
-	const prefs = await loadPrefs(database, [...everyone]);
-	const channels = await loadChannels(database, [...everyone]);
-	// The list owner stays in `everyone` regardless: its preference supplies the
-	// expansion timezone even when the owner is no longer a member and so
-	// receives nothing.
-	const memberOf = await loadMemberships(database, [...everyone]);
+	const prefs = await loadPrefs(database, [
+		...new Set(taskRows.map((task) => task.listOwnerId)),
+	]);
+	// The list owner's preference supplies the expansion timezone even when
+	// the owner is no longer a member and receives nothing.
 
 	for (const task of taskRows) {
 		// Isolate per task: a malformed reminderTime or an invalid stored
@@ -420,25 +430,19 @@ async function createDueReminders(
 		}
 
 		for (const occurrence of occurrences) {
-			const firedLate =
-				now.getTime() - occurrence.occurrenceAt.getTime() >
-				timing.lateThresholdMs;
 			for (const recipientUserId of recipientsFor(task)) {
-				// Equivalent of the overdue sweep's notify-time gate; the escalate
-				// branch re-checks the same way.
-				if (!memberOf.has(`${recipientUserId}:${task.workspaceId}`)) continue;
 				try {
 					await createReminder(database, {
-						task,
+						taskId: task.id,
 						occurrenceAt: occurrence.occurrenceAt,
 						recipientUserId,
-						pref: prefs.get(recipientUserId) ?? DEFAULT_PREF,
-						channels: channels.get(recipientUserId) ?? [],
-						firedLate,
+						from,
+						timing,
 						now,
 						summary,
 						cap: options.cap,
 						onBeforeEnqueue: options.onBeforeEnqueue,
+						onAfterAuthorityDiscovery: options.onAfterAuthorityDiscovery,
 					});
 				} catch (error) {
 					summary.skippedRecipients++;
@@ -455,74 +459,122 @@ async function createDueReminders(
 async function createReminder(
 	database: Database,
 	input: {
-		task: TaskRow;
+		taskId: string;
 		occurrenceAt: Date;
 		recipientUserId: string;
-		pref: Pref;
-		channels: ChannelKind[];
-		firedLate: boolean;
+		from: Date;
+		timing: SchedulerTiming;
 		now: Date;
 		summary: TickSummary;
 		cap: EnqueueOptions;
-		onBeforeEnqueue?: () => void | Promise<void>;
+		onBeforeEnqueue?: (tx: Transaction) => void | Promise<void>;
+		onAfterAuthorityDiscovery?: () => void | Promise<void>;
 	},
 ): Promise<void> {
-	const { task, occurrenceAt, recipientUserId, pref, now, summary } = input;
+	const { taskId, occurrenceAt, recipientUserId, now, summary } = input;
 	// The insert and its enqueue are one transaction: a commit between them
 	// would leave a row with no schedule and no outbox entry, which the next
 	// tick's insert conflicts with and the sweep never selects.
-	await database.transaction(async (tx) => {
-		const inserted = await tx
-			.insert(tables.reminderState)
-			.values({
-				id: randomUUID(),
-				taskId: task.id,
-				occurrenceAt,
-				recipientUserId,
-				status: "pending",
-				fireCount: 0,
-				// Never NULL: a crash before the branch below leaves the row
-				// reachable by the sweep's self-heal branch rather than stranded.
-				nextAttemptAt: now,
-				firedLate: input.firedLate,
-			})
-			.onConflictDoNothing()
-			.returning({ id: tables.reminderState.id });
-		if (inserted.length === 0) return; // another scan won the race
-		const reminderStateId = inserted[0].id;
-		summary.created++;
+	const result = await retryProducerCandidate(() =>
+		database.transaction((tx) =>
+			withProducerAuthority(
+				tx,
+				{
+					kind: "reminder",
+					taskId,
+					recipientUserId,
+					occurrenceAt,
+				},
+				async (authority) => {
+					const task = authority.task;
+					const pref = authority.recipientPref;
+					const lockedWindow = reminderWindow(
+						[
+							{
+								taskId,
+								reminderTime: task.reminderTime,
+								rrule: task.rrule,
+								dueAt: task.dueAt,
+								done: task.done,
+							},
+						],
+						authority.ownerPref.timezone,
+						input.from,
+						now,
+					);
+					if (
+						!lockedWindow.occurrences.some(
+							(row) => row.occurrenceAt.getTime() === occurrenceAt.getTime(),
+						)
+					)
+						return { created: 0, fired: 0, deferred: 0, enqueued: 0 };
+					const inserted = await tx
+						.insert(tables.reminderState)
+						.values({
+							id: randomUUID(),
+							taskId,
+							occurrenceAt,
+							recipientUserId,
+							status: "pending",
+							fireCount: 0,
+							// Never NULL: a crash before the branch below leaves the row
+							// reachable by the sweep's self-heal branch rather than stranded.
+							nextAttemptAt: now,
+							firedLate:
+								now.getTime() - occurrenceAt.getTime() >
+								input.timing.lateThresholdMs,
+						})
+						.onConflictDoNothing()
+						.returning({ id: tables.reminderState.id });
+					if (inserted.length === 0)
+						return { created: 0, fired: 0, deferred: 0, enqueued: 0 }; // another scan won the race
+					const reminderStateId = inserted[0].id;
 
-		const decision = decideQuietHours(pref, task.urgent, now, recipientUserId);
-		if (decision.kind === "defer") {
-			await tx
-				.update(tables.reminderState)
-				.set({
-					status: "deferred",
-					deferredUntil: decision.until,
-					nextAttemptAt: null,
-				})
-				.where(eq(tables.reminderState.id, reminderStateId));
-			summary.deferred++;
-			return;
-		}
+					const decision = decideQuietHours(
+						pref,
+						task.urgent,
+						now,
+						recipientUserId,
+					);
+					if (decision.kind === "defer") {
+						await tx
+							.update(tables.reminderState)
+							.set({
+								status: "deferred",
+								deferredUntil: decision.until,
+								nextAttemptAt: null,
+							})
+							.where(eq(tables.reminderState.id, reminderStateId));
+						return { created: 1, fired: 0, deferred: 1, enqueued: 0 };
+					}
 
-		const policy = policyFor(task, pref);
-		summary.enqueued += await fire(
-			tx,
-			reminderStateId,
-			recipientUserId,
-			task,
-			occurrenceAt,
-			1,
-			repeatAt(policy, now),
-			input.channels,
-			pref.locale,
-			now,
-			input.cap,
-			input.onBeforeEnqueue,
-		);
-		summary.fired++;
-	});
+					const policy = policyFor(task, pref);
+					const enqueued = await fire(
+						tx,
+						reminderStateId,
+						recipientUserId,
+						task,
+						occurrenceAt,
+						1,
+						repeatAt(policy, now),
+						authority.channels,
+						pref.locale,
+						now,
+						input.cap,
+						input.onBeforeEnqueue,
+					);
+					return { created: 1, fired: 1, deferred: 0, enqueued };
+				},
+				{ onAfterDiscovery: input.onAfterAuthorityDiscovery },
+			),
+		),
+	);
+	if (result.kind === "eligible") {
+		summary.created += result.value.created;
+		summary.fired += result.value.fired;
+		summary.deferred += result.value.deferred;
+		summary.enqueued += result.value.enqueued;
+	}
 }
 
 type SweepRow = TaskRow & {
@@ -535,7 +587,7 @@ type SweepRow = TaskRow & {
 };
 
 async function loadSweepRows(
-	database: Database,
+	database: Database | Transaction,
 	now: Date,
 ): Promise<SweepRow[]> {
 	const columns = {
@@ -571,19 +623,22 @@ async function loadSweepRows(
 	// it must catch both stranded shapes (next_attempt_at NULL and the
 	// insert-time placeholder) or the row is reachable by no branch at all.
 	const waking = await base().where(
-		or(
-			and(
-				eq(tables.reminderState.status, "deferred"),
-				isNotNull(tables.reminderState.deferredUntil),
-				lte(tables.reminderState.deferredUntil, now),
-			),
-			and(
-				eq(tables.reminderState.status, "pending"),
-				eq(tables.reminderState.fireCount, 0),
-				isNull(tables.reminderState.deferredUntil),
-				or(
-					isNull(tables.reminderState.nextAttemptAt),
-					lte(tables.reminderState.nextAttemptAt, now),
+		and(
+			producerVisible,
+			or(
+				and(
+					eq(tables.reminderState.status, "deferred"),
+					isNotNull(tables.reminderState.deferredUntil),
+					lte(tables.reminderState.deferredUntil, now),
+				),
+				and(
+					eq(tables.reminderState.status, "pending"),
+					eq(tables.reminderState.fireCount, 0),
+					isNull(tables.reminderState.deferredUntil),
+					or(
+						isNull(tables.reminderState.nextAttemptAt),
+						lte(tables.reminderState.nextAttemptAt, now),
+					),
 				),
 			),
 		),
@@ -593,6 +648,7 @@ async function loadSweepRows(
 	// forever.
 	const escalating = await base().where(
 		and(
+			producerVisible,
 			eq(tables.reminderState.status, "pending"),
 			isNotNull(tables.reminderState.nextAttemptAt),
 			lte(tables.reminderState.nextAttemptAt, now),
@@ -612,33 +668,21 @@ async function sweep(
 	summary: TickSummary,
 	options: TickOptions,
 ): Promise<void> {
-	const rows = await loadSweepRows(database, now);
+	const rows = await database.transaction((tx) =>
+		withDrizzleProducerActivationScan(tx, (scoped) =>
+			loadSweepRows(scoped, now),
+		),
+	);
 	if (rows.length === 0) return;
-
-	const userIds = new Set<string>();
-	for (const row of rows) {
-		userIds.add(row.recipientUserId);
-		if (row.fallbackUserId) userIds.add(row.fallbackUserId);
-	}
-	const prefs = await loadPrefs(database, [...userIds]);
-	const channels = await loadChannels(database, [...userIds]);
 
 	for (const row of rows) {
 		// Isolate per row: an unresolvable policy throws, and one bad row must
 		// not abort every remaining row in this tick.
 		try {
 			if (row.branch === "wake") {
-				await sweepWake(database, row, prefs, channels, now, summary, options);
+				await sweepWake(database, row, now, summary, options);
 			} else {
-				await sweepEscalate(
-					database,
-					row,
-					prefs,
-					channels,
-					now,
-					summary,
-					options,
-				);
+				await sweepEscalate(database, row, now, summary, options);
 			}
 		} catch (error) {
 			summary.skippedRows++;
@@ -653,104 +697,158 @@ async function sweep(
 async function sweepWake(
 	database: Database,
 	row: SweepRow,
-	prefs: Map<string, Pref>,
-	channels: Map<string, ChannelKind[]>,
 	now: Date,
 	summary: TickSummary,
 	options: TickOptions,
 ): Promise<void> {
-	const pref = prefs.get(row.recipientUserId) ?? DEFAULT_PREF;
-	const decision = decideQuietHours(pref, row.urgent, now, row.recipientUserId);
-	if (decision.kind === "defer") {
-		await database
-			.update(tables.reminderState)
-			.set({
-				status: "deferred",
-				deferredUntil: decision.until,
-				nextAttemptAt: null,
-			})
-			.where(eq(tables.reminderState.id, row.reminderStateId));
-		summary.deferred++;
-		return;
+	const result = await retryProducerCandidate(() =>
+		database.transaction((tx) =>
+			withProducerAuthority(
+				tx,
+				{
+					kind: "reminder",
+					taskId: row.id,
+					recipientUserId: row.recipientUserId,
+					occurrenceAt: row.occurrenceAt,
+					reminderStateId: row.reminderStateId,
+				},
+				async (authority) => {
+					const state = authority.reminderState;
+					if (!state || !readyWake(state, now) || authority.task.done)
+						return { fired: 0, deferred: 0, enqueued: 0 };
+					const pref = authority.recipientPref;
+					const decision = decideQuietHours(
+						pref,
+						authority.task.urgent,
+						now,
+						row.recipientUserId,
+					);
+					if (decision.kind === "defer") {
+						await tx
+							.update(tables.reminderState)
+							.set({
+								status: "deferred",
+								deferredUntil: decision.until,
+								nextAttemptAt: null,
+							})
+							.where(eq(tables.reminderState.id, state.id));
+						return { fired: 0, deferred: 1, enqueued: 0 };
+					}
+					// Waking fires now, even when there is no repeat policy.
+					const enqueued = await fire(
+						tx,
+						state.id,
+						row.recipientUserId,
+						authority.task,
+						state.occurrence_at,
+						1,
+						repeatAt(policyFor(authority.task, pref), now),
+						authority.channels,
+						pref.locale,
+						now,
+						options.cap,
+						options.onBeforeEnqueue,
+					);
+					return { fired: 1, deferred: 0, enqueued };
+				},
+				{ onAfterDiscovery: options.onAfterAuthorityDiscovery },
+			),
+		),
+	);
+	if (result.kind === "eligible") {
+		summary.fired += result.value.fired;
+		summary.deferred += result.value.deferred;
+		summary.enqueued += result.value.enqueued;
 	}
-
-	// Never nextEscalation() here: it has no "send now" outcome, so a row
-	// leaving quiet hours with no repeat policy would be terminated instead of
-	// delivered.
-	const policy = policyFor(row, pref);
-	await database.transaction(async (tx) => {
-		summary.enqueued += await fire(
-			tx,
-			row.reminderStateId,
-			row.recipientUserId,
-			row,
-			row.occurrenceAt,
-			1,
-			repeatAt(policy, now),
-			channels.get(row.recipientUserId) ?? [],
-			pref.locale,
-			now,
-			options.cap,
-			options.onBeforeEnqueue,
-		);
-	});
-	summary.fired++;
 }
 
 async function sweepEscalate(
 	database: Database,
 	row: SweepRow,
-	prefs: Map<string, Pref>,
-	channels: Map<string, ChannelKind[]>,
 	now: Date,
 	summary: TickSummary,
 	options: TickOptions,
 ): Promise<void> {
-	const pref = prefs.get(row.recipientUserId) ?? DEFAULT_PREF;
-	const policy = policyFor(row, pref);
-	const action = nextEscalation({ fireCount: row.fireCount }, policy, now);
-
-	if (action.kind === "repeat") {
-		await database.transaction(async (tx) => {
-			summary.enqueued += await fire(
+	const first = await retryProducerCandidate(() =>
+		database.transaction((tx) =>
+			withProducerAuthority(
 				tx,
-				row.reminderStateId,
-				row.recipientUserId,
-				row,
-				row.occurrenceAt,
-				row.fireCount + 1,
-				action.at,
-				channels.get(row.recipientUserId) ?? [],
-				pref.locale,
-				now,
-				options.cap,
-				options.onBeforeEnqueue,
-			);
-		});
+				{
+					kind: "reminder",
+					taskId: row.id,
+					recipientUserId: row.recipientUserId,
+					occurrenceAt: row.occurrenceAt,
+					reminderStateId: row.reminderStateId,
+				},
+				async (authority) => {
+					const state = authority.reminderState;
+					if (!state || !readyEscalate(state, now) || authority.task.done)
+						return { kind: "skip" as const, enqueued: 0 };
+					const pref = authority.recipientPref;
+					const action = nextEscalation(
+						{ fireCount: state.fire_count },
+						policyFor(authority.task, pref),
+						now,
+					);
+					if (action.kind === "repeat") {
+						const enqueued = await fire(
+							tx,
+							state.id,
+							row.recipientUserId,
+							authority.task,
+							state.occurrence_at,
+							state.fire_count + 1,
+							action.at,
+							authority.channels,
+							pref.locale,
+							now,
+							options.cap,
+							options.onBeforeEnqueue,
+						);
+						return { kind: "repeated" as const, enqueued };
+					}
+					if (
+						action.kind === "escalate" &&
+						action.userId !== row.recipientUserId
+					) {
+						if (authority.memberUserIds.includes(action.userId))
+							return {
+								kind: "handoff" as const,
+								userId: action.userId,
+								enqueued: 0,
+							};
+						console.warn(
+							`scheduler: escalation fallback ${action.userId} is not a member of workspace ${authority.task.workspaceId}; terminating reminder ${state.id} instead`,
+						);
+					}
+					await terminate(tx, state.id);
+					return { kind: "terminated" as const, enqueued: 0 };
+				},
+				{ onAfterDiscovery: options.onAfterAuthorityDiscovery },
+			),
+		),
+	);
+	if (first.kind === "skip") return;
+	if (first.value.kind === "repeated") {
 		summary.repeated++;
-		return;
-	}
-
-	if (action.kind === "escalate") {
+		summary.enqueued += first.value.enqueued;
+	} else if (first.value.kind === "terminated") {
+		summary.terminated++;
+	} else if (first.value.kind === "handoff") {
+		await options.onBeforeFallbackHandoff?.();
 		await escalateToFallback(
 			database,
 			row,
-			action.userId,
-			prefs,
-			channels,
+			first.value.userId,
 			now,
 			summary,
 			options,
 		);
-		return;
 	}
-
-	await terminate(database, row.reminderStateId);
-	summary.terminated++;
 }
 
 async function terminate(
-	database: Database,
+	database: Transaction,
 	reminderStateId: string,
 ): Promise<void> {
 	await database
@@ -763,99 +861,123 @@ async function escalateToFallback(
 	database: Database,
 	row: SweepRow,
 	fallbackUserId: string,
-	prefs: Map<string, Pref>,
-	channels: Map<string, ChannelKind[]>,
 	now: Date,
 	summary: TickSummary,
 	options: TickOptions,
 ): Promise<void> {
-	// The sibling row carries no marker saying "already escalated", so the
-	// cycle guard is structural: a row whose own recipient is the policy's
-	// fallback is the sibling, and it hands off to nobody.
-	if (fallbackUserId === row.recipientUserId) {
-		await terminate(database, row.reminderStateId);
-		summary.terminated++;
-		return;
-	}
+	const result = await retryProducerCandidate(() =>
+		database.transaction((tx) =>
+			withProducerAuthority(
+				tx,
+				{
+					kind: "fallback-create",
+					taskId: row.id,
+					recipientUserId: fallbackUserId,
+					occurrenceAt: row.occurrenceAt,
+					originReminderStateId: row.reminderStateId,
+					at: now,
+				},
+				async (authority) => {
+					const origin = authority.originReminderState;
+					if (!origin || !readyEscalate(origin, now) || authority.task.done)
+						return { escalated: 0, deferred: 0, enqueued: 0 };
+					const pref = authority.recipientPref;
+					const decision = decideQuietHours(
+						pref,
+						authority.task.urgent,
+						now,
+						fallbackUserId,
+					);
+					const policy = policyFor(authority.task, pref);
+					const inserted = await tx
+						.insert(tables.reminderState)
+						.values({
+							id: randomUUID(),
+							taskId: authority.task.id,
+							occurrenceAt: origin.occurrence_at,
+							recipientUserId: fallbackUserId,
+							status: "pending",
+							fireCount: 0,
+							nextAttemptAt: now,
+							firedLate: origin.fired_late,
+						})
+						.onConflictDoNothing()
+						.returning({ id: tables.reminderState.id });
 
-	// Memberships change between writing the preference and firing it, so the
-	// co-membership check at write time is not sufficient: re-check here or a
-	// former member keeps receiving task titles from a workspace they left.
-	const member = await database
-		.select({ id: tables.membership.id })
-		.from(tables.membership)
-		.where(
-			and(
-				eq(tables.membership.userId, fallbackUserId),
-				eq(tables.membership.workspaceId, row.workspaceId),
+					let deferred = 0;
+					let enqueued = 0;
+					if (inserted.length > 0) {
+						const siblingId = inserted[0].id;
+						if (decision.kind === "defer") {
+							await tx
+								.update(tables.reminderState)
+								.set({
+									status: "deferred",
+									deferredUntil: decision.until,
+									nextAttemptAt: null,
+								})
+								.where(eq(tables.reminderState.id, siblingId));
+							deferred++;
+						} else {
+							enqueued += await fire(
+								tx,
+								siblingId,
+								fallbackUserId,
+								authority.task,
+								origin.occurrence_at,
+								1,
+								repeatAt(policy, now),
+								authority.channels,
+								pref.locale,
+								now,
+								options.cap,
+								options.onBeforeEnqueue,
+							);
+						}
+					}
+
+					await tx
+						.update(tables.reminderState)
+						.set({
+							status: "escalated",
+							nextAttemptAt: null,
+							deferredUntil: null,
+						})
+						.where(eq(tables.reminderState.id, origin.id));
+					return { escalated: 1, deferred, enqueued };
+				},
+				{ onAfterDiscovery: options.onAfterAuthorityDiscovery },
 			),
-		)
-		.limit(1);
-	if (member.length === 0) {
-		console.warn(
-			`scheduler: escalation fallback ${fallbackUserId} is not a member of workspace ${row.workspaceId}; terminating reminder ${row.reminderStateId} instead`,
-		);
-		await terminate(database, row.reminderStateId);
-		summary.terminated++;
-		return;
+		),
+	);
+	if (result.kind === "eligible") {
+		summary.escalated += result.value.escalated;
+		summary.deferred += result.value.deferred;
+		summary.enqueued += result.value.enqueued;
 	}
+}
 
-	const pref = prefs.get(fallbackUserId) ?? DEFAULT_PREF;
-	const decision = decideQuietHours(pref, row.urgent, now, fallbackUserId);
-	const policy = policyFor(row, pref);
+type LockedReminder = NonNullable<ProducerAuthority["reminderState"]>;
 
-	await database.transaction(async (tx) => {
-		const inserted = await tx
-			.insert(tables.reminderState)
-			.values({
-				id: randomUUID(),
-				taskId: row.id,
-				occurrenceAt: row.occurrenceAt,
-				recipientUserId: fallbackUserId,
-				status: "pending",
-				fireCount: 0,
-				nextAttemptAt: now,
-				firedLate: row.firedLate,
-			})
-			.onConflictDoNothing()
-			.returning({ id: tables.reminderState.id });
+function readyWake(state: LockedReminder, now: Date): boolean {
+	return (
+		(state.status === "deferred" &&
+			state.deferred_until !== null &&
+			state.deferred_until <= now) ||
+		(state.status === "pending" &&
+			state.fire_count === 0 &&
+			state.deferred_until === null &&
+			(state.next_attempt_at === null || state.next_attempt_at <= now))
+	);
+}
 
-		if (inserted.length > 0) {
-			const siblingId = inserted[0].id;
-			if (decision.kind === "defer") {
-				await tx
-					.update(tables.reminderState)
-					.set({
-						status: "deferred",
-						deferredUntil: decision.until,
-						nextAttemptAt: null,
-					})
-					.where(eq(tables.reminderState.id, siblingId));
-				summary.deferred++;
-			} else {
-				summary.enqueued += await fire(
-					tx,
-					siblingId,
-					fallbackUserId,
-					row,
-					row.occurrenceAt,
-					1,
-					repeatAt(policy, now),
-					channels.get(fallbackUserId) ?? [],
-					pref.locale,
-					now,
-					options.cap,
-					options.onBeforeEnqueue,
-				);
-			}
-		}
-
-		await tx
-			.update(tables.reminderState)
-			.set({ status: "escalated", nextAttemptAt: null, deferredUntil: null })
-			.where(eq(tables.reminderState.id, row.reminderStateId));
-	});
-	summary.escalated++;
+function readyEscalate(state: LockedReminder, now: Date): boolean {
+	return (
+		state.status === "pending" &&
+		state.fire_count > 0 &&
+		state.next_attempt_at !== null &&
+		state.next_attempt_at <= now
+	);
 }
 
 export function startScheduler(

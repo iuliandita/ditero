@@ -18,7 +18,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { Cron } from "croner";
-import { and, eq, gte, inArray, lt, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
 import { overdueSweepMs } from "../../config/scheduler.ts";
@@ -33,15 +33,20 @@ import {
 } from "../../zero/event-sink.ts";
 import { type EnqueueOptions, enqueueOutbox } from "./outbox.ts";
 import {
+	retryProducerCandidate,
+	withProducerAuthority,
+} from "./producer-authority.ts";
+import {
 	DEFAULT_PREF,
 	decideQuietHours,
 	loadChannels,
-	loadMemberships,
 	loadPrefs,
 } from "./recipients.ts";
 import { withLeaderLock } from "./scheduler.ts";
+import { withDrizzleProducerActivationScan } from "./task-activation-drizzle.ts";
 
 type Database = NodePgDatabase<typeof tables>;
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type ChannelKind = (typeof tables.channelKindEnum.enumValues)[number];
 
 export const OVERDUE_LOCK_KEY = 918275;
@@ -118,12 +123,14 @@ function keyFor(collected: CollectedEvent, channelKind: ChannelKind): string {
 type EnqueueEventOptions = {
 	now?: Date;
 	maxQueuedPerUser?: number;
+	onBeforeOverdueEnqueue?: (tx: Transaction) => void | Promise<void>;
+	onAfterAuthorityDiscovery?: () => void | Promise<void>;
 };
 
 // One outbox row per (event, recipient, enabled channel). The channel is part of
 // the idempotency key or a user with two channels would be notified once.
 async function enqueueRows(
-	database: Database,
+	database: Database | Transaction,
 	recipientUserId: string,
 	channels: ChannelKind[],
 	payload: EventPayload,
@@ -268,33 +275,64 @@ export const OVERDUE_SCAN_LIMIT = 5_000;
 
 export type OverdueSummary = { scanned: number; enqueued: number };
 
+// This predicate runs inside the verified producer scan scope. In particular,
+// suppressed guarded tasks are excluded before LIMIT, so they cannot starve
+// newer eligible work behind a 5,000-task backlog.
+const overdueBaseEligible = sql`exists (
+	select 1 from membership m
+	where m.workspace_id = ${tables.list.workspaceId}
+		and (
+			exists (select 1 from task_assignee a where a.task_id = ${tables.task.id} and a.user_id = m.user_id)
+			or (m.user_id = ${tables.list.ownerId} and not exists
+				(select 1 from task_assignee a where a.task_id = ${tables.task.id}))
+		)
+		and (
+			not exists (select 1 from task_notification_activation g where g.task_id = ${tables.task.id})
+			or exists (
+				select 1 from task_notification_activation g
+				join task_notification_recipient r on r.task_id = g.task_id and r.user_id = m.user_id
+				where g.task_id = ${tables.task.id} and g.status = 'active'
+					and r.active and r.generation = g.generation
+					and r.overdue_suppressed_due_at is distinct from ${tables.task.dueAt}
+			)
+		)
+)`;
+
 export async function overdueSweep(
 	database: Database,
 	options: EnqueueEventOptions = {},
 ): Promise<OverdueSummary> {
 	const now = options.now ?? new Date();
-	const rows: OverdueRow[] = await database
-		.select({
-			taskId: tables.task.id,
-			title: tables.task.title,
-			dueAt: tables.task.dueAt,
-			listOwnerId: tables.list.ownerId,
-			workspaceId: tables.list.workspaceId,
-		})
-		.from(tables.task)
-		.innerJoin(tables.list, eq(tables.task.listId, tables.list.id))
-		.where(
-			and(
-				eq(tables.task.done, false),
-				lt(tables.task.dueAt, now),
-				gte(tables.task.dueAt, new Date(now.getTime() - OVERDUE_LOOKBACK_MS)),
-				// Habits are never "finished" and so are never overdue; they have
-				// their own reminder path.
-				ne(tables.list.kind, "habits"),
-			),
-		)
-		.orderBy(tables.task.dueAt)
-		.limit(OVERDUE_SCAN_LIMIT);
+	const rows: OverdueRow[] = await database.transaction((tx) =>
+		withDrizzleProducerActivationScan(tx, (scoped) =>
+			scoped
+				.select({
+					taskId: tables.task.id,
+					title: tables.task.title,
+					dueAt: tables.task.dueAt,
+					listOwnerId: tables.list.ownerId,
+					workspaceId: tables.list.workspaceId,
+				})
+				.from(tables.task)
+				.innerJoin(tables.list, eq(tables.task.listId, tables.list.id))
+				.where(
+					and(
+						overdueBaseEligible,
+						eq(tables.task.done, false),
+						lt(tables.task.dueAt, now),
+						gte(
+							tables.task.dueAt,
+							new Date(now.getTime() - OVERDUE_LOOKBACK_MS),
+						),
+						// Habits are never "finished" and so are never overdue; they have
+						// their own reminder path.
+						ne(tables.list.kind, "habits"),
+					),
+				)
+				.orderBy(tables.task.dueAt)
+				.limit(OVERDUE_SCAN_LIMIT),
+		),
+	);
 	const summary: OverdueSummary = { scanned: rows.length, enqueued: 0 };
 	if (rows.length === 0) return summary;
 
@@ -317,96 +355,66 @@ export async function overdueSweep(
 		byTask.set(row.taskId, list);
 	}
 
-	const recipientsFor = (row: OverdueRow) =>
-		byTask.get(row.taskId) ?? [row.listOwnerId];
-	const everyone = new Set<string>();
-	for (const row of rows) for (const id of recipientsFor(row)) everyone.add(id);
-
-	// Assign and mention are gated on membership at write time; this is the
-	// equivalent gate at notify time (see loadMemberships).
-	const memberOf = await loadMemberships(database, [...everyone]);
-
-	const prefs = await loadPrefs(database, [...everyone]);
-	const channels = await loadChannels(database, [...everyone]);
-
-	// Every (task, recipient, channel) key this sweep would write, resolved
-	// before any insert. After the first sweep of a recipient's local day every
-	// one of them already exists, and this turns what was one INSERT round-trip
-	// per key into a single SELECT -- the sweep is idempotent by design, so
-	// re-running it must be cheap, not merely harmless.
-	type Candidate = {
-		row: OverdueRow;
-		recipientUserId: string;
-		channelKind: ChannelKind;
-		key: string;
-		localDate: string;
-	};
-	const planned: Candidate[] = [];
-	for (const row of rows) {
-		for (const recipientUserId of recipientsFor(row)) {
-			if (!memberOf.has(`${recipientUserId}:${row.workspaceId}`)) continue;
-			const pref = prefs.get(recipientUserId) ?? DEFAULT_PREF;
-			// The recipient's OWN local date, not UTC: at UTC+13 a UTC date rolls
-			// over up to 13 hours early, which is a second overdue notice inside one
-			// local day.
-			const localDate = instantToWallClock(now, pref.timezone).date;
-			for (const channelKind of channels.get(recipientUserId) ?? []) {
-				planned.push({
-					row,
-					recipientUserId,
-					channelKind,
-					localDate,
-					key: `overdue:${row.taskId}:${recipientUserId}:${localDate}:${channelKind}`,
-				});
-			}
-		}
-	}
-	if (planned.length === 0) return summary;
-
-	const existing = new Set(
-		(
-			await database
-				.select({ key: tables.notificationOutbox.idempotencyKey })
-				.from(tables.notificationOutbox)
-				.where(
-					inArray(
-						tables.notificationOutbox.idempotencyKey,
-						planned.map((c) => c.key),
-					),
-				)
-		).map((r) => r.key),
-	);
-
 	const cap: EnqueueOptions = {
 		maxQueuedPerUser: options.maxQueuedPerUser ?? maxQueuedPerUser(process.env),
 		refusedLogged: new Set(),
 	};
-	for (const candidate of planned) {
-		// The unique constraint remains the authority; this only skips the
-		// round-trip for keys already known to exist.
-		if (existing.has(candidate.key)) continue;
-		const pref = prefs.get(candidate.recipientUserId) ?? DEFAULT_PREF;
-		const decision = decideQuietHours(
-			pref,
-			false,
-			now,
-			candidate.recipientUserId,
-		);
-		summary.enqueued += await enqueueRows(
-			database,
-			candidate.recipientUserId,
-			[candidate.channelKind],
-			{
-				kind: "overdue",
-				taskId: candidate.row.taskId,
-				taskTitle: candidate.row.title,
-				dueAt: candidate.row.dueAt?.toISOString(),
-				locale: pref.locale,
-			},
-			() => candidate.key,
-			decision.kind === "defer" ? decision.until : now,
-			cap,
-		);
+	for (const row of rows) {
+		for (const recipientUserId of byTask.get(row.taskId) ?? [row.listOwnerId]) {
+			try {
+				const result = await retryProducerCandidate(() =>
+					database.transaction((tx) =>
+						withProducerAuthority(
+							tx,
+							{ kind: "overdue", taskId: row.taskId, recipientUserId },
+							async (authority) => {
+								const task = authority.task;
+								if (
+									task.done ||
+									task.listKind === "habits" ||
+									!task.dueAt ||
+									task.dueAt >= now ||
+									task.dueAt < new Date(now.getTime() - OVERDUE_LOOKBACK_MS)
+								)
+									return 0;
+								const pref = authority.recipientPref;
+								const localDate = instantToWallClock(now, pref.timezone).date;
+								const decision = decideQuietHours(
+									pref,
+									false,
+									now,
+									recipientUserId,
+								);
+								await options.onBeforeOverdueEnqueue?.(tx);
+								return enqueueRows(
+									tx,
+									recipientUserId,
+									authority.channels,
+									{
+										kind: "overdue",
+										taskId: task.id,
+										taskTitle: task.title,
+										dueAt: task.dueAt.toISOString(),
+										locale: pref.locale,
+									},
+									(channelKind) =>
+										`overdue:${task.id}:${recipientUserId}:${localDate}:${channelKind}`,
+									decision.kind === "defer" ? decision.until : now,
+									cap,
+								);
+							},
+							{ onAfterDiscovery: options.onAfterAuthorityDiscovery },
+						),
+					),
+				);
+				if (result.kind === "eligible") summary.enqueued += result.value;
+			} catch (error) {
+				console.error(
+					`events: skipping overdue recipient ${recipientUserId} for task ${row.taskId}:`,
+					error,
+				);
+			}
+		}
 	}
 	return summary;
 }

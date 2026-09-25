@@ -1,7 +1,11 @@
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { expect, it, vi } from "vitest";
-import { withProducerAuthority } from "./producer-authority.ts";
+import {
+	ProducerAuthorityChanged,
+	retryProducerCandidate,
+	withProducerAuthority,
+} from "./producer-authority.ts";
 
 type Transaction = Parameters<typeof withProducerAuthority>[0];
 
@@ -54,4 +58,23 @@ it("skips a task absent at prediscovery without invoking the callback", async ()
 	).resolves.toEqual({ kind: "skip" });
 	expect(callback).not.toHaveBeenCalled();
 	expect(execute).toHaveBeenCalledTimes(1);
+});
+
+it("retries only changed authority, once, in a new attempt", async () => {
+	const changed = new ProducerAuthorityChanged();
+	const recovered = vi
+		.fn()
+		.mockRejectedValueOnce(changed)
+		.mockResolvedValueOnce("sent");
+	await expect(retryProducerCandidate(recovered)).resolves.toBe("sent");
+	expect(recovered).toHaveBeenCalledTimes(2);
+
+	const exhausted = vi.fn().mockRejectedValue(changed);
+	await expect(retryProducerCandidate(exhausted)).rejects.toBe(changed);
+	expect(exhausted).toHaveBeenCalledTimes(2);
+
+	const sqlFailure = new Error("statement failed");
+	const failed = vi.fn().mockRejectedValue(sqlFailure);
+	await expect(retryProducerCandidate(failed)).rejects.toBe(sqlFailure);
+	expect(failed).toHaveBeenCalledTimes(1);
 });

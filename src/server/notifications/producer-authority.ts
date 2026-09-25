@@ -80,6 +80,7 @@ export type ProducerAuthority = {
 	lookup: TaskActivationLookup;
 	recipientKind: "base" | "fallback";
 	baseRecipientIds: string[];
+	memberUserIds: string[];
 	recipientUserId: string;
 	recipientPref: Pref;
 	ownerPref: Pref;
@@ -98,6 +99,19 @@ export class ProducerAuthorityChanged extends Error {
 		super("Producer authority changed during lock acquisition");
 		this.name = "ProducerAuthorityChanged";
 	}
+}
+
+// A changed prediscovery set needs a fresh transaction and lock acquisition.
+// Never retry SQL errors or malformed authority, and never retry in a tainted tx.
+export async function retryProducerCandidate<T>(
+	run: () => Promise<T>,
+): Promise<T> {
+	try {
+		return await run();
+	} catch (error) {
+		if (!(error instanceof ProducerAuthorityChanged)) throw error;
+	}
+	return run();
 }
 
 function sameRows<Row>(a: Row[], b: Row[]): boolean {
@@ -283,7 +297,7 @@ export async function withProducerAuthority<T>(
 	tx: Transaction,
 	candidate: ProducerCandidate,
 	callback: (authority: ProducerAuthority, tx: Transaction) => Promise<T>,
-	options: { onAfterDiscovery?: () => Promise<void> } = {},
+	options: { onAfterDiscovery?: () => void | Promise<void> } = {},
 ): Promise<ProducerAuthorityResult<T>> {
 	if (!candidate.taskId || !candidate.recipientUserId)
 		throw new Error("Producer task and recipient IDs are required");
@@ -628,6 +642,7 @@ export async function withProducerAuthority<T>(
 				lookup,
 				recipientKind,
 				baseRecipientIds: currentBaseIds,
+				memberUserIds: currentMembers.map((row) => row.user_id),
 				recipientUserId: candidate.recipientUserId,
 				recipientPref: prefs.get(candidate.recipientUserId) ?? DEFAULT_PREF,
 				ownerPref: prefs.get(task.listOwnerId) ?? DEFAULT_PREF,
