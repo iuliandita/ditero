@@ -220,8 +220,6 @@ export function validateImportGraph(source: PortableExportV1): {
 	data.habitLogs.forEach((row, i) => {
 		const path = `data.habitLogs[${i}].habitId`;
 		requireRef(tasks, row.habitId, path);
-		if (tasks.has(row.habitId) && !isHabit(row.habitId))
-			error("not-a-habit", path);
 	});
 	function softRef(
 		map: ReadonlyMap<string, unknown>,
