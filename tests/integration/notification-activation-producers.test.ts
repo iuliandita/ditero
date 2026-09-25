@@ -1,3 +1,4 @@
+import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -8,6 +9,9 @@ import {
 	overdueSweep,
 } from "../../src/server/notifications/events.ts";
 import { scanTick } from "../../src/server/notifications/scheduler.ts";
+import { mutators } from "../../src/zero/mutators.ts";
+import { schema } from "../../src/zero/schema.gen.ts";
+import { withZeroUserContext } from "../../src/zero/task-activation.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 const databaseURL = process.env.DATABASE_URL;
@@ -15,6 +19,7 @@ if (!databaseURL) throw new Error("DATABASE_URL is required");
 const admin = new Pool({ connectionString: databaseURL, max: 5 });
 const runtime = new Pool({ connectionString: databaseURL, max: 3 });
 const db = drizzle(runtime, { schema: tables });
+const zeroDb = zeroNodePg(schema, runtime);
 
 const occurrence = new Date("2026-08-01T09:00:00.000Z");
 const due = new Date("2026-08-01T12:00:00.000Z");
@@ -187,6 +192,29 @@ test("restricted producer scan admits native and active guard, excludes pending 
 	expect(await states("pending")).toEqual([]);
 	expect(await states("old")).toEqual([]);
 	expect(await outbox("active")).toHaveLength(1);
+});
+
+test("native empty and whitespace task IDs still create reminders", async () => {
+	for (const id of ["", "  "]) await seedTask(id);
+	const result = await scanTick(db, { now: firstTick, timing });
+	expect(result.created).toBe(2);
+	for (const id of ["", "  "]) {
+		expect((await states(id)).map((row) => row.recipient_user_id)).toEqual([
+			"member",
+		]);
+		expect(await outbox(id)).toHaveLength(1);
+	}
+});
+
+test("native empty and whitespace task IDs still enqueue overdue events", async () => {
+	for (const id of ["", "  "])
+		await seedTask(id, {
+			dueAt: new Date("2026-08-01T08:00:00Z"),
+			reminderTime: null,
+		});
+	const result = await overdueSweep(db, { now: firstTick });
+	expect(result).toEqual({ scanned: 2, enqueued: 2 });
+	for (const id of ["", "  "]) expect(await outbox(id)).toHaveLength(1);
 });
 
 test("guarded fixed and relative recurrences fire from historical anchors but not future anchors", async () => {
@@ -647,6 +675,129 @@ for (const path of [
 			await writer.query("rollback").catch(() => {});
 			writer.release();
 			await producer.catch(() => {});
+		}
+	});
+}
+
+type ActualWriter = "complete" | "assign" | "remove-member";
+async function actualWriter(
+	kind: ActualWriter,
+	holding?: (pid: number) => Promise<void>,
+) {
+	return zeroDb.transaction((tx) =>
+		withZeroUserContext(tx, "owner", async () => {
+			if (kind === "complete") {
+				await mutators.task.complete.fn({
+					tx,
+					ctx: { id: "owner" },
+					args: { id: "actual" },
+				});
+			} else if (kind === "assign") {
+				await mutators.task.assign.fn({
+					tx,
+					ctx: { id: "owner" },
+					args: { taskId: "actual", userId: "fallback" },
+				});
+			} else {
+				await mutators.membership.remove.fn({
+					tx,
+					ctx: { id: "owner" },
+					args: { id: "seat-member" },
+				});
+			}
+			if (holding) {
+				const rows = Array.from(
+					await tx.dbTransaction.query("select pg_backend_pid() as pid", []),
+				);
+				await holding(Number(rows[0]?.pid));
+			}
+		}),
+	);
+}
+
+function transactionBarrier() {
+	let release!: () => void;
+	let entered!: (pid: number) => void;
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const started = new Promise<number>((resolve) => {
+		entered = resolve;
+	});
+	return {
+		release,
+		async hold(pid: number) {
+			entered(pid);
+			await held;
+		},
+		async pid() {
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			try {
+				return await Promise.race([
+					started,
+					new Promise<never>((_, reject) => {
+						timer = setTimeout(
+							() => reject(new Error("Transaction did not reach its barrier")),
+							5000,
+						);
+					}),
+				]);
+			} finally {
+				clearTimeout(timer);
+			}
+		},
+	};
+}
+
+for (const kind of ["complete", "assign", "remove-member"] as const) {
+	test(`actual ${kind} commits before scanTick rechecks eligibility`, async () => {
+		await seedTask("actual", { guarded: "active" });
+		const barrier = transactionBarrier();
+		const writing = actualWriter(kind, barrier.hold);
+		let producing: Promise<unknown> | undefined;
+		try {
+			const writerPid = await barrier.pid();
+			producing = scanTick(db, { now: firstTick, timing });
+			const producerPid = await activeProducerPid(writerPid);
+			expect(await blockingPids(producerPid)).toContain(writerPid);
+			barrier.release();
+			await writing;
+			await producing;
+			expect(await outbox("actual")).toEqual([]);
+		} finally {
+			barrier.release();
+			await writing.catch(() => {});
+			await producing?.catch(() => {});
+		}
+	});
+
+	test(`scanTick enqueue commits before actual ${kind} invalidates its evidence`, async () => {
+		await seedTask("actual", { guarded: "active" });
+		const barrier = transactionBarrier();
+		const producing = scanTick(db, {
+			now: firstTick,
+			timing,
+			onBeforeEnqueue: async (tx) => {
+				const rows = await tx.execute<{ pid: number }>(
+					sql`select pg_backend_pid() as pid`,
+				);
+				await barrier.hold(rows.rows[0].pid);
+			},
+		});
+		let writing: Promise<unknown> | undefined;
+		try {
+			const producerPid = await barrier.pid();
+			writing = actualWriter(kind);
+			const writerPid = await activeProducerPid(producerPid);
+			expect(await blockingPids(writerPid)).toContain(producerPid);
+			barrier.release();
+			await producing;
+			await writing;
+			expect(await outbox("actual")).toHaveLength(1);
+		} finally {
+			barrier.release();
+			await producing.catch(() => {});
+			await writing?.catch(() => {});
 		}
 	});
 }

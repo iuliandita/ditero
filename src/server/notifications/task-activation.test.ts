@@ -11,9 +11,9 @@ import {
 const taskId = "task-1";
 const now = new Date("2026-09-21T12:00:00Z");
 
-function nativeRow() {
+function nativeRow(id = taskId) {
 	return {
-		task_id: taskId,
+		task_id: id,
 		scope: "producer",
 		guard_task_id: null,
 		status: null,
@@ -30,6 +30,7 @@ function clientFixture(
 		autocommit?: boolean;
 		missingTask?: boolean;
 		envelope?: Record<string, unknown> | null;
+		taskId?: string;
 	} = {},
 ) {
 	let scope = options.scope ?? null;
@@ -49,12 +50,20 @@ function clientFixture(
 			return { rows: [{ scope }] };
 		}
 		if (sql.includes("FROM task WHERE")) {
-			return { rows: options.missingTask ? [] : [{ id: taskId }] };
+			return {
+				rows: options.missingTask ? [] : [{ id: options.taskId ?? taskId }],
+			};
 		}
 		if (sql.includes("LEFT JOIN task_notification_activation")) {
 			if (options.envelope === null) return { rows: [] };
 			return {
-				rows: [{ ...nativeRow(), scope, ...options.envelope }],
+				rows: [
+					{
+						...nativeRow(options.taskId ?? taskId),
+						scope,
+						...options.envelope,
+					},
+				],
 			};
 		}
 		throw new Error(`Unexpected query: ${sql}`);
@@ -109,11 +118,26 @@ describe("task activation lookup", () => {
 		});
 	});
 
-	it.each(["", "  "])("rejects empty task ID %j before SQL", async (id) => {
+	it.each(["", "  "])("looks up native task ID %j exactly", async (id) => {
+		const { client, query } = clientFixture({ taskId: id });
+		await expect(
+			withProducerTaskActivation(client, id, async (lookup) => {
+				expect(lookup).toEqual({ kind: "native", taskId: id });
+			}),
+		).resolves.toBeUndefined();
+		expect(query.mock.calls[3]?.[1]).toEqual([id]);
+		expect(query.mock.calls[4]?.[1]).toEqual([id]);
+	});
+
+	it("rejects a non-string task ID before SQL", async () => {
 		const { client, query } = clientFixture();
 		await expect(
-			withProducerTaskActivation(client, id, async () => {}),
-		).rejects.toThrow();
+			withProducerTaskActivation(
+				client,
+				null as unknown as string,
+				async () => {},
+			),
+		).rejects.toThrow(/string/);
 		expect(query).not.toHaveBeenCalled();
 	});
 

@@ -299,7 +299,7 @@ export async function withProducerAuthority<T>(
 	callback: (authority: ProducerAuthority, tx: Transaction) => Promise<T>,
 	options: { onAfterDiscovery?: () => void | Promise<void> } = {},
 ): Promise<ProducerAuthorityResult<T>> {
-	if (!candidate.taskId || !candidate.recipientUserId)
+	if (typeof candidate.taskId !== "string" || !candidate.recipientUserId)
 		throw new Error("Producer task and recipient IDs are required");
 	if (candidate.kind !== "overdue" && !validInstant(candidate.occurrenceAt))
 		throw new Error("Producer occurrence is invalid");

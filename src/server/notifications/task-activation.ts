@@ -108,8 +108,8 @@ async function withTaskActivation<T>(
 		client: TaskActivationClient,
 	) => Promise<T>,
 ): Promise<T> {
-	if (typeof taskId !== "string" || taskId.trim() === "") {
-		throw new Error("Task ID is required for activation lookup");
+	if (typeof taskId !== "string") {
+		throw new Error("Task ID must be a string for activation lookup");
 	}
 	return withActivationScope(client, purpose, async () => {
 		const lock =
