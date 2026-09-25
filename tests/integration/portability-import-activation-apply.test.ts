@@ -322,6 +322,44 @@ test("v4 publishes a new task only after its assignment and suppresses historica
 	]);
 });
 
+test("v4 applies empty task and principal source IDs through assignment activation", async () => {
+	const task = document.data.tasks[0];
+	const assignment = document.data.assignments[0];
+	const principal = document.data.principals.find((row) => row.id === "bob");
+	if (!task || !assignment || !principal)
+		throw new Error("Missing source task or principal");
+	task.id = "";
+	task.fallbackUserId = "";
+	assignment.taskId = "";
+	assignment.userId = "";
+	principal.id = "";
+	for (const membership of document.data.memberships)
+		if (membership.userId === "bob") membership.userId = "";
+	delete mappings.principals.bob;
+	mappings.principals[""] = "bob";
+	const job = await save();
+	const status = await finish(job);
+	expect(status.appliedCount).toBe(3);
+	const taskId = await targetId("tasks", "");
+	const assignmentId = await targetId("assignments", assignment.id);
+	expect(
+		(
+			await pool.query(
+				"select task_id, user_id from task_assignee where id = $1",
+				[assignmentId],
+			)
+		).rows[0],
+	).toEqual({ task_id: taskId, user_id: "bob" });
+	expect(
+		(
+			await pool.query(
+				"select status from task_notification_activation where task_id = $1",
+				[taskId],
+			)
+		).rows[0]?.status,
+	).toBe("active");
+});
+
 test("a returning assignee retains null overdue suppression across generations", async () => {
 	const future = new Date("2099-01-01T10:00:00.000Z");
 	const task = document.data.tasks.find((row) => row.id === "source-task");

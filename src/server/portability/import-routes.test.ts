@@ -212,6 +212,28 @@ describe("native import plan transport", () => {
 			Object.hasOwn(store.save.mock.calls[0]?.[4].principals, "__proto__"),
 		).toBe(true);
 	});
+	test("accepts an empty source mapping key but rejects an empty target", async () => {
+		const value = {
+			...payload(),
+			mappings: {
+				workspaces: {},
+				principals: { "": "caller" } as Record<string, string>,
+			},
+		};
+		const doc = document();
+		doc.sourceUserId = "";
+		doc.data.principals[0].id = "";
+		value.document = JSON.stringify(doc);
+		expect((await app().handle(request(JSON.stringify(value)))).status).toBe(
+			200,
+		);
+		expect(store.save.mock.calls[0]?.[4].principals).toEqual({ "": "caller" });
+		value.mappings.principals = { "": "" };
+		expect((await app().handle(request(JSON.stringify(value)))).status).toBe(
+			400,
+		);
+		expect(store.save).toHaveBeenCalledTimes(1);
+	});
 	test("holds admission until a save actually stops, then accepts retry", async () => {
 		let finish: ((value: unknown) => void) | undefined;
 		store.save.mockImplementationOnce(

@@ -314,7 +314,7 @@ export async function freezeV4Activation(
 		if (item.collection !== "assignments" || item.disposition !== "ensure")
 			continue;
 		const sourceTaskId = sourceAssignmentTasks.get(item.sourceId);
-		if (!sourceTaskId) throw new ImportPlanError("invalid-graph");
+		if (sourceTaskId === undefined) throw new ImportPlanError("invalid-graph");
 		const list = byTask.get(sourceTaskId) ?? [];
 		list.push(item);
 		byTask.set(sourceTaskId, list);
