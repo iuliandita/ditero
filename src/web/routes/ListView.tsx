@@ -38,6 +38,7 @@ import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
 import { TitleSuggestInput } from "../components/list/TitleSuggestInput.tsx";
 import { TaskListSkeleton } from "../components/shell/AppSkeleton.tsx";
+import { BackButton } from "../components/ui/back-button.tsx";
 import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
 import { RowActions } from "../components/ui/row-actions.tsx";
@@ -61,9 +62,11 @@ function lastKey(items: { sortKey: string }[]): string | null {
 export function ListView({
 	listId,
 	listActions,
+	onBack,
 }: {
 	listId: string;
 	listActions: (list: List) => RowAction[];
+	onBack?: () => void;
 }) {
 	const zero = useZero<typeof schema>();
 	const [tasks, tasksDetails] = useQuery(queries.tasks.mine());
@@ -220,9 +223,21 @@ export function ListView({
 		);
 	}
 
+	const backControl = onBack ? (
+		<BackButton aria-label={m.list_back_to_lists()} onClick={onBack} />
+	) : null;
 	// A list id from a stale nav ref stays blank once lists have synced; before
-	// that the id is simply not loaded yet.
-	if (!list) return listsLoading ? <TaskListSkeleton /> : null;
+	// that the id is simply not loaded yet. Mobile keeps its way back in both states.
+	if (!list) {
+		const content = listsLoading ? <TaskListSkeleton /> : null;
+		if (!backControl) return content;
+		return (
+			<div className="max-w-3xl">
+				<div className="mb-4 flex items-center">{backControl}</div>
+				{content}
+			</div>
+		);
+	}
 	// Narrowed alias so nested function declarations keep the non-null type.
 	const openList = list;
 	const taskTemplates = templates.filter(
@@ -306,6 +321,7 @@ export function ListView({
 		<div data-testid="list" className="max-w-3xl">
 			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
 			<div ref={listHeaderRef} className="group mb-4 flex items-center gap-2">
+				{backControl}
 				<button
 					type="button"
 					aria-label={m.list_change_icon()}
@@ -314,9 +330,9 @@ export function ListView({
 				>
 					<ListIcon icon={list.icon} kind={kind} title={list.title} />
 				</button>
-				<h2 className="min-w-0 flex-1 truncate text-lg font-semibold">
+				<h1 className="min-w-0 flex-1 truncate text-xl font-semibold md:text-2xl">
 					{list.title}
-				</h2>
+				</h1>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<Button

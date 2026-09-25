@@ -107,7 +107,11 @@ export function TaskList({
 			transition={FLIP_TRANSITION}
 			className={task.done ? "opacity-70" : undefined}
 		>
-			{row(task)}
+			{sortable && kind !== "shopping" && task.done ? (
+				<div className="ms-7">{row(task)}</div>
+			) : (
+				row(task)
+			)}
 		</motion.li>
 	);
 

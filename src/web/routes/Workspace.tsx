@@ -321,10 +321,6 @@ function NormalWorkspace() {
 		dispatchContent({ kind: next === "settings" ? "settings" : "home" });
 	}
 
-	const openListRow = openListId
-		? (activeLists.find((l) => l.id === openListId) ?? null)
-		: null;
-
 	// --- Views wiring ---------------------------------------------------------
 	// Home ref resolution: builtin/saved view, "dashboard:<id>", or (dangling/
 	// garbage) DEFAULT_HOME — pure helper, unit-tested.
@@ -510,19 +506,12 @@ function NormalWorkspace() {
 		);
 	} else if (openListId) {
 		content = (
-			<div>
-				<div className="flex items-center gap-2 border-b p-3 md:hidden">
-					<BackButton
-						aria-label={m.list_back_to_lists()}
-						onClick={() => closeList(openListId)}
-					/>
-					<span className="truncate font-medium">
-						{openListRow?.title ?? m.list_untitled_fallback()}
-					</span>
-				</div>
-				<div className="p-4 md:p-6">
-					<ListView listId={openListId} listActions={buildListActions} />
-				</div>
+			<div className="p-4 md:p-6">
+				<ListView
+					listId={openListId}
+					listActions={buildListActions}
+					onBack={!isDesktop ? () => closeList(openListId) : undefined}
+				/>
 			</div>
 		);
 	} else if (openDashboardId) {

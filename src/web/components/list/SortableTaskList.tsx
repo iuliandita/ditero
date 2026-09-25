@@ -57,7 +57,7 @@ export function SortableTaskList({
 							className={task.done ? "opacity-70" : undefined}
 						>
 							{task.done ? (
-								renderRow(task)
+								<div className="ms-7">{renderRow(task)}</div>
 							) : (
 								<SortableRow
 									id={task.id}
