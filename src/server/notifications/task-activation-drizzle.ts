@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { QueryResultRow } from "pg";
-import type * as tables from "../../db/schema.ts";
+import * as tables from "../../db/schema.ts";
 import {
 	type TaskActivationClient,
 	type TaskActivationLookup,
@@ -14,6 +14,34 @@ type Database = NodePgDatabase<typeof tables>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 const statements = new Set<string>(Object.values(taskActivationSql));
+
+function mappedCutoff(
+	value: unknown,
+	column: { mapFromDriverValue(value: string): unknown },
+): unknown {
+	return typeof value === "string" ? column.mapFromDriverValue(value) : value;
+}
+
+function mappedRows<Row extends QueryResultRow>(
+	query: string,
+	rows: Row[],
+): Row[] {
+	if (query !== taskActivationSql.guardEnvelope) return rows;
+	return rows.map(
+		(row) =>
+			({
+				...row,
+				import_occurrence_cutoff: mappedCutoff(
+					row.import_occurrence_cutoff,
+					tables.taskNotificationActivation.importOccurrenceCutoff,
+				),
+				recipient_generation_cutoff: mappedCutoff(
+					row.recipient_generation_cutoff,
+					tables.taskNotificationActivation.recipientGenerationCutoff,
+				),
+			}) as Row,
+	);
+}
 
 // The adapter accepts only the lookup helper's fixed SQL. Drizzle binds the one
 // dynamic value on the transaction's connection; callback SQL uses tx directly.
@@ -28,7 +56,7 @@ export function taskActivationClientFromDrizzle(
 			const placeholders = query.match(/\$\d+/g) ?? [];
 			if (placeholders.length === 0 && (values?.length ?? 0) === 0) {
 				const result = await tx.execute<Row>(sql.raw(query));
-				return { rows: result.rows as Row[] };
+				return { rows: mappedRows(query, result.rows as Row[]) };
 			}
 			if (
 				placeholders.length !== 1 ||
@@ -41,7 +69,7 @@ export function taskActivationClientFromDrizzle(
 			const result = await tx.execute<Row>(
 				sql`${sql.raw(query.slice(0, index))}${values[0]}${sql.raw(query.slice(index + 2))}`,
 			);
-			return { rows: result.rows as Row[] };
+			return { rows: mappedRows(query, result.rows as Row[]) };
 		},
 	};
 }

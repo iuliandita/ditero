@@ -131,6 +131,36 @@ test("failed callback aborts the transaction and the local scope does not leak",
 	});
 });
 
+test("active guard cutoffs are UTC instants on the restricted Drizzle transaction", async () => {
+	await admin.query(
+		`update task_notification_activation set status = 'active', completion_mode = 'import',
+		 import_occurrence_cutoff = '2026-02-01T10:00:00Z',
+		 recipient_generation_cutoff = '2026-02-01T11:00:00+01' where task_id = 'guarded'`,
+	);
+	await db.transaction(async (tx) => {
+		await withDrizzleProducerTaskActivation(
+			tx,
+			"guarded",
+			async (lookup, sameTx) => {
+				expect(sameTx).toBe(tx);
+				expect(lookup).toMatchObject({
+					kind: "guarded",
+					status: "active",
+					completionMode: "import",
+				});
+				if (lookup.kind !== "guarded")
+					throw new Error("Expected guarded lookup");
+				expect(lookup.importOccurrenceCutoff?.toISOString()).toBe(
+					"2026-02-01T10:00:00.000Z",
+				);
+				expect(lookup.recipientGenerationCutoff?.toISOString()).toBe(
+					"2026-02-01T10:00:00.000Z",
+				);
+			},
+		);
+	});
+});
+
 test("autocommit database execution cannot retain the producer scope", async () => {
 	type Transaction = Parameters<typeof withDrizzleProducerActivationScan>[0];
 	await expect(
