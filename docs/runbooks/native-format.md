@@ -54,7 +54,10 @@ remains version 1; existing saved plans retain their format and planner versions
 Version 2 adds `sourceNamespace`, a stable installation UUID. Comments, templates,
 and completion events carry `sourceRef` with `namespace`, a canonical collection name,
 and `id`. Source IDs can be empty; empty and absent references are different. Source
-reference tuples must be unique, comparing UUID namespaces without regard to letter case.
+reference tuples must be unique within their parent task for comments and events, or
+within their workspace for templates, comparing UUID namespaces without regard to letter
+case. Copies under different parents can retain the same original provenance; their
+local row IDs remain distinct within each collection.
 These identifiers are untrusted source claims, not evidence of destination ownership.
 
 Comment `author` replaces `authorId`; template `creator` replaces `createdBy`.
