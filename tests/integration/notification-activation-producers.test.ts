@@ -489,6 +489,35 @@ test("overdue suppression precedes scan limit and a changed due instant becomes 
 	expect(await outbox("overdue")).toHaveLength(1);
 });
 
+test("overdue suppression is checked separately for each active recipient", async () => {
+	const pastDue = new Date("2026-08-01T08:00:00Z");
+	await seedTask("mixed-overdue", {
+		guarded: "active",
+		dueAt: pastDue,
+		reminderTime: null,
+	});
+	await admin.query(
+		"insert into task_assignee (id,task_id,user_id) values ('mixed-fallback','mixed-overdue','fallback')",
+	);
+	await admin.query(
+		"update task_notification_recipient set overdue_suppressed_due_at=$1 where task_id='mixed-overdue' and user_id='member'",
+		[pastDue],
+	);
+	await admin.query(`insert into task_notification_recipient (task_id,user_id,active,generation,cutoff)
+		values ('mixed-overdue','fallback',true,1,'2026-07-01T00:00:00Z')`);
+	expect(await overdueSweep(db, { now: firstTick })).toEqual({
+		scanned: 1,
+		enqueued: 1,
+	});
+	expect(
+		(
+			await admin.query(
+				"select recipient_user_id from notification_outbox where payload->>'taskId'='mixed-overdue'",
+			)
+		).rows,
+	).toEqual([{ recipient_user_id: "fallback" }]);
+});
+
 test("5,000 earlier suppressed guards do not consume the overdue scan limit", async () => {
 	await admin.query(`insert into task (id, list_id, title, sort_key, due_at)
 		select 'bulk-' || i, 'list', 'Suppressed', 'bulk-' || i, '2026-08-01T07:00:00Z'::timestamptz
