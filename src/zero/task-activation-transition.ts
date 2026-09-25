@@ -9,6 +9,13 @@ export type ActivationAuthority = {
 	evidence: { rows: number; bytes: number };
 };
 
+export class ActivationTransitionConflict extends Error {
+	constructor() {
+		super("Task activation generation or status changed");
+		this.name = "ActivationTransitionConflict";
+	}
+}
+
 const MAX_ROWS = 50_000;
 const MAX_BYTES = 64 * 1024 * 1024;
 
@@ -71,6 +78,37 @@ export async function reconcileActiveTaskRecipients(
 	locked: ActivationAuthority,
 	forceGeneration = false,
 ): Promise<void> {
+	return transitionRecipients(query, taskId, locked, forceGeneration);
+}
+
+// The caller rebuilds and confirms the review under its authority/domain locks.
+// This CAS fences old import plans without changing their owner-only ledger.
+export async function publishManualTaskRecipients(
+	query: ActivationQuery,
+	taskId: string,
+	locked: ActivationAuthority,
+	expectedGeneration: number,
+	reviewDigest: string,
+): Promise<void> {
+	if (
+		!Number.isSafeInteger(expectedGeneration) ||
+		expectedGeneration < 1 ||
+		!/^[0-9a-f]{64}$/.test(reviewDigest)
+	)
+		throw new Error("Invalid manual activation confirmation");
+	return transitionRecipients(query, taskId, locked, true, {
+		expectedGeneration,
+		reviewDigest,
+	});
+}
+
+async function transitionRecipients(
+	query: ActivationQuery,
+	taskId: string,
+	locked: ActivationAuthority,
+	forceGeneration: boolean,
+	manual?: { expectedGeneration: number; reviewDigest: string },
+): Promise<void> {
 	const current = await rows(
 		query,
 		`select t.id, t.due_at, l.workspace_id, l.owner_id
@@ -108,13 +146,17 @@ export async function reconcileActiveTaskRecipients(
 		from task_notification_activation where task_id = $1 for update`,
 		[taskId],
 	);
-	if (guardRows.length === 0) return;
+	if (guardRows.length === 0 && !manual) return;
 	if (
 		guardRows.length !== 1 ||
 		guardRows[0].task_id !== taskId ||
-		guardRows[0].status !== "active"
+		(manual
+			? (guardRows[0].status !== "pending" &&
+					guardRows[0].status !== "blocked") ||
+				guardRows[0].generation !== manual.expectedGeneration
+			: guardRows[0].status !== "active")
 	)
-		throw new Error("Task activation guard changed");
+		throw new ActivationTransitionConflict();
 	const guard = guardRows[0];
 	const effective = assignees.length ? assignees : [ownerId];
 	for (const id of effective) {
@@ -190,6 +232,26 @@ export async function reconcileActiveTaskRecipients(
 			);
 	const cutoff = new Date(cutoffMs);
 	const prior = new Set(recipients.map((row) => value(row, "user_id")));
+	const dueAt =
+		current[0].due_at === null ? null : instant(current[0].due_at, "due date");
+	const suppressed = dueAt && dueAt.getTime() < now.getTime() ? dueAt : null;
+	const newIds = [...nextSet].filter((id) => !prior.has(id)).sort();
+	// Charge prospective rows too; a near-limit retained history must not grow
+	// beyond the bound during this publication. JSON includes column names, so
+	// its byte estimate conservatively includes the inserted row's metadata.
+	await probe(
+		query,
+		`select count(*)::text as count,
+		coalesce(sum(octet_length(jsonb_build_object(
+			'task_id',$1::text,'user_id',recipient.user_id,'active',true,
+			'generation',$3::integer,'cutoff',$4::timestamptz,
+			'overdue_suppressed_due_at',$5::timestamptz,
+			'created_at',now(),'updated_at',now())::text)),0)::text as bytes
+		from unnest($2::text[]) recipient(user_id)`,
+		[taskId, newIds, nextGeneration, cutoff, suppressed],
+		locked.evidence,
+		true,
+	);
 	for (const row of recipients) {
 		const id = value(row, "user_id");
 		if (nextSet.has(id)) {
@@ -209,11 +271,7 @@ export async function reconcileActiveTaskRecipients(
 			);
 		}
 	}
-	const dueAt =
-		current[0].due_at === null ? null : instant(current[0].due_at, "due date");
-	for (const id of [...nextSet].sort()) {
-		if (prior.has(id)) continue;
-		const suppressed = dueAt && dueAt.getTime() < now.getTime() ? dueAt : null;
+	for (const id of newIds) {
 		await rows(
 			query,
 			`insert into task_notification_recipient
@@ -222,14 +280,27 @@ export async function reconcileActiveTaskRecipients(
 			[taskId, id, nextGeneration, cutoff, suppressed],
 		);
 	}
-	const changed = await rows(
-		query,
-		`update task_notification_activation
-		set generation = $2, recipient_generation_cutoff = $3, updated_at = now()
-		where task_id = $1 and status = 'active' and generation = $4
-		returning task_id`,
-		[taskId, nextGeneration, cutoff, oldGeneration],
-	);
+	const changed = manual
+		? await rows(
+				query,
+				`update task_notification_activation
+			set status = 'active', generation = $2, recipient_generation_cutoff = $3,
+			import_occurrence_cutoff = coalesce(import_occurrence_cutoff, $3),
+			completion_mode = 'manual', manual_review_digest = $5,
+			blocked_reason = null, updated_at = now()
+			where task_id = $1 and status in ('pending','blocked') and generation = $4
+			returning task_id`,
+				[taskId, nextGeneration, cutoff, oldGeneration, manual.reviewDigest],
+			)
+		: await rows(
+				query,
+				`update task_notification_activation
+			set generation = $2, recipient_generation_cutoff = $3,
+			manual_review_digest = null, updated_at = now()
+			where task_id = $1 and status = 'active' and generation = $4
+			returning task_id`,
+				[taskId, nextGeneration, cutoff, oldGeneration],
+			);
 	if (changed.length !== 1 || changed[0].task_id !== taskId)
-		throw new Error("Task activation generation changed");
+		throw new ActivationTransitionConflict();
 }
