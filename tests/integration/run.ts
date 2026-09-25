@@ -21,8 +21,9 @@ const env = {
 	S3_ACCESS_KEY_ID: "minioadmin",
 	S3_SECRET_ACCESS_KEY: "minioadmin",
 	S3_BUCKET: "ditero-test",
-	S3_ENDPOINT: "http://localhost:59000",
+	S3_ENDPOINT: "",
 	S3_REGION: "us-east-1",
+	DITERO_TEST_MINIO_PORT: "0",
 };
 
 function run(command: string, args: string[], allowFailure = false) {
@@ -31,6 +32,22 @@ function run(command: string, args: string[], allowFailure = false) {
 		throw new Error(`${command} exited with status ${result.status}`);
 	}
 	return result.status ?? 1;
+}
+
+function minioEndpoint(): string {
+	const result = spawnSync("docker", [...compose, "port", "minio", "9000"], {
+		env,
+		encoding: "utf8",
+	});
+	if (result.error || result.status !== 0)
+		throw new Error(
+			`Could not resolve MinIO published port: ${result.error?.message ?? result.stderr.trim()}`,
+		);
+	const match = /^127\.0\.0\.1:(\d+)$/.exec(result.stdout.trim());
+	const port = Number(match?.[1]);
+	if (!Number.isInteger(port) || port < 1 || port > 65535)
+		throw new Error(`Unexpected MinIO published port: ${result.stdout.trim()}`);
+	return `http://127.0.0.1:${port}`;
 }
 
 function runVitest(filters: string[], bunRuntime = false): number {
@@ -57,6 +74,7 @@ try {
 		"upstream-db",
 		"minio",
 	]);
+	env.S3_ENDPOINT = minioEndpoint();
 	run("docker", [...compose, "run", "--rm", "minio-init"]);
 	run("bun", ["run", "db:migrate"]);
 	if (requestedTests.length === 0) {
