@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { publicationEvidenceBudget } from "../../src/server/portability/import-activation-recovery.ts";
+import { publicationEvidenceBudget } from "./import-activation-recovery.ts";
 
 test("review reserves retained rows once so exactly one new recipient can fit", () => {
 	const seed = publicationEvidenceBudget(

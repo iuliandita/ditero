@@ -17,10 +17,17 @@ it("rejects invalid candidates before querying or entering producer scope", asyn
 			tx,
 			{
 				kind: "reminder",
-				taskId: "",
+				taskId: null as unknown as string,
 				recipientUserId: "recipient",
 				occurrenceAt: new Date(),
 			},
+			async () => "sent",
+		),
+	).rejects.toThrow(/required/);
+	await expect(
+		withProducerAuthority(
+			tx,
+			{ kind: "overdue", taskId: "", recipientUserId: "" },
 			async () => "sent",
 		),
 	).rejects.toThrow(/required/);

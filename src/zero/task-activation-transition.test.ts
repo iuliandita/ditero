@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import {
 	type ActivationQuery,
 	reconcileActiveTaskRecipients,
-} from "../../src/zero/task-activation-transition.ts";
+} from "./task-activation-transition.ts";
 
 test("oversized pair bytes stop before assignment rows are materialized", async () => {
 	const sqlSeen: string[] = [];
