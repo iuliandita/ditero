@@ -1,7 +1,16 @@
 import type { Pool, PoolClient } from "pg";
-import { withLiveUserContext } from "../db/user-context.ts";
+import { withLiveUserContext, withUserContext } from "../db/user-context.ts";
 import { inviteState } from "../domain/invite.ts";
 import { activeRecipientKeyGuard } from "../server/e2e/identity-rotation.ts";
+import {
+	committedInviteAssignment,
+	InviteTaskUnavailable,
+	inviteQueryFromPg,
+	lockInviteEvidence,
+	lockInviteMembership,
+	lockInviteTask,
+	reconcileInviteAssignment,
+} from "./invite-task-activation.ts";
 
 export const FAST_INVITE_TTL_MS = 15 * 60_000;
 
@@ -37,6 +46,7 @@ type StoredInvite = {
 	attach_kind: "assign" | "mention" | null;
 	created_at: Date;
 	claimed_by: string | null;
+	created_by: string;
 };
 
 export type FastInviteClaim = {
@@ -99,7 +109,7 @@ async function lockedInvite(
 ): Promise<StoredInvite> {
 	const found = await client.query<StoredInvite>(
 		`select id, workspace_id, role, email, status, expires_at, max_uses,
-		        uses, attach_task_id, attach_kind, created_at, claimed_by
+		        uses, attach_task_id, attach_kind, created_at, claimed_by, created_by
 		 from invite where token = $1
 		 and exists (select 1 from workspace w where w.id = invite.workspace_id and w.kind = 'shared')
 		 for update`,
@@ -108,6 +118,42 @@ async function lockedInvite(
 	const invite = found.rows[0];
 	if (!invite) throw new FastInviteError("not_found");
 	return invite;
+}
+
+async function discoveredInvite(
+	client: PoolClient,
+	token: string,
+): Promise<StoredInvite> {
+	const found = await client.query<StoredInvite>(
+		`select id, workspace_id, role, email, status, expires_at, max_uses,
+		 uses, attach_task_id, attach_kind, created_at, claimed_by, created_by
+		 from invite where token = $1`,
+		[token],
+	);
+	if (found.rows.length !== 1) throw new FastInviteError("not_found");
+	return found.rows[0];
+}
+
+function sameAttachment(
+	discovered: StoredInvite,
+	locked: StoredInvite,
+): boolean {
+	return (
+		discovered.id === locked.id &&
+		discovered.workspace_id === locked.workspace_id &&
+		discovered.attach_task_id === locked.attach_task_id &&
+		discovered.attach_kind === locked.attach_kind &&
+		discovered.role === locked.role &&
+		discovered.created_by === locked.created_by
+	);
+}
+
+async function liveUser(client: PoolClient, userId: string): Promise<void> {
+	const rows = await client.query(
+		'select id from "user" where id = $1 and deleted_at is null for key share',
+		[userId],
+	);
+	if (rows.rowCount !== 1) throw new FastInviteError("not_found");
 }
 
 async function ensureActiveGrantRequest(
@@ -137,8 +183,54 @@ export async function claimFastInvite(
 	userEmail: string,
 	now = new Date(),
 ): Promise<FastInviteClaim> {
-	return await withLiveUserContext(pool, userId, async (client) => {
+	return await withUserContext(pool, userId, async (client) => {
+		const observed = await discoveredInvite(client, token);
+		const attachedAssign =
+			observed.attach_task_id != null && observed.attach_kind === "assign";
+		const completedObserved =
+			observed.status === "accepted" &&
+			observed.claimed_by === userId &&
+			observed.uses === 1;
+		let lockedTask: Awaited<ReturnType<typeof lockInviteTask>> | null = null;
+		const query = inviteQueryFromPg(client);
+		if (attachedAssign && !completedObserved) {
+			try {
+				lockedTask = await lockInviteTask(query, client, {
+					taskId: observed.attach_task_id as string,
+					workspaceId: observed.workspace_id,
+					actorId: userId,
+					inviteeId: userId,
+					inviterId: observed.created_by,
+					membershipRole: observed.role,
+				});
+				await lockInviteEvidence(query, lockedTask);
+			} catch (error) {
+				if (error instanceof InviteTaskUnavailable)
+					throw new FastInviteError(
+						error.reason === "pending" ? "conflict" : "not_found",
+					);
+				throw error;
+			}
+		} else if (completedObserved) {
+			await liveUser(client, userId);
+		} else {
+			try {
+				await lockInviteMembership(query, {
+					workspaceId: observed.workspace_id,
+					actorId: userId,
+					inviterId: observed.created_by,
+					role: observed.role,
+					insert: true,
+				});
+			} catch (error) {
+				if (error instanceof InviteTaskUnavailable)
+					throw new FastInviteError("not_found");
+				throw error;
+			}
+		}
 		const invite = await lockedInvite(client, token);
+		if (!sameAttachment(observed, invite))
+			throw new FastInviteError("conflict");
 		assertFastEligible(invite);
 		const completedByCaller =
 			invite.status === "accepted" &&
@@ -159,6 +251,21 @@ export async function claimFastInvite(
 		if (invite.claimed_by != null && invite.claimed_by !== userId) {
 			throw new FastInviteError("exhausted");
 		}
+		if (completedByCaller && attachedAssign) {
+			if (
+				!(await committedInviteAssignment(
+					query,
+					invite.attach_task_id as string,
+					invite.workspace_id,
+					userId,
+				))
+			)
+				throw new FastInviteError("conflict");
+		} else if (completedByCaller) {
+			// A completed reload only reads the previously committed grant state.
+		} else if (attachedAssign && !lockedTask) {
+			throw new FastInviteError("conflict");
+		}
 		if (!completedByCaller && invite.claimed_by == null) {
 			const claimed = await client.query(
 				`update invite set claimed_by = $2, claimed_at = $3
@@ -169,13 +276,9 @@ export async function claimFastInvite(
 			if (claimed.rowCount !== 1) throw new FastInviteError("exhausted");
 		}
 
-		await client.query(
-			`insert into membership (id, user_id, workspace_id, role)
-			 values ($1, $2, $3, $4)
-			 on conflict (user_id, workspace_id) do nothing`,
-			[`m_${crypto.randomUUID()}`, userId, invite.workspace_id, invite.role],
-		);
-		await ensureActiveGrantRequest(client, userId, invite.workspace_id);
+		if (!completedByCaller) {
+			await ensureActiveGrantRequest(client, userId, invite.workspace_id);
+		}
 
 		const context = await client.query<{
 			version: number;
@@ -313,13 +416,68 @@ export async function finalizeFastInvite(
 	mode: "fast" | "fallback",
 	now = new Date(),
 ): Promise<{ workspaceId: string; grantRequestId: string | null }> {
-	return await withLiveUserContext(pool, userId, async (client) => {
+	return await withUserContext(pool, userId, async (client) => {
+		const observed = await discoveredInvite(client, token);
+		const attachedAssign =
+			observed.attach_task_id != null && observed.attach_kind === "assign";
+		const completedObserved =
+			observed.status === "accepted" &&
+			observed.claimed_by === userId &&
+			observed.uses === 1;
+		const query = inviteQueryFromPg(client);
+		let lockedTask: Awaited<ReturnType<typeof lockInviteTask>> | null = null;
+		if (attachedAssign && !completedObserved) {
+			try {
+				lockedTask = await lockInviteTask(query, client, {
+					taskId: observed.attach_task_id as string,
+					workspaceId: observed.workspace_id,
+					actorId: userId,
+					inviteeId: userId,
+					inviterId: observed.created_by,
+				});
+				await lockInviteEvidence(query, lockedTask);
+			} catch (error) {
+				if (error instanceof InviteTaskUnavailable)
+					throw new FastInviteError(
+						error.reason === "pending" ? "conflict" : "not_found",
+					);
+				throw error;
+			}
+		} else if (completedObserved) {
+			await liveUser(client, userId);
+		} else {
+			try {
+				await lockInviteMembership(query, {
+					workspaceId: observed.workspace_id,
+					actorId: userId,
+					inviterId: observed.created_by,
+					role: observed.role,
+					insert: false,
+				});
+			} catch (error) {
+				if (error instanceof InviteTaskUnavailable)
+					throw new FastInviteError("not_found");
+				throw error;
+			}
+		}
 		const invite = await lockedInvite(client, token);
+		if (!sameAttachment(observed, invite))
+			throw new FastInviteError("conflict");
 		if (
 			invite.status === "accepted" &&
 			invite.claimed_by === userId &&
 			invite.uses === 1
 		) {
+			if (
+				attachedAssign &&
+				!(await committedInviteAssignment(
+					query,
+					invite.attach_task_id as string,
+					invite.workspace_id,
+					userId,
+				))
+			)
+				throw new FastInviteError("conflict");
 			return {
 				workspaceId: invite.workspace_id,
 				grantRequestId: await pendingRequestId(
@@ -367,12 +525,13 @@ export async function finalizeFastInvite(
 		);
 		if (consumed.rowCount !== 1) throw new FastInviteError("exhausted");
 
-		if (invite.attach_task_id != null && invite.attach_kind === "assign") {
+		if (lockedTask) {
 			await client.query(
 				`insert into task_assignee (id, task_id, user_id)
 				 values ($1, $2, $3) on conflict do nothing`,
-				[`${invite.attach_task_id}:${userId}`, invite.attach_task_id, userId],
+				[`${lockedTask.taskId}:${userId}`, lockedTask.taskId, userId],
 			);
+			await reconcileInviteAssignment(query, lockedTask);
 		}
 		return {
 			workspaceId: invite.workspace_id,

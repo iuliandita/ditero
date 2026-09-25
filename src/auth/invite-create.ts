@@ -11,6 +11,12 @@ import {
 	ackBaseUrl,
 	takeRateToken,
 } from "../server/notifications/capability.ts";
+import {
+	InviteTaskUnavailable,
+	inviteActivationClientFromDrizzle,
+	inviteQueryFromDrizzle,
+	lockInviteTask,
+} from "./invite-task-activation.ts";
 import { isRestrictedAccount } from "./managed-account.ts";
 import {
 	type AppEnv,
@@ -170,20 +176,52 @@ export async function createInvite(
 	}
 	const maxUses =
 		input.maxUses !== undefined ? input.maxUses : email != null ? 1 : null;
-	await database.insert(invite).values({
+	const values = {
 		id,
 		workspaceId: input.workspaceId,
 		role: input.role,
 		email,
 		token,
-		status: "pending",
+		status: "pending" as const,
 		uses: 0,
 		expiresAt: input.expiresAt != null ? new Date(input.expiresAt) : null,
 		maxUses,
 		attachTaskId: input.attachTaskId ?? null,
 		attachKind: input.attachKind ?? null,
 		createdBy: callerId,
-	});
+	};
+	if (input.attachKind === "assign" && input.attachTaskId) {
+		try {
+			await database.transaction(async (tx) => {
+				await lockInviteTask(
+					inviteQueryFromDrizzle(tx),
+					inviteActivationClientFromDrizzle(tx),
+					{
+						taskId: input.attachTaskId as string,
+						workspaceId: input.workspaceId,
+						actorId: callerId,
+					},
+				);
+				const lockedRole = await roleInWorkspace(
+					tx,
+					callerId,
+					input.workspaceId,
+				);
+				if (lockedRole !== callerRole)
+					throw new InviteCreateError(403, "workspace role changed");
+				await tx.insert(invite).values(values);
+			});
+		} catch (error) {
+			if (error instanceof InviteTaskUnavailable)
+				throw new InviteCreateError(
+					error.reason === "pending" ? 409 : 400,
+					`attach task ${error.reason}`,
+				);
+			throw error;
+		}
+	} else {
+		await database.insert(invite).values(values);
+	}
 
 	return { id, token, link: inviteLink(token, env) };
 }
