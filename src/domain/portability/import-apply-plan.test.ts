@@ -8,6 +8,7 @@ import {
 	type ImportTargetSnapshot,
 	sealImportApplyPlan,
 } from "./import-apply-plan.ts";
+import { hashImportValue } from "./import-digest.ts";
 import { buildImportPlan } from "./import-plan.ts";
 import type { PortableExportV1 } from "./v1.ts";
 import { parsePortableExportV1 } from "./validate.ts";
@@ -171,6 +172,89 @@ describe("sealed import apply plan", () => {
 			"f76817713bb8ba6e72643191fc41c1a42615f0ba92c5f1f19c09b62fd35d69cb",
 		);
 	});
+	test("v4 seals canonical activation evidence in a separate digest domain", async () => {
+		const item = candidate();
+		const target = snapshot();
+		const evidence = {
+			version: 1 as const,
+			workspaceId: "target-workspace",
+			assignees: [],
+			ownerFallback: { userId: "owner", membershipId: "owner-seat" },
+			escalationFallback: null,
+		};
+		const relationshipDigest = await hashImportValue(
+			"ditero-import-expected-relationships-v1",
+			evidence,
+			() => {},
+		);
+		target.dependencyProof.activation = {
+			kind: "transition",
+			precondition: { kind: "absent" },
+			generation: 1,
+			readinessOrdinal: item.ordinal,
+			expectedRelationships: {
+				digest: relationshipDigest,
+				count: 1,
+				bytes: 150,
+				evidence,
+			},
+		};
+		const v4 = await sealImportApplyPlan(
+			[item],
+			new Map([[item.sourceKey, target]]),
+			{ ...context, plannerVersion: 4 },
+		);
+		const v2 = await seal();
+		expect(v4.report.plannerVersion).toBe(4);
+		expect(v4.items[0].contentDigest).toBe(v2.items[0].contentDigest);
+		expect(v4.items[0].itemDigest).not.toBe(v2.items[0].itemDigest);
+		expect(v4.planDigest).not.toBe(v2.planDigest);
+		expect(v4.items[0].dependencyProof?.activation).toEqual(
+			target.dependencyProof.activation,
+		);
+		if (!target.dependencyProof.activation)
+			throw new Error("missing activation");
+		const adopted = structuredClone(target);
+		adopted.targetPrecondition = {
+			kind: "mapped",
+			mapVersion: 2,
+			targetDigest: "same-content",
+		};
+		adopted.dependencyProof.activation = {
+			...target.dependencyProof.activation,
+			kind: "transition",
+			precondition: {
+				kind: "present",
+				status: "pending",
+				generation: 5,
+				owningSourceId: "old-source",
+				owningJobId: "terminal-job",
+				owningOwnerUserId: "owner",
+				expectedRelationshipDigest: relationshipDigest,
+			},
+			generation: 6,
+		};
+		await expect(
+			sealImportApplyPlan([item], new Map([[item.sourceKey, adopted]]), {
+				...context,
+				plannerVersion: 4,
+			}),
+		).resolves.toMatchObject({ report: { plannerVersion: 4 } });
+		const altered = structuredClone(target);
+		if (!altered.dependencyProof.activation)
+			throw new Error("missing activation");
+		altered.dependencyProof.activation.expectedRelationships.evidence.ownerFallback =
+			{
+				userId: "different",
+				membershipId: "owner-seat",
+			};
+		await expect(
+			sealImportApplyPlan([item], new Map([[item.sourceKey, altered]]), {
+				...context,
+				plannerVersion: 4,
+			}),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
+	});
 	test("v3 changes execution identity while preserving existing source-map content identity", async () => {
 		const item = candidate();
 		const snapshots = new Map([[item.sourceKey, snapshot()]]);
@@ -210,6 +294,18 @@ describe("sealed import apply plan", () => {
 			},
 			dependencyProof: {
 				...snapshot().dependencyProof,
+				rows: [
+					...snapshot().dependencyProof.rows,
+					{
+						collection: "tasks",
+						sourceKey: "task-source-key",
+						itemOrdinal: 0,
+						id: "target-task",
+						workspaceId: "target-workspace",
+						listId: "target-list",
+						parentId: null,
+					},
+				],
 				assignee: {
 					sourceUserId: "source-user",
 					targetUserId: "target-user",
@@ -247,6 +343,253 @@ describe("sealed import apply plan", () => {
 			"membership",
 		);
 		expect({ item, target }).toEqual(before);
+	});
+	test("v4 binds fallback seats and assignment readiness to the task generation", async () => {
+		const task = candidate();
+		task.payload = {
+			id: "target-task",
+			listId: "target-list",
+			title: "Task",
+			fallbackUserId: "fallback-user",
+		};
+		const assigned = assignment();
+		assigned.item.ordinal = 1;
+		assigned.item.sourceKey = "assignment-key";
+		assigned.item.dependencies = [
+			{
+				collection: "tasks",
+				sourceId: task.sourceId,
+				sourceKey: task.sourceKey,
+			},
+		];
+		assigned.target.dependencyProof.taskActivationGeneration = 1;
+		const taskTarget = snapshot();
+		taskTarget.dependencyProof.fallback = {
+			sourceUserId: "source-fallback",
+			targetUserId: "fallback-user",
+			workspaceId: "target-workspace",
+			membershipId: "fallback-seat",
+		};
+		const evidence = {
+			version: 1 as const,
+			workspaceId: "target-workspace",
+			assignees: [
+				{ userId: "existing-user", membershipId: "existing-seat" },
+				{ userId: "target-user", membershipId: "membership" },
+			],
+			ownerFallback: null,
+			escalationFallback: {
+				userId: "fallback-user",
+				membershipId: "fallback-seat",
+			},
+		};
+		taskTarget.dependencyProof.activation = {
+			kind: "transition",
+			precondition: { kind: "absent" },
+			generation: 1,
+			readinessOrdinal: 1,
+			expectedRelationships: {
+				digest: await hashImportValue(
+					"ditero-import-expected-relationships-v1",
+					evidence,
+					() => {},
+				),
+				count: 3,
+				bytes: 200,
+				evidence,
+			},
+		};
+		const snapshots = new Map([
+			[task.sourceKey, taskTarget],
+			[assigned.item.sourceKey, assigned.target],
+		]);
+		const plan = await sealImportApplyPlan([task, assigned.item], snapshots, {
+			...context,
+			plannerVersion: 4,
+		});
+		expect(plan.items[0].dependencyProof?.activation?.readinessOrdinal).toBe(1);
+		expect(
+			plan.items[0].dependencyProof?.activation?.expectedRelationships.evidence
+				.assignees,
+		).toHaveLength(2);
+		const duplicate = structuredClone(taskTarget);
+		if (!duplicate.dependencyProof.activation)
+			throw new Error("missing activation");
+		const duplicateRelationships =
+			duplicate.dependencyProof.activation.expectedRelationships;
+		duplicateRelationships.evidence.assignees[1].userId = "existing-user";
+		duplicateRelationships.digest = await hashImportValue(
+			"ditero-import-expected-relationships-v1",
+			duplicateRelationships.evidence,
+			() => {},
+		);
+		await expect(
+			sealImportApplyPlan(
+				[task, assigned.item],
+				new Map([
+					[task.sourceKey, duplicate],
+					[assigned.item.sourceKey, assigned.target],
+				]),
+				{ ...context, plannerVersion: 4 },
+			),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
+		const early = structuredClone(taskTarget);
+		if (!early.dependencyProof.activation)
+			throw new Error("missing activation");
+		early.dependencyProof.activation.readinessOrdinal = 0;
+		await expect(
+			sealImportApplyPlan(
+				[task, assigned.item],
+				new Map([
+					[task.sourceKey, early],
+					[assigned.item.sourceKey, assigned.target],
+				]),
+				{ ...context, plannerVersion: 4 },
+			),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
+		const missingFallback = structuredClone(taskTarget);
+		delete missingFallback.dependencyProof.fallback;
+		await expect(
+			sealImportApplyPlan(
+				[task, assigned.item],
+				new Map([
+					[task.sourceKey, missingFallback],
+					[assigned.item.sourceKey, assigned.target],
+				]),
+				{ ...context, plannerVersion: 4 },
+			),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
+	});
+	test("v4 keeps unchanged guardless legacy task and mapped pair guardless", async () => {
+		const task = candidate();
+		const assigned = assignment();
+		assigned.item.ordinal = 1;
+		assigned.item.sourceKey = "assignment-key";
+		assigned.item.dependencies = [
+			{
+				collection: "tasks",
+				sourceId: task.sourceId,
+				sourceKey: task.sourceKey,
+			},
+		];
+		const taskTarget = snapshot();
+		taskTarget.targetPrecondition = {
+			kind: "mapped",
+			mapVersion: 1,
+			targetDigest: "task-digest",
+		};
+		assigned.target.targetPrecondition = {
+			kind: "mapped",
+			mapVersion: 1,
+			targetDigest: "pair-digest",
+		};
+		const plan = await sealImportApplyPlan(
+			[task, assigned.item],
+			new Map([
+				[task.sourceKey, taskTarget],
+				[assigned.item.sourceKey, assigned.target],
+			]),
+			{ ...context, plannerVersion: 4 },
+		);
+		expect(plan.items[0].dependencyProof?.activation).toBeUndefined();
+		expect(
+			plan.items[1].dependencyProof?.taskActivationGeneration,
+		).toBeUndefined();
+	});
+	test.each([
+		false,
+		true,
+	])("v4 seals readiness beyond one 100-item apply window (last mapped: %s)", async (lastMapped) => {
+		const task = candidate();
+		const taskTarget = snapshot();
+		const pairs = [];
+		const items: ImportApplyCandidate[] = [task];
+		const snapshots = new Map<string, ImportTargetSnapshot>([
+			[task.sourceKey, taskTarget],
+		]);
+		for (let ordinal = 1; ordinal <= 101; ordinal++) {
+			const userId = `user-${String(ordinal).padStart(3, "0")}`;
+			const membershipId = `seat-${ordinal}`;
+			pairs.push({ userId, membershipId });
+			const pair = assignment();
+			pair.item.ordinal = ordinal;
+			pair.item.sourceId = `assignment-${ordinal}`;
+			pair.item.sourceKey = `assignment-key-${ordinal}`;
+			pair.item.targetId = `target-task:${userId}`;
+			pair.item.payload = {
+				id: pair.item.targetId,
+				taskId: "target-task",
+				userId,
+			};
+			pair.item.dependencies = [
+				{
+					collection: "tasks",
+					sourceId: task.sourceId,
+					sourceKey: task.sourceKey,
+				},
+			];
+			pair.target.targetPrecondition = {
+				kind: "absent",
+				naturalKey: {
+					kind: "task-assignee-pair",
+					taskId: "target-task",
+					userId,
+				},
+			};
+			if (lastMapped && ordinal === 101) {
+				pair.target.targetPrecondition = {
+					kind: "mapped",
+					mapVersion: 1,
+					targetDigest: "existing-pair-digest",
+				};
+			}
+			pair.target.dependencyProof.assignee = {
+				sourceUserId: `source-${ordinal}`,
+				targetUserId: userId,
+				workspaceId: "target-workspace",
+				membershipId,
+			};
+			pair.target.dependencyProof.taskActivationGeneration = 1;
+			items.push(pair.item);
+			snapshots.set(pair.item.sourceKey, pair.target);
+		}
+		const evidence = {
+			version: 1 as const,
+			workspaceId: "target-workspace",
+			assignees: pairs,
+			ownerFallback: null,
+			escalationFallback: null,
+		};
+		taskTarget.dependencyProof.activation = {
+			kind: "transition",
+			precondition: { kind: "absent" },
+			generation: 1,
+			readinessOrdinal: 101,
+			expectedRelationships: {
+				digest: await hashImportValue(
+					"ditero-import-expected-relationships-v1",
+					evidence,
+					() => {},
+				),
+				count: 101,
+				bytes: 6000,
+				evidence,
+			},
+		};
+		const plan = await sealImportApplyPlan(items, snapshots, {
+			...context,
+			plannerVersion: 4,
+		});
+		expect(plan.items[0].dependencyProof?.activation?.readinessOrdinal).toBe(
+			101,
+		);
+		taskTarget.dependencyProof.activation.readinessOrdinal = 100;
+		await expect(
+			sealImportApplyPlan(items, snapshots, {
+				...context,
+				plannerVersion: 4,
+			}),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
 	});
 	test.each([
 		"missing",
@@ -286,7 +629,7 @@ describe("sealed import apply plan", () => {
 		await expect(
 			sealImportApplyPlan([item], new Map([[item.sourceKey, snapshot()]]), {
 				...context,
-				plannerVersion: 4 as 3,
+				plannerVersion: 5 as 3,
 			}),
 		).rejects.toMatchObject({ code: "invalid-mappings" });
 	});

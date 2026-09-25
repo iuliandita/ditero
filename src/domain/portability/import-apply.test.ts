@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { projectImportApply } from "./import-apply.ts";
+import {
+	blockV4TasksWithFailedAssignments,
+	projectImportApply,
+} from "./import-apply.ts";
 import { buildImportPlan } from "./import-plan.ts";
 import type { PortableExportV1, PortableRows } from "./v1.ts";
 
@@ -428,7 +431,7 @@ describe("import apply eligibility", () => {
 		const source = fixture();
 		const plan = await buildImportPlan(source, context);
 		expect(() =>
-			projectImportApply(source, plan.items, { plannerVersion: 4 as 3 }),
+			projectImportApply(source, plan.items, { plannerVersion: 5 as 3 }),
 		).toThrow("invalid-mappings");
 	});
 	test("projects supported phases and explicit dependencies without mutating either input", async () => {
@@ -584,5 +587,76 @@ describe("import apply eligibility", () => {
 		expect(() =>
 			projectImportApply(source, plan.items, { signal: AbortSignal.abort() }),
 		).toThrow("planning-cancelled");
+	});
+	test("v4 preserves notification fields and dates on root and child tasks", async () => {
+		const source = fixture();
+		Object.assign(source.data.tasks[0], {
+			dueAt: "2020-01-01T00:00:00.000Z",
+			reminderTime: "09:00",
+			repeatEveryMin: 5,
+			maxRepeats: 2,
+			fallbackUserId: "self",
+			urgent: true,
+		});
+		source.data.tasks[1].dueAt = "2100-01-01T00:00:00.000Z";
+		const plan = await buildImportPlan(source, context);
+		const projected = projectImportApply(source, plan.items, {
+			plannerVersion: 4,
+		});
+		for (const id of ["task", "child"]) {
+			const candidate = projected.items.find((item) => item.sourceId === id);
+			expect(candidate?.disposition).toBe("ensure");
+			expect(candidate?.payload).toEqual(
+				plan.items.find((item) => item.sourceId === id)?.payload,
+			);
+		}
+	});
+	test("v4 reverse-blocks a notification task when an intended assignment fails", async () => {
+		const source = fixture();
+		source.data.tasks[0].dueAt = date;
+		const plan = await buildImportPlan(source, context);
+		const projected = projectImportApply(source, plan.items, {
+			plannerVersion: 4,
+		});
+		const assignment = projected.items.find(
+			(item) => item.collection === "assignments",
+		);
+		if (!assignment) throw new Error("missing assignment fixture");
+		assignment.disposition = "blocked";
+		assignment.codes = ["invalid-assignee-membership"];
+		blockV4TasksWithFailedAssignments(source, projected.items);
+		expect(
+			projected.items.find((item) => item.sourceId === "task")?.codes,
+		).toContain("notification-recipient-blocked");
+		expect(
+			projected.items.find((item) => item.sourceId === "child")?.disposition,
+		).toBe("ensure");
+	});
+	test("v4 closes an early unmapped assignment backward then forward to children", async () => {
+		const source = fixture();
+		source.data.tasks[0].dueAt = date;
+		source.data.assignments[0].userId = "former";
+		source.data.memberships.push({
+			id: "former-seat",
+			userId: "former",
+			workspaceId: "workspace",
+			role: "member",
+		});
+		const plan = await buildImportPlan(source, {
+			...context,
+			mappings: {
+				...context.mappings,
+				principals: { self: "owner", former: null },
+			},
+		});
+		const projected = projectImportApply(source, plan.items, {
+			plannerVersion: 4,
+		});
+		expect(
+			projected.items.find((item) => item.sourceId === "task")?.codes,
+		).toContain("notification-recipient-blocked");
+		expect(
+			projected.items.find((item) => item.sourceId === "child")?.codes,
+		).toContain("blocked-dependency");
 	});
 });

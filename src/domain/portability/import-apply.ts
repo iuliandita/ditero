@@ -29,13 +29,13 @@ export function projectImportApply(
 	document: PortableExportV1,
 	planItems: readonly ImportPlanItem[],
 	context: {
-		plannerVersion?: 2 | 3;
+		plannerVersion?: 2 | 3 | 4;
 		signal?: AbortSignal;
 		deadline?: number;
 	} = {},
 ) {
 	const plannerVersion = context.plannerVersion ?? 2;
-	if (plannerVersion !== 2 && plannerVersion !== 3)
+	if (plannerVersion !== 2 && plannerVersion !== 3 && plannerVersion !== 4)
 		throw new ImportPlanError("invalid-mappings");
 	const deadline = context.deadline ?? performance.now() + 15_000;
 	function checkpoint() {
@@ -114,12 +114,13 @@ export function projectImportApply(
 				const row = original as PortableRows["tasks"];
 				item.phase = row.parentId === null ? "root-tasks" : "child-tasks";
 				if (
-					row.reminderTime !== null ||
-					row.repeatEveryMin !== null ||
-					row.maxRepeats !== null ||
-					row.fallbackUserId !== null ||
-					row.urgent ||
-					(!row.done && row.dueAt !== null)
+					plannerVersion !== 4 &&
+					(row.reminderTime !== null ||
+						row.repeatEveryMin !== null ||
+						row.maxRepeats !== null ||
+						row.fallbackUserId !== null ||
+						row.urgent ||
+						(!row.done && row.dueAt !== null))
 				)
 					block(item, "notification-bearing-task");
 				dependency("lists", row.listId);
@@ -159,6 +160,8 @@ export function projectImportApply(
 				block(item, "unsupported-collection");
 		}
 	}
+	if (plannerVersion === 4)
+		blockV4TasksWithFailedAssignments(document, items, context);
 	const queue = items.filter((item) => item.disposition !== "ensure");
 	for (let i = 0; i < queue.length; i++) {
 		checkpoint();
@@ -183,4 +186,49 @@ export function projectImportApply(
 	}
 	checkpoint();
 	return { items, counts };
+}
+
+// Call after live freeze has marked collisions and missing seats, before its
+// ordinary forward closure and before sealing. The source document is required
+// because blocked candidates have already restored their original payloads.
+export function blockV4TasksWithFailedAssignments(
+	document: PortableExportV1,
+	items: ImportApplyCandidate[],
+	context: { signal?: AbortSignal; deadline?: number } = {},
+): void {
+	const tasks = new Map(
+		items
+			.filter((item) => item.collection === "tasks")
+			.map((item) => [item.sourceId, item]),
+	);
+	const sourceTasks = new Map(document.data.tasks.map((row) => [row.id, row]));
+	const sourceAssignments = new Map(
+		document.data.assignments.map((row) => [row.id, row]),
+	);
+	for (const item of items) {
+		if (context.signal?.aborted)
+			throw new ImportPlanError("planning-cancelled");
+		if (context.deadline !== undefined && performance.now() >= context.deadline)
+			throw new ImportPlanError("planning-timeout");
+		if (item.collection !== "assignments" || item.disposition === "ensure")
+			continue;
+		const assignment = sourceAssignments.get(item.sourceId);
+		const task = assignment && sourceTasks.get(assignment.taskId);
+		const target = assignment && tasks.get(assignment.taskId);
+		if (!assignment || !task || !target)
+			throw new ImportPlanError("invalid-graph");
+		if (
+			target.disposition === "ensure" &&
+			(task.reminderTime !== null ||
+				task.repeatEveryMin !== null ||
+				task.maxRepeats !== null ||
+				task.fallbackUserId !== null ||
+				task.urgent ||
+				(!task.done && task.dueAt !== null))
+		) {
+			target.disposition = "blocked";
+			if (!target.codes.includes("notification-recipient-blocked"))
+				target.codes.push("notification-recipient-blocked");
+		}
+	}
 }
