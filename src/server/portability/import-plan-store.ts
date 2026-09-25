@@ -13,6 +13,12 @@ import {
 import type { PortableExportV1 } from "../../domain/portability/v1.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 import {
+	discoverV4Authority,
+	ImportActivationLimitError,
+	lockV4Authority,
+	type V4Authority,
+} from "./import-activation-freeze.ts";
+import {
 	freezeImportTargets,
 	ImportFreezeLimitError,
 } from "./import-freeze.ts";
@@ -73,6 +79,7 @@ export async function importTransaction<T>(
 	run: (client: PoolClient) => Promise<T>,
 	signal?: AbortSignal,
 	deadline = performance.now() + 15_000,
+	beforeOwnerLock?: (client: PoolClient) => Promise<readonly string[]>,
 ): Promise<T> {
 	const acquisitionBudget = Math.ceil(deadline - performance.now());
 	if (signal?.aborted) fail("import-cancelled", 408);
@@ -155,11 +162,35 @@ export async function importTransaction<T>(
 				};
 			},
 		});
-		const live = await bounded.query(
-			'select id from "user" where id = $1 and deleted_at is null for update',
-			[ownerId],
-		);
-		if (live.rowCount !== 1) fail("inactive-user", 403);
+		if (beforeOwnerLock) {
+			const ids = [
+				...new Set([ownerId, ...(await beforeOwnerLock(bounded))]),
+			].sort();
+			async function lockOthers(userIds: string[]) {
+				for (let offset = 0; offset < userIds.length; offset += 256) {
+					const batch = userIds.slice(offset, offset + 256);
+					const live = await bounded.query(
+						'select id from "user" where id = any($1::text[]) and deleted_at is null order by id for share',
+						[batch],
+					);
+					if (live.rowCount !== batch.length)
+						fail("invalid-principal-mapping", 403);
+				}
+			}
+			await lockOthers(ids.filter((id) => id < ownerId));
+			const live = await bounded.query(
+				'select id from "user" where id = $1 and deleted_at is null for update',
+				[ownerId],
+			);
+			if (live.rowCount !== 1) fail("inactive-user", 403);
+			await lockOthers(ids.filter((id) => id > ownerId));
+		} else {
+			const live = await bounded.query(
+				'select id from "user" where id = $1 and deleted_at is null for update',
+				[ownerId],
+			);
+			if (live.rowCount !== 1) fail("inactive-user", 403);
+		}
 		const result = await run(bounded);
 		await bounded.query("commit");
 		return result;
@@ -205,12 +236,13 @@ async function authorizeMappings(
 	ownerId: string,
 	document: PortableExportV1,
 	mappings: ImportMappings,
+	v4 = false,
 ) {
 	if (mappings.principals[document.sourceUserId] !== ownerId)
 		fail("invalid-principal-mapping", 400);
 	const workspaceIds = [...new Set(Object.values(mappings.workspaces))].sort();
 	const callers = await client.query<{ workspace_id: string; role: Role }>(
-		`select m.workspace_id, m.role from membership m join workspace w on w.id = m.workspace_id where m.user_id = $1 and m.workspace_id = any($2::text[]) order by m.id for share of m, w`,
+		`select m.workspace_id, m.role from membership m join workspace w on w.id = m.workspace_id where m.user_id = $1 and m.workspace_id = any($2::text[]) order by m.id ${v4 ? "" : "for share of m, w"}`,
 		[ownerId, workspaceIds],
 	);
 	if (
@@ -226,13 +258,13 @@ async function authorizeMappings(
 		),
 	].sort();
 	const live = await client.query(
-		'select id from "user" where id = any($1::text[]) and deleted_at is null order by id for key share',
+		`select id from "user" where id = any($1::text[]) and deleted_at is null order by id ${v4 ? "" : "for key share"}`,
 		[principals],
 	);
 	if (live.rowCount !== principals.length)
 		fail("invalid-principal-mapping", 403);
 	const seats = await client.query<{ user_id: string; workspace_id: string }>(
-		`select user_id, workspace_id from membership where user_id = any($1::text[]) and workspace_id = any($2::text[]) order by id for share`,
+		`select user_id, workspace_id from membership where user_id = any($1::text[]) and workspace_id = any($2::text[]) order by id ${v4 ? "" : "for share"}`,
 		[principals, workspaceIds],
 	);
 	const existing = new Set(
@@ -285,7 +317,7 @@ export async function saveImportPlan(
 	options: {
 		signal?: AbortSignal;
 		deadline?: number;
-		plannerVersion?: 1 | 2 | 3;
+		plannerVersion?: 1 | 2 | 3 | 4;
 	} = {},
 ): Promise<ImportPlanStatus> {
 	const deadline = Math.min(
@@ -308,10 +340,20 @@ export async function saveImportPlan(
 			fail("import-cancelled", 408);
 		throw error;
 	});
+	const v4Candidates =
+		options.plannerVersion === 4
+			? projectImportApply(document, basePlan.items, {
+					plannerVersion: 4,
+					signal: options.signal,
+					deadline,
+				}).items
+			: null;
+	let v4Authority: V4Authority | null = null;
 	return importTransaction(
 		pool,
 		ownerId,
 		async (client) => {
+			if (v4Authority) await lockV4Authority(client, v4Authority);
 			if (options.plannerVersion === 3) {
 				// Account deletion locks users before workspace memberships.
 				const assignees = [
@@ -328,7 +370,13 @@ export async function saveImportPlan(
 				if (live.rowCount !== assignees.length)
 					fail("invalid-principal-mapping", 403);
 			}
-			await authorizeMappings(client, ownerId, document, mappings);
+			await authorizeMappings(
+				client,
+				ownerId,
+				document,
+				mappings,
+				options.plannerVersion === 4,
+			);
 			const sources = await client.query<{
 				label: string;
 				format: string;
@@ -352,12 +400,18 @@ export async function saveImportPlan(
 			let plan:
 				| typeof basePlan
 				| Awaited<ReturnType<typeof sealImportApplyPlan>> = basePlan;
-			if (options.plannerVersion === 2 || options.plannerVersion === 3) {
-				const candidates = projectImportApply(document, basePlan.items, {
-					plannerVersion: options.plannerVersion,
-					signal: options.signal,
-					deadline,
-				});
+			if (
+				options.plannerVersion === 2 ||
+				options.plannerVersion === 3 ||
+				options.plannerVersion === 4
+			) {
+				const candidates = v4Candidates
+					? { items: v4Candidates }
+					: projectImportApply(document, basePlan.items, {
+							plannerVersion: options.plannerVersion,
+							signal: options.signal,
+							deadline,
+						});
 				const frozen = await freezeImportTargets(
 					client,
 					ownerId,
@@ -365,7 +419,12 @@ export async function saveImportPlan(
 					document,
 					mappings,
 					candidates.items,
-					{ signal: options.signal, deadline },
+					{
+						signal: options.signal,
+						deadline,
+						plannerVersion: options.plannerVersion,
+						v4Authority,
+					},
 				);
 				plan = await sealImportApplyPlan(frozen.items, frozen.snapshots, {
 					plannerVersion: options.plannerVersion,
@@ -437,8 +496,26 @@ export async function saveImportPlan(
 		},
 		options.signal,
 		deadline,
+		v4Candidates
+			? async (client) => {
+					v4Authority = await discoverV4Authority(
+						client,
+						ownerId,
+						document,
+						mappings,
+						v4Candidates,
+						{
+							signal: options.signal,
+							deadline,
+						},
+					);
+					return v4Authority.userIds;
+				}
+			: undefined,
 	).catch((error: unknown) => {
 		if (error instanceof ImportFreezeLimitError) fail(error.code, error.status);
+		if (error instanceof ImportActivationLimitError)
+			fail(error.code, error.status);
 		if (error instanceof ImportPlanError && error.code === "planning-timeout")
 			fail("import-timeout", 503);
 		if (error instanceof ImportPlanError && error.code === "planning-cancelled")

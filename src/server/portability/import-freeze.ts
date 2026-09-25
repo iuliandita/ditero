@@ -1,5 +1,8 @@
 import type { PoolClient } from "pg";
-import type { ImportApplyCandidate } from "../../domain/portability/import-apply.ts";
+import {
+	blockV4TasksWithFailedAssignments,
+	type ImportApplyCandidate,
+} from "../../domain/portability/import-apply.ts";
 import {
 	digestImportContent,
 	type ImportDependencyProof,
@@ -14,6 +17,10 @@ import type {
 	PortableJson,
 	PortableRows,
 } from "../../domain/portability/v1.ts";
+import {
+	freezeV4Activation,
+	type V4Authority,
+} from "./import-activation-freeze.ts";
 import {
 	digestImportTarget,
 	IMPORT_TARGETS,
@@ -65,7 +72,12 @@ export async function freezeImportTargets(
 	document: PortableExportV1,
 	mappings: ImportMappings,
 	candidates: readonly ImportApplyCandidate[],
-	options: { signal?: AbortSignal; deadline?: number } = {},
+	options: {
+		signal?: AbortSignal;
+		deadline?: number;
+		plannerVersion?: 2 | 3 | 4;
+		v4Authority?: V4Authority | null;
+	} = {},
 ): Promise<{
 	items: ImportApplyCandidate[];
 	snapshots: Map<string, ImportTargetSnapshot>;
@@ -136,14 +148,23 @@ export async function freezeImportTargets(
 			user: textField(payload(item), "userId"),
 			workspace: targetWorkspace(item),
 		}));
-		const seats = await client.query<{
-			id: string;
-			user_id: string;
-			workspace_id: string;
-		}>(
-			`select m.id, m.user_id, m.workspace_id from membership m where exists (select 1 from jsonb_to_recordset($1::jsonb) as p("user" text, workspace text) where m.user_id = p."user" and m.workspace_id = p.workspace) order by m.id for share of m`,
-			[JSON.stringify(pairs)],
-		);
+		const seats =
+			options.plannerVersion === 4 && options.v4Authority
+				? {
+						rows: [...options.v4Authority.seats.values()].map((seat) => ({
+							id: seat.membershipId,
+							user_id: seat.userId,
+							workspace_id: seat.workspaceId,
+						})),
+					}
+				: await client.query<{
+						id: string;
+						user_id: string;
+						workspace_id: string;
+					}>(
+						`select m.id, m.user_id, m.workspace_id from membership m where exists (select 1 from jsonb_to_recordset($1::jsonb) as p("user" text, workspace text) where m.user_id = p."user" and m.workspace_id = p.workspace) order by m.id for share of m`,
+						[JSON.stringify(pairs)],
+					);
 		const byPair = new Map(
 			seats.rows.map((row) => [
 				JSON.stringify([row.user_id, row.workspace_id]),
@@ -209,7 +230,22 @@ export async function freezeImportTargets(
 		const selected = items.filter(
 			(item) => item.disposition === "ensure" && item.collection === collection,
 		);
-		if (!selected.length) continue;
+		const currentTaskIds =
+			options.plannerVersion === 4 && collection === "assignments"
+				? [
+						...new Set(
+							items
+								.filter(
+									(item) =>
+										item.collection === "tasks" &&
+										item.disposition === "ensure",
+								)
+								.map((item) => item.targetId)
+								.filter((id): id is string => id !== null),
+						),
+					]
+				: [];
+		if (!selected.length && !currentTaskIds.length) continue;
 		const { table, fields } = IMPORT_TARGETS[collection];
 		const ids = selected.map((item) => {
 			if (!item.targetId) throw new ImportPlanError("invalid-mappings");
@@ -217,6 +253,10 @@ export async function freezeImportTargets(
 		});
 		const parameters: unknown[] = [ids];
 		let predicate = "r.id = any($1::text[])";
+		if (currentTaskIds.length) {
+			parameters.push(currentTaskIds);
+			predicate += ` or r.task_id = any($${parameters.length}::text[])`;
+		}
 		if (
 			collection === "labels" ||
 			collection === "taskLabels" ||
@@ -240,12 +280,24 @@ export async function freezeImportTargets(
 							};
 			});
 			parameters.push(JSON.stringify(natural));
+			const naturalParameter = parameters.length;
 			predicate +=
 				collection === "labels"
-					? ` or exists (select 1 from jsonb_to_recordset($2::jsonb) as n(workspace text, name text) where r.workspace_id = n.workspace and r.name = n.name)`
+					? ` or exists (select 1 from jsonb_to_recordset($${naturalParameter}::jsonb) as n(workspace text, name text) where r.workspace_id = n.workspace and r.name = n.name)`
 					: collection === "assignments"
-						? ` or exists (select 1 from jsonb_to_recordset($2::jsonb) as n(task text, "user" text) where r.task_id = n.task and r.user_id = n."user")`
-						: ` or exists (select 1 from jsonb_to_recordset($2::jsonb) as n(task text, label text) where r.task_id = n.task and r.label_id = n.label)`;
+						? ` or exists (select 1 from jsonb_to_recordset($${naturalParameter}::jsonb) as n(task text, "user" text) where r.task_id = n.task and r.user_id = n."user")`
+						: ` or exists (select 1 from jsonb_to_recordset($${naturalParameter}::jsonb) as n(task text, label text) where r.task_id = n.task and r.label_id = n.label)`;
+		}
+		if (currentTaskIds.length) {
+			const probe = await client.query<{ count: string; bytes: string }>(
+				`select count(*)::text as count, coalesce(sum(octet_length(id) + octet_length(user_id)), 0)::text as bytes from task_assignee where task_id = any($1::text[])`,
+				[currentTaskIds],
+			);
+			if (
+				Number(probe.rows[0]?.count) > 50_000 ||
+				Number(probe.rows[0]?.bytes) > maxBytes
+			)
+				throw new ImportFreezeLimitError();
 		}
 		const found = await client.query<{ id: string }>(
 			`select r.id from "${table}" r where ${predicate} order by r.id for share`,
@@ -340,6 +392,7 @@ export async function freezeImportTargets(
 		}
 		visit(item);
 		return {
+			...snapshots.get(item.sourceKey)?.dependencyProof,
 			workspace: {
 				sourceId: sourceWorkspace(item),
 				targetId: targetWorkspace(item),
@@ -464,14 +517,36 @@ export async function freezeImportTargets(
 				});
 		}
 	}
-	const queue = items.filter((item) => item.disposition !== "ensure");
-	for (let i = 0; i < queue.length; i++) {
-		checkpoint();
-		for (const child of dependents.get(queue[i].sourceKey) ?? []) {
-			if (child.disposition !== "ensure") continue;
-			block(child, "blocked-dependency");
-			queue.push(child);
+	if (options.plannerVersion === 4)
+		blockV4TasksWithFailedAssignments(document, items, options);
+	function closeBlocked() {
+		const queue = items.filter((item) => item.disposition !== "ensure");
+		for (let i = 0; i < queue.length; i++) {
+			checkpoint();
+			for (const child of dependents.get(queue[i].sourceKey) ?? []) {
+				if (child.disposition !== "ensure") continue;
+				block(child, "blocked-dependency");
+				queue.push(child);
+			}
 		}
+	}
+	closeBlocked();
+	if (options.plannerVersion === 4) {
+		if (!options.v4Authority) throw new ImportPlanError("invalid-mappings");
+		await freezeV4Activation(
+			client,
+			ownerId,
+			document,
+			mappings,
+			items,
+			snapshots,
+			targets,
+			options.v4Authority,
+			items.length,
+			bytes,
+			options,
+		);
+		closeBlocked();
 	}
 	for (const item of items) {
 		checkpoint();

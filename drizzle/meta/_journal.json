@@ -274,6 +274,13 @@
       "when": 1790348271114,
       "tag": "0038_import_activation_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790348795400,
+      "tag": "0039_import_activation_plan_version",
+      "breakpoints": true
     }
   ]
 }
