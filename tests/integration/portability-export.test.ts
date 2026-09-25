@@ -1,3 +1,4 @@
+import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Elysia } from "elysia";
 import { Client, Pool } from "pg";
@@ -9,12 +10,16 @@ import { parsePortableExportV1 } from "../../src/domain/portability/validate.ts"
 import { makeGuards, type Session } from "../../src/server/guards.ts";
 import type { ExportOptions } from "../../src/server/portability/export.ts";
 import { portabilityRoutes } from "../../src/server/portability/routes.ts";
+import { mutators } from "../../src/zero/mutators.ts";
+import { schema } from "../../src/zero/schema.gen.ts";
+import { withZeroUserContext } from "../../src/zero/task-activation.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
 const pool = new Pool({ connectionString: databaseURL });
 const db = drizzle(pool, { schema: tables });
+const zdb = zeroNodePg(schema, pool);
 const now = new Date("2026-09-16T10:00:00.000Z");
 const guards = makeGuards(["http://localhost"], async (headers) => {
 	const id = headers.get("x-test-user");
@@ -775,6 +780,39 @@ describe("portable export", () => {
 			].sort(),
 		);
 		expect(await (await request()).text()).toBe(body);
+	});
+
+	test("round-trips retained habit history after a real cross-kind task move", async () => {
+		await db.insert(tables.list).values({
+			id: "shared-tasks",
+			workspaceId: "shared",
+			ownerId: "bob",
+			title: "Tasks",
+			kind: "tasks",
+			sortKey: "b",
+		});
+		await zdb.transaction((tx) =>
+			withZeroUserContext(tx, "bob", () =>
+				mutators.task.move.fn({
+					tx,
+					ctx: { id: "bob" },
+					args: { id: "shared-task", listId: "shared-tasks", sortKey: "b" },
+				}),
+			),
+		);
+		const body = await (await request()).text();
+		const result = parsePortableExportV1(body);
+		expect(
+			result.data.tasks.find((row) => row.id === "shared-task")?.listId,
+		).toBe("shared-tasks");
+		expect(result.data.habitLogs).toMatchObject([
+			{ id: "habit-log", habitId: "shared-task", status: "done" },
+		]);
+		expect(validateImportGraph(result)).toEqual({
+			valid: true,
+			errors: [],
+			warnings: [],
+		});
 	});
 
 	test("refuses row and byte caps without emitting a partial download, and releases the transaction", async () => {

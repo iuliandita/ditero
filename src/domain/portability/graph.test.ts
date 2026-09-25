@@ -270,6 +270,25 @@ describe("native import graph", () => {
 			path: "data.lists[0].folderId",
 		});
 	});
+	test("retains a habit log after its task moves to a non-habit list", () => {
+		const source = fixture();
+		source.data.lists[0].kind = "tasks";
+		expect(validateImportGraph(source)).toEqual({
+			valid: true,
+			errors: [],
+			warnings: [
+				{
+					code: "unresolved-reference",
+					path: "data.dashboards[0].panels[1].habitIds[0]",
+				},
+			],
+		});
+		source.data.tasks = source.data.tasks.filter((row) => row.id !== "task");
+		expect(validateImportGraph(source).errors).toContainEqual({
+			code: "missing-reference",
+			path: "data.habitLogs[0].habitId",
+		});
+	});
 	test("requires current task-workspace membership for assignment but permits former comment authors", () => {
 		const source = fixture();
 		expect(validateImportGraph(source).valid).toBe(true);
@@ -455,7 +474,7 @@ describe("native import graph", () => {
 			),
 		).toBe(true);
 	});
-	test("checks template kind, habit kind, and personal/shared page scope", () => {
+	test("checks template kind and personal/shared page scope", () => {
 		const source = fixture();
 		source.data.templates[0].kind = "list";
 		source.data.lists[0].kind = "tasks";
@@ -464,7 +483,6 @@ describe("native import graph", () => {
 		const result = validateImportGraph(source);
 		expect(result.errors.map((finding) => finding.code)).toEqual([
 			"template-kind-mismatch",
-			"not-a-habit",
 			"scope-workspace-mismatch",
 			"scope-workspace-mismatch",
 		]);
