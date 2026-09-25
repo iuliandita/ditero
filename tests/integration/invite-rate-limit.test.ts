@@ -6,7 +6,7 @@
 // budget bounds both rows and mail. Every fixture uses the fractional 1/60 rate
 // on purpose: a `refillPerSec: 0` fixture hid two real M3a bugs in this exact
 // token-bucket statement, so it is never used here.
-import { eq, like } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
@@ -47,10 +47,16 @@ async function seed() {
 }
 
 async function clean() {
-	await db.delete(tables.invite);
-	await db.delete(tables.membership);
-	await db.delete(tables.workspace);
-	await db.delete(tables.user);
+	await db
+		.delete(tables.invite)
+		.where(inArray(tables.invite.workspaceId, ["wsA", "wsB"]));
+	await db
+		.delete(tables.membership)
+		.where(inArray(tables.membership.id, ["mA", "mB"]));
+	await db
+		.delete(tables.workspace)
+		.where(inArray(tables.workspace.id, ["wsA", "wsB"]));
+	await db.delete(tables.user).where(inArray(tables.user.id, [A, B]));
 	await db
 		.delete(tables.rateBucket)
 		.where(like(tables.rateBucket.key, "%irlA"));
@@ -95,6 +101,47 @@ async function routeCreate(
 }
 
 describe("invite create rate limit", () => {
+	test("cleanup preserves another fixture's workspace and list", async () => {
+		const sentinel = {
+			user: "irl-sentinel-user",
+			workspace: "irl-sentinel-workspace",
+			list: "irl-sentinel-list",
+		};
+		await db.insert(tables.user).values({
+			id: sentinel.user,
+			name: "Sentinel",
+			email: "sentinel@irl.invalid",
+		});
+		await db.insert(tables.workspace).values({
+			id: sentinel.workspace,
+			name: "Sentinel",
+			ownerId: sentinel.user,
+			kind: "shared",
+		});
+		await db.insert(tables.list).values({
+			id: sentinel.list,
+			workspaceId: sentinel.workspace,
+			ownerId: sentinel.user,
+			title: "Sentinel",
+			sortKey: "a0",
+		});
+		try {
+			await clean();
+			expect(
+				await db
+					.select({ id: tables.list.id })
+					.from(tables.list)
+					.where(eq(tables.list.id, sentinel.list)),
+			).toEqual([{ id: sentinel.list }]);
+		} finally {
+			await db.delete(tables.list).where(eq(tables.list.id, sentinel.list));
+			await db
+				.delete(tables.workspace)
+				.where(eq(tables.workspace.id, sentinel.workspace));
+			await db.delete(tables.user).where(eq(tables.user.id, sentinel.user));
+		}
+	});
+
 	test("the over-budget call 429s and creates no extra row or mail", async () => {
 		const capacity = 3;
 		const mail = { count: 0 };

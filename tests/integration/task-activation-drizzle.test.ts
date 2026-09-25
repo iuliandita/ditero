@@ -57,8 +57,16 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-	await runtime.end();
-	await admin.end();
+	try {
+		await admin.query("delete from task where id in ('guarded', 'native')");
+		await admin.query("delete from list where id = 'list'");
+		await admin.query("delete from membership where id = 'seat'");
+		await admin.query("delete from workspace where id = 'space'");
+		await admin.query("delete from \"user\" where id = 'owner'");
+	} finally {
+		await runtime.end();
+		await admin.end();
+	}
 });
 
 test("producer scan sees protected rows and task lookup distinguishes pending from native", async () => {
