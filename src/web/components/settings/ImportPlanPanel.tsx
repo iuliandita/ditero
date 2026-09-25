@@ -51,7 +51,14 @@ export function ImportPlanPanel() {
 	const locked = busy || applying;
 	const [parsing, setParsing] = useState(false);
 	const [error, setError] = useState<
-		"failed" | "invalid" | "limit" | "quota" | "retained" | "incomplete" | null
+		| "failed"
+		| "invalid"
+		| "unsupported"
+		| "limit"
+		| "quota"
+		| "retained"
+		| "incomplete"
+		| null
 	>(null);
 	const writable = workspaces.filter((w) =>
 		memberships.some(
@@ -120,7 +127,9 @@ export function ImportPlanPanel() {
 		);
 		worker.current = parser;
 		parser.onmessage = (
-			event: MessageEvent<Loaded | { error: "invalid" | "limit" }>,
+			event: MessageEvent<
+				Loaded | { error: "invalid" | "limit" | "unsupported" }
+			>,
 		) => {
 			if (worker.current !== parser) return;
 			setParsing(false);
@@ -175,15 +184,17 @@ export function ImportPlanPanel() {
 						: null;
 				if (!controller.signal.aborted)
 					setError(
-						code === "import-source-retained"
-							? "retained"
-							: code === "import-run-incomplete"
-								? "incomplete"
-								: code === "import-quota-exceeded"
-									? "quota"
-									: response.status === 413
-										? "limit"
-										: "failed",
+						code === "unsupported-import-version"
+							? "unsupported"
+							: code === "import-source-retained"
+								? "retained"
+								: code === "import-run-incomplete"
+									? "incomplete"
+									: code === "import-quota-exceeded"
+										? "quota"
+										: response.status === 413
+											? "limit"
+											: "failed",
 					);
 				return;
 			}
@@ -389,17 +400,19 @@ export function ImportPlanPanel() {
 			</fieldset>
 			{error && (
 				<p role="alert" className="mt-2 text-sm text-destructive">
-					{error === "retained"
-						? m.import_apply_source_retained()
-						: error === "incomplete"
-							? m.import_apply_run_active()
-							: error === "quota"
-								? m.import_plan_quota()
-								: error === "limit"
-									? m.import_plan_limits()
-									: error === "invalid"
-										? m.import_plan_invalid()
-										: m.import_plan_failed()}
+					{error === "unsupported"
+						? m.import_plan_history_unsupported()
+						: error === "retained"
+							? m.import_apply_source_retained()
+							: error === "incomplete"
+								? m.import_apply_run_active()
+								: error === "quota"
+									? m.import_plan_quota()
+									: error === "limit"
+										? m.import_plan_limits()
+										: error === "invalid"
+											? m.import_plan_invalid()
+											: m.import_plan_failed()}
 				</p>
 			)}
 			{report && (

@@ -3,13 +3,14 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { UserContextError } from "../../db/user-context.ts";
 import {
+	parseImportDocument,
+	UnsupportedImportVersionError,
+} from "../../domain/portability/import-document.ts";
+import {
 	type ImportMappings,
 	ImportPlanError,
 } from "../../domain/portability/import-plan.ts";
-import {
-	PortableExportValidationError,
-	parsePortableExportV1,
-} from "../../domain/portability/validate.ts";
+import { PortableExportValidationError } from "../../domain/portability/validate.ts";
 import type { Guards } from "../guards.ts";
 import { V4ApplyConflict } from "./import-activation.ts";
 import { importActivationRoutes } from "./import-activation-routes.ts";
@@ -197,6 +198,8 @@ async function handled(run: () => Promise<Response>): Promise<Response> {
 			return response({ code: error.code }, 409);
 		if (error instanceof UserContextError)
 			return response({ code: "unauthorized" }, 401);
+		if (error instanceof UnsupportedImportVersionError)
+			return response({ code: error.code }, 400);
 		if (error instanceof PortableExportValidationError)
 			return response(
 				{ code: error.code },
@@ -332,7 +335,7 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 						)
 							throw new ImportRequestError("invalid-source", 400);
 						const mapping = mappings(raw.mappings);
-						const document = parsePortableExportV1(raw.document);
+						const document = parseImportDocument(raw.document);
 						if (request.signal.aborted)
 							throw new ImportRequestError("request-cancelled", 408);
 						return response(

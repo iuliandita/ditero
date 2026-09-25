@@ -5,8 +5,11 @@ import { Client, Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import * as tables from "../../src/db/schema.ts";
 import { validateImportGraph } from "../../src/domain/portability/graph.ts";
+import { validateImportGraphV2 } from "../../src/domain/portability/graph-v2.ts";
 import type { PortableExportV1 } from "../../src/domain/portability/v1.ts";
+import type { PortableExportV2 } from "../../src/domain/portability/v2.ts";
 import { parsePortableExportV1 } from "../../src/domain/portability/validate.ts";
+import { parsePortableExportV2 } from "../../src/domain/portability/validate-v2.ts";
 import { makeGuards, type Session } from "../../src/server/guards.ts";
 import type { ExportOptions } from "../../src/server/portability/export.ts";
 import { portabilityRoutes } from "../../src/server/portability/routes.ts";
@@ -55,12 +58,17 @@ const expectedFields = {
 		"id workspaceId parentKind parentId keyVersion declaredBytes observedBytes ciphertextSha256 thumbnailDeclaredBytes thumbnailObservedBytes thumbnailCiphertextSha256 uploadedBy createdAt committedAt",
 };
 
-function request(options: ExportOptions = {}, user = "alice", origin?: string) {
+function request(
+	options: ExportOptions = {},
+	user = "alice",
+	origin?: string,
+	search = "",
+) {
 	const app = new Elysia().use(
 		portabilityRoutes(pool, guards, { now: () => now, ...options }),
 	);
 	return app.handle(
-		new Request("http://localhost/api/portability/export", {
+		new Request(`http://localhost/api/portability/export${search}`, {
 			headers: {
 				...(user ? { "x-test-user": user } : {}),
 				...(origin ? { origin } : {}),
@@ -400,6 +408,192 @@ afterAll(async () => {
 });
 
 describe("portable export", () => {
+	test("keeps default and explicit v1 bytes identical and rejects invalid versions", async () => {
+		const plain = await request();
+		const explicit = await request({}, "alice", undefined, "?version=1");
+		expect(plain.status).toBe(200);
+		expect(explicit.status).toBe(200);
+		expect(await explicit.text()).toBe(await plain.text());
+		expect(explicit.headers.get("content-disposition")).toBe(
+			'attachment; filename="ditero-export-v1.json"',
+		);
+		for (const search of [
+			"?version=",
+			"?version=3",
+			"?version=2&version=2",
+			"?version=1&version=2",
+		]) {
+			const response = await request({}, "alice", undefined, search);
+			expect(response.status).toBe(400);
+			expect(response.headers.get("cache-control")).toBe("no-store");
+			expect(await response.json()).toEqual({
+				code: "unsupported-export-version",
+			});
+		}
+	});
+
+	test("v2 exports scoped native history and authors from the same snapshot", async () => {
+		const occurrence = new Date("2026-09-15T08:09:10.123Z");
+		await db.insert(tables.user).values({
+			id: "former",
+			name: "Deleted account",
+			email: "former@example.test",
+			deletedAt: now,
+			createdAt: now,
+			updatedAt: now,
+		});
+		await db.insert(tables.taskCompletionEvent).values([
+			{
+				id: "11111111-1111-4111-8111-111111111111",
+				taskId: "shared-task",
+				actorUserId: "former",
+				recordedAt: occurrence,
+				origin: "member_mutation",
+				action: "complete",
+				beforeDueAt: now,
+				beforeDueAllDay: false,
+				beforeDone: false,
+				afterDueAt: null,
+				afterDone: true,
+			},
+			{
+				id: "22222222-2222-4222-8222-222222222222",
+				taskId: "foreign-task",
+				actorUserId: "outsider",
+				recordedAt: occurrence,
+				origin: "member_mutation",
+				action: "complete",
+				beforeDueAt: now,
+				beforeDueAllDay: false,
+				beforeDone: false,
+				afterDueAt: null,
+				afterDone: true,
+			},
+		]);
+		const response = await request({}, "alice", undefined, "?version=2");
+		expect(response.status, await response.clone().text()).toBe(200);
+		expect(response.headers.get("content-disposition")).toBe(
+			'attachment; filename="ditero-history-v2.json"',
+		);
+		const document = parsePortableExportV2(await response.text());
+		expect(document.schemaVersion).toBe(2);
+		expect(document.sourceNamespace).toMatch(/^[0-9a-f-]{36}$/i);
+		expect(document.boundaries.taskHistory).toBe("recorded-events-only");
+		expect(document.data.completionEvents).toEqual([
+			{
+				id: "11111111-1111-4111-8111-111111111111",
+				sourceRef: {
+					namespace: document.sourceNamespace,
+					collection: "completionEvents",
+					id: "11111111-1111-4111-8111-111111111111",
+				},
+				taskId: "shared-task",
+				occurredAt: occurrence.toISOString(),
+				actor: { kind: "native_user", principalId: "former" },
+				origin: { kind: "native", mechanism: "member_mutation" },
+				action: "complete",
+				beforeDueAt: now.toISOString(),
+				beforeDueAllDay: false,
+				beforeDone: false,
+				afterDueAt: null,
+				afterDone: true,
+			},
+		]);
+		expect(document.data.principals).toContainEqual({
+			id: "former",
+			name: "Deleted account",
+		});
+		expect(document.data.principals.some((row) => row.id === "outsider")).toBe(
+			false,
+		);
+		expect(document.data.comments[0]).toMatchObject({
+			sourceRef: {
+				namespace: document.sourceNamespace,
+				collection: "comments",
+				id: "comment",
+			},
+			author: { kind: "native_user", principalId: "bob" },
+		});
+		expect(document.data.templates[0]).toMatchObject({
+			sourceRef: {
+				namespace: document.sourceNamespace,
+				collection: "templates",
+				id: "template",
+			},
+			creator: { kind: "native_user", principalId: "bob" },
+		});
+		expect("authorId" in document.data.comments[0]).toBe(false);
+		expect("createdBy" in document.data.templates[0]).toBe(false);
+		expect(validateImportGraphV2(document)).toEqual({
+			valid: true,
+			errors: [],
+			warnings: [],
+		});
+	});
+
+	test("v2 charges transformed author and history bytes and row count", async () => {
+		await db.insert(tables.taskCompletionEvent).values({
+			id: "66666666-6666-4666-8666-666666666666",
+			taskId: "shared-task",
+			actorUserId: "bob",
+			recordedAt: now,
+			origin: "member_mutation",
+			action: "habit_set",
+			habitDate: "2026-09-16",
+			beforeHabitStatus: null,
+			afterHabitStatus: "done",
+		});
+		const v1Bytes = Buffer.byteLength(await (await request()).text());
+		const baseline = await request({}, "alice", undefined, "?version=2");
+		expect(baseline.status).toBe(200);
+		const body = await baseline.text();
+		expect(Buffer.byteLength(body)).toBeGreaterThan(v1Bytes);
+		for (const options of [
+			{ maxBytes: Buffer.byteLength(body) - 1 },
+			{ maxBytes: v1Bytes },
+			{
+				maxRows:
+					Object.values(
+						JSON.parse(body).data as Record<string, unknown[]>,
+					).reduce((n, rows) => n + rows.length, 0) - 1,
+			},
+		]) {
+			const response = await request(options, "alice", undefined, "?version=2");
+			expect(response.status).toBe(413);
+			expect(await response.json()).toEqual({ code: "export-limit-exceeded" });
+		}
+	});
+
+	test("v2 preserves an empty native task reference", async () => {
+		await db.insert(tables.task).values({
+			id: "",
+			listId: "shared-list",
+			title: "Empty ID",
+			sortKey: "z",
+		});
+		await db.insert(tables.taskCompletionEvent).values({
+			id: "55555555-5555-4555-8555-555555555555",
+			taskId: "",
+			actorUserId: "bob",
+			recordedAt: now,
+			origin: "capability_recipient",
+			action: "complete",
+			beforeDueAt: null,
+			beforeDueAllDay: false,
+			beforeDone: false,
+			afterDueAt: null,
+			afterDone: true,
+		});
+		const document = parsePortableExportV2(
+			await (await request({}, "alice", undefined, "?version=2")).text(),
+		);
+		expect(document.data.completionEvents[0]).toMatchObject({
+			taskId: "",
+			origin: { kind: "native", mechanism: "capability_recipient" },
+		});
+		expect(validateImportGraphV2(document).errors).toEqual([]);
+	});
+
 	test("produces a file accepted by native format and graph validation", async () => {
 		const response = await request();
 		expect(response.status).toBe(200);
@@ -783,6 +977,32 @@ describe("portable export", () => {
 	});
 
 	test("round-trips retained habit history after a real cross-kind task move", async () => {
+		await db.insert(tables.taskCompletionEvent).values([
+			{
+				id: "33333333-3333-4333-8333-333333333333",
+				taskId: "shared-task",
+				actorUserId: "bob",
+				recordedAt: now,
+				origin: "member_mutation",
+				action: "habit_set",
+				habitDate: "2026-09-16",
+				beforeHabitStatus: null,
+				afterHabitStatus: "done",
+			},
+			{
+				id: "44444444-4444-4444-8444-444444444444",
+				taskId: "shared-task",
+				actorUserId: "bob",
+				recordedAt: now,
+				origin: "member_mutation",
+				action: "complete",
+				beforeDueAt: now,
+				beforeDueAllDay: false,
+				beforeDone: false,
+				afterDueAt: null,
+				afterDone: true,
+			},
+		]);
 		await db.insert(tables.list).values({
 			id: "shared-tasks",
 			workspaceId: "shared",
@@ -813,6 +1033,29 @@ describe("portable export", () => {
 			errors: [],
 			warnings: [],
 		});
+		const movedToTasks = parsePortableExportV2(
+			await (await request({}, "alice", undefined, "?version=2")).text(),
+		);
+		expect(movedToTasks.data.completionEvents.map((row) => row.action)).toEqual(
+			["habit_set", "complete"],
+		);
+		expect(validateImportGraphV2(movedToTasks).errors).toEqual([]);
+		await zdb.transaction((tx) =>
+			withZeroUserContext(tx, "bob", () =>
+				mutators.task.move.fn({
+					tx,
+					ctx: { id: "bob" },
+					args: { id: "shared-task", listId: "shared-list", sortKey: "c" },
+				}),
+			),
+		);
+		const movedToHabits = parsePortableExportV2(
+			await (await request({}, "alice", undefined, "?version=2")).text(),
+		);
+		expect(
+			movedToHabits.data.completionEvents.map((row) => row.action),
+		).toEqual(["habit_set", "complete"]);
+		expect(validateImportGraphV2(movedToHabits).errors).toEqual([]);
 	});
 
 	test("refuses row and byte caps without emitting a partial download, and releases the transaction", async () => {
@@ -857,14 +1100,17 @@ describe("portable export", () => {
 		expect((await request({}, "alice", "http://localhost")).status).toBe(200);
 	});
 
-	test("keeps one snapshot and holds membership revocation until export finishes", async () => {
+	test.each([
+		"",
+		"?version=2",
+	])("keeps one snapshot and holds membership revocation until export finishes %s", async (search) => {
 		const blocker = await pool.connect();
 		const revoker = await pool.connect();
 		let response: Promise<Response> | undefined;
 		try {
 			await blocker.query("begin");
 			await blocker.query("lock table list in access exclusive mode");
-			response = request();
+			response = request({}, "alice", undefined, search);
 			await expect
 				.poll(
 					async () => {
@@ -890,7 +1136,9 @@ describe("portable export", () => {
 			await blocker.query("commit");
 			const result = await response;
 			expect(result.status, await result.clone().text()).toBe(200);
-			const snapshot = (await result.json()) as PortableExportV1;
+			const snapshot = (await result.json()) as
+				| PortableExportV1
+				| PortableExportV2;
 			expect(
 				snapshot.data.tasks.find((row) => row.id === "shared-task")?.title,
 			).toBe("shared");

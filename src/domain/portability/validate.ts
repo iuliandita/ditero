@@ -38,6 +38,8 @@ const timestamp = string.refine((value) => {
 	const parsed = new Date(value);
 	return Number.isFinite(parsed.getTime()) && parsed.toISOString() === value;
 }, "Expected an exported ISO timestamp");
+export const portableTimestamp = timestamp;
+export const portableDay = day;
 const dateBound = z.union([day, timestamp]);
 const repeatEveryMin = integer.min(1).max(MAX_REPEAT_EVERY_MIN).nullable();
 const maxRepeats = nonnegative.max(MAX_REPEATS_CAP).nullable();
@@ -52,7 +54,7 @@ const recurrence = string
 	}, "Invalid recurrence rule")
 	.nullable();
 
-function unchanged(left: unknown, right: unknown): boolean {
+export function unchanged(left: unknown, right: unknown): boolean {
 	if (Object.is(left, right)) return true;
 	if (
 		!left ||
@@ -228,7 +230,36 @@ const preferences = z.strictObject({
 	updatedAt: timestamp,
 });
 
-const rows = {
+export const portableTemplateBase = z.strictObject({
+	id,
+	workspaceId: id,
+	kind: z.enum(["list", "task"]),
+	name: string,
+	icon: nullableString,
+	content: boundedTemplate,
+});
+
+export function templateKindMatches(row: {
+	kind: string;
+	content: PortableJson;
+}): boolean {
+	return (
+		row.content !== null &&
+		typeof row.content === "object" &&
+		!Array.isArray(row.content) &&
+		row.content.kind === row.kind
+	);
+}
+
+export const portableCommentBase = z.strictObject({
+	id,
+	taskId: id,
+	body: string,
+	createdAt: timestamp,
+	editedAt: timestamp.nullable(),
+});
+
+export const portableRows = {
 	principals: z.strictObject({ id, name: string }),
 	workspaces: z.strictObject({
 		id,
@@ -284,33 +315,11 @@ const rows = {
 	}),
 	labels: z.strictObject({ id, workspaceId: id, name: string, color: string }),
 	taskLabels: z.strictObject({ id, taskId: id, labelId: id }),
-	templates: z
-		.strictObject({
-			id,
-			workspaceId: id,
-			kind: z.enum(["list", "task"]),
-			name: string,
-			icon: nullableString,
-			content: boundedTemplate,
-			createdBy: id,
-		})
-		.refine(
-			(row) =>
-				row.content !== null &&
-				typeof row.content === "object" &&
-				!Array.isArray(row.content) &&
-				row.content.kind === row.kind,
-			"Template kind mismatch",
-		),
+	templates: portableTemplateBase
+		.safeExtend({ createdBy: id })
+		.refine(templateKindMatches, "Template kind mismatch"),
 	assignments: z.strictObject({ id, taskId: id, userId: id }),
-	comments: z.strictObject({
-		id,
-		taskId: id,
-		authorId: id,
-		body: string,
-		createdAt: timestamp,
-		editedAt: timestamp.nullable(),
-	}),
+	comments: portableCommentBase.safeExtend({ authorId: id }),
 	habitLogs: z
 		.strictObject({
 			id,
@@ -426,25 +435,25 @@ const documentSchema = z.strictObject({
 		taskHistory: z.literal("current-state-and-habit-logs"),
 	}),
 	data: z.strictObject({
-		principals: z.array(rows.principals),
-		workspaces: z.array(rows.workspaces),
-		memberships: z.array(rows.memberships),
-		folders: z.array(rows.folders),
-		lists: z.array(rows.lists),
-		tasks: z.array(rows.tasks),
-		labels: z.array(rows.labels),
-		taskLabels: z.array(rows.taskLabels),
-		templates: z.array(rows.templates),
-		assignments: z.array(rows.assignments),
-		comments: z.array(rows.comments),
-		habitLogs: z.array(rows.habitLogs),
-		views: z.array(rows.views),
-		dashboards: z.array(rows.dashboards),
-		userPrefs: z.array(rows.userPrefs),
-		focusSessions: z.array(rows.focusSessions),
-		karma: z.array(rows.karma),
-		karmaEvents: z.array(rows.karmaEvents),
-		attachments: z.array(rows.attachments),
+		principals: z.array(portableRows.principals),
+		workspaces: z.array(portableRows.workspaces),
+		memberships: z.array(portableRows.memberships),
+		folders: z.array(portableRows.folders),
+		lists: z.array(portableRows.lists),
+		tasks: z.array(portableRows.tasks),
+		labels: z.array(portableRows.labels),
+		taskLabels: z.array(portableRows.taskLabels),
+		templates: z.array(portableRows.templates),
+		assignments: z.array(portableRows.assignments),
+		comments: z.array(portableRows.comments),
+		habitLogs: z.array(portableRows.habitLogs),
+		views: z.array(portableRows.views),
+		dashboards: z.array(portableRows.dashboards),
+		userPrefs: z.array(portableRows.userPrefs),
+		focusSessions: z.array(portableRows.focusSessions),
+		karma: z.array(portableRows.karma),
+		karmaEvents: z.array(portableRows.karmaEvents),
+		attachments: z.array(portableRows.attachments),
 	}),
 }) satisfies z.ZodType<PortableExportV1>;
 
@@ -483,7 +492,7 @@ function* childValues(value: object): Generator<unknown> {
 		}
 }
 
-export function parsePortableExportV1(input: string): PortableExportV1 {
+export function parseBoundedPortableJson(input: string): unknown {
 	let byteLength = 0;
 	for (const character of input) {
 		const point = character.codePointAt(0) ?? 0;
@@ -542,6 +551,17 @@ export function parsePortableExportV1(input: string): PortableExportV1 {
 				depth: frame.depth + 1,
 			});
 	}
+	return parsed;
+}
+
+export function parsePortableExportV1(input: string): PortableExportV1 {
+	return validatePortableExportV1Value(parseBoundedPortableJson(input));
+}
+
+// Resource bounds belong to parseBoundedPortableJson before this shape check.
+export function validatePortableExportV1Value(
+	parsed: unknown,
+): PortableExportV1 {
 	const validated = documentSchema.safeParse(parsed);
 	if (!validated.success || !unchanged(parsed, validated.data))
 		throw new PortableExportValidationError("invalid-export");

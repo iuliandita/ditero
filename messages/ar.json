@@ -1701,6 +1701,7 @@
 	"import_plan_busy": "جارٍ العمل…",
 	"import_plan_save": "حفظ المحاكاة",
 	"import_plan_invalid": "هذا الملف ليس تصديرًا أصليًا صالحًا أو أن مراجعه غير متسقة.",
+	"import_plan_history_unsupported": "لا يمكن استيراد أرشيفات السجل بعد.",
 	"import_plan_failed": "فشل الطلب. تحقق من صلاحياتك واتصالك ثم حاول مجددًا.",
 	"import_plan_report": "تقرير المحاكاة المحفوظ",
 	"import_plan_ensure": "العناصر المخططة",

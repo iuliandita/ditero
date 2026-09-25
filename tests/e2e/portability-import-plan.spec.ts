@@ -146,6 +146,62 @@ test("rejects malformed files locally without saving a plan", async ({
 	).toBeDisabled();
 });
 
+test("explains unsupported history archives locally and accepts a replacement v1 file", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 375, height: 812 });
+	await signUp(page, uniqueEmail("history-archive"));
+	await waitWorkspaceReady(page);
+	const exported = await (
+		await page.request.get("/api/portability/export")
+	).json();
+	const archive = {
+		...exported,
+		schemaVersion: 2,
+		sourceNamespace: "11111111-1111-4111-8111-111111111111",
+		boundaries: { ...exported.boundaries, taskHistory: "recorded-events-only" },
+		data: { ...exported.data, completionEvents: [] },
+	};
+	let saveRequests = 0;
+	page.on("request", (request) => {
+		if (
+			request.method() === "POST" &&
+			request.url().endsWith("/api/portability/import/plans")
+		)
+			saveRequests++;
+	});
+	await goToSettings(page);
+	const panel = page.getByRole("region", { name: "Plan an import" });
+	await panel.getByLabel("Native JSON export").setInputFiles({
+		name: "ditero-history-v2.json",
+		mimeType: "application/json",
+		buffer: Buffer.from(JSON.stringify(archive)),
+	});
+	await expect(panel.getByRole("alert")).toHaveText(
+		"History archives cannot be imported yet.",
+	);
+	await expect(
+		panel.getByRole("button", { name: "Save dry run" }),
+	).toBeDisabled();
+	expect(
+		(await new AxeBuilder({ page }).include("#import-plan").analyze())
+			.violations,
+	).toEqual([]);
+	await panel.screenshot({
+		path: test.info().outputPath("history-archive-unsupported.png"),
+	});
+	await panel.getByLabel("Native JSON export").setInputFiles({
+		name: "ditero-export-v1.json",
+		mimeType: "application/json",
+		buffer: Buffer.from(JSON.stringify(exported)),
+	});
+	await expect(panel.getByRole("alert")).toHaveCount(0);
+	await expect(panel.getByTestId("import-workspace")).toHaveCount(
+		exported.data.workspaces.length,
+	);
+	expect(saveRequests).toBe(0);
+});
+
 test("imports assignments, recovers a lost response, and supports ordinary unassign", async ({
 	page,
 }) => {

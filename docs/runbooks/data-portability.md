@@ -70,6 +70,23 @@ An action through a reminder link identifies the link's intended recipient. It d
 not prove who clicked the link. Native history is retained in database backups but
 is not included in version 1 JSON exports.
 
+## History archive
+
+The authenticated `GET /api/portability/export?version=2` endpoint downloads
+`ditero-history-v2.json`, including recorded task history and explicit source
+attribution for comments, templates, and completion events. It includes only content
+you can currently access. It does not reconstruct earlier events or include attachment
+files or keys.
+
+This archive cannot yet be imported. Settings **Download JSON** and the endpoint
+without a version selector still produce version 1 for the existing import workflow.
+An explicit `?version=1` produces the same file. Unsupported or repeated version
+selectors return HTTP 400. Both formats share the limits below.
+
+The archive includes a stable installation namespace retained by database backups.
+It identifies the source but does not authenticate its claims or grant destination
+access. See [Native data format](native-format.md) for the version 2 contract.
+
 ## Other export exclusions
 
 Committed attachments appear as references with parent IDs, size and integrity metadata.

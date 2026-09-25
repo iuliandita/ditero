@@ -11,6 +11,14 @@ import type {
 	PortableExportV1,
 	PortableRows,
 } from "../../domain/portability/v1.ts";
+import type { PortableExportV2 } from "../../domain/portability/v2.ts";
+import {
+	type NativeCompletionEvent,
+	v2Comment,
+	v2CompletionEvent,
+	v2Document,
+	v2Template,
+} from "./export-v2.ts";
 
 export interface ExportOptions {
 	maxRows?: number;
@@ -386,10 +394,11 @@ async function* cursorRows<T extends object>(
 	}
 }
 
-export async function exportPortableJson(
+async function exportPortableJsonVersion(
 	pool: Pool,
 	userId: string,
-	options: ExportOptions = {},
+	options: ExportOptions,
+	version: 1 | 2,
 ): Promise<string> {
 	const maxRows = options.maxRows ?? 50_000;
 	const maxBytes = options.maxBytes ?? 32 * 1024 * 1024;
@@ -408,6 +417,14 @@ export async function exportPortableJson(
 			[userId],
 		);
 		if (live.rowCount !== 1) throw new UserContextError();
+		let namespace = "";
+		if (version === 2) {
+			const identity = await query<{ namespace: string }>(
+				"select namespace from portability_identity where id = 1",
+			);
+			namespace = identity.rows[0]?.namespace ?? "";
+			if (!namespace) throw new Error("Portability identity is missing");
+		}
 		await preflight(
 			query,
 			'select workspace_id as "workspaceId" from membership where user_id = $1',
@@ -447,7 +464,7 @@ export async function exportPortableJson(
 			karmaEvents: [],
 			attachments: [],
 		};
-		const snapshot: PortableExportV1 = {
+		const v1Snapshot: PortableExportV1 = {
 			format: "ditero",
 			schemaVersion: 1,
 			exportedAt: (options.now?.() ?? new Date()).toISOString(),
@@ -462,6 +479,11 @@ export async function exportPortableJson(
 			},
 			data,
 		};
+		const v2Snapshot =
+			version === 2 ? v2Document(v1Snapshot, namespace) : undefined;
+		const snapshot: PortableExportV1 | PortableExportV2 =
+			v2Snapshot ?? v1Snapshot;
+		const outputData = snapshot.data;
 		let rows = 0;
 		let bytes = Buffer.byteLength(JSON.stringify(snapshot));
 		const principalIds = new Set([userId]);
@@ -506,11 +528,19 @@ export async function exportPortableJson(
 				parameters,
 			)) {
 				check();
-				const serialized = JSON.stringify(row);
+				let projected: unknown = row;
+				if (version === 2 && key === "comments")
+					projected = v2Comment(row as PortableRows["comments"], namespace);
+				if (version === 2 && key === "templates")
+					projected = v2Template(row as PortableRows["templates"], namespace);
+				const serialized = JSON.stringify(projected);
 				rows++;
-				bytes += Buffer.byteLength(serialized) + (data[key].length ? 1 : 0);
+				bytes +=
+					Buffer.byteLength(serialized) + (outputData[key].length ? 1 : 0);
 				if (rows > maxRows || bytes > maxBytes) throw new ExportLimitError();
-				data[key].push(JSON.parse(serialized) as PortableRows[K]);
+				// The v2 author-bearing rows differ from the v1 projection, but
+				// the collection key and budget are shared by this one collector.
+				(outputData[key] as unknown[]).push(JSON.parse(serialized));
 				for (const field of [
 					"ownerId",
 					"userId",
@@ -555,6 +585,55 @@ export async function exportPortableJson(
 			`${workspaceScope} and r.state = 'committed' and r.deleted_at is null`,
 			[workspaceIds],
 		);
+		if (v2Snapshot) {
+			const eventFields = [
+				"id",
+				"taskId",
+				"actorUserId",
+				"recordedAt",
+				"origin",
+				"action",
+				"beforeDueAt",
+				"beforeDueAllDay",
+				"beforeDone",
+				"afterDueAt",
+				"afterDone",
+				"habitDate",
+				"beforeHabitStatus",
+				"afterHabitStatus",
+			] as const;
+			const selection = `select ${eventFields
+				.map(
+					(field) =>
+						`r.${field.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`)} as "${field}"`,
+				)
+				.join(", ")} from task_completion_event r where ${taskScope}`;
+			await preflight(
+				query,
+				selection,
+				[workspaceIds],
+				maxRows - rows,
+				maxBytes - bytes,
+				eventFields,
+			);
+			for await (const event of cursorRows<NativeCompletionEvent>(
+				query,
+				signal,
+				`${selection} order by r.id`,
+				[workspaceIds],
+			)) {
+				check();
+				const projected = v2CompletionEvent(event, namespace);
+				const serialized = JSON.stringify(projected);
+				rows++;
+				bytes +=
+					Buffer.byteLength(serialized) +
+					(v2Snapshot.data.completionEvents.length ? 1 : 0);
+				if (rows > maxRows || bytes > maxBytes) throw new ExportLimitError();
+				v2Snapshot.data.completionEvents.push(projected);
+				principalIds.add(event.actorUserId);
+			}
+		}
 		await collect("principals", "user", "r.id = any($1::text[])", [
 			[...principalIds],
 		]);
@@ -566,4 +645,20 @@ export async function exportPortableJson(
 		check();
 		return serialized;
 	});
+}
+
+export function exportPortableJson(
+	pool: Pool,
+	userId: string,
+	options: ExportOptions = {},
+): Promise<string> {
+	return exportPortableJsonVersion(pool, userId, options, 1);
+}
+
+export function exportPortableJsonV2(
+	pool: Pool,
+	userId: string,
+	options: ExportOptions = {},
+): Promise<string> {
+	return exportPortableJsonVersion(pool, userId, options, 2);
 }

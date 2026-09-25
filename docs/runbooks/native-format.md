@@ -1,6 +1,6 @@
 # Native data format
 
-The native JSON format identifies itself with `format: "ditero"` and
+The default native JSON format identifies itself with `format: "ditero"` and
 `schemaVersion: 1`. It records `exportedAt`, `sourceUserId`, explicit `boundaries`,
 and named collections under `data`. The row fields are defined in
 `src/domain/portability/v1.ts`. IDs belong to the source; they do not grant access
@@ -42,6 +42,39 @@ at most 32 MiB, 50,000 rows, 50,000 entries in any nested array, two million val
 and 32 levels of nesting. A graph report retains at most 1,000 findings, including
 a terminal limit error; exceeding the report limit fails validation, so a truncated
 report cannot authorize an incomplete import plan.
+
+## Version 2 history archive
+
+An explicit `GET /api/portability/export?version=2` returns `schemaVersion: 2`.
+Its types are defined in `src/domain/portability/v2.ts`; its parser and graph validator
+remain separate. It is an archive only: the current import UI and plan endpoint reject
+it with an unsupported-version message and create no saved plan. The default download
+remains version 1; existing saved plans retain their format and planner versions.
+
+Version 2 adds `sourceNamespace`, a stable installation UUID. Comments, templates,
+and completion events carry `sourceRef` with `namespace`, a canonical collection name,
+and `id`. Source IDs can be empty; empty and absent references are different. Source
+reference tuples must be unique, comparing UUID namespaces without regard to letter case.
+These identifiers are untrusted source claims, not evidence of destination ownership.
+
+Comment `author` replaces `authorId`; template `creator` replaces `createdBy`.
+Authorship is `native_user` with a reference to an included principal, `source_claim`
+with a namespace, nullable source principal ID and display name, or `unknown`.
+Source-claimed names are limited to 512 characters. Native exports use current principal
+names, including account anonymization. A matching name or ID never authenticates an
+external author or supplies author-only permissions.
+
+`completionEvents` records the task, action, `occurredAt`, actor, origin, and the exact
+before/after task or habit state. Origin distinguishes a native member mutation from a
+reminder-link recipient; external origins can be source claims or unknown, with an
+optional label of at most 128 characters. A reminder recipient is not proof of who
+clicked. Historical events and habit logs stay valid after the task moves to a different
+list kind. Each event still requires its task to exist in the document.
+
+`boundaries.taskHistory` is `recorded-events-only`: no older events are inferred from
+current task state. The other exclusions and all parser/export limits remain unchanged.
+The format represents source claims for future import support; this release neither
+stores imported authors nor replays historical completion, Karma, or notifications.
 
 ## Saved dry runs
 

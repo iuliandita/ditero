@@ -1581,6 +1581,7 @@
 	"import_plan_busy": "Wird verarbeitet…",
 	"import_plan_save": "Probelauf speichern",
 	"import_plan_invalid": "Diese Datei ist kein gültiger nativer Export oder enthält widersprüchliche Verweise.",
+	"import_plan_history_unsupported": "Verlaufsarchive können noch nicht importiert werden.",
 	"import_plan_failed": "Die Anfrage ist fehlgeschlagen. Prüfe Zugriff und Verbindung und versuche es erneut.",
 	"import_plan_report": "Gespeicherter Probelaufbericht",
 	"import_plan_ensure": "Geplante Einträge",

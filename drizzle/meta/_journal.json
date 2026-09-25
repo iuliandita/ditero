@@ -302,6 +302,20 @@
       "when": 1790363662262,
       "tag": "0042_completion_history_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790369413752,
+      "tag": "0043_portability_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790369417743,
+      "tag": "0044_portability_identity_rls",
+      "breakpoints": true
     }
   ]
 }

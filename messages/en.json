@@ -1581,6 +1581,7 @@
 	"import_plan_busy": "Working…",
 	"import_plan_save": "Save dry run",
 	"import_plan_invalid": "This file is not a valid native export, or its references are inconsistent.",
+	"import_plan_history_unsupported": "History archives cannot be imported yet.",
 	"import_plan_failed": "The request failed. Check your access and connection, then retry.",
 	"import_plan_report": "Saved dry-run report",
 	"import_plan_ensure": "Planned entries",

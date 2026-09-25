@@ -147,6 +147,32 @@ describe("native import plan transport", () => {
 			report: { plannerVersion: 4, applySupported: true },
 		});
 	});
+	test("refuses history archives explicitly without saving a plan", async () => {
+		const source = document();
+		const archive = {
+			...source,
+			schemaVersion: 2,
+			sourceNamespace: "11111111-1111-4111-8111-111111111111",
+			boundaries: { ...source.boundaries, taskHistory: "recorded-events-only" },
+			data: { ...source.data, completionEvents: [] },
+		};
+		const result = await app().handle(
+			request(
+				JSON.stringify({ ...payload(), document: JSON.stringify(archive) }),
+			),
+		);
+		expect(result.status).toBe(400);
+		expect(result.headers.get("cache-control")).toBe("no-store");
+		expect(await result.json()).toEqual({ code: "unsupported-import-version" });
+		const malformed = await app().handle(
+			request(JSON.stringify({ ...payload(), document: '{"schemaVersion":2' })),
+		);
+		expect(malformed.status).toBe(400);
+		expect(await malformed.json()).not.toEqual({
+			code: "unsupported-import-version",
+		});
+		expect(store.save).not.toHaveBeenCalled();
+	});
 	test("refuses malformed, unknown-field and invalid native requests before storage", async () => {
 		for (const body of [
 			"{",

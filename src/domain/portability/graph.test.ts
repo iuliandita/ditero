@@ -297,6 +297,20 @@ describe("native import graph", () => {
 			{ code: "nonmember-assignment", path: "data.assignments[0].userId" },
 		]);
 	});
+	test("keeps v1 creator and comment reference findings in traversal order", () => {
+		const source = fixture();
+		source.data.templates[0].createdBy = "missing";
+		source.data.templates[0].kind = "list";
+		source.data.comments[0].authorId = "missing";
+		expect(validateImportGraph(source).errors).toEqual([
+			{ code: "missing-reference", path: "data.templates[0].createdBy" },
+			{
+				code: "template-kind-mismatch",
+				path: "data.templates[0].content.kind",
+			},
+			{ code: "missing-reference", path: "data.comments[0].authorId" },
+		]);
+	});
 	test("caps combined findings and fails explicitly when warnings overflow", () => {
 		const source = fixture();
 		source.data.views[0].filter = {

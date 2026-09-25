@@ -1611,6 +1611,7 @@
 	"import_plan_busy": "Traitement…",
 	"import_plan_save": "Enregistrer la simulation",
 	"import_plan_invalid": "Ce fichier n’est pas un export natif valide ou ses références sont incohérentes.",
+	"import_plan_history_unsupported": "Les archives d’historique ne peuvent pas encore être importées.",
 	"import_plan_failed": "La demande a échoué. Vérifie ton accès et ta connexion, puis réessaie.",
 	"import_plan_report": "Rapport de simulation enregistré",
 	"import_plan_ensure": "Entrées prévues",

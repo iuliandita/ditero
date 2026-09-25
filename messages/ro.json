@@ -1611,6 +1611,7 @@
 	"import_plan_busy": "Se procesează…",
 	"import_plan_save": "Salvează simularea",
 	"import_plan_invalid": "Fișierul nu este un export nativ valid sau referințele sale sunt incoerente.",
+	"import_plan_history_unsupported": "Arhivele de istoric nu pot fi încă importate.",
 	"import_plan_failed": "Cererea a eșuat. Verifică accesul și conexiunea, apoi încearcă din nou.",
 	"import_plan_report": "Raport de simulare salvat",
 	"import_plan_ensure": "Intrări planificate",
