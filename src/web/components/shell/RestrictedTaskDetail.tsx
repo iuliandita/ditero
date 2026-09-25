@@ -14,7 +14,12 @@ import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
+import {
+	taskImportRecoveryKey,
+	useTaskImportActivation,
+} from "../../hooks/useTaskImportActivation.ts";
 import { AttachmentList } from "../attachments/AttachmentList.tsx";
+import { ImportActivationRecovery } from "../list/ImportActivationRecovery.tsx";
 import { CommentThread } from "../people/CommentThread.tsx";
 
 // Read-only task detail for the restricted ("kid") shell. The only write a kid may
@@ -35,12 +40,14 @@ export function RestrictedTaskDetail({
 }) {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
+	const activation = useTaskImportActivation(task?.id);
 
 	if (!task) return null;
 	const t = task;
 	const done = t.done ?? false;
 
 	function toggle() {
+		if (!activation.canWrite) return;
 		void runMutation(
 			zero.mutate(
 				done
@@ -70,7 +77,15 @@ export function RestrictedTaskDetail({
 				</SheetHeader>
 
 				<div className="flex flex-col gap-4 p-4 pt-2">
+					<ImportActivationRecovery
+						key={taskImportRecoveryKey(t.id, workspaceId, activation.status)}
+						taskId={t.id}
+						workspaceId={workspaceId}
+						status={activation.status}
+						open={open}
+					/>
 					<Button
+						disabled={!activation.canWrite}
 						type="button"
 						size="lg"
 						variant={done ? "outline" : "default"}

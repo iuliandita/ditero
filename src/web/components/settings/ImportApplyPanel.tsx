@@ -17,7 +17,7 @@ type Plan = {
 	id: string;
 	planDigest: string;
 	report: {
-		plannerVersion: 1 | 2 | 3;
+		plannerVersion: 1 | 2 | 3 | 4;
 		applySupported: boolean;
 		counts: { ensure: number; ignored: number; blocked: number };
 	};
@@ -41,12 +41,16 @@ export function ImportApplyPanel({
 	const [loading, setLoading] = useState(true);
 	const [applying, setApplying] = useState(false);
 	const [paused, setPaused] = useState(false);
-	const [error, setError] = useState<"status" | "apply" | null>(null);
+	const [error, setError] = useState<"status" | "apply" | "conflict" | null>(
+		null,
+	);
 	const [reload, setReload] = useState(0);
 	const path = `/api/portability/import/plans/${encodeURIComponent(plan.id)}`;
 	const supported =
 		plan.report.applySupported &&
-		(plan.report.plannerVersion === 2 || plan.report.plannerVersion === 3);
+		(plan.report.plannerVersion === 2 ||
+			plan.report.plannerVersion === 3 ||
+			plan.report.plannerVersion === 4);
 	const counts = plan.report.counts;
 	const total = counts.ensure + counts.ignored + counts.blocked;
 	const number = (value: number) =>
@@ -89,6 +93,7 @@ export function ImportApplyPanel({
 			active.current ||
 			loading ||
 			error === "status" ||
+			error === "conflict" ||
 			run?.state === "completed" ||
 			run?.state === "conflict"
 		)
@@ -122,6 +127,11 @@ export function ImportApplyPanel({
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({ planDigest: plan.planDigest, counts }),
 				});
+				if (controller.signal.aborted || !alive.current) return;
+				if (response.status === 409) {
+					setError("conflict");
+					return;
+				}
 				if (!response.ok) throw new Error("Import batch failed");
 				const next = (await response.json()) as Run;
 				if (controller.signal.aborted) return;
@@ -143,7 +153,10 @@ export function ImportApplyPanel({
 			}
 		}
 	}
-	const terminal = run?.state === "completed" || run?.state === "conflict";
+	const terminal =
+		run?.state === "completed" ||
+		run?.state === "conflict" ||
+		error === "conflict";
 	return (
 		<div className="mt-3 space-y-2 border-t pt-3">
 			<div
@@ -174,7 +187,9 @@ export function ImportApplyPanel({
 				<p role="alert" className="text-sm text-destructive">
 					{error === "status"
 						? m.import_plan_failed()
-						: m.import_apply_failed()}
+						: error === "conflict"
+							? m.import_apply_conflict()
+							: m.import_apply_failed()}
 				</p>
 			)}
 			<p className="text-xs text-muted-foreground">

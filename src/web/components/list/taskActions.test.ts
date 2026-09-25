@@ -36,6 +36,34 @@ function build(role: Role | null) {
 }
 
 describe("taskActions save-as-template", () => {
+	test("paused tasks hide schedule and priority while keeping deletion and snapshots", () => {
+		const actions = taskActions({
+			task: task(),
+			kind: "tasks",
+			role: "member",
+			canEdit: false,
+			handlers: {
+				open: () => {},
+				schedule: () => {},
+				pickDate: undefined,
+				setPriority: () => {},
+				saveAsTemplate: () => {},
+				remove: () => {},
+			},
+		});
+		expect(actions.find((action) => action.id === "schedule")?.hidden).toBe(
+			true,
+		);
+		expect(actions.find((action) => action.id === "priority")?.hidden).toBe(
+			true,
+		);
+		expect(
+			actions.find((action) => action.id === "save-as-template")?.hidden,
+		).toBe(false);
+		expect(actions.find((action) => action.id === "delete")?.hidden).toBe(
+			false,
+		);
+	});
 	test("a write role gets the entry, and it hands the task to the handler", () => {
 		const { actions, saved } = build("member");
 		const entry = actions.find((a) => a.id === "save-as-template");

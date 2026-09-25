@@ -2,6 +2,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
+import { useTaskImportActivation } from "../../hooks/useTaskImportActivation.ts";
 
 export type ShoppingHandlers = {
 	onToggle: (id: string, done: boolean) => void;
@@ -26,9 +27,11 @@ export function ShoppingRow({
 	task: Task;
 	handlers: ShoppingHandlers;
 }) {
+	const activation = useTaskImportActivation(task.id);
 	return (
 		<div className="flex items-center gap-2 py-1.5">
 			<Checkbox
+				disabled={!activation.canWrite}
 				aria-label={task.title}
 				checked={task.done ?? false}
 				onCheckedChange={() => handlers.onToggle(task.id, task.done ?? false)}
@@ -42,8 +45,17 @@ export function ShoppingRow({
 				)}
 			>
 				{task.title}
+				{(activation.status === "pending" ||
+					activation.status === "blocked") && (
+					<span className="block text-xs text-amber-700 dark:text-amber-400">
+						{activation.status === "pending"
+							? m.activation_badge_pending()
+							: m.activation_badge_blocked()}
+					</span>
+				)}
 			</button>
 			<input
+				disabled={!activation.canWrite}
 				// key resets the field when the synced value changes underneath.
 				key={`q-${task.quantity ?? ""}`}
 				defaultValue={task.quantity ?? ""}
@@ -58,6 +70,7 @@ export function ShoppingRow({
 				}
 			/>
 			<input
+				disabled={!activation.canWrite}
 				key={`u-${task.unit ?? ""}`}
 				defaultValue={task.unit ?? ""}
 				aria-label={m.shopping_unit_for({ title: task.title })}

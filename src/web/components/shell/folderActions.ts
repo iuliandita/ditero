@@ -16,11 +16,13 @@ export function folderActions({
 	folder,
 	role,
 	listCount,
+	editBlocked = false,
 	handlers,
 }: {
 	folder: Folder;
 	role: Role | null;
 	listCount: number;
+	editBlocked?: boolean;
 	handlers: FolderActionHandlers;
 }): RowAction[] {
 	const canWrite = role !== null && WRITE_ROLES.has(role);
@@ -37,6 +39,7 @@ export function folderActions({
 			label: m.action_rename(),
 			icon: Pencil,
 			hidden: !canWrite,
+			disabledReason: editBlocked ? m.activation_container_paused() : undefined,
 			onSelect: () => handlers.rename(folder),
 		},
 		{

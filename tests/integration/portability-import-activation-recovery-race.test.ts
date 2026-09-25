@@ -10,7 +10,7 @@ import {
 	finishTaskActivation,
 	reviewTaskActivation,
 } from "../../src/server/portability/import-activation-recovery.ts";
-import { applyImportBatchV4Internal } from "../../src/server/portability/import-apply-store.ts";
+import { applyImportBatch } from "../../src/server/portability/import-apply-store.ts";
 import {
 	type ImportPlanStatus,
 	saveImportPlan,
@@ -124,7 +124,7 @@ beforeEach(async () => {
 		{ plannerVersion: 4 },
 	);
 	for (let attempt = 0; attempt < 20; attempt++) {
-		const status = await applyImportBatchV4Internal(importer, "alice", job.id, {
+		const status = await applyImportBatch(importer, "alice", job.id, {
 			planDigest: job.planDigest,
 			counts: job.report.counts,
 		});
@@ -159,12 +159,12 @@ afterAll(async () => {
 });
 
 async function continueImport() {
-	let result = await applyImportBatchV4Internal(importer, "alice", job.id, {
+	let result = await applyImportBatch(importer, "alice", job.id, {
 		planDigest: job.planDigest,
 		counts: job.report.counts,
 	});
 	for (let attempt = 0; result.state === "running" && attempt < 20; attempt++)
-		result = await applyImportBatchV4Internal(importer, "alice", job.id, {
+		result = await applyImportBatch(importer, "alice", job.id, {
 			planDigest: job.planDigest,
 			counts: job.report.counts,
 		});

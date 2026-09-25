@@ -122,7 +122,13 @@ function describePreset(p: RecurrencePreset, weekdays: string[]): string {
 // edited: the block serializes a preset via presetToRRule and persists through
 // task.update. Mounted in the task detail surface; keyed by task id upstream so
 // state resets when the detail switches tasks.
-export function RecurrenceEditor({ task }: { task: Task }) {
+export function RecurrenceEditor({
+	task,
+	disabled = false,
+}: {
+	task: Task;
+	disabled?: boolean;
+}) {
 	const zero = useZero<typeof schema>();
 	const [error, setError] = useState<string | null>(null);
 	const [enabled, setEnabled] = useState(task.rrule != null);
@@ -137,6 +143,7 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 		relative?: boolean;
 		reminder?: string;
 	}) {
+		if (disabled) return;
 		setError(null);
 		const p = next.preset ?? preset;
 		const rel = next.relative ?? relative;
@@ -167,6 +174,7 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 	}
 
 	function clear() {
+		if (disabled) return;
 		setEnabled(false);
 		setError(null);
 		void runMutation(
@@ -235,6 +243,7 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 			<div className="flex flex-col gap-1 text-sm">
 				<span className="text-muted-foreground">{m.recurrence_repeat()}</span>
 				<Button
+					disabled={disabled}
 					variant="outline"
 					size="sm"
 					className="self-start"
@@ -250,7 +259,8 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 	const weekdays = weekdayNames();
 
 	return (
-		<div
+		<fieldset
+			disabled={disabled}
 			className="flex flex-col gap-3 text-sm"
 			data-testid="recurrence-editor"
 		>
@@ -425,6 +435,6 @@ export function RecurrenceEditor({ task }: { task: Task }) {
 			>
 				{describePreset(preset, weekdays)}
 			</p>
-		</div>
+		</fieldset>
 	);
 }

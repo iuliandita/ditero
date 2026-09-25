@@ -33,11 +33,13 @@ export function taskActions({
 	task,
 	kind,
 	role,
+	canEdit = true,
 	handlers,
 }: {
 	task: Task;
 	kind: ListKind;
 	role: Role | null;
+	canEdit?: boolean;
 	handlers: TaskActionHandlers;
 }): RowAction[] {
 	// task.update and task.delete both gate on requireWrite over the list's
@@ -58,7 +60,7 @@ export function taskActions({
 			id: "schedule",
 			label: m.schedule_sheet_title(),
 			icon: CalendarClock,
-			hidden: !canWrite || bare,
+			hidden: !canWrite || !canEdit || bare,
 			submenu: [
 				{
 					id: "schedule-today-evening",
@@ -87,7 +89,7 @@ export function taskActions({
 			id: "priority",
 			label: m.task_field_priority(),
 			icon: Flag,
-			hidden: !canWrite || bare,
+			hidden: !canWrite || !canEdit || bare,
 			submenu: PRIORITY_LEVELS.map((level) => ({
 				id: `priority-${level}`,
 				label: priorityLabel(level),

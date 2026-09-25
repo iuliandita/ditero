@@ -27,6 +27,7 @@ import type {
 	TaskAssignee,
 	TaskLabel,
 } from "../../../zero/schema.gen.ts";
+import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import type { GroupCtx, GroupTask } from "../../views/group.ts";
 import { groupTasks } from "../../views/group.ts";
@@ -103,6 +104,7 @@ export function ViewRenderer(props: {
 	onSortChange?: (sort: ViewSort) => void;
 }): JSX.Element {
 	const { pref } = useUserPref();
+	const activation = useTaskImportActivationMap();
 	const {
 		filter,
 		display,
@@ -253,18 +255,21 @@ export function ViewRenderer(props: {
 	}
 
 	const handlers: RowHandlers = {
-		onToggle: (id, done) =>
+		onToggle: (id, done) => {
+			if (!activation.canWriteTask(id)) return;
 			void run(
 				zero.mutate(
 					done
 						? mutators.task.update({ id, done: false })
 						: mutators.task.complete({ id }),
 				),
-			),
+			);
+		},
 		onOpenDetail: (task) => onOpenTask(task),
 	};
 
 	function onReorder(id: string, sortKey: string) {
+		if (!activation.canWriteTask(id)) return;
 		void run(zero.mutate(mutators.task.update({ id, sortKey })));
 	}
 
@@ -272,6 +277,7 @@ export function ViewRenderer(props: {
 	// priority (-> priority) and status (-> done); other group-bys are
 	// reorder-only within a column.
 	function onRegroup(id: string, columnKey: string) {
+		if (!activation.canWriteTask(id)) return;
 		if (display.groupBy === "priority") {
 			void run(
 				zero.mutate(mutators.task.update({ id, priority: Number(columnKey) })),
@@ -293,6 +299,7 @@ export function ViewRenderer(props: {
 	}
 
 	function onReschedule(id: string, dueAt: number) {
+		if (!activation.canWriteTask(id)) return;
 		void run(zero.mutate(mutators.task.update({ id, dueAt })));
 	}
 
@@ -374,6 +381,7 @@ export function ViewRenderer(props: {
 					isDesktop={isDesktop}
 					onOpenTask={onOpenTask}
 					onReschedule={onReschedule}
+					canDrag={activation.canWriteTask}
 					timeZone={pref.timezone}
 				/>
 			) : renderList ? (
@@ -382,6 +390,7 @@ export function ViewRenderer(props: {
 					reorderable={listReorderable}
 					handlers={handlers}
 					onReorder={onReorder}
+					canDrag={activation.canWriteTask}
 				/>
 			) : display.layout === "board" ? (
 				<BoardLayout
@@ -416,11 +425,13 @@ function ListLayout({
 	reorderable,
 	handlers,
 	onReorder,
+	canDrag,
 }: {
 	groups: ViewEntryGroup[];
 	reorderable: boolean;
 	handlers: RowHandlers;
 	onReorder: (id: string, sortKey: string) => void;
+	canDrag: (id: string) => boolean;
 }) {
 	const renderRow = (entry: ViewEntry) => (
 		<TaskRow
@@ -452,6 +463,7 @@ function ListLayout({
 								entry: e,
 							}))}
 							onMove={onReorder}
+							canDrag={canDrag}
 							renderItem={(item) => renderRow(item.entry)}
 							handleLabel={m.task_reorder_handle()}
 							handleTestId="view-reorder"

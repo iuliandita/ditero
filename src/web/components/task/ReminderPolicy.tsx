@@ -24,9 +24,11 @@ import {
 export function ReminderPolicy({
 	task,
 	workspaceId,
+	disabled = false,
 }: {
 	task: Task;
 	workspaceId: string;
+	disabled?: boolean;
 }) {
 	const zero = useZero<typeof schema>();
 	const me = zero.userID ?? "";
@@ -53,6 +55,7 @@ export function ReminderPolicy({
 	const defaults = pref.escalationDefaults;
 
 	function update(patch: Parameters<typeof mutators.task.update>[0]) {
+		if (disabled) return;
 		setError(null);
 		void runMutation(zero.mutate(mutators.task.update(patch)), setError);
 	}
@@ -69,6 +72,7 @@ export function ReminderPolicy({
 				<label className="flex flex-col gap-1">
 					<span className="text-muted-foreground">{m.reminder_time()}</span>
 					<input
+						disabled={disabled}
 						type="time"
 						value={task.reminderTime ?? ""}
 						data-testid="reminder-time"
@@ -89,6 +93,7 @@ export function ReminderPolicy({
 					{m.reminder_urgent_label()}
 				</span>
 				<Button
+					disabled={disabled}
 					size="sm"
 					variant={task.urgent ? "default" : "outline"}
 					role="switch"
@@ -103,6 +108,7 @@ export function ReminderPolicy({
 
 			<button
 				type="button"
+				disabled={disabled}
 				aria-expanded={open}
 				data-testid="reminder-overrides-toggle"
 				className="w-fit text-xs text-muted-foreground underline"
@@ -118,6 +124,7 @@ export function ReminderPolicy({
 							{m.escalation_repeat_every()}
 						</span>
 						<input
+							disabled={disabled}
 							type="number"
 							min={1}
 							max={REPEAT_EVERY_MIN_MAX}
@@ -140,6 +147,7 @@ export function ReminderPolicy({
 							{m.escalation_max_repeats()}
 						</span>
 						<input
+							disabled={disabled}
 							type="number"
 							min={0}
 							max={REPEATS_MAX}
@@ -160,6 +168,7 @@ export function ReminderPolicy({
 							{m.escalation_fallback_member()}
 						</span>
 						<select
+							disabled={disabled}
 							value={task.fallbackUserId ?? ""}
 							data-testid="reminder-fallback"
 							className="h-8 rounded-lg border bg-transparent px-2 text-sm"

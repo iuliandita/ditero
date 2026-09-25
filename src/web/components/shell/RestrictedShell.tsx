@@ -8,6 +8,10 @@ import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
+import {
+	useTaskImportActivation,
+	useTaskImportActivationMap,
+} from "../../hooks/useTaskImportActivation.ts";
 import { RestrictedTaskDetail } from "./RestrictedTaskDetail.tsx";
 
 // A single large-touch-target row for the kid surface. Deliberately not TaskRow:
@@ -22,12 +26,14 @@ function RestrictedRow({
 	onToggle: () => void;
 	onOpen: () => void;
 }) {
+	const activation = useTaskImportActivation(task.id);
 	return (
 		<li
 			data-testid="restricted-task"
 			className="flex items-center gap-3 rounded-xl border p-4"
 		>
 			<Checkbox
+				disabled={!activation.canWrite}
 				aria-label={task.title}
 				checked={task.done ?? false}
 				onCheckedChange={onToggle}
@@ -46,6 +52,14 @@ function RestrictedRow({
 				>
 					{task.title}
 				</span>
+				{(activation.status === "pending" ||
+					activation.status === "blocked") && (
+					<span className="block text-xs text-amber-700 dark:text-amber-400">
+						{activation.status === "pending"
+							? m.activation_badge_pending()
+							: m.activation_badge_blocked()}
+					</span>
+				)}
 				{task.dueAt != null && (
 					<span
 						className={cn(
@@ -67,6 +81,7 @@ function RestrictedRow({
 // Workspace when the current user is a restricted managed account.
 export function RestrictedShell() {
 	const zero = useZero<typeof schema>();
+	const activation = useTaskImportActivationMap();
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [tasks] = useQuery(queries.tasks.mine());
 	const [lists] = useQuery(queries.lists.mine());
@@ -100,6 +115,7 @@ export function RestrictedShell() {
 		: null;
 
 	function toggle(task: Task) {
+		if (!activation.canWriteTask(task.id)) return;
 		setError(null);
 		const done = task.done ?? false;
 		void runMutation(

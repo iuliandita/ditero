@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { PortableExportV1 } from "../../domain/portability/v1.ts";
 import { makeGuards, type Session } from "../guards.ts";
+import { V4ApplyConflict } from "./import-activation.ts";
 
 const store = vi.hoisted(() => ({
 	save: vi.fn(),
@@ -106,7 +107,7 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	store.save.mockResolvedValue({
 		id: "saved",
-		report: { plannerVersion: 3, applySupported: true },
+		report: { plannerVersion: 4, applySupported: true },
 	});
 	store.list.mockResolvedValue([]);
 	store.get.mockResolvedValue(null);
@@ -139,11 +140,11 @@ describe("native import plan transport", () => {
 			{
 				signal: expect.any(AbortSignal),
 				deadline: expect.any(Number),
-				plannerVersion: 3,
+				plannerVersion: 4,
 			},
 		);
 		expect(await result.json()).toMatchObject({
-			report: { plannerVersion: 3, applySupported: true },
+			report: { plannerVersion: 4, applySupported: true },
 		});
 	});
 	test("refuses malformed, unknown-field and invalid native requests before storage", async () => {
@@ -303,6 +304,15 @@ function applyRequest(
 }
 
 describe("native import execution transport", () => {
+	test("returns a private conflict response for activation preflight limits", async () => {
+		store.apply.mockRejectedValueOnce(
+			new V4ApplyConflict("activation-readiness-limit", 100),
+		);
+		const result = await app().handle(applyRequest());
+		expect(result.status).toBe(409);
+		expect(result.headers.get("cache-control")).toBe("no-store");
+		expect(await result.json()).toEqual({ code: "activation-readiness-limit" });
+	});
 	test("authenticates and checks origin before execution", async () => {
 		const api = app();
 		expect((await api.handle(applyRequest("{", { "x-user": "" }))).status).toBe(

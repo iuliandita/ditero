@@ -7,10 +7,7 @@ import type { ImportMappings } from "../../src/domain/portability/import-plan.ts
 import type { PortableExportV1 } from "../../src/domain/portability/v1.ts";
 import { withProducerTaskActivation } from "../../src/server/notifications/task-activation.ts";
 import { exportPortableJson } from "../../src/server/portability/export.ts";
-import {
-	applyImportBatch,
-	applyImportBatchV4Internal,
-} from "../../src/server/portability/import-apply-store.ts";
+import { applyImportBatch } from "../../src/server/portability/import-apply-store.ts";
 import {
 	type ImportPlanStatus,
 	saveImportPlan,
@@ -127,14 +124,14 @@ const confirmation = (job: ImportPlanStatus) => ({
 	counts: job.report.counts,
 });
 async function finish(job: ImportPlanStatus) {
-	let status = await applyImportBatchV4Internal(
+	let status = await applyImportBatch(
 		runtime,
 		"alice",
 		job.id,
 		confirmation(job),
 	);
 	for (let batch = 0; status.state === "running" && batch < 20; batch++)
-		status = await applyImportBatchV4Internal(
+		status = await applyImportBatch(
 			runtime,
 			"alice",
 			job.id,
@@ -217,8 +214,20 @@ async function blockedBy(blockerPid: number) {
 	);
 }
 
-test("public apply still refuses saved v4 without creating a run or task", async () => {
+test.each([
+	{ plannerVersion: 99, applySupported: true },
+	{ plannerVersion: 4, applySupported: false },
+])("public apply refuses unsupported saved plans without writes: %j", async ({
+	plannerVersion,
+	applySupported,
+}) => {
 	const job = await save();
+	await pool.query(
+		`update import_job set planner_version=$1, apply_supported=$2,
+		 report=jsonb_set(jsonb_set(report, '{plannerVersion}', to_jsonb($1::int)), '{applySupported}', to_jsonb($2::boolean))
+		 where id=$3`,
+		[plannerVersion, applySupported, job.id],
+	);
 	await expect(
 		applyImportBatch(runtime, "alice", job.id, confirmation(job)),
 	).rejects.toMatchObject({ code: "import-apply-unsupported" });
@@ -233,6 +242,43 @@ test("public apply still refuses saved v4 without creating a run or task", async
 			)
 		).rows[0]?.count,
 	).toBe(0);
+});
+
+test("public v4 apply requires exact confirmation before publishing the task", async () => {
+	const job = await save();
+	await expect(
+		applyImportBatch(runtime, "alice", job.id, {
+			...confirmation(job),
+			planDigest: "0".repeat(64),
+		}),
+	).rejects.toMatchObject({ code: "import-confirmation-mismatch" });
+	expect(
+		(await pool.query("select count(*)::int as count from import_run")).rows[0]
+			?.count,
+	).toBe(0);
+	expect(
+		(
+			await pool.query(
+				"select count(*)::int as count from task_notification_activation",
+			)
+		).rows[0]?.count,
+	).toBe(0);
+	const result = await applyImportBatch(
+		runtime,
+		"alice",
+		job.id,
+		confirmation(job),
+	);
+	expect(result.state).toBe("completed");
+	const id = await targetId("tasks", "source-task");
+	expect(
+		(
+			await pool.query(
+				"select status from task_notification_activation where task_id=$1",
+				[id],
+			)
+		).rows[0]?.status,
+	).toBe("active");
 });
 
 test("v4 publishes a new task only after its assignment and suppresses historical overdue for its recipient", async () => {
@@ -558,7 +604,7 @@ test("active mapped task pauses for a new assignment, advances only its generati
 test("a task stays pending across the 100-item window and publishes the complete recipient set", async () => {
 	const added = await addManyAssignees(105);
 	const job = await save();
-	let status = await applyImportBatchV4Internal(
+	let status = await applyImportBatch(
 		runtime,
 		"alice",
 		job.id,
@@ -570,7 +616,7 @@ test("a task stays pending across the 100-item window and publishes the complete
 			[source.id],
 		);
 		if (mapped.rowCount) break;
-		status = await applyImportBatchV4Internal(
+		status = await applyImportBatch(
 			runtime,
 			"alice",
 			job.id,
@@ -598,7 +644,7 @@ test("a task stays pending across the 100-item window and publishes the complete
 		).rows[0]?.count,
 	).toBe(0);
 	for (let batch = 0; status.state === "running" && batch < 20; batch++)
-		status = await applyImportBatchV4Internal(
+		status = await applyImportBatch(
 			runtime,
 			"alice",
 			job.id,
@@ -635,7 +681,7 @@ test("an independently ready task activates while a later assignment-heavy task 
 		await exportPortableJson(pool, "alice"),
 	) as PortableExportV1;
 	const job = await save();
-	let status = await applyImportBatchV4Internal(
+	let status = await applyImportBatch(
 		runtime,
 		"alice",
 		job.id,
@@ -647,7 +693,7 @@ test("an independently ready task activates while a later assignment-heavy task 
 			[source.id],
 		);
 		if (mapped.rows[0]?.count === 2) break;
-		status = await applyImportBatchV4Internal(
+		status = await applyImportBatch(
 			runtime,
 			"alice",
 			job.id,
@@ -678,7 +724,7 @@ test("an independently ready task activates while a later assignment-heavy task 
 test("readiness evidence drift rolls back remaining links and leaves the cursor unchanged", async () => {
 	await addManyAssignees(105);
 	const job = await save();
-	let status = await applyImportBatchV4Internal(
+	let status = await applyImportBatch(
 		runtime,
 		"alice",
 		job.id,
@@ -690,7 +736,7 @@ test("readiness evidence drift rolls back remaining links and leaves the cursor 
 			[source.id],
 		);
 		if (mapped.rowCount) break;
-		status = await applyImportBatchV4Internal(
+		status = await applyImportBatch(
 			runtime,
 			"alice",
 			job.id,
@@ -709,7 +755,7 @@ test("readiness evidence drift rolls back remaining links and leaves the cursor 
 		"update task_notification_activation set expected_relationship_digest=$2 where task_id=$1",
 		[id, "b".repeat(64)],
 	);
-	const stopped = await applyImportBatchV4Internal(
+	const stopped = await applyImportBatch(
 		runtime,
 		"alice",
 		job.id,
@@ -741,7 +787,7 @@ test("readiness evidence drift rolls back remaining links and leaves the cursor 
 test("a revoked required seat conflicts a pending batch without advancing its cursor or links", async () => {
 	await addManyAssignees(105);
 	const job = await save();
-	let status = await applyImportBatchV4Internal(
+	let status = await applyImportBatch(
 		runtime,
 		"alice",
 		job.id,
@@ -753,7 +799,7 @@ test("a revoked required seat conflicts a pending batch without advancing its cu
 			[source.id],
 		);
 		if (mapped.rowCount) break;
-		status = await applyImportBatchV4Internal(
+		status = await applyImportBatch(
 			runtime,
 			"alice",
 			job.id,
@@ -769,7 +815,7 @@ test("a revoked required seat conflicts a pending batch without advancing its cu
 		)
 	).rows[0]?.count;
 	await pool.query("delete from membership where id='target-member-104'");
-	const stopped = await applyImportBatchV4Internal(
+	const stopped = await applyImportBatch(
 		runtime,
 		"alice",
 		job.id,
@@ -801,7 +847,7 @@ test("a revoked required seat conflicts a pending batch without advancing its cu
 test("more than 100 ready guards cannot be hidden behind the activation page limit", async () => {
 	await addManyAssignees(105);
 	const job = await save();
-	let status = await applyImportBatchV4Internal(
+	let status = await applyImportBatch(
 		runtime,
 		"alice",
 		job.id,
@@ -813,7 +859,7 @@ test("more than 100 ready guards cannot be hidden behind the activation page lim
 			[source.id],
 		);
 		if (mapped.rowCount) break;
-		status = await applyImportBatchV4Internal(
+		status = await applyImportBatch(
 			runtime,
 			"alice",
 			job.id,
@@ -838,7 +884,7 @@ test("more than 100 ready guards cannot be hidden behind the activation page lim
 			readinessOrdinal: 0,
 		})),
 	);
-	const stopped = await applyImportBatchV4Internal(
+	const stopped = await applyImportBatch(
 		runtime,
 		"alice",
 		job.id,
@@ -854,7 +900,7 @@ test("more than 100 ready guards cannot be hidden behind the activation page lim
 test("a terminal old run can be adopted by one sealed task item and then published", async () => {
 	await addManyAssignees(105);
 	const first = await save();
-	let firstStatus = await applyImportBatchV4Internal(
+	let firstStatus = await applyImportBatch(
 		runtime,
 		"alice",
 		first.id,
@@ -866,7 +912,7 @@ test("a terminal old run can be adopted by one sealed task item and then publish
 			[source.id],
 		);
 		if (mapped.rowCount) break;
-		firstStatus = await applyImportBatchV4Internal(
+		firstStatus = await applyImportBatch(
 			runtime,
 			"alice",
 			first.id,
@@ -922,7 +968,7 @@ test("a stale active-generation proof conflicts without writing a new assignment
 		"update task_notification_activation set generation=generation+1,updated_at=now() where task_id=$1",
 		[id],
 	);
-	const result = await applyImportBatchV4Internal(
+	const result = await applyImportBatch(
 		runtime,
 		"alice",
 		stale.id,
@@ -1050,7 +1096,7 @@ test("a producer holding the task share lock finishes before the v4 transition",
 			return lookup.generation;
 		});
 		await entered;
-		applyWork = applyImportBatchV4Internal(
+		applyWork = applyImportBatch(
 			raceRuntime,
 			"alice",
 			job.id,
@@ -1088,7 +1134,7 @@ test("a v4 transition holding the task update lock makes the producer observe th
 			await holder.query<{ pid: number }>("select pg_backend_pid() as pid")
 		).rows[0]?.pid;
 		if (!holderPid) throw new Error("Missing holder backend");
-		applyWork = applyImportBatchV4Internal(
+		applyWork = applyImportBatch(
 			raceRuntime,
 			"alice",
 			job.id,

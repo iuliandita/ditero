@@ -46,10 +46,11 @@ report cannot authorize an incomplete import plan.
 ## Saved dry runs
 
 Settings can validate a native file, map its workspaces and people, and save a
-dry-run report. Saving does not import content. New plans use planner version 3
-and freeze destination checks for later application. Saved version 2 plans remain
-applicable with their original exclusions; save a new plan to include assignments.
-Older version 1 plans remain non-applicable; upload their file again to create a current plan.
+dry-run report. Saving does not import content. New plans use planner version 4
+and freeze destination checks for later application. Saved version 2 and 3 plans
+remain applicable with their original exclusions; save a new plan to include
+newly supported task notification settings. Older version 1 plans remain
+non-applicable; upload their file again to create a current plan.
 
 Create a named import source for the first file. Explicitly select that same
 source for later exports from the same account and installation. Native v1 has
@@ -60,27 +61,28 @@ its original format, schema version, and source user. It cannot be reassigned.
 Every source workspace needs an existing writable destination. The exporting
 user maps to the caller; other people can remain unmapped or map to applicable
 current members. Source roles and memberships never create permissions.
-Application currently supports folders, the exporting user's own lists, labels,
-tasks without notification settings, task-label links, and assignments to mapped
-current members. Mapping another owner
-to your account does not make their lists eligible. Tasks with a reminder time,
-repeat interval, repeat limit, fallback recipient, or urgent flag are blocked;
-these settings are never silently removed.
-Unfinished tasks with a due date are also blocked, including habits: automatic
-overdue alerts do not require a reminder setting. Completed dated tasks and
-undated tasks remain eligible when they have no reminder settings. Comments, templates,
-views, dashboards, focus records, preferences, Karma, and habit logs remain
-blocked pending their import policies. Attachment files remain excluded.
+Application supports folders, the exporting user's own lists, labels, tasks,
+task-label links, and assignments to mapped current members. Mapping another owner
+to your account does not make their lists eligible. Version 4 plans preserve task
+due dates, completion, recurrence, reminder time, repeat interval and limit,
+urgency, and a fallback recipient. A source fallback person must map explicitly to
+a current member of the task's destination workspace. Missing or changed mapping
+evidence blocks the affected task; a failed intended assignment also blocks its
+notification-bearing task rather than replacing the assignee with the list owner.
+Version 2 and 3 plans keep their older dated-task and notification-setting exclusions.
+Comments, templates, views, dashboards, focus records, preferences, Karma, and habit
+logs remain blocked pending their import policies. Attachment files remain excluded.
 Unresolved references and mapping conflicts block affected records and their
 dependents. The report distinguishes candidate records, excluded metadata, and
 blocked records. Candidates are not a promise that an eventual apply will pass
 its authorization and conflict checks.
 
-Each mapped assignee must be an active member of every destination workspace in
-which they are assigned. Viewers can receive assignments. Import creates no
-invitations or memberships and sends no assignment notifications. Apply rechecks
-the exact saved membership and task relationship; removing and recreating a membership
-requires a new plan. Existing untracked assignments are conflicts, not adopted rows.
+Each mapped assignee and fallback recipient must be an active member of every
+destination workspace in which they are used. Viewers can receive assignments.
+Import creates no invitations or memberships and sends no assignment notifications.
+Apply rechecks the exact saved membership and task relationship; removing and
+recreating a membership requires a new plan. Existing untracked assignments are
+conflicts, not adopted rows.
 Imported assignments support the normal assign/unassign controls. Removing one does
 not authorize a later import to restore it; source omissions never unassign anyone.
 
@@ -131,3 +133,38 @@ unchanged. Source content changes require a future explicit merge policy; they
 do not overwrite edits. Applied workspace mappings remain pinned, while a later
 export may add unrelated source workspaces. Existing completion state is copied
 without replaying completion events, Karma awards, or notifications.
+
+## Activation and recovery for version 4 tasks
+
+Newly imported tasks remain **Pending** until their notification-affecting
+assignments are committed and checked. A later plan that adds recipients to an
+active imported task pauses it again until that recipient set is complete. A
+conflict or security change can leave the task **Blocked**. While pending or
+blocked, automatic task reminders and overdue alerts are paused, and edits to
+task fields, completion, recurrence, assignments, and reminder settings are
+refused. Authorized deletion remains available. Native tasks and saved version 2
+or 3 plans retain their previous behavior.
+
+Resume an interrupted plan when it remains valid. A terminal conflict needs a
+fresh plan; resuming does not erase earlier committed batches. If the plan cannot
+finish, **Finish import for this task** is a separate, explicit recovery action for
+one task. A current owner, admin, or member of its workspace can review the task,
+current assignees, owner or escalation fallback, and missing or changed expected
+links. A viewer cannot finish it. Review remains available even if the original
+source or importer is gone. Review all pages before confirming. The confirmation
+accepts the current relationships without repairing missing links, rewriting
+source mappings, or replaying old notifications. Review changes require a fresh
+confirmation. A previously saved plan cannot resume writing assignments to the
+task after manual finish; create and review a new plan if those missing links
+are still wanted.
+
+Each activation sets a cutoff for automatic occurrences. Reminders from before
+the original import activation are not replayed, and a later pause skips
+occurrences before the newly published cutoff for **all** recipients, including
+those already assigned. A notification queued before the pause may still be
+delivered. New recipients do not get an overdue alert for the task's historical
+due date. Existing or returning recipients keep their previous overdue state.
+An explicit change to `dueAt` clears that suppression, even if the newly chosen
+date is already past; setting the same date, reopening the task, or automatic
+recurrence advancement does not. Future occurrences and new due dates follow
+normal notification rules once the task is active.

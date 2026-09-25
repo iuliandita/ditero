@@ -120,48 +120,6 @@ export async function applyImportBatch(
 	},
 	options: { signal?: AbortSignal; deadline?: number } = {},
 ): Promise<ImportRunStatus> {
-	return applyImportBatchCore(
-		pool,
-		ownerId,
-		jobId,
-		confirmation,
-		options,
-		false,
-	);
-}
-
-// Internal integration seam. No route imports this entrypoint while v4 gates remain incomplete.
-export async function applyImportBatchV4Internal(
-	pool: Pool,
-	ownerId: string,
-	jobId: string,
-	confirmation: {
-		planDigest: string;
-		counts: { ensure: number; ignored: number; blocked: number };
-	},
-	options: { signal?: AbortSignal; deadline?: number } = {},
-): Promise<ImportRunStatus> {
-	return applyImportBatchCore(
-		pool,
-		ownerId,
-		jobId,
-		confirmation,
-		options,
-		true,
-	);
-}
-
-async function applyImportBatchCore(
-	pool: Pool,
-	ownerId: string,
-	jobId: string,
-	confirmation: {
-		planDigest: string;
-		counts: { ensure: number; ignored: number; blocked: number };
-	},
-	options: { signal?: AbortSignal; deadline?: number },
-	v4: boolean,
-): Promise<ImportRunStatus> {
 	const deadline = Math.min(
 		options.deadline ?? Infinity,
 		performance.now() + 15_000,
@@ -171,6 +129,7 @@ async function applyImportBatchCore(
 		if (performance.now() >= deadline) fail("import-timeout", 503);
 	};
 	let authority: V4ApplyAuthority | undefined;
+	let discoveredVersion: number | undefined;
 	return importTransaction(
 		pool,
 		ownerId,
@@ -189,13 +148,14 @@ async function applyImportBatchCore(
 			).rows[0];
 			if (!job) fail("plan-not-found", 404);
 			if (
-				(v4
-					? job.planner_version !== 4
-					: ![2, 3].includes(job.planner_version)) ||
+				![2, 3, 4].includes(job.planner_version) ||
+				job.planner_version !== discoveredVersion ||
+				(job.planner_version === 4 && !authority) ||
 				!job.apply_supported ||
 				job.report.plannerVersion !== job.planner_version
 			)
 				fail("import-apply-unsupported");
+			const v4 = job.planner_version === 4;
 			if (
 				confirmation?.planDigest !== job.plan_digest ||
 				!confirmation.counts ||
@@ -920,11 +880,18 @@ async function applyImportBatchCore(
 		},
 		options.signal,
 		deadline,
-		v4
-			? async (client) => {
-					authority = await discoverV4ApplyAuthority(client, ownerId, jobId);
-					return [...authority.userIds];
-				}
-			: undefined,
+		async (client) => {
+			// V4 must discover every authority user before the first user lock.
+			discoveredVersion = (
+				await client.query<{ planner_version: number }>(
+					`select j.planner_version from import_source s join import_job j on j.source_id = s.id
+					where j.id = $1 and j.owner_user_id = $2 and s.owner_user_id = $2`,
+					[jobId, ownerId],
+				)
+			).rows[0]?.planner_version;
+			if (discoveredVersion !== 4) return [];
+			authority = await discoverV4ApplyAuthority(client, ownerId, jobId);
+			return [...authority.userIds];
+		},
 	);
 }

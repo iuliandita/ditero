@@ -1,5 +1,6 @@
 import { useZero } from "@rocicorp/zero/react";
 import { House, Pencil, Trash2 } from "lucide-react";
+import { useState } from "react";
 import type { ListKind } from "../../domain/icon-map.ts";
 import { randomId } from "../../domain/random-id.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
@@ -34,6 +35,8 @@ export function useWorkspaceRowActions({
 	tasks,
 	activeLists,
 	activeFolders,
+	canEditList,
+	canEditFolder,
 	roleByWorkspace,
 	savedViews,
 	onOpenHome,
@@ -50,6 +53,8 @@ export function useWorkspaceRowActions({
 	tasks: Task[];
 	activeLists: List[];
 	activeFolders: Folder[];
+	canEditList: (listId: string) => boolean;
+	canEditFolder: (folderId: string) => boolean;
 	roleByWorkspace: Map<string, Role>;
 	savedViews: SavedView[];
 	onOpenHome: () => void;
@@ -67,11 +72,19 @@ export function useWorkspaceRowActions({
 }) {
 	const zero = useZero<typeof schema>();
 	const confirm = useConfirm();
+	const [containerError, setContainerError] = useState<string | null>(null);
 
 	function moveListToFolder(list: List, folderId: string | null) {
+		if (!canEditList(list.id) || (folderId && !canEditFolder(folderId))) {
+			setContainerError(m.activation_container_paused());
+			return;
+		}
+		setContainerError(null);
 		void zero
 			.mutate(mutators.list.update({ id: list.id, folderId }))
-			.client.catch((e) => console.error("list.update failed", e));
+			.client.catch(() =>
+				setContainerError(m.activation_container_change_failed()),
+			);
 	}
 
 	function saveListAsTemplate(list: List) {
@@ -118,7 +131,10 @@ export function useWorkspaceRowActions({
 	}
 
 	const listActionHandlers: ListActionHandlers = {
-		rename: setRenameTarget,
+		rename: (list) => {
+			if (canEditList(list.id)) setRenameTarget(list);
+			else setContainerError(m.activation_container_paused());
+		},
 		moveToFolder: moveListToFolder,
 		saveAsTemplate: saveListAsTemplate,
 		remove: (list) => void deleteList(list),
@@ -130,6 +146,7 @@ export function useWorkspaceRowActions({
 			role: roleByWorkspace.get(list.workspaceId) ?? null,
 			userId: zero.userID ?? "",
 			folders: activeFolders,
+			editBlocked: !canEditList(list.id),
 			handlers: listActionHandlers,
 		});
 
@@ -154,7 +171,10 @@ export function useWorkspaceRowActions({
 			onOpenHome();
 			setNewListFolder({ id: folderId, nonce: Date.now() });
 		},
-		rename: (folder) => setFolderDialog({ mode: "rename", folder }),
+		rename: (folder) => {
+			if (canEditFolder(folder.id)) setFolderDialog({ mode: "rename", folder });
+			else setContainerError(m.activation_container_paused());
+		},
 		remove: (folder) => void deleteFolder(folder),
 	};
 
@@ -163,6 +183,7 @@ export function useWorkspaceRowActions({
 			folder,
 			role: roleByWorkspace.get(folder.workspaceId) ?? null,
 			listCount: activeLists.filter((l) => l.folderId === folder.id).length,
+			editBlocked: !canEditFolder(folder.id),
 			handlers: folderActionHandlers,
 		});
 
@@ -251,6 +272,8 @@ export function useWorkspaceRowActions({
 	};
 
 	return {
+		containerError,
+		setContainerError,
 		buildListActions,
 		buildFolderActions,
 		buildViewActions,

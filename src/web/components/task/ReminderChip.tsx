@@ -8,6 +8,7 @@ import { mutators } from "../../../zero/mutators.ts";
 import type { ReminderState, schema, Task } from "../../../zero/schema.gen.ts";
 import { useChannelDeliveryStatus } from "../../hooks/useNotificationChannels.ts";
 import { useReminderStates } from "../../hooks/useReminderStates.ts";
+import { useTaskImportActivation } from "../../hooks/useTaskImportActivation.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 
 const ACTIONABLE = new Set(["pending", "deferred", "escalated"]);
@@ -65,6 +66,7 @@ export function ReminderChip({ task }: { task: Task }) {
 	const zero = useZero<typeof schema>();
 	const { pref } = useUserPref();
 	const { current } = useReminderStates(task.id);
+	const activation = useTaskImportActivation(task.id);
 	const { allUnverified } = useChannelDeliveryStatus();
 	const [error, setError] = useState<string | null>(null);
 
@@ -94,6 +96,7 @@ export function ReminderChip({ task }: { task: Task }) {
 	return (
 		<>
 			<button
+				disabled={!activation.canWrite}
 				type="button"
 				data-testid="reminder-chip"
 				aria-label={m.reminder_ack_aria({ status: text })}
