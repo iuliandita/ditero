@@ -1252,3 +1252,122 @@ export const importWorkspaceMap = pgTable(
 		index("import_workspace_map_owner_idx").on(t.ownerUserId),
 	],
 );
+
+// Task-owned evidence survives import-ledger and account cleanup. Only deleting
+// the task removes it; source, job, and owner IDs are provenance scalars.
+export const taskNotificationActivation = pgTable(
+	"task_notification_activation",
+	{
+		taskId: text("task_id")
+			.primaryKey()
+			.references(() => task.id, { onDelete: "cascade" }),
+		status: text("status").notNull(),
+		generation: integer("generation").notNull(),
+		importOccurrenceCutoff: timestamp("import_occurrence_cutoff", {
+			withTimezone: true,
+		}),
+		recipientGenerationCutoff: timestamp("recipient_generation_cutoff", {
+			withTimezone: true,
+		}),
+		completionMode: text("completion_mode"),
+		owningSourceId: text("owning_source_id"),
+		owningOwnerUserId: text("owning_owner_user_id"),
+		owningJobId: text("owning_job_id"),
+		readinessOrdinal: integer("readiness_ordinal").notNull().default(0),
+		blockedReason: text("blocked_reason"),
+		manualReviewDigest: text("manual_review_digest"),
+		expectedRelationshipDigest: text("expected_relationship_digest"),
+		expectedRelationshipCount: integer("expected_relationship_count"),
+		expectedRelationshipBytes: integer("expected_relationship_bytes"),
+		expectedRelationships: jsonb("expected_relationships"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		index("task_notification_activation_job_idx").on(
+			t.owningJobId,
+			t.generation,
+			t.status,
+			t.readinessOrdinal,
+			t.taskId,
+		),
+		check(
+			"task_notification_activation_status",
+			sql`${t.status} in ('pending', 'blocked', 'active')`,
+		),
+		check("task_notification_activation_generation", sql`${t.generation} > 0`),
+		check(
+			"task_notification_activation_readiness",
+			sql`${t.readinessOrdinal} >= 0`,
+		),
+		check(
+			"task_notification_activation_completion",
+			sql`(${t.status} = 'active') = (${t.completionMode} is not null)
+				and (${t.completionMode} is null or ${t.completionMode} in ('import', 'manual'))`,
+		),
+		check(
+			"task_notification_activation_active_cutoffs",
+			sql`${t.status} <> 'active' or (${t.importOccurrenceCutoff} is not null and ${t.recipientGenerationCutoff} is not null)`,
+		),
+		check(
+			"task_notification_activation_cutoff_order",
+			sql`${t.importOccurrenceCutoff} is null or ${t.recipientGenerationCutoff} is null or ${t.recipientGenerationCutoff} >= ${t.importOccurrenceCutoff}`,
+		),
+		check(
+			"task_notification_activation_blocked_reason",
+			sql`${t.blockedReason} is null or char_length(${t.blockedReason}) <= 128`,
+		),
+		check(
+			"task_notification_activation_evidence",
+			sql`(${t.expectedRelationships} is null and ${t.expectedRelationshipDigest} is null and ${t.expectedRelationshipCount} is null and ${t.expectedRelationshipBytes} is null)
+				or (${t.expectedRelationships} is not null and jsonb_typeof(${t.expectedRelationships}) = 'object'
+					and ${t.expectedRelationshipDigest} is not null
+					and ${t.expectedRelationshipCount} is not null
+					and ${t.expectedRelationshipBytes} is not null
+					and ${t.expectedRelationshipDigest} ~ '^[0-9a-f]{64}$'
+					and ${t.expectedRelationshipCount} between 0 and 50000
+					and ${t.expectedRelationshipBytes} between 0 and 67108864
+					and octet_length(${t.expectedRelationships}::text) = ${t.expectedRelationshipBytes})`,
+		),
+	],
+);
+
+export const taskNotificationRecipient = pgTable(
+	"task_notification_recipient",
+	{
+		taskId: text("task_id")
+			.notNull()
+			.references(() => task.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "no action" }),
+		active: boolean("active").notNull().default(false),
+		generation: integer("generation").notNull(),
+		cutoff: timestamp("cutoff", { withTimezone: true }),
+		overdueSuppressedDueAt: timestamp("overdue_suppressed_due_at", {
+			withTimezone: true,
+		}),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.taskId, t.userId] }),
+		index("task_notification_recipient_user_idx").on(t.userId),
+		index("task_notification_recipient_active_idx")
+			.on(t.taskId, t.generation, t.userId)
+			.where(sql`${t.active}`),
+		check("task_notification_recipient_generation", sql`${t.generation} > 0`),
+		check(
+			"task_notification_recipient_active_cutoff",
+			sql`not ${t.active} or ${t.cutoff} is not null`,
+		),
+	],
+);

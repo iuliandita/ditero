@@ -260,6 +260,20 @@
       "when": 1789767612672,
       "tag": "0036_import_assignment_version_gates",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790348267670,
+      "tag": "0037_import_activation",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790348271114,
+      "tag": "0038_import_activation_policies",
+      "breakpoints": true
     }
   ]
 }
