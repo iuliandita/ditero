@@ -168,9 +168,10 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	const pa = await a.newPage();
 	const pb = await b.newPage();
 
-	const userId = await signUp(pa, "cara@t.dev");
+	const email = uniqueEmail("cara");
+	const userId = await signUp(pa, email);
 	await joinShared(userId);
-	await signIn(pb, "cara@t.dev");
+	await signIn(pb, email);
 
 	await pa.getByTestId("open-shared").click();
 	await pb.getByTestId("open-shared").click();
@@ -230,7 +231,22 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	await expect(pa.getByLabel("Priority: Medium")).toBeVisible();
 
 	// --- Mobile list-index reorder (same wiring, list.update sortKey) ---
+	await expect(
+		pa.getByRole("heading", { name: "Shared list", level: 1 }),
+	).toHaveCount(1);
+	await expect(pa.getByRole("button", { name: "Back to lists" })).toHaveCount(
+		1,
+	);
+	await expect
+		.poll(async () => {
+			const titles = await pa.getByText("Shared list", { exact: true }).all();
+			return (
+				await Promise.all(titles.map((title) => title.isVisible()))
+			).filter(Boolean).length;
+		})
+		.toBe(1);
 	await pa.getByLabel("Back to lists").click();
+	await expect(pa.getByTestId("list-index")).toBeVisible();
 	await pa.getByRole("button", { name: "New list" }).click();
 	await pa.getByTestId("new-list").fill("Zeta");
 	await pa.getByTestId("new-list-submit").click();
@@ -324,6 +340,20 @@ test("complete on A sinks + strikes and syncs to B", async ({ browser }) => {
 	await expect(listB.getByRole("checkbox", { name: "Finish me" })).toBeChecked({
 		timeout: 3000,
 	});
+	await pa.setViewportSize({ width: 375, height: 812 });
+	await expect
+		.poll(async () => {
+			const open = await listA
+				.getByRole("checkbox", { name: "Keep open" })
+				.boundingBox();
+			const completed = await listA
+				.getByRole("checkbox", { name: "Finish me" })
+				.boundingBox();
+			if (!open || !completed)
+				throw new Error("Missing mobile task checkboxes");
+			return Math.abs(open.x - completed.x);
+		})
+		.toBeLessThanOrEqual(1);
 	await a.close();
 	await b.close();
 });
