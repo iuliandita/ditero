@@ -54,6 +54,11 @@ export const attachmentParentEnum = pgEnum("attachment_parent", [
 	"list",
 ]);
 export const templateKindEnum = pgEnum("template_kind", ["list", "task"]);
+export const importHistoryCollectionEnum = pgEnum("import_history_collection", [
+	"comments",
+	"templates",
+	"completionEvents",
+]);
 export const inviteStatusEnum = pgEnum("invite_status", [
 	"pending",
 	"accepted",
@@ -450,6 +455,60 @@ export const importedCompletionEvent = pgTable(
 		),
 	],
 );
+
+// Server-only replay identity. No content, job, parent, source, or account FK:
+// deletion leaves a tombstone that prevents resurrection on later imports.
+export const importHistoryLedger = pgTable(
+	"import_history_ledger",
+	{
+		id: text("id").primaryKey(),
+		collection: importHistoryCollectionEnum("collection").notNull(),
+		targetParentId: text("target_parent_id").notNull(),
+		sourceNamespace: uuid("source_namespace").notNull(),
+		sourceRowId: text("source_row_id").notNull(),
+		sourceRowIdSha256: text("source_row_id_sha256").notNull(),
+		targetId: text("target_id").notNull(),
+		contentDigest: text("content_digest").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true, precision: 3 })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		unique("import_history_ledger_source").on(
+			t.collection,
+			t.targetParentId,
+			t.sourceNamespace,
+			t.sourceRowIdSha256,
+		),
+		unique("import_history_ledger_target").on(t.collection, t.targetId),
+		check("import_history_ledger_id_nonempty", sql`length(${t.id}) > 0`),
+		check(
+			"import_history_ledger_parent_nonempty",
+			sql`length(${t.targetParentId}) > 0`,
+		),
+		check(
+			"import_history_ledger_target_nonempty",
+			sql`length(${t.targetId}) > 0`,
+		),
+		check(
+			"import_history_ledger_source_hash",
+			sql`${t.sourceRowIdSha256} = encode(sha256(convert_to(${t.sourceRowId}, 'UTF8')), 'hex')`,
+		),
+		check(
+			"import_history_ledger_digest",
+			sql`${t.contentDigest} ~ '^[0-9a-f]{64}$'`,
+		),
+	],
+);
+
+export const importHistoryRedaction = pgTable("import_history_redaction", {
+	ledgerId: text("ledger_id")
+		.primaryKey()
+		.references(() => importHistoryLedger.id),
+	redactedAt: timestamp("redacted_at", { withTimezone: true, precision: 3 })
+		.defaultNow()
+		.notNull(),
+});
 
 export const label = pgTable(
 	"label",

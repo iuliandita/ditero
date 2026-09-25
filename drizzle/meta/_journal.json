@@ -330,6 +330,20 @@
       "when": 1790372159632,
       "tag": "0046_imported-history-policies",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790373551518,
+      "tag": "0047_fast_the_watchers",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790373551519,
+      "tag": "0048_import_history_ledger_rls",
+      "breakpoints": true
     }
   ]
 }
