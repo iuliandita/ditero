@@ -7,6 +7,16 @@ import { hashImportValue } from "../../domain/portability/import-digest.ts";
 import type { PortableJson } from "../../domain/portability/v1.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 import {
+	assertV4LockedDomain,
+	discoverV4ApplyAuthority,
+	lockV4ActivationRows,
+	lockV4ApplyAuthority,
+	publishV4Ready,
+	stageV4Task,
+	type V4ApplyAuthority,
+	V4ApplyConflict,
+} from "./import-activation.ts";
+import {
 	ImportPlanStoreError,
 	importTransaction,
 } from "./import-plan-store.ts";
@@ -110,6 +120,48 @@ export async function applyImportBatch(
 	},
 	options: { signal?: AbortSignal; deadline?: number } = {},
 ): Promise<ImportRunStatus> {
+	return applyImportBatchCore(
+		pool,
+		ownerId,
+		jobId,
+		confirmation,
+		options,
+		false,
+	);
+}
+
+// Internal integration seam. No route imports this entrypoint while v4 gates remain incomplete.
+export async function applyImportBatchV4Internal(
+	pool: Pool,
+	ownerId: string,
+	jobId: string,
+	confirmation: {
+		planDigest: string;
+		counts: { ensure: number; ignored: number; blocked: number };
+	},
+	options: { signal?: AbortSignal; deadline?: number } = {},
+): Promise<ImportRunStatus> {
+	return applyImportBatchCore(
+		pool,
+		ownerId,
+		jobId,
+		confirmation,
+		options,
+		true,
+	);
+}
+
+async function applyImportBatchCore(
+	pool: Pool,
+	ownerId: string,
+	jobId: string,
+	confirmation: {
+		planDigest: string;
+		counts: { ensure: number; ignored: number; blocked: number };
+	},
+	options: { signal?: AbortSignal; deadline?: number },
+	v4: boolean,
+): Promise<ImportRunStatus> {
 	const deadline = Math.min(
 		options.deadline ?? Infinity,
 		performance.now() + 15_000,
@@ -118,6 +170,7 @@ export async function applyImportBatch(
 		if (options.signal?.aborted) fail("import-cancelled", 408);
 		if (performance.now() >= deadline) fail("import-timeout", 503);
 	};
+	let authority: V4ApplyAuthority | undefined;
 	return importTransaction(
 		pool,
 		ownerId,
@@ -136,7 +189,9 @@ export async function applyImportBatch(
 			).rows[0];
 			if (!job) fail("plan-not-found", 404);
 			if (
-				![2, 3].includes(job.planner_version) ||
+				(v4
+					? job.planner_version !== 4
+					: ![2, 3].includes(job.planner_version)) ||
 				!job.apply_supported ||
 				job.report.plannerVersion !== job.planner_version
 			)
@@ -169,6 +224,13 @@ export async function applyImportBatch(
 					[jobId, start],
 				)
 			).rows;
+			if (
+				v4 &&
+				(!authority ||
+					authority.start !== start ||
+					authority.next !== start + items.length)
+			)
+				fail("import-concurrent-retry");
 			for (const [index, item] of items.entries()) {
 				const { itemDigest, ...evidence } = item;
 				if (
@@ -181,6 +243,33 @@ export async function applyImportBatch(
 				)
 					fail("invalid-plan-evidence");
 			}
+			if (v4 && authority) {
+				authority.ready = authority.ready.map((ready) => {
+					if (ready.ordinal < start) return ready;
+					const current = items.find((item) => item.ordinal === ready.ordinal);
+					if (!current)
+						throw new ImportPlanStoreError("import-concurrent-retry", 409);
+					if (
+						current.targetId !== ready.targetId ||
+						current.collection !== "tasks" ||
+						current.dependencyProof?.activation?.kind !== "transition"
+					)
+						fail("import-concurrent-retry");
+					return current;
+				});
+				for (const item of authority.ready) {
+					if (item.ordinal >= start) continue;
+					const { itemDigest, ...evidence } = item;
+					if (
+						(await hashImportValue(
+							"ditero-import-item-v4",
+							evidence as unknown as PortableJson,
+							checkpoint,
+						)) !== itemDigest
+					)
+						fail("invalid-plan-evidence");
+				}
+			}
 			const supported = items.filter((item) => item.disposition === "ensure");
 			const assignments = supported.filter(
 				(item) => item.collection === "assignments",
@@ -189,7 +278,7 @@ export async function applyImportBatch(
 				const assignee = item.dependencyProof?.assignee;
 				const payload = payloadOf(item);
 				if (
-					job.planner_version !== 3 ||
+					![3, 4].includes(job.planner_version) ||
 					!assignee ||
 					![
 						assignee.sourceUserId,
@@ -205,8 +294,7 @@ export async function applyImportBatch(
 				)
 					fail("invalid-plan-evidence");
 			}
-			// Lock assignee users before any workspace/membership authority locks,
-			// matching account deletion. The owner is already locked by the transaction.
+			// The v4 discovery callback already locked every authority user in ID order.
 			const assigneeIds = [
 				...new Set(
 					assignments.map(
@@ -215,14 +303,19 @@ export async function applyImportBatch(
 				),
 			].sort();
 			const activeAssignees = new Set(
-				assignments.length
-					? (
-							await client.query<{ id: string }>(
-								'select id from "user" where id = any($1::text[]) and deleted_at is null order by id for share',
-								[assigneeIds],
-							)
-						).rows.map((row) => row.id)
-					: [],
+				v4
+					? assigneeIds.filter(
+							(id): id is string =>
+								typeof id === "string" && !!authority?.userIds.has(id),
+						)
+					: assignments.length
+						? (
+								await client.query<{ id: string }>(
+									'select id from "user" where id = any($1::text[]) and deleted_at is null order by id for share',
+									[assigneeIds],
+								)
+							).rows.map((row) => row.id)
+						: [],
 			);
 			const membershipIds = [
 				...new Set(
@@ -231,19 +324,42 @@ export async function applyImportBatch(
 					),
 				),
 			].sort();
+			let v4Seats: Awaited<ReturnType<typeof lockV4ApplyAuthority>> | undefined;
+			if (v4 && authority) {
+				try {
+					v4Seats = await lockV4ApplyAuthority(client, authority);
+				} catch (error) {
+					if (!(error instanceof V4ApplyConflict)) throw error;
+					if (!run) {
+						await client.query(
+							"insert into import_run (job_id, owner_user_id) values ($1,$2)",
+							[jobId, ownerId],
+						);
+					}
+					await client.query(
+						`update import_run set state = 'conflict', conflict_code = $1, conflict_ordinal = $2, updated_at = now() where job_id = $3 and owner_user_id = $4`,
+						[error.code, error.ordinal, jobId, ownerId],
+					);
+					const stopped = await readRun(client, ownerId, jobId);
+					if (!stopped) throw new Error("Import run disappeared");
+					return stopped;
+				}
+			}
 			const assigneeSeats = new Map(
-				assignments.length
-					? (
-							await client.query<{
-								id: string;
-								user_id: string;
-								workspace_id: string;
-							}>(
-								"select id, user_id, workspace_id from membership where id = any($1::text[]) order by id for share",
-								[membershipIds],
-							)
-						).rows.map((row) => [row.id, row] as const)
-					: [],
+				v4Seats
+					? [...v4Seats.values()].map((seat) => [seat.id, seat] as const)
+					: assignments.length
+						? (
+								await client.query<{
+									id: string;
+									user_id: string;
+									workspace_id: string;
+								}>(
+									"select id, user_id, workspace_id from membership where id = any($1::text[]) order by id for share",
+									[membershipIds],
+								)
+							).rows.map((row) => [row.id, row] as const)
+						: [],
 			);
 			const workspaces = [
 				...new Set(
@@ -251,13 +367,24 @@ export async function applyImportBatch(
 				),
 			].sort();
 			if (workspaces.includes(undefined)) fail("invalid-plan-evidence");
-			const authority = await client.query<{ role: Role }>(
-				`select m.role from membership m join workspace w on w.id = m.workspace_id where m.user_id = $1 and m.workspace_id = any($2::text[]) order by w.id, m.id for share of w, m`,
-				[ownerId, workspaces],
-			);
+			const workspaceAuthority = v4
+				? {
+						rows: workspaces.flatMap((id) =>
+							[...(v4Seats?.values() ?? [])]
+								.filter(
+									(seat) =>
+										seat.workspace_id === id && seat.user_id === ownerId,
+								)
+								.map((seat) => ({ role: seat.role as Role })),
+						),
+					}
+				: await client.query<{ role: Role }>(
+						`select m.role from membership m join workspace w on w.id = m.workspace_id where m.user_id = $1 and m.workspace_id = any($2::text[]) order by w.id, m.id for share of w, m`,
+						[ownerId, workspaces],
+					);
 			if (
-				authority.rows.length !== workspaces.length ||
-				authority.rows.some((row) => !WRITE_ROLES.has(row.role))
+				workspaceAuthority.rows.length !== workspaces.length ||
+				workspaceAuthority.rows.some((row) => !WRITE_ROLES.has(row.role))
 			) {
 				if (!run) fail("invalid-workspace-mapping", 403);
 				await client.query(
@@ -335,6 +462,12 @@ export async function applyImportBatch(
 						if (proof.listId) want("lists", proof.listId);
 					}
 				}
+				if (v4 && authority) {
+					for (const id of [...authority.taskIds, ...authority.parentIds])
+						want("tasks", id);
+					for (const id of authority.listIds) want("lists", id);
+					for (const id of authority.pairIds) want("assignments", id);
+				}
 				const live = new Map<string, Row>();
 				let bytes = 0;
 				let rawBytes = 0;
@@ -353,7 +486,7 @@ export async function applyImportBatch(
 					for (let offset = 0; offset < keys.length; offset += 100) {
 						const page = keys.slice(offset, offset + 100);
 						const locked = await client.query<{ id: string }>(
-							`select id from "${table}" where id = any($1::text[]) order by id for share`,
+							`select id from "${table}" where id = any($1::text[]) order by id for ${v4 && collection === "tasks" ? "update" : "share"}`,
 							[page],
 						);
 						const lockedIds = locked.rows.map((row) => row.id);
@@ -380,6 +513,11 @@ export async function applyImportBatch(
 							live.set(rowKey(collection, String(row.id)), row);
 					}
 				}
+				if (v4 && authority) await assertV4LockedDomain(client, authority);
+				const v4State =
+					v4 && authority
+						? await lockV4ActivationRows(client, authority)
+						: undefined;
 				const batch = new Map(items.map((item) => [item.ordinal, item]));
 				const prepared: {
 					item: FrozenImportItem;
@@ -409,6 +547,40 @@ export async function applyImportBatch(
 							seat.workspace_id !== assignee.workspaceId
 						)
 							conflict("assignee-membership-conflict");
+						if (v4) {
+							const guard = v4State?.guards.get(String(payload.taskId));
+							const taskItem = items.find(
+								(candidate) =>
+									candidate.collection === "tasks" &&
+									candidate.targetId === payload.taskId,
+							);
+							const intended =
+								taskItem?.dependencyProof?.activation?.generation ??
+								guard?.generation;
+							const generation = proof?.taskActivationGeneration;
+							if (
+								generation === undefined
+									? pre.kind !== "mapped" ||
+										guard !== undefined ||
+										taskItem?.dependencyProof?.activation !== undefined
+									: intended !== generation
+							)
+								conflict("activation-generation-conflict");
+						}
+					}
+					if (v4 && collection === "tasks" && payload.fallbackUserId !== null) {
+						const fallback = proof?.fallback;
+						const seat = fallback && v4Seats?.get(fallback.membershipId);
+						if (
+							!fallback ||
+							!seat ||
+							fallback.targetUserId !== payload.fallbackUserId ||
+							fallback.workspaceId !== proof?.workspace.targetId ||
+							seat.user_id !== fallback.targetUserId ||
+							seat.workspace_id !== fallback.workspaceId ||
+							!authority?.userIds.has(fallback.targetUserId)
+						)
+							conflict("fallback-membership-conflict");
 					}
 					if (
 						payload.id !== item.targetId ||
@@ -417,6 +589,9 @@ export async function applyImportBatch(
 						conflict("invalid-plan-evidence");
 					if (
 						collection === "tasks" &&
+						(!v4 ||
+							(pre.kind === "mapped" &&
+								proof?.activation?.precondition.kind === "absent")) &&
 						([
 							"reminderTime",
 							"repeatEveryMin",
@@ -611,6 +786,21 @@ export async function applyImportBatch(
 				for (const { item, collection, targetDigest, noop } of prepared) {
 					currentOrdinal = item.ordinal;
 					const payload = payloadOf(item);
+					if (
+						v4 &&
+						collection === "assignments" &&
+						item.dependencyProof?.taskActivationGeneration !== undefined
+					) {
+						const guard = v4State?.guards.get(String(payload.taskId));
+						if (
+							!guard ||
+							guard.generation !== item.dependencyProof.taskActivationGeneration
+						)
+							throw new BatchConflict(
+								"activation-generation-conflict",
+								item.ordinal,
+							);
+					}
 					if (noop) {
 						await client.query(
 							`update import_source_map set last_plan_digest = $1, updated_at = now() where source_id = $2 and source_key = $3 and owner_user_id = $4 and last_plan_digest is distinct from $1`,
@@ -638,6 +828,18 @@ export async function applyImportBatch(
 							],
 						);
 					}
+					if (v4 && collection === "tasks") {
+						if (!v4State)
+							throw new BatchConflict("invalid-plan-evidence", item.ordinal);
+						await stageV4Task(
+							client,
+							item,
+							ownerId,
+							job.source_id,
+							jobId,
+							v4State,
+						);
+					}
 				}
 				for (const [source, target] of pins)
 					await client.query(
@@ -658,6 +860,15 @@ export async function applyImportBatch(
 				)
 					throw new BatchConflict("import-map-quota-exceeded", currentOrdinal);
 				const next = start + items.length;
+				if (v4 && authority && v4Seats && v4State)
+					await publishV4Ready(
+						client,
+						jobId,
+						authority,
+						v4Seats,
+						v4State,
+						checkpoint,
+					);
 				const remaining = (
 					await client.query(
 						`select 1 from import_item where job_id = $1 and ordinal >= $2 limit 1`,
@@ -682,15 +893,22 @@ export async function applyImportBatch(
 					error !== null &&
 					"code" in error &&
 					["23505", "23503"].includes(String(error.code));
-				if (!(error instanceof BatchConflict) && !race) throw error;
+				if (
+					!(error instanceof BatchConflict) &&
+					!(error instanceof V4ApplyConflict) &&
+					!race
+				)
+					throw error;
 				await client.query("rollback to savepoint import_batch");
 				await client.query(
 					`update import_run set state = 'conflict', conflict_code = $1, conflict_ordinal = $2, updated_at = now() where job_id = $3 and owner_user_id = $4`,
 					[
-						error instanceof BatchConflict
+						error instanceof BatchConflict || error instanceof V4ApplyConflict
 							? error.code
 							: "target-write-conflict",
-						error instanceof BatchConflict ? error.ordinal : currentOrdinal,
+						error instanceof BatchConflict || error instanceof V4ApplyConflict
+							? error.ordinal
+							: currentOrdinal,
 						jobId,
 						ownerId,
 					],
@@ -702,5 +920,11 @@ export async function applyImportBatch(
 		},
 		options.signal,
 		deadline,
+		v4
+			? async (client) => {
+					authority = await discoverV4ApplyAuthority(client, ownerId, jobId);
+					return [...authority.userIds];
+				}
+			: undefined,
 	);
 }
