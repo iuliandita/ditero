@@ -23,7 +23,7 @@ function AuthShell({ children }: { children: ReactNode }) {
 					<span className="text-sm font-semibold">Ditero</span>
 				</div>
 				{children}
-				<div className="mt-6">
+				<div className="mt-4">
 					<LanguageSwitcher compact />
 				</div>
 			</div>
@@ -219,11 +219,9 @@ export function Login() {
 
 	return (
 		<AuthShell>
-			<h1 className="text-2xl font-semibold tracking-tight">
-				{m.login_heading()}
-			</h1>
+			<h1 className="sr-only">{m.login_heading()}</h1>
 			<form
-				className="mt-6 space-y-3"
+				className="space-y-3"
 				onSubmit={(event) => {
 					event.preventDefault();
 					signIn();
@@ -239,7 +237,6 @@ export function Login() {
 						type="email"
 						autoComplete="email"
 						className="h-11"
-						placeholder={m.login_email_placeholder()}
 						value={email}
 						onChange={(event) => setEmail(event.target.value)}
 						disabled={pending}
@@ -256,7 +253,6 @@ export function Login() {
 						type="password"
 						autoComplete="current-password"
 						className="h-11"
-						placeholder={m.login_password_placeholder()}
 						value={password}
 						onChange={(event) => setPassword(event.target.value)}
 						disabled={pending}
@@ -287,29 +283,27 @@ export function Login() {
 					</Button>
 				</div>
 			</form>
-			<div className="mt-5 border-t border-border/70 pt-4">
+			<div className="mt-2 space-y-1">
 				<p className="sr-only">{m.login_other_options()}</p>
-				<div className="divide-y divide-border/70 rounded-lg bg-muted/50">
-					<Button
-						data-testid="signin-passkey"
-						type="button"
-						variant="ghost"
-						className="h-11 w-full rounded-none first:rounded-t-xl"
-						onClick={signInPasskey}
-						disabled={pending}
-					>
-						{m.login_signin_passkey()}
-					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						className="h-11 w-full rounded-none last:rounded-b-xl"
-						onClick={signInGoogle}
-						disabled={pending}
-					>
-						{m.login_continue_google()}
-					</Button>
-				</div>
+				<Button
+					data-testid="signin-passkey"
+					type="button"
+					variant="ghost"
+					className="h-11 w-full text-muted-foreground hover:text-foreground"
+					onClick={signInPasskey}
+					disabled={pending}
+				>
+					{m.login_signin_passkey()}
+				</Button>
+				<Button
+					type="button"
+					variant="ghost"
+					className="h-11 w-full text-muted-foreground hover:text-foreground"
+					onClick={signInGoogle}
+					disabled={pending}
+				>
+					{m.login_continue_google()}
+				</Button>
 			</div>
 		</AuthShell>
 	);

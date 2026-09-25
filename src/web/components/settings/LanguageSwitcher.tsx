@@ -33,12 +33,13 @@ export function LanguageSwitcher({
 	return (
 		<div
 			className={
-				compact
-					? "flex items-center justify-between gap-3 text-sm"
-					: "flex flex-col gap-1 text-sm"
+				compact ? "flex justify-end text-sm" : "flex flex-col gap-1 text-sm"
 			}
 		>
-			<span id={labelId} className="text-muted-foreground">
+			<span
+				id={labelId}
+				className={compact ? "sr-only" : "text-muted-foreground"}
+			>
 				{m.language_switcher_label()}
 			</span>
 			<Select value={value} onValueChange={onChange}>
@@ -47,7 +48,7 @@ export function LanguageSwitcher({
 					data-testid="language-switcher"
 					className={
 						compact
-							? "w-auto min-w-36 data-[size=default]:h-11"
+							? "w-auto min-w-36 border-0 bg-transparent text-muted-foreground shadow-none data-[size=default]:h-11 hover:text-foreground dark:bg-transparent"
 							: "w-full sm:w-56"
 					}
 				>
