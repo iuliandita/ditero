@@ -4,6 +4,7 @@ import {
 	withAccountDeletionTaskActivation,
 	withAckTaskActivation,
 	withInviteTaskActivation,
+	withProducerActivationScan,
 	withProducerTaskActivation,
 } from "./task-activation.ts";
 
@@ -204,5 +205,52 @@ describe("task activation lookup", () => {
 			}),
 		).rejects.toBe(failure);
 		expect(calls.at(-1)).toContain("LEFT JOIN task_notification_activation");
+	});
+});
+
+describe("preliminary producer scan scope", () => {
+	it("exposes producer evidence only inside the callback and clears afterward", async () => {
+		const { client, calls } = clientFixture();
+		const value = await withProducerActivationScan(client, async (scoped) => {
+			expect(scoped).toBe(client);
+			expect(
+				(
+					await scoped.query<{ scope: string }>(
+						"SELECT current_setting('ditero.activation_scope', true) AS scope",
+					)
+				).rows[0]?.scope,
+			).toBe("producer");
+			return 7;
+		});
+		expect(value).toBe(7);
+		expect(calls.some((sql) => sql.includes("FROM task WHERE"))).toBe(false);
+		expect(calls.at(-1)).toContain(
+			"set_config('ditero.activation_scope', '', true)",
+		);
+	});
+
+	it("rejects a nested scan without changing the caller's scope", async () => {
+		const { client, calls } = clientFixture({ scope: "ack" });
+		await expect(
+			withProducerActivationScan(client, async () => {}),
+		).rejects.toThrow(/Nested/);
+		expect(calls).toHaveLength(1);
+	});
+
+	it("requires a transaction and leaves failed callbacks for outer rollback", async () => {
+		const autocommit = clientFixture({ autocommit: true });
+		await expect(
+			withProducerActivationScan(autocommit.client, async () => {}),
+		).rejects.toThrow(/transaction/);
+		expect(autocommit.calls).toHaveLength(3);
+
+		const { client, calls } = clientFixture();
+		const failure = new Error("scan failed");
+		await expect(
+			withProducerActivationScan(client, async () => {
+				throw failure;
+			}),
+		).rejects.toBe(failure);
+		expect(calls.at(-1)).toContain("current_setting");
 	});
 });
