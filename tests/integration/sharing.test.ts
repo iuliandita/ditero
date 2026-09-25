@@ -584,4 +584,59 @@ describe("sharing write-permission mutators", () => {
 			.where(eq(tables.comment.id, "cmt-del-member"));
 		expect(rows).toHaveLength(1);
 	});
+
+	test("imported comment claims do not grant local author rights", async () => {
+		await db.insert(tables.comment).values({
+			id: "cmt-imported",
+			taskId: "shared-task",
+			body: "historical text",
+			sourceNamespace: "00000000-0000-0000-0000-000000000001",
+			sourceRowId: "source-comment",
+			historicalAuthorKind: "source_claim",
+			historicalAuthorNamespace: "00000000-0000-0000-0000-000000000001",
+			historicalAuthorPrincipalId: "member",
+			historicalAuthorName: "member",
+			importedAt: new Date(),
+		});
+
+		await expect(
+			call(
+				mutators.comment.edit,
+				{ id: "member" },
+				{
+					id: "cmt-imported",
+					body: "hijacked",
+				},
+			),
+		).rejects.toThrow(/imported comments cannot be edited/);
+		await expect(
+			call(
+				mutators.comment.delete,
+				{ id: "member" },
+				{
+					id: "cmt-imported",
+				},
+			),
+		).rejects.toThrow(/access denied/);
+
+		const rows = await db
+			.select()
+			.from(tables.comment)
+			.where(eq(tables.comment.id, "cmt-imported"));
+		expect(rows[0]?.body).toBe("historical text");
+		expect(rows[0]?.editedAt).toBeNull();
+
+		await call(
+			mutators.comment.delete,
+			{ id: "admin" },
+			{
+				id: "cmt-imported",
+			},
+		);
+		const deleted = await db
+			.select()
+			.from(tables.comment)
+			.where(eq(tables.comment.id, "cmt-imported"));
+		expect(deleted).toHaveLength(0);
+	});
 });

@@ -5,7 +5,9 @@ import { Button } from "../ui/button.tsx";
 export function DataPortabilityPanel() {
 	const active = useRef<AbortController | null>(null);
 	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState<"failed" | "limit" | null>(null);
+	const [error, setError] = useState<"failed" | "limit" | "history" | null>(
+		null,
+	);
 	useEffect(() => () => active.current?.abort(), []);
 
 	async function download() {
@@ -22,6 +24,18 @@ export function DataPortabilityPanel() {
 			if (response.status === 413) {
 				setError("limit");
 				return;
+			}
+			if (response.status === 409) {
+				const body: unknown = await response.json().catch(() => null);
+				if (
+					body != null &&
+					typeof body === "object" &&
+					"code" in body &&
+					body.code === "history-requires-v2"
+				) {
+					setError("history");
+					return;
+				}
 			}
 			if (!response.ok) throw new Error("Export failed");
 			const blob = await response.blob();
@@ -68,7 +82,11 @@ export function DataPortabilityPanel() {
 			</Button>
 			{error && (
 				<p role="alert" className="mt-2 text-sm text-destructive">
-					{error === "limit" ? m.portability_limit() : m.portability_failed()}
+					{error === "limit"
+						? m.portability_limit()
+						: error === "history"
+							? m.portability_history_requires_v2()
+							: m.portability_failed()}
 				</p>
 			)}
 		</section>

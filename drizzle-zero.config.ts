@@ -94,6 +94,10 @@ export default drizzleZeroConfig(schema, {
 			icon: true,
 			content: true,
 			createdBy: true,
+			historicalCreatorKind: true,
+			historicalCreatorName: true,
+			importedAt: true,
+			provenanceRedactedAt: true,
 		},
 		invite: {
 			id: true,
@@ -122,6 +126,10 @@ export default drizzleZeroConfig(schema, {
 			body: true,
 			createdAt: true,
 			editedAt: true,
+			historicalAuthorKind: true,
+			historicalAuthorName: true,
+			importedAt: true,
+			provenanceRedactedAt: true,
 		},
 		managedAccount: {
 			id: true,

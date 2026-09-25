@@ -8,6 +8,7 @@ import {
 	type ExportOptions,
 	exportPortableJson,
 	exportPortableJsonV2,
+	HistoryRequiresV2Error,
 } from "./export.ts";
 
 export function portabilityRoutes(
@@ -59,6 +60,12 @@ export function portabilityRoutes(
 					},
 				});
 			} catch (error) {
+				if (error instanceof HistoryRequiresV2Error) {
+					return Response.json(
+						{ code: "history-requires-v2" },
+						{ status: 409, headers: { "cache-control": "no-store" } },
+					);
+				}
 				if (error instanceof ExportInterruptedError) {
 					return Response.json(
 						{ code: error.code },

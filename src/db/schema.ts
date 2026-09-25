@@ -352,6 +352,105 @@ export const taskCompletionEvent = pgTable(
 	],
 );
 
+export const importedCompletionEvent = pgTable(
+	"imported_completion_event",
+	{
+		id: text("id").primaryKey(),
+		taskId: text("task_id")
+			.notNull()
+			.references(() => task.id, { onDelete: "cascade" }),
+		sourceNamespace: uuid("source_namespace").notNull(),
+		sourceRowId: text("source_row_id").notNull(),
+		occurredAt: timestamp("occurred_at", {
+			withTimezone: true,
+			precision: 3,
+		}).notNull(),
+		ingestedAt: timestamp("ingested_at", { withTimezone: true, precision: 3 })
+			.defaultNow()
+			.notNull(),
+		actorKind: text("actor_kind").$type<"source_claim" | "unknown">().notNull(),
+		actorNamespace: uuid("actor_namespace"),
+		actorPrincipalId: text("actor_principal_id"),
+		actorName: text("actor_name"),
+		originKind: text("origin_kind")
+			.$type<"source_claim" | "unknown">()
+			.notNull(),
+		originMechanism: text("origin_mechanism").$type<
+			"member_mutation" | "capability_recipient"
+		>(),
+		originLabel: text("origin_label"),
+		provenanceRedactedAt: timestamp("provenance_redacted_at", {
+			withTimezone: true,
+			precision: 3,
+		}),
+		action: text("action")
+			.$type<"complete" | "reopen" | "skip" | "habit_set" | "habit_unlog">()
+			.notNull(),
+		beforeDueAt: timestamp("before_due_at", {
+			withTimezone: true,
+			precision: 3,
+		}),
+		beforeDueAllDay: boolean("before_due_all_day"),
+		beforeDone: boolean("before_done"),
+		afterDueAt: timestamp("after_due_at", { withTimezone: true, precision: 3 }),
+		afterDone: boolean("after_done"),
+		habitDate: text("habit_date"),
+		beforeHabitStatus: habitLogStatusEnum("before_habit_status"),
+		afterHabitStatus: habitLogStatusEnum("after_habit_status"),
+	},
+	(t) => [
+		index("imported_completion_event_page_idx").on(
+			t.taskId,
+			t.occurredAt.desc(),
+			t.id.desc(),
+		),
+		check("imported_completion_event_id_nonempty", sql`length(${t.id}) > 0`),
+		check(
+			"imported_completion_event_actor",
+			sql`(
+			(${t.actorKind} = 'source_claim' and ${t.actorNamespace} is not null)
+			or (${t.actorKind} = 'unknown' and ${t.actorNamespace} is null and ${t.actorPrincipalId} is null and ${t.actorName} is null)
+		)`,
+		),
+		check(
+			"imported_completion_event_origin",
+			sql`(
+			(${t.originKind} = 'source_claim' and (${t.originMechanism} is null or ${t.originMechanism} in ('member_mutation', 'capability_recipient')))
+			or (${t.originKind} = 'unknown' and ${t.originMechanism} is null and ${t.originLabel} is null)
+		)`,
+		),
+		check(
+			"imported_completion_event_redaction",
+			sql`${t.provenanceRedactedAt} is null or (${t.actorKind} = 'unknown' and ${t.originKind} = 'unknown')`,
+		),
+		check(
+			"imported_completion_event_claim_length",
+			sql`(${t.actorName} is null or char_length(${t.actorName}) <= 512) and (${t.originLabel} is null or char_length(${t.originLabel}) <= 128)`,
+		),
+		check(
+			"imported_completion_event_payload",
+			sql`(
+			(${t.action} in ('complete', 'reopen', 'skip') and ${t.beforeDueAllDay} is not null and ${t.beforeDone} is not null and ${t.afterDone} is not null and ${t.habitDate} is null and ${t.beforeHabitStatus} is null and ${t.afterHabitStatus} is null)
+			or (${t.action} in ('habit_set', 'habit_unlog') and ${t.habitDate} is not null and ${t.beforeDueAt} is null and ${t.beforeDueAllDay} is null and ${t.beforeDone} is null and ${t.afterDueAt} is null and ${t.afterDone} is null)
+		)`,
+		),
+		check(
+			"imported_completion_event_transition",
+			sql`(
+			(${t.action} = 'complete' and ${t.beforeDone} = false)
+			or (${t.action} = 'reopen' and ${t.beforeDone} = true and ${t.afterDone} = false)
+			or (${t.action} = 'skip' and ${t.afterDone} = false and ${t.afterDueAt} is not null)
+			or (${t.action} = 'habit_set' and ${t.afterHabitStatus} is not null and ${t.afterHabitStatus} is distinct from ${t.beforeHabitStatus})
+			or (${t.action} = 'habit_unlog' and ${t.beforeHabitStatus} is not null and ${t.afterHabitStatus} is null)
+		)`,
+		),
+		check(
+			"imported_completion_event_habit_date",
+			sql`${t.habitDate} is null or ${t.habitDate} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`,
+		),
+	],
+);
+
 export const label = pgTable(
 	"label",
 	{
@@ -379,19 +478,51 @@ export const taskLabel = pgTable(
 	(t) => [unique("task_label_pair").on(t.taskId, t.labelId)],
 );
 
-export const template = pgTable("template", {
-	id: text("id").primaryKey(),
-	workspaceId: text("workspace_id")
-		.notNull()
-		.references(() => workspace.id),
-	kind: templateKindEnum("kind").notNull(),
-	name: text("name").notNull(),
-	icon: text("icon"),
-	content: jsonb("content").notNull(), // TemplateContent snapshot (src/domain/template.ts)
-	createdBy: text("created_by")
-		.notNull()
-		.references(() => user.id),
-});
+export const template = pgTable(
+	"template",
+	{
+		id: text("id").primaryKey(),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => workspace.id),
+		kind: templateKindEnum("kind").notNull(),
+		name: text("name").notNull(),
+		icon: text("icon"),
+		content: jsonb("content").notNull(), // TemplateContent snapshot (src/domain/template.ts)
+		createdBy: text("created_by")
+			.notNull()
+			.references(() => user.id),
+		sourceNamespace: uuid("source_namespace"),
+		sourceRowId: text("source_row_id"),
+		historicalCreatorKind: text("historical_creator_kind").$type<
+			"source_claim" | "unknown"
+		>(),
+		historicalCreatorNamespace: uuid("historical_creator_namespace"),
+		historicalCreatorPrincipalId: text("historical_creator_principal_id"),
+		historicalCreatorName: text("historical_creator_name"),
+		importedAt: timestamp("imported_at", { withTimezone: true, precision: 3 }),
+		provenanceRedactedAt: timestamp("provenance_redacted_at", {
+			withTimezone: true,
+			precision: 3,
+		}),
+	},
+	(t) => [
+		check(
+			"template_provenance",
+			sql`(
+		(${t.sourceNamespace} is null and ${t.sourceRowId} is null and ${t.historicalCreatorKind} is null and ${t.historicalCreatorNamespace} is null and ${t.historicalCreatorPrincipalId} is null and ${t.historicalCreatorName} is null and ${t.importedAt} is null and ${t.provenanceRedactedAt} is null)
+		or (${t.sourceNamespace} is not null and ${t.sourceRowId} is not null and ${t.historicalCreatorKind} is not null and ${t.importedAt} is not null
+			and ((${t.historicalCreatorKind} = 'source_claim' and ${t.historicalCreatorNamespace} is not null)
+				or (${t.historicalCreatorKind} = 'unknown' and ${t.historicalCreatorNamespace} is null and ${t.historicalCreatorPrincipalId} is null and ${t.historicalCreatorName} is null))
+			and (${t.provenanceRedactedAt} is null or ${t.historicalCreatorKind} = 'unknown'))
+	)`,
+		),
+		check(
+			"template_historical_creator_name_length",
+			sql`${t.historicalCreatorName} is null or char_length(${t.historicalCreatorName}) <= 512`,
+		),
+	],
+);
 
 export const invite = pgTable(
 	"invite",
@@ -443,20 +574,50 @@ export const taskAssignee = pgTable(
 	(t) => [unique("task_assignee_pair").on(t.taskId, t.userId)],
 );
 
-export const comment = pgTable("comment", {
-	id: text("id").primaryKey(),
-	taskId: text("task_id")
-		.notNull()
-		.references(() => task.id, { onDelete: "cascade" }),
-	authorId: text("author_id")
-		.notNull()
-		.references(() => user.id),
-	body: text("body").notNull(),
-	createdAt: timestamp("created_at", { withTimezone: true })
-		.defaultNow()
-		.notNull(),
-	editedAt: timestamp("edited_at", { withTimezone: true }),
-});
+export const comment = pgTable(
+	"comment",
+	{
+		id: text("id").primaryKey(),
+		taskId: text("task_id")
+			.notNull()
+			.references(() => task.id, { onDelete: "cascade" }),
+		authorId: text("author_id").references(() => user.id),
+		body: text("body").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		editedAt: timestamp("edited_at", { withTimezone: true }),
+		sourceNamespace: uuid("source_namespace"),
+		sourceRowId: text("source_row_id"),
+		historicalAuthorKind: text("historical_author_kind").$type<
+			"source_claim" | "unknown"
+		>(),
+		historicalAuthorNamespace: uuid("historical_author_namespace"),
+		historicalAuthorPrincipalId: text("historical_author_principal_id"),
+		historicalAuthorName: text("historical_author_name"),
+		importedAt: timestamp("imported_at", { withTimezone: true, precision: 3 }),
+		provenanceRedactedAt: timestamp("provenance_redacted_at", {
+			withTimezone: true,
+			precision: 3,
+		}),
+	},
+	(t) => [
+		check(
+			"comment_provenance",
+			sql`(
+		(${t.authorId} is not null and ${t.sourceNamespace} is null and ${t.sourceRowId} is null and ${t.historicalAuthorKind} is null and ${t.historicalAuthorNamespace} is null and ${t.historicalAuthorPrincipalId} is null and ${t.historicalAuthorName} is null and ${t.importedAt} is null and ${t.provenanceRedactedAt} is null)
+		or (${t.authorId} is null and ${t.sourceNamespace} is not null and ${t.sourceRowId} is not null and ${t.historicalAuthorKind} is not null and ${t.importedAt} is not null
+			and ((${t.historicalAuthorKind} = 'source_claim' and ${t.historicalAuthorNamespace} is not null)
+				or (${t.historicalAuthorKind} = 'unknown' and ${t.historicalAuthorNamespace} is null and ${t.historicalAuthorPrincipalId} is null and ${t.historicalAuthorName} is null))
+			and (${t.provenanceRedactedAt} is null or ${t.historicalAuthorKind} = 'unknown'))
+	)`,
+		),
+		check(
+			"comment_historical_author_name_length",
+			sql`${t.historicalAuthorName} is null or char_length(${t.historicalAuthorName}) <= 512`,
+		),
+	],
+);
 
 export const managedAccount = pgTable("managed_account", {
 	id: text("id").primaryKey(),
@@ -847,6 +1008,7 @@ export const taskRelations = relations(task, ({ one, many }) => ({
 	habitLogs: many(habitLog),
 	focusSessions: many(focusSession),
 	completionEvents: many(taskCompletionEvent),
+	importedCompletionEvents: many(importedCompletionEvent),
 }));
 
 export const taskCompletionEventRelations = relations(
@@ -859,6 +1021,16 @@ export const taskCompletionEventRelations = relations(
 		actor: one(user, {
 			fields: [taskCompletionEvent.actorUserId],
 			references: [user.id],
+		}),
+	}),
+);
+
+export const importedCompletionEventRelations = relations(
+	importedCompletionEvent,
+	({ one }) => ({
+		task: one(task, {
+			fields: [importedCompletionEvent.taskId],
+			references: [task.id],
 		}),
 	}),
 );

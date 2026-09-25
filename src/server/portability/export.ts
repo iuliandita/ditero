@@ -13,10 +13,12 @@ import type {
 } from "../../domain/portability/v1.ts";
 import type { PortableExportV2 } from "../../domain/portability/v2.ts";
 import {
+	type ImportedCompletionEvent,
 	type NativeCompletionEvent,
 	v2Comment,
 	v2CompletionEvent,
 	v2Document,
+	v2ImportedCompletionEvent,
 	v2Template,
 } from "./export-v2.ts";
 
@@ -31,6 +33,12 @@ export interface ExportOptions {
 export class ExportLimitError extends Error {
 	constructor() {
 		super("Export exceeds the configured limit");
+	}
+}
+
+export class HistoryRequiresV2Error extends Error {
+	constructor() {
+		super("history-requires-v2");
 	}
 }
 
@@ -493,7 +501,32 @@ async function exportPortableJsonVersion(
 			where: string,
 			parameters: unknown[] = [workspaceIds, userId],
 		) {
-			const projection = projections[key]
+			const fields = [
+				...projections[key],
+				...(version === 2 && key === "comments"
+					? [
+							"sourceNamespace",
+							"sourceRowId",
+							"historicalAuthorKind",
+							"historicalAuthorNamespace",
+							"historicalAuthorPrincipalId",
+							"historicalAuthorName",
+							"provenanceRedactedAt",
+						]
+					: []),
+				...(version === 2 && key === "templates"
+					? [
+							"sourceNamespace",
+							"sourceRowId",
+							"historicalCreatorKind",
+							"historicalCreatorNamespace",
+							"historicalCreatorPrincipalId",
+							"historicalCreatorName",
+							"provenanceRedactedAt",
+						]
+					: []),
+			];
+			const projection = fields
 				.map((field) => {
 					const column = field.replace(
 						/[A-Z]/g,
@@ -518,7 +551,7 @@ async function exportPortableJsonVersion(
 				parameters,
 				maxRows - rows,
 				maxBytes - bytes,
-				projections[key],
+				fields,
 			);
 			const sql = `${selection} order by r.${order}`;
 			for await (const row of cursorRows<Record<string, unknown>>(
@@ -530,9 +563,15 @@ async function exportPortableJsonVersion(
 				check();
 				let projected: unknown = row;
 				if (version === 2 && key === "comments")
-					projected = v2Comment(row as PortableRows["comments"], namespace);
+					projected = v2Comment(
+						row as Parameters<typeof v2Comment>[0],
+						namespace,
+					);
 				if (version === 2 && key === "templates")
-					projected = v2Template(row as PortableRows["templates"], namespace);
+					projected = v2Template(
+						row as Parameters<typeof v2Template>[0],
+						namespace,
+					);
 				const serialized = JSON.stringify(projected);
 				rows++;
 				bytes +=
@@ -549,6 +588,13 @@ async function exportPortableJsonVersion(
 					"fallbackUserId",
 					"uploadedBy",
 				]) {
+					if (
+						version === 2 &&
+						key === "templates" &&
+						field === "createdBy" &&
+						row.sourceNamespace !== null
+					)
+						continue;
 					if (typeof row[field] === "string") principalIds.add(row[field]);
 				}
 			}
@@ -559,6 +605,16 @@ async function exportPortableJsonVersion(
 		await collect("memberships", "membership", workspaceScope, [workspaceIds]);
 		await collect("folders", "folder", workspaceScope, [workspaceIds]);
 		await collect("lists", "list", workspaceScope, [workspaceIds]);
+		if (version === 1) {
+			const importedHistory = await query<{ present: boolean }>(
+				`select (
+					exists(select 1 from comment r where r.source_namespace is not null and ${taskScope})
+					or exists(select 1 from template r where r.source_namespace is not null and ${workspaceScope})
+				) as present`,
+				[workspaceIds],
+			);
+			if (importedHistory.rows[0]?.present) throw new HistoryRequiresV2Error();
+		}
 		await collect("tasks", "task", `r.id in (${visibleTasks})`, [workspaceIds]);
 		await collect("labels", "label", workspaceScope, [workspaceIds]);
 		await collect(
@@ -632,6 +688,60 @@ async function exportPortableJsonVersion(
 				if (rows > maxRows || bytes > maxBytes) throw new ExportLimitError();
 				v2Snapshot.data.completionEvents.push(projected);
 				principalIds.add(event.actorUserId);
+			}
+			const importedEventFields = [
+				"id",
+				"taskId",
+				"sourceNamespace",
+				"sourceRowId",
+				"occurredAt",
+				"actorKind",
+				"actorNamespace",
+				"actorPrincipalId",
+				"actorName",
+				"originKind",
+				"originMechanism",
+				"originLabel",
+				"provenanceRedactedAt",
+				"action",
+				"beforeDueAt",
+				"beforeDueAllDay",
+				"beforeDone",
+				"afterDueAt",
+				"afterDone",
+				"habitDate",
+				"beforeHabitStatus",
+				"afterHabitStatus",
+			] as const;
+			const importedSelection = `select ${importedEventFields
+				.map(
+					(field) =>
+						`r.${field.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`)} as "${field}"`,
+				)
+				.join(", ")} from imported_completion_event r where ${taskScope}`;
+			await preflight(
+				query,
+				importedSelection,
+				[workspaceIds],
+				maxRows - rows,
+				maxBytes - bytes,
+				importedEventFields,
+			);
+			for await (const event of cursorRows<ImportedCompletionEvent>(
+				query,
+				signal,
+				`${importedSelection} order by r.id`,
+				[workspaceIds],
+			)) {
+				check();
+				const projected = v2ImportedCompletionEvent(event);
+				const serialized = JSON.stringify(projected);
+				rows++;
+				bytes +=
+					Buffer.byteLength(serialized) +
+					(v2Snapshot.data.completionEvents.length ? 1 : 0);
+				if (rows > maxRows || bytes > maxBytes) throw new ExportLimitError();
+				v2Snapshot.data.completionEvents.push(projected);
 			}
 		}
 		await collect("principals", "user", "r.id = any($1::text[])", [

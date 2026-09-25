@@ -531,6 +531,261 @@ describe("portable export", () => {
 		});
 	});
 
+	test("v1 refuses visible imported authorship without changing native-only bytes", async () => {
+		const nativeBytes = await (await request()).text();
+		const sourceNamespace = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+		await db.insert(tables.comment).values([
+			{
+				id: "imported-comment",
+				taskId: "shared-task",
+				authorId: null,
+				body: "Imported",
+				createdAt: now,
+				sourceNamespace,
+				sourceRowId: "source-comment",
+				historicalAuthorKind: "unknown",
+				importedAt: now,
+			},
+			{
+				id: "foreign-imported-comment",
+				taskId: "foreign-task",
+				authorId: null,
+				body: "FOREIGN-ROW-imported",
+				createdAt: now,
+				sourceNamespace,
+				sourceRowId: "foreign-source-comment",
+				historicalAuthorKind: "unknown",
+				importedAt: now,
+			},
+		]);
+		for (const search of ["", "?version=1"]) {
+			const response = await request({}, "alice", undefined, search);
+			expect(response.status).toBe(409);
+			expect(response.headers.get("cache-control")).toBe("no-store");
+			expect(response.headers.get("content-disposition")).toBeNull();
+			expect(await response.json()).toEqual({ code: "history-requires-v2" });
+		}
+		await pool.query("delete from comment where id = 'imported-comment'");
+		expect(await (await request()).text()).toBe(nativeBytes);
+		await db.insert(tables.template).values({
+			id: "imported-template",
+			workspaceId: "shared",
+			kind: "task",
+			name: "Imported template",
+			content: { kind: "task", task: { title: "Imported" } },
+			createdBy: "bob",
+			sourceNamespace,
+			sourceRowId: "source-template",
+			historicalCreatorKind: "unknown",
+			importedAt: now,
+		});
+		expect((await request()).status).toBe(409);
+		await pool.query("delete from template where id = 'imported-template'");
+		expect(await (await request()).text()).toBe(nativeBytes);
+	});
+
+	test("v2 retains imported claims, original references and occurrence times", async () => {
+		const sourceNamespace = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+		const actorNamespace = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+		const occurredAt = new Date("2020-01-02T03:04:05.678Z");
+		await db.insert(tables.comment).values([
+			{
+				id: "imported-comment",
+				taskId: "shared-task",
+				authorId: null,
+				body: "From source",
+				createdAt: now,
+				sourceNamespace,
+				sourceRowId: "",
+				historicalAuthorKind: "source_claim",
+				historicalAuthorNamespace: actorNamespace,
+				historicalAuthorPrincipalId: "alice",
+				historicalAuthorName: "alice",
+				importedAt: now,
+			},
+			{
+				id: "redacted-comment",
+				taskId: "shared-task",
+				authorId: null,
+				body: "Redacted",
+				createdAt: now,
+				sourceNamespace,
+				sourceRowId: "redacted-source-comment",
+				historicalAuthorKind: "unknown",
+				importedAt: now,
+				provenanceRedactedAt: now,
+			},
+			{
+				id: "FOREIGN-ROW-imported-comment",
+				taskId: "foreign-task",
+				authorId: null,
+				body: "FOREIGN-ROW-secret",
+				createdAt: now,
+				sourceNamespace,
+				sourceRowId: "foreign-source-comment",
+				historicalAuthorKind: "unknown",
+				importedAt: now,
+			},
+		]);
+		await db.insert(tables.template).values([
+			{
+				id: "imported-template",
+				workspaceId: "shared",
+				kind: "task",
+				name: "Imported template",
+				content: { kind: "task", task: { title: "Source template" } },
+				createdBy: "bob",
+				sourceNamespace,
+				sourceRowId: "source-template",
+				historicalCreatorKind: "source_claim",
+				historicalCreatorNamespace: actorNamespace,
+				historicalCreatorPrincipalId: "alice",
+				historicalCreatorName: "alice",
+				importedAt: now,
+			},
+			{
+				id: "redacted-template",
+				workspaceId: "shared",
+				kind: "task",
+				name: "Redacted template",
+				content: { kind: "task", task: { title: "Redacted" } },
+				createdBy: "bob",
+				sourceNamespace,
+				sourceRowId: "redacted-source-template",
+				historicalCreatorKind: "unknown",
+				importedAt: now,
+				provenanceRedactedAt: now,
+			},
+		]);
+		await db.insert(tables.importedCompletionEvent).values([
+			{
+				id: "imported-event",
+				taskId: "shared-task",
+				sourceNamespace,
+				sourceRowId: "",
+				occurredAt,
+				ingestedAt: now,
+				actorKind: "source_claim",
+				actorNamespace,
+				actorPrincipalId: "outsider",
+				actorName: "alice",
+				originKind: "source_claim",
+				originMechanism: "member_mutation",
+				originLabel: "legacy app",
+				action: "complete",
+				beforeDueAt: now,
+				beforeDueAllDay: false,
+				beforeDone: false,
+				afterDueAt: null,
+				afterDone: true,
+			},
+			{
+				id: "redacted-event",
+				taskId: "shared-task",
+				sourceNamespace,
+				sourceRowId: "redacted-source-event",
+				occurredAt,
+				actorKind: "unknown",
+				originKind: "unknown",
+				provenanceRedactedAt: now,
+				action: "habit_set",
+				habitDate: "2020-01-02",
+				beforeHabitStatus: null,
+				afterHabitStatus: "done",
+			},
+			{
+				id: "FOREIGN-ROW-imported-event",
+				taskId: "foreign-task",
+				sourceNamespace,
+				sourceRowId: "foreign-source-event",
+				occurredAt,
+				actorKind: "unknown",
+				originKind: "unknown",
+				action: "habit_set",
+				habitDate: "2020-01-02",
+				beforeHabitStatus: null,
+				afterHabitStatus: "done",
+			},
+		]);
+		const response = await request({}, "alice", undefined, "?version=2");
+		expect(response.status, await response.clone().text()).toBe(200);
+		const body = await response.text();
+		expect(body).not.toContain("FOREIGN-ROW-");
+		const document = parsePortableExportV2(body);
+		expect(
+			document.data.comments.find((row) => row.id === "imported-comment"),
+		).toMatchObject({
+			sourceRef: { namespace: sourceNamespace, collection: "comments", id: "" },
+			author: {
+				kind: "source_claim",
+				sourceNamespace: actorNamespace,
+				sourcePrincipalId: "alice",
+				displayName: "alice",
+			},
+		});
+		expect(
+			document.data.comments.find((row) => row.id === "redacted-comment"),
+		).toMatchObject({
+			author: { kind: "unknown" },
+		});
+		expect(
+			document.data.templates.find((row) => row.id === "imported-template"),
+		).toMatchObject({
+			sourceRef: {
+				namespace: sourceNamespace,
+				collection: "templates",
+				id: "source-template",
+			},
+			creator: {
+				kind: "source_claim",
+				sourceNamespace: actorNamespace,
+				sourcePrincipalId: "alice",
+				displayName: "alice",
+			},
+		});
+		expect(
+			document.data.templates.find((row) => row.id === "redacted-template"),
+		).toMatchObject({
+			creator: { kind: "unknown" },
+		});
+		expect(
+			document.data.completionEvents.find((row) => row.id === "imported-event"),
+		).toMatchObject({
+			sourceRef: {
+				namespace: sourceNamespace,
+				collection: "completionEvents",
+				id: "",
+			},
+			occurredAt: occurredAt.toISOString(),
+			actor: {
+				kind: "source_claim",
+				sourceNamespace: actorNamespace,
+				sourcePrincipalId: "outsider",
+				displayName: "alice",
+			},
+			origin: {
+				kind: "source_claim",
+				mechanism: "member_mutation",
+				label: "legacy app",
+			},
+		});
+		expect(
+			document.data.completionEvents.find((row) => row.id === "redacted-event"),
+		).toMatchObject({
+			actor: { kind: "unknown" },
+			origin: { kind: "unknown" },
+		});
+		expect(body).not.toContain("ingestedAt");
+		expect(document.data.principals.some((row) => row.id === "outsider")).toBe(
+			false,
+		);
+		expect(body).not.toContain("provenanceRedactedAt");
+		expect(body).not.toContain("historicalAuthorPrincipalId");
+		expect(body).not.toContain("historicalCreatorPrincipalId");
+		expect(body).not.toContain('"createdBy":"bob"');
+		expect(validateImportGraphV2(document).errors).toEqual([]);
+	});
+
 	test("v2 charges transformed author and history bytes and row count", async () => {
 		await db.insert(tables.taskCompletionEvent).values({
 			id: "66666666-6666-4666-8666-666666666666",
@@ -561,6 +816,107 @@ describe("portable export", () => {
 			const response = await request(options, "alice", undefined, "?version=2");
 			expect(response.status).toBe(413);
 			expect(await response.json()).toEqual({ code: "export-limit-exceeded" });
+		}
+	});
+
+	test("v2 charges imported events against row and byte limits before download", async () => {
+		const baseline = await request({}, "alice", undefined, "?version=2");
+		expect(baseline.status).toBe(200);
+		const baselineBody = await baseline.text();
+		const baselineRows = Object.values(
+			JSON.parse(baselineBody).data as Record<string, unknown[]>,
+		).reduce((count, rows) => count + rows.length, 0);
+		await db.insert(tables.importedCompletionEvent).values({
+			id: "imported-event",
+			taskId: "shared-task",
+			sourceNamespace: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+			sourceRowId: "event",
+			occurredAt: now,
+			actorKind: "unknown",
+			originKind: "unknown",
+			action: "habit_set",
+			habitDate: "2026-09-16",
+			beforeHabitStatus: null,
+			afterHabitStatus: "done",
+		});
+		const full = await request({}, "alice", undefined, "?version=2");
+		expect(full.status).toBe(200);
+		const body = await full.text();
+		expect(Buffer.byteLength(body)).toBeGreaterThan(
+			Buffer.byteLength(baselineBody),
+		);
+		for (const options of [
+			{ maxRows: baselineRows },
+			{ maxBytes: Buffer.byteLength(body) - 1 },
+		]) {
+			const response = await request(options, "alice", undefined, "?version=2");
+			expect(response.status).toBe(413);
+			expect(response.headers.get("content-disposition")).toBeNull();
+			expect(await response.json()).toEqual({ code: "export-limit-exceeded" });
+		}
+		expect((await request()).status).toBe(200);
+	});
+
+	test("v2 refuses an oversized source reference before fetching its text", async () => {
+		const baseline = await request({}, "alice", undefined, "?version=2");
+		const budget = Buffer.byteLength(await baseline.text()) + 16 * 1024;
+		await db.insert(tables.importedCompletionEvent).values({
+			id: "imported-event",
+			taskId: "shared-task",
+			sourceNamespace: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+			sourceRowId: "x".repeat(1024 * 1024),
+			occurredAt: now,
+			actorKind: "unknown",
+			originKind: "unknown",
+			action: "habit_set",
+			habitDate: "2026-09-16",
+			beforeHabitStatus: null,
+			afterHabitStatus: "done",
+		});
+		const observed = new Pool({ connectionString: databaseURL, max: 1 });
+		const client = await observed.connect();
+		const queries = vi.spyOn(client, "query");
+		client.release();
+		try {
+			const app = new Elysia().use(
+				portabilityRoutes(observed, guards, {
+					now: () => now,
+					maxBytes: budget,
+				}),
+			);
+			const response = await app.handle(
+				new Request("http://localhost/api/portability/export?version=2", {
+					headers: { "x-test-user": "alice" },
+				}),
+			);
+			expect(response.status).toBe(413);
+			const statements = queries.mock.calls
+				.map((args) => args[0])
+				.filter((sql): sql is string => typeof sql === "string");
+			expect(
+				statements.some(
+					(sql) =>
+						sql.includes('octet_length(projected."sourceRowId"::text)') &&
+						sql.includes("from imported_completion_event r"),
+				),
+			).toBe(true);
+			expect(
+				statements.some(
+					(sql) =>
+						sql.includes("row_to_json(projected)") &&
+						sql.includes("from imported_completion_event r"),
+				),
+			).toBe(false);
+			expect(
+				statements.some(
+					(sql) =>
+						sql.startsWith("declare portability_cursor") &&
+						sql.includes("from imported_completion_event r"),
+				),
+			).toBe(false);
+		} finally {
+			queries.mockRestore();
+			await observed.end();
 		}
 	});
 

@@ -1752,6 +1752,8 @@ export const mutators = defineMutators({
 			async ({ tx, ctx, args }) => {
 				const c = await tx.run(zql.comment.where("id", args.id).one());
 				if (!c) throw new Error("comment not found");
+				if (c.importedAt != null)
+					throw new Error("access denied: imported comments cannot be edited");
 				if (c.authorId !== ctx.id)
 					throw new Error("access denied: comment author only");
 				const task = await tx.run(
@@ -1781,7 +1783,7 @@ export const mutators = defineMutators({
 					tx,
 					ctx.id,
 					list.workspaceId,
-					c.authorId,
+					c.importedAt == null ? c.authorId : null,
 					"comment author",
 				);
 				await tx.mutate.comment.delete({ id: args.id });
