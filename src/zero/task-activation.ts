@@ -59,7 +59,7 @@ async function probe(
 
 function field(row: RawRow, key: string): string {
 	const value = row[key];
-	if (typeof value !== "string" || value === "")
+	if (typeof value !== "string")
 		throw new Error(`Invalid task activation ${key}`);
 	return value;
 }
@@ -543,32 +543,34 @@ export async function lockZeroContainerWrite(
 	await ensureUser(tx, actorId);
 	if ((options.listId === undefined) === (options.folderId === undefined))
 		throw new Error("Exactly one activation container is required");
-	const row = options.listId
-		? (
-				await query(
-					tx,
-					"select id, workspace_id, folder_id from list where id = $1",
-					[options.listId],
-				)
-			)[0]
-		: (
-				await query(tx, "select id, workspace_id from folder where id = $1", [
-					options.folderId,
-				])
-			)[0];
+	const row =
+		options.listId !== undefined
+			? (
+					await query(
+						tx,
+						"select id, workspace_id, folder_id from list where id = $1",
+						[options.listId],
+					)
+				)[0]
+			: (
+					await query(tx, "select id, workspace_id from folder where id = $1", [
+						options.folderId,
+					])
+				)[0];
 	if (!row || row.id !== (options.listId ?? options.folderId))
 		throw new Error("Activation container not found");
 	const workspaceId = field(row, "workspace_id");
-	const folderIds = options.listId
-		? [
-				...new Set(
-					[
-						optionalField(row, "folder_id"),
-						options.targetFolderId ?? null,
-					].filter((id): id is string => id !== null),
-				),
-			].sort()
-		: [options.folderId as string];
+	const folderIds =
+		options.listId !== undefined
+			? [
+					...new Set(
+						[
+							optionalField(row, "folder_id"),
+							options.targetFolderId ?? null,
+						].filter((id): id is string => id !== null),
+					),
+				].sort()
+			: [options.folderId as string];
 	await lockZeroPreferenceUser(tx, actorId);
 	if (
 		(
@@ -601,7 +603,7 @@ export async function lockZeroContainerWrite(
 		)
 			throw new Error("Activation folder changed");
 	if (
-		options.listId &&
+		options.listId !== undefined &&
 		(
 			await ids(tx, "select id from list where id = $1 for update", [
 				options.listId,
@@ -610,7 +612,7 @@ export async function lockZeroContainerWrite(
 	)
 		throw new Error("Activation list changed");
 	let changes = true;
-	if (options.listId) {
+	if (options.listId !== undefined) {
 		const current = (
 			await query(
 				tx,
@@ -648,12 +650,12 @@ export async function lockZeroContainerWrite(
 			(options.folderPatch.sortKey !== undefined &&
 				options.folderPatch.sortKey !== current.sort_key);
 	}
-	if (options.folderId && changes && !options.allowPending) {
-		let cursor = "";
+	if (options.folderId !== undefined && changes && !options.allowPending) {
+		let cursor: string | null = null;
 		while (true) {
 			const page = await ids(
 				tx,
-				`select id from list where folder_id = $1 and id > $2
+				`select id from list where folder_id = $1 and ($2::text is null or id > $2)
 				order by id limit 4096 for update`,
 				[options.folderId, cursor],
 			);
@@ -662,13 +664,14 @@ export async function lockZeroContainerWrite(
 		}
 	}
 	if (options.deleteTasks) {
-		if (!options.listId) throw new Error("Task deletion requires a list");
-		let cursor = "";
+		if (options.listId === undefined)
+			throw new Error("Task deletion requires a list");
+		let cursor: string | null = null;
 		while (true) {
 			const page = await ids(
 				tx,
 				`select id from task
-				where list_id = $1 and id > $2 order by id limit 256 for update`,
+				where list_id = $1 and ($2::text is null or id > $2) order by id limit 256 for update`,
 				[options.listId, cursor],
 			);
 			if (page.length === 0) break;
@@ -680,8 +683,8 @@ export async function lockZeroContainerWrite(
 		tx,
 		`select t.id from task t
 		join task_notification_activation g on g.task_id = t.id
-		${options.folderId ? "join list l on l.id = t.list_id" : ""}
-		where ${options.folderId ? "l.folder_id" : "t.list_id"} = $1
+		${options.folderId !== undefined ? "join list l on l.id = t.list_id" : ""}
+		where ${options.folderId !== undefined ? "l.folder_id" : "t.list_id"} = $1
 		and g.status in ('pending','blocked') limit 1`,
 		[options.folderId ?? options.listId],
 	);
@@ -696,12 +699,12 @@ export async function deleteZeroListTasks(
 ): Promise<void> {
 	if (tx.location !== "server") throw new Error("Server transaction required");
 	for (const child of [true, false]) {
-		let cursor = "";
+		let cursor: string | null = null;
 		while (true) {
 			const page = await ids(
 				tx,
 				`select id from task where list_id = $1
-				and (parent_id is not null) = $2 and id > $3
+				and (parent_id is not null) = $2 and ($3::text is null or id > $3)
 				order by id limit 256`,
 				[listId, child, cursor],
 			);
@@ -748,14 +751,14 @@ export async function lockZeroTaskDeletion(
 		)[0] !== initial.listId
 	)
 		throw new Error("Task deletion list changed");
-	let cursor = "";
+	let cursor: string | null = null;
 	let sawParent = false;
 	let lockedCount = 0;
 	while (true) {
 		const page = await ids(
 			tx,
 			`select id from task
-			where (id = $1 or parent_id = $1) and id > $2
+			where (id = $1 or parent_id = $1) and ($2::text is null or id > $2)
 			order by id limit 256 for update`,
 			[taskId, cursor],
 		);
@@ -783,12 +786,12 @@ export async function deleteZeroTaskChildren(
 	taskId: string,
 ): Promise<void> {
 	if (tx.location !== "server") throw new Error("Server transaction required");
-	let cursor = "";
+	let cursor: string | null = null;
 	while (true) {
 		const page = await ids(
 			tx,
 			`select id from task where parent_id = $1
-			and id > $2 order by id limit 256`,
+			and ($2::text is null or id > $2) order by id limit 256`,
 			[taskId, cursor],
 		);
 		if (page.length === 0) break;

@@ -88,6 +88,39 @@ afterAll(async () => {
 	await admin.end();
 });
 
+test("native empty-ID children remain included in parent deletion", async () => {
+	await call(mutators.task.create, "alice", {
+		id: "",
+		listId: "list",
+		title: "Child",
+		sortKey: "a1",
+		parentId: "task",
+	});
+	await call(mutators.task.delete, "alice", { id: "task" });
+	expect((await admin.query("select id from task")).rows).toEqual([]);
+});
+
+test("native empty-ID lists and tasks remain editable and deletable", async () => {
+	await admin.query(
+		"insert into list (id,workspace_id,owner_id,title,kind,sort_key) values ('','ws','alice','Empty ID','tasks','a1')",
+	);
+	await call(mutators.task.create, "alice", {
+		id: "",
+		listId: "",
+		title: "Native",
+		sortKey: "a0",
+	});
+	await call(mutators.task.update, "alice", { id: "", title: "Edited" });
+	await call(mutators.list.update, "alice", { id: "", title: "Edited list" });
+	await call(mutators.list.delete, "alice", { id: "" });
+	expect((await admin.query("select id from task where id='' ")).rows).toEqual(
+		[],
+	);
+	expect((await admin.query("select id from list where id='' ")).rows).toEqual(
+		[],
+	);
+});
+
 test.each([
 	"pending",
 	"blocked",
