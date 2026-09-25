@@ -8,6 +8,7 @@ import {
 	Settings,
 	Users,
 } from "lucide-react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -240,6 +241,7 @@ export function Sidebar({
 	collapsed: boolean;
 	onToggleCollapsed: () => void;
 }) {
+	const focusNewList = useRef(false);
 	// A view row is current only on the views surface: no list open, lists section.
 	const viewActive = (id: string) =>
 		activeViewId === id && openListId == null && section === "lists";
@@ -393,7 +395,18 @@ export function Sidebar({
 							{!collapsed && m.sidebar_create()}
 						</Button>
 					</DropdownMenuTrigger>
-					<DropdownMenuContent side={collapsed ? "right" : "top"} align="start">
+					<DropdownMenuContent
+						side={collapsed ? "right" : "top"}
+						align="start"
+						onCloseAutoFocus={(event) => {
+							if (focusNewList.current) {
+								event.preventDefault();
+								focusNewList.current = false;
+								// Mount after the menu releases its focus trap.
+								onNewList();
+							}
+						}}
+					>
 						<DropdownMenuItem
 							data-testid="new-view"
 							className="min-h-11"
@@ -414,7 +427,9 @@ export function Sidebar({
 							<DropdownMenuItem
 								data-testid="sidebar-new-list"
 								className="min-h-11"
-								onSelect={onNewList}
+								onSelect={() => {
+									focusNewList.current = true;
+								}}
 							>
 								<ListPlus className="size-4" />
 								{m.create_list_new_list()}

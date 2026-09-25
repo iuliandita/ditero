@@ -734,4 +734,7 @@ test("affordances: sidebar New list returns to the index with the title focused"
 		.click();
 	await expect(title).toBeHidden();
 	await expect(page.getByTestId("create-list-open")).toBeFocused();
+	await page.getByTestId("sidebar-create").click();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("sidebar-create")).toBeFocused();
 });
