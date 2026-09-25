@@ -281,6 +281,13 @@
       "when": 1790348795400,
       "tag": "0039_import_activation_plan_version",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790351231572,
+      "tag": "0040_import_activation_run_policy",
+      "breakpoints": true
     }
   ]
 }
