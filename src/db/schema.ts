@@ -252,6 +252,94 @@ export const task = pgTable(
 	],
 );
 
+export const taskCompletionEvent = pgTable(
+	"task_completion_event",
+	{
+		id: text("id").primaryKey(),
+		taskId: text("task_id")
+			.notNull()
+			.references(() => task.id, { onDelete: "cascade" }),
+		actorUserId: text("actor_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "no action" }),
+		recordedAt: timestamp("recorded_at", {
+			withTimezone: true,
+			precision: 3,
+		}).notNull(),
+		origin: text("origin")
+			.$type<"member_mutation" | "capability_recipient">()
+			.notNull(),
+		action: text("action")
+			.$type<"complete" | "reopen" | "skip" | "habit_set" | "habit_unlog">()
+			.notNull(),
+		beforeDueAt: timestamp("before_due_at", {
+			withTimezone: true,
+			precision: 3,
+		}),
+		beforeDueAllDay: boolean("before_due_all_day"),
+		beforeDone: boolean("before_done"),
+		afterDueAt: timestamp("after_due_at", {
+			withTimezone: true,
+			precision: 3,
+		}),
+		afterDone: boolean("after_done"),
+		habitDate: text("habit_date"),
+		beforeHabitStatus: habitLogStatusEnum("before_habit_status"),
+		afterHabitStatus: habitLogStatusEnum("after_habit_status"),
+	},
+	(t) => [
+		index("task_completion_event_page_idx").on(
+			t.taskId,
+			t.recordedAt.desc(),
+			t.id.desc(),
+		),
+		index("task_completion_event_actor_idx").on(t.actorUserId),
+		check(
+			"task_completion_event_id_uuid",
+			sql`${t.id} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'`,
+		),
+		check(
+			"task_completion_event_origin",
+			sql`${t.origin} in ('member_mutation', 'capability_recipient')`,
+		),
+		check(
+			"task_completion_event_payload",
+			sql`(
+				(${t.action} in ('complete', 'reopen', 'skip')
+					and ${t.beforeDueAllDay} is not null
+					and ${t.beforeDone} is not null
+					and ${t.afterDone} is not null
+					and ${t.habitDate} is null
+					and ${t.beforeHabitStatus} is null
+					and ${t.afterHabitStatus} is null)
+				or (${t.action} in ('habit_set', 'habit_unlog')
+					and ${t.habitDate} is not null
+					and ${t.beforeDueAt} is null
+					and ${t.beforeDueAllDay} is null
+					and ${t.beforeDone} is null
+					and ${t.afterDueAt} is null
+					and ${t.afterDone} is null)
+			)`,
+		),
+		check(
+			"task_completion_event_transition",
+			sql`(
+				(${t.action} = 'complete' and ${t.beforeDone} = false)
+				or (${t.action} = 'reopen' and ${t.beforeDone} = true and ${t.afterDone} = false)
+				or (${t.action} = 'skip' and ${t.afterDone} = false and ${t.afterDueAt} is not null)
+				or (${t.action} = 'habit_set' and ${t.afterHabitStatus} is not null
+					and ${t.afterHabitStatus} is distinct from ${t.beforeHabitStatus})
+				or (${t.action} = 'habit_unlog' and ${t.beforeHabitStatus} is not null
+					and ${t.afterHabitStatus} is null)
+			)`,
+		),
+		check(
+			"task_completion_event_habit_date",
+			sql`${t.habitDate} is null or ${t.habitDate} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`,
+		),
+	],
+);
+
 export const label = pgTable(
 	"label",
 	{
@@ -746,7 +834,22 @@ export const taskRelations = relations(task, ({ one, many }) => ({
 	comments: many(comment),
 	habitLogs: many(habitLog),
 	focusSessions: many(focusSession),
+	completionEvents: many(taskCompletionEvent),
 }));
+
+export const taskCompletionEventRelations = relations(
+	taskCompletionEvent,
+	({ one }) => ({
+		task: one(task, {
+			fields: [taskCompletionEvent.taskId],
+			references: [task.id],
+		}),
+		actor: one(user, {
+			fields: [taskCompletionEvent.actorUserId],
+			references: [user.id],
+		}),
+	}),
+);
 
 export const labelRelations = relations(label, ({ one, many }) => ({
 	workspace: one(workspace, {

@@ -69,6 +69,7 @@ import {
 	lockZeroTaskWrite,
 	reconcileZeroActiveRecipients,
 } from "./task-activation.ts";
+import { appendZeroCompletionEvent } from "./task-completion-history.ts";
 
 const DENIED = "access denied: need member+";
 const denied = () => new MutatorError("denied", DENIED);
@@ -508,6 +509,7 @@ function zeroAckStore(tx: Transaction<Schema>): AckStore {
 				rrule: row.rrule ?? null,
 				recurrenceRelative: row.recurrenceRelative ?? false,
 				dueAt: row.dueAt ?? null,
+				dueAllDay: row.dueAllDay ?? false,
 				done: row.done ?? false,
 				priority: row.priority ?? 0,
 			};
@@ -555,6 +557,9 @@ function zeroAckStore(tx: Transaction<Schema>): AckStore {
 		},
 		async awardKarma(userId, delta, reason, date) {
 			await awardKarma(tx, userId, delta, reason, date);
+		},
+		async appendEvent(event) {
+			await appendZeroCompletionEvent(tx, event);
 		},
 	};
 }
@@ -722,10 +727,11 @@ export const mutators = defineMutators({
 						throw new Error("escalation fallback is not a member");
 				}
 				// Only a state change creates or clears the completion timestamp.
+				const now = Date.now();
 				const completed =
 					args.done === undefined || args.done === task.done
 						? {}
-						: { completedAt: args.done ? Date.now() : null };
+						: { completedAt: args.done ? now : null };
 				await tx.mutate.task.update({
 					id: args.id,
 					...(args.title !== undefined ? { title: args.title } : {}),
@@ -765,6 +771,21 @@ export const mutators = defineMutators({
 					task.dueAt ?? null,
 					args.dueAt,
 				);
+				if (args.done !== undefined && args.done !== task.done) {
+					await appendZeroCompletionEvent(tx, {
+						taskId: args.id,
+						actorUserId: ctx.id,
+						recordedAt: now,
+						origin: "member_mutation",
+						action: args.done ? "complete" : "reopen",
+						beforeDueAt: task.dueAt ?? null,
+						beforeDueAllDay: task.dueAllDay ?? false,
+						beforeDone: task.done ?? false,
+						afterDueAt:
+							args.dueAt === undefined ? (task.dueAt ?? null) : args.dueAt,
+						afterDone: args.done,
+					});
+				}
 			},
 		),
 		move: defineMutator(
@@ -920,9 +941,13 @@ export const mutators = defineMutators({
 				// A done task, including an exhausted recurring series, has no current
 				// occurrence to complete. Live recurring tasks remain open between calls.
 				if (task.done) return;
+				let afterDueAt = task.dueAt ?? null;
+				let afterDone = true;
 				if (task.rrule) {
 					const next = nextOccurrence(task, now);
 					if (next !== null) {
+						afterDueAt = next.getTime();
+						afterDone = false;
 						await tx.mutate.task.update({
 							id: args.id,
 							dueAt: next.getTime(),
@@ -950,6 +975,18 @@ export const mutators = defineMutators({
 					"task_complete",
 					localDay(new Date(now), await callerTimeZone(tx, ctx.id)),
 				);
+				await appendZeroCompletionEvent(tx, {
+					taskId: args.id,
+					actorUserId: ctx.id,
+					recordedAt: now,
+					origin: "member_mutation",
+					action: "complete",
+					beforeDueAt: task.dueAt ?? null,
+					beforeDueAllDay: task.dueAllDay ?? false,
+					beforeDone: task.done ?? false,
+					afterDueAt,
+					afterDone,
+				});
 			},
 		),
 		// Skip the current occurrence of a recurring task: advance the due date
@@ -978,6 +1015,18 @@ export const mutators = defineMutators({
 					dueAt: next.getTime(),
 					done: false,
 					completedAt: null,
+				});
+				await appendZeroCompletionEvent(tx, {
+					taskId: args.id,
+					actorUserId: ctx.id,
+					recordedAt: now,
+					origin: "member_mutation",
+					action: "skip",
+					beforeDueAt: task.dueAt ?? null,
+					beforeDueAllDay: task.dueAllDay ?? false,
+					beforeDone: task.done ?? false,
+					afterDueAt: next.getTime(),
+					afterDone: false,
 				});
 			},
 		),
@@ -1045,6 +1094,18 @@ export const mutators = defineMutators({
 				} else if (args.status !== "done" && wasDone && priorDelta > 0) {
 					await awardKarma(tx, ctx.id, -priorDelta, "habit_undo", args.date);
 				}
+				if (existing?.status !== args.status) {
+					await appendZeroCompletionEvent(tx, {
+						taskId: args.habitId,
+						actorUserId: ctx.id,
+						recordedAt: now,
+						origin: "member_mutation",
+						action: "habit_set",
+						habitDate: args.date,
+						beforeHabitStatus: existing?.status ?? null,
+						afterHabitStatus: args.status,
+					});
+				}
 			},
 		),
 		// Remove a habit-log occurrence. If it was `done`, append a compensating
@@ -1076,6 +1137,16 @@ export const mutators = defineMutators({
 					await awardKarma(tx, ctx.id, -recorded, "habit_undo", args.date);
 				}
 				await tx.mutate.habitLog.delete({ id: existing.id });
+				await appendZeroCompletionEvent(tx, {
+					taskId: args.habitId,
+					actorUserId: ctx.id,
+					recordedAt: Date.now(),
+					origin: "member_mutation",
+					action: "habit_unlog",
+					habitDate: args.date,
+					beforeHabitStatus: existing.status,
+					afterHabitStatus: null,
+				});
 			},
 		),
 	},
@@ -1108,6 +1179,7 @@ export const mutators = defineMutators({
 						recipientUserId: reminder.recipientUserId,
 					},
 					ctx.id,
+					"member_mutation",
 					now,
 				);
 				const acked = ackedPatch(now, "in_app", outcome);
