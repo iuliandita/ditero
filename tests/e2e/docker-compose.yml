@@ -80,7 +80,7 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "59000:9000"
+      - "127.0.0.1:${DITERO_TEST_MINIO_PORT:-59000}:9000"
     volumes:
       - minio-data:/data
     healthcheck:
