@@ -281,6 +281,41 @@ describe("ack route: success", () => {
 		expect(task.completedAt).not.toBeNull();
 	});
 
+	test("a later ack of an exhausted recurring task does not complete or award it again", async () => {
+		await db
+			.update(tables.task)
+			.set({ rrule: "FREQ=DAILY;COUNT=1" })
+			.where(eq(tables.task.id, TASK));
+		try {
+			const firstId = await seedReminder("ak-r-exhausted-first", MEMBER);
+			const firstToken = await mintCapability(firstId, MEMBER);
+			expect((await postAck(firstToken)).status).toBe(200);
+			const completedAt = new Date(OCCURRENCE.getTime() - 1_000);
+			await db
+				.update(tables.task)
+				.set({ completedAt })
+				.where(eq(tables.task.id, TASK));
+
+			const secondId = await seedReminder("ak-r-exhausted-second", MEMBER, {
+				occurrenceAt: new Date(OCCURRENCE.getTime() + 86_400_000),
+			});
+			const secondToken = await mintCapability(secondId, MEMBER);
+			expect((await postAck(secondToken)).status).toBe(200);
+			expect((await reminderRow(secondId)).status).toBe("acked");
+			expect((await taskRow(TASK)).completedAt).toEqual(completedAt);
+			const events = await db
+				.select()
+				.from(tables.karmaEvent)
+				.where(eq(tables.karmaEvent.userId, MEMBER));
+			expect(events).toHaveLength(1);
+		} finally {
+			await db
+				.update(tables.task)
+				.set({ rrule: null })
+				.where(eq(tables.task.id, TASK));
+		}
+	});
+
 	// C22: med reminders and dog walks are habit-kind, and task.complete throws
 	// for those lists. Routing every ack through it would break the button for
 	// exactly the reminders that most need it.

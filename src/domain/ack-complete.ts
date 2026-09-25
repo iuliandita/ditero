@@ -142,9 +142,9 @@ export async function completeForAck(
 		return "logged";
 	}
 
-	// Same shape as task.complete: an already-done non-recurring task is a
-	// no-op, a recurring one advances to its next occurrence.
-	if (!task.rrule && task.done) return "completed";
+	// Same shape as task.complete: a done task has no current occurrence,
+	// including when a recurring series has been exhausted.
+	if (task.done) return "completed";
 	if (task.rrule) {
 		const next = nextDue(task.rrule, new Date(task.dueAt ?? now), {
 			relative: task.recurrenceRelative,
