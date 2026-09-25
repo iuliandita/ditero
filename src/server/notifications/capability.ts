@@ -17,12 +17,63 @@ import {
 	ackedPatch,
 	completeForAck,
 } from "../../domain/ack-complete.ts";
+import type { CompletionEventInput } from "../../domain/completion-history.ts";
 import { karmaWrite } from "../../domain/karma.ts";
+import { completionEventValues } from "../../zero/task-completion-history.ts";
 import { withAckTaskActivation } from "./task-activation.ts";
 import { taskActivationClientFromDrizzle } from "./task-activation-drizzle.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 type DbTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+async function appendCapabilityCompletionEvent(
+	tx: DbTransaction,
+	event: CompletionEventInput,
+): Promise<void> {
+	if (event.origin !== "capability_recipient")
+		throw new Error("Invalid capability completion origin");
+	const setting = async (name: string) => {
+		const result = await tx.execute<{ value: string | null }>(
+			sql`select current_setting(${name}, true) as value`,
+		);
+		if (result.rows.length !== 1)
+			throw new Error("Completion context lookup failed");
+		return result.rows[0].value;
+	};
+	const set = async (name: string, value: string) => {
+		const result = await tx.execute<{ value: string }>(
+			sql`select set_config(${name}, ${value}, true) as value`,
+		);
+		if (result.rows[0]?.value !== value || (await setting(name)) !== value)
+			throw new Error("Completion context verification failed");
+	};
+	const names = [
+		"ditero.user_id",
+		"ditero.completion_history_scope_present",
+		"ditero.completion_history_actor_id",
+		"ditero.completion_history_task_id",
+		"ditero.completion_history_origin",
+	] as const;
+	const prior: (string | null)[] = [];
+	for (const name of names) prior.push(await setting(name));
+	if (
+		prior.some((value) => value) ||
+		(await setting("ditero.activation_scope"))
+	)
+		throw new Error("Nested completion history scope is forbidden");
+	const values = [
+		event.actorUserId,
+		"1",
+		event.actorUserId,
+		event.taskId,
+		event.origin,
+	];
+	for (let i = 0; i < names.length; i++) await set(names[i], values[i]);
+	await tx
+		.insert(tables.taskCompletionEvent)
+		.values(completionEventValues(event));
+	for (let i = 0; i < names.length; i++) await set(names[i], prior[i] ?? "");
+}
 
 // Path of the public capability route. Exported so the minting and serving
 // sides cannot drift into links nobody answers.
@@ -183,6 +234,7 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 					rrule: tables.task.rrule,
 					recurrenceRelative: tables.task.recurrenceRelative,
 					dueAt: tables.task.dueAt,
+					dueAllDay: tables.task.dueAllDay,
 					done: tables.task.done,
 					priority: tables.task.priority,
 				})
@@ -291,6 +343,9 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 				reason,
 				createdAt: now,
 			});
+		},
+		async appendEvent(event) {
+			await appendCapabilityCompletionEvent(tx, event);
 		},
 	};
 }
@@ -494,6 +549,7 @@ export async function redeemAckCapability(
 					recipientUserId: reminder.recipientUserId,
 				},
 				capability.recipient_user_id,
+				"capability_recipient",
 				now,
 			);
 			const patch = ackedPatch(now, via, outcome);

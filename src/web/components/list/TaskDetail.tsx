@@ -59,6 +59,7 @@ import { RecurrenceEditor } from "../task/RecurrenceEditor.tsx";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { ReminderPolicy } from "../task/ReminderPolicy.tsx";
 import { ImportActivationRecovery } from "./ImportActivationRecovery.tsx";
+import { TaskCompletionHistory } from "./TaskCompletionHistory.tsx";
 
 const PRIORITY_OPTIONS = [0, 1, 2, 3];
 
@@ -577,6 +578,12 @@ export function TaskDetail({
 					workspaceId={list.workspaceId}
 					parentKind="task"
 					parentId={t.id}
+				/>
+				<TaskCompletionHistory
+					key={JSON.stringify([t.id, list.workspaceId])}
+					taskId={t.id}
+					workspaceId={list.workspaceId}
+					detailOpen={open}
 				/>
 
 				<div className="border-t pt-3">

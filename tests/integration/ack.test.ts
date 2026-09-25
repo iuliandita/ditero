@@ -81,6 +81,9 @@ async function call<A>(
 
 async function wipeVolatile() {
 	await db
+		.delete(tables.taskCompletionEvent)
+		.where(inArray(tables.taskCompletionEvent.taskId, [...taskIds]));
+	await db
 		.delete(tables.ackCapability)
 		.where(inArray(tables.ackCapability.recipientUserId, [...userIds]));
 	await db
@@ -279,6 +282,19 @@ describe("ack route: success", () => {
 		const task = await taskRow(TASK);
 		expect(task.done).toBe(true);
 		expect(task.completedAt).not.toBeNull();
+		const history = await db
+			.select()
+			.from(tables.taskCompletionEvent)
+			.where(eq(tables.taskCompletionEvent.taskId, TASK));
+		expect(history).toHaveLength(1);
+		expect(history[0]).toMatchObject({
+			actorUserId: MEMBER,
+			origin: "capability_recipient",
+			action: "complete",
+			beforeDone: false,
+			afterDone: true,
+		});
+		expect(history[0].recordedAt.getTime()).toBe(task.completedAt?.getTime());
 	});
 
 	test("a later ack of an exhausted recurring task does not complete or award it again", async () => {
@@ -308,6 +324,11 @@ describe("ack route: success", () => {
 				.from(tables.karmaEvent)
 				.where(eq(tables.karmaEvent.userId, MEMBER));
 			expect(events).toHaveLength(1);
+			const history = await db
+				.select()
+				.from(tables.taskCompletionEvent)
+				.where(eq(tables.taskCompletionEvent.taskId, TASK));
+			expect(history).toHaveLength(1);
 		} finally {
 			await db
 				.update(tables.task)
@@ -334,6 +355,19 @@ describe("ack route: success", () => {
 		expect(logs[0].date).toBe(LOCAL_DATE);
 		expect(logs[0].status).toBe("done");
 		expect(logs[0].karmaDelta).toBeGreaterThan(0);
+		const history = await db
+			.select()
+			.from(tables.taskCompletionEvent)
+			.where(eq(tables.taskCompletionEvent.taskId, HABIT));
+		expect(history).toHaveLength(1);
+		expect(history[0]).toMatchObject({
+			actorUserId: MEMBER,
+			origin: "capability_recipient",
+			action: "habit_set",
+			habitDate: LOCAL_DATE,
+			beforeHabitStatus: null,
+			afterHabitStatus: "done",
+		});
 		// The habit task itself is never marked done -- habits never finish.
 		expect((await taskRow(HABIT)).done).toBe(false);
 	});
@@ -588,6 +622,12 @@ describe("ack route: rejection", () => {
 		expect((await postAck(token)).status).toBe(200);
 		expect((await reminderRow(reminderId)).status).toBe("acked");
 		expect((await taskRow(TASK)).done).toBe(false);
+		expect(
+			await db
+				.select()
+				.from(tables.taskCompletionEvent)
+				.where(eq(tables.taskCompletionEvent.taskId, TASK)),
+		).toHaveLength(0);
 	});
 
 	test("redeems a token exactly once under concurrency", async () => {
@@ -838,6 +878,18 @@ describe("in-app reminder.ack mutator", () => {
 		expect(reminder.status).toBe("acked");
 		expect(reminder.ackedVia).toBe("in_app");
 		expect((await taskRow(TASK)).done).toBe(true);
+		const history = await db
+			.select()
+			.from(tables.taskCompletionEvent)
+			.where(eq(tables.taskCompletionEvent.taskId, TASK));
+		expect(history).toHaveLength(1);
+		expect(history[0]).toMatchObject({
+			actorUserId: MEMBER,
+			origin: "member_mutation",
+			action: "complete",
+			beforeDone: false,
+			afterDone: true,
+		});
 	});
 
 	test("refuses another user's reminder row", async () => {

@@ -51,8 +51,26 @@ Attachment references can likewise outlive their parent. Import planning reports
 unresolved references and maps or omits them explicitly, without creating permissions.
 
 Tasks retain their current completion state and timestamp. Habit logs preserve recorded
-occurrences. A full past completion ledger for recurring tasks is not currently stored
-and cannot be reconstructed by an export.
+occurrences. Version 1 JSON excludes task completion history. It cannot reconstruct
+past recurring completions from a task's current state.
+
+## Task completion history
+
+Open a task and expand **Completion history** to see recorded completions, reopenings,
+skipped occurrences, and habit status changes. Recording starts when this feature is
+installed; earlier actions are not reconstructed. History follows current task access
+and is removed when the task is deleted. Names reflect current account information,
+including account anonymization, rather than a snapshot of the name at the time.
+
+History loads in pages of 100 records. Offline or incomplete results are marked as
+incomplete; an empty cached page does not establish that no history exists. Reconnect
+to load missing records.
+
+An action through a reminder link identifies the link's intended recipient. It does
+not prove who clicked the link. Native history is retained in database backups but
+is not included in version 1 JSON exports.
+
+## Other export exclusions
 
 Committed attachments appear as references with parent IDs, size and integrity metadata.
 Their file contents, encrypted names, wrapped file keys, workspace keys, recovery data,
