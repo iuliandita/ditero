@@ -29,6 +29,7 @@ const pool = new Pool({ connectionString: databaseURL });
 const db = drizzle(pool, { schema: tables });
 const DELETE_ME = "account-delete-me";
 const REMAINING = "account-delete-remaining";
+const FIRST_OWNER = "account-delete-aaa-owner";
 const PERSONAL = "account-delete-personal";
 const SHARED = "account-delete-shared";
 const PERSONAL_ATTACHMENT = "account-delete-personal-file";
@@ -396,6 +397,248 @@ describe("account deletion", () => {
 		});
 		expect(await count("membership", "user_id", DELETE_ME)).toBe(2);
 	});
+
+	test("ownership transfer does not invert sorted user locks", async () => {
+		await seed(true);
+		await pool.query(
+			`insert into "user" (id, name, email, email_verified, created_at, updated_at)
+			 values ($1, 'First owner', 'first-owner@example.test', true, now(), now())`,
+			[FIRST_OWNER],
+		);
+		await pool.query(
+			`insert into membership (id, user_id, workspace_id, role)
+			 values ('account-delete-first-owner-seat', $1, $2, 'owner')`,
+			[FIRST_OWNER, SHARED],
+		);
+		const deletionPool = new Pool({
+			connectionString: databaseURL,
+			application_name: "account-deletion-transfer-race",
+		});
+		const blocker = await pool.connect();
+		const producer = await pool.connect();
+		let blockerHeld = false;
+		let producerHeld = false;
+		try {
+			await blocker.query("begin");
+			blockerHeld = true;
+			await blocker.query("select id from workspace where id=$1 for update", [
+				SHARED,
+			]);
+			const blockerPid = (
+				await blocker.query<{ pid: number }>("select pg_backend_pid() as pid")
+			).rows[0]?.pid;
+			if (!blockerPid) throw new Error("Missing blocker PID");
+
+			const deletionApp = new Elysia().use(
+				accountDeletionRoutes(deletionPool, guards, {
+					now: () => new Date(NOW),
+					deletedEmail: () => "deleted-account@example.invalid",
+				}),
+			);
+			const deletion = deletionApp.handle(
+				new Request("http://localhost/api/account/delete", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-test-user": DELETE_ME,
+					},
+					body: JSON.stringify({ acknowledgeKeyLoss: true }),
+				}),
+			);
+			const deletionSettled = deletion.then(
+				(response) => response,
+				(error: unknown) => error,
+			);
+			const deadline = performance.now() + 5_000;
+			let deletionPid: number | undefined;
+			while (performance.now() < deadline) {
+				const blocked = await pool.query<{ pid: number }>(
+					`select pid from pg_stat_activity
+					 where application_name='account-deletion-transfer-race'
+					   and wait_event_type='Lock'
+					   and $1::int=any(pg_blocking_pids(pid))`,
+					[blockerPid],
+				);
+				deletionPid = blocked.rows[0]?.pid;
+				if (deletionPid) break;
+				await new Promise((resolve) => setTimeout(resolve, 20));
+			}
+			expect(deletionPid).toBeDefined();
+
+			await producer.query("begin");
+			producerHeld = true;
+			const producerPid = (
+				await producer.query<{ pid: number }>("select pg_backend_pid() as pid")
+			).rows[0]?.pid;
+			if (!producerPid) throw new Error("Missing producer PID");
+			const producerLock = producer.query(
+				`select id from "user" where id=any($1::text[]) order by id for update`,
+				[[FIRST_OWNER, DELETE_ME]],
+			);
+			const producerSettled = producerLock.then(
+				() => "acquired" as const,
+				(error: unknown) => error,
+			);
+			let producerBlocked = false;
+			while (performance.now() < deadline) {
+				const blocked = await pool.query<{ blocked: boolean }>(
+					`select exists(select 1 from pg_stat_activity
+					 where pid=$1 and wait_event_type='Lock'
+					   and $2::int=any(pg_blocking_pids(pid))) as blocked`,
+					[producerPid, deletionPid],
+				);
+				producerBlocked = blocked.rows[0]?.blocked ?? false;
+				if (producerBlocked) break;
+				await new Promise((resolve) => setTimeout(resolve, 20));
+			}
+			expect(producerBlocked).toBe(true);
+			await blocker.query("commit");
+			blockerHeld = false;
+			const [deleted, acquired] = await Promise.all([
+				deletionSettled,
+				producerSettled,
+			]);
+			expect(acquired).toBe("acquired");
+			expect(deleted).toBeInstanceOf(Response);
+			if (!(deleted instanceof Response)) throw deleted;
+			expect(deleted.status, await deleted.clone().text()).toBe(200);
+			await producer.query("commit");
+			producerHeld = false;
+			expect(
+				(
+					await pool.query("select owner_id from workspace where id=$1", [
+						SHARED,
+					])
+				).rows[0]?.owner_id,
+			).toBe(FIRST_OWNER);
+		} finally {
+			if (blockerHeld) await blocker.query("rollback");
+			if (producerHeld) await producer.query("rollback");
+			blocker.release();
+			producer.release();
+			await deletionPool.end();
+		}
+	}, 20_000);
+
+	test("a newly eligible owner after user discovery requires a fresh deletion attempt", async () => {
+		await seed(true);
+		await pool.query(
+			`insert into "user" (id, name, email, email_verified, created_at, updated_at)
+			 values ($1, 'First owner', 'first-owner@example.test', true, now(), now())`,
+			[FIRST_OWNER],
+		);
+		await pool.query(
+			`insert into membership (id, user_id, workspace_id, role)
+			 values ('account-delete-first-owner-seat', $1, $2, 'owner')`,
+			[FIRST_OWNER, SHARED],
+		);
+		const deletionPool = new Pool({
+			connectionString: databaseURL,
+			application_name: "account-deletion-scope-race",
+		});
+		const blocker = await pool.connect();
+		let blockerHeld = false;
+		try {
+			await blocker.query("begin");
+			blockerHeld = true;
+			await blocker.query('select id from "user" where id=$1 for update', [
+				DELETE_ME,
+			]);
+			const blockerPid = (
+				await blocker.query<{ pid: number }>("select pg_backend_pid() as pid")
+			).rows[0]?.pid;
+			if (!blockerPid) throw new Error("Missing blocker PID");
+			const deletionApp = new Elysia().use(
+				accountDeletionRoutes(deletionPool, guards, {
+					now: () => new Date(NOW),
+					deletedEmail: () => "deleted-account@example.invalid",
+				}),
+			);
+			const deletion = deletionApp.handle(
+				new Request("http://localhost/api/account/delete", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-test-user": DELETE_ME,
+					},
+					body: JSON.stringify({ acknowledgeKeyLoss: true }),
+				}),
+			);
+			const settled = deletion.then(
+				(response) => response,
+				(error: unknown) => error,
+			);
+			const deadline = performance.now() + 5_000;
+			let blocked = false;
+			while (performance.now() < deadline) {
+				const wait = await pool.query<{ blocked: boolean }>(
+					`select exists(select 1 from pg_stat_activity
+					 where application_name='account-deletion-scope-race'
+					   and wait_event_type='Lock'
+					   and $1::int=any(pg_blocking_pids(pid))) as blocked`,
+					[blockerPid],
+				);
+				blocked = wait.rows[0]?.blocked ?? false;
+				if (blocked) break;
+				await new Promise((resolve) => setTimeout(resolve, 20));
+			}
+			expect(blocked).toBe(true);
+			const newOwner = "account-delete-000-owner";
+			await pool.query(
+				`insert into "user" (id, name, email, email_verified, created_at, updated_at)
+				 values ($1, 'New owner', 'new-owner@example.test', true, now(), now())`,
+				[newOwner],
+			);
+			await pool.query(
+				`insert into membership (id, user_id, workspace_id, role)
+				 values ('account-delete-new-owner-seat', $1, $2, 'owner')`,
+				[newOwner, SHARED],
+			);
+			await blocker.query("commit");
+			blockerHeld = false;
+			const response = await settled;
+			expect(response).toBeInstanceOf(Response);
+			if (!(response instanceof Response)) throw response;
+			expect(response.status).toBe(409);
+			expect(await response.json()).toEqual({ code: "account-scope-changed" });
+			expect(
+				(
+					await pool.query('select deleted_at from "user" where id=$1', [
+						DELETE_ME,
+					])
+				).rows[0]?.deleted_at,
+			).toBeNull();
+			expect(
+				(
+					await pool.query("select owner_id from workspace where id=$1", [
+						SHARED,
+					])
+				).rows[0]?.owner_id,
+			).toBe(DELETE_ME);
+			const retried = await deletionApp.handle(
+				new Request("http://localhost/api/account/delete", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-test-user": DELETE_ME,
+					},
+					body: JSON.stringify({ acknowledgeKeyLoss: true }),
+				}),
+			);
+			expect(retried.status, await retried.clone().text()).toBe(200);
+			expect(
+				(
+					await pool.query("select owner_id from workspace where id=$1", [
+						SHARED,
+					])
+				).rows[0]?.owner_id,
+			).toBe(newOwner);
+		} finally {
+			if (blockerHeld) await blocker.query("rollback");
+			blocker.release();
+			await deletionPool.end();
+		}
+	}, 20_000);
 });
 
 test("notification payloads contain the parent title and no attachment metadata", async () => {

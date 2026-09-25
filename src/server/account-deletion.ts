@@ -17,6 +17,8 @@ type AccountDeletionOptions = {
 	deletedEmail?: () => string;
 };
 
+class AccountScopeChangedError extends Error {}
+
 const deleteBody = z.object({
 	acknowledgeKeyLoss: z.boolean(),
 });
@@ -90,33 +92,99 @@ async function deletionPreview(
 	};
 }
 
+async function accountLockScope(client: PoolClient, userId: string) {
+	const workspaces = await client.query<{ id: string }>(
+		`select w.id from workspace w
+		 where w.owner_id = $1
+		    or exists (select 1 from membership m where m.workspace_id = w.id and m.user_id = $1)
+		    or exists (select 1 from list l where l.workspace_id = w.id and l.owner_id = $1)
+		 order by w.id`,
+		[userId],
+	);
+	const replacements = await client.query<{ user_id: string }>(
+		`select distinct candidate.user_id from (
+		   select m.user_id from workspace w join membership m on m.workspace_id = w.id
+		   where w.kind = 'shared' and w.owner_id = $1
+		     and m.role = 'owner' and m.user_id <> $1
+		   union
+		   select w.owner_id as user_id from list l join workspace w on w.id = l.workspace_id
+		   where w.kind = 'shared' and l.owner_id = $1 and w.owner_id <> $1
+		 ) candidate order by candidate.user_id`,
+		[userId],
+	);
+	return {
+		workspaceIds: workspaces.rows.map((row) => row.id),
+		userIds: [
+			...new Set([userId, ...replacements.rows.map((row) => row.user_id)]),
+		].sort(),
+	};
+}
+
+function sameIds(left: string[], right: string[]): boolean {
+	return (
+		left.length === right.length &&
+		left.every((id, index) => id === right[index])
+	);
+}
+
 async function lockAccountScope(
 	client: PoolClient,
 	userId: string,
 ): Promise<{ email: string; deletedAt: Date | null; workspaceIds: string[] }> {
-	const account = await client.query<{
+	const discovered = await accountLockScope(client, userId);
+	const users = await client.query<{
+		id: string;
 		email: string;
 		deleted_at: Date | null;
-	}>(`select email, deleted_at from "user" where id = $1 for update`, [userId]);
-	const row = account.rows[0];
-	if (!row) throw new Error("authenticated user row is missing");
+	}>(
+		`select id, email, deleted_at from "user"
+		 where id = any($1::text[]) order by id for update`,
+		[discovered.userIds],
+	);
+	if (users.rows.length !== discovered.userIds.length)
+		throw new AccountScopeChangedError();
+	const account = users.rows.find((row) => row.id === userId);
+	if (!account) throw new Error("authenticated user row is missing");
+	if (account.deleted_at)
+		return {
+			email: account.email,
+			deletedAt: account.deleted_at,
+			workspaceIds: [],
+		};
 
 	const workspaces = await client.query<{ id: string }>(
-		`select w.id
-		 from workspace w
-		 join membership mine
-		   on mine.workspace_id = w.id and mine.user_id = $1
-		 for update of w, mine`,
-		[userId],
+		`select id from workspace where id = any($1::text[])
+		 order by id for update`,
+		[discovered.workspaceIds],
 	);
-	const workspaceIds = workspaces.rows.map(({ id }) => id);
+	if (
+		!sameIds(
+			workspaces.rows.map((row) => row.id),
+			discovered.workspaceIds,
+		)
+	)
+		throw new AccountScopeChangedError();
 	await client.query(
-		`select id from membership
-		 where workspace_id = any($1::text[])
-		 for update`,
-		[workspaceIds],
+		`select id from membership where workspace_id = any($1::text[])
+		 order by id for update`,
+		[discovered.workspaceIds],
 	);
-	return { email: row.email, deletedAt: row.deleted_at, workspaceIds };
+	await client.query(
+		`select id from list where workspace_id = any($1::text[]) and owner_id = $2
+		 order by id for update`,
+		[discovered.workspaceIds, userId],
+	);
+	const locked = await accountLockScope(client, userId);
+	if (
+		!sameIds(locked.workspaceIds, discovered.workspaceIds) ||
+		!sameIds(locked.userIds, discovered.userIds)
+	)
+		throw new AccountScopeChangedError();
+	return {
+		email: account.email,
+		deletedAt: account.deleted_at,
+		workspaceIds: discovered.workspaceIds,
+	};
 }
 
 async function removePersonalData(
@@ -336,40 +404,53 @@ export function accountDeletionRoutes(
 				} catch {
 					return new Response("Bad Request", { status: 400 });
 				}
-				return await withUserContext(pool, session.user.id, async (client) => {
-					const scope = await lockAccountScope(client, session.user.id);
-					if (scope.deletedAt) return { deleted: true };
-					const preview = await deletionPreview(client, session.user.id);
-					if (preview.soleOwnerWorkspaces.length > 0) {
-						return Response.json(
-							{
-								code: "ownership-transfer-required",
-								soleOwnerWorkspaces: preview.soleOwnerWorkspaces,
-							},
-							{ status: 409 },
-						);
-					}
-					if (
-						preview.lastHolderWorkspaces.length > 0 &&
-						!body.acknowledgeKeyLoss
-					) {
-						return Response.json(
-							{
-								code: "key-loss-ack-required",
-								lastHolderWorkspaces: preview.lastHolderWorkspaces,
-							},
-							{ status: 409 },
-						);
-					}
-					await removeAccount(
-						client,
+				try {
+					return await withUserContext(
+						pool,
 						session.user.id,
-						scope.email,
-						now(),
-						deletedEmail(),
+						async (client) => {
+							const scope = await lockAccountScope(client, session.user.id);
+							if (scope.deletedAt) return { deleted: true };
+							const preview = await deletionPreview(client, session.user.id);
+							if (preview.soleOwnerWorkspaces.length > 0) {
+								return Response.json(
+									{
+										code: "ownership-transfer-required",
+										soleOwnerWorkspaces: preview.soleOwnerWorkspaces,
+									},
+									{ status: 409 },
+								);
+							}
+							if (
+								preview.lastHolderWorkspaces.length > 0 &&
+								!body.acknowledgeKeyLoss
+							) {
+								return Response.json(
+									{
+										code: "key-loss-ack-required",
+										lastHolderWorkspaces: preview.lastHolderWorkspaces,
+									},
+									{ status: 409 },
+								);
+							}
+							await removeAccount(
+								client,
+								session.user.id,
+								scope.email,
+								now(),
+								deletedEmail(),
+							);
+							return { deleted: true };
+						},
 					);
-					return { deleted: true };
-				});
+				} catch (error) {
+					if (error instanceof AccountScopeChangedError)
+						return Response.json(
+							{ code: "account-scope-changed" },
+							{ status: 409 },
+						);
+					throw error;
+				}
 			}),
 		);
 }
