@@ -285,7 +285,7 @@ export async function saveImportPlan(
 	options: {
 		signal?: AbortSignal;
 		deadline?: number;
-		plannerVersion?: 1 | 2;
+		plannerVersion?: 1 | 2 | 3;
 	} = {},
 ): Promise<ImportPlanStatus> {
 	const deadline = Math.min(
@@ -312,6 +312,22 @@ export async function saveImportPlan(
 		pool,
 		ownerId,
 		async (client) => {
+			if (options.plannerVersion === 3) {
+				// Account deletion locks users before workspace memberships.
+				const assignees = [
+					...new Set(
+						document.data.assignments
+							.map((row) => mappings.principals[row.userId])
+							.filter((id): id is string => typeof id === "string"),
+					),
+				].sort();
+				const live = await client.query(
+					'select id from "user" where id = any($1::text[]) and deleted_at is null order by id for share',
+					[assignees],
+				);
+				if (live.rowCount !== assignees.length)
+					fail("invalid-principal-mapping", 403);
+			}
 			await authorizeMappings(client, ownerId, document, mappings);
 			const sources = await client.query<{
 				label: string;
@@ -336,8 +352,9 @@ export async function saveImportPlan(
 			let plan:
 				| typeof basePlan
 				| Awaited<ReturnType<typeof sealImportApplyPlan>> = basePlan;
-			if (options.plannerVersion === 2) {
+			if (options.plannerVersion === 2 || options.plannerVersion === 3) {
 				const candidates = projectImportApply(document, basePlan.items, {
+					plannerVersion: options.plannerVersion,
 					signal: options.signal,
 					deadline,
 				});
@@ -351,6 +368,7 @@ export async function saveImportPlan(
 					{ signal: options.signal, deadline },
 				);
 				plan = await sealImportApplyPlan(frozen.items, frozen.snapshots, {
+					plannerVersion: options.plannerVersion,
 					ownerUserId: ownerId,
 					sourceId: selection.id,
 					documentDigest: basePlan.documentDigest,

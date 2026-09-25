@@ -110,7 +110,7 @@ export async function freezeImportTargets(
 			if (!list) throw new ImportPlanError("invalid-graph");
 			return list.workspaceId;
 		}
-		if (item.collection === "taskLabels") {
+		if (item.collection === "taskLabels" || item.collection === "assignments") {
 			const task = sourceTasks.get(textField(row, "taskId"));
 			const list = task && sourceLists.get(task.listId);
 			if (!list) throw new ImportPlanError("invalid-graph");
@@ -122,6 +122,47 @@ export async function freezeImportTargets(
 		const id = mappings.workspaces[sourceWorkspace(item)];
 		if (!id) throw new ImportPlanError("invalid-mappings");
 		return id;
+	}
+	const assigneeProofs = new Map<
+		string,
+		NonNullable<ImportDependencyProof["assignee"]>
+	>();
+	const assignments = items.filter(
+		(item) =>
+			item.collection === "assignments" && item.disposition === "ensure",
+	);
+	if (assignments.length) {
+		const pairs = assignments.map((item) => ({
+			user: textField(payload(item), "userId"),
+			workspace: targetWorkspace(item),
+		}));
+		const seats = await client.query<{
+			id: string;
+			user_id: string;
+			workspace_id: string;
+		}>(
+			`select m.id, m.user_id, m.workspace_id from membership m where exists (select 1 from jsonb_to_recordset($1::jsonb) as p("user" text, workspace text) where m.user_id = p."user" and m.workspace_id = p.workspace) order by m.id for share of m`,
+			[JSON.stringify(pairs)],
+		);
+		const byPair = new Map(
+			seats.rows.map((row) => [
+				JSON.stringify([row.user_id, row.workspace_id]),
+				row,
+			]),
+		);
+		for (const item of assignments) {
+			checkpoint();
+			const userId = textField(payload(item), "userId");
+			const workspaceId = targetWorkspace(item);
+			const seat = byPair.get(JSON.stringify([userId, workspaceId]));
+			if (seat)
+				assigneeProofs.set(item.sourceKey, {
+					sourceUserId: textField(original(item), "userId"),
+					targetUserId: userId,
+					workspaceId,
+					membershipId: seat.id,
+				});
+		}
 	}
 	// Pins are immutable and serialized by the caller's owner lock. A row lock
 	// would also require an UPDATE policy and hide these SELECT-only rows.
@@ -176,7 +217,11 @@ export async function freezeImportTargets(
 		});
 		const parameters: unknown[] = [ids];
 		let predicate = "r.id = any($1::text[])";
-		if (collection === "labels" || collection === "taskLabels") {
+		if (
+			collection === "labels" ||
+			collection === "taskLabels" ||
+			collection === "assignments"
+		) {
 			const natural = selected.map((item) => {
 				const row = payload(item);
 				return collection === "labels"
@@ -184,16 +229,23 @@ export async function freezeImportTargets(
 							workspace: textField(row, "workspaceId"),
 							name: textField(row, "name"),
 						}
-					: {
-							task: textField(row, "taskId"),
-							label: textField(row, "labelId"),
-						};
+					: collection === "assignments"
+						? {
+								task: textField(row, "taskId"),
+								user: textField(row, "userId"),
+							}
+						: {
+								task: textField(row, "taskId"),
+								label: textField(row, "labelId"),
+							};
 			});
 			parameters.push(JSON.stringify(natural));
 			predicate +=
 				collection === "labels"
 					? ` or exists (select 1 from jsonb_to_recordset($2::jsonb) as n(workspace text, name text) where r.workspace_id = n.workspace and r.name = n.name)`
-					: ` or exists (select 1 from jsonb_to_recordset($2::jsonb) as n(task text, label text) where r.task_id = n.task and r.label_id = n.label)`;
+					: collection === "assignments"
+						? ` or exists (select 1 from jsonb_to_recordset($2::jsonb) as n(task text, "user" text) where r.task_id = n.task and r.user_id = n."user")`
+						: ` or exists (select 1 from jsonb_to_recordset($2::jsonb) as n(task text, label text) where r.task_id = n.task and r.label_id = n.label)`;
 		}
 		const found = await client.query<{ id: string }>(
 			`select r.id from "${table}" r where ${predicate} order by r.id for share`,
@@ -293,6 +345,9 @@ export async function freezeImportTargets(
 				targetId: targetWorkspace(item),
 			},
 			rows,
+			...(item.collection === "assignments"
+				? { assignee: assigneeProofs.get(item.sourceKey) }
+				: {}),
 		};
 	}
 	const labelKeys = new Set(
@@ -305,11 +360,23 @@ export async function freezeImportTargets(
 			JSON.stringify([row.task_id, row.label_id]),
 		),
 	);
+	const assignmentKeys = new Set(
+		[...(targets.get("assignments")?.values() ?? [])].map((row) =>
+			JSON.stringify([row.task_id, row.user_id]),
+		),
+	);
 	for (const item of items) {
 		checkpoint();
 		if (item.disposition !== "ensure") continue;
 		if (!Object.hasOwn(IMPORT_TARGETS, item.collection) || !item.targetId)
 			throw new ImportPlanError("invalid-mappings");
+		if (
+			item.collection === "assignments" &&
+			!assigneeProofs.has(item.sourceKey)
+		) {
+			block(item, "invalid-assignee-membership");
+			continue;
+		}
 		const collection = item.collection as ImportTargetCollection;
 		const target = targets.get(collection)?.get(item.targetId);
 		const map = maps.get(item.sourceKey);
@@ -362,7 +429,13 @@ export async function freezeImportTargets(
 								taskId: textField(row, "taskId"),
 								labelId: textField(row, "labelId"),
 							}
-						: null;
+						: collection === "assignments"
+							? {
+									kind: "task-assignee-pair" as const,
+									taskId: textField(row, "taskId"),
+									userId: textField(row, "userId"),
+								}
+							: null;
 			if (
 				(naturalKey?.kind === "label-name" &&
 					labelKeys.has(
@@ -371,6 +444,10 @@ export async function freezeImportTargets(
 				(naturalKey?.kind === "task-label-pair" &&
 					taskLabelKeys.has(
 						JSON.stringify([naturalKey.taskId, naturalKey.labelId]),
+					)) ||
+				(naturalKey?.kind === "task-assignee-pair" &&
+					assignmentKeys.has(
+						JSON.stringify([naturalKey.taskId, naturalKey.userId]),
 					))
 			)
 				block(item, "target-natural-key-collision");

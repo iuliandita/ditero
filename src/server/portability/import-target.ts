@@ -55,6 +55,10 @@ export const IMPORT_TARGETS = {
 		table: "task_label",
 		fields: ["id", "taskId", "labelId"],
 	},
+	assignments: {
+		table: "task_assignee",
+		fields: ["id", "taskId", "userId"],
+	},
 } as const;
 
 export type ImportTargetCollection = keyof typeof IMPORT_TARGETS;

@@ -106,7 +106,7 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	store.save.mockResolvedValue({
 		id: "saved",
-		report: { plannerVersion: 2, applySupported: true },
+		report: { plannerVersion: 3, applySupported: true },
 	});
 	store.list.mockResolvedValue([]);
 	store.get.mockResolvedValue(null);
@@ -139,11 +139,11 @@ describe("native import plan transport", () => {
 			{
 				signal: expect.any(AbortSignal),
 				deadline: expect.any(Number),
-				plannerVersion: 2,
+				plannerVersion: 3,
 			},
 		);
 		expect(await result.json()).toMatchObject({
-			report: { plannerVersion: 2, applySupported: true },
+			report: { plannerVersion: 3, applySupported: true },
 		});
 	});
 	test("refuses malformed, unknown-field and invalid native requests before storage", async () => {

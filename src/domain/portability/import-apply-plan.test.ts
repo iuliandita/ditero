@@ -1,9 +1,16 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import type { ImportApplyCandidate } from "./import-apply.ts";
+import {
+	type ImportApplyCandidate,
+	projectImportApply,
+} from "./import-apply.ts";
 import {
 	type ImportTargetSnapshot,
 	sealImportApplyPlan,
 } from "./import-apply-plan.ts";
+import { buildImportPlan } from "./import-plan.ts";
+import type { PortableExportV1 } from "./v1.ts";
+import { parsePortableExportV1 } from "./validate.ts";
 
 const context = {
 	ownerUserId: "owner",
@@ -65,6 +72,176 @@ function seal(item = candidate(), target = snapshot()) {
 }
 
 describe("sealed import apply plan", () => {
+	test.each([
+		undefined,
+		2,
+	] as const)("preserves the captured v2 fixture with version %s", async (plannerVersion) => {
+		const golden = JSON.parse(
+			readFileSync(
+				new URL(
+					"../../../tests/fixtures/portability/import-v2-golden.json",
+					import.meta.url,
+				),
+				"utf8",
+			),
+		) as {
+			input: {
+				document: PortableExportV1;
+				context: Parameters<typeof buildImportPlan>[1];
+			};
+			basePlanV1: Awaited<ReturnType<typeof buildImportPlan>>;
+			projectedV2: ReturnType<typeof projectImportApply>;
+			sealInput: {
+				context: Parameters<typeof sealImportApplyPlan>[2];
+				snapshots: (ImportTargetSnapshot & { sourceKey: string })[];
+			};
+			expectedSealedV2: Awaited<ReturnType<typeof sealImportApplyPlan>>;
+		};
+		const document = parsePortableExportV1(
+			JSON.stringify(golden.input.document),
+		);
+		const base = await buildImportPlan(document, golden.input.context);
+		expect(base).toEqual(golden.basePlanV1);
+		const projected = projectImportApply(document, base.items, {
+			plannerVersion,
+		});
+		expect(projected).toEqual(golden.projectedV2);
+		const snapshots = new Map(
+			golden.sealInput.snapshots.map(({ sourceKey, ...snapshot }) => [
+				sourceKey,
+				snapshot,
+			]),
+		);
+		const sealed = await sealImportApplyPlan(projected.items, snapshots, {
+			...golden.sealInput.context,
+			plannerVersion,
+		});
+		expect(JSON.stringify(sealed)).toBe(
+			JSON.stringify(golden.expectedSealedV2),
+		);
+		expect(sealed.planDigest).toBe(
+			"dd0a219d6f71748ebd2201966a0632ec73a3a7e0b4c245d8f563b56009f6e026",
+		);
+	});
+	test("v3 changes execution identity while preserving existing source-map content identity", async () => {
+		const item = candidate();
+		const snapshots = new Map([[item.sourceKey, snapshot()]]);
+		const v2 = await sealImportApplyPlan([item], snapshots, context);
+		const v3 = await sealImportApplyPlan([item], snapshots, {
+			...context,
+			plannerVersion: 3,
+		});
+		expect(v3.report.plannerVersion).toBe(3);
+		expect(v3.items[0].contentDigest).toBe(v2.items[0].contentDigest);
+		expect(v3.items[0].itemDigest).not.toBe(v2.items[0].itemDigest);
+		expect(v3.planDigest).not.toBe(v2.planDigest);
+		expect(v3.items[0].dependencyProof).toEqual(v2.items[0].dependencyProof);
+		expect(v3.items[0].dependencyProof).not.toHaveProperty("assignee");
+	});
+	function assignment() {
+		const item: ImportApplyCandidate = {
+			...candidate(),
+			collection: "assignments",
+			phase: "assignments",
+			targetId: "target-task:target-user",
+			payload: {
+				id: "target-task:target-user",
+				taskId: "target-task",
+				userId: "target-user",
+			},
+		};
+		const target: ImportTargetSnapshot = {
+			...snapshot(),
+			targetPrecondition: {
+				kind: "absent",
+				naturalKey: {
+					kind: "task-assignee-pair",
+					taskId: "target-task",
+					userId: "target-user",
+				},
+			},
+			dependencyProof: {
+				...snapshot().dependencyProof,
+				assignee: {
+					sourceUserId: "source-user",
+					targetUserId: "target-user",
+					workspaceId: "target-workspace",
+					membershipId: "membership",
+				},
+			},
+		};
+		return { item, target };
+	}
+	test("v3 freezes membership evidence without changing stable assignment content", async () => {
+		const { item, target } = assignment();
+		const before = structuredClone({ item, target });
+		const original = await sealImportApplyPlan(
+			[item],
+			new Map([[item.sourceKey, target]]),
+			{ ...context, plannerVersion: 3 },
+		);
+		const replacement = structuredClone(target);
+		if (!replacement.dependencyProof.assignee)
+			throw new Error("Missing assignee fixture");
+		replacement.dependencyProof.assignee.membershipId =
+			"replacement-membership";
+		const changed = await sealImportApplyPlan(
+			[item],
+			new Map([[item.sourceKey, replacement]]),
+			{ ...context, plannerVersion: 3 },
+		);
+		expect(changed.items[0].contentDigest).toBe(
+			original.items[0].contentDigest,
+		);
+		expect(changed.items[0].itemDigest).not.toBe(original.items[0].itemDigest);
+		expect(changed.planDigest).not.toBe(original.planDigest);
+		expect(original.items[0].dependencyProof?.assignee?.membershipId).toBe(
+			"membership",
+		);
+		expect({ item, target }).toEqual(before);
+	});
+	test.each([
+		"missing",
+		"user",
+		"workspace",
+		"membership",
+		"canonical-id",
+		"natural-key",
+	])("rejects v3 assignment with invalid %s evidence", async (field) => {
+		const { item, target } = assignment();
+		if (field === "missing") delete target.dependencyProof.assignee;
+		if (field === "user" && target.dependencyProof.assignee)
+			target.dependencyProof.assignee.targetUserId = "different-user";
+		if (field === "workspace" && target.dependencyProof.assignee)
+			target.dependencyProof.assignee.workspaceId = "different-workspace";
+		if (field === "membership" && target.dependencyProof.assignee)
+			target.dependencyProof.assignee.membershipId = "";
+		if (field === "canonical-id") item.targetId = "generic-import-hash";
+		if (field === "natural-key")
+			target.targetPrecondition = { kind: "absent", naturalKey: null };
+		await expect(
+			sealImportApplyPlan([item], new Map([[item.sourceKey, target]]), {
+				...context,
+				plannerVersion: 3,
+			}),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
+	});
+	test("rejects assignee evidence on unrelated v3 content and unknown plan versions", async () => {
+		const { target } = assignment();
+		const item = candidate();
+		await expect(
+			sealImportApplyPlan([item], new Map([[item.sourceKey, target]]), {
+				...context,
+				plannerVersion: 3,
+			}),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
+		await expect(
+			sealImportApplyPlan([item], new Map([[item.sourceKey, snapshot()]]), {
+				...context,
+				plannerVersion: 4 as 3,
+			}),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
+	});
 	test("database dependency order does not change sealed identity", async () => {
 		const original = await seal();
 		const reordered = snapshot();

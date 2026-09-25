@@ -257,6 +257,180 @@ async function project(source = fixture()) {
 	return projectImportApply(source, plan.items);
 }
 describe("import apply eligibility", () => {
+	test("v3 assigns mapped members with canonical pair IDs after task-labels", async () => {
+		const source = fixture();
+		source.data.assignments.push({
+			id: "child-assignment",
+			taskId: "child",
+			userId: "former",
+		});
+		source.data.memberships.push({
+			id: "viewer-seat",
+			userId: "former",
+			workspaceId: "workspace",
+			role: "viewer",
+		});
+		const plan = await buildImportPlan(source, {
+			...context,
+			mappings: {
+				...context.mappings,
+				principals: { self: "owner", former: "target-member" },
+			},
+		});
+		const before = structuredClone({ source, plan });
+		const result = projectImportApply(source, plan.items, {
+			plannerVersion: 3,
+		});
+		const link = result.items.find((item) => item.collection === "taskLabels");
+		for (const [id, taskId, userId] of [
+			["assignment", "task", "owner"],
+			["child-assignment", "child", "target-member"],
+		]) {
+			const assignedTask = result.items.find(
+				(item) => item.collection === "tasks" && item.sourceId === taskId,
+			);
+			const original = plan.items.find((item) => item.sourceId === id);
+			const assignment = result.items.find((item) => item.sourceId === id);
+			expect(assignment).toMatchObject({
+				sourceId: id,
+				sourceKey: original?.sourceKey,
+				disposition: "ensure",
+				phase: "assignments",
+				targetId: `${assignedTask?.targetId}:${userId}`,
+				payload: {
+					id: `${assignedTask?.targetId}:${userId}`,
+					taskId: assignedTask?.targetId,
+					userId,
+				},
+				dependencies: [
+					{
+						collection: "tasks",
+						sourceId: taskId,
+						sourceKey: assignedTask?.sourceKey,
+					},
+				],
+			});
+			expect(assignment?.ordinal).toBeGreaterThan(link?.ordinal ?? Infinity);
+		}
+		expect({ source, plan }).toEqual(before);
+		expect(
+			result.items.filter((item) => item.collection !== "assignments"),
+		).toEqual(
+			projectImportApply(source, plan.items).items.filter(
+				(item) => item.collection !== "assignments",
+			),
+		);
+	});
+	test("v3 preserves unmapped assignments without blocking supported tasks or assignees", async () => {
+		const source = fixture();
+		source.data.memberships.push({
+			id: "former-seat",
+			userId: "former",
+			workspaceId: "workspace",
+			role: "member",
+		});
+		source.data.assignments.push({
+			id: "unmapped-assignment",
+			taskId: "task",
+			userId: "former",
+		});
+		const plan = await buildImportPlan(source, {
+			...context,
+			mappings: {
+				...context.mappings,
+				principals: { self: "owner", former: null },
+			},
+		});
+		const result = projectImportApply(source, plan.items, {
+			plannerVersion: 3,
+		});
+		expect(
+			result.items.find((item) => item.sourceId === "unmapped-assignment"),
+		).toMatchObject({
+			disposition: "blocked",
+			targetId: null,
+			phase: null,
+			codes: ["unmapped-reference"],
+			payload: source.data.assignments[1],
+		});
+		for (const id of ["task", "child", "assignment"])
+			expect(
+				result.items.find((item) => item.sourceId === id)?.disposition,
+			).toBe("ensure");
+	});
+	test("v3 keeps both assignments excluded when principal mappings collapse their pair", async () => {
+		const source = fixture();
+		source.data.memberships.push({
+			id: "former-seat",
+			userId: "former",
+			workspaceId: "workspace",
+			role: "member",
+		});
+		source.data.assignments.push({
+			id: "duplicate-assignment",
+			taskId: "task",
+			userId: "former",
+		});
+		const plan = await buildImportPlan(source, context);
+		const result = projectImportApply(source, plan.items, {
+			plannerVersion: 3,
+		});
+		for (const original of source.data.assignments)
+			expect(
+				result.items.find((item) => item.sourceId === original.id),
+			).toMatchObject({
+				disposition: "blocked",
+				targetId: null,
+				phase: null,
+				codes: ["mapping-conflict"],
+				payload: original,
+			});
+		expect(
+			result.items.find((item) => item.sourceId === "task")?.disposition,
+		).toBe("ensure");
+	});
+	test.each([
+		"folder",
+		"foreign-owner",
+		"reminder",
+		"due-date",
+	])("v3 closes %s exclusions through child-task assignments", async (reason) => {
+		const source = fixture();
+		source.data.assignments[0].taskId = "child";
+		if (reason === "foreign-owner") source.data.lists[0].ownerId = "former";
+		if (reason === "reminder") source.data.tasks[0].reminderTime = "09:00";
+		if (reason === "due-date")
+			source.data.tasks[0].dueAt = "2100-01-01T00:00:00.000Z";
+		const plan = await buildImportPlan(source, context);
+		if (reason === "folder") {
+			const folder = plan.items.find((item) => item.collection === "folders");
+			if (!folder) throw new Error("Missing fixture folder");
+			folder.disposition = "blocked";
+			folder.codes.push("target-conflict");
+		}
+		const result = projectImportApply(source, plan.items, {
+			plannerVersion: 3,
+		});
+		expect(
+			result.items.find((item) => item.collection === "assignments"),
+		).toMatchObject({
+			disposition: "blocked",
+			phase: null,
+			targetId: null,
+			codes: ["blocked-dependency"],
+			payload: source.data.assignments[0],
+		});
+		expect(
+			result.items.find((item) => item.collection === "labels")?.disposition,
+		).toBe("ensure");
+	});
+	test("rejects an unknown projection version", async () => {
+		const source = fixture();
+		const plan = await buildImportPlan(source, context);
+		expect(() =>
+			projectImportApply(source, plan.items, { plannerVersion: 4 as 3 }),
+		).toThrow("invalid-mappings");
+	});
 	test("projects supported phases and explicit dependencies without mutating either input", async () => {
 		const source = fixture();
 		const plan = await buildImportPlan(source, context);

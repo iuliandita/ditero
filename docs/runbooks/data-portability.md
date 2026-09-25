@@ -11,7 +11,9 @@ the export time, source user, and explicit exclusions in `boundaries`.
 
 This is a data export, not a restorable backup. Settings supports reviewed,
 resumable import of a subset of native content; see [Native data format](native-format.md)
-for supported records and exclusions. Keep normal database and attachment-storage
+for supported records and exclusions. Task assignments require explicit mappings to
+current destination members and never create permissions or send assignment notices.
+Keep normal database and attachment-storage
 backups for disaster recovery.
 
 ## Included and excluded data

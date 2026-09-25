@@ -334,7 +334,7 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 								source.data,
 								document,
 								mapping,
-								{ signal: request.signal, deadline, plannerVersion: 2 },
+								{ signal: request.signal, deadline, plannerVersion: 3 },
 							),
 						);
 					} finally {

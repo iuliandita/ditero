@@ -37,7 +37,13 @@ afterAll(async () => {
 	await pool.end();
 });
 
-async function seedJob(client: PoolClient, owner = "alice", legacy = false) {
+async function seedJob(
+	client: PoolClient,
+	owner = "alice",
+	legacy = false,
+	plannerVersion = 2,
+	applySupported = true,
+) {
 	const sourceId = randomUUID();
 	const jobId = randomUUID();
 	await client.query(
@@ -45,8 +51,10 @@ async function seedJob(client: PoolClient, owner = "alice", legacy = false) {
 		[sourceId, owner],
 	);
 	await client.query(
-		`insert into import_job (id, source_id, owner_user_id, document_digest, mapping_digest, plan_digest, report, payload_bytes${legacy ? "" : ", planner_version, apply_supported"}) values ($1,$2,$3,'document','mapping','plan','{}',0${legacy ? "" : ",2,true"})`,
-		[jobId, sourceId, owner],
+		`insert into import_job (id, source_id, owner_user_id, document_digest, mapping_digest, plan_digest, report, payload_bytes${legacy ? "" : ", planner_version, apply_supported"}) values ($1,$2,$3,'document','mapping','plan','{}',0${legacy ? "" : ",$4,$5"})`,
+		legacy
+			? [jobId, sourceId, owner]
+			: [jobId, sourceId, owner, plannerVersion, applySupported],
 	);
 	return { sourceId, jobId };
 }
@@ -95,9 +103,9 @@ async function insertLedger(
 	);
 }
 
-async function seedLedger() {
+async function seedLedger(plannerVersion = 2) {
 	return withUserContext(runtime, "alice", async (client) => {
-		const ids = await seedJob(client);
+		const ids = await seedJob(client, "alice", false, plannerVersion);
 		await insertItem(client, ids.jobId);
 		await insertLedger(client, ids.sourceId, ids.jobId);
 		return ids;
@@ -131,23 +139,29 @@ test("legacy jobs default to non-applicable and cannot acquire a run", async () 
 	).rejects.toThrow(/row-level security/i);
 });
 
-test.each([
-	"phase",
-	"content_digest",
-	"target_precondition",
-	"dependency_proof",
-])("v2 ensured items reject missing %s in the creating transaction", async (missing) => {
+test.each(
+	[2, 3].flatMap((plannerVersion) =>
+		["phase", "content_digest", "target_precondition", "dependency_proof"].map(
+			(missing) => ({ plannerVersion, missing }),
+		),
+	),
+)("v$plannerVersion ensured items reject missing $missing in the creating transaction", async ({
+	plannerVersion,
+	missing,
+}) => {
 	await expect(
 		withUserContext(runtime, "alice", async (client) => {
-			const { jobId } = await seedJob(client);
+			const { jobId } = await seedJob(client, "alice", false, plannerVersion);
 			await insertItem(client, jobId, missing);
 		}),
 	).rejects.toThrow(/row-level security/i);
 	expect((await pool.query("select * from import_job")).rows).toEqual([]);
 });
 
-test("v2 evidence permits same-transaction items but cannot reopen a committed plan", async () => {
-	const { jobId } = await seedLedger();
+test.each([
+	2, 3,
+])("v%s evidence permits same-transaction items but cannot reopen a committed plan", async (plannerVersion) => {
+	const { jobId } = await seedLedger(plannerVersion);
 	await expect(
 		withUserContext(runtime, "alice", (client) =>
 			insertItem(client, jobId, undefined, 1),
@@ -162,8 +176,10 @@ test("v2 evidence permits same-transaction items but cannot reopen a committed p
 	).toEqual([{ ordinal: 0 }]);
 });
 
-test("runtime RLS isolates reads, updates and deletes on every apply ledger table", async () => {
-	await seedLedger();
+test.each([
+	2, 3,
+])("v%s runtime RLS isolates reads, updates and deletes on every apply ledger table", async (plannerVersion) => {
+	await seedLedger(plannerVersion);
 	await withUserContext(runtime, "bob", async (client) => {
 		for (const table of ledgerTables) {
 			expect((await client.query(`select * from ${table}`)).rows).toEqual([]);
@@ -186,11 +202,13 @@ test("runtime RLS isolates reads, updates and deletes on every apply ledger tabl
 	});
 });
 
-test("runtime inserts require matching parent ownership and cannot forge another owner", async () => {
+test.each([
+	2, 3,
+])("v%s runtime inserts require matching parent ownership and cannot forge another owner", async (plannerVersion) => {
 	const { jobId, sourceId } = await withUserContext(
 		runtime,
 		"alice",
-		(client) => seedJob(client),
+		(client) => seedJob(client, "alice", false, plannerVersion),
 	);
 	for (const owner of ["alice", "bob"]) {
 		const inserts = [
@@ -258,6 +276,86 @@ test("a run cannot be rebound to another applicable job owned by the same user",
 	expect((await pool.query("select job_id from import_run")).rows).toEqual([
 		{ job_id: original.jobId },
 	]);
+});
+
+test.each([
+	{ plannerVersion: 1, applySupported: true },
+	{ plannerVersion: 4, applySupported: true },
+	{ plannerVersion: 2, applySupported: false },
+	{ plannerVersion: 3, applySupported: false },
+])("v$plannerVersion applySupported=$applySupported refuses run insertion and progress", async ({
+	plannerVersion,
+	applySupported,
+}) => {
+	const { jobId } = await withUserContext(runtime, "alice", (client) =>
+		seedJob(client, "alice", false, plannerVersion, applySupported),
+	);
+	await expect(
+		withUserContext(runtime, "alice", (client) =>
+			client.query(
+				"insert into import_run (job_id, owner_user_id) values ($1,'alice')",
+				[jobId],
+			),
+		),
+	).rejects.toThrow(/row-level security/i);
+	// Seed an otherwise unreachable run to exercise the UPDATE policy independently.
+	await pool.query(
+		"insert into import_run (job_id, owner_user_id) values ($1,'alice')",
+		[jobId],
+	);
+	await expect(
+		withUserContext(runtime, "alice", (client) =>
+			client.query("update import_run set next_ordinal = 1 where job_id = $1", [
+				jobId,
+			]),
+		),
+	).rejects.toThrow(/row-level security/i);
+	expect(
+		(
+			await pool.query(
+				"select next_ordinal from import_run where job_id = $1",
+				[jobId],
+			)
+		).rows,
+	).toEqual([{ next_ordinal: 0 }]);
+});
+
+test.each([
+	"ensure",
+	"blocked",
+	"ignored",
+])("unknown planner versions refuse %s items even with complete evidence", async (disposition) => {
+	await expect(
+		withUserContext(runtime, "alice", async (client) => {
+			const { jobId } = await seedJob(client, "alice", false, 4);
+			await client.query(
+				`insert into import_item (job_id, ordinal, collection, source_id, source_key, item_digest, disposition, payload, codes, phase, content_digest, target_precondition, dependency_proof) values ($1,0,'tasks','task','tasks:task','item',$2,'{}','[]','tasks','content','{}','[]')`,
+				[jobId, disposition],
+			);
+		}),
+	).rejects.toThrow(/row-level security/i);
+	expect((await pool.query("select * from import_job")).rows).toEqual([]);
+});
+
+test.each([
+	2, 3,
+])("v%s excludes non-executable rows from the evidence requirement", async (plannerVersion) => {
+	await withUserContext(runtime, "alice", async (client) => {
+		const { jobId } = await seedJob(client, "alice", false, plannerVersion);
+		for (const [ordinal, disposition] of ["blocked", "ignored"].entries()) {
+			await client.query(
+				`insert into import_item (job_id, ordinal, collection, source_id, source_key, item_digest, disposition, payload, codes) values ($1,$2,'tasks',$3,$3,'item',$4,'{}','[]')`,
+				[jobId, ordinal, `task-${ordinal}`, disposition],
+			);
+		}
+		expect(
+			(
+				await client.query("select * from import_item where job_id = $1", [
+					jobId,
+				])
+			).rowCount,
+		).toBe(2);
+	});
 });
 
 test.each([

@@ -1616,6 +1616,8 @@
 	"import_plan_quota": "Les simulations enregistrées ont atteint la limite de stockage. Supprime les anciennes simulations ou les sources inutilisées, puis réessaie.",
 	"import_apply_intro": "Enregistre une simulation, vérifie les entrées prises en charge et exclues, puis confirme avant toute importation.",
 	"import_apply_report": "Plan d’importation enregistré",
+	"import_apply_boundary_assignments": "Seuls les dossiers pris en charge, tes listes, les étiquettes, les tâches sans rappel, les liens entre tâches et étiquettes et les attributions aux membres actuels explicitement associés peuvent être importés. Les tâches inachevées avec une échéance sont exclues pour éviter les alertes automatiques de retard. Aucune invitation ni notification d’attribution n’est envoyée. Les éléments existants ne sont jamais écrasés.",
+	"import_plan_assignment_membership": "Chaque personne associée doit appartenir à chaque espace de travail de destination où ses tâches attribuées seront importées.",
 	"import_apply_boundary": "Seuls les dossiers pris en charge, tes listes, les étiquettes, les tâches sans rappel et leurs associations aux étiquettes peuvent être importés. Les tâches inachevées avec une échéance sont exclues pour éviter les alertes automatiques de retard. Les entrées existantes ne sont jamais écrasées.",
 	"import_apply_eligible": "Entrées admissibles",
 	"import_apply_confirm": "Admissibles : {eligible}. Ignorées : {ignored}. Bloquées : {blocked}. Importer uniquement les entrées admissibles ? Les entrées existantes inchangées seront conservées. Les entrées exclues ne sont pas importées.",

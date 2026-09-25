@@ -46,9 +46,10 @@ report cannot authorize an incomplete import plan.
 ## Saved dry runs
 
 Settings can validate a native file, map its workspaces and people, and save a
-dry-run report. Saving does not import content. New plans use planner version 2
-and freeze destination checks for later application. Older version 1 plans remain
-non-applicable; upload their file again to create a current plan.
+dry-run report. Saving does not import content. New plans use planner version 3
+and freeze destination checks for later application. Saved version 2 plans remain
+applicable with their original exclusions; save a new plan to include assignments.
+Older version 1 plans remain non-applicable; upload their file again to create a current plan.
 
 Create a named import source for the first file. Explicitly select that same
 source for later exports from the same account and installation. Native v1 has
@@ -60,19 +61,28 @@ Every source workspace needs an existing writable destination. The exporting
 user maps to the caller; other people can remain unmapped or map to applicable
 current members. Source roles and memberships never create permissions.
 Application currently supports folders, the exporting user's own lists, labels,
-tasks without notification settings, and task-label links. Mapping another owner
+tasks without notification settings, task-label links, and assignments to mapped
+current members. Mapping another owner
 to your account does not make their lists eligible. Tasks with a reminder time,
 repeat interval, repeat limit, fallback recipient, or urgent flag are blocked;
 these settings are never silently removed.
 Unfinished tasks with a due date are also blocked, including habits: automatic
 overdue alerts do not require a reminder setting. Completed dated tasks and
-undated tasks remain eligible when they have no reminder settings. Assignments, comments, templates,
+undated tasks remain eligible when they have no reminder settings. Comments, templates,
 views, dashboards, focus records, preferences, Karma, and habit logs remain
 blocked pending their import policies. Attachment files remain excluded.
 Unresolved references and mapping conflicts block affected records and their
 dependents. The report distinguishes candidate records, excluded metadata, and
 blocked records. Candidates are not a promise that an eventual apply will pass
 its authorization and conflict checks.
+
+Each mapped assignee must be an active member of every destination workspace in
+which they are assigned. Viewers can receive assignments. Import creates no
+invitations or memberships and sends no assignment notifications. Apply rechecks
+the exact saved membership and task relationship; removing and recreating a membership
+requires a new plan. Existing untracked assignments are conflicts, not adopted rows.
+Imported assignments support the normal assign/unassign controls. Removing one does
+not authorize a later import to restore it; source omissions never unassign anyone.
 
 Plans store immutable ordered items and a versioned planner report. Identical
 content, mappings, and destination checks under the same source return the same
