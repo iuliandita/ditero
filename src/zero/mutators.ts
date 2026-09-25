@@ -46,6 +46,10 @@ import {
 import { filterGroupSchema, viewDisplaySchema } from "../domain/view-filter.ts";
 import { collectEvent } from "./event-sink.ts";
 import {
+	lockMembershipRoleChange,
+	removeMembershipWithActivation,
+} from "./membership-activation.ts";
+import {
 	type Dashboard,
 	type List,
 	type Membership,
@@ -1578,12 +1582,17 @@ export const mutators = defineMutators({
 		setRole: defineMutator(
 			z.object({ id: z.string(), role: z.enum(ROLES) }),
 			async ({ tx, ctx, args }) => {
-				const { callerRole } = await requireMembershipAdmin(
-					tx,
-					ctx.id,
-					args.id,
-					"cannot demote the last owner",
-				);
+				const callerRole =
+					tx.location === "server"
+						? await lockMembershipRoleChange(tx, ctx.id, args.id)
+						: (
+								await requireMembershipAdmin(
+									tx,
+									ctx.id,
+									args.id,
+									"cannot demote the last owner",
+								)
+							).callerRole;
 				if (args.role === "owner" && callerRole !== "owner")
 					throw new Error("access denied: only an owner may grant owner");
 				await tx.mutate.membership.update({ id: args.id, role: args.role });
@@ -1592,6 +1601,10 @@ export const mutators = defineMutators({
 		remove: defineMutator(
 			z.object({ id: z.string() }),
 			async ({ tx, ctx, args }) => {
+				if (tx.location === "server") {
+					await removeMembershipWithActivation(tx, ctx.id, args.id);
+					return;
+				}
 				const { target } = await requireMembershipAdmin(
 					tx,
 					ctx.id,
