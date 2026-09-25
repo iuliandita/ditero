@@ -7,6 +7,7 @@ import {
 	ExportLimitError,
 	type ExportOptions,
 	exportPortableJson,
+	exportPortableJsonV2,
 } from "./export.ts";
 
 export function portabilityRoutes(
@@ -18,6 +19,17 @@ export function portabilityRoutes(
 	return new Elysia().get(
 		"/api/portability/export",
 		guards.guardedGet(async (request, session) => {
+			const versions = new URL(request.url).searchParams.getAll("version");
+			if (
+				versions.length > 1 ||
+				(versions.length === 1 && !["1", "2"].includes(versions[0]))
+			) {
+				return Response.json(
+					{ code: "unsupported-export-version" },
+					{ status: 400, headers: { "cache-control": "no-store" } },
+				);
+			}
+			const version = versions[0] === "2" ? 2 : 1;
 			if (activeUsers.size >= 2 || activeUsers.has(session.user.id)) {
 				return Response.json(
 					{ code: "export-busy" },
@@ -29,7 +41,9 @@ export function portabilityRoutes(
 			}
 			activeUsers.add(session.user.id);
 			try {
-				const body = await exportPortableJson(pool, session.user.id, {
+				const exporter =
+					version === 2 ? exportPortableJsonV2 : exportPortableJson;
+				const body = await exporter(pool, session.user.id, {
 					...options,
 					signal: request.signal,
 				});
@@ -37,7 +51,9 @@ export function portabilityRoutes(
 					headers: {
 						"content-type": "application/json; charset=utf-8",
 						"content-disposition":
-							'attachment; filename="ditero-export-v1.json"',
+							version === 2
+								? 'attachment; filename="ditero-history-v2.json"'
+								: 'attachment; filename="ditero-export-v1.json"',
 						"cache-control": "no-store",
 						"x-content-type-options": "nosniff",
 					},

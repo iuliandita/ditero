@@ -17,6 +17,7 @@ import {
 	timestamp,
 	unique,
 	uniqueIndex,
+	uuid,
 } from "drizzle-orm/pg-core";
 import { CHANNEL_ERROR_CODES } from "../domain/notification-retry.ts";
 import { user } from "./auth-schema.ts";
@@ -259,6 +260,17 @@ export const task = pgTable(
 			sql`(${t.recurrenceAnchorAt} is null and ${t.recurrenceConsumed} is null) or (${t.recurrenceAnchorAt} is not null and ${t.recurrenceConsumed} is not null and ${t.recurrenceConsumed} >= 0)`,
 		),
 	],
+);
+
+// Stable, server-only source namespace. A migration seeds the single row before
+// enabling FORCE RLS; exports read it inside their existing read-only snapshot.
+export const portabilityIdentity = pgTable(
+	"portability_identity",
+	{
+		id: integer("id").primaryKey(),
+		namespace: uuid("namespace").notNull(),
+	},
+	(t) => [check("portability_identity_singleton", sql`${t.id} = 1`)],
 );
 
 export const taskCompletionEvent = pgTable(
