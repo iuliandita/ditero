@@ -42,6 +42,7 @@ export function validateImportGraphV2(
 						else eventIds.add(row.id);
 					}
 					const ref = JSON.stringify([
+						"taskId" in row ? row.taskId : row.workspaceId,
 						row.sourceRef.namespace.toLowerCase(),
 						row.sourceRef.collection,
 						row.sourceRef.id,

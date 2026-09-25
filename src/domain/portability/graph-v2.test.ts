@@ -306,6 +306,49 @@ describe("v2 import graph", () => {
 		expect(validateImportGraphV2(source).errors).toEqual([]);
 	});
 
+	test("retains the same provenance on copies under different parents", () => {
+		const source = fixture();
+		source.data.tasks.push({ ...source.data.tasks[0], id: "other-task" });
+		source.data.workspaces.push({
+			...source.data.workspaces[0],
+			id: "other-workspace",
+		});
+		source.data.comments.push({
+			...source.data.comments[0],
+			id: "other-comment",
+			taskId: "other-task",
+		});
+		source.data.completionEvents.push({
+			...source.data.completionEvents[0],
+			id: "other-event",
+			taskId: "other-task",
+		});
+		source.data.templates.push({
+			...source.data.templates[0],
+			id: "other-template",
+			workspaceId: "other-workspace",
+		});
+		expect(validateImportGraphV2(source).errors).toEqual([]);
+
+		source.data.comments[1].taskId = "task";
+		source.data.completionEvents[1].taskId = "task";
+		source.data.templates[1].workspaceId = "ws";
+		expect(validateImportGraphV2(source).errors).toEqual([
+			{
+				code: "duplicate-source-reference",
+				path: "data.comments[1].sourceRef",
+			},
+			{
+				code: "duplicate-source-reference",
+				path: "data.templates[1].sourceRef",
+			},
+			{
+				code: "duplicate-source-reference",
+				path: "data.completionEvents[1].sourceRef",
+			},
+		]);
+	});
+
 	test("uses the shared combined finding cap for additional event checks", () => {
 		const source = fixture();
 		source.data.completionEvents = Array.from({ length: 1_001 }, (_, i) => ({
