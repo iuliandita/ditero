@@ -288,6 +288,20 @@
       "when": 1790351231572,
       "tag": "0040_import_activation_run_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790363642593,
+      "tag": "0041_completion_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790363662262,
+      "tag": "0042_completion_history_rls",
+      "breakpoints": true
     }
   ]
 }

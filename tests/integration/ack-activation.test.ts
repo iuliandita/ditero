@@ -113,8 +113,49 @@ for (const status of ["native", "active"] as const) {
 			status: "acked",
 			awards: 1,
 		});
+		const history = (
+			await admin.query(`select actor_user_id,origin,action,
+			before_done,after_done from task_completion_event where task_id='ack-task'`)
+		).rows;
+		expect(history).toEqual([
+			{
+				actor_user_id: "ack-user",
+				origin: "capability_recipient",
+				action: "complete",
+				before_done: false,
+				after_done: true,
+			},
+		]);
 	});
 }
+
+test("history append failure rolls back capability consumption and completion", async () => {
+	await admin.query(
+		"revoke insert on task_completion_event from ditero_ack_activation_test",
+	);
+	try {
+		await expect(
+			redeemAckCapability(db, token, "capability"),
+		).rejects.toThrow();
+		expect(await result()).toEqual({
+			done: false,
+			status: "pending",
+			consumed_at: null,
+			awards: 0,
+		});
+		expect(
+			(
+				await admin.query(
+					"select count(*)::int as count from task_completion_event where task_id='ack-task'",
+				)
+			).rows[0].count,
+		).toBe(0);
+	} finally {
+		await admin.query(
+			"grant insert on task_completion_event to ditero_ack_activation_test",
+		);
+	}
+});
 
 test("viewer ack remains content-free on an active imported task", async () => {
 	await guard("active");
