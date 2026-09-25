@@ -490,6 +490,42 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 			expect(t.completedAt).not.toBeNull();
 		});
 
+		test("repeating completion after a series is exhausted preserves its timestamp and Karma", async () => {
+			await call(
+				mutators.task.complete,
+				{ id: "hm-owner" },
+				{ id: "hm-t-exhausted" },
+			);
+			const first = await taskRow("hm-t-exhausted");
+			await call(
+				mutators.task.complete,
+				{ id: "hm-owner" },
+				{ id: "hm-t-exhausted" },
+			);
+			const second = await taskRow("hm-t-exhausted");
+			expect(second.completedAt).toEqual(first.completedAt);
+			expect((await karmaRow("hm-owner")).points).toBe(5);
+			expect(await eventCount("hm-owner")).toBe(1);
+		});
+
+		test("two intentional live recurring completions advance twice and each award Karma", async () => {
+			await call(
+				mutators.task.complete,
+				{ id: "hm-owner" },
+				{ id: "hm-t-fixed" },
+			);
+			await call(
+				mutators.task.complete,
+				{ id: "hm-owner" },
+				{ id: "hm-t-fixed" },
+			);
+			const task = await taskRow("hm-t-fixed");
+			expect(task.dueAt?.getTime()).toBe(ANCHOR + 2 * DAY);
+			expect(task.done).toBe(false);
+			expect((await karmaRow("hm-owner")).points).toBe(10);
+			expect(await eventCount("hm-owner")).toBe(2);
+		});
+
 		test("malformed rrule -> throws, task unchanged, no Karma", async () => {
 			await expect(
 				call(mutators.task.complete, { id: "hm-owner" }, { id: "hm-t-bad" }),
@@ -622,6 +658,30 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 				{ id: "hm-t-plain", done: true },
 			);
 			expect((await taskRow("hm-t-plain")).done).toBe(true);
+		});
+
+		test.each([
+			"hm-t-plain",
+			"hm-t-exhausted",
+		])("same done flag preserves completedAt while editing %s and explicit reopen clears it", async (id) => {
+			await call(mutators.task.complete, { id: "hm-owner" }, { id });
+			await db
+				.update(tables.task)
+				.set({ completedAt: new Date(ANCHOR) })
+				.where(eq(tables.task.id, id));
+			const completedAt = (await taskRow(id)).completedAt;
+			await call(
+				mutators.task.update,
+				{ id: "hm-owner" },
+				{ id, done: true, title: "edited" },
+			);
+			const edited = await taskRow(id);
+			expect(edited.title).toBe("edited");
+			expect(edited.completedAt).toEqual(completedAt);
+			await call(mutators.task.update, { id: "hm-owner" }, { id, done: false });
+			const reopened = await taskRow(id);
+			expect(reopened.done).toBe(false);
+			expect(reopened.completedAt).toBeNull();
 		});
 	});
 

@@ -82,3 +82,32 @@ describe("completeForAck karma day", () => {
 		expect(s.awards[0].date).toBe("2026-07-15");
 	});
 });
+
+describe("completeForAck exhausted recurrence", () => {
+	it("does not rewrite completion or award Karma on a second ack", async () => {
+		const task: AckTask = {
+			...PLAIN_TASK,
+			rrule: "FREQ=DAILY;COUNT=1",
+			dueAt: EVENING_NY,
+		};
+		const s = store(task, "UTC");
+		const updates: { done: boolean; completedAt: number | null }[] = [];
+		s.updateTask = async (_id, patch) => {
+			task.done = patch.done;
+			updates.push({ done: patch.done, completedAt: patch.completedAt });
+		};
+		const reminder = {
+			taskId: task.id,
+			occurrenceAt: EVENING_NY,
+			recipientUserId: "u1",
+		};
+		expect(await completeForAck(s, reminder, "u1", EVENING_NY)).toBe(
+			"completed",
+		);
+		expect(await completeForAck(s, reminder, "u1", EVENING_NY + 1_000)).toBe(
+			"completed",
+		);
+		expect(updates).toEqual([{ done: true, completedAt: EVENING_NY }]);
+		expect(s.awards).toHaveLength(1);
+	});
+});

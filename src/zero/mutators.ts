@@ -721,9 +721,9 @@ export const mutators = defineMutators({
 					if (!fallbackRole)
 						throw new Error("escalation fallback is not a member");
 				}
-				// done and completedAt are one invariant, kept here in one place.
+				// Only a state change creates or clears the completion timestamp.
 				const completed =
-					args.done === undefined
+					args.done === undefined || args.done === task.done
 						? {}
 						: { completedAt: args.done ? Date.now() : null };
 				await tx.mutate.task.update({
@@ -917,10 +917,9 @@ export const mutators = defineMutators({
 				if (list.kind === "habits")
 					throw new Error("habits complete via habit.log");
 				const now = Date.now();
-				// Non-recurring completion is idempotent: an already-done task is a
-				// no-op so a repeat call cannot re-award Karma. Recurring tasks still
-				// advance+award per occurrence (each occurrence is a real completion).
-				if (!task.rrule && task.done) return;
+				// A done task, including an exhausted recurring series, has no current
+				// occurrence to complete. Live recurring tasks remain open between calls.
+				if (task.done) return;
 				if (task.rrule) {
 					const next = nextOccurrence(task, now);
 					if (next !== null) {
