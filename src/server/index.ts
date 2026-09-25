@@ -3,7 +3,7 @@
 // permission runs inside each mutator, driven by /api/zero/mutate.
 import { join } from "node:path";
 import { cors } from "@elysiajs/cors";
-import { mustGetMutator, mustGetQuery } from "@rocicorp/zero";
+import { mustGetMutator, mustGetQuery, type Transaction } from "@rocicorp/zero";
 import { handleMutateRequest, handleQueryRequest } from "@rocicorp/zero/server";
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { Elysia } from "elysia";
@@ -38,7 +38,9 @@ import { verifyRuntimeDatabaseRole } from "../db/runtime-role.ts";
 import { verifyZeroShardAccess, zeroShardSchema } from "../db/zero-shard.ts";
 import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
+import type { Schema } from "../zero/schema.gen.ts";
 import { schema } from "../zero/schema.gen.ts";
+import { withZeroUserContext } from "../zero/task-activation.ts";
 import { accountDeletionRoutes } from "./account-deletion.ts";
 import { attachmentRoutes } from "./attachments/routes.ts";
 import { startAttachmentSweep } from "./attachments/sweep.ts";
@@ -444,7 +446,9 @@ const routes = new Elysia()
 							args: unknown;
 						}) => Promise<void>;
 					};
-					await m.fn({ tx, ctx, args });
+					await withZeroUserContext(tx as Transaction<Schema>, ctx.id, () =>
+						m.fn({ tx, ctx, args }),
+					);
 				}),
 			request,
 			userID: ctx.id,
