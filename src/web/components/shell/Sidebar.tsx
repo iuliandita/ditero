@@ -328,26 +328,28 @@ export function Sidebar({
 					</ul>
 				</div>
 
-				<div className="mb-3">
-					{!collapsed && (
-						<div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-							{m.sidebar_dashboards_heading()}
-						</div>
-					)}
-					<ul className="flex flex-col gap-0.5">
-						{dashboards.map((d) => (
-							<NavRow
-								key={d.id}
-								name={d.name}
-								icon={d.icon}
-								active={dashboardActive(d.id)}
-								onOpen={() => onOpenDashboard(d.id)}
-								collapsed={collapsed}
-								actions={dashboardActions(d)}
-							/>
-						))}
-					</ul>
-				</div>
+				{dashboards.length > 0 && (
+					<div className="mb-3">
+						{!collapsed && (
+							<div className="px-2 py-1 text-xs font-medium text-muted-foreground">
+								{m.sidebar_dashboards_heading()}
+							</div>
+						)}
+						<ul className="flex flex-col gap-0.5">
+							{dashboards.map((d) => (
+								<NavRow
+									key={d.id}
+									name={d.name}
+									icon={d.icon}
+									active={dashboardActive(d.id)}
+									onOpen={() => onOpenDashboard(d.id)}
+									collapsed={collapsed}
+									actions={dashboardActions(d)}
+								/>
+							))}
+						</ul>
+					</div>
+				)}
 
 				{groups.map((group) => (
 					<div key={group.folder?.id ?? "__ungrouped__"} className="mb-3">
