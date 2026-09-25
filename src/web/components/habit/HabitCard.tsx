@@ -11,6 +11,7 @@ import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { List, schema, Task } from "../../../zero/schema.gen.ts";
 import { useHabitLogs } from "../../hooks/useHabitLogs.ts";
+import { useTaskImportActivation } from "../../hooks/useTaskImportActivation.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { HabitTracker } from "./HabitTracker.tsx";
@@ -33,6 +34,7 @@ export function HabitCard({
 	onOpenDetail: (task: Task) => void;
 }) {
 	const zero = useZero<typeof schema>();
+	const activation = useTaskImportActivation(task.id);
 	const { logs } = useHabitLogs(task.id);
 	const { pref } = useUserPref();
 	const today = localDay(new Date(), pref.timezone);
@@ -52,6 +54,7 @@ export function HabitCard({
 	);
 
 	function log(status: "done" | "skipped") {
+		if (!activation.canWrite) return;
 		void runMutation(
 			zero.mutate(
 				mutators.habit.log({ habitId: task.id, date: today, status }),
@@ -61,6 +64,7 @@ export function HabitCard({
 	}
 
 	function unlog() {
+		if (!activation.canWrite) return;
 		void runMutation(
 			zero.mutate(mutators.habit.unlog({ habitId: task.id, date: today })),
 			() => {},
@@ -85,6 +89,14 @@ export function HabitCard({
 					className="min-w-0 flex-1 text-start"
 				>
 					<span className="block truncate font-medium">{task.title}</span>
+					{(activation.status === "pending" ||
+						activation.status === "blocked") && (
+						<span className="block text-xs text-amber-700 dark:text-amber-400">
+							{activation.status === "pending"
+								? m.activation_badge_pending()
+								: m.activation_badge_blocked()}
+						</span>
+					)}
 					{task.reminderTime && (
 						<span className="text-xs text-muted-foreground">
 							{task.reminderTime}
@@ -114,6 +126,7 @@ export function HabitCard({
 			<div className="mt-3 flex items-center justify-between gap-2">
 				<div className="flex items-center gap-1">
 					<Button
+						disabled={!activation.canWrite}
 						type="button"
 						variant="ghost"
 						size="sm"
@@ -127,7 +140,7 @@ export function HabitCard({
 						type="button"
 						variant="ghost"
 						size="sm"
-						disabled={todayStatus === "none"}
+						disabled={!activation.canWrite || todayStatus === "none"}
 						data-testid="habit-undo"
 						onClick={unlog}
 					>
@@ -135,6 +148,7 @@ export function HabitCard({
 					</Button>
 				</div>
 				<Button
+					disabled={!activation.canWrite}
 					type="button"
 					variant={done ? "default" : "outline"}
 					aria-pressed={done}

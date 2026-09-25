@@ -46,6 +46,11 @@ import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
 import { formatFocusedDuration } from "../../focus/timer-core.ts";
 import { useFocusTimer } from "../../focus/useFocusTimer.tsx";
 import { useFocusSessions } from "../../hooks/useFocusSessions.ts";
+import {
+	taskImportRecoveryKey,
+	useTaskImportActivation,
+	useTaskImportActivationMap,
+} from "../../hooks/useTaskImportActivation.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { AttachmentList } from "../attachments/AttachmentList.tsx";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
@@ -53,6 +58,7 @@ import { CommentThread } from "../people/CommentThread.tsx";
 import { RecurrenceEditor } from "../task/RecurrenceEditor.tsx";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { ReminderPolicy } from "../task/ReminderPolicy.tsx";
+import { ImportActivationRecovery } from "./ImportActivationRecovery.tsx";
 
 const PRIORITY_OPTIONS = [0, 1, 2, 3];
 
@@ -90,6 +96,8 @@ export function TaskDetail({
 	const [error, setError] = useState<string | null>(null);
 	const [newSubtask, setNewSubtask] = useState("");
 	const [newLabel, setNewLabel] = useState("");
+	const activation = useTaskImportActivation(task?.id);
+	const activationMap = useTaskImportActivationMap();
 
 	// Total time-on-task = sum of this task's completed `work` focus intervals.
 	const { sessions: focusSessions } = useFocusSessions(task?.id);
@@ -107,6 +115,9 @@ export function TaskDetail({
 		() => (task ? allTasks.filter((t) => t.parentId === task.id) : []),
 		[allTasks, task],
 	);
+	const canMove =
+		activation.canWrite &&
+		subtasks.every((subtask) => activationMap.canWriteTask(subtask.id));
 	const moveTargets = useMemo(
 		() =>
 			allLists.filter(
@@ -128,6 +139,7 @@ export function TaskDetail({
 	const due = dueToInputs(t.dueAt);
 
 	function update(patch: Parameters<typeof mutators.task.update>[0]) {
+		if (!activationMap.canWriteTask(patch.id)) return;
 		void run(zero.mutate(mutators.task.update(patch)));
 	}
 
@@ -173,6 +185,7 @@ export function TaskDetail({
 	}
 
 	function addSubtask() {
+		if (!activation.canWrite) return;
 		const title = newSubtask.trim();
 		if (!title) return;
 		void run(
@@ -197,6 +210,7 @@ export function TaskDetail({
 	// which would be a content decision, not a placement one.
 	const titleField = (
 		<Input
+			disabled={!activation.canWrite}
 			defaultValue={task.title}
 			key={task.id}
 			aria-label={m.task_detail_title_field()}
@@ -219,6 +233,21 @@ export function TaskDetail({
 				isDesktop ? "grid grid-cols-2 items-start gap-x-6" : "flex flex-col",
 			)}
 		>
+			{activation.status !== "native" && activation.status !== "active" && (
+				<div className={cn(isDesktop && "col-span-2")}>
+					<ImportActivationRecovery
+						key={taskImportRecoveryKey(
+							t.id,
+							list.workspaceId,
+							activation.status,
+						)}
+						taskId={t.id}
+						workspaceId={list.workspaceId}
+						status={activation.status}
+						open={open}
+					/>
+				</div>
+			)}
 			{error && (
 				<p
 					role="alert"
@@ -232,6 +261,7 @@ export function TaskDetail({
 				<label className="flex flex-col gap-1 text-sm">
 					<span className="text-muted-foreground">{m.task_field_notes()}</span>
 					<textarea
+						disabled={!activation.canWrite}
 						key={`notes-${task.id}`}
 						defaultValue={task.notes ?? ""}
 						rows={3}
@@ -249,6 +279,7 @@ export function TaskDetail({
 					<div className="flex items-center gap-2">
 						<input
 							type="date"
+							disabled={!activation.canWrite}
 							value={due.date}
 							aria-label={m.task_due_date_aria()}
 							className="h-8 rounded-lg border bg-transparent px-2 text-sm"
@@ -258,12 +289,13 @@ export function TaskDetail({
 							type="time"
 							value={due.time}
 							aria-label={m.task_due_time_aria()}
-							disabled={!due.date}
+							disabled={!activation.canWrite || !due.date}
 							className="h-8 rounded-lg border bg-transparent px-2 text-sm disabled:opacity-50"
 							onChange={(e) => setDue(due.date, e.target.value)}
 						/>
 						{task.dueAt != null && (
 							<Button
+								disabled={!activation.canWrite}
 								variant="ghost"
 								size="icon-sm"
 								aria-label={m.task_due_clear()}
@@ -295,26 +327,37 @@ export function TaskDetail({
 					</Button>
 				</div>
 
-				{!isSubtask && <RecurrenceEditor key={t.id} task={t} />}
+				{!isSubtask && (
+					<RecurrenceEditor
+						key={t.id}
+						task={t}
+						disabled={!activation.canWrite}
+					/>
+				)}
 
 				{!isSubtask && (
 					<ReminderPolicy
 						key={`reminder-${t.id}`}
 						task={t}
 						workspaceId={list.workspaceId}
+						disabled={!activation.canWrite}
 					/>
 				)}
 
 				{!isSubtask && t.rrule != null && kind !== "habits" && (
 					<Button
+						disabled={!activation.canWrite}
 						variant="outline"
 						size="sm"
 						className="self-start"
 						data-testid="recurrence-skip"
 						aria-label={m.task_skip_occurrence()}
-						onClick={() =>
-							void run(zero.mutate(mutators.task.skipOccurrence({ id: t.id })))
-						}
+						onClick={() => {
+							if (activation.canWrite)
+								void run(
+									zero.mutate(mutators.task.skipOccurrence({ id: t.id })),
+								);
+						}}
 					>
 						<SkipForward /> {m.task_skip_occurrence()}
 					</Button>
@@ -333,6 +376,7 @@ export function TaskDetail({
 								const active = (task.priority ?? 0) === level;
 								return (
 									<button
+										disabled={!activation.canWrite}
 										key={level}
 										type="button"
 										aria-pressed={active}
@@ -415,7 +459,11 @@ export function TaskDetail({
 					</div>
 				)}
 
-				<AssigneePicker task={t} workspaceId={list.workspaceId} />
+				<AssigneePicker
+					task={t}
+					workspaceId={list.workspaceId}
+					disabled={!activation.canWrite}
+				/>
 
 				{!isSubtask && (
 					<div className="flex flex-col gap-1 text-sm">
@@ -426,9 +474,11 @@ export function TaskDetail({
 							{subtasks.map((s) => (
 								<li key={s.id} className="flex items-center gap-2 py-1">
 									<Checkbox
+										disabled={!activationMap.canWriteTask(s.id)}
 										aria-label={s.title}
 										checked={s.done ?? false}
 										onCheckedChange={() => {
+											if (!activationMap.canWriteTask(s.id)) return;
 											if (s.done) update({ id: s.id, done: false });
 											else
 												void run(
@@ -459,6 +509,7 @@ export function TaskDetail({
 						</ul>
 						<div className="flex items-center gap-1.5">
 							<Input
+								disabled={!activation.canWrite}
 								value={newSubtask}
 								placeholder={m.task_add_subtask_placeholder()}
 								onChange={(e) => setNewSubtask(e.target.value)}
@@ -469,7 +520,7 @@ export function TaskDetail({
 							<Button
 								size="sm"
 								onClick={addSubtask}
-								disabled={!newSubtask.trim()}
+								disabled={!activation.canWrite || !newSubtask.trim()}
 							>
 								{m.action_add()}
 							</Button>
@@ -483,8 +534,10 @@ export function TaskDetail({
 							{m.task_move_to_list()}
 						</span>
 						<Select
+							disabled={!canMove}
 							value={list.id}
 							onValueChange={(target) => {
+								if (!canMove) return;
 								const targetTasks = allTasks.filter(
 									(t) => t.listId === target && t.parentId == null,
 								);

@@ -280,9 +280,10 @@ test("a run cannot be rebound to another applicable job owned by the same user",
 
 test.each([
 	{ plannerVersion: 1, applySupported: true },
-	{ plannerVersion: 4, applySupported: true },
+	{ plannerVersion: 99, applySupported: true },
 	{ plannerVersion: 2, applySupported: false },
 	{ plannerVersion: 3, applySupported: false },
+	{ plannerVersion: 4, applySupported: false },
 ])("v$plannerVersion applySupported=$applySupported refuses run insertion and progress", async ({
 	plannerVersion,
 	applySupported,
@@ -327,7 +328,7 @@ test.each([
 ])("unknown planner versions refuse %s items even with complete evidence", async (disposition) => {
 	await expect(
 		withUserContext(runtime, "alice", async (client) => {
-			const { jobId } = await seedJob(client, "alice", false, 4);
+			const { jobId } = await seedJob(client, "alice", false, 99);
 			await client.query(
 				`insert into import_item (job_id, ordinal, collection, source_id, source_key, item_digest, disposition, payload, codes, phase, content_digest, target_precondition, dependency_proof) values ($1,0,'tasks','task','tasks:task','item',$2,'{}','[]','tasks','content','{}','[]')`,
 				[jobId, disposition],

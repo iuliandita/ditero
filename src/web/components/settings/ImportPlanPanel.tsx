@@ -18,7 +18,7 @@ type Status = {
 	sourceLabel: string;
 	createdAt: string;
 	report: {
-		plannerVersion: 1 | 2 | 3;
+		plannerVersion: 1 | 2 | 3 | 4;
 		applySupported: boolean;
 		counts: { ensure: number; ignored: number; blocked: number };
 		findings: { code: string; path: string }[];
@@ -229,7 +229,9 @@ export function ImportPlanPanel() {
 		(source || label.trim());
 	const applicable =
 		report?.report.applySupported &&
-		(report.report.plannerVersion === 2 || report.report.plannerVersion === 3);
+		(report.report.plannerVersion === 2 ||
+			report.report.plannerVersion === 3 ||
+			report.report.plannerVersion === 4);
 	return (
 		<section
 			id="import-plan"
@@ -407,9 +409,11 @@ export function ImportPlanPanel() {
 					</h3>
 					<p className="text-sm">
 						{applicable
-							? report.report.plannerVersion === 3
-								? m.import_apply_boundary_assignments()
-								: m.import_apply_boundary()
+							? report.report.plannerVersion === 4
+								? m.import_apply_boundary_activation()
+								: report.report.plannerVersion === 3
+									? m.import_apply_boundary_assignments()
+									: m.import_apply_boundary()
 							: m.import_plan_boundary()}
 					</p>
 					<dl className="mt-2 text-sm">

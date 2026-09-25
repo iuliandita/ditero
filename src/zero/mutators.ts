@@ -46,6 +46,10 @@ import {
 import { filterGroupSchema, viewDisplaySchema } from "../domain/view-filter.ts";
 import { collectEvent } from "./event-sink.ts";
 import {
+	lockMembershipRoleChange,
+	removeMembershipWithActivation,
+} from "./membership-activation.ts";
+import {
 	type Dashboard,
 	type List,
 	type Membership,
@@ -55,6 +59,16 @@ import {
 	type Workspace,
 	zql,
 } from "./schema.gen.ts";
+import {
+	clearExplicitDueSuppression,
+	deleteZeroListTasks,
+	deleteZeroTaskChildren,
+	lockZeroContainerWrite,
+	lockZeroPreferenceUser,
+	lockZeroTaskDeletion,
+	lockZeroTaskWrite,
+	reconcileZeroActiveRecipients,
+} from "./task-activation.ts";
 
 const DENIED = "access denied: need member+";
 const denied = () => new MutatorError("denied", DENIED);
@@ -652,12 +666,21 @@ export const mutators = defineMutators({
 				fallbackUserId: z.string().max(200).nullable().optional(),
 			}),
 			async ({ tx, ctx, args }) => {
-				const task = await tx.run(
+				let task = await tx.run(
 					zql.task.where("id", args.id).related("list").one(),
 				);
 				if (!task) throw new Error("task not found");
-				const list = task.list as List;
+				let list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				await lockZeroTaskWrite(tx, ctx.id, {
+					taskIds: [args.id],
+					extraUserIds: args.fallbackUserId ? [args.fallbackUserId] : [],
+				});
+				task = await tx.run(
+					zql.task.where("id", args.id).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				list = task.list as List;
 				// Fail loud before any write if a non-null rrule is malformed, so the
 				// complete/skip paths never read back an unparseable recurrence.
 				if (args.rrule != null) parseRule(args.rrule);
@@ -736,6 +759,12 @@ export const mutators = defineMutators({
 						? { fallbackUserId: args.fallbackUserId }
 						: {}),
 				});
+				await clearExplicitDueSuppression(
+					tx,
+					args.id,
+					task.dueAt ?? null,
+					args.dueAt,
+				);
 			},
 		),
 		move: defineMutator(
@@ -746,13 +775,22 @@ export const mutators = defineMutators({
 				await requireWrite(tx, ctx.id, target.workspaceId);
 				const task = await tx.run(zql.task.where("id", args.id).one());
 				if (!task) throw new Error("task not found");
-				if (task.listId !== args.listId) {
+				const locked = await lockZeroTaskWrite(tx, ctx.id, {
+					taskIds: [args.id],
+					targetListIds: [args.listId],
+					includeChildren: task.listId !== args.listId,
+				});
+				const current = await tx.run(zql.task.where("id", args.id).one());
+				if (!current) throw new Error("task not found");
+				if (current.listId !== args.listId) {
 					// A subtask must stay in its parent's list; only parents relocate,
 					// and their children cascade to the target list (same-list invariant
 					// that task.create enforces).
-					if (task.parentId != null)
+					if (current.parentId != null)
 						throw new Error("subtask must stay in its parent's list");
 					const children = await tx.run(zql.task.where("parentId", args.id));
+					if (children.some((child) => !locked.taskIds.includes(child.id)))
+						throw new Error("Task activation children changed");
 					for (const child of children) {
 						await tx.mutate.task.update({ id: child.id, listId: args.listId });
 					}
@@ -762,6 +800,9 @@ export const mutators = defineMutators({
 					listId: args.listId,
 					sortKey: args.sortKey,
 				});
+				if (current.listId !== args.listId)
+					for (const id of locked.taskIds)
+						await reconcileZeroActiveRecipients(tx, id, locked, true);
 			},
 		),
 		delete: defineMutator(
@@ -773,10 +814,13 @@ export const mutators = defineMutators({
 				if (!task) throw new Error("task not found");
 				const list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				await lockZeroTaskDeletion(tx, ctx.id, args.id);
 				// parent_id FK is `no action`: delete children explicitly first.
-				const children = await tx.run(zql.task.where("parentId", args.id));
-				for (const child of children) {
-					await tx.mutate.task.delete({ id: child.id });
+				if (tx.location === "server") await deleteZeroTaskChildren(tx, args.id);
+				else {
+					const children = await tx.run(zql.task.where("parentId", args.id));
+					for (const child of children)
+						await tx.mutate.task.delete({ id: child.id });
 				}
 				await tx.mutate.task.delete({ id: args.id });
 			},
@@ -793,6 +837,10 @@ export const mutators = defineMutators({
 				if (!task) throw new Error("task not found");
 				const list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				const locked = await lockZeroTaskWrite(tx, ctx.id, {
+					taskIds: [args.taskId],
+					extraUserIds: [args.userId],
+				});
 				const assigneeRole = await roleInWorkspace(
 					tx,
 					args.userId,
@@ -807,6 +855,7 @@ export const mutators = defineMutators({
 					taskId: args.taskId,
 					userId: args.userId,
 				});
+				await reconcileZeroActiveRecipients(tx, args.taskId, locked);
 				// Assigning yourself is not news. Collected, not enqueued: the
 				// server drains this after the mutation commits (server/notifications/
 				// events.ts); on the client it is a no-op.
@@ -832,9 +881,15 @@ export const mutators = defineMutators({
 				if (!task) throw new Error("task not found");
 				const list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				const locked = await lockZeroTaskWrite(tx, ctx.id, {
+					taskIds: [args.taskId],
+				});
 				const id = `${args.taskId}:${args.userId}`;
 				const existing = await tx.run(zql.taskAssignee.where("id", id).one());
-				if (existing) await tx.mutate.taskAssignee.delete({ id });
+				if (existing) {
+					await tx.mutate.taskAssignee.delete({ id });
+					await reconcileZeroActiveRecipients(tx, args.taskId, locked);
+				}
 			},
 		),
 		// Complete a task: for a recurring task advance to the next occurrence
@@ -844,12 +899,18 @@ export const mutators = defineMutators({
 		complete: defineMutator(
 			z.object({ id: z.string() }),
 			async ({ tx, ctx, args }) => {
-				const task = await tx.run(
+				let task = await tx.run(
 					zql.task.where("id", args.id).related("list").one(),
 				);
 				if (!task) throw new Error("task not found");
-				const list = task.list as List;
+				let list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				await lockZeroTaskWrite(tx, ctx.id, { taskIds: [args.id] });
+				task = await tx.run(
+					zql.task.where("id", args.id).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				list = task.list as List;
 				// Habits are task rows in a kind=habits list; they complete only via
 				// habit.log. Reject before any mutate/karma so a habit id cannot
 				// double-award task karma and advance the habit's dueAt.
@@ -897,12 +958,18 @@ export const mutators = defineMutators({
 		skipOccurrence: defineMutator(
 			z.object({ id: z.string() }),
 			async ({ tx, ctx, args }) => {
-				const task = await tx.run(
+				let task = await tx.run(
 					zql.task.where("id", args.id).related("list").one(),
 				);
 				if (!task) throw new Error("task not found");
-				const list = task.list as List;
+				let list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				await lockZeroTaskWrite(tx, ctx.id, { taskIds: [args.id] });
+				task = await tx.run(
+					zql.task.where("id", args.id).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				list = task.list as List;
 				if (!task.rrule) throw new Error("not a recurring task");
 				const now = Date.now();
 				const next = nextOccurrence(task, now);
@@ -927,12 +994,17 @@ export const mutators = defineMutators({
 				status: z.enum(["done", "skipped"]),
 			}),
 			async ({ tx, ctx, args }) => {
-				const habit = await tx.run(
+				let habit = await tx.run(
 					zql.task.where("id", args.habitId).related("list").one(),
 				);
 				if (!habit) throw new Error("habit not found");
 				const list = habit.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				await lockZeroTaskWrite(tx, ctx.id, { taskIds: [args.habitId] });
+				habit = await tx.run(
+					zql.task.where("id", args.habitId).related("list").one(),
+				);
+				if (!habit) throw new Error("habit not found");
 				const now = Date.now();
 				const existing = await tx.run(
 					zql.habitLog
@@ -981,12 +1053,17 @@ export const mutators = defineMutators({
 		unlog: defineMutator(
 			z.object({ habitId: z.string(), date: z.string().regex(DATE_RE) }),
 			async ({ tx, ctx, args }) => {
-				const habit = await tx.run(
+				let habit = await tx.run(
 					zql.task.where("id", args.habitId).related("list").one(),
 				);
 				if (!habit) throw new Error("habit not found");
 				const list = habit.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				await lockZeroTaskWrite(tx, ctx.id, { taskIds: [args.habitId] });
+				habit = await tx.run(
+					zql.task.where("id", args.habitId).related("list").one(),
+				);
+				if (!habit) throw new Error("habit not found");
 				const existing = await tx.run(
 					zql.habitLog
 						.where("habitId", args.habitId)
@@ -1017,6 +1094,10 @@ export const mutators = defineMutators({
 				if (!reminder) throw new Error("reminder not found");
 				if (reminder.recipientUserId !== ctx.id)
 					throw new Error("access denied: not your reminder");
+				await lockZeroTaskWrite(tx, ctx.id, {
+					taskIds: [reminder.taskId],
+					allowViewer: true,
+				});
 				const now = Date.now();
 				// Completion first, so its outcome lands on the row (the capability
 				// route does the same); a denial throws before anything is written.
@@ -1131,6 +1212,11 @@ export const mutators = defineMutators({
 				const list = await tx.run(zql.list.where("id", args.id).one());
 				if (!list) throw new Error("list not found");
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				await lockZeroContainerWrite(tx, ctx.id, {
+					listId: args.id,
+					targetFolderId: args.folderId,
+					listPatch: args,
+				});
 				await tx.mutate.list.update({
 					id: args.id,
 					...(args.title !== undefined ? { title: args.title } : {}),
@@ -1155,14 +1241,22 @@ export const mutators = defineMutators({
 					list.ownerId,
 					"list owner",
 				);
+				await lockZeroContainerWrite(tx, ctx.id, {
+					listId: args.id,
+					allowPending: true,
+					deleteTasks: true,
+				});
 				// list_id FK is `no action`: delete tasks first (children before
 				// parents), task_label cascades on task delete.
-				const tasks = await tx.run(zql.task.where("listId", args.id));
-				for (const t of tasks) {
-					if (t.parentId != null) await tx.mutate.task.delete({ id: t.id });
-				}
-				for (const t of tasks) {
-					if (t.parentId == null) await tx.mutate.task.delete({ id: t.id });
+				if (tx.location === "server") await deleteZeroListTasks(tx, args.id);
+				else {
+					const tasks = await tx.run(zql.task.where("listId", args.id));
+					for (const t of tasks) {
+						if (t.parentId != null) await tx.mutate.task.delete({ id: t.id });
+					}
+					for (const t of tasks) {
+						if (t.parentId == null) await tx.mutate.task.delete({ id: t.id });
+					}
 				}
 				await tx.mutate.list.delete({ id: args.id });
 			},
@@ -1196,6 +1290,10 @@ export const mutators = defineMutators({
 				const folder = await tx.run(zql.folder.where("id", args.id).one());
 				if (!folder) throw new Error("folder not found");
 				await requireWrite(tx, ctx.id, folder.workspaceId);
+				await lockZeroContainerWrite(tx, ctx.id, {
+					folderId: args.id,
+					folderPatch: args,
+				});
 				await tx.mutate.folder.update({
 					id: args.id,
 					...(args.name !== undefined ? { name: args.name } : {}),
@@ -1484,12 +1582,17 @@ export const mutators = defineMutators({
 		setRole: defineMutator(
 			z.object({ id: z.string(), role: z.enum(ROLES) }),
 			async ({ tx, ctx, args }) => {
-				const { callerRole } = await requireMembershipAdmin(
-					tx,
-					ctx.id,
-					args.id,
-					"cannot demote the last owner",
-				);
+				const callerRole =
+					tx.location === "server"
+						? await lockMembershipRoleChange(tx, ctx.id, args.id)
+						: (
+								await requireMembershipAdmin(
+									tx,
+									ctx.id,
+									args.id,
+									"cannot demote the last owner",
+								)
+							).callerRole;
 				if (args.role === "owner" && callerRole !== "owner")
 					throw new Error("access denied: only an owner may grant owner");
 				await tx.mutate.membership.update({ id: args.id, role: args.role });
@@ -1498,6 +1601,10 @@ export const mutators = defineMutators({
 		remove: defineMutator(
 			z.object({ id: z.string() }),
 			async ({ tx, ctx, args }) => {
+				if (tx.location === "server") {
+					await removeMembershipWithActivation(tx, ctx.id, args.id);
+					return;
+				}
 				const { target } = await requireMembershipAdmin(
 					tx,
 					ctx.id,
@@ -1835,6 +1942,7 @@ export const mutators = defineMutators({
 				e2eAutoLockMinutes: autoLockArg.optional(),
 			}),
 			async ({ tx, ctx, args }) => {
+				await lockZeroPreferenceUser(tx, ctx.id);
 				if (args.escalationDefaults) {
 					const { fallbackUserId } = args.escalationDefaults as {
 						fallbackUserId: string | null;

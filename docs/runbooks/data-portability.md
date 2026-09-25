@@ -11,10 +11,30 @@ the export time, source user, and explicit exclusions in `boundaries`.
 
 This is a data export, not a restorable backup. Settings supports reviewed,
 resumable import of a subset of native content; see [Native data format](native-format.md)
-for supported records and exclusions. Task assignments require explicit mappings to
-current destination members and never create permissions or send assignment notices.
-Keep normal database and attachment-storage
-backups for disaster recovery.
+for supported records and exclusions. Version 4 import can preserve task dates,
+recurrence, reminders, repeat policy, urgency, and a mapped fallback recipient.
+Assignments and fallback recipients require explicit mappings to current destination
+members. Import never creates permissions or sends assignment notices. Keep normal
+database and attachment-storage backups for disaster recovery.
+
+## Imported task notifications
+
+A version 4 task can show **Pending** while its assignments are still being applied,
+or **Blocked** after a conflict or security change. Its content and notification-related
+controls stay paused until the task is activated. Resume an interrupted, still-valid
+import plan to finish its remaining work. If the plan cannot resume, a current member
+who can edit the task may use **Finish import for this task** after reviewing its current
+assignees, fallback recipients, and any missing source links. Finishing accepts the
+current relationships; it does not restore missing assignments or overwrite task
+content. A changed review must be opened again before confirmation.
+
+Automatic reminders begin with eligible future occurrences after activation. Occurrences
+that pass while a task is pending or blocked are skipped, including for recipients who
+were already active before a later pause. Deliveries queued before the pause may still
+arrive. Historical overdue alerts for a newly activated recipient are suppressed;
+an explicit change to the task's due date makes that date eligible again, even when
+the new date is in the past. Simply reopening or automatically advancing a recurring
+task does not clear that historical suppression.
 
 ## Included and excluded data
 

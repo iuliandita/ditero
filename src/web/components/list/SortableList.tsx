@@ -45,6 +45,7 @@ export function SortableRow({
 	label,
 	testId,
 	revealHandle,
+	disabled = false,
 	children,
 }: {
 	id: string;
@@ -53,6 +54,7 @@ export function SortableRow({
 	// Reveal the grip on hover/focus like RowActions' kebab. Below md there is no
 	// hover, so it stays visible there.
 	revealHandle?: boolean;
+	disabled?: boolean;
 	children: ReactNode;
 }) {
 	const {
@@ -62,7 +64,7 @@ export function SortableRow({
 		transform,
 		transition,
 		isDragging,
-	} = useSortable({ id });
+	} = useSortable({ id, disabled });
 	return (
 		<div
 			ref={setNodeRef}
@@ -78,6 +80,7 @@ export function SortableRow({
 			)}
 		>
 			<button
+				disabled={disabled}
 				type="button"
 				data-testid={testId}
 				aria-label={label}
@@ -106,6 +109,7 @@ export function SortableList<T extends { id: string; sortKey: string }>({
 	handleLabel,
 	handleTestId,
 	className,
+	canDrag,
 }: {
 	items: T[];
 	onMove: (id: string, sortKey: string) => void;
@@ -113,12 +117,14 @@ export function SortableList<T extends { id: string; sortKey: string }>({
 	handleLabel: string;
 	handleTestId: string;
 	className?: string;
+	canDrag?: (id: string) => boolean;
 }) {
 	const sensors = useReorderSensors();
 
 	function onDragEnd(e: DragEndEvent) {
 		const { active, over } = e;
 		if (!over || active.id === over.id) return;
+		if (canDrag && !canDrag(String(active.id))) return;
 		const key = reorderSortKey(items, String(active.id), String(over.id));
 		if (key) onMove(String(active.id), key);
 	}
@@ -138,6 +144,7 @@ export function SortableList<T extends { id: string; sortKey: string }>({
 						<li key={item.id}>
 							<SortableRow
 								id={item.id}
+								disabled={canDrag ? !canDrag(item.id) : false}
 								label={handleLabel}
 								testId={handleTestId}
 								revealHandle

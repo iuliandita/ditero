@@ -13,6 +13,7 @@ import type {
 	TaskAssignee,
 	TaskLabel,
 } from "../../../zero/schema.gen.ts";
+import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
 import { type RowHandlers, TaskRow } from "../list/TaskRow.tsx";
 import {
 	Dialog,
@@ -74,10 +75,12 @@ export function usePanelRowHandlers(onOpenTask: (task: Task) => void): {
 	error: string | null;
 } {
 	const zero = useZero<typeof schema>();
+	const activation = useTaskImportActivationMap();
 	const [error, setError] = useState<string | null>(null);
 	const handlers = useMemo<RowHandlers>(
 		() => ({
 			onToggle: (id, done) => {
+				if (!activation.canWriteTask(id)) return;
 				setError(null);
 				void runMutation(
 					zero.mutate(
@@ -90,7 +93,7 @@ export function usePanelRowHandlers(onOpenTask: (task: Task) => void): {
 			},
 			onOpenDetail: onOpenTask,
 		}),
-		[zero, onOpenTask],
+		[zero, onOpenTask, activation],
 	);
 	return { handlers, error };
 }

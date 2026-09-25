@@ -12,6 +12,7 @@ import { useMemo } from "react";
 import { reorderSortKey } from "@/lib/reorder";
 import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
+import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
 import { SortableRow, useReorderSensors } from "../list/SortableList.tsx";
 import { type RowHandlers, TaskRow } from "../list/TaskRow.tsx";
 import type { ViewEntry, ViewEntryGroup } from "./ViewRenderer.tsx";
@@ -78,6 +79,7 @@ function DroppableColumn({
 	group: ViewEntryGroup;
 	handlers: RowHandlers;
 }) {
+	const activation = useTaskImportActivationMap();
 	const { setNodeRef, isOver } = useDroppable({
 		id: `${COL_PREFIX}${group.key}`,
 	});
@@ -90,6 +92,7 @@ function DroppableColumn({
 				{group.entries.map((e) => (
 					<div key={e.task.id} className="rounded-md border bg-card p-1">
 						<SortableRow
+							disabled={!activation.canWriteTask(e.task.id)}
 							id={e.task.id}
 							label={m.board_move_card()}
 							testId="board-card-handle"
@@ -140,6 +143,7 @@ export function BoardLayout({
 	onRegroup: (id: string, columnKey: string) => void;
 }) {
 	const sensors = useReorderSensors();
+	const activation = useTaskImportActivationMap();
 	// Cards drag when either interaction is possible; within-column reorder is
 	// gated on `reorderable`, cross-column regroup on `regroupable`, so a
 	// scalar-sorted priority/status board still drags (to regroup) without
@@ -163,6 +167,7 @@ export function BoardLayout({
 		const { active, over } = e;
 		if (!over) return;
 		const activeId = String(active.id);
+		if (!activation.canWriteTask(activeId)) return;
 		const overId = String(over.id);
 		const from = colByCard.get(activeId);
 		const to = columnOfOver(overId);

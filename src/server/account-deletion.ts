@@ -4,6 +4,11 @@ import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import { withUserContext } from "../db/user-context.ts";
 import type { Guards } from "./guards.ts";
+import {
+	blockAccountActivation,
+	discoverAccountActivationWorkspaces,
+	lockAccountActivationRows,
+} from "./portability/import-activation-account-deletion.ts";
 
 type WorkspaceWarning = { id: string; name: string };
 
@@ -101,6 +106,10 @@ async function accountLockScope(client: PoolClient, userId: string) {
 		 order by w.id`,
 		[userId],
 	);
+	const activationWorkspaces = await discoverAccountActivationWorkspaces(
+		client,
+		userId,
+	);
 	const replacements = await client.query<{ user_id: string }>(
 		`select distinct candidate.user_id from (
 		   select m.user_id from workspace w join membership m on m.workspace_id = w.id
@@ -113,7 +122,12 @@ async function accountLockScope(client: PoolClient, userId: string) {
 		[userId],
 	);
 	return {
-		workspaceIds: workspaces.rows.map((row) => row.id),
+		workspaceIds: [
+			...new Set([
+				...workspaces.rows.map((row) => row.id),
+				...activationWorkspaces,
+			]),
+		].sort(),
 		userIds: [
 			...new Set([userId, ...replacements.rows.map((row) => row.user_id)]),
 		].sort(),
@@ -169,11 +183,7 @@ async function lockAccountScope(
 		 order by id for update`,
 		[discovered.workspaceIds],
 	);
-	await client.query(
-		`select id from list where workspace_id = any($1::text[]) and owner_id = $2
-		 order by id for update`,
-		[discovered.workspaceIds, userId],
-	);
+	await lockAccountActivationRows(client, userId, discovered.workspaceIds);
 	const locked = await accountLockScope(client, userId);
 	if (
 		!sameIds(locked.workspaceIds, discovered.workspaceIds) ||
@@ -271,10 +281,12 @@ async function removePersonalData(
 async function removeAccount(
 	client: PoolClient,
 	userId: string,
+	workspaceIds: string[],
 	originalEmail: string,
 	now: Date,
 	deletedEmail: string,
 ): Promise<void> {
+	await blockAccountActivation(client, userId, workspaceIds);
 	await removePersonalData(client, userId, now);
 
 	await client.query(
@@ -436,6 +448,7 @@ export function accountDeletionRoutes(
 							await removeAccount(
 								client,
 								session.user.id,
+								scope.workspaceIds,
 								scope.email,
 								now(),
 								deletedEmail(),

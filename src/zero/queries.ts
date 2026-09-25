@@ -85,6 +85,18 @@ export const queries = defineQueries({
 			),
 		),
 	},
+	// Only task ID and status are allowlisted; import provenance stays server-side.
+	taskImportActivations: {
+		mine: defineQuery(({ ctx }) =>
+			zql.taskNotificationActivation.where(({ exists }) =>
+				exists("task", (t) =>
+					t.where(({ exists: e }) =>
+						e("list", (l) => l.where(workspaceVisible(ctx))),
+					),
+				),
+			),
+		),
+	},
 	// Co-members: memberships in any workspace the user belongs to. Powers members
 	// panel, assignee/mention pickers, and client-side connection derivation.
 	memberships: {

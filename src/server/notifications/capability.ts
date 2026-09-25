@@ -18,6 +18,8 @@ import {
 	completeForAck,
 } from "../../domain/ack-complete.ts";
 import { karmaWrite } from "../../domain/karma.ts";
+import { withAckTaskActivation } from "./task-activation.ts";
+import { taskActivationClientFromDrizzle } from "./task-activation-drizzle.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 type DbTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -293,6 +295,48 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 	};
 }
 
+// Discover without locks, then take authority/domain locks before runtime rows.
+// Consuming a capability first would reverse account deletion's user-first order.
+async function lockAckTask(
+	tx: DbTransaction,
+	userId: string,
+	reminder: typeof tables.reminderState.$inferSelect,
+): Promise<boolean> {
+	const [observed] = await tx
+		.select({ listId: tables.list.id, workspaceId: tables.list.workspaceId })
+		.from(tables.task)
+		.innerJoin(tables.list, eq(tables.task.listId, tables.list.id))
+		.where(eq(tables.task.id, reminder.taskId));
+	if (!observed) return false;
+	await tx.execute(sql`select id from workspace
+		where id = ${observed.workspaceId} for share`);
+	await tx.execute(sql`select id from membership
+		where workspace_id = ${observed.workspaceId} and user_id = ${userId}
+		order by id for share`);
+	const lockedList = await tx.execute<{ workspace_id: string }>(sql`
+		select workspace_id from list where id = ${observed.listId} for share`);
+	if (lockedList.rows[0]?.workspace_id !== observed.workspaceId)
+		throw new AckCompletionDenied("task authority changed");
+	const active = await withAckTaskActivation(
+		taskActivationClientFromDrizzle(tx),
+		reminder.taskId,
+		async (lookup) => {
+			const [current] = await tx
+				.select({ listId: tables.task.listId })
+				.from(tables.task)
+				.where(eq(tables.task.id, reminder.taskId));
+			if (current?.listId !== observed.listId)
+				throw new AckCompletionDenied("task authority changed");
+			return lookup.kind === "native" || lookup.status === "active";
+		},
+	);
+	// Match the producer's deterministic sibling order before consuming a token.
+	await tx.execute(sql`select id from reminder_state
+		where task_id = ${reminder.taskId} and occurrence_at = ${reminder.occurrenceAt}
+		order by id for update`);
+	return active;
+}
+
 // Redeem a capability token. Returns the recipient the capability was bound to,
 // or null for every rejection class; the caller must not distinguish them.
 // Throwing out of the transaction body is how a denied completion rolls the
@@ -316,6 +360,35 @@ export async function redeemAckCapability(
 ): Promise<string | null> {
 	try {
 		return await database.transaction(async (tx) => {
+			const [observed] = await tx
+				.select()
+				.from(tables.ackCapability)
+				.where(eq(tables.ackCapability.tokenHash, hashAckToken(token)));
+			if (!observed) return null;
+			const live = await tx.execute(sql`select id from "user"
+				where id = ${observed.recipientUserId} and deleted_at is null for update`);
+			let observedReminder:
+				| typeof tables.reminderState.$inferSelect
+				| undefined;
+			let taskActive = false;
+			if (
+				observed.action === ACK_ACTION &&
+				observed.reminderStateId !== null &&
+				(options.allowedRecipients === undefined ||
+					options.allowedRecipients.includes(observed.recipientUserId))
+			) {
+				[observedReminder] = await tx
+					.select()
+					.from(tables.reminderState)
+					.where(eq(tables.reminderState.id, observed.reminderStateId));
+				if (observedReminder?.recipientUserId === observed.recipientUserId) {
+					taskActive = await lockAckTask(
+						tx,
+						observed.recipientUserId,
+						observedReminder,
+					);
+				}
+			}
 			const { rows } = await tx.execute<{
 				reminder_state_id: string | null;
 				recipient_user_id: string;
@@ -333,11 +406,20 @@ export async function redeemAckCapability(
 			// Unknown, expired or already consumed -- one outcome, by design.
 			if (!capability) return null;
 			if (
+				capability.recipient_user_id !== observed.recipientUserId ||
+				capability.reminder_state_id !== observed.reminderStateId ||
+				capability.action !== observed.action ||
+				capability.channel_kind !== observed.channelKind
+			)
+				throw new AckCompletionDenied("capability authority changed");
+			if (
 				options.allowedRecipients !== undefined &&
 				!options.allowedRecipients.includes(capability.recipient_user_id)
 			) {
 				return null;
 			}
+			if (live.rowCount !== 1)
+				throw new AckCompletionDenied("user is no longer active");
 			if (capability.action === ACK_VERIFY_ACTION) {
 				if (capability.channel_kind === null) return null;
 				// A capability minted for Discord must not be redeemable through the
@@ -390,6 +472,16 @@ export async function redeemAckCapability(
 			if (reminder.recipientUserId !== capability.recipient_user_id) {
 				return null;
 			}
+			if (
+				!taskActive ||
+				!observedReminder ||
+				reminder.taskId !== observedReminder.taskId ||
+				reminder.occurrenceAt.getTime() !==
+					observedReminder.occurrenceAt.getTime()
+			)
+				throw new AckCompletionDenied(
+					"task activation is incomplete or changed",
+				);
 
 			// Completion runs first so its outcome can be recorded on the row: a
 			// denial throws and rolls everything back, so nothing observes the

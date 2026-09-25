@@ -152,6 +152,7 @@ function DayCell({
 	registerRef,
 	onFocusDay,
 	onOpen,
+	canDrag,
 }: {
 	dayKey: string;
 	inMonth: boolean;
@@ -162,6 +163,7 @@ function DayCell({
 	registerRef: (i: number, el: HTMLButtonElement | null) => void;
 	onFocusDay: (i: number) => void;
 	onOpen: (task: Task) => void;
+	canDrag: (taskId: string) => boolean;
 }): JSX.Element {
 	const { setNodeRef, isOver } = useDroppable({ id: `day:${dayKey}` });
 	const dayNum = dayOfMonth(dayKey);
@@ -201,7 +203,7 @@ function DayCell({
 							key={it.entry.task.id}
 							item={it}
 							dragId={`chip:${it.entry.task.id}:${dayKey}`}
-							dragEnabled
+							dragEnabled={canDrag(it.entry.task.id)}
 							onOpen={onOpen}
 						/>
 					))}
@@ -281,12 +283,14 @@ export function CalendarLayout({
 	isDesktop,
 	onOpenTask,
 	onReschedule,
+	canDrag,
 	timeZone,
 }: {
 	entries: ViewEntry[];
 	isDesktop: boolean;
 	onOpenTask: (task: Task) => void;
 	onReschedule: (taskId: string, dueAt: number) => void;
+	canDrag: (taskId: string) => boolean;
 	timeZone: string;
 }): JSX.Element {
 	const today = localDay(new Date(), timeZone);
@@ -382,6 +386,7 @@ export function CalendarLayout({
 	}
 
 	function reschedule(taskId: string, targetKey: string) {
+		if (!canDrag(taskId)) return;
 		const task = taskById.get(taskId);
 		if (!task) return;
 		// Preserve the task's LOCAL time-of-day, then re-resolve it against the
@@ -405,6 +410,7 @@ export function CalendarLayout({
 		if (!overId.startsWith("day:")) return;
 		const taskId = active.data.current?.taskId as string | undefined;
 		if (!taskId) return;
+		if (!canDrag(taskId)) return;
 		reschedule(taskId, overId.slice("day:".length));
 	}
 
@@ -513,6 +519,7 @@ export function CalendarLayout({
 											registerRef={registerRef}
 											onFocusDay={setActiveIdx}
 											onOpen={onOpenTask}
+											canDrag={canDrag}
 										/>
 									);
 								})}

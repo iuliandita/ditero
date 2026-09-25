@@ -34,9 +34,11 @@ const INVITE_ROLES = new Set(["owner", "admin", "member"]);
 export function AssigneePicker({
 	task,
 	workspaceId,
+	disabled = false,
 }: {
 	task: Task;
 	workspaceId: string;
+	disabled?: boolean;
 }) {
 	const zero = useZero<typeof schema>();
 	const me = zero.userID ?? "";
@@ -95,6 +97,7 @@ export function AssigneePicker({
 	);
 
 	function toggleMember(userId: string) {
+		if (disabled) return;
 		setError(null);
 		const assigned = assignedIds.has(userId);
 		const mutation = assigned
@@ -104,6 +107,7 @@ export function AssigneePicker({
 	}
 
 	function requestInvite(p: Pending) {
+		if (disabled) return;
 		setInvitedLink(null);
 		setInviteMail(undefined);
 		setInviteMailTo("");
@@ -112,7 +116,7 @@ export function AssigneePicker({
 	}
 
 	async function confirmInvite() {
-		if (!pending || busy) return;
+		if (!pending || busy || disabled) return;
 		setBusy(true);
 		setError(null);
 		try {
@@ -197,6 +201,7 @@ export function AssigneePicker({
 			>
 				<PopoverTrigger asChild>
 					<Button
+						disabled={disabled}
 						variant="outline"
 						size="sm"
 						className="self-start"

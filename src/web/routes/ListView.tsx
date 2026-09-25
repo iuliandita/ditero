@@ -42,6 +42,7 @@ import { BackButton } from "../components/ui/back-button.tsx";
 import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
 import { RowActions } from "../components/ui/row-actions.tsx";
+import { useTaskImportActivationMap } from "../hooks/useTaskImportActivation.ts";
 
 const DISPLAY_MODES: CompletedDisplay[] = ["sink", "keep", "hide"];
 
@@ -69,6 +70,7 @@ export function ListView({
 	onBack?: () => void;
 }) {
 	const zero = useZero<typeof schema>();
+	const activation = useTaskImportActivationMap();
 	const [tasks, tasksDetails] = useQuery(queries.tasks.mine());
 	const [lists, listsDetails] = useQuery(queries.lists.mine());
 	const [labels] = useQuery(queries.labels.mine());
@@ -244,6 +246,9 @@ export function ListView({
 		(t) => t.kind === "task" && t.workspaceId === openList.workspaceId,
 	);
 	const kind = (list.kind ?? "tasks") as ListKind;
+	const canEditContainer =
+		!tasksLoading &&
+		listTasks.every((task) => activation.canWriteTask(task.id));
 	const mode = (list.completedDisplay ?? "sink") as CompletedDisplay;
 	const callerRole = memberships.find(
 		(member) =>
@@ -263,20 +268,28 @@ export function ListView({
 	];
 
 	const handlers = {
-		onToggle: (id: string, done: boolean) =>
+		onToggle: (id: string, done: boolean) => {
+			if (!activation.canWriteTask(id)) return;
 			void run(
 				zero.mutate(
 					done
 						? mutators.task.update({ id, done: false })
 						: mutators.task.complete({ id }),
 				),
-			),
+			);
+		},
 		onOpenDetail: (task: { id: string }) => setDetailTaskId(task.id),
-		onSchedule: (task: { id: string }) => setScheduleTaskId(task.id),
-		onMove: (id: string, sortKey: string) =>
-			void run(zero.mutate(mutators.task.update({ id, sortKey }))),
-		onUpdate: (id: string, patch: { quantity?: string; unit?: string }) =>
-			void run(zero.mutate(mutators.task.update({ id, ...patch }))),
+		onSchedule: (task: { id: string }) => {
+			if (activation.canWriteTask(task.id)) setScheduleTaskId(task.id);
+		},
+		onMove: (id: string, sortKey: string) => {
+			if (activation.canWriteTask(id))
+				void run(zero.mutate(mutators.task.update({ id, sortKey })));
+		},
+		onUpdate: (id: string, patch: { quantity?: string; unit?: string }) => {
+			if (activation.canWriteTask(id))
+				void run(zero.mutate(mutators.task.update({ id, ...patch })));
+		},
 	};
 
 	// Snapshot the current list (with one level of subtasks) into a reusable
@@ -324,6 +337,7 @@ export function ListView({
 				{backControl}
 				<button
 					type="button"
+					disabled={!canEditContainer}
 					aria-label={m.list_change_icon()}
 					onClick={() => setIconOpen(true)}
 					className="flex size-9 shrink-0 items-center justify-center rounded-lg border"
@@ -347,7 +361,11 @@ export function ListView({
 						<DropdownMenuLabel>{m.list_completed_heading()}</DropdownMenuLabel>
 						<DropdownMenuRadioGroup
 							value={mode}
-							onValueChange={(v) =>
+							onValueChange={(v) => {
+								if (!canEditContainer) {
+									setError(m.activation_container_paused());
+									return;
+								}
 								void run(
 									zero.mutate(
 										mutators.list.update({
@@ -355,11 +373,15 @@ export function ListView({
 											completedDisplay: v as CompletedDisplay,
 										}),
 									),
-								)
-							}
+								);
+							}}
 						>
 							{DISPLAY_MODES.map((value) => (
-								<DropdownMenuRadioItem key={value} value={value}>
+								<DropdownMenuRadioItem
+									key={value}
+									value={value}
+									disabled={!canEditContainer}
+								>
 									{DISPLAY_MODE_LABELS[value]()}
 								</DropdownMenuRadioItem>
 							))}
@@ -497,9 +519,13 @@ export function ListView({
 				kind={kind}
 				title={list.title}
 				current={list.icon}
-				onSelect={(icon) =>
-					void run(zero.mutate(mutators.list.update({ id: list.id, icon })))
-				}
+				onSelect={(icon) => {
+					if (!canEditContainer) {
+						setError(m.activation_container_paused());
+						return;
+					}
+					void run(zero.mutate(mutators.list.update({ id: list.id, icon })));
+				}}
 			/>
 
 			<ScheduleSheet
@@ -509,7 +535,7 @@ export function ListView({
 					if (!o) setScheduleTaskId(null);
 				}}
 				onPick={(dueAt, dueAllDay) => {
-					if (scheduleTaskId)
+					if (scheduleTaskId && activation.canWriteTask(scheduleTaskId))
 						void run(
 							zero.mutate(
 								mutators.task.update({ id: scheduleTaskId, dueAt, dueAllDay }),

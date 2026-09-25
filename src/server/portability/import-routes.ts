@@ -11,6 +11,8 @@ import {
 	parsePortableExportV1,
 } from "../../domain/portability/validate.ts";
 import type { Guards } from "../guards.ts";
+import { V4ApplyConflict } from "./import-activation.ts";
+import { importActivationRoutes } from "./import-activation-routes.ts";
 import { applyImportBatch, getImportRunStatus } from "./import-apply-store.ts";
 import {
 	discardImportPlan,
@@ -188,6 +190,8 @@ async function handled(run: () => Promise<Response>): Promise<Response> {
 			error instanceof ImportPlanStoreError
 		)
 			return response({ code: error.code }, error.status);
+		if (error instanceof V4ApplyConflict)
+			return response({ code: error.code }, 409);
 		if (error instanceof UserContextError)
 			return response({ code: "unauthorized" }, 401);
 		if (error instanceof PortableExportValidationError)
@@ -213,6 +217,7 @@ function pathId(request: Request, discard = false): string {
 export function importPlanRoutes(pool: Pool, guards: Guards) {
 	const activeUsers = new Set<string>();
 	return new Elysia()
+		.use(importActivationRoutes(pool, guards))
 		.get(
 			"/api/portability/import/plans/:id/run",
 			guards.guardedGet((request, session) =>
@@ -334,7 +339,7 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 								source.data,
 								document,
 								mapping,
-								{ signal: request.signal, deadline, plannerVersion: 3 },
+								{ signal: request.signal, deadline, plannerVersion: 4 },
 							),
 						);
 					} finally {

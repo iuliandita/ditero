@@ -4,9 +4,17 @@
 // {valid, workspaceName, email} — never the token, role, ids, or attach details.
 import { and, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import { db as defaultDb } from "../db/client.ts";
-import { invite, membership, taskAssignee, workspace } from "../db/schema.ts";
-import { UserContextError } from "../db/user-context.ts";
+import { invite, taskAssignee, workspace } from "../db/schema.ts";
 import { canRedeem, type InviteRow, inviteState } from "../domain/invite.ts";
+import {
+	InviteTaskUnavailable,
+	inviteActivationClientFromDrizzle,
+	inviteQueryFromDrizzle,
+	lockInviteEvidence,
+	lockInviteMembership,
+	lockInviteTask,
+	reconcileInviteAssignment,
+} from "./invite-task-activation.ts";
 
 export type AcceptFailure =
 	| "not_found"
@@ -47,22 +55,76 @@ export async function acceptInvite(
 	now: number = Date.now(),
 ): Promise<{ workspaceId: string; grantRequestId: string | null }> {
 	return database.transaction(async (tx) => {
-		// Account deletion holds FOR UPDATE until the tombstone commits. Recheck
-		// after waiting, before consuming the invite or restoring membership.
-		const live = await tx.execute(sql`
-			select id from "user"
-			where id = ${userId} and deleted_at is null for key share`);
-		if (live.rowCount !== 1) throw new UserContextError();
 		const [inv] = await tx
 			.select()
 			.from(invite)
 			.where(eq(invite.token, token))
 			.limit(1);
 		if (!inv) throw new InviteAcceptError("not_found", "invite not found");
+		const attachedAssign =
+			inv.attachTaskId != null && inv.attachKind === "assign";
+		let lockedTask: Awaited<ReturnType<typeof lockInviteTask>> | null = null;
+		const query = inviteQueryFromDrizzle(tx);
+		if (attachedAssign) {
+			await tx.execute(
+				sql`select set_config('ditero.user_id', ${userId}, true)`,
+			);
+			try {
+				lockedTask = await lockInviteTask(
+					query,
+					inviteActivationClientFromDrizzle(tx),
+					{
+						taskId: inv.attachTaskId as string,
+						workspaceId: inv.workspaceId,
+						actorId: userId,
+						inviteeId: userId,
+						inviterId: inv.createdBy,
+						membershipRole: inv.role,
+					},
+				);
+				await lockInviteEvidence(query, lockedTask);
+			} catch (error) {
+				if (error instanceof InviteTaskUnavailable)
+					throw new InviteAcceptError(
+						error.reason === "pending" ? "exhausted" : "not_found",
+						"attach task unavailable",
+					);
+				throw error;
+			}
+		} else {
+			try {
+				await lockInviteMembership(query, {
+					workspaceId: inv.workspaceId,
+					actorId: userId,
+					inviterId: inv.createdBy,
+					role: inv.role,
+					insert: true,
+				});
+			} catch (error) {
+				if (error instanceof InviteTaskUnavailable)
+					throw new InviteAcceptError("not_found", "invite not found");
+				throw error;
+			}
+		}
+		const [current] = await tx
+			.select()
+			.from(invite)
+			.where(eq(invite.token, token))
+			.for("update");
+		if (!current) throw new InviteAcceptError("not_found", "invite not found");
+		if (
+			current.id !== inv.id ||
+			current.workspaceId !== inv.workspaceId ||
+			current.attachTaskId !== inv.attachTaskId ||
+			current.attachKind !== inv.attachKind ||
+			current.role !== inv.role ||
+			current.createdBy !== inv.createdBy
+		)
+			throw new InviteAcceptError("exhausted", "invite changed");
 		const [targetWorkspace] = await tx
 			.select({ kind: workspace.kind })
 			.from(workspace)
-			.where(eq(workspace.id, inv.workspaceId))
+			.where(eq(workspace.id, current.workspaceId))
 			.limit(1);
 		if (targetWorkspace?.kind !== "shared") {
 			throw new InviteAcceptError("not_found", "invite not found");
@@ -70,7 +132,7 @@ export async function acceptInvite(
 
 		// Friendly, distinct pre-check (revoked/accepted/expired/exhausted) BEFORE any
 		// write; the authoritative guard is the conditional UPDATE below.
-		const state = inviteState(domainRow(inv), now);
+		const state = inviteState(domainRow(current), now);
 		if (state !== "valid") {
 			// 'accepted' means a bounded invite already hit maxUses -> exhausted.
 			const reason: AcceptFailure = state === "accepted" ? "exhausted" : state;
@@ -81,8 +143,8 @@ export async function acceptInvite(
 		// link cannot grant its role to a different account. Open (email-null) invites
 		// stay redeemable by anyone holding the link.
 		if (
-			inv.email != null &&
-			userEmail.toLowerCase() !== inv.email.toLowerCase()
+			current.email != null &&
+			userEmail.toLowerCase() !== current.email.toLowerCase()
 		) {
 			throw new InviteAcceptError(
 				"email_mismatch",
@@ -93,7 +155,7 @@ export async function acceptInvite(
 		// the WDK grant. Only /finalize may consume that reservation; letting this
 		// legacy endpoint race it would recreate the exact membership-without-key
 		// window the fast path closes.
-		if (inv.claimedBy != null) {
+		if (current.claimedBy != null) {
 			throw new InviteAcceptError("exhausted", "invite already claimed");
 		}
 
@@ -109,7 +171,7 @@ export async function acceptInvite(
 			})
 			.where(
 				and(
-					eq(invite.id, inv.id),
+					eq(invite.id, current.id),
 					eq(invite.status, "pending"),
 					isNull(invite.claimedBy),
 					or(isNull(invite.maxUses), lt(invite.uses, invite.maxUses)),
@@ -123,27 +185,17 @@ export async function acceptInvite(
 			throw new InviteAcceptError("exhausted", "invite exhausted");
 		}
 
-		// Already-member is a no-op (unique userId+workspaceId).
-		await tx
-			.insert(membership)
-			.values({
-				id: crypto.randomUUID(),
-				userId,
-				workspaceId: inv.workspaceId,
-				role: inv.role,
-			})
-			.onConflictDoNothing();
-
 		// 'assign' attaches a task_assignee row; 'mention' resolves to membership only.
-		if (inv.attachTaskId != null && inv.attachKind === "assign") {
+		if (lockedTask) {
 			await tx
 				.insert(taskAssignee)
 				.values({
-					id: `${inv.attachTaskId}:${userId}`,
-					taskId: inv.attachTaskId,
+					id: `${lockedTask.taskId}:${userId}`,
+					taskId: lockedTask.taskId,
 					userId,
 				})
 				.onConflictDoNothing();
+			await reconcileInviteAssignment(query, lockedTask);
 		}
 
 		// M-E2E Task 15. Same transaction as the membership, so the two cannot
@@ -159,7 +211,7 @@ export async function acceptInvite(
 		const grantRequestId = await requestActiveKeyDrizzle(
 			tx,
 			userId,
-			inv.workspaceId,
+			current.workspaceId,
 		);
 
 		// Returned rather than notified from in here: the outbox write must land
@@ -167,7 +219,7 @@ export async function acceptInvite(
 		// grant nobody is waiting for. Same boundary events.ts settled on, and
 		// the same trade -- a crash between commit and enqueue loses a
 		// notification, which is recoverable in a way a phantom one is not.
-		return { workspaceId: inv.workspaceId, grantRequestId };
+		return { workspaceId: current.workspaceId, grantRequestId };
 	});
 }
 

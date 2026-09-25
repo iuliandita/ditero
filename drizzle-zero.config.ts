@@ -98,6 +98,7 @@ export default drizzleZeroConfig(schema, {
 			createdAt: true,
 		},
 		taskAssignee: { id: true, taskId: true, userId: true },
+		taskNotificationActivation: { taskId: true, status: true },
 		comment: {
 			id: true,
 			taskId: true,

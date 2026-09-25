@@ -27,6 +27,7 @@ import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { Label, schema, Task } from "../../../zero/schema.gen.ts";
+import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
 import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
@@ -52,7 +53,7 @@ function SwipeRow({
 	onSchedule,
 }: {
 	children: ReactNode;
-	onComplete: () => void;
+	onComplete?: () => void;
 	onSchedule?: () => void;
 }) {
 	const reduce = useReducedMotion();
@@ -71,6 +72,7 @@ function SwipeRow({
 	function onPointerDown(e: ReactPointerEvent) {
 		moved.current = false;
 		if (e.pointerType !== "touch") return;
+		if (!onComplete && !onSchedule) return;
 		start.current = { x: e.clientX, y: e.clientY, active: false };
 	}
 	function onPointerMove(e: ReactPointerEvent) {
@@ -82,6 +84,10 @@ function SwipeRow({
 			if (Math.abs(mx) < 10) return;
 			// Vertical intent -> release so the list scrolls normally.
 			if (Math.abs(mx) <= Math.abs(my)) {
+				start.current = null;
+				return;
+			}
+			if ((mx > 0 && !onComplete) || (mx < 0 && !onSchedule)) {
 				start.current = null;
 				return;
 			}
@@ -97,7 +103,7 @@ function SwipeRow({
 		const s = start.current;
 		start.current = null;
 		if (s?.active) {
-			if (dxRef.current >= SWIPE_THRESHOLD) onComplete();
+			if (dxRef.current >= SWIPE_THRESHOLD) onComplete?.();
 			else if (dxRef.current <= -SWIPE_THRESHOLD && onSchedule) onSchedule();
 		}
 		setOffset(0);
@@ -113,12 +119,14 @@ function SwipeRow({
 	const active = start.current?.active ?? false;
 	return (
 		<div className="relative overflow-hidden">
-			<div
-				className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-success"
-				style={{ opacity: dx > 0 ? 1 : 0 }}
-			>
-				<Check className="size-4" />
-			</div>
+			{onComplete && (
+				<div
+					className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-success"
+					style={{ opacity: dx > 0 ? 1 : 0 }}
+				>
+					<Check className="size-4" />
+				</div>
+			)}
 			{onSchedule && (
 				<div
 					className="pointer-events-none absolute inset-y-0 end-0 flex items-center pe-3 text-info"
@@ -189,11 +197,15 @@ export function TaskRow({
 	handlers: RowHandlers;
 }) {
 	const [expanded, setExpanded] = useState(false);
+	const [editError, setEditError] = useState<string | null>(null);
 	const zero = useZero<typeof schema>();
 	const confirm = useConfirm();
 	const [lists] = useQuery(queries.lists.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
 	const [allTasks] = useQuery(queries.tasks.mine());
+	const activation = useTaskImportActivationMap();
+	const activationStatus = activation.statusForTask(task.id);
+	const canEdit = activation.canWriteTask(task.id);
 	const bare = kind === "checklist";
 	const doneCount = subtasks.filter((s) => s.done).length;
 	const total = subtasks.length;
@@ -212,9 +224,11 @@ export function TaskRow({
 	}, [lists, memberships, task.listId, zero.userID]);
 
 	function update(fields: Partial<Due> & { priority?: number }) {
+		if (!canEdit) return;
+		setEditError(null);
 		void zero
 			.mutate(mutators.task.update({ id: task.id, ...fields }))
-			.client.catch((e) => console.error("task.update failed", e));
+			.client.catch(() => setEditError(m.activation_task_change_failed()));
 	}
 
 	async function removeTask() {
@@ -264,6 +278,7 @@ export function TaskRow({
 		task,
 		kind,
 		role,
+		canEdit,
 		handlers: {
 			open: handlers.onOpenDetail,
 			schedule: (_t, due) => update(due),
@@ -280,9 +295,15 @@ export function TaskRow({
 	return (
 		<div className="rounded-lg">
 			<SwipeRow
-				onComplete={() => handlers.onToggle(task.id, task.done ?? false)}
+				onComplete={
+					canEdit
+						? () => handlers.onToggle(task.id, task.done ?? false)
+						: undefined
+				}
 				onSchedule={
-					handlers.onSchedule ? () => handlers.onSchedule?.(task) : undefined
+					canEdit && handlers.onSchedule
+						? () => handlers.onSchedule?.(task)
+						: undefined
 				}
 			>
 				{/* data-kbd-row scopes the roving row actions to this row; the open
@@ -294,11 +315,12 @@ export function TaskRow({
 					{...rowProps}
 				>
 					<Checkbox
+						disabled={!canEdit}
 						aria-label={task.title}
 						checked={task.done ?? false}
-						onCheckedChange={() =>
-							handlers.onToggle(task.id, task.done ?? false)
-						}
+						onCheckedChange={() => {
+							if (canEdit) handlers.onToggle(task.id, task.done ?? false);
+						}}
 						data-kbd-action="toggle"
 						className="mt-0.5"
 					/>
@@ -316,6 +338,17 @@ export function TaskRow({
 						>
 							{task.title}
 						</span>
+						{(activationStatus === "pending" ||
+							activationStatus === "blocked") && (
+							<Badge
+								variant="outline"
+								className="mt-1 text-xs text-amber-700 dark:text-amber-400"
+							>
+								{activationStatus === "pending"
+									? m.activation_badge_pending()
+									: m.activation_badge_blocked()}
+							</Badge>
+						)}
 						{!bare && (
 							<div className="mt-0.5 flex flex-wrap items-center gap-2">
 								<AssigneeChips taskId={task.id} />
@@ -388,14 +421,23 @@ export function TaskRow({
 				</div>
 			</SwipeRow>
 			{menu}
+			{editError && (
+				<p role="alert" className="ms-7 text-xs text-destructive">
+					{editError}
+				</p>
+			)}
 			{expanded && total > 0 && (
 				<ul className="ms-6 flex flex-col border-s ps-2">
 					{subtasks.map((s) => (
 						<li key={s.id} className="flex items-center gap-2 py-1">
 							<Checkbox
+								disabled={!activation.canWriteTask(s.id)}
 								aria-label={s.title}
 								checked={s.done ?? false}
-								onCheckedChange={() => handlers.onToggle(s.id, s.done ?? false)}
+								onCheckedChange={() => {
+									if (activation.canWriteTask(s.id))
+										handlers.onToggle(s.id, s.done ?? false);
+								}}
 							/>
 							<button
 								type="button"

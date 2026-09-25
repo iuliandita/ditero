@@ -47,6 +47,7 @@ import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
 import { useDashboards } from "../hooks/useDashboards.ts";
 import { useSyncedTheme } from "../hooks/useSyncedTheme.ts";
+import { useTaskImportActivationMap } from "../hooks/useTaskImportActivation.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import { useViews } from "../hooks/useViews.ts";
 import { useWorkspaceDashboards } from "../hooks/useWorkspaceDashboards.ts";
@@ -95,6 +96,7 @@ export function Workspace() {
 function NormalWorkspace() {
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
+	const activation = useTaskImportActivationMap();
 	const persistLocale = useCallback(
 		(locale: Locale) => {
 			// Best-effort by design, not a swallowed error: changeLocale() already
@@ -230,14 +232,31 @@ function NormalWorkspace() {
 
 	// --- List row actions -----------------------------------------------------
 	const activeRole = activeId ? (roleByWorkspace.get(activeId) ?? null) : null;
+	const canEditList = (listId: string) =>
+		!viewRowsLoading &&
+		tasks
+			.filter((task) => task.listId === listId)
+			.every((task) => activation.canWriteTask(task.id));
+	const canEditFolder = (folderId: string) =>
+		!viewRowsLoading &&
+		activeLists
+			.filter((list) => list.folderId === folderId)
+			.every((list) => canEditList(list.id));
 
 	function submitRename(next: string) {
 		const target = renameTarget;
 		setRenameTarget(null);
 		if (!target || next === target.title) return;
+		if (!canEditList(target.id)) {
+			setWorkspaceActionError(m.activation_container_paused());
+			return;
+		}
+		setWorkspaceActionError(null);
 		void zero
 			.mutate(mutators.list.update({ id: target.id, title: next }))
-			.client.catch((e) => console.error("list.update failed", e));
+			.client.catch(() =>
+				setWorkspaceActionError(m.activation_container_change_failed()),
+			);
 	}
 
 	// --- Folder row actions ---------------------------------------------------
@@ -261,9 +280,16 @@ function NormalWorkspace() {
 
 	function renameFolder(folder: Folder, name: string) {
 		if (name === folder.name) return;
+		if (!canEditFolder(folder.id)) {
+			setWorkspaceActionError(m.activation_container_paused());
+			return;
+		}
+		setWorkspaceActionError(null);
 		void zero
 			.mutate(mutators.folder.update({ id: folder.id, name }))
-			.client.catch((e) => console.error("folder.update failed", e));
+			.client.catch(() =>
+				setWorkspaceActionError(m.activation_container_change_failed()),
+			);
 	}
 
 	function submitFolderDialog(name: string) {
@@ -313,9 +339,16 @@ function NormalWorkspace() {
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
 	// of M1a scope: each group is its own DndContext, so a list can't leave it.
 	function moveList(id: string, sortKey: string) {
+		if (!canEditList(id)) {
+			setWorkspaceActionError(m.activation_container_paused());
+			return;
+		}
+		setWorkspaceActionError(null);
 		zero
 			.mutate(mutators.list.update({ id, sortKey }))
-			.client.catch((e) => console.error("list reorder failed", e));
+			.client.catch(() =>
+				setWorkspaceActionError(m.activation_container_change_failed()),
+			);
 	}
 	function changeSection(next: Section) {
 		dispatchContent({ kind: next === "settings" ? "settings" : "home" });
@@ -416,6 +449,8 @@ function NormalWorkspace() {
 	);
 
 	const {
+		containerError: workspaceActionError,
+		setContainerError: setWorkspaceActionError,
 		buildListActions,
 		buildFolderActions,
 		buildViewActions,
@@ -424,6 +459,8 @@ function NormalWorkspace() {
 		tasks,
 		activeLists,
 		activeFolders,
+		canEditList,
+		canEditFolder,
 		roleByWorkspace,
 		savedViews,
 		onOpenHome: openHome,
@@ -775,6 +812,7 @@ function NormalWorkspace() {
 										</div>
 										<SortableList
 											items={group.lists}
+											canDrag={canEditList}
 											onMove={moveList}
 											handleLabel={m.list_reorder_handle()}
 											handleTestId="list-drag"
@@ -856,6 +894,14 @@ function NormalWorkspace() {
 					}
 					fab={<Fab onOpen={() => setQuickAddOpen(true)} />}
 				>
+					{workspaceActionError && (
+						<p
+							role="alert"
+							className="mx-4 mt-3 rounded-lg border border-destructive/30 p-3 text-sm text-destructive"
+						>
+							{workspaceActionError}
+						</p>
+					)}
 					{content}
 				</AppShell>
 

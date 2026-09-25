@@ -18,12 +18,14 @@ export function listActions({
 	role,
 	userId,
 	folders,
+	editBlocked = false,
 	handlers,
 }: {
 	list: List;
 	role: Role | null;
 	userId: string;
 	folders: Folder[];
+	editBlocked?: boolean;
 	handlers: ListActionHandlers;
 }): RowAction[] {
 	const canWrite = role !== null && WRITE_ROLES.has(role);
@@ -34,6 +36,7 @@ export function listActions({
 			label: m.action_rename(),
 			icon: Pencil,
 			hidden: !canWrite,
+			disabledReason: editBlocked ? m.activation_container_paused() : undefined,
 			onSelect: () => handlers.rename(list),
 		},
 		{
@@ -41,6 +44,7 @@ export function listActions({
 			label: m.action_move_to_folder(),
 			icon: FolderInput,
 			hidden: !canWrite,
+			disabledReason: editBlocked ? m.activation_container_paused() : undefined,
 			submenu: [
 				{
 					id: "move-none",

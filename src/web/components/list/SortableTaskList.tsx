@@ -9,6 +9,7 @@ import { FLIP_TRANSITION } from "@/lib/motion";
 import { reorderSortKey } from "@/lib/reorder";
 import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
+import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
 import { SortableRow, useReorderSensors } from "./SortableList.tsx";
 
 // Open tasks are drag-sortable; completed rows render statically and are never
@@ -27,6 +28,7 @@ export function SortableTaskList({
 	renderRow: (task: Task) => ReactNode;
 	reduce: boolean;
 }) {
+	const activation = useTaskImportActivationMap();
 	const sortable = tasks.filter((t) => !t.done);
 	const sortableIds = sortable.map((t) => t.id);
 	const sensors = useReorderSensors();
@@ -34,6 +36,7 @@ export function SortableTaskList({
 	function onDragEnd(e: DragEndEvent) {
 		const { active, over } = e;
 		if (!over || active.id === over.id) return;
+		if (!activation.canWriteTask(String(active.id))) return;
 		const key = reorderSortKey(sortable, String(active.id), String(over.id));
 		if (key) onMove(String(active.id), key);
 	}
@@ -61,6 +64,7 @@ export function SortableTaskList({
 							) : (
 								<SortableRow
 									id={task.id}
+									disabled={!activation.canWriteTask(task.id)}
 									label={m.task_reorder_handle()}
 									testId="task-drag"
 									revealHandle

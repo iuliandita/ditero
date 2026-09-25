@@ -75,7 +75,7 @@ test("saves and deduplicates a dry run without changing tasks, then discards it"
 	await panel.getByRole("button", { name: "Save dry run" }).click();
 	expect((await (await retry).json()).id).toBe(firstId);
 	await expect(panel.getByRole("status").first()).toContainText(
-		"Only supported folders",
+		"Supported folders, your lists",
 	);
 	await expect(
 		panel.getByRole("button", { name: "Discard dry run", exact: true }),
@@ -90,6 +90,24 @@ test("saves and deduplicates a dry run without changing tasks, then discards it"
 		(await new AxeBuilder({ page }).include("#import-plan").analyze())
 			.violations,
 	).toEqual([]);
+	await page.route(
+		"**/api/portability/import/plans/*/apply",
+		(route) =>
+			route.fulfill({
+				status: 409,
+				contentType: "application/json",
+				body: JSON.stringify({ code: "activation-readiness-limit" }),
+			}),
+		{ times: 1 },
+	);
+	await panel.getByRole("button", { name: "Apply import" }).click();
+	await page.getByTestId("confirm-accept").click();
+	await expect(panel.getByRole("alert")).toContainText(
+		"This import stopped because its saved conditions changed",
+	);
+	await expect(
+		panel.getByRole("button", { name: "Resume import" }),
+	).toBeDisabled();
 	const after = await page.request.get("/api/portability/export");
 	expect((await after.json()).data.tasks).toEqual(exported.data.tasks);
 	await panel
@@ -175,6 +193,10 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 	expect(original.data.assignments[0].userId).toBe(original.sourceUserId);
 	const importDocument = structuredClone(original);
 	importDocument.data.tasks[0].title = "Imported assigned task";
+	importDocument.data.tasks[0].dueAt = "2030-01-15T15:00:00.000Z";
+	importDocument.data.tasks[0].reminderTime = "09:00";
+	importDocument.data.tasks[0].rrule = "FREQ=DAILY";
+	importDocument.data.tasks[0].fallbackUserId = original.sourceUserId;
 	importDocument.data.lists.find(
 		(list: { id: string }) => list.id === importDocument.data.tasks[0].listId,
 	).title = "Imported assigned list";
@@ -202,7 +224,7 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 		.getByRole("button", { name: "Save dry run", exact: true })
 		.click();
 	const savedPlan = await (await saved).json();
-	expect(savedPlan.report.plannerVersion).toBe(3);
+	expect(savedPlan.report.plannerVersion).toBe(4);
 	const eligible =
 		importDocument.data.folders.length +
 		importDocument.data.lists.length +
@@ -281,6 +303,12 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 	const importedTask = after.data.tasks.find(
 		(row: { title: string }) => row.title === "Imported assigned task",
 	);
+	expect(importedTask).toMatchObject({
+		dueAt: "2030-01-15T15:00:00.000Z",
+		reminderTime: "09:00",
+		rrule: "FREQ=DAILY",
+		fallbackUserId: original.sourceUserId,
+	});
 	expect(after.data.assignments).toHaveLength(2);
 	expect(after.data.assignments).toContainEqual({
 		id: `${importedTask.id}:${original.sourceUserId}`,
