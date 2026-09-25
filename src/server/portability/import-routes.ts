@@ -11,6 +11,7 @@ import {
 	parsePortableExportV1,
 } from "../../domain/portability/validate.ts";
 import type { Guards } from "../guards.ts";
+import { importActivationRoutes } from "./import-activation-routes.ts";
 import { applyImportBatch, getImportRunStatus } from "./import-apply-store.ts";
 import {
 	discardImportPlan,
@@ -213,6 +214,7 @@ function pathId(request: Request, discard = false): string {
 export function importPlanRoutes(pool: Pool, guards: Guards) {
 	const activeUsers = new Set<string>();
 	return new Elysia()
+		.use(importActivationRoutes(pool, guards))
 		.get(
 			"/api/portability/import/plans/:id/run",
 			guards.guardedGet((request, session) =>
