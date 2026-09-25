@@ -64,10 +64,12 @@ export function ListView({
 	listId,
 	listActions,
 	onBack,
+	onQuickAdd,
 }: {
 	listId: string;
 	listActions: (list: List) => RowAction[];
 	onBack?: () => void;
+	onQuickAdd: () => void;
 }) {
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
@@ -333,14 +335,14 @@ export function ListView({
 	return (
 		<div data-testid="list" className="max-w-3xl">
 			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
-			<div ref={listHeaderRef} className="group mb-4 flex items-center gap-2">
+			<div ref={listHeaderRef} className="group mb-5 flex items-center gap-1.5">
 				{backControl}
 				<button
 					type="button"
 					disabled={!canEditContainer}
 					aria-label={m.list_change_icon()}
 					onClick={() => setIconOpen(true)}
-					className="flex size-9 shrink-0 items-center justify-center rounded-lg border"
+					className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:size-9"
 				>
 					<ListIcon icon={list.icon} kind={kind} title={list.title} />
 				</button>
@@ -353,6 +355,7 @@ export function ListView({
 							variant="ghost"
 							size="icon-sm"
 							aria-label={m.list_display_options()}
+							className="size-11 md:size-8"
 						>
 							<SlidersHorizontal />
 						</Button>
@@ -443,7 +446,7 @@ export function ListView({
 				}
 			/>
 
-			<div className="mb-3 flex gap-2">
+			<div className="mb-5 hidden gap-2 md:flex">
 				<TitleSuggestInput
 					inputRef={titleInput}
 					data-testid="new-task"
@@ -480,7 +483,13 @@ export function ListView({
 					<Button
 						data-testid="list-empty-add"
 						variant="outline"
-						onClick={() => titleInput.current?.focus()}
+						onClick={() => {
+							if (titleInput.current?.getClientRects().length) {
+								titleInput.current.focus();
+							} else {
+								onQuickAdd();
+							}
+						}}
 					>
 						{m.list_empty_action()}
 					</Button>

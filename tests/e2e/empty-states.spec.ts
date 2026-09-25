@@ -36,6 +36,7 @@ async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
 }
 
 async function createList(page: Page, name: string): Promise<void> {
+	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	await expect(

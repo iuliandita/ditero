@@ -40,6 +40,7 @@ async function waitWorkspaceReady(page: Page): Promise<void> {
 
 async function createListDesktop(page: Page, name: string): Promise<void> {
 	await waitWorkspaceReady(page);
+	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	await expect(

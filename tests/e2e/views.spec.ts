@@ -58,6 +58,8 @@ async function waitWorkspaceReady(page: Page): Promise<void> {
 
 async function createListDesktop(page: Page, name: string): Promise<void> {
 	await waitWorkspaceReady(page);
+	await page.getByTestId("sidebar-create").click();
+	await page.getByTestId("sidebar-new-list").click();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	await expect(
@@ -192,6 +194,7 @@ test("view: build priority+assignee filter, save, appears in sidebar, round-trip
 	await waitWorkspaceReady(page);
 
 	const viewName = `Hot for me ${Date.now()}`;
+	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(viewName);
 
@@ -264,6 +267,7 @@ test("view: layout switch renders board columns then a real table", async ({
 
 	// New view, empty filter (matches all my tasks), list layout to start.
 	const viewName = `Switcher ${Date.now()}`;
+	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(viewName);
 	await page.getByTestId("view-save").click();
@@ -307,6 +311,7 @@ test("view: dragging a card to another priority column regroups + persists", asy
 	await addTask(page, cardTitle);
 
 	const viewName = `Kanban ${Date.now()}`;
+	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(viewName);
 	await pickLabeled(page, "Layout", "Board");
@@ -436,6 +441,7 @@ test("keys: c opens quick-add, is skipped in inputs, g t opens Today", async ({
 	});
 
 	// Inside a text input: `c` types, never fires the shortcut.
+	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").click();
 	await page.keyboard.press("c");
 	await expect(page.getByTestId("quickadd-input")).toHaveCount(0);
@@ -650,6 +656,7 @@ test("a11y: no serious/critical violations on views + keyboard surfaces", async 
 	await addTask(page, "Axe item");
 
 	// Filter builder inside the New view form (with a condition row present).
+	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(`Axe view ${Date.now()}`);
 	await page.getByTestId("add-condition").click();

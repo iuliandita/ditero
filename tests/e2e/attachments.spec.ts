@@ -36,6 +36,7 @@ async function createListAndTask(
 	taskName: string,
 ): Promise<void> {
 	await waitWorkspaceReady(page);
+	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").fill(listName);
 	await page.getByTestId("new-list-submit").click();
 	await page

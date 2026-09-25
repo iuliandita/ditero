@@ -56,6 +56,8 @@ async function waitWorkspaceReady(page: Page): Promise<void> {
 
 async function createListDesktop(page: Page, name: string): Promise<void> {
 	await waitWorkspaceReady(page);
+	await page.getByTestId("sidebar-create").click();
+	await page.getByTestId("sidebar-new-list").click();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	await expect(
@@ -102,6 +104,7 @@ async function createDashboard(
 	name: string,
 	opts: { workspace?: string } = {},
 ): Promise<void> {
+	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("new-dashboard").click();
 	await page.getByTestId("dashboard-name").fill(name);
 	if (opts.workspace) {
@@ -289,6 +292,7 @@ test("dashboard: sidebar create, view-ref tasks panel + inline counter, completi
 
 	// A saved view (empty filter = all my tasks) to reference from the panel.
 	const viewName = `Panel view ${Date.now()}`;
+	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(viewName);
 	await page.getByTestId("view-save").click();
@@ -487,7 +491,9 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		const pOutsider = await ctxOutsider.newPage();
 		await signUp(pOutsider, uniqueEmail("d4-outsider"));
 		await waitWorkspaceReady(pOutsider);
+		await pOutsider.getByTestId("sidebar-create").click();
 		await expect(pOutsider.getByTestId("new-dashboard")).toBeVisible();
+		await pOutsider.keyboard.press("Escape");
 		await expect(
 			sidebarLists(pOutsider).getByRole("button", {
 				name: teamDash,

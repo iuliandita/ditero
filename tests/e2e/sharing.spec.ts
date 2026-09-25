@@ -39,6 +39,7 @@ test("personal workspace hides admission controls and lets its owner remove a le
 			"insert into membership (id,user_id,workspace_id,role) values ($1,$2,$3,'member')",
 			[crypto.randomUUID(), legacyId, workspace.rows[0].id],
 		);
+		await owner.getByTestId("create-list-open").click();
 		await owner.getByTestId("new-list").fill("Personal policy");
 		await owner.getByTestId("new-list-submit").click();
 		await owner
@@ -219,7 +220,7 @@ function tokenFrom(link: string): string {
 // Redeem an invite by driving the real client accept page. `join` uses the
 // already-authenticated context's session; `signup` creates the account on the
 // page (prefilled email is set explicitly to be safe). Either way the page
-// auto-accepts and redirects to "/", so we wait for the app shell (new-list).
+// auto-accepts and redirects to "/", so we wait for the app shell.
 async function redeemViaAcceptPage(
 	page: Page,
 	token: string,
@@ -235,7 +236,9 @@ async function redeemViaAcceptPage(
 		await page.getByTestId("accept-password").fill(opts.password);
 		await page.getByTestId("accept-submit").click();
 	}
-	await expect(page.getByTestId("new-list")).toBeVisible({ timeout: 20000 });
+	await expect(page.getByTestId("create-list-open")).toBeVisible({
+		timeout: 20000,
+	});
 }
 
 // Gate per design 2.14: zero serious/critical violations. Moderate/minor logged
@@ -559,7 +562,7 @@ test("kid: guardian adds a managed account -> restricted shell shows the assigne
 	// No management affordances leak into the restricted shell.
 	await expect(pk.getByTestId("open-members")).toHaveCount(0);
 	await expect(pk.getByTestId("invite-open")).toHaveCount(0);
-	await expect(pk.getByTestId("new-list")).toHaveCount(0);
+	await expect(pk.getByTestId("create-list-open")).toHaveCount(0);
 	await expect(pk.getByTestId("new-task")).toHaveCount(0);
 	await expect(pk.getByTestId("add-kid-open")).toHaveCount(0);
 
@@ -638,7 +641,9 @@ test("isolation: an outsider sees no shared invites, assignees, comments, or man
 
 	// Outsider: fully loaded personal app, actively syncing. It must expose none
 	// of the shared workspace or its people rows.
-	await expect(po.getByTestId("new-list")).toBeVisible({ timeout: 15000 });
+	await expect(po.getByTestId("create-list-open")).toBeVisible({
+		timeout: 15000,
+	});
 	// Clicking Open shared cannot surface a workspace the outsider has no
 	// membership in.
 	await po.getByTestId("open-shared").click();

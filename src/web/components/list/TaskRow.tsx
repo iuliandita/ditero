@@ -293,7 +293,7 @@ export function TaskRow({
 	const { rowProps, menu } = useRowContextMenu(actions, actionsLabel);
 
 	return (
-		<div className="rounded-lg">
+		<div>
 			<SwipeRow
 				onComplete={
 					canEdit
@@ -310,25 +310,27 @@ export function TaskRow({
 				    button carries data-kbd-nav (roving focus + open target). `group`
 				    is what RowActions' md:group-hover reveal keys off. */}
 				<div
-					className="group flex items-start gap-2 rounded-lg py-1.5 transition-colors duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none hover:bg-muted/40 active:bg-muted/60"
+					className="group flex min-h-12 items-center gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50"
 					data-kbd-row
 					{...rowProps}
 				>
-					<Checkbox
-						disabled={!canEdit}
-						aria-label={task.title}
-						checked={task.done ?? false}
-						onCheckedChange={() => {
-							if (canEdit) handlers.onToggle(task.id, task.done ?? false);
-						}}
-						data-kbd-action="toggle"
-						className="mt-0.5"
-					/>
+					<div className="flex size-11 shrink-0 items-center justify-center md:size-8">
+						<Checkbox
+							disabled={!canEdit}
+							aria-label={task.title}
+							checked={task.done ?? false}
+							onCheckedChange={() => {
+								if (canEdit) handlers.onToggle(task.id, task.done ?? false);
+							}}
+							data-kbd-action="toggle"
+							className="after:-inset-3.5 md:after:-inset-2"
+						/>
+					</div>
 					<button
 						type="button"
 						data-kbd-nav
 						onClick={() => handlers.onOpenDetail(task)}
-						className="min-w-0 flex-1 text-start"
+						className="min-h-11 min-w-0 flex-1 content-center text-start"
 					>
 						<span
 							className={cn(
@@ -354,7 +356,11 @@ export function TaskRow({
 								<AssigneeChips taskId={task.id} />
 								<DueChip task={task} />
 								{labels.map((l) => (
-									<Badge key={l.id} variant="outline" className="h-4 px-1.5">
+									<Badge
+										key={l.id}
+										variant="outline"
+										className="h-4 border-transparent bg-muted/60 px-1.5 text-muted-foreground"
+									>
 										{l.name}
 									</Badge>
 								))}

@@ -131,6 +131,9 @@ async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
 }
 
 async function saveCalendarView(page: Page, name: string): Promise<void> {
+	if (await page.getByTestId("sidebar-create").count()) {
+		await page.getByTestId("sidebar-create").click();
+	}
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(name);
 	await pickLabeled(page, "Layout", "Calendar");

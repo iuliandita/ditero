@@ -14,6 +14,7 @@ test("saves and deduplicates a dry run without changing tasks, then discards it"
 }) => {
 	await signUp(page, uniqueEmail("import-plan"));
 	await waitWorkspaceReady(page);
+	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").fill("Import dry-run check");
 	await page.getByTestId("new-list-submit").click();
 	await sidebarLists(page)
@@ -27,6 +28,15 @@ test("saves and deduplicates a dry run without changing tasks, then discards it"
 			.getByTestId("list")
 			.getByText("Keep this task unchanged", { exact: true }),
 	).toBeVisible();
+	await expect
+		.poll(async () => {
+			const response = await page.request.get("/api/portability/export");
+			expect(response.ok()).toBeTruthy();
+			return (await response.json()).data.tasks.map(
+				(task: { title: string }) => task.title,
+			);
+		})
+		.toEqual(["Keep this task unchanged"]);
 	await goToSettings(page);
 	const downloadEvent = page.waitForEvent("download");
 	await page.getByRole("button", { name: "Download JSON" }).click();
@@ -151,6 +161,7 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 }) => {
 	await signUp(page, uniqueEmail("import-apply"));
 	await waitWorkspaceReady(page);
+	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").fill("Import execution check");
 	await page.getByTestId("new-list-submit").click();
 	await sidebarLists(page)
