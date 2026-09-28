@@ -301,6 +301,10 @@
 	"list_add_task_placeholder": "Añade una tarea",
 	"title_suggest_label": "Sugerencias de tus elementos anteriores",
 	"list_add_task": "Añadir tarea",
+	"list_add_item_placeholder": "Añade un elemento",
+	"list_add_item": "Añadir elemento",
+	"list_add_habit_placeholder": "Añade un hábito",
+	"list_add_habit": "Añadir hábito",
 	"quickadd_input_label": "Añadir tarea rápida",
 	"quickadd_sheet_title": "Añadir rápido",
 	"quickadd_placeholder": "p. ej. Comprar leche {date} {priority} {label} {list}",
@@ -398,6 +402,8 @@
 	"shopping_qty_placeholder": "Cant.",
 	"shopping_unit_placeholder": "Unidad",
 	"shopping_quantity_for": "Cantidad de {title}",
+	"shopping_quantity_add": "Añadir cantidad a {title}",
+	"shopping_quantity_edit": "{amount}, editar cantidad de {title}",
 	"shopping_unit_for": "Unidad de {title}",
 	"shopping_category_other": "Otros",
 	"task_reorder_handle": "Reordenar la tarea",
@@ -904,13 +910,10 @@
 		}
 	],
 	"panel_focus_own_only": "Solo tus sesiones",
-	"habit_no_recurrence_hint": "Configura una repetición para empezar a seguir este hábito.",
 	"habit_skip_action": "Saltar",
 	"habit_undo_action": "Deshacer",
+	"habit_track_daily": "Seguir a diario",
 	"habit_done_action": "Hecho hoy",
-	"habit_done_state": "Hecho",
-	"habit_mark_done_aria": "Marcar como hecho hoy",
-	"habit_done_today_aria": "Hecho hoy",
 	"habit_streak_days": [
 		{
 			"declarations": [

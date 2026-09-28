@@ -34,7 +34,7 @@ import { LOCALES } from "../domain/locale.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { MutatorError } from "../domain/mutator-error.ts";
 import { randomId } from "../domain/random-id.ts";
-import { nextDue, parseRule } from "../domain/recurrence.ts";
+import { initialRRule, nextDue, parseRule } from "../domain/recurrence.ts";
 import { ADMIN_ROLES, ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
@@ -609,6 +609,7 @@ export const mutators = defineMutators({
 					if (parent.listId !== args.listId)
 						throw new Error("parent in different list");
 				}
+				const rrule = initialRRule(list.kind, args.parentId);
 				await tx.mutate.task.insert({
 					id: args.id,
 					listId: args.listId,
@@ -623,6 +624,7 @@ export const mutators = defineMutators({
 					...(args.quantity !== undefined ? { quantity: args.quantity } : {}),
 					...(args.unit !== undefined ? { unit: args.unit } : {}),
 					...(args.category !== undefined ? { category: args.category } : {}),
+					...(rrule != null ? { rrule } : {}),
 				});
 			},
 		),

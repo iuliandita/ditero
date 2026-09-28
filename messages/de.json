@@ -298,6 +298,10 @@
 	"list_add_task_placeholder": "Aufgabe hinzufügen",
 	"title_suggest_label": "Vorschläge aus deinen früheren Einträgen",
 	"list_add_task": "Aufgabe hinzufügen",
+	"list_add_item_placeholder": "Eintrag hinzufügen",
+	"list_add_item": "Eintrag hinzufügen",
+	"list_add_habit_placeholder": "Gewohnheit hinzufügen",
+	"list_add_habit": "Gewohnheit hinzufügen",
 	"quickadd_input_label": "Aufgabe schnell hinzufügen",
 	"quickadd_sheet_title": "Schnell hinzufügen",
 	"quickadd_placeholder": "z. B. Milch kaufen {date} {priority} {label} {list}",
@@ -395,6 +399,8 @@
 	"shopping_qty_placeholder": "Menge",
 	"shopping_unit_placeholder": "Einheit",
 	"shopping_quantity_for": "Menge für {title}",
+	"shopping_quantity_add": "Menge für {title} hinzufügen",
+	"shopping_quantity_edit": "{amount}, Menge für {title} bearbeiten",
 	"shopping_unit_for": "Einheit für {title}",
 	"shopping_category_other": "Sonstiges",
 	"task_reorder_handle": "Aufgabe umsortieren",
@@ -886,13 +892,10 @@
 		}
 	],
 	"panel_focus_own_only": "Nur deine Sitzungen",
-	"habit_no_recurrence_hint": "Leg eine Wiederholung fest, um diese Gewohnheit zu verfolgen.",
 	"habit_skip_action": "Überspringen",
 	"habit_undo_action": "Rückgängig",
+	"habit_track_daily": "Täglich verfolgen",
 	"habit_done_action": "Heute erledigt",
-	"habit_done_state": "Erledigt",
-	"habit_mark_done_aria": "Für heute als erledigt markieren",
-	"habit_done_today_aria": "Heute erledigt",
 	"habit_streak_days": [
 		{
 			"declarations": [

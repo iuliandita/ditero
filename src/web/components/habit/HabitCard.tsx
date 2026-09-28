@@ -1,11 +1,12 @@
 import { useZero } from "@rocicorp/zero/react";
-import { Check, RotateCcw, SkipForward } from "lucide-react";
-import { useMemo } from "react";
+import { Check, Repeat, RotateCcw, SkipForward } from "lucide-react";
+import { useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ListIcon } from "@/lib/list-icon";
 import { runMutation } from "@/lib/run-mutation";
 import { cn } from "@/lib/utils";
 import { localDay } from "../../../domain/local-day.ts";
+import { DAILY_RRULE } from "../../../domain/recurrence.ts";
 import { computeStreak, type HabitLogEntry } from "../../../domain/streak.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
@@ -38,6 +39,8 @@ export function HabitCard({
 	const { logs } = useHabitLogs(task.id);
 	const { pref } = useUserPref();
 	const today = localDay(new Date(), pref.timezone);
+	// Undo and Track daily unmount once used; focus lands on Done, not the body.
+	const doneRef = useRef<HTMLButtonElement>(null);
 
 	const entries = useMemo<HabitLogEntry[]>(
 		() => logs.map((l) => ({ date: l.date, status: l.status })),
@@ -67,6 +70,15 @@ export function HabitCard({
 		if (!activation.canWrite) return;
 		void runMutation(
 			zero.mutate(mutators.habit.unlog({ habitId: task.id, date: today })),
+			() => {},
+		);
+	}
+
+	// A habit made before new habits started daily has no rule to track against.
+	function trackDaily() {
+		if (!activation.canWrite) return;
+		void runMutation(
+			zero.mutate(mutators.task.update({ id: task.id, rrule: DAILY_RRULE })),
 			() => {},
 		);
 	}
@@ -113,12 +125,20 @@ export function HabitCard({
 					<HabitTracker streak={streak} />
 				</div>
 			) : (
-				<p
-					className="mt-3 text-sm text-muted-foreground"
-					data-testid="habit-no-recurrence"
+				<Button
+					disabled={!activation.canWrite}
+					type="button"
+					variant="outline"
+					size="sm"
+					data-testid="habit-track-daily"
+					onClick={() => {
+						trackDaily();
+						doneRef.current?.focus();
+					}}
+					className="mt-3 min-h-11 md:min-h-7"
 				>
-					{m.habit_no_recurrence_hint()}
-				</p>
+					<Repeat /> {m.habit_track_daily()}
+				</Button>
 			)}
 
 			{/* Secondary skip/undo on the start side; the large primary "done" toggle
@@ -133,28 +153,37 @@ export function HabitCard({
 						aria-pressed={todayStatus === "skipped"}
 						data-testid="habit-skip"
 						onClick={() => log("skipped")}
+						className="min-h-11 md:min-h-7"
 					>
 						<SkipForward /> {m.habit_skip_action()}
 					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						disabled={!activation.canWrite || todayStatus === "none"}
-						data-testid="habit-undo"
-						onClick={unlog}
-					>
-						<RotateCcw /> {m.habit_undo_action()}
-					</Button>
+					{/* Nothing to undo until today is logged, so it is absent, not a
+					    disabled ghost that reads as enabled. */}
+					{todayStatus !== "none" && (
+						<Button
+							disabled={!activation.canWrite}
+							type="button"
+							variant="ghost"
+							size="sm"
+							data-testid="habit-undo"
+							onClick={() => {
+								unlog();
+								doneRef.current?.focus();
+							}}
+							className="min-h-11 md:min-h-7"
+						>
+							<RotateCcw /> {m.habit_undo_action()}
+						</Button>
+					)}
 				</div>
 				<Button
+					ref={doneRef}
 					disabled={!activation.canWrite}
 					type="button"
 					variant={done ? "default" : "outline"}
+					// One label in both states: the pressed fill says whether today is
+					// done, and the name never drifts from what is on the button.
 					aria-pressed={done}
-					aria-label={
-						done ? m.habit_done_today_aria() : m.habit_mark_done_aria()
-					}
 					data-testid="habit-done"
 					onClick={() => (done ? unlog() : log("done"))}
 					className={cn(
@@ -162,7 +191,7 @@ export function HabitCard({
 						done && "bg-success text-background hover:bg-success/90",
 					)}
 				>
-					<Check /> {done ? m.habit_done_state() : m.habit_done_action()}
+					<Check /> {m.habit_done_action()}
 				</Button>
 			</div>
 		</div>

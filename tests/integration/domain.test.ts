@@ -1,5 +1,6 @@
 import type { Transaction } from "@rocicorp/zero";
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -529,6 +530,35 @@ describe("domain mutators", () => {
 				},
 			),
 		).rejects.toThrow(/different list/);
+	});
+
+	test("a new top-level habit starts daily; subtasks and tasks do not", async () => {
+		await db.insert(tables.list).values({
+			id: "l-habits",
+			workspaceId: "w1",
+			ownerId: "owner",
+			title: "Habits",
+			kind: "habits",
+			sortKey: "z0",
+		});
+		const create = (id: string, listId: string, parentId?: string) =>
+			call(
+				mutators.task.create,
+				{ id: "member" },
+				{ id, listId, title: id, sortKey: "d0", parentId },
+			);
+		await create("habit-new", "l-habits");
+		await create("habit-step", "l-habits", "habit-new");
+		await create("task-new", "l1");
+		const rrules = new Map(
+			(await db.query.task.findMany()).map((r) => [r.id, r.rrule]),
+		);
+		expect(rrules.get("habit-new")).toBe("FREQ=DAILY;INTERVAL=1");
+		expect(rrules.get("habit-step")).toBeNull();
+		expect(rrules.get("task-new")).toBeNull();
+		await call(mutators.task.delete, { id: "member" }, { id: "habit-new" });
+		await call(mutators.task.delete, { id: "member" }, { id: "task-new" });
+		await db.delete(tables.list).where(eq(tables.list.id, "l-habits"));
 	});
 
 	test("task.delete cascades subtasks", async () => {
