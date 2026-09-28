@@ -29,6 +29,7 @@ import { AppShell } from "../components/shell/AppShell.tsx";
 import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
 import { Fab } from "../components/shell/Fab.tsx";
+import { FirstRunActions } from "../components/shell/FirstRunActions.tsx";
 import { groupLists } from "../components/shell/grouping.ts";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
@@ -704,6 +705,16 @@ function NormalWorkspace() {
 								membershipWorkspaceIds={membershipWorkspaceIds}
 								loading={viewRowsLoading}
 								onOpenTask={(t) => setDetailTaskId(t.id)}
+								firstRun={
+									isLanding && activeId && canCreateList(activeRole) ? (
+										<FirstRunActions
+											workspaceId={activeId}
+											lists={activeLists}
+											onCreateList={startNewList}
+											onOpenList={openList}
+										/>
+									) : undefined
+								}
 							/>
 						</ErrorBoundary>
 					</section>

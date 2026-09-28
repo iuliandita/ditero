@@ -266,7 +266,7 @@ export function ImportActivationRecovery({
 			<div className="flex items-start gap-3">
 				<AlertCircle
 					aria-hidden="true"
-					className="mt-0.5 size-5 shrink-0 text-amber-600"
+					className="mt-0.5 size-5 shrink-0 text-warning"
 				/>
 				<div className="min-w-0 flex-1 space-y-2">
 					<h3 className="font-medium">
@@ -415,7 +415,7 @@ export function ImportActivationRecovery({
 							)}
 						</div>
 					)}
-					<div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+					<div className="space-y-2 rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">
 						<p>{m.activation_missing_remains()}</p>
 						<p>{m.activation_future_only()}</p>
 						<p>{m.activation_overdue_history()}</p>
