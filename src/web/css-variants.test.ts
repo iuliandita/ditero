@@ -94,6 +94,22 @@ test("the motion and elevation tokens back their utilities", async () => {
 		expect(css).toContain(`${name}: `);
 });
 
+// `font-sans` must resolve Arabic glyphs to the self-hosted companion face
+// before falling back to the platform sans -- dropping it from the stack
+// reintroduces the mixed-typeface regression from #357 silently, since the
+// page still renders and every Latin surface still looks fine.
+test("font-sans keeps the Arabic companion face in the stack", async () => {
+	const css = await build(["font-sans"]);
+	expect(css).toContain(
+		'font-family: "Geist Variable", "Noto Sans Arabic Variable", sans-serif;',
+	);
+	// The companion face must stay scoped to the Arabic block via unicode-range,
+	// or it ships to every visitor instead of loading lazily for Arabic text.
+	expect(css).toMatch(
+		/font-family:\s*"Noto Sans Arabic Variable";[^}]*unicode-range:\s*U\+0?600/,
+	);
+});
+
 // Extracts the declaration block opened by `open`, balancing braces so a nested
 // block (the media query's `:root:not(.light)`) does not end it early.
 function blockAfter(css: string, open: string, from = 0): string {
