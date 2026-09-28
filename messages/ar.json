@@ -1430,6 +1430,8 @@
 	"action_undo": "تراجع",
 	"snackbar_task_completed": "اكتمل: {title}",
 	"snackbar_task_moved": "نُقلت إلى {list}: {title}",
+	"snackbar_task_complete_failed": "تعذر إكمال: {title}",
+	"snackbar_task_move_failed": "تعذر نقل: {title}",
 	"action_delete": "حذف",
 	"action_remove": "إزالة",
 	"confirm_cancel": "إلغاء",

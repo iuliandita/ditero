@@ -1100,3 +1100,49 @@ test("delete lives in the detail's overflow menu behind a confirm", async ({
 	).toHaveCount(0, { timeout: 15000 });
 	await expect(listRow(page, "Survivor")).toBeFocused();
 });
+
+// A snackbar confirms the write the moment it is made; a refusal from the
+// client run or the server must replace it, never leave "Completed" or
+// "Moved to" standing. Demoting the user to viewer makes both writes refused.
+test("a refused complete or move takes its snackbar back", async ({ page }) => {
+	const email = uniqueEmail("refused");
+	await signUp(page, email);
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, "Work");
+	await createListDesktop(page, "Home");
+	await openListDesktop(page, "Home");
+	await addTask(page, "Held back");
+	const panel = await openPanel(page, "Held back");
+	const snack = (text: string) =>
+		page.getByTestId("snackbar").filter({ hasText: text });
+
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await pool.query(
+			`update membership set role = 'viewer'
+			 where user_id = (select id from "user" where email = $1)`,
+			[email],
+		);
+	} finally {
+		await pool.end();
+	}
+
+	await panel.getByTestId("task-detail-done").click();
+	await expect(snack("Could not complete: Held back")).toBeVisible({
+		timeout: 15000,
+	});
+	await expect(snack("Completed: Held back")).toHaveCount(0);
+	await expect(
+		snack("Could not complete: Held back").getByTestId("snackbar-action"),
+	).toHaveCount(0);
+
+	const again = await openPanel(page, "Held back");
+	await openMoreOptions(again);
+	await again.getByRole("combobox", { name: "Move to list" }).click();
+	await page.getByRole("option", { name: "Work", exact: true }).click();
+	await expect(snack("Could not move: Held back")).toBeVisible({
+		timeout: 15000,
+	});
+	await expect(snack("Moved to Work: Held back")).toHaveCount(0);
+	await expect(listRow(page, "Held back")).toBeVisible({ timeout: 15000 });
+});

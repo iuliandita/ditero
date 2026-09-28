@@ -723,6 +723,22 @@ test("view: a board beside the docked detail falls back to the list", async ({
 	const column = page.getByRole("region", { name: "P1 High" });
 	await expect(column).toBeVisible({ timeout: 15000 });
 
+	// No panel open: a desktop board at every md width, as before, including
+	// 900px where only ~570px of content is left.
+	for (const width of [900, 1440, 1100]) {
+		await page.setViewportSize({ width, height: 800 });
+		// Let the resize observer report and React re-render before looking;
+		// the board from the previous width would otherwise satisfy the check.
+		await page.evaluate(
+			() =>
+				new Promise((done) =>
+					requestAnimationFrame(() => requestAnimationFrame(done)),
+				),
+		);
+		await expect(column).toBeVisible();
+		await expect(page.getByText("Viewing as list")).toHaveCount(0);
+	}
+
 	const renderer = page.getByTestId("view-renderer");
 	await renderer
 		.locator("[data-kbd-nav]")
@@ -744,8 +760,12 @@ test("view: a board beside the docked detail falls back to the list", async ({
 		1100,
 	);
 
-	// Closing gives the width back and the board returns.
+	// Closing gives the width back, the board returns, and focus lands on the
+	// board card that opened the panel, not on the list row it replaced.
 	await page.keyboard.press("Escape");
 	await expect(panel).toBeHidden();
 	await expect(column).toBeVisible();
+	await expect(
+		renderer.locator("[data-kbd-nav]").filter({ hasText: "Card one" }),
+	).toBeFocused();
 });

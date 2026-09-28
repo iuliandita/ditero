@@ -1322,6 +1322,8 @@
 	"action_undo": "Rückgängig",
 	"snackbar_task_completed": "Erledigt: {title}",
 	"snackbar_task_moved": "Nach {list} verschoben: {title}",
+	"snackbar_task_complete_failed": "Konnte nicht erledigt werden: {title}",
+	"snackbar_task_move_failed": "Konnte nicht verschoben werden: {title}",
 	"action_delete": "Löschen",
 	"action_remove": "Entfernen",
 	"confirm_cancel": "Abbrechen",

@@ -1349,6 +1349,8 @@
 	"action_undo": "Deshacer",
 	"snackbar_task_completed": "Completado: {title}",
 	"snackbar_task_moved": "Movida a {list}: {title}",
+	"snackbar_task_complete_failed": "No se pudo completar: {title}",
+	"snackbar_task_move_failed": "No se pudo mover: {title}",
 	"action_delete": "Eliminar",
 	"action_remove": "Quitar",
 	"confirm_cancel": "Cancelar",

@@ -59,7 +59,9 @@ import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import { formatTimeValue } from "../../lib/date-picker.ts";
 import { formatList } from "../../lib/intl-format.ts";
+import { onMutationFailure } from "../../lib/mutation-outcome.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
+import { markTaskPanelOpen } from "../../lib/use-wide-content.ts";
 import { AttachmentList } from "../attachments/AttachmentList.tsx";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
 import { CommentThread } from "../people/CommentThread.tsx";
@@ -323,6 +325,10 @@ export function TaskDetail({
 			title.setSelectionRange(title.value.length, title.value.length);
 		} else panel.focus({ preventScroll: true });
 	}, [docked, shownId]);
+
+	// Layouts beside the docked panel check their width only while it is open.
+	const docks = docked && shownId != null;
+	useEffect(() => (docks ? markTaskPanelOpen() : undefined), [docks]);
 
 	// Focus may be back in the list (triaging) or on <body>; Escape still closes.
 	// Text fields outside the panel keep Escape for themselves, and anything
@@ -882,14 +888,21 @@ export function TaskDetail({
 											(x) => x.listId === target && x.parentId == null,
 										);
 										const from = { listId: t.listId, sortKey: t.sortKey };
-										void run(
-											zero.mutate(
-												mutators.task.move({
-													id: t.id,
-													listId: target,
-													sortKey: tailKey(targetTasks),
+										const move = zero.mutate(
+											mutators.task.move({
+												id: t.id,
+												listId: target,
+												sortKey: tailKey(targetTasks),
+											}),
+										);
+										void run(move);
+										onMutationFailure(move, () =>
+											snackbar.show({
+												key: t.id,
+												message: m.snackbar_task_move_failed({
+													title: t.title,
 												}),
-											),
+											}),
 										);
 										snackbar.show({
 											key: t.id,

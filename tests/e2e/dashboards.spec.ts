@@ -425,9 +425,23 @@ test("dashboard edit mode: drag reorder persists, size preset applies, remove wi
 	await beta.getByTestId("panel-menu").click();
 	await page.getByTestId("panel-resize").click();
 	await page.getByTestId("panel-size-full").click();
-	await expect(beta.locator("..")).toHaveClass(/@2xl:col-span-12/, {
+	await expect(beta.locator("..")).toHaveClass(/md:col-span-12/, {
 		timeout: 15000,
 	});
+
+	// Without a docked task detail the grid stays 12 columns at any md width,
+	// even where the content is under 672px (900px viewport, 280px sidebar).
+	await page.setViewportSize({ width: 900, height: 800 });
+	await expect
+		.poll(() =>
+			page
+				.getByTestId("dashboard-grid")
+				.evaluate(
+					(el) => getComputedStyle(el).gridTemplateColumns.split(" ").length,
+				),
+		)
+		.toBe(12);
+	await page.setViewportSize({ width: 1280, height: 720 });
 
 	// Remove Beta, accepting the in-app AlertDialog. A page.once("dialog")
 	// handler would silently do nothing here: the confirm is a DOM dialog, not

@@ -1349,6 +1349,8 @@
 	"action_undo": "Anulează",
 	"snackbar_task_completed": "Finalizat: {title}",
 	"snackbar_task_moved": "Mutată în {list}: {title}",
+	"snackbar_task_complete_failed": "Nu s-a putut finaliza: {title}",
+	"snackbar_task_move_failed": "Nu s-a putut muta: {title}",
 	"action_delete": "Șterge",
 	"action_remove": "Elimină",
 	"confirm_cancel": "Anulează",

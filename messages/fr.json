@@ -1349,6 +1349,8 @@
 	"action_undo": "Annuler",
 	"snackbar_task_completed": "Terminé : {title}",
 	"snackbar_task_moved": "Déplacée vers {list} : {title}",
+	"snackbar_task_complete_failed": "Impossible de terminer : {title}",
+	"snackbar_task_move_failed": "Impossible de déplacer : {title}",
 	"action_delete": "Supprimer",
 	"action_remove": "Retirer",
 	"confirm_cancel": "Annuler",

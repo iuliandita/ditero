@@ -1,12 +1,12 @@
 import type { PanelSize } from "../../../domain/dashboard.ts";
 
-// Grid column span per size preset (PANEL_SPANS) once the dashboard container
-// is @2xl wide; narrower (a phone, or beside the docked task detail) the grid
-// is a single column so every panel renders full-width. Static strings because
+// md+ grid column span per size preset (PANEL_SPANS); below md, or beside the
+// docked task detail when too little width is left (useWideContent), the grid
+// is a single column and these are not applied, so every panel is full-width. Static strings because
 // Tailwind can't see computed class names.
 export const PANEL_SPAN_CLASS: Record<PanelSize, string> = {
-	s: "@2xl:col-span-3",
-	m: "@2xl:col-span-6",
-	l: "@2xl:col-span-8",
-	full: "@2xl:col-span-12",
+	s: "md:col-span-3",
+	m: "md:col-span-6",
+	l: "md:col-span-8",
+	full: "md:col-span-12",
 };

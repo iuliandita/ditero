@@ -35,6 +35,7 @@ import type {
 } from "../../../zero/schema.gen.ts";
 import type { SavedView } from "../../hooks/useViews.ts";
 import { useIsDesktop } from "../../lib/use-media-query.ts";
+import { useWideContent } from "../../lib/use-wide-content.ts";
 import { useReorderSensors } from "../list/SortableList.tsx";
 import { BackButton } from "../ui/back-button.tsx";
 import { Button } from "../ui/button.tsx";
@@ -99,9 +100,11 @@ function SortablePanel({
 	onEdit,
 	onResize,
 	onRemove,
+	spanClass,
 	children,
 }: {
 	panel: Panel;
+	spanClass: string;
 	viewName: string | null;
 	onEdit?: () => void;
 	onResize: (size: PanelSize) => void;
@@ -125,7 +128,7 @@ function SortablePanel({
 				transition: reduce ? undefined : transition,
 				zIndex: isDragging ? 10 : undefined,
 			}}
-			className={cn(PANEL_SPAN_CLASS[panel.size], isDragging && "opacity-90")}
+			className={cn(spanClass, isDragging && "opacity-90")}
 		>
 			<PanelFrame
 				panel={panel}
@@ -181,6 +184,10 @@ export function DashboardView({
 	onOpenView: (viewId: string) => void;
 }): JSX.Element {
 	const isDesktop = useIsDesktop();
+	// The 12-column grid, unless the docked task detail leaves too little room.
+	const [measureRef, wide] = useWideContent();
+	const spanOf = (p: Panel) => (wide ? PANEL_SPAN_CLASS[p.size] : "");
+	const tileSpan = wide ? "md:col-span-3" : "";
 	// Effective edit mode is gated on canEdit so a mid-edit role revocation
 	// drops the surface back to view chrome instead of stranding failing writes.
 	const [editRequested, setEditRequested] = useState(false);
@@ -343,13 +350,14 @@ export function DashboardView({
 		const grid = (
 			<div
 				data-testid="dashboard-grid"
-				className="grid grid-cols-1 gap-4 @2xl:grid-cols-12"
+				className={cn("grid grid-cols-1 gap-4", wide && "md:grid-cols-12")}
 			>
 				{editing
 					? panels.map((p) => (
 							<SortablePanel
 								key={p.id}
 								panel={p}
+								spanClass={spanOf(p)}
 								viewName={panelViewName(p)}
 								onEdit={() => setPanelDialog({ mode: "edit", panel: p })}
 								onResize={(size) => resizePanel(p.id, size)}
@@ -359,7 +367,7 @@ export function DashboardView({
 							</SortablePanel>
 						))
 					: panels.map((p) => (
-							<div key={p.id} className={PANEL_SPAN_CLASS[p.size]}>
+							<div key={p.id} className={spanOf(p)}>
 								<PanelFrame
 									panel={p}
 									editing={false}
@@ -373,7 +381,10 @@ export function DashboardView({
 					(atCap ? (
 						<p
 							data-testid="panel-limit-reached"
-							className="flex min-h-28 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground @2xl:col-span-3"
+							className={cn(
+								"flex min-h-28 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground",
+								tileSpan,
+							)}
 						>
 							{m.panel_limit_reached()}
 						</p>
@@ -382,7 +393,10 @@ export function DashboardView({
 							type="button"
 							data-testid="add-panel"
 							onClick={() => setPanelDialog({ mode: "add" })}
-							className="flex min-h-28 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40 @2xl:col-span-3"
+							className={cn(
+								"flex min-h-28 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40",
+								tileSpan,
+							)}
 						>
 							<Plus className="size-4" /> {m.panel_add()}
 						</button>
@@ -411,9 +425,7 @@ export function DashboardView({
 		<section
 			aria-label={dashboard.name}
 			data-testid="dashboard-surface"
-			// The grid spans follow this container, not the viewport, so a docked
-			// task detail narrowing the content drops it to one column.
-			className="@container"
+			ref={measureRef}
 		>
 			<div className="mb-3 flex items-center gap-2">
 				{!isDesktop && <BackButton size="compact" onClick={onBack} />}
