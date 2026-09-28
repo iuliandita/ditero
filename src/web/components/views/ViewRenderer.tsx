@@ -357,9 +357,10 @@ export function ViewRenderer(props: {
 			{loading ? (
 				<TaskListSkeleton />
 			) : empty ? (
-				// A user with no tasks at all is new and gets onboarded; a user whose
-				// filter matched nothing is told so, calmly. Same frame, different job.
-				tasks.length === 0 ? (
+				// A user with no list in any workspace is new and gets onboarded; once
+				// one exists, even empty, an empty view is simply a filter that matched
+				// nothing. Same frame, different job.
+				lists.length === 0 ? (
 					<EmptyState
 						data-testid="view-empty-first-use"
 						title={m.view_empty_welcome_title()}

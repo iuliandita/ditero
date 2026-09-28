@@ -179,3 +179,35 @@ for (const scheme of ["light", "dark"] as const) {
 		await expectNoSeriousA11y(page, `shopping list ${scheme}`);
 	});
 }
+
+// The welcome is for a user with no list anywhere. One empty list is enough to
+// retire it: the landing then says the view matched nothing instead.
+for (const viewport of [
+	{ name: "desktop", width: 1280, height: 800 },
+	{ name: "mobile", width: 375, height: 812 },
+] as const) {
+	test(`first run: the welcome is gone once any list exists (${viewport.name})`, async ({
+		page,
+	}) => {
+		await page.setViewportSize({
+			width: viewport.width,
+			height: viewport.height,
+		});
+		await signUp(page, uniqueEmail(`id3${viewport.name}`));
+		await waitWorkspaceReady(page);
+		const welcome = page.getByTestId("view-empty-first-use");
+		await expect(welcome).toBeVisible({ timeout: 15000 });
+
+		if (viewport.name === "desktop")
+			await page.getByTestId("create-list-open").click();
+		else await page.getByRole("button", { name: "New list" }).click();
+		await page.getByTestId("new-list").fill("Errands");
+		await page.getByTestId("new-list-submit").click();
+
+		await expect(page.getByTestId("view-empty-no-match")).toBeVisible({
+			timeout: 15000,
+		});
+		await expect(welcome).toHaveCount(0);
+		await expect(page.getByTestId("first-run-create-list")).toHaveCount(0);
+	});
+}
