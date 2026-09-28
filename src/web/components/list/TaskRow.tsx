@@ -13,6 +13,11 @@ import { AssigneeChips } from "@/components/people/AssigneeChips";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+	CHECK_POP,
+	strikeClass,
+	useJustCompleted,
+} from "@/lib/completion-feedback";
+import {
 	formatDue,
 	isOverdue,
 	priorityLabel,
@@ -210,6 +215,7 @@ export function TaskRow({
 	const doneCount = subtasks.filter((s) => s.done).length;
 	const total = subtasks.length;
 	const progress = total > 0 ? doneCount / total : 0;
+	const justCompleted = useJustCompleted(task.done ?? false);
 
 	// The caller's role in the workspace owning this task's list. The mutators
 	// re-check on write; this only keeps the menu from offering a refusal.
@@ -323,7 +329,10 @@ export function TaskRow({
 								if (canEdit) handlers.onToggle(task.id, task.done ?? false);
 							}}
 							data-kbd-action="toggle"
-							className="after:-inset-3.5 md:after:-inset-2"
+							className={cn(
+								"after:-inset-3.5 md:after:-inset-2",
+								justCompleted && CHECK_POP,
+							)}
 						/>
 					</div>
 					<button
@@ -335,10 +344,12 @@ export function TaskRow({
 						<span
 							className={cn(
 								"block truncate text-sm",
-								task.done && "text-muted-foreground line-through",
+								task.done && "text-muted-foreground",
 							)}
 						>
-							{task.title}
+							<span className={strikeClass(task.done ?? false)}>
+								{task.title}
+							</span>
 						</span>
 						{(activationStatus === "pending" ||
 							activationStatus === "blocked") && (
@@ -450,10 +461,10 @@ export function TaskRow({
 								onClick={() => handlers.onOpenDetail(s)}
 								className={cn(
 									"min-w-0 flex-1 truncate text-start text-sm",
-									s.done && "text-muted-foreground line-through",
+									s.done && "text-muted-foreground",
 								)}
 							>
-								{s.title}
+								<span className={strikeClass(s.done ?? false)}>{s.title}</span>
 							</button>
 						</li>
 					))}

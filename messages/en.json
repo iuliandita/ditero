@@ -272,12 +272,25 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} item in cart",
+				"countPlural=other": "{countNum} items in cart"
+			}
+		}
+	],
 	"list_change_icon": "Change list icon",
 	"list_display_options": "List display options",
 	"list_completed_heading": "Completed items",
 	"list_completed_sink": "Sink completed items",
 	"list_completed_keep": "Keep in place",
-	"list_completed_hide": "Hide completed items",
 	"list_group_by_assignee": "Group by assignee",
 	"list_save_as_template": "Save as template",
 	"list_add_from_template": "Add from template",
@@ -1293,6 +1306,8 @@
 	"mutator_error_label_name_taken": "A label with that name already exists.",
 	"modal_close_label": "Close",
 	"action_close": "Close",
+	"action_undo": "Undo",
+	"snackbar_task_completed": "Completed: {title}",
 	"action_delete": "Delete",
 	"action_remove": "Remove",
 	"confirm_cancel": "Cancel",

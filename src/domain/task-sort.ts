@@ -22,21 +22,22 @@ const bySortKeyAsc = (a: SortableTask, b: SortableTask) =>
 	a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0;
 
 // design 2.16: completion never mutates sortKey; this is pure view ordering.
+// sink and hide both move completed rows into the trailing collapsed group
+// (#348). A settling row is done but was just completed, so it stays at its
+// sortKey position long enough to be seen and undone in place.
 export function sortTasks<T extends SortableTask>(
 	tasks: T[],
 	mode: CompletedDisplay,
+	isSettling: (task: T) => boolean = () => false,
 ): { visible: T[]; completed: T[] } {
-	const open = tasks.filter((t) => !t.done).sort(bySortKeyAsc);
-	const done = tasks.filter((t) => t.done).sort(byCompletedAtDesc);
-
 	if (mode === "keep") {
 		return { visible: [...tasks].sort(bySortKeyAsc), completed: [] };
 	}
-	if (mode === "hide") {
-		return { visible: open, completed: done };
-	}
-	// sink: completed sinks to the bottom of the same list.
-	return { visible: [...open, ...done], completed: [] };
+	const inPlace = (t: T) => !t.done || isSettling(t);
+	return {
+		visible: tasks.filter(inPlace).sort(bySortKeyAsc),
+		completed: tasks.filter((t) => !inPlace(t)).sort(byCompletedAtDesc),
+	};
 }
 
 export type FieldSortableTask = {

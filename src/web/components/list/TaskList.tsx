@@ -1,10 +1,11 @@
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useMemo, useRef } from "react";
 import { FLIP_TRANSITION } from "@/lib/motion";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { sortTasks } from "../../../domain/task-sort.ts";
 import { m } from "../../../paraglide/messages.js";
 import type { Label, List, Task } from "../../../zero/schema.gen.ts";
+import { useSettling } from "../../hooks/useSettling.ts";
 import { HabitCard } from "../habit/HabitCard.tsx";
 import { CompletedSection } from "./CompletedSection.tsx";
 import { type ShoppingHandlers, ShoppingRow } from "./ShoppingRow.tsx";
@@ -12,6 +13,7 @@ import { SortableTaskList } from "./SortableTaskList.tsx";
 import { type RowHandlers, TaskRow } from "./TaskRow.tsx";
 
 const UNCATEGORIZED = ""; // sorts nowhere; rendered last explicitly
+const NOTHING_SETTLING: ReadonlySet<string> = new Set();
 
 export type TaskListHandlers = RowHandlers &
 	ShoppingHandlers & { onMove: (id: string, sortKey: string) => void };
@@ -57,9 +59,13 @@ export function TaskList({
 	const reduce = useReducedMotion();
 	const kind = (list.kind ?? "tasks") as ListKind;
 	const mode = list.completedDisplay ?? "sink";
+	const rootRef = useRef<HTMLDivElement>(null);
+	const observed = useSettling(tasks, rootRef);
+	// keep mode never moves a completed row, so nothing settles there.
+	const settling = mode === "keep" ? NOTHING_SETTLING : observed;
 	const { visible, completed } = useMemo(
-		() => sortTasks(tasks, mode),
-		[tasks, mode],
+		() => sortTasks(tasks, mode, (t) => settling.has(t.id)),
+		[tasks, mode, settling],
 	);
 
 	// habits render as a vertical stack of cards, not task rows: completion is
@@ -105,6 +111,7 @@ export function TaskList({
 			key={task.id}
 			layout={!reduce}
 			transition={FLIP_TRANSITION}
+			data-settling={settling.has(task.id) || undefined}
 			className={task.done ? "opacity-70" : undefined}
 		>
 			{sortable && kind !== "shopping" && task.done ? (
@@ -117,34 +124,23 @@ export function TaskList({
 
 	let body: ReactNode;
 	if (kind === "shopping") {
-		// keep: completed stay in place within their category (sortKey order, as
-		// sortTasks already left them). sink/hide pull completed to a trailing
-		// group so categories show only open items.
-		const grouped = mode === "keep" ? visible : visible.filter((t) => !t.done);
-		const doneVisible = mode === "keep" ? [] : visible.filter((t) => t.done);
-		const groups = groupByCategory(grouped);
-		body = (
-			<>
-				{groups.map(([category, items]) => (
-					<div key={category} className="mb-2">
-						<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
-							{category === UNCATEGORIZED
-								? m.shopping_category_other()
-								: category}
-						</div>
-						<ul className="flex flex-col">{items.map(item)}</ul>
-					</div>
-				))}
-				{doneVisible.length > 0 && (
-					<ul className="flex flex-col">{doneVisible.map(item)}</ul>
-				)}
-			</>
-		);
+		// Checked items stay in their category while settling (and always in
+		// keep mode); settled ones collect in the trailing "in cart" group.
+		const groups = groupByCategory(visible);
+		body = groups.map(([category, items]) => (
+			<div key={category} className="mb-2">
+				<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
+					{category === UNCATEGORIZED ? m.shopping_category_other() : category}
+				</div>
+				<ul className="flex flex-col">{items.map(item)}</ul>
+			</div>
+		));
 	} else if (sortable) {
 		// Non-shopping kinds are drag-sortable; the completed group below never is.
 		body = (
 			<SortableTaskList
 				tasks={visible}
+				settling={settling}
 				onMove={handlers.onMove}
 				renderRow={row}
 				reduce={!!reduce}
@@ -156,12 +152,20 @@ export function TaskList({
 	}
 
 	return (
-		<LayoutGroup>
-			{body}
-			{/* hide mode: completed collapse into a section (all kinds). */}
-			<CompletedSection count={completed.length}>
-				<ul className="flex flex-col">{completed.map(item)}</ul>
-			</CompletedSection>
-		</LayoutGroup>
+		<div ref={rootRef}>
+			<LayoutGroup>
+				{body}
+				<CompletedSection
+					count={completed.length}
+					label={
+						kind === "shopping"
+							? m.list_in_cart_count({ count: completed.length })
+							: m.list_completed_count({ count: completed.length })
+					}
+				>
+					<ul className="flex flex-col">{completed.map(item)}</ul>
+				</CompletedSection>
+			</LayoutGroup>
+		</div>
 	);
 }
