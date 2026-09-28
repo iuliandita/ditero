@@ -16,6 +16,7 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { addCopyFor } from "@/lib/kind-copy";
 import { ListIcon } from "@/lib/list-icon";
 import { runMutation } from "@/lib/run-mutation";
 import type { ListKind } from "../../domain/icon-map.ts";
@@ -38,6 +39,7 @@ import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
 import { TitleSuggestInput } from "../components/list/TitleSuggestInput.tsx";
 import { TaskListSkeleton } from "../components/shell/AppSkeleton.tsx";
+import { ListProgress } from "../components/shell/ListProgress.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
@@ -255,6 +257,9 @@ export function ListView({
 		(t) => t.kind === "task" && t.workspaceId === openList.workspaceId,
 	);
 	const kind = (list.kind ?? "tasks") as ListKind;
+	const addCopy = addCopyFor(kind);
+	// Same count as the sidebar bar: every task in the list, subtasks included.
+	const doneCount = listTasks.filter((t) => t.done).length;
 	const canEditContainer =
 		!tasksLoading &&
 		listTasks.every((task) => activation.canWriteTask(task.id));
@@ -435,6 +440,15 @@ export function ListView({
 				/>
 			</div>
 
+			{kind === "project" && !tasksLoading && (
+				<ListProgress
+					showLabel
+					done={doneCount}
+					total={listTasks.length}
+					className="-mt-3 mb-5"
+				/>
+			)}
+
 			<AttachmentList
 				ref={attachmentsRef}
 				workspaceId={openList.workspaceId}
@@ -451,7 +465,7 @@ export function ListView({
 				<TitleSuggestInput
 					inputRef={titleInput}
 					data-testid="new-task"
-					placeholder={m.list_add_task_placeholder()}
+					placeholder={addCopy.placeholder()}
 					value={title}
 					onChange={setTitle}
 					onSubmit={() => void createTask()}
@@ -463,7 +477,7 @@ export function ListView({
 					type="button"
 					onClick={() => void createTask()}
 				>
-					{m.list_add_task()}
+					{addCopy.action()}
 				</Button>
 			</div>
 

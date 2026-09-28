@@ -1,7 +1,9 @@
 import { RRule } from "rrule";
 import { describe, expect, test } from "vitest";
 import {
+	DAILY_RRULE,
 	expand,
+	initialRRule,
 	nextDue,
 	parseRule,
 	presetToRRule,
@@ -236,5 +238,20 @@ describe("expand", () => {
 
 	test("throws on malformed rrule", () => {
 		expect(() => expand("garbage", utc(2026, 2, 7), utc(2026, 2, 8))).toThrow();
+	});
+});
+
+describe("initialRRule", () => {
+	test("a top-level habit starts daily, and the rule parses", () => {
+		expect(initialRRule("habits", null)).toBe(DAILY_RRULE);
+		expect(initialRRule("habits", undefined)).toBe(DAILY_RRULE);
+		expect(rruleToPreset(DAILY_RRULE)).toEqual({ freq: "daily", interval: 1 });
+	});
+
+	test("habit subtasks and every other kind start without a rule", () => {
+		expect(initialRRule("habits", "parent")).toBeNull();
+		for (const kind of ["tasks", "shopping", "checklist", "project", null]) {
+			expect(initialRRule(kind, null)).toBeNull();
+		}
 	});
 });

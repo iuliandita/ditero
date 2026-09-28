@@ -301,8 +301,9 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 	const HABIT = "Drink water";
 	const card = habitCard(page, HABIT);
 	await expect(card).toBeVisible();
-	// No recurrence yet -> the guard renders the prompt, not streak math.
-	await expect(card.getByTestId("habit-no-recurrence")).toBeVisible();
+	// Starter habits carry no RRULE: a one-tap action, not streak math.
+	await expect(card.getByTestId("habit-track-daily")).toBeVisible();
+	await expect(card.getByTestId("habit-undo")).toHaveCount(0);
 
 	// Set a daily recurrence via the task detail (default preset is daily).
 	const detail = await openDetail(page, HABIT);
@@ -381,12 +382,30 @@ test("habits: a blank habits list is creatable from the kind picker", async ({
 	).toBeVisible({ timeout: 15000 });
 	await openListDesktop(page, "Chores");
 
-	// Habit mechanics, not task rows: the list renders cards, and a habit with no
-	// RRULE yet shows the recurrence hint instead of a streak.
+	// Habit mechanics, not task rows: the list renders cards, and a new habit
+	// starts daily, so it tracks right away.
 	await page.getByTestId("new-task").fill("Walk the dog");
 	await page.getByTestId("new-task-submit").click();
 
 	const card = habitCard(page, "Walk the dog");
 	await expect(card).toBeVisible({ timeout: 15000 });
-	await expect(card.getByTestId("habit-no-recurrence")).toBeVisible();
+	await expect(card.getByTestId("habit-streak")).toHaveText("0 days");
+	await expect(card.getByTestId("habit-track-daily")).toHaveCount(0);
+});
+
+test("habits: a habit without a recurrence starts tracking in one tap", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("habit-track"));
+	await createHabitsList(page);
+	await openListDesktop(page, "Habits");
+
+	const card = habitCard(page, "Read");
+	const track = card.getByTestId("habit-track-daily");
+	await expect(track).toHaveText("Track daily");
+	await expect(card.getByTestId("habit-streak")).toHaveCount(0);
+	await track.click();
+	await expect(card.getByTestId("habit-streak")).toHaveText("0 days");
+	await expect(track).toHaveCount(0);
+	await expect(card.getByTestId("habit-done")).toBeFocused();
 });

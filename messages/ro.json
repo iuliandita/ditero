@@ -301,6 +301,10 @@
 	"list_add_task_placeholder": "Adaugă o sarcină",
 	"title_suggest_label": "Sugestii din elementele tale anterioare",
 	"list_add_task": "Adaugă sarcina",
+	"list_add_item_placeholder": "Adaugă un element",
+	"list_add_item": "Adaugă elementul",
+	"list_add_habit_placeholder": "Adaugă un obicei",
+	"list_add_habit": "Adaugă obiceiul",
 	"quickadd_input_label": "Adăugare rapidă de sarcină",
 	"quickadd_sheet_title": "Adăugare rapidă",
 	"quickadd_placeholder": "ex. Cumpără lapte {date} {priority} {label} {list}",
@@ -398,6 +402,9 @@
 	"shopping_qty_placeholder": "Cant.",
 	"shopping_unit_placeholder": "Unitate",
 	"shopping_quantity_for": "Cantitate pentru {title}",
+	"shopping_quantity_add": "{label}, adaugă cantitate pentru {title}",
+	"shopping_quantity_edit": "{amount}, editează cantitatea pentru {title}",
+	"shopping_quantity_invalid": "Introdu un număr mai mare decât 0, de ex. 2 sau 1,5",
 	"shopping_unit_for": "Unitate pentru {title}",
 	"shopping_category_other": "Altele",
 	"task_reorder_handle": "Reordonează sarcina",
@@ -874,6 +881,22 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: serie de {countNum} zi. Deschide sarcina",
+				"countPlural=few": "{title}: serie de {countNum} zile. Deschide sarcina",
+				"countPlural=other": "{title}: serie de {countNum} de zile. Deschide sarcina"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: fără recurență setată. Deschide sarcina",
 	"panel_streak_no_recurrence": "Fără recurență",
 	"panel_streak_missing": "Obicei lipsă (șters sau nepartajat cu tine)",
@@ -904,13 +927,10 @@
 		}
 	],
 	"panel_focus_own_only": "Doar sesiunile tale",
-	"habit_no_recurrence_hint": "Setează o recurență ca să începi să urmărești acest obicei.",
 	"habit_skip_action": "Sari",
 	"habit_undo_action": "Anulează",
+	"habit_track_daily": "Urmărește zilnic",
 	"habit_done_action": "Făcut azi",
-	"habit_done_state": "Făcut",
-	"habit_mark_done_aria": "Marchează ca făcut pentru azi",
-	"habit_done_today_aria": "Făcut azi",
 	"habit_streak_days": [
 		{
 			"declarations": [
