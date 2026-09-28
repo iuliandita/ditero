@@ -928,6 +928,25 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "{title}: لا سلسلة. فتح المهمة",
+				"countPlural=one": "{title}: سلسلة يوم واحد. فتح المهمة",
+				"countPlural=two": "{title}: سلسلة يومين. فتح المهمة",
+				"countPlural=few": "{title}: سلسلة {countNum} أيام. فتح المهمة",
+				"countPlural=many": "{title}: سلسلة {countNum} يومًا. فتح المهمة",
+				"countPlural=other": "{title}: سلسلة {countNum} يوم. فتح المهمة"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: لا تكرار محدد. فتح المهمة",
 	"panel_streak_no_recurrence": "بلا تكرار",
 	"panel_streak_missing": "عادة مفقودة (محذوفة أو غير مشتركة معك)",

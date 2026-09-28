@@ -166,6 +166,12 @@ test("habits: add habit verb, new habits start daily, one Done label, Undo only 
 		timeout: 15000,
 	});
 	await expect(card.getByTestId("habit-track-daily")).toHaveCount(0);
+	// Days before the habit existed are not misses: one pending cell, no score.
+	await expect(card.getByTestId("habit-heatmap").getByRole("img")).toHaveCount(
+		1,
+	);
+	await expect(card.getByRole("img", { name: /: upcoming$/ })).toBeVisible();
+	await expect(card.getByTestId("habit-adherence")).toHaveCount(0);
 
 	const done = card.getByTestId("habit-done");
 	await expect(done).toHaveText("Done today");

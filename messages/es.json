@@ -880,6 +880,22 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: racha de {countNum} día. Abrir la tarea",
+				"countPlural=many": "{title}: racha de {countNum} días. Abrir la tarea",
+				"countPlural=other": "{title}: racha de {countNum} días. Abrir la tarea"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: sin repetición configurada. Abrir la tarea",
 	"panel_streak_no_recurrence": "Sin repetición",
 	"panel_streak_missing": "Falta el hábito (se eliminó o no está compartido contigo)",

@@ -880,6 +880,22 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title} : série de {countNum} jour. Ouvrir la tâche",
+				"countPlural=many": "{title} : série de {countNum} jours. Ouvrir la tâche",
+				"countPlural=other": "{title} : série de {countNum} jours. Ouvrir la tâche"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title} : aucune répétition définie. Ouvrir la tâche",
 	"panel_streak_no_recurrence": "Aucune répétition",
 	"panel_streak_missing": "Habitude manquante (supprimée ou non partagée avec toi)",

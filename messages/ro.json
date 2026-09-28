@@ -880,6 +880,22 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: serie de {countNum} zi. Deschide sarcina",
+				"countPlural=few": "{title}: serie de {countNum} zile. Deschide sarcina",
+				"countPlural=other": "{title}: serie de {countNum} de zile. Deschide sarcina"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: fără recurență setată. Deschide sarcina",
 	"panel_streak_no_recurrence": "Fără recurență",
 	"panel_streak_missing": "Obicei lipsă (șters sau nepartajat cu tine)",

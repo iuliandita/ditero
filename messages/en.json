@@ -864,6 +864,21 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: {countNum} day streak. Open task",
+				"countPlural=other": "{title}: {countNum} day streak. Open task"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: no recurrence set. Open task",
 	"panel_streak_no_recurrence": "No recurrence",
 	"panel_streak_missing": "Habit missing (deleted or not shared with you)",

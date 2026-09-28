@@ -60,8 +60,8 @@ describe("computeStreak", () => {
 		expect(r.heatmap[29]).toEqual({ date: TODAY, status: "none" });
 	});
 
-	test("empty logs with past expected dates -> current/longest 0, adherence 0", () => {
-		const r = computeStreak(DAILY, [], TODAY);
+	test("tracked since the window start with no logs -> current/longest 0, adherence 0", () => {
+		const r = computeStreak(DAILY, [], TODAY, 30, "2026-06-15");
 		expect(r.current).toBe(0);
 		expect(r.longest).toBe(0);
 		expect(r.adherencePct).toBe(0); // 29 past occurrences all missed
@@ -72,12 +72,12 @@ describe("computeStreak", () => {
 		expect(r.heatmap).toEqual([{ date: TODAY, status: "none" }]);
 		expect(r.current).toBe(0);
 		expect(r.longest).toBe(0);
-		expect(r.adherencePct).toBe(100); // no past occurrence to hold against
+		expect(r.adherencePct).toBeNull(); // no past occurrence to hold against
 	});
 
 	test("heatmap length == expected count, marks missed and none", () => {
 		const dates = windowDates();
-		const r = computeStreak(DAILY, [], TODAY);
+		const r = computeStreak(DAILY, [], TODAY, 30, "2026-06-15");
 		expect(r.heatmap).toHaveLength(dates.length);
 		expect(r.heatmap.slice(0, 29).every((h) => h.status === "missed")).toBe(
 			true,
@@ -94,6 +94,8 @@ describe("computeStreak", () => {
 				{ date: "2026-07-07", status: "done" },
 			],
 			TODAY,
+			30,
+			"2026-06-15",
 		);
 		// Mondays in [2026-06-15, 2026-07-14]: 06-15,22,29, 07-06,13. 2026-07-07 is
 		// a Tuesday (ignored). Only 2026-07-06 (Mon) is done; the rest missed.
@@ -114,7 +116,13 @@ describe("computeStreak", () => {
 		// habit's true epoch. Expected dates are every other day from that edge, so
 		// TODAY (2026-07-14, an odd offset) is NOT an occurrence. This asserts the
 		// current deferred behavior; epoch-anchoring would change it visibly.
-		const r = computeStreak("FREQ=DAILY;INTERVAL=2", [], TODAY);
+		const r = computeStreak(
+			"FREQ=DAILY;INTERVAL=2",
+			[],
+			TODAY,
+			30,
+			"2026-06-15",
+		);
 		expect(r.heatmap.map((h) => h.date)).toEqual([
 			"2026-06-15",
 			"2026-06-17",
@@ -133,6 +141,75 @@ describe("computeStreak", () => {
 			"2026-07-13",
 		]);
 		expect(r.heatmap.some((h) => h.date === TODAY)).toBe(false);
+	});
+
+	test("a habit started today with nothing logged has one pending day and no score", () => {
+		const r = computeStreak(DAILY, [], TODAY);
+		expect(r.heatmap).toEqual([{ date: TODAY, status: "none" }]);
+		expect(r.adherencePct).toBeNull();
+		expect(r.current).toBe(0);
+	});
+
+	test("days before tracking started are neither shown nor missed", () => {
+		const r = computeStreak(
+			DAILY,
+			[done("2026-07-12")],
+			TODAY,
+			30,
+			"2026-07-10",
+		);
+		expect(r.heatmap).toEqual([
+			{ date: "2026-07-10", status: "missed" },
+			{ date: "2026-07-11", status: "missed" },
+			{ date: "2026-07-12", status: "done" },
+			{ date: "2026-07-13", status: "missed" },
+			{ date: TODAY, status: "none" },
+		]);
+		expect(r.adherencePct).toBe(25); // 1 done of 4 elapsed days since 07-10
+	});
+
+	test("without a start day, the first check-in anchors tracking", () => {
+		const r = computeStreak(
+			DAILY,
+			[done("2026-07-12"), done("2026-07-13")],
+			TODAY,
+		);
+		expect(r.heatmap.map((h) => h.status)).toEqual(["done", "done", "none"]);
+		expect(r.adherencePct).toBe(100);
+		expect(r.current).toBe(2);
+	});
+
+	test("a log older than the start day still counts (imported history)", () => {
+		const r = computeStreak(
+			DAILY,
+			[done("2026-07-08")],
+			TODAY,
+			30,
+			"2026-07-13",
+		);
+		expect(r.heatmap[0]).toEqual({ date: "2026-07-08", status: "done" });
+		expect(r.heatmap).toHaveLength(7);
+	});
+
+	test("a tracking start before the window is clamped to the window", () => {
+		const r = computeStreak(DAILY, [], TODAY, 30, "2025-01-01");
+		expect(r.heatmap).toHaveLength(30);
+	});
+
+	test("INTERVAL>1 phase follows a tracking start inside the window", () => {
+		const r = computeStreak(
+			"FREQ=DAILY;INTERVAL=2",
+			[],
+			TODAY,
+			30,
+			"2026-07-09",
+		);
+		expect(r.heatmap.map((h) => h.date)).toEqual([
+			"2026-07-09",
+			"2026-07-11",
+			"2026-07-13",
+		]);
+		expect(r.adherencePct).toBe(0);
 	});
 
 	test("malformed rrule fails loud", () => {

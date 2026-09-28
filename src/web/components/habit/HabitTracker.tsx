@@ -6,13 +6,14 @@ import { formatDayKey } from "../../lib/intl-format.ts";
 
 type HeatCell = StreakResult["heatmap"][number];
 
-// Shape + color per status (never color alone, per shell doc 2): done fills,
-// skipped is a dashed outline, missed a solid destructive outline, upcoming a
-// faint dotted cell. Each cell is labeled with its date + status for a11y.
+// Shape per status (never color alone, per shell doc 2): done fills, skipped is
+// a dashed outline, missed a quiet solid outline, upcoming a faint dotted cell.
+// A missed day is information, not an alarm, so it stays neutral. Each cell is
+// labeled with its date + status for a11y.
 const CELL_STYLE: Record<HeatCell["status"], string> = {
 	done: "bg-success border border-success",
 	skipped: "border border-dashed border-muted-foreground/60 bg-transparent",
-	missed: "border border-destructive/60 bg-destructive/10",
+	missed: "border border-control-border bg-muted",
 	none: "border border-dotted border-muted-foreground/30 bg-transparent",
 };
 
@@ -38,9 +39,11 @@ export function HabitTracker({ streak }: { streak: StreakResult }) {
 						{m.habit_streak_days({ count: current })}
 					</span>
 				</span>
-				<span className="text-muted-foreground" data-testid="habit-adherence">
-					{m.habit_adherence({ pct: adherencePct })}
-				</span>
+				{adherencePct != null && (
+					<span className="text-muted-foreground" data-testid="habit-adherence">
+						{m.habit_adherence({ pct: adherencePct })}
+					</span>
+				)}
 			</div>
 			{heatmap.length > 0 && (
 				<div className="flex flex-wrap gap-1" data-testid="habit-heatmap">
