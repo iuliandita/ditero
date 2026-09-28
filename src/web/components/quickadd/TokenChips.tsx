@@ -1,7 +1,11 @@
 import { CalendarClock, Flag, Hash, ListTodo, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { QuickAddToken } from "../../../domain/quick-add.ts";
+import {
+	priorityFromToken,
+	type QuickAddToken,
+} from "../../../domain/quick-add.ts";
 import { m } from "../../../paraglide/messages.js";
+import { priorityLabel } from "../../lib/task-display.ts";
 
 const ICONS = {
 	date: CalendarClock,
@@ -30,6 +34,9 @@ export function TokenChips({
 				const unknown =
 					tk.type === "label" &&
 					unknownLabels.has(tk.text.slice(1).toLowerCase());
+				// Priority chips name the level the way every picker does ("P1 High").
+				const level =
+					tk.type === "priority" ? priorityFromToken(tk.text) : null;
 				return (
 					<Badge
 						// Spans never overlap, so the start offset is a stable unique key.
@@ -39,7 +46,7 @@ export function TokenChips({
 						className={unknown ? "border-dashed" : undefined}
 					>
 						{unknown ? <Plus /> : <Icon />}
-						{tk.text}
+						{level != null ? priorityLabel(level) : tk.text}
 						<button
 							type="button"
 							// `tk.text` is the verbatim input span (sigil included), never translated.

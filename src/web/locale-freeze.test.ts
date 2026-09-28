@@ -33,11 +33,7 @@ import {
 } from "./lib/channel-messages.ts";
 import { labelColorName } from "./lib/label-color.ts";
 import { mutationErrorMessage } from "./lib/mutator-messages.ts";
-import {
-	PRIORITIES,
-	priorityLabel,
-	priorityLabelShort,
-} from "./lib/task-display.ts";
+import { PRIORITIES, priorityLabel } from "./lib/task-display.ts";
 import { BUILTIN_VIEWS } from "./views/builtins.ts";
 import { groupTasks } from "./views/group.ts";
 
@@ -96,6 +92,12 @@ function commandLabel(id: string): string {
 	return command.label;
 }
 
+// priorityLabel composes the p1-p4 code with the translated name.
+function codedPriority(code: string, name: Message): Message {
+	return (_inputs, options) =>
+		m.priority_coded({ code, name: name({}, options) }, options);
+}
+
 function priorityOptionLabel(value: number): string {
 	const entry = PRIORITIES.find((p) => p.value === value);
 	if (!entry) throw new Error(`no priority option '${value}'`);
@@ -117,14 +119,13 @@ const PROBES: [string, () => string, Message][] = [
 	[
 		"task-display.ts PRIORITY_LABELS",
 		() => priorityLabel(2),
-		m.priority_medium,
+		codedPriority("P2", m.priority_medium),
 	],
 	[
-		"task-display.ts PRIORITY_LABELS_SHORT",
-		() => priorityLabelShort(2),
-		m.priority_medium_short,
+		"task-display.ts PRIORITIES",
+		() => priorityOptionLabel(3),
+		codedPriority("P1", m.priority_high),
 	],
-	["task-display.ts PRIORITIES", () => priorityOptionLabel(3), m.priority_high],
 	["role-labels.ts ROLE_LABELS", () => ROLE_LABELS.owner(), m.role_label_owner],
 	["PanelFrame.tsx SIZE_LABEL", () => SIZE_LABEL.s(), m.panel_size_small],
 	[
