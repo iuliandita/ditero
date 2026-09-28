@@ -97,7 +97,7 @@ test("shopping: add item verb, quantity only when set, no lone Other header", as
 	const qty = list.locator("input[aria-label='Quantity for Oat milk']");
 	await expect(qty).toBeFocused();
 	// A bad quantity keeps the fields open with the reason, nothing is saved.
-	await qty.fill("-1");
+	await qty.fill("abc");
 	await qty.press("Enter");
 	await expect(list.getByTestId("shopping-qty-error")).toHaveText(
 		"Enter a number above 0, like 2 or 1.5",

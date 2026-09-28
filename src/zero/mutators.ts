@@ -33,7 +33,7 @@ import { localDay } from "../domain/local-day.ts";
 import { LOCALES } from "../domain/locale.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { MutatorError } from "../domain/mutator-error.ts";
-import { isValidQuantity, UNIT_MAX_LENGTH } from "../domain/quantity.ts";
+import { isStorableQuantity, isValidUnit } from "../domain/quantity.ts";
 import { randomId } from "../domain/random-id.ts";
 import { initialRRule, nextDue, parseRule } from "../domain/recurrence.ts";
 import { ADMIN_ROLES, ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
@@ -579,13 +579,13 @@ function nextOccurrence(
 	});
 }
 
-// New writes only: rows stored as free text before these rules keep displaying,
-// and task.update only sends a field that changed.
+// Bounds only: the number format is a client rule, since replayed offline
+// writes from before it may carry legacy free text (domain/quantity.ts).
 const quantityArg = z
 	.string()
 	.trim()
-	.refine(isValidQuantity, "quantity must be a number above 0");
-const unitArg = z.string().trim().max(UNIT_MAX_LENGTH);
+	.refine(isStorableQuantity, "quantity is too long");
+const unitArg = z.string().trim().refine(isValidUnit, "unit is too long");
 
 export const mutators = defineMutators({
 	task: {

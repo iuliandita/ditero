@@ -11,6 +11,7 @@ import { formatAmount } from "@/lib/shopping-list";
 import { cn } from "@/lib/utils";
 import {
 	isValidQuantity,
+	isValidUnit,
 	QUANTITY_MAX_LENGTH,
 	UNIT_MAX_LENGTH,
 } from "../../../domain/quantity.ts";
@@ -69,7 +70,10 @@ export function ShoppingRow({
 			const quantity = qtyRef.current?.value.trim() ?? "";
 			const unit = unitRef.current?.value.trim() ?? "";
 			const quantityChanged = quantity !== (task.quantity ?? "");
-			if (quantityChanged && !isValidQuantity(quantity)) {
+			if (
+				(quantityChanged && !isValidQuantity(quantity)) ||
+				!isValidUnit(unit)
+			) {
 				setInvalid(true);
 				if (refocus) qtyRef.current?.focus();
 				return;

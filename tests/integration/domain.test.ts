@@ -561,7 +561,7 @@ describe("domain mutators", () => {
 		await db.delete(tables.list).where(eq(tables.list.id, "l-habits"));
 	});
 
-	test("quantity and unit writes are validated; old free text survives", async () => {
+	test("quantity and unit writes are bounded; legacy free text still replays", async () => {
 		await db.insert(tables.task).values({
 			id: "t-qty",
 			listId: "l1",
@@ -580,15 +580,20 @@ describe("domain mutators", () => {
 		const row = async () =>
 			db.query.task.findFirst({ where: (t, { eq }) => eq(t.id, "t-qty") });
 
-		for (const quantity of ["-1", "0", "abc", "1e3", "12345678901"])
-			await expect(update({ quantity }), quantity).rejects.toThrow();
+		await expect(update({ quantity: "x".repeat(33) })).rejects.toThrow();
 		await expect(update({ unit: "x".repeat(17) })).rejects.toThrow();
-		await expect(create("t-qty-bad", { quantity: "-2" })).rejects.toThrow();
+		await expect(
+			create("t-qty-bad", { quantity: "x".repeat(33) }),
+		).rejects.toThrow();
 		expect((await row())?.quantity).toBe("a handful");
+
+		// An offline edit queued before the number rule replays unharmed.
+		await update({ quantity: " 2 boxes " });
+		expect((await row())?.quantity).toBe("2 boxes");
 
 		// A unit-only change never re-checks the stored quantity.
 		await update({ unit: " jar " });
-		expect(await row()).toMatchObject({ quantity: "a handful", unit: "jar" });
+		expect(await row()).toMatchObject({ quantity: "2 boxes", unit: "jar" });
 
 		await update({ quantity: "1,5" });
 		expect((await row())?.quantity).toBe("1,5");
