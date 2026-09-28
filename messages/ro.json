@@ -274,12 +274,26 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} produs în coș",
+				"countPlural=few": "{countNum} produse în coș",
+				"countPlural=other": "{countNum} de produse în coș"
+			}
+		}
+	],
 	"list_change_icon": "Schimbă pictograma listei",
 	"list_display_options": "Opțiuni de afișare a listei",
 	"list_completed_heading": "Elemente finalizate",
 	"list_completed_sink": "Mută elementele finalizate la final",
 	"list_completed_keep": "Lasă-le pe loc",
-	"list_completed_hide": "Ascunde elementele finalizate",
 	"list_group_by_assignee": "Grupează după responsabil",
 	"list_save_as_template": "Salvează ca șablon",
 	"list_add_from_template": "Adaugă din șablon",
@@ -1268,10 +1282,12 @@
 	"login_backup_code_label": "Cod de rezervă",
 	"login_email_placeholder": "email",
 	"login_password_placeholder": "parolă",
+	"login_new_here": "Prima vizită?",
 	"login_signup": "Creează cont",
 	"login_signin": "Conectează-te",
 	"login_signin_passkey": "Conectează-te cu passkey",
 	"login_continue_google": "Continuă cu Google",
+	"login_or": "sau",
 	"login_two_factor_title": "Autentificare în doi pași",
 	"login_backup_code_placeholder": "Cod de rezervă",
 	"login_verify_code": "Verifică codul",
@@ -1317,6 +1333,8 @@
 	"mutator_error_label_name_taken": "Există deja o etichetă cu acest nume.",
 	"modal_close_label": "Închide",
 	"action_close": "Închide",
+	"action_undo": "Anulează",
+	"snackbar_task_completed": "Finalizat: {title}",
 	"action_delete": "Șterge",
 	"action_remove": "Elimină",
 	"confirm_cancel": "Anulează",

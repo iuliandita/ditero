@@ -165,8 +165,14 @@ for (const scheme of ["light", "dark"] as const) {
 				"border-top-color",
 				await tokenColor(page, token),
 			);
-		// Done fills with the tone, so the checked priority-2 box is solid.
-		await expect(box(page, "Finished thing")).toHaveCSS(
+		// Done rows settle into the collapsed completed group; the rule holds
+		// there too, and done fills with the tone, so the priority-2 box is solid.
+		await page.getByTestId("list").getByTestId("completed-section").click();
+		const finished = box(page, "Finished thing");
+		await expect(finished).toBeVisible();
+		await expect(finished).toHaveAttribute("data-shape", "round");
+		expect(await isRound(finished)).toBe(true);
+		await expect(finished).toHaveCSS(
 			"background-color",
 			await tokenColor(page, "--priority-2"),
 		);

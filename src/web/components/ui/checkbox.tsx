@@ -66,7 +66,9 @@ function Checkbox({
 			<CheckboxPrimitive.Indicator
 				data-slot="checkbox-indicator"
 				className={cn(
-					"grid place-content-center text-current duration-(--motion-fast) ease-(--motion-ease) data-[state=checked]:animate-in data-[state=checked]:fade-in-0 data-[state=checked]:zoom-in-75 motion-reduce:animate-none",
+					// No mount animation: the indicator also mounts on first render and when
+					// the completed group opens; CHECK_POP animates real completions only.
+					"grid place-content-center text-current",
 					round ? "[&>svg]:size-2.5" : "[&>svg]:size-3.5",
 				)}
 			>

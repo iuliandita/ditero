@@ -280,12 +280,29 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا شيء في السلة",
+				"countPlural=one": "عنصر واحد في السلة",
+				"countPlural=two": "عنصران في السلة",
+				"countPlural=few": "{countNum} عناصر في السلة",
+				"countPlural=many": "{countNum} عنصرًا في السلة",
+				"countPlural=other": "{countNum} عنصر في السلة"
+			}
+		}
+	],
 	"list_change_icon": "تغيير أيقونة القائمة",
 	"list_display_options": "خيارات عرض القائمة",
 	"list_completed_heading": "العناصر المكتملة",
 	"list_completed_sink": "إنزال العناصر المكتملة للأسفل",
 	"list_completed_keep": "الإبقاء في مكانها",
-	"list_completed_hide": "إخفاء العناصر المكتملة",
 	"list_group_by_assignee": "التجميع حسب المكلَّف",
 	"list_save_as_template": "الحفظ كقالب",
 	"list_add_from_template": "الإضافة من قالب",
@@ -1346,10 +1363,12 @@
 	"login_backup_code_label": "رمز احتياطي",
 	"login_email_placeholder": "البريد الإلكتروني",
 	"login_password_placeholder": "كلمة المرور",
+	"login_new_here": "جديد هنا؟",
 	"login_signup": "إنشاء حساب",
 	"login_signin": "تسجيل الدخول",
 	"login_signin_passkey": "تسجيل الدخول بمفتاح مرور",
 	"login_continue_google": "المتابعة باستخدام Google",
+	"login_or": "أو",
 	"login_two_factor_title": "المصادقة الثنائية",
 	"login_backup_code_placeholder": "رمز احتياطي",
 	"login_verify_code": "تحقق من الرمز",
@@ -1395,6 +1414,8 @@
 	"mutator_error_label_name_taken": "توجد بالفعل علامة بهذا الاسم.",
 	"modal_close_label": "إغلاق",
 	"action_close": "إغلاق",
+	"action_undo": "تراجع",
+	"snackbar_task_completed": "اكتمل: {title}",
 	"action_delete": "حذف",
 	"action_remove": "إزالة",
 	"confirm_cancel": "إلغاء",

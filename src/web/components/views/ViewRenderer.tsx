@@ -28,6 +28,7 @@ import type {
 	TaskLabel,
 } from "../../../zero/schema.gen.ts";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
+import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import type { GroupCtx, GroupTask } from "../../views/group.ts";
 import { groupTasks } from "../../views/group.ts";
@@ -255,17 +256,12 @@ export function ViewRenderer(props: {
 		setError(null);
 		return runMutation(mutation, setError);
 	}
+	const toggleTask = useTaskToggle(run);
 
 	const handlers: RowHandlers = {
-		onToggle: (id, done) => {
-			if (!activation.canWriteTask(id)) return;
-			void run(
-				zero.mutate(
-					done
-						? mutators.task.update({ id, done: false })
-						: mutators.task.complete({ id }),
-				),
-			);
+		onToggle: (id) => {
+			const task = tasks.find((t) => t.id === id);
+			if (task && activation.canWriteTask(id)) toggleTask(task);
 		},
 		onOpenDetail: (task) => onOpenTask(task),
 	};
