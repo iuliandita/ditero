@@ -51,9 +51,11 @@ test("mobile search finds a task by substring and opens it", async ({
 	await page.getByRole("button", { name: "New list" }).click();
 	await page.getByTestId("new-list").fill("Groceries");
 	await page.getByTestId("new-list-submit").click();
+	// Scoped to the list index: the first-run welcome offers a "Groceries"
+	// starter button too, and clicking it would create a second, pre-filled list.
 	await page
+		.getByTestId("list-index")
 		.getByRole("button", { name: "Groceries", exact: true })
-		.first()
 		.click();
 	await expect(page.getByTestId("list")).toBeVisible({ timeout: 15000 });
 
