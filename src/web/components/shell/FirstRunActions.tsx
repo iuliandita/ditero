@@ -5,21 +5,31 @@ import { Button } from "@/components/ui/button";
 import { ListIcon } from "@/lib/list-icon";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { randomId } from "../../../domain/random-id.ts";
-import { STARTER_TEMPLATES } from "../../../domain/template.ts";
+import {
+	STARTER_TEMPLATES,
+	type TemplateContent,
+} from "../../../domain/template.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { List, schema } from "../../../zero/schema.gen.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { nextKey } from "./CreateList.tsx";
 
-// Each starter has a distinct list kind, so the kind names the starter.
-const STARTER_NAMES: Record<ListKind, () => string> = {
+// Each starter has a distinct list kind, so the kind names the starter. There
+// is no project starter.
+type StarterKind = Exclude<ListKind, "project">;
+const STARTER_NAMES: Record<StarterKind, () => string> = {
 	shopping: m.starter_name_shopping,
 	checklist: m.starter_name_checklist,
 	tasks: m.starter_name_tasks,
 	habits: m.starter_name_habits,
-	project: m.template_default_name_project,
 };
+
+type ListContent = Extract<TemplateContent, { kind: "list" }>;
+const STARTERS = STARTER_TEMPLATES.filter(
+	(c): c is ListContent & { listKind: StarterKind } =>
+		c.kind === "list" && c.listKind !== "project",
+);
 
 // The welcome's one primary action plus the household starters as quick
 // starts. A starter lands the user inside the new, already populated list.
@@ -40,9 +50,8 @@ export function FirstRunActions({
 	const inFlight = useRef(false);
 	const startersId = useId();
 
-	async function start(index: number) {
-		const content = STARTER_TEMPLATES[index];
-		if (content?.kind !== "list" || inFlight.current) return;
+	async function start(content: (typeof STARTERS)[number]) {
+		if (inFlight.current) return;
 		inFlight.current = true;
 		setBusy(true);
 		setError(null);
@@ -85,26 +94,24 @@ export function FirstRunActions({
 					aria-labelledby={startersId}
 					className="flex flex-wrap justify-center gap-2"
 				>
-					{STARTER_TEMPLATES.map((content, i) =>
-						content.kind === "list" ? (
-							<li key={content.listKind}>
-								<Button
-									data-testid={`first-run-starter-${content.listKind}`}
-									variant="outline"
-									className="h-11 gap-2 px-3 md:h-9"
-									disabled={busy}
-									onClick={() => void start(i)}
-								>
-									<ListIcon
-										icon={content.icon ?? null}
-										kind={content.listKind}
-										title=""
-									/>
-									{STARTER_NAMES[content.listKind]()}
-								</Button>
-							</li>
-						) : null,
-					)}
+					{STARTERS.map((content) => (
+						<li key={content.listKind}>
+							<Button
+								data-testid={`first-run-starter-${content.listKind}`}
+								variant="outline"
+								className="h-11 gap-2 px-3 md:h-9"
+								disabled={busy}
+								onClick={() => void start(content)}
+							>
+								<ListIcon
+									icon={content.icon ?? null}
+									kind={content.listKind}
+									title=""
+								/>
+								{STARTER_NAMES[content.listKind]()}
+							</Button>
+						</li>
+					))}
 				</ul>
 			</div>
 			{error && (

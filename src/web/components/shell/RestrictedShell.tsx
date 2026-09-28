@@ -1,9 +1,11 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
 import { runMutation } from "@/lib/run-mutation";
 import { formatDue, isOverdue } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
+import type { ListKind } from "../../../domain/icon-map.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
@@ -19,10 +21,12 @@ import { RestrictedTaskDetail } from "./RestrictedTaskDetail.tsx";
 // big tap target and generous height are the point.
 function RestrictedRow({
 	task,
+	kind,
 	onToggle,
 	onOpen,
 }: {
 	task: Task;
+	kind: ListKind;
 	onToggle: () => void;
 	onOpen: () => void;
 }) {
@@ -37,8 +41,8 @@ function RestrictedRow({
 				aria-label={task.title}
 				checked={task.done ?? false}
 				onCheckedChange={onToggle}
-				shape="round"
-				priority={task.priority}
+				shape={checkShapeFor(kind)}
+				priority={checkToneFor(kind, task.priority)}
 				className="size-6"
 			/>
 			<button
@@ -153,6 +157,10 @@ export function RestrictedShell() {
 							<RestrictedRow
 								key={task.id}
 								task={task}
+								kind={
+									(lists.find((l) => l.id === task.listId)?.kind ??
+										"tasks") as ListKind
+								}
 								onToggle={() => toggle(task)}
 								onOpen={() => setDetailTaskId(task.id)}
 							/>

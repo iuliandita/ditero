@@ -12,7 +12,7 @@ import {
 import { AssigneeChips } from "@/components/people/AssigneeChips";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { checkShapeFor } from "@/lib/check-shape";
+import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
 import {
 	CHECK_POP,
 	strikeClass,
@@ -331,7 +331,7 @@ export function TaskRow({
 							}}
 							data-kbd-action="toggle"
 							shape={checkShapeFor(kind)}
-							priority={bare ? null : task.priority}
+							priority={checkToneFor(kind, task.priority)}
 							className={cn(
 								"after:-inset-3.5 md:after:-inset-2",
 								justCompleted && CHECK_POP,
@@ -456,7 +456,7 @@ export function TaskRow({
 										handlers.onToggle(s.id, s.done ?? false);
 								}}
 								shape={checkShapeFor(kind)}
-								priority={bare ? null : s.priority}
+								priority={checkToneFor(kind, s.priority)}
 							/>
 							<button
 								type="button"
