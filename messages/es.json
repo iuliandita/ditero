@@ -274,12 +274,26 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} artículo en el carrito",
+				"countPlural=many": "{countNum} artículos en el carrito",
+				"countPlural=other": "{countNum} artículos en el carrito"
+			}
+		}
+	],
 	"list_change_icon": "Cambiar el icono de la lista",
 	"list_display_options": "Opciones de visualización de la lista",
 	"list_completed_heading": "Elementos completados",
 	"list_completed_sink": "Bajar los elementos completados",
 	"list_completed_keep": "Dejarlas en su sitio",
-	"list_completed_hide": "Ocultar los elementos completados",
 	"list_group_by_assignee": "Agrupar por responsable",
 	"list_save_as_template": "Guardar como plantilla",
 	"list_add_from_template": "Añadir desde plantilla",
@@ -1281,10 +1295,12 @@
 	"login_backup_code_label": "Código de respaldo",
 	"login_email_placeholder": "correo",
 	"login_password_placeholder": "contraseña",
+	"login_new_here": "¿Nuevo por aquí?",
 	"login_signup": "Crear cuenta",
 	"login_signin": "Iniciar sesión",
 	"login_signin_passkey": "Iniciar sesión con clave de acceso",
 	"login_continue_google": "Continuar con Google",
+	"login_or": "o",
 	"login_two_factor_title": "Verificación en dos pasos",
 	"login_backup_code_placeholder": "Código de respaldo",
 	"login_verify_code": "Verificar el código",
@@ -1330,6 +1346,8 @@
 	"mutator_error_label_name_taken": "Ya existe una etiqueta con ese nombre.",
 	"modal_close_label": "Cerrar",
 	"action_close": "Cerrar",
+	"action_undo": "Deshacer",
+	"snackbar_task_completed": "Completado: {title}",
 	"action_delete": "Eliminar",
 	"action_remove": "Quitar",
 	"confirm_cancel": "Cancelar",

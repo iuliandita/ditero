@@ -43,14 +43,20 @@ import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
 import { RowActions } from "../components/ui/row-actions.tsx";
 import { useTaskImportActivationMap } from "../hooks/useTaskImportActivation.ts";
+import { useTaskToggle } from "../hooks/useTaskToggle.ts";
 
-const DISPLAY_MODES: CompletedDisplay[] = ["sink", "keep", "hide"];
+// `hide` stays a stored value but renders exactly like sink since #348 (both
+// collapse completed rows into a group), so the menu offers only the two
+// distinct behaviours and shows a hide list as sink.
+const DISPLAY_MODES = ["sink", "keep"] as const;
 
 // Thunks: resolving `m` at module scope would freeze the import-time locale.
-const DISPLAY_MODE_LABELS: Record<CompletedDisplay, () => string> = {
+const DISPLAY_MODE_LABELS: Record<
+	(typeof DISPLAY_MODES)[number],
+	() => string
+> = {
 	sink: m.list_completed_sink,
 	keep: m.list_completed_keep,
-	hide: m.list_completed_hide,
 };
 
 function lastKey(items: { sortKey: string }[]): string | null {
@@ -210,6 +216,7 @@ export function ListView({
 		setError(null);
 		return runMutation(mutation, setError);
 	}
+	const toggleTask = useTaskToggle(run);
 
 	async function createTask() {
 		const t = title.trim();
@@ -270,15 +277,9 @@ export function ListView({
 	];
 
 	const handlers = {
-		onToggle: (id: string, done: boolean) => {
-			if (!activation.canWriteTask(id)) return;
-			void run(
-				zero.mutate(
-					done
-						? mutators.task.update({ id, done: false })
-						: mutators.task.complete({ id }),
-				),
-			);
+		onToggle: (id: string) => {
+			const task = listTasks.find((t) => t.id === id);
+			if (task && activation.canWriteTask(id)) toggleTask(task);
 		},
 		onOpenDetail: (task: { id: string }) => setDetailTaskId(task.id),
 		onSchedule: (task: { id: string }) => {
@@ -363,7 +364,7 @@ export function ListView({
 					<DropdownMenuContent align="end">
 						<DropdownMenuLabel>{m.list_completed_heading()}</DropdownMenuLabel>
 						<DropdownMenuRadioGroup
-							value={mode}
+							value={mode === "hide" ? "sink" : mode}
 							onValueChange={(v) => {
 								if (!canEditContainer) {
 									setError(m.activation_container_paused());

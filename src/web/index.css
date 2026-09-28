@@ -243,3 +243,21 @@
 		@apply font-sans;
 	}
 }
+
+/* Completion feedback: the check scales in on transform/opacity only, and only
+   while the checkbox carries .check-pop (set on an observed check, see
+   lib/completion-feedback.ts). */
+@keyframes check-pop {
+	from {
+		opacity: 0;
+		transform: scale(0.4);
+	}
+}
+.check-pop [data-slot="checkbox-indicator"] {
+	animation: check-pop var(--motion-base) var(--motion-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+	.check-pop [data-slot="checkbox-indicator"] {
+		animation: none;
+	}
+}

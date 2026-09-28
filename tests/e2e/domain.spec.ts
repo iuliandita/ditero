@@ -307,8 +307,10 @@ test("shopping list from starter renders category-grouped (mobile)", async ({
 	await ctx.close();
 });
 
-// --- Scenario 3: complete on A sinks + strikes and syncs to B ---
-test("complete on A sinks + strikes and syncs to B", async ({ browser }) => {
+// --- Scenario 3: complete on A strikes, settles into the group, syncs to B ---
+test("complete on A strikes, settles into the completed group and syncs to B", async ({
+	browser,
+}) => {
 	const email = uniqueEmail("sink");
 	const a = await browser.newContext();
 	const b = await browser.newContext();
@@ -330,17 +332,34 @@ test("complete on A sinks + strikes and syncs to B", async ({ browser }) => {
 	});
 
 	await listA.getByRole("checkbox", { name: "Finish me" }).check();
-	// A: completed row is struck through and sinks below the open row.
-	await expect(listA.getByText("Finish me", { exact: true })).toHaveClass(
-		/line-through/,
-	);
+	// A: the strike is a pseudo-element scaled in from 0; measure it, not the class.
 	await expect
-		.poll(() => isAbove(listA, "Keep open", "Finish me"), { timeout: 15000 })
-		.toBe(true);
+		.poll(() =>
+			listA
+				.getByText("Finish me", { exact: true })
+				.evaluate((el) => getComputedStyle(el, "::after").scale),
+		)
+		.toMatch(/^1( 1)?$/);
+	// A: after the settle delay the row leaves the open rows for the group.
+	const sectionA = listA.getByTestId("completed-section");
+	await expect(sectionA).toHaveText(/1 item completed/, { timeout: 15000 });
+	await expect(sectionA).toHaveAttribute("aria-expanded", "false");
+	await expect(
+		listA.getByRole("checkbox", { name: "Keep open" }),
+	).toBeVisible();
+	await expect(listA.getByRole("checkbox", { name: "Finish me" })).toHaveCount(
+		0,
+	);
 	// B: same completed state within the sync budget.
-	await expect(listB.getByRole("checkbox", { name: "Finish me" })).toBeChecked({
-		timeout: 3000,
-	});
+	await expect(listB.getByTestId("completed-section")).toHaveText(
+		/1 item completed/,
+		{ timeout: 15000 },
+	);
+	await sectionA.click();
+	await expect(
+		listA.getByRole("checkbox", { name: "Finish me" }),
+	).toBeChecked();
+	expect(await isAbove(listA, "Keep open", "Finish me")).toBe(true);
 	await pa.setViewportSize({ width: 375, height: 812 });
 	await expect
 		.poll(async () => {
