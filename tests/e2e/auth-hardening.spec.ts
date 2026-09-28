@@ -71,6 +71,34 @@ test("sign up validates the form before making an auth request", async ({
 	expect(requests).toEqual([]);
 });
 
+// #356: passkey and Google used to be three stacked plain-text links of equal
+// weight, and an error re-centered the whole column, moving the logo ~27px.
+test("login hierarchy: passkey and Google are secondary buttons, and an error does not shift the logo", async ({
+	page,
+}) => {
+	await page.goto("/");
+
+	const passkeyButton = page.getByTestId("signin-passkey");
+	const googleButton = page.getByTestId("signin-google");
+	await expect(passkeyButton).toHaveRole("button");
+	await expect(googleButton).toHaveRole("button");
+	await expect(passkeyButton.locator("svg")).toBeVisible();
+	await expect(googleButton.locator("svg")).toBeVisible();
+
+	const logo = page.getByText("Ditero", { exact: true });
+	const before = await logo.boundingBox();
+	if (!before) throw new Error("logo not found before the error");
+
+	await page.getByTestId("email").fill(`hierarchy-${Date.now()}@t.dev`);
+	await page.getByTestId("password").fill("wrong-password");
+	await page.getByTestId("signin").click();
+	await expect(page.getByRole("alert")).toBeVisible();
+
+	const after = await logo.boundingBox();
+	if (!after) throw new Error("logo not found after the error");
+	expect(after.y).toBe(before.y);
+});
+
 test("enrolls and signs in with a passkey", async ({ browser }) => {
 	const context = await browser.newContext();
 	const page = await context.newPage();

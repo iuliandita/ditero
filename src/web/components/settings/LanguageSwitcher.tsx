@@ -33,7 +33,7 @@ export function LanguageSwitcher({
 	return (
 		<div
 			className={
-				compact ? "flex justify-end text-sm" : "flex flex-col gap-1 text-sm"
+				compact ? "flex justify-start text-sm" : "flex flex-col gap-1 text-sm"
 			}
 		>
 			<span
