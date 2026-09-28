@@ -33,6 +33,7 @@ import { localDay } from "../domain/local-day.ts";
 import { LOCALES } from "../domain/locale.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { MutatorError } from "../domain/mutator-error.ts";
+import { isValidQuantity, UNIT_MAX_LENGTH } from "../domain/quantity.ts";
 import { randomId } from "../domain/random-id.ts";
 import { initialRRule, nextDue, parseRule } from "../domain/recurrence.ts";
 import { ADMIN_ROLES, ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
@@ -578,6 +579,14 @@ function nextOccurrence(
 	});
 }
 
+// New writes only: rows stored as free text before these rules keep displaying,
+// and task.update only sends a field that changed.
+const quantityArg = z
+	.string()
+	.trim()
+	.refine(isValidQuantity, "quantity must be a number above 0");
+const unitArg = z.string().trim().max(UNIT_MAX_LENGTH);
+
 export const mutators = defineMutators({
 	task: {
 		create: defineMutator(
@@ -591,8 +600,8 @@ export const mutators = defineMutators({
 				dueAllDay: z.boolean().optional(),
 				priority: z.number().optional(),
 				parentId: z.string().nullable().optional(),
-				quantity: z.string().optional(),
-				unit: z.string().optional(),
+				quantity: quantityArg.optional(),
+				unit: unitArg.optional(),
 				category: z.string().optional(),
 			}),
 			async ({ tx, ctx, args }) => {
@@ -637,8 +646,8 @@ export const mutators = defineMutators({
 				dueAt: z.number().nullable().optional(),
 				dueAllDay: z.boolean().optional(),
 				priority: z.number().optional(),
-				quantity: z.string().nullable().optional(),
-				unit: z.string().nullable().optional(),
+				quantity: quantityArg.nullable().optional(),
+				unit: unitArg.nullable().optional(),
 				category: z.string().nullable().optional(),
 				sortKey: z.string().optional(),
 				rrule: z.string().nullable().optional(),

@@ -413,6 +413,7 @@
 	"shopping_quantity_for": "كمية {title}",
 	"shopping_quantity_add": "{label}، أضف كمية لـ {title}",
 	"shopping_quantity_edit": "{amount}، تعديل كمية {title}",
+	"shopping_quantity_invalid": "أدخل رقمًا أكبر من 0، مثل 2 أو 1.5",
 	"shopping_unit_for": "وحدة {title}",
 	"shopping_category_other": "أخرى",
 	"task_reorder_handle": "إعادة ترتيب المهمة",

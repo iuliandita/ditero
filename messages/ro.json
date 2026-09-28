@@ -404,6 +404,7 @@
 	"shopping_quantity_for": "Cantitate pentru {title}",
 	"shopping_quantity_add": "{label}, adaugă cantitate pentru {title}",
 	"shopping_quantity_edit": "{amount}, editează cantitatea pentru {title}",
+	"shopping_quantity_invalid": "Introdu un număr mai mare decât 0, de ex. 2 sau 1,5",
 	"shopping_unit_for": "Unitate pentru {title}",
 	"shopping_category_other": "Altele",
 	"task_reorder_handle": "Reordonează sarcina",

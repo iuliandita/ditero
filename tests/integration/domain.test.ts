@@ -561,6 +561,45 @@ describe("domain mutators", () => {
 		await db.delete(tables.list).where(eq(tables.list.id, "l-habits"));
 	});
 
+	test("quantity and unit writes are validated; old free text survives", async () => {
+		await db.insert(tables.task).values({
+			id: "t-qty",
+			listId: "l1",
+			title: "Olives",
+			sortKey: "e0",
+			quantity: "a handful",
+		});
+		const update = (args: { quantity?: string; unit?: string }) =>
+			call(mutators.task.update, { id: "member" }, { id: "t-qty", ...args });
+		const create = (id: string, args: { quantity?: string; unit?: string }) =>
+			call(
+				mutators.task.create,
+				{ id: "member" },
+				{ id, listId: "l1", title: id, sortKey: "e1", ...args },
+			);
+		const row = async () =>
+			db.query.task.findFirst({ where: (t, { eq }) => eq(t.id, "t-qty") });
+
+		for (const quantity of ["-1", "0", "abc", "1e3", "12345678901"])
+			await expect(update({ quantity }), quantity).rejects.toThrow();
+		await expect(update({ unit: "x".repeat(17) })).rejects.toThrow();
+		await expect(create("t-qty-bad", { quantity: "-2" })).rejects.toThrow();
+		expect((await row())?.quantity).toBe("a handful");
+
+		// A unit-only change never re-checks the stored quantity.
+		await update({ unit: " jar " });
+		expect(await row()).toMatchObject({ quantity: "a handful", unit: "jar" });
+
+		await update({ quantity: "1,5" });
+		expect((await row())?.quantity).toBe("1,5");
+		await update({ quantity: "" });
+		expect((await row())?.quantity).toBe("");
+		await create("t-qty-ok", { quantity: "2.5", unit: "kg" });
+
+		await call(mutators.task.delete, { id: "member" }, { id: "t-qty" });
+		await call(mutators.task.delete, { id: "member" }, { id: "t-qty-ok" });
+	});
+
 	test("task.delete cascades subtasks", async () => {
 		await call(
 			mutators.task.create,

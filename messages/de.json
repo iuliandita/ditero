@@ -401,6 +401,7 @@
 	"shopping_quantity_for": "Menge für {title}",
 	"shopping_quantity_add": "{label}, Menge für {title} hinzufügen",
 	"shopping_quantity_edit": "{amount}, Menge für {title} bearbeiten",
+	"shopping_quantity_invalid": "Gib eine Zahl über 0 ein, z. B. 2 oder 1,5",
 	"shopping_unit_for": "Einheit für {title}",
 	"shopping_category_other": "Sonstiges",
 	"task_reorder_handle": "Aufgabe umsortieren",

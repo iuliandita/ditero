@@ -404,6 +404,7 @@
 	"shopping_quantity_for": "Cantidad de {title}",
 	"shopping_quantity_add": "{label}, añadir cantidad a {title}",
 	"shopping_quantity_edit": "{amount}, editar cantidad de {title}",
+	"shopping_quantity_invalid": "Escribe un número mayor que 0, como 2 o 1,5",
 	"shopping_unit_for": "Unidad de {title}",
 	"shopping_category_other": "Otros",
 	"task_reorder_handle": "Reordenar la tarea",

@@ -96,6 +96,15 @@ test("shopping: add item verb, quantity only when set, no lone Other header", as
 		.click();
 	const qty = list.locator("input[aria-label='Quantity for Oat milk']");
 	await expect(qty).toBeFocused();
+	// A bad quantity keeps the fields open with the reason, nothing is saved.
+	await qty.fill("-1");
+	await qty.press("Enter");
+	await expect(list.getByTestId("shopping-qty-error")).toHaveText(
+		"Enter a number above 0, like 2 or 1.5",
+	);
+	await expect(qty).toBeFocused();
+	await expect(qty).toHaveAttribute("aria-invalid", "true");
+	await expect(list.getByTestId("shopping-qty-chip")).toHaveCount(0);
 	await qty.fill("2");
 	await list.locator("input[aria-label='Unit for Oat milk']").fill("L");
 	await expectNoSeriousA11y(page, "shopping quantity fields");

@@ -401,6 +401,7 @@
 	"shopping_quantity_for": "Quantity for {title}",
 	"shopping_quantity_add": "{label}, add quantity for {title}",
 	"shopping_quantity_edit": "{amount}, edit quantity for {title}",
+	"shopping_quantity_invalid": "Enter a number above 0, like 2 or 1.5",
 	"shopping_unit_for": "Unit for {title}",
 	"shopping_category_other": "Other",
 	"task_reorder_handle": "Reorder task",
