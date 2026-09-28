@@ -129,3 +129,52 @@ test("both dark palettes declare the same custom properties", () => {
 	expect(classBlock.size).toBeGreaterThan(30);
 	expect([...mediaBlock].sort()).toEqual([...classBlock].sort());
 });
+
+// Every class the primitive's source could emit, compiled for real: a stock
+// transition-all animates width/height/padding on any state change, and a
+// blurred overlay is decoration the calm scrim replaced. Scanning the compiled
+// CSS, not the markup, also catches a variant that reintroduces either.
+function candidatesOf(file: string): string[] {
+	const src = readFileSync(
+		path.join(root, "src/web/components/ui", file),
+		"utf8",
+	);
+	return [...new Set(src.split(/[\s"'`]+/).filter(Boolean))];
+}
+
+test("button, badge and tabs never transition layout properties", async () => {
+	for (const file of ["button.tsx", "badge.tsx", "tabs.tsx"]) {
+		const css = await build(candidatesOf(file));
+		expect(css, file).toMatch(
+			/transition-property:\s*color,\s*background-color/,
+		);
+		expect(css, file).not.toMatch(/transition-property:\s*all/);
+	}
+});
+
+test("overlays use the scrim token and no backdrop blur", async () => {
+	for (const file of ["dialog.tsx", "sheet.tsx", "alert-dialog.tsx"]) {
+		const css = await build(candidatesOf(file));
+		expect(css, file).toContain("background-color: var(--scrim)");
+		expect(css, file).not.toContain("--tw-backdrop-blur:");
+	}
+});
+
+// The checkbox's priority tones and the warning token are only real if their
+// utilities resolve to declared tokens; an undeclared --color-* emits nothing.
+test("priority, warning and control tokens back their utilities", async () => {
+	const css = await build([
+		...candidatesOf("checkbox.tsx"),
+		"text-warning",
+		"border-warning/40",
+	]);
+	for (const token of [
+		"--priority-1",
+		"--priority-2",
+		"--priority-3",
+		"--control-border",
+		"--warning",
+	])
+		expect(css).toContain(`var(${token})`);
+	expect(css).toContain('[data-state="checked"]');
+});
