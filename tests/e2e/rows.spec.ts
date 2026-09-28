@@ -83,7 +83,11 @@ async function expectOutOfLayout(control: Locator) {
 
 // Chromium synthesizes pointer events from CDP touches, which is what the
 // long-press listens to; Playwright's touchscreen API only offers a tap.
-async function longPress(page: Page, target: Locator) {
+async function longPress(
+	page: Page,
+	target: Locator,
+	whileHeld?: () => Promise<void>,
+) {
 	const box = await target.boundingBox();
 	if (!box) throw new Error("long-press target has no box");
 	const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -93,6 +97,7 @@ async function longPress(page: Page, target: Locator) {
 		touchPoints: [point],
 	});
 	await page.waitForTimeout(700);
+	await whileHeld?.();
 	await cdp.send("Input.dispatchTouchEvent", {
 		type: "touchEnd",
 		touchPoints: [],
@@ -111,7 +116,18 @@ test("touch rows show only checkbox, title and one cue; long-press opens actions
 	await expectOutOfLayout(row.getByTestId("row-actions"));
 	await expectOutOfLayout(page.getByTestId("task-drag").first());
 
-	await longPress(page, row.getByRole("button", { name: "Open details" }));
+	const background = () =>
+		row.evaluate((el) => getComputedStyle(el).backgroundColor);
+	const resting = await background();
+	// The held row takes a fill before the menu opens: the computed value, not
+	// the class, since an undeclared variant would leave the class inert.
+	await longPress(
+		page,
+		row.getByRole("button", { name: "Open details" }),
+		async () => {
+			await expect.poll(background).not.toBe(resting);
+		},
+	);
 	const menu = page.locator('[role="menu"]');
 	await expect(menu).toBeVisible();
 	await expect(menu.getByTestId("row-action-delete")).toBeVisible();
@@ -128,6 +144,43 @@ test("touch rows show only checkbox, title and one cue; long-press opens actions
 	await expect(page.getByRole("dialog")).toHaveCount(0);
 
 	await expectNoSeriousA11y(page, "touch list");
+	await ctx.close();
+});
+
+// Android can answer a held finger with contextmenu and then pointercancel
+// instead of pointerup. Dispatched by hand because no emulated engine produces
+// that order.
+test("an Android-order long-press opens the menu once and keeps it open", async ({
+	browser,
+}) => {
+	const { ctx, page } = await phone(browser);
+	await inlineAdd(page, "Buy stamps");
+	const open = rowOf(page, "Buy stamps").getByRole("button", {
+		name: "Open details",
+	});
+	await open.evaluate(async (el) => {
+		const box = el.getBoundingClientRect();
+		const at = {
+			bubbles: true,
+			cancelable: true,
+			clientX: box.x + 20,
+			clientY: box.y + box.height / 2,
+			pointerId: 7,
+			pointerType: "touch",
+			isPrimary: true,
+		};
+		el.dispatchEvent(new PointerEvent("pointerdown", at));
+		await new Promise((r) => setTimeout(r, 600));
+		el.dispatchEvent(new MouseEvent("contextmenu", at));
+		await new Promise((r) => setTimeout(r, 50));
+		el.dispatchEvent(new PointerEvent("pointercancel", at));
+	});
+	const menu = page.locator('[role="menu"]');
+	await expect(menu).toHaveCount(1);
+	await page.waitForTimeout(300);
+	await expect(menu).toHaveCount(1);
+	await expect(menu.getByTestId("row-action-delete")).toBeVisible();
+	await expect(page.getByRole("dialog")).toHaveCount(0);
 	await ctx.close();
 });
 

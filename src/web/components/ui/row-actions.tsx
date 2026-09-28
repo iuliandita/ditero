@@ -205,10 +205,17 @@ export function useRowContextMenu(actions: RowAction[], label?: string) {
 			onContextMenu: (event: MouseEvent) => {
 				if (visible.length === 0) return;
 				event.preventDefault();
-				// Android raises contextmenu for a held finger; the long-press path
-				// owns touch and opens on release, so the lifting finger cannot land
-				// on a menu item that appeared under it.
-				if (press.current) return;
+				// Android raises contextmenu for a held finger and may then send
+				// pointercancel instead of pointerup, so the press is settled here:
+				// open once at the press point and clear it, leaving the later
+				// pointerup or pointercancel nothing to open or cancel.
+				const at = press.current;
+				if (at) {
+					cancelPress();
+					released.current = true;
+					setPoint({ x: at.x, y: at.y });
+					return;
+				}
 				setPoint({ x: event.clientX, y: event.clientY });
 			},
 			onPointerDown: (event: PointerEvent) => {
