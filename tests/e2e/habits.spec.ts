@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { browserToday } from "../support/browser-day.ts";
-import { goToSettings } from "./helpers.ts";
+import { goToSettings, openMoreOptions, setDueDate } from "./helpers.ts";
 
 // M2 recurrence editor e2e. Exercises the preset-driven recurrence control in the
 // task detail surface: enable, set a weekly every-2-weeks Mon/Wed rule, verify the
@@ -74,6 +74,8 @@ async function openDetail(page: Page, title: string): Promise<Locator> {
 		.click();
 	const detail = page.getByRole("dialog");
 	await expect(detail.getByLabel("Task title")).toBeVisible();
+	// Every caller here works with repeat/focus controls behind the disclosure.
+	await openMoreOptions(detail);
 	return detail;
 }
 
@@ -197,7 +199,7 @@ test("recurring task: list checkbox advances the due date and stays pending", as
 	// against local now; a UTC-derived string can be off by a day).
 	const detail = await openDetail(page, "Take out bins");
 	const today = await browserToday(page);
-	await detail.getByLabel("Due date").fill(today);
+	await setDueDate(page, detail, today);
 	await detail.getByTestId("recurrence-enable").click();
 	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
 	await closeDetail(page);
@@ -240,7 +242,7 @@ test("recurring task: Skip control advances the due date without awarding Karma"
 	// Due today + a daily recurrence so the row reads "Today" and Skip is offered.
 	const detail = await openDetail(page, "Sweep floor");
 	const today = await browserToday(page);
-	await detail.getByLabel("Due date").fill(today);
+	await setDueDate(page, detail, today);
 	await detail.getByTestId("recurrence-enable").click();
 	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
 

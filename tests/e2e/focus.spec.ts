@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { goToSettings, leaveSettings } from "./helpers.ts";
+import { goToSettings, leaveSettings, openMoreOptions } from "./helpers.ts";
 
 // M2 focus/Pomodoro timer e2e. Configures the focus prefs (round-trips), starts a
 // task-bound focus session, and (via the dev-only time seam) lets the work interval
@@ -73,6 +73,8 @@ async function openDetail(page: Page, title: string): Promise<Locator> {
 		.click();
 	const detail = page.getByRole("dialog");
 	await expect(detail.getByLabel("Task title")).toBeVisible();
+	// Every caller here works with repeat/focus controls behind the disclosure.
+	await openMoreOptions(detail);
 	return detail;
 }
 
@@ -153,8 +155,7 @@ test("focus: settings round-trip, task-bound session logs + advances, axe", asyn
 		"No focus time yet",
 	);
 	await detail.getByTestId("task-focus-start").click();
-	// Close the detail: it is a modal Sheet, which makes the app-level pill inert
-	// while open. The session is app-scoped and survives the close.
+	// Close the detail; the session is app-scoped and survives the close.
 	await page.keyboard.press("Escape");
 	await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15000 });
 

@@ -219,7 +219,7 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	await pa.getByLabel("Quick add").click();
 	await pa.getByTestId("quickadd-input").fill("milk tomorrow p2 #store");
 	await expect(pa.getByTestId("chip-date")).toBeVisible();
-	await expect(pa.getByTestId("chip-priority")).toBeVisible();
+	await expect(pa.getByTestId("chip-priority")).toHaveText("P2 Medium");
 	await expect(pa.getByTestId("chip-label")).toBeVisible();
 
 	await pa.getByTestId("quickadd-submit").click();
@@ -229,7 +229,7 @@ test("quick-add chips + drag reorder sync across clients", async ({
 		timeout: 15000,
 	});
 	await expect(pa.getByText("store", { exact: true })).toBeVisible();
-	await expect(pa.getByLabel("Priority: Medium")).toBeVisible();
+	await expect(pa.getByLabel("Priority: P2 Medium")).toBeVisible();
 
 	// --- Mobile list-index reorder (same wiring, list.update sortKey) ---
 	await expect(
@@ -658,78 +658,216 @@ test("new-item field suggests earlier titles and fills on click", async ({
 	).toHaveCount(2);
 });
 
-// The task detail used to be a right-anchored rail. Asserts the placement the
-// request actually named -- horizontally centered -- by measuring the resolved
-// box, because a right-anchored panel is also "visible" and a class check would
-// not tell the two apart.
-test("task detail opens centered on desktop, not against the right edge", async ({
+// #349: the task detail is a non-modal panel docked beside the list from lg.
+function listRow(page: Page, title: string): Locator {
+	return page
+		.getByTestId("list")
+		.locator("[data-kbd-nav]")
+		.filter({ hasText: title })
+		.first();
+}
+
+async function openPanel(page: Page, title: string): Promise<Locator> {
+	await listRow(page, title).click();
+	const panel = page.getByTestId("task-detail");
+	await expect(panel.getByLabel("Task title")).toHaveValue(title);
+	return panel;
+}
+
+async function listWithTasks(
+	page: Page,
+	prefix: string,
+	titles: string[],
+): Promise<void> {
+	await signUp(page, uniqueEmail(prefix));
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, prefix);
+	await openListDesktop(page, prefix);
+	for (const title of titles) await addTask(page, title);
+}
+
+// Measures the resolved boxes: a fixed panel that overlapped the list, or a
+// list that never gave up the panel's width, both pass a class check.
+test("task detail docks beside the list without covering it", async ({
 	page,
 }) => {
-	await signUp(page, uniqueEmail("detail-center"));
-	await waitWorkspaceReady(page);
-	await createListDesktop(page, "Centered");
-	await openListDesktop(page, "Centered");
-	await addTask(page, "Measure me");
+	await listWithTasks(page, "Docked", ["Measure me"]);
+	const panel = await openPanel(page, "Measure me");
+	const list = page.getByTestId("list");
 
-	await page
-		.getByTestId("list")
-		.locator("[data-kbd-nav]")
-		.filter({ hasText: "Measure me" })
-		.first()
-		.click();
-	const detail = page.getByRole("dialog");
-	await expect(detail.getByLabel("Task title")).toBeVisible();
-
-	const box = await detail.boundingBox();
-	expect(box).not.toBeNull();
-	const viewport = page.viewportSize();
-	expect(viewport).not.toBeNull();
-	if (!box || !viewport) return;
-
-	const startGap = box.x;
-	const endGap = viewport.width - (box.x + box.width);
-	// A rail sits flush against one edge, so its far gap is ~0 and the two gaps
-	// differ by roughly the panel width. Centered means they match.
-	expect(Math.abs(startGap - endGap)).toBeLessThanOrEqual(2);
-	expect(startGap).toBeGreaterThan(20);
+	for (const { width, panelWidth, minList } of [
+		{ width: 1280, panelWidth: 440, minList: 480 },
+		{ width: 1024, panelWidth: 384, minList: 280 },
+	]) {
+		await page.setViewportSize({ width, height: 800 });
+		// Polled on the end edge too: the panel slides in, so its first frames
+		// sit a few pixels short of it.
+		await expect
+			.poll(async () => {
+				const box = await panel.boundingBox();
+				return box
+					? [Math.round(box.width), Math.round(box.x + box.width)]
+					: [];
+			})
+			.toEqual([panelWidth, width]);
+		const p = await panel.boundingBox();
+		const l = await list.boundingBox();
+		expect(p).not.toBeNull();
+		expect(l).not.toBeNull();
+		if (!p || !l) return;
+		// Flush against the end edge, full height.
+		expect(Math.abs(width - (p.x + p.width))).toBeLessThanOrEqual(1);
+		expect(p.height).toBeGreaterThanOrEqual(799);
+		// The list sits wholly before the panel and stays a readable column.
+		expect(l.x + l.width).toBeLessThanOrEqual(p.x + 1);
+		expect(l.width).toBeGreaterThanOrEqual(minList);
+	}
+	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+		1024,
+	);
 });
 
-// #189: the same modal used to stack all 13 sections in one narrow column.
-// Measures the resolved boxes of two section labels that sit in different
-// columns -- a class check cannot tell a grid that collapsed from one that did
-// not, and in a single column these two labels share an x and are ~450px apart
-// vertically, so both assertions below discriminate.
-test("task detail lays out in two columns on desktop", async ({ page }) => {
-	await signUp(page, uniqueEmail("detail-cols"));
-	await waitWorkspaceReady(page);
-	await createListDesktop(page, "Columns");
-	await openListDesktop(page, "Columns");
-	await addTask(page, "Wide me");
+test("the list stays usable while the detail is open", async ({ page }) => {
+	await listWithTasks(page, "Triage", ["First task", "Second task"]);
+	const panel = await openPanel(page, "First task");
+	// Focus moves into the panel on open.
+	await expect(panel).toBeFocused();
 
-	await page
+	// Another row is still clickable and swaps the panel's task in place.
+	await listRow(page, "Second task").click();
+	await expect(panel.getByLabel("Task title")).toHaveValue("Second task");
+	await expect(page.getByTestId("task-detail")).toHaveCount(1);
+	await expect(panel).toBeFocused();
+
+	// Escape closes and hands focus back to the row that opened it.
+	await page.keyboard.press("Escape");
+	await expect(panel).toBeHidden();
+	await expect(listRow(page, "Second task")).toBeFocused();
+
+	// The detail's own done box completes the task through the row's path.
+	await openPanel(page, "Second task");
+	await panel.getByTestId("task-detail-done").click();
+	await expect(
+		page.getByTestId("list").getByRole("checkbox", { name: "Second task" }),
+	).toBeChecked({ timeout: 15000 });
+	await expect(panel.getByTestId("task-detail-done")).toBeChecked();
+});
+
+test("the detail title is not selected on open and saves on Enter", async ({
+	page,
+}) => {
+	await listWithTasks(page, "Titles", ["Keep me"]);
+	const panel = await openPanel(page, "Keep me");
+	const title = panel.getByLabel("Task title");
+	await expect(title).not.toBeFocused();
+	expect(
+		await title.evaluate(
+			(el: HTMLInputElement) =>
+				(el.selectionEnd ?? 0) - (el.selectionStart ?? 0),
+		),
+	).toBe(0);
+
+	await title.click();
+	await title.press("End");
+	await title.pressSequentially(" safe");
+	await title.press("Enter");
+	await expect(listRow(page, "Keep me safe")).toBeVisible({ timeout: 15000 });
+	await expect(title).toBeFocused();
+
+	// Escape on a dirty title cancels the edit and keeps the panel open.
+	await title.pressSequentially(" oops");
+	await title.press("Escape");
+	await expect(title).toHaveValue("Keep me safe");
+	await expect(panel).toBeVisible();
+});
+
+test("secondary controls sit behind More options", async ({ page }) => {
+	await listWithTasks(page, "Disclose", ["Plain", "Other"]);
+	const panel = await openPanel(page, "Plain");
+	const toggle = panel.getByTestId("task-more-toggle");
+
+	// Up front: due, priority, notes, subtasks. Behind: repeat, focus, files.
+	await expect(panel.getByTestId("due-picker")).toBeVisible();
+	await expect(panel.getByTestId("task-priority")).toBeVisible();
+	await expect(panel.getByPlaceholder("Add subtask")).toBeVisible();
+	await expect(toggle).toHaveAttribute("aria-expanded", "false");
+	await expect(panel.getByTestId("recurrence-enable")).toHaveCount(0);
+	await expect(panel.getByTestId("task-focus-start")).toHaveCount(0);
+
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-expanded", "true");
+	await expect(panel.getByTestId("recurrence-enable")).toBeVisible();
+	await expect(panel.getByTestId("task-focus-start")).toBeVisible();
+	await expect(panel.getByTestId("task-attachments")).toBeVisible();
+	await expectNoSeriousA11y(page, "task detail, more options");
+
+	// The choice holds for the session, across tasks.
+	await listRow(page, "Other").click();
+	await expect(panel.getByLabel("Task title")).toHaveValue("Other");
+	await expect(toggle).toHaveAttribute("aria-expanded", "true");
+});
+
+test("the due picker sets dates from quick picks and keeps the time", async ({
+	page,
+}) => {
+	await listWithTasks(page, "Dates", ["Plan it"]);
+	const panel = await openPanel(page, "Plan it");
+	const row = page
 		.getByTestId("list")
-		.locator("[data-kbd-nav]")
-		.filter({ hasText: "Wide me" })
-		.first()
-		.click();
-	const detail = page.getByRole("dialog");
-	await expect(detail.getByLabel("Task title")).toBeVisible();
+		.locator("[data-kbd-row]")
+		.filter({ hasText: "Plan it" });
 
-	// English literals, matching the neighbouring tests in this file.
-	const notesLabel = detail.getByText("Notes", { exact: true });
-	const priorityLabel = detail.getByText("Priority", { exact: true });
-	await expect(notesLabel).toBeVisible();
-	await expect(priorityLabel).toBeVisible();
+	await panel.getByTestId("due-picker").click();
+	await expect(page.getByTestId("due-picker-content")).toBeVisible();
+	await expectNoSeriousA11y(page, "due picker");
+	await page.getByTestId("due-pick-tomorrow").click();
+	await expect(page.getByTestId("due-picker-content")).toHaveCount(0);
+	await expect(panel.getByTestId("due-picker")).toHaveText("Tomorrow");
+	await expect(row.getByText("Tomorrow", { exact: true })).toBeVisible({
+		timeout: 15000,
+	});
 
-	const notes = await notesLabel.boundingBox();
-	const priority = await priorityLabel.boundingBox();
-	expect(notes).not.toBeNull();
-	expect(priority).not.toBeNull();
-	if (!notes || !priority) return;
+	// A typed time, then a different day: the time carries over.
+	const time = panel.getByTestId("due-time");
+	await time.fill("5:30 pm");
+	await time.press("Enter");
+	await expect(row.getByText(/^Tomorrow 5:30\sPM$/)).toBeVisible({
+		timeout: 15000,
+	});
+	await panel.getByTestId("due-picker").click();
+	await page.getByTestId("due-pick-today").click();
+	await expect(row.getByText(/^Today 5:30\sPM$/)).toBeVisible({
+		timeout: 15000,
+	});
 
-	// Right column: strictly right of the left one, by far more than any
-	// rounding. Single column puts these at an identical x.
-	expect(priority.x).toBeGreaterThan(notes.x + 100);
-	// And side by side, not merely indented: the two bands overlap vertically.
-	expect(priority.y).toBeLessThan(notes.y + 100);
+	// No date clears it.
+	await panel.getByTestId("due-picker").click();
+	await page.getByTestId("due-pick-none").click();
+	await expect(panel.getByTestId("due-picker")).toHaveText("Add date");
+	await expect(row.getByText(/Today/)).toHaveCount(0);
+});
+
+test("delete lives in the detail's overflow menu behind a confirm", async ({
+	page,
+}) => {
+	await listWithTasks(page, "Deletes", ["Doomed", "Survivor"]);
+	const panel = await openPanel(page, "Doomed");
+	await expect(panel.getByRole("button", { name: "Delete task" })).toHaveCount(
+		0,
+	);
+
+	await panel.getByTestId("row-actions").click();
+	await page.getByTestId("row-action-delete").click();
+	await page.getByTestId("confirm-cancel").click();
+	await expect(panel).toBeVisible();
+	await expect(listRow(page, "Doomed")).toBeVisible();
+
+	await panel.getByTestId("row-actions").click();
+	await page.getByTestId("row-action-delete").click();
+	await page.getByTestId("confirm-accept").click();
+	await expect(panel).toBeHidden();
+	await expect(
+		page.getByTestId("list").getByText("Doomed", { exact: true }),
+	).toHaveCount(0, { timeout: 15000 });
+	await expect(listRow(page, "Survivor")).toBeVisible();
 });

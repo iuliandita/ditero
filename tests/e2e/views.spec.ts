@@ -208,7 +208,7 @@ test("view: build priority+assignee filter, save, appears in sidebar, round-trip
 	await pickSelect(
 		page,
 		conditionRow(page, 0).getByTestId("value-control"),
-		"High",
+		"P1 High",
 	);
 
 	// Condition 1: assignee includes me (assignee defaults to the "me" token).
@@ -247,7 +247,7 @@ test("view: build priority+assignee filter, save, appears in sidebar, round-trip
 		page.getByTestId("field-select").filter({ hasText: "Priority" }),
 	).toHaveCount(1);
 	await expect(
-		page.getByTestId("value-control").filter({ hasText: "High" }),
+		page.getByTestId("value-control").filter({ hasText: "P1 High" }),
 	).toHaveCount(1);
 	await expect(
 		page.getByTestId("field-select").filter({ hasText: "Assignee" }),
@@ -279,7 +279,7 @@ test("view: layout switch renders board columns then a real table", async ({
 	await pickLabeled(page, "Layout", "Board");
 	await pickLabeled(page, "Group by", "Priority");
 	await page.getByTestId("view-save").click();
-	for (const col of ["High", "Medium", "Low", "None"]) {
+	for (const col of ["P1 High", "P2 Medium", "P3 Low", "P4 None"]) {
 		await expect(page.getByRole("region", { name: col })).toBeVisible({
 			timeout: 15000,
 		});
@@ -320,8 +320,8 @@ test("view: dragging a card to another priority column regroups + persists", asy
 	await expect(page.getByTestId("view-surface")).toBeVisible();
 
 	// The card starts in the "None" (priority 0) column.
-	const none = page.getByRole("region", { name: "None" });
-	const high = page.getByRole("region", { name: "High" });
+	const none = page.getByRole("region", { name: "P4 None" });
+	const high = page.getByRole("region", { name: "P1 High" });
 	await expect(none.getByText(cardTitle, { exact: true })).toBeVisible({
 		timeout: 15000,
 	});
@@ -370,7 +370,7 @@ test("view: dragging a card to another priority column regroups + persists", asy
 	await expect(page.getByTestId("view-surface")).toBeVisible();
 	await expect(
 		page
-			.getByRole("region", { name: "High" })
+			.getByRole("region", { name: "P1 High" })
 			.getByText(cardTitle, { exact: true }),
 	).toBeVisible({ timeout: 15000 });
 });
@@ -667,7 +667,7 @@ test("a11y: no serious/critical violations on views + keyboard surfaces", async 
 	await pickLabeled(page, "Layout", "Board");
 	await pickLabeled(page, "Group by", "Priority");
 	await page.getByTestId("view-save").click();
-	await expect(page.getByRole("region", { name: "None" })).toBeVisible({
+	await expect(page.getByRole("region", { name: "P4 None" })).toBeVisible({
 		timeout: 15000,
 	});
 	await expectNoSeriousA11y(page, "board layout");
