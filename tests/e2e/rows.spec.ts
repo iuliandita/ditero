@@ -265,6 +265,11 @@ test("a row announces its title once, with labeled subtask progress and priority
 	const flag = row.getByRole("img", { name: "Priority: High" });
 	await expect(flag).toBeVisible();
 	await expect(flag).toHaveAttribute("data-priority", "3");
+	// High is the solid flag; medium is tinted and low open, so the level reads
+	// without its hue.
+	expect(
+		await flag.locator("svg").evaluate((el) => getComputedStyle(el).fill),
+	).not.toBe("none");
 	const text = row.getByTestId("task-priority-text");
 	await page.mouse.move(0, 0);
 	await expect(text).toBeHidden();
