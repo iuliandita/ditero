@@ -52,7 +52,7 @@ export function TokenChips({
 							// `tk.text` is the verbatim input span (sigil included), never translated.
 							aria-label={m.quickadd_chip_remove({ token: tk.text })}
 							onClick={() => onRemove(tk)}
-							className="-me-1 ms-0.5 rounded-full hover:bg-black/10"
+							className="-me-1 ms-0.5 rounded-full hover:bg-foreground/10"
 						>
 							<X className="size-3" />
 						</button>

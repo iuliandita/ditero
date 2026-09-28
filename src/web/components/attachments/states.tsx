@@ -346,10 +346,10 @@ export function AttachmentGateChrome({
 					tabIndex={-1}
 					aria-label={m.e2e_rotation_blocked_title()}
 					data-testid="attachment-rotation-blocked"
-					className="flex flex-col gap-2 rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					className="flex flex-col gap-2 rounded-xl border border-warning/40 bg-warning/5 p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					<div className="flex items-start gap-2">
-						<ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" />
+						<ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
 						<div className="flex min-w-0 flex-col gap-1">
 							<p className="font-medium">{m.e2e_rotation_blocked_title()}</p>
 							<p className="text-sm text-muted-foreground">

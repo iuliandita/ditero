@@ -1,6 +1,6 @@
 import { useZero } from "@rocicorp/zero/react";
-import { List as ListIcon, SearchX, Sparkles } from "lucide-react";
-import { type JSX, useMemo, useRef, useState } from "react";
+import { List as ListIcon, SearchX } from "lucide-react";
+import { type JSX, type ReactNode, useMemo, useRef, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
 import { priorityLabel } from "@/lib/task-display";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -103,6 +103,8 @@ export function ViewRenderer(props: {
 	// Optional: Task 13 threads this to persist a table header sort into the
 	// view row. Absent -> the header toggles a local, unpersisted sort.
 	onSortChange?: (sort: ViewSort) => void;
+	// The first-run welcome's actions; only the landing supplies them.
+	firstRun?: ReactNode;
 }): JSX.Element {
 	const { pref } = useUserPref();
 	const activation = useTaskImportActivationMap();
@@ -351,15 +353,17 @@ export function ViewRenderer(props: {
 			{loading ? (
 				<TaskListSkeleton />
 			) : empty ? (
-				// A user with no tasks at all is new and gets onboarded; a user whose
-				// filter matched nothing is told so, calmly. Same frame, different job.
-				tasks.length === 0 ? (
+				// A user with no list in any workspace is new and gets onboarded; once
+				// one exists, even empty, an empty view is simply a filter that matched
+				// nothing. Same frame, different job.
+				lists.length === 0 ? (
 					<EmptyState
 						data-testid="view-empty-first-use"
-						icon={Sparkles}
 						title={m.view_empty_welcome_title()}
 						message={m.view_empty_welcome_hint()}
-					/>
+					>
+						{props.firstRun}
+					</EmptyState>
 				) : (
 					<EmptyState
 						data-testid="view-empty-no-match"

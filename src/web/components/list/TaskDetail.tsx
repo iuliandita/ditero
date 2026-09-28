@@ -34,6 +34,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
 import { runMutation } from "@/lib/run-mutation";
 import { inputsToDue, priorityLabel, priorityMeta } from "@/lib/task-display";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -441,6 +442,8 @@ export function TaskDetail({
 				aria-label={m.task_detail_done_aria()}
 				data-testid="task-detail-done"
 				onCheckedChange={toggleDone}
+				shape={checkShapeFor(kind ?? "tasks")}
+				priority={checkToneFor(kind ?? "tasks", t.priority)}
 			/>
 			<Input
 				ref={titleRef}
@@ -653,6 +656,8 @@ export function TaskDetail({
 													zero.mutate(mutators.task.complete({ id: s.id })),
 												);
 										}}
+										shape={checkShapeFor(kind ?? "tasks")}
+										priority={checkToneFor(kind ?? "tasks", s.priority)}
 									/>
 									<span
 										className={cn(

@@ -43,7 +43,7 @@ function label(
 					count: reminder.fireCount ?? 0,
 					max: resolvedMaxRepeats ?? m.reminder_max_unknown(),
 				}),
-				tone: "text-amber-600",
+				tone: "text-warning",
 			};
 		case "acked":
 			return { text: m.reminder_acked(), tone: "text-muted-foreground" };
