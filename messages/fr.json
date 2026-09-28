@@ -402,7 +402,7 @@
 	"shopping_qty_placeholder": "Qté",
 	"shopping_unit_placeholder": "Unité",
 	"shopping_quantity_for": "Quantité pour {title}",
-	"shopping_quantity_add": "Ajouter une quantité pour {title}",
+	"shopping_quantity_add": "{label}, ajouter une quantité pour {title}",
 	"shopping_quantity_edit": "{amount}, modifier la quantité pour {title}",
 	"shopping_unit_for": "Unité pour {title}",
 	"shopping_category_other": "Autre",

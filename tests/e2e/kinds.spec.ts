@@ -91,7 +91,9 @@ test("shopping: add item verb, quantity only when set, no lone Other header", as
 	).toHaveCount(0);
 
 	await list.getByText("Oat milk", { exact: true }).hover();
-	await list.getByRole("button", { name: "Add quantity for Oat milk" }).click();
+	await list
+		.getByRole("button", { name: "Qty, add quantity for Oat milk" })
+		.click();
 	const qty = list.locator("input[aria-label='Quantity for Oat milk']");
 	await expect(qty).toBeFocused();
 	await qty.fill("2");

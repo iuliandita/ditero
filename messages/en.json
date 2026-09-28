@@ -399,7 +399,7 @@
 	"shopping_qty_placeholder": "Qty",
 	"shopping_unit_placeholder": "Unit",
 	"shopping_quantity_for": "Quantity for {title}",
-	"shopping_quantity_add": "Add quantity for {title}",
+	"shopping_quantity_add": "{label}, add quantity for {title}",
 	"shopping_quantity_edit": "{amount}, edit quantity for {title}",
 	"shopping_unit_for": "Unit for {title}",
 	"shopping_category_other": "Other",

@@ -402,7 +402,7 @@
 	"shopping_qty_placeholder": "Cant.",
 	"shopping_unit_placeholder": "Unidad",
 	"shopping_quantity_for": "Cantidad de {title}",
-	"shopping_quantity_add": "Añadir cantidad a {title}",
+	"shopping_quantity_add": "{label}, añadir cantidad a {title}",
 	"shopping_quantity_edit": "{amount}, editar cantidad de {title}",
 	"shopping_unit_for": "Unidad de {title}",
 	"shopping_category_other": "Otros",

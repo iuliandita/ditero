@@ -411,7 +411,7 @@
 	"shopping_qty_placeholder": "الكمية",
 	"shopping_unit_placeholder": "الوحدة",
 	"shopping_quantity_for": "كمية {title}",
-	"shopping_quantity_add": "أضف كمية لـ {title}",
+	"shopping_quantity_add": "{label}، أضف كمية لـ {title}",
 	"shopping_quantity_edit": "{amount}، تعديل كمية {title}",
 	"shopping_unit_for": "وحدة {title}",
 	"shopping_category_other": "أخرى",

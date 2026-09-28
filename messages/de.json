@@ -399,7 +399,7 @@
 	"shopping_qty_placeholder": "Menge",
 	"shopping_unit_placeholder": "Einheit",
 	"shopping_quantity_for": "Menge für {title}",
-	"shopping_quantity_add": "Menge für {title} hinzufügen",
+	"shopping_quantity_add": "{label}, Menge für {title} hinzufügen",
 	"shopping_quantity_edit": "{amount}, Menge für {title} bearbeiten",
 	"shopping_unit_for": "Einheit für {title}",
 	"shopping_category_other": "Sonstiges",

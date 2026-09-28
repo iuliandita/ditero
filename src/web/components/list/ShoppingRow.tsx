@@ -163,7 +163,11 @@ export function ShoppingRow({
 					ref={triggerRef}
 					type="button"
 					data-testid="shopping-qty-add"
-					aria-label={m.shopping_quantity_add({ title: task.title })}
+					// Starts with the visible label so voice control can say what it sees.
+					aria-label={m.shopping_quantity_add({
+						label: m.shopping_qty_placeholder(),
+						title: task.title,
+					})}
 					onClick={() => setEditing(true)}
 					className="flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-[opacity,color] duration-(--motion-fast) ease-(--motion-ease) hover:text-foreground motion-reduce:transition-none md:min-h-8 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
 				>

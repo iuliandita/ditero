@@ -402,7 +402,7 @@
 	"shopping_qty_placeholder": "Cant.",
 	"shopping_unit_placeholder": "Unitate",
 	"shopping_quantity_for": "Cantitate pentru {title}",
-	"shopping_quantity_add": "Adaugă cantitate pentru {title}",
+	"shopping_quantity_add": "{label}, adaugă cantitate pentru {title}",
 	"shopping_quantity_edit": "{amount}, editează cantitatea pentru {title}",
 	"shopping_unit_for": "Unitate pentru {title}",
 	"shopping_category_other": "Altele",
