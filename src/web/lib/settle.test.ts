@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { EMPTY_SETTLE, observeTasks, settleAll } from "./settle.ts";
+import {
+	EMPTY_SETTLE,
+	observeTasks,
+	reopenedIds,
+	settleAll,
+} from "./settle.ts";
 
 const row = (id: string, done: boolean | null) => ({ id, done });
 
@@ -67,5 +72,31 @@ describe("settleAll", () => {
 
 	test("is a no-op when nothing is settling", () => {
 		expect(settleAll(EMPTY_SETTLE)).toBe(EMPTY_SETTLE);
+	});
+});
+
+describe("reopenedIds", () => {
+	const map = (entries: [string, boolean][]) => new Map(entries);
+
+	test("reports only rows that went done -> open", () => {
+		expect(
+			reopenedIds(
+				map([
+					["a", true],
+					["b", false],
+					["c", true],
+				]),
+				map([
+					["a", false],
+					["b", false],
+					["c", true],
+					["d", false],
+				]),
+			),
+		).toEqual(["a"]);
+	});
+
+	test("a row never seen done is not a reopen", () => {
+		expect(reopenedIds(map([]), map([["a", false]]))).toEqual([]);
 	});
 });

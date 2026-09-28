@@ -46,6 +46,18 @@ export function observeTasks(
 	return { done, settling, epoch: added ? state.epoch + 1 : state.epoch };
 }
 
+// Rows seen done in `prev` and open in `next`: a reopen from any path (Undo,
+// a manual uncheck, another device).
+export function reopenedIds(
+	prev: ReadonlyMap<string, boolean>,
+	next: ReadonlyMap<string, boolean>,
+): string[] {
+	const out: string[] = [];
+	for (const [id, done] of next)
+		if (!done && prev.get(id) === true) out.push(id);
+	return out;
+}
+
 export function settleAll(state: SettleState): SettleState {
 	return state.settling.size === 0 ? state : { ...state, settling: new Set() };
 }

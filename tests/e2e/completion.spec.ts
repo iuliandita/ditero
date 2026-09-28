@@ -143,3 +143,122 @@ test("reduced motion: completion is instant and still settles", async ({
 	await page.getByTestId("snackbar-action").click();
 	await expect(box).not.toBeChecked();
 });
+
+test("a snack that replaces another under a resting pointer waits for it to leave", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("settle-hover"));
+	await openNewList(page, "SettleHover");
+	for (const t of ["Row A", "Row B", "Row C"]) await addTask(page, t);
+	const snackbar = page.getByTestId("snackbar");
+
+	await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+	await page.keyboard.press("j");
+	await page.keyboard.press("x");
+	await expect(snackbar).toContainText("Completed: Row A");
+	await snackbar.hover();
+	// Row A settles and focus moves to Row B; complete it without moving the
+	// pointer, so no pointerenter fires for the replacement snack.
+	await expect(
+		page.getByTestId("list").getByTestId("completed-section"),
+	).toBeVisible({
+		timeout: 5000,
+	});
+	await page.keyboard.press("x");
+	// The outgoing snack overlaps its replacement for its short exit, so read
+	// the live region, then require the replacement alone on screen.
+	const live = page.getByTestId("snackbar-live");
+	await expect(live).toHaveText("Completed: Row B");
+	await expect(snackbar).toHaveCount(1);
+	await page.waitForTimeout(6500);
+	await expect(snackbar).toHaveCount(1);
+	await expect(snackbar).toContainText("Completed: Row B");
+
+	await page.mouse.move(5, 5);
+	await expect(snackbar).toHaveCount(0, { timeout: 7000 });
+});
+
+test("reopening a task from a view retracts its Completed snack", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("settle-view"));
+	await openNewList(page, "SettleView");
+	await addTask(page, "View row");
+	await sidebarLists(page)
+		.getByRole("button", { name: "All my tasks", exact: true })
+		.click();
+	const box = page.getByRole("checkbox", { name: "View row" });
+	await expect(box).toBeVisible({ timeout: 15000 });
+	const snackbar = page.getByTestId("snackbar");
+
+	await box.check();
+	await expect(snackbar).toContainText("Completed: View row");
+	await box.uncheck();
+	// Well inside the 5s auto-dismiss, so only the retraction can clear it.
+	await expect(snackbar).toHaveCount(0, { timeout: 2000 });
+	await expect(box).not.toBeChecked();
+});
+
+test("a reopen on another device retracts the Completed snack", async ({
+	browser,
+}) => {
+	const email = uniqueEmail("settle-remote");
+	const a = await browser.newContext();
+	const b = await browser.newContext();
+	try {
+		const pa = await a.newPage();
+		const pb = await b.newPage();
+		await signUp(pa, email);
+		await pb.goto("/");
+		await pb.getByTestId("email").fill(email);
+		await pb.getByTestId("password").fill("pw-123456");
+		await pb.getByTestId("signin").click();
+		await expect(pb.getByTestId("workspace")).toBeVisible({ timeout: 15000 });
+
+		await openNewList(pa, "Devices");
+		await addTask(pa, "Shared row");
+		await sidebarLists(pb)
+			.getByRole("button", { name: "Devices", exact: true })
+			.last()
+			.click();
+		const listB = pb.getByTestId("list");
+		await expect(listB.getByText("Shared row", { exact: true })).toBeVisible({
+			timeout: 15000,
+		});
+
+		const snackbar = pa.getByTestId("snackbar");
+		await pa
+			.getByTestId("list")
+			.getByRole("checkbox", { name: "Shared row" })
+			.check();
+		await expect(snackbar).toContainText("Completed: Shared row");
+		// Hovering pauses the auto-dismiss, so the snack can only leave by retraction.
+		await snackbar.hover();
+
+		const sectionB = listB.getByTestId("completed-section");
+		await expect(sectionB).toBeVisible({ timeout: 15000 });
+		await sectionB.click();
+		await listB.getByRole("checkbox", { name: "Shared row" }).uncheck();
+		await expect(snackbar).toHaveCount(0, { timeout: 15000 });
+	} finally {
+		await a.close();
+		await b.close();
+	}
+});
+
+test("when the last open row settles, focus lands on the completed group", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("settle-last"));
+	await openNewList(page, "SettleLast");
+	await addTask(page, "Only row");
+	const list = page.getByTestId("list");
+
+	await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+	await page.keyboard.press("j");
+	await expect(list.locator("[data-kbd-nav]")).toBeFocused();
+	await page.keyboard.press("x");
+	const section = list.getByTestId("completed-section");
+	await expect(section).toBeVisible({ timeout: 5000 });
+	await expect(section).toBeFocused();
+});

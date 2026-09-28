@@ -10,21 +10,24 @@ type Run = (mutation: { client: Promise<unknown> }) => unknown;
 // Check/uncheck a row and confirm a completion in the shared snackbar. The
 // snackbar is raised together with the optimistic write, never after the
 // server answers. Undo reopens through the same task.update the uncheck path
-// already uses. A recurring task gets no Undo: task.complete advanced its due
+// already uses; reopening by hand retracts the snack so it never offers Undo
+// for a task that is already open. A recurring task gets no Undo: task.complete advanced its due
 // date to the next occurrence, and reopening would not restore that.
 export function useTaskToggle(run: Run) {
 	const zero = useZero<typeof schema>();
-	const snackbar = useSnackbar();
+	const { show, dismissKey } = useSnackbar();
 	return useCallback(
 		(task: Pick<Task, "id" | "title" | "done" | "rrule">) => {
 			const reopen = () =>
 				run(zero.mutate(mutators.task.update({ id: task.id, done: false })));
 			if (task.done) {
+				dismissKey(task.id);
 				reopen();
 				return;
 			}
 			run(zero.mutate(mutators.task.complete({ id: task.id })));
-			snackbar({
+			show({
+				key: task.id,
 				message: m.snackbar_task_completed({ title: task.title }),
 				action:
 					task.rrule == null
@@ -32,6 +35,6 @@ export function useTaskToggle(run: Run) {
 						: undefined,
 			});
 		},
-		[run, zero, snackbar],
+		[run, zero, show, dismissKey],
 	);
 }

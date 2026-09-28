@@ -7,6 +7,7 @@ import { m } from "../../../paraglide/messages.js";
 import type { Label, List, Task } from "../../../zero/schema.gen.ts";
 import { useSettling } from "../../hooks/useSettling.ts";
 import { HabitCard } from "../habit/HabitCard.tsx";
+import { useSnackbar } from "../ui/snackbar.tsx";
 import { CompletedSection } from "./CompletedSection.tsx";
 import { type ShoppingHandlers, ShoppingRow } from "./ShoppingRow.tsx";
 import { SortableTaskList } from "./SortableTaskList.tsx";
@@ -60,7 +61,10 @@ export function TaskList({
 	const kind = (list.kind ?? "tasks") as ListKind;
 	const mode = list.completedDisplay ?? "sink";
 	const rootRef = useRef<HTMLDivElement>(null);
-	const observed = useSettling(tasks, rootRef);
+	// A reopen from any path (another device, the detail sheet) retracts a
+	// "Completed" snack that no longer describes the row.
+	const { dismissKey } = useSnackbar();
+	const observed = useSettling(tasks, rootRef, dismissKey);
 	// keep mode never moves a completed row, so nothing settles there.
 	const settling = mode === "keep" ? NOTHING_SETTLING : observed;
 	const { visible, completed } = useMemo(

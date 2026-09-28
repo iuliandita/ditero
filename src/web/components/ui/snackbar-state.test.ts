@@ -43,7 +43,44 @@ describe("snackbarReducer", () => {
 	});
 });
 
+describe("snackbarReducer: dismissKey", () => {
+	test("retracts the current snack about that key", () => {
+		const s1 = snackbarReducer(EMPTY_SNACKBAR, {
+			type: "show",
+			message: "a",
+			key: "task-1",
+		});
+		expect(
+			snackbarReducer(s1, { type: "dismissKey", key: "task-1" }).snack,
+		).toBeNull();
+	});
+
+	test("leaves a snack about something else alone", () => {
+		const s1 = snackbarReducer(EMPTY_SNACKBAR, {
+			type: "show",
+			message: "a",
+			key: "task-2",
+		});
+		expect(snackbarReducer(s1, { type: "dismissKey", key: "task-1" })).toBe(s1);
+	});
+
+	test("a keyless snack is never retracted by key", () => {
+		const s1 = snackbarReducer(EMPTY_SNACKBAR, { type: "show", message: "a" });
+		expect(snackbarReducer(s1, { type: "dismissKey", key: "" })).toBe(s1);
+	});
+});
+
 describe("countdown", () => {
+	test("a countdown started paused keeps its full time until resumed", () => {
+		const c = startCountdown(5000, 1000, true);
+		expect(c).toEqual({ remaining: 5000, startedAt: null });
+		expect(pauseCountdown(c, 9000).remaining).toBe(5000);
+		expect(resumeCountdown(c, 9000)).toEqual({
+			remaining: 5000,
+			startedAt: 9000,
+		});
+	});
+
 	test("pause keeps the unspent time and resume restarts from it", () => {
 		const c0 = startCountdown(5000, 1000);
 		const paused = pauseCountdown(c0, 3000);
