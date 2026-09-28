@@ -91,7 +91,7 @@ export function HabitCard({
 					<span className="block truncate font-medium">{task.title}</span>
 					{(activation.status === "pending" ||
 						activation.status === "blocked") && (
-						<span className="block text-xs text-amber-700 dark:text-amber-400">
+						<span className="block text-xs text-warning">
 							{activation.status === "pending"
 								? m.activation_badge_pending()
 								: m.activation_badge_blocked()}

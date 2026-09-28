@@ -272,12 +272,25 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Eintrag im Einkaufswagen",
+				"countPlural=other": "{countNum} Einträge im Einkaufswagen"
+			}
+		}
+	],
 	"list_change_icon": "Listensymbol ändern",
 	"list_display_options": "Anzeigeoptionen der Liste",
 	"list_completed_heading": "Erledigte Einträge",
 	"list_completed_sink": "Erledigte Einträge nach unten",
 	"list_completed_keep": "An Ort und Stelle",
-	"list_completed_hide": "Erledigte Einträge ausblenden",
 	"list_group_by_assignee": "Nach Zuständigkeit gruppieren",
 	"list_save_as_template": "Als Vorlage speichern",
 	"list_add_from_template": "Aus Vorlage hinzufügen",
@@ -1293,6 +1306,8 @@
 	"mutator_error_label_name_taken": "Ein Label mit diesem Namen gibt es schon.",
 	"modal_close_label": "Schließen",
 	"action_close": "Schließen",
+	"action_undo": "Rückgängig",
+	"snackbar_task_completed": "Erledigt: {title}",
 	"action_delete": "Löschen",
 	"action_remove": "Entfernen",
 	"confirm_cancel": "Abbrechen",
@@ -1405,7 +1420,13 @@
 	"list_empty": "Hier ist noch nichts.",
 	"list_empty_action": "Eintrag hinzufügen",
 	"view_empty_welcome_title": "Willkommen bei Ditero",
-	"view_empty_welcome_hint": "Leg unten eine Liste an, um deine erste Aufgabe hinzuzufügen.",
+	"view_empty_welcome_hint": "Aufgaben leben in Listen. Leg eine an, um loszulegen.",
+	"view_empty_welcome_action": "Erste Liste anlegen",
+	"view_empty_welcome_starters": "Oder starte mit einer fertigen Liste",
+	"starter_name_shopping": "Einkäufe",
+	"starter_name_checklist": "Packliste",
+	"starter_name_tasks": "Hausarbeit",
+	"starter_name_habits": "Tägliche Gewohnheiten",
 	"view_empty_no_match": "Zurzeit passt nichts zu dieser Ansicht.",
 	"action_continue": "Weiter",
 	"action_retry": "Erneut versuchen",

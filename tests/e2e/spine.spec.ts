@@ -68,7 +68,10 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 	// exact: the row's kebab is labelled "Actions for Buy milk", and getByLabel
 	// substring-matches by default, so a loose locator now resolves to two nodes.
 	await pa.getByLabel("Buy milk", { exact: true }).check();
-	await expect(pb.getByLabel("Buy milk", { exact: true })).toBeChecked({
-		timeout: 15000,
-	});
+	// Bob's row settles into his collapsed completed group once the write lands;
+	// the group's count is the end state, independent of the settle timing.
+	await expect(pb.getByTestId("completed-section")).toHaveText(
+		/1 item completed/,
+		{ timeout: 15000 },
+	);
 });

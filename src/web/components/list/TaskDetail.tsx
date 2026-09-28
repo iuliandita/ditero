@@ -29,6 +29,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
+import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
 import { runMutation } from "@/lib/run-mutation";
 import {
 	dueToInputs,
@@ -485,6 +486,8 @@ export function TaskDetail({
 													zero.mutate(mutators.task.complete({ id: s.id })),
 												);
 										}}
+										shape={checkShapeFor(kind ?? "tasks")}
+										priority={checkToneFor(kind ?? "tasks", s.priority)}
 									/>
 									<span
 										className={cn(

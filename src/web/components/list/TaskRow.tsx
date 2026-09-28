@@ -12,6 +12,12 @@ import {
 import { AssigneeChips } from "@/components/people/AssigneeChips";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
+import {
+	CHECK_POP,
+	strikeClass,
+	useJustCompleted,
+} from "@/lib/completion-feedback";
 import {
 	formatDue,
 	isOverdue,
@@ -210,6 +216,7 @@ export function TaskRow({
 	const doneCount = subtasks.filter((s) => s.done).length;
 	const total = subtasks.length;
 	const progress = total > 0 ? doneCount / total : 0;
+	const justCompleted = useJustCompleted(task.done ?? false);
 
 	// The caller's role in the workspace owning this task's list. The mutators
 	// re-check on write; this only keeps the menu from offering a refusal.
@@ -323,7 +330,12 @@ export function TaskRow({
 								if (canEdit) handlers.onToggle(task.id, task.done ?? false);
 							}}
 							data-kbd-action="toggle"
-							className="after:-inset-3.5 md:after:-inset-2"
+							shape={checkShapeFor(kind)}
+							priority={checkToneFor(kind, task.priority)}
+							className={cn(
+								"after:-inset-3.5 md:after:-inset-2",
+								justCompleted && CHECK_POP,
+							)}
 						/>
 					</div>
 					<button
@@ -335,17 +347,16 @@ export function TaskRow({
 						<span
 							className={cn(
 								"block truncate text-sm",
-								task.done && "text-muted-foreground line-through",
+								task.done && "text-muted-foreground",
 							)}
 						>
-							{task.title}
+							<span className={strikeClass(task.done ?? false)}>
+								{task.title}
+							</span>
 						</span>
 						{(activationStatus === "pending" ||
 							activationStatus === "blocked") && (
-							<Badge
-								variant="outline"
-								className="mt-1 text-xs text-amber-700 dark:text-amber-400"
-							>
+							<Badge variant="outline" className="mt-1 text-xs text-warning">
 								{activationStatus === "pending"
 									? m.activation_badge_pending()
 									: m.activation_badge_blocked()}
@@ -444,16 +455,18 @@ export function TaskRow({
 									if (activation.canWriteTask(s.id))
 										handlers.onToggle(s.id, s.done ?? false);
 								}}
+								shape={checkShapeFor(kind)}
+								priority={checkToneFor(kind, s.priority)}
 							/>
 							<button
 								type="button"
 								onClick={() => handlers.onOpenDetail(s)}
 								className={cn(
 									"min-w-0 flex-1 truncate text-start text-sm",
-									s.done && "text-muted-foreground line-through",
+									s.done && "text-muted-foreground",
 								)}
 							>
-								{s.title}
+								<span className={strikeClass(s.done ?? false)}>{s.title}</span>
 							</button>
 						</li>
 					))}

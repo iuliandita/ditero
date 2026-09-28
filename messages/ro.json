@@ -274,12 +274,26 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} produs în coș",
+				"countPlural=few": "{countNum} produse în coș",
+				"countPlural=other": "{countNum} de produse în coș"
+			}
+		}
+	],
 	"list_change_icon": "Schimbă pictograma listei",
 	"list_display_options": "Opțiuni de afișare a listei",
 	"list_completed_heading": "Elemente finalizate",
 	"list_completed_sink": "Mută elementele finalizate la final",
 	"list_completed_keep": "Lasă-le pe loc",
-	"list_completed_hide": "Ascunde elementele finalizate",
 	"list_group_by_assignee": "Grupează după responsabil",
 	"list_save_as_template": "Salvează ca șablon",
 	"list_add_from_template": "Adaugă din șablon",
@@ -1319,6 +1333,8 @@
 	"mutator_error_label_name_taken": "Există deja o etichetă cu acest nume.",
 	"modal_close_label": "Închide",
 	"action_close": "Închide",
+	"action_undo": "Anulează",
+	"snackbar_task_completed": "Finalizat: {title}",
 	"action_delete": "Șterge",
 	"action_remove": "Elimină",
 	"confirm_cancel": "Anulează",
@@ -1433,7 +1449,13 @@
 	"list_empty": "Încă nu e nimic aici.",
 	"list_empty_action": "Adaugă un element",
 	"view_empty_welcome_title": "Bine ai venit în Ditero",
-	"view_empty_welcome_hint": "Creează o listă mai jos ca să adaugi prima ta sarcină.",
+	"view_empty_welcome_hint": "Sarcinile stau în liste. Creează una ca să începi.",
+	"view_empty_welcome_action": "Creează prima ta listă",
+	"view_empty_welcome_starters": "Sau pornește de la un șablon",
+	"starter_name_shopping": "Cumpărături",
+	"starter_name_checklist": "Bagaje",
+	"starter_name_tasks": "Treburi casnice",
+	"starter_name_habits": "Obiceiuri zilnice",
 	"view_empty_no_match": "Momentan nimic nu corespunde acestei vizualizări.",
 	"action_continue": "Continuă",
 	"action_retry": "Încearcă din nou",

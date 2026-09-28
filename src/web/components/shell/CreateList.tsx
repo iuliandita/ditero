@@ -74,7 +74,7 @@ const NONE = "__none__";
 const BLANK = "__blank__";
 
 // Live sort key placing a new list after the current last one.
-function nextKey(lists: List[]): string {
+export function nextKey(lists: List[]): string {
 	const last = lists.reduce<string | null>(
 		(max, l) => (max == null || l.sortKey > max ? l.sortKey : max),
 		null,

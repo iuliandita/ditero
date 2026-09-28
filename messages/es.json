@@ -274,12 +274,26 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} artículo en el carrito",
+				"countPlural=many": "{countNum} artículos en el carrito",
+				"countPlural=other": "{countNum} artículos en el carrito"
+			}
+		}
+	],
 	"list_change_icon": "Cambiar el icono de la lista",
 	"list_display_options": "Opciones de visualización de la lista",
 	"list_completed_heading": "Elementos completados",
 	"list_completed_sink": "Bajar los elementos completados",
 	"list_completed_keep": "Dejarlas en su sitio",
-	"list_completed_hide": "Ocultar los elementos completados",
 	"list_group_by_assignee": "Agrupar por responsable",
 	"list_save_as_template": "Guardar como plantilla",
 	"list_add_from_template": "Añadir desde plantilla",
@@ -1319,6 +1333,8 @@
 	"mutator_error_label_name_taken": "Ya existe una etiqueta con ese nombre.",
 	"modal_close_label": "Cerrar",
 	"action_close": "Cerrar",
+	"action_undo": "Deshacer",
+	"snackbar_task_completed": "Completado: {title}",
 	"action_delete": "Eliminar",
 	"action_remove": "Quitar",
 	"confirm_cancel": "Cancelar",
@@ -1433,7 +1449,13 @@
 	"list_empty": "Aquí todavía no hay nada.",
 	"list_empty_action": "Añadir un elemento",
 	"view_empty_welcome_title": "Te damos la bienvenida a Ditero",
-	"view_empty_welcome_hint": "Crea una lista abajo para añadir tu primera tarea.",
+	"view_empty_welcome_hint": "Las tareas viven en listas. Crea una para empezar.",
+	"view_empty_welcome_action": "Crea tu primera lista",
+	"view_empty_welcome_starters": "O empieza con una plantilla",
+	"starter_name_shopping": "Compras",
+	"starter_name_checklist": "Lista de equipaje",
+	"starter_name_tasks": "Tareas de casa",
+	"starter_name_habits": "Hábitos diarios",
 	"view_empty_no_match": "Ahora mismo no hay nada que coincida con esta vista.",
 	"action_continue": "Continuar",
 	"action_retry": "Inténtalo de nuevo",

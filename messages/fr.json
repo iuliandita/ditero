@@ -274,12 +274,26 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} article dans le panier",
+				"countPlural=many": "{countNum} articles dans le panier",
+				"countPlural=other": "{countNum} articles dans le panier"
+			}
+		}
+	],
 	"list_change_icon": "Changer l'icône de la liste",
 	"list_display_options": "Options d'affichage de la liste",
 	"list_completed_heading": "Éléments terminés",
 	"list_completed_sink": "Éléments terminés en bas",
 	"list_completed_keep": "Garder en place",
-	"list_completed_hide": "Masquer les éléments terminés",
 	"list_group_by_assignee": "Grouper par personne assignée",
 	"list_save_as_template": "Enregistrer comme modèle",
 	"list_add_from_template": "Ajouter depuis un modèle",
@@ -1319,6 +1333,8 @@
 	"mutator_error_label_name_taken": "Une étiquette portant ce nom existe déjà.",
 	"modal_close_label": "Fermer",
 	"action_close": "Fermer",
+	"action_undo": "Annuler",
+	"snackbar_task_completed": "Terminé : {title}",
 	"action_delete": "Supprimer",
 	"action_remove": "Retirer",
 	"confirm_cancel": "Annuler",
@@ -1433,7 +1449,13 @@
 	"list_empty": "Il n'y a encore rien ici.",
 	"list_empty_action": "Ajouter un élément",
 	"view_empty_welcome_title": "Bienvenue dans Ditero",
-	"view_empty_welcome_hint": "Crée une liste ci-dessous pour ajouter ta première tâche.",
+	"view_empty_welcome_hint": "Les tâches vivent dans des listes. Crée-en une pour commencer.",
+	"view_empty_welcome_action": "Crée ta première liste",
+	"view_empty_welcome_starters": "Ou commence avec un modèle",
+	"starter_name_shopping": "Courses",
+	"starter_name_checklist": "Liste de voyage",
+	"starter_name_tasks": "Tâches ménagères",
+	"starter_name_habits": "Habitudes quotidiennes",
 	"view_empty_no_match": "Rien ne correspond à cette vue pour le moment.",
 	"action_continue": "Continuer",
 	"action_retry": "Réessayer",
