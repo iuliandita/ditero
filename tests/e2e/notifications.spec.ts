@@ -384,7 +384,8 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		await detail.getByTestId("reminder-max").fill("2");
 		await expectNoSeriousA11y(page, "reminder policy");
 
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 		const reopened = await openDetail(page, "Take pills");
 		await openMoreOptions(reopened);
@@ -420,7 +421,8 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		await setDueDate(page, detail, when.date);
 		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill(when.time);
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 		await page.setViewportSize({ width: 390, height: 844 });
@@ -485,7 +487,8 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		await setDueDate(page, detail, when.date);
 		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill(when.time);
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 		await expect(page.getByTestId("reminder-chip").first()).toBeVisible({
@@ -512,7 +515,8 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		await setDueDate(page, detail, when.date);
 		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill(when.time);
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 		// The scan tick materializes the reminder_state row, which syncs back.

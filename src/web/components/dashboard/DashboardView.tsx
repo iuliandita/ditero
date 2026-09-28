@@ -343,7 +343,7 @@ export function DashboardView({
 		const grid = (
 			<div
 				data-testid="dashboard-grid"
-				className="grid grid-cols-1 gap-4 md:grid-cols-12"
+				className="grid grid-cols-1 gap-4 @2xl:grid-cols-12"
 			>
 				{editing
 					? panels.map((p) => (
@@ -373,7 +373,7 @@ export function DashboardView({
 					(atCap ? (
 						<p
 							data-testid="panel-limit-reached"
-							className="flex min-h-28 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground md:col-span-3"
+							className="flex min-h-28 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground @2xl:col-span-3"
 						>
 							{m.panel_limit_reached()}
 						</p>
@@ -382,7 +382,7 @@ export function DashboardView({
 							type="button"
 							data-testid="add-panel"
 							onClick={() => setPanelDialog({ mode: "add" })}
-							className="flex min-h-28 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40 md:col-span-3"
+							className="flex min-h-28 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40 @2xl:col-span-3"
 						>
 							<Plus className="size-4" /> {m.panel_add()}
 						</button>
@@ -408,7 +408,13 @@ export function DashboardView({
 	}
 
 	return (
-		<section aria-label={dashboard.name} data-testid="dashboard-surface">
+		<section
+			aria-label={dashboard.name}
+			data-testid="dashboard-surface"
+			// The grid spans follow this container, not the viewport, so a docked
+			// task detail narrowing the content drops it to one column.
+			className="@container"
+		>
 			<div className="mb-3 flex items-center gap-2">
 				{!isDesktop && <BackButton size="compact" onClick={onBack} />}
 				<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">

@@ -567,7 +567,8 @@ test("interactive ack: a signed Discord POST acks a live reminder and terminates
 	await setDueDate(pageA, detail, when.date);
 	await openMoreOptions(detail);
 	await detail.getByTestId("reminder-time").fill(when.time);
-	await pageA.keyboard.press("Escape");
+	// Focus is in a field; Escape would only leave it. Close explicitly.
+	await detail.getByTestId("task-detail-close").click();
 	await expect(pageA.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 	// The scan materialises reminder_state, which syncs back as a live chip.

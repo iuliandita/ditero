@@ -21,25 +21,54 @@ function weekInfoFirstDay(tag: string): number | null {
 	}
 }
 
+// CLDR weekData firstDay for engines without Intl week info (Firefox). Regions
+// not listed start on Monday. Bare app locales resolve to CLDR's likely region.
+const SUNDAY_REGIONS = new Set(
+	"AG AS BD BR BS BT BW BZ CA CN CO DM DO ET GT GU HK HN ID IL IN JM JP KE KH KR LA MH MM MO MT MX MZ NI NP PA PE PH PK PR PT PY SA SG SV TH TT TW UM US VE VI WS YE ZA ZW".split(
+		" ",
+	),
+);
+const SATURDAY_REGIONS = new Set(
+	"AE AF BH DJ DZ EG IQ IR JO KW LY OM QA SD SY".split(" "),
+);
+const LIKELY_REGION: Record<string, string> = {
+	ar: "EG",
+	de: "DE",
+	en: "US",
+	es: "ES",
+	fr: "FR",
+	ro: "RO",
+};
+
+export function cldrFirstDay(tag: string): number {
+	const [lang, ...rest] = tag.split(/[-_]/);
+	const region =
+		rest.find((part) => /^[A-Za-z]{2}$/.test(part))?.toUpperCase() ??
+		(Object.hasOwn(LIKELY_REGION, lang.toLowerCase())
+			? LIKELY_REGION[lang.toLowerCase()]
+			: undefined);
+	if (region && SUNDAY_REGIONS.has(region)) return 0;
+	if (region && SATURDAY_REGIONS.has(region)) return 6;
+	return 1;
+}
+
 /**
  * First day of the week as a Date#getDay index. The app locale is a bare
  * language ("en"), which maximizes to one region (en -> US, Sunday); a browser
  * language with a region for the same language ("en-GB") is the better signal,
- * so it wins when present. Engines without Intl week info fall back to Monday.
+ * so it wins when present. Engines without Intl week info use CLDR's table.
  */
 export function firstWeekday(
 	locale: string,
 	preferred: readonly string[] = [],
+	weekInfo: (tag: string) => number | null = weekInfoFirstDay,
 ): number {
 	const lang = locale.split("-")[0].toLowerCase();
 	const regional = preferred.find(
 		(tag) => tag.includes("-") && tag.split("-")[0].toLowerCase() === lang,
 	);
-	return (
-		(regional ? weekInfoFirstDay(regional) : null) ??
-		weekInfoFirstDay(locale) ??
-		1
-	);
+	const tag = regional ?? locale;
+	return weekInfo(tag) ?? cldrFirstDay(tag);
 }
 
 export function startOfDay(d: Date): Date {
@@ -65,7 +94,7 @@ export function dayKey(d: Date): string {
 	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-const DAY_KEY = /^(\d{4})-(\d{2})-(\d{2})$/;
+const DAY_KEY = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
 
 export function parseDayKey(key: string): Date | null {
 	const parts = key.match(DAY_KEY);
@@ -127,6 +156,9 @@ export function parseDueText(
 	if (!trimmed) return null;
 	const iso = parseDayKey(trimmed);
 	if (iso) return { date: dayKey(iso), time: null };
+	// A malformed day key ("2026-13-01") is a typo, not natural language: the
+	// date grammar would happily read part of it and save some other day.
+	if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) return null;
 	const parsed = parseQuickAdd(trimmed, now, locale);
 	if (!parsed.dueAt) return null;
 	const at = parsed.dueAt;

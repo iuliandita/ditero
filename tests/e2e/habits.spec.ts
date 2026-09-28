@@ -80,7 +80,9 @@ async function openDetail(page: Page, title: string): Promise<Locator> {
 }
 
 async function closeDetail(page: Page): Promise<void> {
-	await page.keyboard.press("Escape");
+	// The close button, not Escape: callers may leave focus in a field, where
+	// the first Escape only leaves the field.
+	await page.getByTestId("task-detail-close").click();
 	await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15000 });
 }
 
@@ -391,4 +393,44 @@ test("habits: a blank habits list is creatable from the kind picker", async ({
 	const card = habitCard(page, "Walk the dog");
 	await expect(card).toBeVisible({ timeout: 15000 });
 	await expect(card.getByTestId("habit-no-recurrence")).toBeVisible();
+});
+
+// The detail's own done box on a habit logs today's occurrence, the same write
+// as the card's Done. task.complete refuses habits, so routing it there would
+// raise an error and a false "Completed" snackbar.
+test("habits: the detail's done box logs today like the card", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("habit-detail"));
+	await createHabitsList(page);
+	await openListDesktop(page, "Habits");
+
+	const HABIT = "Drink water";
+	const card = habitCard(page, HABIT);
+	const detail = await openDetail(page, HABIT);
+	await detail.getByTestId("recurrence-enable").click();
+	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
+	await expect(card.getByTestId("habit-done")).toHaveAttribute(
+		"aria-pressed",
+		"false",
+	);
+
+	const box = detail.getByTestId("task-detail-done");
+	await box.click();
+	await expect(card.getByTestId("habit-done")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+		{ timeout: 15000 },
+	);
+	await expect(box).toBeChecked();
+	await expect(detail.getByRole("alert")).toHaveCount(0);
+	await expect(page.getByTestId("snackbar")).toHaveCount(0);
+
+	await box.click();
+	await expect(card.getByTestId("habit-done")).toHaveAttribute(
+		"aria-pressed",
+		"false",
+		{ timeout: 15000 },
+	);
+	await expect(box).not.toBeChecked();
 });

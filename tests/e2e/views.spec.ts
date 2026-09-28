@@ -698,3 +698,54 @@ test("a11y: no serious/critical violations on views + keyboard surfaces", async 
 	).toBeVisible();
 	await expectNoSeriousA11y(page, "cheat-sheet");
 });
+
+// #365 review: board, table and month grid chose their layout from the
+// viewport, so beside the docked task detail at 1100px a board rendered its
+// columns into ~390px. They now follow the width they actually get.
+test("view: a board beside the docked detail falls back to the list", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1100, height: 800 });
+	await signUp(page, uniqueEmail("v-narrow"));
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, "L9");
+	await openListDesktop(page, "L9");
+	await addTask(page, "Card one");
+
+	await page.getByTestId("sidebar-create").click();
+	await page.getByTestId("new-view").click();
+	await page.getByTestId("view-name").fill(`Narrow ${Date.now()}`);
+	await pickLabeled(page, "Layout", "Board");
+	await pickLabeled(page, "Group by", "Priority");
+	await page.getByTestId("view-save").click();
+	// Only the board pads empty priority columns; the list fallback groups the
+	// same tasks but shows just the groups that have any.
+	const column = page.getByRole("region", { name: "P1 High" });
+	await expect(column).toBeVisible({ timeout: 15000 });
+
+	const renderer = page.getByTestId("view-renderer");
+	await renderer
+		.locator("[data-kbd-nav]")
+		.filter({ hasText: "Card one" })
+		.first()
+		.click();
+	const panel = page.getByTestId("task-detail");
+	await expect(panel.getByLabel("Task title")).toHaveValue("Card one");
+
+	await expect(column).toHaveCount(0);
+	await expect(page.getByText("Viewing as list")).toBeVisible();
+	const v = await renderer.boundingBox();
+	const p = await panel.boundingBox();
+	expect(v).not.toBeNull();
+	expect(p).not.toBeNull();
+	if (!v || !p) return;
+	expect(v.x + v.width).toBeLessThanOrEqual(p.x + 1);
+	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+		1100,
+	);
+
+	// Closing gives the width back and the board returns.
+	await page.keyboard.press("Escape");
+	await expect(panel).toBeHidden();
+	await expect(column).toBeVisible();
+});

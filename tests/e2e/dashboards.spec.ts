@@ -425,7 +425,7 @@ test("dashboard edit mode: drag reorder persists, size preset applies, remove wi
 	await beta.getByTestId("panel-menu").click();
 	await page.getByTestId("panel-resize").click();
 	await page.getByTestId("panel-size-full").click();
-	await expect(beta.locator("..")).toHaveClass(/md:col-span-12/, {
+	await expect(beta.locator("..")).toHaveClass(/@2xl:col-span-12/, {
 		timeout: 15000,
 	});
 

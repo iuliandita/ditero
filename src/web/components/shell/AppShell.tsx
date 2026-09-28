@@ -22,7 +22,7 @@ export function AppShell({
 			className="min-h-dvh md:grid md:grid-cols-[auto_1fr]"
 		>
 			<div className="hidden md:block">{sidebar}</div>
-			<main className="pb-24 md:pb-0 lg:[body:has([data-task-panel])_&]:pe-96 xl:[body:has([data-task-panel])_&]:pe-110">
+			<main className="min-w-0 pb-24 md:pb-0 lg:[body:has([data-task-panel])_&]:pe-96 xl:[body:has([data-task-panel])_&]:pe-110">
 				<div className="mx-auto w-full md:max-w-[1200px]">{children}</div>
 			</main>
 			<div className="md:hidden">

@@ -241,7 +241,8 @@ async function setReminder(page: Page, title: string): Promise<void> {
 	await setDueDate(page, detail, when.date);
 	await openMoreOptions(detail);
 	await detail.getByTestId("reminder-time").fill(when.time);
-	await page.keyboard.press("Escape");
+	// Focus is in a field; Escape would only leave it. Close explicitly.
+	await detail.getByTestId("task-detail-close").click();
 	await expect(page.getByRole("dialog", { name: "Task details" })).toBeHidden({
 		timeout: 15_000,
 	});

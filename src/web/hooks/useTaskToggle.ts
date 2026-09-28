@@ -8,7 +8,7 @@ import { useSnackbar } from "../components/ui/snackbar.tsx";
 type Run = (mutation: { client: Promise<unknown> }) => unknown;
 
 // Check/uncheck a row and confirm a completion in the shared snackbar. The
-// snackbar is raised together with the optimistic write, never after the
+// snackbar is raised once the optimistic write applies, never after the
 // server answers. Undo reopens through the same task.update the uncheck path
 // already uses; reopening by hand retracts the snack so it never offers Undo
 // for a task that is already open. A recurring task gets no Undo: task.complete advanced its due
@@ -25,15 +25,22 @@ export function useTaskToggle(run: Run) {
 				reopen();
 				return;
 			}
-			run(zero.mutate(mutators.task.complete({ id: task.id })));
-			show({
-				key: task.id,
-				message: m.snackbar_task_completed({ title: task.title }),
-				action:
-					task.rrule == null
-						? { label: m.action_undo(), run: reopen }
-						: undefined,
-			});
+			const mutation = zero.mutate(mutators.task.complete({ id: task.id }));
+			run(mutation);
+			// Only once the optimistic write has applied: a mutator that throws
+			// (a refused kind, a revoked role) must never read as "Completed".
+			mutation.client.then(
+				() =>
+					show({
+						key: task.id,
+						message: m.snackbar_task_completed({ title: task.title }),
+						action:
+							task.rrule == null
+								? { label: m.action_undo(), run: reopen }
+								: undefined,
+					}),
+				() => {},
+			);
 		},
 		[run, zero, show, dismissKey],
 	);

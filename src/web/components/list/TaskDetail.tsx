@@ -39,6 +39,7 @@ import { runMutation } from "@/lib/run-mutation";
 import { inputsToDue, priorityLabel, priorityMeta } from "@/lib/task-display";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
+import { localDay } from "../../../domain/local-day.ts";
 import { randomId } from "../../../domain/random-id.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import { m } from "../../../paraglide/messages.js";
@@ -48,12 +49,14 @@ import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
 import { formatFocusedDuration } from "../../focus/timer-core.ts";
 import { useFocusTimer } from "../../focus/useFocusTimer.tsx";
 import { useFocusSessions } from "../../hooks/useFocusSessions.ts";
+import { useHabitLogs } from "../../hooks/useHabitLogs.ts";
 import {
 	taskImportRecoveryKey,
 	useTaskImportActivation,
 	useTaskImportActivationMap,
 } from "../../hooks/useTaskImportActivation.ts";
 import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
+import { useUserPref } from "../../hooks/useUserPref.ts";
 import { formatTimeValue } from "../../lib/date-picker.ts";
 import { formatList } from "../../lib/intl-format.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
@@ -140,6 +143,13 @@ function resolveReturn(
 	return add?.getClientRects().length ? add : null;
 }
 
+function isTextField(el: Element | null): el is HTMLElement {
+	return (
+		el instanceof HTMLElement &&
+		(el.isContentEditable || ["INPUT", "TEXTAREA"].includes(el.tagName))
+	);
+}
+
 // Sort key placing a moved task after the last top-level task in the target list.
 function tailKey(tasks: Task[]): string {
 	const last = tasks.reduce<string | null>(
@@ -189,6 +199,9 @@ export function TaskDetail({
 	const moreId = useId();
 	const panelRef = useRef<HTMLDivElement>(null);
 	const titleRef = useRef<HTMLInputElement>(null);
+	// An unsaved title edit, kept outside the input: crossing the lg breakpoint
+	// swaps panel and sheet, which remounts the input without a blur.
+	const titleDraft = useRef<{ id: string; value: string } | null>(null);
 	const returnFocus = useRef<ReturnTarget | null>(null);
 	const activation = useTaskImportActivation(task?.id);
 	const activationMap = useTaskImportActivationMap();
@@ -205,6 +218,14 @@ export function TaskDetail({
 	);
 
 	const kind = (list.kind ?? "tasks") as List["kind"];
+	// A habit is never "done"; its box is today's occurrence, logged exactly as
+	// the habit card's Done does (task.complete refuses habits by design).
+	const { pref } = useUserPref();
+	const { logs: habitLogs } = useHabitLogs(task?.id ?? "");
+	const today = localDay(new Date(), pref.timezone);
+	const habitDoneToday = habitLogs.some(
+		(l) => l.date === today && l.status === "done",
+	);
 	const subtasks = useMemo(
 		() => (task ? allTasks.filter((t) => t.parentId === task.id) : []),
 		[allTasks, task],
@@ -247,13 +268,39 @@ export function TaskDetail({
 	const closeRef = useRef(() => close());
 	closeRef.current = () => close();
 
+	// Escape in a field leaves the field first (blur commits title, notes and
+	// time fields; a subtask draft stays put), landing on the panel itself; only
+	// the next Escape closes. Returns whether this Escape was consumed.
+	function leaveField(): boolean {
+		if (revertTitle()) return true;
+		const active = document.activeElement;
+		if (!isTextField(active) || !panelRef.current?.contains(active))
+			return false;
+		active.blur();
+		panelRef.current.focus({ preventScroll: true });
+		return true;
+	}
+
 	// Escape with a dirty title cancels the edit instead of closing.
 	function revertTitle(): boolean {
 		const el = titleRef.current;
 		if (!el || !task || document.activeElement !== el) return false;
 		if (el.value === task.title) return false;
 		el.value = task.title;
+		titleDraft.current = null;
 		return true;
+	}
+
+	// Where focus lands when the surface (re)mounts: back into an unsaved title
+	// edit, caret at the end, or else the surface itself.
+	function focusSurface() {
+		const title = titleRef.current;
+		if (title && titleDraft.current?.id === task?.id) {
+			title.focus({ preventScroll: true });
+			title.setSelectionRange(title.value.length, title.value.length);
+			return;
+		}
+		panelRef.current?.focus({ preventScroll: true });
 	}
 
 	const shownId = open && task ? task.id : null;
@@ -270,7 +317,11 @@ export function TaskDetail({
 			!panel.contains(active)
 		)
 			returnFocus.current = captureReturn(active);
-		panel.focus({ preventScroll: true });
+		const title = titleRef.current;
+		if (title && titleDraft.current?.id === shownId) {
+			title.focus({ preventScroll: true });
+			title.setSelectionRange(title.value.length, title.value.length);
+		} else panel.focus({ preventScroll: true });
 	}, [docked, shownId]);
 
 	// Focus may be back in the list (triaging) or on <body>; Escape still closes.
@@ -318,12 +369,28 @@ export function TaskDetail({
 		void run(zero.mutate(mutators.task.update(patch)));
 	}
 
-	// Same path as the list rows, so recurrence advance and Karma stay identical.
+	const isHabit = kind === "habits";
+	const checked = isHabit ? habitDoneToday : (t.done ?? false);
+
+	// Same path as the list rows (or the habit card), so recurrence advance,
+	// Karma and the completion snackbar stay identical.
 	function toggleDone() {
-		if (activation.canWrite) toggleTask(t);
+		if (!activation.canWrite) return;
+		if (!isHabit) {
+			toggleTask(t);
+			return;
+		}
+		void run(
+			zero.mutate(
+				habitDoneToday
+					? mutators.habit.unlog({ habitId: t.id, date: today })
+					: mutators.habit.log({ habitId: t.id, date: today, status: "done" }),
+			),
+		);
 	}
 
 	function saveTitle(el: HTMLInputElement) {
+		titleDraft.current = null;
 		const v = el.value.trim();
 		if (!v) {
 			el.value = t.title;
@@ -438,7 +505,7 @@ export function TaskDetail({
 		<div className="flex items-center gap-3 px-4 pt-4 pb-3">
 			<Checkbox
 				disabled={!activation.canWrite}
-				checked={t.done ?? false}
+				checked={checked}
 				aria-label={m.task_detail_done_aria()}
 				data-testid="task-detail-done"
 				onCheckedChange={toggleDone}
@@ -448,13 +515,18 @@ export function TaskDetail({
 			<Input
 				ref={titleRef}
 				disabled={!activation.canWrite}
-				defaultValue={t.title}
+				defaultValue={
+					titleDraft.current?.id === t.id ? titleDraft.current.value : t.title
+				}
 				key={t.id}
+				onChange={(e) => {
+					titleDraft.current = { id: t.id, value: e.currentTarget.value };
+				}}
 				aria-label={m.task_detail_title_field()}
 				data-testid="task-detail-title"
 				className={cn(
 					"h-9 min-w-0 flex-1 border-transparent px-1.5 text-base font-medium focus-visible:border-input",
-					t.done && "text-muted-foreground line-through",
+					checked && "text-muted-foreground line-through",
 				)}
 				onBlur={(e) => saveTitle(e.currentTarget)}
 				onKeyDown={(e) => {
@@ -462,6 +534,7 @@ export function TaskDetail({
 						e.preventDefault();
 						saveTitle(e.currentTarget);
 					} else if (e.key === "Escape" && revertTitle()) {
+						// Consumed: the edit is cancelled, focus stays in the title.
 						e.preventDefault();
 						e.stopPropagation();
 					}
@@ -507,6 +580,7 @@ export function TaskDetail({
 			<div className="flex flex-col gap-4">
 				<Field label={m.task_field_due()}>
 					<DuePicker
+						key={t.id}
 						dueAt={t.dueAt ?? null}
 						dueAllDay={t.dueAllDay ?? null}
 						done={t.done ?? false}
@@ -878,10 +952,9 @@ export function TaskDetail({
 				tabIndex={-1}
 				className="fixed inset-y-0 end-0 z-30 flex w-96 flex-col border-s bg-background outline-none animate-in fade-in-0 slide-in-from-end-6 duration-(--motion-slow) ease-(--motion-ease) motion-reduce:animate-none xl:w-110"
 				onKeyDown={(e) => {
-					if (e.key === "Escape" && !e.defaultPrevented) {
-						e.preventDefault();
-						close();
-					}
+					if (e.key !== "Escape" || e.defaultPrevented) return;
+					e.preventDefault();
+					if (!leaveField()) close();
 				}}
 			>
 				{header}
@@ -909,10 +982,10 @@ export function TaskDetail({
 				// not focused (and text-selected) on open.
 				onOpenAutoFocus={(e) => {
 					e.preventDefault();
-					panelRef.current?.focus();
+					focusSurface();
 				}}
 				onEscapeKeyDown={(e) => {
-					if (revertTitle()) e.preventDefault();
+					if (leaveField()) e.preventDefault();
 				}}
 			>
 				<SheetTitle className="sr-only">{m.task_detail_title()}</SheetTitle>

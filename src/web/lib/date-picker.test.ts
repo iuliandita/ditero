@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	cldrFirstDay,
 	dayKey,
 	firstWeekday,
 	formatTimeValue,
@@ -34,6 +35,26 @@ describe("firstWeekday", () => {
 			expect(firstWeekday("en", ["de-DE"])).toBe(0);
 		},
 	);
+});
+
+describe("firstWeekday without Intl week info", () => {
+	const none = () => null;
+	it("falls back to CLDR for the app locales", () => {
+		expect(firstWeekday("en", [], none)).toBe(0);
+		expect(firstWeekday("ar", [], none)).toBe(6);
+		for (const locale of ["de", "es", "fr", "ro"])
+			expect(firstWeekday(locale, [], none)).toBe(1);
+	});
+	it("uses the browser's region for the same language", () => {
+		expect(firstWeekday("en", ["en-GB"], none)).toBe(1);
+		expect(firstWeekday("ar", ["ar-SA"], none)).toBe(0);
+		expect(firstWeekday("es", ["es-MX"], none)).toBe(0);
+		expect(firstWeekday("en", ["de-DE"], none)).toBe(0);
+	});
+	it.skipIf(!hasWeekInfo)("agrees with Intl week info", () => {
+		for (const tag of ["en", "en-GB", "ar", "ar-SA", "de", "es-MX", "fr", "ro"])
+			expect(cldrFirstDay(tag), tag).toBe(firstWeekday(tag));
+	});
 });
 
 describe("monthCells", () => {
@@ -91,6 +112,16 @@ describe("parseDueText", () => {
 		expect(parseDueText("tomorrow 5pm", "en", now)).toEqual({
 			date: "2026-09-29",
 			time: "17:00",
+		});
+	});
+	it("rejects impossible ISO days instead of guessing", () => {
+		expect(parseDueText("2026-13-01", "en", now)).toBeNull();
+		expect(parseDueText("2026-02-31", "en", now)).toBeNull();
+	});
+	it("accepts unpadded ISO days", () => {
+		expect(parseDueText("2026-2-3", "en", now)).toEqual({
+			date: "2026-02-03",
+			time: null,
 		});
 	});
 	it("returns null for text that names no date", () => {
