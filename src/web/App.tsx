@@ -1,5 +1,6 @@
 import { BootSkeleton } from "./components/shell/AppSkeleton.tsx";
 import { ConfirmProvider } from "./components/ui/confirm.tsx";
+import { SnackbarProvider } from "./components/ui/snackbar.tsx";
 import { useUserPref } from "./hooks/useUserPref.ts";
 import { authClient } from "./lib/auth-client.ts";
 import { KeyringProvider } from "./lib/e2e/KeyringProvider.tsx";
@@ -14,7 +15,9 @@ import { Workspace } from "./routes/Workspace.tsx";
 export function App() {
 	return (
 		<ConfirmProvider>
-			<Routes />
+			<SnackbarProvider>
+				<Routes />
+			</SnackbarProvider>
 		</ConfirmProvider>
 	);
 }

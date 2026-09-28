@@ -54,7 +54,7 @@ function buildLookups(
 // all satisfy it.
 type KeyTarget = { tagName?: string; isContentEditable?: boolean } | null;
 
-function isEditable(target: KeyTarget): boolean {
+export function isEditable(target: KeyTarget): boolean {
 	if (!target?.tagName) return false;
 	const tag = target.tagName;
 	if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;

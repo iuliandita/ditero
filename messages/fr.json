@@ -274,12 +274,26 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} article dans le panier",
+				"countPlural=many": "{countNum} articles dans le panier",
+				"countPlural=other": "{countNum} articles dans le panier"
+			}
+		}
+	],
 	"list_change_icon": "Changer l'icône de la liste",
 	"list_display_options": "Options d'affichage de la liste",
 	"list_completed_heading": "Éléments terminés",
 	"list_completed_sink": "Éléments terminés en bas",
 	"list_completed_keep": "Garder en place",
-	"list_completed_hide": "Masquer les éléments terminés",
 	"list_group_by_assignee": "Grouper par personne assignée",
 	"list_save_as_template": "Enregistrer comme modèle",
 	"list_add_from_template": "Ajouter depuis un modèle",
@@ -1319,6 +1333,8 @@
 	"mutator_error_label_name_taken": "Une étiquette portant ce nom existe déjà.",
 	"modal_close_label": "Fermer",
 	"action_close": "Fermer",
+	"action_undo": "Annuler",
+	"snackbar_task_completed": "Terminé : {title}",
 	"action_delete": "Supprimer",
 	"action_remove": "Retirer",
 	"confirm_cancel": "Annuler",

@@ -1,4 +1,9 @@
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+	CHECK_POP,
+	strikeClass,
+	useJustCompleted,
+} from "@/lib/completion-feedback";
 import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
@@ -28,6 +33,7 @@ export function ShoppingRow({
 	handlers: ShoppingHandlers;
 }) {
 	const activation = useTaskImportActivation(task.id);
+	const justCompleted = useJustCompleted(task.done ?? false);
 	return (
 		<div className="flex items-center gap-2 py-1.5">
 			<Checkbox
@@ -35,16 +41,17 @@ export function ShoppingRow({
 				aria-label={task.title}
 				checked={task.done ?? false}
 				onCheckedChange={() => handlers.onToggle(task.id, task.done ?? false)}
+				className={cn(justCompleted && CHECK_POP)}
 			/>
 			<button
 				type="button"
 				onClick={() => handlers.onOpenDetail(task)}
 				className={cn(
 					"min-w-0 flex-1 truncate text-start",
-					task.done && "text-muted-foreground line-through",
+					task.done && "text-muted-foreground",
 				)}
 			>
-				{task.title}
+				<span className={strikeClass(task.done ?? false)}>{task.title}</span>
 				{(activation.status === "pending" ||
 					activation.status === "blocked") && (
 					<span className="block text-xs text-amber-700 dark:text-amber-400">
