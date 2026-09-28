@@ -67,7 +67,7 @@ describe("computeStreak", () => {
 		expect(r.adherencePct).toBe(0); // 29 past occurrences all missed
 	});
 
-	test("empty logs with only a pending today -> adherence 100", () => {
+	test("empty logs with only a pending today -> no adherence yet", () => {
 		const r = computeStreak(DAILY, [], TODAY, 1);
 		expect(r.heatmap).toEqual([{ date: TODAY, status: "none" }]);
 		expect(r.current).toBe(0);
