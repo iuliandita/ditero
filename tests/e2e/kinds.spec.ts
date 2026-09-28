@@ -33,6 +33,7 @@ async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
 	expect(serious, `serious/critical a11y violations on ${surface}`).toEqual([]);
 }
 
+// From the landing, where the create-list form lives.
 async function createKindList(
 	page: Page,
 	name: string,
@@ -43,10 +44,19 @@ async function createKindList(
 	await page.getByTestId("new-list").fill(name);
 	await page.getByRole("button", { name: kind, exact: true }).click();
 	await page.getByTestId("new-list-submit").click();
-	const nav = sidebarLists(page).getByRole("button", { name, exact: true });
-	await expect(nav.first()).toBeVisible({ timeout: 15000 });
-	await nav.first().click();
-	await expect(page.getByTestId("list")).toBeVisible();
+	await expect(
+		sidebarLists(page).getByRole("button", { name, exact: true }).first(),
+	).toBeVisible({ timeout: 15000 });
+}
+
+async function openList(page: Page, name: string): Promise<void> {
+	await sidebarLists(page)
+		.getByRole("button", { name, exact: true })
+		.first()
+		.click();
+	await expect(
+		page.getByTestId("list").getByRole("heading", { name }),
+	).toBeVisible();
 }
 
 async function add(page: Page, title: string, action: string): Promise<void> {
@@ -64,6 +74,7 @@ test("shopping: add item verb, quantity only when set, no lone Other header", as
 }) => {
 	await signUp(page, uniqueEmail("kind-shop"));
 	await createKindList(page, "Market", "Shopping");
+	await openList(page, "Market");
 
 	await expect(page.getByTestId("new-task")).toHaveAttribute(
 		"placeholder",
@@ -102,13 +113,15 @@ test("checklist and project: kind verbs and a labeled project progress count", a
 }) => {
 	await signUp(page, uniqueEmail("kind-proj"));
 	await createKindList(page, "Packing", "Checklist");
+	await createKindList(page, "Launch", "Project");
+	await openList(page, "Packing");
 	await expect(page.getByTestId("new-task")).toHaveAttribute(
 		"placeholder",
 		"Add an item",
 	);
 	await add(page, "Passport", "Add item");
 
-	await createKindList(page, "Launch", "Project");
+	await openList(page, "Launch");
 	await expect(page.getByTestId("new-task")).toHaveAttribute(
 		"placeholder",
 		"Add a task",
@@ -137,6 +150,7 @@ test("habits: add habit verb, new habits start daily, one Done label, Undo only 
 }) => {
 	await signUp(page, uniqueEmail("kind-habit"));
 	await createKindList(page, "Routines", "Habits");
+	await openList(page, "Routines");
 
 	await expect(page.getByTestId("new-task")).toHaveAttribute(
 		"placeholder",

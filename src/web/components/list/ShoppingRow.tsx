@@ -116,8 +116,13 @@ export function ShoppingRow({
 					data-testid="shopping-qty-fields"
 					onBlur={onFieldsBlur}
 					onKeyDown={(e) => {
-						if (e.key === "Enter") finish(true, true);
-						else if (e.key === "Escape") {
+						// Focus returns to the chip inside this keydown; without
+						// preventDefault the same Enter then activates it and reopens.
+						if (e.key === "Enter") {
+							e.preventDefault();
+							finish(true, true);
+						} else if (e.key === "Escape") {
+							e.preventDefault();
 							e.stopPropagation();
 							finish(false, true);
 						}
