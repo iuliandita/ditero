@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
+import { openDetails } from "./helpers.ts";
 
 // Task 10 cluster: NLP quick-add and drag reorder. Task 11 extends this file
 // with the rest of the domain matrix (kinds, templates, a11y, isolation).
@@ -391,7 +392,7 @@ test("subtask add + parent progress; depth-2 affordance absent", async ({
 	await addTask(page, "Parent");
 	const list = page.getByTestId("list");
 
-	await list.getByRole("button", { name: "Parent", exact: true }).click();
+	await openDetails(page, "Parent");
 	const detail = page.getByRole("dialog");
 	for (const child of ["Child A", "Child B"]) {
 		await detail.getByPlaceholder("Add subtask").fill(child);
@@ -412,7 +413,7 @@ test("subtask add + parent progress; depth-2 affordance absent", async ({
 	});
 
 	// A subtask's own detail offers no further nesting (subtasks are one level).
-	await list.getByRole("button", { name: "Child A", exact: true }).click();
+	await openDetails(page, "Child A");
 	const subDetail = page.getByRole("dialog");
 	await expect(subDetail.getByLabel("Task title")).toBeVisible();
 	await expect(subDetail.getByPlaceholder("Add subtask")).toHaveCount(0);
@@ -614,10 +615,7 @@ test("a11y: no serious/critical violations on core surfaces", async ({
 	}
 
 	await openListDesktop(page, "Tasks board");
-	await page
-		.getByTestId("list")
-		.getByRole("button", { name: "Tasks board item", exact: true })
-		.click();
+	await openDetails(page, "Tasks board item");
 	await expect(page.getByRole("dialog")).toBeVisible();
 	await expectNoSeriousA11y(page, "task detail");
 	await page.keyboard.press("Escape");
