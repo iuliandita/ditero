@@ -1,6 +1,7 @@
-import { Globe, KeyRound, ListChecks } from "lucide-react";
+import { KeyRound, ListChecks } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 import { m } from "../../paraglide/messages.js";
+import { GoogleMark } from "../components/auth/GoogleMark.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input } from "../components/ui/input.tsx";
@@ -302,7 +303,7 @@ export function Login() {
 					onClick={signInGoogle}
 					disabled={pending}
 				>
-					<Globe aria-hidden="true" />
+					<GoogleMark />
 					{m.login_continue_google()}
 				</Button>
 			</div>
