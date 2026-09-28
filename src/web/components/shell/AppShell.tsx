@@ -20,7 +20,9 @@ export function AppShell({
 			className="min-h-dvh md:grid md:grid-cols-[auto_1fr]"
 		>
 			<div className="hidden md:block">{sidebar}</div>
-			<main className="pb-24 md:pb-0">
+			{/* Room below the last row for the tab bar, the floating add button
+			    (top edge ~136px up) and the snackbar that stacks above it. */}
+			<main className="pb-[calc(11rem+env(safe-area-inset-bottom))] md:pb-0">
 				<div className="mx-auto w-full md:max-w-[1200px]">{children}</div>
 			</main>
 			<div className="md:hidden">

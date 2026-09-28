@@ -300,6 +300,9 @@
 	],
 	"list_change_icon": "تغيير أيقونة القائمة",
 	"list_display_options": "خيارات عرض القائمة",
+	"list_reorder_mode": "إعادة الترتيب",
+	"list_reorder_hint": "اسحب المقابض لإعادة الترتيب.",
+	"list_reorder_done": "تم",
 	"list_completed_heading": "العناصر المكتملة",
 	"list_completed_sink": "إنزال العناصر المكتملة للأسفل",
 	"list_completed_keep": "الإبقاء في مكانها",
@@ -411,6 +414,27 @@
 	"shopping_category_other": "أخرى",
 	"task_reorder_handle": "إعادة ترتيب المهمة",
 	"task_priority_aria": "الأولوية: {priority}",
+	"task_open_details": "فتح التفاصيل",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=zero": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
+				"totalPlural=one": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
+				"totalPlural=two": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
+				"totalPlural=few": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
+				"totalPlural=many": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
+				"totalPlural=other": "المهام الفرعية المكتملة: {doneNum} من {totalNum}"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
