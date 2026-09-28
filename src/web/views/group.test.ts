@@ -55,7 +55,7 @@ describe("groupTasks", () => {
 		expect(groups.map((g) => g.label)).toEqual([
 			"P1 High",
 			"P3 Low",
-			"P4 None",
+			"No priority",
 		]);
 		expect(groups.map((g) => g.key)).toEqual(["3", "1", "0"]);
 	});
@@ -67,7 +67,7 @@ describe("groupTasks", () => {
 			ctx,
 		);
 		expect(groups).toHaveLength(1);
-		expect(groups[0].label).toBe("P4 None");
+		expect(groups[0].label).toBe("No priority");
 	});
 
 	it("assignee fans out multi-assignee tasks and trails Unassigned", () => {

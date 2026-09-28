@@ -10,16 +10,18 @@ const PRIORITY_LABELS: Record<number, () => string> = {
 	3: m.priority_high,
 };
 
-// One scheme everywhere: quick-add's p1-p4 code plus the name, so "p1" typed
+// One scheme everywhere: quick-add's p1-p3 code plus the name, so "p1" typed
 // in quick-add and "P1 High" in a picker are visibly the same thing. The code
 // is grammar, never translated. p1 is the highest, the reverse of the stored
-// level (3 high .. 0 none), matching domain/quick-add PRIORITY_RANK.
+// level (3 high .. 0 none), matching domain/quick-add PRIORITY_RANK. The empty
+// level (p4) reads as "No priority" alone: a code in front of "none" says less.
 export function priorityLabel(priority: number | null | undefined): string {
 	const level = priority ?? 0;
-	const known = Object.hasOwn(PRIORITY_LABELS, level);
+	if (level === 0 || !Object.hasOwn(PRIORITY_LABELS, level))
+		return m.priority_none();
 	return m.priority_coded({
-		code: `P${4 - (known ? level : 0)}`,
-		name: known ? PRIORITY_LABELS[level]() : m.priority_none(),
+		code: `P${4 - level}`,
+		name: PRIORITY_LABELS[level](),
 	});
 }
 

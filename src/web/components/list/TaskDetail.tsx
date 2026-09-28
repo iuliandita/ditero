@@ -52,6 +52,7 @@ import {
 	useTaskImportActivation,
 	useTaskImportActivationMap,
 } from "../../hooks/useTaskImportActivation.ts";
+import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
 import { formatTimeValue } from "../../lib/date-picker.ts";
 import { formatList } from "../../lib/intl-format.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
@@ -65,6 +66,7 @@ import { ReminderPolicy } from "../task/ReminderPolicy.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
 import type { RowAction } from "../ui/row-action.ts";
 import { RowActions } from "../ui/row-actions.tsx";
+import { useSnackbar } from "../ui/snackbar.tsx";
 import { ImportActivationRecovery } from "./ImportActivationRecovery.tsx";
 
 // P1 first, matching quick-add's p1-p4 reading order.
@@ -93,6 +95,48 @@ function writeMoreOpen(open: boolean) {
 	try {
 		sessionStorage.setItem(MORE_KEY, open ? "1" : "0");
 	} catch {}
+}
+
+// Where focus goes back to on close. Rows re-render (completing sinks a row
+// into its group, a sync can remount it), so the element is backed by the
+// task id every row's open button carries, and by the next row's id for when
+// the task itself left the list.
+type ReturnTarget = {
+	el: HTMLElement;
+	taskId: string | null;
+	nextTaskId: string | null;
+};
+
+function findRow(taskId: string): HTMLElement | null {
+	return document.querySelector<HTMLElement>(
+		`[data-task-id="${CSS.escape(taskId)}"]`,
+	);
+}
+
+function captureReturn(el: HTMLElement): ReturnTarget {
+	const taskId = el.dataset.taskId ?? null;
+	if (taskId == null) return { el, taskId, nextTaskId: null };
+	const rows = [...document.querySelectorAll<HTMLElement>("[data-task-id]")];
+	const next = rows
+		.slice(rows.indexOf(el) + 1)
+		.find((row) => row.dataset.taskId !== taskId);
+	return { el, taskId, nextTaskId: next?.dataset.taskId ?? null };
+}
+
+function resolveReturn(
+	target: ReturnTarget,
+	leaving: boolean,
+): HTMLElement | null {
+	if (!leaving) {
+		if (target.el.isConnected) return target.el;
+		const row = target.taskId ? findRow(target.taskId) : null;
+		if (row) return row;
+	}
+	if (target.taskId == null) return null;
+	const next = target.nextTaskId ? findRow(target.nextTaskId) : null;
+	if (next) return next;
+	const add = document.querySelector<HTMLElement>('[data-testid="new-task"]');
+	return add?.getClientRects().length ? add : null;
 }
 
 // Sort key placing a moved task after the last top-level task in the target list.
@@ -136,6 +180,7 @@ export function TaskDetail({
 	const zero = useZero<typeof schema>();
 	const focus = useFocusTimer();
 	const confirm = useConfirm();
+	const snackbar = useSnackbar();
 	const [error, setError] = useState<string | null>(null);
 	const [newSubtask, setNewSubtask] = useState("");
 	const [newLabel, setNewLabel] = useState("");
@@ -143,7 +188,7 @@ export function TaskDetail({
 	const moreId = useId();
 	const panelRef = useRef<HTMLDivElement>(null);
 	const titleRef = useRef<HTMLInputElement>(null);
-	const returnFocus = useRef<HTMLElement | null>(null);
+	const returnFocus = useRef<ReturnTarget | null>(null);
 	const activation = useTaskImportActivation(task?.id);
 	const activationMap = useTaskImportActivationMap();
 
@@ -175,7 +220,9 @@ export function TaskDetail({
 	);
 	const selected = new Set(taskLabelIds);
 
-	function close() {
+	// `leaving`: the task is gone from this list (deleted, moved), so focus goes
+	// to the row after it instead.
+	function close({ leaving = false }: { leaving?: boolean } = {}) {
 		const active = document.activeElement;
 		const inPanel =
 			active instanceof HTMLElement &&
@@ -183,16 +230,21 @@ export function TaskDetail({
 		// Title, notes and time fields save on blur; flush them before unmount.
 		if (inPanel) (active as HTMLElement).blur();
 		onOpenChange(false);
-		const back = returnFocus.current;
+		const target = returnFocus.current;
 		returnFocus.current = null;
 		// Only reclaim focus the panel held; a user already back in the list
 		// keeps their place.
-		const reclaim = inPanel || active == null || active === document.body;
-		if (docked && reclaim && back?.isConnected)
-			back.focus({ preventScroll: true });
+		const reclaim =
+			leaving || inPanel || active == null || active === document.body;
+		if (!docked || !reclaim || !target) return;
+		// Next frame: the panel has unmounted by then, and a closing Radix Select
+		// or menu has already put focus back on its own (now gone) trigger.
+		requestAnimationFrame(() =>
+			resolveReturn(target, leaving)?.focus({ preventScroll: true }),
+		);
 	}
-	const closeRef = useRef(close);
-	closeRef.current = close;
+	const closeRef = useRef(() => close());
+	closeRef.current = () => close();
 
 	// Escape with a dirty title cancels the edit instead of closing.
 	function revertTitle(): boolean {
@@ -216,7 +268,7 @@ export function TaskDetail({
 			active !== document.body &&
 			!panel.contains(active)
 		)
-			returnFocus.current = active;
+			returnFocus.current = captureReturn(active);
 		panel.focus({ preventScroll: true });
 	}, [docked, shownId]);
 
@@ -251,6 +303,9 @@ export function TaskDetail({
 		setError(null);
 		return runMutation(mutation, setError);
 	}
+	// The rows' own toggle, so the completion snackbar (and its no-Undo rule for
+	// recurring tasks) is identical from the panel.
+	const toggleTask = useTaskToggle(run);
 
 	if (!task || !open) return null;
 	// Alias the narrowed task so the handler closures below keep the non-null type.
@@ -264,9 +319,7 @@ export function TaskDetail({
 
 	// Same path as the list rows, so recurrence advance and Karma stay identical.
 	function toggleDone() {
-		if (!activation.canWrite) return;
-		if (t.done) update({ id: t.id, done: false });
-		else void run(zero.mutate(mutators.task.complete({ id: t.id })));
+		if (activation.canWrite) toggleTask(t);
 	}
 
 	function saveTitle(el: HTMLInputElement) {
@@ -351,9 +404,7 @@ export function TaskDetail({
 		});
 		if (!ok) return;
 		void run(zero.mutate(mutators.task.delete({ id: t.id })));
-		// The originating row is about to unmount with the task.
-		returnFocus.current = null;
-		close();
+		close({ leaving: true });
 	}
 
 	// Not gated on import activation: a paused task must stay deletable.
@@ -425,7 +476,7 @@ export function TaskDetail({
 					aria-label={m.action_close()}
 					data-testid="task-detail-close"
 					className="size-11 md:size-8"
-					onClick={close}
+					onClick={() => close()}
 				>
 					<X />
 				</Button>
@@ -638,6 +689,8 @@ export function TaskDetail({
 						<Button
 							size="sm"
 							variant="outline"
+							className="pointer-coarse:h-11"
+							data-testid="subtask-add"
 							onClick={addSubtask}
 							disabled={!activation.canWrite || !newSubtask.trim()}
 						>
@@ -749,6 +802,7 @@ export function TaskDetail({
 										const targetTasks = allTasks.filter(
 											(x) => x.listId === target && x.parentId == null,
 										);
+										const from = { listId: t.listId, sortKey: t.sortKey };
 										void run(
 											zero.mutate(
 												mutators.task.move({
@@ -758,8 +812,25 @@ export function TaskDetail({
 												}),
 											),
 										);
-										returnFocus.current = null;
-										close();
+										snackbar.show({
+											key: t.id,
+											message: m.snackbar_task_moved({
+												title: t.title,
+												list:
+													moveTargets.find((l) => l.id === target)?.title ?? "",
+											}),
+											// Back to the same list and the same place in it.
+											action: {
+												label: m.action_undo(),
+												run: () =>
+													void run(
+														zero.mutate(
+															mutators.task.move({ id: t.id, ...from }),
+														),
+													),
+											},
+										});
+										close({ leaving: true });
 									}}
 								>
 									<SelectTrigger

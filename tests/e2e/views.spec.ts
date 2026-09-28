@@ -279,7 +279,7 @@ test("view: layout switch renders board columns then a real table", async ({
 	await pickLabeled(page, "Layout", "Board");
 	await pickLabeled(page, "Group by", "Priority");
 	await page.getByTestId("view-save").click();
-	for (const col of ["P1 High", "P2 Medium", "P3 Low", "P4 None"]) {
+	for (const col of ["P1 High", "P2 Medium", "P3 Low", "No priority"]) {
 		await expect(page.getByRole("region", { name: col })).toBeVisible({
 			timeout: 15000,
 		});
@@ -320,7 +320,7 @@ test("view: dragging a card to another priority column regroups + persists", asy
 	await expect(page.getByTestId("view-surface")).toBeVisible();
 
 	// The card starts in the "None" (priority 0) column.
-	const none = page.getByRole("region", { name: "P4 None" });
+	const none = page.getByRole("region", { name: "No priority" });
 	const high = page.getByRole("region", { name: "P1 High" });
 	await expect(none.getByText(cardTitle, { exact: true })).toBeVisible({
 		timeout: 15000,
@@ -667,7 +667,7 @@ test("a11y: no serious/critical violations on views + keyboard surfaces", async 
 	await pickLabeled(page, "Layout", "Board");
 	await pickLabeled(page, "Group by", "Priority");
 	await page.getByTestId("view-save").click();
-	await expect(page.getByRole("region", { name: "P4 None" })).toBeVisible({
+	await expect(page.getByRole("region", { name: "No priority" })).toBeVisible({
 		timeout: 15000,
 	});
 	await expectNoSeriousA11y(page, "board layout");

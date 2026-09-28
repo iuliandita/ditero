@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
+import { openMoreOptions } from "./helpers.ts";
 
 // Task 10 cluster: NLP quick-add and drag reorder. Task 11 extends this file
 // with the rest of the domain matrix (kinds, templates, a11y, isolation).
@@ -762,14 +763,120 @@ test("the list stays usable while the detail is open", async ({ page }) => {
 	await page.keyboard.press("Escape");
 	await expect(panel).toBeHidden();
 	await expect(listRow(page, "Second task")).toBeFocused();
+});
 
-	// The detail's own done box completes the task through the row's path.
-	await openPanel(page, "Second task");
+test("completing from the detail matches the rows, snackbar included", async ({
+	page,
+}) => {
+	await listWithTasks(page, "Snacks", ["One-off", "Every day", "After"]);
+	// A replaced snack animates out beside its successor; name the one meant.
+	const snack = (text: string) =>
+		page.getByTestId("snackbar").filter({ hasText: text });
+
+	// One-off: the row's completion snackbar, and Undo reopens it.
+	let panel = await openPanel(page, "One-off");
 	await panel.getByTestId("task-detail-done").click();
+	await expect(snack("Completed: One-off")).toBeVisible();
+	await snack("Completed: One-off").getByTestId("snackbar-action").click();
 	await expect(
-		page.getByTestId("list").getByRole("checkbox", { name: "Second task" }),
-	).toBeChecked({ timeout: 15000 });
-	await expect(panel.getByTestId("task-detail-done")).toBeChecked();
+		page.getByTestId("list").getByRole("checkbox", { name: "One-off" }),
+	).not.toBeChecked({ timeout: 15000 });
+
+	// Recurring: task.complete advances the occurrence, so no Undo is offered.
+	panel = await openPanel(page, "Every day");
+	await panel.getByTestId("due-picker").click();
+	await page.getByTestId("due-pick-today").click();
+	await openMoreOptions(panel);
+	await panel.getByTestId("recurrence-enable").click();
+	await expect(panel.getByTestId("recurrence-editor")).toBeVisible();
+	await panel.getByTestId("task-detail-done").click();
+	await expect(snack("Completed: Every day")).toBeVisible();
+	await expect(
+		snack("Completed: Every day").getByTestId("snackbar-action"),
+	).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(panel).toBeHidden();
+
+	// A completed one-off leaves the open rows; closing hands focus to the row
+	// that followed it rather than dropping it on the page.
+	panel = await openPanel(page, "One-off");
+	await panel.getByTestId("task-detail-done").click();
+	await expect(snack("Completed: One-off")).toBeVisible();
+	await panel.getByTestId("task-detail-close").click();
+	await expect(panel).toBeHidden();
+	await expect(listRow(page, "Every day")).toBeFocused();
+});
+
+test("moving from the detail offers Undo that puts the task back", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("moves"));
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, "Work");
+	await createListDesktop(page, "Home");
+	await openListDesktop(page, "Home");
+	for (const title of ["Pack bag", "Stay put"]) await addTask(page, title);
+
+	const panel = await openPanel(page, "Pack bag");
+	await openMoreOptions(panel);
+	await panel.getByRole("combobox", { name: "Move to list" }).click();
+	await page.getByRole("option", { name: "Work", exact: true }).click();
+
+	const snackbar = page.getByTestId("snackbar");
+	await expect(snackbar).toContainText("Moved to Work: Pack bag");
+	await expect(panel).toBeHidden();
+	const list = page.getByTestId("list");
+	await expect(list.getByText("Pack bag", { exact: true })).toHaveCount(0, {
+		timeout: 15000,
+	});
+	// The task left, so focus goes to the row after it.
+	await expect(listRow(page, "Stay put")).toBeFocused();
+
+	await snackbar.getByTestId("snackbar-action").click();
+	await expect(list.getByText("Pack bag", { exact: true })).toBeVisible({
+		timeout: 15000,
+	});
+});
+
+test("detail controls reach 44px on a touch screen", async ({ browser }) => {
+	const ctx = await browser.newContext({
+		viewport: { width: 390, height: 844 },
+		hasTouch: true,
+		isMobile: true,
+	});
+	const page = await ctx.newPage();
+	await signUp(page, uniqueEmail("touch"));
+	await waitWorkspaceReady(page);
+	await page.getByRole("button", { name: "New list" }).click();
+	await page.locator('[data-slot="select-trigger"]').nth(1).click();
+	await page
+		.getByRole("option", { name: "Shopping list", exact: true })
+		.click();
+	await page.getByTestId("new-list-submit").click();
+	await page
+		.getByRole("button", { name: "Shopping list", exact: true })
+		.first()
+		.click();
+	await page
+		.getByTestId("list")
+		.getByRole("button", { name: "Milk", exact: true })
+		.click();
+	const sheet = page.getByTestId("task-detail");
+	await expect(sheet.getByLabel("Task title")).toBeVisible();
+
+	for (const id of [
+		"due-picker",
+		"task-priority",
+		"assignee-open",
+		"subtask-add",
+		"task-more-toggle",
+		"task-detail-close",
+	]) {
+		const box = await sheet.getByTestId(id).boundingBox();
+		expect(box, id).not.toBeNull();
+		expect(box?.height ?? 0, id).toBeGreaterThanOrEqual(44);
+	}
+	await ctx.close();
 });
 
 test("the detail title is not selected on open and saves on Enter", async ({
@@ -807,7 +914,7 @@ test("secondary controls sit behind More options", async ({ page }) => {
 
 	// Up front: due, priority, notes, subtasks. Behind: repeat, focus, files.
 	await expect(panel.getByTestId("due-picker")).toBeVisible();
-	await expect(panel.getByTestId("task-priority")).toBeVisible();
+	await expect(panel.getByTestId("task-priority")).toHaveText("No priority");
 	await expect(panel.getByPlaceholder("Add subtask")).toBeVisible();
 	await expect(toggle).toHaveAttribute("aria-expanded", "false");
 	await expect(panel.getByTestId("recurrence-enable")).toHaveCount(0);
@@ -888,5 +995,5 @@ test("delete lives in the detail's overflow menu behind a confirm", async ({
 	await expect(
 		page.getByTestId("list").getByText("Doomed", { exact: true }),
 	).toHaveCount(0, { timeout: 15000 });
-	await expect(listRow(page, "Survivor")).toBeVisible();
+	await expect(listRow(page, "Survivor")).toBeFocused();
 });

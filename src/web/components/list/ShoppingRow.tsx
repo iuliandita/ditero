@@ -45,6 +45,7 @@ export function ShoppingRow({
 			/>
 			<button
 				type="button"
+				data-task-id={task.id}
 				onClick={() => handlers.onOpenDetail(task)}
 				className={cn(
 					"min-w-0 flex-1 truncate text-start",

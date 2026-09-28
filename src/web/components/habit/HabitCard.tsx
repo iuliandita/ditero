@@ -85,6 +85,7 @@ export function HabitCard({
 				<button
 					type="button"
 					data-kbd-nav
+					data-task-id={task.id}
 					onClick={() => onOpenDetail(task)}
 					className="min-w-0 flex-1 text-start"
 				>
