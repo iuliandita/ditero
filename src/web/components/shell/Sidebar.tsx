@@ -36,6 +36,7 @@ import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
 import type { Section } from "./BottomNav.tsx";
 import type { ListGroup } from "./grouping.ts";
 import { ListProgress } from "./ListProgress.tsx";
+import { SyncIndicator } from "./SyncIndicator.tsx";
 import { ThemeMenu } from "./ThemeMenu.tsx";
 import { WorkspaceSwitcherMenu } from "./WorkspaceSwitcher.tsx";
 
@@ -583,6 +584,7 @@ export function Sidebar({
 					<Settings className="size-4" />
 					{!collapsed && m.nav_settings()}
 				</Button>
+				<SyncIndicator placement="sidebar" />
 				<ThemeMenu collapsed={collapsed} />
 				<Button
 					variant="ghost"

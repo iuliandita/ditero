@@ -1442,6 +1442,32 @@
 	"auth_error_invalid_origin": "Le serveur ne fait pas confiance à cette adresse. Demande à l'opérateur de l'ajouter aux origines de confiance de l'instance.",
 	"mutation_failed": "Un problème est survenu.",
 	"mutation_offline_not_saved": "Tu es hors ligne, cette modification n'a pas été enregistrée. Reconnecte-toi et réessaie.",
+	"sync_synced_title": "Synchronisé",
+	"sync_synced_detail": "Toutes tes modifications sont enregistrées sur le serveur.",
+	"sync_syncing_title": "Synchronisation",
+	"sync_syncing_detail": "Tes modifications sont enregistrées sur cet appareil et partent vers le serveur.",
+	"sync_offline_title": "Hors ligne",
+	"sync_offline_detail": "Impossible de joindre le serveur. Tes modifications sont enregistrées sur cet appareil et seront synchronisées au retour de la connexion.",
+	"sync_stopped_title": "Synchronisation arrêtée",
+	"sync_stopped_detail": "Impossible de joindre le serveur, et les nouvelles modifications ne peuvent pas être enregistrées pour l'instant. Recharge la page pour réessayer.",
+	"sync_rejected_title": "Une modification n'a pas été enregistrée",
+	"sync_rejected_detail": "Le serveur a refusé une modification, elle a donc été annulée. Vérifie l'élément et réessaie.",
+	"sync_rejected_dismiss": "Fermer",
+	"sync_pending_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} modification en attente de synchronisation",
+				"countPlural=many": "{countNum} modifications en attente de synchronisation",
+				"countPlural=other": "{countNum} modifications en attente de synchronisation"
+			}
+		}
+	],
 	"mutator_error_denied": "Tu n'as pas la permission de faire cela.",
 	"mutator_error_label_name_taken": "Une étiquette portant ce nom existe déjà.",
 	"modal_close_label": "Fermer",
