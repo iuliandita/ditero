@@ -390,6 +390,68 @@ test("dashboard: a priority board panel sections by priority and hides completed
 	).toBeVisible();
 });
 
+async function viewGroupBy(name: string): Promise<string | null> {
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		const { rows } = await pool.query<{ g: string }>(
+			`select display->>'groupBy' as g from view where name = $1`,
+			[name],
+		);
+		return rows[0]?.g ?? null;
+	} finally {
+		await pool.end();
+	}
+}
+
+test("view form: editing a board saved ungrouped keeps its stored grouping", async ({
+	page,
+}) => {
+	const email = uniqueEmail("vc5");
+	await signUp(page, email);
+	await waitWorkspaceReady(page);
+	const name = `Old board ${Date.now()}`;
+	await createBoardView(page, name);
+	// Polled: the view renders optimistically before its row reaches the server.
+	await expect
+		.poll(() => viewGroupBy(name), { timeout: 15000 })
+		.toBe("priority");
+
+	// A board saved before boards always grouped.
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await pool.query(
+			`update view set display = jsonb_set(display, '{groupBy}', '"none"')
+			 where name = $1`,
+			[name],
+		);
+	} finally {
+		await pool.end();
+	}
+	await page.reload();
+	await waitWorkspaceReady(page);
+	await page
+		.getByRole("navigation", { name: "Lists" })
+		.getByRole("button", { name, exact: true })
+		.click();
+	await expect(page.getByTestId("board-column")).toHaveCount(4, {
+		timeout: 15000,
+	});
+
+	// The form shows what renders, but an unrelated edit writes back the stored
+	// value rather than quietly persisting the fallback.
+	await page.getByTestId("view-actions").click();
+	await page.getByTestId("view-edit").click();
+	await expect(page.getByLabel("Group by", { exact: true })).toHaveText(
+		"Priority",
+	);
+	await page.getByTestId("view-name").fill(`${name} renamed`);
+	await page.getByTestId("view-save").click();
+	await expect(page.getByTestId("view-name")).toBeHidden({ timeout: 15000 });
+	await expect
+		.poll(() => viewGroupBy(`${name} renamed`), { timeout: 15000 })
+		.toBe("none");
+});
+
 test("mobile: the bottom nav is a solid bar", async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await signUp(page, uniqueEmail("vc4"));

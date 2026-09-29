@@ -7,6 +7,7 @@ import { m } from "../../src/paraglide/messages.js";
 import {
 	goToSettings,
 	leaveSettings,
+	openDetails,
 	openMoreOptions,
 	signUp,
 	uniqueEmail,
@@ -48,10 +49,7 @@ async function createListAndTask(
 	await expect(page.getByTestId("new-task")).toBeVisible({ timeout: 15_000 });
 	await page.getByTestId("new-task").fill(taskName);
 	await page.getByTestId("new-task-submit").click();
-	await page
-		.getByTestId("list")
-		.getByRole("button", { name: taskName, exact: true })
-		.click();
+	await openDetails(page, taskName);
 	const detail = page.getByRole("dialog", { name: m.task_detail_title() });
 	await expect(detail).toBeVisible();
 	// Files live behind the detail's "More options" disclosure.
@@ -234,10 +232,7 @@ async function openTask(page: Page, listName: string, taskName: string) {
 		.getByRole("button", { name: listName, exact: true })
 		.first()
 		.click();
-	await page
-		.getByTestId("list")
-		.getByRole("button", { name: taskName, exact: true })
-		.click();
+	await openDetails(page, taskName);
 	await openMoreOptions(
 		page.getByRole("dialog", { name: m.task_detail_title() }),
 	);

@@ -1,10 +1,17 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { CalendarClock, Check, ChevronRight, Flag } from "lucide-react";
+import {
+	CalendarClock,
+	Check,
+	ChevronRight,
+	Flag,
+	ListChecks,
+} from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import {
 	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
 	type PointerEvent as ReactPointerEvent,
+	useId,
 	useMemo,
 	useRef,
 	useState,
@@ -25,6 +32,7 @@ import {
 	priorityLabel,
 	priorityMeta,
 } from "@/lib/task-display";
+import { TOUCH_KEYBOARD_ONLY } from "@/lib/touch";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { randomId } from "../../../domain/random-id.ts";
@@ -181,20 +189,64 @@ function DueChip({ task }: { task: Task }) {
 	);
 }
 
+// Fill density carries the level without hue: solid high, tinted medium, open
+// low. The ring and the flag carry the priority color on top of that.
+const FLAG_FILL: Record<number, string> = {
+	3: "fill-current",
+	2: "fill-current/30",
+	1: "fill-none",
+};
+
 function PriorityFlag({
+	id,
 	priority,
 	className,
 }: {
+	id: string;
 	priority: number | null | undefined;
 	className?: string;
 }) {
 	const meta = priorityMeta(priority);
 	if (!meta) return null;
+	const label = priorityLabel(priority);
 	return (
-		<Flag
-			aria-label={m.task_priority_aria({ priority: priorityLabel(priority) })}
-			className={cn("size-3.5 shrink-0 fill-current", meta.color, className)}
-		/>
+		<span
+			id={id}
+			role="img"
+			aria-label={m.task_priority_aria({ priority: label })}
+			data-testid="task-priority"
+			data-priority={meta.value}
+			className={cn("inline-flex shrink-0 items-center gap-1", className)}
+		>
+			{/* The word appears where a pointer can hover or the keyboard is in
+			    the row; touch keeps the flag alone, per the one-cue row. */}
+			<span
+				aria-hidden
+				data-testid="task-priority-text"
+				className="hidden text-xs text-muted-foreground group-hover:inline group-has-[:focus-visible]:inline"
+			>
+				{label}
+			</span>
+			<Flag
+				aria-hidden
+				className={cn("size-3.5", meta.color, FLAG_FILL[meta.value])}
+			/>
+		</span>
+	);
+}
+
+function SubtaskCount({ done, total }: { done: number; total: number }) {
+	return (
+		<span
+			data-testid="subtask-count"
+			className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums"
+		>
+			<ListChecks aria-hidden className="size-3" />
+			<span aria-hidden>{m.task_subtask_progress({ done, total })}</span>
+			<span className="sr-only">
+				{m.task_subtask_progress_aria({ done, total })}
+			</span>
+		</span>
 	);
 }
 
@@ -319,6 +371,26 @@ export function TaskRow({
 	const actionsLabel = m.row_actions_for({ name: task.title });
 	const canDelete = actions.some((a) => a.id === "delete" && !a.hidden);
 	const { rowProps, menu } = useRowContextMenu(actions, actionsLabel);
+	const ids = useId();
+	const badgeId = `${ids}-badge`;
+	const metaId = `${ids}-meta`;
+	const progressId = `${ids}-progress`;
+	const priorityId = `${ids}-priority`;
+	const showBadge =
+		activationStatus === "pending" || activationStatus === "blocked";
+	const showProgress = kind === "project" && total > 0;
+	const hasPriority = !bare && priorityMeta(task.priority) != null;
+	// The checkbox carries the title and the done state; the open button would
+	// only repeat it, so it names its action and points at the row's details.
+	const describedBy =
+		[
+			showBadge && badgeId,
+			!bare && metaId,
+			showProgress && progressId,
+			hasPriority && priorityId,
+		]
+			.filter(Boolean)
+			.join(" ") || undefined;
 
 	return (
 		<div>
@@ -346,9 +418,8 @@ export function TaskRow({
 				    is what RowActions' md:group-hover reveal keys off. */}
 				<div
 					className={cn(
-						"group flex min-h-12 gap-2 rounded-md px-1 py-1",
+						"group flex min-h-12 gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60",
 						card ? "items-start" : "items-center",
-						" transition-colors duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50",
 					)}
 					data-kbd-row
 					{...rowProps}
@@ -379,6 +450,8 @@ export function TaskRow({
 						type="button"
 						data-kbd-nav
 						data-task-id={task.id}
+						aria-label={m.task_open_details()}
+						aria-describedby={describedBy}
 						onClick={() => handlers.onOpenDetail(task)}
 						title={card ? task.title : undefined}
 						className={cn(
@@ -397,16 +470,22 @@ export function TaskRow({
 								{task.title}
 							</span>
 						</span>
-						{(activationStatus === "pending" ||
-							activationStatus === "blocked") && (
-							<Badge variant="outline" className="mt-1 text-xs text-warning">
+						{showBadge && (
+							<Badge
+								id={badgeId}
+								variant="outline"
+								className="mt-1 text-xs text-warning"
+							>
 								{activationStatus === "pending"
 									? m.activation_badge_pending()
 									: m.activation_badge_blocked()}
 							</Badge>
 						)}
 						{!bare && (
-							<div className="mt-0.5 flex flex-wrap items-center gap-2">
+							<div
+								id={metaId}
+								className="mt-0.5 flex flex-wrap items-center gap-2"
+							>
 								<AssigneeChips taskId={task.id} />
 								<DueChip task={task} />
 								{list && (
@@ -430,23 +509,19 @@ export function TaskRow({
 									</Badge>
 								))}
 								{total > 0 && kind !== "project" && (
-									<span className="text-xs text-muted-foreground">
-										{m.task_subtask_progress({ done: doneCount, total })}
-									</span>
+									<SubtaskCount done={doneCount} total={total} />
 								)}
 							</div>
 						)}
-						{kind === "project" && total > 0 && (
-							<div className="mt-1 flex items-center gap-2">
+						{showProgress && (
+							<div id={progressId} className="mt-1 flex items-center gap-2">
 								<div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
 									<div
 										className="h-full rounded-full bg-kind-project"
 										style={{ width: `${Math.round(progress * 100)}%` }}
 									/>
 								</div>
-								<span className="text-xs text-muted-foreground">
-									{m.task_subtask_progress({ done: doneCount, total })}
-								</span>
+								<SubtaskCount done={doneCount} total={total} />
 							</div>
 						)}
 					</button>
@@ -455,6 +530,7 @@ export function TaskRow({
 					{!bare && <ReminderChip task={task} />}
 					{!bare && (
 						<PriorityFlag
+							id={priorityId}
 							priority={task.priority}
 							className={card ? "mt-2.5" : undefined}
 						/>
@@ -467,7 +543,10 @@ export function TaskRow({
 							}
 							aria-expanded={expanded}
 							onClick={() => setExpanded((e) => !e)}
-							className="mt-0.5 text-muted-foreground"
+							className={cn(
+								"mt-0.5 text-muted-foreground",
+								TOUCH_KEYBOARD_ONLY,
+							)}
 						>
 							<ChevronRight
 								className={cn(
@@ -477,7 +556,7 @@ export function TaskRow({
 							/>
 						</button>
 					)}
-					<RowActions actions={actions} label={actionsLabel} />
+					<RowActions actions={actions} label={actionsLabel} hideOnTouch />
 					{/* The keyboard's delete target. It cannot be the menu item: Radix
 					    portals the menu content out of this row, and the item exists
 					    only while the menu is open, so actOnFocused could never find
@@ -519,6 +598,7 @@ export function TaskRow({
 							/>
 							<button
 								type="button"
+								aria-label={m.task_open_details()}
 								onClick={() => handlers.onOpenDetail(s)}
 								className={cn(
 									"min-w-0 flex-1 truncate text-start text-sm",

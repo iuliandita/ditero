@@ -69,6 +69,9 @@ function SortableCard(props: CardOptions & { entry: ViewEntry }) {
 				label={m.board_move_card()}
 				testId="board-card-handle"
 				revealHandle
+				// Dragging is the board's own gesture, so touch gets a full 44px grip;
+				// a long press on the card body still opens the row menu.
+				touch="reorder"
 				// A slim grip keeps the card's start edge close to its checkbox.
 				className={cn(CARD_SURFACE, "gap-0")}
 				handleClassName="mt-2 w-4"

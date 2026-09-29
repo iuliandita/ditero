@@ -136,11 +136,13 @@ export function ViewManager({
 	const [filter, setFilter] = useState<FilterGroup>(
 		initial?.filter ?? EMPTY_FILTER,
 	);
-	// A board always groups (#355); the form shows what the board renders.
-	const [display, setDisplay] = useState<ViewDisplay>(() => {
-		const d = initial?.display ?? DEFAULT_DISPLAY;
-		return { ...d, groupBy: effectiveGroupBy(d.layout, d.groupBy) };
-	});
+	// The stored value, untouched until the user picks a layout or grouping, so
+	// saving an unrelated edit never rewrites it. The select shows what the
+	// view renders: a board always groups (#355).
+	const [display, setDisplay] = useState<ViewDisplay>(
+		initial?.display ?? DEFAULT_DISPLAY,
+	);
+	const shownGroupBy = effectiveGroupBy(display.layout, display.groupBy);
 	const [scope, setScope] = useState<"personal" | "workspace">(
 		initial?.scope ?? "personal",
 	);
@@ -248,7 +250,7 @@ export function ViewManager({
 				</Field>
 				<Field label={m.view_field_group_by()} htmlFor={`${baseId}-groupby`}>
 					<Select
-						value={display.groupBy}
+						value={shownGroupBy}
 						onValueChange={(v) => setGroupBy(v as GroupBy)}
 					>
 						<SelectTrigger id={`${baseId}-groupby`} size="sm">

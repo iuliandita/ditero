@@ -19,6 +19,7 @@ import {
 import { addCopyFor } from "@/lib/kind-copy";
 import { ListIcon } from "@/lib/list-icon";
 import { runMutation } from "@/lib/run-mutation";
+import { useIsDesktop, useMediaQuery } from "@/lib/use-media-query";
 import type { ListKind } from "../../domain/icon-map.ts";
 import { randomId } from "../../domain/random-id.ts";
 import { WRITE_ROLES } from "../../domain/role.ts";
@@ -92,6 +93,9 @@ export function ListView({
 	const [error, setError] = useState<string | null>(null);
 	const [iconOpen, setIconOpen] = useState(false);
 	const [groupByAssignee, setGroupByAssignee] = useState(false);
+	const [reordering, setReordering] = useState(false);
+	const isDesktop = useIsDesktop();
+	const coarse = useMediaQuery("(pointer: coarse)");
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 	const [scheduleTaskId, setScheduleTaskId] = useState<string | null>(null);
 	const titleInput = useRef<HTMLInputElement>(null);
@@ -270,6 +274,15 @@ export function ListView({
 			member.userId === zero.userID,
 	)?.role;
 	const canAttach = callerRole != null && WRITE_ROLES.has(callerRole);
+	// Touch drags from a grip that only exists in this mode; a pointer keeps the
+	// hover grip and the keyboard reorders from a focused grip either way.
+	const canReorder =
+		coarse &&
+		!groupByAssignee &&
+		kind !== "shopping" &&
+		kind !== "habits" &&
+		parents.length > 1;
+	const reorderActive = reordering && canReorder;
 	const rowActions: RowAction[] = [
 		...listActions(openList),
 		{
@@ -338,6 +351,32 @@ export function ListView({
 		);
 	}
 
+	// One field, placed per shell: above the rows on desktop, after them on a
+	// phone, where the thumb already is and the floating add button sits.
+	const addForm = (
+		<div className={isDesktop ? "mb-5 flex gap-2" : "mt-2 flex gap-2"}>
+			<TitleSuggestInput
+				inputRef={titleInput}
+				data-testid="new-task"
+				placeholder={addCopy.placeholder()}
+				value={title}
+				onChange={setTitle}
+				onSubmit={() => void createTask()}
+				candidates={titleCandidates}
+				listId={listId}
+			/>
+			<Button
+				data-testid="new-task-submit"
+				type="button"
+				className="min-h-11 md:min-h-0"
+				onClick={() => void createTask()}
+			>
+				{addCopy.action()}
+			</Button>
+		</div>
+	);
+	const mobileAdd = isDesktop ? undefined : addForm;
+
 	return (
 		<div data-testid="list" className="max-w-3xl">
 			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
@@ -404,6 +443,15 @@ export function ListView({
 						>
 							{m.list_group_by_assignee()}
 						</DropdownMenuCheckboxItem>
+						{canReorder && (
+							<DropdownMenuCheckboxItem
+								data-testid="reorder-mode"
+								checked={reordering}
+								onCheckedChange={setReordering}
+							>
+								{m.list_reorder_mode()}
+							</DropdownMenuCheckboxItem>
+						)}
 						<DropdownMenuSeparator />
 						<DropdownMenuSub>
 							<DropdownMenuSubTrigger data-testid="add-from-template">
@@ -461,25 +509,23 @@ export function ListView({
 				}
 			/>
 
-			<div className="mb-5 hidden gap-2 md:flex">
-				<TitleSuggestInput
-					inputRef={titleInput}
-					data-testid="new-task"
-					placeholder={addCopy.placeholder()}
-					value={title}
-					onChange={setTitle}
-					onSubmit={() => void createTask()}
-					candidates={titleCandidates}
-					listId={listId}
-				/>
-				<Button
-					data-testid="new-task-submit"
-					type="button"
-					onClick={() => void createTask()}
+			{isDesktop && addForm}
+
+			{reorderActive && (
+				<div
+					data-testid="reorder-bar"
+					className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-muted ps-3 text-sm text-muted-foreground"
 				>
-					{addCopy.action()}
-				</Button>
-			</div>
+					<span>{m.list_reorder_hint()}</span>
+					<Button
+						variant="ghost"
+						className="min-h-11"
+						onClick={() => setReordering(false)}
+					>
+						{m.list_reorder_done()}
+					</Button>
+				</div>
+			)}
 
 			{error && (
 				<p role="alert" className="mb-2 text-sm text-destructive">
@@ -526,6 +572,7 @@ export function ListView({
 							/>
 						</section>
 					))}
+					{mobileAdd}
 				</div>
 			) : (
 				<TaskList
@@ -534,8 +581,11 @@ export function ListView({
 					subtasksByParent={subtasksByParent}
 					labelsByTask={labelsByTask}
 					handlers={handlers}
+					reordering={reorderActive}
+					footer={mobileAdd}
 				/>
 			)}
+			{!tasksLoading && parents.length === 0 && mobileAdd}
 
 			<IconPicker
 				open={iconOpen}

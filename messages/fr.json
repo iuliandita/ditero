@@ -291,6 +291,9 @@
 	],
 	"list_change_icon": "Changer l'icône de la liste",
 	"list_display_options": "Options d'affichage de la liste",
+	"list_reorder_mode": "Réorganiser",
+	"list_reorder_hint": "Fais glisser les poignées pour réorganiser.",
+	"list_reorder_done": "Terminé",
 	"list_completed_heading": "Éléments terminés",
 	"list_completed_sink": "Éléments terminés en bas",
 	"list_completed_keep": "Garder en place",
@@ -409,6 +412,24 @@
 	"shopping_category_other": "Autre",
 	"task_reorder_handle": "Réorganiser la tâche",
 	"task_priority_aria": "Priorité : {priority}",
+	"task_open_details": "Ouvrir les détails",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} sur {totalNum} sous-tâche terminée",
+				"totalPlural=many": "{doneNum} sur {totalNum} sous-tâches terminées",
+				"totalPlural=other": "{doneNum} sur {totalNum} sous-tâches terminées"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
