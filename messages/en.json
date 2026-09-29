@@ -288,6 +288,9 @@
 	],
 	"list_change_icon": "Change list icon",
 	"list_display_options": "List display options",
+	"list_reorder_mode": "Reorder",
+	"list_reorder_hint": "Drag the handles to reorder.",
+	"list_reorder_done": "Done",
 	"list_completed_heading": "Completed items",
 	"list_completed_sink": "Sink completed items",
 	"list_completed_keep": "Keep in place",
@@ -406,6 +409,23 @@
 	"shopping_category_other": "Other",
 	"task_reorder_handle": "Reorder task",
 	"task_priority_aria": "Priority: {priority}",
+	"task_open_details": "Open details",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} of {totalNum} subtask done",
+				"totalPlural=other": "{doneNum} of {totalNum} subtasks done"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [

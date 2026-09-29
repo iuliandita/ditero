@@ -291,6 +291,9 @@
 	],
 	"list_change_icon": "Cambiar el icono de la lista",
 	"list_display_options": "Opciones de visualización de la lista",
+	"list_reorder_mode": "Reordenar",
+	"list_reorder_hint": "Arrastra las asas para reordenar.",
+	"list_reorder_done": "Listo",
 	"list_completed_heading": "Elementos completados",
 	"list_completed_sink": "Bajar los elementos completados",
 	"list_completed_keep": "Dejarlas en su sitio",
@@ -409,6 +412,24 @@
 	"shopping_category_other": "Otros",
 	"task_reorder_handle": "Reordenar la tarea",
 	"task_priority_aria": "Prioridad: {priority}",
+	"task_open_details": "Abrir detalles",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} de {totalNum} subtarea hecha",
+				"totalPlural=many": "{doneNum} de {totalNum} subtareas hechas",
+				"totalPlural=other": "{doneNum} de {totalNum} subtareas hechas"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [

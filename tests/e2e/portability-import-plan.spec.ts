@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
 	goToSettings,
 	leaveSettings,
+	openDetails,
 	sidebarLists,
 	signUp,
 	uniqueEmail,
@@ -173,10 +174,7 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 	await expect(
 		page.getByTestId("list").getByText("A task to import", { exact: true }),
 	).toBeVisible();
-	await page
-		.getByTestId("list")
-		.getByRole("button", { name: "A task to import", exact: true })
-		.click();
+	await openDetails(page, "A task to import");
 	await page.getByTestId("assignee-open").click();
 	const self = page
 		.getByTestId("assignee-picker")
