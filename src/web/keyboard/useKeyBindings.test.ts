@@ -11,6 +11,7 @@ function evt(init: {
 	key: string;
 	metaKey?: boolean;
 	ctrlKey?: boolean;
+	shiftKey?: boolean;
 	target?: { tagName?: string; isContentEditable?: boolean };
 }) {
 	return { preventDefault: () => {}, ...init };
@@ -77,5 +78,43 @@ describe("useKeyBindings engine", () => {
 		const run = vi.fn();
 		createKeyHandler(keymap, run).onKeyDown(evt({ key: "z" }));
 		expect(run).not.toHaveBeenCalled();
+	});
+
+	test("Shift+ArrowDown extends the selection; a bare ArrowDown does not", () => {
+		const run = vi.fn();
+		const h = createKeyHandler(keymap, run);
+		h.onKeyDown(evt({ key: "ArrowDown" }));
+		h.onKeyDown(evt({ key: "ArrowDown", shiftKey: true }));
+		expect(run).toHaveBeenCalledExactlyOnceWith("selection.extendDown");
+	});
+
+	test("a shifted printable key still resolves as a single key", () => {
+		const run = vi.fn();
+		createKeyHandler(keymap, run).onKeyDown(evt({ key: "?", shiftKey: true }));
+		expect(run).toHaveBeenCalledExactlyOnceWith("help.cheatSheet");
+	});
+
+	test("Ctrl+A stays with a text field; only the palette chord fires there", () => {
+		const run = vi.fn();
+		const h = createKeyHandler(keymap, run);
+		h.onKeyDown(evt({ key: "a", ctrlKey: true, target: INPUT }));
+		expect(run).not.toHaveBeenCalled();
+		h.onKeyDown(evt({ key: "a", ctrlKey: true }));
+		expect(run).toHaveBeenCalledExactlyOnceWith("selection.all");
+	});
+
+	test("a command that cannot run leaves the key to the browser", () => {
+		const run = vi.fn();
+		const preventDefault = vi.fn();
+		const h = createKeyHandler(keymap, run, {
+			canRun: (id) => !id.startsWith("selection."),
+		});
+		h.onKeyDown({ key: "a", metaKey: true, preventDefault });
+		h.onKeyDown({ key: "Escape", preventDefault });
+		h.onKeyDown({ key: "s", preventDefault });
+		expect(run).not.toHaveBeenCalled();
+		expect(preventDefault).not.toHaveBeenCalled();
+		h.onKeyDown({ key: "c", preventDefault });
+		expect(run).toHaveBeenCalledExactlyOnceWith("task.create");
 	});
 });

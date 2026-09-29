@@ -11,6 +11,7 @@ const CATEGORY_LABELS: Record<string, () => string> = {
 	view: m.cheatsheet_category_view,
 	nav: m.cheatsheet_category_nav,
 	help: m.cheatsheet_category_help,
+	selection: m.cheatsheet_category_selection,
 };
 
 export function categoryLabel(category: string): string {

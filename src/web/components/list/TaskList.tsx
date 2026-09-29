@@ -12,7 +12,7 @@ import { useSnackbar } from "../ui/snackbar.tsx";
 import { CompletedSection } from "./CompletedSection.tsx";
 import { type ShoppingHandlers, ShoppingRow } from "./ShoppingRow.tsx";
 import { SortableTaskList } from "./SortableTaskList.tsx";
-import { type RowHandlers, TaskRow } from "./TaskRow.tsx";
+import { type RowHandlers, type RowSelection, TaskRow } from "./TaskRow.tsx";
 
 const NOTHING_SETTLING: ReadonlySet<string> = new Set();
 
@@ -28,6 +28,7 @@ export function TaskList({
 	sortable = true,
 	reordering = false,
 	footer,
+	selectionFor,
 }: {
 	list: List;
 	tasks: Task[];
@@ -44,6 +45,8 @@ export function TaskList({
 	// After the open rows, before the completed group: the mobile inline add
 	// belongs with the rows it extends.
 	footer?: ReactNode;
+	// Bulk selection per row; absent where the list offers none.
+	selectionFor?: (task: Task) => RowSelection;
 }) {
 	const reduce = useReducedMotion();
 	const kind = (list.kind ?? "tasks") as ListKind;
@@ -91,6 +94,7 @@ export function TaskList({
 				subtasks={subtasksByParent.get(task.id) ?? []}
 				labels={labelsByTask.get(task.id) ?? []}
 				handlers={handlers}
+				selection={selectionFor?.(task)}
 			/>
 		);
 	};

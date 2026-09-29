@@ -149,9 +149,27 @@
 	"palette_results_label": "Résultats",
 	"palette_no_results": "Aucun résultat",
 	"palette_group_commands": "Commandes",
-	"palette_group_navigate": "Naviguer",
-	"palette_group_search": "Recherche",
 	"palette_dashboard_item": "Dashboard : {name}",
+	"palette_group_recent": "Récents",
+	"palette_group_lists": "Listes",
+	"palette_group_views": "Vues",
+	"palette_group_tasks": "Tâches",
+	"cheatsheet_category_selection": "Sélection",
+	"command_selection_toggle": "Sélectionner ou désélectionner la tâche",
+	"command_selection_extend_down": "Étendre la sélection vers le bas",
+	"command_selection_extend_up": "Étendre la sélection vers le haut",
+	"command_selection_all": "Sélectionner toutes les tâches",
+	"command_selection_clear": "Effacer la sélection",
+	"action_select": "Sélectionner",
+	"action_deselect": "Désélectionner",
+	"task_select_aria": "Sélectionner {title}",
+	"selection_bar_label": "Tâches sélectionnées",
+	"selection_complete": "Terminer",
+	"selection_move": "Déplacer",
+	"selection_due": "Échéance",
+	"selection_priority": "Priorité",
+	"selection_delete": "Supprimer",
+	"selection_clear": "Effacer la sélection",
 	"list_untitled_fallback": "Liste",
 	"palette_untitled_task": "Tâche",
 	"cheatsheet_title": "Raccourcis clavier",
@@ -1393,6 +1411,172 @@
 	"snackbar_task_moved": "Déplacée vers {list} : {title}",
 	"snackbar_task_complete_failed": "Impossible de terminer : {title}",
 	"snackbar_task_move_failed": "Impossible de déplacer : {title}",
+	"selection_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tâche sélectionnée",
+				"countPlural=many": "{countNum} tâches sélectionnées",
+				"countPlural=other": "{countNum} tâches sélectionnées"
+			}
+		}
+	],
+	"snackbar_bulk_completed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tâche terminée.",
+				"countPlural=many": "{countNum} tâches terminées.",
+				"countPlural=other": "{countNum} tâches terminées."
+			}
+		}
+	],
+	"snackbar_bulk_undo_skips_recurring": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Annuler ignore {countNum} tâche récurrente.",
+				"countPlural=many": "Annuler ignore {countNum} tâches récurrentes.",
+				"countPlural=other": "Annuler ignore {countNum} tâches récurrentes."
+			}
+		}
+	],
+	"snackbar_bulk_recurring_advanced": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tâche récurrente passe à sa prochaine date.",
+				"countPlural=many": "{countNum} tâches récurrentes passent à leur prochaine date.",
+				"countPlural=other": "{countNum} tâches récurrentes passent à leur prochaine date."
+			}
+		}
+	],
+	"snackbar_bulk_complete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Impossible de terminer {countNum} tâche",
+				"countPlural=many": "Impossible de terminer {countNum} tâches",
+				"countPlural=other": "Impossible de terminer {countNum} tâches"
+			}
+		}
+	],
+	"snackbar_bulk_moved": [
+		{
+			"declarations": [
+				"input count",
+				"input list",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tâche déplacée vers {list}",
+				"countPlural=many": "{countNum} tâches déplacées vers {list}",
+				"countPlural=other": "{countNum} tâches déplacées vers {list}"
+			}
+		}
+	],
+	"snackbar_bulk_move_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Impossible de déplacer {countNum} tâche",
+				"countPlural=many": "Impossible de déplacer {countNum} tâches",
+				"countPlural=other": "Impossible de déplacer {countNum} tâches"
+			}
+		}
+	],
+	"snackbar_bulk_update_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Impossible de modifier {countNum} tâche",
+				"countPlural=many": "Impossible de modifier {countNum} tâches",
+				"countPlural=other": "Impossible de modifier {countNum} tâches"
+			}
+		}
+	],
+	"snackbar_bulk_delete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Impossible de supprimer {countNum} tâche",
+				"countPlural=many": "Impossible de supprimer {countNum} tâches",
+				"countPlural=other": "Impossible de supprimer {countNum} tâches"
+			}
+		}
+	],
+	"bulk_delete_title": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Supprimer {countNum} tâche ?",
+				"countPlural=many": "Supprimer {countNum} tâches ?",
+				"countPlural=other": "Supprimer {countNum} tâches ?"
+			}
+		}
+	],
+	"bulk_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Cela supprime {countNum} tâche et ses sous-tâches. Cette action est irréversible.",
+				"countPlural=many": "Cela supprime {countNum} tâches et leurs sous-tâches. Cette action est irréversible.",
+				"countPlural=other": "Cela supprime {countNum} tâches et leurs sous-tâches. Cette action est irréversible."
+			}
+		}
+	],
 	"action_delete": "Supprimer",
 	"action_remove": "Retirer",
 	"confirm_cancel": "Annuler",

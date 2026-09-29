@@ -53,6 +53,16 @@ export type RowHandlers = {
 	onSchedule?: (task: Task) => void;
 };
 
+// Bulk selection for one row. `active` means some row in the list is selected;
+// on touch a tap then selects instead of opening, and the swipes step aside.
+export type RowSelection = {
+	selected: boolean;
+	active: boolean;
+	tapSelects: boolean;
+	toggle: () => void;
+	extend: () => void;
+};
+
 const SWIPE_THRESHOLD = 72;
 
 // Touch swipe on a task row (design 2.6): right = toggle done (green; a done
@@ -230,6 +240,53 @@ function PriorityFlag({
 	);
 }
 
+// The row's select control. aria-pressed carries the state; the square mark
+// echoes a checked item box so it reads as "picked", distinct from the round
+// done checkbox at the row's start. Revealed on hover or focus until a
+// selection exists, then shown on every row; on touch it joins the layout only
+// once long-press "Select" has started a selection.
+function SelectToggle({
+	title,
+	selection,
+	selecting,
+}: {
+	title: string;
+	selection: RowSelection;
+	selecting: boolean;
+}) {
+	return (
+		<button
+			type="button"
+			aria-pressed={selection.selected}
+			aria-label={m.task_select_aria({ title })}
+			data-testid="task-select"
+			onClick={(event) => {
+				if (event.shiftKey) selection.extend();
+				else selection.toggle();
+			}}
+			className={cn(
+				"flex size-11 shrink-0 items-center justify-center rounded-md md:size-7",
+				"focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+				!selecting &&
+					"md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100",
+				!selecting && TOUCH_KEYBOARD_ONLY,
+			)}
+		>
+			<span
+				aria-hidden
+				className={cn(
+					"flex size-4 items-center justify-center rounded-[4px] border-[1.5px] transition-colors duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none",
+					selection.selected
+						? "border-primary bg-primary text-primary-foreground"
+						: "border-control-border",
+				)}
+			>
+				{selection.selected && <Check className="size-3" strokeWidth={3} />}
+			</span>
+		</button>
+	);
+}
+
 function SubtaskCount({ done, total }: { done: number; total: number }) {
 	return (
 		<span
@@ -251,12 +308,14 @@ export function TaskRow({
 	subtasks,
 	labels,
 	handlers,
+	selection,
 }: {
 	task: Task;
 	kind: ListKind;
 	subtasks: Task[];
 	labels: Label[];
 	handlers: RowHandlers;
+	selection?: RowSelection;
 }) {
 	const [expanded, setExpanded] = useState(false);
 	const [editError, setEditError] = useState<string | null>(null);
@@ -349,6 +408,9 @@ export function TaskRow({
 			setPriority: (_t, priority) => update({ priority }),
 			saveAsTemplate,
 			remove: () => void removeTask(),
+			select: selection
+				? { selected: selection.selected, toggle: selection.toggle }
+				: undefined,
 		},
 	});
 	const actionsLabel = m.row_actions_for({ name: task.title });
@@ -375,16 +437,31 @@ export function TaskRow({
 			.filter(Boolean)
 			.join(" ") || undefined;
 
+	const selecting = selection?.active ?? false;
+	// Cmd/Ctrl-click toggles and Shift-click extends, as in a file list; a plain
+	// click still opens, except on touch while a selection is being made.
+	function onOpenClick(event: ReactMouseEvent) {
+		if (selection && (event.metaKey || event.ctrlKey)) {
+			event.preventDefault();
+			selection.toggle();
+		} else if (selection && event.shiftKey) {
+			event.preventDefault();
+			selection.extend();
+		} else if (selection?.tapSelects) {
+			selection.toggle();
+		} else handlers.onOpenDetail(task);
+	}
+
 	return (
 		<div>
 			<SwipeRow
 				onComplete={
-					canEdit
+					canEdit && !selecting
 						? () => handlers.onToggle(task.id, task.done ?? false)
 						: undefined
 				}
 				onSchedule={
-					canEdit && handlers.onSchedule
+					canEdit && handlers.onSchedule && !selecting
 						? () => handlers.onSchedule?.(task)
 						: undefined
 				}
@@ -393,8 +470,9 @@ export function TaskRow({
 				    button carries data-kbd-nav (roving focus + open target). `group`
 				    is what RowActions' md:group-hover reveal keys off. */}
 				<div
-					className="group flex min-h-12 items-center gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60"
+					className="group flex min-h-12 items-center gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted"
 					data-kbd-row
+					data-selected={selection?.selected || undefined}
 					{...rowProps}
 				>
 					<div className="flex size-11 shrink-0 items-center justify-center md:size-8">
@@ -420,7 +498,11 @@ export function TaskRow({
 						data-task-id={task.id}
 						aria-label={m.task_open_details()}
 						aria-describedby={describedBy}
-						onClick={() => handlers.onOpenDetail(task)}
+						onMouseDown={(event) => {
+							// Shift-click extends the selection, not the page's text selection.
+							if (selection && event.shiftKey) event.preventDefault();
+						}}
+						onClick={onOpenClick}
 						className="min-h-11 min-w-0 flex-1 content-center text-start"
 					>
 						<span
@@ -501,6 +583,13 @@ export function TaskRow({
 								)}
 							/>
 						</button>
+					)}
+					{selection && (
+						<SelectToggle
+							title={task.title}
+							selection={selection}
+							selecting={selecting}
+						/>
 					)}
 					<RowActions actions={actions} label={actionsLabel} hideOnTouch />
 					{/* The keyboard's delete target. It cannot be the menu item: Radix

@@ -11,7 +11,17 @@ import { COMMANDS } from "./commands.ts";
 // A lone prefix (e.g. "g") that isn't completed within this window is dropped.
 const SEQUENCE_TIMEOUT_MS = 800;
 
-type Opts = { activeContext?: CommandContext };
+type Opts = {
+	activeContext?: CommandContext;
+	// Consulted before a matched command claims its key. A command that cannot
+	// act right now (no selectable rows for select-all) leaves the key to the
+	// browser instead of swallowing it.
+	canRun?: (id: string) => boolean;
+};
+
+// Chords fire from text fields only for the palette opener; any other chord
+// there (select-all) belongs to the field.
+const CHORDS_IN_EDITABLE: ReadonlySet<string> = new Set(["palette.open"]);
 
 const CONTEXT = new Map<string, CommandContext>(
 	COMMANDS.map((c) => [c.id, c.context]),
@@ -22,6 +32,7 @@ type Lookups = {
 	prefixes: Set<string>; // first key of a 2-key sequence
 	sequences: Map<string, string>; // "first second" -> id
 	chords: Map<string, string>; // non-modifier key of a Meta/Ctrl chord -> id
+	shifted: Map<string, string>; // key of a ["Shift", key] binding -> id
 };
 
 function buildLookups(
@@ -32,6 +43,7 @@ function buildLookups(
 	const prefixes = new Set<string>();
 	const sequences = new Map<string, string>();
 	const chords = new Map<string, string>();
+	const shifted = new Map<string, string>();
 	for (const [id, bindings] of Object.entries(keymap)) {
 		const ctx = CONTEXT.get(id) ?? "global";
 		if (!contextsOverlap(ctx, active)) continue;
@@ -40,13 +52,15 @@ function buildLookups(
 				singles.set(b[0], id);
 			} else if (b.length === 2 && CHORD_MODIFIERS.has(b[0])) {
 				chords.set(b[1], id);
+			} else if (b.length === 2 && b[0] === "Shift") {
+				shifted.set(b[1], id);
 			} else if (b.length === 2) {
 				prefixes.add(b[0]);
 				sequences.set(`${b[0]} ${b[1]}`, id);
 			}
 		}
 	}
-	return { singles, prefixes, sequences, chords };
+	return { singles, prefixes, sequences, chords, shifted };
 }
 
 // Duck-typed so the matcher stays DOM-free (testable under the node vitest env):
@@ -66,6 +80,7 @@ type KeyEventLike = {
 	key: string;
 	metaKey?: boolean;
 	ctrlKey?: boolean;
+	shiftKey?: boolean;
 	target?: KeyTarget | EventTarget;
 	preventDefault: () => void;
 };
@@ -80,7 +95,11 @@ export function createKeyHandler(
 	opts?: Opts,
 ) {
 	const active = opts?.activeContext ?? "global";
-	const { singles, prefixes, sequences, chords } = buildLookups(keymap, active);
+	const { singles, prefixes, sequences, chords, shifted } = buildLookups(
+		keymap,
+		active,
+	);
+	const canRun = opts?.canRun ?? (() => true);
 
 	let pending: string | null = null;
 	let timer: ReturnType<typeof setTimeout> | null = null;
@@ -96,12 +115,12 @@ export function createKeyHandler(
 	function onKeyDown(e: KeyEventLike) {
 		const key = e.key;
 
-		// Meta/Ctrl chord (only palette.open in the registry) — matched BEFORE the
-		// editable-skip so it fires from inputs too. A held modifier never starts a
-		// single-key/sequence match.
+		// Meta/Ctrl chord, matched BEFORE the editable-skip so ⌘K fires from inputs
+		// too. A held modifier never starts a single-key/sequence match.
 		if (e.metaKey || e.ctrlKey) {
 			const id = chords.get(key);
-			if (id) {
+			const editable = isEditable(e.target as KeyTarget);
+			if (id && (!editable || CHORDS_IN_EDITABLE.has(id)) && canRun(id)) {
 				e.preventDefault();
 				run(id);
 			}
@@ -112,6 +131,18 @@ export function createKeyHandler(
 		// Everything below is a single key or g-sequence: inert inside text inputs.
 		if (isEditable(e.target as KeyTarget)) return;
 		if (MODIFIER_KEYS.has(key)) return;
+
+		// An explicit Shift binding (Shift+ArrowDown). Shifted printable keys like
+		// "?" arrive already shifted and fall through to the single-key lookup.
+		const shiftedId = e.shiftKey ? shifted.get(key) : undefined;
+		if (shiftedId) {
+			clearPending();
+			if (canRun(shiftedId)) {
+				e.preventDefault();
+				run(shiftedId);
+			}
+			return;
+		}
 
 		// Complete a pending sequence; the prefix is consumed either way.
 		if (pending) {
@@ -133,7 +164,7 @@ export function createKeyHandler(
 		}
 
 		const id = singles.get(key);
-		if (id) {
+		if (id && canRun(id)) {
 			e.preventDefault();
 			run(id);
 		}
@@ -152,11 +183,14 @@ export function useKeyBindings(
 ): void {
 	const runRef = useRef(run);
 	runRef.current = run;
+	const canRunRef = useRef(opts?.canRun);
+	canRunRef.current = opts?.canRun;
 	const activeContext = opts?.activeContext;
 
 	useEffect(() => {
 		const handler = createKeyHandler(keymap, (id) => runRef.current(id), {
 			activeContext,
+			canRun: (id) => canRunRef.current?.(id) ?? true,
 		});
 		window.addEventListener("keydown", handler.onKeyDown);
 		return () => {
