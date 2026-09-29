@@ -1476,7 +1476,6 @@
 	"app_loading": "Chargement…",
 	"tasks_loading": "Chargement des tâches…",
 	"list_empty": "Il n'y a encore rien ici.",
-	"list_empty_action": "Ajouter un élément",
 	"view_empty_welcome_title": "Bienvenue dans Ditero",
 	"view_empty_welcome_hint": "Les tâches vivent dans des listes. Crée-en une pour commencer.",
 	"view_empty_welcome_action": "Crée ta première liste",

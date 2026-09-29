@@ -1566,7 +1566,6 @@
 	"app_loading": "جارٍ التحميل…",
 	"tasks_loading": "جارٍ تحميل المهام…",
 	"list_empty": "لا يوجد شيء هنا بعد.",
-	"list_empty_action": "أضف عنصرًا",
 	"view_empty_welcome_title": "مرحبًا بك في Ditero",
 	"view_empty_welcome_hint": "المهام تعيش في قوائم. أنشئ قائمة لتبدأ.",
 	"view_empty_welcome_action": "أنشئ قائمتك الأولى",

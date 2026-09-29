@@ -1446,7 +1446,6 @@
 	"app_loading": "Wird geladen…",
 	"tasks_loading": "Aufgaben werden geladen…",
 	"list_empty": "Hier ist noch nichts.",
-	"list_empty_action": "Eintrag hinzufügen",
 	"view_empty_welcome_title": "Willkommen bei Ditero",
 	"view_empty_welcome_hint": "Aufgaben leben in Listen. Leg eine an, um loszulegen.",
 	"view_empty_welcome_action": "Erste Liste anlegen",

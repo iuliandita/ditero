@@ -18,6 +18,14 @@ export const FRESH_HINTS: Hints = {
 	shortcutsSeen: false,
 };
 
+// Before the session resolves there is no user to key on: show nothing rather
+// than flash a fresh hint from a shared bucket.
+export const NO_USER_HINTS: Hints = {
+	syntaxUses: SYNTAX_HINT_USES,
+	syntaxDismissed: true,
+	shortcutsSeen: true,
+};
+
 type KeyValue = Pick<Storage, "getItem" | "setItem">;
 
 export const hintsKey = (userId: string): string => `ditero.hints.${userId}`;
@@ -110,6 +118,7 @@ export function createHintStore(storage: () => KeyValue | null) {
 	const listeners = new Set<() => void>();
 	return {
 		get(userId: string): Hints {
+			if (!userId) return NO_USER_HINTS;
 			let h = cache.get(userId);
 			if (!h) {
 				h = readHints(userId, storage());
@@ -118,6 +127,7 @@ export function createHintStore(storage: () => KeyValue | null) {
 			return h;
 		},
 		update(userId: string, fn: (h: Hints) => Hints): void {
+			if (!userId) return;
 			const prev = this.get(userId);
 			const next = fn(prev);
 			if (next === prev) return;

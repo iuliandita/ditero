@@ -21,12 +21,13 @@ async function reopenList(page: Page, name: string) {
 	await expect(page.getByTestId("new-task")).toBeVisible();
 }
 
-async function firstBlankList(page: Page, name: string) {
+async function firstBlankList(page: Page, name: string, kind?: string) {
 	await expect(page.getByTestId("view-empty-first-use")).toBeVisible({
 		timeout: 15000,
 	});
 	await page.getByTestId("first-run-create-list").click();
 	await page.getByTestId("new-list").fill(name);
+	if (kind) await page.getByRole("button", { name: kind, exact: true }).click();
 	await page.getByTestId("new-list").press("Enter");
 	// Not a role query: on a phone quick add opens over the list at once, and a
 	// Radix modal aria-hides everything behind it.
@@ -49,6 +50,24 @@ test("first run lands in the blank list, focused, with the grammar and one examp
 		"Example: Call the plumber tomorrow p1 #home",
 	);
 	await expect(hint.locator("kbd")).toHaveText("c");
+	await expect(page.getByTestId("new-task-submit")).toHaveText("Add task");
+	await expect(page.getByTestId("list-empty-add")).toHaveText("Add task");
+});
+
+// Field, button and empty state name a new row the same way per kind (#367).
+test("a blank checklist speaks of items everywhere it offers an add", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("hint8"));
+	await waitWorkspaceReady(page);
+	await firstBlankList(page, "Packing", "Checklist");
+	await expect(page.getByTestId("new-task")).toBeFocused();
+	await expect(page.getByTestId("new-task")).toHaveAttribute(
+		"placeholder",
+		"Add an item",
+	);
+	await expect(page.getByTestId("new-task-submit")).toHaveText("Add item");
+	await expect(page.getByTestId("list-empty-add")).toHaveText("Add item");
 });
 
 test("a starter lands focused without the example line", async ({ page }) => {

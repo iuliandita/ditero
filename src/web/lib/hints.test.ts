@@ -10,6 +10,7 @@ import {
 	type Hints,
 	hintsKey,
 	markShortcutsSeen,
+	NO_USER_HINTS,
 	parseHints,
 	readHints,
 	recordSyntaxUse,
@@ -87,6 +88,22 @@ describe("stored hints", () => {
 		const store = createHintStore(() => broken);
 		store.update("u1", dismissSyntaxHint);
 		expect(store.get("u1").syntaxDismissed).toBe(true);
+	});
+
+	test("without a user id nothing is read, written, or shown", () => {
+		let reads = 0;
+		const storage = memoryStorage({ [hintsKey("")]: JSON.stringify({}) });
+		const store = createHintStore(() => {
+			reads++;
+			return storage;
+		});
+		const h = store.get("");
+		expect(h).toBe(NO_USER_HINTS);
+		expect(syntaxHintVisible(h)).toBe(false);
+		expect(shortcutHintVisible(h, true)).toBe(false);
+		store.update("", () => FRESH_HINTS);
+		expect(reads).toBe(0);
+		expect([...storage.data.keys()]).toEqual([hintsKey("")]);
 	});
 
 	test("the store persists per user and notifies once per real change", () => {

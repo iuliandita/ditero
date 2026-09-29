@@ -527,7 +527,7 @@ export function ListView({
 							}
 						}}
 					>
-						{m.list_empty_action()}
+						{addCopy.action()}
 					</Button>
 				</EmptyState>
 			) : groupByAssignee ? (
