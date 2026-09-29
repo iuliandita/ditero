@@ -1,7 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { openDetails } from "./helpers.ts";
+import {
+	openDetails,
+	openMembers,
+	openShared,
+	openWorkspaceSwitcher,
+} from "./helpers.ts";
 
 // M1b sharing/people e2e. Two browser contexts = two clients; assertions are
 // real cross-client Zero sync (invite/accept, assign, comment, kid) plus an
@@ -60,7 +65,7 @@ test("personal workspace hides admission controls and lets its owner remove a le
 		await expect(option).toHaveAttribute("aria-pressed", "true");
 		await owner.keyboard.press("Escape");
 		await closeTaskDetail(owner);
-		await owner.getByTestId("open-members").click();
+		await openMembers(owner);
 		const panel = owner.getByTestId("members-panel");
 		await expect(panel).toBeVisible();
 		await expect(panel.getByTestId("invite-open")).toHaveCount(0);
@@ -148,10 +153,9 @@ async function joinShared(
 //
 // The sidebar entry is the node that carries the assertion's meaning: this
 // client's membership-gated sync delivered the list row. It does NOT depend on
-// which list is open, and that matters -- openSharedDesktop opens the FIRST
-// list in the shared workspace (Workspace.tsx), and that workspace accumulates
-// lists across the whole run, so in a full suite the open list is whichever one
-// an earlier spec ordered first, not necessarily this one.
+// which list is open, and that matters -- the shared workspace accumulates
+// lists across the whole run, so a list title can render on several surfaces
+// at once.
 //
 // Attribute selector rather than getByRole: the role engine skips aria-hidden
 // subtrees, which any open Radix modal surface produces.
@@ -162,7 +166,7 @@ function sidebarListEntry(page: Page, title: string) {
 }
 
 async function openSharedDesktop(page: Page): Promise<void> {
-	await page.getByTestId("open-shared").click();
+	await openShared(page);
 	await expect(page.getByTestId("new-task")).toBeVisible({ timeout: 15000 });
 }
 
@@ -290,7 +294,7 @@ test("invite: email invite accepted -> member syncs to both, pending drops", asy
 	// funnel). Open registration in e2e permits the accept-page signup.
 
 	await openSharedDesktop(pa);
-	await pa.getByTestId("open-members").click();
+	await openMembers(pa);
 	await expect(pa.getByTestId("members-panel")).toBeVisible();
 
 	// Owner mints an email invite; the link (token) is shown once.
@@ -515,7 +519,7 @@ test("kid: guardian adds a managed account -> restricted shell shows the assigne
 	await joinShared(guardianId, "owner");
 
 	await openSharedDesktop(pg);
-	await pg.getByTestId("open-members").click();
+	await openMembers(pg);
 	await expect(pg.getByTestId("members-panel")).toBeVisible();
 
 	// Provision the managed account; the handle is shown once.
@@ -617,7 +621,7 @@ test("isolation: an outsider sees no shared invites, assignees, comments, or man
 	).toBeVisible({ timeout: 15000 });
 	await closeTaskDetail(pa);
 	// pending invite + kid via members panel
-	await pa.getByTestId("open-members").click();
+	await openMembers(pa);
 	await expect(pa.getByTestId("members-panel")).toBeVisible();
 	await pa.getByTestId("invite-open").click();
 	await pa.getByTestId("invite-email").fill(pendingInviteEmail);
@@ -642,9 +646,19 @@ test("isolation: an outsider sees no shared invites, assignees, comments, or man
 	await expect(po.getByTestId("create-list-open")).toBeVisible({
 		timeout: 15000,
 	});
-	// Clicking Open shared cannot surface a workspace the outsider has no
-	// membership in.
-	await po.getByTestId("open-shared").click();
+	// The workspace switcher cannot surface a workspace the outsider has no
+	// membership in: it lists the personal one and nothing shared.
+	await openWorkspaceSwitcher(po);
+	await expect(
+		po.locator(
+			'[data-testid="workspace-option"][data-workspace-kind="personal"]',
+		),
+	).toHaveCount(1);
+	await expect(
+		po.locator(
+			'[data-testid="workspace-option"][data-workspace-kind="shared"]',
+		),
+	).toHaveCount(0);
 	await po.waitForTimeout(1000);
 	for (const needle of [
 		"Shared list",
@@ -656,22 +670,12 @@ test("isolation: an outsider sees no shared invites, assignees, comments, or man
 	]) {
 		await expect(po.getByText(needle)).toHaveCount(0);
 	}
-	// The outsider's own members panel shows only itself: no pending, no kid.
-	await po.getByTestId("open-members").click();
-	await expect(po.getByTestId("members-panel")).toBeVisible();
-	await expect(po.getByTestId("invite-revoke")).toHaveCount(0);
-	// The outsider's own membership row is the only member (the "(you)" marker only
-	// renders on the current user's row); scope to the members list so the panel's
-	// "<name>'s space" description does not also match the name.
-	await expect(
-		po.getByTestId("members-panel").locator("ul").getByText("(you)"),
-	).toBeVisible();
-	await expect(
-		po
-			.getByTestId("members-panel")
-			.locator("ul")
-			.getByText(nameOf(outsiderEmail)),
-	).toBeVisible();
+	// A personal workspace has no members to manage: the switcher explains
+	// that instead of opening an empty panel with no invite path.
+	await expect(po.getByTestId("workspace-private-note")).toBeVisible();
+	await expect(po.getByTestId("manage-members")).toHaveCount(0);
+	await po.keyboard.press("Escape");
+	await expect(po.getByTestId("members-panel")).toHaveCount(0);
 
 	await a.close();
 	await b.close();
@@ -702,7 +706,7 @@ test("membership: owner changes a member's role, then removes them", async ({
 	await joinShared(memberId, "member");
 
 	await openSharedDesktop(pa);
-	await pa.getByTestId("open-members").click();
+	await openMembers(pa);
 	await expect(pa.getByTestId("members-panel")).toBeVisible();
 
 	// The member's own client stays open (unattended) through the whole flow,
@@ -772,7 +776,7 @@ test("a11y: no serious/critical violations on the sharing surfaces", async ({
 	await openSharedDesktop(pg);
 
 	// Members panel.
-	await pg.getByTestId("open-members").click();
+	await openMembers(pg);
 	await expect(pg.getByTestId("members-panel")).toBeVisible();
 	await expectNoSeriousA11y(pg, "members panel");
 

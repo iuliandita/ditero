@@ -2,7 +2,13 @@ import { expect, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import { generateIdentityKeyPair } from "../../src/domain/e2e/hpke.ts";
 import { encodeBytes } from "../../src/domain/e2e/wire.ts";
-import { goToSettings, signUp, uniqueEmail } from "./helpers.ts";
+import {
+	goToSettings,
+	openMembers,
+	openWorkspaceSwitcher,
+	signUp,
+	uniqueEmail,
+} from "./helpers.ts";
 
 const WORKSPACE = "w_shared_e2e";
 const PASSWORD = "pw-123456";
@@ -68,17 +74,21 @@ async function enroll(page: Page, fromSettings: boolean): Promise<void> {
 }
 
 async function openShared(page: Page): Promise<void> {
-	await expect(page.getByTestId("open-shared")).toBeVisible({
+	await expect(page.getByTestId("workspace-switcher")).toBeVisible({
 		timeout: 20_000,
 	});
-	await page.getByTestId("open-shared").click();
-	await expect(page.getByTestId("open-members")).toBeVisible({
-		timeout: 20_000,
-	});
+	await openWorkspaceSwitcher(page);
+	await page
+		.locator('[data-testid="workspace-option"][data-workspace-kind="shared"]')
+		.first()
+		.click();
+	await expect(page.getByTestId("workspace-switcher")).not.toContainText(
+		"'s space",
+	);
 }
 
 async function invite(page: Page, email: string): Promise<string> {
-	await page.getByTestId("open-members").click();
+	await openMembers(page);
 	await page.getByTestId("invite-open").click();
 	await page.getByTestId("invite-email").fill(email);
 	await page.getByTestId("invite-submit").click();

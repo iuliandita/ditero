@@ -7,6 +7,7 @@ import {
 	test,
 } from "@playwright/test";
 import {
+	openMobileLists,
 	sidebarLists,
 	signUp,
 	uniqueEmail,
@@ -47,6 +48,7 @@ async function phone(browser: Browser) {
 	expect(
 		await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
 	).toBe(true);
+	await openMobileLists(page);
 	await page.getByRole("button", { name: "New list" }).click();
 	await page.getByTestId("new-list").fill("Errands");
 	await page.getByTestId("new-list-submit").click();

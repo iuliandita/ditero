@@ -5,6 +5,7 @@ import { digestImportExpectedRelationships } from "../../src/domain/portability/
 import {
 	sidebarLists,
 	signUp,
+	switchWorkspace,
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
@@ -329,9 +330,7 @@ test("losing recovery authority clears confirmation and restoring it requires a 
 			ownerId,
 			ownerMembershipId,
 		});
-		await page
-			.getByRole("button", { name: workspaceTitle, exact: true })
-			.click();
+		await switchWorkspace(page, workspaceTitle);
 		await openList(page, listTitle);
 		const dialog = await openTask(page, "Shared pending task");
 		const panel = dialog.getByTestId("task-import-activation");

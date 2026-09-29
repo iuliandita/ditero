@@ -260,9 +260,10 @@ test.describe("notification settings", () => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		// The shell swaps sidebar for bottom-nav on the resize; wait for the tab
 		// to mount rather than racing the re-render.
-		const settingsTab = page.getByTestId("nav-tab-settings");
-		await expect(settingsTab).toBeVisible({ timeout: 15_000 });
-		await settingsTab.click();
+		await expect(page.getByTestId("nav-tab-lists")).toBeVisible({
+			timeout: 15_000,
+		});
+		await goToSettings(page);
 		const panel = await settings(page);
 		await expect(panel.getByTestId("channel-ntfy")).toBeVisible();
 		// Every channel is built now, so Telegram is a real, non-disabled row.

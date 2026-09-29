@@ -24,16 +24,21 @@ import type { Folder, List, schema } from "../../zero/schema.gen.ts";
 import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
-import { SortableList } from "../components/list/SortableList.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
-import { BottomNav, type Section } from "../components/shell/BottomNav.tsx";
+import {
+	BottomNav,
+	type MobileTab,
+	type Section,
+} from "../components/shell/BottomNav.tsx";
 import { CreateList } from "../components/shell/CreateList.tsx";
 import { Fab } from "../components/shell/Fab.tsx";
 import { FirstRunActions } from "../components/shell/FirstRunActions.tsx";
 import { groupLists } from "../components/shell/grouping.ts";
-import { ListProgress } from "../components/shell/ListProgress.tsx";
+import { MobileListIndex } from "../components/shell/MobileListIndex.tsx";
+import { PageFrame } from "../components/shell/PageFrame.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
+import { WorkspaceSwitcherSheet } from "../components/shell/WorkspaceSwitcher.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import { Button } from "../components/ui/button.tsx";
 import {
@@ -71,8 +76,9 @@ import { runSelectionCommand } from "../keyboard/selection-commands.ts";
 import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
 import { canCreateFolder, canCreateList } from "../lib/create-gates.ts";
 import { shortcutHintVisible } from "../lib/hints.ts";
-import { ICONS } from "../lib/list-icon.tsx";
 import type { Locale } from "../lib/locale.ts";
+import { viewIcon } from "../lib/nav-icon.tsx";
+import { useNavSections } from "../lib/nav-sections.ts";
 import { recordRecent } from "../lib/recents.ts";
 import { runMutation } from "../lib/run-mutation.ts";
 import { useIsDesktop, useMediaQuery } from "../lib/use-media-query.ts";
@@ -153,12 +159,11 @@ function NormalWorkspace() {
 		{ mode: "create" } | { mode: "edit"; id: string } | null
 	>(null);
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
-	const [openSharedRequested, setOpenSharedRequested] = useState(false);
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [collapsed, setCollapsed] = useState(false);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
-	const [switcherOpen, setSwitcherOpen] = useState(false);
 	const [membersOpen, setMembersOpen] = useState(false);
+	const navSections = useNavSections(zero.userID);
 	const [cheatOpen, setCheatOpen] = useState(false);
 	// One-shot: a "dashboard:<id>" home ref lands on that dashboard after sync.
 	const [homeApplied, setHomeApplied] = useState(false);
@@ -195,16 +200,24 @@ function NormalWorkspace() {
 		[],
 	);
 
-	// Sidebar "New list": the create-list form lives on the lists index, so land
-	// there first (same move as the folder row's "New list here", minus the
-	// preselected folder). The nonce remounts the form so it focuses even when
-	// the index is already the open section.
-	const startNewList = () => {
-		openHome();
-		setNewListFolder({ id: null, nonce: Date.now() });
+	// Phones go back to the Lists tab, where they came from; desktop has its
+	// index in the sidebar and goes home.
+	const openIndex = useCallback(() => {
+		setDetailTaskId(null);
+		dispatchContent({ kind: "index" });
+	}, []);
+
+	// "New list": the create-list form lives on the desktop landing and on the
+	// mobile Lists tab, so land there first. The nonce remounts the form so it
+	// focuses even when that surface is already open; a folder id preselects it.
+	const startNewList = (folderId: string | null = null) => {
+		if (isDesktop) openHome();
+		else openIndex();
+		setNewListFolder({ id: folderId, nonce: Date.now() });
 	};
 	const startFirstList = () => {
-		openHome();
+		if (isDesktop) openHome();
+		else openIndex();
 		setNewListFolder({ id: null, nonce: Date.now(), fromWelcome: true });
 	};
 
@@ -249,6 +262,11 @@ function NormalWorkspace() {
 
 	// --- List row actions -----------------------------------------------------
 	const activeRole = activeId ? (roleByWorkspace.get(activeId) ?? null) : null;
+	// A personal workspace can still hold legacy members from older installs;
+	// the members panel is how its owner removes them.
+	const canManageMembers =
+		workspaces.find((w) => w.id === activeId)?.kind === "shared" ||
+		memberships.filter((row) => row.workspaceId === activeId).length > 1;
 	const canEditList = (listId: string) =>
 		!viewRowsLoading &&
 		tasks
@@ -317,24 +335,9 @@ function NormalWorkspace() {
 		else renameFolder(target.folder, name);
 	}
 
-	useEffect(() => {
-		if (!openSharedRequested) return;
-		const shared = workspaces.find((w) => w.kind === "shared");
-		if (!shared) return;
-		if (activeId !== shared.id) {
-			setActiveId(shared.id);
-			openHome();
-		}
-		const firstList = lists.find((l) => l.workspaceId === shared.id);
-		if (!firstList) return;
-		dispatchContent({ kind: "list", id: firstList.id });
-		setOpenSharedRequested(false);
-	}, [openSharedRequested, workspaces, lists, activeId, openHome]);
-
 	function selectWorkspace(id: string) {
 		setActiveId(id);
-		openHome();
-		setSwitcherOpen(false);
+		if (isDesktop || contentState.kind !== "index") openHome();
 	}
 	const userId = zero.userID;
 	const openList = useCallback(
@@ -391,10 +394,15 @@ function NormalWorkspace() {
 	useEffect(() => {
 		if (cheatOpen) shortcutsSeen();
 	}, [cheatOpen, shortcutsSeen]);
+	// Back from settings returns where it was opened: on phones that is the tab
+	// whose switcher opened it; desktop returns to the landing.
+	const settingsReturn = useRef<"home" | "index">("home");
 	const openSettings = useCallback(() => {
 		setDetailTaskId(null);
+		settingsReturn.current =
+			!isDesktop && contentState.kind === "index" ? "index" : "home";
 		dispatchContent({ kind: "settings" });
-	}, []);
+	}, [isDesktop, contentState.kind]);
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
 	// of M1a scope: each group is its own DndContext, so a list can't leave it.
@@ -410,9 +418,6 @@ function NormalWorkspace() {
 				setWorkspaceActionError(m.activation_container_change_failed()),
 			);
 	}
-	function changeSection(next: Section) {
-		dispatchContent({ kind: next === "settings" ? "settings" : "home" });
-	}
 
 	// --- Views wiring ---------------------------------------------------------
 	// Home ref resolution: builtin/saved view, "dashboard:<id>", or (dangling/
@@ -426,8 +431,24 @@ function NormalWorkspace() {
 		[pref.homeViewRef, savedViews, dashboards],
 	);
 	// The view surface's home: a dashboard home falls back to DEFAULT_HOME here
-	// (used pre-sync and after backing out of the home dashboard).
-	const homeRef = homeTarget.kind === "view" ? homeTarget.id : DEFAULT_HOME;
+	// (used pre-sync and after backing out of the home dashboard). Phones land on
+	// the Today tab whatever the home preference is, so the tab bar always names
+	// what is on screen; the preference picks the desktop landing.
+	const homeRef = !isDesktop
+		? DEFAULT_HOME
+		: homeTarget.kind === "view"
+			? homeTarget.id
+			: DEFAULT_HOME;
+	// Navigating to the home view lands on the home surface itself, which also
+	// carries the desktop create-list form and the first-run welcome.
+	const openNavView = useCallback(
+		(id: string) => {
+			if (id !== homeRef) return openView(id);
+			setDetailTaskId(null);
+			openHome();
+		},
+		[homeRef, openView, openHome],
+	);
 
 	// Land on the home dashboard once both prefs and dashboards have synced (a
 	// dangling ref already resolved to a view above). One-shot and gated on the
@@ -436,11 +457,19 @@ function NormalWorkspace() {
 	useEffect(() => {
 		if (homeApplied || prefLoading || dashboardsLoading) return;
 		setHomeApplied(true);
+		if (!isDesktop) return;
 		if (homeTarget.kind !== "dashboard") return;
 		if (contentState.kind !== "home") return;
 		setDetailTaskId(null);
 		dispatchContent({ kind: "dashboard", id: homeTarget.id });
-	}, [homeApplied, prefLoading, dashboardsLoading, homeTarget, contentState]);
+	}, [
+		homeApplied,
+		prefLoading,
+		dashboardsLoading,
+		homeTarget,
+		contentState,
+		isDesktop,
+	]);
 	const {
 		pinnedViews,
 		resolveView,
@@ -542,14 +571,34 @@ function NormalWorkspace() {
 		? (lists.find((l) => l.id === detailTask.listId) ?? null)
 		: null;
 
+	// Desktop has no index surface of its own (the sidebar is the index), so a
+	// viewport that grows past md while on the Lists tab lands home.
+	const showsHome =
+		contentState.kind === "home" ||
+		(isDesktop && contentState.kind === "index");
 	// The view shown when no list, dashboard or settings surface is open: an
 	// explicitly opened one, else home.
-	const activeViewId =
-		contentState.kind === "home"
-			? homeRef
-			: contentState.kind === "view"
-				? contentState.id
-				: null;
+	const activeViewId = showsHome
+		? homeRef
+		: contentState.kind === "view"
+			? contentState.id
+			: null;
+	// Phones: Today and Lists are tabs. Today is its own tab whatever the home
+	// view is; everything reached from the Lists tab keeps Lists current.
+	const mobileTab: MobileTab | null =
+		contentState.kind === "settings"
+			? null
+			: activeViewId === "today"
+				? "today"
+				: "lists";
+	const isTabRoot =
+		contentState.kind === "home" ||
+		contentState.kind === "index" ||
+		(contentState.kind === "view" && contentState.id === "today");
+	function selectTab(tab: MobileTab) {
+		if (tab === "lists") openIndex();
+		else openNavView("today");
+	}
 
 	// Command handlers injected into the palette/keyboard system. palette.open and
 	// search.open are owned by the provider (it holds the open state). Movement +
@@ -569,7 +618,7 @@ function NormalWorkspace() {
 			"task.delete": () => actOnFocused("delete"),
 			"row.menu": () => actOnFocused("menu"),
 			"help.cheatSheet": () => setCheatOpen(true),
-			"nav.today": () => openView("today"),
+			"nav.today": () => openNavView("today"),
 			"view.new": () => setViewManager({ mode: "create" }),
 			// First dashboard in sidebar (sortKey) order; silent no-op when none
 			// exist (matches the movement handlers' posture — no toast idiom).
@@ -583,16 +632,29 @@ function NormalWorkspace() {
 			"selection.all": () => runSelectionCommand("all"),
 			"selection.clear": () => runSelectionCommand("clear"),
 		}),
-		[firstDashboardId, openView, openDashboard, openSettings],
+		[firstDashboardId, openNavView, openDashboard, openSettings],
 	);
 
 	const activeView = activeViewId ? resolveView(activeViewId) : null;
-	// Object.hasOwn guards the client-controlled icon key: a prototype key
-	// ("constructor"/"__proto__") must not resolve to a non-component and throw.
-	const HeaderIcon =
-		activeView?.icon && Object.hasOwn(ICONS, activeView.icon)
-			? ICONS[activeView.icon]
-			: null;
+	const HeaderIcon = activeView ? viewIcon(activeView) : null;
+
+	const createListForm = (
+		<CreateList
+			key={newListFolder?.nonce ?? "default"}
+			autoFocus={newListFolder !== null}
+			initialFolderId={newListFolder?.id ?? null}
+			workspaceId={activeId ?? ""}
+			lists={activeLists}
+			folders={activeFolders}
+			templates={activeTemplates}
+			onCreated={(listId, blank) => {
+				const fromWelcome = newListFolder?.fromWelcome === true;
+				setNewListFolder(null);
+				if (fromWelcome) arriveAt(listId, blank);
+			}}
+			onCancel={() => setNewListFolder(null)}
+		/>
+	);
 
 	let content: React.ReactNode;
 	if (contentState.kind === "settings") {
@@ -602,25 +664,48 @@ function NormalWorkspace() {
 				activeRole={activeRole}
 				isDesktop={isDesktop}
 				persistLocale={persistLocale}
-				onBack={() => changeSection("lists")}
+				onBack={() => dispatchContent({ kind: settingsReturn.current })}
+				autoFocusBack={!isDesktop}
 				onOpenList={openList}
 			/>
 		);
 	} else if (openListId) {
 		content = (
-			<div className="p-4 md:p-6">
+			<PageFrame measure="reading">
 				<ListView
 					listId={openListId}
 					listActions={buildListActions}
-					onBack={!isDesktop ? () => closeList(openListId) : undefined}
+					onBack={!isDesktop ? openIndex : undefined}
 					onQuickAdd={() => setQuickAddOpen(true)}
 					arrival={arrival?.listId === openListId ? arrival : null}
 				/>
-			</div>
+			</PageFrame>
+		);
+	} else if (!isDesktop && contentState.kind === "index") {
+		content = (
+			<MobileListIndex
+				createList={createListForm}
+				groups={groups}
+				progressByList={progressByList}
+				canEditList={canEditList}
+				onMoveList={moveList}
+				onOpenList={openList}
+				canCreateList={canCreateList(activeRole)}
+				onNewListInFolder={startNewList}
+				views={BUILTIN_VIEWS.filter((v) => v.id !== "today")}
+				pinnedViews={pinnedViews}
+				onOpenView={openView}
+				onNewView={() => setViewManager({ mode: "create" })}
+				dashboards={dashboards}
+				onOpenDashboard={openDashboard}
+				onNewDashboard={() => setDashboardManager({ mode: "create" })}
+				isSectionOpen={navSections.isOpen}
+				onToggleSection={navSections.toggle}
+			/>
 		);
 	} else if (openDashboardId) {
 		content = (
-			<div className="flex flex-col gap-6 p-4 md:p-6">
+			<PageFrame measure="wide">
 				{openDashboardRow ? (
 					// Keyed so edit mode never carries over between dashboards. The
 					// boundary keeps a panel-body throw (e.g. a bad rrule) inline
@@ -640,11 +725,17 @@ function NormalWorkspace() {
 								setDashboardManager({ mode: "edit", id: openDashboardRow.id })
 							}
 							onDeleteDashboard={() => void deleteDashboard(openDashboardRow)}
-							onSetHome={() => setHome(dashboardHomeRef(openDashboardRow.id))}
+							onSetHome={
+								isDesktop
+									? () => setHome(dashboardHomeRef(openDashboardRow.id))
+									: undefined
+							}
 							isHome={
 								pref.homeViewRef === dashboardHomeRef(openDashboardRow.id)
 							}
-							onBack={() => closeDashboard(openDashboardRow.id)}
+							onBack={() =>
+								isDesktop ? closeDashboard(openDashboardRow.id) : openIndex()
+							}
 							data={panelData}
 							ids={panelIds}
 							views={savedViews}
@@ -660,23 +751,30 @@ function NormalWorkspace() {
 						{m.dashboard_not_found()}
 					</p>
 				)}
-			</div>
+			</PageFrame>
 		);
 	} else {
 		// No list open: the view surface (an explicitly opened view, or the home
-		// view on the landing). On the landing the workspace heading, create-list
-		// form and (mobile) navigation index stay rendered below.
-		const isLanding = contentState.kind === "home";
+		// view on the landing). On the desktop landing the workspace heading and
+		// create-list form stay rendered below; phones keep those on the Lists tab.
+		const isLanding = showsHome;
 		content = (
-			<div className="flex flex-col gap-6 p-4 md:p-6">
+			<PageFrame
+				measure={
+					activeView && activeView.display.layout !== "list"
+						? "wide"
+						: "reading"
+				}
+			>
+				{/* Desktop lists live in the sidebar; the create form appears here
+				    only when a "New list" action asks for it, above the view so it
+				    is in sight. */}
+				{isLanding && isDesktop && newListFolder && createListForm}
 				{activeView ? (
 					<section aria-label={activeView.name} data-testid="view-surface">
 						<div className="mb-3 flex items-center gap-2">
-							{!isDesktop && !isLanding && (
-								<BackButton
-									size="compact"
-									onClick={() => closeView(activeView.id)}
-								/>
+							{!isDesktop && !isTabRoot && (
+								<BackButton size="compact" onClick={openIndex} />
 							)}
 							{HeaderIcon && (
 								<HeaderIcon
@@ -687,67 +785,74 @@ function NormalWorkspace() {
 							<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
 								{activeView.name}
 							</h1>
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										aria-label={m.view_actions()}
-										data-testid="view-actions"
-									>
-										<MoreHorizontal />
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent align="end">
-									<DropdownMenuCheckboxItem
-										data-testid="view-set-home"
-										checked={
-											homeTarget.kind === "view" &&
-											activeView.id === homeTarget.id
-										}
-										onSelect={() => setHome(activeView.id)}
-									>
-										<House /> {m.view_set_home()}
-									</DropdownMenuCheckboxItem>
-									{activeView.saved && (
-										<>
-											<DropdownMenuItem
-												data-testid="view-pin"
-												onSelect={() => togglePin(activeView.id)}
-											>
-												{isPinned(activeView.id) ? (
-													<>
-														<PinOff /> {m.view_unpin()}
-													</>
-												) : (
-													<>
-														<Pin /> {m.view_pin()}
-													</>
-												)}
-											</DropdownMenuItem>
-											<DropdownMenuItem
-												data-testid="view-edit"
-												onSelect={() =>
-													setViewManager({ mode: "edit", id: activeView.id })
+							{/* Phones always land on Today, so "Set as home" would do
+							    nothing visible there; a built-in view then has no
+							    actions at all and shows no menu. */}
+							{(isDesktop || activeView.saved) && (
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											aria-label={m.view_actions()}
+											data-testid="view-actions"
+										>
+											<MoreHorizontal />
+										</Button>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end">
+										{isDesktop && (
+											<DropdownMenuCheckboxItem
+												data-testid="view-set-home"
+												checked={
+													homeTarget.kind === "view" &&
+													activeView.id === homeTarget.id
 												}
+												onSelect={() => setHome(activeView.id)}
 											>
-												<Pencil /> {m.view_menu_edit()}
-											</DropdownMenuItem>
-											<DropdownMenuSeparator />
-											<DropdownMenuItem
-												data-testid="view-delete"
-												className="text-destructive"
-												onSelect={() => {
-													if (activeView.saved)
-														void deleteView(activeView.saved);
-												}}
-											>
-												<Trash2 /> {m.view_menu_delete()}
-											</DropdownMenuItem>
-										</>
-									)}
-								</DropdownMenuContent>
-							</DropdownMenu>
+												<House /> {m.view_set_home()}
+											</DropdownMenuCheckboxItem>
+										)}
+										{activeView.saved && (
+											<>
+												<DropdownMenuItem
+													data-testid="view-pin"
+													onSelect={() => togglePin(activeView.id)}
+												>
+													{isPinned(activeView.id) ? (
+														<>
+															<PinOff /> {m.view_unpin()}
+														</>
+													) : (
+														<>
+															<Pin /> {m.view_pin()}
+														</>
+													)}
+												</DropdownMenuItem>
+												<DropdownMenuItem
+													data-testid="view-edit"
+													onSelect={() =>
+														setViewManager({ mode: "edit", id: activeView.id })
+													}
+												>
+													<Pencil /> {m.view_menu_edit()}
+												</DropdownMenuItem>
+												<DropdownMenuSeparator />
+												<DropdownMenuItem
+													data-testid="view-delete"
+													className="text-destructive"
+													onSelect={() => {
+														if (activeView.saved)
+															void deleteView(activeView.saved);
+													}}
+												>
+													<Trash2 /> {m.view_menu_delete()}
+												</DropdownMenuItem>
+											</>
+										)}
+									</DropdownMenuContent>
+								</DropdownMenu>
+							)}
 						</div>
 						{/* A malformed synced view (a co-member's bad filter/display) can
 						    throw in the renderer; the boundary keeps it inline instead of
@@ -786,143 +891,7 @@ function NormalWorkspace() {
 				) : (
 					<p className="text-sm text-muted-foreground">{m.view_not_found()}</p>
 				)}
-
-				{isLanding && (
-					<div className="flex flex-col gap-4">
-						{/* Mobile has no sidebar; surface built-ins + pinned views here so
-						    they are reachable and open the renderer on mobile too. */}
-						{!isDesktop && (
-							<nav
-								aria-label={m.views_nav_label()}
-								className="flex flex-col gap-0.5"
-							>
-								<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
-									{m.sidebar_views_heading()}
-								</div>
-								{[...BUILTIN_VIEWS, ...pinnedViews].map((v) => (
-									<button
-										key={v.id}
-										type="button"
-										aria-current={activeViewId === v.id ? "page" : undefined}
-										onClick={() => openView(v.id)}
-										className="rounded-lg px-2 py-2 text-start text-sm hover:bg-muted"
-									>
-										{v.name}
-									</button>
-								))}
-								<button
-									type="button"
-									data-testid="new-view"
-									onClick={() => setViewManager({ mode: "create" })}
-									className="rounded-lg px-2 py-2 text-start text-sm text-muted-foreground hover:bg-muted"
-								>
-									+ {m.action_new_view()}
-								</button>
-							</nav>
-						)}
-						{/* Dashboards mirror the Views block so they are reachable on
-						    mobile too (desktop nav lives in the sidebar). */}
-						{!isDesktop && (
-							<nav
-								aria-label={m.dashboards_nav_label()}
-								className="flex flex-col gap-0.5"
-							>
-								<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
-									{m.sidebar_dashboards_heading()}
-								</div>
-								{dashboards.map((d) => (
-									<button
-										key={d.id}
-										type="button"
-										onClick={() => openDashboard(d.id)}
-										className="rounded-lg px-2 py-2 text-start text-sm hover:bg-muted"
-									>
-										{d.name}
-									</button>
-								))}
-								<button
-									type="button"
-									data-testid="new-dashboard"
-									onClick={() => setDashboardManager({ mode: "create" })}
-									className="rounded-lg px-2 py-2 text-start text-sm text-muted-foreground hover:bg-muted"
-								>
-									+ {m.action_new_dashboard()}
-								</button>
-							</nav>
-						)}
-						<div className="flex items-center justify-between">
-							{isDesktop ? (
-								<h2 className="text-base font-semibold">
-									{workspaces.find((w) => w.id === activeId)?.name ??
-										m.workspace_name_fallback()}
-								</h2>
-							) : (
-								// Mobile: the workspace name doubles as the switcher trigger.
-								<button
-									type="button"
-									aria-haspopup="dialog"
-									onClick={() => setSwitcherOpen(true)}
-									className="text-base font-semibold"
-								>
-									{workspaces.find((w) => w.id === activeId)?.name ??
-										m.workspace_name_fallback()}
-								</button>
-							)}
-						</div>
-						<CreateList
-							key={newListFolder?.nonce ?? "default"}
-							autoFocus={newListFolder !== null}
-							initialFolderId={newListFolder?.id ?? null}
-							workspaceId={activeId ?? ""}
-							lists={activeLists}
-							folders={activeFolders}
-							templates={activeTemplates}
-							onCreated={(listId, blank) => {
-								const fromWelcome = newListFolder?.fromWelcome === true;
-								setNewListFolder(null);
-								if (fromWelcome) arriveAt(listId, blank);
-							}}
-							onCancel={() => setNewListFolder(null)}
-						/>
-						{/* Desktop nav lives in the sidebar; render the list index only on
-						    mobile so a list title never appears twice at once. */}
-						{!isDesktop && (
-							<div data-testid="list-index" className="flex flex-col gap-4">
-								{groups.map((group) => (
-									<div key={group.folder?.id ?? "__ungrouped__"}>
-										<div className="mb-1 px-1 text-xs font-medium text-muted-foreground">
-											{group.folder?.name ?? m.sidebar_ungrouped_lists()}
-										</div>
-										<SortableList
-											items={group.lists}
-											canDrag={canEditList}
-											onMove={moveList}
-											handleLabel={m.list_reorder_handle()}
-											handleTestId="list-drag"
-											className="gap-1"
-											renderItem={(l) => (
-												<button
-													type="button"
-													onClick={() => openList(l.id)}
-													className="w-full rounded-lg border p-3 text-start"
-												>
-													{l.title}
-													{l.kind === "project" && progressByList.has(l.id) && (
-														<ListProgress
-															done={progressByList.get(l.id)?.done ?? 0}
-															total={progressByList.get(l.id)?.total ?? 0}
-														/>
-													)}
-												</button>
-											)}
-										/>
-									</div>
-								))}
-							</div>
-						)}
-					</div>
-				)}
-			</div>
+			</PageFrame>
 		);
 	}
 
@@ -938,22 +907,23 @@ function NormalWorkspace() {
 								workspaces={workspaces}
 								activeId={activeId}
 								onSelectWorkspace={selectWorkspace}
-								onOpenShared={() => setOpenSharedRequested(true)}
-								onOpenMembers={() => setMembersOpen(true)}
+								onManageMembers={() => setMembersOpen(true)}
+								canManageMembers={canManageMembers}
 								groups={groups}
 								progressByList={progressByList}
 								openListId={openListId}
 								onOpenList={openList}
 								listActions={buildListActions}
 								folderActions={buildFolderActions}
-								onNewList={startNewList}
+								onNewList={() => startNewList()}
+								onNewListInFolder={startNewList}
 								canCreateList={canCreateList(activeRole)}
 								onNewFolder={() => setFolderDialog({ mode: "create" })}
 								canCreateFolder={canCreateFolder(activeRole)}
 								builtinViews={BUILTIN_VIEWS}
 								pinnedViews={pinnedViews}
 								activeViewId={activeViewId}
-								onOpenView={openView}
+								onOpenView={openNavView}
 								onNewView={() => setViewManager({ mode: "create" })}
 								viewActions={buildViewActions}
 								dashboards={dashboards}
@@ -961,6 +931,8 @@ function NormalWorkspace() {
 								onOpenDashboard={openDashboard}
 								onNewDashboard={() => setDashboardManager({ mode: "create" })}
 								dashboardActions={buildDashboardActions}
+								isSectionOpen={navSections.isOpen}
+								onToggleSection={navSections.toggle}
 								section={section}
 								onOpenSettings={openSettings}
 								shortcutHintKey={shortcutHintKey}
@@ -972,13 +944,27 @@ function NormalWorkspace() {
 					}
 					bottomNav={
 						<BottomNav
-							section={section}
-							onSection={changeSection}
+							tab={mobileTab}
+							onTab={selectTab}
 							onSearch={() => setSearchOpen(true)}
 						/>
 					}
 					fab={<Fab onOpen={() => setQuickAddOpen(true)} />}
 				>
+					{!isDesktop && isTabRoot && (
+						// Phones: where you are and where to switch, above the tab's
+						// content. The end of the bar stays free for status.
+						<header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background px-2">
+							<WorkspaceSwitcherSheet
+								workspaces={workspaces}
+								activeId={activeId}
+								onSelect={selectWorkspace}
+								onManageMembers={() => setMembersOpen(true)}
+								canManageMembers={canManageMembers}
+								onOpenSettings={openSettings}
+							/>
+						</header>
+					)}
 					{workspaceActionError && (
 						<p
 							role="alert"
@@ -1005,10 +991,6 @@ function NormalWorkspace() {
 					shareable={shareable}
 					members={members}
 					labelIdsByTask={labelIdsByTask}
-					switcherOpen={switcherOpen}
-					onSwitcherOpenChange={setSwitcherOpen}
-					onSelectWorkspace={selectWorkspace}
-					onOpenShared={() => setOpenSharedRequested(true)}
 					membersOpen={membersOpen}
 					onMembersOpenChange={setMembersOpen}
 					quickAddOpen={quickAddOpen}

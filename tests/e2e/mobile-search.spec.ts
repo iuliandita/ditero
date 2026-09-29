@@ -1,6 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
-import { signUp, uniqueEmail, waitWorkspaceReady } from "./helpers.ts";
+import {
+	openMobileLists,
+	signUp,
+	uniqueEmail,
+	waitWorkspaceReady,
+} from "./helpers.ts";
 
 // The search tab used to be permanently disabled, explaining itself through a
 // `title` tooltip on a surface that only exists on touch (#141). Every assertion
@@ -48,6 +53,7 @@ test("mobile search finds a task by substring and opens it", async ({
 	await signUp(page, uniqueEmail("msearch"));
 	await waitWorkspaceReady(page);
 
+	await openMobileLists(page);
 	await page.getByRole("button", { name: "New list" }).click();
 	await page.getByTestId("new-list").fill("Groceries");
 	await page.getByTestId("new-list-submit").click();

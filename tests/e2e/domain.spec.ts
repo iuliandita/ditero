@@ -1,7 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { openDetails, openMoreOptions } from "./helpers.ts";
+import {
+	openDetails,
+	openMobileLists,
+	openMoreOptions,
+	openShared,
+} from "./helpers.ts";
 
 // Task 10 cluster: NLP quick-add and drag reorder. Task 11 extends this file
 // with the rest of the domain matrix (kinds, templates, a11y, isolation).
@@ -106,7 +111,10 @@ async function openListDesktop(page: Page, name: string): Promise<void> {
 }
 
 async function backToIndexDesktop(page: Page): Promise<void> {
-	await page.getByRole("button", { name: /'s space/ }).click();
+	// The home view's sidebar row lands on the home surface.
+	await sidebarLists(page)
+		.getByRole("button", { name: "Today", exact: true })
+		.click();
 	await expect(page.getByTestId("create-list-open")).toBeVisible();
 }
 
@@ -175,8 +183,8 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	await joinShared(userId);
 	await signIn(pb, email);
 
-	await pa.getByTestId("open-shared").click();
-	await pb.getByTestId("open-shared").click();
+	await openShared(pa);
+	await openShared(pb);
 	await expect(pa.getByTestId("new-task")).toBeVisible({ timeout: 15000 });
 	await expect(pb.getByTestId("new-task")).toBeVisible({ timeout: 15000 });
 
@@ -285,7 +293,9 @@ test("shopping list from starter renders category-grouped (mobile)", async ({
 	await signUp(page, uniqueEmail("shop"));
 	await waitWorkspaceReady(page);
 
-	// Mobile create-list lives in a bottom sheet; pick the shopping starter.
+	// Mobile create-list lives in a bottom sheet on the Lists tab; pick the
+	// shopping starter.
+	await openMobileLists(page);
 	await page.getByRole("button", { name: "New list" }).click();
 	await page.locator('[data-slot="select-trigger"]').nth(1).click();
 	await page
@@ -565,8 +575,8 @@ test("isolation: B never sees A's personal list, folder, or label", async ({
 	).toBeVisible();
 
 	// Both live in the shared workspace so B's client is subscribed and settled.
-	await pa.getByTestId("open-shared").click();
-	await pb.getByTestId("open-shared").click();
+	await openShared(pa);
+	await openShared(pb);
 	await expect(pb.getByTestId("new-task")).toBeVisible({ timeout: 15000 });
 
 	// B's synced queries never leak A's personal list/folder/label rows.
@@ -853,6 +863,7 @@ test("detail controls reach 44px on a touch screen", async ({ browser }) => {
 	const page = await ctx.newPage();
 	await signUp(page, uniqueEmail("touch"));
 	await waitWorkspaceReady(page);
+	await openMobileLists(page);
 	await page.getByRole("button", { name: "New list" }).click();
 	await page.locator('[data-slot="select-trigger"]').nth(1).click();
 	await page

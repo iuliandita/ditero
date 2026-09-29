@@ -125,6 +125,7 @@ export function SortableList<T extends { id: string; sortKey: string }>({
 	handleTestId,
 	className,
 	canDrag,
+	touch,
 }: {
 	items: T[];
 	onMove: (id: string, sortKey: string) => void;
@@ -133,6 +134,7 @@ export function SortableList<T extends { id: string; sortKey: string }>({
 	handleTestId: string;
 	className?: string;
 	canDrag?: (id: string) => boolean;
+	touch?: "hidden" | "reorder";
 }) {
 	const sensors = useReorderSensors();
 
@@ -163,6 +165,7 @@ export function SortableList<T extends { id: string; sortKey: string }>({
 								label={handleLabel}
 								testId={handleTestId}
 								revealHandle
+								touch={touch}
 							>
 								{renderItem(item)}
 							</SortableRow>

@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import {
+	openMobileLists,
 	sidebarLists,
 	signUp,
 	uniqueEmail,
@@ -206,9 +207,14 @@ for (const viewport of [
 
 		if (viewport.name === "desktop")
 			await page.getByTestId("create-list-open").click();
-		else await page.getByRole("button", { name: "New list" }).click();
+		else {
+			await openMobileLists(page);
+			await page.getByRole("button", { name: "New list" }).click();
+		}
 		await page.getByTestId("new-list").fill("Errands");
 		await page.getByTestId("new-list-submit").click();
+		if (viewport.name === "mobile")
+			await page.getByTestId("nav-tab-today").click();
 
 		await expect(page.getByTestId("view-empty-no-match")).toBeVisible({
 			timeout: 15000,

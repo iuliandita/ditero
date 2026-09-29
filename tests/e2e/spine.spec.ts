@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { Pool } from "pg";
+import { openShared } from "./helpers.ts";
 
 // Two users, two browser contexts. Proves (1) workspace isolation: a list in a
 // user's personal workspace never syncs to another user; (2) live sync: a task
@@ -52,8 +53,8 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 	await expect(pa.getByText("Ana secret")).toBeVisible();
 
 	// In the shared workspace, a task toggle propagates to Bob live.
-	await pa.getByTestId("open-shared").click();
-	await pb.getByTestId("open-shared").click();
+	await openShared(pa);
+	await openShared(pb);
 	// Both have the shared list open (live query subscribed) before the write.
 	// First render of the cold zero-cache view, so it gets the same budget the
 	// sync assertions below already carry.

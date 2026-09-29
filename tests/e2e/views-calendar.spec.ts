@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
+import { openMobileLists } from "./helpers.ts";
 
 // M2 calendar-layout e2e. Builds a calendar view, asserts a recurring task's
 // occurrences render on many dates (light chips) and a one-off dued task renders
@@ -133,7 +134,7 @@ async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
 async function saveCalendarView(page: Page, name: string): Promise<void> {
 	if (await page.getByTestId("sidebar-create").count()) {
 		await page.getByTestId("sidebar-create").click();
-	}
+	} else await openMobileLists(page);
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(name);
 	await pickLabeled(page, "Layout", "Calendar");
