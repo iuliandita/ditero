@@ -33,6 +33,7 @@ export function EscalationFields({
 	repeatPlaceholder,
 	maxPlaceholder,
 	repeatHelp,
+	repeatActive,
 	disabled = false,
 	testIds,
 	onChange,
@@ -43,6 +44,10 @@ export function EscalationFields({
 	repeatPlaceholder?: string;
 	maxPlaceholder?: string;
 	repeatHelp: string;
+	/** Whether a repeat interval applies (set here or inherited). Without one
+	 * the domain sends once and never escalates (domain/escalation.ts), so the
+	 * send cap and the fallback have nothing to act on. */
+	repeatActive: boolean;
 	disabled?: boolean;
 	testIds: { repeat: string; max: string; fallback: string };
 	onChange: (patch: Partial<EscalationValues>) => void;
@@ -54,7 +59,9 @@ export function EscalationFields({
 		max: `${id}-max`,
 		fallback: `${id}-fallback`,
 		fallbackHelp: `${id}-fallback-help`,
+		needsRepeat: `${id}-needs-repeat`,
 	};
+	const inert = disabled || !repeatActive;
 	// A stored fallback who has since left every shared workspace still shows,
 	// rather than the Select going blank.
 	const known =
@@ -100,7 +107,8 @@ export function EscalationFields({
 				<span className="flex items-center gap-2">
 					<Input
 						id={ids.max}
-						disabled={disabled}
+						disabled={inert}
+						aria-describedby={repeatActive ? undefined : ids.needsRepeat}
 						type="number"
 						inputMode="numeric"
 						min={0}
@@ -124,7 +132,7 @@ export function EscalationFields({
 					{m.escalation_fallback_member()}
 				</span>
 				<Select
-					disabled={disabled}
+					disabled={inert}
 					value={values.fallbackUserId ?? NONE}
 					onValueChange={(next) =>
 						onChange({ fallbackUserId: next === NONE ? null : next })
@@ -132,7 +140,7 @@ export function EscalationFields({
 				>
 					<SelectTrigger
 						aria-labelledby={ids.fallback}
-						aria-describedby={ids.fallbackHelp}
+						aria-describedby={repeatActive ? ids.fallbackHelp : ids.needsRepeat}
 						data-testid={testIds.fallback}
 						className="w-full sm:w-56 pointer-coarse:data-[size=default]:h-11"
 					>
@@ -152,9 +160,19 @@ export function EscalationFields({
 						)}
 					</SelectContent>
 				</Select>
-				<p id={ids.fallbackHelp} className="text-xs text-muted-foreground">
-					{m.escalation_fallback_help()}
-				</p>
+				{repeatActive ? (
+					<p id={ids.fallbackHelp} className="text-xs text-muted-foreground">
+						{m.escalation_fallback_help()}
+					</p>
+				) : (
+					<p
+						id={ids.needsRepeat}
+						data-testid={`${testIds.fallback}-needs-repeat`}
+						className="text-xs text-muted-foreground"
+					>
+						{m.escalation_needs_repeat()}
+					</p>
+				)}
 			</div>
 		</div>
 	);

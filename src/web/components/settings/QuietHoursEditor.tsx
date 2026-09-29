@@ -1,9 +1,9 @@
-import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import { timeZoneLabel } from "../../lib/time-zones.ts";
 import { TimeField } from "../task/TimeField.tsx";
+import { SaveStatus, useSaveStatus } from "./SaveStatus.tsx";
 import { jumpToSettingsSection } from "./SettingsNav.tsx";
 import { TIMEZONE_TRIGGER_ID } from "./TimeZoneSetting.tsx";
 
@@ -18,19 +18,10 @@ export function QuietHoursEditor() {
 	const { pref, setPref, timezoneDetected } = useUserPref();
 	const quiet = pref.quietHours;
 	const equal = quiet != null && quiet.start === quiet.end;
-	const saveSequence = useRef(0);
-	const [saveState, setSaveState] = useState<
-		"idle" | "saving" | "saved" | "error"
-	>("idle");
+	const status = useSaveStatus();
 
 	function save(quietHours: typeof quiet) {
-		const sequence = ++saveSequence.current;
-		setSaveState("saving");
-		void setPref({ quietHours }).then((succeeded) => {
-			if (sequence === saveSequence.current) {
-				setSaveState(succeeded ? "saved" : "error");
-			}
-		});
+		status.track(setPref({ quietHours }));
 	}
 
 	// Equal start/end is written through and rejected server-side; the warning
@@ -55,6 +46,7 @@ export function QuietHoursEditor() {
 						value={quiet?.start ?? ""}
 						label={m.quiet_hours_start_aria()}
 						data-testid="quiet-start"
+						describedBy="quiet-hours-note"
 						onCommit={(start) => commit({ start })}
 					/>
 				</div>
@@ -66,6 +58,7 @@ export function QuietHoursEditor() {
 						value={quiet?.end ?? ""}
 						label={m.quiet_hours_end_aria()}
 						data-testid="quiet-end"
+						describedBy="quiet-hours-note"
 						onCommit={(end) => commit({ end })}
 					/>
 				</div>
@@ -108,21 +101,11 @@ export function QuietHoursEditor() {
 				</Button>
 			</p>
 
-			{saveState !== "idle" && (
-				<p
-					role={saveState === "error" ? "alert" : "status"}
-					data-testid="quiet-save-status"
-					className={`mt-2 text-xs ${
-						saveState === "error" ? "text-destructive" : "text-muted-foreground"
-					}`}
-				>
-					{saveState === "saving"
-						? m.quiet_hours_saving()
-						: saveState === "saved"
-							? m.quiet_hours_saved()
-							: m.mutation_failed()}
-				</p>
-			)}
+			<SaveStatus
+				state={status.state}
+				className="mt-2"
+				data-testid="quiet-save-status"
+			/>
 
 			{equal && (
 				<p

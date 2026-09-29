@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import {
 	chooseOption,
 	goToSettings,
+	openMoreOptions,
 	signUp,
 	uniqueEmail,
 	waitWorkspaceReady,
@@ -62,6 +63,8 @@ test("sections read in a fixed order with the danger zone last", async ({
 	await expect(nav.locator("a")).toHaveCount(9);
 	await nav.getByText("Danger zone", { exact: true }).click();
 	await expect(page.locator("#settings-danger-heading")).toBeFocused();
+	// The fragment carries invite secrets; section links must never write it.
+	expect(new URL(page.url()).hash).toBe("");
 
 	await page.addStyleTag({
 		content:
@@ -134,9 +137,18 @@ test("quiet hours keep their wall-clock times in a non-UTC zone", async ({
 		page.getByTestId("timezone-select"),
 		"Europe/Berlin",
 	);
+	await expect(page.getByTestId("timezone-save-status")).toHaveText("Saved", {
+		timeout: 15_000,
+	});
 	await expect(page.getByTestId("quiet-zone")).toHaveText("Europe/Berlin", {
 		timeout: 15_000,
 	});
+	await expect(page.locator("#quiet-hours-note")).toHaveCount(1);
+	for (const id of ["quiet-start", "quiet-end"])
+		await expect(page.getByTestId(id)).toHaveAttribute(
+			"aria-describedby",
+			/(^|\s)quiet-hours-note(\s|$)/,
+		);
 
 	await page.getByTestId("quiet-start").fill("22:00");
 	await page.getByTestId("quiet-start").press("Enter");
@@ -282,6 +294,15 @@ test("the import file picker is on-system and keyboard reachable", async ({
 	await expect(panel.getByTestId("import-file-name")).toHaveText(
 		"No file chosen",
 	);
+	await expect(
+		panel.getByRole("heading", { level: 3, name: "Plan an import" }),
+	).toBeVisible();
+	await expect(
+		panel.getByRole("heading", {
+			level: 4,
+			name: "Saved sources and dry runs",
+		}),
+	).toBeVisible();
 	const input = panel.getByLabel("Native JSON export");
 	await expect(input).toHaveAttribute("type", "file");
 	// The native control is visually hidden, not removed.
@@ -304,4 +325,76 @@ test("the import file picker is on-system and keyboard reachable", async ({
 	);
 	// Not a native export, so it is refused with a reason, not silently.
 	await expect(panel.getByRole("alert")).toBeVisible({ timeout: 15_000 });
+});
+
+test("send cap and fallback wait for a repeat interval", async ({ page }) => {
+	await openSettings(page, "settings-escalation");
+	const defaults = page.getByTestId("escalation-defaults");
+	await expect(
+		defaults.getByText("Send at most", { exact: true }),
+	).toBeVisible();
+	await expect(defaults.getByText("times", { exact: true })).toBeVisible();
+
+	// No repeat: the domain sends once and never escalates, so neither field
+	// can do anything and the page says why.
+	const max = page.getByTestId("escalation-max");
+	const fallback = page.getByTestId("escalation-fallback");
+	await expect(max).toBeDisabled();
+	await expect(fallback).toBeDisabled();
+	await expect(
+		page.getByTestId("escalation-fallback-needs-repeat"),
+	).toBeVisible();
+
+	await page.getByTestId("escalation-repeat").fill("15");
+	await expect(max).toBeEnabled({ timeout: 15_000 });
+	await expect(fallback).toBeEnabled();
+	await expect(
+		page.getByTestId("escalation-fallback-needs-repeat"),
+	).toHaveCount(0);
+
+	// A task with no repeat of its own inherits the default, so its fields are
+	// live too.
+	await page.getByTestId("settings-back").click();
+	await page.getByTestId("create-list-open").click();
+	await page.getByTestId("new-list").fill("Chores");
+	await page.getByTestId("new-list-submit").click();
+	await page
+		.getByRole("navigation", { name: "Lists" })
+		.getByRole("button", { name: "Chores", exact: true })
+		.last()
+		.click();
+	await page.getByTestId("new-task").fill("Walk the dog");
+	await page.getByTestId("new-task-submit").click();
+	await page
+		.locator("[data-kbd-nav]")
+		.filter({ hasText: "Walk the dog" })
+		.first()
+		.click();
+	const detail = page.getByRole("dialog");
+	await expect(detail.getByLabel("Task title")).toBeVisible();
+	await openMoreOptions(detail);
+	await detail.getByTestId("reminder-overrides-toggle").click();
+	await expect(detail.getByTestId("reminder-repeat")).toHaveValue("");
+	await expect(detail.getByTestId("reminder-max")).toBeEnabled();
+	await expect(detail.getByTestId("reminder-fallback")).toBeEnabled();
+});
+
+test("passkeys do not claim none before the list answers", async ({ page }) => {
+	await signUp(page, uniqueEmail("settings-passkeys"));
+	await waitWorkspaceReady(page);
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/passkey/list-user-passkeys", async (route) => {
+		await held;
+		await route.continue();
+	});
+	await goToSettings(page);
+	await expect(page.getByTestId("add-passkey")).toBeVisible();
+	await expect(page.getByTestId("passkeys-empty")).toHaveCount(0);
+	release();
+	await expect(page.getByTestId("passkeys-empty")).toBeVisible({
+		timeout: 15_000,
+	});
 });

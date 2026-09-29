@@ -346,9 +346,9 @@ export function ImportPlanPanel() {
 				</p>
 				{loaded && (
 					<>
-						<h3 className="text-sm font-medium">
+						<h4 className="text-sm font-medium">
 							{m.import_plan_workspaces()}
-						</h3>
+						</h4>
 						{loaded.document.data.workspaces.map((w) => (
 							<Field key={w.id} label={w.name}>
 								{(labelId) => (
@@ -393,7 +393,7 @@ export function ImportPlanPanel() {
 								)}
 							</Field>
 						))}
-						<h3 className="text-sm font-medium">{m.import_plan_people()}</h3>
+						<h4 className="text-sm font-medium">{m.import_plan_people()}</h4>
 						<p className="text-xs text-muted-foreground">
 							{m.import_plan_people_help()}{" "}
 							{m.import_plan_assignment_membership()}
@@ -477,9 +477,9 @@ export function ImportPlanPanel() {
 			)}
 			{report && (
 				<div role="status" className="mt-4 rounded-md border p-3">
-					<h3 className="font-medium">
+					<h4 className="font-medium">
 						{applicable ? m.import_apply_report() : m.import_plan_report()}
-					</h3>
+					</h4>
 					<p className="text-sm">
 						{applicable
 							? report.report.plannerVersion === 4
@@ -539,7 +539,7 @@ export function ImportPlanPanel() {
 					disabled={busy}
 				/>
 			)}
-			<h3 className="mt-5 text-sm font-medium">{m.import_plan_saved()}</h3>
+			<h4 className="mt-5 text-sm font-medium">{m.import_plan_saved()}</h4>
 			{sources.map((s) => (
 				<div key={s.id} className="mt-2 rounded-md border p-3">
 					<div className="flex flex-wrap items-center justify-between gap-2">

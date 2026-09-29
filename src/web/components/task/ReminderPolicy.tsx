@@ -146,6 +146,9 @@ export function ReminderPolicy({
 						}
 						maxPlaceholder={String(defaults?.maxRepeats ?? DEFAULT_MAX_REPEATS)}
 						repeatHelp={m.escalation_repeat_help_task()}
+						repeatActive={
+							(task.repeatEveryMin ?? defaults?.repeatEveryMin ?? null) != null
+						}
 						testIds={{
 							repeat: "reminder-repeat",
 							max: "reminder-max",

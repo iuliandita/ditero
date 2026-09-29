@@ -9,6 +9,7 @@ import {
 import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 import { timeZoneLabel, timeZoneOptions } from "../../lib/time-zones.ts";
+import { SaveStatus, useSaveStatus } from "./SaveStatus.tsx";
 
 export const TIMEZONE_TRIGGER_ID = "settings-timezone";
 
@@ -18,7 +19,11 @@ export function TimeZoneSetting() {
 	const { pref, setPref } = useUserPref();
 	const labelId = useId();
 	const helpId = useId();
-	const zones = useMemo(() => timeZoneOptions(pref.timezone), [pref.timezone]);
+	const status = useSaveStatus();
+	const { zones, selected } = useMemo(
+		() => timeZoneOptions(pref.timezone),
+		[pref.timezone],
+	);
 
 	return (
 		<div className="flex flex-col gap-1 text-sm">
@@ -26,9 +31,9 @@ export function TimeZoneSetting() {
 				{m.settings_timezone_label()}
 			</span>
 			<Select
-				value={pref.timezone}
+				value={selected}
 				onValueChange={(timezone) =>
-					void setPref({ timezone, timezoneChosen: true })
+					status.track(setPref({ timezone, timezoneChosen: true }))
 				}
 			>
 				<SelectTrigger
@@ -51,6 +56,7 @@ export function TimeZoneSetting() {
 			<p id={helpId} className="text-xs text-muted-foreground">
 				{m.settings_timezone_help()}
 			</p>
+			<SaveStatus state={status.state} data-testid="timezone-save-status" />
 		</div>
 	);
 }

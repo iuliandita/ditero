@@ -18,6 +18,7 @@ export function TimeField({
 	label,
 	disabled = false,
 	className,
+	describedBy,
 	"data-testid": testId,
 }: {
 	value: string;
@@ -25,6 +26,8 @@ export function TimeField({
 	label: string;
 	disabled?: boolean;
 	className?: string;
+	/** Id of help text that applies whether or not the value is valid. */
+	describedBy?: string;
 	"data-testid"?: string;
 }) {
 	const locale = getLocale();
@@ -66,7 +69,10 @@ export function TimeField({
 				value={draft}
 				aria-label={label}
 				aria-invalid={invalid || undefined}
-				aria-describedby={invalid ? errorId : undefined}
+				aria-describedby={
+					[invalid ? errorId : null, describedBy].filter(Boolean).join(" ") ||
+					undefined
+				}
 				placeholder={m.time_field_placeholder()}
 				autoComplete="off"
 				spellCheck={false}

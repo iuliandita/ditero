@@ -13,6 +13,8 @@ export function SecurityPanel() {
 	const passwordId = useId();
 	const { data: session } = authClient.useSession();
 	const [passkeys, setPasskeys] = useState<PasskeyRecord[]>([]);
+	// False until the first list answers, so "none yet" is never claimed early.
+	const [passkeysLoaded, setPasskeysLoaded] = useState(false);
 	const [password, setPassword] = useState("");
 	const [totpURI, setTotpURI] = useState<string | null>(null);
 	const [backupCodes, setBackupCodes] = useState<string[]>([]);
@@ -29,6 +31,7 @@ export function SecurityPanel() {
 			return;
 		}
 		setPasskeys(result.data ?? []);
+		setPasskeysLoaded(true);
 	}, []);
 
 	useEffect(() => {
@@ -112,8 +115,11 @@ export function SecurityPanel() {
 						<h3 className="text-sm font-semibold">
 							{m.security_passkeys_heading()}
 						</h3>
-						{passkeys.length === 0 && (
-							<p className="mt-0.5 text-sm text-muted-foreground">
+						{passkeysLoaded && passkeys.length === 0 && (
+							<p
+								data-testid="passkeys-empty"
+								className="mt-0.5 text-sm text-muted-foreground"
+							>
 								{m.security_passkeys_empty()}
 							</p>
 						)}

@@ -52,6 +52,7 @@ function EscalationDefaults() {
 				noneLabel={m.escalation_fallback_nobody()}
 				maxPlaceholder={String(DEFAULT_MAX_REPEATS)}
 				repeatHelp={m.escalation_repeat_help_default()}
+				repeatActive={defaults?.repeatEveryMin != null}
 				testIds={{
 					repeat: "escalation-repeat",
 					max: "escalation-max",
