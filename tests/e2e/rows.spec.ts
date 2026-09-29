@@ -227,7 +227,7 @@ test("inline add sits after the rows and nothing floating covers the last row", 
 	await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 	await page.waitForTimeout(300);
 	const fab = await page
-		.getByRole("button", { name: "Quick add" })
+		.getByRole("button", { name: "Quick add", exact: true })
 		.boundingBox();
 	const fieldAtEnd = await field.boundingBox();
 	const lastAtEnd = await last.boundingBox();
