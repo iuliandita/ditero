@@ -1109,6 +1109,51 @@ test("delete lives in the detail's overflow menu behind a confirm", async ({
 	await expect(listRow(page, "Survivor")).toBeFocused();
 });
 
+test("subtask deletion confirms the child and preserves its parent", async ({
+	page,
+}) => {
+	await listWithTasks(page, "subtask-deletes", ["Parent stays"]);
+	const panel = await openPanel(page, "Parent stays");
+	for (const title of ["Child to delete", "Other child"]) {
+		await panel.getByPlaceholder("Add subtask").fill(title);
+		await panel.getByPlaceholder("Add subtask").press("Enter");
+		await expect(panel.getByText(title, { exact: true })).toBeVisible();
+	}
+	const remove = panel.getByRole("button", {
+		name: "Delete Child to delete",
+		exact: true,
+	});
+	await remove.click();
+	const confirmation = page.getByRole("alertdialog");
+	await expect(confirmation).toContainText(/Delete .Child to delete.\?/);
+	await page.getByTestId("confirm-cancel").click();
+	await expect(
+		panel.getByText("Child to delete", { exact: true }),
+	).toBeVisible();
+
+	await expect(remove).toBeFocused();
+	await remove.click();
+	await page.getByTestId("confirm-accept").click();
+	await expect(panel.getByText("Child to delete", { exact: true })).toHaveCount(
+		0,
+		{ timeout: 15000 },
+	);
+	await expect(panel.getByLabel("Task title")).toHaveValue("Parent stays");
+	await expect(panel.getByText("Other child", { exact: true })).toBeVisible();
+	await expect(listRow(page, "Parent stays")).toBeVisible();
+	await panel.getByTestId("task-detail-close").click();
+	await page.reload();
+	await waitWorkspaceReady(page);
+	await openListDesktop(page, "subtask-deletes");
+	const restored = await openPanel(page, "Parent stays");
+	await expect(
+		restored.getByText("Child to delete", { exact: true }),
+	).toHaveCount(0);
+	await expect(
+		restored.getByText("Other child", { exact: true }),
+	).toBeVisible();
+});
+
 // A snackbar confirms the write the moment it is made; a refusal from the
 // client run or the server must replace it, never leave "Completed" or
 // "Moved to" standing. Demoting the user to viewer makes both writes refused.

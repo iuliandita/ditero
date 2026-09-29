@@ -1,6 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "../ui/select.tsx";
 import {
 	type SettingsSectionId,
 	settingsSectionDomId,
@@ -24,12 +32,13 @@ export function jumpToSettingsSection(id: SettingsSectionId) {
 		?.focus({ preventScroll: true });
 }
 
-// Desktop-only table of contents. The surface is long, and the order alone
-// (danger zone last) does not help someone looking for Notifications.
+// The section index stays available as a compact selector on narrow screens.
 export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
 	const [current, setCurrent] = useState<SettingsSectionId | null>(
 		items[0]?.id ?? null,
 	);
+
+	const selectedSection = useRef<SettingsSectionId | null>(null);
 
 	useEffect(() => {
 		const visible = new Map<SettingsSectionId, number>();
@@ -44,10 +53,21 @@ export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
 						visible.set(id, entry.boundingClientRect.top);
 					else visible.delete(id);
 				}
+				const last = items.at(-1);
+				const lastSection =
+					last && document.getElementById(settingsSectionDomId(last.id));
+				// A short final section cannot scroll to the top of the viewport.
+				if (
+					lastSection &&
+					lastSection.getBoundingClientRect().bottom <= window.innerHeight
+				) {
+					setCurrent(last.id);
+					return;
+				}
 				const first = items.find((item) => visible.has(item.id));
 				if (first) setCurrent(first.id);
 			},
-			{ rootMargin: "0px 0px -60% 0px" },
+			{ rootMargin: "-96px 0px -60% 0px" },
 		);
 		for (const item of items) {
 			const el = document.getElementById(settingsSectionDomId(item.id));
@@ -57,8 +77,49 @@ export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
 	}, [items]);
 
 	return (
-		<nav aria-label={m.settings_nav_label()} data-testid="settings-nav">
-			<ul className="flex flex-col gap-0.5">
+		<nav
+			aria-label={m.settings_nav_label()}
+			data-testid="settings-nav"
+			className="sticky top-0 z-10 mb-6 max-w-2xl self-start bg-background py-2 xl:top-6 xl:mb-0 xl:py-0"
+		>
+			<div className="xl:hidden">
+				<Select
+					value={current ?? undefined}
+					dir={getLocale() === "ar" ? "rtl" : "ltr"}
+					onValueChange={(id) => {
+						const section = items.find((item) => item.id === id);
+						if (!section) return;
+						setCurrent(section.id);
+						selectedSection.current = section.id;
+					}}
+				>
+					<SelectTrigger
+						aria-label={m.settings_nav_label()}
+						data-testid="settings-section-select"
+						className="min-h-11 w-full motion-reduce:transition-none"
+					>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent
+						position="popper"
+						className="motion-reduce:animate-none"
+						onCloseAutoFocus={(event) => {
+							const id = selectedSection.current;
+							if (!id) return;
+							event.preventDefault();
+							selectedSection.current = null;
+							jumpToSettingsSection(id);
+						}}
+					>
+						{items.map((item) => (
+							<SelectItem key={item.id} value={item.id} className="min-h-11">
+								{item.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+			<ul className="hidden flex-col gap-0.5 xl:flex">
 				{items.map((item) => (
 					<li key={item.id}>
 						<a

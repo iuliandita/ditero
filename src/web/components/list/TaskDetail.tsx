@@ -495,6 +495,22 @@ export function TaskDetail({
 		close({ leaving: true });
 	}
 
+	async function removeSubtask(subtask: Task, trigger: HTMLButtonElement) {
+		const ok = await confirm({
+			title: m.task_delete_title(),
+			body: m.task_delete_confirm({ title: subtask.title }),
+			confirmLabel: m.action_delete(),
+			destructive: true,
+		});
+		if (!ok) {
+			requestAnimationFrame(() => {
+				if (trigger.isConnected) trigger.focus();
+			});
+			return;
+		}
+		void run(zero.mutate(mutators.task.delete({ id: subtask.id })));
+	}
+
 	// Not gated on import activation: a paused task must stay deletable.
 	const headerActions: RowAction[] = [
 		{
@@ -765,8 +781,8 @@ export function TaskDetail({
 										variant="ghost"
 										size="icon-sm"
 										aria-label={m.task_delete_named({ title: s.title })}
-										onClick={() =>
-											void run(zero.mutate(mutators.task.delete({ id: s.id })))
+										onClick={(event) =>
+											void removeSubtask(s, event.currentTarget)
 										}
 									>
 										<Trash2 />

@@ -86,14 +86,8 @@ export function SettingsSurface({
 				)}
 			</div>
 			<div className="px-4 py-6 md:px-6 xl:grid xl:grid-cols-[11rem_minmax(0,42rem)] xl:gap-12">
-				{isDesktop && (
-					<div className="hidden xl:block">
-						<div className="sticky top-6">
-							<SettingsNav items={nav} />
-						</div>
-					</div>
-				)}
-				<div className="min-w-0 max-w-2xl">
+				<SettingsNav items={nav} />
+				<div className="min-w-0 max-w-2xl [&_[data-section]]:scroll-mt-20 xl:[&_[data-section]]:scroll-mt-4">
 					<SettingsSection id="account" title={m.settings_section_account()}>
 						<AccountPanel />
 					</SettingsSection>
