@@ -1,5 +1,12 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useId,
+	useRef,
+	useState,
+} from "react";
 import type { PortableExportV1 } from "../../../domain/portability/v1.ts";
 import { randomId } from "../../../domain/random-id.ts";
 import { type Role, WRITE_ROLES } from "../../../domain/role.ts";
@@ -9,6 +16,15 @@ import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import { Button } from "../ui/button.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
+import { FilePicker } from "../ui/file-picker.tsx";
+import { Input } from "../ui/input.tsx";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "../ui/select.tsx";
 import { ImportApplyPanel } from "./ImportApplyPanel.tsx";
 
 type Status = {
@@ -26,7 +42,27 @@ type Status = {
 };
 type Source = { id: string; label: string; jobs: Status[] };
 type Loaded = { text: string; document: PortableExportV1 };
-const control = "mt-1 block w-full rounded-md border bg-background p-2 text-sm";
+// Radix Select reserves "" for "no value", so the empty choice needs a token.
+const NONE = "__none";
+const trigger = "w-full sm:w-72 pointer-coarse:data-[size=default]:h-11";
+
+function Field({
+	label,
+	children,
+}: {
+	label: string;
+	children: (labelId: string) => ReactNode;
+}) {
+	const labelId = useId();
+	return (
+		<div className="flex flex-col gap-1 text-sm">
+			<span id={labelId} className="text-muted-foreground">
+				{label}
+			</span>
+			{children(labelId)}
+		</div>
+	);
+}
 
 export function ImportPlanPanel() {
 	const zero = useZero<typeof schema>();
@@ -41,6 +77,9 @@ export function ImportPlanPanel() {
 	const [newId, setNewId] = useState(() => randomId());
 	const [label, setLabel] = useState("");
 	const [loaded, setLoaded] = useState<Loaded | null>(null);
+	const [fileName, setFileName] = useState<string | null>(null);
+	const limitsId = useId();
+	const labelInputId = useId();
 	const [workspaceMap, setWorkspaceMap] = useState<Record<string, string>>({});
 	const [principalMap, setPrincipalMap] = useState<
 		Record<string, string | null>
@@ -108,6 +147,7 @@ export function ImportPlanPanel() {
 		setWorkspaceMap({});
 		setPrincipalMap({});
 		setParsing(false);
+		setFileName(file?.name ?? null);
 		if (!file) return;
 		if (file.size > 32 * 1024 * 1024) {
 			setError("limit");
@@ -233,55 +273,65 @@ export function ImportPlanPanel() {
 			report.report.plannerVersion === 3 ||
 			report.report.plannerVersion === 4);
 	return (
-		<section
-			id="import-plan"
-			className="mt-8 border-t pt-4"
-			aria-labelledby="import-plan-heading"
-		>
-			<h2 id="import-plan-heading" className="text-sm font-semibold">
+		<section id="import-plan" aria-labelledby="import-plan-heading">
+			<h3 id="import-plan-heading" className="text-sm font-semibold">
 				{m.import_plan_heading()}
-			</h2>
+			</h3>
 			<p className="mt-2 text-sm text-muted-foreground">
 				{m.import_apply_intro()}
 			</p>
 			<fieldset disabled={locked} className="mt-3 space-y-3">
-				<label className="block text-sm">
-					{m.import_plan_file()}
-					<input
-						type="file"
-						accept="application/json,.json"
-						className={control}
-						onChange={(e) => selectFile(e.target.files?.[0])}
-					/>
-				</label>
-				<p className="text-xs text-muted-foreground">
+				<FilePicker
+					label={m.import_plan_file()}
+					accept="application/json,.json"
+					fileName={fileName}
+					disabled={locked}
+					describedBy={limitsId}
+					data-testid="import-file"
+					onFile={selectFile}
+				/>
+				<p id={limitsId} className="text-xs text-muted-foreground">
 					{m.import_plan_limits()}
 				</p>
-				<label className="block text-sm">
-					{m.import_plan_source()}
-					<select
-						className={control}
-						value={source}
-						onChange={(e) => {
-							if (source && !e.target.value) setNewId(randomId());
-							setSource(e.target.value);
-							changed();
-						}}
-					>
-						<option value="">{m.import_plan_new()}</option>
-						{sources.map((s) => (
-							<option key={s.id} value={s.id}>
-								{s.label}
-							</option>
-						))}
-					</select>
-				</label>
+				<Field label={m.import_plan_source()}>
+					{(labelId) => (
+						<Select
+							disabled={locked}
+							value={source || NONE}
+							onValueChange={(next) => {
+								const value = next === NONE ? "" : next;
+								if (source && !value) setNewId(randomId());
+								setSource(value);
+								changed();
+							}}
+						>
+							<SelectTrigger
+								aria-labelledby={labelId}
+								data-testid="import-source"
+								className={trigger}
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent position="popper">
+								<SelectItem value={NONE}>{m.import_plan_new()}</SelectItem>
+								{sources.map((s) => (
+									<SelectItem key={s.id} value={s.id}>
+										{s.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					)}
+				</Field>
 				{!source && (
-					<label className="block text-sm">
-						{m.import_plan_label()}
-						<input
+					<label htmlFor={labelInputId} className="flex flex-col gap-1 text-sm">
+						<span className="text-muted-foreground">
+							{m.import_plan_label()}
+						</span>
+						<Input
+							id={labelInputId}
 							maxLength={100}
-							className={control}
+							className="w-full sm:w-72 pointer-coarse:h-11"
 							value={label}
 							onChange={(e) => {
 								setNewId(randomId());
@@ -296,75 +346,98 @@ export function ImportPlanPanel() {
 				</p>
 				{loaded && (
 					<>
-						<h3 className="text-sm font-medium">
+						<h4 className="text-sm font-medium">
 							{m.import_plan_workspaces()}
-						</h3>
+						</h4>
 						{loaded.document.data.workspaces.map((w) => (
-							<label key={w.id} className="block text-sm">
-								{w.name}
-								<select
-									data-testid="import-workspace"
-									className={control}
-									value={workspaceMap[w.id] ?? ""}
-									onChange={(e) => {
-										setWorkspaceMap({
-											...workspaceMap,
-											[w.id]: e.target.value,
-										});
-										setPrincipalMap(
-											Object.fromEntries(
-												loaded.document.data.principals.map((p) => [
-													p.id,
-													p.id === loaded.document.sourceUserId
-														? (zero.userID ?? null)
-														: null,
-												]),
-											),
-										);
-										changed();
-									}}
-								>
-									<option value="">{m.import_plan_choose()}</option>
-									{writable.map((target) => (
-										<option key={target.id} value={target.id}>
-											{target.name}
-										</option>
-									))}
-								</select>
-							</label>
+							<Field key={w.id} label={w.name}>
+								{(labelId) => (
+									<Select
+										value={workspaceMap[w.id] || NONE}
+										onValueChange={(next) => {
+											setWorkspaceMap({
+												...workspaceMap,
+												[w.id]: next === NONE ? "" : next,
+											});
+											setPrincipalMap(
+												Object.fromEntries(
+													loaded.document.data.principals.map((p) => [
+														p.id,
+														p.id === loaded.document.sourceUserId
+															? (zero.userID ?? null)
+															: null,
+													]),
+												),
+											);
+											changed();
+										}}
+									>
+										<SelectTrigger
+											aria-labelledby={labelId}
+											data-testid="import-workspace"
+											className={trigger}
+										>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent position="popper">
+											<SelectItem value={NONE}>
+												{m.import_plan_choose()}
+											</SelectItem>
+											{writable.map((target) => (
+												<SelectItem key={target.id} value={target.id}>
+													{target.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								)}
+							</Field>
 						))}
-						<h3 className="text-sm font-medium">{m.import_plan_people()}</h3>
+						<h4 className="text-sm font-medium">{m.import_plan_people()}</h4>
 						<p className="text-xs text-muted-foreground">
 							{m.import_plan_people_help()}{" "}
 							{m.import_plan_assignment_membership()}
 						</p>
 						{loaded.document.data.principals.map((p) => (
-							<label key={p.id} className="block text-sm">
-								{p.name}
-								<select
-									className={control}
-									disabled={p.id === loaded.document.sourceUserId}
-									value={principalMap[p.id] ?? ""}
-									onChange={(e) => {
-										setPrincipalMap({
-											...principalMap,
-											[p.id]: e.target.value || null,
-										});
-										changed();
-									}}
-								>
-									<option value="">{m.import_plan_unmapped()}</option>
-									{p.id === loaded.document.sourceUserId ? (
-										<option value={zero.userID}>{m.import_plan_you()}</option>
-									) : (
-										people.map((person) => (
-											<option key={person.id} value={person.id}>
-												{person.name}
-											</option>
-										))
-									)}
-								</select>
-							</label>
+							<Field key={p.id} label={p.name}>
+								{(labelId) => (
+									<Select
+										disabled={p.id === loaded.document.sourceUserId}
+										value={principalMap[p.id] || NONE}
+										onValueChange={(next) => {
+											setPrincipalMap({
+												...principalMap,
+												[p.id]: next === NONE ? null : next,
+											});
+											changed();
+										}}
+									>
+										<SelectTrigger
+											aria-labelledby={labelId}
+											data-testid="import-principal"
+											className={trigger}
+										>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent position="popper">
+											<SelectItem value={NONE}>
+												{m.import_plan_unmapped()}
+											</SelectItem>
+											{p.id === loaded.document.sourceUserId
+												? zero.userID && (
+														<SelectItem value={zero.userID}>
+															{m.import_plan_you()}
+														</SelectItem>
+													)
+												: people.map((person) => (
+														<SelectItem key={person.id} value={person.id}>
+															{person.name}
+														</SelectItem>
+													))}
+										</SelectContent>
+									</Select>
+								)}
+							</Field>
 						))}
 					</>
 				)}
@@ -404,9 +477,9 @@ export function ImportPlanPanel() {
 			)}
 			{report && (
 				<div role="status" className="mt-4 rounded-md border p-3">
-					<h3 className="font-medium">
+					<h4 className="font-medium">
 						{applicable ? m.import_apply_report() : m.import_plan_report()}
-					</h3>
+					</h4>
 					<p className="text-sm">
 						{applicable
 							? report.report.plannerVersion === 4
@@ -466,7 +539,7 @@ export function ImportPlanPanel() {
 					disabled={busy}
 				/>
 			)}
-			<h3 className="mt-5 text-sm font-medium">{m.import_plan_saved()}</h3>
+			<h4 className="mt-5 text-sm font-medium">{m.import_plan_saved()}</h4>
 			{sources.map((s) => (
 				<div key={s.id} className="mt-2 rounded-md border p-3">
 					<div className="flex flex-wrap items-center justify-between gap-2">

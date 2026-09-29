@@ -141,7 +141,7 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	await expect(page.getByTestId("language-switcher")).toContainText("العربية");
 	// A real heading on the authed surface, so the catalog assertion covers a
 	// post-auth mount and not just the pre-auth one.
-	await expect(page.locator("#security-heading")).toHaveText(
+	await expect(page.locator("#settings-security-heading")).toHaveText(
 		m.security_heading({}, { locale: "ar" }),
 	);
 	// The back chevron mirrors: the glyph means "reverse", and reverse is

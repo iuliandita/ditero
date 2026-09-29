@@ -1,0 +1,1 @@
+ALTER TABLE "user_pref" ADD COLUMN "timezone_chosen" boolean DEFAULT false NOT NULL;

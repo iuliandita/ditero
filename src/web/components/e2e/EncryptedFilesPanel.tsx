@@ -50,8 +50,8 @@ export function EncryptedFilesPanel({ userId }: { userId: string }) {
 	const autoLock = pref.e2eAutoLockMinutes ?? DEFAULT_AUTO_LOCK_MINUTES;
 
 	return (
-		<section className="mt-4" aria-labelledby="e2e-heading">
-			<h3 id="e2e-heading" className="text-sm font-medium">
+		<section aria-labelledby="e2e-heading">
+			<h3 id="e2e-heading" className="text-sm font-semibold">
 				{m.e2e_settings_heading()}
 			</h3>
 
