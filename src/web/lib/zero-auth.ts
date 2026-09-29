@@ -52,6 +52,7 @@ export function watchZeroAuth(
 ): () => void {
 	let pending: Promise<void> | undefined;
 	let stopped = false;
+	let retryRequested = false;
 
 	const onState = (state: ConnectionState) => {
 		if (state.name !== "needs-auth" || pending || stopped) return;
@@ -66,11 +67,19 @@ export function watchZeroAuth(
 			})
 			.finally(() => {
 				pending = undefined;
+				if (retryRequested) {
+					retryRequested = false;
+					onState(zero.connection.state.current);
+				}
 			});
 	};
 
 	const unsubscribe = zero.connection.state.subscribe(onState);
-	const stopRetry = retrySignals(() => onState(zero.connection.state.current));
+	const stopRetry = retrySignals(() => {
+		if (stopped || zero.connection.state.current.name !== "needs-auth") return;
+		if (pending) retryRequested = true;
+		else onState(zero.connection.state.current);
+	});
 	onState(zero.connection.state.current);
 	return () => {
 		stopped = true;

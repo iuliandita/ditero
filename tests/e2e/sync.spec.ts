@@ -202,14 +202,19 @@ test("desktop: an expired sign-in keeps queued edits until the user signs in aga
 	// routes answer the reconnect the way both then would; the real session is
 	// deleted before signing in again, so that part runs for real.
 	let refuseAuth = false;
-	await page.route("**/api/auth/token", (route) =>
-		refuseAuth ? route.fulfill({ status: 401, body: "{}" }) : route.continue(),
-	);
-	await page.routeWebSocket(/localhost:5354/, (ws) => {
+	let refusedRefreshes = 0;
+	await page.route("**/api/auth/token", (route) => {
+		if (!refuseAuth) return route.continue();
+		refusedRefreshes += 1;
+		return route.fulfill({ status: 401, body: "{}" });
+	});
+	let unauthorizedConnections = 0;
+	await page.routeWebSocket(/\/sync\/v\d+\/connect/, (ws) => {
 		if (!refuseAuth) {
 			ws.connectToServer();
 			return;
 		}
+		unauthorizedConnections += 1;
 		ws.send(
 			JSON.stringify([
 				"error",
@@ -232,7 +237,11 @@ test("desktop: an expired sign-in keeps queued edits until the user signs in aga
 	const title = `Queued before sign-in ${Date.now()}`;
 	await addTask(page, title);
 	refuseAuth = true;
+	const refusedRefresh = page.waitForResponse("**/api/auth/token");
 	await context.setOffline(false);
+	expect((await refusedRefresh).status()).toBe(401);
+	expect(unauthorizedConnections).toBeGreaterThan(0);
+	expect(refusedRefreshes).toBeGreaterThan(0);
 
 	await expect(indicator).toHaveAttribute("data-phase", "reauth", {
 		timeout: 30000,
@@ -245,7 +254,58 @@ test("desktop: an expired sign-in keeps queued edits until the user signs in aga
 
 	refuseAuth = false;
 	await expireSession(email);
+	const expiredToken = await page.request.get("/api/auth/token");
+	expect(expiredToken.status()).toBe(401);
 	await popover.getByTestId("sync-sign-in").click();
+	await page.getByTestId("email").fill(email);
+	await page.getByTestId("password").fill("pw-123456");
+	await page.getByTestId("signin").click();
+	await waitWorkspaceReady(page);
+	await expect.poll(() => serverHasTask(title), { timeout: 30000 }).toBe(true);
+});
+
+test("desktop: a real expired session returns to login and preserves queued edits", async ({
+	page,
+	context,
+}) => {
+	test.setTimeout(120_000);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	let refuseConnection = false;
+	// Stand in for JWT expiry too: deleting a session does not revoke its
+	// already-issued token, which would otherwise remain valid on reconnect.
+	await page.routeWebSocket(/\/sync\/v\d+\/connect/, (ws) => {
+		if (!refuseConnection) {
+			ws.connectToServer();
+			return;
+		}
+		ws.send(
+			JSON.stringify([
+				"error",
+				{ kind: "Unauthorized", message: "expired", origin: "zeroCache" },
+			]),
+		);
+	});
+	const email = uniqueEmail("sync-session");
+	await signUp(page, email);
+	await openNewList(page, "Expired session");
+	const indicator = page.getByTestId("sync-indicator");
+	await expect(indicator).toHaveAttribute("data-phase", "synced", {
+		timeout: 15000,
+	});
+	await context.setOffline(true);
+	await expect(indicator).toHaveAttribute("data-phase", "offline", {
+		timeout: 20000,
+	});
+	const title = `Queued across session expiry ${Date.now()}`;
+	await addTask(page, title);
+	await expireSession(email);
+	const expiredToken = await page.request.get("/api/auth/token");
+	expect(expiredToken.status()).toBe(401);
+	refuseConnection = true;
+	await context.setOffline(false);
+	await expect(page.getByTestId("signin")).toBeVisible({ timeout: 30000 });
+	expect(await serverHasTask(title)).toBe(false);
+	refuseConnection = false;
 	await page.getByTestId("email").fill(email);
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signin").click();
