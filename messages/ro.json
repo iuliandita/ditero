@@ -1362,6 +1362,7 @@
 	"auth_error_registration_disabled": "Conturile noi sunt dezactivate pe această instanță.",
 	"auth_error_invalid_origin": "Serverul nu are încredere în această adresă. Cere-i operatorului să o adauge la originile de încredere ale instanței.",
 	"mutation_failed": "Ceva n-a mers bine.",
+	"mutation_offline_not_saved": "Ești offline, modificarea nu a fost salvată. Reconectează-te și încearcă din nou.",
 	"mutator_error_denied": "Nu ai permisiunea să faci asta.",
 	"mutator_error_label_name_taken": "Există deja o etichetă cu acest nume.",
 	"modal_close_label": "Închide",

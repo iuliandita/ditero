@@ -1334,6 +1334,7 @@
 	"auth_error_registration_disabled": "New accounts are turned off on this instance.",
 	"auth_error_invalid_origin": "This address is not trusted by the server. Ask the operator to add it to the instance's trusted origins.",
 	"mutation_failed": "Something went wrong.",
+	"mutation_offline_not_saved": "You're offline, this change wasn't saved. Reconnect and try again.",
 	"mutator_error_denied": "You do not have permission to do that.",
 	"mutator_error_label_name_taken": "A label with that name already exists.",
 	"modal_close_label": "Close",

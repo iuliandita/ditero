@@ -1446,6 +1446,7 @@
 	"auth_error_registration_disabled": "الحسابات الجديدة معطّلة في هذه النسخة.",
 	"auth_error_invalid_origin": "الخادم لا يثق بهذا العنوان. اطلب من المشغّل إضافته إلى الأصول الموثوقة لهذه النسخة.",
 	"mutation_failed": "حدث خطأ ما.",
+	"mutation_offline_not_saved": "أنت غير متصل، لم يُحفظ هذا التغيير. أعد الاتصال وحاول مرة أخرى.",
 	"mutator_error_denied": "ليس لديك إذن للقيام بذلك.",
 	"mutator_error_label_name_taken": "توجد بالفعل علامة بهذا الاسم.",
 	"modal_close_label": "إغلاق",

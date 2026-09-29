@@ -1362,6 +1362,7 @@
 	"auth_error_registration_disabled": "Las cuentas nuevas están desactivadas en esta instancia.",
 	"auth_error_invalid_origin": "El servidor no confía en esta dirección. Pide al operador que la añada a los orígenes de confianza de la instancia.",
 	"mutation_failed": "Algo ha salido mal.",
+	"mutation_offline_not_saved": "Estás sin conexión, este cambio no se guardó. Vuelve a conectarte e inténtalo de nuevo.",
 	"mutator_error_denied": "No tienes permiso para hacer eso.",
 	"mutator_error_label_name_taken": "Ya existe una etiqueta con ese nombre.",
 	"modal_close_label": "Cerrar",

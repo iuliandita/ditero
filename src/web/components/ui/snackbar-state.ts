@@ -33,6 +33,9 @@ export const EMPTY_SNACKBAR: SnackbarState = {
 };
 
 const RETRACTED_MAX = 50;
+// Failures waiting behind an unrelated snack. Beyond this the oldest go: a
+// backlog of stale refusals helps nobody.
+export const FAIL_QUEUE_MAX = 3;
 
 // The next queued failure takes the freed slot, if any.
 function advance(state: SnackbarState): SnackbarState {
@@ -65,6 +68,8 @@ export function snackbarReducer(
 				action: event.action,
 			},
 			nextId: state.nextId + 1,
+			// A fresh confirmation for this key supersedes anything older about it.
+			queue: state.queue.filter((q) => q.key !== event.key),
 			retracted: state.retracted.filter((k) => k !== event.key),
 		};
 	}
@@ -81,7 +86,7 @@ export function snackbarReducer(
 			queue: [
 				...state.queue.filter((q) => q.key !== event.key),
 				{ message: event.message, key: event.key },
-			],
+			].slice(-FAIL_QUEUE_MAX),
 		};
 	}
 	if (event.type === "dismissKey") {

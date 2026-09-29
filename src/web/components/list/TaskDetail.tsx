@@ -35,7 +35,12 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
-import { mutationResultError, runMutation } from "@/lib/run-mutation";
+import {
+	type MutationFailure,
+	mutationFailureMessage,
+	mutationResultFailure,
+	runMutation,
+} from "@/lib/run-mutation";
 import { inputsToDue, priorityLabel, priorityMeta } from "@/lib/task-display";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
@@ -60,7 +65,6 @@ import { useUserPref } from "../../hooks/useUserPref.ts";
 import { formatTimeValue } from "../../lib/date-picker.ts";
 import { formatList } from "../../lib/intl-format.ts";
 import { onMutationFailure } from "../../lib/mutation-outcome.ts";
-import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { markTaskPanelOpen } from "../../lib/use-wide-content.ts";
 import { AttachmentList } from "../attachments/AttachmentList.tsx";
 import { AssigneePicker } from "../people/AssigneePicker.tsx";
@@ -431,15 +435,15 @@ export function TaskDetail({
 		// manager can clean up. Fold into a single mutator if this proves fragile.
 		setError(null);
 		// Zero resolves a refused write with an error result; it never throws.
-		const failed = (error: string) =>
-			setError(mutationErrorMessage(error, m.task_create_label_failed));
-		const created = mutationResultError(
+		const failed = (failure: MutationFailure) =>
+			setError(mutationFailureMessage(failure, m.task_create_label_failed));
+		const created = mutationResultFailure(
 			await zero.mutate(
 				mutators.label.create({ id, workspaceId: list.workspaceId, name }),
 			).client,
 		);
 		if (created !== null) return failed(created);
-		const attached = mutationResultError(
+		const attached = mutationResultFailure(
 			await zero.mutate(
 				mutators.taskLabel.set({
 					taskId: t.id,

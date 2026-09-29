@@ -1,14 +1,27 @@
 import { describe, expect, it, vi } from "vitest";
-import { mutationResultError, runMutation } from "./run-mutation.ts";
+import { m } from "../../paraglide/messages.js";
+import { mutationResultFailure, runMutation } from "./run-mutation.ts";
 
-describe("mutationResultError", () => {
-	it("reads Zero's resolved error result", () => {
+describe("mutationResultFailure", () => {
+	it("reads Zero's resolved error result and its kind", () => {
 		expect(
-			mutationResultError({ type: "error", error: { message: "nope" } }),
-		).toBe("nope");
-		expect(mutationResultError({ type: "error" })).toBe("");
-		expect(mutationResultError({ type: "success" })).toBeNull();
-		expect(mutationResultError(undefined)).toBeNull();
+			mutationResultFailure({
+				type: "error",
+				error: { type: "app", message: "nope" },
+			}),
+		).toEqual({ kind: "app", message: "nope" });
+		expect(
+			mutationResultFailure({
+				type: "error",
+				error: { type: "zero", message: "Offline" },
+			}),
+		).toEqual({ kind: "zero", message: "Offline" });
+		expect(mutationResultFailure({ type: "error" })).toEqual({
+			kind: "app",
+			message: "",
+		});
+		expect(mutationResultFailure({ type: "success" })).toBeNull();
+		expect(mutationResultFailure(undefined)).toBeNull();
 	});
 });
 
@@ -24,7 +37,7 @@ describe("runMutation", () => {
 		expect(onError).not.toHaveBeenCalled();
 	});
 
-	it("routes a resolved error result to onError", async () => {
+	it("routes an application error to the translated failure", async () => {
 		const onError = vi.fn();
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		expect(
@@ -38,8 +51,22 @@ describe("runMutation", () => {
 				onError,
 			),
 		).toBe(false);
-		expect(onError).toHaveBeenCalledTimes(1);
-		expect(onError.mock.calls[0][0]).toEqual(expect.any(String));
-		expect(onError.mock.calls[0][0]).not.toBe("");
+		expect(onError).toHaveBeenCalledWith(m.mutation_failed());
+	});
+
+	it("says offline, not failed, when Zero was disconnected", async () => {
+		const onError = vi.fn();
+		expect(
+			await runMutation(
+				{
+					client: Promise.resolve({
+						type: "error",
+						error: { type: "zero", message: "Offline" },
+					}),
+				},
+				onError,
+			),
+		).toBe(false);
+		expect(onError).toHaveBeenCalledWith(m.mutation_offline_not_saved());
 	});
 });

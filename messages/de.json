@@ -1334,6 +1334,7 @@
 	"auth_error_registration_disabled": "Neue Konten sind auf dieser Instanz deaktiviert.",
 	"auth_error_invalid_origin": "Der Server vertraut dieser Adresse nicht. Bitte den Betreiber, sie zu den vertrauenswürdigen Ursprüngen der Instanz hinzuzufügen.",
 	"mutation_failed": "Da ist etwas schiefgelaufen.",
+	"mutation_offline_not_saved": "Du bist offline, diese Änderung wurde nicht gespeichert. Verbinde dich neu und versuch es noch einmal.",
 	"mutator_error_denied": "Dazu hast du keine Berechtigung.",
 	"mutator_error_label_name_taken": "Ein Label mit diesem Namen gibt es schon.",
 	"modal_close_label": "Schließen",

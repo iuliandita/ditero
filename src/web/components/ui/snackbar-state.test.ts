@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
 	EMPTY_SNACKBAR,
+	FAIL_QUEUE_MAX,
 	pauseCountdown,
 	resumeCountdown,
 	type SnackbarState,
@@ -119,6 +120,30 @@ describe("snackbarReducer: fail", () => {
 		const s4 = snackbarReducer(s3, { type: "dismissKey", key: "A" });
 		expect(s4.snack?.key).toBe("B");
 		expect(s4.queue).toEqual([]);
+	});
+
+	test("a fresh confirmation for A drops A's older queued failure", () => {
+		const s2 = show(show(EMPTY_SNACKBAR, "A"), "B");
+		const s3 = snackbarReducer(s2, { type: "fail", message: "No A", key: "A" });
+		expect(s3.queue).toHaveLength(1);
+		// The retry for A succeeds and is confirmed.
+		const s4 = show(s3, "A");
+		expect(s4.snack?.key).toBe("A");
+		expect(s4.queue).toEqual([]);
+	});
+
+	test("the failure queue keeps only the newest few", () => {
+		let state = show(EMPTY_SNACKBAR, "current");
+		for (const key of ["t1", "t2", "t3", "t4", "t5"])
+			state = snackbarReducer(state, {
+				type: "fail",
+				message: `No ${key}`,
+				key,
+			});
+		expect(state.queue.map((q) => q.key)).toEqual(
+			["t1", "t2", "t3", "t4", "t5"].slice(-FAIL_QUEUE_MAX),
+		);
+		expect(state.snack?.key).toBe("current");
 	});
 
 	test("completing A again after a reopen can fail again", () => {
