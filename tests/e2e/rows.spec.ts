@@ -272,7 +272,7 @@ test("a row announces its title once, with labeled subtask progress and priority
 	await expect(row).toHaveCount(1, { timeout: 15000 });
 	await row.click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Priority" }).click();
-	await page.getByRole("menuitem", { name: "High", exact: true }).click();
+	await page.getByRole("menuitem", { name: "P1 High", exact: true }).click();
 	await expect(page.locator('[role="menu"]')).toHaveCount(0);
 
 	const open = row.getByRole("button", { name: "Open details" });
@@ -283,7 +283,8 @@ test("a row announces its title once, with labeled subtask progress and priority
 		await detail.getByPlaceholder("Add subtask").press("Enter");
 		await expect(detail.getByText(child, { exact: true })).toBeVisible();
 	}
-	await page.keyboard.press("Escape");
+	// Focus is in a field; Escape would only leave it. Close explicitly.
+	await detail.getByTestId("task-detail-close").click();
 	await expect(detail).toHaveCount(0);
 	await row.getByRole("button", { name: "Expand subtasks" }).click();
 	await page
@@ -301,7 +302,7 @@ test("a row announces its title once, with labeled subtask progress and priority
 		0,
 	);
 	await expect(open).toHaveAccessibleDescription(
-		/1 of 3 subtasks done.*Priority: High/,
+		/1 of 3 subtasks done.*Priority: P1 High/,
 		{ timeout: 15000 },
 	);
 	const names = await row.evaluate((el) =>
@@ -315,7 +316,7 @@ test("a row announces its title once, with labeled subtask progress and priority
 	await expect(count).toContainText("1/3");
 	await expect(count.locator("svg")).toHaveCount(1);
 
-	const flag = row.getByRole("img", { name: "Priority: High" });
+	const flag = row.getByRole("img", { name: "Priority: P1 High" });
 	await expect(flag).toBeVisible();
 	await expect(flag).toHaveAttribute("data-priority", "3");
 	// High is the solid flag; medium is tinted and low open, so the level reads
@@ -327,7 +328,7 @@ test("a row announces its title once, with labeled subtask progress and priority
 	await page.mouse.move(0, 0);
 	await expect(text).toBeHidden();
 	await row.hover();
-	await expect(text).toHaveText("High");
+	await expect(text).toHaveText("P1 High");
 
 	await expectNoSeriousA11y(page, "list rows");
 });
