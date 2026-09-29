@@ -10,6 +10,7 @@ type EntityKind = EntityContent["kind"];
 
 const states = [
 	{ kind: "home" },
+	{ kind: "index" },
 	{ kind: "list", id: "list-a" },
 	{ kind: "view", id: "view-a" },
 	{ kind: "dashboard", id: "dashboard-a" },
@@ -22,6 +23,7 @@ const entityStates = states.filter(
 
 const destinations = [
 	{ kind: "home" },
+	{ kind: "index" },
 	{ kind: "list", id: "list-b" },
 	{ kind: "view", id: "view-b" },
 	{ kind: "dashboard", id: "dashboard-b" },
@@ -66,6 +68,7 @@ describe("workspaceContentReducer", () => {
 
 	test.each([
 		{ kind: "home" },
+		{ kind: "index" },
 		{ kind: "settings" },
 	] satisfies WorkspaceContent[])("$kind ignores entity close actions", (current) => {
 		for (const target of entityStates.map((state) => state.kind)) {

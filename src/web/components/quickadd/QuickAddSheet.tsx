@@ -2,6 +2,12 @@ import { useZero } from "@rocicorp/zero/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import {
 	Sheet,
 	SheetContent,
 	SheetHeader,
@@ -21,6 +27,8 @@ import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
 import { addCopyFor } from "../../lib/kind-copy.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
+import { useIsDesktop } from "../../lib/use-media-query.ts";
+import { cn } from "../../lib/utils.ts";
 import { TokenChips } from "./TokenChips.tsx";
 
 // Case-insensitive prefix match against visible lists. Ambiguous prefixes stay
@@ -52,6 +60,7 @@ export function QuickAddSheet({
 	workspaceId: string;
 }) {
 	const zero = useZero<typeof schema>();
+	const isDesktop = useIsDesktop();
 	const [raw, setRaw] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -168,71 +177,87 @@ export function QuickAddSheet({
 		}
 	}
 
+	const body = (
+		<div className={cn("flex flex-col gap-3", !isDesktop && "p-4 pt-0")}>
+			<input
+				ref={inputRef}
+				data-testid="quickadd-input"
+				aria-label={m.quickadd_input_label()}
+				className="h-10 w-full rounded-lg border bg-transparent px-3 text-base md:text-sm"
+				// The `#`/`~`/`pN` sigils are literal parser grammar and stay
+				// untranslated. The date example is not grammar: it has to be
+				// a word the ACTIVE chrono parser accepts, and on locales with
+				// no parser the hint drops it rather than advertising a syntax
+				// that will not work there.
+				placeholder={
+					dateParserFor(locale)
+						? m.quickadd_placeholder({
+								date: m.quickadd_example_date(),
+								priority: "p2",
+								label: "#store",
+								list: "~groceries",
+							})
+						: m.quickadd_placeholder_nodate({
+								priority: "p2",
+								label: "#store",
+								list: "~groceries",
+							})
+				}
+				value={raw}
+				onChange={(e) => setRaw(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") void submit();
+				}}
+			/>
+			<TokenChips
+				tokens={chips}
+				unknownLabels={unknownLabels}
+				onRemove={removeToken}
+			/>
+			{error && (
+				<p role="alert" className="text-sm text-destructive">
+					{error}
+				</p>
+			)}
+			<div className="flex items-center justify-between gap-2">
+				<span className="truncate text-xs text-muted-foreground">
+					{targetList
+						? m.quickadd_adding_to({ list: targetList.title })
+						: m.quickadd_no_list()}
+				</span>
+				<Button
+					data-testid="quickadd-submit"
+					type="button"
+					onClick={() => void submit()}
+					disabled={busy || !targetList || !title.trim()}
+				>
+					{addCopyFor(targetList?.kind as ListKind | null | undefined).action()}
+				</Button>
+			</div>
+		</div>
+	);
+
+	// Desktop: a centered dialog, since a full-width bottom sheet on a wide
+	// screen puts the field far from where the eye is. Phones keep the sheet.
+	// sm:max-w-*: an unprefixed max-w loses to DialogContent's base sm:max-w-sm.
+	if (isDesktop)
+		return (
+			<Dialog open={open} onOpenChange={onOpenChange}>
+				<DialogContent data-testid="quickadd-dialog" className="sm:max-w-lg">
+					<DialogHeader>
+						<DialogTitle>{m.quickadd_sheet_title()}</DialogTitle>
+					</DialogHeader>
+					{body}
+				</DialogContent>
+			</Dialog>
+		);
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent side="bottom">
+			<SheetContent side="bottom" data-testid="quickadd-sheet">
 				<SheetHeader>
 					<SheetTitle>{m.quickadd_sheet_title()}</SheetTitle>
 				</SheetHeader>
-				<div className="flex flex-col gap-3 p-4 pt-0">
-					<input
-						ref={inputRef}
-						data-testid="quickadd-input"
-						aria-label={m.quickadd_input_label()}
-						className="h-10 w-full rounded-lg border bg-transparent px-3 text-base md:text-sm"
-						// The `#`/`~`/`pN` sigils are literal parser grammar and stay
-						// untranslated. The date example is not grammar: it has to be
-						// a word the ACTIVE chrono parser accepts, and on locales with
-						// no parser the hint drops it rather than advertising a syntax
-						// that will not work there.
-						placeholder={
-							dateParserFor(locale)
-								? m.quickadd_placeholder({
-										date: m.quickadd_example_date(),
-										priority: "p2",
-										label: "#store",
-										list: "~groceries",
-									})
-								: m.quickadd_placeholder_nodate({
-										priority: "p2",
-										label: "#store",
-										list: "~groceries",
-									})
-						}
-						value={raw}
-						onChange={(e) => setRaw(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter") void submit();
-						}}
-					/>
-					<TokenChips
-						tokens={chips}
-						unknownLabels={unknownLabels}
-						onRemove={removeToken}
-					/>
-					{error && (
-						<p role="alert" className="text-sm text-destructive">
-							{error}
-						</p>
-					)}
-					<div className="flex items-center justify-between gap-2">
-						<span className="truncate text-xs text-muted-foreground">
-							{targetList
-								? m.quickadd_adding_to({ list: targetList.title })
-								: m.quickadd_no_list()}
-						</span>
-						<Button
-							data-testid="quickadd-submit"
-							type="button"
-							onClick={() => void submit()}
-							disabled={busy || !targetList || !title.trim()}
-						>
-							{addCopyFor(
-								targetList?.kind as ListKind | null | undefined,
-							).action()}
-						</Button>
-					</div>
-				</div>
+				{body}
 			</SheetContent>
 		</Sheet>
 	);

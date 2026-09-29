@@ -2,20 +2,86 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 const surface = (page: Page) => page.getByTestId("settings-surface");
 
-// Settings is a destination on both platforms (desktop sidebar, mobile bottom
-// tab), never inlined into the landing. One seam so a shell change costs one
-// edit instead of thirty. Attribute selectors, not roles: a tab's only text is
-// its translated label, and role locators skip aria-hidden nodes whenever a
-// Radix modal surface is open. Idempotent, so a caller that reached settings
-// its own way (the mobile tab) can still route through it.
+// Settings is a destination on both platforms (desktop sidebar footer; on
+// phones, the workspace switcher atop the Lists tab), never inlined into the
+// landing. One seam so a shell change costs one edit instead of thirty.
+// Attribute selectors, not roles: role locators skip aria-hidden nodes whenever
+// a Radix modal surface is open. Idempotent, so a caller that reached settings
+// its own way can still route through it.
 export async function goToSettings(page: Page): Promise<void> {
 	if (!(await surface(page).count())) {
-		await page
-			.locator('[data-testid="nav-settings"], [data-testid="nav-tab-settings"]')
-			.first()
-			.click();
+		// By viewport, not by probing: right after a reload the shell may not be
+		// mounted yet, and an instant visibility check would pick the wrong path.
+		if ((page.viewportSize()?.width ?? 1280) >= 768)
+			await page.getByTestId("nav-settings").click();
+		else {
+			await openMobileLists(page);
+			await openWorkspaceSwitcher(page);
+			await page.getByTestId("switcher-settings").click();
+		}
 	}
 	await expect(surface(page)).toBeVisible();
+}
+
+// Phones: the list index, create-list form, views and dashboards live on the
+// Lists tab; Today is the landing.
+export async function openMobileLists(page: Page): Promise<void> {
+	await page.getByTestId("nav-tab-lists").click();
+	await expect(page.getByTestId("nav-tab-lists")).toHaveAttribute(
+		"aria-current",
+		"page",
+	);
+	// Attached, not visible: with no lists yet the index has no height.
+	await expect(page.getByTestId("list-index")).toHaveCount(1);
+}
+
+export async function openWorkspaceSwitcher(page: Page): Promise<void> {
+	// A menu still animating closed would swallow the click and toggle back.
+	await expect(page.getByTestId("switcher-settings")).toHaveCount(0);
+	await page.getByTestId("workspace-switcher").click();
+	await expect(page.getByTestId("switcher-settings")).toBeVisible();
+}
+
+// Members management sits inside the switcher, and only for a shared workspace.
+export async function openMembers(page: Page): Promise<void> {
+	await openWorkspaceSwitcher(page);
+	await page.getByTestId("manage-members").click();
+	await expect(page.getByTestId("members-panel")).toBeVisible();
+}
+
+export function workspaceOption(page: Page, name: string): Locator {
+	return page
+		.getByTestId("workspace-option")
+		.filter({ has: page.getByText(name, { exact: true }) });
+}
+
+// Waits for the workspace to sync: its option only renders once the row has
+// arrived, and an open menu re-renders when it does.
+export async function switchWorkspace(page: Page, name: string): Promise<void> {
+	await openWorkspaceSwitcher(page);
+	await workspaceOption(page, name).click();
+	await expect(page.getByTestId("switcher-settings")).toHaveCount(0);
+	await expect(page.getByTestId("workspace-switcher")).toContainText(name);
+}
+
+// Desktop: switch to the seeded shared workspace and open its seeded list. By
+// name, not position: other specs add lists to the same workspace, and sidebar
+// order would open whichever of theirs sorts first. Waits for the membership to
+// sync: the option only renders once the workspace row has arrived.
+export async function openShared(page: Page): Promise<void> {
+	await openWorkspaceSwitcher(page);
+	await page
+		.locator('[data-testid="workspace-option"][data-workspace-kind="shared"]')
+		.first()
+		.click();
+	await expect(page.getByTestId("switcher-settings")).toHaveCount(0);
+	await expect(page.getByTestId("workspace-switcher")).not.toContainText(
+		"'s space",
+	);
+	await page
+		.locator('nav[aria-label="Lists"] [data-list-id]')
+		.filter({ hasText: /^Shared list$/ })
+		.click();
 }
 
 // Leaves settings for the lists landing, where the create-list form lives. The
@@ -52,12 +118,15 @@ export async function signUp(page: Page, email: string): Promise<void> {
 	});
 }
 
-// The workspace switcher button only renders once the workspace query has
-// synced, so it is the seam between "shell mounted" and "data usable".
+// The workspace switcher names the active workspace only once the workspace
+// query has synced, so its id is the seam between "shell mounted" and "data
+// usable". Any active workspace counts, personal or shared.
 export async function waitWorkspaceReady(page: Page): Promise<void> {
-	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
+	await expect(page.getByTestId("workspace-switcher")).toHaveAttribute(
+		"data-workspace-id",
+		/.+/,
+		{ timeout: SIGNUP_TIMEOUT },
+	);
 }
 
 // Desktop sidebar list/view nav: scopes clicks away from the mobile index and

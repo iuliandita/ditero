@@ -17,12 +17,6 @@ import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
 import { MobileSearch } from "../components/shell/MobileSearch.tsx";
 import { NameDialog } from "../components/shell/NameDialog.tsx";
 import {
-	Sheet,
-	SheetContent,
-	SheetHeader,
-	SheetTitle,
-} from "../components/ui/sheet.tsx";
-import {
 	type ViewFormValue,
 	ViewManager,
 } from "../components/views/ViewManager.tsx";
@@ -61,10 +55,6 @@ export function WorkspaceOverlays({
 	shareable,
 	members,
 	labelIdsByTask,
-	switcherOpen,
-	onSwitcherOpenChange,
-	onSelectWorkspace,
-	onOpenShared,
 	membersOpen,
 	onMembersOpenChange,
 	quickAddOpen,
@@ -107,10 +97,6 @@ export function WorkspaceOverlays({
 	shareable: Workspace[];
 	members: { id: string; name: string }[];
 	labelIdsByTask: Map<string, string[]>;
-	switcherOpen: boolean;
-	onSwitcherOpenChange: (open: boolean) => void;
-	onSelectWorkspace: (id: string) => void;
-	onOpenShared: () => void;
 	membersOpen: boolean;
 	onMembersOpenChange: (open: boolean) => void;
 	quickAddOpen: boolean;
@@ -141,51 +127,6 @@ export function WorkspaceOverlays({
 }) {
 	return (
 		<>
-			{/* Mobile workspace switcher: Lists-header title tap -> bottom sheet. */}
-			<Sheet open={switcherOpen} onOpenChange={onSwitcherOpenChange}>
-				<SheetContent side="bottom">
-					<SheetHeader>
-						<SheetTitle>{m.workspace_switcher_title()}</SheetTitle>
-					</SheetHeader>
-					<div className="flex flex-col gap-1 p-4 pt-0">
-						{workspaces.map((w) => (
-							<button
-								key={w.id}
-								type="button"
-								onClick={() => onSelectWorkspace(w.id)}
-								className={`rounded-lg px-3 py-2 text-start ${
-									w.id === activeId ? "bg-muted font-medium" : ""
-								}`}
-							>
-								{w.name}
-							</button>
-						))}
-						<button
-							type="button"
-							onClick={() => {
-								onOpenShared();
-								onSwitcherOpenChange(false);
-							}}
-							className="rounded-lg px-3 py-2 text-start text-muted-foreground"
-						>
-							{m.sidebar_open_shared()}
-						</button>
-						<button
-							type="button"
-							data-testid="open-members"
-							disabled={!activeId}
-							onClick={() => {
-								onSwitcherOpenChange(false);
-								onMembersOpenChange(true);
-							}}
-							className="rounded-lg px-3 py-2 text-start text-muted-foreground disabled:opacity-50"
-						>
-							{m.sidebar_members()}
-						</button>
-					</div>
-				</SheetContent>
-			</Sheet>
-
 			{activeId && (
 				<MembersPanel
 					workspaceId={activeId}

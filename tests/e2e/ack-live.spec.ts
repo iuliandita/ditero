@@ -5,6 +5,7 @@ import {
 	goToSettings,
 	leaveSettings,
 	openMoreOptions,
+	openShared,
 	setDueDate,
 } from "./helpers.ts";
 
@@ -360,9 +361,9 @@ test("live ack: assignment notifies through /api/zero/mutate, and one ack termin
 		const LIST = unique("Shared");
 		listId = await seedSharedList(ownerId, LIST);
 
-		await pa.getByTestId("open-shared").click();
+		await openShared(pa);
 		await expect(pa.getByTestId("new-task")).toBeVisible({ timeout: 15_000 });
-		await pb.getByTestId("open-shared").click();
+		await openShared(pb);
 		await expect(pb.getByTestId("new-task")).toBeVisible({ timeout: 15_000 });
 		await openList(pa, LIST);
 		await openList(pb, LIST);

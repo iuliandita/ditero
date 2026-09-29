@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import { browserToday, shiftDay } from "../support/browser-day.ts";
+import { openWorkspaceSwitcher, workspaceOption } from "./helpers.ts";
 
 // M-dash dashboards e2e. Exercises the dashboard lifecycle (create from the
 // sidebar, empty state, add view-ref/inline panels), live task completion from
@@ -476,9 +477,11 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		await joinShared(ownerId, "owner");
 		await pOwner.reload();
 		await waitWorkspaceReady(pOwner);
-		await expect(
-			pOwner.getByRole("button", { name: "Household", exact: true }),
-		).toBeVisible({ timeout: 15000 });
+		await openWorkspaceSwitcher(pOwner);
+		await expect(workspaceOption(pOwner, "Household")).toBeVisible({
+			timeout: 15000,
+		});
+		await pOwner.keyboard.press("Escape");
 		await createDashboard(pOwner, teamDash, { workspace: "Household" });
 		await createDashboard(pOwner, soloDash);
 

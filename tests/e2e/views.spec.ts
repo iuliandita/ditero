@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { goToSettings, leaveSettings } from "./helpers.ts";
+import { goToSettings, leaveSettings, openMobileLists } from "./helpers.ts";
 
 // M1c views + keyboard e2e. Exercises the saved-view lifecycle (build/save/
 // round-trip), the layout switch + board regroup, the command palette, the
@@ -616,7 +616,8 @@ test("mobile: a board view degrades to the grouped list affordance", async ({
 	await page.reload();
 	await waitWorkspaceReady(page);
 
-	// Mobile landing surfaces a New view control in its Views nav.
+	// Phones reach New view from the Views section of the Lists tab.
+	await openMobileLists(page);
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(`Mini board ${Date.now()}`);
 	await pickLabeled(page, "Layout", "Board");

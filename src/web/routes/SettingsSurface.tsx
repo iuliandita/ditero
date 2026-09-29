@@ -11,6 +11,7 @@ import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
 import { TemplateManager } from "../components/settings/TemplateManager.tsx";
 import { ThemeSwitcher } from "../components/settings/ThemeSwitcher.tsx";
+import { PageFrame } from "../components/shell/PageFrame.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import type { Locale } from "../lib/locale.ts";
 import { SecurityPanel } from "./SecurityPanel.tsx";
@@ -31,12 +32,16 @@ export function SettingsSurface({
 	onOpenList: (id: string) => void;
 }) {
 	return (
-		<div data-testid="settings-surface">
-			<div className="flex items-center gap-2 border-b p-3">
+		<PageFrame
+			measure="reading"
+			data-testid="settings-surface"
+			className="gap-0"
+		>
+			<div className="flex items-center gap-2">
 				<BackButton data-testid="settings-back" onClick={onBack} />
 				<h1 className="truncate text-lg font-semibold">{m.nav_settings()}</h1>
 			</div>
-			<div className="p-4 md:p-6">
+			<div>
 				<SecurityPanel />
 				<DataPortabilityPanel />
 				<ImportPlanPanel />
@@ -57,6 +62,6 @@ export function SettingsSurface({
 				<FocusSettings />
 				<NotificationSettings />
 			</div>
-		</div>
+		</PageFrame>
 	);
 }

@@ -7,8 +7,10 @@ import { m } from "../../src/paraglide/messages.js";
 import {
 	goToSettings,
 	leaveSettings,
+	openMembers,
 	openMoreOptions,
 	signUp,
+	switchWorkspace,
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
@@ -245,7 +247,7 @@ async function openTask(page: Page, listName: string, taskName: string) {
 }
 
 async function createInvite(page: Page, email: string): Promise<URL> {
-	await page.getByTestId("open-members").click();
+	await openMembers(page);
 	await page.getByTestId("invite-open").click();
 	await page.getByTestId("invite-email").fill(email);
 	await page.getByTestId("invite-submit").click();
@@ -319,9 +321,7 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 			"insert into membership (id, user_id, workspace_id, role) values ($1, $2, $3, 'owner')",
 			[`m_canary_${stamp}`, ownerId, workspaceId],
 		);
-		await owner
-			.getByRole("button", { name: workspaceName, exact: true })
-			.click();
+		await switchWorkspace(owner, workspaceName);
 		await createListAndTask(owner, listName, taskName);
 		const committed = owner.waitForResponse("**/api/attachments/finalize");
 		await inputFor(owner.getByTestId("task-attachments")).setInputFiles({
@@ -426,9 +426,7 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		await member.getByTestId("accept-password").fill("pw-123456");
 		await member.getByTestId("accept-submit").click();
 		await finishEnrollment(member, undefined, true);
-		await member
-			.getByRole("button", { name: workspaceName, exact: true })
-			.click();
+		await switchWorkspace(member, workspaceName);
 		await openTask(member, listName, taskName);
 		await expectDownload(member, oldName, oldBytes);
 
@@ -439,7 +437,7 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		await outsider.getByTestId("e2e-setup").click();
 		await finishEnrollment(outsider);
 
-		await owner.getByTestId("open-members").click();
+		await openMembers(owner);
 		const memberRow = owner
 			.getByTestId("member-row")
 			.filter({ hasText: memberEmail.split("@")[0] });
@@ -512,9 +510,7 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		);
 		await outsider.getByTestId("accept-join").click();
 		await expect(outsider.getByTestId("workspace")).toBeVisible();
-		await outsider
-			.getByRole("button", { name: workspaceName, exact: true })
-			.click();
+		await switchWorkspace(outsider, workspaceName);
 		await openTask(outsider, listName, taskName);
 		const pending = outsider.getByTestId("task-attachments");
 		await expect(

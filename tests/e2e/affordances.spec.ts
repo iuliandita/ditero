@@ -3,7 +3,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import type { Locale } from "../../src/domain/locale.ts";
 import { m } from "../../src/paraglide/messages.js";
-import { goToSettings } from "./helpers.ts";
+import { goToSettings, switchWorkspace } from "./helpers.ts";
 
 // M-ui row-affordances e2e. One RowAction[] descriptor renders three ways
 // (kebab, right-click, keyboard), and every destructive action now runs through
@@ -58,10 +58,12 @@ async function waitWorkspaceReady(page: Page): Promise<void> {
 	});
 }
 
-// Clicking the workspace button clears openListId/openViewId, which is the way
-// back to the lists index (where the create-list form mounts).
+// The home view's sidebar row lands on the home surface, which is where the
+// desktop create-list form mounts.
 async function goToListsIndex(page: Page): Promise<void> {
-	await page.getByRole("button", { name: /'s space/ }).click();
+	await sidebarLists(page)
+		.getByRole("button", { name: "Today", exact: true })
+		.click();
 	await expect(page.getByTestId("create-list-open")).toBeVisible({
 		timeout: 15000,
 	});
@@ -527,9 +529,7 @@ test("roles: a Viewer is offered no Delete anywhere", async ({ page }) => {
 	};
 	await seedViewerWorkspace(userId, names);
 
-	await page
-		.getByRole("button", { name: names.workspace, exact: true })
-		.click();
+	await switchWorkspace(page, names.workspace);
 	await expect(
 		sidebarLists(page).getByRole("button", { name: names.list, exact: true }),
 	).toBeVisible({ timeout: 15000 });
@@ -573,9 +573,7 @@ test("roles: a Viewer keeps New view/New dashboard, loses New folder and this wo
 	};
 	await seedViewerWorkspace(userId, names);
 
-	await page
-		.getByRole("button", { name: names.workspace, exact: true })
-		.click();
+	await switchWorkspace(page, names.workspace);
 	await expect(
 		sidebarLists(page).getByRole("button", { name: names.list, exact: true }),
 	).toBeVisible({ timeout: 15000 });
