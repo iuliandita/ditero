@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import {
+	chooseOption,
 	goToSettings,
 	leaveSettings,
 	sidebarLists,
@@ -57,8 +58,8 @@ test("saves and deduplicates a dry run without changing tasks, then discards it"
 	await expect(panel.getByTestId("import-workspace")).toHaveCount(
 		exported.data.workspaces.length,
 	);
-	for (const select of await panel.getByTestId("import-workspace").all())
-		await select.selectOption(exported.data.workspaces[0].id);
+	for (const trigger of await panel.getByTestId("import-workspace").all())
+		await chooseOption(page, trigger, exported.data.workspaces[0].name);
 	// Lose the response after persistence, then retry the same source identity.
 	let firstId = "";
 	await page.route(
@@ -222,8 +223,8 @@ test("imports assignments, recovers a lost response, and supports ordinary unass
 	await expect(panel.getByTestId("import-workspace")).toHaveCount(
 		original.data.workspaces.length,
 	);
-	for (const select of await panel.getByTestId("import-workspace").all())
-		await select.selectOption(original.data.workspaces[0].id);
+	for (const trigger of await panel.getByTestId("import-workspace").all())
+		await chooseOption(page, trigger, original.data.workspaces[0].name);
 	await expect(
 		panel.getByText("Each mapped person must belong", { exact: false }),
 	).toBeVisible();

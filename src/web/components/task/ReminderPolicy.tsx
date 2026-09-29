@@ -1,5 +1,6 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { useMemo, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { runMutation } from "@/lib/run-mutation";
 import { DEFAULT_MAX_REPEATS } from "../../../domain/escalation-policy.ts";
@@ -8,12 +9,7 @@ import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
-import {
-	maxRepeatsInput,
-	REPEAT_EVERY_MIN_MAX,
-	REPEATS_MAX,
-	repeatEveryMinInput,
-} from "../../lib/escalation-input.ts";
+import { EscalationFields } from "./EscalationFields.tsx";
 import { TimeField } from "./TimeField.tsx";
 
 // Per-task reminder policy (shell doc 4). Urgent carries its consequence in its
@@ -36,6 +32,7 @@ export function ReminderPolicy({
 	const { pref } = useUserPref();
 	const [memberships] = useQuery(queries.memberships.mine());
 	const [error, setError] = useState<string | null>(null);
+	const overridesId = useId();
 	const [open, setOpen] = useState(
 		task.repeatEveryMin != null ||
 			task.maxRepeats != null ||
@@ -88,8 +85,13 @@ export function ReminderPolicy({
 			)}
 
 			<div className="flex items-center justify-between gap-3">
-				<span id="urgent-label" className="text-sm">
-					{m.reminder_urgent_label()}
+				<span className="flex flex-col">
+					<span id="urgent-label" className="text-sm">
+						{m.reminder_urgent_label()}
+					</span>
+					<span id="urgent-help" className="text-xs text-muted-foreground">
+						{m.reminder_urgent_help()}
+					</span>
 				</span>
 				<Button
 					disabled={disabled}
@@ -98,6 +100,7 @@ export function ReminderPolicy({
 					role="switch"
 					aria-checked={task.urgent ?? false}
 					aria-labelledby="urgent-label"
+					aria-describedby="urgent-help"
 					data-testid="reminder-urgent"
 					onClick={() => update({ id: task.id, urgent: !task.urgent })}
 				>
@@ -109,83 +112,47 @@ export function ReminderPolicy({
 				type="button"
 				disabled={disabled}
 				aria-expanded={open}
+				aria-controls={overridesId}
 				data-testid="reminder-overrides-toggle"
-				className="w-fit text-xs text-muted-foreground underline"
+				className="-mx-1 flex min-h-8 w-fit items-center gap-1 rounded-lg px-1 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed pointer-coarse:min-h-11"
 				onClick={() => setOpen((o) => !o)}
 			>
+				{open ? (
+					<ChevronDown className="size-4 shrink-0" aria-hidden="true" />
+				) : (
+					<ChevronRight
+						className="size-4 shrink-0 rtl:rotate-180"
+						aria-hidden="true"
+					/>
+				)}
 				{m.reminder_override_defaults()}
 			</button>
 
 			{open && (
-				<div className="flex flex-wrap gap-3" data-testid="reminder-overrides">
-					<label className="flex flex-col gap-1">
-						<span className="text-muted-foreground">
-							{m.escalation_repeat_every()}
-						</span>
-						<input
-							disabled={disabled}
-							type="number"
-							min={1}
-							max={REPEAT_EVERY_MIN_MAX}
-							value={task.repeatEveryMin ?? ""}
-							placeholder={String(
-								defaults?.repeatEveryMin ?? m.escalation_off(),
-							)}
-							data-testid="reminder-repeat"
-							className="h-8 w-32 rounded-lg border bg-transparent px-2 text-sm"
-							onChange={(e) =>
-								update({
-									id: task.id,
-									repeatEveryMin: repeatEveryMinInput(e.target.value),
-								})
-							}
-						/>
-					</label>
-					<label className="flex flex-col gap-1">
-						<span className="text-muted-foreground">
-							{m.escalation_max_repeats()}
-						</span>
-						<input
-							disabled={disabled}
-							type="number"
-							min={0}
-							max={REPEATS_MAX}
-							value={task.maxRepeats ?? ""}
-							placeholder={String(defaults?.maxRepeats ?? DEFAULT_MAX_REPEATS)}
-							data-testid="reminder-max"
-							className="h-8 w-32 rounded-lg border bg-transparent px-2 text-sm"
-							onChange={(e) =>
-								update({
-									id: task.id,
-									maxRepeats: maxRepeatsInput(e.target.value),
-								})
-							}
-						/>
-					</label>
-					<label className="flex flex-col gap-1">
-						<span className="text-muted-foreground">
-							{m.escalation_fallback_member()}
-						</span>
-						<select
-							disabled={disabled}
-							value={task.fallbackUserId ?? ""}
-							data-testid="reminder-fallback"
-							className="h-8 rounded-lg border bg-transparent px-2 text-sm"
-							onChange={(e) =>
-								update({
-									id: task.id,
-									fallbackUserId: e.target.value || null,
-								})
-							}
-						>
-							<option value="">{m.escalation_inherit_default()}</option>
-							{members.map((mem) => (
-								<option key={mem.id} value={mem.id}>
-									{mem.name}
-								</option>
-							))}
-						</select>
-					</label>
+				<div id={overridesId} className="ps-5" data-testid="reminder-overrides">
+					<EscalationFields
+						disabled={disabled}
+						values={{
+							repeatEveryMin: task.repeatEveryMin ?? null,
+							maxRepeats: task.maxRepeats ?? null,
+							fallbackUserId: task.fallbackUserId ?? null,
+						}}
+						people={members}
+						noneLabel={m.escalation_inherit_default()}
+						repeatPlaceholder={
+							defaults?.repeatEveryMin != null
+								? String(defaults.repeatEveryMin)
+								: undefined
+						}
+						maxPlaceholder={String(defaults?.maxRepeats ?? DEFAULT_MAX_REPEATS)}
+						repeatHelp={m.escalation_repeat_help_task()}
+						testIds={{
+							repeat: "reminder-repeat",
+							max: "reminder-max",
+							fallback: "reminder-fallback",
+						}}
+						onChange={(patch) => update({ id: task.id, ...patch })}
+					/>
 				</div>
 			)}
 		</div>

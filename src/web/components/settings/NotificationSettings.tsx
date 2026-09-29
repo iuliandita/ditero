@@ -7,12 +7,7 @@ import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import { useNotificationChannels } from "../../hooks/useNotificationChannels.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
-import {
-	maxRepeatsInput,
-	REPEAT_EVERY_MIN_MAX,
-	REPEATS_MAX,
-	repeatEveryMinInput,
-} from "../../lib/escalation-input.ts";
+import { EscalationFields } from "../task/EscalationFields.tsx";
 import { ChannelRow } from "./ChannelRow.tsx";
 import { CHANNEL_ORDER, type ChannelHealthRow } from "./channel-form.ts";
 import { QuietHoursEditor } from "./QuietHoursEditor.tsx";
@@ -46,65 +41,30 @@ function EscalationDefaults() {
 	}
 
 	return (
-		<div
-			className="mt-4 flex flex-wrap gap-3"
-			data-testid="escalation-defaults"
-		>
-			<label className="flex flex-col gap-1 text-sm">
-				<span className="text-muted-foreground">
-					{m.escalation_repeat_every()}
-				</span>
-				<input
-					type="number"
-					min={1}
-					max={REPEAT_EVERY_MIN_MAX}
-					value={defaults?.repeatEveryMin ?? ""}
-					data-testid="escalation-repeat"
-					className="h-8 w-32 rounded-lg border bg-transparent px-2 text-sm"
-					onChange={(e) =>
-						set({ repeatEveryMin: repeatEveryMinInput(e.target.value) })
-					}
-				/>
-			</label>
-			<label className="flex flex-col gap-1 text-sm">
-				<span className="text-muted-foreground">
-					{m.escalation_max_repeats()}
-				</span>
-				<input
-					type="number"
-					min={0}
-					max={REPEATS_MAX}
-					placeholder={String(DEFAULT_MAX_REPEATS)}
-					value={defaults?.maxRepeats ?? ""}
-					data-testid="escalation-max"
-					className="h-8 w-32 rounded-lg border bg-transparent px-2 text-sm"
-					onChange={(e) => set({ maxRepeats: maxRepeatsInput(e.target.value) })}
-				/>
-			</label>
-			<label className="flex flex-col gap-1 text-sm">
-				<span className="text-muted-foreground">
-					{m.escalation_fallback_member()}
-				</span>
-				<select
-					value={defaults?.fallbackUserId ?? ""}
-					data-testid="escalation-fallback"
-					className="h-8 rounded-lg border bg-transparent px-2 text-sm"
-					onChange={(e) => set({ fallbackUserId: e.target.value || null })}
-				>
-					<option value="">{m.escalation_fallback_nobody()}</option>
-					{people.map((p) => (
-						<option key={p.id} value={p.id}>
-							{p.name}
-						</option>
-					))}
-				</select>
-			</label>
+		<div data-testid="escalation-defaults">
+			<EscalationFields
+				values={{
+					repeatEveryMin: defaults?.repeatEveryMin ?? null,
+					maxRepeats: defaults?.maxRepeats ?? null,
+					fallbackUserId: defaults?.fallbackUserId ?? null,
+				}}
+				people={people}
+				noneLabel={m.escalation_fallback_nobody()}
+				maxPlaceholder={String(DEFAULT_MAX_REPEATS)}
+				repeatHelp={m.escalation_repeat_help_default()}
+				testIds={{
+					repeat: "escalation-repeat",
+					max: "escalation-max",
+					fallback: "escalation-fallback",
+				}}
+				onChange={set}
+			/>
 		</div>
 	);
 }
 
-// Settings > Notifications: Channels, then Defaults, stacked in one scroll
-// (shell doc 1). Single column on mobile by construction.
+// Settings > Notifications: Channels, then Quiet hours, then repeating
+// reminder defaults, stacked in one scroll (shell doc 1).
 export function NotificationSettings() {
 	const api = useNotificationChannels();
 	// Health (verified/last-error) syncs; config does not. One subscription for
@@ -123,54 +83,67 @@ export function NotificationSettings() {
 		return map;
 	}, [rows]);
 	return (
-		<section
-			className="mt-8 border-t pt-4"
-			aria-labelledby="notification-settings-heading"
-			data-testid="notification-settings"
-		>
-			<h2 id="notification-settings-heading" className="text-sm font-semibold">
-				{m.notifications_heading()}
-			</h2>
-
-			<h3 className="mt-3 text-xs font-medium text-muted-foreground">
-				{m.notifications_channels_heading()}
-			</h3>
-			{/* Page-level, not per row: this is the channel LIST failing to load,
-			    which is not attributable to any one row. Per-row save failures
-			    render inside their own row. */}
-			{api.error && (
-				<p role="alert" className="mt-1 text-xs text-destructive">
-					{api.error}
-				</p>
-			)}
-			{!api.loading && api.channels.length === 0 && (
-				<p
-					className="mt-1 text-xs text-muted-foreground"
-					data-testid="no-channels-note"
+		<div className="flex flex-col gap-8" data-testid="notification-settings">
+			<section aria-labelledby="notification-channels-heading">
+				<h3
+					id="notification-channels-heading"
+					className="text-sm font-semibold"
 				>
-					{m.notifications_no_channels()}
-				</p>
-			)}
-			<div className="mt-2 flex flex-col gap-2">
-				{CHANNEL_ORDER.map((kind) => (
-					<ChannelRow
-						key={kind}
-						kind={kind}
-						api={api}
-						capabilities={api.capabilities}
-						interactionsUrls={api.interactionsUrls}
-						health={health.get(kind) ?? null}
-					/>
-				))}
-			</div>
+					{m.notifications_channels_heading()}
+				</h3>
+				{/* Page-level, not per row: this is the channel LIST failing to load,
+				    which is not attributable to any one row. Per-row save failures
+				    render inside their own row. */}
+				{api.error && (
+					<p role="alert" className="mt-1 text-xs text-destructive">
+						{api.error}
+					</p>
+				)}
+				{!api.loading && api.channels.length === 0 && (
+					<p
+						className="mt-0.5 text-sm text-muted-foreground"
+						data-testid="no-channels-note"
+					>
+						{m.notifications_no_channels()}
+					</p>
+				)}
+				<div className="mt-3 flex flex-col divide-y rounded-xl border">
+					{CHANNEL_ORDER.map((kind) => (
+						<ChannelRow
+							key={kind}
+							kind={kind}
+							api={api}
+							capabilities={api.capabilities}
+							interactionsUrls={api.interactionsUrls}
+							health={health.get(kind) ?? null}
+						/>
+					))}
+				</div>
+			</section>
 
-			<h3 className="mt-6 text-xs font-medium text-muted-foreground">
-				{m.notifications_defaults_heading()}
-			</h3>
-			<div className="mt-2">
-				<QuietHoursEditor />
-				<EscalationDefaults />
-			</div>
-		</section>
+			<section aria-labelledby="quiet-hours-heading">
+				<h3 id="quiet-hours-heading" className="text-sm font-semibold">
+					{m.settings_quiet_hours_heading()}
+				</h3>
+				<p className="mt-0.5 text-sm text-muted-foreground">
+					{m.settings_quiet_hours_help()}
+				</p>
+				<div className="mt-3">
+					<QuietHoursEditor />
+				</div>
+			</section>
+
+			<section aria-labelledby="reminder-defaults-heading">
+				<h3 id="reminder-defaults-heading" className="text-sm font-semibold">
+					{m.notifications_defaults_heading()}
+				</h3>
+				<p className="mt-0.5 text-sm text-muted-foreground">
+					{m.settings_reminder_defaults_help()}
+				</p>
+				<div className="mt-3">
+					<EscalationDefaults />
+				</div>
+			</section>
+		</div>
 	);
 }

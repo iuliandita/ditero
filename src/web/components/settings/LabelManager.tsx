@@ -123,14 +123,13 @@ export function LabelManager({
 
 	return (
 		<section
-			className="mt-8 border-t pt-4"
 			aria-labelledby="label-manager-heading"
 			data-testid="label-manager"
 		>
 			<div className="flex items-center justify-between gap-4">
-				<h2 id="label-manager-heading" className="text-sm font-semibold">
+				<h3 id="label-manager-heading" className="text-sm font-semibold">
 					{m.task_field_labels()}
-				</h2>
+				</h3>
 				{canWrite && labels.length > 0 && newLabelButton}
 			</div>
 

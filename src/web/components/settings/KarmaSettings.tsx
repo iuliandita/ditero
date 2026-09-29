@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
 
@@ -36,28 +37,32 @@ export function KarmaSettings() {
 
 	return (
 		<section
-			className="mt-8 border-t pt-4"
 			aria-labelledby="karma-settings-heading"
 			data-testid="karma-settings"
 		>
-			<h2 id="karma-settings-heading" className="text-sm font-semibold">
+			<h3 id="karma-settings-heading" className="text-sm font-semibold">
 				{m.karma_goals_heading()}
-			</h2>
+			</h3>
 			<p className="mt-1 text-xs text-muted-foreground">
 				{m.karma_goals_description()}
 			</p>
 
 			<div className="mt-4 grid grid-cols-2 gap-3">
 				{GOAL_FIELDS.map((f) => (
-					<label key={f.key} className="flex flex-col gap-1 text-sm">
+					<label
+						key={f.key}
+						htmlFor={f.testid}
+						className="flex flex-col gap-1 text-sm"
+					>
 						<span className="text-muted-foreground">{f.label}</span>
-						<input
+						<Input
 							type="number"
 							min={0}
 							max={1000}
 							value={goals[f.key]}
+							id={f.testid}
 							data-testid={f.testid}
-							className="h-8 rounded-lg border bg-transparent px-2 text-sm"
+							className="tabular-nums pointer-coarse:h-11"
 							onChange={(e) =>
 								setPref({
 									karmaGoals: { ...goals, [f.key]: e.target.valueAsNumber },
@@ -91,15 +96,19 @@ export function KarmaSettings() {
 			</div>
 
 			{vacation.active && (
-				<label className="mt-3 flex flex-col gap-1 text-sm">
+				<label
+					htmlFor="karma-vacation-until"
+					className="mt-3 flex flex-col gap-1 text-sm"
+				>
 					<span className="text-muted-foreground">
 						{m.karma_vacation_until()}
 					</span>
-					<input
+					<Input
 						type="date"
 						value={vacation.until ?? ""}
+						id="karma-vacation-until"
 						data-testid="karma-vacation-until"
-						className="h-8 w-fit rounded-lg border bg-transparent px-2 text-sm"
+						className="w-fit pointer-coarse:h-11"
 						onChange={(e) => {
 							const until = e.target.value;
 							setPref({

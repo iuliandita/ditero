@@ -88,13 +88,12 @@ export function TemplateManager({
 
 	return (
 		<section
-			className="mt-8 border-t pt-4"
 			aria-labelledby="template-manager-heading"
 			data-testid="template-manager"
 		>
-			<h2 id="template-manager-heading" className="text-sm font-semibold">
+			<h3 id="template-manager-heading" className="text-sm font-semibold">
 				{m.templates_heading()}
-			</h2>
+			</h3>
 
 			{templates.length === 0 ? (
 				<p className="mt-4 py-6 text-center text-xs text-muted-foreground">

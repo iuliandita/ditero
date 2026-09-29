@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { KeyRound } from "lucide-react";
+import { useCallback, useEffect, useId, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { m } from "../../paraglide/messages.js";
 import { EncryptedFilesPanel } from "../components/e2e/EncryptedFilesPanel.tsx";
-import { AccountDeletionPanel } from "../components/settings/AccountDeletionPanel.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { authErrorMessage } from "../lib/auth-messages.ts";
-import { useKeyring } from "../lib/e2e/KeyringProvider.tsx";
 
 type PasskeyRecord = { id: string; name?: string | null };
 
 export function SecurityPanel() {
-	const { signOut } = useKeyring();
-	const [signingOut, setSigningOut] = useState(false);
+	const passwordId = useId();
 	const { data: session } = authClient.useSession();
 	const [passkeys, setPasskeys] = useState<PasskeyRecord[]>([]);
 	const [password, setPassword] = useState("");
@@ -21,18 +21,6 @@ export function SecurityPanel() {
 		Boolean(session?.user.twoFactorEnabled),
 	);
 	const [error, setError] = useState<string | null>(null);
-
-	async function endSession() {
-		setSigningOut(true);
-		setError(null);
-		try {
-			await signOut();
-		} catch {
-			setError(m.security_error_sign_out());
-		} finally {
-			setSigningOut(false);
-		}
-	}
 
 	const loadPasskeys = useCallback(async () => {
 		const result = await authClient.passkey.listUserPasskeys();
@@ -117,119 +105,134 @@ export function SecurityPanel() {
 	}
 
 	return (
-		<section className="mt-8 border-t pt-4" aria-labelledby="security-heading">
-			<div className="flex items-center justify-between gap-4">
-				<h2 id="security-heading" className="text-sm font-semibold">
-					{m.security_heading()}
-				</h2>
-				<button
-					data-testid="sign-out"
-					type="button"
-					className="border px-2 py-1"
-					disabled={signingOut}
-					onClick={endSession}
-				>
-					{m.security_sign_out()}
-				</button>
-			</div>
-
-			<div className="mt-4">
-				<div className="flex items-center justify-between gap-4">
-					<h3 className="text-sm font-medium">
-						{m.security_passkeys_heading()}
-					</h3>
-					<button
+		<div className="flex flex-col gap-8">
+			<div>
+				<div className="flex flex-wrap items-center justify-between gap-3">
+					<div className="min-w-0">
+						<h3 className="text-sm font-semibold">
+							{m.security_passkeys_heading()}
+						</h3>
+						{passkeys.length === 0 && (
+							<p className="mt-0.5 text-sm text-muted-foreground">
+								{m.security_passkeys_empty()}
+							</p>
+						)}
+					</div>
+					<Button
 						data-testid="add-passkey"
-						type="button"
-						className="border px-2 py-1"
-						onClick={addPasskey}
+						variant="outline"
+						className="pointer-coarse:h-11"
+						onClick={() => void addPasskey()}
 					>
+						<KeyRound aria-hidden="true" />
 						{m.security_add_passkey()}
-					</button>
+					</Button>
 				</div>
-				<ul className="mt-2 space-y-1">
-					{passkeys.map((item) => (
-						<li
-							key={item.id}
-							data-testid="passkey-item"
-							className="flex items-center justify-between gap-3 border p-2 text-sm"
-						>
-							<span>{item.name || m.security_passkey_unnamed()}</span>
-							<button
-								type="button"
-								className="border px-2 py-1"
-								onClick={() => removePasskey(item.id)}
+				{passkeys.length > 0 && (
+					<ul className="mt-3 flex flex-col divide-y rounded-xl border">
+						{passkeys.map((item) => (
+							<li
+								key={item.id}
+								data-testid="passkey-item"
+								className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
 							>
-								{m.security_passkey_remove()}
-							</button>
-						</li>
-					))}
-				</ul>
+								<span className="min-w-0 truncate">
+									{item.name || m.security_passkey_unnamed()}
+								</span>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="pointer-coarse:h-11"
+									onClick={() => void removePasskey(item.id)}
+								>
+									{m.security_passkey_remove()}
+								</Button>
+							</li>
+						))}
+					</ul>
+				)}
 			</div>
 
-			<div className="mt-4 space-y-2">
-				<div className="flex items-center justify-between gap-4">
-					<h3 className="text-sm font-medium">{m.security_totp_heading()}</h3>
-					<span data-testid="two-factor-status" className="text-sm">
+			<div className="flex flex-col gap-3">
+				<div className="flex flex-wrap items-center justify-between gap-3">
+					<h3 className="text-sm font-semibold">{m.security_totp_heading()}</h3>
+					<span
+						data-testid="two-factor-status"
+						className="text-sm text-muted-foreground"
+					>
 						{twoFactorEnabled
 							? m.security_totp_enabled()
 							: m.security_totp_disabled()}
 					</span>
 				</div>
-				<input
-					data-testid="security-password"
-					type="password"
-					className="w-full border p-2"
-					placeholder={m.security_password_placeholder()}
-					value={password}
-					onChange={(event) => setPassword(event.target.value)}
-				/>
-				{twoFactorEnabled ? (
-					<button
-						data-testid="disable-2fa"
-						type="button"
-						className="border px-2 py-1"
-						onClick={disableTwoFactor}
-					>
-						{m.security_disable_2fa()}
-					</button>
-				) : (
-					<button
-						data-testid="enable-2fa"
-						type="button"
-						className="border px-2 py-1"
-						onClick={enableTwoFactor}
-					>
-						{m.security_enable_2fa()}
-					</button>
-				)}
+				<div className="flex flex-col gap-1 text-sm">
+					<label htmlFor={passwordId} className="text-muted-foreground">
+						{m.security_password_placeholder()}
+					</label>
+					<span className="flex flex-wrap items-center gap-2">
+						<Input
+							id={passwordId}
+							data-testid="security-password"
+							type="password"
+							autoComplete="current-password"
+							className="w-full sm:w-64 pointer-coarse:h-11"
+							value={password}
+							onChange={(event) => setPassword(event.target.value)}
+						/>
+						{twoFactorEnabled ? (
+							<Button
+								data-testid="disable-2fa"
+								variant="outline"
+								className="pointer-coarse:h-11"
+								onClick={() => void disableTwoFactor()}
+							>
+								{m.security_disable_2fa()}
+							</Button>
+						) : (
+							<Button
+								data-testid="enable-2fa"
+								variant="outline"
+								className="pointer-coarse:h-11"
+								onClick={() => void enableTwoFactor()}
+							>
+								{m.security_enable_2fa()}
+							</Button>
+						)}
+					</span>
+				</div>
 
 				{totpURI ? (
-					<div className="space-y-2">
-						<code data-testid="totp-uri" className="block break-all text-xs">
+					<div className="flex flex-col gap-2">
+						<code
+							data-testid="totp-uri"
+							className="block rounded-lg bg-muted px-3 py-2 text-xs break-all"
+						>
 							{totpURI}
 						</code>
-						<input
-							data-testid="totp-code"
-							inputMode="numeric"
-							className="w-full border p-2"
-							placeholder={m.security_totp_code_placeholder()}
-							value={totpCode}
-							onChange={(event) => setTotpCode(event.target.value)}
-						/>
-						<button
-							data-testid="verify-2fa"
-							type="button"
-							className="border px-2 py-1"
-							onClick={verifyTwoFactor}
-						>
-							{m.security_verify_2fa()}
-						</button>
+						<span className="flex flex-wrap items-center gap-2">
+							<Input
+								data-testid="totp-code"
+								inputMode="numeric"
+								autoComplete="one-time-code"
+								aria-label={m.security_totp_code_placeholder()}
+								className="w-full sm:w-40 pointer-coarse:h-11"
+								placeholder={m.security_totp_code_placeholder()}
+								value={totpCode}
+								onChange={(event) => setTotpCode(event.target.value)}
+							/>
+							<Button
+								data-testid="verify-2fa"
+								className="pointer-coarse:h-11"
+								onClick={() => void verifyTwoFactor()}
+							>
+								{m.security_verify_2fa()}
+							</Button>
+						</span>
 					</div>
 				) : null}
 
 				{backupCodes.length ? (
-					<ul className="grid grid-cols-2 gap-1 font-mono text-xs">
+					<ul className="grid w-fit grid-cols-2 gap-x-6 gap-y-1 rounded-lg bg-muted px-3 py-2 font-mono text-xs tabular-nums">
 						{backupCodes.map((code) => (
 							<li key={code} data-testid="backup-code">
 								{code}
@@ -241,9 +244,11 @@ export function SecurityPanel() {
 
 			{session?.user.id && <EncryptedFilesPanel userId={session.user.id} />}
 
-			<AccountDeletionPanel />
-
-			{error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-		</section>
+			{error ? (
+				<p role="alert" className="text-sm text-destructive">
+					{error}
+				</p>
+			) : null}
+		</div>
 	);
 }

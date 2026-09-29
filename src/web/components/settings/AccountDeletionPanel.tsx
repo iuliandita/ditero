@@ -96,11 +96,8 @@ export function AccountDeletionPanel() {
 		preview?.lastHolderWorkspaces.map(({ name }) => name) ?? [];
 
 	return (
-		<section
-			className="mt-8 border-t border-destructive/30 pt-4"
-			aria-labelledby="account-delete-heading"
-		>
-			<h3 id="account-delete-heading" className="text-sm font-medium">
+		<section aria-labelledby="account-delete-heading">
+			<h3 id="account-delete-heading" className="text-sm font-semibold">
 				{m.account_delete_heading()}
 			</h3>
 			<p className="mt-1 max-w-prose text-sm text-muted-foreground">
