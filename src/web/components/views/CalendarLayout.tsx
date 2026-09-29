@@ -10,6 +10,8 @@ import {
 } from "@dnd-kit/core";
 import { CalendarClock, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 import { type JSX, useMemo, useRef, useState } from "react";
+import { checkShapeFor } from "@/lib/check-shape";
+import { priorityLabel } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
 import { localDay, shiftDay } from "../../../domain/local-day.ts";
 import { expand } from "../../../domain/recurrence.ts";
@@ -76,6 +78,58 @@ function monthOf(dayKey: string): number {
 
 type DayItem = { entry: ViewEntry; occurrence: boolean };
 
+// The cue is the task checkbox in miniature: round for a task, square for an
+// item, ringed in its priority tone and filled once done. It is decoration;
+// the accessible name (chipName) carries the same facts in words.
+const TONE_RING: Record<number, string> = {
+	1: "border-priority-1",
+	2: "border-priority-2",
+	3: "border-priority-3",
+};
+const TONE_FILL: Record<number, string> = {
+	1: "bg-priority-1",
+	2: "bg-priority-2",
+	3: "bg-priority-3",
+};
+
+function ChipCue({ item }: { item: DayItem }): JSX.Element {
+	const { task, kind } = item.entry;
+	const p = task.priority ?? 0;
+	const done = (task.done ?? false) && !item.occurrence;
+	return (
+		<span
+			aria-hidden
+			data-testid="calendar-chip-cue"
+			className={cn(
+				"mt-[3px] size-2.5 shrink-0 border-[1.5px]",
+				checkShapeFor(kind) === "round" ? "rounded-full" : "rounded-[2px]",
+				TONE_RING[p] ?? "border-control-border",
+				done && (TONE_FILL[p] ?? "bg-control-border"),
+			)}
+		/>
+	);
+}
+
+// A recurring occurrence has no done state of its own; only the concrete task
+// reports completion.
+function chipName(item: DayItem): string {
+	const task = item.entry.task;
+	let name = item.occurrence
+		? m.calendar_chip_recurring({ title: task.title })
+		: task.title;
+	if ((task.priority ?? 0) > 0)
+		name = m.calendar_chip_priority({
+			name,
+			priority: priorityLabel(task.priority),
+		});
+	if (task.done && !item.occurrence) name = m.calendar_chip_done({ name });
+	return name;
+}
+
+function isQuiet(item: DayItem): boolean {
+	return (item.entry.task.done ?? false) && !item.occurrence;
+}
+
 // Same rule as weekdayNames: built per call. Formats the key's PARTS through a
 // local Date -- passing the key to `new Date()` would parse it as UTC midnight
 // and render the previous day anywhere west of UTC, which is the bug this file
@@ -117,27 +171,36 @@ function Chip({
 			data-testid="calendar-chip"
 			style={style}
 			onClick={() => onOpen(task)}
-			aria-label={
-				item.occurrence
-					? m.calendar_chip_recurring({ title: task.title })
-					: task.title
-			}
+			aria-label={chipName(item)}
+			title={task.title}
 			className={cn(
-				"flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-start text-xs text-foreground",
+				"flex w-full items-start gap-1 rounded px-1 py-0.5 text-start text-xs",
 				"focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-				// Occurrences read as "generated" via a dashed border + muted fill +
-				// the repeat glyph, not low-contrast text (keeps AA at this size).
+				// Occurrences read as "generated" via a dashed border + the repeat
+				// glyph, not low-contrast text (keeps AA at this size). Done tasks
+				// drop their fill and step back to secondary text.
 				item.occurrence
-					? "border border-dashed border-border bg-muted/50"
-					: "bg-primary/10",
+					? "border border-dashed border-border text-foreground"
+					: isQuiet(item)
+						? "text-muted-foreground"
+						: "bg-muted text-foreground",
 				dragEnabled && "cursor-grab touch-none",
 			)}
 			{...(dragEnabled ? { ...attributes, ...listeners } : {})}
 		>
-			{item.occurrence && (
-				<Repeat className="size-3 shrink-0" aria-hidden="true" />
+			{item.occurrence ? (
+				<Repeat className="mt-px size-3 shrink-0" aria-hidden="true" />
+			) : (
+				<ChipCue item={item} />
 			)}
-			<span className="truncate">{task.title}</span>
+			<span
+				className={cn(
+					"line-clamp-2 min-w-0 break-words",
+					isQuiet(item) && "line-through",
+				)}
+			>
+				{task.title}
+			</span>
 		</button>
 	);
 }
@@ -243,23 +306,31 @@ function Agenda({
 									type="button"
 									data-testid="agenda-item"
 									onClick={() => onOpen(it.entry.task)}
-									aria-label={
-										it.occurrence
-											? m.calendar_chip_recurring({
-													title: it.entry.task.title,
-												})
-											: it.entry.task.title
-									}
+									aria-label={chipName(it)}
 									className={cn(
-										"flex w-full items-center gap-1.5 rounded px-1 py-1 text-start text-sm",
+										"flex min-h-11 w-full items-start gap-2 rounded px-1 py-1.5 text-start text-sm md:min-h-9",
 										"focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-										it.occurrence && "text-muted-foreground",
+										(it.occurrence || isQuiet(it)) && "text-muted-foreground",
 									)}
 								>
-									{it.occurrence && (
-										<Repeat className="size-3.5 shrink-0" aria-hidden="true" />
+									{it.occurrence ? (
+										<Repeat
+											className="mt-0.5 size-3.5 shrink-0"
+											aria-hidden="true"
+										/>
+									) : (
+										<span className="mt-0.5 flex size-3.5 shrink-0 items-center justify-center">
+											<ChipCue item={it} />
+										</span>
 									)}
-									<span className="truncate">{it.entry.task.title}</span>
+									<span
+										className={cn(
+											"line-clamp-2 min-w-0 break-words",
+											isQuiet(it) && "line-through",
+										)}
+									>
+										{it.entry.task.title}
+									</span>
 								</button>
 							</li>
 						))}

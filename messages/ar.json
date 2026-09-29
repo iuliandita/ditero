@@ -734,6 +734,8 @@
 	"calendar_agenda_heading": "الأجندة",
 	"calendar_viewing_as_agenda": "العرض كأجندة",
 	"calendar_chip_recurring": "{title}، متكررة",
+	"calendar_chip_priority": "{name}، {priority}",
+	"calendar_chip_done": "{name}، مكتملة",
 	"calendar_day_today": "{date}، اليوم",
 	"filter_multi_selected": [
 		{
@@ -880,6 +882,7 @@
 	"panel_title_placeholder": "عنوان البطاقة",
 	"panel_mobile_hint": "على الهواتف، تُرتَّب البطاقات فوق بعضها بترتيب لوحة المعلومات.",
 	"panel_no_matches": "لا مهام مطابقة",
+	"panel_all_done": "لا شيء مفتوح هنا",
 	"panel_show_all": [
 		{
 			"declarations": ["input count", "local countNum = count: number"],
@@ -1587,10 +1590,10 @@
 	"action_continue": "متابعة",
 	"action_retry": "حاول مرة أخرى",
 	"e2e_enroll_title": "تفعيل التشفير",
-	"e2e_enroll_intro": "تُشفَّر الملفات التي ترفقها على هذا الجهاز قبل رفعها. لا يخزّن هذا الخادم سوى النسخة المشفّرة — فهو لا يرى المحتوى ولا اسم الملف.",
+	"e2e_enroll_intro": "تُشفَّر الملفات التي ترفقها على هذا الجهاز قبل رفعها. لا يخزّن هذا الخادم سوى النسخة المشفّرة، فهو لا يرى المحتوى ولا اسم الملف.",
 	"e2e_enroll_passphrase_heading": "اختر عبارة مرور للتشفير",
 	"e2e_enroll_not_account_password": "هذه ليست كلمة مرور حسابك. اختر شيئًا مختلفًا، وشيئًا ستتذكره.",
-	"e2e_no_reset_note": "لا يمكن لأحد إعادة تعيين عبارة المرور هذه — لا أنت ولا من يدير هذا الخادم. إذا فقدتها وفقدت رمز الاسترداد، فستضيع ملفاتك المشفّرة نهائيًا.",
+	"e2e_no_reset_note": "لا يمكن لأحد إعادة تعيين عبارة المرور هذه، لا أنت ولا من يدير هذا الخادم. إذا فقدتها وفقدت رمز الاسترداد، فستضيع ملفاتك المشفّرة نهائيًا.",
 	"e2e_field_passphrase": "عبارة مرور التشفير",
 	"e2e_field_passphrase_confirm": "أعد إدخال عبارة المرور",
 	"e2e_passphrase_too_short": "استخدم 12 حرفًا على الأقل.",
@@ -1612,7 +1615,7 @@
 	"e2e_recovery_confirm_label": "أعد كتابة الرمز لتأكيد أنك حفظته",
 	"e2e_recovery_confirm_submit": "تأكيد وإنهاء",
 	"e2e_recovery_confirm_mismatch": "هذا لا يطابق الرمز أعلاه.",
-	"e2e_recovery_confirm_checksum": "تحقّق من الرمز — يبدو أن أحد المحارف غير صحيح.",
+	"e2e_recovery_confirm_checksum": "تحقّق من الرمز، يبدو أن أحد المحارف غير صحيح.",
 	"e2e_settings_heading": "الملفات المشفّرة",
 	"e2e_status_unenrolled": "لم يتم إعداد التشفير على هذا الحساب بعد.",
 	"e2e_setup_action": "إعداد التشفير",
@@ -1643,7 +1646,7 @@
 	"e2e_recovery_reset_heading": "اختر عبارة مرور جديدة",
 	"e2e_recovery_reset_intro": "لقد فتحت باستخدام رمز الاسترداد، فاختر عبارة مرور يمكنك استخدامها في المرة القادمة.",
 	"e2e_recovery_reset_submit": "حفظ عبارة المرور",
-	"e2e_recovery_must_confirm": "أكّد الرمز قبل الإغلاق — لا يمكن عرضه مرة أخرى.",
+	"e2e_recovery_must_confirm": "أكّد الرمز قبل الإغلاق، لا يمكن عرضه مرة أخرى.",
 	"e2e_field_current_passphrase": "عبارة مرور التشفير الحالية",
 	"e2e_change_passphrase": "تغيير عبارة المرور",
 	"e2e_change_passphrase_done": "تم تغيير عبارة المرور. رمز الاسترداد لا يزال يعمل.",

@@ -31,6 +31,7 @@ import type {
 } from "../../../domain/view-filter.ts";
 import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
+import { effectiveGroupBy } from "../../views/group.ts";
 import { FilterBuilder } from "./FilterBuilder.tsx";
 import { SORT_FIELD_LABELS, SORT_FIELDS } from "./filter-options.ts";
 
@@ -135,9 +136,11 @@ export function ViewManager({
 	const [filter, setFilter] = useState<FilterGroup>(
 		initial?.filter ?? EMPTY_FILTER,
 	);
-	const [display, setDisplay] = useState<ViewDisplay>(
-		initial?.display ?? DEFAULT_DISPLAY,
-	);
+	// A board always groups (#355); the form shows what the board renders.
+	const [display, setDisplay] = useState<ViewDisplay>(() => {
+		const d = initial?.display ?? DEFAULT_DISPLAY;
+		return { ...d, groupBy: effectiveGroupBy(d.layout, d.groupBy) };
+	});
 	const [scope, setScope] = useState<"personal" | "workspace">(
 		initial?.scope ?? "personal",
 	);
@@ -153,7 +156,11 @@ export function ViewManager({
 	const canSetScope = mode === "create";
 
 	function setLayout(layout: ViewLayout) {
-		setDisplay((d) => ({ ...d, layout }));
+		setDisplay((d) => ({
+			...d,
+			layout,
+			groupBy: effectiveGroupBy(layout, d.groupBy),
+		}));
 	}
 	function setGroupBy(groupBy: GroupBy) {
 		setDisplay((d) => ({ ...d, groupBy }));
@@ -248,7 +255,9 @@ export function ViewManager({
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							{GROUP_BYS.map((value) => (
+							{GROUP_BYS.filter(
+								(value) => display.layout !== "board" || value !== "none",
+							).map((value) => (
 								<SelectItem key={value} value={value}>
 									{GROUP_BY_LABELS[value]()}
 								</SelectItem>

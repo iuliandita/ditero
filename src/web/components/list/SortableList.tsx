@@ -45,6 +45,8 @@ export function SortableRow({
 	label,
 	testId,
 	revealHandle,
+	handleEnd = false,
+	className,
 	disabled = false,
 	children,
 }: {
@@ -54,6 +56,9 @@ export function SortableRow({
 	// Reveal the grip on hover/focus like RowActions' kebab. Below md there is no
 	// hover, so it stays visible there.
 	revealHandle?: boolean;
+	// Grip after the content (inside a board card) instead of before it.
+	handleEnd?: boolean;
+	className?: string;
 	disabled?: boolean;
 	children: ReactNode;
 }) {
@@ -76,6 +81,7 @@ export function SortableRow({
 			className={cn(
 				"flex items-start gap-1",
 				revealHandle && "group",
+				className,
 				isDragging && "opacity-90",
 			)}
 		>
@@ -85,6 +91,7 @@ export function SortableRow({
 				data-testid={testId}
 				aria-label={label}
 				className={cn(
+					handleEnd && "order-last",
 					"mt-1.5 flex size-6 shrink-0 touch-none items-center justify-center rounded text-muted-foreground/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
 					revealHandle &&
 						"transition-opacity duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
