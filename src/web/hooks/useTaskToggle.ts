@@ -16,7 +16,7 @@ type Run = (mutation: { client: Promise<unknown> }) => unknown;
 // date to the next occurrence, and reopening would not restore that.
 export function useTaskToggle(run: Run) {
 	const zero = useZero<typeof schema>();
-	const { show, dismissKey } = useSnackbar();
+	const { show, fail, dismissKey } = useSnackbar();
 	return useCallback(
 		(task: Pick<Task, "id" | "title" | "done" | "rrule">) => {
 			const reopen = () =>
@@ -35,16 +35,23 @@ export function useTaskToggle(run: Run) {
 				message: m.snackbar_task_completed({ title: task.title }),
 				action:
 					task.rrule == null
-						? { label: m.action_undo(), run: reopen }
+						? {
+								label: m.action_undo(),
+								run: () => {
+									// A failure landing after this Undo describes nothing.
+									dismissKey(task.id);
+									reopen();
+								},
+							}
 						: undefined,
 			});
 			onMutationFailure(mutation, () =>
-				show({
+				fail({
 					key: task.id,
 					message: m.snackbar_task_complete_failed({ title: task.title }),
 				}),
 			);
 		},
-		[run, zero, show, dismissKey],
+		[run, zero, show, fail, dismissKey],
 	);
 }

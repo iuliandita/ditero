@@ -2,51 +2,43 @@ import { describe, expect, it, vi } from "vitest";
 import { onMutationFailure } from "./mutation-outcome.ts";
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+// What Zero 1.9's mutator proxy resolves: it never rejects.
+const ok = () => Promise.resolve({ type: "success" });
+const refused = (message: string) =>
+	Promise.resolve({ type: "error", error: { type: "app", message } });
 
 describe("onMutationFailure", () => {
 	it("stays quiet when both halves succeed", async () => {
 		const onFail = vi.fn();
-		onMutationFailure(
-			{
-				client: Promise.resolve(),
-				server: Promise.resolve({ type: "success" }),
-			},
-			onFail,
-		);
+		onMutationFailure({ client: ok(), server: ok() }, onFail);
 		await settle();
 		expect(onFail).not.toHaveBeenCalled();
 	});
 
-	it("fires on a client rejection", async () => {
+	it("fires on a client error result", async () => {
 		const onFail = vi.fn();
 		onMutationFailure(
-			{
-				client: Promise.reject(new Error("refused")),
-				server: Promise.resolve({ type: "success" }),
-			},
+			{ client: refused("need member+"), server: ok() },
 			onFail,
 		);
 		await settle();
 		expect(onFail).toHaveBeenCalledTimes(1);
 	});
 
-	it("fires on a server error result, which resolves rather than rejects", async () => {
+	it("fires on a server error result", async () => {
 		const onFail = vi.fn();
 		onMutationFailure(
-			{ client: Promise.resolve(), server: Promise.resolve({ type: "error" }) },
+			{ client: ok(), server: refused("need member+") },
 			onFail,
 		);
 		await settle();
 		expect(onFail).toHaveBeenCalledTimes(1);
 	});
 
-	it("fires once when both halves fail", async () => {
+	it("fires once when both halves report an error", async () => {
 		const onFail = vi.fn();
 		onMutationFailure(
-			{
-				client: Promise.reject(new Error("refused")),
-				server: Promise.reject(new Error("offline")),
-			},
+			{ client: refused("need member+"), server: refused("need member+") },
 			onFail,
 		);
 		await settle();

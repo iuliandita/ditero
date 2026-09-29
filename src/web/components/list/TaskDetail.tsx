@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
-import { runMutation } from "@/lib/run-mutation";
+import { mutationResultError, runMutation } from "@/lib/run-mutation";
 import { inputsToDue, priorityLabel, priorityMeta } from "@/lib/task-display";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
@@ -430,20 +430,25 @@ export function TaskDetail({
 		// worst case is an orphan label if the second write fails, which the label
 		// manager can clean up. Fold into a single mutator if this proves fragile.
 		setError(null);
-		try {
+		// Zero resolves a refused write with an error result; it never throws.
+		const failed = (error: string) =>
+			setError(mutationErrorMessage(error, m.task_create_label_failed));
+		const created = mutationResultError(
 			await zero.mutate(
 				mutators.label.create({ id, workspaceId: list.workspaceId, name }),
-			).client;
+			).client,
+		);
+		if (created !== null) return failed(created);
+		const attached = mutationResultError(
 			await zero.mutate(
 				mutators.taskLabel.set({
 					taskId: t.id,
 					labelIds: [...selected, id],
 				}),
-			).client;
-			setNewLabel("");
-		} catch (e) {
-			setError(mutationErrorMessage(e, m.task_create_label_failed));
-		}
+			).client,
+		);
+		if (attached !== null) return failed(attached);
+		setNewLabel("");
 	}
 
 	function addSubtask() {
@@ -897,7 +902,7 @@ export function TaskDetail({
 										);
 										void run(move);
 										onMutationFailure(move, () =>
-											snackbar.show({
+											snackbar.fail({
 												key: t.id,
 												message: m.snackbar_task_move_failed({
 													title: t.title,
@@ -914,12 +919,14 @@ export function TaskDetail({
 											// Back to the same list and the same place in it.
 											action: {
 												label: m.action_undo(),
-												run: () =>
+												run: () => {
+													snackbar.dismissKey(t.id);
 													void run(
 														zero.mutate(
 															mutators.task.move({ id: t.id, ...from }),
 														),
-													),
+													);
+												},
 											},
 										});
 										close({ leaving: true });

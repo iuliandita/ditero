@@ -3,6 +3,7 @@ import {
 	EMPTY_SNACKBAR,
 	pauseCountdown,
 	resumeCountdown,
+	type SnackbarState,
 	snackbarReducer,
 	startCountdown,
 } from "./snackbar-state.ts";
@@ -61,12 +62,73 @@ describe("snackbarReducer: dismissKey", () => {
 			message: "a",
 			key: "task-2",
 		});
-		expect(snackbarReducer(s1, { type: "dismissKey", key: "task-1" })).toBe(s1);
+		expect(
+			snackbarReducer(s1, { type: "dismissKey", key: "task-1" }).snack,
+		).toBe(s1.snack);
 	});
 
 	test("a keyless snack is never retracted by key", () => {
 		const s1 = snackbarReducer(EMPTY_SNACKBAR, { type: "show", message: "a" });
-		expect(snackbarReducer(s1, { type: "dismissKey", key: "" })).toBe(s1);
+		expect(snackbarReducer(s1, { type: "dismissKey", key: "" }).snack).toBe(
+			s1.snack,
+		);
+	});
+});
+
+describe("snackbarReducer: fail", () => {
+	const undo = { label: "Undo", run: () => {} };
+	const show = (state: SnackbarState, key: string) =>
+		snackbarReducer(state, {
+			type: "show",
+			message: `Completed ${key}`,
+			key,
+			action: undo,
+		});
+
+	test("replaces the confirmation it contradicts", () => {
+		const s1 = show(EMPTY_SNACKBAR, "A");
+		const s2 = snackbarReducer(s1, { type: "fail", message: "No A", key: "A" });
+		expect(s2.snack?.message).toBe("No A");
+		expect(s2.snack?.action).toBeUndefined();
+	});
+
+	test("A then B then A refused: B keeps its Undo, A's error follows", () => {
+		const s2 = show(show(EMPTY_SNACKBAR, "A"), "B");
+		const s3 = snackbarReducer(s2, { type: "fail", message: "No A", key: "A" });
+		expect(s3.snack?.key).toBe("B");
+		expect(s3.snack?.action).toBe(undo);
+		const s4 = snackbarReducer(s3, {
+			type: "dismiss",
+			id: s3.snack?.id ?? 0,
+		});
+		expect(s4.snack?.message).toBe("No A");
+		expect(s4.queue).toEqual([]);
+	});
+
+	test("A refused after the user reopened A shows nothing", () => {
+		const s1 = show(EMPTY_SNACKBAR, "A");
+		const s2 = snackbarReducer(s1, { type: "dismissKey", key: "A" });
+		const s3 = snackbarReducer(s2, { type: "fail", message: "No A", key: "A" });
+		expect(s3.snack).toBeNull();
+		expect(s3.queue).toEqual([]);
+	});
+
+	test("reopening A drops A's queued failure behind B", () => {
+		const s2 = show(show(EMPTY_SNACKBAR, "A"), "B");
+		const s3 = snackbarReducer(s2, { type: "fail", message: "No A", key: "A" });
+		const s4 = snackbarReducer(s3, { type: "dismissKey", key: "A" });
+		expect(s4.snack?.key).toBe("B");
+		expect(s4.queue).toEqual([]);
+	});
+
+	test("completing A again after a reopen can fail again", () => {
+		const s1 = snackbarReducer(show(EMPTY_SNACKBAR, "A"), {
+			type: "dismissKey",
+			key: "A",
+		});
+		const s2 = show(s1, "A");
+		const s3 = snackbarReducer(s2, { type: "fail", message: "No A", key: "A" });
+		expect(s3.snack?.message).toBe("No A");
 	});
 });
 
