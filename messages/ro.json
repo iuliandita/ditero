@@ -252,11 +252,11 @@
 	"e2e_last_holder_ack": "Înțeleg că aceste fișiere se vor pierde.",
 	"account_delete_confirm": "Șterge-mi definitiv contul",
 	"account_delete_failed": "Contul nu a putut fi șters.",
-	"priority_none": "Fără",
+	"priority_none": "Fără prioritate",
 	"priority_low": "Scăzută",
 	"priority_medium": "Medie",
-	"priority_medium_short": "Med",
 	"priority_high": "Ridicată",
+	"priority_coded": "{code} {name}",
 	"due_today": "Azi",
 	"due_tomorrow": "Mâine",
 	"list_completed_count": [
@@ -304,6 +304,10 @@
 	"list_add_task_placeholder": "Adaugă o sarcină",
 	"title_suggest_label": "Sugestii din elementele tale anterioare",
 	"list_add_task": "Adaugă sarcina",
+	"list_add_item_placeholder": "Adaugă un element",
+	"list_add_item": "Adaugă elementul",
+	"list_add_habit_placeholder": "Adaugă un obicei",
+	"list_add_habit": "Adaugă obiceiul",
 	"quickadd_input_label": "Adăugare rapidă de sarcină",
 	"quickadd_sheet_title": "Adăugare rapidă",
 	"quickadd_placeholder": "ex. Cumpără lapte {date} {priority} {label} {list}",
@@ -401,6 +405,9 @@
 	"shopping_qty_placeholder": "Cant.",
 	"shopping_unit_placeholder": "Unitate",
 	"shopping_quantity_for": "Cantitate pentru {title}",
+	"shopping_quantity_add": "{label}, adaugă cantitate pentru {title}",
+	"shopping_quantity_edit": "{amount}, editează cantitatea pentru {title}",
+	"shopping_quantity_invalid": "Introdu un număr mai mare decât 0, de ex. 2 sau 1,5",
 	"shopping_unit_for": "Unitate pentru {title}",
 	"shopping_category_other": "Altele",
 	"task_reorder_handle": "Reordonează sarcina",
@@ -459,6 +466,19 @@
 	"task_delete_named": "Șterge {title}",
 	"task_move_to_list": "Mută în altă listă",
 	"task_delete": "Șterge sarcina",
+	"task_detail_done_aria": "Finalizată",
+	"task_detail_more": "Mai multe opțiuni",
+	"task_more_repeats": "Se repetă",
+	"task_more_reminder": "Memento {time}",
+	"task_more_urgent": "Urgentă",
+	"task_due_add": "Adaugă o dată",
+	"task_due_trigger_aria": "Termen: {value}",
+	"task_due_next_week": "Săptămâna viitoare",
+	"task_due_type_placeholder": "Scrie o dată, de exemplu mâine",
+	"task_due_type_placeholder_iso": "Scrie o dată ca AAAA-LL-ZZ",
+	"task_due_type_invalid": "Data nu a putut fi citită.",
+	"time_field_placeholder": "Adaugă ora",
+	"time_field_invalid": "Scrie o oră ca {example}.",
 	"action_add": "Adaugă",
 	"recurrence_repeat": "Repetare",
 	"recurrence_does_not_repeat": "Nu se repetă",
@@ -895,6 +915,22 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: serie de {countNum} zi. Deschide sarcina",
+				"countPlural=few": "{title}: serie de {countNum} zile. Deschide sarcina",
+				"countPlural=other": "{title}: serie de {countNum} de zile. Deschide sarcina"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: fără recurență setată. Deschide sarcina",
 	"panel_streak_no_recurrence": "Fără recurență",
 	"panel_streak_missing": "Obicei lipsă (șters sau nepartajat cu tine)",
@@ -925,13 +961,10 @@
 		}
 	],
 	"panel_focus_own_only": "Doar sesiunile tale",
-	"habit_no_recurrence_hint": "Setează o recurență ca să începi să urmărești acest obicei.",
 	"habit_skip_action": "Sari",
 	"habit_undo_action": "Anulează",
+	"habit_track_daily": "Urmărește zilnic",
 	"habit_done_action": "Făcut azi",
-	"habit_done_state": "Făcut",
-	"habit_mark_done_aria": "Marchează ca făcut pentru azi",
-	"habit_done_today_aria": "Făcut azi",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -1350,12 +1383,16 @@
 	"auth_error_registration_disabled": "Conturile noi sunt dezactivate pe această instanță.",
 	"auth_error_invalid_origin": "Serverul nu are încredere în această adresă. Cere-i operatorului să o adauge la originile de încredere ale instanței.",
 	"mutation_failed": "Ceva n-a mers bine.",
+	"mutation_offline_not_saved": "Ești offline, modificarea nu a fost salvată. Reconectează-te și încearcă din nou.",
 	"mutator_error_denied": "Nu ai permisiunea să faci asta.",
 	"mutator_error_label_name_taken": "Există deja o etichetă cu acest nume.",
 	"modal_close_label": "Închide",
 	"action_close": "Închide",
 	"action_undo": "Anulează",
 	"snackbar_task_completed": "Finalizat: {title}",
+	"snackbar_task_moved": "Mutată în {list}: {title}",
+	"snackbar_task_complete_failed": "Nu s-a putut finaliza: {title}",
+	"snackbar_task_move_failed": "Nu s-a putut muta: {title}",
 	"action_delete": "Șterge",
 	"action_remove": "Elimină",
 	"confirm_cancel": "Anulează",

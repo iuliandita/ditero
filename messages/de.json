@@ -251,11 +251,11 @@
 	"e2e_last_holder_ack": "Ich verstehe, dass diese Dateien verloren gehen.",
 	"account_delete_confirm": "Mein Konto dauerhaft löschen",
 	"account_delete_failed": "Das Konto konnte nicht gelöscht werden.",
-	"priority_none": "Keine",
+	"priority_none": "Keine Priorität",
 	"priority_low": "Niedrig",
 	"priority_medium": "Mittel",
-	"priority_medium_short": "Mittel",
 	"priority_high": "Hoch",
+	"priority_coded": "{code} {name}",
 	"due_today": "Heute",
 	"due_tomorrow": "Morgen",
 	"list_completed_count": [
@@ -301,6 +301,10 @@
 	"list_add_task_placeholder": "Aufgabe hinzufügen",
 	"title_suggest_label": "Vorschläge aus deinen früheren Einträgen",
 	"list_add_task": "Aufgabe hinzufügen",
+	"list_add_item_placeholder": "Eintrag hinzufügen",
+	"list_add_item": "Eintrag hinzufügen",
+	"list_add_habit_placeholder": "Gewohnheit hinzufügen",
+	"list_add_habit": "Gewohnheit hinzufügen",
 	"quickadd_input_label": "Aufgabe schnell hinzufügen",
 	"quickadd_sheet_title": "Schnell hinzufügen",
 	"quickadd_placeholder": "z. B. Milch kaufen {date} {priority} {label} {list}",
@@ -398,6 +402,9 @@
 	"shopping_qty_placeholder": "Menge",
 	"shopping_unit_placeholder": "Einheit",
 	"shopping_quantity_for": "Menge für {title}",
+	"shopping_quantity_add": "{label}, Menge für {title} hinzufügen",
+	"shopping_quantity_edit": "{amount}, Menge für {title} bearbeiten",
+	"shopping_quantity_invalid": "Gib eine Zahl über 0 ein, z. B. 2 oder 1,5",
 	"shopping_unit_for": "Einheit für {title}",
 	"shopping_category_other": "Sonstiges",
 	"task_reorder_handle": "Aufgabe umsortieren",
@@ -455,6 +462,19 @@
 	"task_delete_named": "{title} löschen",
 	"task_move_to_list": "In Liste verschieben",
 	"task_delete": "Aufgabe löschen",
+	"task_detail_done_aria": "Erledigt",
+	"task_detail_more": "Weitere Optionen",
+	"task_more_repeats": "Wiederholt sich",
+	"task_more_reminder": "Erinnerung {time}",
+	"task_more_urgent": "Dringend",
+	"task_due_add": "Datum hinzufügen",
+	"task_due_trigger_aria": "Fälligkeitsdatum: {value}",
+	"task_due_next_week": "Nächste Woche",
+	"task_due_type_placeholder": "Datum eingeben, z. B. morgen",
+	"task_due_type_placeholder_iso": "Datum als JJJJ-MM-TT eingeben",
+	"task_due_type_invalid": "Dieses Datum konnte nicht gelesen werden.",
+	"time_field_placeholder": "Uhrzeit hinzufügen",
+	"time_field_invalid": "Gib eine Uhrzeit wie {example} ein.",
 	"action_add": "Hinzufügen",
 	"recurrence_repeat": "Wiederholung",
 	"recurrence_does_not_repeat": "Wiederholt sich nicht",
@@ -878,6 +898,21 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: {countNum} Tag Serie. Aufgabe öffnen",
+				"countPlural=other": "{title}: {countNum} Tage Serie. Aufgabe öffnen"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: keine Wiederholung festgelegt. Aufgabe öffnen",
 	"panel_streak_no_recurrence": "Keine Wiederholung",
 	"panel_streak_missing": "Gewohnheit fehlt (gelöscht oder nicht mit dir geteilt)",
@@ -906,13 +941,10 @@
 		}
 	],
 	"panel_focus_own_only": "Nur deine Sitzungen",
-	"habit_no_recurrence_hint": "Leg eine Wiederholung fest, um diese Gewohnheit zu verfolgen.",
 	"habit_skip_action": "Überspringen",
 	"habit_undo_action": "Rückgängig",
+	"habit_track_daily": "Täglich verfolgen",
 	"habit_done_action": "Heute erledigt",
-	"habit_done_state": "Erledigt",
-	"habit_mark_done_aria": "Für heute als erledigt markieren",
-	"habit_done_today_aria": "Heute erledigt",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -1322,12 +1354,16 @@
 	"auth_error_registration_disabled": "Neue Konten sind auf dieser Instanz deaktiviert.",
 	"auth_error_invalid_origin": "Der Server vertraut dieser Adresse nicht. Bitte den Betreiber, sie zu den vertrauenswürdigen Ursprüngen der Instanz hinzuzufügen.",
 	"mutation_failed": "Da ist etwas schiefgelaufen.",
+	"mutation_offline_not_saved": "Du bist offline, diese Änderung wurde nicht gespeichert. Verbinde dich neu und versuch es noch einmal.",
 	"mutator_error_denied": "Dazu hast du keine Berechtigung.",
 	"mutator_error_label_name_taken": "Ein Label mit diesem Namen gibt es schon.",
 	"modal_close_label": "Schließen",
 	"action_close": "Schließen",
 	"action_undo": "Rückgängig",
 	"snackbar_task_completed": "Erledigt: {title}",
+	"snackbar_task_moved": "Nach {list} verschoben: {title}",
+	"snackbar_task_complete_failed": "Konnte nicht erledigt werden: {title}",
+	"snackbar_task_move_failed": "Konnte nicht verschoben werden: {title}",
 	"action_delete": "Löschen",
 	"action_remove": "Entfernen",
 	"confirm_cancel": "Abbrechen",

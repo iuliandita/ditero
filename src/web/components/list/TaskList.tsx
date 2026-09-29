@@ -1,6 +1,7 @@
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useMemo, useRef } from "react";
 import { FLIP_TRANSITION } from "@/lib/motion";
+import { groupByCategory, UNCATEGORIZED } from "@/lib/shopping-list";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { sortTasks } from "../../../domain/task-sort.ts";
 import { m } from "../../../paraglide/messages.js";
@@ -13,30 +14,10 @@ import { type ShoppingHandlers, ShoppingRow } from "./ShoppingRow.tsx";
 import { SortableTaskList } from "./SortableTaskList.tsx";
 import { type RowHandlers, TaskRow } from "./TaskRow.tsx";
 
-const UNCATEGORIZED = ""; // sorts nowhere; rendered last explicitly
 const NOTHING_SETTLING: ReadonlySet<string> = new Set();
 
 export type TaskListHandlers = RowHandlers &
 	ShoppingHandlers & { onMove: (id: string, sortKey: string) => void };
-
-// First-seen category order among (already sort-key-ordered) tasks; the
-// uncategorized bucket is always emitted last.
-function groupByCategory(tasks: Task[]): [string, Task[]][] {
-	const map = new Map<string, Task[]>();
-	for (const t of tasks) {
-		const key = t.category?.trim() ? t.category : UNCATEGORIZED;
-		const bucket = map.get(key);
-		if (bucket) bucket.push(t);
-		else map.set(key, [t]);
-	}
-	const entries = [...map.entries()];
-	entries.sort((a, b) => {
-		if (a[0] === UNCATEGORIZED) return 1;
-		if (b[0] === UNCATEGORIZED) return -1;
-		return 0;
-	});
-	return entries;
-}
 
 export function TaskList({
 	list,
@@ -138,12 +119,16 @@ export function TaskList({
 	if (kind === "shopping") {
 		// Checked items stay in their category while settling (and always in
 		// keep mode); settled ones collect in the trailing "in cart" group.
-		const groups = groupByCategory(visible);
+		const { groups, showHeaders } = groupByCategory(visible);
 		body = groups.map(([category, items]) => (
 			<div key={category} className="mb-2">
-				<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
-					{category === UNCATEGORIZED ? m.shopping_category_other() : category}
-				</div>
+				{showHeaders && (
+					<div className="px-1 py-1 text-xs font-medium text-muted-foreground">
+						{category === UNCATEGORIZED
+							? m.shopping_category_other()
+							: category}
+					</div>
+				)}
 				<ul className="flex flex-col">{items.map(item)}</ul>
 			</div>
 		));

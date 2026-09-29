@@ -252,11 +252,11 @@
 	"e2e_last_holder_ack": "Je comprends que ces fichiers seront perdus.",
 	"account_delete_confirm": "Supprimer définitivement mon compte",
 	"account_delete_failed": "Le compte n'a pas pu être supprimé.",
-	"priority_none": "Aucune",
+	"priority_none": "Sans priorité",
 	"priority_low": "Basse",
 	"priority_medium": "Moyenne",
-	"priority_medium_short": "Moy.",
 	"priority_high": "Haute",
+	"priority_coded": "{code} {name}",
 	"due_today": "Aujourd'hui",
 	"due_tomorrow": "Demain",
 	"list_completed_count": [
@@ -304,6 +304,10 @@
 	"list_add_task_placeholder": "Ajouter une tâche",
 	"title_suggest_label": "Suggestions issues de vos éléments précédents",
 	"list_add_task": "Ajouter la tâche",
+	"list_add_item_placeholder": "Ajouter un élément",
+	"list_add_item": "Ajouter l'élément",
+	"list_add_habit_placeholder": "Ajouter une habitude",
+	"list_add_habit": "Ajouter l'habitude",
 	"quickadd_input_label": "Ajout rapide d'une tâche",
 	"quickadd_sheet_title": "Ajout rapide",
 	"quickadd_placeholder": "ex. Acheter du lait {date} {priority} {label} {list}",
@@ -401,6 +405,9 @@
 	"shopping_qty_placeholder": "Qté",
 	"shopping_unit_placeholder": "Unité",
 	"shopping_quantity_for": "Quantité pour {title}",
+	"shopping_quantity_add": "{label}, ajouter une quantité pour {title}",
+	"shopping_quantity_edit": "{amount}, modifier la quantité pour {title}",
+	"shopping_quantity_invalid": "Saisis un nombre supérieur à 0, par ex. 2 ou 1,5",
 	"shopping_unit_for": "Unité pour {title}",
 	"shopping_category_other": "Autre",
 	"task_reorder_handle": "Réorganiser la tâche",
@@ -459,6 +466,19 @@
 	"task_delete_named": "Supprimer {title}",
 	"task_move_to_list": "Déplacer vers une liste",
 	"task_delete": "Supprimer la tâche",
+	"task_detail_done_aria": "Terminée",
+	"task_detail_more": "Plus d'options",
+	"task_more_repeats": "Se répète",
+	"task_more_reminder": "Rappel {time}",
+	"task_more_urgent": "Urgente",
+	"task_due_add": "Ajouter une date",
+	"task_due_trigger_aria": "Échéance : {value}",
+	"task_due_next_week": "La semaine prochaine",
+	"task_due_type_placeholder": "Tape une date, comme demain",
+	"task_due_type_placeholder_iso": "Tape une date au format AAAA-MM-JJ",
+	"task_due_type_invalid": "Impossible de lire cette date.",
+	"time_field_placeholder": "Ajouter une heure",
+	"time_field_invalid": "Saisis une heure comme {example}.",
 	"action_add": "Ajouter",
 	"recurrence_repeat": "Répétition",
 	"recurrence_does_not_repeat": "Ne se répète pas",
@@ -895,6 +915,22 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title} : série de {countNum} jour. Ouvrir la tâche",
+				"countPlural=many": "{title} : série de {countNum} jours. Ouvrir la tâche",
+				"countPlural=other": "{title} : série de {countNum} jours. Ouvrir la tâche"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title} : aucune répétition définie. Ouvrir la tâche",
 	"panel_streak_no_recurrence": "Aucune répétition",
 	"panel_streak_missing": "Habitude manquante (supprimée ou non partagée avec toi)",
@@ -925,13 +961,10 @@
 		}
 	],
 	"panel_focus_own_only": "Tes sessions uniquement",
-	"habit_no_recurrence_hint": "Définis une répétition pour commencer à suivre cette habitude.",
 	"habit_skip_action": "Passer",
 	"habit_undo_action": "Annuler",
+	"habit_track_daily": "Suivre chaque jour",
 	"habit_done_action": "Fait aujourd'hui",
-	"habit_done_state": "Fait",
-	"habit_mark_done_aria": "Marquer comme fait pour aujourd'hui",
-	"habit_done_today_aria": "Fait aujourd'hui",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -1350,12 +1383,16 @@
 	"auth_error_registration_disabled": "Les nouveaux comptes sont désactivés sur cette instance.",
 	"auth_error_invalid_origin": "Le serveur ne fait pas confiance à cette adresse. Demande à l'opérateur de l'ajouter aux origines de confiance de l'instance.",
 	"mutation_failed": "Un problème est survenu.",
+	"mutation_offline_not_saved": "Tu es hors ligne, cette modification n'a pas été enregistrée. Reconnecte-toi et réessaie.",
 	"mutator_error_denied": "Tu n'as pas la permission de faire cela.",
 	"mutator_error_label_name_taken": "Une étiquette portant ce nom existe déjà.",
 	"modal_close_label": "Fermer",
 	"action_close": "Fermer",
 	"action_undo": "Annuler",
 	"snackbar_task_completed": "Terminé : {title}",
+	"snackbar_task_moved": "Déplacée vers {list} : {title}",
+	"snackbar_task_complete_failed": "Impossible de terminer : {title}",
+	"snackbar_task_move_failed": "Impossible de déplacer : {title}",
 	"action_delete": "Supprimer",
 	"action_remove": "Retirer",
 	"confirm_cancel": "Annuler",

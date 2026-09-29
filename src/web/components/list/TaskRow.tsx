@@ -417,6 +417,7 @@ export function TaskRow({
 					<button
 						type="button"
 						data-kbd-nav
+						data-task-id={task.id}
 						aria-label={m.task_open_details()}
 						aria-describedby={describedBy}
 						onClick={() => handlers.onOpenDetail(task)}

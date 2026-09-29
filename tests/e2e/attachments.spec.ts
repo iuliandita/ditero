@@ -8,6 +8,7 @@ import {
 	goToSettings,
 	leaveSettings,
 	openDetails,
+	openMoreOptions,
 	signUp,
 	uniqueEmail,
 	waitWorkspaceReady,
@@ -49,9 +50,10 @@ async function createListAndTask(
 	await page.getByTestId("new-task").fill(taskName);
 	await page.getByTestId("new-task-submit").click();
 	await openDetails(page, taskName);
-	await expect(
-		page.getByRole("dialog", { name: m.task_detail_title() }),
-	).toBeVisible();
+	const detail = page.getByRole("dialog", { name: m.task_detail_title() });
+	await expect(detail).toBeVisible();
+	// Files live behind the detail's "More options" disclosure.
+	await openMoreOptions(detail);
 }
 
 function inputFor(scope: Locator): Locator {
@@ -231,6 +233,9 @@ async function openTask(page: Page, listName: string, taskName: string) {
 		.first()
 		.click();
 	await openDetails(page, taskName);
+	await openMoreOptions(
+		page.getByRole("dialog", { name: m.task_detail_title() }),
+	);
 	await expect(page.getByTestId("task-attachments")).toBeVisible();
 }
 

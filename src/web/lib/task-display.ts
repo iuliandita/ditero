@@ -10,27 +10,19 @@ const PRIORITY_LABELS: Record<number, () => string> = {
 	3: m.priority_high,
 };
 
+// One scheme everywhere: quick-add's p1-p3 code plus the name, so "p1" typed
+// in quick-add and "P1 High" in a picker are visibly the same thing. The code
+// is grammar, never translated. p1 is the highest, the reverse of the stored
+// level (3 high .. 0 none), matching domain/quick-add PRIORITY_RANK. The empty
+// level (p4) reads as "No priority" alone: a code in front of "none" says less.
 export function priorityLabel(priority: number | null | undefined): string {
 	const level = priority ?? 0;
-	return Object.hasOwn(PRIORITY_LABELS, level)
-		? PRIORITY_LABELS[level]()
-		: m.priority_none();
-}
-
-// Abbreviated forms for width-constrained surfaces (the 4-across picker in the
-// task detail). Only the level that has a shorter form appears here; the rest
-// fall through to the full label.
-const PRIORITY_LABELS_SHORT: Record<number, () => string> = {
-	2: m.priority_medium_short,
-};
-
-export function priorityLabelShort(
-	priority: number | null | undefined,
-): string {
-	const level = priority ?? 0;
-	return Object.hasOwn(PRIORITY_LABELS_SHORT, level)
-		? PRIORITY_LABELS_SHORT[level]()
-		: priorityLabel(level);
+	if (level === 0 || !Object.hasOwn(PRIORITY_LABELS, level))
+		return m.priority_none();
+	return m.priority_coded({
+		code: `P${4 - level}`,
+		name: PRIORITY_LABELS[level](),
+	});
 }
 
 // Priority: 0 none, 1 low, 2 med, 3 high (db default 0). Colors are the

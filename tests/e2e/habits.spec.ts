@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { browserToday } from "../support/browser-day.ts";
-import { goToSettings } from "./helpers.ts";
+import { goToSettings, openMoreOptions, setDueDate } from "./helpers.ts";
 
 // M2 recurrence editor e2e. Exercises the preset-driven recurrence control in the
 // task detail surface: enable, set a weekly every-2-weeks Mon/Wed rule, verify the
@@ -74,11 +74,15 @@ async function openDetail(page: Page, title: string): Promise<Locator> {
 		.click();
 	const detail = page.getByRole("dialog");
 	await expect(detail.getByLabel("Task title")).toBeVisible();
+	// Every caller here works with repeat/focus controls behind the disclosure.
+	await openMoreOptions(detail);
 	return detail;
 }
 
 async function closeDetail(page: Page): Promise<void> {
-	await page.keyboard.press("Escape");
+	// The close button, not Escape: callers may leave focus in a field, where
+	// the first Escape only leaves the field.
+	await page.getByTestId("task-detail-close").click();
 	await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15000 });
 }
 
@@ -197,7 +201,7 @@ test("recurring task: list checkbox advances the due date and stays pending", as
 	// against local now; a UTC-derived string can be off by a day).
 	const detail = await openDetail(page, "Take out bins");
 	const today = await browserToday(page);
-	await detail.getByLabel("Due date").fill(today);
+	await setDueDate(page, detail, today);
 	await detail.getByTestId("recurrence-enable").click();
 	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
 	await closeDetail(page);
@@ -240,7 +244,7 @@ test("recurring task: Skip control advances the due date without awarding Karma"
 	// Due today + a daily recurrence so the row reads "Today" and Skip is offered.
 	const detail = await openDetail(page, "Sweep floor");
 	const today = await browserToday(page);
-	await detail.getByLabel("Due date").fill(today);
+	await setDueDate(page, detail, today);
 	await detail.getByTestId("recurrence-enable").click();
 	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
 
@@ -301,8 +305,9 @@ test("habits: track a habit — set recurrence, done/skip/undo, streak + heatmap
 	const HABIT = "Drink water";
 	const card = habitCard(page, HABIT);
 	await expect(card).toBeVisible();
-	// No recurrence yet -> the guard renders the prompt, not streak math.
-	await expect(card.getByTestId("habit-no-recurrence")).toBeVisible();
+	// Starter habits carry no RRULE: a one-tap action, not streak math.
+	await expect(card.getByTestId("habit-track-daily")).toBeVisible();
+	await expect(card.getByTestId("habit-undo")).toHaveCount(0);
 
 	// Set a daily recurrence via the task detail (default preset is daily).
 	const detail = await openDetail(page, HABIT);
@@ -381,12 +386,70 @@ test("habits: a blank habits list is creatable from the kind picker", async ({
 	).toBeVisible({ timeout: 15000 });
 	await openListDesktop(page, "Chores");
 
-	// Habit mechanics, not task rows: the list renders cards, and a habit with no
-	// RRULE yet shows the recurrence hint instead of a streak.
+	// Habit mechanics, not task rows: the list renders cards, and a new habit
+	// starts daily, so it tracks right away.
 	await page.getByTestId("new-task").fill("Walk the dog");
 	await page.getByTestId("new-task-submit").click();
 
 	const card = habitCard(page, "Walk the dog");
 	await expect(card).toBeVisible({ timeout: 15000 });
-	await expect(card.getByTestId("habit-no-recurrence")).toBeVisible();
+	await expect(card.getByTestId("habit-streak")).toHaveText("0 days");
+	await expect(card.getByTestId("habit-track-daily")).toHaveCount(0);
+});
+
+test("habits: a habit without a recurrence starts tracking in one tap", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("habit-track"));
+	await createHabitsList(page);
+	await openListDesktop(page, "Habits");
+
+	const card = habitCard(page, "Read");
+	const track = card.getByTestId("habit-track-daily");
+	await expect(track).toHaveText("Track daily");
+	await expect(card.getByTestId("habit-streak")).toHaveCount(0);
+	await track.click();
+	await expect(card.getByTestId("habit-streak")).toHaveText("0 days");
+	await expect(track).toHaveCount(0);
+	await expect(card.getByTestId("habit-done")).toBeFocused();
+});
+
+// The detail's own done box on a habit logs today's occurrence, the same write
+// as the card's Done. task.complete refuses habits, so routing it there would
+// raise an error and a false "Completed" snackbar.
+test("habits: the detail's done box logs today like the card", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("habit-detail"));
+	await createHabitsList(page);
+	await openListDesktop(page, "Habits");
+
+	const HABIT = "Drink water";
+	const card = habitCard(page, HABIT);
+	const detail = await openDetail(page, HABIT);
+	await detail.getByTestId("recurrence-enable").click();
+	await expect(detail.getByTestId("recurrence-editor")).toBeVisible();
+	await expect(card.getByTestId("habit-done")).toHaveAttribute(
+		"aria-pressed",
+		"false",
+	);
+
+	const box = detail.getByTestId("task-detail-done");
+	await box.click();
+	await expect(card.getByTestId("habit-done")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+		{ timeout: 15000 },
+	);
+	await expect(box).toBeChecked();
+	await expect(detail.getByRole("alert")).toHaveCount(0);
+	await expect(page.getByTestId("snackbar")).toHaveCount(0);
+
+	await box.click();
+	await expect(card.getByTestId("habit-done")).toHaveAttribute(
+		"aria-pressed",
+		"false",
+		{ timeout: 15000 },
+	);
+	await expect(box).not.toBeChecked();
 });

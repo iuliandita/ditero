@@ -14,6 +14,7 @@ import {
 	REPEATS_MAX,
 	repeatEveryMinInput,
 } from "../../lib/escalation-input.ts";
+import { TimeField } from "./TimeField.tsx";
 
 // Per-task reminder policy (shell doc 4). Urgent carries its consequence in its
 // own label, not a tooltip: its failure mode is a missed dose.
@@ -69,23 +70,21 @@ export function ReminderPolicy({
 			)}
 
 			{task.rrule == null && (
-				<label className="flex flex-col gap-1">
+				<div className="flex flex-col gap-1">
 					<span className="text-muted-foreground">{m.reminder_time()}</span>
-					<input
+					<TimeField
 						disabled={disabled}
-						type="time"
 						value={task.reminderTime ?? ""}
+						label={m.reminder_time()}
 						data-testid="reminder-time"
-						aria-label={m.reminder_time()}
-						className="h-8 w-fit rounded-lg border bg-transparent px-2 text-sm"
-						onChange={(e) =>
+						onCommit={(next) =>
 							update({
 								id: task.id,
-								reminderTime: e.target.value === "" ? null : e.target.value,
+								reminderTime: next === "" ? null : next,
 							})
 						}
 					/>
-				</label>
+				</div>
 			)}
 
 			<div className="flex items-center justify-between gap-3">

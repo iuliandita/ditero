@@ -8,7 +8,7 @@ import {
 	test,
 } from "@playwright/test";
 import { Pool } from "pg";
-import { goToSettings } from "./helpers.ts";
+import { goToSettings, openMoreOptions, setDueDate } from "./helpers.ts";
 
 // M3b Task 16 e2e: the five-row channel settings surface, the SMTP mail path
 // against a real loopback sink, the test-send ack round trip (durable through a
@@ -564,9 +564,11 @@ test("interactive ack: a signed Discord POST acks a live reminder and terminates
 			time: `${get("hour") === "24" ? "00" : get("hour")}:${get("minute")}`,
 		};
 	});
-	await detail.getByLabel("Due date").fill(when.date);
+	await setDueDate(pageA, detail, when.date);
+	await openMoreOptions(detail);
 	await detail.getByTestId("reminder-time").fill(when.time);
-	await pageA.keyboard.press("Escape");
+	// Focus is in a field; Escape would only leave it. Close explicitly.
+	await detail.getByTestId("task-detail-close").click();
 	await expect(pageA.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 	// The scan materialises reminder_state, which syncs back as a live chip.

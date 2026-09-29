@@ -113,8 +113,8 @@
 			],
 			"selectors": ["donePlural"],
 			"match": {
-				"donePlural=one": "{doneNum} of {totalNum} complete",
-				"donePlural=other": "{doneNum} of {totalNum} complete"
+				"donePlural=one": "{doneNum} of {totalNum} done",
+				"donePlural=other": "{doneNum} of {totalNum} done"
 			}
 		}
 	],
@@ -251,11 +251,11 @@
 	"e2e_last_holder_ack": "I understand these files will be lost.",
 	"account_delete_confirm": "Permanently delete my account",
 	"account_delete_failed": "The account could not be deleted.",
-	"priority_none": "None",
+	"priority_none": "No priority",
 	"priority_low": "Low",
 	"priority_medium": "Medium",
-	"priority_medium_short": "Med",
 	"priority_high": "High",
+	"priority_coded": "{code} {name}",
 	"due_today": "Today",
 	"due_tomorrow": "Tomorrow",
 	"list_completed_count": [
@@ -301,6 +301,10 @@
 	"list_add_task_placeholder": "Add a task",
 	"title_suggest_label": "Suggestions from your earlier items",
 	"list_add_task": "Add task",
+	"list_add_item_placeholder": "Add an item",
+	"list_add_item": "Add item",
+	"list_add_habit_placeholder": "Add a habit",
+	"list_add_habit": "Add habit",
 	"quickadd_input_label": "Quick add task",
 	"quickadd_sheet_title": "Quick add",
 	"quickadd_placeholder": "e.g. Buy milk {date} {priority} {label} {list}",
@@ -398,6 +402,9 @@
 	"shopping_qty_placeholder": "Qty",
 	"shopping_unit_placeholder": "Unit",
 	"shopping_quantity_for": "Quantity for {title}",
+	"shopping_quantity_add": "{label}, add quantity for {title}",
+	"shopping_quantity_edit": "{amount}, edit quantity for {title}",
+	"shopping_quantity_invalid": "Enter a number above 0, like 2 or 1.5",
 	"shopping_unit_for": "Unit for {title}",
 	"shopping_category_other": "Other",
 	"task_reorder_handle": "Reorder task",
@@ -455,6 +462,19 @@
 	"task_delete_named": "Delete {title}",
 	"task_move_to_list": "Move to list",
 	"task_delete": "Delete task",
+	"task_detail_done_aria": "Done",
+	"task_detail_more": "More options",
+	"task_more_repeats": "Repeats",
+	"task_more_reminder": "Reminder {time}",
+	"task_more_urgent": "Urgent",
+	"task_due_add": "Add date",
+	"task_due_trigger_aria": "Due date: {value}",
+	"task_due_next_week": "Next week",
+	"task_due_type_placeholder": "Type a date, like next friday",
+	"task_due_type_placeholder_iso": "Type a date as YYYY-MM-DD",
+	"task_due_type_invalid": "Could not read that date.",
+	"time_field_placeholder": "Add time",
+	"time_field_invalid": "Enter a time like {example}.",
 	"action_add": "Add",
 	"recurrence_repeat": "Repeat",
 	"recurrence_does_not_repeat": "Does not repeat",
@@ -878,6 +898,21 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: {countNum} day streak. Open task",
+				"countPlural=other": "{title}: {countNum} day streak. Open task"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: no recurrence set. Open task",
 	"panel_streak_no_recurrence": "No recurrence",
 	"panel_streak_missing": "Habit missing (deleted or not shared with you)",
@@ -906,13 +941,10 @@
 		}
 	],
 	"panel_focus_own_only": "Your sessions only",
-	"habit_no_recurrence_hint": "Set a recurrence to start tracking this habit.",
 	"habit_skip_action": "Skip",
 	"habit_undo_action": "Undo",
+	"habit_track_daily": "Track daily",
 	"habit_done_action": "Done today",
-	"habit_done_state": "Done",
-	"habit_mark_done_aria": "Mark done for today",
-	"habit_done_today_aria": "Done today",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -1322,12 +1354,16 @@
 	"auth_error_registration_disabled": "New accounts are turned off on this instance.",
 	"auth_error_invalid_origin": "This address is not trusted by the server. Ask the operator to add it to the instance's trusted origins.",
 	"mutation_failed": "Something went wrong.",
+	"mutation_offline_not_saved": "You're offline, this change wasn't saved. Reconnect and try again.",
 	"mutator_error_denied": "You do not have permission to do that.",
 	"mutator_error_label_name_taken": "A label with that name already exists.",
 	"modal_close_label": "Close",
 	"action_close": "Close",
 	"action_undo": "Undo",
 	"snackbar_task_completed": "Completed: {title}",
+	"snackbar_task_moved": "Moved to {list}: {title}",
+	"snackbar_task_complete_failed": "Could not complete: {title}",
+	"snackbar_task_move_failed": "Could not move: {title}",
 	"action_delete": "Delete",
 	"action_remove": "Remove",
 	"confirm_cancel": "Cancel",

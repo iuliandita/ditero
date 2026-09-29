@@ -44,6 +44,18 @@ export function presetToRRule(p: RecurrencePreset): string {
 	}
 }
 
+export const DAILY_RRULE = presetToRRule({ freq: "daily", interval: 1 });
+
+// A habit is tracked against its recurrence, so one created without a rule has
+// nothing to track. Top-level habits therefore start daily; subtasks and every
+// other kind start without a rule.
+export function initialRRule(
+	listKind: string | null | undefined,
+	parentId: string | null | undefined,
+): string | null {
+	return listKind === "habits" && parentId == null ? DAILY_RRULE : null;
+}
+
 const FREQ_NAME: Record<number, RecurrencePreset["freq"] | undefined> = {
 	[RRule.DAILY]: "daily",
 	[RRule.WEEKLY]: "weekly",
