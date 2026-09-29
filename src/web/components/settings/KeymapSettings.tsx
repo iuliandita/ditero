@@ -129,13 +129,18 @@ export function KeymapSettings() {
 	}
 
 	return (
-		<section className="mt-8 border-t pt-4" aria-labelledby="keymap-heading">
+		<div>
 			<div className="flex items-center justify-between gap-4">
-				<h2 id="keymap-heading" className="text-sm font-semibold">
-					{m.keymap_heading()}
-				</h2>
-				<fieldset className="m-0 inline-flex gap-1 border-0 p-0">
-					<legend className="sr-only">{m.keymap_profile_legend()}</legend>
+				<span
+					id="keymap-profile-label"
+					className="text-sm text-muted-foreground"
+				>
+					{m.keymap_profile_legend()}
+				</span>
+				<fieldset
+					aria-labelledby="keymap-profile-label"
+					className="m-0 inline-flex gap-1 border-0 p-0"
+				>
 					<Button
 						size="sm"
 						variant={pref.keymapProfile === "default" ? "default" : "outline"}
@@ -281,6 +286,6 @@ export function KeymapSettings() {
 					</div>
 				))}
 			</div>
-		</section>
+		</div>
 	);
 }

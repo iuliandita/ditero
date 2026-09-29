@@ -55,7 +55,13 @@ test("account deletion requires the last-key-holder acknowledgement", async ({
 	await expect(page.getByText(m.e2e_last_holder_title())).toBeVisible();
 	const confirm = page.getByTestId("delete-account-confirm");
 	await expect(confirm).toBeDisabled();
-	await page.getByTestId("delete-account-key-loss-ack").check();
+	// The app's own square checkbox, named by its visible label; clicking the
+	// label text toggles it like a native one would.
+	const ack = page.getByRole("checkbox", { name: m.e2e_last_holder_ack() });
+	await expect(ack).toHaveAttribute("data-slot", "checkbox");
+	await expect(ack).toHaveAttribute("data-shape", "square");
+	await page.getByText(m.e2e_last_holder_ack(), { exact: true }).click();
+	await expect(ack).toBeChecked();
 	await expect(confirm).toBeEnabled();
 
 	const { violations } = await new AxeBuilder({ page }).analyze();

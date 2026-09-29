@@ -339,6 +339,27 @@ describe("quiet hours and the sweep", () => {
 		expect(await outboxFor(rows[0].id)).toHaveLength(0);
 	});
 
+	// Settings stores quiet hours as the wall-clock HH:MM the user typed, with no
+	// conversion, and the scan must read them in the user's own zone. 21:00Z is
+	// 23:00 in Berlin (inside 22:00-07:00) but outside the same window read as
+	// UTC, so a UTC reading would fire here instead of deferring.
+	test("quiet hours are read in the user's zone, as settings stores them", async () => {
+		await setPref(OWNER, {
+			timezone: "Europe/Berlin",
+			quietHours: { start: "22:00", end: "07:00" },
+		});
+		await seedTask("sched-qz", { reminderTime: "23:00" });
+		await tick(new Date("2026-08-01T21:00:30Z"));
+
+		const rows = await remindersFor("sched-qz");
+		expect(rows).toHaveLength(1);
+		expect(rows[0].status).toBe("deferred");
+		expect(rows[0].deferredUntil?.toISOString()).toBe(
+			"2026-08-02T05:00:00.000Z",
+		);
+		expect(await outboxFor(rows[0].id)).toHaveLength(0);
+	});
+
 	// C2 regression. The defect this replaces deleted the reminder instead.
 	test("a deferred reminder fires after the window, with no escalation policy", async () => {
 		await setPref(OWNER, { quietHours: { start: "08:00", end: "10:00" } });

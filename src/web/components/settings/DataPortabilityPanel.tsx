@@ -44,14 +44,10 @@ export function DataPortabilityPanel() {
 	}
 
 	return (
-		<section
-			id="data-portability"
-			className="mt-8 border-t pt-4"
-			aria-labelledby="data-portability-heading"
-		>
-			<h2 id="data-portability-heading" className="text-sm font-semibold">
+		<section id="data-portability" aria-labelledby="data-portability-heading">
+			<h3 id="data-portability-heading" className="text-sm font-semibold">
 				{m.portability_heading()}
-			</h2>
+			</h3>
 			<p className="mt-1 text-xs text-muted-foreground">
 				{m.portability_description()}
 			</p>

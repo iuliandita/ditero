@@ -198,17 +198,18 @@ export function ChannelRow({
 
 	return (
 		<section
-			className="rounded-lg border p-3"
+			className="px-3 py-1"
 			data-testid={rowId}
 			aria-labelledby={`${rowId}-name`}
 			aria-disabled={unavailable !== null ? "true" : undefined}
 		>
 			<div className="flex items-center justify-between gap-3">
 				{/* No aria-label: it would replace the accessible name and hide the
-				    channel, its summary and its status from a screen reader. */}
+				    channel, its summary and its status from a screen reader.
+				    An unconfigured row has exactly one action, and this is it. */}
 				<button
 					type="button"
-					className="flex min-w-0 flex-1 items-center gap-2 text-left"
+					className="group/disclosure -mx-1 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-1 text-start outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
 					aria-expanded={open}
 					aria-controls={`${rowId}-form`}
 					data-testid={`${rowId}-disclosure`}
@@ -216,24 +217,36 @@ export function ChannelRow({
 					onClick={() => setOpen((o) => !o)}
 				>
 					{open ? (
-						<ChevronDown className="size-4 shrink-0" />
+						<ChevronDown className="size-4 shrink-0 text-muted-foreground" />
 					) : (
-						<ChevronRight className="size-4 shrink-0 rtl:rotate-180" />
+						<ChevronRight className="size-4 shrink-0 text-muted-foreground rtl:rotate-180" />
 					)}
-					<span id={`${rowId}-name`} className="text-sm font-medium">
-						{label}
+					<span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+						<span id={`${rowId}-name`} className="text-sm font-medium">
+							{label}
+						</span>
+						<span className="flex min-w-0 items-center gap-2">
+							{summary !== null && (
+								<span className="truncate text-xs text-muted-foreground">
+									{summary}
+								</span>
+							)}
+							<StatusText state={state} />
+						</span>
 					</span>
-					{summary !== null && (
-						<span className="truncate text-xs text-muted-foreground">
-							{summary}
+					{!open && !frozen && (
+						<span
+							data-testid={`${rowId}-action`}
+							className="inline-flex h-7 shrink-0 items-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium transition-colors duration-(--motion-fast) ease-(--motion-ease) group-hover/disclosure:bg-muted motion-reduce:transition-none dark:border-input dark:bg-input/30"
+						>
+							{stored ? m.channel_action_edit() : m.channel_action_setup()}
 						</span>
 					)}
-					<StatusText state={state} />
 				</button>
-				{/* A row with nothing stored has no enabled state to toggle, so it is
-				    a plain expand affordance: role="switch" whose aria-checked never
-				    changes on activation breaks the switch contract. */}
-				{stored ? (
+				{/* A row with nothing stored has no enabled state to toggle, so it
+				    has no switch: role="switch" whose aria-checked never changes on
+				    activation breaks the switch contract. */}
+				{stored && (
 					<Button
 						size="sm"
 						variant={stored.enabled ? "default" : "outline"}
@@ -241,22 +254,11 @@ export function ChannelRow({
 						aria-checked={stored.enabled}
 						aria-label={m.channel_toggle_label({ channel: label })}
 						data-testid={`${rowId}-toggle`}
+						className="pointer-coarse:h-11"
 						disabled={busy}
 						onClick={() => void onToggle()}
 					>
 						{stored.enabled ? m.toggle_on() : m.toggle_off()}
-					</Button>
-				) : (
-					<Button
-						size="sm"
-						variant="outline"
-						aria-expanded={open}
-						aria-controls={`${rowId}-form`}
-						data-testid={`${rowId}-toggle`}
-						disabled={frozen}
-						onClick={() => setOpen((o) => !o)}
-					>
-						{m.channel_action_setup()}
 					</Button>
 				)}
 			</div>
@@ -265,7 +267,7 @@ export function ChannelRow({
 			    contrast gate (shell doc 8). */}
 			{unavailable !== null && (
 				<p
-					className="mt-2 text-xs text-muted-foreground"
+					className="mb-2 text-xs text-muted-foreground"
 					data-testid={`${rowId}-unavailable`}
 				>
 					{channelWarningMessage(unavailable)}
@@ -274,7 +276,7 @@ export function ChannelRow({
 			{warnings.map((warning) => (
 				<p
 					key={warning}
-					className="mt-2 text-xs text-muted-foreground"
+					className="mb-2 text-xs text-muted-foreground"
 					data-testid={`${rowId}-warning-${warning}`}
 				>
 					{channelWarningMessage(warning)}
@@ -284,7 +286,7 @@ export function ChannelRow({
 			{!frozen && open && (
 				<div
 					id={`${rowId}-form`}
-					className="mt-3 flex flex-col gap-2"
+					className="mt-1 mb-3 flex flex-col gap-2"
 					data-testid={`${rowId}-form`}
 				>
 					{hasModes(kind) && (
@@ -455,7 +457,7 @@ export function ChannelRow({
 							{copied && m.channel_copied_announcement()}
 							{result.state === "verified" && (
 								<>
-									<Check className="size-3.5 text-emerald-600" />
+									<Check className="size-3.5 text-success" />
 									{acked
 										? m.channel_status_test_acked()
 										: m.channel_status_test_sent()}
@@ -500,7 +502,7 @@ function StatusText({ state }: { state: ReturnType<typeof channelHealth> }) {
 		// actually came back. A send the provider accepted says only "Sent".
 		return state.ackProven ? (
 			<span className="flex items-center gap-1 text-xs text-muted-foreground">
-				<Check className="size-3.5 text-emerald-600" />
+				<Check className="size-3.5 text-success" />
 				{m.channel_status_verified({ when })}
 			</span>
 		) : (

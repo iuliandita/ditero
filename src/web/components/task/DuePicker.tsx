@@ -155,10 +155,12 @@ export function DuePicker({
 	);
 }
 
-function TypedDate({
+export function TypedDate({
 	onPick,
+	label = m.task_due_date_aria(),
 }: {
 	onPick: (date: string, time: string | null) => void;
+	label?: string;
 }) {
 	const locale = getLocale();
 	const [text, setText] = useState("");
@@ -168,7 +170,7 @@ function TypedDate({
 		<div className="flex flex-col gap-1">
 			<Input
 				value={text}
-				aria-label={m.task_due_date_aria()}
+				aria-label={label}
 				aria-invalid={invalid || undefined}
 				aria-describedby={invalid ? errorId : undefined}
 				placeholder={
@@ -202,7 +204,7 @@ function TypedDate({
 	);
 }
 
-function QuickPicks({
+export function QuickPicks({
 	hasDue,
 	onPick,
 	onClear,
@@ -267,7 +269,7 @@ function QuickPicks({
 	);
 }
 
-function MonthGrid({
+export function MonthGrid({
 	selected,
 	onPick,
 }: {

@@ -24,7 +24,7 @@ export function ThemeSwitcher() {
 				<SelectTrigger
 					aria-labelledby={labelId}
 					data-testid="theme-switcher"
-					className="w-full sm:w-56"
+					className="w-full sm:w-56 pointer-coarse:data-[size=default]:h-11"
 				>
 					<SelectValue />
 				</SelectTrigger>

@@ -288,6 +288,13 @@
       "when": 1790351231572,
       "tag": "0040_import_activation_run_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790655601342,
+      "tag": "0041_user_pref_timezone_chosen",
+      "breakpoints": true
     }
   ]
 }
