@@ -669,7 +669,7 @@ export function CommentThread({
 							onClick={(e) =>
 								setCaret(e.currentTarget.selectionStart ?? body.length)
 							}
-							className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none focus-visible:border-ring"
+							className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring"
 						/>
 						{mention && suggestions.length > 0 && (
 							<ul

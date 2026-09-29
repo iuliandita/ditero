@@ -52,7 +52,11 @@ describe("groupTasks", () => {
 			task({ id: "none", priority: 0 }),
 		];
 		const groups = groupTasks(tasks, "priority", ctx);
-		expect(groups.map((g) => g.label)).toEqual(["High", "Low", "None"]);
+		expect(groups.map((g) => g.label)).toEqual([
+			"P1 High",
+			"P3 Low",
+			"No priority",
+		]);
 		expect(groups.map((g) => g.key)).toEqual(["3", "1", "0"]);
 	});
 
@@ -63,7 +67,7 @@ describe("groupTasks", () => {
 			ctx,
 		);
 		expect(groups).toHaveLength(1);
-		expect(groups[0].label).toBe("None");
+		expect(groups[0].label).toBe("No priority");
 	});
 
 	it("assignee fans out multi-assignee tasks and trails Unassigned", () => {

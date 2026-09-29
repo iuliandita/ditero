@@ -30,7 +30,11 @@ type Snackbar = {
 		key?: string;
 		action?: SnackAction;
 	}) => void;
-	// Retract the current snack if it is about `key` (e.g. the task reopened).
+	// A write the snack confirmed was refused: replaces that confirmation, or
+	// waits behind an unrelated snack; ignored once the user retracted `key`.
+	fail: (snack: { message: string; key: string }) => void;
+	// Retract the current snack if it is about `key` (e.g. the task reopened),
+	// and any failure still waiting for it.
 	dismissKey: (key: string) => void;
 };
 
@@ -56,6 +60,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
 	const api = useMemo<Snackbar>(
 		() => ({
 			show: (next) => dispatch({ type: "show", ...next }),
+			fail: (next) => dispatch({ type: "fail", ...next }),
 			dismissKey: (key) => dispatch({ type: "dismissKey", key }),
 		}),
 		[],

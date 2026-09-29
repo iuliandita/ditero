@@ -191,7 +191,14 @@ export function BoardLayout({
 	}
 
 	const board = (
-		<div className="flex gap-3 overflow-x-auto pb-2">
+		// Wider than its container once the columns outgrow it, so the scroller
+		// itself takes focus: keyboard users scroll it with the arrow keys.
+		<section
+			aria-label={m.view_layout_board()}
+			// biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll container must be focusable to be keyboard-scrollable
+			tabIndex={0}
+			className="flex gap-3 overflow-x-auto rounded-lg pb-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+		>
 			{groups.map((g) =>
 				dndEnabled ? (
 					<DroppableColumn key={g.key || "all"} group={g} handlers={handlers} />
@@ -199,7 +206,7 @@ export function BoardLayout({
 					<StaticColumn key={g.key || "all"} group={g} handlers={handlers} />
 				),
 			)}
-		</div>
+		</section>
 	);
 
 	if (!dndEnabled) return board;

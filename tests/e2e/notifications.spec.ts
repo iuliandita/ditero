@@ -1,6 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { goToSettings, leaveSettings } from "./helpers.ts";
+import {
+	goToSettings,
+	leaveSettings,
+	openMoreOptions,
+	setDueDate,
+} from "./helpers.ts";
 
 // M3a Task 15 e2e (repaired for M3b Task 16): the notification settings surface
 // (channel config, masked secret round-trip, test send, quiet hours), the
@@ -365,7 +370,8 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		await addTask(page, "Take pills");
 		const detail = await openDetail(page, "Take pills");
 
-		await detail.getByLabel("Due date").fill("2026-09-01");
+		await setDueDate(page, detail, "2026-09-01");
+		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill("08:30");
 		await detail.getByTestId("reminder-urgent").click();
 		await expect(detail.getByTestId("reminder-urgent")).toHaveAttribute(
@@ -378,10 +384,16 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		await detail.getByTestId("reminder-max").fill("2");
 		await expectNoSeriousA11y(page, "reminder policy");
 
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 		const reopened = await openDetail(page, "Take pills");
-		await expect(reopened.getByTestId("reminder-time")).toHaveValue("08:30");
+		await openMoreOptions(reopened);
+		// Stored as 08:30, shown in the locale's own clock (Intl may separate
+		// the day period with a narrow no-break space).
+		await expect(reopened.getByTestId("reminder-time")).toHaveValue(
+			/^8:30\sAM$/,
+		);
 		await expect(reopened.getByTestId("reminder-urgent")).toHaveAttribute(
 			"aria-checked",
 			"true",
@@ -406,13 +418,16 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		const HABIT = "Drink water";
 		let detail = await openDetail(page, HABIT);
 		const when = await localNowMinus(page, 2);
-		await detail.getByLabel("Due date").fill(when.date);
+		await setDueDate(page, detail, when.date);
+		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill(when.time);
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 		await page.setViewportSize({ width: 390, height: 844 });
 		detail = await openDetail(page, HABIT);
+		await openMoreOptions(detail);
 
 		// The disclosure is collapsed by default and opens on tap, unchanged from
 		// desktop.
@@ -469,9 +484,11 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		await createHabitsList(page);
 		const detail = await openDetail(page, "Drink water");
 		const when = await localNowMinus(page, 2);
-		await detail.getByLabel("Due date").fill(when.date);
+		await setDueDate(page, detail, when.date);
+		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill(when.time);
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 		await expect(page.getByTestId("reminder-chip").first()).toBeVisible({
@@ -495,9 +512,11 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		const HABIT = "Drink water";
 		const detail = await openDetail(page, HABIT);
 		const when = await localNowMinus(page, 2);
-		await detail.getByLabel("Due date").fill(when.date);
+		await setDueDate(page, detail, when.date);
+		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill(when.time);
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 		// The scan tick materializes the reminder_state row, which syncs back.

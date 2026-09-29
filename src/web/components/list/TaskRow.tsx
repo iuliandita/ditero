@@ -341,6 +341,7 @@ export function TaskRow({
 					<button
 						type="button"
 						data-kbd-nav
+						data-task-id={task.id}
 						onClick={() => handlers.onOpenDetail(task)}
 						className="min-h-11 min-w-0 flex-1 content-center text-start"
 					>

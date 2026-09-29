@@ -16,6 +16,7 @@ import { mutators } from "../../../zero/mutators.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { formatList } from "../../lib/intl-format.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
+import { TimeField } from "./TimeField.tsx";
 
 type Freq = RecurrencePreset["freq"];
 
@@ -409,13 +410,11 @@ export function RecurrenceEditor({
 
 			<div className="flex items-center gap-2">
 				<span className="text-muted-foreground">{m.reminder_time()}</span>
-				<Input
-					type="time"
+				<TimeField
 					value={reminder}
-					aria-label={m.reminder_time()}
+					label={m.reminder_time()}
 					data-testid="recurrence-reminder"
-					className="h-8 w-32"
-					onChange={(e) => commitReminder(e.target.value)}
+					onCommit={commitReminder}
 				/>
 				{reminder !== "" && (
 					<Button
