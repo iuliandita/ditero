@@ -171,7 +171,8 @@ export function DashboardView({
 	onUpdate: (panels: Panel[]) => void;
 	onEditDashboard: () => void;
 	onDeleteDashboard: () => void;
-	onSetHome: () => void;
+	// Absent on phones, which always land on Today.
+	onSetHome?: () => void;
 	isHome: boolean;
 	onBack: () => void;
 	data: PanelData;
@@ -457,13 +458,15 @@ export function DashboardView({
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
-						<DropdownMenuCheckboxItem
-							data-testid="dashboard-set-home"
-							checked={isHome}
-							onSelect={onSetHome}
-						>
-							<House /> {m.dashboard_set_home()}
-						</DropdownMenuCheckboxItem>
+						{onSetHome && (
+							<DropdownMenuCheckboxItem
+								data-testid="dashboard-set-home"
+								checked={isHome}
+								onSelect={onSetHome}
+							>
+								<House /> {m.dashboard_set_home()}
+							</DropdownMenuCheckboxItem>
+						)}
 						<DropdownMenuItem
 							data-testid="dashboard-rename"
 							onSelect={onEditDashboard}

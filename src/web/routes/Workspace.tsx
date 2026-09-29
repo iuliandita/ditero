@@ -696,7 +696,11 @@ function NormalWorkspace() {
 								setDashboardManager({ mode: "edit", id: openDashboardRow.id })
 							}
 							onDeleteDashboard={() => void deleteDashboard(openDashboardRow)}
-							onSetHome={() => setHome(dashboardHomeRef(openDashboardRow.id))}
+							onSetHome={
+								isDesktop
+									? () => setHome(dashboardHomeRef(openDashboardRow.id))
+									: undefined
+							}
 							isHome={
 								pref.homeViewRef === dashboardHomeRef(openDashboardRow.id)
 							}
@@ -752,67 +756,74 @@ function NormalWorkspace() {
 							<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
 								{activeView.name}
 							</h1>
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										aria-label={m.view_actions()}
-										data-testid="view-actions"
-									>
-										<MoreHorizontal />
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent align="end">
-									<DropdownMenuCheckboxItem
-										data-testid="view-set-home"
-										checked={
-											homeTarget.kind === "view" &&
-											activeView.id === homeTarget.id
-										}
-										onSelect={() => setHome(activeView.id)}
-									>
-										<House /> {m.view_set_home()}
-									</DropdownMenuCheckboxItem>
-									{activeView.saved && (
-										<>
-											<DropdownMenuItem
-												data-testid="view-pin"
-												onSelect={() => togglePin(activeView.id)}
-											>
-												{isPinned(activeView.id) ? (
-													<>
-														<PinOff /> {m.view_unpin()}
-													</>
-												) : (
-													<>
-														<Pin /> {m.view_pin()}
-													</>
-												)}
-											</DropdownMenuItem>
-											<DropdownMenuItem
-												data-testid="view-edit"
-												onSelect={() =>
-													setViewManager({ mode: "edit", id: activeView.id })
+							{/* Phones always land on Today, so "Set as home" would do
+							    nothing visible there; a built-in view then has no
+							    actions at all and shows no menu. */}
+							{(isDesktop || activeView.saved) && (
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											aria-label={m.view_actions()}
+											data-testid="view-actions"
+										>
+											<MoreHorizontal />
+										</Button>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end">
+										{isDesktop && (
+											<DropdownMenuCheckboxItem
+												data-testid="view-set-home"
+												checked={
+													homeTarget.kind === "view" &&
+													activeView.id === homeTarget.id
 												}
+												onSelect={() => setHome(activeView.id)}
 											>
-												<Pencil /> {m.view_menu_edit()}
-											</DropdownMenuItem>
-											<DropdownMenuSeparator />
-											<DropdownMenuItem
-												data-testid="view-delete"
-												className="text-destructive"
-												onSelect={() => {
-													if (activeView.saved)
-														void deleteView(activeView.saved);
-												}}
-											>
-												<Trash2 /> {m.view_menu_delete()}
-											</DropdownMenuItem>
-										</>
-									)}
-								</DropdownMenuContent>
-							</DropdownMenu>
+												<House /> {m.view_set_home()}
+											</DropdownMenuCheckboxItem>
+										)}
+										{activeView.saved && (
+											<>
+												<DropdownMenuItem
+													data-testid="view-pin"
+													onSelect={() => togglePin(activeView.id)}
+												>
+													{isPinned(activeView.id) ? (
+														<>
+															<PinOff /> {m.view_unpin()}
+														</>
+													) : (
+														<>
+															<Pin /> {m.view_pin()}
+														</>
+													)}
+												</DropdownMenuItem>
+												<DropdownMenuItem
+													data-testid="view-edit"
+													onSelect={() =>
+														setViewManager({ mode: "edit", id: activeView.id })
+													}
+												>
+													<Pencil /> {m.view_menu_edit()}
+												</DropdownMenuItem>
+												<DropdownMenuSeparator />
+												<DropdownMenuItem
+													data-testid="view-delete"
+													className="text-destructive"
+													onSelect={() => {
+														if (activeView.saved)
+															void deleteView(activeView.saved);
+													}}
+												>
+													<Trash2 /> {m.view_menu_delete()}
+												</DropdownMenuItem>
+											</>
+										)}
+									</DropdownMenuContent>
+								</DropdownMenu>
+							)}
 						</div>
 						{/* A malformed synced view (a co-member's bad filter/display) can
 						    throw in the renderer; the boundary keeps it inline instead of

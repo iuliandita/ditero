@@ -33,15 +33,15 @@ async function joinShared(email: string): Promise<void> {
 	}
 }
 
-async function storedHomeRef(email: string): Promise<string | null> {
+async function setHomeRef(email: string, ref: string): Promise<void> {
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
 	try {
-		const { rows } = await pool.query<{ ref: string | null }>(
-			`select p.home_view_ref as ref from user_pref p
-			 join "user" u on u.id = p.id where u.email = $1`,
-			[email],
+		await pool.query(
+			`insert into user_pref (id, home_view_ref)
+			 select id, $2 from "user" where email = $1
+			 on conflict (id) do update set home_view_ref = excluded.home_view_ref`,
+			[email, ref],
 		);
-		return rows[0]?.ref ?? null;
 	} finally {
 		await pool.end();
 	}
@@ -352,30 +352,28 @@ test("phones: Today is a tab, settings leaves the bar, and each tab keeps to its
 		.click();
 	expect((await box(grip)).width).toBeLessThan(2);
 
-	// A home view other than Today still lands phones on the Today tab, so the
-	// tab bar names what is on screen.
+	// Phones always land on Today, so they offer no "Set as home": it would
+	// have no visible effect here. A built-in view then has no menu at all.
 	await page.getByRole("button", { name: "All my tasks", exact: true }).click();
 	await expect(page.getByTestId("nav-tab-lists")).toHaveAttribute(
 		"aria-current",
 		"page",
 	);
-	await page.getByTestId("view-actions").click();
-	await page.getByTestId("view-set-home").click();
-	// Reload only once the preference is stored, or the landing proves nothing.
-	await expect
-		.poll(() => storedHomeRef(email), { timeout: 15000 })
-		.toBe("all-my-tasks");
+	await expect(page.getByTestId("view-surface")).toBeVisible();
+	await expect(page.getByTestId("view-actions")).toHaveCount(0);
+	await expect(page.getByTestId("view-set-home")).toHaveCount(0);
+
+	// A home chosen on desktop leaves the phone on the Today tab, so the tab
+	// bar names what is on screen. Widening the same page first proves the
+	// preference has synced; narrowing it back must return to Today.
+	await setHomeRef(email, "all-my-tasks");
 	await page.reload();
 	await waitWorkspaceReady(page);
-	// The landing only diverges once the preference has synced: Today's own
-	// "Set as home" reads unchecked from then on.
-	await page.getByTestId("view-actions").click();
-	await expect(page.getByTestId("view-set-home")).toHaveAttribute(
-		"aria-checked",
-		"false",
-		{ timeout: 15000 },
-	);
-	await page.keyboard.press("Escape");
+	await page.setViewportSize({ width: 1280, height: 844 });
+	await expect(
+		page.getByTestId("view-surface").getByRole("heading", { level: 1 }),
+	).toHaveText("All my tasks", { timeout: 15000 });
+	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(page.getByTestId("nav-tab-today")).toHaveAttribute(
 		"aria-current",
 		"page",
