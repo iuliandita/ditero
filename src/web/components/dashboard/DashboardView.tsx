@@ -36,6 +36,7 @@ import type {
 import type { SavedView } from "../../hooks/useViews.ts";
 import { useIsDesktop } from "../../lib/use-media-query.ts";
 import { useWideContent } from "../../lib/use-wide-content.ts";
+import { effectiveGroupBy, filterMentionsDone } from "../../views/group.ts";
 import { useReorderSensors } from "../list/SortableList.tsx";
 import { BackButton } from "../ui/back-button.tsx";
 import { Button } from "../ui/button.tsx";
@@ -47,6 +48,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
+import { EmptyState } from "../ui/empty-state.tsx";
 import { AddPanelDialog } from "./AddPanelDialog.tsx";
 import { CounterPanel } from "./CounterPanel.tsx";
 import { FocusPanel } from "./FocusPanel.tsx";
@@ -279,6 +281,10 @@ export function DashboardView({
 					);
 				}
 				const label = panelLabel(panel, panelViewName(panel));
+				const view =
+					panel.source.kind === "view"
+						? viewsById.get(panel.source.viewId)
+						: undefined;
 				return panel.type === "tasks" ? (
 					<TasksPanel
 						panel={panel}
@@ -286,6 +292,12 @@ export function DashboardView({
 						label={label}
 						data={data}
 						ids={ids}
+						byPriority={
+							view != null &&
+							effectiveGroupBy(view.display.layout, view.display.groupBy) ===
+								"priority"
+						}
+						showCompleted={filterMentionsDone(resolved.filter)}
 						onOpenTask={onOpenTask}
 						onOpenView={onOpenView}
 					/>
@@ -325,14 +337,11 @@ export function DashboardView({
 		);
 	} else if (panels.length === 0 && !editing) {
 		body = (
-			<div
+			<EmptyState
 				data-testid="dashboard-empty"
-				className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-10 text-center"
+				icon={LayoutDashboard}
+				message={m.dashboard_empty_hint()}
 			>
-				<LayoutDashboard aria-hidden className="size-8 text-muted-foreground" />
-				<p className="text-sm text-muted-foreground">
-					{m.dashboard_empty_hint()}
-				</p>
 				{canEdit && (
 					<Button
 						data-testid="dashboard-empty-add"
@@ -344,7 +353,7 @@ export function DashboardView({
 						<Plus /> {m.panel_add()}
 					</Button>
 				)}
-			</div>
+			</EmptyState>
 		);
 	} else {
 		const grid = (
@@ -382,7 +391,7 @@ export function DashboardView({
 						<p
 							data-testid="panel-limit-reached"
 							className={cn(
-								"flex min-h-28 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground",
+								"flex min-h-28 items-center justify-center px-4 text-center text-sm text-muted-foreground",
 								tileSpan,
 							)}
 						>
@@ -393,8 +402,10 @@ export function DashboardView({
 							type="button"
 							data-testid="add-panel"
 							onClick={() => setPanelDialog({ mode: "add" })}
+							// A quiet fill, not a dashed outline: the slot is an action,
+							// and it reads as one without pretending to be a panel.
 							className={cn(
-								"flex min-h-28 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40",
+								"flex min-h-28 items-center justify-center gap-2 rounded-xl bg-muted text-sm font-medium text-muted-foreground transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
 								tileSpan,
 							)}
 						>

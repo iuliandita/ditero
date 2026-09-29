@@ -7,9 +7,9 @@ import {
 import { m } from "../../../paraglide/messages.js";
 
 // The add-item field with a listbox of titles the user has written before.
-// Accepting one only fills the field: it is still parsed on submit like typed
-// text, so a suggestion carrying "#label" or a date behaves exactly as if it
-// had been typed, rather than acquiring metadata silently or losing it.
+// Accepting one only fills the field, and the title is then saved exactly as
+// written: this field does not parse quick-add tokens, so a suggestion carrying
+// "#label" or a date word becomes plain title text, same as if it were typed.
 export function TitleSuggestInput({
 	value,
 	onChange,

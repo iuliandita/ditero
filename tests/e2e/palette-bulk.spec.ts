@@ -399,7 +399,9 @@ test("touch: long-press Select starts selection mode and taps then select", asyn
 	await expect(page.getByRole("dialog")).toHaveCount(0);
 	expect((await control.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(44);
 	// The floating add button steps aside for the bar.
-	await expect(page.getByRole("button", { name: "Quick add" })).toBeHidden();
+	await expect(
+		page.getByRole("button", { name: "Quick add", exact: true }),
+	).toBeHidden();
 	await expectNoSeriousA11y(page, "touch selection mode");
 
 	await bar.getByTestId("selection-clear").tap();

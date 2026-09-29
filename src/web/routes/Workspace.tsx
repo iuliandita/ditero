@@ -47,6 +47,7 @@ import {
 import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
 import { useDashboards } from "../hooks/useDashboards.ts";
+import { useHints } from "../hooks/useHints.ts";
 import { useSyncedTheme } from "../hooks/useSyncedTheme.ts";
 import { useTaskImportActivationMap } from "../hooks/useTaskImportActivation.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
@@ -55,6 +56,7 @@ import { useWorkspaceDashboards } from "../hooks/useWorkspaceDashboards.ts";
 import { useWorkspaceData } from "../hooks/useWorkspaceData.ts";
 import { useWorkspaceRowActions } from "../hooks/useWorkspaceRowActions.ts";
 import { useWorkspaceViews } from "../hooks/useWorkspaceViews.ts";
+import { formatBinding } from "../keyboard/binding-label.ts";
 import {
 	type CommandHandlers,
 	CommandProvider,
@@ -66,12 +68,14 @@ import {
 	openFocused,
 } from "../keyboard/roving.ts";
 import { runSelectionCommand } from "../keyboard/selection-commands.ts";
+import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
 import { canCreateFolder, canCreateList } from "../lib/create-gates.ts";
+import { shortcutHintVisible } from "../lib/hints.ts";
 import { ICONS } from "../lib/list-icon.tsx";
 import type { Locale } from "../lib/locale.ts";
 import { recordRecent } from "../lib/recents.ts";
 import { runMutation } from "../lib/run-mutation.ts";
-import { useIsDesktop } from "../lib/use-media-query.ts";
+import { useIsDesktop, useMediaQuery } from "../lib/use-media-query.ts";
 import { BUILTIN_VIEWS, DEFAULT_HOME } from "../views/builtins.ts";
 import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
 import { ListView } from "./ListView.tsx";
@@ -170,6 +174,12 @@ function NormalWorkspace() {
 	const [newListFolder, setNewListFolder] = useState<{
 		id: string | null;
 		nonce: number;
+		fromWelcome?: boolean;
+	} | null>(null);
+	// First run just created this list: it opens ready to add to.
+	const [arrival, setArrival] = useState<{
+		listId: string;
+		blank: boolean;
 	} | null>(null);
 	const openHome = useCallback(() => dispatchContent({ kind: "home" }), []);
 	const closeList = useCallback(
@@ -192,6 +202,10 @@ function NormalWorkspace() {
 	const startNewList = () => {
 		openHome();
 		setNewListFolder({ id: null, nonce: Date.now() });
+	};
+	const startFirstList = () => {
+		openHome();
+		setNewListFolder({ id: null, nonce: Date.now(), fromWelcome: true });
 	};
 
 	// Default active workspace is the user's personal one, so new lists stay private.
@@ -356,6 +370,27 @@ function NormalWorkspace() {
 		},
 		[openList],
 	);
+	const arriveAt = useCallback(
+		(listId: string, blank: boolean) => {
+			openList(listId);
+			setArrival({ listId, blank });
+		},
+		[openList],
+	);
+	useEffect(() => {
+		if (arrival && openListId !== arrival.listId) setArrival(null);
+	}, [arrival, openListId]);
+
+	const { hints, shortcutsSeen } = useHints();
+	const finePointer = useMediaQuery("(any-pointer: fine)");
+	const cheatBinding = useEffectiveKeymap()["help.cheatSheet"]?.[0];
+	const shortcutHintKey =
+		cheatBinding && shortcutHintVisible(hints, finePointer)
+			? formatBinding(cheatBinding)
+			: null;
+	useEffect(() => {
+		if (cheatOpen) shortcutsSeen();
+	}, [cheatOpen, shortcutsSeen]);
 	const openSettings = useCallback(() => {
 		setDetailTaskId(null);
 		dispatchContent({ kind: "settings" });
@@ -579,6 +614,7 @@ function NormalWorkspace() {
 					listActions={buildListActions}
 					onBack={!isDesktop ? () => closeList(openListId) : undefined}
 					onQuickAdd={() => setQuickAddOpen(true)}
+					arrival={arrival?.listId === openListId ? arrival : null}
 				/>
 			</div>
 		);
@@ -739,8 +775,8 @@ function NormalWorkspace() {
 										<FirstRunActions
 											workspaceId={activeId}
 											lists={activeLists}
-											onCreateList={startNewList}
-											onOpenList={openList}
+											onCreateList={startFirstList}
+											onOpenList={(id) => arriveAt(id, false)}
 										/>
 									) : undefined
 								}
@@ -841,7 +877,11 @@ function NormalWorkspace() {
 							lists={activeLists}
 							folders={activeFolders}
 							templates={activeTemplates}
-							onCreated={() => setNewListFolder(null)}
+							onCreated={(listId, blank) => {
+								const fromWelcome = newListFolder?.fromWelcome === true;
+								setNewListFolder(null);
+								if (fromWelcome) arriveAt(listId, blank);
+							}}
 							onCancel={() => setNewListFolder(null)}
 						/>
 						{/* Desktop nav lives in the sidebar; render the list index only on
@@ -923,6 +963,8 @@ function NormalWorkspace() {
 								dashboardActions={buildDashboardActions}
 								section={section}
 								onOpenSettings={openSettings}
+								shortcutHintKey={shortcutHintKey}
+								onOpenShortcuts={() => setCheatOpen(true)}
 								collapsed={collapsed}
 								onToggleCollapsed={() => setCollapsed((c) => !c)}
 							/>

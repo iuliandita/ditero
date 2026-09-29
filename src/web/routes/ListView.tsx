@@ -1,6 +1,6 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { ListTodo, Paperclip, SlidersHorizontal } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -40,6 +40,7 @@ import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
 import { TitleSuggestInput } from "../components/list/TitleSuggestInput.tsx";
+import { InlineSyntaxHint } from "../components/quickadd/InlineSyntaxHint.tsx";
 import { TaskListSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
@@ -76,11 +77,14 @@ export function ListView({
 	listActions,
 	onBack,
 	onQuickAdd,
+	arrival,
 }: {
 	listId: string;
 	listActions: (list: List) => RowAction[];
 	onBack?: () => void;
 	onQuickAdd: () => void;
+	/** Set when first run just created this list: land ready to add. */
+	arrival?: { blank: boolean } | null;
 }) {
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
@@ -103,6 +107,7 @@ export function ListView({
 	const titleInput = useRef<HTMLInputElement>(null);
 	const attachmentsRef = useRef<AttachmentListHandle>(null);
 	const listHeaderRef = useRef<HTMLDivElement>(null);
+	const arrivedAt = useRef<string | null>(null);
 
 	// Zero reports per-query completeness; "no rows yet" and "no rows" are only
 	// distinguishable here, where the queries live. The row surface below is pure.
@@ -110,6 +115,17 @@ export function ListView({
 	const tasksLoading = listsLoading || tasksDetails.type !== "complete";
 
 	const list = lists.find((l) => l.id === listId);
+	// The phone's add field renders only once rows have synced.
+	const listReady = list != null && !tasksLoading;
+
+	// Once per arrival, after the list has synced: focus the add field where one
+	// is on screen, else open quick add for an empty list.
+	useEffect(() => {
+		if (!arrival || !listReady || arrivedAt.current === listId) return;
+		arrivedAt.current = listId;
+		if (titleInput.current?.getClientRects().length) titleInput.current.focus();
+		else if (arrival.blank) onQuickAdd();
+	}, [arrival, listReady, listId, onQuickAdd]);
 	const listTasks = useMemo(
 		() => tasks.filter((t) => t.listId === listId),
 		[tasks, listId],
@@ -388,25 +404,35 @@ export function ListView({
 	// One field, placed per shell: above the rows on desktop, after them on a
 	// phone, where the thumb already is and the floating add button sits.
 	const addForm = (
-		<div className={isDesktop ? "mb-5 flex gap-2" : "mt-2 flex gap-2"}>
-			<TitleSuggestInput
-				inputRef={titleInput}
-				data-testid="new-task"
-				placeholder={addCopy.placeholder()}
-				value={title}
-				onChange={setTitle}
-				onSubmit={() => void createTask()}
-				candidates={titleCandidates}
-				listId={listId}
+		<div
+			className={
+				isDesktop ? "mb-5 flex flex-col gap-1" : "mt-2 flex flex-col gap-1"
+			}
+		>
+			<div className="flex gap-2">
+				<TitleSuggestInput
+					inputRef={titleInput}
+					data-testid="new-task"
+					placeholder={addCopy.placeholder()}
+					value={title}
+					onChange={setTitle}
+					onSubmit={() => void createTask()}
+					candidates={titleCandidates}
+					listId={listId}
+				/>
+				<Button
+					data-testid="new-task-submit"
+					type="button"
+					className="min-h-11 md:min-h-0"
+					onClick={() => void createTask()}
+				>
+					{addCopy.action()}
+				</Button>
+			</div>
+			<InlineSyntaxHint
+				example={arrival?.blank === true}
+				onQuickAdd={onQuickAdd}
 			/>
-			<Button
-				data-testid="new-task-submit"
-				type="button"
-				className="min-h-11 md:min-h-0"
-				onClick={() => void createTask()}
-			>
-				{addCopy.action()}
-			</Button>
 		</div>
 	);
 	const mobileAdd = isDesktop ? undefined : addForm;
@@ -601,7 +627,7 @@ export function ListView({
 							}
 						}}
 					>
-						{m.list_empty_action()}
+						{addCopy.action()}
 					</Button>
 				</EmptyState>
 			) : groupByAssignee ? (

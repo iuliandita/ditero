@@ -176,6 +176,19 @@ test("overlays use the scrim token and no backdrop blur", async () => {
 	}
 });
 
+// Sticky and floating bars sit on a solid surface (DESIGN.md No Glass Rule).
+test("bottom nav, focus timer and board columns never blur", async () => {
+	for (const file of [
+		"../shell/BottomNav.tsx",
+		"../focus/FocusTimer.tsx",
+		"../views/BoardLayout.tsx",
+	]) {
+		const css = await build(candidatesOf(file));
+		expect(css, file).not.toContain("--tw-backdrop-blur:");
+		expect(css, file).not.toContain("backdrop-filter:");
+	}
+});
+
 // The checkbox's priority tones and the warning token are only real if their
 // utilities resolve to declared tokens; an undeclared --color-* emits nothing.
 test("priority, warning and control tokens back their utilities", async () => {
