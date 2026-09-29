@@ -367,6 +367,15 @@ test("phones: Today is a tab, settings leaves the bar, and each tab keeps to its
 		.toBe("all-my-tasks");
 	await page.reload();
 	await waitWorkspaceReady(page);
+	// The landing only diverges once the preference has synced: Today's own
+	// "Set as home" reads unchecked from then on.
+	await page.getByTestId("view-actions").click();
+	await expect(page.getByTestId("view-set-home")).toHaveAttribute(
+		"aria-checked",
+		"false",
+		{ timeout: 15000 },
+	);
+	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("nav-tab-today")).toHaveAttribute(
 		"aria-current",
 		"page",
