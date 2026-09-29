@@ -691,7 +691,7 @@
 	"filter_remove_group": "Quitar el grupo",
 	"filter_add_condition": "Condición",
 	"filter_add_group": "Grupo",
-	"filter_no_conditions": "Todavía no hay condiciones — coincide con todo.",
+	"filter_no_conditions": "Todavía no hay condiciones, así que coincide con todo.",
 	"filter_no_options": "Sin opciones.",
 	"filter_multi_any": "Cualquiera",
 	"filter_assignee_me": "Yo",
@@ -731,6 +731,8 @@
 	"calendar_agenda_heading": "Agenda",
 	"calendar_viewing_as_agenda": "Viendo como agenda",
 	"calendar_chip_recurring": "{title}, se repite",
+	"calendar_chip_priority": "{name}, {priority}",
+	"calendar_chip_done": "{name}, completada",
 	"calendar_day_today": "{date}, hoy",
 	"filter_multi_selected": [
 		{
@@ -868,6 +870,7 @@
 	"panel_title_placeholder": "Título del panel",
 	"panel_mobile_hint": "En el móvil, los paneles se apilan en el orden del dashboard.",
 	"panel_no_matches": "No hay tareas que coincidan",
+	"panel_all_done": "No queda nada pendiente",
 	"panel_show_all": [
 		{
 			"declarations": ["input count", "local countNum = count: number"],

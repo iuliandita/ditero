@@ -31,6 +31,7 @@ import type {
 } from "../../../domain/view-filter.ts";
 import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
+import { effectiveGroupBy } from "../../views/group.ts";
 import { FilterBuilder } from "./FilterBuilder.tsx";
 import { SORT_FIELD_LABELS, SORT_FIELDS } from "./filter-options.ts";
 
@@ -135,9 +136,13 @@ export function ViewManager({
 	const [filter, setFilter] = useState<FilterGroup>(
 		initial?.filter ?? EMPTY_FILTER,
 	);
+	// The stored value, untouched until the user picks a layout or grouping, so
+	// saving an unrelated edit never rewrites it. The select shows what the
+	// view renders: a board always groups (#355).
 	const [display, setDisplay] = useState<ViewDisplay>(
 		initial?.display ?? DEFAULT_DISPLAY,
 	);
+	const shownGroupBy = effectiveGroupBy(display.layout, display.groupBy);
 	const [scope, setScope] = useState<"personal" | "workspace">(
 		initial?.scope ?? "personal",
 	);
@@ -153,7 +158,11 @@ export function ViewManager({
 	const canSetScope = mode === "create";
 
 	function setLayout(layout: ViewLayout) {
-		setDisplay((d) => ({ ...d, layout }));
+		setDisplay((d) => ({
+			...d,
+			layout,
+			groupBy: effectiveGroupBy(layout, d.groupBy),
+		}));
 	}
 	function setGroupBy(groupBy: GroupBy) {
 		setDisplay((d) => ({ ...d, groupBy }));
@@ -241,14 +250,16 @@ export function ViewManager({
 				</Field>
 				<Field label={m.view_field_group_by()} htmlFor={`${baseId}-groupby`}>
 					<Select
-						value={display.groupBy}
+						value={shownGroupBy}
 						onValueChange={(v) => setGroupBy(v as GroupBy)}
 					>
 						<SelectTrigger id={`${baseId}-groupby`} size="sm">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							{GROUP_BYS.map((value) => (
+							{GROUP_BYS.filter(
+								(value) => display.layout !== "board" || value !== "none",
+							).map((value) => (
 								<SelectItem key={value} value={value}>
 									{GROUP_BY_LABELS[value]()}
 								</SelectItem>

@@ -25,6 +25,7 @@ import {
 	strikeClass,
 	useJustCompleted,
 } from "@/lib/completion-feedback";
+import { ListIcon } from "@/lib/list-icon";
 import {
 	formatDue,
 	isOverdue,
@@ -65,8 +66,10 @@ function SwipeRow({
 	children,
 	onComplete,
 	onSchedule,
+	surface = "bg-background",
 }: {
 	children: ReactNode;
+	surface?: string;
 	onComplete?: () => void;
 	onSchedule?: () => void;
 }) {
@@ -155,7 +158,7 @@ function SwipeRow({
 				onPointerUp={onPointerUp}
 				onPointerCancel={onPointerUp}
 				onClickCapture={onClickCapture}
-				className="touch-pan-y bg-background"
+				className={cn("touch-pan-y", surface)}
 				style={{
 					transform: `translateX(${dx}px)`,
 					transition:
@@ -197,9 +200,11 @@ const FLAG_FILL: Record<number, string> = {
 function PriorityFlag({
 	id,
 	priority,
+	className,
 }: {
 	id: string;
 	priority: number | null | undefined;
+	className?: string;
 }) {
 	const meta = priorityMeta(priority);
 	if (!meta) return null;
@@ -211,7 +216,7 @@ function PriorityFlag({
 			aria-label={m.task_priority_aria({ priority: label })}
 			data-testid="task-priority"
 			data-priority={meta.value}
-			className="inline-flex shrink-0 items-center gap-1"
+			className={cn("inline-flex shrink-0 items-center gap-1", className)}
 		>
 			{/* The word appears where a pointer can hover or the keyboard is in
 			    the row; touch keeps the flag alone, per the one-cue row. */}
@@ -251,13 +256,24 @@ export function TaskRow({
 	subtasks,
 	labels,
 	handlers,
+	variant = "row",
+	surface,
+	list,
 }: {
 	task: Task;
 	kind: ListKind;
 	subtasks: Task[];
 	labels: Label[];
 	handlers: RowHandlers;
+	// "card" is the board surface: two-line titles and top-aligned controls.
+	variant?: "row" | "card";
+	// The fill the row sits on, so its swipe layer never reads as an inner box.
+	// A board card and a dashboard panel are card; a dialog is popover.
+	surface?: "card" | "popover";
+	// Shown when the surface mixes lists, so a row says where it lives.
+	list?: { title: string; icon: string | null } | null;
 }) {
+	const card = variant === "card";
 	const [expanded, setExpanded] = useState(false);
 	const [editError, setEditError] = useState<string | null>(null);
 	const zero = useZero<typeof schema>();
@@ -268,7 +284,8 @@ export function TaskRow({
 	const activation = useTaskImportActivationMap();
 	const activationStatus = activation.statusForTask(task.id);
 	const canEdit = activation.canWriteTask(task.id);
-	const bare = kind === "checklist";
+	// A checklist row is just a tick; a card elsewhere still owes its cues.
+	const bare = kind === "checklist" && !card;
 	const doneCount = subtasks.filter((s) => s.done).length;
 	const total = subtasks.length;
 	const progress = total > 0 ? doneCount / total : 0;
@@ -378,6 +395,13 @@ export function TaskRow({
 	return (
 		<div>
 			<SwipeRow
+				surface={
+					surface === "popover"
+						? "bg-popover"
+						: card || surface === "card"
+							? "bg-card"
+							: undefined
+				}
 				onComplete={
 					canEdit
 						? () => handlers.onToggle(task.id, task.done ?? false)
@@ -393,11 +417,19 @@ export function TaskRow({
 				    button carries data-kbd-nav (roving focus + open target). `group`
 				    is what RowActions' md:group-hover reveal keys off. */}
 				<div
-					className="group flex min-h-12 items-center gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60"
+					className={cn(
+						"group flex min-h-12 gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60",
+						card ? "items-start" : "items-center",
+					)}
 					data-kbd-row
 					{...rowProps}
 				>
-					<div className="flex size-11 shrink-0 items-center justify-center md:size-8">
+					<div
+						className={cn(
+							"flex shrink-0 items-center justify-center",
+							card ? "size-8" : "size-11 md:size-8",
+						)}
+					>
 						<Checkbox
 							disabled={!canEdit}
 							aria-label={task.title}
@@ -421,11 +453,16 @@ export function TaskRow({
 						aria-label={m.task_open_details()}
 						aria-describedby={describedBy}
 						onClick={() => handlers.onOpenDetail(task)}
-						className="min-h-11 min-w-0 flex-1 content-center text-start"
+						title={card ? task.title : undefined}
+						className={cn(
+							"min-w-0 flex-1 text-start",
+							card ? "min-h-8 py-1.5" : "min-h-11 content-center",
+						)}
 					>
 						<span
 							className={cn(
-								"block truncate text-sm",
+								"block text-sm",
+								card ? "line-clamp-2 break-words" : "truncate",
 								task.done && "text-muted-foreground",
 							)}
 						>
@@ -451,6 +488,17 @@ export function TaskRow({
 							>
 								<AssigneeChips taskId={task.id} />
 								<DueChip task={task} />
+								{list && (
+									<span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+										<ListIcon
+											icon={list.icon}
+											kind={kind}
+											title={list.title}
+											className="size-3 shrink-0"
+										/>
+										<span className="truncate">{list.title}</span>
+									</span>
+								)}
 								{labels.map((l) => (
 									<Badge
 										key={l.id}
@@ -480,7 +528,13 @@ export function TaskRow({
 					{/* Outside the title button: the chip is itself a control when the
 					    reminder is still live, and a button cannot nest in a button. */}
 					{!bare && <ReminderChip task={task} />}
-					{!bare && <PriorityFlag id={priorityId} priority={task.priority} />}
+					{!bare && (
+						<PriorityFlag
+							id={priorityId}
+							priority={task.priority}
+							className={card ? "mt-2.5" : undefined}
+						/>
+					)}
 					{total > 0 && (
 						<button
 							type="button"
