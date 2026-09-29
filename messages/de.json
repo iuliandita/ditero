@@ -308,6 +308,9 @@
 	],
 	"list_change_icon": "Listensymbol ändern",
 	"list_display_options": "Anzeigeoptionen der Liste",
+	"list_reorder_mode": "Umsortieren",
+	"list_reorder_hint": "Zum Umsortieren an den Griffen ziehen.",
+	"list_reorder_done": "Fertig",
 	"list_completed_heading": "Erledigte Einträge",
 	"list_completed_sink": "Erledigte Einträge nach unten",
 	"list_completed_keep": "An Ort und Stelle",
@@ -426,6 +429,23 @@
 	"shopping_category_other": "Sonstiges",
 	"task_reorder_handle": "Aufgabe umsortieren",
 	"task_priority_aria": "Priorität: {priority}",
+	"task_open_details": "Details öffnen",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} von {totalNum} Teilaufgabe erledigt",
+				"totalPlural=other": "{doneNum} von {totalNum} Teilaufgaben erledigt"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
