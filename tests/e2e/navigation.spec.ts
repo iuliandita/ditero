@@ -33,6 +33,20 @@ async function joinShared(email: string): Promise<void> {
 	}
 }
 
+async function storedHomeRef(email: string): Promise<string | null> {
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		const { rows } = await pool.query<{ ref: string | null }>(
+			`select p.home_view_ref as ref from user_pref p
+			 join "user" u on u.id = p.id where u.email = $1`,
+			[email],
+		);
+		return rows[0]?.ref ?? null;
+	} finally {
+		await pool.end();
+	}
+}
+
 async function createList(page: Page, name: string): Promise<void> {
 	await page.getByTestId("create-list-open").click();
 	await page.getByTestId("new-list").fill(name);
@@ -347,6 +361,10 @@ test("phones: Today is a tab, settings leaves the bar, and each tab keeps to its
 	);
 	await page.getByTestId("view-actions").click();
 	await page.getByTestId("view-set-home").click();
+	// Reload only once the preference is stored, or the landing proves nothing.
+	await expect
+		.poll(() => storedHomeRef(email), { timeout: 15000 })
+		.toBe("all-my-tasks");
 	await page.reload();
 	await waitWorkspaceReady(page);
 	await expect(page.getByTestId("nav-tab-today")).toHaveAttribute(
@@ -370,9 +388,13 @@ test("phones: Today is a tab, settings leaves the bar, and each tab keeps to its
 	await page.getByTestId("manage-members").click();
 	const panel = page.getByTestId("members-panel");
 	await expect(panel).toBeVisible();
-	await expect
-		.poll(() => panel.evaluate((el) => el.contains(document.activeElement)))
-		.toBe(true);
+	const focusInPanel = () =>
+		panel.evaluate((el) => el.contains(document.activeElement));
+	await expect.poll(focusInPanel).toBe(true);
+	// Still there once the switcher sheet has finished closing and released
+	// its own focus.
+	await page.waitForTimeout(600);
+	expect(await focusInPanel()).toBe(true);
 	await page.keyboard.press("Escape");
 	await expect(panel).toHaveCount(0);
 
