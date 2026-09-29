@@ -149,11 +149,15 @@ function DesktopCreateList(props: CreateListProps) {
 	function close() {
 		setOpen(false);
 		// An explicit sidebar action remounts this component when its intent clears.
-		requestAnimationFrame(() =>
+		// Only when focus was lost with the form: a caller that navigated to the
+		// new list has already placed it.
+		requestAnimationFrame(() => {
+			const current = document.activeElement;
+			if (current && current !== document.body) return;
 			document
 				.querySelector<HTMLButtonElement>("[data-create-list-trigger]")
-				?.focus(),
-		);
+				?.focus();
+		});
 	}
 	if (!open) {
 		return (
