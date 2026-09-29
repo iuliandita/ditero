@@ -7,6 +7,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
+import type { ListKind } from "../../../domain/icon-map.ts";
 import {
 	dateParserFor,
 	parseQuickAdd,
@@ -18,6 +19,7 @@ import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
+import { addCopyFor } from "../../lib/kind-copy.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { TokenChips } from "./TokenChips.tsx";
 
@@ -225,7 +227,9 @@ export function QuickAddSheet({
 							onClick={() => void submit()}
 							disabled={busy || !targetList || !title.trim()}
 						>
-							{m.list_add_task()}
+							{addCopyFor(
+								targetList?.kind as ListKind | null | undefined,
+							).action()}
 						</Button>
 					</div>
 				</div>

@@ -4,7 +4,9 @@ export type HabitLogEntry = { date: string; status: "done" | "skipped" }; // dat
 export type StreakResult = {
 	current: number;
 	longest: number;
-	adherencePct: number; // 0..100 over the trailing window
+	// 0..100 over the tracked part of the window; null until one scheduled day
+	// has passed, so a new habit has no score rather than a perfect or zero one.
+	adherencePct: number | null;
 	heatmap: { date: string; status: "done" | "skipped" | "missed" | "none" }[];
 };
 
@@ -20,10 +22,16 @@ const parseYMD = (s: string): Date => {
 const addDaysYMD = (s: string, n: number): string =>
 	toYMD(new Date(parseYMD(s).getTime() + n * 86_400_000));
 
+// Tracking starts on the earlier of `since` (default today) and the first
+// logged day, so days before a habit existed are never missed and imported
+// history still counts. Tasks store no creation day, which is why the first
+// check-in is the anchor unless a caller knows better.
+//
 // Assumes phase-independent schedules (e.g. FREQ=DAILY;INTERVAL=1,
 // FREQ=WEEKLY;BYDAY=...), which cover the overwhelming majority of habits.
-// `expand` anchors dtstart at the window start, so for INTERVAL>1 rules the
-// occurrence phase follows the window edge, not the habit's true epoch; expected
+// `expand` anchors dtstart at the later of the window start and the tracking
+// start, so for INTERVAL>1 rules the phase follows that edge, not the habit's
+// true epoch; expected
 // dates may then diverge from the real schedule. True epoch-anchoring for
 // interval>1 is a known limitation, deferred (it needs a start anchor threaded
 // through the recurrence contract, out of scope here).
@@ -32,8 +40,12 @@ export function computeStreak(
 	logs: HabitLogEntry[],
 	today: string, // "YYYY-MM-DD"
 	windowDays = 30,
+	since: string = today,
 ): StreakResult {
-	const start = addDaysYMD(today, -(windowDays - 1));
+	let tracked = since < today ? since : today;
+	for (const l of logs) if (l.date < tracked) tracked = l.date;
+	const windowStart = addDaysYMD(today, -(windowDays - 1));
+	const start = tracked > windowStart ? tracked : windowStart;
 
 	// Expected (scheduled) occurrence dates, ascending, deduped.
 	const seen = new Set<string>();
@@ -91,7 +103,7 @@ export function computeStreak(
 		} else if (d < today) total++; // missed
 		// else pending today: excluded
 	}
-	const adherencePct = total === 0 ? 100 : Math.round((100 * done) / total);
+	const adherencePct = total === 0 ? null : Math.round((100 * done) / total);
 
 	const heatmap = expected.map((d) => {
 		const status = logByDate.get(d);

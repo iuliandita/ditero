@@ -113,8 +113,8 @@
 			],
 			"selectors": ["donePlural"],
 			"match": {
-				"donePlural=one": "{doneNum} of {totalNum} complete",
-				"donePlural=other": "{doneNum} of {totalNum} complete"
+				"donePlural=one": "{doneNum} of {totalNum} done",
+				"donePlural=other": "{doneNum} of {totalNum} done"
 			}
 		}
 	],
@@ -298,6 +298,10 @@
 	"list_add_task_placeholder": "Add a task",
 	"title_suggest_label": "Suggestions from your earlier items",
 	"list_add_task": "Add task",
+	"list_add_item_placeholder": "Add an item",
+	"list_add_item": "Add item",
+	"list_add_habit_placeholder": "Add a habit",
+	"list_add_habit": "Add habit",
 	"quickadd_input_label": "Quick add task",
 	"quickadd_sheet_title": "Quick add",
 	"quickadd_placeholder": "e.g. Buy milk {date} {priority} {label} {list}",
@@ -395,6 +399,9 @@
 	"shopping_qty_placeholder": "Qty",
 	"shopping_unit_placeholder": "Unit",
 	"shopping_quantity_for": "Quantity for {title}",
+	"shopping_quantity_add": "{label}, add quantity for {title}",
+	"shopping_quantity_edit": "{amount}, edit quantity for {title}",
+	"shopping_quantity_invalid": "Enter a number above 0, like 2 or 1.5",
 	"shopping_unit_for": "Unit for {title}",
 	"shopping_category_other": "Other",
 	"task_reorder_handle": "Reorder task",
@@ -871,6 +878,21 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: {countNum} day streak. Open task",
+				"countPlural=other": "{title}: {countNum} day streak. Open task"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: no recurrence set. Open task",
 	"panel_streak_no_recurrence": "No recurrence",
 	"panel_streak_missing": "Habit missing (deleted or not shared with you)",
@@ -899,13 +921,10 @@
 		}
 	],
 	"panel_focus_own_only": "Your sessions only",
-	"habit_no_recurrence_hint": "Set a recurrence to start tracking this habit.",
 	"habit_skip_action": "Skip",
 	"habit_undo_action": "Undo",
+	"habit_track_daily": "Track daily",
 	"habit_done_action": "Done today",
-	"habit_done_state": "Done",
-	"habit_mark_done_aria": "Mark done for today",
-	"habit_done_today_aria": "Done today",
 	"habit_streak_days": [
 		{
 			"declarations": [

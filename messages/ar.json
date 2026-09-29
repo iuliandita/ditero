@@ -310,6 +310,10 @@
 	"list_add_task_placeholder": "أضف مهمة",
 	"title_suggest_label": "اقتراحات من عناصرك السابقة",
 	"list_add_task": "إضافة مهمة",
+	"list_add_item_placeholder": "أضف عنصرًا",
+	"list_add_item": "إضافة عنصر",
+	"list_add_habit_placeholder": "أضف عادة",
+	"list_add_habit": "إضافة عادة",
 	"quickadd_input_label": "إضافة مهمة سريعة",
 	"quickadd_sheet_title": "إضافة سريعة",
 	"quickadd_placeholder": "مثال: شراء الحليب {date} {priority} {label} {list}",
@@ -407,6 +411,9 @@
 	"shopping_qty_placeholder": "الكمية",
 	"shopping_unit_placeholder": "الوحدة",
 	"shopping_quantity_for": "كمية {title}",
+	"shopping_quantity_add": "{label}، أضف كمية لـ {title}",
+	"shopping_quantity_edit": "{amount}، تعديل كمية {title}",
+	"shopping_quantity_invalid": "أدخل رقمًا أكبر من 0، مثل 2 أو 1.5",
 	"shopping_unit_for": "وحدة {title}",
 	"shopping_category_other": "أخرى",
 	"task_reorder_handle": "إعادة ترتيب المهمة",
@@ -935,6 +942,25 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "{title}: لا سلسلة. فتح المهمة",
+				"countPlural=one": "{title}: سلسلة يوم واحد. فتح المهمة",
+				"countPlural=two": "{title}: سلسلة يومين. فتح المهمة",
+				"countPlural=few": "{title}: سلسلة {countNum} أيام. فتح المهمة",
+				"countPlural=many": "{title}: سلسلة {countNum} يومًا. فتح المهمة",
+				"countPlural=other": "{title}: سلسلة {countNum} يوم. فتح المهمة"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: لا تكرار محدد. فتح المهمة",
 	"panel_streak_no_recurrence": "بلا تكرار",
 	"panel_streak_missing": "عادة مفقودة (محذوفة أو غير مشتركة معك)",
@@ -971,13 +997,10 @@
 		}
 	],
 	"panel_focus_own_only": "جلساتك فقط",
-	"habit_no_recurrence_hint": "حدد تكرارًا لبدء تتبع هذه العادة.",
 	"habit_skip_action": "تخطي",
 	"habit_undo_action": "تراجع",
+	"habit_track_daily": "تتبّع يوميًا",
 	"habit_done_action": "أنجزتها اليوم",
-	"habit_done_state": "منجزة",
-	"habit_mark_done_aria": "تعليمها كمنجزة لليوم",
-	"habit_done_today_aria": "منجزة اليوم",
 	"habit_streak_days": [
 		{
 			"declarations": [
