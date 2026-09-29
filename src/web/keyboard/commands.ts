@@ -145,4 +145,50 @@ export const COMMANDS: CommandDef[] = [
 		bindings: { default: [["."]] },
 		context: "global",
 	},
+	// Bulk selection in a list. `x` already completes, so selecting takes `s`.
+	{
+		id: "selection.toggle",
+		category: "selection",
+		get label() {
+			return m.command_selection_toggle();
+		},
+		bindings: { default: [["s"]] },
+		context: "global",
+	},
+	{
+		id: "selection.extendDown",
+		category: "selection",
+		get label() {
+			return m.command_selection_extend_down();
+		},
+		bindings: { default: [["Shift", "ArrowDown"]] },
+		context: "global",
+	},
+	{
+		id: "selection.extendUp",
+		category: "selection",
+		get label() {
+			return m.command_selection_extend_up();
+		},
+		bindings: { default: [["Shift", "ArrowUp"]] },
+		context: "global",
+	},
+	{
+		id: "selection.all",
+		category: "selection",
+		get label() {
+			return m.command_selection_all();
+		},
+		bindings: { default: [["Meta", "a"]] },
+		context: "global",
+	},
+	{
+		id: "selection.clear",
+		category: "selection",
+		get label() {
+			return m.command_selection_clear();
+		},
+		bindings: { default: [["Escape"]] },
+		context: "global",
+	},
 ];

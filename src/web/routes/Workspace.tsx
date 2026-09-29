@@ -67,11 +67,13 @@ import {
 	focusPrev,
 	openFocused,
 } from "../keyboard/roving.ts";
+import { runSelectionCommand } from "../keyboard/selection-commands.ts";
 import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
 import { canCreateFolder, canCreateList } from "../lib/create-gates.ts";
 import { shortcutHintVisible } from "../lib/hints.ts";
 import { ICONS } from "../lib/list-icon.tsx";
 import type { Locale } from "../lib/locale.ts";
+import { recordRecent } from "../lib/recents.ts";
 import { runMutation } from "../lib/run-mutation.ts";
 import { useIsDesktop, useMediaQuery } from "../lib/use-media-query.ts";
 import { BUILTIN_VIEWS, DEFAULT_HOME } from "../views/builtins.ts";
@@ -334,10 +336,40 @@ function NormalWorkspace() {
 		openHome();
 		setSwitcherOpen(false);
 	}
-	const openList = useCallback((id: string) => {
-		setDetailTaskId(null);
-		dispatchContent({ kind: "list", id });
-	}, []);
+	const userId = zero.userID;
+	const openList = useCallback(
+		(id: string) => {
+			setDetailTaskId(null);
+			dispatchContent({ kind: "list", id });
+			recordRecent(userId, { kind: "list", id });
+		},
+		[userId],
+	);
+	const openView = useCallback(
+		(id: string) => {
+			setDetailTaskId(null);
+			dispatchContent({ kind: "view", id });
+			recordRecent(userId, { kind: "view", id });
+		},
+		[userId],
+	);
+	const openDashboard = useCallback(
+		(id: string) => {
+			setDetailTaskId(null);
+			dispatchContent({ kind: "dashboard", id });
+			recordRecent(userId, { kind: "dashboard", id });
+		},
+		[userId],
+	);
+	// A task found by search opens over its list: the docked panel on desktop,
+	// the sheet on a phone.
+	const openTask = useCallback(
+		(taskId: string, listId: string) => {
+			openList(listId);
+			setDetailTaskId(taskId);
+		},
+		[openList],
+	);
 	const arriveAt = useCallback(
 		(listId: string, blank: boolean) => {
 			openList(listId);
@@ -359,14 +391,6 @@ function NormalWorkspace() {
 	useEffect(() => {
 		if (cheatOpen) shortcutsSeen();
 	}, [cheatOpen, shortcutsSeen]);
-	const openView = useCallback((id: string) => {
-		setDetailTaskId(null);
-		dispatchContent({ kind: "view", id });
-	}, []);
-	const openDashboard = useCallback((id: string) => {
-		setDetailTaskId(null);
-		dispatchContent({ kind: "dashboard", id });
-	}, []);
 	const openSettings = useCallback(() => {
 		setDetailTaskId(null);
 		dispatchContent({ kind: "settings" });
@@ -553,6 +577,11 @@ function NormalWorkspace() {
 				if (firstDashboardId) openDashboard(firstDashboardId);
 			},
 			"dashboard.new": () => setDashboardManager({ mode: "create" }),
+			"selection.toggle": () => runSelectionCommand("toggle"),
+			"selection.extendDown": () => runSelectionCommand("extendDown"),
+			"selection.extendUp": () => runSelectionCommand("extendUp"),
+			"selection.all": () => runSelectionCommand("all"),
+			"selection.clear": () => runSelectionCommand("clear"),
 		}),
 		[firstDashboardId, openView, openDashboard, openSettings],
 	);
@@ -1002,8 +1031,7 @@ function NormalWorkspace() {
 					searchOpen={searchOpen}
 					onSearchSelect={(taskId, listId) => {
 						setSearchOpen(false);
-						openList(listId);
-						setDetailTaskId(taskId);
+						openTask(taskId, listId);
 					}}
 					onSearchClose={() => setSearchOpen(false)}
 					cheatOpen={cheatOpen}
@@ -1011,6 +1039,7 @@ function NormalWorkspace() {
 					onOpenList={openList}
 					onOpenView={openView}
 					onOpenDashboard={openDashboard}
+					onOpenTask={openTask}
 				/>
 				<FocusTimer />
 			</CommandProvider>

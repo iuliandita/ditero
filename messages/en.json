@@ -149,9 +149,31 @@
 	"palette_results_label": "Results",
 	"palette_no_results": "No results",
 	"palette_group_commands": "Commands",
-	"palette_group_navigate": "Navigate",
-	"palette_group_search": "Search",
 	"palette_dashboard_item": "Dashboard: {name}",
+	"palette_group_recent": "Recent",
+	"palette_group_lists": "Lists",
+	"palette_group_views": "Views",
+	"palette_group_tasks": "Tasks",
+	"cheatsheet_category_selection": "Selection",
+	"command_selection_toggle": "Select or deselect task",
+	"command_selection_extend_down": "Extend selection down",
+	"command_selection_extend_up": "Extend selection up",
+	"command_selection_all": "Select all tasks",
+	"command_selection_clear": "Clear selection",
+	"action_select": "Select",
+	"action_deselect": "Deselect",
+	"task_select_aria": "Select {title}",
+	"selection_bar_label": "Selected tasks",
+	"selection_complete": "Complete",
+	"selection_move": "Move",
+	"selection_due": "Due date",
+	"selection_priority": "Priority",
+	"selection_delete": "Delete",
+	"selection_clear": "Clear selection",
+	"selection_check": "Check",
+	"selection_uncheck": "Uncheck",
+	"selection_clear_quantity": "Clear amount",
+	"selection_paused_reason": "Paused by an import, so it cannot be selected",
 	"list_untitled_fallback": "List",
 	"palette_untitled_task": "Task",
 	"cheatsheet_title": "Keyboard shortcuts",
@@ -1403,6 +1425,175 @@
 	"snackbar_task_moved": "Moved to {list}: {title}",
 	"snackbar_task_complete_failed": "Could not complete: {title}",
 	"snackbar_task_move_failed": "Could not move: {title}",
+	"selection_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} task selected",
+				"countPlural=other": "{countNum} tasks selected"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Checked {countNum} item.",
+				"countPlural=other": "Checked {countNum} items."
+			}
+		}
+	],
+	"snackbar_bulk_completed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Completed {countNum} task.",
+				"countPlural=other": "Completed {countNum} tasks."
+			}
+		}
+	],
+	"snackbar_bulk_undo_skips_recurring": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Undo skips {countNum} recurring task.",
+				"countPlural=other": "Undo skips {countNum} recurring tasks."
+			}
+		}
+	],
+	"snackbar_bulk_recurring_advanced": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} recurring task moved to its next date.",
+				"countPlural=other": "{countNum} recurring tasks moved to their next date."
+			}
+		}
+	],
+	"snackbar_bulk_complete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Could not complete {countNum} task",
+				"countPlural=other": "Could not complete {countNum} tasks"
+			}
+		}
+	],
+	"snackbar_bulk_moved": [
+		{
+			"declarations": [
+				"input count",
+				"input list",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Moved {countNum} task to {list}",
+				"countPlural=other": "Moved {countNum} tasks to {list}"
+			}
+		}
+	],
+	"snackbar_bulk_move_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Could not move {countNum} task",
+				"countPlural=other": "Could not move {countNum} tasks"
+			}
+		}
+	],
+	"snackbar_bulk_update_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Could not update {countNum} task",
+				"countPlural=other": "Could not update {countNum} tasks"
+			}
+		}
+	],
+	"snackbar_bulk_delete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Could not delete {countNum} task",
+				"countPlural=other": "Could not delete {countNum} tasks"
+			}
+		}
+	],
+	"bulk_delete_title": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Delete {countNum} task?",
+				"countPlural=other": "Delete {countNum} tasks?"
+			}
+		}
+	],
+	"bulk_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "This deletes {countNum} task and its subtasks. This cannot be undone.",
+				"countPlural=other": "This deletes {countNum} tasks and their subtasks. This cannot be undone."
+			}
+		}
+	],
 	"action_delete": "Delete",
 	"action_remove": "Remove",
 	"confirm_cancel": "Cancel",

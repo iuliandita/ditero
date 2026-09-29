@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
+import { recordRecent } from "@/lib/recents";
 import {
 	type MutationFailure,
 	mutationFailureMessage,
@@ -310,6 +311,10 @@ export function TaskDetail({
 	}
 
 	const shownId = open && task ? task.id : null;
+
+	useEffect(() => {
+		if (shownId) recordRecent(zero.userID, { kind: "task", id: shownId });
+	}, [shownId, zero.userID]);
 
 	// Docked is non-modal, so focus is managed by hand: into the panel on open
 	// and on every swap, back to the row that opened it on close.

@@ -149,9 +149,31 @@
 	"palette_results_label": "Ergebnisse",
 	"palette_no_results": "Keine Ergebnisse",
 	"palette_group_commands": "Befehle",
-	"palette_group_navigate": "Navigation",
-	"palette_group_search": "Suche",
 	"palette_dashboard_item": "Dashboard: {name}",
+	"palette_group_recent": "Zuletzt geöffnet",
+	"palette_group_lists": "Listen",
+	"palette_group_views": "Ansichten",
+	"palette_group_tasks": "Aufgaben",
+	"cheatsheet_category_selection": "Auswahl",
+	"command_selection_toggle": "Aufgabe auswählen oder abwählen",
+	"command_selection_extend_down": "Auswahl nach unten erweitern",
+	"command_selection_extend_up": "Auswahl nach oben erweitern",
+	"command_selection_all": "Alle Aufgaben auswählen",
+	"command_selection_clear": "Auswahl aufheben",
+	"action_select": "Auswählen",
+	"action_deselect": "Abwählen",
+	"task_select_aria": "{title} auswählen",
+	"selection_bar_label": "Ausgewählte Aufgaben",
+	"selection_complete": "Erledigen",
+	"selection_move": "Verschieben",
+	"selection_due": "Fällig",
+	"selection_priority": "Priorität",
+	"selection_delete": "Löschen",
+	"selection_clear": "Auswahl aufheben",
+	"selection_check": "Abhaken",
+	"selection_uncheck": "Zurücksetzen",
+	"selection_clear_quantity": "Menge löschen",
+	"selection_paused_reason": "Durch einen Import pausiert und daher nicht auswählbar",
 	"list_untitled_fallback": "Liste",
 	"palette_untitled_task": "Aufgabe",
 	"cheatsheet_title": "Tastenkürzel",
@@ -1403,6 +1425,175 @@
 	"snackbar_task_moved": "Nach {list} verschoben: {title}",
 	"snackbar_task_complete_failed": "Konnte nicht erledigt werden: {title}",
 	"snackbar_task_move_failed": "Konnte nicht verschoben werden: {title}",
+	"selection_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Aufgabe ausgewählt",
+				"countPlural=other": "{countNum} Aufgaben ausgewählt"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Eintrag abgehakt.",
+				"countPlural=other": "{countNum} Einträge abgehakt."
+			}
+		}
+	],
+	"snackbar_bulk_completed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Aufgabe erledigt.",
+				"countPlural=other": "{countNum} Aufgaben erledigt."
+			}
+		}
+	],
+	"snackbar_bulk_undo_skips_recurring": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Rückgängig lässt {countNum} wiederkehrende Aufgabe aus.",
+				"countPlural=other": "Rückgängig lässt {countNum} wiederkehrende Aufgaben aus."
+			}
+		}
+	],
+	"snackbar_bulk_recurring_advanced": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} wiederkehrende Aufgabe ist zum nächsten Termin gesprungen.",
+				"countPlural=other": "{countNum} wiederkehrende Aufgaben sind zum nächsten Termin gesprungen."
+			}
+		}
+	],
+	"snackbar_bulk_complete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Aufgabe konnte nicht erledigt werden",
+				"countPlural=other": "{countNum} Aufgaben konnten nicht erledigt werden"
+			}
+		}
+	],
+	"snackbar_bulk_moved": [
+		{
+			"declarations": [
+				"input count",
+				"input list",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Aufgabe nach {list} verschoben",
+				"countPlural=other": "{countNum} Aufgaben nach {list} verschoben"
+			}
+		}
+	],
+	"snackbar_bulk_move_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Aufgabe konnte nicht verschoben werden",
+				"countPlural=other": "{countNum} Aufgaben konnten nicht verschoben werden"
+			}
+		}
+	],
+	"snackbar_bulk_update_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Aufgabe konnte nicht geändert werden",
+				"countPlural=other": "{countNum} Aufgaben konnten nicht geändert werden"
+			}
+		}
+	],
+	"snackbar_bulk_delete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Aufgabe konnte nicht gelöscht werden",
+				"countPlural=other": "{countNum} Aufgaben konnten nicht gelöscht werden"
+			}
+		}
+	],
+	"bulk_delete_title": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Aufgabe löschen?",
+				"countPlural=other": "{countNum} Aufgaben löschen?"
+			}
+		}
+	],
+	"bulk_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Das löscht {countNum} Aufgabe samt Unteraufgaben. Das lässt sich nicht rückgängig machen.",
+				"countPlural=other": "Das löscht {countNum} Aufgaben samt Unteraufgaben. Das lässt sich nicht rückgängig machen."
+			}
+		}
+	],
 	"action_delete": "Löschen",
 	"action_remove": "Entfernen",
 	"confirm_cancel": "Abbrechen",

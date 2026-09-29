@@ -150,9 +150,31 @@
 	"palette_results_label": "Resultados",
 	"palette_no_results": "Sin resultados",
 	"palette_group_commands": "Comandos",
-	"palette_group_navigate": "Navegar",
-	"palette_group_search": "Buscar",
 	"palette_dashboard_item": "Dashboard: {name}",
+	"palette_group_recent": "Recientes",
+	"palette_group_lists": "Listas",
+	"palette_group_views": "Vistas",
+	"palette_group_tasks": "Tareas",
+	"cheatsheet_category_selection": "Selección",
+	"command_selection_toggle": "Seleccionar o deseleccionar tarea",
+	"command_selection_extend_down": "Ampliar la selección hacia abajo",
+	"command_selection_extend_up": "Ampliar la selección hacia arriba",
+	"command_selection_all": "Seleccionar todas las tareas",
+	"command_selection_clear": "Quitar la selección",
+	"action_select": "Seleccionar",
+	"action_deselect": "Deseleccionar",
+	"task_select_aria": "Seleccionar {title}",
+	"selection_bar_label": "Tareas seleccionadas",
+	"selection_complete": "Completar",
+	"selection_move": "Mover",
+	"selection_due": "Fecha",
+	"selection_priority": "Prioridad",
+	"selection_delete": "Eliminar",
+	"selection_clear": "Quitar la selección",
+	"selection_check": "Marcar",
+	"selection_uncheck": "Desmarcar",
+	"selection_clear_quantity": "Quitar cantidad",
+	"selection_paused_reason": "Pausada por una importación, no se puede seleccionar",
 	"list_untitled_fallback": "Lista",
 	"palette_untitled_task": "Tarea",
 	"cheatsheet_title": "Atajos de teclado",
@@ -1432,6 +1454,187 @@
 	"snackbar_task_moved": "Movida a {list}: {title}",
 	"snackbar_task_complete_failed": "No se pudo completar: {title}",
 	"snackbar_task_move_failed": "No se pudo mover: {title}",
+	"selection_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tarea seleccionada",
+				"countPlural=many": "{countNum} tareas seleccionadas",
+				"countPlural=other": "{countNum} tareas seleccionadas"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} artículo marcado.",
+				"countPlural=many": "{countNum} artículos marcados.",
+				"countPlural=other": "{countNum} artículos marcados."
+			}
+		}
+	],
+	"snackbar_bulk_completed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tarea completada.",
+				"countPlural=many": "{countNum} tareas completadas.",
+				"countPlural=other": "{countNum} tareas completadas."
+			}
+		}
+	],
+	"snackbar_bulk_undo_skips_recurring": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Deshacer omite {countNum} tarea recurrente.",
+				"countPlural=many": "Deshacer omite {countNum} tareas recurrentes.",
+				"countPlural=other": "Deshacer omite {countNum} tareas recurrentes."
+			}
+		}
+	],
+	"snackbar_bulk_recurring_advanced": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tarea recurrente pasó a su próxima fecha.",
+				"countPlural=many": "{countNum} tareas recurrentes pasaron a su próxima fecha.",
+				"countPlural=other": "{countNum} tareas recurrentes pasaron a su próxima fecha."
+			}
+		}
+	],
+	"snackbar_bulk_complete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "No se pudo completar {countNum} tarea",
+				"countPlural=many": "No se pudieron completar {countNum} tareas",
+				"countPlural=other": "No se pudieron completar {countNum} tareas"
+			}
+		}
+	],
+	"snackbar_bulk_moved": [
+		{
+			"declarations": [
+				"input count",
+				"input list",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tarea movida a {list}",
+				"countPlural=many": "{countNum} tareas movidas a {list}",
+				"countPlural=other": "{countNum} tareas movidas a {list}"
+			}
+		}
+	],
+	"snackbar_bulk_move_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "No se pudo mover {countNum} tarea",
+				"countPlural=many": "No se pudieron mover {countNum} tareas",
+				"countPlural=other": "No se pudieron mover {countNum} tareas"
+			}
+		}
+	],
+	"snackbar_bulk_update_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "No se pudo actualizar {countNum} tarea",
+				"countPlural=many": "No se pudieron actualizar {countNum} tareas",
+				"countPlural=other": "No se pudieron actualizar {countNum} tareas"
+			}
+		}
+	],
+	"snackbar_bulk_delete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "No se pudo eliminar {countNum} tarea",
+				"countPlural=many": "No se pudieron eliminar {countNum} tareas",
+				"countPlural=other": "No se pudieron eliminar {countNum} tareas"
+			}
+		}
+	],
+	"bulk_delete_title": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "¿Eliminar {countNum} tarea?",
+				"countPlural=many": "¿Eliminar {countNum} tareas?",
+				"countPlural=other": "¿Eliminar {countNum} tareas?"
+			}
+		}
+	],
+	"bulk_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Se eliminará {countNum} tarea con sus subtareas. Esto no se puede deshacer.",
+				"countPlural=many": "Se eliminarán {countNum} tareas con sus subtareas. Esto no se puede deshacer.",
+				"countPlural=other": "Se eliminarán {countNum} tareas con sus subtareas. Esto no se puede deshacer."
+			}
+		}
+	],
 	"action_delete": "Eliminar",
 	"action_remove": "Quitar",
 	"confirm_cancel": "Cancelar",

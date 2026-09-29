@@ -79,6 +79,7 @@ export function KeymapSettings() {
 				key: e.key,
 				metaKey: e.metaKey,
 				ctrlKey: e.ctrlKey,
+				shiftKey: e.shiftKey,
 			});
 			if (binding) {
 				setDraft({ commandId: id, binding });

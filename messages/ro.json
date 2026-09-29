@@ -150,9 +150,31 @@
 	"palette_results_label": "Rezultate",
 	"palette_no_results": "Niciun rezultat",
 	"palette_group_commands": "Comenzi",
-	"palette_group_navigate": "Navigare",
-	"palette_group_search": "Căutare",
 	"palette_dashboard_item": "Dashboard: {name}",
+	"palette_group_recent": "Recente",
+	"palette_group_lists": "Liste",
+	"palette_group_views": "Vizualizări",
+	"palette_group_tasks": "Sarcini",
+	"cheatsheet_category_selection": "Selecție",
+	"command_selection_toggle": "Selectează sau deselectează sarcina",
+	"command_selection_extend_down": "Extinde selecția în jos",
+	"command_selection_extend_up": "Extinde selecția în sus",
+	"command_selection_all": "Selectează toate sarcinile",
+	"command_selection_clear": "Golește selecția",
+	"action_select": "Selectează",
+	"action_deselect": "Deselectează",
+	"task_select_aria": "Selectează {title}",
+	"selection_bar_label": "Sarcini selectate",
+	"selection_complete": "Finalizează",
+	"selection_move": "Mută",
+	"selection_due": "Termen",
+	"selection_priority": "Prioritate",
+	"selection_delete": "Șterge",
+	"selection_clear": "Golește selecția",
+	"selection_check": "Bifează",
+	"selection_uncheck": "Debifează",
+	"selection_clear_quantity": "Șterge cantitatea",
+	"selection_paused_reason": "Pusă pe pauză de un import, nu poate fi selectată",
 	"list_untitled_fallback": "Listă",
 	"palette_untitled_task": "Sarcină",
 	"cheatsheet_title": "Scurtături de tastatură",
@@ -1432,6 +1454,187 @@
 	"snackbar_task_moved": "Mutată în {list}: {title}",
 	"snackbar_task_complete_failed": "Nu s-a putut finaliza: {title}",
 	"snackbar_task_move_failed": "Nu s-a putut muta: {title}",
+	"selection_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină selectată",
+				"countPlural=few": "{countNum} sarcini selectate",
+				"countPlural=other": "{countNum} de sarcini selectate"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} articol bifat.",
+				"countPlural=few": "{countNum} articole bifate.",
+				"countPlural=other": "{countNum} de articole bifate."
+			}
+		}
+	],
+	"snackbar_bulk_completed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină finalizată.",
+				"countPlural=few": "{countNum} sarcini finalizate.",
+				"countPlural=other": "{countNum} de sarcini finalizate."
+			}
+		}
+	],
+	"snackbar_bulk_undo_skips_recurring": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Anularea omite {countNum} sarcină recurentă.",
+				"countPlural=few": "Anularea omite {countNum} sarcini recurente.",
+				"countPlural=other": "Anularea omite {countNum} de sarcini recurente."
+			}
+		}
+	],
+	"snackbar_bulk_recurring_advanced": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină recurentă a trecut la următoarea dată.",
+				"countPlural=few": "{countNum} sarcini recurente au trecut la următoarea dată.",
+				"countPlural=other": "{countNum} de sarcini recurente au trecut la următoarea dată."
+			}
+		}
+	],
+	"snackbar_bulk_complete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut finaliza {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut finaliza {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut finaliza {countNum} de sarcini"
+			}
+		}
+	],
+	"snackbar_bulk_moved": [
+		{
+			"declarations": [
+				"input count",
+				"input list",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină mutată în {list}",
+				"countPlural=few": "{countNum} sarcini mutate în {list}",
+				"countPlural=other": "{countNum} de sarcini mutate în {list}"
+			}
+		}
+	],
+	"snackbar_bulk_move_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut muta {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut muta {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut muta {countNum} de sarcini"
+			}
+		}
+	],
+	"snackbar_bulk_update_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut actualiza {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut actualiza {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut actualiza {countNum} de sarcini"
+			}
+		}
+	],
+	"snackbar_bulk_delete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut șterge {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut șterge {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut șterge {countNum} de sarcini"
+			}
+		}
+	],
+	"bulk_delete_title": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Ștergi {countNum} sarcină?",
+				"countPlural=few": "Ștergi {countNum} sarcini?",
+				"countPlural=other": "Ștergi {countNum} de sarcini?"
+			}
+		}
+	],
+	"bulk_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Se șterge {countNum} sarcină împreună cu subsarcinile ei. Această acțiune nu poate fi anulată.",
+				"countPlural=few": "Se șterg {countNum} sarcini împreună cu subsarcinile lor. Această acțiune nu poate fi anulată.",
+				"countPlural=other": "Se șterg {countNum} de sarcini împreună cu subsarcinile lor. Această acțiune nu poate fi anulată."
+			}
+		}
+	],
 	"action_delete": "Șterge",
 	"action_remove": "Elimină",
 	"confirm_cancel": "Anulează",

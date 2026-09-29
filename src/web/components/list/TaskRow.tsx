@@ -46,7 +46,10 @@ import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
 import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
+import { type RowSelection, SelectToggle } from "./SelectToggle.tsx";
 import { type Due, taskActions } from "./taskActions.ts";
+
+export type { RowSelection } from "./SelectToggle.tsx";
 
 export type RowHandlers = {
 	onToggle: (id: string, done: boolean) => void;
@@ -256,6 +259,7 @@ export function TaskRow({
 	subtasks,
 	labels,
 	handlers,
+	selection,
 	variant = "row",
 	surface,
 	list,
@@ -265,6 +269,7 @@ export function TaskRow({
 	subtasks: Task[];
 	labels: Label[];
 	handlers: RowHandlers;
+	selection?: RowSelection;
 	// "card" is the board surface: two-line titles and top-aligned controls.
 	variant?: "row" | "card";
 	// The fill the row sits on, so its swipe layer never reads as an inner box.
@@ -366,6 +371,10 @@ export function TaskRow({
 			setPriority: (_t, priority) => update({ priority }),
 			saveAsTemplate,
 			remove: () => void removeTask(),
+			select:
+				selection?.selectable && !selection.active
+					? { selected: selection.selected, toggle: selection.toggle }
+					: undefined,
 		},
 	});
 	const actionsLabel = m.row_actions_for({ name: task.title });
@@ -392,6 +401,22 @@ export function TaskRow({
 			.filter(Boolean)
 			.join(" ") || undefined;
 
+	const selecting = selection?.active ?? false;
+	// Cmd/Ctrl-click toggles and Shift-click extends, as in a file list. In
+	// selection mode a plain click or tap toggles too, so the row never opens
+	// or completes by accident while a batch is being built.
+	function onOpenClick(event: ReactMouseEvent) {
+		if (selection && (event.metaKey || event.ctrlKey)) {
+			event.preventDefault();
+			selection.toggle();
+		} else if (selection && event.shiftKey) {
+			event.preventDefault();
+			selection.extend();
+		} else if (selection && selecting) {
+			selection.toggle();
+		} else handlers.onOpenDetail(task);
+	}
+
 	return (
 		<div>
 			<SwipeRow
@@ -403,12 +428,12 @@ export function TaskRow({
 							: undefined
 				}
 				onComplete={
-					canEdit
+					canEdit && !selecting
 						? () => handlers.onToggle(task.id, task.done ?? false)
 						: undefined
 				}
 				onSchedule={
-					canEdit && handlers.onSchedule
+					canEdit && handlers.onSchedule && !selecting
 						? () => handlers.onSchedule?.(task)
 						: undefined
 				}
@@ -418,41 +443,54 @@ export function TaskRow({
 				    is what RowActions' md:group-hover reveal keys off. */}
 				<div
 					className={cn(
-						"group flex min-h-12 gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60",
+						"group flex min-h-12 gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted",
 						card ? "items-start" : "items-center",
 					)}
 					data-kbd-row
+					data-selected={selection?.selected || undefined}
 					{...rowProps}
 				>
-					<div
-						className={cn(
-							"flex shrink-0 items-center justify-center",
-							card ? "size-8" : "size-11 md:size-8",
-						)}
-					>
-						<Checkbox
-							disabled={!canEdit}
-							aria-label={task.title}
-							checked={task.done ?? false}
-							onCheckedChange={() => {
-								if (canEdit) handlers.onToggle(task.id, task.done ?? false);
-							}}
-							data-kbd-action="toggle"
-							shape={checkShapeFor(kind)}
-							priority={checkToneFor(kind, task.priority)}
-							className={cn(
-								"after:-inset-3.5 md:after:-inset-2",
-								justCompleted && CHECK_POP,
-							)}
+					{selection && selecting ? (
+						<SelectToggle
+							title={task.title}
+							selection={selection}
+							placement="lead"
 						/>
-					</div>
+					) : (
+						<div
+							className={cn(
+								"flex shrink-0 items-center justify-center",
+								card ? "size-8" : "size-11 md:size-8",
+							)}
+						>
+							<Checkbox
+								disabled={!canEdit}
+								aria-label={task.title}
+								checked={task.done ?? false}
+								onCheckedChange={() => {
+									if (canEdit) handlers.onToggle(task.id, task.done ?? false);
+								}}
+								data-kbd-action="toggle"
+								shape={checkShapeFor(kind)}
+								priority={checkToneFor(kind, task.priority)}
+								className={cn(
+									"after:-inset-3.5 md:after:-inset-2",
+									justCompleted && CHECK_POP,
+								)}
+							/>
+						</div>
+					)}
 					<button
 						type="button"
 						data-kbd-nav
 						data-task-id={task.id}
 						aria-label={m.task_open_details()}
 						aria-describedby={describedBy}
-						onClick={() => handlers.onOpenDetail(task)}
+						onMouseDown={(event) => {
+							// Shift-click extends the selection, not the page's text selection.
+							if (selection && event.shiftKey) event.preventDefault();
+						}}
+						onClick={onOpenClick}
 						title={card ? task.title : undefined}
 						className={cn(
 							"min-w-0 flex-1 text-start",
@@ -555,6 +593,13 @@ export function TaskRow({
 								)}
 							/>
 						</button>
+					)}
+					{selection && !selecting && (
+						<SelectToggle
+							title={task.title}
+							selection={selection}
+							placement="trail"
+						/>
 					)}
 					<RowActions actions={actions} label={actionsLabel} hideOnTouch />
 					{/* The keyboard's delete target. It cannot be the menu item: Radix

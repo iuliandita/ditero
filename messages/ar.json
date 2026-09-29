@@ -153,9 +153,31 @@
 	"palette_results_label": "النتائج",
 	"palette_no_results": "لا نتائج",
 	"palette_group_commands": "الأوامر",
-	"palette_group_navigate": "التنقل",
-	"palette_group_search": "بحث",
 	"palette_dashboard_item": "لوحة معلومات: {name}",
+	"palette_group_recent": "الأخيرة",
+	"palette_group_lists": "القوائم",
+	"palette_group_views": "طرق العرض",
+	"palette_group_tasks": "المهام",
+	"cheatsheet_category_selection": "التحديد",
+	"command_selection_toggle": "تحديد المهمة أو إلغاء تحديدها",
+	"command_selection_extend_down": "توسيع التحديد للأسفل",
+	"command_selection_extend_up": "توسيع التحديد للأعلى",
+	"command_selection_all": "تحديد كل المهام",
+	"command_selection_clear": "مسح التحديد",
+	"action_select": "تحديد",
+	"action_deselect": "إلغاء التحديد",
+	"task_select_aria": "تحديد {title}",
+	"selection_bar_label": "المهام المحددة",
+	"selection_complete": "إكمال",
+	"selection_move": "نقل",
+	"selection_due": "الموعد",
+	"selection_priority": "الأولوية",
+	"selection_delete": "حذف",
+	"selection_clear": "مسح التحديد",
+	"selection_check": "تأشير",
+	"selection_uncheck": "إلغاء التأشير",
+	"selection_clear_quantity": "مسح الكمية",
+	"selection_paused_reason": "موقوفة مؤقتًا بسبب استيراد، لذا لا يمكن تحديدها",
 	"list_untitled_fallback": "قائمة",
 	"palette_untitled_task": "مهمة",
 	"cheatsheet_title": "اختصارات لوحة المفاتيح",
@@ -1519,6 +1541,223 @@
 	"snackbar_task_moved": "نُقلت إلى {list}: {title}",
 	"snackbar_task_complete_failed": "تعذر إكمال: {title}",
 	"snackbar_task_move_failed": "تعذر نقل: {title}",
+	"selection_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا مهام محددة",
+				"countPlural=one": "مهمة واحدة محددة",
+				"countPlural=two": "مهمتان محددتان",
+				"countPlural=few": "{countNum} مهام محددة",
+				"countPlural=many": "{countNum} مهمة محددة",
+				"countPlural=other": "{countNum} مهمة محددة"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم يُؤشَّر أي عنصر.",
+				"countPlural=one": "أُشِّر عنصر واحد.",
+				"countPlural=two": "أُشِّر عنصران.",
+				"countPlural=few": "أُشِّرت {countNum} عناصر.",
+				"countPlural=many": "أُشِّر {countNum} عنصرًا.",
+				"countPlural=other": "أُشِّر {countNum} عنصر."
+			}
+		}
+	],
+	"snackbar_bulk_completed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم تكتمل أي مهمة.",
+				"countPlural=one": "اكتملت مهمة واحدة.",
+				"countPlural=two": "اكتملت مهمتان.",
+				"countPlural=few": "اكتملت {countNum} مهام.",
+				"countPlural=many": "اكتملت {countNum} مهمة.",
+				"countPlural=other": "اكتملت {countNum} مهمة."
+			}
+		}
+	],
+	"snackbar_bulk_undo_skips_recurring": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "التراجع يشمل كل المهام.",
+				"countPlural=one": "التراجع لا يشمل المهمة المتكررة.",
+				"countPlural=two": "التراجع لا يشمل المهمتين المتكررتين.",
+				"countPlural=few": "التراجع لا يشمل {countNum} مهام متكررة.",
+				"countPlural=many": "التراجع لا يشمل {countNum} مهمة متكررة.",
+				"countPlural=other": "التراجع لا يشمل {countNum} مهمة متكررة."
+			}
+		}
+	],
+	"snackbar_bulk_recurring_advanced": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم تنتقل أي مهمة متكررة.",
+				"countPlural=one": "انتقلت مهمة متكررة واحدة إلى موعدها التالي.",
+				"countPlural=two": "انتقلت مهمتان متكررتان إلى موعدهما التالي.",
+				"countPlural=few": "انتقلت {countNum} مهام متكررة إلى مواعيدها التالية.",
+				"countPlural=many": "انتقلت {countNum} مهمة متكررة إلى مواعيدها التالية.",
+				"countPlural=other": "انتقلت {countNum} مهمة متكررة إلى مواعيدها التالية."
+			}
+		}
+	],
+	"snackbar_bulk_complete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر إكمال المهام",
+				"countPlural=one": "تعذّر إكمال مهمة واحدة",
+				"countPlural=two": "تعذّر إكمال مهمتين",
+				"countPlural=few": "تعذّر إكمال {countNum} مهام",
+				"countPlural=many": "تعذّر إكمال {countNum} مهمة",
+				"countPlural=other": "تعذّر إكمال {countNum} مهمة"
+			}
+		}
+	],
+	"snackbar_bulk_moved": [
+		{
+			"declarations": [
+				"input count",
+				"input list",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم تُنقل أي مهمة إلى {list}",
+				"countPlural=one": "نُقلت مهمة واحدة إلى {list}",
+				"countPlural=two": "نُقلت مهمتان إلى {list}",
+				"countPlural=few": "نُقلت {countNum} مهام إلى {list}",
+				"countPlural=many": "نُقلت {countNum} مهمة إلى {list}",
+				"countPlural=other": "نُقلت {countNum} مهمة إلى {list}"
+			}
+		}
+	],
+	"snackbar_bulk_move_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر نقل المهام",
+				"countPlural=one": "تعذّر نقل مهمة واحدة",
+				"countPlural=two": "تعذّر نقل مهمتين",
+				"countPlural=few": "تعذّر نقل {countNum} مهام",
+				"countPlural=many": "تعذّر نقل {countNum} مهمة",
+				"countPlural=other": "تعذّر نقل {countNum} مهمة"
+			}
+		}
+	],
+	"snackbar_bulk_update_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر تحديث المهام",
+				"countPlural=one": "تعذّر تحديث مهمة واحدة",
+				"countPlural=two": "تعذّر تحديث مهمتين",
+				"countPlural=few": "تعذّر تحديث {countNum} مهام",
+				"countPlural=many": "تعذّر تحديث {countNum} مهمة",
+				"countPlural=other": "تعذّر تحديث {countNum} مهمة"
+			}
+		}
+	],
+	"snackbar_bulk_delete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر حذف المهام",
+				"countPlural=one": "تعذّر حذف مهمة واحدة",
+				"countPlural=two": "تعذّر حذف مهمتين",
+				"countPlural=few": "تعذّر حذف {countNum} مهام",
+				"countPlural=many": "تعذّر حذف {countNum} مهمة",
+				"countPlural=other": "تعذّر حذف {countNum} مهمة"
+			}
+		}
+	],
+	"bulk_delete_title": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "حذف المهام؟",
+				"countPlural=one": "حذف مهمة واحدة؟",
+				"countPlural=two": "حذف مهمتين؟",
+				"countPlural=few": "حذف {countNum} مهام؟",
+				"countPlural=many": "حذف {countNum} مهمة؟",
+				"countPlural=other": "حذف {countNum} مهمة؟"
+			}
+		}
+	],
+	"bulk_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لن تُحذف أي مهمة.",
+				"countPlural=one": "سيُحذف مهمة واحدة مع مهامها الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=two": "ستُحذف مهمتان مع مهامهما الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=few": "ستُحذف {countNum} مهام مع مهامها الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=many": "ستُحذف {countNum} مهمة مع مهامها الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=other": "ستُحذف {countNum} مهمة مع مهامها الفرعية. لا يمكن التراجع عن هذا."
+			}
+		}
+	],
 	"action_delete": "حذف",
 	"action_remove": "إزالة",
 	"confirm_cancel": "إلغاء",

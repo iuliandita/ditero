@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { m } from "../../paraglide/messages.js";
 import type {
 	Dashboard,
@@ -26,10 +27,12 @@ import {
 	type ViewFormValue,
 	ViewManager,
 } from "../components/views/ViewManager.tsx";
+import { useUserPref } from "../hooks/useUserPref.ts";
 import type { SavedView } from "../hooks/useViews.ts";
 import { CheatSheet } from "../keyboard/CheatSheet.tsx";
 import { useCommands } from "../keyboard/CommandContext.tsx";
 import { CommandPalette } from "../keyboard/CommandPalette.tsx";
+import { canRunCommand } from "../keyboard/selection-commands.ts";
 import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
 import { useKeyBindings } from "../keyboard/useKeyBindings.ts";
 
@@ -39,7 +42,12 @@ import { useKeyBindings } from "../keyboard/useKeyBindings.ts";
 function WorkspaceKeyboard() {
 	const { run } = useCommands();
 	const keymap = useEffectiveKeymap();
-	useKeyBindings(keymap, run);
+	const { pref } = useUserPref();
+	const preferred = useMemo(
+		() => new Set(Object.keys(pref.keymap)),
+		[pref.keymap],
+	);
+	useKeyBindings(keymap, run, { canRun: canRunCommand, preferred });
 	return null;
 }
 
@@ -92,6 +100,7 @@ export function WorkspaceOverlays({
 	onOpenList,
 	onOpenView,
 	onOpenDashboard,
+	onOpenTask,
 }: {
 	isDesktop: boolean;
 	activeId: string | null;
@@ -138,6 +147,7 @@ export function WorkspaceOverlays({
 	onOpenList: (id: string) => void;
 	onOpenView: (id: string) => void;
 	onOpenDashboard: (id: string) => void;
+	onOpenTask: (taskId: string, listId: string) => void;
 }) {
 	return (
 		<>
@@ -348,6 +358,7 @@ export function WorkspaceOverlays({
 						onNavigateList={onOpenList}
 						onNavigateView={onOpenView}
 						onNavigateDashboard={onOpenDashboard}
+						onOpenTask={onOpenTask}
 					/>
 					<CheatSheet open={cheatOpen} onOpenChange={onCheatOpenChange} />
 				</>

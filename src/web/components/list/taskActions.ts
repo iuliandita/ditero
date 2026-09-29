@@ -3,6 +3,7 @@ import {
 	Copy,
 	Flag,
 	SquareArrowOutUpRight,
+	SquareCheck,
 	Trash2,
 } from "lucide-react";
 import type { ListKind } from "../../../domain/icon-map.ts";
@@ -25,6 +26,8 @@ export type TaskActionHandlers = {
 	setPriority: (task: Task, priority: number) => void;
 	saveAsTemplate: (task: Task) => void;
 	remove: (task: Task) => void;
+	/** Bulk selection toggle; absent on surfaces without a selection. */
+	select?: { selected: boolean; toggle: () => void };
 };
 
 // Plain function, not a hook, for the same reason listActions is one: rows are
@@ -55,6 +58,15 @@ export function taskActions({
 			label: m.action_open(),
 			icon: SquareArrowOutUpRight,
 			onSelect: () => handlers.open(task),
+		},
+		{
+			id: "select",
+			label: handlers.select?.selected
+				? m.action_deselect()
+				: m.action_select(),
+			icon: SquareCheck,
+			hidden: handlers.select === undefined,
+			onSelect: () => handlers.select?.toggle(),
 		},
 		{
 			id: "schedule",

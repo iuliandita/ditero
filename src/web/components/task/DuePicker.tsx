@@ -103,32 +103,15 @@ export function DuePicker({
 						{shown}
 					</Button>
 				</PopoverTrigger>
-				<PopoverContent
-					align="start"
-					className="w-72 gap-2 p-2 pointer-coarse:w-[21rem]"
-					data-testid="due-picker-content"
-					aria-label={m.schedule_pick_date()}
-					onOpenAutoFocus={(e) => {
-						// A touch keyboard popping over the calendar is worse than no
-						// focus; pointer users land in the typed field.
-						if (window.matchMedia("(pointer: coarse)").matches)
-							e.preventDefault();
+				<DuePickerContent
+					selected={parseDayKey(due.date)}
+					hasDue={dueAt != null}
+					onPick={pick}
+					onClear={() => {
+						onClear();
+						setOpen(false);
 					}}
-				>
-					<TypedDate onPick={pick} />
-					<QuickPicks
-						hasDue={dueAt != null}
-						onPick={pick}
-						onClear={() => {
-							onClear();
-							setOpen(false);
-						}}
-					/>
-					<MonthGrid
-						selected={parseDayKey(due.date)}
-						onPick={(d) => pick(dayKey(d))}
-					/>
-				</PopoverContent>
+				/>
 			</Popover>
 			{dueAt != null && (
 				<>
@@ -152,6 +135,45 @@ export function DuePicker({
 			)}
 			{children}
 		</div>
+	);
+}
+
+/**
+ * The popover body: typed date, quick picks, month grid. Exported for setters
+ * that bring their own trigger (the bulk selection bar); `time` is null unless
+ * the typed text carried one.
+ */
+export function DuePickerContent({
+	selected,
+	hasDue,
+	onPick,
+	onClear,
+}: {
+	selected: Date | null;
+	hasDue: boolean;
+	onPick: (date: string, time: string | null) => void;
+	onClear: () => void;
+}) {
+	return (
+		<PopoverContent
+			align="start"
+			className="w-72 gap-2 p-2 pointer-coarse:w-[21rem]"
+			data-testid="due-picker-content"
+			aria-label={m.schedule_pick_date()}
+			onOpenAutoFocus={(e) => {
+				// A touch keyboard popping over the calendar is worse than no
+				// focus; pointer users land in the typed field.
+				if (window.matchMedia("(pointer: coarse)").matches) e.preventDefault();
+			}}
+		>
+			<TypedDate onPick={onPick} />
+			<QuickPicks
+				hasDue={hasDue}
+				onPick={(date) => onPick(date, null)}
+				onClear={onClear}
+			/>
+			<MonthGrid selected={selected} onPick={(d) => onPick(dayKey(d), null)} />
+		</PopoverContent>
 	);
 }
 

@@ -1,9 +1,10 @@
-import { useZero } from "@rocicorp/zero/react";
+import { useQuery, useZero } from "@rocicorp/zero/react";
 import { List as ListIcon, SearchX } from "lucide-react";
 import { type JSX, type ReactNode, useMemo, useRef, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
 import { useWideContent } from "@/lib/use-wide-content";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import { type Role, WRITE_ROLES } from "../../../domain/role.ts";
 import { compareTasksBy } from "../../../domain/task-sort.ts";
 import type {
 	FilterCtx,
@@ -17,6 +18,7 @@ import {
 } from "../../../domain/view-filter.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
+import { queries } from "../../../zero/queries.ts";
 import type {
 	Folder,
 	Label,
@@ -26,6 +28,7 @@ import type {
 	TaskAssignee,
 	TaskLabel,
 } from "../../../zero/schema.gen.ts";
+import { useRowSelection } from "../../hooks/useRowSelection.ts";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
 import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
@@ -35,8 +38,13 @@ import {
 	filterMentionsDone,
 	groupForView,
 } from "../../views/group.ts";
+import { BulkSelection } from "../list/BulkSelection.tsx";
 import { SortableList } from "../list/SortableList.tsx";
-import { type RowHandlers, TaskRow } from "../list/TaskRow.tsx";
+import {
+	type RowHandlers,
+	type RowSelection,
+	TaskRow,
+} from "../list/TaskRow.tsx";
 import { TaskListSkeleton } from "../shell/AppSkeleton.tsx";
 import { EmptyState } from "../ui/empty-state.tsx";
 import { BoardLayout } from "./BoardLayout.tsx";
@@ -256,6 +264,67 @@ export function ViewRenderer(props: {
 	}
 	const toggleTask = useTaskToggle(run);
 
+	// Bulk selection on the list layout. A view spans workspaces, so each row is
+	// eligible by the caller's write role where it lives; habits complete per
+	// occurrence and never join. An eligible row an import paused shows why it
+	// cannot be picked.
+	const [memberships] = useQuery(queries.memberships.mine());
+	const writableWorkspaces = useMemo(
+		() =>
+			new Set(
+				memberships
+					.filter((mem) => mem.userId === currentUserId)
+					.filter((mem) => WRITE_ROLES.has(mem.role as Role))
+					.map((mem) => mem.workspaceId),
+			),
+		[memberships, currentUserId],
+	);
+	const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+	const eligible = (task: Task): boolean => {
+		const list = listById.get(task.listId);
+		return (
+			list != null &&
+			list.kind !== "habits" &&
+			writableWorkspaces.has(list.workspaceId)
+		);
+	};
+	const selection = useRowSelection({
+		enabled: renderListFor(display.layout, isDesktop) && !loading,
+		resetKey: `${display.layout}:${JSON.stringify(filter)}`,
+		isSelectable: (id) => {
+			const task = taskById.get(id);
+			return (
+				task != null &&
+				eligible(task) &&
+				activation.canWriteTask(id) &&
+				tasks.every((t) => t.parentId !== id || activation.canWriteTask(t.id))
+			);
+		},
+	});
+	const selectionFor = (task: Task): RowSelection | undefined =>
+		eligible(task)
+			? selection.rowFor(task.id, m.selection_paused_reason())
+			: undefined;
+	const selectedTasks = (): Task[] =>
+		selection
+			.ordered()
+			.map((id) => taskById.get(id))
+			.filter((t): t is Task => t != null);
+	// Move only within one workspace, the same rule as the task detail's move.
+	const bulkMoveTargets = (selected: Task[]): List[] => {
+		const workspaces = new Set(
+			selected.map((t) => listById.get(t.listId)?.workspaceId),
+		);
+		if (workspaces.size !== 1) return [];
+		const [workspaceId] = workspaces;
+		return lists.filter(
+			(l) =>
+				l.workspaceId === workspaceId &&
+				l.kind !== "habits" &&
+				!selected.every((t) => t.listId === l.id),
+		);
+	};
+
 	const handlers: RowHandlers = {
 		onToggle: (id) => {
 			const task = tasks.find((t) => t.id === id);
@@ -329,8 +398,8 @@ export function ViewRenderer(props: {
 	// folded into the generic "viewing as list" path.
 	const asList =
 		!isDesktop && display.layout !== "list" && display.layout !== "calendar";
-	const renderList =
-		display.layout === "list" || (!isDesktop && display.layout !== "calendar");
+	const renderList = renderListFor(display.layout, isDesktop);
+	const selected = selection.count > 0 ? selectedTasks() : [];
 
 	// Only the row path. A board's columns (also the regroup drop targets), a
 	// table's headers and the calendar's month grid are each still an answer when
@@ -381,19 +450,35 @@ export function ViewRenderer(props: {
 					timeZone={pref.timezone}
 				/>
 			) : renderList ? (
-				<ListLayout
-					// A board pads empty priority columns as drop targets; as a list
-					// they would only be empty headings.
-					groups={
-						display.layout === "board"
-							? entryGroups.filter((g) => g.entries.length > 0)
-							: entryGroups
-					}
-					reorderable={listReorderable}
-					handlers={handlers}
-					onReorder={onReorder}
-					canDrag={activation.canWriteTask}
-				/>
+				<div ref={selection.rootRef}>
+					<BulkSelection
+						count={selection.count}
+						selected={selected}
+						variant="tasks"
+						moveTargets={bulkMoveTargets(selected)}
+						allTasks={tasks}
+						showDueAndPriority={selected.some((t) => {
+							const kind = listById.get(t.listId)?.kind;
+							return kind !== "checklist" && kind !== "shopping";
+						})}
+						run={run}
+						onDone={selection.finish}
+					/>
+					<ListLayout
+						// A board pads empty priority columns as drop targets; as a list
+						// they would only be empty headings.
+						groups={
+							display.layout === "board"
+								? entryGroups.filter((g) => g.entries.length > 0)
+								: entryGroups
+						}
+						reorderable={listReorderable}
+						handlers={handlers}
+						onReorder={onReorder}
+						canDrag={activation.canWriteTask}
+						selectionFor={selectionFor}
+					/>
+				</div>
 			) : display.layout === "board" ? (
 				<BoardLayout
 					groups={entryGroups}
@@ -421,18 +506,26 @@ export function ViewRenderer(props: {
 	);
 }
 
+// Calendar owns its own mobile collapse (month grid -> agenda), so it is not
+// folded into the generic "viewing as list" path.
+function renderListFor(layout: ViewDisplay["layout"], isDesktop: boolean) {
+	return layout === "list" || (!isDesktop && layout !== "calendar");
+}
+
 function ListLayout({
 	groups,
 	reorderable,
 	handlers,
 	onReorder,
 	canDrag,
+	selectionFor,
 }: {
 	groups: ViewEntryGroup[];
 	reorderable: boolean;
 	handlers: RowHandlers;
 	onReorder: (id: string, sortKey: string) => void;
 	canDrag: (id: string) => boolean;
+	selectionFor: (task: Task) => RowSelection | undefined;
 }) {
 	const renderRow = (entry: ViewEntry) => (
 		<TaskRow
@@ -441,6 +534,7 @@ function ListLayout({
 			subtasks={[]}
 			labels={entry.labels}
 			handlers={handlers}
+			selection={selectionFor(entry.task)}
 		/>
 	);
 
