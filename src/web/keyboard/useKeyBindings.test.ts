@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { resolveKeymap } from "../../domain/keymap.ts";
+import { findConflicts, resolveKeymap } from "../../domain/keymap.ts";
 import { COMMANDS } from "./commands.ts";
 import { createKeyHandler } from "./useKeyBindings.ts";
 
@@ -116,5 +116,57 @@ describe("useKeyBindings engine", () => {
 		expect(preventDefault).not.toHaveBeenCalled();
 		h.onKeyDown({ key: "c", preventDefault });
 		expect(run).toHaveBeenCalledExactlyOnceWith("task.create");
+	});
+
+	test("a remap onto a selection key falls through when selection cannot run", () => {
+		const remapped = resolveKeymap(COMMANDS, "default", {
+			"task.create": [["s"]],
+		});
+		const run = vi.fn();
+		const h = createKeyHandler(remapped, run, {
+			canRun: (id) => !id.startsWith("selection."),
+		});
+		h.onKeyDown(evt({ key: "s" }));
+		expect(run).toHaveBeenCalledExactlyOnceWith("task.create");
+	});
+
+	test("a preferred rebind wins a shared key even when both can run", () => {
+		const remapped = resolveKeymap(COMMANDS, "default", {
+			"help.cheatSheet": [["s"]],
+		});
+		const run = vi.fn();
+		createKeyHandler(remapped, run, {
+			preferred: new Set(["help.cheatSheet"]),
+		}).onKeyDown(evt({ key: "s" }));
+		expect(run).toHaveBeenCalledExactlyOnceWith("help.cheatSheet");
+	});
+
+	test("a selection command still takes its key when it can run", () => {
+		const run = vi.fn();
+		createKeyHandler(keymap, run, { canRun: () => true }).onKeyDown(
+			evt({ key: "s" }),
+		);
+		expect(run).toHaveBeenCalledExactlyOnceWith("selection.toggle");
+	});
+
+	test("a user's own chord still fires from a text field", () => {
+		const remapped = resolveKeymap(COMMANDS, "default", {
+			"task.create": [["Meta", "j"]],
+		});
+		const run = vi.fn();
+		createKeyHandler(remapped, run).onKeyDown(
+			evt({ key: "j", ctrlKey: true, target: INPUT }),
+		);
+		expect(run).toHaveBeenCalledExactlyOnceWith("task.create");
+	});
+
+	test("the remap screen reports a rebind onto a selection key", () => {
+		const remapped = resolveKeymap(COMMANDS, "default", {
+			"task.create": [["s"]],
+		});
+		expect(findConflicts(remapped, COMMANDS)).toContainEqual([
+			"selection.toggle",
+			"task.create",
+		]);
 	});
 });

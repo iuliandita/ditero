@@ -170,6 +170,10 @@
 	"selection_priority": "Prioridad",
 	"selection_delete": "Eliminar",
 	"selection_clear": "Quitar la selección",
+	"selection_check": "Marcar",
+	"selection_uncheck": "Desmarcar",
+	"selection_clear_quantity": "Quitar cantidad",
+	"selection_paused_reason": "Pausada por una importación, no se puede seleccionar",
 	"list_untitled_fallback": "Lista",
 	"palette_untitled_task": "Tarea",
 	"cheatsheet_title": "Atajos de teclado",
@@ -1423,6 +1427,21 @@
 				"countPlural=one": "{countNum} tarea seleccionada",
 				"countPlural=many": "{countNum} tareas seleccionadas",
 				"countPlural=other": "{countNum} tareas seleccionadas"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} artículo marcado.",
+				"countPlural=many": "{countNum} artículos marcados.",
+				"countPlural=other": "{countNum} artículos marcados."
 			}
 		}
 	],

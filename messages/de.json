@@ -169,6 +169,10 @@
 	"selection_priority": "Priorität",
 	"selection_delete": "Löschen",
 	"selection_clear": "Auswahl aufheben",
+	"selection_check": "Abhaken",
+	"selection_uncheck": "Zurücksetzen",
+	"selection_clear_quantity": "Menge löschen",
+	"selection_paused_reason": "Durch einen Import pausiert und daher nicht auswählbar",
 	"list_untitled_fallback": "Liste",
 	"palette_untitled_task": "Aufgabe",
 	"cheatsheet_title": "Tastenkürzel",
@@ -1393,6 +1397,20 @@
 			"match": {
 				"countPlural=one": "{countNum} Aufgabe ausgewählt",
 				"countPlural=other": "{countNum} Aufgaben ausgewählt"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Eintrag abgehakt.",
+				"countPlural=other": "{countNum} Einträge abgehakt."
 			}
 		}
 	],

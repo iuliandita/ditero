@@ -1,5 +1,12 @@
-import { Plus } from "lucide-react";
-import { type FocusEvent, useEffect, useId, useRef, useState } from "react";
+import { Plus, SquareArrowOutUpRight, SquareCheck } from "lucide-react";
+import {
+	type FocusEvent,
+	type MouseEvent as ReactMouseEvent,
+	useEffect,
+	useId,
+	useRef,
+	useState,
+} from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { checkShapeFor } from "@/lib/check-shape";
 import {
@@ -18,6 +25,9 @@ import {
 import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
 import { useTaskImportActivation } from "../../hooks/useTaskImportActivation.ts";
+import type { RowAction } from "../ui/row-action.ts";
+import { useRowContextMenu } from "../ui/row-actions.tsx";
+import { type RowSelection, SelectToggle } from "./SelectToggle.tsx";
 
 export type ShoppingHandlers = {
 	onToggle: (id: string, done: boolean) => void;
@@ -34,9 +44,11 @@ const FIELD =
 export function ShoppingRow({
 	task,
 	handlers,
+	selection,
 }: {
 	task: Task;
 	handlers: ShoppingHandlers;
+	selection?: RowSelection;
 }) {
 	const activation = useTaskImportActivation(task.id);
 	const justCompleted = useJustCompleted(task.done ?? false);
@@ -94,30 +106,87 @@ export function ShoppingRow({
 	}
 
 	const canEdit = activation.canWrite;
-	const showAdd = !amount && !task.done && canEdit;
+	const selecting = selection?.active ?? false;
+	const showAdd = !amount && !task.done && canEdit && !selecting;
+
+	// Long-press (touch) or right-click opens the way into selection mode; a
+	// shopping row has no other menu, so there is nothing to offer without it.
+	const menuActions: RowAction[] =
+		selection?.selectable && !selecting
+			? [
+					{
+						id: "open",
+						label: m.action_open(),
+						icon: SquareArrowOutUpRight,
+						onSelect: () => handlers.onOpenDetail(task),
+					},
+					{
+						id: "select",
+						label: m.action_select(),
+						icon: SquareCheck,
+						onSelect: selection.toggle,
+					},
+				]
+			: [];
+	const { rowProps, menu } = useRowContextMenu(
+		menuActions,
+		m.row_actions_for({ name: task.title }),
+	);
+
+	// Same modifier and selection-mode rules as a task row.
+	function onOpenClick(event: ReactMouseEvent) {
+		if (selection && (event.metaKey || event.ctrlKey)) {
+			event.preventDefault();
+			selection.toggle();
+		} else if (selection && event.shiftKey) {
+			event.preventDefault();
+			selection.extend();
+		} else if (selection && selecting) {
+			selection.toggle();
+		} else handlers.onOpenDetail(task);
+	}
 
 	return (
 		<div>
-			<div className="group flex min-h-12 items-center gap-2 rounded-md px-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none hover:bg-muted/30 md:min-h-10">
-				<div className="flex size-11 shrink-0 items-center justify-center md:size-8">
-					<Checkbox
-						disabled={!canEdit}
-						aria-label={task.title}
-						checked={task.done ?? false}
-						onCheckedChange={() =>
-							handlers.onToggle(task.id, task.done ?? false)
-						}
-						shape={checkShapeFor("shopping")}
-						className={cn(
-							"after:-inset-3.5 md:after:-inset-2",
-							justCompleted && CHECK_POP,
-						)}
+			<div
+				className="group flex min-h-12 items-center gap-2 rounded-md px-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted md:min-h-10"
+				data-kbd-row
+				data-selected={selection?.selected || undefined}
+				{...rowProps}
+			>
+				{selection && selecting ? (
+					<SelectToggle
+						title={task.title}
+						selection={selection}
+						placement="lead"
 					/>
-				</div>
+				) : (
+					<div className="flex size-11 shrink-0 items-center justify-center md:size-8">
+						<Checkbox
+							disabled={!canEdit}
+							aria-label={task.title}
+							checked={task.done ?? false}
+							onCheckedChange={() =>
+								handlers.onToggle(task.id, task.done ?? false)
+							}
+							data-kbd-action="toggle"
+							shape={checkShapeFor("shopping")}
+							className={cn(
+								"after:-inset-3.5 md:after:-inset-2",
+								justCompleted && CHECK_POP,
+							)}
+						/>
+					</div>
+				)}
 				<button
 					type="button"
+					data-kbd-nav
 					data-task-id={task.id}
-					onClick={() => handlers.onOpenDetail(task)}
+					onMouseDown={(event) => {
+						// Shift-click extends the selection, not the page's text selection.
+						if (selection && event.shiftKey) event.preventDefault();
+					}}
+					onClick={onOpenClick}
 					className={cn(
 						"min-h-11 min-w-0 flex-1 truncate text-start md:min-h-9",
 						task.done && "text-muted-foreground",
@@ -205,7 +274,15 @@ export function ShoppingRow({
 						{m.shopping_qty_placeholder()}
 					</button>
 				) : null}
+				{selection && !selecting && (
+					<SelectToggle
+						title={task.title}
+						selection={selection}
+						placement="trail"
+					/>
+				)}
 			</div>
+			{menu}
 			{editing && invalid && (
 				<p
 					id={errorId}

@@ -6,6 +6,7 @@ import {
 	type Page,
 	test,
 } from "@playwright/test";
+import { Pool } from "pg";
 import {
 	sidebarLists,
 	signUp,
@@ -61,11 +62,13 @@ async function addTasks(page: Page, titles: string[]): Promise<void> {
 	}
 }
 
-function row(page: Page, title: string): Locator {
+// Found by its title text, not its done checkbox: selection mode swaps that
+// checkbox out for the select control.
+function row(page: Page, title: string, scope = "list"): Locator {
 	return page
-		.getByTestId("list")
+		.getByTestId(scope)
 		.locator("[data-kbd-row]")
-		.filter({ has: page.getByRole("checkbox", { name: title, exact: true }) });
+		.filter({ has: page.getByText(title, { exact: true }) });
 }
 
 function openButton(page: Page, title: string): Locator {
@@ -183,6 +186,24 @@ test("keyboard multi-select, bulk complete, and one Undo restores all", async ({
 		"2 tasks selected",
 	);
 	await page.keyboard.press("Shift+ArrowDown");
+	// Selection mode: the select control leads every row and the done checkbox
+	// steps aside, so `x` and a stray click cannot complete anything.
+	await expect(page.getByTestId("list").getByRole("checkbox")).toHaveCount(0);
+	await expect(
+		row(page, "Row four").locator(
+			'[data-testid="task-select"][data-placement="lead"]',
+		),
+	).toBeVisible();
+	await page.keyboard.press("x");
+	await openButton(page, "Row four").click();
+	await expect(page.getByTestId("selection-count")).toHaveText(
+		"4 tasks selected",
+	);
+	await expect(page.getByTestId("task-detail")).toHaveCount(0);
+	await openButton(page, "Row four").click();
+	await expect(page.getByTestId("selection-count")).toHaveText(
+		"3 tasks selected",
+	);
 	await expectNoSeriousA11y(page, "list with selection bar");
 
 	await bar.getByTestId("selection-complete").click();
@@ -231,6 +252,14 @@ test("Escape and select-all, then bulk move with Undo", async ({ page }) => {
 		.click();
 	const snackbar = page.getByTestId("snackbar");
 	await expect(snackbar).toContainText("Moved 2 tasks to Home");
+	// Moved in the order they were on screen.
+	await openList(page, "Home");
+	const homeTitles = await page
+		.getByTestId("list")
+		.getByRole("checkbox")
+		.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")));
+	expect(homeTitles).toEqual(["Move A", "Move B"]);
+	await openList(page, "Errands");
 	const list = page.getByTestId("list");
 	await expect(list.getByRole("checkbox", { name: "Move A" })).toHaveCount(0);
 	await expect(list.getByRole("checkbox", { name: "Move B" })).toHaveCount(0);
@@ -315,6 +344,7 @@ async function longPress(page: Page, target: Locator) {
 }
 
 async function phone(browser: Browser) {
+	// Two lists, so Move has somewhere to go.
 	const ctx = await browser.newContext({
 		viewport: { width: 390, height: 844 },
 		hasTouch: true,
@@ -326,9 +356,14 @@ async function phone(browser: Browser) {
 	expect(
 		await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
 	).toBe(true);
-	await page.getByRole("button", { name: "New list" }).click();
-	await page.getByTestId("new-list").fill("Errands");
-	await page.getByTestId("new-list-submit").click();
+	for (const name of ["Home", "Errands"]) {
+		await page.getByRole("button", { name: "New list" }).click();
+		await page.getByTestId("new-list").fill(name);
+		await page.getByTestId("new-list-submit").click();
+		await expect(
+			page.getByTestId("list-index").getByRole("button", { name, exact: true }),
+		).toBeVisible({ timeout: 15000 });
+	}
 	await page
 		.getByTestId("list-index")
 		.getByRole("button", { name: "Errands", exact: true })
@@ -354,6 +389,8 @@ test("touch: long-press Select starts selection mode and taps then select", asyn
 	await expect(page.getByTestId("selection-count")).toHaveText(
 		"1 task selected",
 	);
+	// Move stays reachable on a phone (the bar wraps rather than clipping).
+	await expect(bar.getByTestId("selection-move")).toBeInViewport();
 	// A tap now selects instead of opening the task.
 	await openButton(page, "Tap three").tap();
 	await expect(page.getByTestId("selection-count")).toHaveText(
@@ -370,4 +407,129 @@ test("touch: long-press Select starts selection mode and taps then select", asyn
 	await openButton(page, "Tap two").tap();
 	await expect(page.getByRole("dialog")).toBeVisible();
 	await ctx.close();
+});
+
+// Another device completes a selected row: it settles into the collapsed
+// completed group, so it leaves the selection and a bulk delete never reaches it.
+async function completeElsewhere(title: string): Promise<void> {
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await pool.query("update task set done = true where title = $1", [title]);
+	} finally {
+		await pool.end();
+	}
+}
+
+test("a selected row that leaves the screen leaves the selection", async ({
+	page,
+}) => {
+	await setupList(page, "bulk-hidden", ["Hide me", "Keep me", "Other"]);
+	await openButton(page, "Hide me").click({ modifiers: ["ControlOrMeta"] });
+	await openButton(page, "Keep me").click({ modifiers: ["ControlOrMeta"] });
+	await expect(page.getByTestId("selection-count")).toHaveText(
+		"2 tasks selected",
+	);
+	await completeElsewhere("Hide me");
+	await expect(
+		page.getByTestId("list").getByTestId("completed-section"),
+	).toBeVisible({ timeout: 15000 });
+	await expect(page.getByTestId("selection-count")).toHaveText(
+		"1 task selected",
+	);
+	await page.getByTestId("selection-delete").click();
+	const confirm = page.getByRole("alertdialog");
+	await expect(confirm).toContainText("Delete 1 task?");
+	await confirm.getByRole("button", { name: "Delete" }).click();
+	await expect(page.getByText("Keep me", { exact: true })).toHaveCount(0);
+	await page.getByTestId("list").getByTestId("completed-section").click();
+	await expect(
+		page.getByTestId("list").getByRole("checkbox", { name: "Hide me" }),
+	).toBeChecked();
+});
+
+test("Ctrl/Cmd+A outside the list stays the page's own", async ({ page }) => {
+	await setupList(page, "bulk-ctrl-a", ["Only row"]);
+	await page.getByTestId("new-task").focus();
+	await page.keyboard.press("ControlOrMeta+a");
+	await expect(page.getByTestId("selection-bar")).toHaveCount(0);
+	await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+	await page.keyboard.press("ControlOrMeta+a");
+	await expect(page.getByTestId("selection-bar")).toHaveCount(0);
+});
+
+test("saved views select across their rows and complete in bulk", async ({
+	page,
+}) => {
+	await setupList(page, "bulk-view", ["View one", "View two"]);
+	await sidebarLists(page)
+		.getByRole("button", { name: "All my tasks", exact: true })
+		.click();
+	await expect(page.getByTestId("view-surface")).toBeVisible();
+	const surface = "view-renderer";
+	await row(page, "View one", surface)
+		.getByRole("button", { name: "Open details" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await row(page, "View two", surface)
+		.getByRole("button", { name: "Open details" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(page.getByTestId("selection-count")).toHaveText(
+		"2 tasks selected",
+	);
+	// Both rows live in one workspace, so Move is offered.
+	await expect(page.getByTestId("selection-move")).toBeVisible();
+	await page.getByTestId("selection-complete").click();
+	await expect(page.getByTestId("snackbar")).toContainText(
+		"Completed 2 tasks.",
+	);
+	await page.getByTestId("snackbar").getByTestId("snackbar-action").click();
+	await expect(
+		page
+			.getByTestId(surface)
+			.getByRole("checkbox", { name: "View one", exact: true }),
+	).not.toBeChecked();
+});
+
+test("shopping lists check, clear amounts and uncheck in bulk", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("bulk-shop"));
+	await waitWorkspaceReady(page);
+	await page.getByTestId("sidebar-create").click();
+	await page.getByTestId("sidebar-new-list").click();
+	await page.getByTestId("new-list").fill("Groceries");
+	await page.getByRole("button", { name: "Shopping", exact: true }).click();
+	await page.getByTestId("new-list-submit").click();
+	await openList(page, "Groceries");
+	await addTasks(page, ["Milk", "Bread"]);
+	await row(page, "Milk").hover();
+	await row(page, "Milk").getByTestId("shopping-qty-add").click();
+	await page.locator("input[aria-label='Quantity for Milk']").fill("2");
+	await page.keyboard.press("Enter");
+	await expect(
+		row(page, "Milk").getByTestId("shopping-qty-chip"),
+	).toBeVisible();
+
+	await row(page, "Milk").locator("[data-kbd-nav]").focus();
+	await page.keyboard.press("ControlOrMeta+a");
+	const bar = page.getByTestId("selection-bar");
+	await expect(page.getByTestId("selection-count")).toHaveText(
+		"2 tasks selected",
+	);
+	await expect(bar.getByTestId("selection-due")).toHaveCount(0);
+	await bar.getByTestId("selection-clear-quantity").click();
+	await expect(row(page, "Milk").getByTestId("shopping-qty-chip")).toHaveCount(
+		0,
+	);
+	await bar.getByTestId("selection-complete").click();
+	await expect(page.getByTestId("snackbar")).toContainText("Checked 2 items.");
+	const inCart = page.getByTestId("list").getByTestId("completed-section");
+	await expect(inCart).toBeVisible({ timeout: 5000 });
+	await inCart.click();
+	await row(page, "Milk").locator("[data-kbd-nav]").focus();
+	await page.keyboard.press("ControlOrMeta+a");
+	await page.getByTestId("selection-uncheck").click();
+	await expect(inCart).toHaveCount(0, { timeout: 5000 });
+	await expect(
+		page.getByTestId("list").getByRole("checkbox", { name: "Bread" }),
+	).not.toBeChecked();
 });

@@ -170,6 +170,10 @@
 	"selection_priority": "Prioritate",
 	"selection_delete": "Șterge",
 	"selection_clear": "Golește selecția",
+	"selection_check": "Bifează",
+	"selection_uncheck": "Debifează",
+	"selection_clear_quantity": "Șterge cantitatea",
+	"selection_paused_reason": "Pusă pe pauză de un import, nu poate fi selectată",
 	"list_untitled_fallback": "Listă",
 	"palette_untitled_task": "Sarcină",
 	"cheatsheet_title": "Scurtături de tastatură",
@@ -1423,6 +1427,21 @@
 				"countPlural=one": "{countNum} sarcină selectată",
 				"countPlural=few": "{countNum} sarcini selectate",
 				"countPlural=other": "{countNum} de sarcini selectate"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} articol bifat.",
+				"countPlural=few": "{countNum} articole bifate.",
+				"countPlural=other": "{countNum} de articole bifate."
 			}
 		}
 	],

@@ -7,44 +7,45 @@ import { mutators } from "../../zero/mutators.ts";
 import type { List, schema, Task } from "../../zero/schema.gen.ts";
 import { useConfirm } from "../components/ui/confirm.tsx";
 import { useSnackbar } from "../components/ui/snackbar.tsx";
-import { onMutationFailure } from "../lib/mutation-outcome.ts";
+import { runBatch } from "../lib/bulk-batch.ts";
 import { inputsToDue } from "../lib/task-display.ts";
 
 type Run = (mutation: { client: Promise<unknown> }) => unknown;
 type Mutation = { client: Promise<unknown>; server: Promise<unknown> };
 
-// Bulk edits over selected rows, one existing mutator call per task, so every
-// write keeps its own per-task authorization. One snack speaks for the batch:
-// its key is minted per batch so a failure can only replace its own
-// confirmation. Failures count up in that one snack; a connection drop is not
-// a failure (onMutationFailure ignores a "zero" server settle).
+// Bulk edits over selected rows: one existing mutator call per task, so every
+// write keeps its own per-task authorization. Each call applies optimistically
+// the moment it is made (Zero's client write is local), so a batch never waits
+// on the server and the list reflects it at once; the server answers each one
+// in its own time.
+//
+// One snack confirms the batch and carries its Undo. Failures are reported
+// under a separate key, so they queue behind that snack instead of replacing
+// it, and Undo only takes back the tasks whose write did not fail. A
+// connection drop is not a failure (onMutationFailure ignores a "zero" server
+// settle: the write is queued and lands on reconnect).
 export function useBulkTaskActions(run: Run) {
 	const zero = useZero<typeof schema>();
 	const { show, fail, dismissKey } = useSnackbar();
 	const confirm = useConfirm();
 
+	// Returns the ids whose write failed so far; the set fills as answers come in.
 	const each = useCallback(
-		<T>(
+		<T extends { id: string }>(
 			items: readonly T[],
 			mutate: (item: T) => Mutation,
 			failed: (count: number) => string,
-			key = `bulk:${randomId()}`,
-		) => {
-			let failures = 0;
-			for (const item of items) {
-				const mutation = mutate(item);
-				run(mutation);
-				onMutationFailure(mutation, () => {
-					failures += 1;
-					fail({ key, message: failed(failures) });
-				});
-			}
+		): ReadonlySet<string> => {
+			const failedKey = `bulk-failed:${randomId()}`;
+			return runBatch(items, mutate, run, (count) =>
+				fail({ key: failedKey, message: failed(count) }),
+			);
 		},
 		[run, fail],
 	);
 
 	const complete = useCallback(
-		(tasks: readonly Task[]) => {
+		(tasks: readonly Task[], variant: "tasks" | "shopping" = "tasks") => {
 			const open = tasks.filter((t) => !t.done);
 			if (open.length === 0) return;
 			// task.complete on a recurring task advances it to the next date;
@@ -53,13 +54,21 @@ export function useBulkTaskActions(run: Run) {
 			const undoable = open.filter((t) => t.rrule == null);
 			const recurring = open.length - undoable.length;
 			const key = `bulk:${randomId()}`;
-			const done = m.snackbar_bulk_completed({ count: open.length });
+			const done =
+				variant === "shopping"
+					? m.snackbar_bulk_checked({ count: open.length })
+					: m.snackbar_bulk_completed({ count: open.length });
 			const message =
 				recurring === 0
 					? done
 					: undoable.length > 0
 						? `${done} ${m.snackbar_bulk_undo_skips_recurring({ count: recurring })}`
 						: `${done} ${m.snackbar_bulk_recurring_advanced({ count: recurring })}`;
+			const failed = each(
+				open,
+				(t) => zero.mutate(mutators.task.complete({ id: t.id })),
+				(count) => m.snackbar_bulk_complete_failed({ count }),
+			);
 			show({
 				key,
 				message,
@@ -69,26 +78,37 @@ export function useBulkTaskActions(run: Run) {
 								label: m.action_undo(),
 								run: () => {
 									dismissKey(key);
-									for (const t of undoable)
+									for (const t of undoable) {
+										if (failed.has(t.id)) continue;
 										run(
 											zero.mutate(
 												mutators.task.update({ id: t.id, done: false }),
 											),
 										);
+									}
 								},
 							}
 						: undefined,
 			});
-			each(
-				open,
-				(t) => zero.mutate(mutators.task.complete({ id: t.id })),
-				(count) => m.snackbar_bulk_complete_failed({ count }),
-				key,
-			);
 		},
 		[zero, show, dismissKey, run, each],
 	);
 
+	// Unchecking is the everyday correction in a shopping list and needs no
+	// Undo, the same as unchecking one row.
+	const uncheck = useCallback(
+		(tasks: readonly Task[]) => {
+			each(
+				tasks.filter((t) => t.done),
+				(t) => zero.mutate(mutators.task.update({ id: t.id, done: false })),
+				(count) => m.snackbar_bulk_update_failed({ count }),
+			);
+		},
+		[zero, each],
+	);
+
+	// `tasks` arrive in on-screen order and land after the target's last task
+	// in that same order.
 	const move = useCallback(
 		(tasks: readonly Task[], target: List, targetTasks: readonly Task[]) => {
 			const moving = tasks.filter((t) => t.listId !== target.id);
@@ -99,12 +119,23 @@ export function useBulkTaskActions(run: Run) {
 					(max, t) => (max == null || t.sortKey > max ? t.sortKey : max),
 					null,
 				);
-			// Appended in their current order, each after the one before.
 			const plan = moving.map((t) => {
 				last = keyBetween(last, null);
-				return { task: t, sortKey: last };
+				return { id: t.id, from: t, sortKey: last };
 			});
 			const key = `bulk:${randomId()}`;
+			const failed = each(
+				plan,
+				(p) =>
+					zero.mutate(
+						mutators.task.move({
+							id: p.id,
+							listId: target.id,
+							sortKey: p.sortKey,
+						}),
+					),
+				(count) => m.snackbar_bulk_move_failed({ count }),
+			);
 			show({
 				key,
 				message: m.snackbar_bulk_moved({
@@ -115,32 +146,21 @@ export function useBulkTaskActions(run: Run) {
 					label: m.action_undo(),
 					run: () => {
 						dismissKey(key);
-						for (const { task } of plan)
+						for (const { id, from } of plan) {
+							if (failed.has(id)) continue;
 							run(
 								zero.mutate(
 									mutators.task.move({
-										id: task.id,
-										listId: task.listId,
-										sortKey: task.sortKey,
+										id,
+										listId: from.listId,
+										sortKey: from.sortKey,
 									}),
 								),
 							);
+						}
 					},
 				},
 			});
-			each(
-				plan,
-				(p) =>
-					zero.mutate(
-						mutators.task.move({
-							id: p.task.id,
-							listId: target.id,
-							sortKey: p.sortKey,
-						}),
-					),
-				(count) => m.snackbar_bulk_move_failed({ count }),
-				key,
-			);
 		},
 		[zero, show, dismissKey, run, each],
 	);
@@ -163,6 +183,20 @@ export function useBulkTaskActions(run: Run) {
 			each(
 				tasks,
 				(t) => zero.mutate(mutators.task.update({ id: t.id, priority })),
+				(count) => m.snackbar_bulk_update_failed({ count }),
+			);
+		},
+		[zero, each],
+	);
+
+	const clearQuantity = useCallback(
+		(tasks: readonly Task[]) => {
+			each(
+				tasks.filter((t) => t.quantity != null || t.unit != null),
+				(t) =>
+					zero.mutate(
+						mutators.task.update({ id: t.id, quantity: null, unit: null }),
+					),
 				(count) => m.snackbar_bulk_update_failed({ count }),
 			);
 		},
@@ -192,7 +226,15 @@ export function useBulkTaskActions(run: Run) {
 	);
 
 	return useMemo(
-		() => ({ complete, move, setDue, setPriority, remove }),
-		[complete, move, setDue, setPriority, remove],
+		() => ({
+			complete,
+			uncheck,
+			move,
+			setDue,
+			setPriority,
+			clearQuantity,
+			remove,
+		}),
+		[complete, uncheck, move, setDue, setPriority, clearQuantity, remove],
 	);
 }

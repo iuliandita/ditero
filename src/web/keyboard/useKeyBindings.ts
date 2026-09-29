@@ -17,46 +17,66 @@ type Opts = {
 	// act right now (no selectable rows for select-all) leaves the key to the
 	// browser instead of swallowing it.
 	canRun?: (id: string) => boolean;
+	// Commands the user rebound. They are tried first when a key is shared, so a
+	// deliberate remap onto a default key (task.create on `s`) wins over it.
+	preferred?: ReadonlySet<string>;
 };
 
-// Chords fire from text fields only for the palette opener; any other chord
-// there (select-all) belongs to the field.
-const CHORDS_IN_EDITABLE: ReadonlySet<string> = new Set(["palette.open"]);
+// Selection chords (select-all) never fire from a text field: there the chord
+// belongs to the field. Every other chord keeps firing from inputs, as ⌘K does.
+const blockedInEditable = (id: string): boolean => id.startsWith("selection.");
 
 const CONTEXT = new Map<string, CommandContext>(
 	COMMANDS.map((c) => [c.id, c.context]),
 );
 
+// Each key maps to every command bound to it, in priority order: a user's
+// rebind first, then registry order. The first one that can run takes the key,
+// so a command that cannot act right now never swallows a key another command
+// shares with it.
+type Candidates = Map<string, string[]>;
 type Lookups = {
-	singles: Map<string, string>; // key -> id
+	singles: Candidates; // key -> ids
 	prefixes: Set<string>; // first key of a 2-key sequence
-	sequences: Map<string, string>; // "first second" -> id
-	chords: Map<string, string>; // non-modifier key of a Meta/Ctrl chord -> id
-	shifted: Map<string, string>; // key of a ["Shift", key] binding -> id
+	sequences: Candidates; // "first second" -> ids
+	chords: Candidates; // non-modifier key of a Meta/Ctrl chord -> ids
+	shifted: Candidates; // key of a ["Shift", key] binding -> ids
 };
+
+function add(map: Candidates, key: string, id: string) {
+	const ids = map.get(key);
+	if (ids) ids.push(id);
+	else map.set(key, [id]);
+}
 
 function buildLookups(
 	keymap: EffectiveKeymap,
 	active: CommandContext,
+	preferred: ReadonlySet<string>,
 ): Lookups {
-	const singles = new Map<string, string>();
+	const singles: Candidates = new Map();
 	const prefixes = new Set<string>();
-	const sequences = new Map<string, string>();
-	const chords = new Map<string, string>();
-	const shifted = new Map<string, string>();
-	for (const [id, bindings] of Object.entries(keymap)) {
+	const sequences: Candidates = new Map();
+	const chords: Candidates = new Map();
+	const shifted: Candidates = new Map();
+	const ids = Object.keys(keymap);
+	const ordered = [
+		...ids.filter((id) => preferred.has(id)),
+		...ids.filter((id) => !preferred.has(id)),
+	];
+	for (const id of ordered) {
 		const ctx = CONTEXT.get(id) ?? "global";
 		if (!contextsOverlap(ctx, active)) continue;
-		for (const b of bindings) {
+		for (const b of keymap[id]) {
 			if (b.length === 1) {
-				singles.set(b[0], id);
+				add(singles, b[0], id);
 			} else if (b.length === 2 && CHORD_MODIFIERS.has(b[0])) {
-				chords.set(b[1], id);
+				add(chords, b[1], id);
 			} else if (b.length === 2 && b[0] === "Shift") {
-				shifted.set(b[1], id);
+				add(shifted, b[1], id);
 			} else if (b.length === 2) {
 				prefixes.add(b[0]);
-				sequences.set(`${b[0]} ${b[1]}`, id);
+				add(sequences, `${b[0]} ${b[1]}`, id);
 			}
 		}
 	}
@@ -98,8 +118,13 @@ export function createKeyHandler(
 	const { singles, prefixes, sequences, chords, shifted } = buildLookups(
 		keymap,
 		active,
+		opts?.preferred ?? new Set(),
 	);
 	const canRun = opts?.canRun ?? (() => true);
+	const pick = (
+		ids: string[] | undefined,
+		allowed: (id: string) => boolean = () => true,
+	): string | undefined => ids?.find((id) => allowed(id) && canRun(id));
 
 	let pending: string | null = null;
 	let timer: ReturnType<typeof setTimeout> | null = null;
@@ -118,9 +143,12 @@ export function createKeyHandler(
 		// Meta/Ctrl chord, matched BEFORE the editable-skip so ⌘K fires from inputs
 		// too. A held modifier never starts a single-key/sequence match.
 		if (e.metaKey || e.ctrlKey) {
-			const id = chords.get(key);
 			const editable = isEditable(e.target as KeyTarget);
-			if (id && (!editable || CHORDS_IN_EDITABLE.has(id)) && canRun(id)) {
+			const id = pick(
+				chords.get(key),
+				(candidate) => !editable || !blockedInEditable(candidate),
+			);
+			if (id) {
 				e.preventDefault();
 				run(id);
 			}
@@ -133,20 +161,19 @@ export function createKeyHandler(
 		if (MODIFIER_KEYS.has(key)) return;
 
 		// An explicit Shift binding (Shift+ArrowDown). Shifted printable keys like
-		// "?" arrive already shifted and fall through to the single-key lookup.
-		const shiftedId = e.shiftKey ? shifted.get(key) : undefined;
+		// "?" arrive already shifted and fall through to the single-key lookup,
+		// as does a Shift binding that cannot run.
+		const shiftedId = e.shiftKey ? pick(shifted.get(key)) : undefined;
 		if (shiftedId) {
 			clearPending();
-			if (canRun(shiftedId)) {
-				e.preventDefault();
-				run(shiftedId);
-			}
+			e.preventDefault();
+			run(shiftedId);
 			return;
 		}
 
 		// Complete a pending sequence; the prefix is consumed either way.
 		if (pending) {
-			const seqId = sequences.get(`${pending} ${key}`);
+			const seqId = pick(sequences.get(`${pending} ${key}`));
 			clearPending();
 			if (seqId) {
 				e.preventDefault();
@@ -163,8 +190,8 @@ export function createKeyHandler(
 			return;
 		}
 
-		const id = singles.get(key);
-		if (id && canRun(id)) {
+		const id = pick(singles.get(key));
+		if (id) {
 			e.preventDefault();
 			run(id);
 		}
@@ -186,10 +213,12 @@ export function useKeyBindings(
 	const canRunRef = useRef(opts?.canRun);
 	canRunRef.current = opts?.canRun;
 	const activeContext = opts?.activeContext;
+	const preferred = opts?.preferred;
 
 	useEffect(() => {
 		const handler = createKeyHandler(keymap, (id) => runRef.current(id), {
 			activeContext,
+			preferred,
 			canRun: (id) => canRunRef.current?.(id) ?? true,
 		});
 		window.addEventListener("keydown", handler.onKeyDown);
@@ -197,5 +226,5 @@ export function useKeyBindings(
 			window.removeEventListener("keydown", handler.onKeyDown);
 			handler.dispose();
 		};
-	}, [keymap, activeContext]);
+	}, [keymap, activeContext, preferred]);
 }

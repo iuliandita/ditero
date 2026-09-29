@@ -170,6 +170,10 @@
 	"selection_priority": "Priorité",
 	"selection_delete": "Supprimer",
 	"selection_clear": "Effacer la sélection",
+	"selection_check": "Cocher",
+	"selection_uncheck": "Décocher",
+	"selection_clear_quantity": "Effacer la quantité",
+	"selection_paused_reason": "En pause à cause d’une importation, impossible de la sélectionner",
 	"list_untitled_fallback": "Liste",
 	"palette_untitled_task": "Tâche",
 	"cheatsheet_title": "Raccourcis clavier",
@@ -1423,6 +1427,21 @@
 				"countPlural=one": "{countNum} tâche sélectionnée",
 				"countPlural=many": "{countNum} tâches sélectionnées",
 				"countPlural=other": "{countNum} tâches sélectionnées"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} article coché.",
+				"countPlural=many": "{countNum} articles cochés.",
+				"countPlural=other": "{countNum} articles cochés."
 			}
 		}
 	],

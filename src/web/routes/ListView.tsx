@@ -1,13 +1,6 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { ListTodo, Paperclip, SlidersHorizontal } from "lucide-react";
-import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useReducer,
-	useRef,
-	useState,
-} from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -26,11 +19,6 @@ import {
 import { addCopyFor } from "@/lib/kind-copy";
 import { ListIcon } from "@/lib/list-icon";
 import { runMutation } from "@/lib/run-mutation";
-import {
-	EMPTY_SELECTION,
-	liveSelection,
-	selectionReducer,
-} from "@/lib/selection";
 import { useIsDesktop, useMediaQuery } from "@/lib/use-media-query";
 import type { ListKind } from "../../domain/icon-map.ts";
 import { randomId } from "../../domain/random-id.ts";
@@ -46,9 +34,9 @@ import {
 	AttachmentList,
 	type AttachmentListHandle,
 } from "../components/attachments/AttachmentList.tsx";
+import { BulkSelection } from "../components/list/BulkSelection.tsx";
 import { IconPicker } from "../components/list/IconPicker.tsx";
 import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
-import { SelectionBar } from "../components/list/SelectionBar.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
 import { TitleSuggestInput } from "../components/list/TitleSuggestInput.tsx";
@@ -58,13 +46,9 @@ import { BackButton } from "../components/ui/back-button.tsx";
 import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
 import { RowActions } from "../components/ui/row-actions.tsx";
-import { useBulkTaskActions } from "../hooks/useBulkTaskActions.ts";
+import { useRowSelection } from "../hooks/useRowSelection.ts";
 import { useTaskImportActivationMap } from "../hooks/useTaskImportActivation.ts";
 import { useTaskToggle } from "../hooks/useTaskToggle.ts";
-import {
-	registerSelectionTarget,
-	type SelectionCommand,
-} from "../keyboard/selection-commands.ts";
 
 // `hide` stays a stored value but renders exactly like sink since #348 (both
 // collapse completed rows into a group), so the menu offers only the two
@@ -79,11 +63,6 @@ const DISPLAY_MODE_LABELS: Record<
 	sink: m.list_completed_sink,
 	keep: m.list_completed_keep,
 };
-
-// Surfaces that own Escape while they are up; clearing the selection under
-// them would spend one keypress on two things.
-const ESCAPE_OWNERS =
-	'[role="dialog"], [role="alertdialog"], [role="menu"], [data-task-panel]';
 
 function lastKey(items: { sortKey: string }[]): string | null {
 	return items.reduce<string | null>(
@@ -124,17 +103,6 @@ export function ListView({
 	const titleInput = useRef<HTMLInputElement>(null);
 	const attachmentsRef = useRef<AttachmentListHandle>(null);
 	const listHeaderRef = useRef<HTMLDivElement>(null);
-	const listRef = useRef<HTMLDivElement>(null);
-	const [selection, dispatchSelection] = useReducer(
-		selectionReducer,
-		EMPTY_SELECTION,
-	);
-	// A selection belongs to the list it was made in.
-	const [selectionListId, setSelectionListId] = useState(listId);
-	if (selectionListId !== listId) {
-		setSelectionListId(listId);
-		dispatchSelection({ type: "clear" });
-	}
 
 	// Zero reports per-query completeness; "no rows yet" and "no rows" are only
 	// distinguishable here, where the queries live. The row surface below is pure.
@@ -257,109 +225,28 @@ export function ListView({
 		return runMutation(mutation, setError);
 	}, []);
 	const toggleTask = useTaskToggle(run);
-	const bulk = useBulkTaskActions(run);
-
-	const parentIds = useMemo(() => new Set(parents.map((t) => t.id)), [parents]);
-	const selectedIds = useMemo(
-		() => liveSelection(selection, parentIds),
-		[selection, parentIds],
-	);
-	const selectedCount = selectedIds.length;
-
-	// Rows in on-screen order, read from the DOM so grouping, sinking and the
-	// completed section are all accounted for exactly as the user sees them.
-	function rowOrder(): string[] {
-		const root = listRef.current;
-		if (!root) return [];
-		return Array.from(
-			root.querySelectorAll<HTMLElement>("[data-kbd-nav][data-task-id]"),
-		)
-			.map((el) => el.dataset.taskId ?? "")
-			.filter((id) => parentIds.has(id));
-	}
-	function focusedRowId(): string | null {
-		const row = document.activeElement?.closest<HTMLElement>("[data-kbd-row]");
-		if (!row || !listRef.current?.contains(row)) return null;
-		const id =
-			row.querySelector<HTMLElement>("[data-kbd-nav]")?.dataset.taskId ?? null;
-		return id && parentIds.has(id) ? id : null;
-	}
-	function focusRow(id: string) {
-		listRef.current
-			?.querySelector<HTMLElement>(
-				`[data-kbd-nav][data-task-id="${CSS.escape(id)}"]`,
-			)
-			?.focus();
-	}
 
 	const selectRole = memberships.find(
 		(member) =>
 			member.workspaceId === list?.workspaceId && member.userId === zero.userID,
 	)?.role;
-	// Habits complete per occurrence and shopping rows carry no row actions, so
-	// both stay out of bulk editing; a viewer has nothing to apply.
+	// Habits complete per occurrence, so they stay out of bulk editing; a viewer
+	// has nothing to apply, and a role that drops to viewer clears a held
+	// selection. A row an import paused (itself or a subtask) cannot be picked.
 	const canSelect =
 		list != null &&
 		list.kind !== "habits" &&
-		list.kind !== "shopping" &&
 		selectRole != null &&
 		WRITE_ROLES.has(selectRole);
-
-	// The keymap reaches this list through the selection registry. Both
-	// callbacks are refreshed every render so they read current state.
-	const selectionCommand = useRef<{
-		run: (command: SelectionCommand) => void;
-		can: (command: SelectionCommand) => boolean;
-	}>({ run: () => {}, can: () => false });
-	selectionCommand.current = {
-		can: (command) => {
-			if (command === "clear")
-				return (
-					selectedCount > 0 && document.querySelector(ESCAPE_OWNERS) === null
-				);
-			if (command === "toggle") return focusedRowId() !== null;
-			return rowOrder().length > 0;
-		},
-		run: (command) => {
-			if (command === "clear") {
-				dispatchSelection({ type: "clear" });
-				return;
-			}
-			const order = rowOrder();
-			if (command === "all") {
-				dispatchSelection({ type: "all", order });
-				return;
-			}
-			const current = focusedRowId();
-			if (command === "toggle") {
-				if (current) dispatchSelection({ type: "toggle", id: current });
-				return;
-			}
-			const step = command === "extendDown" ? 1 : -1;
-			if (current === null) {
-				const first = step > 0 ? order[0] : order[order.length - 1];
-				if (!first) return;
-				dispatchSelection({ type: "extend", order, to: first });
-				focusRow(first);
-				return;
-			}
-			// The focused row joins first, so a range always includes where the
-			// user started from.
-			if (!selectedIds.includes(current) && selection.anchor === null)
-				dispatchSelection({ type: "extend", order, to: current });
-			const next = order[order.indexOf(current) + step];
-			if (!next) return;
-			dispatchSelection({ type: "extend", order, to: next });
-			focusRow(next);
-		},
-	};
-	useEffect(() => {
-		if (!canSelect) return;
-		return registerSelectionTarget({
-			run: (command) => selectionCommand.current.run(command),
-			can: (command) => selectionCommand.current.can(command),
-		});
-	}, [canSelect]);
+	const selection = useRowSelection({
+		enabled: canSelect && !tasksLoading,
+		resetKey: listId,
+		isSelectable: (id) =>
+			activation.canWriteTask(id) &&
+			(subtasksByParent.get(id) ?? []).every((sub) =>
+				activation.canWriteTask(sub.id),
+			),
+	});
 
 	async function createTask() {
 		const t = title.trim();
@@ -431,37 +318,15 @@ export function ListView({
 		},
 	];
 
-	// Bulk edits skip rows an import has paused, parents whose subtasks it
-	// paused included, exactly like the single-row paths do.
-	const selectedTasks = parents.filter(
-		(t) =>
-			selectedIds.includes(t.id) &&
-			activation.canWriteTask(t.id) &&
-			(subtasksByParent.get(t.id) ?? []).every((s) =>
-				activation.canWriteTask(s.id),
-			),
-	);
-	const moveTargets = lists.filter(
-		(l) => l.workspaceId === openList.workspaceId && l.id !== openList.id,
-	);
-	// After the bar's own action removes it, keyboard focus would fall to the
-	// page; put it back on the list.
-	function afterBulk() {
-		dispatchSelection({ type: "clear" });
-		requestAnimationFrame(() =>
-			listRef.current?.querySelector<HTMLElement>("[data-kbd-nav]")?.focus(),
-		);
-	}
-	const selectionFor = canSelect
-		? (task: Task) => ({
-				selected: selectedIds.includes(task.id),
-				active: selectedCount > 0,
-				tapSelects: coarse && selectedCount > 0,
-				toggle: () => dispatchSelection({ type: "toggle", id: task.id }),
-				extend: () =>
-					dispatchSelection({ type: "extend", order: rowOrder(), to: task.id }),
-			})
-		: undefined;
+	const selectionFor = (task: Task) =>
+		selection.rowFor(task.id, m.selection_paused_reason());
+	const orderedSelected = (): Task[] => {
+		const byId = new Map(parents.map((t) => [t.id, t]));
+		return selection
+			.ordered()
+			.map((id) => byId.get(id))
+			.filter((t): t is Task => t != null);
+	};
 
 	const handlers = {
 		onToggle: (id: string) => {
@@ -547,7 +412,7 @@ export function ListView({
 	const mobileAdd = isDesktop ? undefined : addForm;
 
 	return (
-		<div ref={listRef} data-testid="list" className="max-w-3xl">
+		<div ref={selection.rootRef} data-testid="list" className="max-w-3xl">
 			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
 			<div ref={listHeaderRef} className="group mb-5 flex items-center gap-1.5">
 				{backControl}
@@ -697,44 +562,18 @@ export function ListView({
 			)}
 
 			{canSelect && (
-				<p
-					role="status"
-					aria-live="polite"
-					aria-atomic
-					data-testid="selection-live"
-					className="sr-only"
-				>
-					{selectedCount > 0 ? m.selection_count({ count: selectedCount }) : ""}
-				</p>
-			)}
-			{selectedCount > 0 && (
-				<SelectionBar
-					count={selectedCount}
-					canComplete={selectedTasks.some((t) => !t.done)}
-					showDueAndPriority={kind !== "checklist"}
-					moveTargets={moveTargets}
-					onComplete={() => {
-						bulk.complete(selectedTasks);
-						afterBulk();
-					}}
-					onMove={(targetId) => {
-						const target = moveTargets.find((l) => l.id === targetId);
-						if (!target) return;
-						bulk.move(
-							selectedTasks,
-							target,
-							tasks.filter((t) => t.listId === target.id),
-						);
-						afterBulk();
-					}}
-					onDue={(date, time) => bulk.setDue(selectedTasks, date, time)}
-					onPriority={(priority) => bulk.setPriority(selectedTasks, priority)}
-					onDelete={() => {
-						void bulk.remove(selectedTasks).then((done) => {
-							if (done) afterBulk();
-						});
-					}}
-					onClear={afterBulk}
+				<BulkSelection
+					count={selection.count}
+					selected={selection.count > 0 ? orderedSelected() : []}
+					variant={kind === "shopping" ? "shopping" : "tasks"}
+					moveTargets={lists.filter(
+						(l) =>
+							l.workspaceId === openList.workspaceId && l.id !== openList.id,
+					)}
+					allTasks={tasks}
+					showDueAndPriority={kind !== "checklist" && kind !== "shopping"}
+					run={run}
+					onDone={selection.finish}
 				/>
 			)}
 			{error && (

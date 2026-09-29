@@ -45,22 +45,15 @@ import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
 import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
+import { type RowSelection, SelectToggle } from "./SelectToggle.tsx";
 import { type Due, taskActions } from "./taskActions.ts";
+
+export type { RowSelection } from "./SelectToggle.tsx";
 
 export type RowHandlers = {
 	onToggle: (id: string, done: boolean) => void;
 	onOpenDetail: (task: Task) => void;
 	onSchedule?: (task: Task) => void;
-};
-
-// Bulk selection for one row. `active` means some row in the list is selected;
-// on touch a tap then selects instead of opening, and the swipes step aside.
-export type RowSelection = {
-	selected: boolean;
-	active: boolean;
-	tapSelects: boolean;
-	toggle: () => void;
-	extend: () => void;
 };
 
 const SWIPE_THRESHOLD = 72;
@@ -240,53 +233,6 @@ function PriorityFlag({
 	);
 }
 
-// The row's select control. aria-pressed carries the state; the square mark
-// echoes a checked item box so it reads as "picked", distinct from the round
-// done checkbox at the row's start. Revealed on hover or focus until a
-// selection exists, then shown on every row; on touch it joins the layout only
-// once long-press "Select" has started a selection.
-function SelectToggle({
-	title,
-	selection,
-	selecting,
-}: {
-	title: string;
-	selection: RowSelection;
-	selecting: boolean;
-}) {
-	return (
-		<button
-			type="button"
-			aria-pressed={selection.selected}
-			aria-label={m.task_select_aria({ title })}
-			data-testid="task-select"
-			onClick={(event) => {
-				if (event.shiftKey) selection.extend();
-				else selection.toggle();
-			}}
-			className={cn(
-				"flex size-11 shrink-0 items-center justify-center rounded-md md:size-7",
-				"focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-				!selecting &&
-					"md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100",
-				!selecting && TOUCH_KEYBOARD_ONLY,
-			)}
-		>
-			<span
-				aria-hidden
-				className={cn(
-					"flex size-4 items-center justify-center rounded-[4px] border-[1.5px] transition-colors duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none",
-					selection.selected
-						? "border-primary bg-primary text-primary-foreground"
-						: "border-control-border",
-				)}
-			>
-				{selection.selected && <Check className="size-3" strokeWidth={3} />}
-			</span>
-		</button>
-	);
-}
-
 function SubtaskCount({ done, total }: { done: number; total: number }) {
 	return (
 		<span
@@ -408,9 +354,10 @@ export function TaskRow({
 			setPriority: (_t, priority) => update({ priority }),
 			saveAsTemplate,
 			remove: () => void removeTask(),
-			select: selection
-				? { selected: selection.selected, toggle: selection.toggle }
-				: undefined,
+			select:
+				selection?.selectable && !selection.active
+					? { selected: selection.selected, toggle: selection.toggle }
+					: undefined,
 		},
 	});
 	const actionsLabel = m.row_actions_for({ name: task.title });
@@ -438,8 +385,9 @@ export function TaskRow({
 			.join(" ") || undefined;
 
 	const selecting = selection?.active ?? false;
-	// Cmd/Ctrl-click toggles and Shift-click extends, as in a file list; a plain
-	// click still opens, except on touch while a selection is being made.
+	// Cmd/Ctrl-click toggles and Shift-click extends, as in a file list. In
+	// selection mode a plain click or tap toggles too, so the row never opens
+	// or completes by accident while a batch is being built.
 	function onOpenClick(event: ReactMouseEvent) {
 		if (selection && (event.metaKey || event.ctrlKey)) {
 			event.preventDefault();
@@ -447,7 +395,7 @@ export function TaskRow({
 		} else if (selection && event.shiftKey) {
 			event.preventDefault();
 			selection.extend();
-		} else if (selection?.tapSelects) {
+		} else if (selection && selecting) {
 			selection.toggle();
 		} else handlers.onOpenDetail(task);
 	}
@@ -475,23 +423,31 @@ export function TaskRow({
 					data-selected={selection?.selected || undefined}
 					{...rowProps}
 				>
-					<div className="flex size-11 shrink-0 items-center justify-center md:size-8">
-						<Checkbox
-							disabled={!canEdit}
-							aria-label={task.title}
-							checked={task.done ?? false}
-							onCheckedChange={() => {
-								if (canEdit) handlers.onToggle(task.id, task.done ?? false);
-							}}
-							data-kbd-action="toggle"
-							shape={checkShapeFor(kind)}
-							priority={checkToneFor(kind, task.priority)}
-							className={cn(
-								"after:-inset-3.5 md:after:-inset-2",
-								justCompleted && CHECK_POP,
-							)}
+					{selection && selecting ? (
+						<SelectToggle
+							title={task.title}
+							selection={selection}
+							placement="lead"
 						/>
-					</div>
+					) : (
+						<div className="flex size-11 shrink-0 items-center justify-center md:size-8">
+							<Checkbox
+								disabled={!canEdit}
+								aria-label={task.title}
+								checked={task.done ?? false}
+								onCheckedChange={() => {
+									if (canEdit) handlers.onToggle(task.id, task.done ?? false);
+								}}
+								data-kbd-action="toggle"
+								shape={checkShapeFor(kind)}
+								priority={checkToneFor(kind, task.priority)}
+								className={cn(
+									"after:-inset-3.5 md:after:-inset-2",
+									justCompleted && CHECK_POP,
+								)}
+							/>
+						</div>
+					)}
 					<button
 						type="button"
 						data-kbd-nav
@@ -584,11 +540,11 @@ export function TaskRow({
 							/>
 						</button>
 					)}
-					{selection && (
+					{selection && !selecting && (
 						<SelectToggle
 							title={task.title}
 							selection={selection}
-							selecting={selecting}
+							placement="trail"
 						/>
 					)}
 					<RowActions actions={actions} label={actionsLabel} hideOnTouch />

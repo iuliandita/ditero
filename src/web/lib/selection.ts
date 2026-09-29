@@ -12,6 +12,7 @@ export type SelectionEvent =
 	| { type: "toggle"; id: string }
 	| { type: "extend"; order: readonly string[]; to: string }
 	| { type: "all"; order: readonly string[] }
+	| { type: "retain"; ids: ReadonlySet<string> }
 	| { type: "clear" };
 
 export const EMPTY_SELECTION: Selection = { ids: [], anchor: null, base: [] };
@@ -57,16 +58,25 @@ export function selectionReducer(
 						anchor: state.anchor ?? event.order[0],
 						base: [...event.order],
 					};
+		// Rows that stopped being on screen or selectable (completed into the
+		// collapsed group, deleted, moved, paused by an import) leave the
+		// selection, so an action never reaches a row the user cannot see.
+		// Unchanged state is returned as is, so a caller may retain every render.
+		case "retain": {
+			const ids = state.ids.filter((id) => event.ids.has(id));
+			if (ids.length === state.ids.length) return state;
+			if (ids.length === 0) return EMPTY_SELECTION;
+			const anchor =
+				state.anchor !== null && event.ids.has(state.anchor)
+					? state.anchor
+					: null;
+			return {
+				ids,
+				anchor,
+				base: state.base.filter((id) => event.ids.has(id)),
+			};
+		}
 		case "clear":
 			return EMPTY_SELECTION;
 	}
-}
-
-// Rows that left the list (deleted, moved, synced away) drop out of the
-// selection without an event: the bar never counts what is not there.
-export function liveSelection(
-	state: Selection,
-	present: ReadonlySet<string>,
-): string[] {
-	return state.ids.filter((id) => present.has(id));
 }

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { m } from "../../paraglide/messages.js";
 import type {
 	Dashboard,
@@ -26,6 +27,7 @@ import {
 	type ViewFormValue,
 	ViewManager,
 } from "../components/views/ViewManager.tsx";
+import { useUserPref } from "../hooks/useUserPref.ts";
 import type { SavedView } from "../hooks/useViews.ts";
 import { CheatSheet } from "../keyboard/CheatSheet.tsx";
 import { useCommands } from "../keyboard/CommandContext.tsx";
@@ -40,7 +42,12 @@ import { useKeyBindings } from "../keyboard/useKeyBindings.ts";
 function WorkspaceKeyboard() {
 	const { run } = useCommands();
 	const keymap = useEffectiveKeymap();
-	useKeyBindings(keymap, run, { canRun: canRunCommand });
+	const { pref } = useUserPref();
+	const preferred = useMemo(
+		() => new Set(Object.keys(pref.keymap)),
+		[pref.keymap],
+	);
+	useKeyBindings(keymap, run, { canRun: canRunCommand, preferred });
 	return null;
 }
 

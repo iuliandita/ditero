@@ -169,6 +169,10 @@
 	"selection_priority": "Priority",
 	"selection_delete": "Delete",
 	"selection_clear": "Clear selection",
+	"selection_check": "Check",
+	"selection_uncheck": "Uncheck",
+	"selection_clear_quantity": "Clear amount",
+	"selection_paused_reason": "Paused by an import, so it cannot be selected",
 	"list_untitled_fallback": "List",
 	"palette_untitled_task": "Task",
 	"cheatsheet_title": "Keyboard shortcuts",
@@ -1393,6 +1397,20 @@
 			"match": {
 				"countPlural=one": "{countNum} task selected",
 				"countPlural=other": "{countNum} tasks selected"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Checked {countNum} item.",
+				"countPlural=other": "Checked {countNum} items."
 			}
 		}
 	],

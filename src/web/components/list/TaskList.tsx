@@ -46,7 +46,7 @@ export function TaskList({
 	// belongs with the rows it extends.
 	footer?: ReactNode;
 	// Bulk selection per row; absent where the list offers none.
-	selectionFor?: (task: Task) => RowSelection;
+	selectionFor?: (task: Task) => RowSelection | undefined;
 }) {
 	const reduce = useReducedMotion();
 	const kind = (list.kind ?? "tasks") as ListKind;
@@ -85,7 +85,13 @@ export function TaskList({
 
 	const row = (task: Task): ReactNode => {
 		if (kind === "shopping") {
-			return <ShoppingRow task={task} handlers={handlers} />;
+			return (
+				<ShoppingRow
+					task={task}
+					handlers={handlers}
+					selection={selectionFor?.(task)}
+				/>
+			);
 		}
 		return (
 			<TaskRow

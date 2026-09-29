@@ -1,6 +1,8 @@
 import {
 	CalendarDays,
 	CircleCheck,
+	CircleDashed,
+	Eraser,
 	Flag,
 	FolderInput,
 	type LucideIcon,
@@ -22,8 +24,8 @@ import { DuePickerContent } from "../task/DuePicker.tsx";
 
 const PRIORITIES = [3, 2, 1, 0];
 
-// Icon over a short label on a phone (a five-up toolbar), icon beside it from
-// md. Always named by its text, so no separate aria-label to drift.
+// Icon over a short label on a phone, icon beside it from md. Always named by
+// its text, so no separate aria-label to drift.
 const ACTION =
 	"flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-xs font-medium text-foreground transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none md:h-8 md:flex-row md:gap-1.5 md:px-2.5 md:text-sm [&_svg]:size-5 [&_svg]:shrink-0 [&_svg]:text-muted-foreground md:[&_svg]:size-4";
 
@@ -43,27 +45,36 @@ function Action({
 
 // The bulk action bar for a list's selected rows: a floating strip above the
 // tab bar on a phone, a sticky strip above the rows on desktop. Plain buttons
-// in reading order; the count is announced by the list's live region.
+// in reading order; the count is announced by the list's live region. On a
+// phone the actions wrap onto a second row rather than truncate, so every one
+// (Move included) stays reachable at any text length. Optional handlers leave
+// their action out: shopping has no due date or priority, tasks no quantity.
 export function SelectionBar({
 	count,
+	variant = "tasks",
 	canComplete,
-	showDueAndPriority,
+	canUncheck = false,
 	moveTargets,
 	onComplete,
+	onUncheck,
 	onMove,
 	onDue,
 	onPriority,
+	onClearQuantity,
 	onDelete,
 	onClear,
 }: {
 	count: number;
+	variant?: "tasks" | "shopping";
 	canComplete: boolean;
-	showDueAndPriority: boolean;
+	canUncheck?: boolean;
 	moveTargets: { id: string; title: string }[];
 	onComplete: () => void;
+	onUncheck?: () => void;
 	onMove: (listId: string) => void;
-	onDue: (date: string, time: string | null) => void;
-	onPriority: (priority: number) => void;
+	onDue?: (date: string, time: string | null) => void;
+	onPriority?: (priority: number) => void;
+	onClearQuantity?: () => void;
 	onDelete: () => void;
 	onClear: () => void;
 }) {
@@ -94,14 +105,27 @@ export function SelectionBar({
 					<X aria-hidden className="size-4" />
 				</button>
 			</div>
-			<div className="grid auto-cols-fr grid-flow-col md:flex md:items-center md:gap-0.5">
+			<div className="grid grid-cols-[repeat(auto-fit,minmax(4.25rem,1fr))] md:flex md:items-center md:gap-0.5">
 				<Action
 					data-testid="selection-complete"
 					icon={CircleCheck}
-					label={m.selection_complete()}
+					label={
+						variant === "shopping"
+							? m.selection_check()
+							: m.selection_complete()
+					}
 					disabled={!canComplete}
 					onClick={onComplete}
 				/>
+				{onUncheck && (
+					<Action
+						data-testid="selection-uncheck"
+						icon={CircleDashed}
+						label={m.selection_uncheck()}
+						disabled={!canUncheck}
+						onClick={onUncheck}
+					/>
+				)}
 				{moveTargets.length > 0 && (
 					<DropdownMenu modal={false}>
 						<DropdownMenuTrigger asChild>
@@ -124,7 +148,7 @@ export function SelectionBar({
 						</DropdownMenuContent>
 					</DropdownMenu>
 				)}
-				{showDueAndPriority && (
+				{onDue && (
 					<Popover open={dueOpen} onOpenChange={setDueOpen}>
 						<PopoverTrigger asChild>
 							<Action
@@ -147,7 +171,7 @@ export function SelectionBar({
 						/>
 					</Popover>
 				)}
-				{showDueAndPriority && (
+				{onPriority && (
 					<DropdownMenu modal={false}>
 						<DropdownMenuTrigger asChild>
 							<Action
@@ -181,6 +205,14 @@ export function SelectionBar({
 							})}
 						</DropdownMenuContent>
 					</DropdownMenu>
+				)}
+				{onClearQuantity && (
+					<Action
+						data-testid="selection-clear-quantity"
+						icon={Eraser}
+						label={m.selection_clear_quantity()}
+						onClick={onClearQuantity}
+					/>
 				)}
 				<Action
 					data-testid="selection-delete"

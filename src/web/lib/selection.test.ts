@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
 	EMPTY_SELECTION,
-	liveSelection,
 	type Selection,
 	type SelectionEvent,
 	selectionReducer,
@@ -72,8 +71,27 @@ describe("selectionReducer", () => {
 		);
 	});
 
-	test("liveSelection drops rows that are gone", () => {
-		const s = run({ type: "all", order: ORDER });
-		expect(liveSelection(s, new Set(["a", "c", "x"]))).toEqual(["a", "c"]);
+	test("retain drops rows no longer on screen and keeps identity otherwise", () => {
+		const s = run({ type: "toggle", id: "a" }, { type: "toggle", id: "c" });
+		const kept = selectionReducer(s, {
+			type: "retain",
+			ids: new Set(["b", "c", "d"]),
+		});
+		expect(kept.ids).toEqual(["c"]);
+		expect(kept.anchor).toBe("c");
+		expect(
+			selectionReducer(kept, { type: "retain", ids: new Set(ORDER) }),
+		).toBe(kept);
+		expect(
+			selectionReducer(kept, { type: "retain", ids: new Set(["a"]) }),
+		).toEqual(EMPTY_SELECTION);
+	});
+
+	test("a range after retain starts from a surviving anchor only", () => {
+		const s = run(
+			{ type: "toggle", id: "b" },
+			{ type: "retain", ids: new Set(["c", "d", "e"]) },
+		);
+		expect(s).toEqual(EMPTY_SELECTION);
 	});
 });

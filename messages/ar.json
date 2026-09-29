@@ -173,6 +173,10 @@
 	"selection_priority": "الأولوية",
 	"selection_delete": "حذف",
 	"selection_clear": "مسح التحديد",
+	"selection_check": "تأشير",
+	"selection_uncheck": "إلغاء التأشير",
+	"selection_clear_quantity": "مسح الكمية",
+	"selection_paused_reason": "موقوفة مؤقتًا بسبب استيراد، لذا لا يمكن تحديدها",
 	"list_untitled_fallback": "قائمة",
 	"palette_untitled_task": "مهمة",
 	"cheatsheet_title": "اختصارات لوحة المفاتيح",
@@ -1513,6 +1517,24 @@
 				"countPlural=few": "{countNum} مهام محددة",
 				"countPlural=many": "{countNum} مهمة محددة",
 				"countPlural=other": "{countNum} مهمة محددة"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم يُؤشَّر أي عنصر.",
+				"countPlural=one": "أُشِّر عنصر واحد.",
+				"countPlural=two": "أُشِّر عنصران.",
+				"countPlural=few": "أُشِّرت {countNum} عناصر.",
+				"countPlural=many": "أُشِّر {countNum} عنصرًا.",
+				"countPlural=other": "أُشِّر {countNum} عنصر."
 			}
 		}
 	],
