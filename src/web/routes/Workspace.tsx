@@ -370,10 +370,15 @@ function NormalWorkspace() {
 		setDetailTaskId(null);
 		dispatchContent({ kind: "dashboard", id });
 	}, []);
+	// Back from settings returns where it was opened: on phones that is the tab
+	// whose switcher opened it; desktop returns to the landing.
+	const settingsReturn = useRef<"home" | "index">("home");
 	const openSettings = useCallback(() => {
 		setDetailTaskId(null);
+		settingsReturn.current =
+			!isDesktop && contentState.kind === "index" ? "index" : "home";
 		dispatchContent({ kind: "settings" });
-	}, []);
+	}, [isDesktop, contentState.kind]);
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
 	// of M1a scope: each group is its own DndContext, so a list can't leave it.
@@ -389,9 +394,6 @@ function NormalWorkspace() {
 				setWorkspaceActionError(m.activation_container_change_failed()),
 			);
 	}
-	function changeSection(next: Section) {
-		dispatchContent({ kind: next === "settings" ? "settings" : "home" });
-	}
 
 	// --- Views wiring ---------------------------------------------------------
 	// Home ref resolution: builtin/saved view, "dashboard:<id>", or (dangling/
@@ -405,8 +407,14 @@ function NormalWorkspace() {
 		[pref.homeViewRef, savedViews, dashboards],
 	);
 	// The view surface's home: a dashboard home falls back to DEFAULT_HOME here
-	// (used pre-sync and after backing out of the home dashboard).
-	const homeRef = homeTarget.kind === "view" ? homeTarget.id : DEFAULT_HOME;
+	// (used pre-sync and after backing out of the home dashboard). Phones land on
+	// the Today tab whatever the home preference is, so the tab bar always names
+	// what is on screen; the preference picks the desktop landing.
+	const homeRef = !isDesktop
+		? DEFAULT_HOME
+		: homeTarget.kind === "view"
+			? homeTarget.id
+			: DEFAULT_HOME;
 	// Navigating to the home view lands on the home surface itself, which also
 	// carries the desktop create-list form and the first-run welcome.
 	const openNavView = useCallback(
@@ -425,11 +433,19 @@ function NormalWorkspace() {
 	useEffect(() => {
 		if (homeApplied || prefLoading || dashboardsLoading) return;
 		setHomeApplied(true);
+		if (!isDesktop) return;
 		if (homeTarget.kind !== "dashboard") return;
 		if (contentState.kind !== "home") return;
 		setDetailTaskId(null);
 		dispatchContent({ kind: "dashboard", id: homeTarget.id });
-	}, [homeApplied, prefLoading, dashboardsLoading, homeTarget, contentState]);
+	}, [
+		homeApplied,
+		prefLoading,
+		dashboardsLoading,
+		homeTarget,
+		contentState,
+		isDesktop,
+	]);
 	const {
 		pinnedViews,
 		resolveView,
@@ -619,7 +635,8 @@ function NormalWorkspace() {
 				activeRole={activeRole}
 				isDesktop={isDesktop}
 				persistLocale={persistLocale}
-				onBack={() => changeSection("lists")}
+				onBack={() => dispatchContent({ kind: settingsReturn.current })}
+				autoFocusBack={!isDesktop}
 				onOpenList={openList}
 			/>
 		);
@@ -716,6 +733,10 @@ function NormalWorkspace() {
 						: "reading"
 				}
 			>
+				{/* Desktop lists live in the sidebar; the create form appears here
+				    only when a "New list" action asks for it, above the view so it
+				    is in sight. */}
+				{isLanding && isDesktop && newListFolder && createListForm}
 				{activeView ? (
 					<section aria-label={activeView.name} data-testid="view-surface">
 						<div className="mb-3 flex items-center gap-2">
@@ -829,16 +850,6 @@ function NormalWorkspace() {
 					</section>
 				) : (
 					<p className="text-sm text-muted-foreground">{m.view_not_found()}</p>
-				)}
-
-				{isLanding && isDesktop && (
-					<div className="flex flex-col gap-4">
-						<h2 className="text-base font-semibold">
-							{workspaces.find((w) => w.id === activeId)?.name ??
-								m.workspace_name_fallback()}
-						</h2>
-						{createListForm}
-					</div>
 				)}
 			</PageFrame>
 		);

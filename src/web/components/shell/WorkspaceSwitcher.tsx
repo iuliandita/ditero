@@ -78,6 +78,15 @@ function TriggerFace({
 	);
 }
 
+// "Shared workspaces appear here once someone invites you" is only true while
+// none is listed yet.
+export function privateNoteVisible(
+	workspaces: Pick<Workspace, "kind">[],
+	canManageMembers: boolean,
+): boolean {
+	return !canManageMembers && !workspaces.some((w) => w.kind === "shared");
+}
+
 export function WorkspaceSwitcherMenu({
 	workspaces,
 	activeId,
@@ -90,6 +99,7 @@ export function WorkspaceSwitcherMenu({
 	const active = workspaces.find((w) => w.id === activeId);
 	const name = active?.name ?? m.workspace_name_fallback();
 	const membersPending = useRef(false);
+	const showPrivateNote = privateNoteVisible(workspaces, canManageMembers);
 	return (
 		// modal={false}: a modal Radix menu aria-hides the app root while its
 		// trigger stays focusable, which axe scores as aria-hidden-focus.
@@ -149,7 +159,7 @@ export function WorkspaceSwitcherMenu({
 					))}
 				</DropdownMenuRadioGroup>
 				<DropdownMenuSeparator />
-				{canManageMembers ? (
+				{canManageMembers && (
 					<DropdownMenuItem
 						data-testid="manage-members"
 						className="min-h-9"
@@ -160,7 +170,8 @@ export function WorkspaceSwitcherMenu({
 						<Users />
 						{m.workspace_manage_members()}
 					</DropdownMenuItem>
-				) : (
+				)}
+				{showPrivateNote && (
 					<p
 						data-testid="workspace-private-note"
 						className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground"
@@ -192,8 +203,16 @@ export function WorkspaceSwitcherSheet({
 	onOpenSettings,
 }: Props) {
 	const [open, setOpen] = useState(false);
+	const showPrivateNote = privateNoteVisible(workspaces, canManageMembers);
 	const active = workspaces.find((w) => w.id === activeId);
 	const name = active?.name ?? m.workspace_name_fallback();
+	// Both follow-ups replace the header this sheet's trigger lives in, so they
+	// run after the sheet has closed and released focus, never in the same tick.
+	const pending = useRef<(() => void) | null>(null);
+	const closeThen = (action: () => void) => {
+		pending.current = action;
+		setOpen(false);
+	};
 	const row =
 		"flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-start text-sm transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-muted active:bg-muted motion-reduce:transition-none";
 	return (
@@ -210,7 +229,17 @@ export function WorkspaceSwitcherSheet({
 				<TriggerFace name={name} />
 			</button>
 			<Sheet open={open} onOpenChange={setOpen}>
-				<SheetContent side="bottom" className="max-h-[85dvh]">
+				<SheetContent
+					side="bottom"
+					className="max-h-[85dvh]"
+					onCloseAutoFocus={(event) => {
+						const action = pending.current;
+						if (!action) return;
+						event.preventDefault();
+						pending.current = null;
+						action();
+					}}
+				>
 					<SheetHeader>
 						<SheetTitle>{m.workspace_switcher_title()}</SheetTitle>
 					</SheetHeader>
@@ -238,20 +267,18 @@ export function WorkspaceSwitcherSheet({
 							</button>
 						))}
 						<div className="my-1 h-px bg-border" />
-						{canManageMembers ? (
+						{canManageMembers && (
 							<button
 								type="button"
 								data-testid="manage-members"
-								onClick={() => {
-									setOpen(false);
-									onManageMembers();
-								}}
+								onClick={() => closeThen(onManageMembers)}
 								className={row}
 							>
 								<Users aria-hidden className="size-4 shrink-0" />
 								{m.workspace_manage_members()}
 							</button>
-						) : (
+						)}
+						{showPrivateNote && (
 							<p
 								data-testid="workspace-private-note"
 								className="px-3 py-2 text-sm text-muted-foreground"
@@ -262,10 +289,7 @@ export function WorkspaceSwitcherSheet({
 						<button
 							type="button"
 							data-testid="switcher-settings"
-							onClick={() => {
-								setOpen(false);
-								onOpenSettings();
-							}}
+							onClick={() => closeThen(onOpenSettings)}
 							className={row}
 						>
 							<Settings aria-hidden className="size-4 shrink-0" />

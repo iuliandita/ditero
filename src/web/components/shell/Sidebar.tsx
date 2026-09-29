@@ -381,7 +381,7 @@ export function Sidebar({
 					{builtinViews.map(viewRow)}
 				</ul>
 
-				{groups.length > 0 && (
+				{(groups.length > 0 || canCreateList) && (
 					<NavGroup
 						title={m.sidebar_ungrouped_lists()}
 						section="lists"
@@ -417,6 +417,26 @@ export function Sidebar({
 								) : (
 									group.lists.map(listRow)
 								),
+							)}
+							{canCreateList && (
+								<li>
+									<button
+										type="button"
+										data-testid="create-list-open"
+										data-create-list-trigger
+										aria-label={m.create_list_new_list()}
+										title={collapsed ? m.create_list_new_list() : undefined}
+										onClick={onNewList}
+										className={cn(
+											ROW,
+											"w-full text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+											collapsed && "justify-center px-0",
+										)}
+									>
+										<Plus aria-hidden className="size-4 shrink-0" />
+										{!collapsed && m.create_list_new_list()}
+									</button>
+								</li>
 							)}
 						</ul>
 					</NavGroup>

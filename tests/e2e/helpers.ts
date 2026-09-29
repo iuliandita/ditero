@@ -84,9 +84,10 @@ export async function openShared(page: Page): Promise<void> {
 		.click();
 }
 
-// Leaves settings for the lists landing, where the create-list form lives. The
-// in-surface control exists on both platforms, so it needs no viewport branch.
-// Idempotent for the same reason as above.
+// Leaves settings for where it was opened: the landing on desktop, the Lists tab
+// on phones (goToSettings goes through it), which is where each keeps its
+// create-list entry. The in-surface control exists on both platforms, so it
+// needs no viewport branch. Idempotent for the same reason as above.
 export async function leaveSettings(page: Page): Promise<void> {
 	if (await surface(page).count()) {
 		await page.getByTestId("settings-back").click();

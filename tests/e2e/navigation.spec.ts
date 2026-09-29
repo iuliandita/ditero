@@ -139,6 +139,28 @@ test("sidebar leads with Today, nests lists under folders, and has no bare headi
 	).toBeVisible();
 });
 
+test("desktop Today shows no list index; New list opens the form on request", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await signUp(page, uniqueEmail("nav-landing"));
+	await waitWorkspaceReady(page);
+	await createList(page, "Errands");
+	await sidebarLists(page)
+		.getByRole("button", { name: "Today", exact: true })
+		.click();
+	const main = page.locator("main");
+	await expect(main.getByTestId("view-surface")).toBeVisible();
+	await expect(main.getByTestId("new-list")).toHaveCount(0);
+	await expect(main.getByRole("heading", { level: 2 })).toHaveCount(0);
+	await expect(main.getByText("'s space")).toHaveCount(0);
+
+	await page.getByTestId("create-list-open").click();
+	await expect(main.getByTestId("new-list")).toBeFocused();
+	await main.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(main.getByTestId("new-list")).toHaveCount(0);
+});
+
 test("each item type has its own glyph, named by its section", async ({
 	page,
 }) => {
@@ -202,17 +224,24 @@ test("workspace switcher switches and owns member management", async ({
 	const email = uniqueEmail("nav-switch");
 	await signUp(page, email);
 	await waitWorkspaceReady(page);
-	await joinShared(email);
 
 	const trigger = page.getByTestId("workspace-switcher");
 	await expect(trigger).toContainText("'s space");
 	await openWorkspaceSwitcher(page);
-	// Personal: no members to manage, and it says why.
+	// Personal only: no members to manage, and it says why.
+	await expect(page.getByTestId("workspace-option")).toHaveCount(1);
 	await expect(page.getByTestId("workspace-private-note")).toBeVisible();
 	await expect(page.getByTestId("manage-members")).toHaveCount(0);
+	await page.keyboard.press("Escape");
+
+	// Once a shared workspace is listed, the note would be false: it goes.
+	await joinShared(email);
+	await openWorkspaceSwitcher(page);
 	await expect(page.getByTestId("workspace-option")).toHaveCount(2, {
 		timeout: 15000,
 	});
+	await expect(page.getByTestId("workspace-private-note")).toHaveCount(0);
+	await expect(page.getByTestId("manage-members")).toHaveCount(0);
 	await expectNoSeriousA11y(page, "workspace switcher");
 
 	await page
@@ -242,7 +271,8 @@ test("phones: Today is a tab, settings leaves the bar, and each tab keeps to its
 		isMobile: true,
 	});
 	const page = await ctx.newPage();
-	await signUp(page, uniqueEmail("nav-mobile"));
+	const email = uniqueEmail("nav-mobile");
+	await signUp(page, email);
 	await waitWorkspaceReady(page);
 
 	const bar = page.locator('nav[aria-label="Primary"]');
@@ -274,16 +304,77 @@ test("phones: Today is a tab, settings leaves the bar, and each tab keeps to its
 	await expect(page.getByTestId("new-dashboard")).toBeVisible();
 	await expectNoSeriousA11y(page, "mobile lists tab");
 
-	// Settings is one switcher away, and back returns to the tabs.
+	// Settings is one switcher away; focus lands on its way back, and back
+	// returns to the tab that opened it.
 	await openWorkspaceSwitcher(page);
 	await page.getByTestId("switcher-settings").click();
 	await expect(page.getByTestId("settings-surface")).toBeVisible();
+	await expect(page.getByTestId("settings-back")).toBeFocused();
 	await page.getByTestId("settings-back").click();
 	await expect(page.getByTestId("settings-surface")).toHaveCount(0);
+	await expect(page.getByTestId("nav-tab-lists")).toHaveAttribute(
+		"aria-current",
+		"page",
+	);
+
+	// Grips stay out of the way of taps until Reorder is on (#369).
+	for (const name of ["Errands", "Garden"]) {
+		await page.getByRole("button", { name: "New list" }).click();
+		await page.getByTestId("new-list").fill(name);
+		await page.getByTestId("new-list-submit").click();
+		await expect(
+			page.getByTestId("list-index").getByRole("button", { name, exact: true }),
+		).toBeVisible({ timeout: 15000 });
+		await openMobileLists(page);
+	}
+	const grip = page.getByTestId("list-drag").first();
+	expect((await box(grip)).width).toBeLessThan(2);
+	await page.getByTestId("list-reorder-mode").click();
+	await expect(page.getByTestId("list-reorder-bar")).toBeVisible();
+	expect((await box(grip)).width).toBeGreaterThanOrEqual(44);
+	await page
+		.getByTestId("list-reorder-bar")
+		.getByRole("button", { name: "Done" })
+		.click();
+	expect((await box(grip)).width).toBeLessThan(2);
+
+	// A home view other than Today still lands phones on the Today tab, so the
+	// tab bar names what is on screen.
+	await page.getByRole("button", { name: "All my tasks", exact: true }).click();
+	await expect(page.getByTestId("nav-tab-lists")).toHaveAttribute(
+		"aria-current",
+		"page",
+	);
+	await page.getByTestId("view-actions").click();
+	await page.getByTestId("view-set-home").click();
+	await page.reload();
+	await waitWorkspaceReady(page);
 	await expect(page.getByTestId("nav-tab-today")).toHaveAttribute(
 		"aria-current",
 		"page",
 	);
+	await expect(
+		page.getByTestId("view-surface").getByRole("heading", { level: 1 }),
+	).toHaveText("Today");
+
+	// Manage members from the sheet hands focus into the members panel.
+	await joinShared(email);
+	await openWorkspaceSwitcher(page);
+	await page
+		.locator('[data-testid="workspace-option"][data-workspace-kind="shared"]')
+		.click();
+	await expect(page.getByTestId("workspace-switcher")).toContainText(
+		"Household",
+	);
+	await openWorkspaceSwitcher(page);
+	await page.getByTestId("manage-members").click();
+	const panel = page.getByTestId("members-panel");
+	await expect(panel).toBeVisible();
+	await expect
+		.poll(() => panel.evaluate((el) => el.contains(document.activeElement)))
+		.toBe(true);
+	await page.keyboard.press("Escape");
+	await expect(panel).toHaveCount(0);
 
 	// Quick add stays a bottom sheet on a phone.
 	await page.getByRole("button", { name: "Quick add", exact: true }).click();

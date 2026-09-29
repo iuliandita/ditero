@@ -1,8 +1,9 @@
 import { Plus } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { ListIcon } from "@/lib/list-icon";
 import { dashboardIcon, FolderIcon, viewIcon } from "@/lib/nav-icon";
 import type { NavSection } from "@/lib/nav-sections";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { m } from "../../../paraglide/messages.js";
@@ -10,6 +11,7 @@ import type { Dashboard, List } from "../../../zero/schema.gen.ts";
 import type { SavedView } from "../../hooks/useViews.ts";
 import type { BuiltinView } from "../../views/builtins.ts";
 import { SortableList } from "../list/SortableList.tsx";
+import { Button } from "../ui/button.tsx";
 import type { ListGroup } from "./grouping.ts";
 import { ListProgress } from "./ListProgress.tsx";
 import { EmptyFolder, NavGroup } from "./Sidebar.tsx";
@@ -57,6 +59,17 @@ export function MobileListIndex({
 	isSectionOpen: (section: NavSection) => boolean;
 	onToggleSection: (section: NavSection) => void;
 }) {
+	// Touch drags from a grip that only exists in reorder mode, as on a list
+	// page (#369): outside it the grips stay out of the way of taps, and the
+	// keyboard still reorders from a focused grip.
+	const coarse = useMediaQuery("(pointer: coarse)");
+	const [reordering, setReordering] = useState(false);
+	const listCount = groups.reduce((n, g) => n + g.lists.length, 0);
+	const canReorder =
+		coarse &&
+		listCount > 1 &&
+		groups.some((g) => g.lists.some((l) => canEditList(l.id)));
+	const reorderActive = reordering && canReorder;
 	const viewRow = (v: BuiltinView | SavedView) => {
 		const Icon = viewIcon(v);
 		return (
@@ -81,6 +94,7 @@ export function MobileListIndex({
 			handleLabel={m.list_reorder_handle()}
 			handleTestId="list-drag"
 			className="gap-0.5"
+			touch={reorderActive ? "reorder" : "hidden"}
 			renderItem={(l) => (
 				<button
 					type="button"
@@ -115,7 +129,34 @@ export function MobileListIndex({
 			</ul>
 
 			<NavGroup title={m.sidebar_ungrouped_lists()} section="lists">
-				<div className="mb-2">{createList}</div>
+				<div className="mb-2 flex items-center gap-2">
+					<div className="min-w-0 flex-1">{createList}</div>
+					{canReorder && !reorderActive && (
+						<Button
+							variant="ghost"
+							data-testid="list-reorder-mode"
+							className="min-h-11 text-muted-foreground"
+							onClick={() => setReordering(true)}
+						>
+							{m.list_reorder_mode()}
+						</Button>
+					)}
+				</div>
+				{reorderActive && (
+					<div
+						data-testid="list-reorder-bar"
+						className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-muted ps-3 text-sm text-muted-foreground"
+					>
+						<span>{m.list_reorder_hint()}</span>
+						<Button
+							variant="ghost"
+							className="min-h-11"
+							onClick={() => setReordering(false)}
+						>
+							{m.list_reorder_done()}
+						</Button>
+					</div>
+				)}
 				<div data-testid="list-index" className="flex flex-col gap-2">
 					{groups.map((group) =>
 						group.folder ? (

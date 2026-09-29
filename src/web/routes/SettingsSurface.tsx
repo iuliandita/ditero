@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { Role } from "../../domain/role.ts";
 import { m } from "../../paraglide/messages.js";
 import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
@@ -23,6 +24,7 @@ export function SettingsSurface({
 	persistLocale,
 	onBack,
 	onOpenList,
+	autoFocusBack,
 }: {
 	activeId: string | null;
 	activeRole: Role | null;
@@ -30,7 +32,14 @@ export function SettingsSurface({
 	persistLocale: (locale: Locale) => void;
 	onBack: () => void;
 	onOpenList: (id: string) => void;
+	// Phones arrive from a sheet that unmounts with its trigger; without a
+	// deliberate target focus would fall to the document body.
+	autoFocusBack?: boolean;
 }) {
+	const backRef = useRef<HTMLButtonElement>(null);
+	useEffect(() => {
+		if (autoFocusBack) backRef.current?.focus();
+	}, [autoFocusBack]);
 	return (
 		<PageFrame
 			measure="reading"
@@ -38,7 +47,11 @@ export function SettingsSurface({
 			className="gap-0"
 		>
 			<div className="flex items-center gap-2">
-				<BackButton data-testid="settings-back" onClick={onBack} />
+				<BackButton
+					ref={backRef}
+					data-testid="settings-back"
+					onClick={onBack}
+				/>
 				<h1 className="truncate text-lg font-semibold">{m.nav_settings()}</h1>
 			</div>
 			<div>
