@@ -380,6 +380,11 @@ test("dashboard: a priority board panel sections by priority and hides completed
 	await expect(panel.getByText("Pay rent", { exact: true })).toHaveCount(0);
 	// Same row cues as a list: priority flag and the list the row lives in.
 	await expect(high.getByLabel("Priority: P1 High")).toBeVisible();
+	// Rows sit directly on the panel's surface, not on a box of canvas colour.
+	await page.getByTestId("dashboard-edit").click();
+	await page.mouse.move(0, 0);
+	const frame = page.getByRole("region", { name: "Priority board" });
+	expect((await surfaceReport(frame)).innerFills).toBe(0);
 	await expect(
 		panel.getByRole("region", { name: "P3 Low" }).getByText("Groceries"),
 	).toBeVisible();

@@ -131,10 +131,12 @@ function PanelRows({
 	entries,
 	handlers,
 	listOf,
+	surface,
 }: {
 	entries: TaskEntry[];
 	handlers: RowHandlers;
 	listOf: PanelRowOptions["listOf"];
+	surface: "card" | "popover";
 }): JSX.Element {
 	return (
 		<ul className="flex flex-col">
@@ -146,6 +148,7 @@ function PanelRows({
 						subtasks={[]}
 						labels={e.labels}
 						handlers={handlers}
+						surface={surface}
 						list={listOf ? listOf(e.task.listId) : null}
 					/>
 				</li>
@@ -158,10 +161,12 @@ export function PanelTaskList({
 	entries,
 	handlers,
 	options,
+	surface = "card",
 }: {
 	entries: TaskEntry[];
 	handlers: RowHandlers;
 	options: PanelRowOptions;
+	surface?: "card" | "popover";
 }): JSX.Element {
 	if (!options.byPriority)
 		return (
@@ -169,6 +174,7 @@ export function PanelTaskList({
 				entries={entries}
 				handlers={handlers}
 				listOf={options.listOf}
+				surface={surface}
 			/>
 		);
 	return (
@@ -197,6 +203,7 @@ export function PanelTaskList({
 							entries={rows}
 							handlers={handlers}
 							listOf={options.listOf}
+							surface={surface}
 						/>
 					</section>
 				);
@@ -242,6 +249,7 @@ export function PanelExpandDialog({
 						entries={entries}
 						handlers={handlers}
 						options={options}
+						surface="popover"
 					/>
 				</div>
 			</DialogContent>

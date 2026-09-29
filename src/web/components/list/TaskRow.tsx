@@ -205,6 +205,7 @@ export function TaskRow({
 	labels,
 	handlers,
 	variant = "row",
+	surface,
 	list,
 }: {
 	task: Task;
@@ -214,6 +215,9 @@ export function TaskRow({
 	handlers: RowHandlers;
 	// "card" is the board surface: two-line titles and top-aligned controls.
 	variant?: "row" | "card";
+	// The fill the row sits on, so its swipe layer never reads as an inner box.
+	// A board card and a dashboard panel are card; a dialog is popover.
+	surface?: "card" | "popover";
 	// Shown when the surface mixes lists, so a row says where it lives.
 	list?: { title: string; icon: string | null } | null;
 }) {
@@ -319,7 +323,13 @@ export function TaskRow({
 	return (
 		<div>
 			<SwipeRow
-				surface={card ? "bg-card" : undefined}
+				surface={
+					surface === "popover"
+						? "bg-popover"
+						: card || surface === "card"
+							? "bg-card"
+							: undefined
+				}
 				onComplete={
 					canEdit
 						? () => handlers.onToggle(task.id, task.done ?? false)

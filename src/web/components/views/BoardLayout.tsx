@@ -69,7 +69,9 @@ function SortableCard(props: CardOptions & { entry: ViewEntry }) {
 				label={m.board_move_card()}
 				testId="board-card-handle"
 				revealHandle
-				className={CARD_SURFACE}
+				// A slim grip keeps the card's start edge close to its checkbox.
+				className={cn(CARD_SURFACE, "gap-0")}
+				handleClassName="mt-2 w-4"
 			>
 				<CardBody {...props} />
 			</SortableRow>
@@ -105,7 +107,7 @@ function ColumnShell({
 			aria-label={label}
 			data-testid="board-column"
 			className={cn(
-				"flex w-72 shrink-0 flex-col rounded-xl bg-muted",
+				"flex w-66 shrink-0 flex-col rounded-xl bg-muted",
 				isOver && "ring-2 ring-ring",
 			)}
 		>
