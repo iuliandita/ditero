@@ -268,7 +268,7 @@ export function ListView({
 
 	// Rows in on-screen order, read from the DOM so grouping, sinking and the
 	// completed section are all accounted for exactly as the user sees them.
-	const rowOrder = useCallback((): string[] => {
+	function rowOrder(): string[] {
 		const root = listRef.current;
 		if (!root) return [];
 		return Array.from(
@@ -276,22 +276,21 @@ export function ListView({
 		)
 			.map((el) => el.dataset.taskId ?? "")
 			.filter((id) => parentIds.has(id));
-	}, [parentIds]);
-	const focusedRowId = useCallback((): string | null => {
-		const active = document.activeElement;
-		const row = active?.closest<HTMLElement>("[data-kbd-row]");
+	}
+	function focusedRowId(): string | null {
+		const row = document.activeElement?.closest<HTMLElement>("[data-kbd-row]");
 		if (!row || !listRef.current?.contains(row)) return null;
 		const id =
 			row.querySelector<HTMLElement>("[data-kbd-nav]")?.dataset.taskId ?? null;
 		return id && parentIds.has(id) ? id : null;
-	}, [parentIds]);
-	const focusRow = useCallback((id: string) => {
+	}
+	function focusRow(id: string) {
 		listRef.current
 			?.querySelector<HTMLElement>(
 				`[data-kbd-nav][data-task-id="${CSS.escape(id)}"]`,
 			)
 			?.focus();
-	}, []);
+	}
 
 	const selectRole = memberships.find(
 		(member) =>
