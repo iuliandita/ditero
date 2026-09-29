@@ -102,7 +102,7 @@
 		"find-my-way": "^9.7.0",
 		"js-yaml": "^4.3.2",
 		"postcss": "^8.5.26",
-		"undici": "^7.29.0",
+		"undici": "7.29.1",
 		"ip-address": "^10.4.0",
 		"@hpke/common": "1.10.1"
 	}

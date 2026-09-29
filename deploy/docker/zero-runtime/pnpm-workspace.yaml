@@ -11,3 +11,4 @@ overrides:
   '@opentelemetry/propagator-jaeger@2.7.1': 2.9.0
   'fast-uri@3.1.5': 3.1.7
   'fast-uri@4.1.2': 4.1.4
+  undici: 7.29.1
