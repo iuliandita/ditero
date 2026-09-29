@@ -351,7 +351,9 @@ for (const width of [1440, 1280]) {
 
 		// With the docked task detail the pane narrows; the edges still agree.
 		await surface
-			.getByRole("button", { name: "Buy stamps", exact: true })
+			.locator("[data-kbd-row]")
+			.filter({ hasText: "Buy stamps" })
+			.getByRole("button", { name: "Open details" })
 			.click();
 		await expect(page.locator("[data-task-panel]")).toBeVisible();
 		const docked = await viewEdges();

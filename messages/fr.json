@@ -153,6 +153,7 @@
 	"palette_untitled_task": "Tâche",
 	"cheatsheet_title": "Raccourcis clavier",
 	"cheatsheet_description": "Les raccourcis fonctionnent partout, sauf dans les champs de texte.",
+	"shortcut_hint": "Appuie sur {key} pour les raccourcis clavier",
 	"cheatsheet_category_general": "Général",
 	"cheatsheet_category_task": "Tâche",
 	"cheatsheet_category_view": "Vue",
@@ -288,6 +289,9 @@
 	],
 	"list_change_icon": "Changer l'icône de la liste",
 	"list_display_options": "Options d'affichage de la liste",
+	"list_reorder_mode": "Réorganiser",
+	"list_reorder_hint": "Fais glisser les poignées pour réorganiser.",
+	"list_reorder_done": "Terminé",
 	"list_completed_heading": "Éléments terminés",
 	"list_completed_sink": "Éléments terminés en bas",
 	"list_completed_keep": "Garder en place",
@@ -307,6 +311,14 @@
 	"quickadd_placeholder": "ex. Acheter du lait {date} {priority} {label} {list}",
 	"quickadd_placeholder_nodate": "p. ex. Acheter du lait {priority} {label} {list}",
 	"quickadd_example_date": "demain",
+	"syntax_hint_title": "Astuces de saisie",
+	"syntax_hint_word": "nom",
+	"syntax_hint_priority": "Priorité, p1 est la plus haute",
+	"syntax_hint_example": "Exemple : Appeler le plombier {date} {priority} #maison",
+	"syntax_hint_example_nodate": "Exemple : Appeler le plombier {priority} #maison",
+	"syntax_hint_dismiss": "Masquer les astuces de saisie",
+	"syntax_hint_inline_lead": "L'ajout rapide ({key}) comprend :",
+	"syntax_hint_inline_lead_nokey": "L'ajout rapide comprend :",
 	"quickadd_adding_to": "Ajout dans {list}",
 	"quickadd_no_list": "Aucune liste disponible",
 	"quickadd_failed": "Impossible d'ajouter la tâche.",
@@ -406,6 +418,24 @@
 	"shopping_category_other": "Autre",
 	"task_reorder_handle": "Réorganiser la tâche",
 	"task_priority_aria": "Priorité : {priority}",
+	"task_open_details": "Ouvrir les détails",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} sur {totalNum} sous-tâche terminée",
+				"totalPlural=many": "{doneNum} sur {totalNum} sous-tâches terminées",
+				"totalPlural=other": "{doneNum} sur {totalNum} sous-tâches terminées"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -1484,7 +1514,6 @@
 	"app_loading": "Chargement…",
 	"tasks_loading": "Chargement des tâches…",
 	"list_empty": "Il n'y a encore rien ici.",
-	"list_empty_action": "Ajouter un élément",
 	"view_empty_welcome_title": "Bienvenue dans Ditero",
 	"view_empty_welcome_hint": "Les tâches vivent dans des listes. Crée-en une pour commencer.",
 	"view_empty_welcome_action": "Crée ta première liste",

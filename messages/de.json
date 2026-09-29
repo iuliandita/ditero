@@ -152,6 +152,7 @@
 	"palette_untitled_task": "Aufgabe",
 	"cheatsheet_title": "Tastenkürzel",
 	"cheatsheet_description": "Tastenkürzel funktionieren überall außerhalb von Textfeldern.",
+	"shortcut_hint": "Drück {key} für Tastenkürzel",
 	"cheatsheet_category_general": "Allgemein",
 	"cheatsheet_category_task": "Aufgabe",
 	"cheatsheet_category_view": "Ansicht",
@@ -285,6 +286,9 @@
 	],
 	"list_change_icon": "Listensymbol ändern",
 	"list_display_options": "Anzeigeoptionen der Liste",
+	"list_reorder_mode": "Umsortieren",
+	"list_reorder_hint": "Zum Umsortieren an den Griffen ziehen.",
+	"list_reorder_done": "Fertig",
 	"list_completed_heading": "Erledigte Einträge",
 	"list_completed_sink": "Erledigte Einträge nach unten",
 	"list_completed_keep": "An Ort und Stelle",
@@ -304,6 +308,14 @@
 	"quickadd_placeholder": "z. B. Milch kaufen {date} {priority} {label} {list}",
 	"quickadd_placeholder_nodate": "z. B. Milch kaufen {priority} {label} {list}",
 	"quickadd_example_date": "morgen",
+	"syntax_hint_title": "Eingabetipps",
+	"syntax_hint_word": "Name",
+	"syntax_hint_priority": "Priorität, p1 ist die höchste",
+	"syntax_hint_example": "Beispiel: Klempner anrufen {date} {priority} #zuhause",
+	"syntax_hint_example_nodate": "Beispiel: Klempner anrufen {priority} #zuhause",
+	"syntax_hint_dismiss": "Eingabetipps ausblenden",
+	"syntax_hint_inline_lead": "Schnell hinzufügen ({key}) versteht:",
+	"syntax_hint_inline_lead_nokey": "Schnell hinzufügen versteht:",
 	"quickadd_adding_to": "Wird zu {list} hinzugefügt",
 	"quickadd_no_list": "Keine Liste verfügbar",
 	"quickadd_failed": "Die Aufgabe konnte nicht hinzugefügt werden.",
@@ -403,6 +415,23 @@
 	"shopping_category_other": "Sonstiges",
 	"task_reorder_handle": "Aufgabe umsortieren",
 	"task_priority_aria": "Priorität: {priority}",
+	"task_open_details": "Details öffnen",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} von {totalNum} Teilaufgabe erledigt",
+				"totalPlural=other": "{doneNum} von {totalNum} Teilaufgaben erledigt"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -1454,7 +1483,6 @@
 	"app_loading": "Wird geladen…",
 	"tasks_loading": "Aufgaben werden geladen…",
 	"list_empty": "Hier ist noch nichts.",
-	"list_empty_action": "Eintrag hinzufügen",
 	"view_empty_welcome_title": "Willkommen bei Ditero",
 	"view_empty_welcome_hint": "Aufgaben leben in Listen. Leg eine an, um loszulegen.",
 	"view_empty_welcome_action": "Erste Liste anlegen",

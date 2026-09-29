@@ -1,7 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { openMembers, openShared, openWorkspaceSwitcher } from "./helpers.ts";
+import {
+	openDetails,
+	openMembers,
+	openShared,
+	openWorkspaceSwitcher,
+} from "./helpers.ts";
 
 // M1b sharing/people e2e. Two browser contexts = two clients; assertions are
 // real cross-client Zero sync (invite/accept, assign, comment, kid) plus an
@@ -174,10 +179,7 @@ async function addTask(page: Page, title: string): Promise<void> {
 }
 
 async function openTaskDetail(page: Page, title: string): Promise<Page> {
-	await page
-		.getByTestId("list")
-		.getByRole("button", { name: title, exact: true })
-		.click();
+	await openDetails(page, title);
 	await expect(page.getByRole("dialog")).toBeVisible();
 	return page;
 }

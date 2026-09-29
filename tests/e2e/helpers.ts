@@ -129,6 +129,20 @@ export async function waitWorkspaceReady(page: Page): Promise<void> {
 	);
 }
 
+// A task row's title lives on its checkbox; the open control is named "Open
+// details", so the row is found through the checkbox that names it. Covers top
+// rows and expanded subtasks alike.
+export async function openDetails(page: Page, title: string): Promise<void> {
+	await page
+		.getByTestId("list")
+		.locator("[data-kbd-row], li")
+		.filter({ has: page.getByRole("checkbox", { name: title, exact: true }) })
+		.last()
+		.getByRole("button", { name: "Open details" })
+		.first()
+		.click();
+}
+
 // Desktop sidebar list/view nav: scopes clicks away from the mobile index and
 // the create-list controls that share their labels with list titles.
 export function sidebarLists(page: Page): Locator {

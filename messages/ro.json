@@ -153,6 +153,7 @@
 	"palette_untitled_task": "Sarcină",
 	"cheatsheet_title": "Scurtături de tastatură",
 	"cheatsheet_description": "Scurtăturile funcționează oriunde în afara câmpurilor de text.",
+	"shortcut_hint": "Apasă {key} pentru scurtături de tastatură",
 	"cheatsheet_category_general": "General",
 	"cheatsheet_category_task": "Sarcină",
 	"cheatsheet_category_view": "Vizualizare",
@@ -288,6 +289,9 @@
 	],
 	"list_change_icon": "Schimbă pictograma listei",
 	"list_display_options": "Opțiuni de afișare a listei",
+	"list_reorder_mode": "Reordonează",
+	"list_reorder_hint": "Trage de mânere pentru a reordona.",
+	"list_reorder_done": "Gata",
 	"list_completed_heading": "Elemente finalizate",
 	"list_completed_sink": "Mută elementele finalizate la final",
 	"list_completed_keep": "Lasă-le pe loc",
@@ -307,6 +311,14 @@
 	"quickadd_placeholder": "ex. Cumpără lapte {date} {priority} {label} {list}",
 	"quickadd_placeholder_nodate": "de ex. Cumpără lapte {priority} {label} {list}",
 	"quickadd_example_date": "mâine",
+	"syntax_hint_title": "Sfaturi de scriere",
+	"syntax_hint_word": "nume",
+	"syntax_hint_priority": "Prioritate, p1 e cea mai mare",
+	"syntax_hint_example": "Exemplu: Sună instalatorul {date} {priority} #casă",
+	"syntax_hint_example_nodate": "Exemplu: Sună instalatorul {priority} #casă",
+	"syntax_hint_dismiss": "Ascunde sfaturile de scriere",
+	"syntax_hint_inline_lead": "Adăugarea rapidă ({key}) înțelege:",
+	"syntax_hint_inline_lead_nokey": "Adăugarea rapidă înțelege:",
 	"quickadd_adding_to": "Se adaugă în {list}",
 	"quickadd_no_list": "Nicio listă disponibilă",
 	"quickadd_failed": "Nu am putut adăuga sarcina.",
@@ -406,6 +418,24 @@
 	"shopping_category_other": "Altele",
 	"task_reorder_handle": "Reordonează sarcina",
 	"task_priority_aria": "Prioritate: {priority}",
+	"task_open_details": "Deschide detaliile",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} din {totalNum} subsarcină finalizată",
+				"totalPlural=few": "{doneNum} din {totalNum} subsarcini finalizate",
+				"totalPlural=other": "{doneNum} din {totalNum} de subsarcini finalizate"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -1484,7 +1514,6 @@
 	"app_loading": "Se încarcă…",
 	"tasks_loading": "Se încarcă sarcinile…",
 	"list_empty": "Încă nu e nimic aici.",
-	"list_empty_action": "Adaugă un element",
 	"view_empty_welcome_title": "Bine ai venit în Ditero",
 	"view_empty_welcome_hint": "Sarcinile stau în liste. Creează una ca să începi.",
 	"view_empty_welcome_action": "Creează prima ta listă",

@@ -153,6 +153,7 @@
 	"palette_untitled_task": "Tarea",
 	"cheatsheet_title": "Atajos de teclado",
 	"cheatsheet_description": "Los atajos funcionan en cualquier parte fuera de los campos de texto.",
+	"shortcut_hint": "Pulsa {key} para ver los atajos de teclado",
 	"cheatsheet_category_general": "General",
 	"cheatsheet_category_task": "Tarea",
 	"cheatsheet_category_view": "Vista",
@@ -288,6 +289,9 @@
 	],
 	"list_change_icon": "Cambiar el icono de la lista",
 	"list_display_options": "Opciones de visualización de la lista",
+	"list_reorder_mode": "Reordenar",
+	"list_reorder_hint": "Arrastra las asas para reordenar.",
+	"list_reorder_done": "Listo",
 	"list_completed_heading": "Elementos completados",
 	"list_completed_sink": "Bajar los elementos completados",
 	"list_completed_keep": "Dejarlas en su sitio",
@@ -307,6 +311,14 @@
 	"quickadd_placeholder": "p. ej. Comprar leche {date} {priority} {label} {list}",
 	"quickadd_placeholder_nodate": "p. ej. Comprar leche {priority} {label} {list}",
 	"quickadd_example_date": "mañana",
+	"syntax_hint_title": "Consejos de escritura",
+	"syntax_hint_word": "nombre",
+	"syntax_hint_priority": "Prioridad, p1 es la más alta",
+	"syntax_hint_example": "Ejemplo: Llamar al fontanero {date} {priority} #casa",
+	"syntax_hint_example_nodate": "Ejemplo: Llamar al fontanero {priority} #casa",
+	"syntax_hint_dismiss": "Ocultar consejos de escritura",
+	"syntax_hint_inline_lead": "Añadir rápido ({key}) entiende:",
+	"syntax_hint_inline_lead_nokey": "Añadir rápido entiende:",
 	"quickadd_adding_to": "Se añadirá a {list}",
 	"quickadd_no_list": "No hay ninguna lista disponible",
 	"quickadd_failed": "No se pudo añadir la tarea.",
@@ -406,6 +418,24 @@
 	"shopping_category_other": "Otros",
 	"task_reorder_handle": "Reordenar la tarea",
 	"task_priority_aria": "Prioridad: {priority}",
+	"task_open_details": "Abrir detalles",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} de {totalNum} subtarea hecha",
+				"totalPlural=many": "{doneNum} de {totalNum} subtareas hechas",
+				"totalPlural=other": "{doneNum} de {totalNum} subtareas hechas"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -1484,7 +1514,6 @@
 	"app_loading": "Cargando…",
 	"tasks_loading": "Cargando tareas…",
 	"list_empty": "Aquí todavía no hay nada.",
-	"list_empty_action": "Añadir un elemento",
 	"view_empty_welcome_title": "Te damos la bienvenida a Ditero",
 	"view_empty_welcome_hint": "Las tareas viven en listas. Crea una para empezar.",
 	"view_empty_welcome_action": "Crea tu primera lista",

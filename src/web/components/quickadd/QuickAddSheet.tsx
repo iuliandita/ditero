@@ -25,10 +25,13 @@ import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
+import { useHints } from "../../hooks/useHints.ts";
+import { syntaxHintVisible } from "../../lib/hints.ts";
 import { addCopyFor } from "../../lib/kind-copy.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { useIsDesktop } from "../../lib/use-media-query.ts";
 import { cn } from "../../lib/utils.ts";
+import { SyntaxHint } from "./SyntaxHint.tsx";
 import { TokenChips } from "./TokenChips.tsx";
 
 // Case-insensitive prefix match against visible lists. Ambiguous prefixes stay
@@ -65,6 +68,7 @@ export function QuickAddSheet({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
+	const { hints, recordUse, dismissSyntax } = useHints();
 
 	useEffect(() => {
 		if (open) inputRef.current?.focus();
@@ -167,6 +171,7 @@ export function QuickAddSheet({
 				await zero.mutate(mutators.taskLabel.set({ taskId: id, labelIds }))
 					.client;
 			}
+			recordUse(chips.length);
 			// Serial entry: clear and keep the sheet open (Enter = add another).
 			setRaw("");
 			inputRef.current?.focus();
@@ -214,6 +219,14 @@ export function QuickAddSheet({
 				unknownLabels={unknownLabels}
 				onRemove={removeToken}
 			/>
+			{syntaxHintVisible(hints) && (
+				<SyntaxHint
+					onDismiss={() => {
+						dismissSyntax();
+						inputRef.current?.focus();
+					}}
+				/>
+			)}
 			{error && (
 				<p role="alert" className="text-sm text-destructive">
 					{error}

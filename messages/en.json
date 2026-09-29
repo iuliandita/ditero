@@ -152,6 +152,7 @@
 	"palette_untitled_task": "Task",
 	"cheatsheet_title": "Keyboard shortcuts",
 	"cheatsheet_description": "Shortcuts work anywhere outside text fields.",
+	"shortcut_hint": "Press {key} for keyboard shortcuts",
 	"cheatsheet_category_general": "General",
 	"cheatsheet_category_task": "Task",
 	"cheatsheet_category_view": "View",
@@ -285,6 +286,9 @@
 	],
 	"list_change_icon": "Change list icon",
 	"list_display_options": "List display options",
+	"list_reorder_mode": "Reorder",
+	"list_reorder_hint": "Drag the handles to reorder.",
+	"list_reorder_done": "Done",
 	"list_completed_heading": "Completed items",
 	"list_completed_sink": "Sink completed items",
 	"list_completed_keep": "Keep in place",
@@ -304,6 +308,14 @@
 	"quickadd_placeholder": "e.g. Buy milk {date} {priority} {label} {list}",
 	"quickadd_placeholder_nodate": "e.g. Buy milk {priority} {label} {list}",
 	"quickadd_example_date": "tomorrow",
+	"syntax_hint_title": "Typing tips",
+	"syntax_hint_word": "name",
+	"syntax_hint_priority": "Priority, p1 is highest",
+	"syntax_hint_example": "Example: Call the plumber {date} {priority} #home",
+	"syntax_hint_example_nodate": "Example: Call the plumber {priority} #home",
+	"syntax_hint_dismiss": "Hide typing tips",
+	"syntax_hint_inline_lead": "Quick add ({key}) understands:",
+	"syntax_hint_inline_lead_nokey": "Quick add understands:",
 	"quickadd_adding_to": "Adding to {list}",
 	"quickadd_no_list": "No list available",
 	"quickadd_failed": "Could not add the task.",
@@ -403,6 +415,23 @@
 	"shopping_category_other": "Other",
 	"task_reorder_handle": "Reorder task",
 	"task_priority_aria": "Priority: {priority}",
+	"task_open_details": "Open details",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} of {totalNum} subtask done",
+				"totalPlural=other": "{doneNum} of {totalNum} subtasks done"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -1454,7 +1483,6 @@
 	"app_loading": "Loading…",
 	"tasks_loading": "Loading tasks…",
 	"list_empty": "Nothing here yet.",
-	"list_empty_action": "Add an item",
 	"view_empty_welcome_title": "Welcome to Ditero",
 	"view_empty_welcome_hint": "Tasks live in lists. Create one to get started.",
 	"view_empty_welcome_action": "Create your first list",

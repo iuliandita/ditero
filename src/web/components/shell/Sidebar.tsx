@@ -30,6 +30,7 @@ import type {
 } from "../../../zero/schema.gen.ts";
 import type { SavedView } from "../../hooks/useViews.ts";
 import type { BuiltinView } from "../../views/builtins.ts";
+import { KeyText } from "../ui/key-text.tsx";
 import type { RowAction } from "../ui/row-action.ts";
 import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
 import type { Section } from "./BottomNav.tsx";
@@ -281,6 +282,8 @@ export function Sidebar({
 	onToggleSection,
 	section,
 	onOpenSettings,
+	shortcutHintKey,
+	onOpenShortcuts,
 	collapsed,
 	onToggleCollapsed,
 }: {
@@ -315,6 +318,9 @@ export function Sidebar({
 	onToggleSection: (section: NavSection) => void;
 	section: Section;
 	onOpenSettings: () => void;
+	/** Keycap for the cheat sheet while its hint is still due; null hides it. */
+	shortcutHintKey: string | null;
+	onOpenShortcuts: () => void;
 	collapsed: boolean;
 	onToggleCollapsed: () => void;
 }) {
@@ -526,6 +532,21 @@ export function Sidebar({
 						)}
 					</DropdownMenuContent>
 				</DropdownMenu>
+				{shortcutHintKey && !collapsed && (
+					<button
+						type="button"
+						data-testid="shortcut-hint"
+						onClick={onOpenShortcuts}
+						className="flex min-h-8 w-full items-center rounded-lg px-3 text-start text-xs text-muted-foreground transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none"
+					>
+						<span>
+							<KeyText
+								render={(key) => m.shortcut_hint({ key })}
+								keyLabel={shortcutHintKey}
+							/>
+						</span>
+					</button>
+				)}
 			</div>
 
 			<div className="flex items-center gap-1 border-t p-2">

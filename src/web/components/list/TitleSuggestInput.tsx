@@ -7,9 +7,9 @@ import {
 import { m } from "../../../paraglide/messages.js";
 
 // The add-item field with a listbox of titles the user has written before.
-// Accepting one only fills the field: it is still parsed on submit like typed
-// text, so a suggestion carrying "#label" or a date behaves exactly as if it
-// had been typed, rather than acquiring metadata silently or losing it.
+// Accepting one only fills the field, and the title is then saved exactly as
+// written: this field does not parse quick-add tokens, so a suggestion carrying
+// "#label" or a date word becomes plain title text, same as if it were typed.
 export function TitleSuggestInput({
 	value,
 	onChange,
@@ -97,7 +97,7 @@ export function TitleSuggestInput({
 				aria-controls={listboxId}
 				aria-autocomplete="list"
 				aria-activedescendant={activeId}
-				className="h-9 w-full rounded-lg border bg-transparent px-3 text-base md:text-sm"
+				className="h-11 w-full rounded-lg border bg-transparent px-3 text-base md:h-9 md:text-sm"
 				placeholder={placeholder}
 				value={value}
 				onChange={(e) => change(e.target.value)}
@@ -111,7 +111,9 @@ export function TitleSuggestInput({
 					role="listbox"
 					aria-label={m.title_suggest_label()}
 					data-testid="title-suggestions"
-					className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border bg-popover p-1 shadow-md"
+					// Phones place the field at the list's end, above the keyboard,
+					// so the suggestions open upward there.
+					className="absolute z-50 w-full overflow-hidden rounded-lg border bg-popover p-1 shadow-md max-md:bottom-full max-md:mb-1 md:mt-1"
 				>
 					{suggestions.map((title, index) => (
 						<button
