@@ -264,7 +264,9 @@ test("pending and blocked tasks wait for activation while native writes and dele
 		await expect(
 			blocked.getByRole("textbox", { name: "Task title" }),
 		).toBeDisabled();
-		await blocked.getByRole("button", { name: "Delete task" }).click();
+		await blocked.getByTestId("row-actions").click();
+		await page.getByTestId("row-action-delete").click();
+		await page.getByTestId("confirm-accept").click();
 		await expect
 			.poll(
 				async () =>

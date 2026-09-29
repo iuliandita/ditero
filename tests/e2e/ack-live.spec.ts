@@ -1,7 +1,12 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import { parseAckUrl } from "../support/ntfy-tap.ts";
-import { goToSettings, leaveSettings } from "./helpers.ts";
+import {
+	goToSettings,
+	leaveSettings,
+	openMoreOptions,
+	setDueDate,
+} from "./helpers.ts";
 
 // M3a Task 16 e2e: the live half of the durability gate.
 //
@@ -233,9 +238,11 @@ async function openDetail(page: Page, title: string): Promise<Locator> {
 async function setReminder(page: Page, title: string): Promise<void> {
 	const detail = await openDetail(page, title);
 	const when = await localNowMinus(page, 2);
-	await detail.getByLabel("Due date").fill(when.date);
+	await setDueDate(page, detail, when.date);
+	await openMoreOptions(detail);
 	await detail.getByTestId("reminder-time").fill(when.time);
-	await page.keyboard.press("Escape");
+	// Focus is in a field; Escape would only leave it. Close explicitly.
+	await detail.getByTestId("task-detail-close").click();
 	await expect(page.getByRole("dialog", { name: "Task details" })).toBeHidden({
 		timeout: 15_000,
 	});

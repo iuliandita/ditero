@@ -3,7 +3,7 @@ import { List as ListIcon, SearchX } from "lucide-react";
 import { type JSX, type ReactNode, useMemo, useRef, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
 import { priorityLabel } from "@/lib/task-display";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useWideContent } from "@/lib/use-wide-content";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { compareTasksBy } from "../../../domain/task-sort.ts";
 import type {
@@ -124,7 +124,8 @@ export function ViewRenderer(props: {
 		loading = false,
 	} = props;
 	const zero = useZero<typeof schema>();
-	const isDesktop = useIsDesktop();
+	// Width the view actually gets, not the viewport (the docked detail).
+	const [measureRef, isDesktop] = useWideContent();
 	const [error, setError] = useState<string | null>(null);
 
 	// Table header clicks drive the effective sort; seed from display.sort and
@@ -338,7 +339,7 @@ export function ViewRenderer(props: {
 	const empty = sorted.length === 0 && renderList;
 
 	return (
-		<div data-testid="view-renderer">
+		<div ref={measureRef} data-testid="view-renderer">
 			{error && (
 				<p role="alert" className="mb-2 text-sm text-destructive">
 					{error}

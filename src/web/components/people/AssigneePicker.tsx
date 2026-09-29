@@ -204,7 +204,7 @@ export function AssigneePicker({
 						disabled={disabled}
 						variant="outline"
 						size="sm"
-						className="self-start"
+						className="self-start pointer-coarse:h-11"
 						data-testid="assignee-open"
 					>
 						<UserPlus />

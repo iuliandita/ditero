@@ -252,11 +252,11 @@
 	"e2e_last_holder_ack": "I understand these files will be lost.",
 	"account_delete_confirm": "Permanently delete my account",
 	"account_delete_failed": "The account could not be deleted.",
-	"priority_none": "None",
+	"priority_none": "No priority",
 	"priority_low": "Low",
 	"priority_medium": "Medium",
-	"priority_medium_short": "Med",
 	"priority_high": "High",
+	"priority_coded": "{code} {name}",
 	"due_today": "Today",
 	"due_tomorrow": "Tomorrow",
 	"list_completed_count": [
@@ -289,6 +289,9 @@
 	],
 	"list_change_icon": "Change list icon",
 	"list_display_options": "List display options",
+	"list_reorder_mode": "Reorder",
+	"list_reorder_hint": "Drag the handles to reorder.",
+	"list_reorder_done": "Done",
 	"list_completed_heading": "Completed items",
 	"list_completed_sink": "Sink completed items",
 	"list_completed_keep": "Keep in place",
@@ -415,6 +418,23 @@
 	"shopping_category_other": "Other",
 	"task_reorder_handle": "Reorder task",
 	"task_priority_aria": "Priority: {priority}",
+	"task_open_details": "Open details",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} of {totalNum} subtask done",
+				"totalPlural=other": "{doneNum} of {totalNum} subtasks done"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -451,6 +471,19 @@
 	"task_delete_named": "Delete {title}",
 	"task_move_to_list": "Move to list",
 	"task_delete": "Delete task",
+	"task_detail_done_aria": "Done",
+	"task_detail_more": "More options",
+	"task_more_repeats": "Repeats",
+	"task_more_reminder": "Reminder {time}",
+	"task_more_urgent": "Urgent",
+	"task_due_add": "Add date",
+	"task_due_trigger_aria": "Due date: {value}",
+	"task_due_next_week": "Next week",
+	"task_due_type_placeholder": "Type a date, like next friday",
+	"task_due_type_placeholder_iso": "Type a date as YYYY-MM-DD",
+	"task_due_type_invalid": "Could not read that date.",
+	"time_field_placeholder": "Add time",
+	"time_field_invalid": "Enter a time like {example}.",
 	"action_add": "Add",
 	"recurrence_repeat": "Repeat",
 	"recurrence_does_not_repeat": "Does not repeat",
@@ -1330,12 +1363,16 @@
 	"auth_error_registration_disabled": "New accounts are turned off on this instance.",
 	"auth_error_invalid_origin": "This address is not trusted by the server. Ask the operator to add it to the instance's trusted origins.",
 	"mutation_failed": "Something went wrong.",
+	"mutation_offline_not_saved": "You're offline, this change wasn't saved. Reconnect and try again.",
 	"mutator_error_denied": "You do not have permission to do that.",
 	"mutator_error_label_name_taken": "A label with that name already exists.",
 	"modal_close_label": "Close",
 	"action_close": "Close",
 	"action_undo": "Undo",
 	"snackbar_task_completed": "Completed: {title}",
+	"snackbar_task_moved": "Moved to {list}: {title}",
+	"snackbar_task_complete_failed": "Could not complete: {title}",
+	"snackbar_task_move_failed": "Could not move: {title}",
 	"action_delete": "Delete",
 	"action_remove": "Remove",
 	"confirm_cancel": "Cancel",

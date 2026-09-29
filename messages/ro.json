@@ -253,11 +253,11 @@
 	"e2e_last_holder_ack": "Înțeleg că aceste fișiere se vor pierde.",
 	"account_delete_confirm": "Șterge-mi definitiv contul",
 	"account_delete_failed": "Contul nu a putut fi șters.",
-	"priority_none": "Fără",
+	"priority_none": "Fără prioritate",
 	"priority_low": "Scăzută",
 	"priority_medium": "Medie",
-	"priority_medium_short": "Med",
 	"priority_high": "Ridicată",
+	"priority_coded": "{code} {name}",
 	"due_today": "Azi",
 	"due_tomorrow": "Mâine",
 	"list_completed_count": [
@@ -292,6 +292,9 @@
 	],
 	"list_change_icon": "Schimbă pictograma listei",
 	"list_display_options": "Opțiuni de afișare a listei",
+	"list_reorder_mode": "Reordonează",
+	"list_reorder_hint": "Trage de mânere pentru a reordona.",
+	"list_reorder_done": "Gata",
 	"list_completed_heading": "Elemente finalizate",
 	"list_completed_sink": "Mută elementele finalizate la final",
 	"list_completed_keep": "Lasă-le pe loc",
@@ -418,6 +421,24 @@
 	"shopping_category_other": "Altele",
 	"task_reorder_handle": "Reordonează sarcina",
 	"task_priority_aria": "Prioritate: {priority}",
+	"task_open_details": "Deschide detaliile",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} din {totalNum} subsarcină finalizată",
+				"totalPlural=few": "{doneNum} din {totalNum} subsarcini finalizate",
+				"totalPlural=other": "{doneNum} din {totalNum} de subsarcini finalizate"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -454,6 +475,19 @@
 	"task_delete_named": "Șterge {title}",
 	"task_move_to_list": "Mută în altă listă",
 	"task_delete": "Șterge sarcina",
+	"task_detail_done_aria": "Finalizată",
+	"task_detail_more": "Mai multe opțiuni",
+	"task_more_repeats": "Se repetă",
+	"task_more_reminder": "Memento {time}",
+	"task_more_urgent": "Urgentă",
+	"task_due_add": "Adaugă o dată",
+	"task_due_trigger_aria": "Termen: {value}",
+	"task_due_next_week": "Săptămâna viitoare",
+	"task_due_type_placeholder": "Scrie o dată, de exemplu mâine",
+	"task_due_type_placeholder_iso": "Scrie o dată ca AAAA-LL-ZZ",
+	"task_due_type_invalid": "Data nu a putut fi citită.",
+	"time_field_placeholder": "Adaugă ora",
+	"time_field_invalid": "Scrie o oră ca {example}.",
 	"action_add": "Adaugă",
 	"recurrence_repeat": "Repetare",
 	"recurrence_does_not_repeat": "Nu se repetă",
@@ -1358,12 +1392,16 @@
 	"auth_error_registration_disabled": "Conturile noi sunt dezactivate pe această instanță.",
 	"auth_error_invalid_origin": "Serverul nu are încredere în această adresă. Cere-i operatorului să o adauge la originile de încredere ale instanței.",
 	"mutation_failed": "Ceva n-a mers bine.",
+	"mutation_offline_not_saved": "Ești offline, modificarea nu a fost salvată. Reconectează-te și încearcă din nou.",
 	"mutator_error_denied": "Nu ai permisiunea să faci asta.",
 	"mutator_error_label_name_taken": "Există deja o etichetă cu acest nume.",
 	"modal_close_label": "Închide",
 	"action_close": "Închide",
 	"action_undo": "Anulează",
 	"snackbar_task_completed": "Finalizat: {title}",
+	"snackbar_task_moved": "Mutată în {list}: {title}",
+	"snackbar_task_complete_failed": "Nu s-a putut finaliza: {title}",
+	"snackbar_task_move_failed": "Nu s-a putut muta: {title}",
 	"action_delete": "Șterge",
 	"action_remove": "Elimină",
 	"confirm_cancel": "Anulează",

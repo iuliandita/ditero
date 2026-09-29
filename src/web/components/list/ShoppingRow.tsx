@@ -116,6 +116,7 @@ export function ShoppingRow({
 				</div>
 				<button
 					type="button"
+					data-task-id={task.id}
 					onClick={() => handlers.onOpenDetail(task)}
 					className={cn(
 						"min-h-11 min-w-0 flex-1 truncate text-start md:min-h-9",

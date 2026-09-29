@@ -175,7 +175,7 @@ test("a touch-only tablet gets no shortcut hint", async ({ browser }) => {
 	await ctx.close();
 });
 
-test("on a phone a blank first list opens quick add with the grammar", async ({
+test("on a phone a blank first list focuses the inline field with the grammar", async ({
 	browser,
 }) => {
 	const ctx = await browser.newContext({
@@ -187,9 +187,13 @@ test("on a phone a blank first list opens quick add with the grammar", async ({
 	await signUp(page, uniqueEmail("hint7"));
 	await waitWorkspaceReady(page);
 	await firstBlankList(page, "Kitchen");
+	await expect(page.getByTestId("new-task")).toBeFocused();
+	const hint = page.getByTestId("list").getByTestId("syntax-hint");
+	await expect(hint).toBeVisible();
+	await expect(hint.getByTestId("syntax-hint-example")).toBeVisible();
+	// No keycap on touch: the lead just opens quick add.
+	await expect(hint.locator("kbd")).toHaveCount(0);
+	await hint.getByTestId("syntax-hint-open-quickadd").click();
 	await expect(page.getByTestId("quickadd-input")).toBeFocused();
-	await expect(
-		page.locator('[role="dialog"] [data-testid="syntax-hint"]'),
-	).toBeVisible();
 	await ctx.close();
 });

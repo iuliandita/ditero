@@ -60,8 +60,46 @@ export async function waitWorkspaceReady(page: Page): Promise<void> {
 	});
 }
 
+// A task row's title lives on its checkbox; the open control is named "Open
+// details", so the row is found through the checkbox that names it. Covers top
+// rows and expanded subtasks alike.
+export async function openDetails(page: Page, title: string): Promise<void> {
+	await page
+		.getByTestId("list")
+		.locator("[data-kbd-row], li")
+		.filter({ has: page.getByRole("checkbox", { name: title, exact: true }) })
+		.last()
+		.getByRole("button", { name: "Open details" })
+		.first()
+		.click();
+}
+
 // Desktop sidebar list/view nav: scopes clicks away from the mobile index and
 // the create-list controls that share their labels with list titles.
 export function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });
+}
+
+// The task detail's due date is a popover with a typed field; the typed field
+// accepts an ISO day key, which keeps callers locale-independent. The popover
+// is portaled, so it is found on the page, not inside the detail.
+export async function setDueDate(
+	page: Page,
+	detail: Locator,
+	date: string,
+): Promise<void> {
+	await detail.getByTestId("due-picker").click();
+	const input = page.getByTestId("due-picker-input");
+	await input.fill(date);
+	await input.press("Enter");
+	await expect(page.getByTestId("due-picker-content")).toHaveCount(0);
+}
+
+// Repeat, reminder, focus, files and move live behind "More options". Its open
+// state is remembered per session, so this only clicks when it is closed.
+export async function openMoreOptions(detail: Locator): Promise<void> {
+	const toggle = detail.getByTestId("task-more-toggle");
+	if ((await toggle.getAttribute("aria-expanded")) !== "true")
+		await toggle.click();
+	await expect(detail.getByTestId("task-more")).toBeVisible();
 }

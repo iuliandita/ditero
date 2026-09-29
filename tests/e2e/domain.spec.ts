@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
+import { openDetails, openMoreOptions } from "./helpers.ts";
 
 // Task 10 cluster: NLP quick-add and drag reorder. Task 11 extends this file
 // with the rest of the domain matrix (kinds, templates, a11y, isolation).
@@ -219,7 +220,7 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	await pa.getByLabel("Quick add").click();
 	await pa.getByTestId("quickadd-input").fill("milk tomorrow p2 #store");
 	await expect(pa.getByTestId("chip-date")).toBeVisible();
-	await expect(pa.getByTestId("chip-priority")).toBeVisible();
+	await expect(pa.getByTestId("chip-priority")).toHaveText("P2 Medium");
 	await expect(pa.getByTestId("chip-label")).toBeVisible();
 
 	await pa.getByTestId("quickadd-submit").click();
@@ -229,7 +230,7 @@ test("quick-add chips + drag reorder sync across clients", async ({
 		timeout: 15000,
 	});
 	await expect(pa.getByText("store", { exact: true })).toBeVisible();
-	await expect(pa.getByLabel("Priority: Medium")).toBeVisible();
+	await expect(pa.getByLabel("Priority: P2 Medium")).toBeVisible();
 
 	// --- Mobile list-index reorder (same wiring, list.update sortKey) ---
 	await expect(
@@ -391,14 +392,15 @@ test("subtask add + parent progress; depth-2 affordance absent", async ({
 	await addTask(page, "Parent");
 	const list = page.getByTestId("list");
 
-	await list.getByRole("button", { name: "Parent", exact: true }).click();
+	await openDetails(page, "Parent");
 	const detail = page.getByRole("dialog");
 	for (const child of ["Child A", "Child B"]) {
 		await detail.getByPlaceholder("Add subtask").fill(child);
 		await detail.getByPlaceholder("Add subtask").press("Enter");
 		await expect(detail.getByText(child, { exact: true })).toBeVisible();
 	}
-	await page.keyboard.press("Escape");
+	// Focus is in a field; Escape would only leave it. Close explicitly.
+	await detail.getByTestId("task-detail-close").click();
 	await expect(detail).toBeHidden();
 
 	// Parent row shows aggregate progress; completing one subtask advances it.
@@ -412,7 +414,7 @@ test("subtask add + parent progress; depth-2 affordance absent", async ({
 	});
 
 	// A subtask's own detail offers no further nesting (subtasks are one level).
-	await list.getByRole("button", { name: "Child A", exact: true }).click();
+	await openDetails(page, "Child A");
 	const subDetail = page.getByRole("dialog");
 	await expect(subDetail.getByLabel("Task title")).toBeVisible();
 	await expect(subDetail.getByPlaceholder("Add subtask")).toHaveCount(0);
@@ -614,10 +616,7 @@ test("a11y: no serious/critical violations on core surfaces", async ({
 	}
 
 	await openListDesktop(page, "Tasks board");
-	await page
-		.getByTestId("list")
-		.getByRole("button", { name: "Tasks board item", exact: true })
-		.click();
+	await openDetails(page, "Tasks board item");
 	await expect(page.getByRole("dialog")).toBeVisible();
 	await expectNoSeriousA11y(page, "task detail");
 	await page.keyboard.press("Escape");
@@ -677,78 +676,473 @@ test("new-item field suggests earlier titles and fills on click", async ({
 	).toHaveCount(2);
 });
 
-// The task detail used to be a right-anchored rail. Asserts the placement the
-// request actually named -- horizontally centered -- by measuring the resolved
-// box, because a right-anchored panel is also "visible" and a class check would
-// not tell the two apart.
-test("task detail opens centered on desktop, not against the right edge", async ({
+// #349: the task detail is a non-modal panel docked beside the list from lg.
+function listRow(page: Page, title: string): Locator {
+	return page
+		.getByTestId("list")
+		.locator("[data-kbd-nav]")
+		.filter({ hasText: title })
+		.first();
+}
+
+async function openPanel(page: Page, title: string): Promise<Locator> {
+	await listRow(page, title).click();
+	const panel = page.getByTestId("task-detail");
+	await expect(panel.getByLabel("Task title")).toHaveValue(title);
+	return panel;
+}
+
+async function listWithTasks(
+	page: Page,
+	prefix: string,
+	titles: string[],
+): Promise<void> {
+	await signUp(page, uniqueEmail(prefix));
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, prefix);
+	await openListDesktop(page, prefix);
+	for (const title of titles) await addTask(page, title);
+}
+
+// Measures the resolved boxes: a fixed panel that overlapped the list, or a
+// list that never gave up the panel's width, both pass a class check.
+test("task detail docks beside the list without covering it", async ({
 	page,
 }) => {
-	await signUp(page, uniqueEmail("detail-center"));
-	await waitWorkspaceReady(page);
-	await createListDesktop(page, "Centered");
-	await openListDesktop(page, "Centered");
-	await addTask(page, "Measure me");
+	await listWithTasks(page, "Docked", ["Measure me"]);
+	const panel = await openPanel(page, "Measure me");
+	const list = page.getByTestId("list");
 
-	await page
-		.getByTestId("list")
-		.locator("[data-kbd-nav]")
-		.filter({ hasText: "Measure me" })
-		.first()
-		.click();
-	const detail = page.getByRole("dialog");
-	await expect(detail.getByLabel("Task title")).toBeVisible();
-
-	const box = await detail.boundingBox();
-	expect(box).not.toBeNull();
-	const viewport = page.viewportSize();
-	expect(viewport).not.toBeNull();
-	if (!box || !viewport) return;
-
-	const startGap = box.x;
-	const endGap = viewport.width - (box.x + box.width);
-	// A rail sits flush against one edge, so its far gap is ~0 and the two gaps
-	// differ by roughly the panel width. Centered means they match.
-	expect(Math.abs(startGap - endGap)).toBeLessThanOrEqual(2);
-	expect(startGap).toBeGreaterThan(20);
+	for (const { width, panelWidth, minList } of [
+		{ width: 1280, panelWidth: 440, minList: 480 },
+		{ width: 1024, panelWidth: 384, minList: 280 },
+	]) {
+		await page.setViewportSize({ width, height: 800 });
+		// Polled on the end edge too: the panel slides in, so its first frames
+		// sit a few pixels short of it.
+		await expect
+			.poll(async () => {
+				const box = await panel.boundingBox();
+				return box
+					? [Math.round(box.width), Math.round(box.x + box.width)]
+					: [];
+			})
+			.toEqual([panelWidth, width]);
+		const p = await panel.boundingBox();
+		const l = await list.boundingBox();
+		expect(p).not.toBeNull();
+		expect(l).not.toBeNull();
+		if (!p || !l) return;
+		// Flush against the end edge, full height.
+		expect(Math.abs(width - (p.x + p.width))).toBeLessThanOrEqual(1);
+		expect(p.height).toBeGreaterThanOrEqual(799);
+		// The list sits wholly before the panel and stays a readable column.
+		expect(l.x + l.width).toBeLessThanOrEqual(p.x + 1);
+		expect(l.width).toBeGreaterThanOrEqual(minList);
+	}
+	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+		1024,
+	);
 });
 
-// #189: the same modal used to stack all 13 sections in one narrow column.
-// Measures the resolved boxes of two section labels that sit in different
-// columns -- a class check cannot tell a grid that collapsed from one that did
-// not, and in a single column these two labels share an x and are ~450px apart
-// vertically, so both assertions below discriminate.
-test("task detail lays out in two columns on desktop", async ({ page }) => {
-	await signUp(page, uniqueEmail("detail-cols"));
-	await waitWorkspaceReady(page);
-	await createListDesktop(page, "Columns");
-	await openListDesktop(page, "Columns");
-	await addTask(page, "Wide me");
+test("the list stays usable while the detail is open", async ({ page }) => {
+	await listWithTasks(page, "Triage", ["First task", "Second task"]);
+	const panel = await openPanel(page, "First task");
+	// Focus moves into the panel on open.
+	await expect(panel).toBeFocused();
 
+	// Another row is still clickable and swaps the panel's task in place.
+	await listRow(page, "Second task").click();
+	await expect(panel.getByLabel("Task title")).toHaveValue("Second task");
+	await expect(page.getByTestId("task-detail")).toHaveCount(1);
+	await expect(panel).toBeFocused();
+
+	// Escape closes and hands focus back to the row that opened it.
+	await page.keyboard.press("Escape");
+	await expect(panel).toBeHidden();
+	await expect(listRow(page, "Second task")).toBeFocused();
+});
+
+test("completing from the detail matches the rows, snackbar included", async ({
+	page,
+}) => {
+	await listWithTasks(page, "Snacks", ["One-off", "Every day", "After"]);
+	// A replaced snack animates out beside its successor; name the one meant.
+	const snack = (text: string) =>
+		page.getByTestId("snackbar").filter({ hasText: text });
+
+	// One-off: the row's completion snackbar, and Undo reopens it.
+	let panel = await openPanel(page, "One-off");
+	await panel.getByTestId("task-detail-done").click();
+	await expect(snack("Completed: One-off")).toBeVisible();
+	await snack("Completed: One-off").getByTestId("snackbar-action").click();
+	await expect(
+		page.getByTestId("list").getByRole("checkbox", { name: "One-off" }),
+	).not.toBeChecked({ timeout: 15000 });
+
+	// Recurring: task.complete advances the occurrence, so no Undo is offered.
+	panel = await openPanel(page, "Every day");
+	await panel.getByTestId("due-picker").click();
+	await page.getByTestId("due-pick-today").click();
+	await openMoreOptions(panel);
+	await panel.getByTestId("recurrence-enable").click();
+	await expect(panel.getByTestId("recurrence-editor")).toBeVisible();
+	await panel.getByTestId("task-detail-done").click();
+	await expect(snack("Completed: Every day")).toBeVisible();
+	await expect(
+		snack("Completed: Every day").getByTestId("snackbar-action"),
+	).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(panel).toBeHidden();
+
+	// A completed one-off leaves the open rows; closing hands focus to the row
+	// that followed it rather than dropping it on the page.
+	panel = await openPanel(page, "One-off");
+	await panel.getByTestId("task-detail-done").click();
+	await expect(snack("Completed: One-off")).toBeVisible();
+	await panel.getByTestId("task-detail-close").click();
+	await expect(panel).toBeHidden();
+	await expect(listRow(page, "Every day")).toBeFocused();
+});
+
+test("moving from the detail offers Undo that puts the task back", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("moves"));
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, "Work");
+	await createListDesktop(page, "Home");
+	await openListDesktop(page, "Home");
+	for (const title of ["Pack bag", "Stay put"]) await addTask(page, title);
+
+	const panel = await openPanel(page, "Pack bag");
+	await openMoreOptions(panel);
+	await panel.getByRole("combobox", { name: "Move to list" }).click();
+	await page.getByRole("option", { name: "Work", exact: true }).click();
+
+	const snackbar = page.getByTestId("snackbar");
+	await expect(snackbar).toContainText("Moved to Work: Pack bag");
+	await expect(panel).toBeHidden();
+	const list = page.getByTestId("list");
+	await expect(list.getByText("Pack bag", { exact: true })).toHaveCount(0, {
+		timeout: 15000,
+	});
+	// The task left, so focus goes to the row after it.
+	await expect(listRow(page, "Stay put")).toBeFocused();
+
+	await snackbar.getByTestId("snackbar-action").click();
+	await expect(list.getByText("Pack bag", { exact: true })).toBeVisible({
+		timeout: 15000,
+	});
+	// Back where it was (its old sort key), above the task that stayed.
+	await expect
+		.poll(async () => {
+			const moved = await listRow(page, "Pack bag").boundingBox();
+			const stayed = await listRow(page, "Stay put").boundingBox();
+			return moved && stayed ? moved.y < stayed.y : null;
+		})
+		.toBe(true);
+});
+
+test("detail controls reach 44px on a touch screen", async ({ browser }) => {
+	const ctx = await browser.newContext({
+		viewport: { width: 390, height: 844 },
+		hasTouch: true,
+		isMobile: true,
+	});
+	const page = await ctx.newPage();
+	await signUp(page, uniqueEmail("touch"));
+	await waitWorkspaceReady(page);
+	await page.getByRole("button", { name: "New list" }).click();
+	await page.locator('[data-slot="select-trigger"]').nth(1).click();
 	await page
-		.getByTestId("list")
-		.locator("[data-kbd-nav]")
-		.filter({ hasText: "Wide me" })
+		.getByRole("option", { name: "Shopping list", exact: true })
+		.click();
+	await page.getByTestId("new-list-submit").click();
+	await page
+		.getByRole("button", { name: "Shopping list", exact: true })
 		.first()
 		.click();
-	const detail = page.getByRole("dialog");
-	await expect(detail.getByLabel("Task title")).toBeVisible();
+	await page
+		.getByTestId("list")
+		.getByRole("button", { name: "Milk", exact: true })
+		.click();
+	const sheet = page.getByTestId("task-detail");
+	await expect(sheet.getByLabel("Task title")).toBeVisible();
 
-	// English literals, matching the neighbouring tests in this file.
-	const notesLabel = detail.getByText("Notes", { exact: true });
-	const priorityLabel = detail.getByText("Priority", { exact: true });
-	await expect(notesLabel).toBeVisible();
-	await expect(priorityLabel).toBeVisible();
+	for (const id of [
+		"due-picker",
+		"task-priority",
+		"assignee-open",
+		"subtask-add",
+		"task-more-toggle",
+		"task-detail-close",
+	]) {
+		const box = await sheet.getByTestId(id).boundingBox();
+		expect(box, id).not.toBeNull();
+		expect(box?.height ?? 0, id).toBeGreaterThanOrEqual(44);
+	}
+	await ctx.close();
+});
 
-	const notes = await notesLabel.boundingBox();
-	const priority = await priorityLabel.boundingBox();
-	expect(notes).not.toBeNull();
-	expect(priority).not.toBeNull();
-	if (!notes || !priority) return;
+test("the detail title is not selected on open and saves on Enter", async ({
+	page,
+}) => {
+	await listWithTasks(page, "Titles", ["Keep me"]);
+	const panel = await openPanel(page, "Keep me");
+	const title = panel.getByLabel("Task title");
+	await expect(title).not.toBeFocused();
+	expect(
+		await title.evaluate(
+			(el: HTMLInputElement) =>
+				(el.selectionEnd ?? 0) - (el.selectionStart ?? 0),
+		),
+	).toBe(0);
 
-	// Right column: strictly right of the left one, by far more than any
-	// rounding. Single column puts these at an identical x.
-	expect(priority.x).toBeGreaterThan(notes.x + 100);
-	// And side by side, not merely indented: the two bands overlap vertically.
-	expect(priority.y).toBeLessThan(notes.y + 100);
+	await title.click();
+	await title.press("End");
+	await title.pressSequentially(" safe");
+	await title.press("Enter");
+	await expect(listRow(page, "Keep me safe")).toBeVisible({ timeout: 15000 });
+	await expect(title).toBeFocused();
+
+	// Escape on a dirty title cancels the edit and keeps the panel open.
+	await title.pressSequentially(" oops");
+	await title.press("Escape");
+	await expect(title).toHaveValue("Keep me safe");
+	await expect(panel).toBeVisible();
+
+	// Crossing the lg breakpoint swaps panel and sheet; the unsaved edit and
+	// the caret come along.
+	await title.pressSequentially(" draft");
+	await page.setViewportSize({ width: 800, height: 900 });
+	const sheetTitle = page.getByTestId("task-detail").getByLabel("Task title");
+	await expect(sheetTitle).toHaveValue("Keep me safe draft");
+	await expect(sheetTitle).toBeFocused();
+	await page.setViewportSize({ width: 1280, height: 720 });
+	await expect(title).toHaveValue("Keep me safe draft");
+	await title.press("Enter");
+	await expect(listRow(page, "Keep me safe draft")).toBeVisible({
+		timeout: 15000,
+	});
+});
+
+test("Escape leaves a detail field before it closes the detail", async ({
+	page,
+}) => {
+	await listWithTasks(page, "Escapes", ["Parent"]);
+	const panel = await openPanel(page, "Parent");
+	const subtask = panel.getByPlaceholder("Add subtask");
+	await subtask.fill("Half a thought");
+
+	await subtask.press("Escape");
+	await expect(panel).toBeVisible();
+	await expect(panel).toBeFocused();
+	await expect(subtask).toHaveValue("Half a thought");
+
+	await page.keyboard.press("Escape");
+	await expect(panel).toBeHidden();
+});
+
+test("secondary controls sit behind More options", async ({ page }) => {
+	await listWithTasks(page, "Disclose", ["Plain", "Other"]);
+	const panel = await openPanel(page, "Plain");
+	const toggle = panel.getByTestId("task-more-toggle");
+
+	// Up front: due, priority, notes, subtasks. Behind: repeat, focus, files.
+	await expect(panel.getByTestId("due-picker")).toBeVisible();
+	await expect(panel.getByTestId("task-priority")).toHaveText("No priority");
+	await expect(panel.getByPlaceholder("Add subtask")).toBeVisible();
+	await expect(toggle).toHaveAttribute("aria-expanded", "false");
+	await expect(panel.getByTestId("recurrence-enable")).toHaveCount(0);
+	await expect(panel.getByTestId("task-focus-start")).toHaveCount(0);
+
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-expanded", "true");
+	await expect(panel.getByTestId("recurrence-enable")).toBeVisible();
+	await expect(panel.getByTestId("task-focus-start")).toBeVisible();
+	await expect(panel.getByTestId("task-attachments")).toBeVisible();
+	await expectNoSeriousA11y(page, "task detail, more options");
+
+	// The focus pill docks beside the panel, not over it (logical inset, so
+	// the same rule holds when RTL puts the panel on the left).
+	await panel.getByTestId("task-focus-start").click();
+	const pill = page.getByTestId("focus-timer");
+	await expect(pill).toBeVisible();
+	await expect
+		.poll(async () => {
+			const a = await pill.boundingBox();
+			const b = await panel.boundingBox();
+			return a && b ? a.x + a.width <= b.x : null;
+		})
+		.toBe(true);
+	await pill.getByTestId("focus-stop").click();
+
+	// The choice holds for the session, across tasks.
+	await listRow(page, "Other").click();
+	await expect(panel.getByLabel("Task title")).toHaveValue("Other");
+	await expect(toggle).toHaveAttribute("aria-expanded", "true");
+});
+
+test("the due picker sets dates from quick picks and keeps the time", async ({
+	page,
+}) => {
+	await listWithTasks(page, "Dates", ["Plan it"]);
+	const panel = await openPanel(page, "Plan it");
+	const row = page
+		.getByTestId("list")
+		.locator("[data-kbd-row]")
+		.filter({ hasText: "Plan it" });
+
+	await panel.getByTestId("due-picker").click();
+	await expect(page.getByTestId("due-picker-content")).toBeVisible();
+	await expectNoSeriousA11y(page, "due picker");
+	await page.getByTestId("due-pick-tomorrow").click();
+	await expect(page.getByTestId("due-picker-content")).toHaveCount(0);
+	await expect(panel.getByTestId("due-picker")).toHaveText("Tomorrow");
+	await expect(row.getByText("Tomorrow", { exact: true })).toBeVisible({
+		timeout: 15000,
+	});
+
+	// An all-day task moved to another day stays all-day (no 12:00 AM).
+	await panel.getByTestId("due-picker").click();
+	await page.getByTestId("due-pick-today").click();
+	await expect(row.getByText("Today", { exact: true })).toBeVisible({
+		timeout: 15000,
+	});
+	await expect(panel.getByTestId("due-time")).toHaveValue("");
+	await panel.getByTestId("due-picker").click();
+	await page.getByTestId("due-pick-tomorrow").click();
+	await expect(row.getByText("Tomorrow", { exact: true })).toBeVisible({
+		timeout: 15000,
+	});
+
+	// A typed time, then a different day: the time carries over.
+	const time = panel.getByTestId("due-time");
+	await time.fill("5:30 pm");
+	await time.press("Enter");
+	await expect(row.getByText(/^Tomorrow 5:30\sPM$/)).toBeVisible({
+		timeout: 15000,
+	});
+	await panel.getByTestId("due-picker").click();
+	await page.getByTestId("due-pick-today").click();
+	await expect(row.getByText(/^Today 5:30\sPM$/)).toBeVisible({
+		timeout: 15000,
+	});
+
+	// An impossible ISO day is refused in place, not read as some other date.
+	await panel.getByTestId("due-picker").click();
+	const typed = page.getByTestId("due-picker-input");
+	await typed.fill("2026-13-01");
+	await typed.press("Enter");
+	await expect(
+		page
+			.getByTestId("due-picker-content")
+			.getByText("Could not read that date."),
+	).toBeVisible();
+	await expect(typed).toHaveAttribute("aria-invalid", "true");
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("due-picker-content")).toHaveCount(0);
+	await expect(row.getByText(/^Today 5:30\sPM$/)).toBeVisible();
+
+	// No date clears it.
+	await panel.getByTestId("due-picker").click();
+	await page.getByTestId("due-pick-none").click();
+	await expect(panel.getByTestId("due-picker")).toHaveText("Add date");
+	await expect(row.getByText(/Today/)).toHaveCount(0);
+});
+
+// An unreadable time on one task must not follow the panel to the next.
+test("a half-typed due time stays with its task", async ({ page }) => {
+	await listWithTasks(page, "Drafts", ["First", "Second"]);
+	for (const title of ["Second", "First"]) {
+		const panel = await openPanel(page, title);
+		await panel.getByTestId("due-picker").click();
+		await page.getByTestId("due-pick-tomorrow").click();
+		await expect(panel.getByTestId("due-picker")).toHaveText("Tomorrow");
+	}
+	const panel = page.getByTestId("task-detail");
+	const time = panel.getByTestId("due-time");
+	await time.fill("25:99");
+	await time.press("Enter");
+	await expect(panel.getByText(/Enter a time like/)).toBeVisible();
+
+	await listRow(page, "Second").click();
+	await expect(panel.getByLabel("Task title")).toHaveValue("Second");
+	await expect(time).toHaveValue("");
+	await expect(panel.getByText(/Enter a time like/)).toHaveCount(0);
+});
+
+test("delete lives in the detail's overflow menu behind a confirm", async ({
+	page,
+}) => {
+	await listWithTasks(page, "Deletes", ["Doomed", "Survivor"]);
+	const panel = await openPanel(page, "Doomed");
+	await expect(panel.getByRole("button", { name: "Delete task" })).toHaveCount(
+		0,
+	);
+
+	await panel.getByTestId("row-actions").click();
+	await page.getByTestId("row-action-delete").click();
+	await page.getByTestId("confirm-cancel").click();
+	await expect(panel).toBeVisible();
+	await expect(listRow(page, "Doomed")).toBeVisible();
+
+	await panel.getByTestId("row-actions").click();
+	await page.getByTestId("row-action-delete").click();
+	await page.getByTestId("confirm-accept").click();
+	await expect(panel).toBeHidden();
+	await expect(
+		page.getByTestId("list").getByText("Doomed", { exact: true }),
+	).toHaveCount(0, { timeout: 15000 });
+	await expect(listRow(page, "Survivor")).toBeFocused();
+});
+
+// A snackbar confirms the write the moment it is made; a refusal from the
+// client run or the server must replace it, never leave "Completed" or
+// "Moved to" standing. Demoting the user to viewer makes both writes refused.
+test("a refused complete or move takes its snackbar back", async ({ page }) => {
+	const email = uniqueEmail("refused");
+	await signUp(page, email);
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, "Work");
+	await createListDesktop(page, "Home");
+	await openListDesktop(page, "Home");
+	await addTask(page, "Held back");
+	const panel = await openPanel(page, "Held back");
+	const snack = (text: string) =>
+		page.getByTestId("snackbar").filter({ hasText: text });
+
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await pool.query(
+			`update membership set role = 'viewer'
+			 where user_id = (select id from "user" where email = $1)`,
+			[email],
+		);
+	} finally {
+		await pool.end();
+	}
+
+	await panel.getByTestId("task-detail-done").click();
+	await expect(snack("Could not complete: Held back")).toBeVisible({
+		timeout: 15000,
+	});
+	await expect(snack("Completed: Held back")).toHaveCount(0);
+	// The panel's own error line: Zero reports the refusal as a resolved error
+	// result, which the runner used to miss while waiting for a rejection.
+	await expect(panel.getByRole("alert")).toBeVisible();
+	await expect(
+		snack("Could not complete: Held back").getByTestId("snackbar-action"),
+	).toHaveCount(0);
+
+	const again = await openPanel(page, "Held back");
+	await openMoreOptions(again);
+	await again.getByRole("combobox", { name: "Move to list" }).click();
+	await page.getByRole("option", { name: "Work", exact: true }).click();
+	await expect(snack("Could not move: Held back")).toBeVisible({
+		timeout: 15000,
+	});
+	await expect(snack("Moved to Work: Held back")).toHaveCount(0);
+	await expect(listRow(page, "Held back")).toBeVisible({ timeout: 15000 });
 });

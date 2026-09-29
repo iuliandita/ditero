@@ -26,6 +26,8 @@ export function TaskList({
 	labelsByTask,
 	handlers,
 	sortable = true,
+	reordering = false,
+	footer,
 }: {
 	list: List;
 	tasks: Task[];
@@ -37,6 +39,11 @@ export function TaskList({
 	// assignee group) would reorder relative to hidden rows. Callers rendering a
 	// subset pass sortable={false} to fall back to a static list.
 	sortable?: boolean;
+	// Touch reorder mode: drag grips shown instead of kept out of the layout.
+	reordering?: boolean;
+	// After the open rows, before the completed group: the mobile inline add
+	// belongs with the rows it extends.
+	footer?: ReactNode;
 }) {
 	const reduce = useReducedMotion();
 	const kind = (list.kind ?? "tasks") as ListKind;
@@ -68,6 +75,7 @@ export function TaskList({
 						/>
 					</li>
 				))}
+				{footer && <li>{footer}</li>}
 			</ul>
 		);
 	}
@@ -133,6 +141,7 @@ export function TaskList({
 				onMove={handlers.onMove}
 				renderRow={row}
 				reduce={!!reduce}
+				reordering={reordering}
 			/>
 		);
 	} else {
@@ -144,6 +153,7 @@ export function TaskList({
 		<div ref={rootRef}>
 			<LayoutGroup>
 				{body}
+				{footer}
 				<CompletedSection
 					count={completed.length}
 					label={

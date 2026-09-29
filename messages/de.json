@@ -252,11 +252,11 @@
 	"e2e_last_holder_ack": "Ich verstehe, dass diese Dateien verloren gehen.",
 	"account_delete_confirm": "Mein Konto dauerhaft löschen",
 	"account_delete_failed": "Das Konto konnte nicht gelöscht werden.",
-	"priority_none": "Keine",
+	"priority_none": "Keine Priorität",
 	"priority_low": "Niedrig",
 	"priority_medium": "Mittel",
-	"priority_medium_short": "Mittel",
 	"priority_high": "Hoch",
+	"priority_coded": "{code} {name}",
 	"due_today": "Heute",
 	"due_tomorrow": "Morgen",
 	"list_completed_count": [
@@ -289,6 +289,9 @@
 	],
 	"list_change_icon": "Listensymbol ändern",
 	"list_display_options": "Anzeigeoptionen der Liste",
+	"list_reorder_mode": "Umsortieren",
+	"list_reorder_hint": "Zum Umsortieren an den Griffen ziehen.",
+	"list_reorder_done": "Fertig",
 	"list_completed_heading": "Erledigte Einträge",
 	"list_completed_sink": "Erledigte Einträge nach unten",
 	"list_completed_keep": "An Ort und Stelle",
@@ -415,6 +418,23 @@
 	"shopping_category_other": "Sonstiges",
 	"task_reorder_handle": "Aufgabe umsortieren",
 	"task_priority_aria": "Priorität: {priority}",
+	"task_open_details": "Details öffnen",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} von {totalNum} Teilaufgabe erledigt",
+				"totalPlural=other": "{doneNum} von {totalNum} Teilaufgaben erledigt"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -451,6 +471,19 @@
 	"task_delete_named": "{title} löschen",
 	"task_move_to_list": "In Liste verschieben",
 	"task_delete": "Aufgabe löschen",
+	"task_detail_done_aria": "Erledigt",
+	"task_detail_more": "Weitere Optionen",
+	"task_more_repeats": "Wiederholt sich",
+	"task_more_reminder": "Erinnerung {time}",
+	"task_more_urgent": "Dringend",
+	"task_due_add": "Datum hinzufügen",
+	"task_due_trigger_aria": "Fälligkeitsdatum: {value}",
+	"task_due_next_week": "Nächste Woche",
+	"task_due_type_placeholder": "Datum eingeben, z. B. morgen",
+	"task_due_type_placeholder_iso": "Datum als JJJJ-MM-TT eingeben",
+	"task_due_type_invalid": "Dieses Datum konnte nicht gelesen werden.",
+	"time_field_placeholder": "Uhrzeit hinzufügen",
+	"time_field_invalid": "Gib eine Uhrzeit wie {example} ein.",
 	"action_add": "Hinzufügen",
 	"recurrence_repeat": "Wiederholung",
 	"recurrence_does_not_repeat": "Wiederholt sich nicht",
@@ -1330,12 +1363,16 @@
 	"auth_error_registration_disabled": "Neue Konten sind auf dieser Instanz deaktiviert.",
 	"auth_error_invalid_origin": "Der Server vertraut dieser Adresse nicht. Bitte den Betreiber, sie zu den vertrauenswürdigen Ursprüngen der Instanz hinzuzufügen.",
 	"mutation_failed": "Da ist etwas schiefgelaufen.",
+	"mutation_offline_not_saved": "Du bist offline, diese Änderung wurde nicht gespeichert. Verbinde dich neu und versuch es noch einmal.",
 	"mutator_error_denied": "Dazu hast du keine Berechtigung.",
 	"mutator_error_label_name_taken": "Ein Label mit diesem Namen gibt es schon.",
 	"modal_close_label": "Schließen",
 	"action_close": "Schließen",
 	"action_undo": "Rückgängig",
 	"snackbar_task_completed": "Erledigt: {title}",
+	"snackbar_task_moved": "Nach {list} verschoben: {title}",
+	"snackbar_task_complete_failed": "Konnte nicht erledigt werden: {title}",
+	"snackbar_task_move_failed": "Konnte nicht verschoben werden: {title}",
 	"action_delete": "Löschen",
 	"action_remove": "Entfernen",
 	"confirm_cancel": "Abbrechen",

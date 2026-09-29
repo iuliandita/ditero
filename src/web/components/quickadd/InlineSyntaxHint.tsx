@@ -3,6 +3,7 @@ import { useHints } from "../../hooks/useHints.ts";
 import { formatBinding } from "../../keyboard/binding-label.ts";
 import { useEffectiveKeymap } from "../../keyboard/useEffectiveKeymap.ts";
 import { syntaxHintVisible } from "../../lib/hints.ts";
+import { useMediaQuery } from "../../lib/use-media-query.ts";
 import { KeyText } from "../ui/key-text.tsx";
 import { SyntaxHint } from "./SyntaxHint.tsx";
 
@@ -18,8 +19,10 @@ export function InlineSyntaxHint({
 }) {
 	const { hints, dismissSyntax } = useHints();
 	const binding = useEffectiveKeymap()["task.create"]?.[0];
+	// A keycap means nothing without a keyboard; touch gets the plain lead.
+	const finePointer = useMediaQuery("(any-pointer: fine)");
 	if (!syntaxHintVisible(hints)) return null;
-	const keyLabel = binding ? formatBinding(binding) : null;
+	const keyLabel = binding && finePointer ? formatBinding(binding) : null;
 	return (
 		<SyntaxHint
 			example={example}
