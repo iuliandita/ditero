@@ -1940,6 +1940,8 @@ export const mutators = defineMutators({
 				// M3a: notification defaults. Null means "not configured", never
 				// collapsed to a default here -- the scheduler resolves inheritance.
 				timezone: timezoneArg.optional(),
+				// Set with a settings pick; browser detection writes timezone alone.
+				timezoneChosen: z.boolean().optional(),
 				quietHours: quietHoursArg.optional(),
 				escalationDefaults: escalationDefaultsArg.optional(),
 				// M-i18n: null means "no preference set" (falls back to Accept-Language).
@@ -1979,6 +1981,7 @@ export const mutators = defineMutators({
 						vacation: args.vacation ?? null,
 						focus: args.focus ?? null,
 						timezone: args.timezone ?? "UTC",
+						timezoneChosen: args.timezoneChosen ?? false,
 						quietHours: args.quietHours ?? null,
 						escalationDefaults: args.escalationDefaults ?? null,
 						locale: args.locale ?? null,

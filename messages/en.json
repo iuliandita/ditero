@@ -205,6 +205,8 @@
 	"file_picker_choose": "Choose file",
 	"file_picker_none": "No file chosen",
 	"file_picker_drop": "or drop it here",
+	"date_field_trigger_aria": "{label}: {value}",
+	"date_field_none": "No date",
 	"focus_settings_heading": "Focus timer",
 	"focus_settings_description": "Pomodoro intervals for the focus timer.",
 	"focus_field_work_min": "Focus (min)",

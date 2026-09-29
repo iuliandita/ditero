@@ -209,6 +209,8 @@
 	"file_picker_choose": "اختر ملفًا",
 	"file_picker_none": "لم يُختر أي ملف",
 	"file_picker_drop": "أو أفلته هنا",
+	"date_field_trigger_aria": "{label}: {value}",
+	"date_field_none": "بلا تاريخ",
 	"focus_settings_heading": "مؤقّت التركيز",
 	"focus_settings_description": "فترات Pomodoro لمؤقّت التركيز.",
 	"focus_field_work_min": "التركيز (دقيقة)",

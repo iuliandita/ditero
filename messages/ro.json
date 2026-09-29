@@ -206,6 +206,8 @@
 	"file_picker_choose": "Alege fișierul",
 	"file_picker_none": "Niciun fișier ales",
 	"file_picker_drop": "sau trage-l aici",
+	"date_field_trigger_aria": "{label}: {value}",
+	"date_field_none": "Fără dată",
 	"focus_settings_heading": "Cronometru de concentrare",
 	"focus_settings_description": "Intervalele Pomodoro pentru cronometrul de concentrare.",
 	"focus_field_work_min": "Concentrare (min)",

@@ -206,6 +206,8 @@
 	"file_picker_choose": "Choisir un fichier",
 	"file_picker_none": "Aucun fichier choisi",
 	"file_picker_drop": "ou dépose-le ici",
+	"date_field_trigger_aria": "{label} : {value}",
+	"date_field_none": "Pas de date",
 	"focus_settings_heading": "Minuteur focus",
 	"focus_settings_description": "Intervalles Pomodoro du minuteur focus.",
 	"focus_field_work_min": "Focus (min)",

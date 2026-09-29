@@ -27,7 +27,9 @@ export function TimeZoneSetting() {
 			</span>
 			<Select
 				value={pref.timezone}
-				onValueChange={(timezone) => void setPref({ timezone })}
+				onValueChange={(timezone) =>
+					void setPref({ timezone, timezoneChosen: true })
+				}
 			>
 				<SelectTrigger
 					id={TIMEZONE_TRIGGER_ID}

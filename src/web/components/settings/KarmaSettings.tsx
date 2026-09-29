@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { m } from "../../../paraglide/messages.js";
 import { useUserPref } from "../../hooks/useUserPref.ts";
+import { DateField } from "../task/DateField.tsx";
 
 // Karma goals + vacation editor (shell doc 5). Goal inputs cap at the mutator's
 // 0..1000; useUserPref.setPref re-clamps every write. Vacation carries an
@@ -96,27 +97,22 @@ export function KarmaSettings() {
 			</div>
 
 			{vacation.active && (
-				<label
-					htmlFor="karma-vacation-until"
-					className="mt-3 flex flex-col gap-1 text-sm"
-				>
-					<span className="text-muted-foreground">
+				<div className="mt-3 flex flex-col gap-1 text-sm">
+					<span className="text-muted-foreground" aria-hidden="true">
 						{m.karma_vacation_until()}
 					</span>
-					<Input
-						type="date"
+					<DateField
 						value={vacation.until ?? ""}
-						id="karma-vacation-until"
+						label={m.karma_vacation_until()}
+						placeholder={m.date_field_none()}
 						data-testid="karma-vacation-until"
-						className="w-fit pointer-coarse:h-11"
-						onChange={(e) => {
-							const until = e.target.value;
+						onCommit={(until) =>
 							setPref({
 								vacation: until ? { active: true, until } : { active: true },
-							});
-						}}
+							})
+						}
 					/>
-				</label>
+				</div>
 			)}
 		</section>
 	);

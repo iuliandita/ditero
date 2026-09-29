@@ -175,6 +175,105 @@ test("quiet hours keep their wall-clock times in a non-UTC zone", async ({
 	}
 });
 
+test("a deliberately chosen UTC survives browser zone detection", async ({
+	page,
+}) => {
+	// The suite's browser runs in America/New_York, so detection has a real,
+	// non-UTC zone to write on every load.
+	await openSettings(page, "settings-utc");
+	const session = await page.evaluate(async () => {
+		const response = await fetch("/api/auth/get-session");
+		return (await response.json()) as { user: { id: string } };
+	});
+	const zone = page.getByTestId("quiet-zone");
+	await expect(zone).toHaveText("America/New York", { timeout: 15_000 });
+
+	await chooseOption(page, page.getByTestId("timezone-select"), "UTC");
+	await expect(zone).toHaveText("UTC", { timeout: 15_000 });
+
+	await page.reload();
+	await waitWorkspaceReady(page);
+	await goToSettings(page);
+	await expect(page.getByTestId("timezone-select")).toHaveText("UTC");
+	// Give detection its chance to (wrongly) write before reading the row.
+	await page.waitForTimeout(1_500);
+	await expect(zone).toHaveText("UTC");
+
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		const { rows } = await pool.query<{
+			timezone: string;
+			timezone_chosen: boolean;
+		}>("select timezone, timezone_chosen from user_pref where id = $1", [
+			session.user.id,
+		]);
+		expect(rows[0]).toEqual({ timezone: "UTC", timezone_chosen: true });
+	} finally {
+		await pool.end();
+	}
+});
+
+test("the vacation end date uses the app's own date field", async ({
+	page,
+}) => {
+	await openSettings(page, "settings-vacation");
+	const session = await page.evaluate(async () => {
+		const response = await fetch("/api/auth/get-session");
+		return (await response.json()) as { user: { id: string } };
+	});
+	await page.getByTestId("karma-vacation-toggle").click();
+	const until = page.getByTestId("karma-vacation-until");
+	await expect(until).toHaveText("No date", { timeout: 15_000 });
+
+	// No browser date, time or select widget anywhere on the page. The quiet
+	// hours field proves the query can see the page's inputs at all.
+	const surface = page.getByTestId("settings-surface");
+	await expect(surface.getByTestId("quiet-start")).toHaveCount(1);
+	await expect(
+		surface.locator('input[type="date"], input[type="time"], select'),
+	).toHaveCount(0);
+
+	await until.click();
+	const content = page.getByTestId("karma-vacation-until-content");
+	const typed = content.getByRole("textbox", { name: "Until (optional)" });
+	await typed.fill("2030-01-15");
+	await typed.press("Enter");
+	await expect(content).toHaveCount(0);
+	await expect(until).toHaveAttribute("data-value", "2030-01-15", {
+		timeout: 15_000,
+	});
+	await expect(until).toHaveText("Jan 15, 2030");
+
+	await page.reload();
+	await waitWorkspaceReady(page);
+	await goToSettings(page);
+	await expect(until).toHaveAttribute("data-value", "2030-01-15", {
+		timeout: 15_000,
+	});
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		const { rows } = await pool.query<{ vacation: unknown }>(
+			"select vacation from user_pref where id = $1",
+			[session.user.id],
+		);
+		expect(rows[0]?.vacation).toEqual({ active: true, until: "2030-01-15" });
+	} finally {
+		await pool.end();
+	}
+
+	// "No date" clears the end date but keeps vacation on.
+	await until.click();
+	await page.getByTestId("due-pick-none").click();
+	await expect(until).not.toHaveAttribute("data-value", /./, {
+		timeout: 15_000,
+	});
+	await expect(until).toHaveText("No date");
+	await expect(page.getByTestId("karma-vacation-toggle")).toHaveAttribute(
+		"aria-checked",
+		"true",
+	);
+});
+
 test("the import file picker is on-system and keyboard reachable", async ({
 	page,
 }) => {

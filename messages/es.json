@@ -206,6 +206,8 @@
 	"file_picker_choose": "Elegir archivo",
 	"file_picker_none": "Ningún archivo elegido",
 	"file_picker_drop": "o suéltalo aquí",
+	"date_field_trigger_aria": "{label}: {value}",
+	"date_field_none": "Sin fecha",
 	"focus_settings_heading": "Temporizador de concentración",
 	"focus_settings_description": "Intervalos Pomodoro del temporizador de concentración.",
 	"focus_field_work_min": "Concentración (min)",

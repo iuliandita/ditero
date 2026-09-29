@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { z } from "zod";
 import { m } from "../../../paraglide/messages.js";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
@@ -13,6 +13,7 @@ import {
 	AlertDialogTitle,
 } from "../ui/alert-dialog.tsx";
 import { Button } from "../ui/button.tsx";
+import { Checkbox } from "../ui/checkbox.tsx";
 
 const previewSchema = z.object({
 	lastHolderWorkspaces: z.array(z.object({ id: z.string(), name: z.string() })),
@@ -30,6 +31,7 @@ export function AccountDeletionPanel() {
 	const [deleting, setDeleting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const previewAbort = useRef<AbortController | null>(null);
+	const ackId = useId();
 
 	async function loadPreview() {
 		previewAbort.current?.abort();
@@ -155,16 +157,16 @@ export function AccountDeletionPanel() {
 									workspace: formatList(lastHolderNames),
 								})}
 							</p>
-							<label className="mt-3 flex items-start gap-2">
-								<input
-									type="checkbox"
+							<div className="mt-3 flex items-start gap-2">
+								<Checkbox
+									id={ackId}
 									className="mt-0.5"
 									data-testid="delete-account-key-loss-ack"
 									checked={acknowledged}
-									onChange={(event) => setAcknowledged(event.target.checked)}
+									onCheckedChange={(next) => setAcknowledged(next === true)}
 								/>
-								<span>{m.e2e_last_holder_ack()}</span>
-							</label>
+								<label htmlFor={ackId}>{m.e2e_last_holder_ack()}</label>
+							</div>
 						</div>
 					) : null}
 
