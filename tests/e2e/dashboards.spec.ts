@@ -347,16 +347,20 @@ test("dashboard: sidebar create, view-ref tasks panel + inline counter, completi
 		tasksPanel.getByText("Dash task one", { exact: true }),
 	).toBeVisible();
 
-	// Complete a task from the panel row: the row checks AND the counter drops,
+	// Complete a task from the panel row: the row leaves the panel (its view does
+	// not ask about completion, so done rows stay hidden) AND the counter drops,
 	// proving the row routes through the live task.complete path.
 	const checkbox = tasksPanel.getByRole("checkbox", { name: "Dash task one" });
 	await checkbox.click();
-	await expect(checkbox).toHaveAttribute("aria-checked", "true", {
-		timeout: 15000,
-	});
 	await expect(page.getByTestId("counter-tile")).toHaveText("1", {
 		timeout: 15000,
 	});
+	await expect(
+		tasksPanel.getByText("Dash task one", { exact: true }),
+	).toHaveCount(0);
+	await expect(
+		tasksPanel.getByText("Dash task two", { exact: true }),
+	).toBeVisible();
 });
 
 // --- Scenario 3: edit mode reorder (persists), resize preset, remove ---

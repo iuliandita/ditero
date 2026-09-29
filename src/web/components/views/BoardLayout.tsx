@@ -69,7 +69,6 @@ function SortableCard(props: CardOptions & { entry: ViewEntry }) {
 				label={m.board_move_card()}
 				testId="board-card-handle"
 				revealHandle
-				handleEnd
 				className={CARD_SURFACE}
 			>
 				<CardBody {...props} />
