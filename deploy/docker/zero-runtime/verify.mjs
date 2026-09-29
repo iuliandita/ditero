@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 
+assert.equal(process.version, "v22.23.3");
+assert.equal(process.versions.undici, "6.28.1");
+
 const zeroManifest = new URL(
 	"./node_modules/@rocicorp/zero/package.json",
 	import.meta.url,
@@ -60,5 +63,5 @@ const db = new Database(":memory:");
 assert.equal(db.prepare("select 1 as value").get().value, 1);
 db.close();
 console.log(
-	`Zero 1.9.0, Fastify 5.12.3, UUID 11.1.1, Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
+	`Zero 1.9.0, Fastify 5.12.3, UUID 11.1.1, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
 );
