@@ -162,6 +162,10 @@ test("focus: settings round-trip, task-bound session logs + advances, axe", asyn
 	// The docked pill appears, bound to the task, in the Focus phase.
 	const pill = page.getByTestId("focus-timer");
 	await expect(pill).toBeVisible();
+	// A solid floating surface, never frosted glass (DESIGN.md No Glass Rule).
+	expect(await pill.evaluate((el) => getComputedStyle(el).backdropFilter)).toBe(
+		"none",
+	);
 	await expect(pill.getByTestId("focus-phase")).toHaveText("Focus");
 	await expect(pill.getByTestId("focus-task")).toHaveText("Write report");
 

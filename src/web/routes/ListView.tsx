@@ -1,6 +1,6 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { ListTodo, Paperclip, SlidersHorizontal } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -34,6 +34,7 @@ import {
 	AttachmentList,
 	type AttachmentListHandle,
 } from "../components/attachments/AttachmentList.tsx";
+import { BulkSelection } from "../components/list/BulkSelection.tsx";
 import { IconPicker } from "../components/list/IconPicker.tsx";
 import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
@@ -46,6 +47,7 @@ import { BackButton } from "../components/ui/back-button.tsx";
 import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
 import { RowActions } from "../components/ui/row-actions.tsx";
+import { useRowSelection } from "../hooks/useRowSelection.ts";
 import { useTaskImportActivationMap } from "../hooks/useTaskImportActivation.ts";
 import { useTaskToggle } from "../hooks/useTaskToggle.ts";
 
@@ -234,11 +236,33 @@ export function ListView({
 		? (listTasks.find((t) => t.id === scheduleTaskId) ?? null)
 		: null;
 
-	function run(mutation: { client: Promise<unknown> }) {
+	const run = useCallback((mutation: { client: Promise<unknown> }) => {
 		setError(null);
 		return runMutation(mutation, setError);
-	}
+	}, []);
 	const toggleTask = useTaskToggle(run);
+
+	const selectRole = memberships.find(
+		(member) =>
+			member.workspaceId === list?.workspaceId && member.userId === zero.userID,
+	)?.role;
+	// Habits complete per occurrence, so they stay out of bulk editing; a viewer
+	// has nothing to apply, and a role that drops to viewer clears a held
+	// selection. A row an import paused (itself or a subtask) cannot be picked.
+	const canSelect =
+		list != null &&
+		list.kind !== "habits" &&
+		selectRole != null &&
+		WRITE_ROLES.has(selectRole);
+	const selection = useRowSelection({
+		enabled: canSelect && !tasksLoading,
+		resetKey: listId,
+		isSelectable: (id) =>
+			activation.canWriteTask(id) &&
+			(subtasksByParent.get(id) ?? []).every((sub) =>
+				activation.canWriteTask(sub.id),
+			),
+	});
 
 	async function createTask() {
 		const t = title.trim();
@@ -309,6 +333,16 @@ export function ListView({
 			onSelect: () => attachmentsRef.current?.openPicker(),
 		},
 	];
+
+	const selectionFor = (task: Task) =>
+		selection.rowFor(task.id, m.selection_paused_reason());
+	const orderedSelected = (): Task[] => {
+		const byId = new Map(parents.map((t) => [t.id, t]));
+		return selection
+			.ordered()
+			.map((id) => byId.get(id))
+			.filter((t): t is Task => t != null);
+	};
 
 	const handlers = {
 		onToggle: (id: string) => {
@@ -404,7 +438,7 @@ export function ListView({
 	const mobileAdd = isDesktop ? undefined : addForm;
 
 	return (
-		<div data-testid="list" className="max-w-3xl">
+		<div ref={selection.rootRef} data-testid="list" className="max-w-3xl">
 			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
 			<div ref={listHeaderRef} className="group mb-5 flex items-center gap-1.5">
 				{backControl}
@@ -553,6 +587,21 @@ export function ListView({
 				</div>
 			)}
 
+			{canSelect && (
+				<BulkSelection
+					count={selection.count}
+					selected={selection.count > 0 ? orderedSelected() : []}
+					variant={kind === "shopping" ? "shopping" : "tasks"}
+					moveTargets={lists.filter(
+						(l) =>
+							l.workspaceId === openList.workspaceId && l.id !== openList.id,
+					)}
+					allTasks={tasks}
+					showDueAndPriority={kind !== "checklist" && kind !== "shopping"}
+					run={run}
+					onDone={selection.finish}
+				/>
+			)}
 			{error && (
 				<p role="alert" className="mb-2 text-sm text-destructive">
 					{error}
@@ -595,6 +644,7 @@ export function ListView({
 								labelsByTask={labelsByTask}
 								handlers={handlers}
 								sortable={false}
+								selectionFor={selectionFor}
 							/>
 						</section>
 					))}
@@ -609,6 +659,7 @@ export function ListView({
 					handlers={handlers}
 					reordering={reorderActive}
 					footer={mobileAdd}
+					selectionFor={selectionFor}
 				/>
 			)}
 			{!tasksLoading && parents.length === 0 && mobileAdd}

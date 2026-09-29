@@ -137,6 +137,7 @@ export default drizzleZeroConfig(schema, {
 			vacation: true,
 			focus: true,
 			timezone: true,
+			timezoneChosen: true,
 			quietHours: true,
 			escalationDefaults: true,
 			locale: true,

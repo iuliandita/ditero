@@ -483,14 +483,16 @@ for (const width of [1440, 1280]) {
 		await page.getByTestId("task-detail-close").click();
 		await expect(page.locator("[data-task-panel]")).toHaveCount(0);
 
-		// Settings: the heading row and the panels share one box.
+		// Settings keeps its full-width header bar (#373) over a section-nav
+		// grid; the bar spans the surface rather than ending short of it.
 		await page.getByTestId("nav-settings").click();
 		const settings = page.getByTestId("settings-surface");
 		const heading = await box(
 			settings.getByRole("heading", { level: 1 }).locator(".."),
 		);
-		const panel = await box(settings.locator("section").first());
-		expect(Math.abs(heading.right - panel.right)).toBeLessThanOrEqual(1);
+		const surfaceBox = await box(settings);
+		expect(Math.abs(heading.right - surfaceBox.right)).toBeLessThanOrEqual(1);
+		expect(Math.abs(heading.left - surfaceBox.left)).toBeLessThanOrEqual(1);
 	});
 }
 

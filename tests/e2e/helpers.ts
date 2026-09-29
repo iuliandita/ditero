@@ -173,3 +173,16 @@ export async function openMoreOptions(detail: Locator): Promise<void> {
 		await toggle.click();
 	await expect(detail.getByTestId("task-more")).toBeVisible();
 }
+
+// Picks an option from a ui Select (Radix). The listbox is portaled, so the
+// option is found on the page, and waiting for it to close keeps the next
+// action from landing on the dismiss guard.
+export async function chooseOption(
+	page: Page,
+	trigger: Locator,
+	name: string,
+): Promise<void> {
+	await trigger.click();
+	await page.getByRole("option", { name, exact: true }).click();
+	await expect(page.getByRole("listbox")).toHaveCount(0);
+}

@@ -49,7 +49,7 @@ export function LanguageSwitcher({
 					className={
 						compact
 							? "w-auto min-w-36 border-0 bg-transparent text-muted-foreground shadow-none data-[size=default]:h-11 hover:text-foreground dark:bg-transparent"
-							: "w-full sm:w-56"
+							: "w-full sm:w-56 pointer-coarse:data-[size=default]:h-11"
 					}
 				>
 					<SelectValue />

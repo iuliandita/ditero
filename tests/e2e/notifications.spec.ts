@@ -212,8 +212,11 @@ test.describe("notification settings", () => {
 
 	test("quiet hours save and display the user's timezone", async ({ page }) => {
 		const panel = await settings(page);
+		// Typed fields commit on Enter or blur, like every other time field.
 		await page.getByTestId("quiet-start").fill("22:00");
+		await page.getByTestId("quiet-start").press("Enter");
 		await page.getByTestId("quiet-end").fill("07:00");
+		await page.getByTestId("quiet-end").press("Enter");
 		await expect(page.getByTestId("quiet-save-status")).toHaveText("Saved", {
 			timeout: 15_000,
 		});
@@ -224,12 +227,13 @@ test.describe("notification settings", () => {
 		await page.reload();
 		await waitWorkspaceReady(page);
 		await settings(page);
-		await expect(page.getByTestId("quiet-start")).toHaveValue("22:00", {
+		// Stored as 22:00/07:00, shown in the locale's own clock.
+		await expect(page.getByTestId("quiet-start")).toHaveValue(/^10:00\sPM$/, {
 			timeout: 15_000,
 		});
-		await expect(page.getByTestId("quiet-end")).toHaveValue("07:00");
+		await expect(page.getByTestId("quiet-end")).toHaveValue(/^7:00\sAM$/);
 		await expect(page.getByTestId("quiet-urgent-note")).toContainText(
-			"ignore quiet hours",
+			"even during quiet hours",
 		);
 	});
 

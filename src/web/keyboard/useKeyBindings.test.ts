@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { resolveKeymap } from "../../domain/keymap.ts";
+import { findConflicts, resolveKeymap } from "../../domain/keymap.ts";
 import { COMMANDS } from "./commands.ts";
 import { createKeyHandler } from "./useKeyBindings.ts";
 
@@ -11,6 +11,7 @@ function evt(init: {
 	key: string;
 	metaKey?: boolean;
 	ctrlKey?: boolean;
+	shiftKey?: boolean;
 	target?: { tagName?: string; isContentEditable?: boolean };
 }) {
 	return { preventDefault: () => {}, ...init };
@@ -77,5 +78,95 @@ describe("useKeyBindings engine", () => {
 		const run = vi.fn();
 		createKeyHandler(keymap, run).onKeyDown(evt({ key: "z" }));
 		expect(run).not.toHaveBeenCalled();
+	});
+
+	test("Shift+ArrowDown extends the selection; a bare ArrowDown does not", () => {
+		const run = vi.fn();
+		const h = createKeyHandler(keymap, run);
+		h.onKeyDown(evt({ key: "ArrowDown" }));
+		h.onKeyDown(evt({ key: "ArrowDown", shiftKey: true }));
+		expect(run).toHaveBeenCalledExactlyOnceWith("selection.extendDown");
+	});
+
+	test("a shifted printable key still resolves as a single key", () => {
+		const run = vi.fn();
+		createKeyHandler(keymap, run).onKeyDown(evt({ key: "?", shiftKey: true }));
+		expect(run).toHaveBeenCalledExactlyOnceWith("help.cheatSheet");
+	});
+
+	test("Ctrl+A stays with a text field; only the palette chord fires there", () => {
+		const run = vi.fn();
+		const h = createKeyHandler(keymap, run);
+		h.onKeyDown(evt({ key: "a", ctrlKey: true, target: INPUT }));
+		expect(run).not.toHaveBeenCalled();
+		h.onKeyDown(evt({ key: "a", ctrlKey: true }));
+		expect(run).toHaveBeenCalledExactlyOnceWith("selection.all");
+	});
+
+	test("a command that cannot run leaves the key to the browser", () => {
+		const run = vi.fn();
+		const preventDefault = vi.fn();
+		const h = createKeyHandler(keymap, run, {
+			canRun: (id) => !id.startsWith("selection."),
+		});
+		h.onKeyDown({ key: "a", metaKey: true, preventDefault });
+		h.onKeyDown({ key: "Escape", preventDefault });
+		h.onKeyDown({ key: "s", preventDefault });
+		expect(run).not.toHaveBeenCalled();
+		expect(preventDefault).not.toHaveBeenCalled();
+		h.onKeyDown({ key: "c", preventDefault });
+		expect(run).toHaveBeenCalledExactlyOnceWith("task.create");
+	});
+
+	test("a remap onto a selection key falls through when selection cannot run", () => {
+		const remapped = resolveKeymap(COMMANDS, "default", {
+			"task.create": [["s"]],
+		});
+		const run = vi.fn();
+		const h = createKeyHandler(remapped, run, {
+			canRun: (id) => !id.startsWith("selection."),
+		});
+		h.onKeyDown(evt({ key: "s" }));
+		expect(run).toHaveBeenCalledExactlyOnceWith("task.create");
+	});
+
+	test("a preferred rebind wins a shared key even when both can run", () => {
+		const remapped = resolveKeymap(COMMANDS, "default", {
+			"help.cheatSheet": [["s"]],
+		});
+		const run = vi.fn();
+		createKeyHandler(remapped, run, {
+			preferred: new Set(["help.cheatSheet"]),
+		}).onKeyDown(evt({ key: "s" }));
+		expect(run).toHaveBeenCalledExactlyOnceWith("help.cheatSheet");
+	});
+
+	test("a selection command still takes its key when it can run", () => {
+		const run = vi.fn();
+		createKeyHandler(keymap, run, { canRun: () => true }).onKeyDown(
+			evt({ key: "s" }),
+		);
+		expect(run).toHaveBeenCalledExactlyOnceWith("selection.toggle");
+	});
+
+	test("a user's own chord still fires from a text field", () => {
+		const remapped = resolveKeymap(COMMANDS, "default", {
+			"task.create": [["Meta", "j"]],
+		});
+		const run = vi.fn();
+		createKeyHandler(remapped, run).onKeyDown(
+			evt({ key: "j", ctrlKey: true, target: INPUT }),
+		);
+		expect(run).toHaveBeenCalledExactlyOnceWith("task.create");
+	});
+
+	test("the remap screen reports a rebind onto a selection key", () => {
+		const remapped = resolveKeymap(COMMANDS, "default", {
+			"task.create": [["s"]],
+		});
+		expect(findConflicts(remapped, COMMANDS)).toContainEqual([
+			"selection.toggle",
+			"task.create",
+		]);
 	});
 });

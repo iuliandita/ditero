@@ -409,6 +409,10 @@ export const userPref = pgTable("user_pref", {
 	vacation: jsonb("vacation"), // { active, until? } | null
 	focus: jsonb("focus"), // { workMin, breakMin, longBreakMin, roundsPerLongBreak, autoCycle } | null
 	timezone: text("timezone").notNull().default("UTC"),
+	// True once the user picked the zone in settings. Browser detection only
+	// replaces an unchosen "UTC" (the column default), so a deliberate UTC
+	// survives. Client-only: the scheduler reads `timezone` alone.
+	timezoneChosen: boolean("timezone_chosen").notNull().default(false),
 	quietHours: jsonb("quiet_hours"), // { start: "HH:MM", end: "HH:MM" } | null
 	escalationDefaults: jsonb("escalation_defaults"), // { repeatEveryMin, maxRepeats, fallbackUserId } | null
 	locale: text("locale"), // Locale from src/domain/locale.ts; null => browser/Accept-Language default

@@ -1,6 +1,9 @@
 import { useZero } from "@rocicorp/zero/react";
+import { Flag } from "lucide-react";
 import { type JSX, useMemo, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
+import { priorityLabel, priorityMeta } from "@/lib/task-display";
+import { cn } from "@/lib/utils";
 import type { ResolvedSource } from "../../../domain/dashboard.ts";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { m } from "../../../paraglide/messages.js";
@@ -98,12 +101,42 @@ export function usePanelRowHandlers(onOpenTask: (task: Task) => void): {
 	return { handlers, error };
 }
 
-export function PanelTaskList({
+// How a panel lays out its rows: whether to label each row with its list
+// (the set spans lists) and whether to section rows by priority (the source
+// view groups by it).
+export type PanelRowOptions = {
+	listOf: ((listId: string) => { title: string; icon: string | null }) | null;
+	byPriority: boolean;
+};
+
+const PLAIN_ROWS: PanelRowOptions = { listOf: null, byPriority: false };
+
+const PRIORITY_SECTIONS = [3, 2, 1, 0];
+const priorityLevel = (t: Task) =>
+	PRIORITY_SECTIONS.includes(t.priority ?? 0) ? (t.priority ?? 0) : 0;
+
+// Stable: rows keep the source sort inside each priority, and a cap then keeps
+// the most urgent rows rather than whichever the sort put first.
+export function orderForPanel(
+	entries: TaskEntry[],
+	byPriority: boolean,
+): TaskEntry[] {
+	if (!byPriority) return entries;
+	return [...entries].sort(
+		(a, b) => priorityLevel(b.task) - priorityLevel(a.task),
+	);
+}
+
+function PanelRows({
 	entries,
 	handlers,
+	listOf,
+	surface,
 }: {
 	entries: TaskEntry[];
 	handlers: RowHandlers;
+	listOf: PanelRowOptions["listOf"];
+	surface: "card" | "popover";
 }): JSX.Element {
 	return (
 		<ul className="flex flex-col">
@@ -115,10 +148,67 @@ export function PanelTaskList({
 						subtasks={[]}
 						labels={e.labels}
 						handlers={handlers}
+						surface={surface}
+						list={listOf ? listOf(e.task.listId) : null}
 					/>
 				</li>
 			))}
 		</ul>
+	);
+}
+
+export function PanelTaskList({
+	entries,
+	handlers,
+	options,
+	surface = "card",
+}: {
+	entries: TaskEntry[];
+	handlers: RowHandlers;
+	options: PanelRowOptions;
+	surface?: "card" | "popover";
+}): JSX.Element {
+	if (!options.byPriority)
+		return (
+			<PanelRows
+				entries={entries}
+				handlers={handlers}
+				listOf={options.listOf}
+				surface={surface}
+			/>
+		);
+	return (
+		<div className="flex flex-col gap-3">
+			{PRIORITY_SECTIONS.map((p) => {
+				const rows = entries.filter((e) => priorityLevel(e.task) === p);
+				if (rows.length === 0) return null;
+				const tone = priorityMeta(p);
+				return (
+					<section
+						key={p}
+						aria-label={priorityLabel(p)}
+						data-testid="panel-priority-section"
+					>
+						<h3 className="mb-1 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+							{tone && (
+								<Flag
+									aria-hidden
+									className={cn("size-3.5 shrink-0 fill-current", tone.color)}
+								/>
+							)}
+							{priorityLabel(p)}
+							<span aria-hidden="true">{rows.length}</span>
+						</h3>
+						<PanelRows
+							entries={rows}
+							handlers={handlers}
+							listOf={options.listOf}
+							surface={surface}
+						/>
+					</section>
+				);
+			})}
+		</div>
 	);
 }
 
@@ -130,6 +220,7 @@ export function PanelExpandDialog({
 	label,
 	entries,
 	handlers,
+	options = PLAIN_ROWS,
 	error,
 }: {
 	open: boolean;
@@ -137,6 +228,7 @@ export function PanelExpandDialog({
 	label: string;
 	entries: TaskEntry[];
 	handlers: RowHandlers;
+	options?: PanelRowOptions;
 	error: string | null;
 }): JSX.Element {
 	return (
@@ -153,7 +245,12 @@ export function PanelExpandDialog({
 							{error}
 						</p>
 					)}
-					<PanelTaskList entries={entries} handlers={handlers} />
+					<PanelTaskList
+						entries={entries}
+						handlers={handlers}
+						options={options}
+						surface="popover"
+					/>
 				</div>
 			</DialogContent>
 		</Dialog>

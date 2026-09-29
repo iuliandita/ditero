@@ -163,7 +163,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
 			>
 				{snack?.message ?? ""}
 			</div>
-			<div className="pointer-events-none fixed inset-x-0 bottom-[calc(9.5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 md:bottom-6">
+			<div className="pointer-events-none fixed inset-x-0 bottom-[calc(9.5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 max-md:[body:has([data-selection-bar])_&]:bottom-[calc(12rem+env(safe-area-inset-bottom))] md:bottom-6">
 				<div
 					ref={host}
 					className="pointer-events-auto relative flex min-w-0 justify-center"

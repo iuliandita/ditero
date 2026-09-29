@@ -1,11 +1,13 @@
-import { type JSX, useState } from "react";
+import { type JSX, useMemo, useState } from "react";
 import type { Panel, ResolvedSource } from "../../../domain/dashboard.ts";
 import { m } from "../../../paraglide/messages.js";
 import type { Task } from "../../../zero/schema.gen.ts";
 import {
+	orderForPanel,
 	type PanelData,
 	PanelExpandDialog,
 	type PanelIds,
+	type PanelRowOptions,
 	PanelTaskList,
 	usePanelEntries,
 	usePanelRowHandlers,
@@ -18,6 +20,8 @@ export function TasksPanel({
 	label,
 	data,
 	ids,
+	byPriority,
+	showCompleted,
 	onOpenTask,
 	onOpenView,
 }: {
@@ -26,10 +30,38 @@ export function TasksPanel({
 	label: string;
 	data: PanelData;
 	ids: PanelIds;
+	// The source view groups by priority, so the panel sections by it too.
+	byPriority: boolean;
+	// The source filter asks about completion; otherwise done rows stay out.
+	showCompleted: boolean;
 	onOpenTask: (task: Task) => void;
 	onOpenView: (viewId: string) => void;
 }): JSX.Element {
-	const entries = usePanelEntries(data, resolved, ids);
+	const matching = usePanelEntries(data, resolved, ids);
+	const entries = useMemo(
+		() =>
+			orderForPanel(
+				showCompleted ? matching : matching.filter((e) => !e.task.done),
+				byPriority,
+			),
+		[matching, showCompleted, byPriority],
+	);
+	const options = useMemo<PanelRowOptions>(() => {
+		const byId = new Map(data.lists.map((l) => [l.id, l]));
+		const spans = new Set(entries.map((e) => e.task.listId)).size > 1;
+		return {
+			byPriority,
+			listOf: spans
+				? (id) => {
+						const list = byId.get(id);
+						return {
+							title: list?.title || m.list_untitled_fallback(),
+							icon: list?.icon ?? null,
+						};
+					}
+				: null,
+		};
+	}, [data.lists, entries, byPriority]);
 	const { handlers, error } = usePanelRowHandlers(onOpenTask);
 	const [expanded, setExpanded] = useState(false);
 	const capped = capEntries(entries, panel.limit);
@@ -49,10 +81,10 @@ export function TasksPanel({
 					data-testid="panel-no-matches"
 					className="text-sm text-muted-foreground"
 				>
-					{m.panel_no_matches()}
+					{matching.length === 0 ? m.panel_no_matches() : m.panel_all_done()}
 				</p>
 			) : (
-				<PanelTaskList entries={capped} handlers={handlers} />
+				<PanelTaskList entries={capped} handlers={handlers} options={options} />
 			)}
 			{entries.length > capped.length && (
 				<button
@@ -74,6 +106,7 @@ export function TasksPanel({
 				label={label}
 				entries={entries}
 				handlers={handlers}
+				options={options}
 				error={error}
 			/>
 		</div>

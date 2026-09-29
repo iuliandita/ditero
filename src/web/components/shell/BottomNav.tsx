@@ -21,7 +21,7 @@ export function BottomNav({
 	return (
 		<nav
 			aria-label={m.nav_primary_label()}
-			className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] supports-backdrop-filter:bg-background/80 supports-backdrop-filter:backdrop-blur"
+			className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t bg-background pb-[env(safe-area-inset-bottom)]"
 		>
 			<Tab
 				testId="nav-tab-today"

@@ -98,15 +98,11 @@ export function KarmaPanel() {
 			});
 
 	return (
-		<section
-			className="mt-8 border-t pt-4"
-			aria-labelledby="karma-heading"
-			data-testid="karma-panel"
-		>
+		<section aria-labelledby="karma-heading" data-testid="karma-panel">
 			<div className="flex items-center justify-between gap-3">
-				<h2 id="karma-heading" className="text-sm font-semibold">
+				<h3 id="karma-heading" className="text-sm font-semibold">
 					{m.karma_panel_heading()}
-				</h2>
+				</h3>
 				{vacation.active && (
 					<span
 						data-testid="karma-vacation-badge"

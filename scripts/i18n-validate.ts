@@ -19,6 +19,7 @@ export type IssueType =
 	| "protected-term-missing"
 	| "protected-term-casing"
 	| "plural-category"
+	| "dash"
 	| "shape";
 
 export type Issue = {
@@ -44,6 +45,7 @@ const ISSUE_TYPES: IssueType[] = [
 	"protected-term-missing",
 	"protected-term-casing",
 	"plural-category",
+	"dash",
 ];
 
 // Brand and product names that must survive translation byte-for-byte. The
@@ -65,6 +67,9 @@ const PLURAL_DECLARATION = /^local\s+([A-Za-z_]\w*)\s*=\s*.+:\s*plural\s*$/;
 // datetime and relativetime.
 const LOCAL_DECLARATION =
 	/^local\s+[A-Za-z_]\w*\s*=\s*.+:\s*(plural|number|datetime|relativetime)\s*$/;
+// Em and en dashes read as machine-written prose in UI copy (house style);
+// commas, colons or a full stop carry the same pause.
+const DASH = /[\u2013\u2014]/;
 const MATCH_PART = /^([A-Za-z_]\w*)=(\*|[A-Za-z0-9_]+)$/;
 
 function isMessageKey(key: string): boolean {
@@ -270,6 +275,9 @@ export function validateCatalogs(
 			}
 
 			const text = texts.join("\n");
+			if (DASH.test(text)) {
+				add("dash", locale, key, "uses an em or en dash");
+			}
 			if (locale !== baseLocale) {
 				const baseText = messageTexts(baseValue).join("\n");
 				const lost = PROTECTED_TERMS.filter(
