@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { watchZeroAuth } from "./zero-auth.ts";
+import { SessionExpiredError, watchZeroAuth } from "./zero-auth.ts";
 
 type State = { name: string };
 
@@ -54,5 +54,31 @@ describe("watchZeroAuth", () => {
 		);
 		state.emit({ name: "disconnected" });
 		expect(getToken).not.toHaveBeenCalled();
+	});
+
+	test("flags an expired session and retries when the network returns", async () => {
+		const state = stateSource();
+		state.current = { name: "needs-auth" };
+		let retry: (() => void) | undefined;
+		const expired = vi.fn();
+		const getToken = vi
+			.fn<() => Promise<string>>()
+			.mockRejectedValueOnce(new SessionExpiredError("401"))
+			.mockResolvedValueOnce("fresh-token");
+		const connect = vi.fn(async () => undefined);
+		watchZeroAuth({ connection: { state, connect } }, getToken, () => {}, {
+			onSessionExpired: expired,
+			retrySignals: (fn) => {
+				retry = fn;
+				return () => {};
+			},
+		});
+		await vi.waitFor(() => expect(expired).toHaveBeenLastCalledWith(true));
+		expect(connect).not.toHaveBeenCalled();
+		retry?.();
+		await vi.waitFor(() =>
+			expect(connect).toHaveBeenCalledWith({ auth: "fresh-token" }),
+		);
+		expect(expired).toHaveBeenLastCalledWith(false);
 	});
 });

@@ -1443,7 +1443,7 @@
 	"mutation_failed": "Algo ha salido mal.",
 	"mutation_offline_not_saved": "Estás sin conexión, este cambio no se guardó. Vuelve a conectarte e inténtalo de nuevo.",
 	"sync_synced_title": "Sincronizado",
-	"sync_synced_detail": "Todos tus cambios están guardados en el servidor.",
+	"sync_synced_detail": "Conectado. Tus cambios se guardan en el servidor al instante.",
 	"sync_syncing_title": "Sincronizando",
 	"sync_syncing_detail": "Tus cambios están guardados en este dispositivo y se están enviando al servidor.",
 	"sync_offline_title": "Sin conexión",
@@ -1453,6 +1453,9 @@
 	"sync_rejected_title": "Un cambio no se guardó",
 	"sync_rejected_detail": "El servidor rechazó un cambio, así que se deshizo. Revisa el elemento e inténtalo de nuevo.",
 	"sync_rejected_dismiss": "Cerrar",
+	"sync_reauth_title": "Inicia sesión para sincronizar",
+	"sync_reauth_detail": "Tu sesión caducó mientras no estabas. Tus cambios se quedan en este dispositivo y se sincronizarán cuando vuelvas a iniciar sesión.",
+	"sync_reauth_action": "Iniciar sesión de nuevo",
 	"sync_pending_count": [
 		{
 			"declarations": [
@@ -1462,9 +1465,9 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{countNum} cambio pendiente de sincronizar",
-				"countPlural=many": "{countNum} cambios pendientes de sincronizar",
-				"countPlural=other": "{countNum} cambios pendientes de sincronizar"
+				"countPlural=one": "{countNum} cambio reciente sin sincronizar",
+				"countPlural=many": "{countNum} cambios recientes sin sincronizar",
+				"countPlural=other": "{countNum} cambios recientes sin sincronizar"
 			}
 		}
 	],

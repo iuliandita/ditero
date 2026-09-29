@@ -3,6 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import {
 	goToSettings,
+	openMobileLists,
 	sidebarLists,
 	signUp,
 	uniqueEmail,
@@ -60,6 +61,9 @@ test("desktop: offline edits are kept, counted, and land on reconnect", async ({
 	context,
 }) => {
 	test.setTimeout(90_000);
+	// Zero checks its disconnect deadline against Date.now() on a 1s interval,
+	// so a controlled clock can stand in for a long outage.
+	await page.clock.install();
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await signUp(page, uniqueEmail("sync"));
 	await openNewList(page, "Sync");
@@ -75,7 +79,7 @@ test("desktop: offline edits are kept, counted, and land on reconnect", async ({
 	await indicator.hover();
 	const popover = page.locator('[data-testid="sync-popover"]');
 	await expect(popover).toBeVisible();
-	await expect(popover).toContainText("All your changes are saved");
+	await expect(popover).toContainText("saved to the server right away");
 	await expectNoSeriousA11y(page, "sync popover (synced)");
 	await page.mouse.move(700, 450);
 	await expect(popover).toHaveCount(0);
@@ -84,11 +88,16 @@ test("desktop: offline edits are kept, counted, and land on reconnect", async ({
 	await expect(indicator).toHaveAttribute("data-phase", "offline", {
 		timeout: 20000,
 	});
+	// Well past Zero's one-minute default, after which it refuses every edit.
+	await page.clock.fastForward("03:00");
+	await expect(indicator).toHaveAttribute("data-phase", "offline");
 	const title = `Offline task ${Date.now()}`;
 	await addTask(page, title);
+	await expect(page.getByText("this change wasn't saved")).toHaveCount(0);
+	await expect(indicator).toHaveAttribute("data-phase", "offline");
 	await expect(indicator).toContainText("1");
 	await expect(indicator).toHaveAccessibleName(
-		/Offline.*1 change waiting to sync/,
+		/Offline.*1 recent change not synced yet/,
 	);
 
 	// A click pins the explanation; this is also the touch and keyboard path.
@@ -96,7 +105,7 @@ test("desktop: offline edits are kept, counted, and land on reconnect", async ({
 	await expect(popover).toBeVisible();
 	await expect(popover).toContainText("saved on this device");
 	await expect(popover.getByTestId("sync-pending")).toHaveText(
-		"1 change waiting to sync",
+		"1 recent change not synced yet",
 	);
 	await expectNoSeriousA11y(page, "sync popover (offline)");
 	await page.keyboard.press("Escape");
@@ -139,7 +148,107 @@ test("phones: the header carries the indicator and Settings has no add button", 
 	await expect(fab).toBeVisible();
 	await goToSettings(page);
 	await expect(fab).toHaveCount(0);
+	await expect(
+		page.locator(
+			'[data-testid="settings-surface"] [data-testid="sync-indicator"]',
+		),
+	).toBeVisible();
 	await page.getByTestId("settings-back").click();
 	await expect(fab).toBeVisible();
+
+	// Inside a list, where edits happen, the indicator is still there.
+	await openMobileLists(page);
+	await page.getByRole("button", { name: "New list" }).click();
+	await page.getByTestId("new-list").fill("Errands");
+	await page.getByTestId("new-list-submit").click();
+	await page
+		.getByTestId("list-index")
+		.getByRole("button", { name: "Errands", exact: true })
+		.click();
+	const inList = page.locator(
+		'[data-testid="list"] [data-testid="sync-indicator"]',
+	);
+	await expect(inList).toHaveAttribute("data-phase", "synced", {
+		timeout: 15000,
+	});
+	await ctx.setOffline(true);
+	await expect(inList).toHaveAttribute("data-phase", "offline", {
+		timeout: 20000,
+	});
+	await ctx.setOffline(false);
 	await ctx.close();
+});
+
+async function expireSession(email: string): Promise<void> {
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await pool.query(
+			'delete from session where user_id = (select id from "user" where email = $1)',
+			[email],
+		);
+	} finally {
+		await pool.end();
+	}
+}
+
+test("desktop: an expired sign-in keeps queued edits until the user signs in again", async ({
+	page,
+	context,
+}) => {
+	test.setTimeout(120_000);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	// zero-cache reports an expired sign-in only once the short-lived token
+	// runs out, and the token endpoint refuses once the session is gone. The
+	// routes answer the reconnect the way both then would; the real session is
+	// deleted before signing in again, so that part runs for real.
+	let refuseAuth = false;
+	await page.route("**/api/auth/token", (route) =>
+		refuseAuth ? route.fulfill({ status: 401, body: "{}" }) : route.continue(),
+	);
+	await page.routeWebSocket(/localhost:5354/, (ws) => {
+		if (!refuseAuth) {
+			ws.connectToServer();
+			return;
+		}
+		ws.send(
+			JSON.stringify([
+				"error",
+				{ kind: "Unauthorized", message: "expired", origin: "zeroCache" },
+			]),
+		);
+	});
+	const email = uniqueEmail("sync-auth");
+	await signUp(page, email);
+	await openNewList(page, "Away");
+	const indicator = page.getByTestId("sync-indicator");
+	await expect(indicator).toHaveAttribute("data-phase", "synced", {
+		timeout: 15000,
+	});
+
+	await context.setOffline(true);
+	await expect(indicator).toHaveAttribute("data-phase", "offline", {
+		timeout: 20000,
+	});
+	const title = `Queued before sign-in ${Date.now()}`;
+	await addTask(page, title);
+	refuseAuth = true;
+	await context.setOffline(false);
+
+	await expect(indicator).toHaveAttribute("data-phase", "reauth", {
+		timeout: 30000,
+	});
+	await indicator.click();
+	const popover = page.locator('[data-testid="sync-popover"]');
+	await expect(popover).toContainText("sync after you sign in again");
+	await expectNoSeriousA11y(page, "sync popover (sign in again)");
+	expect(await serverHasTask(title)).toBe(false);
+
+	refuseAuth = false;
+	await expireSession(email);
+	await popover.getByTestId("sync-sign-in").click();
+	await page.getByTestId("email").fill(email);
+	await page.getByTestId("password").fill("pw-123456");
+	await page.getByTestId("signin").click();
+	await waitWorkspaceReady(page);
+	await expect.poll(() => serverHasTask(title), { timeout: 30000 }).toBe(true);
 });

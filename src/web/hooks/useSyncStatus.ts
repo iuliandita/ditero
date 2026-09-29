@@ -3,9 +3,10 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import {
 	deriveSyncPhase,
 	OFFLINE_GRACE_MS,
+	SYNCING_DELAY_MS,
 	type SyncPhase,
 } from "../lib/sync-status.ts";
-import { usePendingMutations } from "../lib/zero.tsx";
+import { useSyncTracker } from "../lib/zero.tsx";
 
 function subscribeOnline(onChange: () => void) {
 	window.addEventListener("online", onChange);
@@ -16,14 +17,31 @@ function subscribeOnline(onChange: () => void) {
 	};
 }
 
+function subscribeVisibility(onChange: () => void) {
+	document.addEventListener("visibilitychange", onChange);
+	return () => document.removeEventListener("visibilitychange", onChange);
+}
+
+// True once `active` has held for `delayMs`; drops back immediately.
+function useHeld(active: boolean, delayMs: number): boolean {
+	const [held, setHeld] = useState(false);
+	useEffect(() => {
+		setHeld(false);
+		if (!active) return;
+		const timer = window.setTimeout(() => setHeld(true), delayMs);
+		return () => window.clearTimeout(timer);
+	}, [active, delayMs]);
+	return held;
+}
+
 export function useSyncStatus(): {
 	phase: SyncPhase;
 	pending: number;
 	dismissRejection: () => void;
 } {
-	const connection = useConnectionState().name;
-	const tracker = usePendingMutations();
-	const { pending, rejected } = useSyncExternalStore(
+	const connection = useConnectionState();
+	const tracker = useSyncTracker();
+	const { pending, rejected, sessionExpired } = useSyncExternalStore(
 		tracker.subscribe,
 		tracker.getSnapshot,
 	);
@@ -32,27 +50,28 @@ export function useSyncStatus(): {
 		() => navigator.onLine,
 		() => true,
 	);
-	const [graceElapsed, setGraceElapsed] = useState(false);
-	const connected = connection === "connected";
-
-	useEffect(() => {
-		setGraceElapsed(false);
-		if (connected) return;
-		const timer = window.setTimeout(
-			() => setGraceElapsed(true),
-			OFFLINE_GRACE_MS,
-		);
-		return () => window.clearTimeout(timer);
-	}, [connected]);
+	const tabHidden = useSyncExternalStore(
+		subscribeVisibility,
+		() => document.visibilityState === "hidden",
+		() => false,
+	);
+	const graceElapsed = useHeld(
+		connection.name !== "connected",
+		OFFLINE_GRACE_MS,
+	);
+	const pendingShown = useHeld(pending > 0, SYNCING_DELAY_MS) ? pending : 0;
 
 	return {
 		phase: deriveSyncPhase({
-			connection,
-			pending,
+			connection: connection.name,
+			reason: "reason" in connection ? String(connection.reason) : undefined,
+			tabHidden,
+			pending: pendingShown,
 			rejected,
+			sessionExpired,
 			offlineSettled: graceElapsed || !browserOnline,
 		}),
-		pending,
+		pending: pendingShown,
 		dismissRejection: tracker.dismissRejection,
 	};
 }

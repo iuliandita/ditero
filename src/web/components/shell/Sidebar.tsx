@@ -581,8 +581,8 @@ export function Sidebar({
 					variant={section === "settings" ? "secondary" : "ghost"}
 					size="sm"
 					className={cn(
-						"flex-1 justify-start",
-						collapsed && "justify-center px-0",
+						"justify-start",
+						collapsed ? "w-full justify-center px-0" : "flex-1",
 					)}
 					onClick={onOpenSettings}
 				>

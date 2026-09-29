@@ -7,9 +7,9 @@ import { schema } from "../../zero/schema.gen.ts";
 import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { fetchPublicConfig } from "./public-config.ts";
 import {
-	createPendingMutations,
+	createSyncTracker,
 	OFFLINE_EDIT_WINDOW_MS,
-	type PendingMutations,
+	type SyncTracker,
 	trackMutations,
 } from "./sync-status.ts";
 import { fetchZeroToken, watchZeroAuth } from "./zero-auth.ts";
@@ -38,12 +38,12 @@ function createZeroClient(userID: string, token: string, cacheURL: string) {
 }
 type ZeroClient = ReturnType<typeof createZeroClient>;
 
-const PendingMutationsContext = createContext<PendingMutations | null>(null);
+const SyncTrackerContext = createContext<SyncTracker | null>(null);
 
-export function usePendingMutations(): PendingMutations {
-	const pending = useContext(PendingMutationsContext);
-	if (!pending) throw new Error("usePendingMutations outside AppZeroProvider");
-	return pending;
+export function useSyncTracker(): SyncTracker {
+	const tracker = useContext(SyncTrackerContext);
+	if (!tracker) throw new Error("useSyncTracker outside AppZeroProvider");
+	return tracker;
 }
 
 export function AppZeroProvider({
@@ -55,7 +55,7 @@ export function AppZeroProvider({
 }) {
 	const [client, setClient] = useState<{
 		zero: ZeroClient;
-		pending: PendingMutations;
+		tracker: SyncTracker;
 	} | null>(null);
 
 	useEffect(() => {
@@ -71,13 +71,15 @@ export function AppZeroProvider({
 			]);
 			if (cancelled) return;
 			instance = createZeroClient(userID, token, config.zeroURL);
-			const pending = createPendingMutations();
-			trackMutations(instance, pending);
+			const tracker = createSyncTracker();
+			trackMutations(instance, tracker);
 			stopConnectionWatch = instance.connection.state.subscribe((state) => {
-				if (state.name === "connected") pending.connected();
+				if (state.name === "connected") tracker.connected();
 			});
-			stopAuthRefresh = watchZeroAuth(instance);
-			setClient({ zero: instance, pending });
+			stopAuthRefresh = watchZeroAuth(instance, undefined, undefined, {
+				onSessionExpired: tracker.setSessionExpired,
+			});
+			setClient({ zero: instance, tracker });
 		})().catch((error) => {
 			if (!cancelled) console.error("Zero startup failed", error);
 		});
@@ -93,9 +95,9 @@ export function AppZeroProvider({
 	if (!client) return <ShellSkeleton />;
 	return (
 		<ZeroProvider zero={client.zero}>
-			<PendingMutationsContext.Provider value={client.pending}>
+			<SyncTrackerContext.Provider value={client.tracker}>
 				{children}
-			</PendingMutationsContext.Provider>
+			</SyncTrackerContext.Provider>
 		</ZeroProvider>
 	);
 }

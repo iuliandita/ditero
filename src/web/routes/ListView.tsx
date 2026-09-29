@@ -43,6 +43,7 @@ import { TitleSuggestInput } from "../components/list/TitleSuggestInput.tsx";
 import { InlineSyntaxHint } from "../components/quickadd/InlineSyntaxHint.tsx";
 import { TaskListSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { ListProgress } from "../components/shell/ListProgress.tsx";
+import { SyncIndicator } from "../components/shell/SyncIndicator.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
@@ -436,6 +437,7 @@ export function ListView({
 		</div>
 	);
 	const mobileAdd = isDesktop ? undefined : addForm;
+	const mobileSync = isDesktop ? null : <SyncIndicator placement="header" />;
 
 	return (
 		<div ref={selection.rootRef} data-testid="list" className="max-w-3xl">
@@ -546,6 +548,7 @@ export function ListView({
 					actions={rowActions}
 					label={m.row_actions_for({ name: openList.title })}
 				/>
+				{mobileSync}
 			</div>
 
 			{kind === "project" && !tasksLoading && (

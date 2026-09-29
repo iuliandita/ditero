@@ -3,7 +3,9 @@ import {
 	CloudCheck,
 	CloudOff,
 	CloudUpload,
+	LogIn,
 	type LucideIcon,
+	Unplug,
 } from "lucide-react";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -52,8 +54,15 @@ const PHASE: Record<
 		detail: m.sync_offline_detail,
 		announce: true,
 	},
+	reauth: {
+		icon: LogIn,
+		tone: "text-warning",
+		title: m.sync_reauth_title,
+		detail: m.sync_reauth_detail,
+		announce: true,
+	},
 	stopped: {
-		icon: CloudAlert,
+		icon: Unplug,
 		tone: "text-destructive",
 		title: m.sync_stopped_title,
 		detail: m.sync_stopped_detail,
@@ -174,6 +183,19 @@ export function SyncIndicator({
 						>
 							{m.sync_pending_count({ count: pending })}
 						</p>
+					)}
+					{phase === "reauth" && (
+						<Button
+							size="sm"
+							className="self-start"
+							data-testid="sync-sign-in"
+							// The session is gone, so a reload lands on sign-in. Zero's
+							// store is keyed by user, so signing back in as the same
+							// person reopens it and sends the queued edits.
+							onClick={() => window.location.reload()}
+						>
+							{m.sync_reauth_action()}
+						</Button>
 					)}
 					{phase === "rejected" && (
 						<Button

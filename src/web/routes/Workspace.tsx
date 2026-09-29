@@ -854,6 +854,8 @@ function NormalWorkspace() {
 									</DropdownMenuContent>
 								</DropdownMenu>
 							)}
+							{/* The tab roots carry it in the shell header instead. */}
+							{!isDesktop && !isTabRoot && <SyncIndicator placement="header" />}
 						</div>
 						{/* A malformed synced view (a co-member's bad filter/display) can
 						    throw in the renderer; the boundary keeps it inline instead of

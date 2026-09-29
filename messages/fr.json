@@ -1443,7 +1443,7 @@
 	"mutation_failed": "Un problème est survenu.",
 	"mutation_offline_not_saved": "Tu es hors ligne, cette modification n'a pas été enregistrée. Reconnecte-toi et réessaie.",
 	"sync_synced_title": "Synchronisé",
-	"sync_synced_detail": "Toutes tes modifications sont enregistrées sur le serveur.",
+	"sync_synced_detail": "Connecté. Tes modifications sont enregistrées sur le serveur tout de suite.",
 	"sync_syncing_title": "Synchronisation",
 	"sync_syncing_detail": "Tes modifications sont enregistrées sur cet appareil et partent vers le serveur.",
 	"sync_offline_title": "Hors ligne",
@@ -1453,6 +1453,9 @@
 	"sync_rejected_title": "Une modification n'a pas été enregistrée",
 	"sync_rejected_detail": "Le serveur a refusé une modification, elle a donc été annulée. Vérifie l'élément et réessaie.",
 	"sync_rejected_dismiss": "Fermer",
+	"sync_reauth_title": "Connecte-toi pour synchroniser",
+	"sync_reauth_detail": "Ta connexion a expiré pendant ton absence. Tes modifications restent sur cet appareil et seront synchronisées quand tu te reconnecteras.",
+	"sync_reauth_action": "Se reconnecter",
 	"sync_pending_count": [
 		{
 			"declarations": [
@@ -1462,9 +1465,9 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{countNum} modification en attente de synchronisation",
-				"countPlural=many": "{countNum} modifications en attente de synchronisation",
-				"countPlural=other": "{countNum} modifications en attente de synchronisation"
+				"countPlural=one": "{countNum} modification récente pas encore synchronisée",
+				"countPlural=many": "{countNum} modifications récentes pas encore synchronisées",
+				"countPlural=other": "{countNum} modifications récentes pas encore synchronisées"
 			}
 		}
 	],

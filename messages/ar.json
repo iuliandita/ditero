@@ -1530,7 +1530,7 @@
 	"mutation_failed": "حدث خطأ ما.",
 	"mutation_offline_not_saved": "أنت غير متصل، لم يُحفظ هذا التغيير. أعد الاتصال وحاول مرة أخرى.",
 	"sync_synced_title": "تمت المزامنة",
-	"sync_synced_detail": "كل تغييراتك محفوظة على الخادم.",
+	"sync_synced_detail": "متصل. تُحفظ تغييراتك على الخادم فورًا.",
 	"sync_syncing_title": "جارٍ المزامنة",
 	"sync_syncing_detail": "تغييراتك محفوظة على هذا الجهاز وفي طريقها إلى الخادم.",
 	"sync_offline_title": "غير متصل",
@@ -1540,6 +1540,9 @@
 	"sync_rejected_title": "لم يُحفظ أحد التغييرات",
 	"sync_rejected_detail": "رفض الخادم أحد التغييرات، لذلك تم التراجع عنه. تحقّق من العنصر وحاول مرة أخرى.",
 	"sync_rejected_dismiss": "إغلاق",
+	"sync_reauth_title": "سجّل الدخول للمزامنة",
+	"sync_reauth_detail": "انتهت صلاحية تسجيل دخولك أثناء غيابك. تبقى تعديلاتك على هذا الجهاز وتُزامَن بعد أن تسجّل الدخول مرة أخرى.",
+	"sync_reauth_action": "سجّل الدخول مرة أخرى",
 	"sync_pending_count": [
 		{
 			"declarations": [
@@ -1549,12 +1552,12 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=zero": "لا تغييرات بانتظار المزامنة",
-				"countPlural=one": "تغيير واحد بانتظار المزامنة",
-				"countPlural=two": "تغييران بانتظار المزامنة",
-				"countPlural=few": "{countNum} تغييرات بانتظار المزامنة",
-				"countPlural=many": "{countNum} تغييرًا بانتظار المزامنة",
-				"countPlural=other": "{countNum} تغيير بانتظار المزامنة"
+				"countPlural=zero": "لا تغييرات حديثة غير مُزامَنة",
+				"countPlural=one": "تغيير حديث واحد لم يُزامَن بعد",
+				"countPlural=two": "تغييران حديثان لم يُزامَنا بعد",
+				"countPlural=few": "{countNum} تغييرات حديثة لم تُزامَن بعد",
+				"countPlural=many": "{countNum} تغييرًا حديثًا لم يُزامَن بعد",
+				"countPlural=other": "{countNum} تغيير حديث لم يُزامَن بعد"
 			}
 		}
 	],

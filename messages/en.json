@@ -1414,7 +1414,7 @@
 	"mutation_failed": "Something went wrong.",
 	"mutation_offline_not_saved": "You're offline, this change wasn't saved. Reconnect and try again.",
 	"sync_synced_title": "Synced",
-	"sync_synced_detail": "All your changes are saved on the server.",
+	"sync_synced_detail": "Connected. Changes you make are saved to the server right away.",
 	"sync_syncing_title": "Syncing",
 	"sync_syncing_detail": "Your changes are saved on this device and are on their way to the server.",
 	"sync_offline_title": "Offline",
@@ -1424,6 +1424,9 @@
 	"sync_rejected_title": "A change wasn't saved",
 	"sync_rejected_detail": "The server refused a change, so it was undone. Check the item and try again.",
 	"sync_rejected_dismiss": "Dismiss",
+	"sync_reauth_title": "Sign in to sync",
+	"sync_reauth_detail": "Your sign-in expired while you were away. Your edits are kept on this device and sync after you sign in again.",
+	"sync_reauth_action": "Sign in again",
 	"sync_pending_count": [
 		{
 			"declarations": [
@@ -1433,8 +1436,8 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{countNum} change waiting to sync",
-				"countPlural=other": "{countNum} changes waiting to sync"
+				"countPlural=one": "{countNum} recent change not synced yet",
+				"countPlural=other": "{countNum} recent changes not synced yet"
 			}
 		}
 	],

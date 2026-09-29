@@ -1414,7 +1414,7 @@
 	"mutation_failed": "Da ist etwas schiefgelaufen.",
 	"mutation_offline_not_saved": "Du bist offline, diese Änderung wurde nicht gespeichert. Verbinde dich neu und versuch es noch einmal.",
 	"sync_synced_title": "Synchronisiert",
-	"sync_synced_detail": "Alle deine Änderungen sind auf dem Server gespeichert.",
+	"sync_synced_detail": "Verbunden. Deine Änderungen werden sofort auf dem Server gespeichert.",
 	"sync_syncing_title": "Wird synchronisiert",
 	"sync_syncing_detail": "Deine Änderungen sind auf diesem Gerät gespeichert und werden gerade an den Server gesendet.",
 	"sync_offline_title": "Offline",
@@ -1424,6 +1424,9 @@
 	"sync_rejected_title": "Eine Änderung wurde nicht gespeichert",
 	"sync_rejected_detail": "Der Server hat eine Änderung abgelehnt, deshalb wurde sie rückgängig gemacht. Prüf den Eintrag und versuch es noch einmal.",
 	"sync_rejected_dismiss": "Schließen",
+	"sync_reauth_title": "Zum Synchronisieren anmelden",
+	"sync_reauth_detail": "Deine Anmeldung ist abgelaufen, während du weg warst. Deine Änderungen bleiben auf diesem Gerät und werden synchronisiert, sobald du dich wieder anmeldest.",
+	"sync_reauth_action": "Erneut anmelden",
 	"sync_pending_count": [
 		{
 			"declarations": [
@@ -1433,8 +1436,8 @@
 			],
 			"selectors": ["countPlural"],
 			"match": {
-				"countPlural=one": "{countNum} Änderung wartet auf Synchronisierung",
-				"countPlural=other": "{countNum} Änderungen warten auf Synchronisierung"
+				"countPlural=one": "{countNum} neue Änderung noch nicht synchronisiert",
+				"countPlural=other": "{countNum} neue Änderungen noch nicht synchronisiert"
 			}
 		}
 	],
