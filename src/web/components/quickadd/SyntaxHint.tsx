@@ -17,11 +17,15 @@ const MEANING: Record<SyntaxToken["type"], () => string> = {
 // parser accepts are listed: no date word where there is no date parser.
 export function SyntaxHint({
 	lead,
+	introduction,
+	collapsible = false,
 	example = false,
 	onDismiss,
 	className,
 }: {
 	lead?: ReactNode;
+	introduction?: string;
+	collapsible?: boolean;
 	example?: boolean;
 	onDismiss: () => void;
 	className?: string;
@@ -30,6 +34,33 @@ export function SyntaxHint({
 	const tokens = syntaxTokens(
 		dates ? m.quickadd_example_date() : null,
 		m.syntax_hint_word(),
+	);
+	const legend = (
+		<>
+			<p className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+				{tokens.map((t) => (
+					<span key={t.type} className="inline-flex items-center gap-1.5">
+						<code
+							dir="auto"
+							className="rounded-sm bg-muted px-1 py-px font-mono text-foreground"
+						>
+							{t.token}
+						</code>
+						{MEANING[t.type]()}
+					</span>
+				))}
+			</p>
+			{example && (
+				<p data-testid="syntax-hint-example" className="mt-1.5">
+					{dates
+						? m.syntax_hint_example({
+								date: m.quickadd_example_date(),
+								priority: "p1",
+							})
+						: m.syntax_hint_example_nodate({ priority: "p1" })}
+				</p>
+			)}
+		</>
 	);
 	return (
 		<div
@@ -42,29 +73,25 @@ export function SyntaxHint({
 			)}
 		>
 			<div className="flex min-w-0 flex-1 flex-col gap-1.5 py-1.5">
-				<p className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-					{lead}
-					{tokens.map((t) => (
-						<span key={t.type} className="inline-flex items-center gap-1.5">
-							<code
-								dir="auto"
-								className="rounded-sm bg-muted px-1 py-px font-mono text-foreground"
+				{introduction && <p>{introduction}</p>}
+				{collapsible ? (
+					<div className="flex flex-wrap items-start gap-x-4 gap-y-1">
+						{lead}
+						<details className="min-w-0">
+							<summary
+								data-testid="syntax-hint-details"
+								className="min-h-11 cursor-pointer content-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-7"
 							>
-								{t.token}
-							</code>
-							{MEANING[t.type]()}
-						</span>
-					))}
-				</p>
-				{example && (
-					<p data-testid="syntax-hint-example">
-						{dates
-							? m.syntax_hint_example({
-									date: m.quickadd_example_date(),
-									priority: "p1",
-								})
-							: m.syntax_hint_example_nodate({ priority: "p1" })}
-					</p>
+								{m.syntax_hint_details()}
+							</summary>
+							<div className="pt-1">{legend}</div>
+						</details>
+					</div>
+				) : (
+					<>
+						{lead}
+						{legend}
+					</>
 				)}
 			</div>
 			<button

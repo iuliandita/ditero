@@ -66,11 +66,12 @@ function Item({ action }: { action: RowAction }) {
 	);
 }
 
-function Items({ actions }: { actions: RowAction[] }) {
+export function RowActionItems({ actions }: { actions: RowAction[] }) {
+	const visible = visibleActions(actions);
 	return (
 		<>
-			{actions.map((action, index) => {
-				const previous = actions[index - 1];
+			{visible.map((action, index) => {
+				const previous = visible[index - 1];
 				const separator =
 					action.destructive === true &&
 					previous !== undefined &&
@@ -89,7 +90,7 @@ function Items({ actions }: { actions: RowAction[] }) {
 								</DropdownMenuSubTrigger>
 								<DropdownMenuPortal>
 									<DropdownMenuSubContent>
-										<Items actions={action.submenu} />
+										<RowActionItems actions={action.submenu} />
 									</DropdownMenuSubContent>
 								</DropdownMenuPortal>
 							</DropdownMenuSub>
@@ -161,7 +162,7 @@ export function RowActions({
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				<Items actions={visible} />
+				<RowActionItems actions={visible} />
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
@@ -283,7 +284,7 @@ export function useRowContextMenu(actions: RowAction[], label?: string) {
 						sideOffset={12}
 						aria-label={label ?? m.row_actions_label()}
 					>
-						<Items actions={visible} />
+						<RowActionItems actions={visible} />
 					</DropdownMenuContent>
 				</DropdownMenu>
 			) : null,

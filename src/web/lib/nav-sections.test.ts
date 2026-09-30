@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest";
 import {
+	navSectionOpen,
 	navSectionsKey,
-	parseCollapsed,
-	readCollapsed,
-	writeCollapsed,
+	parseNavSections,
+	readNavSections,
+	toggleNavSection,
+	writeNavSections,
 } from "./nav-sections.ts";
 
 function memory(): Storage {
@@ -23,18 +25,48 @@ function memory(): Storage {
 describe("nav section collapse state", () => {
 	test("round-trips per user without leaking across users", () => {
 		const store = memory();
-		writeCollapsed("u1", new Set(["views"]), store);
-		expect([...readCollapsed("u1", store)]).toEqual(["views"]);
-		expect(readCollapsed("u2", store).size).toBe(0);
-		expect(store.getItem(navSectionsKey("u1"))).toBe('["views"]');
+		writeNavSections("u1", { views: false }, store);
+		expect(readNavSections("u1", store)).toEqual({ views: false });
+		expect(readNavSections("u2", store)).toEqual({});
+		expect(store.getItem(navSectionsKey("u1"))).toBe('{"views":false}');
 	});
 
-	test("garbage and unknown sections read as all open", () => {
-		expect(parseCollapsed("not json").size).toBe(0);
-		expect(parseCollapsed('{"views":true}').size).toBe(0);
-		expect([...parseCollapsed('["dashboards","lists","__proto__"]')]).toEqual([
-			"dashboards",
-		]);
+	test("garbage and unknown sections preserve content defaults", () => {
+		expect(parseNavSections("not json")).toEqual({});
+		expect(
+			parseNavSections('{"views":"open","lists":true,"__proto__":true}'),
+		).toEqual({});
+	});
+
+	test("empty groups fold away while saved items stay discoverable", () => {
+		expect(navSectionOpen({}, "views", false)).toBe(false);
+		expect(navSectionOpen({}, "dashboards", true)).toBe(true);
+	});
+
+	test("explicit empty expansion survives storage and new items", () => {
+		const store = memory();
+		const preferences = toggleNavSection({}, "views", false);
+		writeNavSections("u1", preferences, store);
+		expect(navSectionOpen(readNavSections("u1", store), "views", false)).toBe(
+			true,
+		);
+		expect(navSectionOpen(preferences, "views", true)).toBe(true);
+		expect(navSectionOpen(preferences, "dashboards", false)).toBe(false);
+		expect(
+			navSectionOpen(
+				toggleNavSection(preferences, "views", false),
+				"views",
+				true,
+			),
+		).toBe(false);
+	});
+
+	test("legacy arrays preserve both collapse and explicit expansion", () => {
+		expect(parseNavSections('["dashboards","lists","__proto__"]')).toEqual({
+			views: true,
+			dashboards: false,
+		});
+		expect(parseNavSections("[]")).toEqual({ views: true, dashboards: true });
 	});
 
 	test("a throwing store never breaks the sidebar", () => {
@@ -46,9 +78,9 @@ describe("nav section collapse state", () => {
 				throw new Error("blocked");
 			},
 		};
-		expect(readCollapsed("u1", hostile).size).toBe(0);
+		expect(readNavSections("u1", hostile)).toEqual({});
 		expect(() =>
-			writeCollapsed("u1", new Set(["views"]), hostile),
+			writeNavSections("u1", { views: false }, hostile),
 		).not.toThrow();
 	});
 });

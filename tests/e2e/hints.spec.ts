@@ -36,7 +36,7 @@ async function firstBlankList(page: Page, name: string, kind?: string) {
 	});
 }
 
-test("first run lands in the blank list, focused, with the grammar and one example", async ({
+test("first run lands focused with literal capture guidance and optional quick-add syntax", async ({
 	page,
 }) => {
 	await signUp(page, uniqueEmail("hint1"));
@@ -46,6 +46,9 @@ test("first run lands in the blank list, focused, with the grammar and one examp
 	await expect(page.getByTestId("new-task")).toBeFocused();
 	const hint = page.getByTestId("list").getByTestId("syntax-hint");
 	await expect(hint).toBeVisible();
+	await expect(hint).toContainText("This field saves your text as written.");
+	await expect(hint.getByTestId("syntax-hint-example")).not.toBeVisible();
+	await hint.getByTestId("syntax-hint-details").click();
 	await expect(hint.getByTestId("syntax-hint-example")).toHaveText(
 		"Example: Call the plumber tomorrow p1 #home",
 	);
@@ -190,6 +193,8 @@ test("on a phone a blank first list focuses the inline field with the grammar", 
 	await expect(page.getByTestId("new-task")).toBeFocused();
 	const hint = page.getByTestId("list").getByTestId("syntax-hint");
 	await expect(hint).toBeVisible();
+	await expect(hint.getByTestId("syntax-hint-example")).not.toBeVisible();
+	await hint.getByTestId("syntax-hint-details").click();
 	await expect(hint.getByTestId("syntax-hint-example")).toBeVisible();
 	// No keycap on touch: the lead just opens quick add.
 	await expect(hint.locator("kbd")).toHaveCount(0);

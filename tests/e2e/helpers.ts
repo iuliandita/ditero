@@ -35,6 +35,21 @@ export async function openMobileLists(page: Page): Promise<void> {
 	await expect(page.getByTestId("list-index")).toHaveCount(1);
 }
 
+export async function openAdvancedSection(
+	page: Page,
+	section: "views" | "dashboards",
+): Promise<void> {
+	if ((page.viewportSize()?.width ?? 1280) >= 768) return;
+	await openMobileLists(page);
+	const toggle = page.locator(
+		`section[data-nav-group="${section}"] > button[aria-expanded]`,
+	);
+	await expect(toggle).toBeVisible();
+	if ((await toggle.getAttribute("aria-expanded")) === "false")
+		await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
+
 export async function openWorkspaceSwitcher(page: Page): Promise<void> {
 	// A menu still animating closed would swallow the click and toggle back.
 	await expect(page.getByTestId("switcher-settings")).toHaveCount(0);
@@ -112,6 +127,7 @@ export function uniqueEmail(prefix: string): string {
 export async function signUp(page: Page, email: string): Promise<void> {
 	await page.goto("/");
 	await page.getByTestId("email").fill(email);
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill(PASSWORD);
 	await page.getByTestId("signup").click();
 	await expect(page.getByTestId("workspace")).toBeVisible({

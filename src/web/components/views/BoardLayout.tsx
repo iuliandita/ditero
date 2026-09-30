@@ -15,7 +15,6 @@ import { priorityMeta } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
-import { splitCompleted } from "../../views/group.ts";
 import { CompletedSection } from "../list/CompletedSection.tsx";
 import { SortableRow, useReorderSensors } from "../list/SortableList.tsx";
 import { type RowHandlers, TaskRow } from "../list/TaskRow.tsx";
@@ -38,6 +37,8 @@ function CardBody({
 	return (
 		<TaskRow
 			task={entry.task}
+			occurrence={entry.occurrence}
+			sourceContext={entry.sourceContext}
 			kind={entry.kind}
 			subtasks={[]}
 			labels={entry.labels}
@@ -100,7 +101,14 @@ function ColumnShell({
 	renderOpen: (entries: ViewEntry[]) => React.ReactNode;
 }) {
 	const { open, done } = collapseCompleted
-		? splitCompleted(group.entries)
+		? {
+				open: group.entries.filter(
+					(e) => !(e.occurrence ? e.occurrence.done : e.task.done),
+				),
+				done: group.entries.filter((e) =>
+					e.occurrence ? e.occurrence.done : e.task.done,
+				),
+			}
 		: { open: group.entries, done: [] };
 	const label = group.label || m.board_column_untitled();
 	const tone = priorityColumns ? priorityMeta(Number(group.key)) : null;

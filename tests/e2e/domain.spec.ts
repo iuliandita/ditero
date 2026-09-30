@@ -22,6 +22,7 @@ const PASSWORD = "pw-123456";
 async function signUp(page: Page, email: string): Promise<string> {
 	await page.goto("/");
 	await page.getByTestId("email").fill(email);
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill(PASSWORD);
 	await page.getByTestId("signup").click();
 	await expect(page.getByTestId("workspace")).toBeVisible({ timeout: 15000 });

@@ -466,7 +466,7 @@ test("saved views select across their rows and complete in bulk", async ({
 }) => {
 	await setupList(page, "bulk-view", ["View one", "View two"]);
 	await sidebarLists(page)
-		.getByRole("button", { name: "All my tasks", exact: true })
+		.getByRole("button", { name: "All tasks", exact: true })
 		.click();
 	await expect(page.getByTestId("view-surface")).toBeVisible();
 	const surface = "view-renderer";

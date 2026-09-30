@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { openMobileLists } from "./helpers.ts";
+import { openAdvancedSection } from "./helpers.ts";
 
 // M2 calendar-layout e2e. Builds a calendar view, asserts a recurring task's
 // occurrences render on many dates (light chips) and a one-off dued task renders
@@ -22,6 +22,7 @@ function uniqueEmail(prefix: string): string {
 async function signUp(page: Page, email: string): Promise<void> {
 	await page.goto("/");
 	await page.getByTestId("email").fill(email);
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill(PASSWORD);
 	await page.getByTestId("signup").click();
 	await expect(page.getByTestId("workspace")).toBeVisible({
@@ -134,7 +135,7 @@ async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
 async function saveCalendarView(page: Page, name: string): Promise<void> {
 	if (await page.getByTestId("sidebar-create").count()) {
 		await page.getByTestId("sidebar-create").click();
-	} else await openMobileLists(page);
+	} else await openAdvancedSection(page, "views");
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(name);
 	await pickLabeled(page, "Layout", "Calendar");
@@ -259,14 +260,13 @@ test("calendar: < md collapses to the agenda affordance", async ({ page }) => {
 
 	await saveCalendarView(page, `MobCal ${Date.now()}`);
 
-	// The month grid is gone; the agenda affordance is shown and the dated item
-	// renders in the agenda list.
+	// Month navigation remains on phones, with dated work in the agenda.
 	await expect(page.getByTestId("calendar-surface")).toBeVisible({
 		timeout: 15000,
 	});
-	await expect(page.getByText("Viewing as agenda")).toBeVisible({
-		timeout: 15000,
-	});
+	await expect(page.getByTestId("calendar-prev")).toBeVisible();
+	await expect(page.getByTestId("calendar-next")).toBeVisible();
+	await expect(page.getByTestId("calendar-today")).toBeVisible();
 	await expect(page.getByTestId("calendar-agenda")).toBeVisible();
 	await expect(
 		page.getByTestId("agenda-item").filter({ hasText: oneOff }),

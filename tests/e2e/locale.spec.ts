@@ -68,7 +68,7 @@ async function switchTo(
 // degenerating: without it, a switcher that silently no-ops would still pass
 // every locale whose string happened to match the base.
 const LOGIN_SURFACE = [
-	["signup", m.login_signup] as const,
+	["signup-mode", m.login_signup] as const,
 	["signin", m.login_signin] as const,
 	["signin-passkey", m.login_signin_passkey] as const,
 ];
@@ -128,6 +128,7 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 
 	// Sign up while ar is active; data-testid selectors are locale-independent.
 	await page.getByTestId("email").fill(uniqueEmail("locale"));
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill(PASSWORD);
 	await page.getByTestId("signup").click();
 	await expect(page.getByTestId("workspace")).toBeVisible({

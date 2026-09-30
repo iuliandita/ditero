@@ -43,6 +43,8 @@ import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { Label, schema, Task } from "../../../zero/schema.gen.ts";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
+import { formatDayKey } from "../../lib/intl-format.ts";
+import type { HabitOccurrence } from "../../views/habit-occurrence.ts";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
 import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
@@ -119,6 +121,10 @@ function SwipeRow({
 		if (v < 0 && !onSchedule) v = 0; // no left action -> no left travel
 		setOffset(Math.max(-140, Math.min(140, v)));
 	}
+	function cancelSwipe() {
+		start.current = null;
+		setOffset(0);
+	}
 	function onPointerUp() {
 		const s = start.current;
 		start.current = null;
@@ -159,7 +165,11 @@ function SwipeRow({
 				onPointerDown={onPointerDown}
 				onPointerMove={onPointerMove}
 				onPointerUp={onPointerUp}
-				onPointerCancel={onPointerUp}
+				onPointerCancel={cancelSwipe}
+				onLostPointerCapture={(e) => {
+					// A child's implicit touch capture transfers to this swipe surface.
+					if (e.target === e.currentTarget) cancelSwipe();
+				}}
 				onClickCapture={onClickCapture}
 				className={cn("touch-pan-y", surface)}
 				style={{
@@ -263,6 +273,8 @@ export function TaskRow({
 	variant = "row",
 	surface,
 	list,
+	sourceContext,
+	occurrence,
 }: {
 	task: Task;
 	kind: ListKind;
@@ -277,6 +289,8 @@ export function TaskRow({
 	surface?: "card" | "popover";
 	// Shown when the surface mixes lists, so a row says where it lives.
 	list?: { title: string; icon: string | null } | null;
+	sourceContext?: string;
+	occurrence?: HabitOccurrence;
 }) {
 	const card = variant === "card";
 	const [expanded, setExpanded] = useState(false);
@@ -294,7 +308,9 @@ export function TaskRow({
 	const doneCount = subtasks.filter((s) => s.done).length;
 	const total = subtasks.length;
 	const progress = total > 0 ? doneCount / total : 0;
-	const justCompleted = useJustCompleted(task.done ?? false);
+	const displayedDone = occurrence?.done ?? task.done ?? false;
+	const canToggle = canEdit && (occurrence?.canToggle ?? true);
+	const justCompleted = useJustCompleted(displayedDone);
 
 	// The caller's role in the workspace owning this task's list. The mutators
 	// re-check on write; this only keeps the menu from offering a refusal.
@@ -394,7 +410,7 @@ export function TaskRow({
 	const describedBy =
 		[
 			showBadge && badgeId,
-			!bare && metaId,
+			(!bare || sourceContext || list) && metaId,
 			showProgress && progressId,
 			hasPriority && priorityId,
 		]
@@ -428,8 +444,8 @@ export function TaskRow({
 							: undefined
 				}
 				onComplete={
-					canEdit && !selecting
-						? () => handlers.onToggle(task.id, task.done ?? false)
+					canToggle && !selecting
+						? () => handlers.onToggle(task.id, displayedDone)
 						: undefined
 				}
 				onSchedule={
@@ -466,11 +482,11 @@ export function TaskRow({
 							)}
 						>
 							<Checkbox
-								disabled={!canEdit}
+								disabled={!canToggle}
 								aria-label={task.title}
-								checked={task.done ?? false}
+								checked={displayedDone}
 								onCheckedChange={() => {
-									if (canEdit) handlers.onToggle(task.id, task.done ?? false);
+									if (canToggle) handlers.onToggle(task.id, displayedDone);
 								}}
 								data-kbd-action="toggle"
 								shape={checkShapeFor(kind)}
@@ -504,12 +520,10 @@ export function TaskRow({
 							className={cn(
 								"block text-sm",
 								card ? "line-clamp-2 break-words" : "truncate",
-								task.done && "text-muted-foreground",
+								displayedDone && "text-muted-foreground",
 							)}
 						>
-							<span className={strikeClass(task.done ?? false)}>
-								{task.title}
-							</span>
+							<span className={strikeClass(displayedDone)}>{task.title}</span>
 						</span>
 						{showBadge && (
 							<Badge
@@ -522,14 +536,30 @@ export function TaskRow({
 									: m.activation_badge_blocked()}
 							</Badge>
 						)}
-						{!bare && (
+						{(!bare || sourceContext || list) && (
 							<div
 								id={metaId}
 								data-reading-metadata
 								className="mt-0.5 flex flex-wrap items-center gap-2"
 							>
 								<AssigneeChips taskId={task.id} />
-								<DueChip task={task} />
+								{occurrence ? (
+									<span
+										className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+										data-testid="habit-occurrence-date"
+									>
+										<CalendarClock aria-hidden className="size-3" />
+										{occurrence.status === "unavailable"
+											? m.habit_occurrence_unavailable()
+											: occurrence.status === "skipped"
+												? m.habit_occurrence_skipped()
+												: occurrence.date
+													? formatDayKey(occurrence.date)
+													: null}
+									</span>
+								) : (
+									!bare && <DueChip task={task} />
+								)}
 								{list && (
 									<span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
 										<ListIcon
@@ -539,6 +569,14 @@ export function TaskRow({
 											className="size-3 shrink-0"
 										/>
 										<span className="truncate">{list.title}</span>
+									</span>
+								)}
+								{sourceContext && (
+									<span
+										className="min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground"
+										data-testid="task-source-context"
+									>
+										{sourceContext}
 									</span>
 								)}
 								{labels.map((l) => (

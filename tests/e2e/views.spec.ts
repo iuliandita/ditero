@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { goToSettings, leaveSettings, openMobileLists } from "./helpers.ts";
+import { goToSettings, leaveSettings, openAdvancedSection } from "./helpers.ts";
 
 // M1c views + keyboard e2e. Exercises the saved-view lifecycle (build/save/
 // round-trip), the layout switch + board regroup, the command palette, the
@@ -37,6 +37,7 @@ function uniqueEmail(prefix: string): string {
 async function signUp(page: Page, email: string): Promise<void> {
 	await page.goto("/");
 	await page.getByTestId("email").fill(email);
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill(PASSWORD);
 	await page.getByTestId("signup").click();
 	await expect(page.getByTestId("workspace")).toBeVisible({
@@ -617,7 +618,7 @@ test("mobile: a board view degrades to the grouped list affordance", async ({
 	await waitWorkspaceReady(page);
 
 	// Phones reach New view from the Views section of the Lists tab.
-	await openMobileLists(page);
+	await openAdvancedSection(page, "views");
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(`Mini board ${Date.now()}`);
 	await pickLabeled(page, "Layout", "Board");

@@ -185,7 +185,7 @@ test("reopening a task from a view retracts its Completed snack", async ({
 	await openNewList(page, "SettleView");
 	await addTask(page, "View row");
 	await sidebarLists(page)
-		.getByRole("button", { name: "All my tasks", exact: true })
+		.getByRole("button", { name: "All tasks", exact: true })
 		.click();
 	const box = page.getByRole("checkbox", { name: "View row" });
 	await expect(box).toBeVisible({ timeout: 15000 });

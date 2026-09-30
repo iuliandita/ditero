@@ -116,6 +116,7 @@ function nameOf(email: string): string {
 async function signUp(page: Page, email: string): Promise<string> {
 	await page.goto("/");
 	await page.getByTestId("email").fill(email);
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill(PASSWORD);
 	await page.getByTestId("signup").click();
 	await expect(page.getByTestId("workspace")).toBeVisible({ timeout: 15000 });

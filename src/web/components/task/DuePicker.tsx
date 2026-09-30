@@ -126,6 +126,7 @@ export function DuePicker({
 						disabled={disabled}
 						variant="ghost"
 						size="icon-sm"
+						className="pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]"
 						aria-label={m.task_due_clear()}
 						onClick={onClear}
 					>
@@ -390,6 +391,7 @@ export function MonthGrid({
 					<Button
 						variant="ghost"
 						size="icon-sm"
+						className="pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]"
 						aria-label={m.calendar_prev_month()}
 						onClick={() => page(-1)}
 					>
@@ -398,6 +400,7 @@ export function MonthGrid({
 					<Button
 						variant="ghost"
 						size="icon-sm"
+						className="pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]"
 						aria-label={m.calendar_next_month()}
 						onClick={() => page(1)}
 					>

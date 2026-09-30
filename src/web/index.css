@@ -311,6 +311,9 @@
 }
 
 :root:is([data-reading-size="comfortable"], [data-reading-size="large"]) {
+	& [data-icon-picker-grid] {
+		grid-template-columns: repeat(auto-fit, minmax(var(--reading-target), 1fr));
+	}
 	& [data-reading-inline-add] {
 		flex-wrap: wrap;
 		& > div {

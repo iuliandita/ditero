@@ -19,6 +19,7 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 	] as const) {
 		await p.goto("/");
 		await p.getByTestId("email").fill(email);
+		await p.getByTestId("signup-mode").click();
 		await p.getByTestId("password").fill("pw-123456");
 		await p.getByTestId("signup").click();
 		await expect(p.getByTestId("workspace")).toBeVisible({ timeout: 15000 });
