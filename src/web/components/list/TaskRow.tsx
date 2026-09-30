@@ -447,6 +447,7 @@ export function TaskRow({
 						card ? "items-start" : "items-center",
 					)}
 					data-kbd-row
+					data-reading-row="task"
 					data-selected={selection?.selected || undefined}
 					{...rowProps}
 				>
@@ -458,6 +459,7 @@ export function TaskRow({
 						/>
 					) : (
 						<div
+							data-reading-check-target
 							className={cn(
 								"flex shrink-0 items-center justify-center",
 								card ? "size-8" : "size-11 md:size-8",
@@ -498,6 +500,7 @@ export function TaskRow({
 						)}
 					>
 						<span
+							data-reading-title
 							className={cn(
 								"block text-sm",
 								card ? "line-clamp-2 break-words" : "truncate",
@@ -522,6 +525,7 @@ export function TaskRow({
 						{!bare && (
 							<div
 								id={metaId}
+								data-reading-metadata
 								className="mt-0.5 flex flex-wrap items-center gap-2"
 							>
 								<AssigneeChips taskId={task.id} />
@@ -629,7 +633,11 @@ export function TaskRow({
 			{expanded && total > 0 && (
 				<ul className="ms-6 flex flex-col border-s ps-2">
 					{subtasks.map((s) => (
-						<li key={s.id} className="flex items-center gap-2 py-1">
+						<li
+							key={s.id}
+							data-reading-row="subtask"
+							className="flex items-center gap-2 py-1"
+						>
 							<Checkbox
 								disabled={!activation.canWriteTask(s.id)}
 								aria-label={s.title}
@@ -644,6 +652,7 @@ export function TaskRow({
 							<button
 								type="button"
 								aria-label={m.task_open_details()}
+								data-reading-title
 								onClick={() => handlers.onOpenDetail(s)}
 								className={cn(
 									"min-w-0 flex-1 truncate text-start text-sm",

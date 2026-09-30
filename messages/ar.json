@@ -2183,5 +2183,15 @@
 	"activation_container_change_failed": "تعذر حفظ هذا التغيير. راجع المهام المتوقفة وحاول مجددًا.",
 	"activation_task_change_failed": "تعذر تغيير هذه المهمة. حاول مجددًا.",
 	"activation_badge_pending": "الاستيراد معلّق",
-	"activation_badge_blocked": "تحتاج إلى مراجعة"
+	"activation_badge_blocked": "تحتاج إلى مراجعة",
+	"display_settings_label": "حجم النص والتباين",
+	"display_size_label": "حجم القراءة",
+	"display_size_description": "اضبط النص وعناصر التحكم والمسافات معًا.",
+	"display_size_standard": "عادي",
+	"display_size_comfortable": "مريح",
+	"display_size_large": "كبير",
+	"display_contrast_label": "تباين عالٍ",
+	"display_contrast_description": "اجعل النص والحدود وعناصر التحكم أسهل في التمييز في كل سمة.",
+	"display_device_note": "تُحفظ هذه الإعدادات لحسابك على هذا الجهاز.",
+	"display_save_failed": "تُطبّق تغييراتك الآن، لكن تعذر حفظها على هذا الجهاز."
 }

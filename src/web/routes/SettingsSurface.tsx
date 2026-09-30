@@ -5,6 +5,7 @@ import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
 import { AccountDeletionPanel } from "../components/settings/AccountDeletionPanel.tsx";
 import { AccountPanel } from "../components/settings/AccountPanel.tsx";
 import { DataPortabilityPanel } from "../components/settings/DataPortabilityPanel.tsx";
+import { DisplaySettings } from "../components/settings/DisplaySettings.tsx";
 import { FocusSettings } from "../components/settings/FocusSettings.tsx";
 import { ImportPlanPanel } from "../components/settings/ImportPlanPanel.tsx";
 import { KarmaSettings } from "../components/settings/KarmaSettings.tsx";
@@ -16,7 +17,10 @@ import {
 	SettingsNav,
 	type SettingsNavItem,
 } from "../components/settings/SettingsNav.tsx";
-import { SettingsSection } from "../components/settings/SettingsSection.tsx";
+import {
+	SettingsSection,
+	settingsSectionDomId,
+} from "../components/settings/SettingsSection.tsx";
 import { TemplateManager } from "../components/settings/TemplateManager.tsx";
 import { ThemeSwitcher } from "../components/settings/ThemeSwitcher.tsx";
 import { TimeZoneSetting } from "../components/settings/TimeZoneSetting.tsx";
@@ -33,6 +37,7 @@ export function SettingsSurface({
 	onBack,
 	onOpenList,
 	autoFocusBack,
+	initialSection,
 }: {
 	activeId: string | null;
 	activeRole: Role | null;
@@ -43,11 +48,20 @@ export function SettingsSurface({
 	// Phones arrive from a sheet that unmounts with its trigger; without a
 	// deliberate target focus would fall to the document body.
 	autoFocusBack?: boolean;
+	initialSection?: "account" | "appearance";
 }) {
 	const backRef = useRef<HTMLButtonElement>(null);
 	useEffect(() => {
+		if (initialSection === "appearance") {
+			const sectionId = settingsSectionDomId("appearance");
+			document.getElementById(sectionId)?.scrollIntoView({ block: "start" });
+			document
+				.getElementById(`${sectionId}-heading`)
+				?.focus({ preventScroll: true });
+			return;
+		}
 		if (autoFocusBack) backRef.current?.focus();
-	}, [autoFocusBack]);
+	}, [autoFocusBack, initialSection]);
 	// Order is the reading order: who you are, how it looks, what reaches you,
 	// how the account is protected, then the everyday tools, then your data,
 	// and the irreversible action alone at the end.
@@ -99,6 +113,7 @@ export function SettingsSurface({
 						<div className="flex flex-col gap-5">
 							<LanguageSwitcher persistLocale={persistLocale} />
 							<ThemeSwitcher />
+							<DisplaySettings />
 							<TimeZoneSetting />
 						</div>
 					</SettingsSection>

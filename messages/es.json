@@ -2045,5 +2045,15 @@
 	"activation_container_change_failed": "No se pudo guardar el cambio. Revisa las tareas en pausa e inténtalo de nuevo.",
 	"activation_task_change_failed": "No se pudo cambiar esta tarea. Inténtalo de nuevo.",
 	"activation_badge_pending": "Importación pendiente",
-	"activation_badge_blocked": "Revisión necesaria"
+	"activation_badge_blocked": "Revisión necesaria",
+	"display_settings_label": "Tamaño del texto y contraste",
+	"display_size_label": "Tamaño de lectura",
+	"display_size_description": "Ajusta el texto, los controles y el espaciado juntos.",
+	"display_size_standard": "Estándar",
+	"display_size_comfortable": "Cómodo",
+	"display_size_large": "Grande",
+	"display_contrast_label": "Alto contraste",
+	"display_contrast_description": "Haz que el texto, los bordes y los controles se distingan mejor en cualquier tema.",
+	"display_device_note": "Estos ajustes se guardan para tu cuenta en este dispositivo.",
+	"display_save_failed": "Tus cambios se aplican ahora, pero no se pudieron guardar en este dispositivo."
 }

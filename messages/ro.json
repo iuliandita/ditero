@@ -2045,5 +2045,15 @@
 	"activation_container_change_failed": "Modificarea nu a putut fi salvată. Verifică sarcinile suspendate și încearcă din nou.",
 	"activation_task_change_failed": "Sarcina nu a putut fi modificată. Încearcă din nou.",
 	"activation_badge_pending": "Import în așteptare",
-	"activation_badge_blocked": "Verificare necesară"
+	"activation_badge_blocked": "Verificare necesară",
+	"display_settings_label": "Mărimea textului și contrastul",
+	"display_size_label": "Mărime pentru citire",
+	"display_size_description": "Ajustează împreună textul, comenzile și spațierea.",
+	"display_size_standard": "Standard",
+	"display_size_comfortable": "Confortabil",
+	"display_size_large": "Mare",
+	"display_contrast_label": "Contrast ridicat",
+	"display_contrast_description": "Fă textul, marginile și comenzile mai ușor de distins în orice temă.",
+	"display_device_note": "Aceste setări sunt salvate pentru contul tău pe acest dispozitiv.",
+	"display_save_failed": "Modificările se aplică acum, dar nu au putut fi salvate pe acest dispozitiv."
 }

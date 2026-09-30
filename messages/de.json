@@ -1999,5 +1999,15 @@
 	"activation_container_change_failed": "Die Änderung konnte nicht gespeichert werden. Prüfe pausierte Aufgaben und versuche es erneut.",
 	"activation_task_change_failed": "Die Aufgabe konnte nicht geändert werden. Versuche es erneut.",
 	"activation_badge_pending": "Import ausstehend",
-	"activation_badge_blocked": "Prüfung nötig"
+	"activation_badge_blocked": "Prüfung nötig",
+	"display_settings_label": "Textgröße und Kontrast",
+	"display_size_label": "Lesegröße",
+	"display_size_description": "Passe Text, Bedienelemente und Abstände gemeinsam an.",
+	"display_size_standard": "Standard",
+	"display_size_comfortable": "Komfortabel",
+	"display_size_large": "Groß",
+	"display_contrast_label": "Hoher Kontrast",
+	"display_contrast_description": "Mache Text, Ränder und Bedienelemente in jedem Design leichter erkennbar.",
+	"display_device_note": "Diese Einstellungen werden für dein Konto auf diesem Gerät gespeichert.",
+	"display_save_failed": "Deine Änderungen gelten jetzt, konnten aber auf diesem Gerät nicht gespeichert werden."
 }
