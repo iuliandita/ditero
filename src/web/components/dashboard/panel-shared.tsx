@@ -1,4 +1,4 @@
-import { useZero } from "@rocicorp/zero/react";
+import { useQuery, useZero } from "@rocicorp/zero/react";
 import { Flag } from "lucide-react";
 import { type JSX, useMemo, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
@@ -6,8 +6,10 @@ import { priorityLabel, priorityMeta } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
 import type { ResolvedSource } from "../../../domain/dashboard.ts";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import { localDay } from "../../../domain/local-day.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
+import { queries } from "../../../zero/queries.ts";
 import type {
 	Label,
 	List,
@@ -16,7 +18,10 @@ import type {
 	TaskAssignee,
 	TaskLabel,
 } from "../../../zero/schema.gen.ts";
+import { useLocalDay } from "../../hooks/useLocalDay.ts";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
+import { useUserPref } from "../../hooks/useUserPref.ts";
+import { habitOccurrence } from "../../views/habit-occurrence.ts";
 import { type RowHandlers, TaskRow } from "../list/TaskRow.tsx";
 import {
 	Dialog,
@@ -48,17 +53,49 @@ export function usePanelEntries(
 	ids: PanelIds,
 ): TaskEntry[] {
 	const { tasks, lists, labels, taskLabels, assignees } = data;
+	const [habitLogs] = useQuery(queries.habitLogs.mine());
+	const [workspaces] = useQuery(queries.workspaces.mine());
+	const { pref } = useUserPref();
+	const currentDay = useLocalDay(pref.timezone);
 	// `now` derives inside the memo (not a dep) so relative-date buckets refresh
 	// when the data changes without re-running on every render (M1c pattern).
 	return useMemo(
 		() =>
-			matchingTasks({ tasks, lists, labels, taskLabels, assignees }, resolved, {
-				userId: ids.currentUserId,
-				now: new Date(),
-				membershipWorkspaceIds: ids.membershipWorkspaceIds,
+			matchingTasks(
+				{
+					tasks,
+					lists,
+					labels,
+					taskLabels,
+					assignees,
+					habitLogs,
+					timeZone: pref.timezone,
+					currentDay,
+				},
+				resolved,
+				{
+					userId: ids.currentUserId,
+					now: new Date(),
+					membershipWorkspaceIds: ids.membershipWorkspaceIds,
+				},
+			).map((entry) => {
+				const list = lists.find((l) => l.id === entry.task.listId);
+				const workspace = workspaces.find((w) => w.id === list?.workspaceId);
+				return {
+					...entry,
+					sourceContext: workspace
+						? workspace.kind === "personal"
+							? m.scope_source_personal({ workspace: workspace.name })
+							: m.scope_source_shared({ workspace: workspace.name })
+						: undefined,
+				};
 			}),
 		[
 			tasks,
+			habitLogs,
+			currentDay,
+			workspaces,
+			pref.timezone,
 			lists,
 			labels,
 			taskLabels,
@@ -79,12 +116,39 @@ export function usePanelRowHandlers(onOpenTask: (task: Task) => void): {
 } {
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
+	const [tasks] = useQuery(queries.tasks.mine());
+	const [lists] = useQuery(queries.lists.mine());
+	const [habitLogs] = useQuery(queries.habitLogs.mine());
+	const { pref } = useUserPref();
 	const [error, setError] = useState<string | null>(null);
 	const handlers = useMemo<RowHandlers>(
 		() => ({
 			onToggle: (id, done) => {
 				if (!activation.canWriteTask(id)) return;
 				setError(null);
+				const task = tasks.find((t) => t.id === id);
+				if (
+					task &&
+					lists.find((l) => l.id === task.listId)?.kind === "habits"
+				) {
+					const date = localDay(new Date(), pref.timezone);
+					const occurrence = habitOccurrence(
+						task,
+						habitLogs,
+						new Date(),
+						pref.timezone,
+					);
+					if (occurrence.date !== date) return;
+					void runMutation(
+						zero.mutate(
+							occurrence.done
+								? mutators.habit.unlog({ habitId: id, date })
+								: mutators.habit.log({ habitId: id, date, status: "done" }),
+						),
+						setError,
+					);
+					return;
+				}
 				void runMutation(
 					zero.mutate(
 						done
@@ -96,7 +160,7 @@ export function usePanelRowHandlers(onOpenTask: (task: Task) => void): {
 			},
 			onOpenDetail: onOpenTask,
 		}),
-		[zero, onOpenTask, activation],
+		[zero, onOpenTask, activation, tasks, lists, habitLogs, pref.timezone],
 	);
 	return { handlers, error };
 }
@@ -144,6 +208,8 @@ function PanelRows({
 				<li key={e.task.id}>
 					<TaskRow
 						task={e.task}
+						occurrence={e.occurrence}
+						sourceContext={e.sourceContext}
 						kind={e.kind as ListKind}
 						subtasks={[]}
 						labels={e.labels}

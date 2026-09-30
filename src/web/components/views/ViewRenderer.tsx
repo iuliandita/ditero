@@ -4,6 +4,7 @@ import { type JSX, type ReactNode, useMemo, useRef, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
 import { useWideContent } from "@/lib/use-wide-content";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import { localDay } from "../../../domain/local-day.ts";
 import { type Role, WRITE_ROLES } from "../../../domain/role.ts";
 import { compareTasksBy } from "../../../domain/task-sort.ts";
 import type {
@@ -12,10 +13,7 @@ import type {
 	FilterTask,
 	ViewDisplay,
 } from "../../../domain/view-filter.ts";
-import {
-	resolveWorkspaceScope,
-	taskMatchesFilter,
-} from "../../../domain/view-filter.ts";
+import { resolveWorkspaceScope } from "../../../domain/view-filter.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
@@ -27,17 +25,25 @@ import type {
 	Task,
 	TaskAssignee,
 	TaskLabel,
+	Workspace,
 } from "../../../zero/schema.gen.ts";
+import { useLocalDay } from "../../hooks/useLocalDay.ts";
 import { useRowSelection } from "../../hooks/useRowSelection.ts";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
 import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
+import { formatList } from "../../lib/intl-format.ts";
 import type { GroupCtx, GroupTask } from "../../views/group.ts";
 import {
 	effectiveGroupBy,
 	filterMentionsDone,
 	groupForView,
 } from "../../views/group.ts";
+import {
+	type HabitOccurrence,
+	habitOccurrence,
+	matchesOccurrenceFilter,
+} from "../../views/habit-occurrence.ts";
 import { BulkSelection } from "../list/BulkSelection.tsx";
 import { SortableList } from "../list/SortableList.tsx";
 import {
@@ -58,6 +64,8 @@ export type ViewEntry = {
 	labels: Label[];
 	listTitle: string;
 	listIcon: string | null;
+	sourceContext?: string;
+	occurrence?: HabitOccurrence;
 };
 export type ViewEntryGroup = {
 	key: string;
@@ -74,7 +82,23 @@ type Enriched = ViewEntry & {
 function sortEnriched(entries: Enriched[], sort: ViewSort): Enriched[] {
 	const dir = sort.dir === "desc" ? -1 : 1;
 	return [...entries].sort(
-		(a, b) => dir * compareTasksBy(a.task, b.task, sort.field),
+		(a, b) =>
+			dir *
+			compareTasksBy(
+				{
+					...a.task,
+					...(a.occurrence
+						? { dueAt: a.occurrence.dueAt, done: a.occurrence.done }
+						: {}),
+				},
+				{
+					...b.task,
+					...(b.occurrence
+						? { dueAt: b.occurrence.dueAt, done: b.occurrence.done }
+						: {}),
+				},
+				sort.field,
+			),
 	);
 }
 
@@ -83,6 +107,7 @@ export function ViewRenderer(props: {
 	display: ViewDisplay;
 	tasks: Task[];
 	lists: List[];
+	workspaces?: Pick<Workspace, "id" | "name" | "kind">[];
 	folders: Folder[];
 	labels: Label[];
 	taskLabels: TaskLabel[];
@@ -102,7 +127,9 @@ export function ViewRenderer(props: {
 	firstRun?: ReactNode;
 }): JSX.Element {
 	const { pref } = useUserPref();
+	const currentDay = useLocalDay(pref.timezone);
 	const activation = useTaskImportActivationMap();
+	const [habitLogs] = useQuery(queries.habitLogs.mine());
 	const {
 		filter,
 		display,
@@ -132,6 +159,10 @@ export function ViewRenderer(props: {
 		setLocalSort(display.sort);
 	}
 
+	const workspaceById = useMemo(
+		() => new Map((props.workspaces ?? []).map((w) => [w.id, w])),
+		[props.workspaces],
+	);
 	const listById = useMemo(() => new Map(lists.map((l) => [l.id, l])), [lists]);
 	const labelById = useMemo(
 		() => new Map(labels.map((l) => [l.id, l])),
@@ -178,12 +209,24 @@ export function ViewRenderer(props: {
 			if (!list) continue;
 			const labelIds = labelIdsByTask.get(task.id) ?? [];
 			const assigneeIds = assigneeIdsByTask.get(task.id) ?? [];
-			const dueAt = task.dueAt == null ? null : new Date(task.dueAt);
+			const occurrence =
+				list.kind === "habits"
+					? habitOccurrence(task, habitLogs, ctx.now, pref.timezone, currentDay)
+					: undefined;
+			const effectiveDue = occurrence ? occurrence.dueAt : task.dueAt;
+			const dueAt = effectiveDue == null ? null : new Date(effectiveDue);
+			const done = occurrence ? occurrence.done : (task.done ?? false);
+			const workspace = workspaceById.get(list.workspaceId);
+			const sourceContext = workspace
+				? workspace.kind === "personal"
+					? m.scope_source_personal({ workspace: workspace.name })
+					: m.scope_source_shared({ workspace: workspace.name })
+				: undefined;
 			const filterTask: FilterTask = {
 				id: task.id,
 				listId: task.listId,
 				workspaceId: list.workspaceId,
-				done: task.done ?? false,
+				done,
 				dueAt,
 				priority: task.priority ?? 0,
 				kind: list.kind ?? "tasks",
@@ -192,9 +235,21 @@ export function ViewRenderer(props: {
 				assigneeIds,
 			};
 			if (!scope.has(filterTask.workspaceId)) continue;
-			if (!taskMatchesFilter(filterTask, filter, ctx)) continue;
+			if (
+				!matchesOccurrenceFilter(
+					filterTask,
+					filter,
+					ctx,
+					occurrence,
+					pref.timezone,
+					currentDay,
+				)
+			)
+				continue;
 			out.push({
 				task,
+				occurrence,
+				sourceContext,
 				kind: (list.kind ?? "tasks") as ListKind,
 				listTitle: list.title || m.list_untitled_fallback(),
 				listIcon: list.icon ?? null,
@@ -206,8 +261,9 @@ export function ViewRenderer(props: {
 					id: task.id,
 					listId: task.listId,
 					title: task.title,
-					done: task.done ?? false,
+					done,
 					dueAt,
+					occurrenceDate: occurrence?.date,
 					priority: task.priority ?? 0,
 					assigneeIds,
 					labelIds,
@@ -217,6 +273,10 @@ export function ViewRenderer(props: {
 		return sortEnriched(out, localSort);
 	}, [
 		tasks,
+		habitLogs,
+		currentDay,
+		pref.timezone,
+		workspaceById,
 		listById,
 		labelById,
 		labelIdsByTask,
@@ -231,6 +291,7 @@ export function ViewRenderer(props: {
 	const entryGroups = useMemo<ViewEntryGroup[]>(() => {
 		const groupCtx: GroupCtx = {
 			now: new Date(),
+			timeZone: pref.timezone,
 			listTitle: (id) => listById.get(id)?.title ?? m.list_untitled_fallback(),
 			memberName: (id) => memberById.get(id) ?? m.group_unknown_user(),
 			labelName: (id) => labelById.get(id)?.name ?? m.group_unknown_label(),
@@ -256,6 +317,7 @@ export function ViewRenderer(props: {
 		listById,
 		labelById,
 		memberById,
+		pref.timezone,
 	]);
 
 	function run(mutation: { client: Promise<unknown> }) {
@@ -328,7 +390,24 @@ export function ViewRenderer(props: {
 	const handlers: RowHandlers = {
 		onToggle: (id) => {
 			const task = tasks.find((t) => t.id === id);
-			if (task && activation.canWriteTask(id)) toggleTask(task);
+			if (!task || !activation.canWriteTask(id)) return;
+			if (listById.get(task.listId)?.kind === "habits") {
+				const date = localDay(new Date(), pref.timezone);
+				const occurrence = habitOccurrence(
+					task,
+					habitLogs,
+					new Date(),
+					pref.timezone,
+				);
+				if (occurrence.date !== date) return;
+				void run(
+					zero.mutate(
+						occurrence.done
+							? mutators.habit.unlog({ habitId: id, date })
+							: mutators.habit.log({ habitId: id, date, status: "done" }),
+					),
+				);
+			} else toggleTask(task);
 		},
 		onOpenDetail: (task) => onOpenTask(task),
 	};
@@ -350,6 +429,25 @@ export function ViewRenderer(props: {
 				zero.mutate(mutators.task.update({ id, priority: Number(columnKey) })),
 			);
 		} else if (groupBy === "status") {
+			const task = taskById.get(id);
+			if (task && listById.get(task.listId)?.kind === "habits") {
+				const date = localDay(new Date(), pref.timezone);
+				const occurrence = habitOccurrence(
+					task,
+					habitLogs,
+					new Date(),
+					pref.timezone,
+				);
+				if (occurrence.date !== date) return;
+				void run(
+					zero.mutate(
+						columnKey === "done"
+							? mutators.habit.log({ habitId: id, date, status: "done" })
+							: mutators.habit.unlog({ habitId: id, date }),
+					),
+				);
+				return;
+			}
 			void run(
 				zero.mutate(
 					columnKey === "done"
@@ -408,6 +506,29 @@ export function ViewRenderer(props: {
 
 	return (
 		<div ref={measureRef} data-testid="view-renderer">
+			{lists.length > 0 && (
+				<p
+					data-testid="aggregate-scope"
+					className="mb-3 text-xs text-muted-foreground"
+				>
+					{display.workspaceScope.mode === "all"
+						? m.aggregate_scope_all()
+						: m.aggregate_scope_selected({
+								workspaces: formatList(
+									(props.workspaces ?? [])
+										.filter(
+											(w) =>
+												membershipWorkspaceIds.includes(w.id) &&
+												(display.workspaceScope.mode === "one"
+													? w.id === display.workspaceScope.id
+													: display.workspaceScope.mode === "subset" &&
+														display.workspaceScope.ids.includes(w.id)),
+										)
+										.map((w) => w.name),
+								),
+							})}
+				</p>
+			)}
 			{error && (
 				<p role="alert" className="mb-2 text-sm text-destructive">
 					{error}
@@ -448,6 +569,7 @@ export function ViewRenderer(props: {
 					onReschedule={onReschedule}
 					canDrag={activation.canWriteTask}
 					timeZone={pref.timezone}
+					habitOccurrenceOnly={filterMentionsDone(filter)}
 				/>
 			) : renderList ? (
 				<div ref={selection.rootRef}>
@@ -493,13 +615,35 @@ export function ViewRenderer(props: {
 				/>
 			) : (
 				<TableLayout
-					entries={sorted.map((e) => ({ task: e.task, labels: e.labels }))}
+					entries={sorted.map((e) => ({
+						task: e.occurrence
+							? {
+									...e.task,
+									dueAt: e.occurrence.dueAt,
+									dueAllDay: true,
+									done: e.occurrence.done,
+								}
+							: e.task,
+						labels: e.labels,
+					}))}
 					sort={localSort}
 					onSort={onSort}
 					listTitle={(id) =>
-						listById.get(id)?.title ?? m.list_untitled_fallback()
+						(() => {
+							const list = listById.get(id);
+							const workspace = list
+								? workspaceById.get(list.workspaceId)
+								: undefined;
+							const title = list?.title || m.list_untitled_fallback();
+							const context = workspace
+								? workspace.kind === "personal"
+									? m.scope_source_personal({ workspace: workspace.name })
+									: m.scope_source_shared({ workspace: workspace.name })
+								: undefined;
+							return context ? `${title} · ${context}` : title;
+						})()
 					}
-					onOpenTask={onOpenTask}
+					onOpenTask={(task) => onOpenTask(taskById.get(task.id) ?? task)}
 				/>
 			)}
 		</div>
@@ -530,6 +674,9 @@ function ListLayout({
 	const renderRow = (entry: ViewEntry) => (
 		<TaskRow
 			task={entry.task}
+			occurrence={entry.occurrence}
+			sourceContext={entry.sourceContext}
+			list={{ title: entry.listTitle, icon: entry.listIcon }}
 			kind={entry.kind}
 			subtasks={[]}
 			labels={entry.labels}

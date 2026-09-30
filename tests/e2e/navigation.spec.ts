@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import {
+	openAdvancedSection,
 	openMobileLists,
 	openWorkspaceSwitcher,
 	sidebarLists,
@@ -100,7 +101,7 @@ test("sidebar leads with Today, nests lists under folders, and has no bare headi
 	// Today is the very first destination, before any section.
 	const rows = nav.locator("button[data-nav-kind], button[data-list-id]");
 	await expect(rows.first()).toHaveText("Today");
-	await expect(rows.nth(1)).toHaveText("All my tasks");
+	await expect(rows.nth(1)).toHaveText("All tasks");
 	await expect(rows.nth(2)).toHaveText("Assigned to me");
 
 	// Section order: built-ins, then lists, then dashboards.
@@ -200,7 +201,7 @@ test("each item type has its own glyph, named by its section", async ({
 
 	const today = nav.getByRole("button", { name: "Today", exact: true });
 	const allMine = nav.getByRole("button", {
-		name: "All my tasks",
+		name: "All tasks",
 		exact: true,
 	});
 	const assigned = nav.getByRole("button", {
@@ -314,6 +315,29 @@ test("phones: Today is a tab, settings leaves the bar, and each tab keeps to its
 		"page",
 	);
 	await expect(page.getByTestId("view-surface")).toHaveCount(0);
+	for (const section of ["views", "dashboards"] as const) {
+		await expect(
+			page.locator(
+				`section[data-nav-group="${section}"] > button[aria-expanded]`,
+			),
+		).toHaveAttribute("aria-expanded", "false");
+	}
+	await expect(page.getByTestId("new-view")).toHaveCount(0);
+	await expect(page.getByTestId("new-dashboard")).toHaveCount(0);
+	await openAdvancedSection(page, "views");
+	await openAdvancedSection(page, "dashboards");
+	await expect(page.getByTestId("new-view")).toBeVisible();
+	await expect(page.getByTestId("new-dashboard")).toBeVisible();
+	await page.reload();
+	await waitWorkspaceReady(page);
+	await openMobileLists(page);
+	for (const section of ["views", "dashboards"] as const) {
+		await expect(
+			page.locator(
+				`section[data-nav-group="${section}"] > button[aria-expanded]`,
+			),
+		).toHaveAttribute("aria-expanded", "true");
+	}
 	await expect(page.getByTestId("new-view")).toBeVisible();
 	await expect(page.getByTestId("new-dashboard")).toBeVisible();
 	await expectNoSeriousA11y(page, "mobile lists tab");
@@ -354,7 +378,7 @@ test("phones: Today is a tab, settings leaves the bar, and each tab keeps to its
 
 	// Phones always land on Today, so they offer no "Set as home": it would
 	// have no visible effect here. A built-in view then has no menu at all.
-	await page.getByRole("button", { name: "All my tasks", exact: true }).click();
+	await page.getByRole("button", { name: "All tasks", exact: true }).click();
 	await expect(page.getByTestId("nav-tab-lists")).toHaveAttribute(
 		"aria-current",
 		"page",
@@ -372,7 +396,7 @@ test("phones: Today is a tab, settings leaves the bar, and each tab keeps to its
 	await page.setViewportSize({ width: 1280, height: 844 });
 	await expect(
 		page.getByTestId("view-surface").getByRole("heading", { level: 1 }),
-	).toHaveText("All my tasks", { timeout: 15000 });
+	).toHaveText("All tasks", { timeout: 15000 });
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(page.getByTestId("nav-tab-today")).toHaveAttribute(
 		"aria-current",
@@ -447,7 +471,7 @@ for (const width of [1440, 1280]) {
 
 		// The views surface, where the menu used to sit at the pane's far edge.
 		await sidebarLists(page)
-			.getByRole("button", { name: "All my tasks", exact: true })
+			.getByRole("button", { name: "All tasks", exact: true })
 			.click();
 		const surface = page.getByTestId("view-surface");
 		await expect(

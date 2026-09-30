@@ -26,13 +26,15 @@ export function InlineSyntaxHint({
 	return (
 		<SyntaxHint
 			example={example}
+			collapsible
+			introduction={m.syntax_hint_inline_literal()}
 			onDismiss={dismissSyntax}
 			lead={
 				<button
 					type="button"
 					data-testid="syntax-hint-open-quickadd"
 					onClick={onQuickAdd}
-					className="rounded-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+					className="inline-flex min-h-11 items-center rounded-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-7"
 				>
 					{keyLabel ? (
 						<KeyText

@@ -442,7 +442,7 @@ export function DashboardView({
 		>
 			<div className="mb-3 flex items-center gap-2">
 				{!isDesktop && <BackButton size="compact" onClick={onBack} />}
-				<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
+				<h1 className="min-w-0 flex-1 wrap-anywhere text-lg font-semibold">
 					{dashboard.name}
 				</h1>
 				{!isDesktop && <SyncIndicator placement="header" />}

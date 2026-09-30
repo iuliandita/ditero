@@ -117,13 +117,11 @@ export function TableLayout({
 								</td>
 								<td className="px-3 py-2">
 									{meta ? (
-										<span
-											className={cn(
-												"inline-flex items-center gap-1",
-												meta.color,
-											)}
-										>
-											<Flag className="size-3.5 fill-current" />
+										<span className="inline-flex items-center gap-1 text-foreground">
+											<Flag
+												aria-hidden="true"
+												className={cn("size-3.5 fill-current", meta.color)}
+											/>
 											{meta.label}
 										</span>
 									) : (

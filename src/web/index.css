@@ -317,6 +317,9 @@
 			flex: 0 0 100%;
 		}
 	}
+	& [data-icon-picker-grid] {
+		grid-template-columns: repeat(auto-fit, minmax(var(--reading-target), 1fr));
+	}
 	& [data-reading-inline-add] {
 		flex-wrap: wrap;
 		& > div {

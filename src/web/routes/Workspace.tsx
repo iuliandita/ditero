@@ -5,6 +5,7 @@ import {
 	Pencil,
 	Pin,
 	PinOff,
+	Plus,
 	Trash2,
 } from "lucide-react";
 import {
@@ -788,9 +789,19 @@ function NormalWorkspace() {
 									className="size-5 shrink-0 text-muted-foreground"
 								/>
 							)}
-							<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
+							<h1 className="min-w-0 flex-1 break-words text-lg font-semibold">
 								{activeView.name}
 							</h1>
+							{isDesktop && (
+								<Button
+									type="button"
+									data-testid="desktop-add-task"
+									onClick={() => setQuickAddOpen(true)}
+									disabled={!activeId || !canCreateList(activeRole)}
+								>
+									<Plus aria-hidden /> {m.list_add_task()}
+								</Button>
+							)}
 							{/* Phones always land on Today, so "Set as home" would do
 							    nothing visible there; a built-in view then has no
 							    actions at all and shows no menu. */}
@@ -874,6 +885,7 @@ function NormalWorkspace() {
 								display={activeView.display}
 								tasks={tasks}
 								lists={lists}
+								workspaces={workspaces}
 								folders={folders}
 								labels={labels}
 								taskLabels={taskLabels}
