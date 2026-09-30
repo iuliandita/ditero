@@ -20,6 +20,7 @@ import { SettingsSection } from "../components/settings/SettingsSection.tsx";
 import { TemplateManager } from "../components/settings/TemplateManager.tsx";
 import { ThemeSwitcher } from "../components/settings/ThemeSwitcher.tsx";
 import { TimeZoneSetting } from "../components/settings/TimeZoneSetting.tsx";
+import { SyncIndicator } from "../components/shell/SyncIndicator.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import type { Locale } from "../lib/locale.ts";
 import { SecurityPanel } from "./SecurityPanel.tsx";
@@ -78,6 +79,11 @@ export function SettingsSurface({
 					onClick={onBack}
 				/>
 				<h1 className="truncate text-lg font-semibold">{m.nav_settings()}</h1>
+				{!isDesktop && (
+					<div className="ms-auto">
+						<SyncIndicator placement="header" />
+					</div>
+				)}
 			</div>
 			<div className="px-4 py-6 md:px-6 xl:grid xl:grid-cols-[11rem_minmax(0,42rem)] xl:gap-12">
 				{isDesktop && (

@@ -15,6 +15,7 @@ import {
 	useTaskImportActivationMap,
 } from "../../hooks/useTaskImportActivation.ts";
 import { RestrictedTaskDetail } from "./RestrictedTaskDetail.tsx";
+import { SyncIndicator } from "./SyncIndicator.tsx";
 
 // A single large-touch-target row for the kid surface. Deliberately not TaskRow:
 // no swipe/schedule/reorder/subtask affordances -- a kid completes and opens; the
@@ -137,9 +138,12 @@ export function RestrictedShell() {
 	return (
 		<div data-testid="restricted-shell" className="min-h-dvh">
 			<main className="mx-auto w-full max-w-xl p-4 md:p-6">
-				<h1 className="mb-4 text-2xl font-semibold">
-					{m.restricted_my_tasks_heading()}
-				</h1>
+				<div className="mb-4 flex items-center gap-2">
+					<h1 className="min-w-0 flex-1 text-2xl font-semibold">
+						{m.restricted_my_tasks_heading()}
+					</h1>
+					<SyncIndicator placement="header" />
+				</div>
 
 				{error && (
 					<p role="alert" className="mb-2 text-sm text-destructive">

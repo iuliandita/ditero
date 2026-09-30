@@ -38,6 +38,7 @@ import { useIsDesktop } from "../../lib/use-media-query.ts";
 import { useWideContent } from "../../lib/use-wide-content.ts";
 import { effectiveGroupBy, filterMentionsDone } from "../../views/group.ts";
 import { useReorderSensors } from "../list/SortableList.tsx";
+import { SyncIndicator } from "../shell/SyncIndicator.tsx";
 import { BackButton } from "../ui/back-button.tsx";
 import { Button } from "../ui/button.tsx";
 import {
@@ -444,6 +445,7 @@ export function DashboardView({
 				<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
 					{dashboard.name}
 				</h1>
+				{!isDesktop && <SyncIndicator placement="header" />}
 				{canEdit && parsed.success && (
 					<Button
 						variant={editing ? "default" : "outline"}

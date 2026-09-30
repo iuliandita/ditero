@@ -1413,6 +1413,34 @@
 	"auth_error_invalid_origin": "This address is not trusted by the server. Ask the operator to add it to the instance's trusted origins.",
 	"mutation_failed": "Something went wrong.",
 	"mutation_offline_not_saved": "You're offline, this change wasn't saved. Reconnect and try again.",
+	"sync_synced_title": "Synced",
+	"sync_synced_detail": "Connected. Changes you make are saved to the server right away.",
+	"sync_syncing_title": "Syncing",
+	"sync_syncing_detail": "Your changes are saved on this device and are on their way to the server.",
+	"sync_offline_title": "Offline",
+	"sync_offline_detail": "Can't reach the server. Your edits are saved on this device and will sync when the connection is back.",
+	"sync_stopped_title": "Not syncing",
+	"sync_stopped_detail": "Can't reach the server, and new edits can't be saved right now. Reload the page to try again.",
+	"sync_rejected_title": "A change wasn't saved",
+	"sync_rejected_detail": "The server refused a change, so it was undone. Check the item and try again.",
+	"sync_rejected_dismiss": "Dismiss",
+	"sync_reauth_title": "Sign in to sync",
+	"sync_reauth_detail": "Your sign-in expired while you were away. Your edits are kept on this device and sync after you sign in again.",
+	"sync_reauth_action": "Sign in again",
+	"sync_pending_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} recent change not synced yet",
+				"countPlural=other": "{countNum} recent changes not synced yet"
+			}
+		}
+	],
 	"mutator_error_denied": "You do not have permission to do that.",
 	"mutator_error_label_name_taken": "A label with that name already exists.",
 	"modal_close_label": "Close",

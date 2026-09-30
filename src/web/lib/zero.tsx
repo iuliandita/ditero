@@ -1,11 +1,17 @@
 import { Zero } from "@rocicorp/zero";
 import { ZeroProvider } from "@rocicorp/zero/react";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { mutators } from "../../zero/mutators.ts";
 import { schema } from "../../zero/schema.gen.ts";
 import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { fetchPublicConfig } from "./public-config.ts";
+import {
+	createSyncTracker,
+	OFFLINE_EDIT_WINDOW_MS,
+	type SyncTracker,
+	trackMutations,
+} from "./sync-status.ts";
 import { fetchZeroToken, watchZeroAuth } from "./zero-auth.ts";
 
 async function repairAccountBootstrap(): Promise<void> {
@@ -27,9 +33,18 @@ function createZeroClient(userID: string, token: string, cacheURL: string) {
 		mutators,
 		auth: token,
 		context: { id: userID },
+		disconnectTimeoutMs: OFFLINE_EDIT_WINDOW_MS,
 	});
 }
 type ZeroClient = ReturnType<typeof createZeroClient>;
+
+const SyncTrackerContext = createContext<SyncTracker | null>(null);
+
+export function useSyncTracker(): SyncTracker {
+	const tracker = useContext(SyncTrackerContext);
+	if (!tracker) throw new Error("useSyncTracker outside AppZeroProvider");
+	return tracker;
+}
 
 export function AppZeroProvider({
 	userID,
@@ -38,11 +53,15 @@ export function AppZeroProvider({
 	userID: string;
 	children: ReactNode;
 }) {
-	const [zero, setZero] = useState<ZeroClient | null>(null);
+	const [client, setClient] = useState<{
+		zero: ZeroClient;
+		tracker: SyncTracker;
+	} | null>(null);
 
 	useEffect(() => {
 		let instance: ZeroClient | undefined;
 		let stopAuthRefresh: (() => void) | undefined;
+		let stopConnectionWatch: (() => void) | undefined;
 		let cancelled = false;
 		void (async () => {
 			await repairAccountBootstrap();
@@ -52,19 +71,33 @@ export function AppZeroProvider({
 			]);
 			if (cancelled) return;
 			instance = createZeroClient(userID, token, config.zeroURL);
-			stopAuthRefresh = watchZeroAuth(instance);
-			setZero(instance);
+			const tracker = createSyncTracker();
+			trackMutations(instance, tracker);
+			stopConnectionWatch = instance.connection.state.subscribe((state) => {
+				if (state.name === "connected") tracker.connected();
+			});
+			stopAuthRefresh = watchZeroAuth(instance, undefined, undefined, {
+				onSessionExpired: tracker.setSessionExpired,
+			});
+			setClient({ zero: instance, tracker });
 		})().catch((error) => {
 			if (!cancelled) console.error("Zero startup failed", error);
 		});
 		return () => {
 			cancelled = true;
 			stopAuthRefresh?.();
+			stopConnectionWatch?.();
 			instance?.close();
-			setZero(null);
+			setClient(null);
 		};
 	}, [userID]);
 
-	if (!zero) return <ShellSkeleton />;
-	return <ZeroProvider zero={zero}>{children}</ZeroProvider>;
+	if (!client) return <ShellSkeleton />;
+	return (
+		<ZeroProvider zero={client.zero}>
+			<SyncTrackerContext.Provider value={client.tracker}>
+				{children}
+			</SyncTrackerContext.Provider>
+		</ZeroProvider>
+	);
 }

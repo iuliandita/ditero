@@ -38,6 +38,7 @@ import { MobileListIndex } from "../components/shell/MobileListIndex.tsx";
 import { PageFrame } from "../components/shell/PageFrame.tsx";
 import { RestrictedShell } from "../components/shell/RestrictedShell.tsx";
 import { Sidebar } from "../components/shell/Sidebar.tsx";
+import { SyncIndicator } from "../components/shell/SyncIndicator.tsx";
 import { WorkspaceSwitcherSheet } from "../components/shell/WorkspaceSwitcher.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import { Button } from "../components/ui/button.tsx";
@@ -853,6 +854,8 @@ function NormalWorkspace() {
 									</DropdownMenuContent>
 								</DropdownMenu>
 							)}
+							{/* The tab roots carry it in the shell header instead. */}
+							{!isDesktop && !isTabRoot && <SyncIndicator placement="header" />}
 						</div>
 						{/* A malformed synced view (a co-member's bad filter/display) can
 						    throw in the renderer; the boundary keeps it inline instead of
@@ -949,7 +952,13 @@ function NormalWorkspace() {
 							onSearch={() => setSearchOpen(true)}
 						/>
 					}
-					fab={<Fab onOpen={() => setQuickAddOpen(true)} />}
+					// Settings is not a place to add tasks, and the button would sit on
+					// its controls.
+					fab={
+						contentState.kind === "settings" ? null : (
+							<Fab onOpen={() => setQuickAddOpen(true)} />
+						)
+					}
 				>
 					{!isDesktop && isTabRoot && (
 						// Phones: where you are and where to switch, above the tab's
@@ -963,6 +972,9 @@ function NormalWorkspace() {
 								canManageMembers={canManageMembers}
 								onOpenSettings={openSettings}
 							/>
+							<div className="ms-auto">
+								<SyncIndicator placement="header" />
+							</div>
 						</header>
 					)}
 					{workspaceActionError && (

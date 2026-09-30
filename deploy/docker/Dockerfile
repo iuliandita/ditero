@@ -28,9 +28,12 @@ RUN bun install --frozen-lockfile --production --omit=optional --omit=peer
 
 FROM rocicorp/zero:1.9.0@sha256:f80683bf3ddf08be26c68ddd94589fada29a0b8a4597668b090006c09041d4cd AS zero-base
 
-# Keep upstream's runtime and PostgreSQL patch, but rebuild its dependency tree
+# Keep upstream's PostgreSQL patch, but rebuild its dependency tree
 # from the reviewed lock so the vulnerable packages are actually replaced.
+FROM node:22.23.3-alpine3.24@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS zero-node
+
 FROM zero-base AS zero-deps
+COPY --from=zero-node /usr/local/bin/node /usr/local/bin/node
 WORKDIR /opt/zero-deps
 COPY deploy/docker/zero-runtime/package.json deploy/docker/zero-runtime/pnpm-lock.yaml deploy/docker/zero-runtime/pnpm-workspace.yaml ./
 COPY deploy/docker/zero-runtime/patches ./patches
@@ -65,7 +68,7 @@ FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4c
 RUN apk upgrade --no-cache \
 	&& apk add --no-cache ca-certificates 'curl>=8.22.0-r0' \
 		'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' libstdc++ readline
-COPY --from=zero-base /usr/local/bin/node /usr/local/bin/node
+COPY --from=zero-node /usr/local/bin/node /usr/local/bin/node
 COPY --from=litestream-legacy /out/litestream /usr/local/bin/litestream
 COPY --from=litestream-v5 /out/litestream-v5 /usr/local/bin/litestream-v5
 COPY --from=zero-base /etc/litestream.yml /etc/litestream.yml

@@ -36,6 +36,7 @@ import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
 import type { Section } from "./BottomNav.tsx";
 import type { ListGroup } from "./grouping.ts";
 import { ListProgress } from "./ListProgress.tsx";
+import { SyncIndicator } from "./SyncIndicator.tsx";
 import { ThemeMenu } from "./ThemeMenu.tsx";
 import { WorkspaceSwitcherMenu } from "./WorkspaceSwitcher.tsx";
 
@@ -569,20 +570,26 @@ export function Sidebar({
 				)}
 			</div>
 
-			<div className="flex items-center gap-1 border-t p-2">
+			<div
+				className={cn(
+					"flex items-center gap-1 border-t p-2",
+					collapsed && "flex-col",
+				)}
+			>
 				<Button
 					data-testid="nav-settings"
 					variant={section === "settings" ? "secondary" : "ghost"}
 					size="sm"
 					className={cn(
-						"flex-1 justify-start",
-						collapsed && "justify-center px-0",
+						"justify-start",
+						collapsed ? "w-full justify-center px-0" : "flex-1",
 					)}
 					onClick={onOpenSettings}
 				>
 					<Settings className="size-4" />
 					{!collapsed && m.nav_settings()}
 				</Button>
+				<SyncIndicator placement="sidebar" />
 				<ThemeMenu collapsed={collapsed} />
 				<Button
 					variant="ghost"

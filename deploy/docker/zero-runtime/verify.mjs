@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
+
+assert.equal(process.version, "v22.23.3");
+assert.equal(process.versions.undici, "6.28.1");
 
 const zeroManifest = new URL(
 	"./node_modules/@rocicorp/zero/package.json",
@@ -26,11 +29,23 @@ assert.throws(
 
 // Check physical packages too, so an unused vulnerable copy cannot survive.
 const modules = new URL("./node_modules/", import.meta.url);
-for (const path of readdirSync(modules, { recursive: true })) {
+const packagePaths = readdirSync(modules, { recursive: true });
+if (existsSync(new URL("undici/package.json", modules))) {
+	packagePaths.push("undici/package.json");
+}
+let undiciCopies = 0;
+for (const path of packagePaths) {
 	if (path.endsWith("/fastify/package.json")) {
 		assert.equal(
 			JSON.parse(readFileSync(new URL(path, modules), "utf8")).version,
 			"5.12.3",
+		);
+	}
+	if (path === "undici/package.json" || path.endsWith("/undici/package.json")) {
+		undiciCopies += 1;
+		assert.equal(
+			JSON.parse(readFileSync(new URL(path, modules), "utf8")).version,
+			"7.29.1",
 		);
 	}
 	if (path === "uuid/package.json" || path.endsWith("/uuid/package.json")) {
@@ -41,10 +56,12 @@ for (const path of readdirSync(modules, { recursive: true })) {
 	}
 }
 
+assert.ok(undiciCopies > 0, "No physical undici package found");
+
 const Database = requireZero("@rocicorp/zero-sqlite3");
 const db = new Database(":memory:");
 assert.equal(db.prepare("select 1 as value").get().value, 1);
 db.close();
 console.log(
-	`Zero 1.9.0, Fastify 5.12.3, UUID 11.1.1, SQLite ${process.platform}/${process.arch} verified`,
+	`Zero 1.9.0, Fastify 5.12.3, UUID 11.1.1, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
 );

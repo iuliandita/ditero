@@ -1442,6 +1442,35 @@
 	"auth_error_invalid_origin": "Serverul nu are încredere în această adresă. Cere-i operatorului să o adauge la originile de încredere ale instanței.",
 	"mutation_failed": "Ceva n-a mers bine.",
 	"mutation_offline_not_saved": "Ești offline, modificarea nu a fost salvată. Reconectează-te și încearcă din nou.",
+	"sync_synced_title": "Sincronizat",
+	"sync_synced_detail": "Conectat. Modificările tale se salvează imediat pe server.",
+	"sync_syncing_title": "Se sincronizează",
+	"sync_syncing_detail": "Modificările tale sunt salvate pe acest dispozitiv și sunt trimise către server.",
+	"sync_offline_title": "Offline",
+	"sync_offline_detail": "Serverul nu poate fi contactat. Modificările tale sunt salvate pe acest dispozitiv și se vor sincroniza când revine conexiunea.",
+	"sync_stopped_title": "Sincronizare oprită",
+	"sync_stopped_detail": "Serverul nu poate fi contactat și modificările noi nu pot fi salvate acum. Reîncarcă pagina ca să încerci din nou.",
+	"sync_rejected_title": "O modificare nu a fost salvată",
+	"sync_rejected_detail": "Serverul a refuzat o modificare, așa că a fost anulată. Verifică elementul și încearcă din nou.",
+	"sync_rejected_dismiss": "Închide",
+	"sync_reauth_title": "Autentifică-te ca să sincronizezi",
+	"sync_reauth_detail": "Autentificarea ta a expirat cât ai fost plecat. Modificările tale rămân pe acest dispozitiv și se sincronizează după ce te autentifici din nou.",
+	"sync_reauth_action": "Autentifică-te din nou",
+	"sync_pending_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} modificare recentă nesincronizată încă",
+				"countPlural=few": "{countNum} modificări recente nesincronizate încă",
+				"countPlural=other": "{countNum} de modificări recente nesincronizate încă"
+			}
+		}
+	],
 	"mutator_error_denied": "Nu ai permisiunea să faci asta.",
 	"mutator_error_label_name_taken": "Există deja o etichetă cu acest nume.",
 	"modal_close_label": "Închide",
