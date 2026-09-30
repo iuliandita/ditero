@@ -5,6 +5,8 @@ allowBuilds:
 patchedDependencies:
   postgres@3.4.7: patches/postgres@3.4.7.patch
 overrides:
+  '@grpc/grpc-js': 1.14.5
+  brace-expansion: 2.1.7
   fastify: 5.12.3
   'cloudevents@10.0.0>uuid': 11.1.1
   '@opentelemetry/core@2.7.1': 2.8.0
