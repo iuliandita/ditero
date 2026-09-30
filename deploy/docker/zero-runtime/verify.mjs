@@ -12,6 +12,16 @@ const zeroManifest = new URL(
 assert.equal(JSON.parse(readFileSync(zeroManifest, "utf8")).version, "1.9.0");
 const requireZero = createRequire(realpathSync(zeroManifest));
 assert.equal(requireZero("fastify/package.json").version, "5.12.3");
+const rimrafManifest = requireZero.resolve("rimraf/package.json");
+const requireRimraf = createRequire(realpathSync(rimrafManifest));
+assert.deepEqual(
+	requireRimraf("glob")
+		.globSync("{package.json,pnpm-workspace.yaml}", {
+			cwd: new URL(".", import.meta.url),
+		})
+		.sort(),
+	["package.json", "pnpm-workspace.yaml"],
+);
 
 const cloudeventsManifest = requireZero.resolve("cloudevents/package.json");
 const requireCloudEvents = createRequire(realpathSync(cloudeventsManifest));
@@ -34,7 +44,18 @@ if (existsSync(new URL("undici/package.json", modules))) {
 	packagePaths.push("undici/package.json");
 }
 let undiciCopies = 0;
+let braceExpansionCopies = 0;
 for (const path of packagePaths) {
+	if (
+		path === "brace-expansion/package.json" ||
+		path.endsWith("/brace-expansion/package.json")
+	) {
+		braceExpansionCopies += 1;
+		assert.equal(
+			JSON.parse(readFileSync(new URL(path, modules), "utf8")).version,
+			"2.1.7",
+		);
+	}
 	if (path.endsWith("/fastify/package.json")) {
 		assert.equal(
 			JSON.parse(readFileSync(new URL(path, modules), "utf8")).version,
@@ -57,11 +78,15 @@ for (const path of packagePaths) {
 }
 
 assert.ok(undiciCopies > 0, "No physical undici package found");
+assert.ok(
+	braceExpansionCopies > 0,
+	"No physical brace-expansion package found",
+);
 
 const Database = requireZero("@rocicorp/zero-sqlite3");
 const db = new Database(":memory:");
 assert.equal(db.prepare("select 1 as value").get().value, 1);
 db.close();
 console.log(
-	`Zero 1.9.0, Fastify 5.12.3, UUID 11.1.1, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
+	`Zero 1.9.0, Fastify 5.12.3, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
 );

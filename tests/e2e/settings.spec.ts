@@ -79,6 +79,57 @@ test("sections read in a fixed order with the danger zone last", async ({
 	expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
 });
 
+for (const width of [390, 1024]) {
+	test(`settings section selector jumps and keeps heading focus at ${width}px`, async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width, height: 844 });
+		await page.emulateMedia({ reducedMotion: "reduce" });
+		await openSettings(page, `settings-nav-${width}`);
+		const selector = page.getByTestId("settings-section-select");
+		await expect(selector).toBeVisible();
+		expect((await selector.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+		await expect(
+			page.getByTestId("settings-nav").locator("a").first(),
+		).toBeHidden();
+		const originalHash = new URL(page.url()).hash;
+
+		await selector.focus();
+		await page.keyboard.press("Space");
+		await expect(page.getByRole("listbox")).toBeVisible();
+		await page.keyboard.press("End");
+		await expect(
+			page.getByRole("option", { name: "Danger zone", exact: true }),
+		).toBeFocused();
+		await page.keyboard.press("Enter");
+		await expect(page.getByRole("listbox")).toHaveCount(0);
+		await expect(page.locator("#settings-danger-heading")).toBeFocused();
+		await expect(selector).toHaveText("Danger zone");
+		expect(new URL(page.url()).hash).toBe(originalHash);
+		expect((await selector.boundingBox())?.y).toBeGreaterThanOrEqual(0);
+		expect(
+			(await page.locator("#settings-danger-heading").boundingBox())?.y,
+		).toBeGreaterThanOrEqual(44);
+
+		// Dismissing the menu restores its trigger, without jumping again.
+		await selector.click();
+		await page.keyboard.press("Escape");
+		await expect(selector).toBeFocused();
+		await chooseOption(page, selector, "Notifications");
+		await expect(page.locator("#settings-notifications-heading")).toBeFocused();
+		await expect(selector).toHaveText("Notifications");
+		expect(new URL(page.url()).hash).toBe(originalHash);
+		const { violations } = await new AxeBuilder({ page })
+			.include('[data-testid="settings-nav"]')
+			.analyze();
+		expect(
+			violations.filter(
+				(v) => v.impact === "serious" || v.impact === "critical",
+			),
+		).toEqual([]);
+	});
+}
+
 test("unconfigured channels start collapsed with one Set up action", async ({
 	page,
 }) => {
