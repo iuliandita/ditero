@@ -283,6 +283,7 @@ export function Sidebar({
 	onToggleSection,
 	section,
 	onOpenSettings,
+	onOpenAppearance,
 	shortcutHintKey,
 	onOpenShortcuts,
 	collapsed,
@@ -319,6 +320,7 @@ export function Sidebar({
 	onToggleSection: (section: NavSection) => void;
 	section: Section;
 	onOpenSettings: () => void;
+	onOpenAppearance?: () => void;
 	/** Keycap for the cheat sheet while its hint is still due; null hides it. */
 	shortcutHintKey: string | null;
 	onOpenShortcuts: () => void;
@@ -370,6 +372,7 @@ export function Sidebar({
 					onManageMembers={onManageMembers}
 					canManageMembers={canManageMembers}
 					onOpenSettings={onOpenSettings}
+					onOpenAppearance={onOpenAppearance}
 					collapsed={collapsed}
 				/>
 			</div>

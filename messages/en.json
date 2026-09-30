@@ -2000,5 +2000,15 @@
 	"activation_task_change_failed": "Could not change this task. Try again.",
 	"activation_badge_pending": "Import pending",
 	"activation_badge_blocked": "Review needed",
-	"sync_save_pending_failed": "Could not save pending changes on this device. Try again."
+	"sync_save_pending_failed": "Could not save pending changes on this device. Try again.",
+	"display_settings_label": "Text size and contrast",
+	"display_size_label": "Reading size",
+	"display_size_description": "Adjust text, controls, and spacing together.",
+	"display_size_standard": "Standard",
+	"display_size_comfortable": "Comfortable",
+	"display_size_large": "Large",
+	"display_contrast_label": "High contrast",
+	"display_contrast_description": "Make text, borders, and controls easier to distinguish in any theme.",
+	"display_device_note": "These settings are saved for your account on this device.",
+	"display_save_failed": "Your changes apply now, but could not be saved on this device."
 }

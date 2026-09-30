@@ -410,7 +410,7 @@ export function ListView({
 				isDesktop ? "mb-5 flex flex-col gap-1" : "mt-2 flex flex-col gap-1"
 			}
 		>
-			<div className="flex gap-2">
+			<div data-reading-inline-add className="flex gap-2">
 				<TitleSuggestInput
 					inputRef={titleInput}
 					data-testid="new-task"
@@ -442,7 +442,11 @@ export function ListView({
 	return (
 		<div ref={selection.rootRef} data-testid="list" className="max-w-3xl">
 			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
-			<div ref={listHeaderRef} className="group mb-5 flex items-center gap-1.5">
+			<div
+				ref={listHeaderRef}
+				data-reading-list-header
+				className="group mb-5 flex items-center gap-1.5"
+			>
 				{backControl}
 				<button
 					type="button"

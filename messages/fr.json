@@ -2046,5 +2046,15 @@
 	"activation_task_change_failed": "Impossible de modifier cette tâche. Réessaie.",
 	"activation_badge_pending": "Importation en attente",
 	"activation_badge_blocked": "Vérification requise",
-	"sync_save_pending_failed": "Impossible d’enregistrer les modifications en attente sur cet appareil. Réessaie."
+	"sync_save_pending_failed": "Impossible d’enregistrer les modifications en attente sur cet appareil. Réessaie.",
+	"display_settings_label": "Taille du texte et contraste",
+	"display_size_label": "Taille de lecture",
+	"display_size_description": "Ajuste le texte, les commandes et les espacements ensemble.",
+	"display_size_standard": "Standard",
+	"display_size_comfortable": "Confortable",
+	"display_size_large": "Grande",
+	"display_contrast_label": "Contraste élevé",
+	"display_contrast_description": "Rends le texte, les bordures et les commandes plus faciles à distinguer dans chaque thème.",
+	"display_device_note": "Ces réglages sont enregistrés pour ton compte sur cet appareil.",
+	"display_save_failed": "Tes modifications sont appliquées, mais n’ont pas pu être enregistrées sur cet appareil."
 }

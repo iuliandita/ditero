@@ -141,6 +141,9 @@ function NormalWorkspace() {
 	const { dashboards, loading: dashboardsLoading } = useDashboards();
 	const { pref, setPref, loading: prefLoading } = useUserPref();
 	const [activeId, setActiveId] = useState<string | null>(null);
+	const [settingsSection, setSettingsSection] = useState<
+		"account" | "appearance"
+	>("account");
 	const [contentState, dispatchContent] = useReducer(workspaceContentReducer, {
 		kind: "home",
 	});
@@ -395,11 +398,16 @@ function NormalWorkspace() {
 	// whose switcher opened it; desktop returns to the landing.
 	const settingsReturn = useRef<"home" | "index">("home");
 	const openSettings = useCallback(() => {
+		setSettingsSection("account");
 		setDetailTaskId(null);
 		settingsReturn.current =
 			!isDesktop && contentState.kind === "index" ? "index" : "home";
 		dispatchContent({ kind: "settings" });
 	}, [isDesktop, contentState.kind]);
+	const openAppearance = useCallback(() => {
+		openSettings();
+		setSettingsSection("appearance");
+	}, [openSettings]);
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
 	// of M1a scope: each group is its own DndContext, so a list can't leave it.
@@ -657,6 +665,7 @@ function NormalWorkspace() {
 	if (contentState.kind === "settings") {
 		content = (
 			<SettingsSurface
+				initialSection={settingsSection}
 				activeId={activeId}
 				activeRole={activeRole}
 				isDesktop={isDesktop}
@@ -934,6 +943,7 @@ function NormalWorkspace() {
 								onToggleSection={navSections.toggle}
 								section={section}
 								onOpenSettings={openSettings}
+								onOpenAppearance={openAppearance}
 								shortcutHintKey={shortcutHintKey}
 								onOpenShortcuts={() => setCheatOpen(true)}
 								collapsed={collapsed}
@@ -967,6 +977,7 @@ function NormalWorkspace() {
 								onManageMembers={() => setMembersOpen(true)}
 								canManageMembers={canManageMembers}
 								onOpenSettings={openSettings}
+								onOpenAppearance={openAppearance}
 							/>
 							<div className="ms-auto">
 								<SyncIndicator placement="header" />

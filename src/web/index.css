@@ -295,3 +295,296 @@
 		animation: none;
 	}
 }
+
+/* Reading preferences use rems so the browser's default text size still wins.
+   The target and check sizes are 48/24px and 56/28px at a 16px default. */
+:root[data-reading-size="comfortable"] {
+	font-size: 114.2857%;
+	--reading-target: max(48px, 2.625rem);
+	--reading-check: max(24px, 1.3125rem);
+}
+
+:root[data-reading-size="large"] {
+	font-size: 128.5714%;
+	--reading-target: max(56px, 2.722223rem);
+	--reading-check: max(28px, 1.361112rem);
+}
+
+:root:is([data-reading-size="comfortable"], [data-reading-size="large"]) {
+	& [data-reading-inline-add] {
+		flex-wrap: wrap;
+		& > div {
+			min-inline-size: 0;
+			flex-basis: min(100%, 10rem);
+		}
+		& > button {
+			max-inline-size: 100%;
+		}
+	}
+	&
+		:is(
+			button:not([data-slot="checkbox"]):not(.sr-only):not(
+				[aria-hidden="true"]
+			),
+			input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
+			textarea,
+			select,
+			[role="menuitem"],
+			[role="menuitemcheckbox"],
+			[role="menuitemradio"],
+			[data-slot="select-item"],
+			label:has(> input[type="radio"]),
+			label:has(> input[type="checkbox"])
+		) {
+		min-block-size: var(--reading-target);
+		min-inline-size: var(--reading-target);
+	}
+	&
+		:is(
+			[data-slot="button"],
+			[data-slot="select-trigger"],
+			[data-slot="select-item"],
+			[role^="menuitem"]
+		) {
+		block-size: auto;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+	& [data-slot="select-value"] {
+		-webkit-line-clamp: unset;
+	}
+	& :is([data-slot="checkbox"], input[type="radio"], input[type="checkbox"]) {
+		inline-size: var(--reading-check);
+		block-size: var(--reading-check);
+		&::after {
+			inset: auto;
+			inline-size: var(--reading-target);
+			block-size: var(--reading-target);
+			left: 50%;
+			top: 50%;
+			translate: -50% -50%;
+		}
+	}
+	& :is([data-slot="checkbox-preview"], [data-slot="checkbox-indicator"] svg) {
+		inline-size: calc(var(--reading-check) * 0.7);
+		block-size: calc(var(--reading-check) * 0.7);
+	}
+	& [data-reading-check-target] {
+		inline-size: var(--reading-target);
+		block-size: var(--reading-target);
+	}
+	& [data-reading-title] {
+		display: block;
+		white-space: normal;
+		overflow: visible;
+		overflow-wrap: anywhere;
+		-webkit-line-clamp: unset;
+	}
+	& [data-reading-metadata] :is(.truncate, [data-slot="badge"]) {
+		block-size: auto;
+		white-space: normal;
+		overflow: visible;
+		overflow-wrap: anywhere;
+	}
+	& [data-reading-metadata] > * {
+		max-inline-size: 100%;
+	}
+	& [data-reading-row="subtask"] {
+		gap: calc((var(--reading-target) - var(--reading-check)) / 2 + 0.5rem);
+		padding-inline-start: calc(
+			(var(--reading-target) - var(--reading-check)) /
+			2
+		);
+	}
+	& :is([data-reading-row="task"], [data-reading-row="shopping"]) {
+		flex-wrap: wrap;
+		& [data-kbd-nav] {
+			flex-basis: calc(100% - var(--reading-target) - 0.5rem);
+		}
+	}
+	& [data-reading-list-header] {
+		flex-wrap: wrap;
+		& h1 {
+			order: -1;
+			flex-basis: 100%;
+			white-space: normal;
+			overflow: visible;
+			overflow-wrap: anywhere;
+		}
+	}
+	& [data-reading-row="task"] [data-testid="task-priority"] {
+		margin-inline-start: calc(var(--reading-target) + 0.5rem);
+	}
+	& [data-reading-row="shopping"] {
+		flex-wrap: wrap;
+		padding-block: 0.25rem;
+		& [data-reading-title] {
+			flex-basis: 8rem;
+			flex-grow: 1;
+		}
+		&
+			:is(
+				fieldset,
+				[data-testid="shopping-qty-chip"],
+				[data-testid="shopping-qty-add"]
+			) {
+			max-inline-size: 100%;
+			margin-inline-start: auto;
+			flex-wrap: wrap;
+			white-space: normal;
+			overflow-wrap: anywhere;
+		}
+	}
+}
+
+/* Contrast is independent of light/dark and reading size. Tide keeps its hue;
+   priority still has its word, ring and distinct flag fill. */
+:root[data-high-contrast="true"] {
+	--foreground: oklch(0.19 0.009 220);
+	--card-foreground: var(--foreground);
+	--popover-foreground: var(--foreground);
+	--secondary-foreground: var(--foreground);
+	--accent-foreground: var(--foreground);
+	--sidebar-foreground: var(--foreground);
+	--muted-foreground: oklch(0.38 0.013 215);
+	--primary: oklch(0.4 0.075 192);
+	--primary-foreground: oklch(0.99 0.002 192);
+	--sidebar-accent-foreground: var(--primary);
+	--selection: oklch(0.925 0.026 192);
+	--destructive: oklch(0.4 0.12 27);
+	--success: oklch(0.4 0.08 155);
+	--info: oklch(0.4 0.08 245);
+	--warning: oklch(0.4 0.08 62);
+	--warning-foreground: oklch(0.99 0.002 80);
+	--border: oklch(0.48 0.014 215);
+	--input: var(--border);
+	--control-border: var(--border);
+	--sidebar-border: var(--border);
+	--ring: var(--primary);
+	--kind-tasks: oklch(0.4 0.08 252);
+	--kind-shopping: oklch(0.4 0.08 150);
+	--kind-checklist: oklch(0.4 0.08 80);
+	--kind-project: oklch(0.4 0.08 305);
+	--priority-1: oklch(0.4 0.08 250);
+	--priority-2: oklch(0.4 0.08 60);
+	--priority-3: oklch(0.4 0.12 27);
+	&
+		:is(
+			[data-slot="select-trigger"],
+			[class*="bg-input/"],
+			[class*="bg-destructive/"],
+			[class*="bg-warning/"],
+			[class*="bg-success/"],
+			[class*="bg-info/"]
+		) {
+		background-color: var(--card);
+	}
+	& [data-slot="badge"][data-variant="default"] {
+		background-color: var(--primary);
+	}
+	& [data-testid="task-priority-text"] {
+		display: inline;
+	}
+	& [class*="text-muted-foreground/"] {
+		color: var(--muted-foreground);
+	}
+	& [class*="text-foreground/"] {
+		color: var(--foreground);
+	}
+	& [class*="text-background/"] {
+		color: var(--background);
+	}
+	& :focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
+	}
+}
+
+:root.dark[data-high-contrast="true"] {
+	--foreground: oklch(0.98 0.004 210);
+	--card-foreground: var(--foreground);
+	--popover-foreground: var(--foreground);
+	--secondary-foreground: var(--foreground);
+	--accent-foreground: var(--foreground);
+	--sidebar-foreground: var(--foreground);
+	--muted-foreground: oklch(0.85 0.012 210);
+	--primary: oklch(0.85 0.075 192);
+	--primary-foreground: oklch(0.19 0.02 192);
+	--sidebar-accent-foreground: var(--foreground);
+	--selection: oklch(0.3 0.03 192);
+	--destructive: oklch(0.85 0.08 22);
+	--success: oklch(0.85 0.08 155);
+	--info: oklch(0.85 0.08 245);
+	--warning: oklch(0.85 0.08 75);
+	--warning-foreground: oklch(0.19 0.03 70);
+	--border: oklch(0.68 0.013 210);
+	--input: var(--border);
+	--control-border: var(--border);
+	--sidebar-border: var(--border);
+	--ring: var(--primary);
+	--kind-tasks: oklch(0.85 0.08 252);
+	--kind-shopping: oklch(0.85 0.08 150);
+	--kind-checklist: oklch(0.85 0.08 85);
+	--kind-project: oklch(0.85 0.08 305);
+	--priority-1: oklch(0.85 0.08 250);
+	--priority-2: oklch(0.85 0.08 65);
+	--priority-3: oklch(0.85 0.08 25);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not(.light)[data-high-contrast="true"] {
+		--foreground: oklch(0.98 0.004 210);
+		--card-foreground: var(--foreground);
+		--popover-foreground: var(--foreground);
+		--secondary-foreground: var(--foreground);
+		--accent-foreground: var(--foreground);
+		--sidebar-foreground: var(--foreground);
+		--muted-foreground: oklch(0.85 0.012 210);
+		--primary: oklch(0.85 0.075 192);
+		--primary-foreground: oklch(0.19 0.02 192);
+		--sidebar-accent-foreground: var(--foreground);
+		--selection: oklch(0.3 0.03 192);
+		--destructive: oklch(0.85 0.08 22);
+		--success: oklch(0.85 0.08 155);
+		--info: oklch(0.85 0.08 245);
+		--warning: oklch(0.85 0.08 75);
+		--warning-foreground: oklch(0.19 0.03 70);
+		--border: oklch(0.68 0.013 210);
+		--input: var(--border);
+		--control-border: var(--border);
+		--sidebar-border: var(--border);
+		--ring: var(--primary);
+		--kind-tasks: oklch(0.85 0.08 252);
+		--kind-shopping: oklch(0.85 0.08 150);
+		--kind-checklist: oklch(0.85 0.08 85);
+		--kind-project: oklch(0.85 0.08 305);
+		--priority-1: oklch(0.85 0.08 250);
+		--priority-2: oklch(0.85 0.08 65);
+		--priority-3: oklch(0.85 0.08 25);
+	}
+}
+
+@media (forced-colors: active) {
+	:root [data-slot="checkbox"][data-shape] {
+		border-color: ButtonText;
+		background: Canvas;
+		color: ButtonText;
+		&[data-state="checked"] {
+			background: Highlight;
+			color: HighlightText;
+		}
+	}
+	:root [data-testid="task-priority"] {
+		color: CanvasText;
+		& [data-testid="task-priority-text"] {
+			display: inline;
+		}
+		& svg {
+			color: CanvasText;
+		}
+	}
+	:root[data-reading-size] :focus-visible {
+		outline: 2px solid Highlight;
+		outline-offset: 2px;
+	}
+}
