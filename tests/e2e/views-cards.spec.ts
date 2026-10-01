@@ -45,11 +45,15 @@ type SeedTask = {
 };
 
 // Two lists of different kinds so every surface spans lists, then the tasks.
-async function seed(email: string, tasks: SeedTask[]): Promise<void> {
+async function seed(email: string, tasks: SeedTask[]): Promise<string> {
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
 	try {
-		const rows = await pool.query<{ wsId: string; ownerId: string }>(
-			`select w.id as "wsId", w.owner_id as "ownerId"
+		const rows = await pool.query<{
+			wsId: string;
+			ownerId: string;
+			workspaceName: string;
+		}>(
+			`select w.id as "wsId", w.owner_id as "ownerId", w.name as "workspaceName"
 			 from workspace w join "user" u on u.id = w.owner_id
 			 where u.email = $1 and w.kind = 'personal'`,
 			[email],
@@ -85,6 +89,7 @@ async function seed(email: string, tasks: SeedTask[]): Promise<void> {
 				],
 			);
 		}
+		return row.workspaceName;
 	} finally {
 		await pool.end();
 	}
@@ -254,7 +259,7 @@ test("calendar: chips name priority and completion, done chips step back", async
 }) => {
 	const email = uniqueEmail("vc2");
 	await signUp(page, email);
-	await seed(email, [
+	const workspaceName = await seed(email, [
 		{ list: "home", title: "Call the plumber", priority: 3, dueToday: true },
 		{
 			list: "home",
@@ -282,14 +287,15 @@ test("calendar: chips name priority and completion, done chips step back", async
 	});
 
 	const grid = page.getByRole("table");
+	const source = `${workspaceName} · Personal`;
 	await expect(
 		grid.getByRole("button", {
-			name: "Call the plumber, P1 High",
+			name: `Call the plumber, P1 High, Home jobs, ${source}`,
 			exact: true,
 		}),
 	).toBeVisible({ timeout: 15000 });
 	const done = grid.getByRole("button", {
-		name: "Take out bins, completed",
+		name: `Take out bins, completed, Home jobs, ${source}`,
 		exact: true,
 	});
 	await expect(done).toBeVisible();
@@ -301,7 +307,10 @@ test("calendar: chips name priority and completion, done chips step back", async
 	).toBe("line-through");
 
 	// The long title wraps onto a second line instead of cutting off at once.
-	const long = grid.getByRole("button", { name: LONG_TITLE, exact: true });
+	const long = grid.getByRole("button", {
+		name: `${LONG_TITLE}, Groceries, ${source}`,
+		exact: true,
+	});
 	const rendered = await long
 		.locator("span")
 		.last()

@@ -19,7 +19,21 @@ test("the phone Appearance shortcut and section selector follow reading-size cha
 	await expect(selector).toHaveText("Appearance and language");
 	const selectSection = async (name: string, id: string) => {
 		await selector.click();
-		await page.getByRole("option", { name, exact: true }).click();
+		const option = page.getByRole("option", { name, exact: true });
+		// A resize can make this section current already. Selecting its unchanged
+		// value closes the menu without the changed-value focus handoff.
+		if ((await option.getAttribute("data-state")) === "checked") {
+			const other =
+				id === "account"
+					? { name: "Appearance and language", id: "appearance" }
+					: { name: "Account", id: "account" };
+			await page.getByRole("option", { name: other.name, exact: true }).click();
+			await expect(page.getByRole("listbox")).toHaveCount(0);
+			await expect(page.locator(`#settings-${other.id}-heading`)).toBeFocused();
+			await expect(selector).toHaveText(other.name);
+			await selector.click();
+		}
+		await option.click();
 		await expect(page.getByRole("listbox")).toHaveCount(0);
 		await expect(page.locator(`#settings-${id}-heading`)).toBeFocused();
 		await expect(selector).toHaveText(name);
