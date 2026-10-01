@@ -227,16 +227,21 @@ async function joinShared(
 // Preserve sync metadata, never auth frames or task contents, for sharing failures.
 type SharingSyncEvent = Record<string, unknown> & {
 	kind: string;
+	accountRole: "owner" | "member" | "outsider" | "viewer";
 	clientGroupID?: string;
 	clientID?: string;
 };
 
-function observeSharingSync(page: Page): SharingSyncEvent[] {
+function observeSharingSync(
+	page: Page,
+	accountRole: SharingSyncEvent["accountRole"],
+): SharingSyncEvent[] {
 	const events: SharingSyncEvent[] = [];
 	page.on("websocket", (socket) => {
 		const url = new URL(socket.url());
 		if (!url.pathname.includes("/sync/")) return;
 		const connection = {
+			accountRole,
 			clientGroupID: url.searchParams.get("clientGroupID") ?? undefined,
 			clientID: url.searchParams.get("clientID") ?? undefined,
 		};
@@ -280,7 +285,11 @@ function observeSharingSync(page: Page): SharingSyncEvent[] {
 					}),
 				});
 			} catch {
-				events.push({ kind: "unparseable-sync-frame" });
+				events.push({
+					at: Date.now(),
+					kind: "unparseable-sync-frame",
+					...connection,
+				});
 			}
 		});
 	});
@@ -327,13 +336,14 @@ async function attachSharingFailure(
 			}),
 		);
 		const state: Record<string, unknown> = Object.fromEntries(database);
-		const groups = [
+		const observedGroups = [
 			...new Set(
 				sync.flatMap((event) =>
 					event.clientGroupID ? [event.clientGroupID] : [],
 				),
 			),
 		];
+		const groups = observedGroups.slice(0, 4);
 		const records = (name: string): Record<string, unknown>[] =>
 			Array.isArray(state[name]) ? state[name] : [];
 		const knownIDs = (values: unknown[]) =>
@@ -355,7 +365,12 @@ async function attachSharingFailure(
 				rowKey: { id },
 			})),
 		];
-		let cvr: Record<string, unknown> = { groups, expected };
+		let cvr: Record<string, unknown> = {
+			groups,
+			expected,
+			limits: { groups: 4, rows: 200 },
+			truncated: { groups: observedGroups.length > groups.length },
+		};
 		if (groups.length === 0) {
 			console.error(
 				"dashboard sharing CVR diagnostics: no observed client group",
@@ -381,7 +396,8 @@ async function attachSharingFailure(
 					);
 					const queries = await client.query(
 						`select "clientGroupID", "queryHash", "patchVersion",
-						 "transformationHash", "transformationVersion", "rowSetSignature", deleted
+						 "transformationHash", "transformationVersion", "rowSetSignature", deleted,
+						 count(*) over () as "matchedRows"
 						 from "zero_0/cvr".queries
 						 where "clientGroupID" = any($1::text[]) and "queryName" = 'dashboards.mine'
 						 order by "clientGroupID", "queryHash" limit 200`,
@@ -398,7 +414,8 @@ async function attachSharingFailure(
 						 r."clientGroupID" is not null as "rowFound", r."schema",
 						 r."rowVersion", r."patchVersion", r."refCounts",
 						 r."refCounts" is null as "nullRefs", q."queryHash",
-						 r."refCounts" -> q."queryHash" as "dashboardQueryRefCount"
+						 r."refCounts" -> q."queryHash" as "dashboardQueryRefCount",
+						 count(*) over () as "matchedRows"
 						 from unnest($1::text[]) g(id) cross join expected e
 						 left join "zero_0/cvr".rows r on r."clientGroupID" = g.id
 						 and r."schema" = '' and r."table" = e."table" and r."rowKey" = e."rowKey"
@@ -410,6 +427,11 @@ async function attachSharingFailure(
 					transactionOpen = false;
 					cvr = {
 						...cvr,
+						truncated: {
+							groups: observedGroups.length > groups.length,
+							queries: Number(queries.rows[0]?.matchedRows ?? 0) > 200,
+							rows: Number(rows.rows[0]?.matchedRows ?? 0) > 200,
+						},
 						versions: versions.rows,
 						queries: queries.rows,
 						rows: rows.rows,
@@ -675,11 +697,12 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 	const accounts: Record<string, string> = {};
 	const teamDash = `Team ${Date.now()}`;
 	const soloDash = `Solo ${Date.now()}`;
-	let viewerSync: SharingSyncEvent[] = [];
+	const sync: SharingSyncEvent[][] = [];
 	try {
 		// Owner joins the seeded shared workspace and creates a workspace-shared
 		// dashboard in it, plus a personal one.
 		const pOwner = await ctxOwner.newPage();
+		sync.push(observeSharingSync(pOwner, "owner"));
 		const ownerId = await signUp(pOwner, uniqueEmail("d4-owner"));
 		accounts.owner = ownerId;
 		await joinShared(ownerId, "owner");
@@ -695,6 +718,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 
 		// A second member sees the workspace dashboard, never the personal one.
 		const pMember = await ctxMember.newPage();
+		sync.push(observeSharingSync(pMember, "member"));
 		const memberId = await signUp(pMember, uniqueEmail("d4-member"));
 		accounts.member = memberId;
 		await joinShared(memberId, "member");
@@ -715,6 +739,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 
 		// A non-member never sees it (dashboards section is rendered, entry absent).
 		const pOutsider = await ctxOutsider.newPage();
+		sync.push(observeSharingSync(pOutsider, "outsider"));
 		accounts.outsider = await signUp(pOutsider, uniqueEmail("d4-outsider"));
 		await waitWorkspaceReady(pOutsider);
 		await pOutsider.getByTestId("sidebar-create").click();
@@ -729,7 +754,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 
 		// A viewer sees and opens the dashboard but gets no edit affordances.
 		const pViewer = await ctxViewer.newPage();
-		viewerSync = observeSharingSync(pViewer);
+		sync.push(observeSharingSync(pViewer, "viewer"));
 		const viewerId = await signUp(pViewer, uniqueEmail("d4-viewer"));
 		accounts.viewer = viewerId;
 		await joinShared(viewerId, "viewer");
@@ -750,7 +775,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		await expect(pViewer.getByTestId("dashboard-empty-add")).toHaveCount(0);
 	} catch (error) {
 		try {
-			await attachSharingFailure(accounts, teamDash, soloDash, viewerSync);
+			await attachSharingFailure(accounts, teamDash, soloDash, sync.flat());
 		} catch (diagnosticError) {
 			console.error(
 				"dashboard sharing diagnostics failed:",
