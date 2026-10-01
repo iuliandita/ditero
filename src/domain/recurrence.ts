@@ -335,7 +335,11 @@ export function projectRecurrence(
 		const spent = new RRule({
 			...fixed.rule.origOptions,
 			count: eligibleConsumed,
-		}).betweenBounded(anchor, to, true, limits);
+		}).betweenBounded(anchor, to, true, {
+			...limits,
+			// Ordinal history is internal, independent of displayed window capacity.
+			maxOutput: eligibleConsumed,
+		});
 		if (spent.status === "capped")
 			return { status: "capped", occurrences: [], reason: spent.reason };
 		if (spent.value.length < eligibleConsumed) return empty;
@@ -418,7 +422,7 @@ export function transitionRecurrence(
 				anchor,
 				new Date(Date.UTC(9999, 11, 31, 23, 59, 59)),
 				true,
-				limits,
+				{ ...limits, maxOutput: eligibleConsumed + 1 },
 			);
 			if (current.status === "capped")
 				return { status: "capped", series, reason: current.reason };

@@ -368,6 +368,75 @@ describe("anchored bounded projection", () => {
 			transitionRecurrence(current, utc(2026, 0, 2), { maxPeriods: 1 }),
 		).toEqual({ status: "capped", reason: "period-limit", series: current });
 	});
+	test("a daily COUNT1000 series advances beyond the display output cap", () => {
+		const dueAt = new Date("2026-01-03T12:00:00Z");
+		const current = series("FREQ=DAILY;COUNT=1000", {
+			anchorAt: new Date("2025-01-01T12:00:00Z"),
+			dueAt,
+			consumed: 367,
+		});
+		for (const limits of [{}, { maxOutput: 2 }]) {
+			const result = transitionRecurrence(current, dueAt, limits);
+			expect(result.status).toBe("advanced");
+			expect(result.series).toEqual({
+				...current,
+				consumed: 368,
+				dueAt: new Date("2026-01-04T12:00:00Z"),
+			});
+		}
+	});
+	test("long ordinal lookup retains work and allocation caps without changing state", () => {
+		const dueAt = new Date("2026-01-03T12:00:00Z");
+		const current = series("FREQ=DAILY;COUNT=1000", {
+			anchorAt: new Date("2025-01-01T12:00:00Z"),
+			dueAt,
+			consumed: 367,
+		});
+		for (const [limits, reason] of [
+			[{ maxWork: 1000 }, "work-limit"],
+			[{ maxAllocation: 366 }, "allocation-limit"],
+		] as const) {
+			expect(transitionRecurrence(current, dueAt, limits)).toEqual({
+				status: "capped",
+				reason,
+				series: current,
+			});
+			expect(
+				projectRecurrence(
+					current,
+					dueAt,
+					new Date("2026-01-10T12:00:00Z"),
+					limits,
+				),
+			).toEqual({ status: "capped", reason, occurrences: [] });
+		}
+	});
+	test("long consumed history preserves a complete window and its display cap", () => {
+		const from = new Date("2026-01-03T12:00:00Z");
+		const to = new Date("2026-01-10T12:00:00Z");
+		const current = series("FREQ=DAILY;COUNT=1000", {
+			anchorAt: new Date("2025-01-01T12:00:00Z"),
+			dueAt: from,
+			consumed: 367,
+		});
+		const result = projectRecurrence(current, from, to);
+		expect(result.status).toBe("complete");
+		expect(dates(result)).toEqual([
+			"2026-01-03",
+			"2026-01-04",
+			"2026-01-05",
+			"2026-01-06",
+			"2026-01-07",
+			"2026-01-08",
+			"2026-01-09",
+			"2026-01-10",
+		]);
+		expect(projectRecurrence(current, from, to, { maxOutput: 2 })).toEqual({
+			status: "capped",
+			reason: "output-limit",
+			occurrences: [from, new Date("2026-01-04T12:00:00Z")],
+		});
+	});
 
 	test("spent budget and stale cursors never advertise spent slots; virtual history remains", () => {
 		for (const consumed of [1, 2]) {
