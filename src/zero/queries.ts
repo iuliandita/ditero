@@ -181,6 +181,8 @@ export const queries = defineQueries({
 	// Co-members: memberships in any workspace the user belongs to. Powers members
 	// panel, assignee/mention pickers, and client-side connection derivation.
 	memberships: {
+		// The caller's membership set must not depend on workspace hydration.
+		own: defineQuery(({ ctx }) => zql.membership.where("userId", ctx.id)),
 		mine: defineQuery(({ ctx }) =>
 			zql.membership
 				.where(workspaceVisible(ctx))
