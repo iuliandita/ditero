@@ -217,7 +217,7 @@ test("native empty and whitespace task IDs still enqueue overdue events", async 
 	for (const id of ["", "  "]) expect(await outbox(id)).toHaveLength(1);
 });
 
-test("guarded fixed and relative recurrences fire from historical anchors but not future anchors", async () => {
+test("guarded fixed recurrence projects history while relative recurrence uses its current due date", async () => {
 	await seedTask("fixed-history", {
 		guarded: "active",
 		dueAt: new Date("2026-01-05T12:00:00Z"),
@@ -240,13 +240,19 @@ test("guarded fixed and relative recurrences fire from historical anchors but no
 		rrule: "FREQ=DAILY",
 		recurrenceRelative: true,
 	});
+	await seedTask("relative-current", {
+		guarded: "active",
+		dueAt: due,
+		rrule: "FREQ=DAILY",
+		recurrenceRelative: true,
+	});
 	const summary = await scanTick(db, { now: firstTick, timing });
 	expect(summary.created).toBe(2);
-	for (const id of ["fixed-history", "relative-history"]) {
+	for (const id of ["fixed-history", "relative-current"]) {
 		expect(await states(id)).toHaveLength(1);
 		expect(await outbox(id)).toHaveLength(1);
 	}
-	for (const id of ["fixed-future", "relative-future"]) {
+	for (const id of ["fixed-future", "relative-future", "relative-history"]) {
 		expect(await states(id)).toEqual([]);
 		expect(await outbox(id)).toEqual([]);
 	}
