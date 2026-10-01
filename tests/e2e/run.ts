@@ -12,6 +12,7 @@ const compose = [
 const databaseURL = "postgres://postgres:pass@localhost:55432/ditero_e2e";
 const env = {
 	...process.env,
+	E2E_DIAGNOSTIC_COMPOSE_ARGV: JSON.stringify(compose),
 	DATABASE_URL: databaseURL,
 	E2E_DATABASE_URL: databaseURL,
 	NODE_ENV: "test",

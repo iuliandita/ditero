@@ -1,6 +1,15 @@
+import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { mustGetQuery } from "@rocicorp/zero";
+import { handleQueryRequest } from "@rocicorp/zero/server";
 import { Pool } from "pg";
+import { z } from "zod";
+import { queries as appQueries } from "../../src/zero/queries.ts";
+import { schema } from "../../src/zero/schema.gen.ts";
 import { browserToday, shiftDay } from "../support/browser-day.ts";
 import {
 	openWorkspaceSwitcher,
@@ -296,6 +305,276 @@ function observeSharingSync(
 	return events;
 }
 
+const diagnosticID = z.string().regex(/^[\w-]{1,128}$/);
+const replicaSelectionSchema = z
+	.object({
+		accounts: z.array(diagnosticID).max(4),
+		dashboards: z.array(diagnosticID).max(2),
+		workspaces: z.array(diagnosticID).max(5),
+		memberships: z.array(diagnosticID).max(8),
+	})
+	.strict();
+type ReplicaSelection = z.infer<typeof replicaSelectionSchema>;
+
+async function captureSharingReplica(selection: ReplicaSelection) {
+	const startedAt = Date.now();
+	const unavailable = {
+		startedAt,
+		finishedAt: startedAt,
+		unavailable: "runner hook absent",
+	};
+	if (!process.env.E2E_DIAGNOSTIC_COMPOSE_ARGV) return unavailable;
+	try {
+		replicaSelectionSchema.parse(selection);
+		const compose = z
+			.array(z.string())
+			.parse(JSON.parse(process.env.E2E_DIAGNOSTIC_COMPOSE_ARGV));
+		if (
+			compose[0] !== "compose" ||
+			compose.length > 31 ||
+			compose.length % 2 !== 1
+		)
+			throw new Error();
+		for (let i = 1; i < compose.length; i += 2)
+			if (
+				![
+					"--project-name",
+					"--file",
+					"-f",
+					"--profile",
+					"--project-directory",
+				].includes(compose[i]) ||
+				!compose[i + 1] ||
+				compose[i + 1].length > 4096
+			)
+				throw new Error();
+		const source = readFileSync(
+			new URL("./sharing-replica.mjs", import.meta.url),
+			"utf8",
+		);
+		const output = await new Promise<string>((resolve, reject) => {
+			const child = spawn(
+				"docker",
+				[
+					...compose,
+					"exec",
+					"-T",
+					"zero-cache",
+					"/bin/busybox",
+					"timeout",
+					"-s",
+					"KILL",
+					"4",
+					"node",
+					"--input-type=module",
+					"--eval",
+					source,
+				],
+				{ stdio: ["pipe", "pipe", "ignore"] },
+			);
+			let stdout = "";
+			let bytes = 0;
+			let failure: "deadline" | "output-cap" | undefined;
+			const timer = setTimeout(() => {
+				failure ??= "deadline";
+				child.kill("SIGKILL");
+			}, 5000);
+			child.stdout.on("data", (chunk: Buffer) => {
+				bytes += chunk.length;
+				if (bytes > 32 * 1024) {
+					failure = "output-cap";
+					child.kill("SIGKILL");
+				} else stdout += chunk.toString();
+			});
+			child.stdin.on("error", () => {});
+			child.once("error", () => {
+				clearTimeout(timer);
+				reject(new Error("spawn"));
+			});
+			child.once("close", (code) => {
+				clearTimeout(timer);
+				if (failure || code !== 0)
+					reject(
+						new Error(
+							failure ?? (code === 137 ? "container-kill" : "container-exit"),
+						),
+					);
+				else resolve(stdout);
+			});
+			child.stdin.end(JSON.stringify(selection));
+		});
+		const times = { startedAt: z.number(), finishedAt: z.number() };
+		const error = z
+			.object({
+				...times,
+				stage: z.enum(["input", "open", "query", "rollback", "close"]),
+				error: z.enum(["Error", "RangeError"]),
+			})
+			.strict();
+		const nullableID = diagnosticID.nullable();
+		const version = z.string().max(128).nullable();
+		const common = {
+			expectedID: diagnosticID,
+			rowFound: z.union([z.literal(0), z.literal(1)]),
+			id: nullableID,
+			rowVersion: version,
+		};
+		const row = z.discriminatedUnion("table", [
+			z
+				.object({
+					...common,
+					table: z.literal("dashboard"),
+					owner_id: nullableID,
+					workspace_id: nullableID,
+					scope: z.enum(["personal", "workspace"]).nullable(),
+				})
+				.strict(),
+			z
+				.object({
+					...common,
+					table: z.literal("workspace"),
+					owner_id: nullableID,
+					kind: z.enum(["personal", "shared"]).nullable(),
+				})
+				.strict(),
+			z
+				.object({
+					...common,
+					table: z.literal("membership"),
+					user_id: nullableID,
+					workspace_id: nullableID,
+					role: z.enum(["owner", "admin", "member", "viewer"]).nullable(),
+				})
+				.strict(),
+		]);
+		const result = z
+			.union([
+				error,
+				z
+					.object({
+						...times,
+						metadata: z
+							.array(
+								z
+									.object({
+										stateVersion: z.string().max(128),
+										replicaVersion: z.string().max(128),
+										writeTimeMs: z.number().nullable(),
+									})
+									.strict(),
+							)
+							.max(1),
+						rows: z.array(row).max(15),
+						visibility: z
+							.array(
+								z
+									.object({
+										accountID: diagnosticID,
+										dashboardID: diagnosticID,
+										visible: z.union([z.literal(0), z.literal(1)]),
+									})
+									.strict(),
+							)
+							.max(8),
+					})
+					.strict(),
+			])
+			.parse(JSON.parse(output));
+		if ("rows" in result) {
+			const keys = {
+				dashboard: selection.dashboards,
+				workspace: selection.workspaces,
+				membership: selection.memberships,
+			};
+			if (
+				result.rows.some(
+					(r) =>
+						!keys[r.table].includes(r.expectedID) ||
+						(r.id !== null && r.id !== r.expectedID),
+				) ||
+				result.visibility.some(
+					(v) =>
+						!selection.accounts.includes(v.accountID) ||
+						!selection.dashboards.includes(v.dashboardID),
+				)
+			)
+				throw new Error("output-shape");
+		}
+		return {
+			...result,
+			captureStartedAt: startedAt,
+			captureFinishedAt: Date.now(),
+		};
+	} catch (error) {
+		const marker =
+			error instanceof Error &&
+			[
+				"deadline",
+				"output-cap",
+				"spawn",
+				"container-kill",
+				"container-exit",
+				"output-shape",
+			].includes(error.message)
+				? error.message
+				: "validation";
+		console.error(`dashboard sharing replica diagnostics failed: ${marker}`);
+		return { startedAt, finishedAt: Date.now(), stage: marker, error: "Error" };
+	}
+}
+
+async function sharingQueryHashes(accounts: Record<string, string>) {
+	const root = dirname(require.resolve("@rocicorp/zero"));
+	if (
+		JSON.parse(readFileSync(join(root, "../../../package.json"), "utf8"))
+			.version !== "1.9.0"
+	)
+		throw new Error("Zero version mismatch");
+	// The test-only hash must match the pinned cache's server-mapped AST contract.
+	const { hashOfAST } = (await import(
+		pathToFileURL(join(root, "../../zero-protocol/src/query-hash.js")).href
+	)) as { hashOfAST: (ast: unknown) => string };
+	return await Promise.all(
+		Object.entries(accounts).map(async ([accountRole, accountID]) => {
+			z.enum(["owner", "member", "outsider", "viewer"]).parse(accountRole);
+			diagnosticID.parse(accountID);
+			const names = ["dashboards.mine", "userPrefs.mine"];
+			const response = await handleQueryRequest({
+				schema,
+				userID: accountID,
+				query: {},
+				body: [
+					"transform",
+					names.map((name) => ({ id: name, name, args: [] })),
+				],
+				handler: (name, args) =>
+					mustGetQuery(appQueries, name).fn({
+						args: args as never,
+						ctx: { id: accountID },
+					}),
+			});
+			if (
+				response instanceof Response ||
+				!("kind" in response) ||
+				response.kind !== "QueryResponse" ||
+				response.userID !== accountID ||
+				response.queries.length !== 2
+			)
+				throw new Error("Query response failed");
+			const hashes = response.queries.map((q) => {
+				if (!("ast" in q)) throw new Error("Query transformation failed");
+				return hashOfAST(q.ast);
+			});
+			return {
+				accountRole,
+				accountID,
+				dashboardHash: hashes[0],
+				prefHash: hashes[1],
+			};
+		}),
+	);
+}
+
 async function attachSharingFailure(
 	accounts: Record<string, string>,
 	teamDash: string,
@@ -343,7 +622,6 @@ async function attachSharingFailure(
 				),
 			),
 		];
-		const groups = observedGroups.slice(0, 4);
 		const records = (name: string): Record<string, unknown>[] =>
 			Array.isArray(state[name]) ? state[name] : [];
 		const knownIDs = (values: unknown[]) =>
@@ -365,17 +643,39 @@ async function attachSharingFailure(
 				rowKey: { id },
 			})),
 		];
+		const selection = replicaSelectionSchema.safeParse({
+			accounts: ids,
+			dashboards: knownIDs(records("dashboards").map((row) => row.id)),
+			workspaces: knownIDs(
+				expected
+					.filter((row) => row.table === "workspace")
+					.map((row) => row.rowKey.id),
+			),
+			memberships: knownIDs(records("memberships").map((row) => row.id)),
+		});
+		const replica = selection.success
+			? await captureSharingReplica(selection.data)
+			: { stage: "scope-cap", error: "RangeError" };
+		let hashes: Awaited<ReturnType<typeof sharingQueryHashes>> = [];
+		let hashError: string | undefined;
+		try {
+			if (!selection.success) throw new RangeError();
+			hashes = await sharingQueryHashes(accounts);
+		} catch (error) {
+			hashError = error instanceof RangeError ? "scope-cap" : "query-transform";
+			console.error(`dashboard sharing group recovery failed: ${hashError}`);
+		}
+		let groups: string[] = [];
 		let cvr: Record<string, unknown> = {
 			groups,
 			expected,
-			limits: { groups: 4, rows: 200 },
-			truncated: { groups: observedGroups.length > groups.length },
+			observedGroups,
+			hashes,
+			limits: { groups: 4, candidates: 200, rows: 200 },
+			startedAt: Date.now(),
 		};
-		if (groups.length === 0) {
-			console.error(
-				"dashboard sharing CVR diagnostics: no observed client group",
-			);
-			cvr.error = "no observed client group";
+		if (hashError) {
+			cvr.error = hashError;
 		} else {
 			try {
 				const client = await pool.connect();
@@ -385,9 +685,89 @@ async function attachSharingFailure(
 					transactionOpen = true;
 					await client.query("SET LOCAL statement_timeout = '3s'");
 					// The E2E Compose stack uses Zero's default app/shard namespace.
+					const candidates = await client.query<{
+						accountRole: string;
+						accountID: string;
+						clientGroupID: string;
+						dashboardMatch: boolean;
+						prefMatch: boolean;
+						activeDashboardMatch: boolean;
+						activePrefMatch: boolean;
+						instanceDeleted: boolean | null;
+						lastActive: Date;
+						matchedCandidates: string;
+					}>(
+						`with wanted as (
+						 select * from jsonb_to_recordset($1::jsonb) as w("accountRole" text,
+						 "accountID" text, "dashboardHash" text, "prefHash" text)
+						 ), matches as (
+						 select w."accountRole", w."accountID", q."clientGroupID",
+						 bool_or(q."queryName" = 'dashboards.mine') as "dashboardMatch",
+						 bool_or(q."queryName" = 'userPrefs.mine') as "prefMatch",
+						 bool_or(q."queryName" = 'dashboards.mine' and q.deleted = false) as "activeDashboardMatch",
+						 bool_or(q."queryName" = 'userPrefs.mine' and q.deleted = false) as "activePrefMatch"
+						 from wanted w join "zero_0/cvr".queries q on
+						 (q."queryName" = 'dashboards.mine' and q."transformationHash" = w."dashboardHash") or
+						 (q."queryName" = 'userPrefs.mine' and q."transformationHash" = w."prefHash")
+						 group by w."accountRole", w."accountID", q."clientGroupID"
+						 ) select m.*, i."lastActive", i.deleted as "instanceDeleted",
+						 count(*) over () as "matchedCandidates"
+						 from matches m join "zero_0/cvr".instances i using("clientGroupID")
+						 order by m."accountRole", i."lastActive" desc, m."clientGroupID" limit 200`,
+						[JSON.stringify(hashes)],
+					);
+					const candidatesTruncated =
+						Number(candidates.rows[0]?.matchedCandidates ?? 0) > 200;
+					const recovery = hashes.map(({ accountRole, accountID }) => {
+						const matching = candidates.rows.filter(
+							(row) =>
+								row.accountRole === accountRole && row.accountID === accountID,
+						);
+						const eligible = matching.filter(
+							(row) =>
+								row.instanceDeleted === false &&
+								row.activeDashboardMatch &&
+								row.activePrefMatch,
+						);
+						const selectedGroup =
+							!candidatesTruncated && eligible.length === 1
+								? eligible[0].clientGroupID
+								: null;
+						return {
+							accountRole,
+							accountID,
+							candidateCount: matching.length,
+							selectedGroup,
+							ambiguous: eligible.length > 1,
+							partial: matching.some(
+								(row) => !row.dashboardMatch || !row.prefMatch,
+							),
+							status: candidatesTruncated
+								? "truncated"
+								: selectedGroup
+									? "recovered"
+									: eligible.length > 1
+										? "ambiguous"
+										: "not recoverable",
+						};
+					});
+					groups = [
+						...new Set(
+							recovery.flatMap((row) =>
+								row.selectedGroup ? [row.selectedGroup] : [],
+							),
+						),
+					];
+					cvr = {
+						...cvr,
+						groups,
+						candidates: candidates.rows,
+						recovery,
+						truncated: { candidates: candidatesTruncated, groups: false },
+					};
 					const versions = await client.query(
 						`select g.id as "clientGroupID", i.version as "metadataVersion",
-						 rv.version as "rowsVersion", i."replicaVersion"
+						 rv.version as "rowsVersion", i."replicaVersion", i."lastActive", i.deleted as "instanceDeleted"
 						 from unnest($1::text[]) g(id)
 						 left join "zero_0/cvr".instances i on i."clientGroupID" = g.id
 						 left join "zero_0/cvr"."rowsVersion" rv on rv."clientGroupID" = g.id
@@ -428,13 +808,17 @@ async function attachSharingFailure(
 					cvr = {
 						...cvr,
 						truncated: {
-							groups: observedGroups.length > groups.length,
+							candidates: candidatesTruncated,
+							groups: false,
 							queries: Number(queries.rows[0]?.matchedRows ?? 0) > 200,
 							rows: Number(rows.rows[0]?.matchedRows ?? 0) > 200,
 						},
 						versions: versions.rows,
 						queries: queries.rows,
 						rows: rows.rows,
+						...(groups.length === 0
+							? { unavailable: "no unique eligible account group" }
+							: {}),
 					};
 				} finally {
 					try {
@@ -456,12 +840,16 @@ async function attachSharingFailure(
 				cvr.error = error instanceof Error ? error.name : "unknown";
 			}
 		}
+		cvr.finishedAt = Date.now();
 		await test.info().attach("dashboard-sharing-state", {
 			contentType: "application/json",
 			body: JSON.stringify({
 				accounts,
 				expected: { teamDash, soloDash, workspaceId: SHARED_WORKSPACE_ID },
 				database: state,
+				replica,
+				snapshotRelationship:
+					"Replica captured before CVR; independent committed snapshots, not atomic or the ViewSyncer's held transaction",
 				cvr,
 				sync,
 			}),
