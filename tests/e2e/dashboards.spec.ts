@@ -224,6 +224,97 @@ async function joinShared(
 	}
 }
 
+// Preserve sync metadata, never auth frames or task contents, for sharing failures.
+function observeSharingSync(page: Page): unknown[] {
+	const events: unknown[] = [];
+	page.on("websocket", (socket) => {
+		if (!new URL(socket.url()).pathname.includes("/sync/")) return;
+		socket.on("framereceived", ({ payload }) => {
+			if (events.length >= 100) return;
+			try {
+				const frame: unknown = JSON.parse(payload.toString());
+				if (!Array.isArray(frame)) return;
+				const [kind, data] = frame as [string, Record<string, unknown>];
+				if (!data || !["pokeStart", "pokePart", "pokeEnd"].includes(kind))
+					return;
+				const rows = Array.isArray(data.rowsPatch) ? data.rowsPatch : [];
+				events.push({
+					at: Date.now(),
+					kind,
+					pokeID: data.pokeID,
+					baseCookie: data.baseCookie,
+					cookie: data.cookie,
+					gotQueriesPatch: data.gotQueriesPatch,
+					desiredQueriesPatches: data.desiredQueriesPatches,
+					rows: rows.map((row: Record<string, unknown>) => {
+						const value = row.value as Record<string, unknown> | undefined;
+						return {
+							op: row.op,
+							table: row.tableName,
+							id: value?.id,
+							workspaceId: value?.workspace_id,
+							role: value?.role,
+							scope: value?.scope,
+						};
+					}),
+				});
+			} catch {
+				events.push({ kind: "unparseable-sync-frame" });
+			}
+		});
+	});
+	return events;
+}
+
+async function attachSharingFailure(
+	accounts: Record<string, string>,
+	teamDash: string,
+	soloDash: string,
+	sync: unknown[],
+): Promise<void> {
+	const pool = new Pool({
+		connectionString: process.env.E2E_DATABASE_URL,
+		connectionTimeoutMillis: 3000,
+		query_timeout: 3000,
+	});
+	try {
+		const ids = Object.values(accounts);
+		const queries = {
+			accounts: `select id, deleted_at, two_factor_enabled from "user" where id = any($1)`,
+			memberships: `select id, user_id, workspace_id, role from membership where user_id = any($1)`,
+			preferences: `select id, home_view_ref, pinned_views, locale from user_pref where id = any($1)`,
+			dashboards: `select id, owner_id, workspace_id, scope, name from dashboard where owner_id = any($1) and name = any($2)`,
+		};
+		const database = await Promise.all(
+			Object.entries(queries).map(async ([name, sql]) => {
+				try {
+					const result = await pool.query(
+						sql,
+						name === "dashboards" ? [ids, [teamDash, soloDash]] : [ids],
+					);
+					return [name, result.rows];
+				} catch (error) {
+					return [
+						name,
+						{ error: error instanceof Error ? error.name : "unknown" },
+					];
+				}
+			}),
+		);
+		await test.info().attach("dashboard-sharing-state", {
+			contentType: "application/json",
+			body: JSON.stringify({
+				accounts,
+				expected: { teamDash, soloDash, workspaceId: SHARED_WORKSPACE_ID },
+				database: Object.fromEntries(database),
+				sync,
+			}),
+		});
+	} finally {
+		await pool.end();
+	}
+}
+
 // Gate per design 2.14: zero serious/critical violations. Freeze animations so
 // axe samples the settled frame (matches views.spec exactly).
 async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
@@ -447,14 +538,16 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 	const ctxMember = await browser.newContext();
 	const ctxOutsider = await browser.newContext();
 	const ctxViewer = await browser.newContext();
+	const accounts: Record<string, string> = {};
+	const teamDash = `Team ${Date.now()}`;
+	const soloDash = `Solo ${Date.now()}`;
+	let viewerSync: unknown[] = [];
 	try {
-		const teamDash = `Team ${Date.now()}`;
-		const soloDash = `Solo ${Date.now()}`;
-
 		// Owner joins the seeded shared workspace and creates a workspace-shared
 		// dashboard in it, plus a personal one.
 		const pOwner = await ctxOwner.newPage();
 		const ownerId = await signUp(pOwner, uniqueEmail("d4-owner"));
+		accounts.owner = ownerId;
 		await joinShared(ownerId, "owner");
 		await pOwner.reload();
 		await waitWorkspaceReady(pOwner);
@@ -469,6 +562,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		// A second member sees the workspace dashboard, never the personal one.
 		const pMember = await ctxMember.newPage();
 		const memberId = await signUp(pMember, uniqueEmail("d4-member"));
+		accounts.member = memberId;
 		await joinShared(memberId, "member");
 		await pMember.reload();
 		await waitWorkspaceReady(pMember);
@@ -487,7 +581,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 
 		// A non-member never sees it (dashboards section is rendered, entry absent).
 		const pOutsider = await ctxOutsider.newPage();
-		await signUp(pOutsider, uniqueEmail("d4-outsider"));
+		accounts.outsider = await signUp(pOutsider, uniqueEmail("d4-outsider"));
 		await waitWorkspaceReady(pOutsider);
 		await pOutsider.getByTestId("sidebar-create").click();
 		await expect(pOutsider.getByTestId("new-dashboard")).toBeVisible();
@@ -501,10 +595,18 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 
 		// A viewer sees and opens the dashboard but gets no edit affordances.
 		const pViewer = await ctxViewer.newPage();
+		viewerSync = observeSharingSync(pViewer);
 		const viewerId = await signUp(pViewer, uniqueEmail("d4-viewer"));
+		accounts.viewer = viewerId;
 		await joinShared(viewerId, "viewer");
 		await pViewer.reload();
 		await waitWorkspaceReady(pViewer);
+		await expect(
+			sidebarLists(pViewer).getByRole("button", {
+				name: teamDash,
+				exact: true,
+			}),
+		).toBeVisible({ timeout: 15000 });
 		await openDashboardFromSidebar(pViewer, teamDash);
 		await expect(
 			pViewer.getByRole("heading", { name: teamDash, level: 1 }),
@@ -512,6 +614,16 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		await expect(pViewer.getByTestId("dashboard-empty")).toBeVisible();
 		await expect(pViewer.getByTestId("dashboard-edit")).toHaveCount(0);
 		await expect(pViewer.getByTestId("dashboard-empty-add")).toHaveCount(0);
+	} catch (error) {
+		try {
+			await attachSharingFailure(accounts, teamDash, soloDash, viewerSync);
+		} catch (diagnosticError) {
+			console.error(
+				"dashboard sharing diagnostics failed:",
+				diagnosticError instanceof Error ? diagnosticError.name : "unknown",
+			);
+		}
+		throw error;
 	} finally {
 		await ctxOwner.close();
 		await ctxMember.close();

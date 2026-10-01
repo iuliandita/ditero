@@ -46,6 +46,15 @@ run on separate hosted runners. The separate output directories and JSON reports
 preserve evidence from both phases; CI uploads `test-results/` for each shard with
 a seven-day retention period.
 
+Before cleanup after a failed test or setup step, the runner saves bounded,
+timestamped Compose logs without color, container status/state, and one resource snapshot
+under `<output>/stack-diagnostics/`. It selects only this test project's containers
+and does not inspect their environment. The destination follows Playwright's
+`--output` argument (default `test-results`); `E2E_OUTPUT_DIR` overrides it.
+Diagnostic commands have a 15-second limit each, and failures are reported without
+changing the original test failure or preventing stack cleanup. CI uploads these
+files alongside the phase's browser evidence.
+
 Routine authenticated fixtures use context-bound API signup with UUID addresses
 under the reserved `example.test` domain, then wait for the real workspace to sync.
 They do not depend on signup-form interaction. Dedicated registration, refusal,
