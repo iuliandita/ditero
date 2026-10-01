@@ -550,4 +550,24 @@ describe("native import graph", () => {
 			path: "data.views[0].filter.conditions[0].conditions[0].value[1]",
 		});
 	});
+
+	test("can interrupt midway through indexing without changing ordinary results", () => {
+		const source = fixture();
+		source.data.principals.push(
+			...Array.from({ length: 100 }, (_, i) => ({
+				id: `extra-${i}`,
+				name: "Reader",
+			})),
+		);
+		const expected = validateImportGraph(source);
+		expect(validateImportGraph(source, () => {})).toEqual(expected);
+		const interrupted = new Error("interrupt-index");
+		let calls = 0;
+		expect(() =>
+			validateImportGraph(source, () => {
+				if (++calls === 50) throw interrupted;
+			}),
+		).toThrow(interrupted);
+		expect(calls).toBe(50);
+	});
 });

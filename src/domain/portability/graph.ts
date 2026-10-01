@@ -20,6 +20,7 @@ export interface ImportGraphResult {
 }
 
 export interface ImportGraphContext {
+	checkpoint: () => void;
 	error: (code: string, path: string) => void;
 	requireRef: (
 		map: ReadonlyMap<string, unknown>,
@@ -58,7 +59,9 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 		data: { [K in keyof CommonGraphRows]: Rows[K][] };
 	},
 	hooks: ImportGraphHooks<Rows>,
+	checkpoint: () => void = () => {},
 ): ImportGraphResult {
+	checkpoint();
 	const errors: ImportGraphFinding[] = [];
 	const warnings: ImportGraphFinding[] = [];
 	const { data, sourceUserId } = source;
@@ -83,6 +86,7 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 	): Map<string, Rows[K]> {
 		const result = new Map<string, Rows[K]>();
 		data[key].forEach((row, i) => {
+			checkpoint();
 			const id = "id" in row ? row.id : (row as Rows["karma"]).userId;
 			if (result.has(id))
 				error(
@@ -119,7 +123,13 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 	) {
 		if (!map.has(id)) error("missing-reference", path);
 	}
-	const context: ImportGraphContext = { error, requireRef, principals, tasks };
+	const context: ImportGraphContext = {
+		checkpoint,
+		error,
+		requireRef,
+		principals,
+		tasks,
+	};
 	hooks.onIndexed?.(context);
 	function unique<K extends keyof CommonGraphRows>(
 		key: K,
@@ -127,6 +137,7 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 	) {
 		const seen = new Set<string>();
 		data[key].forEach((row, i) => {
+			checkpoint();
 			const values = fields(row);
 			if (values === null) return;
 			const tuple = JSON.stringify(values);
@@ -159,9 +170,11 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 	};
 	requireRef(principals, sourceUserId, "sourceUserId");
 	data.workspaces.forEach((row, i) => {
+		checkpoint();
 		requireRef(principals, row.ownerId, `data.workspaces[${i}].ownerId`);
 	});
 	data.memberships.forEach((row, i) => {
+		checkpoint();
 		requireRef(principals, row.userId, `data.memberships[${i}].userId`);
 		requireRef(
 			workspaces,
@@ -170,9 +183,11 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 		);
 	});
 	data.folders.forEach((row, i) => {
+		checkpoint();
 		requireRef(workspaces, row.workspaceId, `data.folders[${i}].workspaceId`);
 	});
 	data.lists.forEach((row, i) => {
+		checkpoint();
 		const path = `data.lists[${i}]`;
 		requireRef(workspaces, row.workspaceId, `${path}.workspaceId`);
 		requireRef(principals, row.ownerId, `${path}.ownerId`);
@@ -186,6 +201,7 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 		}
 	});
 	data.tasks.forEach((row, i) => {
+		checkpoint();
 		const path = `data.tasks[${i}]`;
 		requireRef(lists, row.listId, `${path}.listId`);
 		if (row.parentId !== null) {
@@ -201,11 +217,18 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 	});
 	// Each task is visited once, including malformed deep chains and cycles.
 	const visited = new Set<string>();
-	const taskPositions = new Map(data.tasks.map((row, i) => [row.id, i]));
+	const taskPositions = new Map(
+		data.tasks.map((row, i) => {
+			checkpoint();
+			return [row.id, i] as const;
+		}),
+	);
 	for (const row of data.tasks) {
+		checkpoint();
 		const chain = new Set<string>();
 		let id: string | null = row.id;
 		while (id !== null && !visited.has(id) && tasks.has(id)) {
+			checkpoint();
 			if (chain.has(id)) {
 				error(
 					"task-parent-cycle",
@@ -216,12 +239,17 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 			chain.add(id);
 			id = tasks.get(id)?.parentId ?? null;
 		}
-		for (const member of chain) visited.add(member);
+		for (const member of chain) {
+			checkpoint();
+			visited.add(member);
+		}
 	}
 	data.labels.forEach((row, i) => {
+		checkpoint();
 		requireRef(workspaces, row.workspaceId, `data.labels[${i}].workspaceId`);
 	});
 	data.taskLabels.forEach((row, i) => {
+		checkpoint();
 		const path = `data.taskLabels[${i}]`;
 		requireRef(tasks, row.taskId, `${path}.taskId`);
 		requireRef(labels, row.labelId, `${path}.labelId`);
@@ -232,6 +260,7 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 		);
 	});
 	data.templates.forEach((row, i) => {
+		checkpoint();
 		const path = `data.templates[${i}]`;
 		requireRef(workspaces, row.workspaceId, `${path}.workspaceId`);
 		hooks.checkTemplateCreator(row, path, context);
@@ -239,11 +268,13 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 			error("template-kind-mismatch", `${path}.content.kind`);
 	});
 	const membershipPairs = new Set(
-		data.memberships.map((row) =>
-			JSON.stringify([row.userId, row.workspaceId]),
-		),
+		data.memberships.map((row) => {
+			checkpoint();
+			return JSON.stringify([row.userId, row.workspaceId]);
+		}),
 	);
 	data.assignments.forEach((row, i) => {
+		checkpoint();
 		requireRef(tasks, row.taskId, `data.assignments[${i}].taskId`);
 		requireRef(principals, row.userId, `data.assignments[${i}].userId`);
 		const workspaceId = taskWorkspace(row.taskId);
@@ -254,6 +285,7 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 			error("nonmember-assignment", `data.assignments[${i}].userId`);
 	});
 	data.comments.forEach((row, i) => {
+		checkpoint();
 		requireRef(tasks, row.taskId, `data.comments[${i}].taskId`);
 		hooks.checkCommentAuthor(row, `data.comments[${i}]`, context);
 	});
@@ -262,6 +294,7 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 		return task !== undefined && lists.get(task.listId)?.kind === "habits";
 	};
 	data.habitLogs.forEach((row, i) => {
+		checkpoint();
 		const path = `data.habitLogs[${i}].habitId`;
 		requireRef(tasks, row.habitId, path);
 	});
@@ -279,21 +312,25 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 			softRef(workspaces, selection.id, `${path}.id`);
 		if (selection.mode === "subset" && Array.isArray(selection.ids))
 			selection.ids.forEach((id, i) => {
+				checkpoint();
 				softRef(workspaces, id, `${path}.ids[${i}]`);
 			});
 	}
 	function filter(value: PortableJson, path: string) {
 		const queue = [{ value, path }];
 		while (queue.length) {
+			checkpoint();
 			const entry = queue.pop();
 			if (!entry) break;
 			const node = object(entry.value);
 			if (Array.isArray(node.conditions)) {
-				for (let i = node.conditions.length - 1; i >= 0; i--)
+				for (let i = node.conditions.length - 1; i >= 0; i--) {
+					checkpoint();
 					queue.push({
 						value: node.conditions[i],
 						path: `${entry.path}.conditions[${i}]`,
 					});
+				}
 				continue;
 			}
 			const map =
@@ -313,6 +350,7 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 			};
 			if (Array.isArray(node.value))
 				node.value.forEach((id, i) => {
+					checkpoint();
 					check(id, `${entry.path}.value[${i}]`);
 				});
 			else if (node.value !== undefined)
@@ -321,6 +359,7 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 	}
 	for (const collection of ["views", "dashboards"] as const) {
 		data[collection].forEach((row, i) => {
+			checkpoint();
 			const path = `data.${collection}[${i}]`;
 			requireRef(principals, row.ownerId, `${path}.ownerId`);
 			if (row.scope === "personal") {
@@ -333,6 +372,7 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 		});
 	}
 	data.views.forEach((row, i) => {
+		checkpoint();
 		filter(row.filter, `data.views[${i}].filter`);
 		scope(
 			object(row.display).workspaceScope,
@@ -340,8 +380,10 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 		);
 	});
 	data.dashboards.forEach((row, i) => {
+		checkpoint();
 		if (!Array.isArray(row.panels)) return;
 		row.panels.forEach((value, j) => {
+			checkpoint();
 			const panel = object(value);
 			const path = `data.dashboards[${i}].panels[${j}]`;
 			const panelSource = object(panel.source ?? null);
@@ -353,6 +395,7 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 			}
 			if (Array.isArray(panel.habitIds))
 				panel.habitIds.forEach((id, k) => {
+					checkpoint();
 					if (typeof id === "string" && !isHabit(id))
 						warning("unresolved-reference", `${path}.habitIds[${k}]`);
 				});
@@ -366,11 +409,13 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 			softRef(views, value, path);
 	}
 	data.userPrefs.forEach((row, i) => {
+		checkpoint();
 		const path = `data.userPrefs[${i}]`;
 		own(row.id, `${path}.id`);
 		homeRef(row.homeViewRef, `${path}.homeViewRef`);
 		if (Array.isArray(row.pinnedViews))
 			row.pinnedViews.forEach((ref, j) => {
+				checkpoint();
 				homeRef(ref, `${path}.pinnedViews[${j}]`);
 			});
 		softRef(
@@ -380,17 +425,21 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 		);
 	});
 	data.focusSessions.forEach((row, i) => {
+		checkpoint();
 		own(row.userId, `data.focusSessions[${i}].userId`);
 		if (row.taskId !== null)
 			requireRef(tasks, row.taskId, `data.focusSessions[${i}].taskId`);
 	});
 	data.karma.forEach((row, i) => {
+		checkpoint();
 		own(row.userId, `data.karma[${i}].userId`);
 	});
 	data.karmaEvents.forEach((row, i) => {
+		checkpoint();
 		own(row.userId, `data.karmaEvents[${i}].userId`);
 	});
 	data.attachments.forEach((row, i) => {
+		checkpoint();
 		const path = `data.attachments[${i}]`;
 		requireRef(workspaces, row.workspaceId, `${path}.workspaceId`);
 		requireRef(principals, row.uploadedBy, `${path}.uploadedBy`);
@@ -417,11 +466,16 @@ export function validateContentGraph<Rows extends CommonGraphRows>(
 
 export function validateImportGraph(
 	source: PortableExportV1,
+	checkpoint?: () => void,
 ): ImportGraphResult {
-	return validateContentGraph<PortableRows>(source, {
-		checkTemplateCreator: (row, path, { requireRef, principals }) =>
-			requireRef(principals, row.createdBy, `${path}.createdBy`),
-		checkCommentAuthor: (row, path, { requireRef, principals }) =>
-			requireRef(principals, row.authorId, `${path}.authorId`),
-	});
+	return validateContentGraph<PortableRows>(
+		source,
+		{
+			checkTemplateCreator: (row, path, { requireRef, principals }) =>
+				requireRef(principals, row.createdBy, `${path}.createdBy`),
+			checkCommentAuthor: (row, path, { requireRef, principals }) =>
+				requireRef(principals, row.authorId, `${path}.authorId`),
+		},
+		checkpoint,
+	);
 }
