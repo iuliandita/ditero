@@ -109,7 +109,9 @@
 				"local donePlural = done: plural",
 				"local totalNum = total: number"
 			],
-			"selectors": ["donePlural"],
+			"selectors": [
+				"donePlural"
+			],
 			"match": {
 				"donePlural=one": "{doneNum} de {totalNum} completada",
 				"donePlural=many": "{doneNum} de {totalNum} completadas",
@@ -306,7 +308,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} elemento completado",
 				"countPlural=many": "{countNum} elementos completados",
@@ -321,7 +325,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} artículo en el carrito",
 				"countPlural=many": "{countNum} artículos en el carrito",
@@ -470,7 +476,9 @@
 				"local totalNum = total: number",
 				"local totalPlural = total: plural"
 			],
-			"selectors": ["totalPlural"],
+			"selectors": [
+				"totalPlural"
+			],
 			"match": {
 				"totalPlural=one": "{doneNum} de {totalNum} subtarea hecha",
 				"totalPlural=many": "{doneNum} de {totalNum} subtareas hechas",
@@ -548,8 +556,13 @@
 	"recurrence_invalid": "Repetición no válida.",
 	"recurrence_unit_daily": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural"
+			],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "día",
 				"countPlural=many": "días",
@@ -559,8 +572,13 @@
 	],
 	"recurrence_unit_weekly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural"
+			],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "semana",
 				"countPlural=many": "semanas",
@@ -570,8 +588,13 @@
 	],
 	"recurrence_unit_monthly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural"
+			],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "mes",
 				"countPlural=many": "meses",
@@ -581,8 +604,13 @@
 	],
 	"recurrence_unit_yearly": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural"
+			],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "año",
 				"countPlural=many": "años",
@@ -597,7 +625,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "Cada día",
 				"countPlural=many": "Cada {countNum} días",
@@ -613,7 +643,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "Cada semana los {days}",
 				"countPlural=many": "Cada {countNum} semanas los {days}",
@@ -630,7 +662,9 @@
 				"local countPlural = count: plural",
 				"local monthdayNum = monthday: number"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "Cada mes el día {monthdayNum}",
 				"countPlural=many": "Cada {countNum} meses el día {monthdayNum}",
@@ -645,7 +679,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "Cada año",
 				"countPlural=many": "Cada {countNum} años",
@@ -787,7 +823,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} seleccionado",
 				"countPlural=many": "{countNum} seleccionados",
@@ -802,7 +840,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} elemento",
 				"countPlural=many": "{countNum} elementos",
@@ -834,7 +874,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} hábito",
 				"countPlural=many": "{countNum} hábitos",
@@ -919,7 +961,10 @@
 	"panel_all_done": "No queda nada pendiente",
 	"panel_show_all": [
 		{
-			"declarations": ["input count", "local countNum = count: number"],
+			"declarations": [
+				"input count",
+				"local countNum = count: number"
+			],
 			"selectors": [],
 			"match": {
 				"*": "Ver todas ({countNum})"
@@ -947,7 +992,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{label}: {countNum} tarea coincide. Verla",
 				"countPlural=many": "{label}: {countNum} tareas coinciden. Verlas",
@@ -965,7 +1012,9 @@
 				"local countPlural = count: plural",
 				"local pctNum = pct: number"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{title}: racha de {countNum} día, {pctNum}% cumplido. Abrir la tarea",
 				"countPlural=many": "{title}: racha de {countNum} días, {pctNum}% cumplido. Abrir la tarea",
@@ -981,7 +1030,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{title}: racha de {countNum} día. Abrir la tarea",
 				"countPlural=many": "{title}: racha de {countNum} días. Abrir la tarea",
@@ -994,8 +1045,13 @@
 	"panel_streak_missing": "Falta el hábito (se eliminó o no está compartido contigo)",
 	"panel_focus_sessions_unit": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural"
+			],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "sesión de concentración",
 				"countPlural=many": "sesiones de concentración",
@@ -1010,7 +1066,9 @@
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
-			"selectors": ["minutesPlural"],
+			"selectors": [
+				"minutesPlural"
+			],
 			"match": {
 				"minutesPlural=one": "{minutesNum} min de concentración",
 				"minutesPlural=many": "{minutesNum} min de concentración",
@@ -1030,7 +1088,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} día",
 				"countPlural=many": "{countNum} días",
@@ -1040,7 +1100,10 @@
 	],
 	"habit_adherence": [
 		{
-			"declarations": ["input pct", "local pctNum = pct: number"],
+			"declarations": [
+				"input pct",
+				"local pctNum = pct: number"
+			],
 			"selectors": [],
 			"match": {
 				"*": "{pctNum}% cumplido"
@@ -1084,7 +1147,9 @@
 				"local secondsNum = seconds: number",
 				"local secondsPlural = seconds: plural"
 			],
-			"selectors": ["secondsPlural"],
+			"selectors": [
+				"secondsPlural"
+			],
 			"match": {
 				"secondsPlural=one": "{secondsNum} s de concentración",
 				"secondsPlural=many": "{secondsNum} s de concentración",
@@ -1099,7 +1164,9 @@
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
-			"selectors": ["minutesPlural"],
+			"selectors": [
+				"minutesPlural"
+			],
 			"match": {
 				"minutesPlural=one": "{minutesNum} min de concentración",
 				"minutesPlural=many": "{minutesNum} min de concentración",
@@ -1115,7 +1182,9 @@
 				"local hoursNum = hours: number",
 				"local hoursPlural = hours: plural"
 			],
-			"selectors": ["hoursPlural"],
+			"selectors": [
+				"hoursPlural"
+			],
 			"match": {
 				"hoursPlural=one": "{hoursNum} h {minutes} min de concentración",
 				"hoursPlural=many": "{hoursNum} h {minutes} min de concentración",
@@ -1136,7 +1205,9 @@
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
-			"selectors": ["pointsPlural"],
+			"selectors": [
+				"pointsPlural"
+			],
 			"match": {
 				"pointsPlural=one": "Nivel {levelNum}, has llegado al nivel máximo, {pointsNum} punto",
 				"pointsPlural=many": "Nivel {levelNum}, has llegado al nivel máximo, {pointsNum} puntos",
@@ -1157,7 +1228,9 @@
 				"local spanNum = span: number",
 				"local spanPlural = span: plural"
 			],
-			"selectors": ["spanPlural"],
+			"selectors": [
+				"spanPlural"
+			],
 			"match": {
 				"spanPlural=one": "Nivel {levelNum}, {intoNum} de {spanNum} punto hacia el nivel {nextNum}",
 				"spanPlural=many": "Nivel {levelNum}, {intoNum} de {spanNum} puntos hacia el nivel {nextNum}",
@@ -1172,7 +1245,9 @@
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
-			"selectors": ["pointsPlural"],
+			"selectors": [
+				"pointsPlural"
+			],
 			"match": {
 				"pointsPlural=one": "{pointsNum} pts",
 				"pointsPlural=many": "{pointsNum} pts",
@@ -1183,7 +1258,10 @@
 	"karma_level_max": "Nivel máximo",
 	"karma_level_next": [
 		{
-			"declarations": ["input points", "local pointsNum = points: number"],
+			"declarations": [
+				"input points",
+				"local pointsNum = points: number"
+			],
 			"selectors": [],
 			"match": {
 				"*": "Siguiente: {pointsNum}"
@@ -1334,7 +1412,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "Responsables ({countNum})",
 				"countPlural=many": "Responsables ({countNum})",
@@ -1373,8 +1453,13 @@
 	"mention_invite_done": "Listo",
 	"mention_invite_created": [
 		{
-			"declarations": ["input count", "local countPlural = count: plural"],
-			"selectors": ["countPlural"],
+			"declarations": [
+				"input count",
+				"local countPlural = count: plural"
+			],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "Invitación creada. Comparte el enlace; cada persona se une al aceptar.",
 				"countPlural=many": "Invitaciones creadas. Comparte los enlaces; cada persona se une al aceptar.",
@@ -1465,7 +1550,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} cambio reciente sin sincronizar",
 				"countPlural=many": "{countNum} cambios recientes sin sincronizar",
@@ -1489,7 +1576,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} tarea seleccionada",
 				"countPlural=many": "{countNum} tareas seleccionadas",
@@ -1504,7 +1593,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} artículo marcado.",
 				"countPlural=many": "{countNum} artículos marcados.",
@@ -1519,7 +1610,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} tarea completada.",
 				"countPlural=many": "{countNum} tareas completadas.",
@@ -1534,7 +1627,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "Deshacer omite {countNum} tarea recurrente.",
 				"countPlural=many": "Deshacer omite {countNum} tareas recurrentes.",
@@ -1549,7 +1644,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} tarea recurrente pasó a su próxima fecha.",
 				"countPlural=many": "{countNum} tareas recurrentes pasaron a su próxima fecha.",
@@ -1564,7 +1661,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "No se pudo completar {countNum} tarea",
 				"countPlural=many": "No se pudieron completar {countNum} tareas",
@@ -1580,7 +1679,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} tarea movida a {list}",
 				"countPlural=many": "{countNum} tareas movidas a {list}",
@@ -1595,7 +1696,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "No se pudo mover {countNum} tarea",
 				"countPlural=many": "No se pudieron mover {countNum} tareas",
@@ -1610,7 +1713,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "No se pudo actualizar {countNum} tarea",
 				"countPlural=many": "No se pudieron actualizar {countNum} tareas",
@@ -1625,7 +1730,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "No se pudo eliminar {countNum} tarea",
 				"countPlural=many": "No se pudieron eliminar {countNum} tareas",
@@ -1640,7 +1747,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "¿Eliminar {countNum} tarea?",
 				"countPlural=many": "¿Eliminar {countNum} tareas?",
@@ -1655,7 +1764,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "Se eliminará {countNum} tarea con sus subtareas. Esto no se puede deshacer.",
 				"countPlural=many": "Se eliminarán {countNum} tareas con sus subtareas. Esto no se puede deshacer.",
@@ -1715,7 +1826,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "¿Eliminar «{title}» y {countNum} elemento? Esto no se puede deshacer.",
 				"countPlural=many": "¿Eliminar «{title}» y {countNum} elementos? Esto no se puede deshacer.",
@@ -1743,7 +1856,9 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "¿Eliminar «{title}»? También se eliminará {countNum} subtarea. Esto no se puede deshacer.",
 				"countPlural=many": "¿Eliminar «{title}»? También se eliminarán {countNum} subtareas. Esto no se puede deshacer.",
@@ -1862,7 +1977,9 @@
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "y {countNum} persona más",
 				"countPlural=many": "y {countNum} personas más",
@@ -1892,7 +2009,9 @@
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
-			"selectors": ["countPlural"],
+			"selectors": [
+				"countPlural"
+			],
 			"match": {
 				"countPlural=one": "{countNum} archivo",
 				"countPlural=many": "{countNum} archivos",
@@ -2079,5 +2198,33 @@
 	"habit_occurrence_skipped": "Esta vez omitido",
 	"habit_occurrence_unavailable": "Repetición no disponible. Abre el hábito para revisar su horario.",
 	"recurrence_projection_needs_start": "Define una fecha de inicio para mostrar este calendario.",
-	"recurrence_projection_capped": "No se pudo comprobar este calendario por completo. Abre la tarea para revisarlo."
+	"recurrence_projection_capped": "No se pudo comprobar este calendario por completo. Abre la tarea para revisarlo.",
+	"completion_history_heading": "Historial de finalización",
+	"completion_history_future_only": "El historial registra cambios desde que se activó esta función. Puede que no aparezcan finalizaciones anteriores.",
+	"completion_history_complete_member": "{actor} completó la tarea.",
+	"completion_history_complete_link": "Tarea completada mediante un enlace de recordatorio para {recipient}.",
+	"completion_history_reopen_member": "{actor} reabrió la tarea.",
+	"completion_history_reopen_link": "Tarea reabierta mediante un enlace de recordatorio para {recipient}.",
+	"completion_history_skip_member": "{actor} omitió la ocurrencia.",
+	"completion_history_skip_link": "Ocurrencia omitida mediante un enlace de recordatorio para {recipient}.",
+	"completion_history_habit_done_member": "{actor} registró el hábito como completado.",
+	"completion_history_habit_done_link": "Hábito registrado como completado mediante un enlace de recordatorio para {recipient}.",
+	"completion_history_habit_skipped_member": "{actor} marcó el hábito como omitido.",
+	"completion_history_habit_skipped_link": "Hábito marcado como omitido mediante un enlace de recordatorio para {recipient}.",
+	"completion_history_habit_removed_member": "{actor} eliminó el registro del hábito.",
+	"completion_history_habit_removed_link": "Registro del hábito eliminado mediante un enlace de recordatorio para {recipient}.",
+	"completion_history_person_unavailable": "Persona no disponible",
+	"completion_history_occurrence_unknown": "Fecha desconocida",
+	"completion_history_occurrence": "Ocurrencia: {occurrence}",
+	"completion_history_recorded": "Registrado el {time}",
+	"completion_history_loading": "Cargando historial de finalización…",
+	"completion_history_offline_incomplete": "Esta página no está disponible por completo sin conexión. Vuelve a conectarte para cargarla.",
+	"completion_history_empty": "No se han registrado cambios de finalización para esta tarea.",
+	"completion_history_end": "No hay eventos anteriores.",
+	"completion_history_error": "No se pudo cargar el historial de finalización.",
+	"completion_history_retry": "Reintentar",
+	"completion_history_previous": "Anterior",
+	"completion_history_next": "Siguiente",
+	"completion_history_page": "Página {page}",
+	"completion_history_unavailable": "El historial de esta tarea no está disponible."
 }

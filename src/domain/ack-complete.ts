@@ -10,6 +10,11 @@
 // bundled into the web client, and pulling in node:crypto or Drizzle here would
 // drag the server runtime with it.
 
+import type {
+	AppendCompletionEvent,
+	CompletionOrigin,
+	HabitHistoryStatus,
+} from "./completion-history.ts";
 import { karmaForCompletion } from "./karma.ts";
 import { localDay } from "./local-day.ts";
 import { transitionRecurrence } from "./recurrence.ts";
@@ -28,13 +33,14 @@ export type AckTask = {
 	recurrenceAnchorAt?: number | null;
 	recurrenceConsumed?: number | null;
 	dueAt: number | null;
+	dueAllDay: boolean;
 	done: boolean;
 	priority: number;
 };
 
 export type AckHabitLog = {
 	id: string;
-	status: string;
+	status: HabitHistoryStatus;
 	karmaDelta: number;
 };
 
@@ -66,6 +72,7 @@ export type AckStore = {
 		reason: string,
 		date: string,
 	): Promise<void>;
+	appendEvent: AppendCompletionEvent;
 };
 
 // "ack_only" is the viewer outcome: the reminder is acked (escalation stops)
@@ -107,6 +114,7 @@ export async function completeForAck(
 	store: AckStore,
 	reminder: AckReminder,
 	actorUserId: string,
+	origin: CompletionOrigin,
 	now: number = Date.now(),
 ): Promise<AckOutcome> {
 	const task = await store.task(reminder.taskId);
@@ -147,12 +155,27 @@ export async function completeForAck(
 			completedAt: now,
 		});
 		await store.awardKarma(actorUserId, karmaDelta, "habit_done", date);
+		await store.appendEvent({
+			taskId: task.id,
+			actorUserId,
+			recordedAt: now,
+			origin,
+			action: "habit_set",
+			habitDate: date,
+			beforeHabitStatus: existing?.status ?? null,
+			afterHabitStatus: "done",
+		});
 		return "logged";
 	}
 
 	// Same shape as task.complete: a done task has no current occurrence,
 	// including when a recurring series has been exhausted.
 	if (task.done) return "completed";
+	const beforeDueAt = task.dueAt;
+	const beforeDueAllDay = task.dueAllDay;
+	const beforeDone = task.done;
+	let afterDueAt = task.dueAt;
+	let afterDone = true;
 	if (task.rrule) {
 		const result = transitionRecurrence(
 			{
@@ -173,6 +196,8 @@ export async function completeForAck(
 		);
 		if (result.status === "capped" || result.status === "needs-start")
 			throw new AckCompletionDenied(`recurrence ${result.status}`);
+		afterDueAt = result.series.dueAt?.getTime() ?? null;
+		afterDone = result.series.exhausted;
 		await store.updateTask(task.id, {
 			dueAt: result.series.dueAt?.getTime() ?? null,
 			recurrenceAnchorAt: result.series.anchorAt?.getTime() ?? null,
@@ -189,5 +214,17 @@ export async function completeForAck(
 		"task_complete",
 		localDay(new Date(now), timeZone),
 	);
+	await store.appendEvent({
+		taskId: task.id,
+		actorUserId,
+		recordedAt: now,
+		origin,
+		action: "complete",
+		beforeDueAt,
+		beforeDueAllDay,
+		beforeDone,
+		afterDueAt,
+		afterDone,
+	});
 	return "completed";
 }

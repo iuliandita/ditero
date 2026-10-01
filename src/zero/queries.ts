@@ -6,6 +6,8 @@ import {
 	defineQuery,
 	type ExpressionBuilder,
 } from "@rocicorp/zero";
+import { z } from "zod";
+import { COMPLETION_HISTORY_PAGE_SIZE } from "../domain/completion-history.ts";
 import { type Schema, zql } from "./schema.gen.ts";
 
 export type AuthCtx = { id: string };
@@ -72,6 +74,54 @@ export const queries = defineQueries({
 			zql.task.where(({ exists }) =>
 				exists("list", (l) => l.where(workspaceVisible(ctx))),
 			),
+		),
+	},
+	taskCompletionEvents: {
+		page: defineQuery(
+			z
+				.object({
+					taskId: z.string(),
+					cursor: z
+						.object({
+							recordedAt: z
+								.number()
+								.int()
+								.min(-210_866_803_200_000)
+								.max(8_640_000_000_000_000),
+							id: z.string(),
+						})
+						.strict()
+						.nullable(),
+				})
+				.strict(),
+			({ args, ctx }) => {
+				let page = zql.taskCompletionEvent
+					.where("taskId", args.taskId)
+					.where(({ exists }) =>
+						exists("task", (task) =>
+							task.where(({ exists: related }) =>
+								related("list", (list) => list.where(workspaceVisible(ctx))),
+							),
+						),
+					);
+				const cursor = args.cursor;
+				if (cursor) {
+					page = page.where(({ or, and, cmp }) =>
+						or(
+							cmp("recordedAt", "<", cursor.recordedAt),
+							and(
+								cmp("recordedAt", "=", cursor.recordedAt),
+								cmp("id", "<", cursor.id),
+							),
+						),
+					);
+				}
+				return page
+					.orderBy("recordedAt", "desc")
+					.orderBy("id", "desc")
+					.limit(COMPLETION_HISTORY_PAGE_SIZE)
+					.related("actor");
+			},
 		),
 	},
 	taskLabels: {

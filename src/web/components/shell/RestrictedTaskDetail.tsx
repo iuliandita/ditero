@@ -20,6 +20,7 @@ import {
 } from "../../hooks/useTaskImportActivation.ts";
 import { AttachmentList } from "../attachments/AttachmentList.tsx";
 import { ImportActivationRecovery } from "../list/ImportActivationRecovery.tsx";
+import { TaskCompletionHistory } from "../list/TaskCompletionHistory.tsx";
 import { CommentThread } from "../people/CommentThread.tsx";
 
 // Read-only task detail for the restricted ("kid") shell. The only write a kid may
@@ -125,6 +126,12 @@ export function RestrictedTaskDetail({
 						parentKind="task"
 						parentId={t.id}
 						showAdd={false}
+					/>
+					<TaskCompletionHistory
+						key={JSON.stringify([t.id, workspaceId])}
+						taskId={t.id}
+						workspaceId={workspaceId}
+						detailOpen={open}
 					/>
 
 					<div className="border-t pt-3">
