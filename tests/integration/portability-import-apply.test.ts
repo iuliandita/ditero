@@ -955,3 +955,55 @@ test("apply holds its list dependency against concurrent moves while waiting on 
 		await applying.end();
 	}
 });
+
+test.each([
+	"timestamp",
+	"null",
+	"legacy",
+] as const)("%s creation provenance survives saved-plan apply, replay, and replan", async (kind) => {
+	for (const row of document.data.tasks) {
+		if (kind === "legacy") delete row.createdAt;
+		else row.createdAt = kind === "timestamp" ? now.toISOString() : null;
+	}
+	const first = await save();
+	const evidence = async () =>
+		(
+			await pool.query(
+				"select item_digest, content_digest, payload from import_item where job_id = $1 and collection = 'tasks' order by ordinal",
+				[first.id],
+			)
+		).rows;
+	const frozen = await evidence();
+	expect(frozen).toHaveLength(2);
+	for (const row of frozen)
+		expect(Object.hasOwn(row.payload, "createdAt")).toBe(kind !== "legacy");
+	await finish(first);
+	expect(await evidence()).toEqual(frozen);
+	const rootId = await targetId("tasks", "a-root");
+	const rows = await pool.query<{ created_at: Date | null }>(
+		"select created_at from task where id = $1",
+		[rootId],
+	);
+	expect(rows.rows[0]?.created_at?.toISOString() ?? null).toBe(
+		kind === "timestamp" ? now.toISOString() : null,
+	);
+	expect((await apply(first)).state).toBe("completed");
+	await discardImportPlan(runtime, "alice", first.id);
+	const second = await save();
+	const replay = await finish(second);
+	expect(replay.appliedCount).toBe(0);
+	expect(replay.noopCount).toBe(6);
+	if (kind !== "legacy") {
+		await pool.query("update task set created_at = $1 where id = $2", [
+			new Date(now.getTime() + 1000),
+			rootId,
+		]);
+		await discardImportPlan(runtime, "alice", second.id);
+		const changed = await save();
+		const dispositions = await pool.query<{ disposition: string }>(
+			"select disposition from import_item where job_id = $1 and collection = 'tasks' and source_id = 'a-root'",
+			[changed.id],
+		);
+		expect(dispositions.rows[0]?.disposition).toBe("blocked");
+	}
+});

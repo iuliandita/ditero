@@ -255,6 +255,7 @@ const projections = {
 		"dueAllDay",
 		"priority",
 		"completedAt",
+		"createdAt",
 		"sortKey",
 		"parentId",
 		"quantity",

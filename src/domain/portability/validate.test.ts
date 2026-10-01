@@ -258,6 +258,23 @@ function parse(value: unknown) {
 }
 
 describe("portable v1 validation", () => {
+	test("creation provenance is optional without altering legacy source keys", () => {
+		const legacy = fixture();
+		const parsed = parse(legacy);
+		expect(Object.hasOwn(parsed.data.tasks[0], "createdAt")).toBe(false);
+		expect(parsed).toEqual(legacy);
+		for (const createdAt of [null, stamp]) {
+			const value = fixture();
+			value.data.tasks[0].createdAt = createdAt;
+			expect(parse(value).data.tasks[0].createdAt).toBe(createdAt);
+		}
+		for (const createdAt of ["invalid", "2026-09-16", 123]) {
+			const value = fixture();
+			Object.assign(value.data.tasks[0], { createdAt });
+			expect(() => parse(value)).toThrow(PortableExportValidationError);
+		}
+	});
+
 	test("accepts reordered object keys throughout the document", () => {
 		const value = fixture();
 		function reorder(item: unknown): unknown {

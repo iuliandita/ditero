@@ -37,6 +37,7 @@ export const IMPORT_TARGETS = {
 			"dueAllDay",
 			"priority",
 			"completedAt",
+			"createdAt",
 			"sortKey",
 			"parentId",
 			"quantity",
@@ -63,12 +64,28 @@ export const IMPORT_TARGETS = {
 
 export type ImportTargetCollection = keyof typeof IMPORT_TARGETS;
 
+export function taskCreatedAtPresent(
+	collection: ImportTargetCollection,
+	payload: unknown,
+): boolean {
+	return (
+		collection === "tasks" &&
+		payload !== null &&
+		typeof payload === "object" &&
+		!Array.isArray(payload) &&
+		Object.hasOwn(payload, "createdAt")
+	);
+}
+
 export function importTargetProjection(
 	collection: ImportTargetCollection,
 	row: Record<string, unknown>,
+	withTaskCreatedAt = false,
 ): Record<string, PortableJson> {
 	const projection: Record<string, PortableJson> = {};
 	for (const field of IMPORT_TARGETS[collection].fields) {
+		// Legacy saved plans and source maps retain their exact v1 projection.
+		if (field === "createdAt" && !withTaskCreatedAt) continue;
 		const column = field.replace(
 			/[A-Z]/g,
 			(letter) => `_${letter.toLowerCase()}`,
@@ -76,7 +93,7 @@ export function importTargetProjection(
 		const value = row[column];
 		if (
 			collection === "tasks" &&
-			(field === "dueAt" || field === "completedAt")
+			(field === "dueAt" || field === "completedAt" || field === "createdAt")
 		) {
 			if (value === null) projection[field] = null;
 			else if (value instanceof Date && Number.isFinite(value.getTime()))
@@ -98,10 +115,13 @@ export function digestImportTarget(
 	collection: ImportTargetCollection,
 	row: Record<string, unknown>,
 	checkpoint: () => void,
+	withTaskCreatedAt = false,
 ) {
 	return hashImportValue(
-		"ditero-import-target-v1",
-		[collection, importTargetProjection(collection, row)],
+		collection === "tasks" && withTaskCreatedAt
+			? "ditero-import-target-v2"
+			: "ditero-import-target-v1",
+		[collection, importTargetProjection(collection, row, withTaskCreatedAt)],
 		checkpoint,
 	);
 }

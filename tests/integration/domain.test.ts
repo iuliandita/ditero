@@ -380,6 +380,7 @@ describe("domain mutators", () => {
 	});
 
 	test("member can create a task", async () => {
+		const before = Date.now();
 		await call(
 			mutators.task.create,
 			{ id: "member" },
@@ -388,7 +389,65 @@ describe("domain mutators", () => {
 				listId: "l1",
 				title: "member task",
 				sortKey: "a5",
+				createdAt: 1,
 			},
+		);
+		const row = await db.query.task.findFirst({
+			where: (t, { eq }) => eq(t.id, "m-task"),
+		});
+		expect(row?.createdAt).toBeInstanceOf(Date);
+		expect(row?.createdAt?.getTime()).toBeGreaterThanOrEqual(before);
+		expect(row?.createdAt?.getTime()).toBeLessThanOrEqual(Date.now());
+		const original = row?.createdAt;
+		await call(
+			mutators.task.update,
+			{ id: "member" },
+			{ id: "m-task", notes: "metadata", createdAt: 1 },
+		);
+		expect(
+			(
+				await db.query.task.findFirst({
+					where: (t, { eq }) => eq(t.id, "m-task"),
+				})
+			)?.createdAt,
+		).toEqual(original);
+		expect(
+			(await db.query.task.findFirst({ where: (t, { eq }) => eq(t.id, "t1") }))
+				?.createdAt,
+		).toBeNull();
+	});
+
+	test("optimistic creation remains unknown until the authoritative server write", async () => {
+		await zdb.transaction(async (serverTx) => {
+			const clientTx = new Proxy(serverTx, {
+				get(target, property) {
+					if (property === "location") return "client";
+					const value = Reflect.get(target, property);
+					return typeof value === "function" ? value.bind(target) : value;
+				},
+			});
+			await mutators.task.create.fn({
+				tx: clientTx,
+				ctx: { id: "member" },
+				args: {
+					id: "optimistic-task",
+					listId: "l1",
+					title: "Pending",
+					sortKey: "a6",
+				},
+			});
+		});
+		expect(
+			(
+				await db.query.task.findFirst({
+					where: (t, { eq }) => eq(t.id, "optimistic-task"),
+				})
+			)?.createdAt,
+		).toBeNull();
+		await call(
+			mutators.task.delete,
+			{ id: "member" },
+			{ id: "optimistic-task" },
 		);
 	});
 
@@ -803,6 +862,7 @@ describe("domain mutators", () => {
 	});
 
 	test("member can instantiate a list template into their workspace", async () => {
+		const before = Date.now();
 		await call(
 			mutators.template.instantiateList,
 			{ id: "member" },
@@ -826,6 +886,8 @@ describe("domain mutators", () => {
 		for (const t of tasks) {
 			expect(t.done).toBe(false);
 			expect(t.dueAt).toBeNull();
+			expect(t.createdAt?.getTime()).toBeGreaterThanOrEqual(before);
+			expect(t.createdAt?.getTime()).toBeLessThanOrEqual(Date.now());
 		}
 		const bread = tasks.find((t) => t.title === "Bread");
 		const sub = tasks.find((t) => t.title === "Sourdough");
@@ -833,6 +895,7 @@ describe("domain mutators", () => {
 	});
 
 	test("member can instantiate a task template into a target list", async () => {
+		const before = Date.now();
 		await call(
 			mutators.template.instantiateTask,
 			{ id: "member" },
@@ -852,6 +915,10 @@ describe("domain mutators", () => {
 			where: (t, { eq }) => eq(t.parentId, "it-1"),
 		});
 		expect(subs.map((s) => s.title)).toEqual(["Migrate"]);
+		for (const row of [root, ...subs]) {
+			expect(row?.createdAt?.getTime()).toBeGreaterThanOrEqual(before);
+			expect(row?.createdAt?.getTime()).toBeLessThanOrEqual(Date.now());
+		}
 	});
 
 	test("instantiating a list into a foreign workspace is denied", async () => {
@@ -871,6 +938,7 @@ describe("domain mutators", () => {
 	});
 
 	test("a starter content blob instantiates to a list + tasks in one tx", async () => {
+		const before = Date.now();
 		// STARTER_TEMPLATES[0] is the shopping starter (8 items with qty/category).
 		const content = STARTER_TEMPLATES[0];
 		await call(
@@ -897,7 +965,11 @@ describe("domain mutators", () => {
 		const milk = tasks.find((t) => t.title === "Milk");
 		expect(milk?.quantity).toBe("1");
 		expect(milk?.category).toBe("Dairy");
-		for (const t of tasks) expect(t.done).toBe(false);
+		for (const t of tasks) {
+			expect(t.done).toBe(false);
+			expect(t.createdAt?.getTime()).toBeGreaterThanOrEqual(before);
+			expect(t.createdAt?.getTime()).toBeLessThanOrEqual(Date.now());
+		}
 	});
 
 	test("instantiateContent into a foreign workspace is denied", async () => {

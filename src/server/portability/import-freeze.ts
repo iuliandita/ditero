@@ -25,6 +25,7 @@ import {
 	digestImportTarget,
 	IMPORT_TARGETS,
 	type ImportTargetCollection,
+	taskCreatedAtPresent,
 } from "./import-target.ts";
 
 export class ImportFreezeLimitError extends Error {
@@ -447,8 +448,12 @@ export async function freezeImportTargets(
 				block(item, "source-content-changed");
 			else if (!target) block(item, "target-missing");
 			else if (
-				(await digestImportTarget(collection, target, checkpoint)) !==
-				map.last_target_digest
+				(await digestImportTarget(
+					collection,
+					target,
+					checkpoint,
+					taskCreatedAtPresent(collection, item.payload),
+				)) !== map.last_target_digest
 			)
 				block(item, "target-changed");
 			else

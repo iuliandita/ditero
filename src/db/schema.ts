@@ -228,6 +228,7 @@ export const task = pgTable(
 		dueAllDay: boolean("due_all_day").notNull().default(false),
 		priority: smallint("priority").notNull().default(0), // 0 none, 1 low, 2 med, 3 high
 		completedAt: timestamp("completed_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true }),
 		sortKey: text("sort_key").notNull(),
 		parentId: text("parent_id"), // 1 level deep, mutator-enforced
 		quantity: text("quantity"), // shopping extras, nullable on all kinds

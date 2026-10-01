@@ -24,6 +24,7 @@ import {
 	digestImportTarget,
 	IMPORT_TARGETS,
 	type ImportTargetCollection,
+	taskCreatedAtPresent,
 } from "./import-target.ts";
 
 export type ImportRunStatus = {
@@ -83,7 +84,7 @@ function payloadRow(item: FrozenImportItem): Row {
 		Object.entries(payloadOf(item)).map(([key, value]) => [
 			column(key),
 			item.collection === "tasks" &&
-			(key === "dueAt" || key === "completedAt") &&
+			(key === "dueAt" || key === "completedAt" || key === "createdAt") &&
 			typeof value === "string"
 				? new Date(value)
 				: value,
@@ -647,6 +648,7 @@ export async function applyImportBatch(
 						collection,
 						payloadRow(item),
 						checkpoint,
+						taskCreatedAtPresent(collection, payload),
 					);
 					if (pre.kind === "mapped") {
 						if (
@@ -660,8 +662,12 @@ export async function applyImportBatch(
 							map.content_digest !== item.contentDigest ||
 							map.last_target_digest !== pre.targetDigest ||
 							targetDigest !== pre.targetDigest ||
-							(await digestImportTarget(collection, target, checkpoint)) !==
-								pre.targetDigest
+							(await digestImportTarget(
+								collection,
+								target,
+								checkpoint,
+								taskCreatedAtPresent(collection, payload),
+							)) !== pre.targetDigest
 						)
 							conflict("mapped-target-conflict");
 					} else {
