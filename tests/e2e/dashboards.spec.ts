@@ -4,7 +4,14 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import {
+	type Browser,
+	type BrowserContext,
+	expect,
+	type Locator,
+	type Page,
+	test,
+} from "@playwright/test";
 import { mustGetQuery } from "@rocicorp/zero";
 import { handleQueryRequest } from "@rocicorp/zero/server";
 import { Pool } from "pg";
@@ -245,9 +252,11 @@ type SharingSyncEvent = Record<string, unknown> & {
 function observeSharingSync(
 	page: Page,
 	accountRole: SharingSyncEvent["accountRole"],
+	isActive: () => boolean = () => true,
 ): SharingSyncEvent[] {
 	const events: SharingSyncEvent[] = [];
 	page.on("websocket", (socket) => {
+		if (!isActive()) return;
 		const url = new URL(socket.url());
 		if (!url.pathname.includes("/sync/")) return;
 		const connection = {
@@ -263,7 +272,7 @@ function observeSharingSync(
 				baseCookie: url.searchParams.get("baseCookie"),
 			});
 		socket.on("framereceived", ({ payload }) => {
-			if (events.length >= 100) return;
+			if (!isActive() || events.length >= 100) return;
 			try {
 				const frame: unknown = JSON.parse(payload.toString());
 				if (!Array.isArray(frame)) return;
@@ -614,7 +623,12 @@ async function attachSharingFailure(
 	teamDash: string,
 	soloDash: string,
 	sync: SharingSyncEvent[],
-): Promise<void> {
+	comparison?: {
+		accountRole: "member" | "viewer";
+		clientGroupID: string;
+		originalGroups: Record<string, string>;
+	},
+) {
 	const pool = new Pool({
 		connectionString: process.env.E2E_DATABASE_URL,
 		connectionTimeoutMillis: 3000,
@@ -700,12 +714,13 @@ async function attachSharingFailure(
 			console.error(`dashboard sharing group recovery failed: ${hashError}`);
 		}
 		let groups: string[] = [];
+		const groupsByRole: Record<string, string> = {};
 		let cvr: Record<string, unknown> = {
 			groups,
 			expected,
 			observedGroups,
 			hashes,
-			limits: { groups: 4, candidates: 200, rows: 200 },
+			limits: { groups: comparison ? 5 : 4, candidates: 200, rows: 200 },
 			startedAt: Date.now(),
 		};
 		if (hashError) {
@@ -763,10 +778,15 @@ async function attachSharingFailure(
 								row.activeDashboardMatch &&
 								row.activePrefMatch,
 						);
+						const originalGroup = comparison?.originalGroups[accountRole];
+						const scopedEligible = originalGroup
+							? eligible.filter((row) => row.clientGroupID === originalGroup)
+							: eligible;
 						const selectedGroup =
-							!candidatesTruncated && eligible.length === 1
-								? eligible[0].clientGroupID
+							!candidatesTruncated && scopedEligible.length === 1
+								? scopedEligible[0].clientGroupID
 								: null;
+						if (selectedGroup) groupsByRole[accountRole] = selectedGroup;
 						return {
 							accountRole,
 							accountID,
@@ -792,9 +812,44 @@ async function attachSharingFailure(
 							),
 						),
 					];
+					const freshMatches = comparison
+						? candidates.rows.filter(
+								(row) =>
+									row.accountRole === comparison.accountRole &&
+									row.clientGroupID === comparison.clientGroupID &&
+									row.instanceDeleted === false &&
+									row.activeDashboardMatch &&
+									row.activePrefMatch,
+							)
+						: [];
+					const freshObserved =
+						comparison &&
+						sync.some(
+							(event) =>
+								event.accountRole === comparison.accountRole &&
+								event.clientGroupID === comparison.clientGroupID,
+						);
+					const freshGroup =
+						!candidatesTruncated && freshObserved && freshMatches.length === 1
+							? freshMatches[0].clientGroupID
+							: null;
+					if (freshGroup && !groups.includes(freshGroup))
+						groups.push(freshGroup);
+					if (groups.length > (comparison ? 5 : 4)) throw new RangeError();
 					cvr = {
 						...cvr,
 						groups,
+						...(comparison
+							? {
+									freshGroupProof: {
+										accountRole: comparison.accountRole,
+										observedGroup: comparison.clientGroupID,
+										selectedGroup: freshGroup,
+										namedQueryMatches: freshMatches.length,
+										status: freshGroup ? "recovered" : "not recoverable",
+									},
+								}
+							: {}),
 						candidates: candidates.rows,
 						recovery,
 						truncated: { candidates: candidatesTruncated, groups: false },
@@ -875,21 +930,150 @@ async function attachSharingFailure(
 			}
 		}
 		cvr.finishedAt = Date.now();
-		await test.info().attach("dashboard-sharing-state", {
-			contentType: "application/json",
-			body: JSON.stringify({
-				accounts,
-				expected: { teamDash, soloDash, workspaceId: SHARED_WORKSPACE_ID },
-				database: state,
-				replica,
-				snapshotRelationship:
-					"Replica captured before CVR; independent committed snapshots, not atomic or the ViewSyncer's held transaction",
-				cvr,
-				sync,
-			}),
-		});
+		await test
+			.info()
+			.attach(
+				comparison
+					? "dashboard-sharing-fresh-state"
+					: "dashboard-sharing-state",
+				{
+					contentType: "application/json",
+					body: JSON.stringify({
+						accounts,
+						expected: { teamDash, soloDash, workspaceId: SHARED_WORKSPACE_ID },
+						database: state,
+						replica,
+						snapshotRelationship:
+							"Replica captured before CVR; independent committed snapshots, not atomic or the ViewSyncer's held transaction",
+						cvr,
+						sync,
+					}),
+				},
+			);
+		return { groupsByRole };
 	} finally {
 		await pool.end();
+	}
+}
+
+async function attachFreshSharingComparison(
+	browser: Browser,
+	original: Page,
+	accountRole: "member" | "viewer",
+	accounts: Record<string, string>,
+	teamDash: string,
+	soloDash: string,
+	originalSync: SharingSyncEvent[],
+	originalGroups: Record<string, string>,
+): Promise<void> {
+	const startedAt = Date.now();
+	const deadline = startedAt + 5000;
+	let expired = false;
+	let context: BrowserContext | undefined;
+	let freshSync: SharingSyncEvent[] = [];
+	let teamVisible = false;
+	let marker: string | undefined;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		const observation = (async () => {
+			const origin = new URL(original.url()).origin;
+			const cookies = (await original.context().cookies(origin)).filter(
+				(cookie) =>
+					/^(?:__Secure-)?better-auth[.-]session_token$/.test(cookie.name),
+			);
+			if (cookies.length === 0) throw new Error("auth-cookie-absent");
+			if (expired) return;
+			context = await browser.newContext({
+				storageState: { cookies, origins: [] },
+			});
+			if (expired) {
+				await context.close();
+				return;
+			}
+			const page = await context.newPage();
+			if (expired) return;
+			freshSync = observeSharingSync(page, accountRole, () => !expired);
+			await page.goto(origin, {
+				waitUntil: "domcontentloaded",
+				timeout: Math.max(1, deadline - Date.now()),
+			});
+			if (expired) return;
+			await sidebarLists(page)
+				.getByRole("button", { name: teamDash, exact: true })
+				.waitFor({
+					state: "visible",
+					timeout: Math.max(1, deadline - Date.now()),
+				});
+			if (!expired) teamVisible = true;
+		})();
+		await Promise.race([
+			observation,
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(
+					() => {
+						expired = true;
+						reject(new Error("observer-deadline"));
+					},
+					Math.max(1, deadline - Date.now()),
+				);
+			}),
+		]);
+	} catch (error) {
+		marker =
+			error instanceof Error &&
+			["observer-deadline", "auth-cookie-absent"].includes(error.message)
+				? error.message
+				: "observer-failed";
+	} finally {
+		if (timer) clearTimeout(timer);
+		expired = true;
+	}
+	const observationFinishedAt = Date.now();
+	try {
+		const freshGroups = [
+			...new Set(
+				freshSync.flatMap((event) =>
+					event.clientGroupID ? [event.clientGroupID] : [],
+				),
+			),
+		];
+		const oldGroups = new Set(
+			originalSync.flatMap((event) =>
+				event.clientGroupID ? [event.clientGroupID] : [],
+			),
+		);
+		const freshGroup =
+			freshGroups.length === 1 && !oldGroups.has(freshGroups[0])
+				? freshGroups[0]
+				: undefined;
+		await test.info().attach("dashboard-sharing-fresh-observer", {
+			contentType: "application/json",
+			body: JSON.stringify({
+				startedAt,
+				observationFinishedAt,
+				accountRole,
+				teamVisible,
+				marker,
+				freshGroups,
+				freshGroup,
+				storage: "auth cookies only; no origins or IndexedDB",
+				sync: freshSync,
+			}),
+		});
+		if (freshGroup)
+			await attachSharingFailure(
+				accounts,
+				teamDash,
+				soloDash,
+				[...originalSync, ...freshSync],
+				{
+					accountRole,
+					clientGroupID: freshGroup,
+					originalGroups,
+				},
+			);
+	} finally {
+		await context?.close();
 	}
 }
 
@@ -1120,6 +1304,9 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 	const teamDash = `Team ${Date.now()}`;
 	const soloDash = `Solo ${Date.now()}`;
 	const sync: SharingSyncEvent[][] = [];
+	let failedSharingObserver:
+		| { page: Page; accountRole: "member" | "viewer" }
+		| undefined;
 	try {
 		// Owner joins the seeded shared workspace and creates a workspace-shared
 		// dashboard in it, plus a personal one.
@@ -1146,12 +1333,14 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		await joinShared(memberId, "member");
 		await pMember.reload();
 		await waitWorkspaceReady(pMember);
+		failedSharingObserver = { page: pMember, accountRole: "member" };
 		await expect(
 			sidebarLists(pMember).getByRole("button", {
 				name: teamDash,
 				exact: true,
 			}),
 		).toBeVisible({ timeout: 15000 });
+		failedSharingObserver = undefined;
 		await expect(
 			sidebarLists(pMember).getByRole("button", {
 				name: soloDash,
@@ -1182,12 +1371,14 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		await joinShared(viewerId, "viewer");
 		await pViewer.reload();
 		await waitWorkspaceReady(pViewer);
+		failedSharingObserver = { page: pViewer, accountRole: "viewer" };
 		await expect(
 			sidebarLists(pViewer).getByRole("button", {
 				name: teamDash,
 				exact: true,
 			}),
 		).toBeVisible({ timeout: 15000 });
+		failedSharingObserver = undefined;
 		await openDashboardFromSidebar(pViewer, teamDash);
 		await expect(
 			pViewer.getByRole("heading", { name: teamDash, level: 1 }),
@@ -1197,7 +1388,23 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		await expect(pViewer.getByTestId("dashboard-empty-add")).toHaveCount(0);
 	} catch (error) {
 		try {
-			await attachSharingFailure(accounts, teamDash, soloDash, sync.flat());
+			const originalCapture = await attachSharingFailure(
+				accounts,
+				teamDash,
+				soloDash,
+				sync.flat(),
+			);
+			if (failedSharingObserver)
+				await attachFreshSharingComparison(
+					browser,
+					failedSharingObserver.page,
+					failedSharingObserver.accountRole,
+					accounts,
+					teamDash,
+					soloDash,
+					sync.flat(),
+					originalCapture.groupsByRole,
+				);
 		} catch (diagnosticError) {
 			console.error(
 				"dashboard sharing diagnostics failed:",

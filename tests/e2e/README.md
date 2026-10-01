@@ -68,6 +68,16 @@ corroborate recovery but do not widen its scope. Each candidate or saved-query
 result has a 200-row limit; truncation is explicitly flagged.
 It excludes credentials, query arguments, and row contents.
 
+After the original member or viewer dashboard-visibility assertion fails and its
+state is captured, a five-second observer opens one new context for that same
+account with cookies only and empty origin storage. It records whether the Team
+entry appears without changing preferences or retrying the failed assertion.
+A secondary snapshot selects the explicit new WebSocket client group only when
+its account-specific named-query transformations match. It compares up to four
+original groups plus that one proven fresh group, retaining the original failure.
+The new context closes in a finally block; diagnostic errors cannot replace the
+original error.
+
 The runner also supplies its exact Compose arguments through
 `E2E_DIAGNOSTIC_COMPOSE_ARGV`. On a sharing failure, the capture reads the active
 Zero container's serving path from a bounded worker startup log, then verifies
