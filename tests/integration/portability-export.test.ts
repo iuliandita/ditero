@@ -532,6 +532,43 @@ describe("portable export", () => {
 		});
 	});
 
+	test("v2 native terminal skip exports pass the archive parser", async () => {
+		const ids = [
+			"33333333-3333-4333-8333-333333333333",
+			"44444444-4444-4444-8444-444444444444",
+		];
+		await db.insert(tables.taskCompletionEvent).values(
+			ids.map((id, index) => ({
+				id,
+				taskId: "shared-task",
+				actorUserId: "alice",
+				recordedAt: now,
+				origin: "member_mutation" as const,
+				action: "skip" as const,
+				beforeDueAt: index === 0 ? null : now,
+				beforeDueAllDay: false,
+				beforeDone: false,
+				afterDueAt: now,
+				afterDone: true,
+			})),
+		);
+		const response = await request({}, "alice", undefined, "?version=2");
+		expect(response.status, await response.clone().text()).toBe(200);
+		const document = parsePortableExportV2(await response.text());
+		expect(document.data.completionEvents).toHaveLength(2);
+		for (const [index, id] of ids.entries()) {
+			expect(
+				document.data.completionEvents.find((event) => event.id === id),
+			).toMatchObject({
+				action: "skip",
+				beforeDueAt: index === 0 ? null : now.toISOString(),
+				beforeDone: false,
+				afterDueAt: now.toISOString(),
+				afterDone: true,
+			});
+		}
+	});
+
 	test("v2 charges transformed author and history bytes and row count", async () => {
 		await db.insert(tables.taskCompletionEvent).values({
 			id: "66666666-6666-4666-8666-666666666666",

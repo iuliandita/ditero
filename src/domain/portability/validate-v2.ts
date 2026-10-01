@@ -73,8 +73,11 @@ const taskEvent = z
 			(event.action === "complete" && !event.beforeDone) ||
 			(event.action === "reopen" && event.beforeDone && !event.afterDone) ||
 			(event.action === "skip" &&
-				!event.afterDone &&
-				event.afterDueAt !== null),
+				event.afterDueAt !== null &&
+				(!event.afterDone ||
+					(!event.beforeDone &&
+						(event.beforeDueAt === null ||
+							event.afterDueAt === event.beforeDueAt)))),
 		"Invalid task history transition",
 	);
 const habitEvent = z

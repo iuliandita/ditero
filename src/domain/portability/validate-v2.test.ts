@@ -78,7 +78,10 @@ function fixture(): PortableExportV2 {
 
 function taskEvent(
 	action: "complete" | "reopen" | "skip",
-): PortableCompletionEventV2 {
+): Extract<
+	PortableCompletionEventV2,
+	{ action: "complete" | "reopen" | "skip" }
+> {
 	return {
 		id: "",
 		sourceRef: sourceRef("completionEvents"),
@@ -226,12 +229,23 @@ describe("portable v2 validation", () => {
 		}
 	});
 
+	test("preserves terminal skips with an existing due date or a newly persisted anchor", () => {
+		for (const beforeDueAt of [null, stamp]) {
+			const input = fixture();
+			input.data.completionEvents = [
+				{ ...taskEvent("skip"), beforeDueAt, afterDone: true },
+			];
+			expect(parse(input)).toEqual(input);
+		}
+	});
+
 	test("enforces SQL-equivalent task and habit transitions and exact payload fields", () => {
 		for (const [action, update] of [
 			["complete", { beforeDone: true }],
 			["reopen", { beforeDone: false }],
 			["reopen", { afterDone: true }],
-			["skip", { afterDone: true }],
+			["skip", { beforeDone: true, afterDone: true }],
+			["skip", { beforeDueAt: "2024-02-28T00:00:00.000Z", afterDone: true }],
 			["skip", { afterDueAt: null }],
 			["complete", { habitDate: "2024-02-29" }],
 			["complete", { beforeDueAllDay: null }],
