@@ -311,6 +311,12 @@
 }
 
 :root:is([data-reading-size="comfortable"], [data-reading-size="large"]) {
+	& [data-reading-sidebar-footer="expanded"] {
+		flex-wrap: wrap;
+		& [data-testid="nav-settings"] {
+			flex: 0 0 100%;
+		}
+	}
 	& [data-reading-inline-add] {
 		flex-wrap: wrap;
 		& > div {

@@ -574,6 +574,7 @@ export function Sidebar({
 			</div>
 
 			<div
+				data-reading-sidebar-footer={collapsed ? "collapsed" : "expanded"}
 				className={cn(
 					"flex items-center gap-1 border-t p-2",
 					collapsed && "flex-col",
