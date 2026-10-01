@@ -91,8 +91,12 @@ afterAll(async () => {
 
 // Only assert over this file's own dashboard ids: sibling files may seed their
 // own rows, so filter the synced set down before comparing.
-async function myDashboardIds(id: string) {
-	const rows = await zdb.run(queries.dashboards.mine.fn(ctx(id)));
+async function myDashboardIds(id: string, workspaceIds?: string[]) {
+	const rows = await zdb.run(
+		queries.dashboards.mine.fn(
+			workspaceIds ? { args: { workspaceIds }, ctx: { id } } : ctx(id),
+		),
+	);
 	return rows
 		.map((r) => r.id)
 		.filter((did) => (dashboardIds as readonly string[]).includes(did))
@@ -113,6 +117,48 @@ describe("dashboard read-permission isolation", () => {
 
 	test("non-member B sees zero rows", async () => {
 		expect(await myDashboardIds("dash-b")).toEqual([]);
+	});
+
+	test("empty workspaceIds returns personal rows only", async () => {
+		expect(await myDashboardIds("dash-a", [])).toEqual(["dash-personal"]);
+		expect(await myDashboardIds("dash-c", [])).toEqual([]);
+	});
+
+	test("allowed workspaceIds still return the shared dashboard", async () => {
+		expect(await myDashboardIds("dash-a", ["dash-w"])).toEqual([
+			"dash-personal",
+			"dash-ws",
+		]);
+		expect(await myDashboardIds("dash-c", ["dash-w"])).toEqual(["dash-ws"]);
+	});
+
+	test("forged workspaceId without membership sees nothing", async () => {
+		expect(await myDashboardIds("dash-b", ["dash-w"])).toEqual([]);
+	});
+
+	test("a workspace omitted from workspaceIds excludes its dashboard", async () => {
+		expect(await myDashboardIds("dash-c", ["dash-other"])).toEqual([]);
+		expect(await myDashboardIds("dash-a", ["dash-other"])).toEqual([
+			"dash-personal",
+		]);
+	});
+
+	test("revoked membership denies even with stale supplied workspaceIds", async () => {
+		expect(await myDashboardIds("dash-c", ["dash-w"])).toEqual(["dash-ws"]);
+		await db
+			.delete(tables.membership)
+			.where(eq(tables.membership.id, "dash-m-c"));
+		try {
+			expect(await myDashboardIds("dash-c", ["dash-w"])).toEqual([]);
+		} finally {
+			await db.insert(tables.membership).values({
+				id: "dash-m-c",
+				userId: "dash-c",
+				workspaceId: "dash-w",
+				role: "member",
+			});
+		}
+		expect(await myDashboardIds("dash-c", ["dash-w"])).toEqual(["dash-ws"]);
 	});
 });
 

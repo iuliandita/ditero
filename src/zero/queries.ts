@@ -232,14 +232,28 @@ export const queries = defineQueries({
 	// Same visibility union as views: personal dashboards the caller owns OR
 	// workspace-shared dashboards whose workspace the caller is a member of.
 	dashboards: {
-		mine: defineQuery(({ ctx }) =>
-			zql.dashboard.where((eb) => {
-				const { or, and, cmp } = eb;
-				return or(
-					and(cmp("scope", "personal"), cmp("ownerId", ctx.id)),
-					and(cmp("scope", "workspace"), workspaceVisible(ctx)(eb)),
-				);
-			}),
+		mine: defineQuery(
+			z
+				.object({ workspaceIds: z.array(z.string()).max(1000).optional() })
+				.strict()
+				.optional(),
+			({ args, ctx }) => {
+				const workspaceIds = args?.workspaceIds;
+				return zql.dashboard.where((eb) => {
+					const { or, and, cmp } = eb;
+					const personal = and(
+						cmp("scope", "personal"),
+						cmp("ownerId", ctx.id),
+					);
+					if (workspaceIds?.length === 0) return personal;
+					const shared = and(
+						cmp("scope", "workspace"),
+						...(workspaceIds ? [cmp("workspaceId", "IN", workspaceIds)] : []),
+						workspaceVisible(ctx)(eb),
+					);
+					return or(personal, shared);
+				});
+			},
 		),
 	},
 	// One pref row per user (id === userId); the caller reads only their own.

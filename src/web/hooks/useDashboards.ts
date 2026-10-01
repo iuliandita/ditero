@@ -8,7 +8,16 @@ export function useDashboards(): {
 	dashboards: Dashboard[];
 	loading: boolean;
 } {
-	const [rows, details] = useQuery(queries.dashboards.mine());
+	const [workspaces, workspacesDetails] = useQuery(queries.workspaces.mine());
+	const workspacesReady = workspacesDetails.type === "complete";
+
+	// Membership changes need fresh hydration; names and row order must not restart it.
+	const idsKey = JSON.stringify(
+		[...new Set(workspaces.map((w) => w.id))].sort(),
+	);
+	const workspaceIds = useMemo(() => JSON.parse(idsKey) as string[], [idsKey]);
+
+	const [rows, details] = useQuery(queries.dashboards.mine({ workspaceIds }));
 	const dashboards = useMemo(
 		() =>
 			[...rows].sort((a, b) =>
@@ -16,5 +25,8 @@ export function useDashboards(): {
 			),
 		[rows],
 	);
-	return { dashboards, loading: details.type !== "complete" };
+	return {
+		dashboards,
+		loading: !workspacesReady || details.type !== "complete",
+	};
 }
