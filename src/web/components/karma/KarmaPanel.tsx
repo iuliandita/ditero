@@ -129,7 +129,7 @@ export function KarmaPanel() {
 				<div className="flex flex-col items-center gap-1">
 					<Ring fraction={prog.fraction} label={levelLabel} met={prog.maxed}>
 						<span className="text-lg font-semibold">{level}</span>
-						<span className="text-[10px] text-muted-foreground">
+						<span className="text-xs text-muted-foreground">
 							{m.karma_points_short({ points })}
 						</span>
 					</Ring>

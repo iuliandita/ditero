@@ -222,3 +222,56 @@ describe("completed handling", () => {
 		expect(done.map((e) => e.task.id)).toEqual(["a", "d"]);
 	});
 });
+
+describe("habit occurrence due groups", () => {
+	it("keeps today's local habit out of the overdue bucket without changing ordinary tasks", () => {
+		const groups = groupTasks(
+			[
+				task({
+					id: "habit",
+					dueAt: new Date("2026-09-29T22:00:00Z"),
+					occurrenceDate: "2026-09-30",
+				}),
+				task({ id: "task", dueAt: new Date("2026-09-29T22:00:00Z") }),
+				task({
+					id: "next",
+					dueAt: new Date("2026-10-04T22:00:00Z"),
+					occurrenceDate: "2026-10-05",
+				}),
+				task({ id: "unscheduled", occurrenceDate: null }),
+			],
+			"due",
+			{
+				...ctx,
+				now: new Date("2026-09-30T12:00:00Z"),
+				timeZone: "Europe/Berlin",
+			},
+		);
+		expect(
+			groups.map((group) => [group.key, group.tasks.map((entry) => entry.id)]),
+		).toEqual([
+			["overdue", ["task"]],
+			["today", ["habit"]],
+			["next7", ["next"]],
+			["none", ["unscheduled"]],
+		]);
+	});
+	it("groups the user's evening habit as today when UTC has advanced", () => {
+		const groups = groupTasks(
+			[
+				task({
+					id: "habit",
+					dueAt: new Date("2026-09-30T04:00:00Z"),
+					occurrenceDate: "2026-09-30",
+				}),
+			],
+			"due",
+			{
+				...ctx,
+				now: new Date("2026-10-01T02:00:00Z"),
+				timeZone: "America/New_York",
+			},
+		);
+		expect(groups[0].key).toBe("today");
+	});
+});

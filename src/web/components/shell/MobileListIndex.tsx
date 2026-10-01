@@ -56,8 +56,8 @@ export function MobileListIndex({
 	dashboards: Dashboard[];
 	onOpenDashboard: (id: string) => void;
 	onNewDashboard: () => void;
-	isSectionOpen: (section: NavSection) => boolean;
-	onToggleSection: (section: NavSection) => void;
+	isSectionOpen: (section: NavSection, hasItems?: boolean) => boolean;
+	onToggleSection: (section: NavSection, hasItems?: boolean) => void;
 }) {
 	// Touch drags from a grip that only exists in reorder mode, as on a list
 	// page (#369): outside it the grips stay out of the way of taps, and the
@@ -189,8 +189,8 @@ export function MobileListIndex({
 			<NavGroup
 				title={m.sidebar_views_heading()}
 				section="views"
-				open={isSectionOpen("views")}
-				onToggle={() => onToggleSection("views")}
+				open={isSectionOpen("views", pinnedViews.length > 0)}
+				onToggle={() => onToggleSection("views", pinnedViews.length > 0)}
 				touch
 			>
 				<ul className="flex flex-col gap-0.5">
@@ -212,8 +212,8 @@ export function MobileListIndex({
 			<NavGroup
 				title={m.sidebar_dashboards_heading()}
 				section="dashboards"
-				open={isSectionOpen("dashboards")}
-				onToggle={() => onToggleSection("dashboards")}
+				open={isSectionOpen("dashboards", dashboards.length > 0)}
+				onToggle={() => onToggleSection("dashboards", dashboards.length > 0)}
 				touch
 			>
 				<ul className="flex flex-col gap-0.5">

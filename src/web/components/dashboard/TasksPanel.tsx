@@ -41,7 +41,14 @@ export function TasksPanel({
 	const entries = useMemo(
 		() =>
 			orderForPanel(
-				showCompleted ? matching : matching.filter((e) => !e.task.done),
+				showCompleted
+					? matching
+					: matching.filter((e) =>
+							e.occurrence
+								? e.occurrence.status !== "done" &&
+									e.occurrence.status !== "skipped"
+								: !e.task.done,
+						),
 				byPriority,
 			),
 		[matching, showCompleted, byPriority],

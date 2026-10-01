@@ -1,4 +1,4 @@
-import { ChevronsUpDown, Settings, User, Users } from "lucide-react";
+import { ChevronsUpDown, Settings, Type, User, Users } from "lucide-react";
 import { useRef, useState } from "react";
 import {
 	DropdownMenu,
@@ -31,6 +31,7 @@ type Props = {
 	// so the switcher says so instead.
 	canManageMembers: boolean;
 	onOpenSettings: () => void;
+	onOpenAppearance?: () => void;
 };
 
 function initial(name: string): string {
@@ -94,11 +95,12 @@ export function WorkspaceSwitcherMenu({
 	onManageMembers,
 	canManageMembers,
 	onOpenSettings,
+	onOpenAppearance,
 	collapsed,
 }: Props & { collapsed?: boolean }) {
 	const active = workspaces.find((w) => w.id === activeId);
 	const name = active?.name ?? m.workspace_name_fallback();
-	const membersPending = useRef(false);
+	const pendingAction = useRef<(() => void) | null>(null);
 	const showPrivateNote = privateNoteVisible(workspaces, canManageMembers);
 	return (
 		// modal={false}: a modal Radix menu aria-hides the app root while its
@@ -123,12 +125,12 @@ export function WorkspaceSwitcherMenu({
 				side={collapsed ? "right" : "bottom"}
 				className="min-w-64"
 				onCloseAutoFocus={(event) => {
-					if (!membersPending.current) return;
-					// Open the members sheet after the menu hands focus back, or
-					// the restore lands on the trigger behind the sheet.
+					const action = pendingAction.current;
+					if (!action) return;
+					// Let the destination take focus after the menu closes.
 					event.preventDefault();
-					membersPending.current = false;
-					onManageMembers();
+					pendingAction.current = null;
+					action();
 				}}
 			>
 				<DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
@@ -164,7 +166,7 @@ export function WorkspaceSwitcherMenu({
 						data-testid="manage-members"
 						className="min-h-9"
 						onSelect={() => {
-							membersPending.current = true;
+							pendingAction.current = onManageMembers;
 						}}
 					>
 						<Users />
@@ -178,6 +180,18 @@ export function WorkspaceSwitcherMenu({
 					>
 						{m.workspace_private_note()}
 					</p>
+				)}
+				{onOpenAppearance && (
+					<DropdownMenuItem
+						data-testid="switcher-appearance"
+						className="min-h-11"
+						onSelect={() => {
+							pendingAction.current = onOpenAppearance;
+						}}
+					>
+						<Type />
+						{m.display_settings_label()}
+					</DropdownMenuItem>
 				)}
 				<DropdownMenuItem
 					data-testid="switcher-settings"
@@ -201,6 +215,7 @@ export function WorkspaceSwitcherSheet({
 	onManageMembers,
 	canManageMembers,
 	onOpenSettings,
+	onOpenAppearance,
 }: Props) {
 	const [open, setOpen] = useState(false);
 	const showPrivateNote = privateNoteVisible(workspaces, canManageMembers);
@@ -285,6 +300,17 @@ export function WorkspaceSwitcherSheet({
 							>
 								{m.workspace_private_note()}
 							</p>
+						)}
+						{onOpenAppearance && (
+							<button
+								type="button"
+								data-testid="switcher-appearance"
+								onClick={() => closeThen(onOpenAppearance)}
+								className={row}
+							>
+								<Type aria-hidden className="size-4 shrink-0" />
+								{m.display_settings_label()}
+							</button>
 						)}
 						<button
 							type="button"

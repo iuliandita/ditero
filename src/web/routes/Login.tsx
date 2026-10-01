@@ -1,5 +1,9 @@
 import { KeyRound, ListChecks } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
+import {
+	PASSWORD_MAX_LENGTH,
+	PASSWORD_MIN_LENGTH,
+} from "../../auth/password-policy.ts";
 import { m } from "../../paraglide/messages.js";
 import { GoogleMark } from "../components/auth/GoogleMark.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
@@ -40,6 +44,7 @@ function AuthShell({ children }: { children: ReactNode }) {
 }
 
 export function Login() {
+	const [mode, setMode] = useState<"signin" | "signup">("signin");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
@@ -48,7 +53,11 @@ export function Login() {
 	const [backupCode, setBackupCode] = useState("");
 	const [pending, setPending] = useState(false);
 	const pendingRef = useRef(false);
-	const formRef = useRef<HTMLFormElement>(null);
+	function changeMode(next: "signin" | "signup") {
+		setMode(next);
+		setPassword("");
+		setError(null);
+	}
 
 	async function runAction(
 		action: () => Promise<void>,
@@ -232,13 +241,15 @@ export function Login() {
 
 	return (
 		<AuthShell>
-			<h1 className="sr-only">{m.login_heading()}</h1>
+			<h1 className="mb-6 text-lg font-semibold">
+				{mode === "signup" ? m.login_signup() : m.login_signin()}
+			</h1>
 			<form
-				ref={formRef}
 				className="space-y-3"
 				onSubmit={(event) => {
 					event.preventDefault();
-					signIn();
+					if (mode === "signup") signUp();
+					else signIn();
 				}}
 			>
 				<div className="space-y-2">
@@ -265,24 +276,53 @@ export function Login() {
 						id="login-password"
 						data-testid="password"
 						type="password"
-						autoComplete="current-password"
+						autoComplete={
+							mode === "signup" ? "new-password" : "current-password"
+						}
+						minLength={mode === "signup" ? PASSWORD_MIN_LENGTH : undefined}
+						maxLength={mode === "signup" ? PASSWORD_MAX_LENGTH : undefined}
+						aria-describedby={
+							mode === "signup" ? "signup-password-guidance" : undefined
+						}
 						className="h-11"
 						value={password}
 						onChange={(event) => setPassword(event.target.value)}
 						disabled={pending}
 						required
 					/>
+					{mode === "signup" && (
+						<p
+							id="signup-password-guidance"
+							className="text-xs leading-5 text-muted-foreground"
+						>
+							{m.login_password_guidance({
+								min: PASSWORD_MIN_LENGTH,
+								max: PASSWORD_MAX_LENGTH,
+							})}
+						</p>
+					)}
 				</div>
 				{errorMessage}
 				<Button
-					data-testid="signin"
+					data-testid={mode === "signup" ? "signup" : "signin"}
 					type="submit"
 					className="h-11 w-full"
 					disabled={pending}
 				>
-					{m.login_signin()}
+					{mode === "signup" ? m.login_signup() : m.login_signin()}
 				</Button>
 			</form>
+			{mode === "signin" && (
+				<details className="mt-3 text-sm text-muted-foreground">
+					<summary
+						data-testid="login-recovery"
+						className="min-h-11 cursor-pointer content-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+					>
+						{m.login_recovery_label()}
+					</summary>
+					<p className="mt-1 leading-6">{m.login_recovery_admin_guidance()}</p>
+				</details>
+			)}
 			<div className="my-5 flex items-center gap-3">
 				<div aria-hidden="true" className="h-px flex-1 bg-border" />
 				<span className="text-xs font-medium text-muted-foreground">
@@ -316,18 +356,16 @@ export function Login() {
 				</Button>
 			</div>
 			<p className="mt-6 text-center text-sm text-muted-foreground">
-				{m.login_new_here()}{" "}
+				{mode === "signup" ? m.login_existing_account() : m.login_new_here()}{" "}
 				<Button
-					data-testid="signup"
+					data-testid={mode === "signup" ? "signin-mode" : "signup-mode"}
 					type="button"
 					variant="link"
-					className="h-auto p-0 text-sm"
-					onClick={() => {
-						if (formRef.current?.reportValidity()) signUp();
-					}}
+					className="h-auto min-h-11 px-1 py-0 text-sm"
+					onClick={() => changeMode(mode === "signup" ? "signin" : "signup")}
 					disabled={pending}
 				>
-					{m.login_signup()}
+					{mode === "signup" ? m.login_signin() : m.login_signup()}
 				</Button>
 			</p>
 		</AuthShell>

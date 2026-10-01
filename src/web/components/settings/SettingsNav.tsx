@@ -39,45 +39,69 @@ export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
 	);
 
 	const selectedSection = useRef<SettingsSectionId | null>(null);
+	const navRef = useRef<HTMLElement>(null);
 
 	useEffect(() => {
 		const visible = new Map<SettingsSectionId, number>();
-		const observer = new IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					const id = (entry.target as HTMLElement).dataset.section as
-						| SettingsSectionId
-						| undefined;
-					if (!id) continue;
-					if (entry.isIntersecting)
-						visible.set(id, entry.boundingClientRect.top);
-					else visible.delete(id);
-				}
-				const last = items.at(-1);
-				const lastSection =
-					last && document.getElementById(settingsSectionDomId(last.id));
-				// A short final section cannot scroll to the top of the viewport.
-				if (
-					lastSection &&
-					lastSection.getBoundingClientRect().bottom <= window.innerHeight
-				) {
-					setCurrent(last.id);
-					return;
-				}
-				const first = items.find((item) => visible.has(item.id));
-				if (first) setCurrent(first.id);
-			},
-			{ rootMargin: "-96px 0px -60% 0px" },
-		);
-		for (const item of items) {
-			const el = document.getElementById(settingsSectionDomId(item.id));
-			if (el) observer.observe(el);
-		}
-		return () => observer.disconnect();
+		const sections = items.flatMap((item) => {
+			const element = document.getElementById(settingsSectionDomId(item.id));
+			return element ? [element] : [];
+		});
+		let observer: IntersectionObserver | undefined;
+		let boundary: number | undefined;
+		const observeSections = () => {
+			if (!sections[0]) return;
+			// Exclude the preceding section's edge at the scroll landing point.
+			const nextBoundary =
+				Math.ceil(
+					Number.parseFloat(getComputedStyle(sections[0]).scrollMarginTop),
+				) + 1;
+			if (nextBoundary === boundary) return;
+			boundary = nextBoundary;
+			observer?.disconnect();
+			visible.clear();
+			observer = new IntersectionObserver(
+				(entries) => {
+					for (const entry of entries) {
+						const id = (entry.target as HTMLElement).dataset.section as
+							| SettingsSectionId
+							| undefined;
+						if (!id) continue;
+						if (entry.isIntersecting)
+							visible.set(id, entry.boundingClientRect.top);
+						else visible.delete(id);
+					}
+					const last = items.at(-1);
+					const lastSection =
+						last && document.getElementById(settingsSectionDomId(last.id));
+					// A short final section cannot scroll to the top of the viewport.
+					if (
+						lastSection &&
+						lastSection.getBoundingClientRect().bottom <= window.innerHeight
+					) {
+						setCurrent(last.id);
+						return;
+					}
+					const first = items.find((item) => visible.has(item.id));
+					if (first) setCurrent(first.id);
+				},
+				{ rootMargin: `-${boundary}px 0px -60% 0px` },
+			);
+			for (const section of sections) observer.observe(section);
+		};
+		observeSections();
+		const resizeObserver = new ResizeObserver(observeSections);
+		if (navRef.current) resizeObserver.observe(navRef.current);
+		if (sections[0]) resizeObserver.observe(sections[0]);
+		return () => {
+			observer?.disconnect();
+			resizeObserver.disconnect();
+		};
 	}, [items]);
 
 	return (
 		<nav
+			ref={navRef}
 			aria-label={m.settings_nav_label()}
 			data-testid="settings-nav"
 			className="sticky top-0 z-10 mb-6 max-w-2xl self-start bg-background py-2 xl:top-6 xl:mb-0 xl:py-0"

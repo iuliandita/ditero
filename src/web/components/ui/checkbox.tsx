@@ -58,6 +58,7 @@ function Checkbox({
 			{round && (
 				// Hover preview of the check, the way a task invites completion.
 				<CheckIcon
+					data-slot="checkbox-preview"
 					aria-hidden
 					strokeWidth={3}
 					className="pointer-events-none absolute size-2.5 opacity-0 transition-opacity duration-(--motion-fast) group-hover/checkbox:opacity-60 group-disabled/checkbox:hidden group-data-[state=checked]/checkbox:hidden motion-reduce:transition-none"
@@ -72,7 +73,7 @@ function Checkbox({
 					round ? "[&>svg]:size-2.5" : "[&>svg]:size-3.5",
 				)}
 			>
-				<CheckIcon strokeWidth={round ? 3 : 2} />
+				<CheckIcon aria-hidden strokeWidth={round ? 3 : 2} />
 			</CheckboxPrimitive.Indicator>
 		</CheckboxPrimitive.Root>
 	);

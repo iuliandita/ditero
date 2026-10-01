@@ -151,6 +151,7 @@ export function ShoppingRow({
 			<div
 				className="group flex min-h-12 items-center gap-2 rounded-md px-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted md:min-h-10"
 				data-kbd-row
+				data-reading-row="shopping"
 				data-selected={selection?.selected || undefined}
 				{...rowProps}
 			>
@@ -161,7 +162,10 @@ export function ShoppingRow({
 						placement="lead"
 					/>
 				) : (
-					<div className="flex size-11 shrink-0 items-center justify-center md:size-8">
+					<div
+						data-reading-check-target
+						className="flex size-11 shrink-0 items-center justify-center md:size-8"
+					>
 						<Checkbox
 							disabled={!canEdit}
 							aria-label={task.title}
@@ -181,6 +185,7 @@ export function ShoppingRow({
 				<button
 					type="button"
 					data-kbd-nav
+					data-reading-title
 					data-task-id={task.id}
 					onMouseDown={(event) => {
 						// Shift-click extends the selection, not the page's text selection.

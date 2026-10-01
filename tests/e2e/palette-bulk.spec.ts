@@ -408,6 +408,9 @@ test("touch: long-press Select starts selection mode and taps then select", asyn
 
 	await bar.getByTestId("selection-clear").tap();
 	await expect(bar).toHaveCount(0);
+	await expect(
+		page.getByRole("button", { name: "Quick add", exact: true }),
+	).toBeVisible();
 	await openButton(page, "Tap two").tap();
 	await expect(page.getByRole("dialog")).toBeVisible();
 	await ctx.close();
@@ -466,7 +469,7 @@ test("saved views select across their rows and complete in bulk", async ({
 }) => {
 	await setupList(page, "bulk-view", ["View one", "View two"]);
 	await sidebarLists(page)
-		.getByRole("button", { name: "All my tasks", exact: true })
+		.getByRole("button", { name: "All tasks", exact: true })
 		.click();
 	await expect(page.getByTestId("view-surface")).toBeVisible();
 	const surface = "view-renderer";

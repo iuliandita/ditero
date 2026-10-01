@@ -1,47 +1,81 @@
 import { useCallback, useEffect, useState } from "react";
 
-// Views and Dashboards fold away in the sidebar and the mobile Lists tab. The
-// choice is a per-viewer convenience, so it lives in browser storage keyed by
-// user; a blocked or empty store just means every section starts open.
+// An absent choice follows the content: empty advanced groups fold away. An
+// explicit choice survives new items, reloads, and switches between surfaces.
 export type NavSection = "views" | "dashboards";
+export type NavSectionPreferences = Partial<Record<NavSection, boolean>>;
 const SECTIONS: readonly NavSection[] = ["views", "dashboards"];
 
 export function navSectionsKey(userId: string): string {
 	return `ditero.nav.collapsed.${userId}`;
 }
 
-export function parseCollapsed(raw: string | null): Set<NavSection> {
-	if (!raw) return new Set();
+export function parseNavSections(raw: string | null): NavSectionPreferences {
+	if (!raw) return {};
 	try {
 		const value: unknown = JSON.parse(raw);
-		if (!Array.isArray(value)) return new Set();
-		return new Set(SECTIONS.filter((section) => value.includes(section)));
+		// Earlier versions saved the complete collapsed set, including [] when
+		// the user deliberately expanded every group. Preserve both choices.
+		if (Array.isArray(value)) {
+			return {
+				views: !value.includes("views"),
+				dashboards: !value.includes("dashboards"),
+			};
+		}
+		if (typeof value !== "object" || value === null) return {};
+		const preferences: NavSectionPreferences = {};
+		for (const section of SECTIONS) {
+			if (Object.hasOwn(value, section)) {
+				const open = (value as Record<string, unknown>)[section];
+				if (typeof open === "boolean") preferences[section] = open;
+			}
+		}
+		return preferences;
 	} catch {
-		return new Set();
+		return {};
 	}
 }
 
-export function readCollapsed(
+export function readNavSections(
 	userId: string,
 	storage: Pick<Storage, "getItem"> | null = safeStorage(),
-): Set<NavSection> {
+): NavSectionPreferences {
 	try {
-		return parseCollapsed(storage?.getItem(navSectionsKey(userId)) ?? null);
+		return parseNavSections(storage?.getItem(navSectionsKey(userId)) ?? null);
 	} catch {
-		return new Set();
+		return {};
 	}
 }
 
-export function writeCollapsed(
+export function writeNavSections(
 	userId: string,
-	collapsed: Set<NavSection>,
+	preferences: NavSectionPreferences,
 	storage: Pick<Storage, "setItem"> | null = safeStorage(),
 ): void {
 	try {
-		storage?.setItem(navSectionsKey(userId), JSON.stringify([...collapsed]));
+		storage?.setItem(navSectionsKey(userId), JSON.stringify(preferences));
 	} catch {
 		// Private mode or blocked storage: the toggle still works for this visit.
 	}
+}
+
+export function navSectionOpen(
+	preferences: NavSectionPreferences,
+	section: NavSection,
+	hasItems: boolean,
+): boolean {
+	return preferences[section] ?? hasItems;
+}
+
+export function toggleNavSection(
+	preferences: NavSectionPreferences,
+	section: NavSection,
+	hasItems: boolean,
+): NavSectionPreferences {
+	return {
+		...preferences,
+		[section]: !navSectionOpen(preferences, section, hasItems),
+	};
 }
 
 function safeStorage(): Storage | null {
@@ -53,30 +87,29 @@ function safeStorage(): Storage | null {
 }
 
 export function useNavSections(userId: string | null | undefined): {
-	isOpen: (section: NavSection) => boolean;
-	toggle: (section: NavSection) => void;
+	isOpen: (section: NavSection, hasItems?: boolean) => boolean;
+	toggle: (section: NavSection, hasItems?: boolean) => void;
 } {
-	const [collapsed, setCollapsed] = useState<Set<NavSection>>(() =>
-		userId ? readCollapsed(userId) : new Set(),
+	const [preferences, setPreferences] = useState<NavSectionPreferences>(() =>
+		userId ? readNavSections(userId) : {},
 	);
 	useEffect(() => {
-		if (userId) setCollapsed(readCollapsed(userId));
+		setPreferences(userId ? readNavSections(userId) : {});
 	}, [userId]);
 	const toggle = useCallback(
-		(section: NavSection) => {
-			setCollapsed((prev) => {
-				const next = new Set(prev);
-				if (next.has(section)) next.delete(section);
-				else next.add(section);
-				if (userId) writeCollapsed(userId, next);
+		(section: NavSection, hasItems = true) => {
+			setPreferences((prev) => {
+				const next = toggleNavSection(prev, section, hasItems);
+				if (userId) writeNavSections(userId, next);
 				return next;
 			});
 		},
 		[userId],
 	);
 	const isOpen = useCallback(
-		(section: NavSection) => !collapsed.has(section),
-		[collapsed],
+		(section: NavSection, hasItems = true) =>
+			navSectionOpen(preferences, section, hasItems),
+		[preferences],
 	);
 	return { isOpen, toggle };
 }

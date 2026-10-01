@@ -195,7 +195,9 @@ test("reorder mode shows full-size grips on touch; Done hides them", async ({
 	const grip = page.getByTestId("task-drag").first();
 	await expectOutOfLayout(grip);
 
-	await page.getByRole("button", { name: "List display options" }).click();
+	await page
+		.getByRole("button", { name: "Actions for Errands", exact: true })
+		.click();
 	await page.getByTestId("reorder-mode").click();
 	await expect(page.getByTestId("reorder-bar")).toBeVisible();
 	const box = await grip.boundingBox();

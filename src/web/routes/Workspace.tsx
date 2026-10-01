@@ -5,6 +5,7 @@ import {
 	Pencil,
 	Pin,
 	PinOff,
+	Plus,
 	Trash2,
 } from "lucide-react";
 import {
@@ -141,6 +142,9 @@ function NormalWorkspace() {
 	const { dashboards, loading: dashboardsLoading } = useDashboards();
 	const { pref, setPref, loading: prefLoading } = useUserPref();
 	const [activeId, setActiveId] = useState<string | null>(null);
+	const [settingsSection, setSettingsSection] = useState<
+		"account" | "appearance"
+	>("account");
 	const [contentState, dispatchContent] = useReducer(workspaceContentReducer, {
 		kind: "home",
 	});
@@ -395,11 +399,16 @@ function NormalWorkspace() {
 	// whose switcher opened it; desktop returns to the landing.
 	const settingsReturn = useRef<"home" | "index">("home");
 	const openSettings = useCallback(() => {
+		setSettingsSection("account");
 		setDetailTaskId(null);
 		settingsReturn.current =
 			!isDesktop && contentState.kind === "index" ? "index" : "home";
 		dispatchContent({ kind: "settings" });
 	}, [isDesktop, contentState.kind]);
+	const openAppearance = useCallback(() => {
+		openSettings();
+		setSettingsSection("appearance");
+	}, [openSettings]);
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
 	// of M1a scope: each group is its own DndContext, so a list can't leave it.
@@ -657,6 +666,7 @@ function NormalWorkspace() {
 	if (contentState.kind === "settings") {
 		content = (
 			<SettingsSurface
+				initialSection={settingsSection}
 				activeId={activeId}
 				activeRole={activeRole}
 				isDesktop={isDesktop}
@@ -779,9 +789,19 @@ function NormalWorkspace() {
 									className="size-5 shrink-0 text-muted-foreground"
 								/>
 							)}
-							<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
+							<h1 className="min-w-0 flex-1 break-words text-lg font-semibold">
 								{activeView.name}
 							</h1>
+							{isDesktop && (
+								<Button
+									type="button"
+									data-testid="desktop-add-task"
+									onClick={() => setQuickAddOpen(true)}
+									disabled={!activeId || !canCreateList(activeRole)}
+								>
+									<Plus aria-hidden /> {m.list_add_task()}
+								</Button>
+							)}
 							{/* Phones always land on Today, so "Set as home" would do
 							    nothing visible there; a built-in view then has no
 							    actions at all and shows no menu. */}
@@ -865,6 +885,7 @@ function NormalWorkspace() {
 								display={activeView.display}
 								tasks={tasks}
 								lists={lists}
+								workspaces={workspaces}
 								folders={folders}
 								labels={labels}
 								taskLabels={taskLabels}
@@ -934,6 +955,7 @@ function NormalWorkspace() {
 								onToggleSection={navSections.toggle}
 								section={section}
 								onOpenSettings={openSettings}
+								onOpenAppearance={openAppearance}
 								shortcutHintKey={shortcutHintKey}
 								onOpenShortcuts={() => setCheatOpen(true)}
 								collapsed={collapsed}
@@ -967,6 +989,7 @@ function NormalWorkspace() {
 								onManageMembers={() => setMembersOpen(true)}
 								canManageMembers={canManageMembers}
 								onOpenSettings={openSettings}
+								onOpenAppearance={openAppearance}
 							/>
 							<div className="ms-auto">
 								<SyncIndicator placement="header" />
