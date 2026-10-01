@@ -4,10 +4,16 @@ import { formatDue, isOverdue, priorityMeta } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 import type { Label, Task } from "../../../zero/schema.gen.ts";
+import { formatDayKey } from "../../lib/intl-format.ts";
+import type { HabitOccurrence } from "../../views/habit-occurrence.ts";
 import { AssigneeChips } from "../people/AssigneeChips.tsx";
 import type { ViewSort } from "./ViewRenderer.tsx";
 
-export type TableEntry = { task: Task; labels: Label[] };
+export type TableEntry = {
+	task: Task;
+	labels: Label[];
+	occurrence?: HabitOccurrence;
+};
 
 // Only scalar columns are sortable (map onto the view sort fields); multi-value
 // columns (Assignees/Labels) and List have no stable single-key sort.
@@ -58,12 +64,14 @@ function SortHeader({
 
 export function TableLayout({
 	entries,
+	currentDay,
 	sort,
 	onSort,
 	listTitle,
 	onOpenTask,
 }: {
 	entries: TableEntry[];
+	currentDay: string;
 	sort: ViewSort;
 	onSort: (sort: ViewSort) => void;
 	listTitle: (listId: string) => string;
@@ -89,9 +97,14 @@ export function TableLayout({
 					</tr>
 				</thead>
 				<tbody>
-					{entries.map(({ task, labels }) => {
+					{entries.map(({ task, labels, occurrence }) => {
 						const meta = priorityMeta(task.priority);
-						const overdue = isOverdue(task);
+						const overdue = occurrence
+							? occurrence.status === "pending" &&
+								occurrence.date != null &&
+								occurrence.date < currentDay
+							: isOverdue(task);
+						const done = occurrence ? occurrence.done : task.done;
 						return (
 							<tr key={task.id} className="border-b hover:bg-muted/40">
 								<td className="max-w-xs px-3 py-2">
@@ -100,14 +113,24 @@ export function TableLayout({
 										onClick={() => onOpenTask(task)}
 										className={cn(
 											"block max-w-full truncate text-start",
-											task.done && "text-muted-foreground line-through",
+											done && "text-muted-foreground line-through",
 										)}
 									>
 										{task.title}
 									</button>
 								</td>
 								<td className="px-3 py-2">
-									{task.dueAt == null ? (
+									{occurrence ? (
+										<span className={overdue ? "text-destructive" : undefined}>
+											{occurrence.status === "unavailable"
+												? m.habit_occurrence_unavailable()
+												: occurrence.status === "skipped"
+													? m.habit_occurrence_skipped()
+													: occurrence.date
+														? formatDayKey(occurrence.date)
+														: "—"}
+										</span>
+									) : task.dueAt == null ? (
 										<span className="text-muted-foreground">—</span>
 									) : (
 										<span className={overdue ? "text-destructive" : undefined}>

@@ -1,5 +1,85 @@
+import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { Pool } from "pg";
 import { signUp, uniqueEmail, waitWorkspaceReady } from "./helpers.ts";
+
+test.describe("habit table timezone", () => {
+	test.use({ timezoneId: "UTC" });
+	test("a Tokyo habit table shows its local day without changing ordinary overdue tasks", async ({
+		page,
+	}) => {
+		const userId = await signUp(page, uniqueEmail("habit-table-zone"));
+		await page.clock.setFixedTime(new Date("2026-10-01T03:00:00Z"));
+		const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+		const habitListId = randomUUID();
+		const taskListId = randomUUID();
+		const viewId = randomUUID();
+		try {
+			const workspace = await pool.query<{ id: string }>(
+				"select id from workspace where owner_id = $1 and kind = 'personal'",
+				[userId],
+			);
+			if (!workspace.rows[0]) throw new Error("personal workspace not found");
+			await pool.query(
+				`insert into list (id, workspace_id, owner_id, title, kind, sort_key)
+				 values ($1, $3, $4, 'Tokyo habits', 'habits', 'a0'),
+				 ($2, $3, $4, 'Ordinary plans', 'tasks', 'a1')`,
+				[habitListId, taskListId, workspace.rows[0].id, userId],
+			);
+			await pool.query(
+				`insert into task (id, list_id, title, sort_key, due_at, due_all_day, rrule)
+				 values ($1, $2, 'Tokyo daily check-in', 'a0', '2026-09-18T00:00:00Z', true, 'FREQ=DAILY'),
+				 ($3, $4, 'Ordinary overdue plan', 'a0', '2026-09-29T00:00:00Z', true, null)`,
+				[randomUUID(), habitListId, randomUUID(), taskListId],
+			);
+			await pool.query(
+				`insert into view (id, owner_id, name, scope, filter, display, sort_key)
+				 values ($1, $2, 'Tokyo table', 'personal', $3, $4, 'a0')`,
+				[
+					viewId,
+					userId,
+					JSON.stringify({ op: "and", conditions: [] }),
+					JSON.stringify({
+						layout: "table",
+						groupBy: "none",
+						sort: { field: "due", dir: "asc" },
+						workspaceScope: { mode: "all" },
+					}),
+				],
+			);
+			await pool.query(
+				`insert into user_pref (id, timezone, timezone_chosen, pinned_views)
+				 values ($1, 'Asia/Tokyo', true, $2)
+				 on conflict (id) do update set timezone = excluded.timezone,
+				 timezone_chosen = true, pinned_views = excluded.pinned_views`,
+				[userId, JSON.stringify([viewId])],
+			);
+		} finally {
+			await pool.end();
+		}
+		await page.reload();
+		await waitWorkspaceReady(page);
+		await page
+			.getByRole("navigation", { name: "Lists" })
+			.getByRole("button", { name: "Tokyo table", exact: true })
+			.click();
+		const table = page.getByRole("table");
+		const habitDue = table
+			.getByRole("row")
+			.filter({ hasText: "Tokyo daily check-in" })
+			.getByRole("cell")
+			.nth(1);
+		await expect(habitDue).toHaveText("Oct 1");
+		await expect(habitDue.locator("span")).not.toHaveClass(/text-destructive/);
+		const ordinaryDue = table
+			.getByRole("row")
+			.filter({ hasText: "Ordinary overdue plan" })
+			.getByRole("cell")
+			.nth(1);
+		await expect(ordinaryDue).toHaveText("Sep 29");
+		await expect(ordinaryDue.locator("span")).toHaveClass(/text-destructive/);
+	});
+});
 
 test("desktop aggregate capture exposes its destination", async ({ page }) => {
 	await signUp(page, uniqueEmail("aggregate-capture"));

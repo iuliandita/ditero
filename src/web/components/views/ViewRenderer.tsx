@@ -615,16 +615,11 @@ export function ViewRenderer(props: {
 				/>
 			) : (
 				<TableLayout
+					currentDay={currentDay}
 					entries={sorted.map((e) => ({
-						task: e.occurrence
-							? {
-									...e.task,
-									dueAt: e.occurrence.dueAt,
-									dueAllDay: true,
-									done: e.occurrence.done,
-								}
-							: e.task,
+						task: e.task,
 						labels: e.labels,
+						occurrence: e.occurrence,
 					}))}
 					sort={localSort}
 					onSort={onSort}
