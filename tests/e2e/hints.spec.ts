@@ -129,6 +129,9 @@ test("dismissing the syntax hint retires it everywhere", async ({ page }) => {
 	await page.getByTestId("syntax-hint-dismiss").click();
 	await expect(page.getByTestId("new-task")).toBeVisible();
 	await expect(page.getByTestId("syntax-hint")).toHaveCount(0);
+	await page.getByRole("button", { name: "Quick add", exact: true }).click();
+	await expect(page.getByTestId("quickadd-input")).toBeVisible();
+	await page.keyboard.press("Escape");
 
 	await blur(page);
 	await page.keyboard.press("c");

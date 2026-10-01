@@ -206,9 +206,9 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	await expect.poll(() => betaAboveAlpha(pa), { timeout: 15000 }).toBe(true);
 	await expect.poll(() => betaAboveAlpha(pb), { timeout: 15000 }).toBe(true);
 
-	// --- NLP quick-add (FAB is a mobile affordance) ---
+	// --- NLP quick-add through the visible mobile capture entry ---
 	await pa.setViewportSize({ width: 375, height: 812 });
-	await pa.getByLabel("Quick add").click();
+	await pa.getByRole("button", { name: "Quick add", exact: true }).click();
 	await pa.getByTestId("quickadd-input").fill("milk tomorrow p2 #store");
 	await expect(pa.getByTestId("chip-date")).toBeVisible();
 	await expect(pa.getByTestId("chip-priority")).toHaveText("P2 Medium");
@@ -662,7 +662,7 @@ test("a11y: no serious/critical violations on core surfaces", async ({
 	});
 	const mp = await mctx.newPage();
 	await signIn(mp, email);
-	await mp.getByLabel("Quick add").click();
+	await mp.getByRole("button", { name: "Quick add", exact: true }).click();
 	await expect(mp.getByTestId("quickadd-input")).toBeVisible();
 	await expectNoSeriousA11y(mp, "quick-add sheet");
 	await mctx.close();
