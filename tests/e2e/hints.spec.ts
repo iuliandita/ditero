@@ -141,6 +141,9 @@ test("dismissing the syntax hint retires it everywhere", async ({ page }) => {
 
 	await reopenList(page, "Garden");
 	await expect(page.getByTestId("syntax-hint")).toHaveCount(0);
+	await page.getByRole("button", { name: "Quick add", exact: true }).click();
+	await expect(page.getByTestId("quickadd-input")).toBeVisible();
+	await expect(page.getByTestId("syntax-hint")).toHaveCount(0);
 });
 
 test("the shortcut hint shows until the cheat sheet has been opened", async ({
