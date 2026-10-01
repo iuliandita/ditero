@@ -351,6 +351,20 @@
       "when": 1790885553518,
       "tag": "0049_imported_history_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1790886660251,
+      "tag": "0050_import_history_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1790886660828,
+      "tag": "0051_import_history_ledger_rls",
+      "breakpoints": true
     }
   ]
 }
