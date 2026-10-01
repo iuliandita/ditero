@@ -7,7 +7,7 @@ import { runMutation } from "@/lib/run-mutation";
 import { deriveConnections } from "../../../domain/connections.ts";
 import { parseMentions, personMatchesHandle } from "../../../domain/mention.ts";
 import { randomId } from "../../../domain/random-id.ts";
-import { WRITE_ROLES } from "../../../domain/role.ts";
+import { ADMIN_ROLES, WRITE_ROLES } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
@@ -427,22 +427,47 @@ export function CommentThread({
 
 			<ul className="flex flex-col gap-3">
 				{thread.map((c) => {
-					const name = c.author?.name ?? c.authorId;
-					const mine = c.authorId === me;
+					const imported = c.importedAt != null;
+					const name = c.author?.name ?? c.authorId ?? "";
+					const mine = !imported && c.authorId === me;
+					const canDelete =
+						!imported || (callerRole != null && ADMIN_ROLES.has(callerRole));
 					return (
 						<li key={c.id} data-testid="comment-item" className="flex gap-2">
-							<MemberAvatar
-								name={name}
-								image={c.author?.image}
-								className="size-7"
-							/>
+							{!imported && (
+								<MemberAvatar
+									name={name}
+									image={c.author?.image}
+									className="size-7"
+								/>
+							)}
 							<div className="flex min-w-0 flex-1 flex-col gap-0.5">
 								<div className="flex items-baseline gap-2">
-									<span className="font-medium">{name}</span>
+									<span
+										className={
+											imported
+												? "min-w-0 flex-1 font-medium [overflow-wrap:anywhere]"
+												: "font-medium"
+										}
+									>
+										{imported
+											? c.historicalAuthorKind === "source_claim" &&
+												c.historicalAuthorName
+												? m.comment_imported_author({
+														// Keep source text from reordering the translated label.
+														name: `\u2068${c.historicalAuthorName}\u2069`,
+													})
+												: m.comment_imported_unknown()
+											: name}
+									</span>
 									{c.createdAt != null && (
 										<time
 											dateTime={new Date(c.createdAt).toISOString()}
-											className="text-xs text-muted-foreground"
+											className={
+												imported
+													? "max-w-[40%] shrink-0 text-xs text-muted-foreground"
+													: "text-xs text-muted-foreground"
+											}
 										>
 											{formatStamp(c.createdAt)}
 										</time>
@@ -509,19 +534,21 @@ export function CommentThread({
 												<Pencil />
 											</Button>
 										)}
-										<Button
-											variant="ghost"
-											size="icon-sm"
-											aria-label={m.comment_delete_action()}
-											data-testid="comment-delete"
-											onClick={() =>
-												void run(
-													zero.mutate(mutators.comment.delete({ id: c.id })),
-												)
-											}
-										>
-											<Trash2 />
-										</Button>
+										{canDelete && (
+											<Button
+												variant="ghost"
+												size="icon-sm"
+												aria-label={m.comment_delete_action()}
+												data-testid="comment-delete"
+												onClick={() =>
+													void run(
+														zero.mutate(mutators.comment.delete({ id: c.id })),
+													)
+												}
+											>
+												<Trash2 />
+											</Button>
+										)}
 									</div>
 								)}
 							</div>

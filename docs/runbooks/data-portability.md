@@ -83,6 +83,11 @@ without a version selector still produce version 1 for the existing import workf
 An explicit `?version=1` produces the same file. Unsupported or repeated version
 selectors return HTTP 400. Both formats share the limits below.
 
+If retained source authorship on comments or templates cannot be represented in
+version 1, the request returns HTTP 409 with `history-requires-v2`. Request the version
+2 archive to preserve those claims. The export never substitutes a local account as
+the historical author or silently leaves those records out.
+
 The archive includes a stable installation namespace retained by database backups.
 It identifies the source but does not authenticate its claims or grant destination
 access. See [Native data format](native-format.md) for the version 2 contract.

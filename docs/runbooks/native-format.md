@@ -76,8 +76,18 @@ list kind. Each event still requires its task to exist in the document.
 
 `boundaries.taskHistory` is `recorded-events-only`: no older events are inferred from
 current task state. The other exclusions and all parser/export limits remain unchanged.
-The format represents source claims for future import support; this release neither
-stores imported authors nor replays historical completion, Karma, or notifications.
+Retained source claims reexport their original references and claimed event times;
+local ingestion time does not replace historical time. Imported comments have no local
+author and cannot be edited; workspace admins can delete them. A template's local
+operational owner is separate from its historical creator. Redacted attribution exports
+as unknown while retaining its source reference. None of these claims grants author
+permissions or replays completion, Karma, or notifications. Version 2 import remains
+unsupported.
+
+Version 1 cannot represent retained comment authors or template creators. If such rows
+are visible, a version 1 export fails with HTTP 409 and `history-requires-v2` before
+returning a file. Use version 2 instead; no records are silently omitted or attributed
+to a local account. Native-only version 1 exports remain unchanged.
 
 ## Saved dry runs
 
