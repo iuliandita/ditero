@@ -1,10 +1,11 @@
-import { useZero } from "@rocicorp/zero/react";
-import { List as ListIcon, SearchX, Sparkles } from "lucide-react";
-import { type JSX, useMemo, useRef, useState } from "react";
+import { useQuery, useZero } from "@rocicorp/zero/react";
+import { List as ListIcon, SearchX } from "lucide-react";
+import { type JSX, type ReactNode, useMemo, useRef, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
-import { priorityLabel } from "@/lib/task-display";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useWideContent } from "@/lib/use-wide-content";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import { localDay } from "../../../domain/local-day.ts";
+import { type Role, WRITE_ROLES } from "../../../domain/role.ts";
 import { compareTasksBy } from "../../../domain/task-sort.ts";
 import type {
 	FilterCtx,
@@ -12,12 +13,10 @@ import type {
 	FilterTask,
 	ViewDisplay,
 } from "../../../domain/view-filter.ts";
-import {
-	resolveWorkspaceScope,
-	taskMatchesFilter,
-} from "../../../domain/view-filter.ts";
+import { resolveWorkspaceScope } from "../../../domain/view-filter.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
+import { queries } from "../../../zero/queries.ts";
 import type {
 	Folder,
 	Label,
@@ -26,13 +25,32 @@ import type {
 	Task,
 	TaskAssignee,
 	TaskLabel,
+	Workspace,
 } from "../../../zero/schema.gen.ts";
+import { useLocalDay } from "../../hooks/useLocalDay.ts";
+import { useRowSelection } from "../../hooks/useRowSelection.ts";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
+import { useTaskToggle } from "../../hooks/useTaskToggle.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
+import { formatList } from "../../lib/intl-format.ts";
 import type { GroupCtx, GroupTask } from "../../views/group.ts";
-import { groupTasks } from "../../views/group.ts";
+import {
+	effectiveGroupBy,
+	filterMentionsDone,
+	groupForView,
+} from "../../views/group.ts";
+import {
+	type HabitOccurrence,
+	habitOccurrence,
+	matchesOccurrenceFilter,
+} from "../../views/habit-occurrence.ts";
+import { BulkSelection } from "../list/BulkSelection.tsx";
 import { SortableList } from "../list/SortableList.tsx";
-import { type RowHandlers, TaskRow } from "../list/TaskRow.tsx";
+import {
+	type RowHandlers,
+	type RowSelection,
+	TaskRow,
+} from "../list/TaskRow.tsx";
 import { TaskListSkeleton } from "../shell/AppSkeleton.tsx";
 import { EmptyState } from "../ui/empty-state.tsx";
 import { BoardLayout } from "./BoardLayout.tsx";
@@ -40,7 +58,15 @@ import { CalendarLayout } from "./CalendarLayout.tsx";
 import { TableLayout } from "./TableLayout.tsx";
 
 // One filtered+enriched task ready to render as a row/card/cell.
-export type ViewEntry = { task: Task; kind: ListKind; labels: Label[] };
+export type ViewEntry = {
+	task: Task;
+	kind: ListKind;
+	labels: Label[];
+	listTitle: string;
+	listIcon: string | null;
+	sourceContext?: string;
+	occurrence?: HabitOccurrence;
+};
 export type ViewEntryGroup = {
 	key: string;
 	label: string;
@@ -48,10 +74,7 @@ export type ViewEntryGroup = {
 };
 export type ViewSort = { field: string; dir: "asc" | "desc" };
 
-type Enriched = {
-	task: Task;
-	kind: ListKind;
-	labels: Label[];
+type Enriched = ViewEntry & {
 	filterTask: FilterTask;
 	groupTask: GroupTask;
 };
@@ -59,26 +82,23 @@ type Enriched = {
 function sortEnriched(entries: Enriched[], sort: ViewSort): Enriched[] {
 	const dir = sort.dir === "desc" ? -1 : 1;
 	return [...entries].sort(
-		(a, b) => dir * compareTasksBy(a.task, b.task, sort.field),
-	);
-}
-
-// group.ts skips empty priority buckets (correct for list/table), but a
-// regroupable priority board needs every column present as a drop target. Pad
-// to the fixed 4 in High->None order, reusing populated columns as-is. Board
-// layer only; group.ts stays lean.
-// `label` is a getter: this array is module-level, so resolving the message
-// eagerly would freeze it at the import-time locale.
-const PRIORITY_COLUMNS = [3, 2, 1, 0].map((p) => ({
-	key: String(p),
-	get label() {
-		return priorityLabel(p);
-	},
-}));
-function padPriorityColumns(groups: ViewEntryGroup[]): ViewEntryGroup[] {
-	const byKey = new Map(groups.map((g) => [g.key, g]));
-	return PRIORITY_COLUMNS.map(
-		(c) => byKey.get(c.key) ?? { key: c.key, label: c.label, entries: [] },
+		(a, b) =>
+			dir *
+			compareTasksBy(
+				{
+					...a.task,
+					...(a.occurrence
+						? { dueAt: a.occurrence.dueAt, done: a.occurrence.done }
+						: {}),
+				},
+				{
+					...b.task,
+					...(b.occurrence
+						? { dueAt: b.occurrence.dueAt, done: b.occurrence.done }
+						: {}),
+				},
+				sort.field,
+			),
 	);
 }
 
@@ -87,6 +107,7 @@ export function ViewRenderer(props: {
 	display: ViewDisplay;
 	tasks: Task[];
 	lists: List[];
+	workspaces?: Pick<Workspace, "id" | "name" | "kind">[];
 	folders: Folder[];
 	labels: Label[];
 	taskLabels: TaskLabel[];
@@ -102,9 +123,13 @@ export function ViewRenderer(props: {
 	// Optional: Task 13 threads this to persist a table header sort into the
 	// view row. Absent -> the header toggles a local, unpersisted sort.
 	onSortChange?: (sort: ViewSort) => void;
+	// The first-run welcome's actions; only the landing supplies them.
+	firstRun?: ReactNode;
 }): JSX.Element {
 	const { pref } = useUserPref();
+	const currentDay = useLocalDay(pref.timezone);
 	const activation = useTaskImportActivationMap();
+	const [habitLogs] = useQuery(queries.habitLogs.mine());
 	const {
 		filter,
 		display,
@@ -121,7 +146,8 @@ export function ViewRenderer(props: {
 		loading = false,
 	} = props;
 	const zero = useZero<typeof schema>();
-	const isDesktop = useIsDesktop();
+	// Width the view actually gets, not the viewport (the docked detail).
+	const [measureRef, isDesktop] = useWideContent();
 	const [error, setError] = useState<string | null>(null);
 
 	// Table header clicks drive the effective sort; seed from display.sort and
@@ -133,6 +159,10 @@ export function ViewRenderer(props: {
 		setLocalSort(display.sort);
 	}
 
+	const workspaceById = useMemo(
+		() => new Map((props.workspaces ?? []).map((w) => [w.id, w])),
+		[props.workspaces],
+	);
 	const listById = useMemo(() => new Map(lists.map((l) => [l.id, l])), [lists]);
 	const labelById = useMemo(
 		() => new Map(labels.map((l) => [l.id, l])),
@@ -179,12 +209,24 @@ export function ViewRenderer(props: {
 			if (!list) continue;
 			const labelIds = labelIdsByTask.get(task.id) ?? [];
 			const assigneeIds = assigneeIdsByTask.get(task.id) ?? [];
-			const dueAt = task.dueAt == null ? null : new Date(task.dueAt);
+			const occurrence =
+				list.kind === "habits"
+					? habitOccurrence(task, habitLogs, ctx.now, pref.timezone, currentDay)
+					: undefined;
+			const effectiveDue = occurrence ? occurrence.dueAt : task.dueAt;
+			const dueAt = effectiveDue == null ? null : new Date(effectiveDue);
+			const done = occurrence ? occurrence.done : (task.done ?? false);
+			const workspace = workspaceById.get(list.workspaceId);
+			const sourceContext = workspace
+				? workspace.kind === "personal"
+					? m.scope_source_personal({ workspace: workspace.name })
+					: m.scope_source_shared({ workspace: workspace.name })
+				: undefined;
 			const filterTask: FilterTask = {
 				id: task.id,
 				listId: task.listId,
 				workspaceId: list.workspaceId,
-				done: task.done ?? false,
+				done,
 				dueAt,
 				priority: task.priority ?? 0,
 				kind: list.kind ?? "tasks",
@@ -193,10 +235,24 @@ export function ViewRenderer(props: {
 				assigneeIds,
 			};
 			if (!scope.has(filterTask.workspaceId)) continue;
-			if (!taskMatchesFilter(filterTask, filter, ctx)) continue;
+			if (
+				!matchesOccurrenceFilter(
+					filterTask,
+					filter,
+					ctx,
+					occurrence,
+					pref.timezone,
+					currentDay,
+				)
+			)
+				continue;
 			out.push({
 				task,
+				occurrence,
+				sourceContext,
 				kind: (list.kind ?? "tasks") as ListKind,
+				listTitle: list.title || m.list_untitled_fallback(),
+				listIcon: list.icon ?? null,
 				labels: labelIds
 					.map((id) => labelById.get(id))
 					.filter((l): l is Label => l != null),
@@ -205,8 +261,9 @@ export function ViewRenderer(props: {
 					id: task.id,
 					listId: task.listId,
 					title: task.title,
-					done: task.done ?? false,
+					done,
 					dueAt,
+					occurrenceDate: occurrence?.date,
 					priority: task.priority ?? 0,
 					assigneeIds,
 					labelIds,
@@ -216,6 +273,10 @@ export function ViewRenderer(props: {
 		return sortEnriched(out, localSort);
 	}, [
 		tasks,
+		habitLogs,
+		currentDay,
+		pref.timezone,
+		workspaceById,
 		listById,
 		labelById,
 		labelIdsByTask,
@@ -230,13 +291,15 @@ export function ViewRenderer(props: {
 	const entryGroups = useMemo<ViewEntryGroup[]>(() => {
 		const groupCtx: GroupCtx = {
 			now: new Date(),
+			timeZone: pref.timezone,
 			listTitle: (id) => listById.get(id)?.title ?? m.list_untitled_fallback(),
 			memberName: (id) => memberById.get(id) ?? m.group_unknown_user(),
 			labelName: (id) => labelById.get(id)?.name ?? m.group_unknown_label(),
 		};
 		const byId = new Map(sorted.map((e) => [e.task.id, e]));
-		const groups = groupTasks(
+		const groups = groupForView(
 			sorted.map((e) => e.groupTask),
+			display.layout,
 			display.groupBy,
 			groupCtx,
 		);
@@ -247,23 +310,104 @@ export function ViewRenderer(props: {
 				.map((t) => byId.get(t.id))
 				.filter((e): e is Enriched => e != null),
 		}));
-	}, [sorted, display.groupBy, listById, labelById, memberById]);
+	}, [
+		sorted,
+		display.layout,
+		display.groupBy,
+		listById,
+		labelById,
+		memberById,
+		pref.timezone,
+	]);
 
 	function run(mutation: { client: Promise<unknown> }) {
 		setError(null);
 		return runMutation(mutation, setError);
 	}
+	const toggleTask = useTaskToggle(run);
+
+	// Bulk selection on the list layout. A view spans workspaces, so each row is
+	// eligible by the caller's write role where it lives; habits complete per
+	// occurrence and never join. An eligible row an import paused shows why it
+	// cannot be picked.
+	const [memberships] = useQuery(queries.memberships.mine());
+	const writableWorkspaces = useMemo(
+		() =>
+			new Set(
+				memberships
+					.filter((mem) => mem.userId === currentUserId)
+					.filter((mem) => WRITE_ROLES.has(mem.role as Role))
+					.map((mem) => mem.workspaceId),
+			),
+		[memberships, currentUserId],
+	);
+	const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+	const eligible = (task: Task): boolean => {
+		const list = listById.get(task.listId);
+		return (
+			list != null &&
+			list.kind !== "habits" &&
+			writableWorkspaces.has(list.workspaceId)
+		);
+	};
+	const selection = useRowSelection({
+		enabled: renderListFor(display.layout, isDesktop) && !loading,
+		resetKey: `${display.layout}:${JSON.stringify(filter)}`,
+		isSelectable: (id) => {
+			const task = taskById.get(id);
+			return (
+				task != null &&
+				eligible(task) &&
+				activation.canWriteTask(id) &&
+				tasks.every((t) => t.parentId !== id || activation.canWriteTask(t.id))
+			);
+		},
+	});
+	const selectionFor = (task: Task): RowSelection | undefined =>
+		eligible(task)
+			? selection.rowFor(task.id, m.selection_paused_reason())
+			: undefined;
+	const selectedTasks = (): Task[] =>
+		selection
+			.ordered()
+			.map((id) => taskById.get(id))
+			.filter((t): t is Task => t != null);
+	// Move only within one workspace, the same rule as the task detail's move.
+	const bulkMoveTargets = (selected: Task[]): List[] => {
+		const workspaces = new Set(
+			selected.map((t) => listById.get(t.listId)?.workspaceId),
+		);
+		if (workspaces.size !== 1) return [];
+		const [workspaceId] = workspaces;
+		return lists.filter(
+			(l) =>
+				l.workspaceId === workspaceId &&
+				l.kind !== "habits" &&
+				!selected.every((t) => t.listId === l.id),
+		);
+	};
 
 	const handlers: RowHandlers = {
-		onToggle: (id, done) => {
-			if (!activation.canWriteTask(id)) return;
-			void run(
-				zero.mutate(
-					done
-						? mutators.task.update({ id, done: false })
-						: mutators.task.complete({ id }),
-				),
-			);
+		onToggle: (id) => {
+			const task = tasks.find((t) => t.id === id);
+			if (!task || !activation.canWriteTask(id)) return;
+			if (listById.get(task.listId)?.kind === "habits") {
+				const date = localDay(new Date(), pref.timezone);
+				const occurrence = habitOccurrence(
+					task,
+					habitLogs,
+					new Date(),
+					pref.timezone,
+				);
+				if (occurrence.date !== date) return;
+				void run(
+					zero.mutate(
+						occurrence.done
+							? mutators.habit.unlog({ habitId: id, date })
+							: mutators.habit.log({ habitId: id, date, status: "done" }),
+					),
+				);
+			} else toggleTask(task);
 		},
 		onOpenDetail: (task) => onOpenTask(task),
 	};
@@ -273,16 +417,37 @@ export function ViewRenderer(props: {
 		void run(zero.mutate(mutators.task.update({ id, sortKey })));
 	}
 
+	const groupBy = effectiveGroupBy(display.layout, display.groupBy);
+
 	// Board cross-column regroup only writes a single scalar, so it is safe for
 	// priority (-> priority) and status (-> done); other group-bys are
 	// reorder-only within a column.
 	function onRegroup(id: string, columnKey: string) {
 		if (!activation.canWriteTask(id)) return;
-		if (display.groupBy === "priority") {
+		if (groupBy === "priority") {
 			void run(
 				zero.mutate(mutators.task.update({ id, priority: Number(columnKey) })),
 			);
-		} else if (display.groupBy === "status") {
+		} else if (groupBy === "status") {
+			const task = taskById.get(id);
+			if (task && listById.get(task.listId)?.kind === "habits") {
+				const date = localDay(new Date(), pref.timezone);
+				const occurrence = habitOccurrence(
+					task,
+					habitLogs,
+					new Date(),
+					pref.timezone,
+				);
+				if (occurrence.date !== date) return;
+				void run(
+					zero.mutate(
+						columnKey === "done"
+							? mutators.habit.log({ habitId: id, date, status: "done" })
+							: mutators.habit.unlog({ habitId: id, date }),
+					),
+				);
+				return;
+			}
 			void run(
 				zero.mutate(
 					columnKey === "done"
@@ -313,7 +478,7 @@ export function ViewRenderer(props: {
 
 	// Only the ungrouped list in sortKey order is drag-reorderable; every
 	// grouped/other-sorted view renders static rows (M1a lesson).
-	const listReorderable = display.groupBy === "none" && sortKeyOrdered;
+	const listReorderable = groupBy === "none" && sortKeyOrdered;
 
 	// Board within-column reorder is coherent for partitioning group-bys (each
 	// task in one column) AND only when the sort is sortKey order; assignee/label
@@ -321,18 +486,18 @@ export function ViewRenderer(props: {
 	// regroup (priority/status) writes the grouped scalar, not sortKey, so it
 	// stays enabled regardless of sort.
 	const boardReorderable =
-		display.groupBy !== "assignee" &&
-		display.groupBy !== "label" &&
-		sortKeyOrdered;
-	const boardRegroupable =
-		display.groupBy === "priority" || display.groupBy === "status";
+		groupBy !== "assignee" && groupBy !== "label" && sortKeyOrdered;
+	const boardRegroupable = groupBy === "priority" || groupBy === "status";
+	// A status board's Done column is the completed group, so it never folds.
+	const collapseCompleted = !filterMentionsDone(filter) && groupBy !== "status";
+	const spansLists = new Set(sorted.map((e) => e.task.listId)).size > 1;
 
 	// Calendar owns its own mobile collapse (month grid -> agenda), so it is not
 	// folded into the generic "viewing as list" path.
 	const asList =
 		!isDesktop && display.layout !== "list" && display.layout !== "calendar";
-	const renderList =
-		display.layout === "list" || (!isDesktop && display.layout !== "calendar");
+	const renderList = renderListFor(display.layout, isDesktop);
+	const selected = selection.count > 0 ? selectedTasks() : [];
 
 	// Only the row path. A board's columns (also the regroup drop targets), a
 	// table's headers and the calendar's month grid are each still an answer when
@@ -340,7 +505,30 @@ export function ViewRenderer(props: {
 	const empty = sorted.length === 0 && renderList;
 
 	return (
-		<div data-testid="view-renderer">
+		<div ref={measureRef} data-testid="view-renderer">
+			{lists.length > 0 && (
+				<p
+					data-testid="aggregate-scope"
+					className="mb-3 text-xs text-muted-foreground"
+				>
+					{display.workspaceScope.mode === "all"
+						? m.aggregate_scope_all()
+						: m.aggregate_scope_selected({
+								workspaces: formatList(
+									(props.workspaces ?? [])
+										.filter(
+											(w) =>
+												membershipWorkspaceIds.includes(w.id) &&
+												(display.workspaceScope.mode === "one"
+													? w.id === display.workspaceScope.id
+													: display.workspaceScope.mode === "subset" &&
+														display.workspaceScope.ids.includes(w.id)),
+										)
+										.map((w) => w.name),
+								),
+							})}
+				</p>
+			)}
 			{error && (
 				<p role="alert" className="mb-2 text-sm text-destructive">
 					{error}
@@ -355,15 +543,17 @@ export function ViewRenderer(props: {
 			{loading ? (
 				<TaskListSkeleton />
 			) : empty ? (
-				// A user with no tasks at all is new and gets onboarded; a user whose
-				// filter matched nothing is told so, calmly. Same frame, different job.
-				tasks.length === 0 ? (
+				// A user with no list in any workspace is new and gets onboarded; once
+				// one exists, even empty, an empty view is simply a filter that matched
+				// nothing. Same frame, different job.
+				lists.length === 0 ? (
 					<EmptyState
 						data-testid="view-empty-first-use"
-						icon={Sparkles}
 						title={m.view_empty_welcome_title()}
 						message={m.view_empty_welcome_hint()}
-					/>
+					>
+						{props.firstRun}
+					</EmptyState>
 				) : (
 					<EmptyState
 						data-testid="view-empty-no-match"
@@ -373,33 +563,51 @@ export function ViewRenderer(props: {
 				)
 			) : display.layout === "calendar" ? (
 				<CalendarLayout
-					entries={sorted.map((e) => ({
-						task: e.task,
-						kind: e.kind,
-						labels: e.labels,
-					}))}
+					entries={sorted}
 					isDesktop={isDesktop}
 					onOpenTask={onOpenTask}
 					onReschedule={onReschedule}
 					canDrag={activation.canWriteTask}
 					timeZone={pref.timezone}
+					habitOccurrenceOnly={filterMentionsDone(filter)}
 				/>
 			) : renderList ? (
-				<ListLayout
-					groups={entryGroups}
-					reorderable={listReorderable}
-					handlers={handlers}
-					onReorder={onReorder}
-					canDrag={activation.canWriteTask}
-				/>
+				<div ref={selection.rootRef}>
+					<BulkSelection
+						count={selection.count}
+						selected={selected}
+						variant="tasks"
+						moveTargets={bulkMoveTargets(selected)}
+						allTasks={tasks}
+						showDueAndPriority={selected.some((t) => {
+							const kind = listById.get(t.listId)?.kind;
+							return kind !== "checklist" && kind !== "shopping";
+						})}
+						run={run}
+						onDone={selection.finish}
+					/>
+					<ListLayout
+						// A board pads empty priority columns as drop targets; as a list
+						// they would only be empty headings.
+						groups={
+							display.layout === "board"
+								? entryGroups.filter((g) => g.entries.length > 0)
+								: entryGroups
+						}
+						reorderable={listReorderable}
+						handlers={handlers}
+						onReorder={onReorder}
+						canDrag={activation.canWriteTask}
+						selectionFor={selectionFor}
+					/>
+				</div>
 			) : display.layout === "board" ? (
 				<BoardLayout
-					groups={
-						display.groupBy === "priority"
-							? padPriorityColumns(entryGroups)
-							: entryGroups
-					}
+					groups={entryGroups}
 					handlers={handlers}
+					priorityColumns={groupBy === "priority"}
+					collapseCompleted={collapseCompleted}
+					spansLists={spansLists}
 					reorderable={boardReorderable}
 					regroupable={boardRegroupable}
 					onReorder={onReorder}
@@ -407,17 +615,40 @@ export function ViewRenderer(props: {
 				/>
 			) : (
 				<TableLayout
-					entries={sorted.map((e) => ({ task: e.task, labels: e.labels }))}
+					currentDay={currentDay}
+					entries={sorted.map((e) => ({
+						task: e.task,
+						labels: e.labels,
+						occurrence: e.occurrence,
+					}))}
 					sort={localSort}
 					onSort={onSort}
 					listTitle={(id) =>
-						listById.get(id)?.title ?? m.list_untitled_fallback()
+						(() => {
+							const list = listById.get(id);
+							const workspace = list
+								? workspaceById.get(list.workspaceId)
+								: undefined;
+							const title = list?.title || m.list_untitled_fallback();
+							const context = workspace
+								? workspace.kind === "personal"
+									? m.scope_source_personal({ workspace: workspace.name })
+									: m.scope_source_shared({ workspace: workspace.name })
+								: undefined;
+							return context ? `${title} · ${context}` : title;
+						})()
 					}
-					onOpenTask={onOpenTask}
+					onOpenTask={(task) => onOpenTask(taskById.get(task.id) ?? task)}
 				/>
 			)}
 		</div>
 	);
+}
+
+// Calendar owns its own mobile collapse (month grid -> agenda), so it is not
+// folded into the generic "viewing as list" path.
+function renderListFor(layout: ViewDisplay["layout"], isDesktop: boolean) {
+	return layout === "list" || (!isDesktop && layout !== "calendar");
 }
 
 function ListLayout({
@@ -426,20 +657,26 @@ function ListLayout({
 	handlers,
 	onReorder,
 	canDrag,
+	selectionFor,
 }: {
 	groups: ViewEntryGroup[];
 	reorderable: boolean;
 	handlers: RowHandlers;
 	onReorder: (id: string, sortKey: string) => void;
 	canDrag: (id: string) => boolean;
+	selectionFor: (task: Task) => RowSelection | undefined;
 }) {
 	const renderRow = (entry: ViewEntry) => (
 		<TaskRow
 			task={entry.task}
+			occurrence={entry.occurrence}
+			sourceContext={entry.sourceContext}
+			list={{ title: entry.listTitle, icon: entry.listIcon }}
 			kind={entry.kind}
 			subtasks={[]}
 			labels={entry.labels}
 			handlers={handlers}
+			selection={selectionFor(entry.task)}
 		/>
 	);
 

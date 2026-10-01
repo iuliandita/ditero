@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { m } from "../../../paraglide/messages.js";
 import { clampFocusConfig, type FocusConfig } from "../../focus/timer-core.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
@@ -46,40 +47,46 @@ export function FocusSettings() {
 	}
 
 	return (
-		<section className="mt-8 border-t pt-4" aria-labelledby="focus-heading">
-			<h2 id="focus-heading" className="text-sm font-semibold">
+		<section aria-labelledby="focus-heading">
+			<h3 id="focus-heading" className="text-sm font-semibold">
 				{m.focus_settings_heading()}
-			</h2>
+			</h3>
 			<p className="mt-1 text-xs text-muted-foreground">
 				{m.focus_settings_description()}
 			</p>
 
 			<div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
 				{MIN_FIELDS.map((f) => (
-					<label key={f.key} className="flex flex-col gap-1 text-sm">
+					<label
+						key={f.key}
+						htmlFor={f.testid}
+						className="flex flex-col gap-1 text-sm"
+					>
 						<span className="text-muted-foreground">{f.label}</span>
-						<input
+						<Input
 							type="number"
 							min={1}
 							max={180}
 							value={focus[f.key]}
+							id={f.testid}
 							data-testid={f.testid}
-							className="h-8 rounded-lg border bg-transparent px-2 text-sm"
+							className="tabular-nums pointer-coarse:h-11"
 							onChange={(e) => write({ [f.key]: e.target.valueAsNumber })}
 						/>
 					</label>
 				))}
-				<label className="flex flex-col gap-1 text-sm">
+				<label htmlFor="focus-rounds" className="flex flex-col gap-1 text-sm">
 					<span className="text-muted-foreground">
 						{m.focus_field_rounds()}
 					</span>
-					<input
+					<Input
 						type="number"
 						min={1}
 						max={12}
 						value={focus.roundsPerLongBreak}
+						id="focus-rounds"
 						data-testid="focus-rounds"
-						className="h-8 rounded-lg border bg-transparent px-2 text-sm"
+						className="tabular-nums pointer-coarse:h-11"
 						onChange={(e) =>
 							write({ roundsPerLongBreak: e.target.valueAsNumber })
 						}

@@ -1,4 +1,11 @@
-import type { GroupBy } from "../../domain/view-filter.ts";
+import { localDay, shiftDay } from "../../domain/local-day.ts";
+import type {
+	FilterGroup,
+	FilterNode,
+	GroupBy,
+	ViewLayout,
+} from "../../domain/view-filter.ts";
+import { isGroup } from "../../domain/view-filter.ts";
 import { m } from "../../paraglide/messages.js";
 import { priorityLabel } from "../lib/task-display.ts";
 
@@ -13,6 +20,7 @@ export type GroupTask = {
 	title: string;
 	done: boolean;
 	dueAt: Date | null;
+	occurrenceDate?: string | null;
 	priority: number;
 	assigneeIds: string[];
 	labelIds: string[];
@@ -20,6 +28,7 @@ export type GroupTask = {
 
 export type GroupCtx = {
 	now: Date;
+	timeZone?: string;
 	listTitle: (listId: string) => string;
 	memberName: (userId: string) => string;
 	labelName: (labelId: string) => string;
@@ -43,7 +52,20 @@ function pushInto(map: Map<string, GroupTask[]>, key: string, t: GroupTask) {
 
 // Due bucket by date only; completion state is ignored so every task lands in
 // exactly one bucket (a done+overdue task still buckets as overdue by its date).
-function dueBucketKey(dueAt: Date | null, now: Date): string {
+function dueBucketKey(
+	dueAt: Date | null,
+	now: Date,
+	occurrenceDate?: string | null,
+	timeZone = "UTC",
+): string {
+	if (occurrenceDate !== undefined) {
+		if (occurrenceDate == null) return "none";
+		const today = localDay(now, timeZone);
+		if (occurrenceDate < today) return "overdue";
+		if (occurrenceDate === today) return "today";
+		if (occurrenceDate < shiftDay(today, 7)) return "next7";
+		return "later";
+	}
 	if (dueAt === null) return "none";
 	const start = todayStart(now);
 	const due = dueAt.getTime();
@@ -153,7 +175,11 @@ export function groupTasks(
 		case "due": {
 			const buckets = new Map<string, GroupTask[]>();
 			for (const t of tasks)
-				pushInto(buckets, dueBucketKey(t.dueAt, ctx.now), t);
+				pushInto(
+					buckets,
+					dueBucketKey(t.dueAt, ctx.now, t.occurrenceDate, ctx.timeZone),
+					t,
+				);
 			return DUE_ORDER.filter((k) => buckets.has(k)).map((k) => ({
 				key: k,
 				label: DUE_LABELS[k](),
@@ -163,4 +189,55 @@ export function groupTasks(
 		default:
 			return [{ key: "all", label: "", tasks }];
 	}
+}
+
+// A board with no grouping is one column holding every card, which is a list
+// with extra chrome. The view form defaults a board to priority; this covers
+// boards saved before it did (and any written through the API).
+export function effectiveGroupBy(
+	layout: ViewLayout,
+	groupBy: GroupBy,
+): GroupBy {
+	return layout === "board" && groupBy === "none" ? "priority" : groupBy;
+}
+
+// groupTasks skips empty priority buckets (right for list/table), but a
+// regroupable priority board needs every column as a drop target: the fixed
+// four in P1 -> No priority order, populated columns reused as-is.
+export function groupForView(
+	tasks: GroupTask[],
+	layout: ViewLayout,
+	groupBy: GroupBy,
+	ctx: GroupCtx,
+): TaskGroup[] {
+	const by = effectiveGroupBy(layout, groupBy);
+	const groups = groupTasks(tasks, by, ctx);
+	if (layout !== "board" || by !== "priority") return groups;
+	const byKey = new Map(groups.map((g) => [g.key, g]));
+	return PRIORITY_ORDER.map(
+		(p) =>
+			byKey.get(String(p)) ?? {
+				key: String(p),
+				label: priorityLabel(p),
+				tasks: [],
+			},
+	);
+}
+
+// True when any condition, at any depth, filters on `done`. A view that asks
+// about completion explicitly shows what it asked for; every other task
+// surface keeps completed work out of the way.
+export function filterMentionsDone(filter: FilterGroup): boolean {
+	const walk = (node: FilterNode): boolean =>
+		isGroup(node) ? node.conditions.some(walk) : node.field === "done";
+	return walk(filter);
+}
+
+export function splitCompleted<T extends { task: { done?: boolean | null } }>(
+	entries: readonly T[],
+): { open: T[]; done: T[] } {
+	const open: T[] = [];
+	const done: T[] = [];
+	for (const e of entries) (e.task.done ? done : open).push(e);
+	return { open, done };
 }

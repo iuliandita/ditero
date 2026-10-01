@@ -1,7 +1,9 @@
 import { BootSkeleton } from "./components/shell/AppSkeleton.tsx";
 import { ConfirmProvider } from "./components/ui/confirm.tsx";
+import { SnackbarProvider } from "./components/ui/snackbar.tsx";
 import { useUserPref } from "./hooks/useUserPref.ts";
 import { authClient } from "./lib/auth-client.ts";
+import { DisplayPreferencesProvider } from "./lib/DisplayPreferencesProvider.tsx";
 import { KeyringProvider } from "./lib/e2e/KeyringProvider.tsx";
 import { AppZeroProvider } from "./lib/zero.tsx";
 import { AcceptInvite } from "./routes/AcceptInvite.tsx";
@@ -14,13 +16,30 @@ import { Workspace } from "./routes/Workspace.tsx";
 export function App() {
 	return (
 		<ConfirmProvider>
-			<Routes />
+			<SnackbarProvider>
+				<Routes />
+			</SnackbarProvider>
 		</ConfirmProvider>
 	);
 }
 
 function Routes() {
 	const { data: session, isPending } = authClient.useSession();
+	const userId = isPending ? null : (session?.user.id ?? null);
+	return (
+		<DisplayPreferencesProvider key={userId ?? "logged-out"} userId={userId}>
+			<SessionRoutes session={session} isPending={isPending} />
+		</DisplayPreferencesProvider>
+	);
+}
+
+function SessionRoutes({
+	session,
+	isPending,
+}: {
+	session: ReturnType<typeof authClient.useSession>["data"];
+	isPending: boolean;
+}) {
 	// Standalone redemption route: no router, but `/accept?token=` must render for
 	// both logged-out and logged-in invitees. AcceptInvite runs its own session +
 	// preview logic; every other path stays on the normal session-gated flow.
@@ -28,7 +47,7 @@ function Routes() {
 	if (isPending) return <BootSkeleton />;
 	if (!session) return <Login />;
 	return (
-		<AppZeroProvider userID={session.user.id}>
+		<AppZeroProvider key={session.user.id} userID={session.user.id}>
 			<KeyringGate userId={session.user.id} />
 		</AppZeroProvider>
 	);

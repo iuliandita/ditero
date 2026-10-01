@@ -1,6 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { goToSettings, leaveSettings } from "./helpers.ts";
+import {
+	goToSettings,
+	leaveSettings,
+	openMoreOptions,
+	setDueDate,
+	signUp,
+	uniqueEmail,
+} from "./helpers.ts";
 
 // M3a Task 15 e2e (repaired for M3b Task 16): the notification settings surface
 // (channel config, masked secret round-trip, test send, quiet hours), the
@@ -15,30 +22,13 @@ import { goToSettings, leaveSettings } from "./helpers.ts";
 // unacked send reads "Sent ... not acknowledged". The channels.spec file owns the
 // M3b-specific coverage; this file's ntfy assertions are re-pointed at the new
 // surface so the M3a behaviours it guards stay under test.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
 // Set by playwright.config: a private, non-loopback address, since the SSRF
 // boundary refuses loopback unconditionally.
 const NTFY = process.env.E2E_NTFY_URL ?? "http://172.17.0.1:4599";
 const TOKEN = "tk_e2e_secret_value";
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });
@@ -207,8 +197,11 @@ test.describe("notification settings", () => {
 
 	test("quiet hours save and display the user's timezone", async ({ page }) => {
 		const panel = await settings(page);
+		// Typed fields commit on Enter or blur, like every other time field.
 		await page.getByTestId("quiet-start").fill("22:00");
+		await page.getByTestId("quiet-start").press("Enter");
 		await page.getByTestId("quiet-end").fill("07:00");
+		await page.getByTestId("quiet-end").press("Enter");
 		await expect(page.getByTestId("quiet-save-status")).toHaveText("Saved", {
 			timeout: 15_000,
 		});
@@ -219,12 +212,13 @@ test.describe("notification settings", () => {
 		await page.reload();
 		await waitWorkspaceReady(page);
 		await settings(page);
-		await expect(page.getByTestId("quiet-start")).toHaveValue("22:00", {
+		// Stored as 22:00/07:00, shown in the locale's own clock.
+		await expect(page.getByTestId("quiet-start")).toHaveValue(/^10:00\sPM$/, {
 			timeout: 15_000,
 		});
-		await expect(page.getByTestId("quiet-end")).toHaveValue("07:00");
+		await expect(page.getByTestId("quiet-end")).toHaveValue(/^7:00\sAM$/);
 		await expect(page.getByTestId("quiet-urgent-note")).toContainText(
-			"ignore quiet hours",
+			"even during quiet hours",
 		);
 	});
 
@@ -251,9 +245,10 @@ test.describe("notification settings", () => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		// The shell swaps sidebar for bottom-nav on the resize; wait for the tab
 		// to mount rather than racing the re-render.
-		const settingsTab = page.getByTestId("nav-tab-settings");
-		await expect(settingsTab).toBeVisible({ timeout: 15_000 });
-		await settingsTab.click();
+		await expect(page.getByTestId("nav-tab-lists")).toBeVisible({
+			timeout: 15_000,
+		});
+		await goToSettings(page);
 		const panel = await settings(page);
 		await expect(panel.getByTestId("channel-ntfy")).toBeVisible();
 		// Every channel is built now, so Telegram is a real, non-disabled row.
@@ -365,7 +360,8 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		await addTask(page, "Take pills");
 		const detail = await openDetail(page, "Take pills");
 
-		await detail.getByLabel("Due date").fill("2026-09-01");
+		await setDueDate(page, detail, "2026-09-01");
+		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill("08:30");
 		await detail.getByTestId("reminder-urgent").click();
 		await expect(detail.getByTestId("reminder-urgent")).toHaveAttribute(
@@ -378,10 +374,16 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		await detail.getByTestId("reminder-max").fill("2");
 		await expectNoSeriousA11y(page, "reminder policy");
 
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 		const reopened = await openDetail(page, "Take pills");
-		await expect(reopened.getByTestId("reminder-time")).toHaveValue("08:30");
+		await openMoreOptions(reopened);
+		// Stored as 08:30, shown in the locale's own clock (Intl may separate
+		// the day period with a narrow no-break space).
+		await expect(reopened.getByTestId("reminder-time")).toHaveValue(
+			/^8:30\sAM$/,
+		);
 		await expect(reopened.getByTestId("reminder-urgent")).toHaveAttribute(
 			"aria-checked",
 			"true",
@@ -406,13 +408,16 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		const HABIT = "Drink water";
 		let detail = await openDetail(page, HABIT);
 		const when = await localNowMinus(page, 2);
-		await detail.getByLabel("Due date").fill(when.date);
+		await setDueDate(page, detail, when.date);
+		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill(when.time);
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 		await page.setViewportSize({ width: 390, height: 844 });
 		detail = await openDetail(page, HABIT);
+		await openMoreOptions(detail);
 
 		// The disclosure is collapsed by default and opens on tap, unchanged from
 		// desktop.
@@ -469,9 +474,11 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		await createHabitsList(page);
 		const detail = await openDetail(page, "Drink water");
 		const when = await localNowMinus(page, 2);
-		await detail.getByLabel("Due date").fill(when.date);
+		await setDueDate(page, detail, when.date);
+		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill(when.time);
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 		await expect(page.getByTestId("reminder-chip").first()).toBeVisible({
@@ -495,9 +502,11 @@ test.describe("per-task reminder policy and in-app ack", () => {
 		const HABIT = "Drink water";
 		const detail = await openDetail(page, HABIT);
 		const when = await localNowMinus(page, 2);
-		await detail.getByLabel("Due date").fill(when.date);
+		await setDueDate(page, detail, when.date);
+		await openMoreOptions(detail);
 		await detail.getByTestId("reminder-time").fill(when.time);
-		await page.keyboard.press("Escape");
+		// Focus is in a field; Escape would only leave it. Close explicitly.
+		await detail.getByTestId("task-detail-close").click();
 		await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15_000 });
 
 		// The scan tick materializes the reminder_state row, which syncs back.

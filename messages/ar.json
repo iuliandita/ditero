@@ -4,7 +4,7 @@
 	"toggle_off": "إيقاف",
 	"notifications_heading": "الإشعارات",
 	"notifications_channels_heading": "القنوات",
-	"notifications_defaults_heading": "الإعدادات الافتراضية",
+	"notifications_defaults_heading": "التذكيرات المتكررة",
 	"notifications_no_channels": "لم تُعدّ أي قناة بعد - لن تصل التذكيرات خارج التطبيق.",
 	"channel_label_ntfy": "ntfy",
 	"channel_label_telegram": "Telegram",
@@ -40,6 +40,7 @@
 	"channel_field_channelId": "معرّف القناة",
 	"channel_field_address": "عنوان البريد الإلكتروني",
 	"channel_action_setup": "إعداد",
+	"channel_action_edit": "تعديل",
 	"channel_action_save": "حفظ",
 	"channel_action_test": "حفظ وإرسال تجريبي",
 	"channel_action_remove": "إزالة",
@@ -92,9 +93,6 @@
 	"search_hint": "اكتب للبحث في مهامك.",
 	"nav_settings": "الإعدادات",
 	"fab_quick_add": "إضافة سريعة",
-	"sidebar_open_shared": "فتح المشتركة",
-	"sidebar_open_shared_short": "م",
-	"sidebar_members": "الأعضاء",
 	"sidebar_lists_nav_label": "القوائم",
 	"sidebar_views_heading": "طرق العرض",
 	"sidebar_dashboards_heading": "لوحات المعلومات",
@@ -152,13 +150,36 @@
 	"palette_results_label": "النتائج",
 	"palette_no_results": "لا نتائج",
 	"palette_group_commands": "الأوامر",
-	"palette_group_navigate": "التنقل",
-	"palette_group_search": "بحث",
 	"palette_dashboard_item": "لوحة معلومات: {name}",
+	"palette_group_recent": "الأخيرة",
+	"palette_group_lists": "القوائم",
+	"palette_group_views": "طرق العرض",
+	"palette_group_tasks": "المهام",
+	"cheatsheet_category_selection": "التحديد",
+	"command_selection_toggle": "تحديد المهمة أو إلغاء تحديدها",
+	"command_selection_extend_down": "توسيع التحديد للأسفل",
+	"command_selection_extend_up": "توسيع التحديد للأعلى",
+	"command_selection_all": "تحديد كل المهام",
+	"command_selection_clear": "مسح التحديد",
+	"action_select": "تحديد",
+	"action_deselect": "إلغاء التحديد",
+	"task_select_aria": "تحديد {title}",
+	"selection_bar_label": "المهام المحددة",
+	"selection_complete": "إكمال",
+	"selection_move": "نقل",
+	"selection_due": "الموعد",
+	"selection_priority": "الأولوية",
+	"selection_delete": "حذف",
+	"selection_clear": "مسح التحديد",
+	"selection_check": "تأشير",
+	"selection_uncheck": "إلغاء التأشير",
+	"selection_clear_quantity": "مسح الكمية",
+	"selection_paused_reason": "موقوفة مؤقتًا بسبب استيراد، لذا لا يمكن تحديدها",
 	"list_untitled_fallback": "قائمة",
 	"palette_untitled_task": "مهمة",
 	"cheatsheet_title": "اختصارات لوحة المفاتيح",
 	"cheatsheet_description": "تعمل الاختصارات في أي مكان خارج حقول النص.",
+	"shortcut_hint": "اضغط {key} لعرض اختصارات لوحة المفاتيح",
 	"cheatsheet_category_general": "عام",
 	"cheatsheet_category_task": "المهام",
 	"cheatsheet_category_view": "العرض",
@@ -177,11 +198,11 @@
 	"command_nav_up": "التحرك لأعلى",
 	"command_nav_open": "فتح المحدد",
 	"command_task_toggle_done": "تبديل حالة الإنجاز",
-	"escalation_repeat_every": "التكرار كل (دقيقة)",
-	"escalation_max_repeats": "أقصى عدد للتكرارات",
-	"escalation_fallback_member": "العضو الاحتياطي",
+	"escalation_repeat_every": "كرّر التذكير كل",
+	"escalation_max_repeats": "أرسل بحد أقصى",
+	"escalation_fallback_member": "إذا لم يستجب أحد، أبلغ",
 	"escalation_fallback_nobody": "لا أحد",
-	"quiet_hours_start_label": "الهدوء من",
+	"quiet_hours_start_label": "من",
 	"quiet_hours_end_label": "حتى",
 	"quiet_hours_start_aria": "بداية ساعات الهدوء",
 	"quiet_hours_end_aria": "نهاية ساعات الهدوء",
@@ -191,7 +212,25 @@
 	"quiet_hours_timezone_detected": "تم اكتشاف {timezone} - هل هذا صحيح؟",
 	"quiet_hours_timezone": "الأوقات بتوقيت {timezone}.",
 	"quiet_hours_equal_warning": "يجب أن تختلف البداية عن النهاية. لإيقاف الإشعارات تمامًا، عطّل قنواتك بالأعلى.",
-	"quiet_hours_urgent_note": "التذكيرات المعلَّمة كعاجلة تتجاهل ساعات الهدوء.",
+	"quiet_hours_urgent_note": "المهام المضبوطة للتذكير حتى أثناء ساعات الهدوء تصل رغم ذلك.",
+	"settings_quiet_hours_heading": "ساعات الهدوء",
+	"settings_quiet_hours_help": "التذكيرات المستحقة خلال هذه الفترة تنتظر حتى تنتهي.",
+	"settings_reminder_defaults_help": "يُستخدم لكل مهمة ليست لها تذكيرات مخصصة.",
+	"settings_timezone_label": "المنطقة الزمنية",
+	"settings_timezone_help": "تستخدم التذكيرات وساعات الهدوء هذه المنطقة الزمنية.",
+	"settings_timezone_change": "تغيير المنطقة الزمنية",
+	"settings_nav_label": "أقسام الإعدادات",
+	"settings_section_account": "الحساب",
+	"settings_section_appearance": "المظهر واللغة",
+	"settings_section_lists": "التصنيفات والقوالب",
+	"settings_section_focus": "التركيز وKarma",
+	"settings_section_data": "بياناتك",
+	"settings_section_danger": "منطقة الخطر",
+	"file_picker_choose": "اختر ملفًا",
+	"file_picker_none": "لم يُختر أي ملف",
+	"file_picker_drop": "أو أفلته هنا",
+	"date_field_trigger_aria": "{label}: {value}",
+	"date_field_none": "بلا تاريخ",
 	"focus_settings_heading": "مؤقّت التركيز",
 	"focus_settings_description": "فترات Pomodoro لمؤقّت التركيز.",
 	"focus_field_work_min": "التركيز (دقيقة)",
@@ -225,6 +264,7 @@
 	"security_sign_out": "تسجيل الخروج",
 	"security_error_sign_out": "تعذّر إكمال تسجيل الخروج. حاول مرة أخرى.",
 	"security_passkeys_heading": "مفاتيح المرور",
+	"security_passkeys_empty": "سجّل الدخول ببصمتك أو وجهك أو رمز الجهاز بدلًا من كلمة المرور.",
 	"security_add_passkey": "إضافة مفتاح مرور",
 	"security_passkey_unnamed": "مفتاح مرور",
 	"security_passkey_remove": "إزالة",
@@ -255,11 +295,11 @@
 	"e2e_last_holder_ack": "أفهم أن هذه الملفات ستُفقد.",
 	"account_delete_confirm": "حذف حسابي نهائيًا",
 	"account_delete_failed": "تعذّر حذف الحساب.",
-	"priority_none": "بلا",
+	"priority_none": "بدون أولوية",
 	"priority_low": "منخفضة",
 	"priority_medium": "متوسطة",
-	"priority_medium_short": "متوسط",
 	"priority_high": "عالية",
+	"priority_coded": "{code} {name}",
 	"due_today": "اليوم",
 	"due_tomorrow": "غدًا",
 	"list_completed_count": [
@@ -280,12 +320,32 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا شيء في السلة",
+				"countPlural=one": "عنصر واحد في السلة",
+				"countPlural=two": "عنصران في السلة",
+				"countPlural=few": "{countNum} عناصر في السلة",
+				"countPlural=many": "{countNum} عنصرًا في السلة",
+				"countPlural=other": "{countNum} عنصر في السلة"
+			}
+		}
+	],
 	"list_change_icon": "تغيير أيقونة القائمة",
 	"list_display_options": "خيارات عرض القائمة",
+	"list_reorder_mode": "إعادة الترتيب",
+	"list_reorder_hint": "اسحب المقابض لإعادة الترتيب.",
+	"list_reorder_done": "تم",
 	"list_completed_heading": "العناصر المكتملة",
 	"list_completed_sink": "إنزال العناصر المكتملة للأسفل",
 	"list_completed_keep": "الإبقاء في مكانها",
-	"list_completed_hide": "إخفاء العناصر المكتملة",
 	"list_group_by_assignee": "التجميع حسب المكلَّف",
 	"list_save_as_template": "الحفظ كقالب",
 	"list_add_from_template": "الإضافة من قالب",
@@ -293,11 +353,23 @@
 	"list_add_task_placeholder": "أضف مهمة",
 	"title_suggest_label": "اقتراحات من عناصرك السابقة",
 	"list_add_task": "إضافة مهمة",
+	"list_add_item_placeholder": "أضف عنصرًا",
+	"list_add_item": "إضافة عنصر",
+	"list_add_habit_placeholder": "أضف عادة",
+	"list_add_habit": "إضافة عادة",
 	"quickadd_input_label": "إضافة مهمة سريعة",
 	"quickadd_sheet_title": "إضافة سريعة",
 	"quickadd_placeholder": "مثال: شراء الحليب {date} {priority} {label} {list}",
 	"quickadd_placeholder_nodate": "مثال: شراء الحليب {priority} {label} {list}",
 	"quickadd_example_date": "غدا",
+	"syntax_hint_title": "نصائح الكتابة",
+	"syntax_hint_word": "اسم",
+	"syntax_hint_priority": "الأولوية، p1 هي الأعلى",
+	"syntax_hint_example": "مثال: الاتصال بالسباك {date} {priority} #المنزل",
+	"syntax_hint_example_nodate": "مثال: الاتصال بالسباك {priority} #المنزل",
+	"syntax_hint_dismiss": "إخفاء نصائح الكتابة",
+	"syntax_hint_inline_lead": "افتح الإضافة السريعة ({key})",
+	"syntax_hint_inline_lead_nokey": "افتح الإضافة السريعة",
 	"quickadd_adding_to": "الإضافة إلى {list}",
 	"quickadd_no_list": "لا توجد قائمة متاحة",
 	"quickadd_failed": "تعذّرت إضافة المهمة.",
@@ -390,10 +462,34 @@
 	"shopping_qty_placeholder": "الكمية",
 	"shopping_unit_placeholder": "الوحدة",
 	"shopping_quantity_for": "كمية {title}",
+	"shopping_quantity_add": "{label}، أضف كمية لـ {title}",
+	"shopping_quantity_edit": "{amount}، تعديل كمية {title}",
+	"shopping_quantity_invalid": "أدخل رقمًا أكبر من 0، مثل 2 أو 1.5",
 	"shopping_unit_for": "وحدة {title}",
 	"shopping_category_other": "أخرى",
 	"task_reorder_handle": "إعادة ترتيب المهمة",
 	"task_priority_aria": "الأولوية: {priority}",
+	"task_open_details": "فتح التفاصيل",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=zero": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
+				"totalPlural=one": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
+				"totalPlural=two": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
+				"totalPlural=few": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
+				"totalPlural=many": "المهام الفرعية المكتملة: {doneNum} من {totalNum}",
+				"totalPlural=other": "المهام الفرعية المكتملة: {doneNum} من {totalNum}"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -430,6 +526,19 @@
 	"task_delete_named": "حذف {title}",
 	"task_move_to_list": "النقل إلى قائمة",
 	"task_delete": "حذف المهمة",
+	"task_detail_done_aria": "منجزة",
+	"task_detail_more": "خيارات إضافية",
+	"task_more_repeats": "تتكرر",
+	"task_more_reminder": "تذكير {time}",
+	"task_more_urgent": "عاجلة",
+	"task_due_add": "أضف تاريخًا",
+	"task_due_trigger_aria": "تاريخ الاستحقاق: {value}",
+	"task_due_next_week": "الأسبوع القادم",
+	"task_due_type_placeholder": "اكتب تاريخًا، مثل غدًا",
+	"task_due_type_placeholder_iso": "اكتب تاريخًا بصيغة YYYY-MM-DD",
+	"task_due_type_invalid": "تعذرت قراءة هذا التاريخ.",
+	"time_field_placeholder": "أضف وقتًا",
+	"time_field_invalid": "أدخل وقتًا مثل {example}.",
 	"action_add": "إضافة",
 	"recurrence_repeat": "التكرار",
 	"recurrence_does_not_repeat": "لا يتكرر",
@@ -605,10 +714,17 @@
 	"reminder_ack_aria": "{status}. تأكيد استلام التذكير",
 	"reminder_ack_chip": "{status} - تأكيد",
 	"reminder_channel_unverified": "قناة التسليم غير مُتحقق منها",
-	"reminder_urgent_label": "عاجل (يتجاهل ساعات الهدوء)",
-	"reminder_override_defaults": "تجاوز الإعدادات الافتراضية",
-	"escalation_inherit_default": "اتباع الافتراضي",
-	"escalation_off": "معطّل",
+	"reminder_urgent_label": "ذكّر حتى أثناء ساعات الهدوء",
+	"reminder_override_defaults": "استخدم تذكيرات مخصصة لهذه المهمة",
+	"reminder_urgent_help": "للأمور التي لا ينبغي أن تنتظر انتهاء ساعات الهدوء.",
+	"escalation_inherit_default": "استخدم إعدادي الافتراضي",
+	"escalation_minutes_suffix": "دقيقة",
+	"escalation_repeats_suffix": "مرات",
+	"escalation_repeat_help_default": "اتركه فارغًا للتذكير مرة واحدة فقط.",
+	"escalation_repeat_help_task": "اتركه فارغًا لاستخدام إعدادك الافتراضي.",
+	"escalation_fallback_help": "يتلقى التذكير عندما لا يرد أحد على آخر إرسال.",
+	"escalation_needs_repeat": "حدد أولًا عدد مرات التكرار. حتى ذلك الحين يوجد تذكير واحد ولا يُبلَّغ أحد آخر.",
+	"escalation_fallback_unknown": "شخص لم يعد في مساحاتك",
 	"field_name": "الاسم",
 	"field_status": "الحالة",
 	"field_title": "العنوان",
@@ -630,7 +746,7 @@
 	"filter_due_none": "بلا تاريخ استحقاق",
 	"group_no_label": "بلا وسم",
 	"builtin_view_today": "اليوم",
-	"builtin_view_all_my_tasks": "كل مهامي",
+	"builtin_view_all_my_tasks": "جميع المهام",
 	"builtin_view_assigned_to_me": "المسندة إليّ",
 	"filter_op_is": "يساوي",
 	"filter_op_before": "قبل",
@@ -697,6 +813,8 @@
 	"calendar_agenda_heading": "الأجندة",
 	"calendar_viewing_as_agenda": "العرض كأجندة",
 	"calendar_chip_recurring": "{title}، متكررة",
+	"calendar_chip_priority": "{name}، {priority}",
+	"calendar_chip_done": "{name}، مكتملة",
 	"calendar_day_today": "{date}، اليوم",
 	"filter_multi_selected": [
 		{
@@ -843,6 +961,7 @@
 	"panel_title_placeholder": "عنوان البطاقة",
 	"panel_mobile_hint": "على الهواتف، تُرتَّب البطاقات فوق بعضها بترتيب لوحة المعلومات.",
 	"panel_no_matches": "لا مهام مطابقة",
+	"panel_all_done": "لا شيء مفتوح هنا",
 	"panel_show_all": [
 		{
 			"declarations": ["input count", "local countNum = count: number"],
@@ -905,6 +1024,25 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "{title}: لا سلسلة. فتح المهمة",
+				"countPlural=one": "{title}: سلسلة يوم واحد. فتح المهمة",
+				"countPlural=two": "{title}: سلسلة يومين. فتح المهمة",
+				"countPlural=few": "{title}: سلسلة {countNum} أيام. فتح المهمة",
+				"countPlural=many": "{title}: سلسلة {countNum} يومًا. فتح المهمة",
+				"countPlural=other": "{title}: سلسلة {countNum} يوم. فتح المهمة"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: لا تكرار محدد. فتح المهمة",
 	"panel_streak_no_recurrence": "بلا تكرار",
 	"panel_streak_missing": "عادة مفقودة (محذوفة أو غير مشتركة معك)",
@@ -941,13 +1079,10 @@
 		}
 	],
 	"panel_focus_own_only": "جلساتك فقط",
-	"habit_no_recurrence_hint": "حدد تكرارًا لبدء تتبع هذه العادة.",
 	"habit_skip_action": "تخطي",
 	"habit_undo_action": "تراجع",
+	"habit_track_daily": "تتبّع يوميًا",
 	"habit_done_action": "أنجزتها اليوم",
-	"habit_done_state": "منجزة",
-	"habit_mark_done_aria": "تعليمها كمنجزة لليوم",
-	"habit_done_today_aria": "منجزة اليوم",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -1346,10 +1481,12 @@
 	"login_backup_code_label": "رمز احتياطي",
 	"login_email_placeholder": "البريد الإلكتروني",
 	"login_password_placeholder": "كلمة المرور",
+	"login_new_here": "جديد هنا؟",
 	"login_signup": "إنشاء حساب",
 	"login_signin": "تسجيل الدخول",
 	"login_signin_passkey": "تسجيل الدخول بمفتاح مرور",
 	"login_continue_google": "المتابعة باستخدام Google",
+	"login_or": "أو",
 	"login_two_factor_title": "المصادقة الثنائية",
 	"login_backup_code_placeholder": "رمز احتياطي",
 	"login_verify_code": "تحقق من الرمز",
@@ -1391,10 +1528,265 @@
 	"auth_error_registration_disabled": "الحسابات الجديدة معطّلة في هذه النسخة.",
 	"auth_error_invalid_origin": "الخادم لا يثق بهذا العنوان. اطلب من المشغّل إضافته إلى الأصول الموثوقة لهذه النسخة.",
 	"mutation_failed": "حدث خطأ ما.",
+	"mutation_offline_not_saved": "أنت غير متصل، لم يُحفظ هذا التغيير. أعد الاتصال وحاول مرة أخرى.",
+	"sync_synced_title": "تمت المزامنة",
+	"sync_synced_detail": "متصل. تُحفظ تغييراتك على الخادم فورًا.",
+	"sync_syncing_title": "جارٍ المزامنة",
+	"sync_syncing_detail": "تغييراتك محفوظة على هذا الجهاز وفي طريقها إلى الخادم.",
+	"sync_offline_title": "غير متصل",
+	"sync_offline_detail": "تعذّر الوصول إلى الخادم. تعديلاتك محفوظة على هذا الجهاز وستُزامَن عند عودة الاتصال.",
+	"sync_stopped_title": "المزامنة متوقفة",
+	"sync_stopped_detail": "تعذّر الوصول إلى الخادم، ولا يمكن حفظ تعديلات جديدة الآن. أعد تحميل الصفحة لتحاول مرة أخرى.",
+	"sync_rejected_title": "لم يُحفظ أحد التغييرات",
+	"sync_rejected_detail": "رفض الخادم أحد التغييرات، لذلك تم التراجع عنه. تحقّق من العنصر وحاول مرة أخرى.",
+	"sync_rejected_dismiss": "إغلاق",
+	"sync_reauth_title": "سجّل الدخول للمزامنة",
+	"sync_reauth_detail": "انتهت صلاحية تسجيل دخولك أثناء غيابك. تبقى تعديلاتك على هذا الجهاز وتُزامَن بعد أن تسجّل الدخول مرة أخرى.",
+	"sync_reauth_action": "سجّل الدخول مرة أخرى",
+	"sync_pending_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا تغييرات حديثة غير مُزامَنة",
+				"countPlural=one": "تغيير حديث واحد لم يُزامَن بعد",
+				"countPlural=two": "تغييران حديثان لم يُزامَنا بعد",
+				"countPlural=few": "{countNum} تغييرات حديثة لم تُزامَن بعد",
+				"countPlural=many": "{countNum} تغييرًا حديثًا لم يُزامَن بعد",
+				"countPlural=other": "{countNum} تغيير حديث لم يُزامَن بعد"
+			}
+		}
+	],
 	"mutator_error_denied": "ليس لديك إذن للقيام بذلك.",
 	"mutator_error_label_name_taken": "توجد بالفعل علامة بهذا الاسم.",
 	"modal_close_label": "إغلاق",
 	"action_close": "إغلاق",
+	"action_undo": "تراجع",
+	"snackbar_task_completed": "اكتمل: {title}",
+	"snackbar_task_moved": "نُقلت إلى {list}: {title}",
+	"snackbar_task_complete_failed": "تعذر إكمال: {title}",
+	"snackbar_task_move_failed": "تعذر نقل: {title}",
+	"selection_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لا مهام محددة",
+				"countPlural=one": "مهمة واحدة محددة",
+				"countPlural=two": "مهمتان محددتان",
+				"countPlural=few": "{countNum} مهام محددة",
+				"countPlural=many": "{countNum} مهمة محددة",
+				"countPlural=other": "{countNum} مهمة محددة"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم يُؤشَّر أي عنصر.",
+				"countPlural=one": "أُشِّر عنصر واحد.",
+				"countPlural=two": "أُشِّر عنصران.",
+				"countPlural=few": "أُشِّرت {countNum} عناصر.",
+				"countPlural=many": "أُشِّر {countNum} عنصرًا.",
+				"countPlural=other": "أُشِّر {countNum} عنصر."
+			}
+		}
+	],
+	"snackbar_bulk_completed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم تكتمل أي مهمة.",
+				"countPlural=one": "اكتملت مهمة واحدة.",
+				"countPlural=two": "اكتملت مهمتان.",
+				"countPlural=few": "اكتملت {countNum} مهام.",
+				"countPlural=many": "اكتملت {countNum} مهمة.",
+				"countPlural=other": "اكتملت {countNum} مهمة."
+			}
+		}
+	],
+	"snackbar_bulk_undo_skips_recurring": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "التراجع يشمل كل المهام.",
+				"countPlural=one": "التراجع لا يشمل المهمة المتكررة.",
+				"countPlural=two": "التراجع لا يشمل المهمتين المتكررتين.",
+				"countPlural=few": "التراجع لا يشمل {countNum} مهام متكررة.",
+				"countPlural=many": "التراجع لا يشمل {countNum} مهمة متكررة.",
+				"countPlural=other": "التراجع لا يشمل {countNum} مهمة متكررة."
+			}
+		}
+	],
+	"snackbar_bulk_recurring_advanced": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم تنتقل أي مهمة متكررة.",
+				"countPlural=one": "انتقلت مهمة متكررة واحدة إلى موعدها التالي.",
+				"countPlural=two": "انتقلت مهمتان متكررتان إلى موعدهما التالي.",
+				"countPlural=few": "انتقلت {countNum} مهام متكررة إلى مواعيدها التالية.",
+				"countPlural=many": "انتقلت {countNum} مهمة متكررة إلى مواعيدها التالية.",
+				"countPlural=other": "انتقلت {countNum} مهمة متكررة إلى مواعيدها التالية."
+			}
+		}
+	],
+	"snackbar_bulk_complete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر إكمال المهام",
+				"countPlural=one": "تعذّر إكمال مهمة واحدة",
+				"countPlural=two": "تعذّر إكمال مهمتين",
+				"countPlural=few": "تعذّر إكمال {countNum} مهام",
+				"countPlural=many": "تعذّر إكمال {countNum} مهمة",
+				"countPlural=other": "تعذّر إكمال {countNum} مهمة"
+			}
+		}
+	],
+	"snackbar_bulk_moved": [
+		{
+			"declarations": [
+				"input count",
+				"input list",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم تُنقل أي مهمة إلى {list}",
+				"countPlural=one": "نُقلت مهمة واحدة إلى {list}",
+				"countPlural=two": "نُقلت مهمتان إلى {list}",
+				"countPlural=few": "نُقلت {countNum} مهام إلى {list}",
+				"countPlural=many": "نُقلت {countNum} مهمة إلى {list}",
+				"countPlural=other": "نُقلت {countNum} مهمة إلى {list}"
+			}
+		}
+	],
+	"snackbar_bulk_move_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر نقل المهام",
+				"countPlural=one": "تعذّر نقل مهمة واحدة",
+				"countPlural=two": "تعذّر نقل مهمتين",
+				"countPlural=few": "تعذّر نقل {countNum} مهام",
+				"countPlural=many": "تعذّر نقل {countNum} مهمة",
+				"countPlural=other": "تعذّر نقل {countNum} مهمة"
+			}
+		}
+	],
+	"snackbar_bulk_update_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر تحديث المهام",
+				"countPlural=one": "تعذّر تحديث مهمة واحدة",
+				"countPlural=two": "تعذّر تحديث مهمتين",
+				"countPlural=few": "تعذّر تحديث {countNum} مهام",
+				"countPlural=many": "تعذّر تحديث {countNum} مهمة",
+				"countPlural=other": "تعذّر تحديث {countNum} مهمة"
+			}
+		}
+	],
+	"snackbar_bulk_delete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "تعذّر حذف المهام",
+				"countPlural=one": "تعذّر حذف مهمة واحدة",
+				"countPlural=two": "تعذّر حذف مهمتين",
+				"countPlural=few": "تعذّر حذف {countNum} مهام",
+				"countPlural=many": "تعذّر حذف {countNum} مهمة",
+				"countPlural=other": "تعذّر حذف {countNum} مهمة"
+			}
+		}
+	],
+	"bulk_delete_title": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "حذف المهام؟",
+				"countPlural=one": "حذف مهمة واحدة؟",
+				"countPlural=two": "حذف مهمتين؟",
+				"countPlural=few": "حذف {countNum} مهام؟",
+				"countPlural=many": "حذف {countNum} مهمة؟",
+				"countPlural=other": "حذف {countNum} مهمة؟"
+			}
+		}
+	],
+	"bulk_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لن تُحذف أي مهمة.",
+				"countPlural=one": "سيُحذف مهمة واحدة مع مهامها الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=two": "ستُحذف مهمتان مع مهامهما الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=few": "ستُحذف {countNum} مهام مع مهامها الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=many": "ستُحذف {countNum} مهمة مع مهامها الفرعية. لا يمكن التراجع عن هذا.",
+				"countPlural=other": "ستُحذف {countNum} مهمة مع مهامها الفرعية. لا يمكن التراجع عن هذا."
+			}
+		}
+	],
 	"action_delete": "حذف",
 	"action_remove": "إزالة",
 	"confirm_cancel": "إلغاء",
@@ -1405,8 +1797,11 @@
 	"list_reorder_handle": "إعادة ترتيب القائمة",
 	"workspace_switcher_title": "مساحات العمل",
 	"workspace_name_fallback": "مساحة العمل",
-	"views_nav_label": "طرق العرض",
-	"dashboards_nav_label": "لوحات المعلومات",
+	"workspace_manage_members": "إدارة الأعضاء",
+	"workspace_private_note": "مساحة عملك الشخصية خاصة. تظهر مساحات العمل المشتركة هنا عندما يدعوك أحد.",
+	"workspace_kind_personal": "شخصية",
+	"workspace_kind_shared": "مشتركة",
+	"sidebar_folder_empty": "لا توجد قوائم بعد",
 	"view_actions": "إجراءات العرض",
 	"view_set_home": "تعيينها كصفحة رئيسية",
 	"view_pin": "تثبيت",
@@ -1513,17 +1908,22 @@
 	"app_loading": "جارٍ التحميل…",
 	"tasks_loading": "جارٍ تحميل المهام…",
 	"list_empty": "لا يوجد شيء هنا بعد.",
-	"list_empty_action": "أضف عنصرًا",
 	"view_empty_welcome_title": "مرحبًا بك في Ditero",
-	"view_empty_welcome_hint": "أنشئ قائمة بالأسفل لإضافة مهمتك الأولى.",
+	"view_empty_welcome_hint": "المهام تعيش في قوائم. أنشئ قائمة لتبدأ.",
+	"view_empty_welcome_action": "أنشئ قائمتك الأولى",
+	"view_empty_welcome_starters": "أو ابدأ من قالب جاهز",
+	"starter_name_shopping": "مشتريات",
+	"starter_name_checklist": "قائمة السفر",
+	"starter_name_tasks": "أعمال المنزل",
+	"starter_name_habits": "عادات يومية",
 	"view_empty_no_match": "لا يوجد حاليًا ما يطابق هذا العرض.",
 	"action_continue": "متابعة",
 	"action_retry": "حاول مرة أخرى",
 	"e2e_enroll_title": "تفعيل التشفير",
-	"e2e_enroll_intro": "تُشفَّر الملفات التي ترفقها على هذا الجهاز قبل رفعها. لا يخزّن هذا الخادم سوى النسخة المشفّرة — فهو لا يرى المحتوى ولا اسم الملف.",
+	"e2e_enroll_intro": "تُشفَّر الملفات التي ترفقها على هذا الجهاز قبل رفعها. لا يخزّن هذا الخادم سوى النسخة المشفّرة، فهو لا يرى المحتوى ولا اسم الملف.",
 	"e2e_enroll_passphrase_heading": "اختر عبارة مرور للتشفير",
 	"e2e_enroll_not_account_password": "هذه ليست كلمة مرور حسابك. اختر شيئًا مختلفًا، وشيئًا ستتذكره.",
-	"e2e_no_reset_note": "لا يمكن لأحد إعادة تعيين عبارة المرور هذه — لا أنت ولا من يدير هذا الخادم. إذا فقدتها وفقدت رمز الاسترداد، فستضيع ملفاتك المشفّرة نهائيًا.",
+	"e2e_no_reset_note": "لا يمكن لأحد إعادة تعيين عبارة المرور هذه، لا أنت ولا من يدير هذا الخادم. إذا فقدتها وفقدت رمز الاسترداد، فستضيع ملفاتك المشفّرة نهائيًا.",
 	"e2e_field_passphrase": "عبارة مرور التشفير",
 	"e2e_field_passphrase_confirm": "أعد إدخال عبارة المرور",
 	"e2e_passphrase_too_short": "استخدم 12 حرفًا على الأقل.",
@@ -1545,7 +1945,7 @@
 	"e2e_recovery_confirm_label": "أعد كتابة الرمز لتأكيد أنك حفظته",
 	"e2e_recovery_confirm_submit": "تأكيد وإنهاء",
 	"e2e_recovery_confirm_mismatch": "هذا لا يطابق الرمز أعلاه.",
-	"e2e_recovery_confirm_checksum": "تحقّق من الرمز — يبدو أن أحد المحارف غير صحيح.",
+	"e2e_recovery_confirm_checksum": "تحقّق من الرمز، يبدو أن أحد المحارف غير صحيح.",
 	"e2e_settings_heading": "الملفات المشفّرة",
 	"e2e_status_unenrolled": "لم يتم إعداد التشفير على هذا الحساب بعد.",
 	"e2e_setup_action": "إعداد التشفير",
@@ -1576,7 +1976,7 @@
 	"e2e_recovery_reset_heading": "اختر عبارة مرور جديدة",
 	"e2e_recovery_reset_intro": "لقد فتحت باستخدام رمز الاسترداد، فاختر عبارة مرور يمكنك استخدامها في المرة القادمة.",
 	"e2e_recovery_reset_submit": "حفظ عبارة المرور",
-	"e2e_recovery_must_confirm": "أكّد الرمز قبل الإغلاق — لا يمكن عرضه مرة أخرى.",
+	"e2e_recovery_must_confirm": "أكّد الرمز قبل الإغلاق، لا يمكن عرضه مرة أخرى.",
 	"e2e_field_current_passphrase": "عبارة مرور التشفير الحالية",
 	"e2e_change_passphrase": "تغيير عبارة المرور",
 	"e2e_change_passphrase_done": "تم تغيير عبارة المرور. رمز الاسترداد لا يزال يعمل.",
@@ -1783,5 +2183,31 @@
 	"activation_container_change_failed": "تعذر حفظ هذا التغيير. راجع المهام المتوقفة وحاول مجددًا.",
 	"activation_task_change_failed": "تعذر تغيير هذه المهمة. حاول مجددًا.",
 	"activation_badge_pending": "الاستيراد معلّق",
-	"activation_badge_blocked": "تحتاج إلى مراجعة"
+	"activation_badge_blocked": "تحتاج إلى مراجعة",
+	"sync_save_pending_failed": "تعذر حفظ التغييرات المعلّقة على هذا الجهاز. حاول مجددًا.",
+	"display_settings_label": "حجم النص والتباين",
+	"display_size_label": "حجم القراءة",
+	"display_size_description": "اضبط النص وعناصر التحكم والمسافات معًا.",
+	"display_size_standard": "عادي",
+	"display_size_comfortable": "مريح",
+	"display_size_large": "كبير",
+	"display_contrast_label": "تباين عالٍ",
+	"display_contrast_description": "اجعل النص والحدود وعناصر التحكم أسهل في التمييز في كل سمة.",
+	"display_device_note": "تُحفظ هذه الإعدادات لحسابك على هذا الجهاز.",
+	"display_save_failed": "تُطبّق تغييراتك الآن، لكن تعذر حفظها على هذا الجهاز.",
+	"login_password_guidance": "استخدم من {min} إلى {max} حرفًا. كلمة المرور الطويلة والفريدة أسهل في الحفاظ على أمانها.",
+	"login_recovery_label": "لا تستطيع تسجيل الدخول؟",
+	"login_recovery_admin_guidance": "اسأل مسؤول نسخة Ditero هذه عن استعادة الوصول. إذا كان حسابك مُدارًا، فاسأل أحد والديك أو الوصي عليك.",
+	"login_existing_account": "لديك حساب بالفعل؟",
+	"syntax_hint_inline_literal": "يحفظ هذا الحقل النص كما تكتبه.",
+	"syntax_hint_details": "صيغة الإضافة السريعة",
+	"aggregate_scope_all": "في جميع مساحات عملك",
+	"aggregate_scope_selected": "في: {workspaces}",
+	"scope_source_personal": "{workspace} · شخصي",
+	"scope_source_shared": "{workspace} · مشترك",
+	"calendar_go_today": "اليوم",
+	"calendar_show_earlier": "إظهار التواريخ السابقة",
+	"calendar_hide_earlier": "إخفاء التواريخ السابقة",
+	"habit_occurrence_skipped": "تم تخطي هذا التكرار",
+	"habit_occurrence_unavailable": "التكرار غير متاح. افتح العادة لمراجعة جدولها."
 }

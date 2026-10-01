@@ -16,6 +16,7 @@ import { mutators } from "../../../zero/mutators.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { formatList } from "../../lib/intl-format.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
+import { TimeField } from "./TimeField.tsx";
 
 type Freq = RecurrencePreset["freq"];
 
@@ -298,7 +299,7 @@ export function RecurrenceEditor({
 							data-testid={`recurrence-freq-${freq}`}
 							onClick={() => setFreq(freq)}
 							className={cn(
-								"flex-1 rounded-lg border px-2 py-1 text-sm transition-colors motion-reduce:transition-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+								"flex-1 rounded-lg border px-2 py-1 text-sm transition-colors motion-reduce:transition-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
 								active
 									? "border-ring bg-muted font-medium"
 									: "text-muted-foreground",
@@ -342,7 +343,7 @@ export function RecurrenceEditor({
 								data-testid={`recurrence-weekday-${day}`}
 								onClick={() => toggleWeekday(day)}
 								className={cn(
-									"h-8 w-11 rounded-lg border text-sm transition-colors motion-reduce:transition-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+									"h-8 w-11 rounded-lg border text-sm transition-colors motion-reduce:transition-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
 									active
 										? "border-ring bg-muted font-medium"
 										: "text-muted-foreground",
@@ -377,7 +378,7 @@ export function RecurrenceEditor({
 				aria-pressed={relative}
 				data-testid="recurrence-relative"
 				onClick={toggleRelative}
-				className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-start transition-colors motion-reduce:transition-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+				className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-start transition-colors motion-reduce:transition-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 			>
 				<span className="flex flex-col">
 					<span>
@@ -409,13 +410,11 @@ export function RecurrenceEditor({
 
 			<div className="flex items-center gap-2">
 				<span className="text-muted-foreground">{m.reminder_time()}</span>
-				<Input
-					type="time"
+				<TimeField
 					value={reminder}
-					aria-label={m.reminder_time()}
+					label={m.reminder_time()}
 					data-testid="recurrence-reminder"
-					className="h-8 w-32"
-					onChange={(e) => commitReminder(e.target.value)}
+					onCommit={commitReminder}
 				/>
 				{reminder !== "" && (
 					<Button

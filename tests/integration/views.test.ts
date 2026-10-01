@@ -577,6 +577,37 @@ describe("userPref write-permission mutator: M3a notification defaults", () => {
 		expect(row?.timezone).toBe("Europe/Bucharest");
 	});
 
+	// A settings pick marks the zone chosen; a later detection-style write of
+	// the zone alone must not clear that mark, or detection would overwrite a
+	// deliberate UTC on the next load.
+	test("a chosen zone stays chosen through a zone-only write", async () => {
+		const read = async () =>
+			(
+				await db
+					.select()
+					.from(tables.userPref)
+					.where(eq(tables.userPref.id, "viz-a"))
+			)[0];
+		await call(
+			mutators.userPref.set,
+			{ id: "viz-a" },
+			{ timezone: "UTC", timezoneChosen: true },
+		);
+		expect(await read()).toMatchObject({
+			timezone: "UTC",
+			timezoneChosen: true,
+		});
+		await call(
+			mutators.userPref.set,
+			{ id: "viz-a" },
+			{ timezone: "Europe/Bucharest" },
+		);
+		expect(await read()).toMatchObject({
+			timezone: "Europe/Bucharest",
+			timezoneChosen: true,
+		});
+	});
+
 	test("an invalid timezone string is rejected", async () => {
 		await expect(
 			call(

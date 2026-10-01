@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { GroupCtx, GroupTask } from "./group.ts";
-import { groupTasks } from "./group.ts";
+import {
+	effectiveGroupBy,
+	filterMentionsDone,
+	groupForView,
+	groupTasks,
+	splitCompleted,
+} from "./group.ts";
 
 // Bucket labels are pinned to the English catalog literals rather than to
 // `m.*()`: an assertion with the same message on both sides still passes when
@@ -52,7 +58,11 @@ describe("groupTasks", () => {
 			task({ id: "none", priority: 0 }),
 		];
 		const groups = groupTasks(tasks, "priority", ctx);
-		expect(groups.map((g) => g.label)).toEqual(["High", "Low", "None"]);
+		expect(groups.map((g) => g.label)).toEqual([
+			"P1 High",
+			"P3 Low",
+			"No priority",
+		]);
 		expect(groups.map((g) => g.key)).toEqual(["3", "1", "0"]);
 	});
 
@@ -63,7 +73,7 @@ describe("groupTasks", () => {
 			ctx,
 		);
 		expect(groups).toHaveLength(1);
-		expect(groups[0].label).toBe("None");
+		expect(groups[0].label).toBe("No priority");
 	});
 
 	it("assignee fans out multi-assignee tasks and trails Unassigned", () => {
@@ -138,5 +148,130 @@ describe("groupTasks", () => {
 	it("due skips empty buckets", () => {
 		const groups = groupTasks([task({ id: "x", dueAt: null })], "due", ctx);
 		expect(groups.map((g) => g.key)).toEqual(["none"]);
+	});
+});
+
+// Regression for #355: a board saved with the form's default grouping (none)
+// rendered one untitled "Tasks" column holding every card.
+describe("groupForView", () => {
+	const mixed = [
+		task({ id: "lo", priority: 1 }),
+		task({ id: "none", priority: 0 }),
+		task({ id: "hi", priority: 3 }),
+	];
+
+	it("a board saved ungrouped renders all four priority columns in order", () => {
+		const groups = groupForView(mixed, "board", "none", ctx);
+		expect(groups.map((g) => g.label)).toEqual([
+			"P1 High",
+			"P2 Medium",
+			"P3 Low",
+			"No priority",
+		]);
+		expect(groups.map((g) => g.tasks.map((t) => t.id))).toEqual([
+			["hi"],
+			[],
+			["lo"],
+			["none"],
+		]);
+	});
+
+	it("a priority board keeps empty columns as drop targets", () => {
+		const groups = groupForView([task({ id: "a" })], "board", "priority", ctx);
+		expect(groups.map((g) => g.key)).toEqual(["3", "2", "1", "0"]);
+	});
+
+	it("list and table keep their own grouping and skip empty priorities", () => {
+		expect(groupForView(mixed, "list", "none", ctx)).toHaveLength(1);
+		expect(
+			groupForView(mixed, "table", "priority", ctx).map((g) => g.key),
+		).toEqual(["3", "1", "0"]);
+	});
+
+	it("an explicit board grouping is left alone", () => {
+		expect(effectiveGroupBy("board", "status")).toBe("status");
+		expect(effectiveGroupBy("calendar", "none")).toBe("none");
+	});
+});
+
+describe("completed handling", () => {
+	it("filterMentionsDone finds a done condition at any depth", () => {
+		expect(filterMentionsDone({ op: "and", conditions: [] })).toBe(false);
+		expect(
+			filterMentionsDone({
+				op: "and",
+				conditions: [
+					{ field: "priority", operator: "is", value: 3 },
+					{
+						op: "or",
+						conditions: [{ field: "done", operator: "is", value: true }],
+					},
+				],
+			}),
+		).toBe(true);
+	});
+
+	it("splitCompleted keeps order within open and done", () => {
+		const { open, done } = splitCompleted([
+			{ task: { id: "a", done: true } },
+			{ task: { id: "b", done: false } },
+			{ task: { id: "c", done: null } },
+			{ task: { id: "d", done: true } },
+		]);
+		expect(open.map((e) => e.task.id)).toEqual(["b", "c"]);
+		expect(done.map((e) => e.task.id)).toEqual(["a", "d"]);
+	});
+});
+
+describe("habit occurrence due groups", () => {
+	it("keeps today's local habit out of the overdue bucket without changing ordinary tasks", () => {
+		const groups = groupTasks(
+			[
+				task({
+					id: "habit",
+					dueAt: new Date("2026-09-29T22:00:00Z"),
+					occurrenceDate: "2026-09-30",
+				}),
+				task({ id: "task", dueAt: new Date("2026-09-29T22:00:00Z") }),
+				task({
+					id: "next",
+					dueAt: new Date("2026-10-04T22:00:00Z"),
+					occurrenceDate: "2026-10-05",
+				}),
+				task({ id: "unscheduled", occurrenceDate: null }),
+			],
+			"due",
+			{
+				...ctx,
+				now: new Date("2026-09-30T12:00:00Z"),
+				timeZone: "Europe/Berlin",
+			},
+		);
+		expect(
+			groups.map((group) => [group.key, group.tasks.map((entry) => entry.id)]),
+		).toEqual([
+			["overdue", ["task"]],
+			["today", ["habit"]],
+			["next7", ["next"]],
+			["none", ["unscheduled"]],
+		]);
+	});
+	it("groups the user's evening habit as today when UTC has advanced", () => {
+		const groups = groupTasks(
+			[
+				task({
+					id: "habit",
+					dueAt: new Date("2026-09-30T04:00:00Z"),
+					occurrenceDate: "2026-09-30",
+				}),
+			],
+			"due",
+			{
+				...ctx,
+				now: new Date("2026-10-01T02:00:00Z"),
+				timeZone: "America/New_York",
+			},
+		);
+		expect(groups[0].key).toBe("today");
 	});
 });

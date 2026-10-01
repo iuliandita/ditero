@@ -35,7 +35,10 @@ import type {
 } from "../../../zero/schema.gen.ts";
 import type { SavedView } from "../../hooks/useViews.ts";
 import { useIsDesktop } from "../../lib/use-media-query.ts";
+import { useWideContent } from "../../lib/use-wide-content.ts";
+import { effectiveGroupBy, filterMentionsDone } from "../../views/group.ts";
 import { useReorderSensors } from "../list/SortableList.tsx";
+import { SyncIndicator } from "../shell/SyncIndicator.tsx";
 import { BackButton } from "../ui/back-button.tsx";
 import { Button } from "../ui/button.tsx";
 import {
@@ -46,6 +49,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
+import { EmptyState } from "../ui/empty-state.tsx";
 import { AddPanelDialog } from "./AddPanelDialog.tsx";
 import { CounterPanel } from "./CounterPanel.tsx";
 import { FocusPanel } from "./FocusPanel.tsx";
@@ -99,9 +103,11 @@ function SortablePanel({
 	onEdit,
 	onResize,
 	onRemove,
+	spanClass,
 	children,
 }: {
 	panel: Panel;
+	spanClass: string;
 	viewName: string | null;
 	onEdit?: () => void;
 	onResize: (size: PanelSize) => void;
@@ -125,7 +131,7 @@ function SortablePanel({
 				transition: reduce ? undefined : transition,
 				zIndex: isDragging ? 10 : undefined,
 			}}
-			className={cn(PANEL_SPAN_CLASS[panel.size], isDragging && "opacity-90")}
+			className={cn(spanClass, isDragging && "opacity-90")}
 		>
 			<PanelFrame
 				panel={panel}
@@ -168,7 +174,8 @@ export function DashboardView({
 	onUpdate: (panels: Panel[]) => void;
 	onEditDashboard: () => void;
 	onDeleteDashboard: () => void;
-	onSetHome: () => void;
+	// Absent on phones, which always land on Today.
+	onSetHome?: () => void;
 	isHome: boolean;
 	onBack: () => void;
 	data: PanelData;
@@ -181,6 +188,10 @@ export function DashboardView({
 	onOpenView: (viewId: string) => void;
 }): JSX.Element {
 	const isDesktop = useIsDesktop();
+	// The 12-column grid, unless the docked task detail leaves too little room.
+	const [measureRef, wide] = useWideContent();
+	const spanOf = (p: Panel) => (wide ? PANEL_SPAN_CLASS[p.size] : "");
+	const tileSpan = wide ? "md:col-span-3" : "";
 	// Effective edit mode is gated on canEdit so a mid-edit role revocation
 	// drops the surface back to view chrome instead of stranding failing writes.
 	const [editRequested, setEditRequested] = useState(false);
@@ -272,6 +283,10 @@ export function DashboardView({
 					);
 				}
 				const label = panelLabel(panel, panelViewName(panel));
+				const view =
+					panel.source.kind === "view"
+						? viewsById.get(panel.source.viewId)
+						: undefined;
 				return panel.type === "tasks" ? (
 					<TasksPanel
 						panel={panel}
@@ -279,6 +294,12 @@ export function DashboardView({
 						label={label}
 						data={data}
 						ids={ids}
+						byPriority={
+							view != null &&
+							effectiveGroupBy(view.display.layout, view.display.groupBy) ===
+								"priority"
+						}
+						showCompleted={filterMentionsDone(resolved.filter)}
 						onOpenTask={onOpenTask}
 						onOpenView={onOpenView}
 					/>
@@ -318,14 +339,11 @@ export function DashboardView({
 		);
 	} else if (panels.length === 0 && !editing) {
 		body = (
-			<div
+			<EmptyState
 				data-testid="dashboard-empty"
-				className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-10 text-center"
+				icon={LayoutDashboard}
+				message={m.dashboard_empty_hint()}
 			>
-				<LayoutDashboard aria-hidden className="size-8 text-muted-foreground" />
-				<p className="text-sm text-muted-foreground">
-					{m.dashboard_empty_hint()}
-				</p>
 				{canEdit && (
 					<Button
 						data-testid="dashboard-empty-add"
@@ -337,19 +355,20 @@ export function DashboardView({
 						<Plus /> {m.panel_add()}
 					</Button>
 				)}
-			</div>
+			</EmptyState>
 		);
 	} else {
 		const grid = (
 			<div
 				data-testid="dashboard-grid"
-				className="grid grid-cols-1 gap-4 md:grid-cols-12"
+				className={cn("grid grid-cols-1 gap-4", wide && "md:grid-cols-12")}
 			>
 				{editing
 					? panels.map((p) => (
 							<SortablePanel
 								key={p.id}
 								panel={p}
+								spanClass={spanOf(p)}
 								viewName={panelViewName(p)}
 								onEdit={() => setPanelDialog({ mode: "edit", panel: p })}
 								onResize={(size) => resizePanel(p.id, size)}
@@ -359,7 +378,7 @@ export function DashboardView({
 							</SortablePanel>
 						))
 					: panels.map((p) => (
-							<div key={p.id} className={PANEL_SPAN_CLASS[p.size]}>
+							<div key={p.id} className={spanOf(p)}>
 								<PanelFrame
 									panel={p}
 									editing={false}
@@ -373,7 +392,10 @@ export function DashboardView({
 					(atCap ? (
 						<p
 							data-testid="panel-limit-reached"
-							className="flex min-h-28 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground md:col-span-3"
+							className={cn(
+								"flex min-h-28 items-center justify-center px-4 text-center text-sm text-muted-foreground",
+								tileSpan,
+							)}
 						>
 							{m.panel_limit_reached()}
 						</p>
@@ -382,7 +404,12 @@ export function DashboardView({
 							type="button"
 							data-testid="add-panel"
 							onClick={() => setPanelDialog({ mode: "add" })}
-							className="flex min-h-28 items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40 md:col-span-3"
+							// A quiet fill, not a dashed outline: the slot is an action,
+							// and it reads as one without pretending to be a panel.
+							className={cn(
+								"flex min-h-28 items-center justify-center gap-2 rounded-xl bg-muted text-sm font-medium text-muted-foreground transition-colors duration-(--motion-fast) ease-(--motion-ease) hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
+								tileSpan,
+							)}
 						>
 							<Plus className="size-4" /> {m.panel_add()}
 						</button>
@@ -408,12 +435,17 @@ export function DashboardView({
 	}
 
 	return (
-		<section aria-label={dashboard.name} data-testid="dashboard-surface">
+		<section
+			aria-label={dashboard.name}
+			data-testid="dashboard-surface"
+			ref={measureRef}
+		>
 			<div className="mb-3 flex items-center gap-2">
 				{!isDesktop && <BackButton size="compact" onClick={onBack} />}
-				<h1 className="min-w-0 flex-1 truncate text-lg font-semibold">
+				<h1 className="min-w-0 flex-1 wrap-anywhere text-lg font-semibold">
 					{dashboard.name}
 				</h1>
+				{!isDesktop && <SyncIndicator placement="header" />}
 				{canEdit && parsed.success && (
 					<Button
 						variant={editing ? "default" : "outline"}
@@ -439,13 +471,15 @@ export function DashboardView({
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
-						<DropdownMenuCheckboxItem
-							data-testid="dashboard-set-home"
-							checked={isHome}
-							onSelect={onSetHome}
-						>
-							<House /> {m.dashboard_set_home()}
-						</DropdownMenuCheckboxItem>
+						{onSetHome && (
+							<DropdownMenuCheckboxItem
+								data-testid="dashboard-set-home"
+								checked={isHome}
+								onSelect={onSetHome}
+							>
+								<House /> {m.dashboard_set_home()}
+							</DropdownMenuCheckboxItem>
+						)}
 						<DropdownMenuItem
 							data-testid="dashboard-rename"
 							onSelect={onEditDashboard}

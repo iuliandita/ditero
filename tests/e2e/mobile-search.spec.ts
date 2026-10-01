@@ -1,6 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
-import { signUp, uniqueEmail, waitWorkspaceReady } from "./helpers.ts";
+import {
+	openMobileLists,
+	signUp,
+	uniqueEmail,
+	waitWorkspaceReady,
+} from "./helpers.ts";
 
 // The search tab used to be permanently disabled, explaining itself through a
 // `title` tooltip on a surface that only exists on touch (#141). Every assertion
@@ -48,20 +53,25 @@ test("mobile search finds a task by substring and opens it", async ({
 	await signUp(page, uniqueEmail("msearch"));
 	await waitWorkspaceReady(page);
 
+	await openMobileLists(page);
 	await page.getByRole("button", { name: "New list" }).click();
 	await page.getByTestId("new-list").fill("Groceries");
 	await page.getByTestId("new-list-submit").click();
+	// Scoped to the list index: the first-run welcome offers a "Groceries"
+	// starter button too, and clicking it would create a second, pre-filled list.
 	await page
+		.getByTestId("list-index")
 		.getByRole("button", { name: "Groceries", exact: true })
-		.first()
 		.click();
 	await expect(page.getByTestId("list")).toBeVisible({ timeout: 15000 });
 
 	for (const title of ["Buy oat milk", "Call the plumber"]) {
 		await page.getByRole("button", { name: "Quick add", exact: true }).click();
+		await expect(page.getByTestId("quickadd-input")).toBeVisible();
 		await page.getByTestId("quickadd-input").fill(title);
 		await page.getByTestId("quickadd-submit").click();
 		await page.keyboard.press("Escape");
+		await expect(page.getByTestId("quickadd-sheet")).toHaveCount(0);
 		await expect(
 			page.getByTestId("list").getByText(title, { exact: true }),
 		).toBeVisible({ timeout: 15000 });

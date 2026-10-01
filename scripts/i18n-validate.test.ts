@@ -202,6 +202,14 @@ describe("validateCatalogs", () => {
 		expect(result.byType["protected-term-missing"]).toEqual([]);
 	});
 
+	test("an em or en dash in any locale fails", () => {
+		const base = { ...en(), hint: "No conditions yet — matches everything" };
+		const de = translated({ hint: "Noch nichts – alles passt" });
+		const found = issuesOf({ en: base, de }, "dash");
+		expect(found.map((i) => i.locale).sort()).toEqual(["de", "en"]);
+		expect(issuesOf({ en: en(), de: translated() }, "dash")).toEqual([]);
+	});
+
 	test("PROTECTED_TERMS covers the brand set", () => {
 		expect([...PROTECTED_TERMS].sort()).toEqual([
 			"Discord",

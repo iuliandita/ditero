@@ -1,10 +1,17 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { CalendarClock, Check, ChevronRight, Flag } from "lucide-react";
+import {
+	CalendarClock,
+	Check,
+	ChevronRight,
+	Flag,
+	ListChecks,
+} from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import {
 	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
 	type PointerEvent as ReactPointerEvent,
+	useId,
 	useMemo,
 	useRef,
 	useState,
@@ -12,12 +19,20 @@ import {
 import { AssigneeChips } from "@/components/people/AssigneeChips";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
+import {
+	CHECK_POP,
+	strikeClass,
+	useJustCompleted,
+} from "@/lib/completion-feedback";
+import { ListIcon } from "@/lib/list-icon";
 import {
 	formatDue,
 	isOverdue,
 	priorityLabel,
 	priorityMeta,
 } from "@/lib/task-display";
+import { TOUCH_KEYBOARD_ONLY } from "@/lib/touch";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { randomId } from "../../../domain/random-id.ts";
@@ -28,10 +43,15 @@ import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { Label, schema, Task } from "../../../zero/schema.gen.ts";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
+import { formatDayKey } from "../../lib/intl-format.ts";
+import type { HabitOccurrence } from "../../views/habit-occurrence.ts";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
 import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
+import { type RowSelection, SelectToggle } from "./SelectToggle.tsx";
 import { type Due, taskActions } from "./taskActions.ts";
+
+export type { RowSelection } from "./SelectToggle.tsx";
 
 export type RowHandlers = {
 	onToggle: (id: string, done: boolean) => void;
@@ -51,8 +71,10 @@ function SwipeRow({
 	children,
 	onComplete,
 	onSchedule,
+	surface = "bg-background",
 }: {
 	children: ReactNode;
+	surface?: string;
 	onComplete?: () => void;
 	onSchedule?: () => void;
 }) {
@@ -99,6 +121,10 @@ function SwipeRow({
 		if (v < 0 && !onSchedule) v = 0; // no left action -> no left travel
 		setOffset(Math.max(-140, Math.min(140, v)));
 	}
+	function cancelSwipe() {
+		start.current = null;
+		setOffset(0);
+	}
 	function onPointerUp() {
 		const s = start.current;
 		start.current = null;
@@ -139,9 +165,13 @@ function SwipeRow({
 				onPointerDown={onPointerDown}
 				onPointerMove={onPointerMove}
 				onPointerUp={onPointerUp}
-				onPointerCancel={onPointerUp}
+				onPointerCancel={cancelSwipe}
+				onLostPointerCapture={(e) => {
+					// A child's implicit touch capture transfers to this swipe surface.
+					if (e.target === e.currentTarget) cancelSwipe();
+				}}
 				onClickCapture={onClickCapture}
-				className="touch-pan-y bg-background"
+				className={cn("touch-pan-y", surface)}
 				style={{
 					transform: `translateX(${dx}px)`,
 					transition:
@@ -172,14 +202,64 @@ function DueChip({ task }: { task: Task }) {
 	);
 }
 
-function PriorityFlag({ priority }: { priority: number | null | undefined }) {
+// Fill density carries the level without hue: solid high, tinted medium, open
+// low. The ring and the flag carry the priority color on top of that.
+const FLAG_FILL: Record<number, string> = {
+	3: "fill-current",
+	2: "fill-current/30",
+	1: "fill-none",
+};
+
+function PriorityFlag({
+	id,
+	priority,
+	className,
+}: {
+	id: string;
+	priority: number | null | undefined;
+	className?: string;
+}) {
 	const meta = priorityMeta(priority);
 	if (!meta) return null;
+	const label = priorityLabel(priority);
 	return (
-		<Flag
-			aria-label={m.task_priority_aria({ priority: priorityLabel(priority) })}
-			className={cn("size-3.5 shrink-0 fill-current", meta.color)}
-		/>
+		<span
+			id={id}
+			role="img"
+			aria-label={m.task_priority_aria({ priority: label })}
+			data-testid="task-priority"
+			data-priority={meta.value}
+			className={cn("inline-flex shrink-0 items-center gap-1", className)}
+		>
+			{/* The word appears where a pointer can hover or the keyboard is in
+			    the row; touch keeps the flag alone, per the one-cue row. */}
+			<span
+				aria-hidden
+				data-testid="task-priority-text"
+				className="hidden text-xs text-muted-foreground group-hover:inline group-has-[:focus-visible]:inline"
+			>
+				{label}
+			</span>
+			<Flag
+				aria-hidden
+				className={cn("size-3.5", meta.color, FLAG_FILL[meta.value])}
+			/>
+		</span>
+	);
+}
+
+function SubtaskCount({ done, total }: { done: number; total: number }) {
+	return (
+		<span
+			data-testid="subtask-count"
+			className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums"
+		>
+			<ListChecks aria-hidden className="size-3" />
+			<span aria-hidden>{m.task_subtask_progress({ done, total })}</span>
+			<span className="sr-only">
+				{m.task_subtask_progress_aria({ done, total })}
+			</span>
+		</span>
 	);
 }
 
@@ -189,13 +269,30 @@ export function TaskRow({
 	subtasks,
 	labels,
 	handlers,
+	selection,
+	variant = "row",
+	surface,
+	list,
+	sourceContext,
+	occurrence,
 }: {
 	task: Task;
 	kind: ListKind;
 	subtasks: Task[];
 	labels: Label[];
 	handlers: RowHandlers;
+	selection?: RowSelection;
+	// "card" is the board surface: two-line titles and top-aligned controls.
+	variant?: "row" | "card";
+	// The fill the row sits on, so its swipe layer never reads as an inner box.
+	// A board card and a dashboard panel are card; a dialog is popover.
+	surface?: "card" | "popover";
+	// Shown when the surface mixes lists, so a row says where it lives.
+	list?: { title: string; icon: string | null } | null;
+	sourceContext?: string;
+	occurrence?: HabitOccurrence;
 }) {
+	const card = variant === "card";
 	const [expanded, setExpanded] = useState(false);
 	const [editError, setEditError] = useState<string | null>(null);
 	const zero = useZero<typeof schema>();
@@ -206,10 +303,14 @@ export function TaskRow({
 	const activation = useTaskImportActivationMap();
 	const activationStatus = activation.statusForTask(task.id);
 	const canEdit = activation.canWriteTask(task.id);
-	const bare = kind === "checklist";
+	// A checklist row is just a tick; a card elsewhere still owes its cues.
+	const bare = kind === "checklist" && !card;
 	const doneCount = subtasks.filter((s) => s.done).length;
 	const total = subtasks.length;
 	const progress = total > 0 ? doneCount / total : 0;
+	const displayedDone = occurrence?.done ?? task.done ?? false;
+	const canToggle = canEdit && (occurrence?.canToggle ?? true);
+	const justCompleted = useJustCompleted(displayedDone);
 
 	// The caller's role in the workspace owning this task's list. The mutators
 	// re-check on write; this only keeps the menu from offering a refusal.
@@ -286,22 +387,69 @@ export function TaskRow({
 			setPriority: (_t, priority) => update({ priority }),
 			saveAsTemplate,
 			remove: () => void removeTask(),
+			select:
+				selection?.selectable && !selection.active
+					? { selected: selection.selected, toggle: selection.toggle }
+					: undefined,
 		},
 	});
 	const actionsLabel = m.row_actions_for({ name: task.title });
 	const canDelete = actions.some((a) => a.id === "delete" && !a.hidden);
 	const { rowProps, menu } = useRowContextMenu(actions, actionsLabel);
+	const ids = useId();
+	const badgeId = `${ids}-badge`;
+	const metaId = `${ids}-meta`;
+	const progressId = `${ids}-progress`;
+	const priorityId = `${ids}-priority`;
+	const showBadge =
+		activationStatus === "pending" || activationStatus === "blocked";
+	const showProgress = kind === "project" && total > 0;
+	const hasPriority = !bare && priorityMeta(task.priority) != null;
+	// The checkbox carries the title and the done state; the open button would
+	// only repeat it, so it names its action and points at the row's details.
+	const describedBy =
+		[
+			showBadge && badgeId,
+			(!bare || sourceContext || list) && metaId,
+			showProgress && progressId,
+			hasPriority && priorityId,
+		]
+			.filter(Boolean)
+			.join(" ") || undefined;
+
+	const selecting = selection?.active ?? false;
+	// Cmd/Ctrl-click toggles and Shift-click extends, as in a file list. In
+	// selection mode a plain click or tap toggles too, so the row never opens
+	// or completes by accident while a batch is being built.
+	function onOpenClick(event: ReactMouseEvent) {
+		if (selection && (event.metaKey || event.ctrlKey)) {
+			event.preventDefault();
+			selection.toggle();
+		} else if (selection && event.shiftKey) {
+			event.preventDefault();
+			selection.extend();
+		} else if (selection && selecting) {
+			selection.toggle();
+		} else handlers.onOpenDetail(task);
+	}
 
 	return (
 		<div>
 			<SwipeRow
+				surface={
+					surface === "popover"
+						? "bg-popover"
+						: card || surface === "card"
+							? "bg-card"
+							: undefined
+				}
 				onComplete={
-					canEdit
-						? () => handlers.onToggle(task.id, task.done ?? false)
+					canToggle && !selecting
+						? () => handlers.onToggle(task.id, displayedDone)
 						: undefined
 				}
 				onSchedule={
-					canEdit && handlers.onSchedule
+					canEdit && handlers.onSchedule && !selecting
 						? () => handlers.onSchedule?.(task)
 						: undefined
 				}
@@ -310,51 +458,127 @@ export function TaskRow({
 				    button carries data-kbd-nav (roving focus + open target). `group`
 				    is what RowActions' md:group-hover reveal keys off. */}
 				<div
-					className="group flex min-h-12 items-center gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50"
+					className={cn(
+						"group flex min-h-12 gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted",
+						card ? "items-start" : "items-center",
+					)}
 					data-kbd-row
+					data-reading-row="task"
+					data-selected={selection?.selected || undefined}
 					{...rowProps}
 				>
-					<div className="flex size-11 shrink-0 items-center justify-center md:size-8">
-						<Checkbox
-							disabled={!canEdit}
-							aria-label={task.title}
-							checked={task.done ?? false}
-							onCheckedChange={() => {
-								if (canEdit) handlers.onToggle(task.id, task.done ?? false);
-							}}
-							data-kbd-action="toggle"
-							className="after:-inset-3.5 md:after:-inset-2"
+					{selection && selecting ? (
+						<SelectToggle
+							title={task.title}
+							selection={selection}
+							placement="lead"
 						/>
-					</div>
+					) : (
+						<div
+							data-reading-check-target
+							className={cn(
+								"flex shrink-0 items-center justify-center",
+								card ? "size-8" : "size-11 md:size-8",
+							)}
+						>
+							<Checkbox
+								disabled={!canToggle}
+								aria-label={task.title}
+								checked={displayedDone}
+								onCheckedChange={() => {
+									if (canToggle) handlers.onToggle(task.id, displayedDone);
+								}}
+								data-kbd-action="toggle"
+								shape={checkShapeFor(kind)}
+								priority={checkToneFor(kind, task.priority)}
+								className={cn(
+									"after:-inset-3.5 md:after:-inset-2",
+									justCompleted && CHECK_POP,
+								)}
+							/>
+						</div>
+					)}
 					<button
 						type="button"
 						data-kbd-nav
-						onClick={() => handlers.onOpenDetail(task)}
-						className="min-h-11 min-w-0 flex-1 content-center text-start"
+						data-task-id={task.id}
+						aria-label={m.task_open_details()}
+						aria-describedby={describedBy}
+						onMouseDown={(event) => {
+							// Shift-click extends the selection, not the page's text selection.
+							if (selection && event.shiftKey) event.preventDefault();
+						}}
+						onClick={onOpenClick}
+						title={card ? task.title : undefined}
+						className={cn(
+							"min-w-0 flex-1 text-start",
+							card ? "min-h-8 py-1.5" : "min-h-11 content-center",
+						)}
 					>
 						<span
+							data-reading-title
 							className={cn(
-								"block truncate text-sm",
-								task.done && "text-muted-foreground line-through",
+								"block text-sm",
+								card ? "line-clamp-2 break-words" : "truncate",
+								displayedDone && "text-muted-foreground",
 							)}
 						>
-							{task.title}
+							<span className={strikeClass(displayedDone)}>{task.title}</span>
 						</span>
-						{(activationStatus === "pending" ||
-							activationStatus === "blocked") && (
+						{showBadge && (
 							<Badge
+								id={badgeId}
 								variant="outline"
-								className="mt-1 text-xs text-amber-700 dark:text-amber-400"
+								className="mt-1 text-xs text-warning"
 							>
 								{activationStatus === "pending"
 									? m.activation_badge_pending()
 									: m.activation_badge_blocked()}
 							</Badge>
 						)}
-						{!bare && (
-							<div className="mt-0.5 flex flex-wrap items-center gap-2">
+						{(!bare || sourceContext || list) && (
+							<div
+								id={metaId}
+								data-reading-metadata
+								className="mt-0.5 flex flex-wrap items-center gap-2"
+							>
 								<AssigneeChips taskId={task.id} />
-								<DueChip task={task} />
+								{occurrence ? (
+									<span
+										className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+										data-testid="habit-occurrence-date"
+									>
+										<CalendarClock aria-hidden className="size-3" />
+										{occurrence.status === "unavailable"
+											? m.habit_occurrence_unavailable()
+											: occurrence.status === "skipped"
+												? m.habit_occurrence_skipped()
+												: occurrence.date
+													? formatDayKey(occurrence.date)
+													: null}
+									</span>
+								) : (
+									!bare && <DueChip task={task} />
+								)}
+								{list && (
+									<span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+										<ListIcon
+											icon={list.icon}
+											kind={kind}
+											title={list.title}
+											className="size-3 shrink-0"
+										/>
+										<span className="truncate">{list.title}</span>
+									</span>
+								)}
+								{sourceContext && (
+									<span
+										className="min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground"
+										data-testid="task-source-context"
+									>
+										{sourceContext}
+									</span>
+								)}
 								{labels.map((l) => (
 									<Badge
 										key={l.id}
@@ -365,30 +589,32 @@ export function TaskRow({
 									</Badge>
 								))}
 								{total > 0 && kind !== "project" && (
-									<span className="text-xs text-muted-foreground">
-										{m.task_subtask_progress({ done: doneCount, total })}
-									</span>
+									<SubtaskCount done={doneCount} total={total} />
 								)}
 							</div>
 						)}
-						{kind === "project" && total > 0 && (
-							<div className="mt-1 flex items-center gap-2">
+						{showProgress && (
+							<div id={progressId} className="mt-1 flex items-center gap-2">
 								<div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
 									<div
 										className="h-full rounded-full bg-kind-project"
 										style={{ width: `${Math.round(progress * 100)}%` }}
 									/>
 								</div>
-								<span className="text-xs text-muted-foreground">
-									{m.task_subtask_progress({ done: doneCount, total })}
-								</span>
+								<SubtaskCount done={doneCount} total={total} />
 							</div>
 						)}
 					</button>
 					{/* Outside the title button: the chip is itself a control when the
 					    reminder is still live, and a button cannot nest in a button. */}
 					{!bare && <ReminderChip task={task} />}
-					{!bare && <PriorityFlag priority={task.priority} />}
+					{!bare && (
+						<PriorityFlag
+							id={priorityId}
+							priority={task.priority}
+							className={card ? "mt-2.5" : undefined}
+						/>
+					)}
 					{total > 0 && (
 						<button
 							type="button"
@@ -397,7 +623,10 @@ export function TaskRow({
 							}
 							aria-expanded={expanded}
 							onClick={() => setExpanded((e) => !e)}
-							className="mt-0.5 text-muted-foreground"
+							className={cn(
+								"mt-0.5 text-muted-foreground",
+								TOUCH_KEYBOARD_ONLY,
+							)}
 						>
 							<ChevronRight
 								className={cn(
@@ -407,7 +636,14 @@ export function TaskRow({
 							/>
 						</button>
 					)}
-					<RowActions actions={actions} label={actionsLabel} />
+					{selection && !selecting && (
+						<SelectToggle
+							title={task.title}
+							selection={selection}
+							placement="trail"
+						/>
+					)}
+					<RowActions actions={actions} label={actionsLabel} hideOnTouch />
 					{/* The keyboard's delete target. It cannot be the menu item: Radix
 					    portals the menu content out of this row, and the item exists
 					    only while the menu is open, so actOnFocused could never find
@@ -435,7 +671,11 @@ export function TaskRow({
 			{expanded && total > 0 && (
 				<ul className="ms-6 flex flex-col border-s ps-2">
 					{subtasks.map((s) => (
-						<li key={s.id} className="flex items-center gap-2 py-1">
+						<li
+							key={s.id}
+							data-reading-row="subtask"
+							className="flex items-center gap-2 py-1"
+						>
 							<Checkbox
 								disabled={!activation.canWriteTask(s.id)}
 								aria-label={s.title}
@@ -444,16 +684,20 @@ export function TaskRow({
 									if (activation.canWriteTask(s.id))
 										handlers.onToggle(s.id, s.done ?? false);
 								}}
+								shape={checkShapeFor(kind)}
+								priority={checkToneFor(kind, s.priority)}
 							/>
 							<button
 								type="button"
+								aria-label={m.task_open_details()}
+								data-reading-title
 								onClick={() => handlers.onOpenDetail(s)}
 								className={cn(
 									"min-w-0 flex-1 truncate text-start text-sm",
-									s.done && "text-muted-foreground line-through",
+									s.done && "text-muted-foreground",
 								)}
 							>
-								{s.title}
+								<span className={strikeClass(s.done ?? false)}>{s.title}</span>
 							</button>
 						</li>
 					))}

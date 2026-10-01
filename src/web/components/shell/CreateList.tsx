@@ -74,7 +74,7 @@ const NONE = "__none__";
 const BLANK = "__blank__";
 
 // Live sort key placing a new list after the current last one.
-function nextKey(lists: List[]): string {
+export function nextKey(lists: List[]): string {
 	const last = lists.reduce<string | null>(
 		(max, l) => (max == null || l.sortKey > max ? l.sortKey : max),
 		null,
@@ -101,7 +101,7 @@ export function CreateList({
 	/** Focus the title on mount. Only set when an explicit "new list" action
 	 * navigated here, never on a plain landing render. */
 	autoFocus?: boolean;
-	onCreated?: () => void;
+	onCreated?: (listId: string, blank: boolean) => void;
 	onCancel?: () => void;
 }) {
 	const isDesktop = useIsDesktop();
@@ -140,7 +140,7 @@ type CreateListProps = {
 	templates: Template[];
 	initialFolderId?: string | null;
 	autoFocus?: boolean;
-	onCreated?: () => void;
+	onCreated?: (listId: string, blank: boolean) => void;
 	onCancel?: () => void;
 };
 
@@ -149,11 +149,15 @@ function DesktopCreateList(props: CreateListProps) {
 	function close() {
 		setOpen(false);
 		// An explicit sidebar action remounts this component when its intent clears.
-		requestAnimationFrame(() =>
+		// Only when focus was lost with the form: a caller that navigated to the
+		// new list has already placed it.
+		requestAnimationFrame(() => {
+			const current = document.activeElement;
+			if (current && current !== document.body) return;
 			document
 				.querySelector<HTMLButtonElement>("[data-create-list-trigger]")
-				?.focus(),
-		);
+				?.focus();
+		});
 	}
 	if (!open) {
 		return (
@@ -179,9 +183,9 @@ function DesktopCreateList(props: CreateListProps) {
 					close();
 					props.onCancel?.();
 				}}
-				onCreated={() => {
+				onCreated={(listId, blank) => {
 					close();
-					props.onCreated?.();
+					props.onCreated?.(listId, blank);
 				}}
 			/>
 		</div>
@@ -212,8 +216,8 @@ function MobileCreateList(props: CreateListProps) {
 					<Form
 						{...props}
 						onCancel={undefined}
-						onCreated={() => {
-							props.onCreated?.();
+						onCreated={(listId, blank) => {
+							props.onCreated?.(listId, blank);
 							setOpen(false);
 						}}
 					/>
@@ -239,7 +243,7 @@ function Form({
 	templates: Template[];
 	initialFolderId?: string | null;
 	autoFocus?: boolean;
-	onCreated?: () => void;
+	onCreated?: (listId: string, blank: boolean) => void;
 	onCancel?: () => void;
 }) {
 	const zero = useZero<typeof schema>();
@@ -274,6 +278,7 @@ function Form({
 		try {
 			const sortKey = nextKey(lists);
 			const folder = folderId === NONE ? undefined : folderId;
+			const listId = randomId();
 
 			if (templateSel.startsWith("starter:")) {
 				const content = STARTER_TEMPLATES[Number(templateSel.slice(8))];
@@ -284,7 +289,7 @@ function Form({
 						mutators.template.instantiateContent({
 							content,
 							workspaceId,
-							listId: randomId(),
+							listId,
 							sortKey,
 							name: t || defaultName(content),
 							...(folder ? { folderId: folder } : {}),
@@ -296,14 +301,14 @@ function Form({
 					mutators.template.instantiateList({
 						templateId: templateSel.slice(3),
 						workspaceId,
-						listId: randomId(),
+						listId,
 						sortKey,
 					}),
 				).client;
 			} else {
 				await zero.mutate(
 					mutators.list.create({
-						id: randomId(),
+						id: listId,
 						workspaceId,
 						title: t,
 						kind,
@@ -315,7 +320,7 @@ function Form({
 			}
 			setTitle("");
 			setTemplateSel(BLANK);
-			onCreated?.();
+			onCreated?.(listId, !fromTemplate);
 		} catch (e) {
 			setError(mutationErrorMessage(e, m.create_list_failed));
 		} finally {

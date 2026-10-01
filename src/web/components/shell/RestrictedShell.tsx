@@ -1,9 +1,11 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
 import { runMutation } from "@/lib/run-mutation";
 import { formatDue, isOverdue } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
+import type { ListKind } from "../../../domain/icon-map.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
@@ -12,17 +14,21 @@ import {
 	useTaskImportActivation,
 	useTaskImportActivationMap,
 } from "../../hooks/useTaskImportActivation.ts";
+import { DisplaySettings } from "../settings/DisplaySettings.tsx";
 import { RestrictedTaskDetail } from "./RestrictedTaskDetail.tsx";
+import { SyncIndicator } from "./SyncIndicator.tsx";
 
 // A single large-touch-target row for the kid surface. Deliberately not TaskRow:
 // no swipe/schedule/reorder/subtask affordances -- a kid completes and opens; the
 // big tap target and generous height are the point.
 function RestrictedRow({
 	task,
+	kind,
 	onToggle,
 	onOpen,
 }: {
 	task: Task;
+	kind: ListKind;
 	onToggle: () => void;
 	onOpen: () => void;
 }) {
@@ -37,6 +43,8 @@ function RestrictedRow({
 				aria-label={task.title}
 				checked={task.done ?? false}
 				onCheckedChange={onToggle}
+				shape={checkShapeFor(kind)}
+				priority={checkToneFor(kind, task.priority)}
 				className="size-6"
 			/>
 			<button
@@ -46,7 +54,7 @@ function RestrictedRow({
 			>
 				<span
 					className={cn(
-						"block truncate text-lg",
+						"block text-lg [overflow-wrap:anywhere]",
 						task.done && "text-muted-foreground line-through",
 					)}
 				>
@@ -54,7 +62,7 @@ function RestrictedRow({
 				</span>
 				{(activation.status === "pending" ||
 					activation.status === "blocked") && (
-					<span className="block text-xs text-amber-700 dark:text-amber-400">
+					<span className="block text-xs text-warning">
 						{activation.status === "pending"
 							? m.activation_badge_pending()
 							: m.activation_badge_blocked()}
@@ -76,7 +84,7 @@ function RestrictedRow({
 }
 
 // Restricted ("kid") surface: a single cross-workspace "assigned to me" list.
-// No sidebar, switcher, folders, create-list, FAB, members, or settings -- the
+// No sidebar, switcher, folders, create-list, FAB, members, or account settings -- the
 // kid completes and comments on assigned tasks and nothing else. Mounted by
 // Workspace when the current user is a restricted managed account.
 export function RestrictedShell() {
@@ -131,9 +139,20 @@ export function RestrictedShell() {
 	return (
 		<div data-testid="restricted-shell" className="min-h-dvh">
 			<main className="mx-auto w-full max-w-xl p-4 md:p-6">
-				<h1 className="mb-4 text-2xl font-semibold">
-					{m.restricted_my_tasks_heading()}
-				</h1>
+				<div className="mb-4 flex items-center gap-2">
+					<h1 className="min-w-0 flex-1 text-2xl font-semibold">
+						{m.restricted_my_tasks_heading()}
+					</h1>
+					<SyncIndicator placement="header" />
+				</div>
+				<details className="mb-4 rounded-lg border p-3">
+					<summary className="min-h-11 cursor-pointer content-center text-sm font-medium">
+						{m.display_settings_label()}
+					</summary>
+					<div className="pt-4">
+						<DisplaySettings />
+					</div>
+				</details>
 
 				{error && (
 					<p role="alert" className="mb-2 text-sm text-destructive">
@@ -151,6 +170,10 @@ export function RestrictedShell() {
 							<RestrictedRow
 								key={task.id}
 								task={task}
+								kind={
+									(lists.find((l) => l.id === task.listId)?.kind ??
+										"tasks") as ListKind
+								}
 								onToggle={() => toggle(task)}
 								onOpen={() => setDetailTaskId(task.id)}
 							/>

@@ -1,7 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { goToSettings, leaveSettings } from "./helpers.ts";
+import {
+	goToSettings,
+	leaveSettings,
+	openAdvancedSection,
+	signUp,
+	uniqueEmail,
+} from "./helpers.ts";
 
 // M1c views + keyboard e2e. Exercises the saved-view lifecycle (build/save/
 // round-trip), the layout switch + board regroup, the command palette, the
@@ -13,36 +19,9 @@ import { goToSettings, leaveSettings } from "./helpers.ts";
 // that guarantees the context is disposed even on failure, so one flake can
 // never leak a context and cascade into the following tests' signups.
 
-// views.spec is the last file in the run, so the shared single dev server + zero-
-// cache are the warmest here: signup/shell-mount latency creeps up under the
-// accumulated load. Scope a couple of retries + generous per-test budget to THIS
-// file only (domain/sharing keep the project defaults) so a load-induced slow
-// signup retries instead of failing the suite.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-// One get-session call, matching the model specs. `/api/auth/get-session` keeps
-// the default rate limit (only sign-in/up are relaxed under DITERO_E2E), so it
-// must NOT be polled -- a poll loop trips the limiter at the tail and starves the
-// app's own session checks. Tests that need the user resolve it from the DB by
-// email instead (seedOverdueTask), so no session round-trip is needed here.
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 // Desktop sidebar list/view nav (aria-label "Lists"): scopes clicks away from the
 // mobile index + create-list controls that share their labels with titles.
@@ -60,6 +39,8 @@ async function createListDesktop(page: Page, name: string): Promise<void> {
 	await waitWorkspaceReady(page);
 	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("sidebar-new-list").click();
+	// The menu mounts a fresh form after its focus trap closes.
+	await expect(page.getByTestId("new-list")).toBeFocused();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	await expect(
@@ -208,7 +189,7 @@ test("view: build priority+assignee filter, save, appears in sidebar, round-trip
 	await pickSelect(
 		page,
 		conditionRow(page, 0).getByTestId("value-control"),
-		"High",
+		"P1 High",
 	);
 
 	// Condition 1: assignee includes me (assignee defaults to the "me" token).
@@ -247,7 +228,7 @@ test("view: build priority+assignee filter, save, appears in sidebar, round-trip
 		page.getByTestId("field-select").filter({ hasText: "Priority" }),
 	).toHaveCount(1);
 	await expect(
-		page.getByTestId("value-control").filter({ hasText: "High" }),
+		page.getByTestId("value-control").filter({ hasText: "P1 High" }),
 	).toHaveCount(1);
 	await expect(
 		page.getByTestId("field-select").filter({ hasText: "Assignee" }),
@@ -279,7 +260,7 @@ test("view: layout switch renders board columns then a real table", async ({
 	await pickLabeled(page, "Layout", "Board");
 	await pickLabeled(page, "Group by", "Priority");
 	await page.getByTestId("view-save").click();
-	for (const col of ["High", "Medium", "Low", "None"]) {
+	for (const col of ["P1 High", "P2 Medium", "P3 Low", "No priority"]) {
 		await expect(page.getByRole("region", { name: col })).toBeVisible({
 			timeout: 15000,
 		});
@@ -320,8 +301,8 @@ test("view: dragging a card to another priority column regroups + persists", asy
 	await expect(page.getByTestId("view-surface")).toBeVisible();
 
 	// The card starts in the "None" (priority 0) column.
-	const none = page.getByRole("region", { name: "None" });
-	const high = page.getByRole("region", { name: "High" });
+	const none = page.getByRole("region", { name: "No priority" });
+	const high = page.getByRole("region", { name: "P1 High" });
 	await expect(none.getByText(cardTitle, { exact: true })).toBeVisible({
 		timeout: 15000,
 	});
@@ -370,7 +351,7 @@ test("view: dragging a card to another priority column regroups + persists", asy
 	await expect(page.getByTestId("view-surface")).toBeVisible();
 	await expect(
 		page
-			.getByRole("region", { name: "High" })
+			.getByRole("region", { name: "P1 High" })
 			.getByText(cardTitle, { exact: true }),
 	).toBeVisible({ timeout: 15000 });
 });
@@ -616,7 +597,8 @@ test("mobile: a board view degrades to the grouped list affordance", async ({
 	await page.reload();
 	await waitWorkspaceReady(page);
 
-	// Mobile landing surfaces a New view control in its Views nav.
+	// Phones reach New view from the Views section of the Lists tab.
+	await openAdvancedSection(page, "views");
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(`Mini board ${Date.now()}`);
 	await pickLabeled(page, "Layout", "Board");
@@ -667,7 +649,7 @@ test("a11y: no serious/critical violations on views + keyboard surfaces", async 
 	await pickLabeled(page, "Layout", "Board");
 	await pickLabeled(page, "Group by", "Priority");
 	await page.getByTestId("view-save").click();
-	await expect(page.getByRole("region", { name: "None" })).toBeVisible({
+	await expect(page.getByRole("region", { name: "No priority" })).toBeVisible({
 		timeout: 15000,
 	});
 	await expectNoSeriousA11y(page, "board layout");
@@ -697,4 +679,75 @@ test("a11y: no serious/critical violations on views + keyboard surfaces", async 
 			.getByRole("heading", { name: "Keyboard shortcuts" }),
 	).toBeVisible();
 	await expectNoSeriousA11y(page, "cheat-sheet");
+});
+
+// #365 review: board, table and month grid chose their layout from the
+// viewport, so beside the docked task detail at 1100px a board rendered its
+// columns into ~390px. They now follow the width they actually get.
+test("view: a board beside the docked detail falls back to the list", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1100, height: 800 });
+	await signUp(page, uniqueEmail("v-narrow"));
+	await waitWorkspaceReady(page);
+	await createListDesktop(page, "L9");
+	await openListDesktop(page, "L9");
+	await addTask(page, "Card one");
+
+	await page.getByTestId("sidebar-create").click();
+	await page.getByTestId("new-view").click();
+	await page.getByTestId("view-name").fill(`Narrow ${Date.now()}`);
+	await pickLabeled(page, "Layout", "Board");
+	await pickLabeled(page, "Group by", "Priority");
+	await page.getByTestId("view-save").click();
+	// Only the board pads empty priority columns; the list fallback groups the
+	// same tasks but shows just the groups that have any.
+	const column = page.getByRole("region", { name: "P1 High" });
+	await expect(column).toBeVisible({ timeout: 15000 });
+
+	// No panel open: a desktop board at every md width, as before, including
+	// 900px where only ~570px of content is left.
+	for (const width of [900, 1440, 1100]) {
+		await page.setViewportSize({ width, height: 800 });
+		// Let the resize observer report and React re-render before looking;
+		// the board from the previous width would otherwise satisfy the check.
+		await page.evaluate(
+			() =>
+				new Promise((done) =>
+					requestAnimationFrame(() => requestAnimationFrame(done)),
+				),
+		);
+		await expect(column).toBeVisible();
+		await expect(page.getByText("Viewing as list")).toHaveCount(0);
+	}
+
+	const renderer = page.getByTestId("view-renderer");
+	await renderer
+		.locator("[data-kbd-nav]")
+		.filter({ hasText: "Card one" })
+		.first()
+		.click();
+	const panel = page.getByTestId("task-detail");
+	await expect(panel.getByLabel("Task title")).toHaveValue("Card one");
+
+	await expect(column).toHaveCount(0);
+	await expect(page.getByText("Viewing as list")).toBeVisible();
+	const v = await renderer.boundingBox();
+	const p = await panel.boundingBox();
+	expect(v).not.toBeNull();
+	expect(p).not.toBeNull();
+	if (!v || !p) return;
+	expect(v.x + v.width).toBeLessThanOrEqual(p.x + 1);
+	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+		1100,
+	);
+
+	// Closing gives the width back, the board returns, and focus lands on the
+	// board card that opened the panel, not on the list row it replaced.
+	await page.keyboard.press("Escape");
+	await expect(panel).toBeHidden();
+	await expect(column).toBeVisible();
+	await expect(
+		renderer.locator("[data-kbd-nav]").filter({ hasText: "Card one" }),
+	).toBeFocused();
 });

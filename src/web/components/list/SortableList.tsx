@@ -19,6 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import type { ReactNode } from "react";
 import { reorderSortKey } from "@/lib/reorder";
+import { TOUCH_KEYBOARD_ONLY } from "@/lib/touch";
 import { cn } from "@/lib/utils";
 
 // Shared drag sensors for every reorderable list: mouse drags immediately, a
@@ -45,6 +46,9 @@ export function SortableRow({
 	label,
 	testId,
 	revealHandle,
+	className,
+	handleClassName,
+	touch,
 	disabled = false,
 	children,
 }: {
@@ -54,6 +58,12 @@ export function SortableRow({
 	// Reveal the grip on hover/focus like RowActions' kebab. Below md there is no
 	// hover, so it stays visible there.
 	revealHandle?: boolean;
+	className?: string;
+	handleClassName?: string;
+	// Touch rows outside an explicit reorder mode keep the grip out of the
+	// layout (keyboard focus still reveals it, so keyboard reorder works); in
+	// reorder mode it is a full 44px target. Unset keeps the grip as is.
+	touch?: "hidden" | "reorder";
 	disabled?: boolean;
 	children: ReactNode;
 }) {
@@ -76,6 +86,7 @@ export function SortableRow({
 			className={cn(
 				"flex items-start gap-1",
 				revealHandle && "group",
+				className,
 				isDragging && "opacity-90",
 			)}
 		>
@@ -88,6 +99,10 @@ export function SortableRow({
 					"mt-1.5 flex size-6 shrink-0 touch-none items-center justify-center rounded text-muted-foreground/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
 					revealHandle &&
 						"transition-opacity duration-(--motion-fast) ease-(--motion-ease) motion-reduce:transition-none md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+					handleClassName,
+					touch === "hidden" && TOUCH_KEYBOARD_ONLY,
+					touch === "reorder" &&
+						"pointer-coarse:mt-0 pointer-coarse:size-11 pointer-coarse:self-center pointer-coarse:opacity-100",
 				)}
 				{...attributes}
 				{...listeners}
@@ -110,6 +125,7 @@ export function SortableList<T extends { id: string; sortKey: string }>({
 	handleTestId,
 	className,
 	canDrag,
+	touch,
 }: {
 	items: T[];
 	onMove: (id: string, sortKey: string) => void;
@@ -118,6 +134,7 @@ export function SortableList<T extends { id: string; sortKey: string }>({
 	handleTestId: string;
 	className?: string;
 	canDrag?: (id: string) => boolean;
+	touch?: "hidden" | "reorder";
 }) {
 	const sensors = useReorderSensors();
 
@@ -148,6 +165,7 @@ export function SortableList<T extends { id: string; sortKey: string }>({
 								label={handleLabel}
 								testId={handleTestId}
 								revealHandle
+								touch={touch}
 							>
 								{renderItem(item)}
 							</SortableRow>

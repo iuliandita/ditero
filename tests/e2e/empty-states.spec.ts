@@ -87,7 +87,7 @@ test("view: a new user is onboarded, then told calmly that nothing matched", asy
 
 	// A view the task DOES match renders rows and neither empty state.
 	await sidebarLists(page)
-		.getByRole("button", { name: "All my tasks", exact: true })
+		.getByRole("button", { name: "All tasks", exact: true })
 		.click();
 	await expect(surface.getByText("Buy milk", { exact: true })).toBeVisible({
 		timeout: 15000,

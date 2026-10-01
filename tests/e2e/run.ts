@@ -1,5 +1,6 @@
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 const compose = [
 	"compose",
@@ -17,7 +18,7 @@ const env = {
 };
 
 const isolatedBrowser = process.env.E2E_BROWSER_CONTAINER === "1";
-if (isolatedBrowser) {
+function configureBrowser() {
 	if (process.env.PW_TEST_CONNECT_WS_ENDPOINT)
 		throw new Error(
 			"E2E_BROWSER_CONTAINER cannot be combined with PW_TEST_CONNECT_WS_ENDPOINT",
@@ -85,8 +86,73 @@ async function run(command: string, args: string[], allowFailure = false) {
 	return result;
 }
 
+function preserveDiagnostics() {
+	const args = process.argv.slice(2);
+	let output = process.env.E2E_OUTPUT_DIR ?? "test-results";
+	if (!process.env.E2E_OUTPUT_DIR)
+		for (let i = 0; i < args.length; i++) {
+			if (args[i].startsWith("--output=")) output = args[i].slice(9);
+			else if (args[i] === "--output" && args[i + 1]) output = args[++i];
+		}
+	const directory = join(output, "stack-diagnostics");
+	mkdirSync(directory, { recursive: true });
+	function capture(name: string, commandArgs: string[]) {
+		const result = spawnSync("docker", commandArgs, {
+			env,
+			encoding: "utf8",
+			timeout: 15_000,
+			killSignal: "SIGKILL",
+			maxBuffer: 8 * 1024 * 1024,
+		});
+		writeFileSync(join(directory, name), result.stdout ?? "");
+		if (result.status !== 0 || result.error) {
+			const failure = result.error?.message ?? `exit ${result.status}`;
+			console.error(`E2E diagnostics ${name} failed: ${failure}`);
+			writeFileSync(
+				join(directory, `${name}.error.txt`),
+				`${failure}\n${result.stderr ?? ""}`,
+			);
+		}
+		return result;
+	}
+	const project = [...compose, "--profile", "browser"];
+	capture("compose.log", [
+		...project,
+		"logs",
+		"--no-color",
+		"--timestamps",
+		"--tail",
+		"1000",
+	]);
+	capture("compose-ps.json", [...project, "ps", "--all", "--format", "json"]);
+	const ids = capture("container-ids.txt", [
+		...project,
+		"ps",
+		"--all",
+		"--quiet",
+	]);
+	if (ids.status !== 0 || ids.error) return;
+	const containers = ids.stdout.trim().split(/\s+/).filter(Boolean);
+	if (containers.length === 0) return;
+	// Select state only: full inspect includes process environment and credentials.
+	capture("container-state.json", [
+		"inspect",
+		"--format",
+		'{"Id":{{json .Id}},"State":{{json .State}}}',
+		...containers,
+	]);
+	capture("container-resources.json", [
+		"stats",
+		"--no-stream",
+		"--format",
+		"{{json .}}",
+		...containers,
+	]);
+}
+
 let status = 1;
 try {
+	if (isolatedBrowser) configureBrowser();
 	// The api servers import src/paraglide (generated, gitignored) at boot, and
 	// they start before vite -- whose paraglide plugin would otherwise be the
 	// only thing generating it.
@@ -122,6 +188,12 @@ try {
 	status = interrupted === "SIGINT" ? 130 : interrupted === "SIGTERM" ? 143 : 1;
 } finally {
 	cleaningUp = true;
+	if (status !== 0)
+		try {
+			preserveDiagnostics();
+		} catch (error) {
+			console.error("E2E diagnostics failed:", error);
+		}
 	const cleanup = await run(
 		"docker",
 		[

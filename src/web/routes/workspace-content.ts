@@ -1,5 +1,7 @@
 export type WorkspaceContent =
 	| { kind: "home" }
+	// Mobile Lists tab; desktop keeps its index in the sidebar.
+	| { kind: "index" }
 	| { kind: "list"; id: string }
 	| { kind: "view"; id: string }
 	| { kind: "dashboard"; id: string }
@@ -16,7 +18,7 @@ export function workspaceContentReducer(
 	action: WorkspaceContentAction,
 ): WorkspaceContent {
 	if (action.kind !== "close") return action;
-	if (state.kind === "home" || state.kind === "settings") return state;
+	if (!("id" in state)) return state;
 	return state.kind === action.target && state.id === action.id
 		? { kind: "home" }
 		: state;

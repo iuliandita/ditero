@@ -8,3 +8,6 @@
 *.webp binary
 bun.lock linguist-generated
 drizzle/meta/_journal.json linguist-generated
+
+# Unified diff context prefixes precede vendor tabs.
+patches/*.patch whitespace=-space-before-tab

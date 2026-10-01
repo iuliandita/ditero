@@ -13,7 +13,7 @@ const t = (
 ): SortableTask => ({ sortKey, done, completedAt });
 
 describe("sortTasks: sink", () => {
-	test("open by sortKey asc, then done by completedAt desc, appended", () => {
+	test("open by sortKey asc; done in the completed group by completedAt desc", () => {
 		const tasks = [
 			t("c", false),
 			t("a", false),
@@ -23,15 +23,37 @@ describe("sortTasks: sink", () => {
 			t("z", true, 200),
 		];
 		const { visible, completed } = sortTasks(tasks, "sink");
-		expect(visible.map((x) => x.sortKey)).toEqual([
-			"a",
-			"b",
-			"c",
-			"y",
-			"z",
-			"x",
-		]);
+		expect(visible.map((x) => x.sortKey)).toEqual(["a", "b", "c"]);
+		expect(completed.map((x) => x.sortKey)).toEqual(["y", "z", "x"]);
+	});
+});
+
+describe("sortTasks: settling", () => {
+	const tasks = [
+		t("c", false),
+		t("a", false),
+		t("b", true, 100),
+		t("d", true, 50),
+	];
+	const settlingB = (x: SortableTask) => x.sortKey === "b";
+
+	test("a settling done row stays at its sortKey position among open rows", () => {
+		for (const mode of ["sink", "hide"] as const) {
+			const { visible, completed } = sortTasks(tasks, mode, settlingB);
+			expect(visible.map((x) => x.sortKey)).toEqual(["a", "b", "c"]);
+			expect(completed.map((x) => x.sortKey)).toEqual(["d"]);
+		}
+	});
+
+	test("keep mode ignores settling", () => {
+		const { visible, completed } = sortTasks(tasks, "keep", settlingB);
+		expect(visible.map((x) => x.sortKey)).toEqual(["a", "b", "c", "d"]);
 		expect(completed).toEqual([]);
+	});
+
+	test("an open row is never pulled out by the predicate", () => {
+		const { visible } = sortTasks(tasks, "sink", () => false);
+		expect(visible.map((x) => x.sortKey)).toEqual(["a", "c"]);
 	});
 });
 
@@ -95,8 +117,8 @@ describe("sortTasks: null done treated as not-done", () => {
 	test("null done stays among the open/visible tasks in every mode", () => {
 		const tasks = [t("b", null), t("a", true, 100), t("c", false)];
 		const sink = sortTasks(tasks, "sink");
-		expect(sink.visible.map((x) => x.sortKey)).toEqual(["b", "c", "a"]);
-		expect(sink.completed).toEqual([]);
+		expect(sink.visible.map((x) => x.sortKey)).toEqual(["b", "c"]);
+		expect(sink.completed.map((x) => x.sortKey)).toEqual(["a"]);
 
 		const keep = sortTasks(tasks, "keep");
 		expect(keep.visible.map((x) => x.sortKey)).toEqual(["a", "b", "c"]);

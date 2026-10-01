@@ -24,4 +24,8 @@ if ! printf '%s\n' "$output" | grep -q "POSTGRES_PASSWORD is required"; then
 	exit 1
 fi
 
+docker run --rm --network none --entrypoint node \
+	--mount "type=bind,src=$(pwd)/tests/container/zero-undici.mjs,dst=/tmp/zero-undici.mjs,readonly" \
+	"$image" /tmp/zero-undici.mjs
+
 tests/container/zero-backup.sh "$image"

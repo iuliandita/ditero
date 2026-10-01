@@ -1,32 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { goToSettings } from "./helpers.ts";
+import { goToSettings, signUp, uniqueEmail } from "./helpers.ts";
 
 // M2 Karma display e2e (Task 12). Seeds karma by completing a task, opens the
 // own-user Progress panel and asserts the level ring + points + a ledger entry,
 // sets a daily goal and sees the goal ring reflect it, toggles vacation and sees
 // the note. Plus the axe merge gate on the settings surface. Conventions
 // (signUp/uniqueEmail/testid locators/frozen-frame axe) mirror habits.spec.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });

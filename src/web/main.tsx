@@ -4,11 +4,16 @@ import { createRoot } from "react-dom/client";
 import { getLocale } from "../paraglide/runtime.js";
 import { App } from "./App.tsx";
 import { installCryptoVectorHarness } from "./dev/crypto-vectors.ts";
+import {
+	applyDisplayPreferences,
+	DEFAULT_DISPLAY_PREFERENCES,
+} from "./lib/display-preferences.ts";
 import { applyDocumentLocale } from "./lib/locale.ts";
 import { applyTheme, readLocalTheme } from "./lib/theme.ts";
 
 applyDocumentLocale(getLocale());
 applyTheme(readLocalTheme(), document.documentElement);
+applyDisplayPreferences(DEFAULT_DISPLAY_PREFERENCES, document.documentElement);
 // No-op outside dev and test; see the guard in dev/crypto-vectors.ts.
 installCryptoVectorHarness();
 
