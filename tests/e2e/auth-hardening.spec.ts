@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { currentTOTP } from "../totp.ts";
-import { goToSettings } from "./helpers.ts";
+import { goToSettings, signUp, uniqueEmail } from "./helpers.ts";
 
 // Every assertion here that waits on an auth round trip carries an explicit
 // budget: the default only ever fit while this file happened to run first, so
@@ -14,9 +14,13 @@ test.describe.configure({ timeout: 90_000 });
 const SIGNUP_TIMEOUT = 30_000;
 const ENROLL_TIMEOUT = 15_000;
 
-async function signUp(page: import("@playwright/test").Page, email: string) {
+async function signUpThroughForm(
+	page: import("@playwright/test").Page,
+	email: string,
+) {
 	await page.goto("/");
 	await page.getByTestId("email").fill(email);
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signup").click();
 	await expect(page.getByTestId("workspace")).toBeVisible({
@@ -39,8 +43,8 @@ test("login form accepts Enter and has no serious accessibility violations", asy
 		violations.filter((v) => v.impact === "serious" || v.impact === "critical"),
 	).toEqual([]);
 
-	const email = `enter-login-${Date.now()}@t.dev`;
-	await signUp(page, email);
+	const email = uniqueEmail("enter-login");
+	await signUpThroughForm(page, email);
 	await page.getByTestId("sign-out").click();
 	await page.getByTestId("email").fill(email);
 	await page.getByTestId("password").fill("pw-123456");
@@ -60,6 +64,7 @@ test("sign up validates the form before making an auth request", async ({
 	});
 	await page.goto("/");
 	await page.getByTestId("email").fill("invalid-email");
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signup").click();
 	await expect(page.getByTestId("email")).toBeFocused();
@@ -69,6 +74,85 @@ test("sign up validates the form before making an auth request", async ({
 			.evaluate((input: HTMLInputElement) => input.validity.valid),
 	).toBe(false);
 	expect(requests).toEqual([]);
+});
+
+test("account creation requires explicit intent and describes the configured password limits", async ({
+	page,
+}) => {
+	const requests: string[] = [];
+	page.on("request", (request) => {
+		if (request.url().includes("/api/auth/sign-up/email"))
+			requests.push(request.url());
+	});
+	await page.goto("/");
+	await page.getByTestId("password").fill("old-signin-password");
+	await expect(page.getByTestId("password")).toHaveAttribute(
+		"autocomplete",
+		"current-password",
+	);
+	await page.getByTestId("signup-mode").click();
+	await expect(
+		page.getByRole("heading", { name: "Create an account" }),
+	).toBeVisible();
+	await expect(page.getByTestId("password")).toHaveValue("");
+	await expect(page.getByTestId("password")).toHaveAttribute(
+		"autocomplete",
+		"new-password",
+	);
+	await expect(page.getByTestId("password")).toHaveAttribute("minlength", "8");
+	await expect(page.getByTestId("password")).toHaveAttribute(
+		"maxlength",
+		"128",
+	);
+	await expect(page.locator("#signup-password-guidance")).toContainText(
+		"8 to 128",
+	);
+	expect(requests).toEqual([]);
+	await page.getByTestId("email").fill(uniqueEmail("short-password"));
+	await page.getByTestId("password").fill("short");
+	await page.getByTestId("signup").click();
+	expect(
+		await page
+			.getByTestId("password")
+			.evaluate((input: HTMLInputElement) => input.validity.valid),
+	).toBe(false);
+	expect(requests).toEqual([]);
+	await page.getByTestId("signin-mode").click();
+	await expect(page.getByTestId("signin")).toBeVisible();
+	await page.getByTestId("login-recovery").click();
+	await expect(
+		page.getByText(
+			"Ask the administrator of this Ditero instance about recovering access. For a managed account, ask your parent or guardian.",
+		),
+	).toBeVisible();
+});
+
+// #356: passkey and Google used to be three stacked plain-text links of equal
+// weight, and an error re-centered the whole column, moving the logo ~27px.
+test("login hierarchy: passkey and Google are secondary buttons, and an error does not shift the logo", async ({
+	page,
+}) => {
+	await page.goto("/");
+
+	const passkeyButton = page.getByTestId("signin-passkey");
+	const googleButton = page.getByTestId("signin-google");
+	await expect(passkeyButton).toHaveRole("button");
+	await expect(googleButton).toHaveRole("button");
+	await expect(passkeyButton.locator("svg")).toBeVisible();
+	await expect(googleButton.locator("svg")).toBeVisible();
+
+	const logo = page.getByText("Ditero", { exact: true });
+	const before = await logo.boundingBox();
+	if (!before) throw new Error("logo not found before the error");
+
+	await page.getByTestId("email").fill(uniqueEmail("hierarchy"));
+	await page.getByTestId("password").fill("wrong-password");
+	await page.getByTestId("signin").click();
+	await expect(page.getByRole("alert")).toBeVisible();
+
+	const after = await logo.boundingBox();
+	if (!after) throw new Error("logo not found after the error");
+	expect(after.y).toBe(before.y);
 });
 
 test("enrolls and signs in with a passkey", async ({ browser }) => {
@@ -87,7 +171,8 @@ test("enrolls and signs in with a passkey", async ({ browser }) => {
 		},
 	});
 
-	await signUp(page, "passkey@test.invalid");
+	await signUp(page, uniqueEmail("passkey"));
+	await goToSettings(page);
 	await page.getByTestId("add-passkey").click();
 	await expect(page.getByTestId("passkey-item")).toContainText("This device", {
 		timeout: ENROLL_TIMEOUT,
@@ -105,9 +190,10 @@ test("enrolls and signs in with a passkey", async ({ browser }) => {
 test("supports TOTP enrollment, step-up, recovery, and disable", async ({
 	page,
 }) => {
-	const email = "totp@test.invalid";
+	const email = uniqueEmail("totp");
 	const password = "pw-123456";
 	await signUp(page, email);
+	await goToSettings(page);
 	await page.getByTestId("security-password").fill(password);
 	await page.getByTestId("enable-2fa").click();
 
@@ -177,7 +263,8 @@ test("an untrusted origin says so instead of failing blankly", async ({
 		await route.fulfill({ response });
 	});
 	await page.goto("/");
-	await page.getByTestId("email").fill(`origin-${Date.now()}@t.dev`);
+	await page.getByTestId("email").fill(uniqueEmail("origin"));
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signup").click();
 
@@ -207,7 +294,8 @@ test("the invite-only gate names itself instead of failing blankly", async ({
 		}),
 	);
 	await page.goto("/");
-	await page.getByTestId("email").fill(`gate-${Date.now()}@t.dev`);
+	await page.getByTestId("email").fill(uniqueEmail("gate"));
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signup").click();
 

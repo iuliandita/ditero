@@ -98,15 +98,11 @@ export function KarmaPanel() {
 			});
 
 	return (
-		<section
-			className="mt-8 border-t pt-4"
-			aria-labelledby="karma-heading"
-			data-testid="karma-panel"
-		>
+		<section aria-labelledby="karma-heading" data-testid="karma-panel">
 			<div className="flex items-center justify-between gap-3">
-				<h2 id="karma-heading" className="text-sm font-semibold">
+				<h3 id="karma-heading" className="text-sm font-semibold">
 					{m.karma_panel_heading()}
-				</h2>
+				</h3>
 				{vacation.active && (
 					<span
 						data-testid="karma-vacation-badge"
@@ -133,7 +129,7 @@ export function KarmaPanel() {
 				<div className="flex flex-col items-center gap-1">
 					<Ring fraction={prog.fraction} label={levelLabel} met={prog.maxed}>
 						<span className="text-lg font-semibold">{level}</span>
-						<span className="text-[10px] text-muted-foreground">
+						<span className="text-xs text-muted-foreground">
 							{m.karma_points_short({ points })}
 						</span>
 					</Ring>

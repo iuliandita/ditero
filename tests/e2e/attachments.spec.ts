@@ -7,7 +7,11 @@ import { m } from "../../src/paraglide/messages.js";
 import {
 	goToSettings,
 	leaveSettings,
+	openDetails,
+	openMembers,
+	openMoreOptions,
 	signUp,
+	switchWorkspace,
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
@@ -47,13 +51,11 @@ async function createListAndTask(
 	await expect(page.getByTestId("new-task")).toBeVisible({ timeout: 15_000 });
 	await page.getByTestId("new-task").fill(taskName);
 	await page.getByTestId("new-task-submit").click();
-	await page
-		.getByTestId("list")
-		.getByRole("button", { name: taskName, exact: true })
-		.click();
-	await expect(
-		page.getByRole("dialog", { name: m.task_detail_title() }),
-	).toBeVisible();
+	await openDetails(page, taskName);
+	const detail = page.getByRole("dialog", { name: m.task_detail_title() });
+	await expect(detail).toBeVisible();
+	// Files live behind the detail's "More options" disclosure.
+	await openMoreOptions(detail);
 }
 
 function inputFor(scope: Locator): Locator {
@@ -232,15 +234,15 @@ async function openTask(page: Page, listName: string, taskName: string) {
 		.getByRole("button", { name: listName, exact: true })
 		.first()
 		.click();
-	await page
-		.getByTestId("list")
-		.getByRole("button", { name: taskName, exact: true })
-		.click();
+	await openDetails(page, taskName);
+	await openMoreOptions(
+		page.getByRole("dialog", { name: m.task_detail_title() }),
+	);
 	await expect(page.getByTestId("task-attachments")).toBeVisible();
 }
 
 async function createInvite(page: Page, email: string): Promise<URL> {
-	await page.getByTestId("open-members").click();
+	await openMembers(page);
 	await page.getByTestId("invite-open").click();
 	await page.getByTestId("invite-email").fill(email);
 	await page.getByTestId("invite-submit").click();
@@ -314,9 +316,7 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 			"insert into membership (id, user_id, workspace_id, role) values ($1, $2, $3, 'owner')",
 			[`m_canary_${stamp}`, ownerId, workspaceId],
 		);
-		await owner
-			.getByRole("button", { name: workspaceName, exact: true })
-			.click();
+		await switchWorkspace(owner, workspaceName);
 		await createListAndTask(owner, listName, taskName);
 		const committed = owner.waitForResponse("**/api/attachments/finalize");
 		await inputFor(owner.getByTestId("task-attachments")).setInputFiles({
@@ -421,9 +421,7 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		await member.getByTestId("accept-password").fill("pw-123456");
 		await member.getByTestId("accept-submit").click();
 		await finishEnrollment(member, undefined, true);
-		await member
-			.getByRole("button", { name: workspaceName, exact: true })
-			.click();
+		await switchWorkspace(member, workspaceName);
 		await openTask(member, listName, taskName);
 		await expectDownload(member, oldName, oldBytes);
 
@@ -434,7 +432,7 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		await outsider.getByTestId("e2e-setup").click();
 		await finishEnrollment(outsider);
 
-		await owner.getByTestId("open-members").click();
+		await openMembers(owner);
 		const memberRow = owner
 			.getByTestId("member-row")
 			.filter({ hasText: memberEmail.split("@")[0] });
@@ -507,9 +505,7 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		);
 		await outsider.getByTestId("accept-join").click();
 		await expect(outsider.getByTestId("workspace")).toBeVisible();
-		await outsider
-			.getByRole("button", { name: workspaceName, exact: true })
-			.click();
+		await switchWorkspace(outsider, workspaceName);
 		await openTask(outsider, listName, taskName);
 		const pending = outsider.getByTestId("task-attachments");
 		await expect(

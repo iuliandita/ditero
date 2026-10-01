@@ -94,6 +94,22 @@ test("the motion and elevation tokens back their utilities", async () => {
 		expect(css).toContain(`${name}: `);
 });
 
+// `font-sans` must resolve Arabic glyphs to the self-hosted companion face
+// before falling back to the platform sans -- dropping it from the stack
+// reintroduces the mixed-typeface regression from #357 silently, since the
+// page still renders and every Latin surface still looks fine.
+test("font-sans keeps the Arabic companion face in the stack", async () => {
+	const css = await build(["font-sans"]);
+	expect(css).toContain(
+		'font-family: "Geist Variable", "Noto Sans Arabic Variable", sans-serif;',
+	);
+	// The companion face must stay scoped to the Arabic block via unicode-range,
+	// or it ships to every visitor instead of loading lazily for Arabic text.
+	expect(css).toMatch(
+		/font-family:\s*"Noto Sans Arabic Variable";[^}]*unicode-range:\s*U\+0?600/,
+	);
+});
+
 // Extracts the declaration block opened by `open`, balancing braces so a nested
 // block (the media query's `:root:not(.light)`) does not end it early.
 function blockAfter(css: string, open: string, from = 0): string {
@@ -128,4 +144,129 @@ test("both dark palettes declare the same custom properties", () => {
 	// the other silently ships light-mode values to OS-dark users.
 	expect(classBlock.size).toBeGreaterThan(30);
 	expect([...mediaBlock].sort()).toEqual([...classBlock].sort());
+});
+
+// Every class the primitive's source could emit, compiled for real: a stock
+// transition-all animates width/height/padding on any state change, and a
+// blurred overlay is decoration the calm scrim replaced. Scanning the compiled
+// CSS, not the markup, also catches a variant that reintroduces either.
+function candidatesOf(file: string): string[] {
+	const src = readFileSync(
+		path.join(root, "src/web/components/ui", file),
+		"utf8",
+	);
+	return [...new Set(src.split(/[\s"'`]+/).filter(Boolean))];
+}
+
+test("button, badge and tabs never transition layout properties", async () => {
+	for (const file of ["button.tsx", "badge.tsx", "tabs.tsx"]) {
+		const css = await build(candidatesOf(file));
+		expect(css, file).toMatch(
+			/transition-property:\s*color,\s*background-color/,
+		);
+		expect(css, file).not.toMatch(/transition-property:\s*all/);
+	}
+});
+
+test("overlays use the scrim token and no backdrop blur", async () => {
+	for (const file of ["dialog.tsx", "sheet.tsx", "alert-dialog.tsx"]) {
+		const css = await build(candidatesOf(file));
+		expect(css, file).toContain("background-color: var(--scrim)");
+		expect(css, file).not.toContain("--tw-backdrop-blur:");
+	}
+});
+
+// Sticky and floating bars sit on a solid surface (DESIGN.md No Glass Rule).
+test("bottom nav, focus timer and board columns never blur", async () => {
+	for (const file of [
+		"../shell/BottomNav.tsx",
+		"../focus/FocusTimer.tsx",
+		"../views/BoardLayout.tsx",
+	]) {
+		const css = await build(candidatesOf(file));
+		expect(css, file).not.toContain("--tw-backdrop-blur:");
+		expect(css, file).not.toContain("backdrop-filter:");
+	}
+});
+
+// The checkbox's priority tones and the warning token are only real if their
+// utilities resolve to declared tokens; an undeclared --color-* emits nothing.
+test("priority, warning and control tokens back their utilities", async () => {
+	const css = await build([
+		...candidatesOf("checkbox.tsx"),
+		"text-warning",
+		"border-warning/40",
+	]);
+	for (const token of [
+		"--priority-1",
+		"--priority-2",
+		"--priority-3",
+		"--control-border",
+		"--warning",
+	])
+		expect(css).toContain(`var(${token})`);
+	expect(css).toContain('[data-state="checked"]');
+});
+
+// Each animated part needs its own state-specific override: one reduced-motion
+// utility on the overlay cannot stop the content's zoom or slide.
+test("shared overlay parts disable open and closed animation for reduced motion", async () => {
+	for (const file of [
+		"dialog.tsx",
+		"alert-dialog.tsx",
+		"sheet.tsx",
+		"popover.tsx",
+		"dropdown-menu.tsx",
+		"select.tsx",
+	]) {
+		const source = readFileSync(
+			path.join(root, "src/web/components/ui", file),
+			"utf8",
+		);
+		const animated = [
+			...source.matchAll(/"([^"\n]*data-open:animate-in[^"\n]*)"/g),
+		];
+		expect(animated.length, file).toBeGreaterThan(0);
+		for (const [, classes] of animated) {
+			const css = await build(classes.split(/\s+/));
+			for (const state of ["open", "closed"]) {
+				const reduced = blockAfter(
+					css,
+					`.motion-reduce\\:data-${state}\\:animate-none {`,
+				);
+				expect(reduced, file).toContain(
+					"@media (prefers-reduced-motion: reduce)",
+				);
+				expect(reduced, file).toContain(`[data-state="${state}"]`);
+				expect(reduced, file).toContain("animation: none");
+			}
+		}
+	}
+	const sheet = await build(candidatesOf("sheet.tsx"));
+	const reduced = blockAfter(sheet, ".motion-reduce\\:transition-none {");
+	expect(reduced).toContain("@media (prefers-reduced-motion: reduce)");
+	expect(reduced).toContain("transition-property: none");
+});
+
+test("secondary coarse-pointer targets compile to a fixed 44px minimum", async () => {
+	for (const file of [
+		"dialog.tsx",
+		"sheet.tsx",
+		"select.tsx",
+		"../task/DuePicker.tsx",
+		"../list/IconPicker.tsx",
+	]) {
+		const css = await build(candidatesOf(file));
+		for (const [axis, property] of [
+			["h", "height"],
+			["w", "width"],
+		]) {
+			const coarse = blockAfter(
+				css,
+				`.pointer-coarse\\:min-${axis}-\\[44px\\] {`,
+			);
+			expect(coarse, file).toContain("@media (pointer: coarse)");
+			expect(coarse, file).toContain(`min-${property}: 44px`);
+		}
+	}
 });

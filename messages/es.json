@@ -4,7 +4,7 @@
 	"toggle_off": "Desactivado",
 	"notifications_heading": "Notificaciones",
 	"notifications_channels_heading": "Canales",
-	"notifications_defaults_heading": "Valores predeterminados",
+	"notifications_defaults_heading": "Recordatorios repetidos",
 	"notifications_no_channels": "Aún no hay ningún canal configurado: los recordatorios no se enviarán fuera de la app.",
 	"channel_label_ntfy": "ntfy",
 	"channel_label_telegram": "Telegram",
@@ -40,6 +40,7 @@
 	"channel_field_channelId": "ID del canal",
 	"channel_field_address": "Dirección de correo",
 	"channel_action_setup": "Configurar",
+	"channel_action_edit": "Editar",
 	"channel_action_save": "Guardar",
 	"channel_action_test": "Guardar y enviar una prueba",
 	"channel_action_remove": "Quitar",
@@ -92,9 +93,6 @@
 	"search_hint": "Escribe para buscar tus tareas.",
 	"nav_settings": "Ajustes",
 	"fab_quick_add": "Añadir rápido",
-	"sidebar_open_shared": "Abrir lo compartido",
-	"sidebar_open_shared_short": "C",
-	"sidebar_members": "Miembros",
 	"sidebar_lists_nav_label": "Listas",
 	"sidebar_views_heading": "Vistas",
 	"sidebar_dashboards_heading": "Dashboards",
@@ -149,13 +147,36 @@
 	"palette_results_label": "Resultados",
 	"palette_no_results": "Sin resultados",
 	"palette_group_commands": "Comandos",
-	"palette_group_navigate": "Navegar",
-	"palette_group_search": "Buscar",
 	"palette_dashboard_item": "Dashboard: {name}",
+	"palette_group_recent": "Recientes",
+	"palette_group_lists": "Listas",
+	"palette_group_views": "Vistas",
+	"palette_group_tasks": "Tareas",
+	"cheatsheet_category_selection": "Selección",
+	"command_selection_toggle": "Seleccionar o deseleccionar tarea",
+	"command_selection_extend_down": "Ampliar la selección hacia abajo",
+	"command_selection_extend_up": "Ampliar la selección hacia arriba",
+	"command_selection_all": "Seleccionar todas las tareas",
+	"command_selection_clear": "Quitar la selección",
+	"action_select": "Seleccionar",
+	"action_deselect": "Deseleccionar",
+	"task_select_aria": "Seleccionar {title}",
+	"selection_bar_label": "Tareas seleccionadas",
+	"selection_complete": "Completar",
+	"selection_move": "Mover",
+	"selection_due": "Fecha",
+	"selection_priority": "Prioridad",
+	"selection_delete": "Eliminar",
+	"selection_clear": "Quitar la selección",
+	"selection_check": "Marcar",
+	"selection_uncheck": "Desmarcar",
+	"selection_clear_quantity": "Quitar cantidad",
+	"selection_paused_reason": "Pausada por una importación, no se puede seleccionar",
 	"list_untitled_fallback": "Lista",
 	"palette_untitled_task": "Tarea",
 	"cheatsheet_title": "Atajos de teclado",
 	"cheatsheet_description": "Los atajos funcionan en cualquier parte fuera de los campos de texto.",
+	"shortcut_hint": "Pulsa {key} para ver los atajos de teclado",
 	"cheatsheet_category_general": "General",
 	"cheatsheet_category_task": "Tarea",
 	"cheatsheet_category_view": "Vista",
@@ -174,12 +195,12 @@
 	"command_nav_up": "Subir",
 	"command_nav_open": "Abrir lo enfocado",
 	"command_task_toggle_done": "Marcar o desmarcar como hecho",
-	"escalation_repeat_every": "Repetir cada (min)",
-	"escalation_max_repeats": "Repeticiones máximas",
-	"escalation_fallback_member": "Miembro de respaldo",
+	"escalation_repeat_every": "Repetir recordatorio cada",
+	"escalation_max_repeats": "Enviar como máximo",
+	"escalation_fallback_member": "Si nadie responde, avisar a",
 	"escalation_fallback_nobody": "Nadie",
-	"quiet_hours_start_label": "Silencio desde",
-	"quiet_hours_end_label": "hasta",
+	"quiet_hours_start_label": "Desde",
+	"quiet_hours_end_label": "Hasta",
 	"quiet_hours_start_aria": "Inicio del horario de silencio",
 	"quiet_hours_end_aria": "Fin del horario de silencio",
 	"quiet_hours_clear": "Borrar",
@@ -188,7 +209,25 @@
 	"quiet_hours_timezone_detected": "Hemos detectado {timezone}, ¿es correcto?",
 	"quiet_hours_timezone": "Las horas están en {timezone}.",
 	"quiet_hours_equal_warning": "El inicio y el fin deben ser distintos. Para dejar de recibir notificaciones del todo, desactiva tus canales aquí arriba.",
-	"quiet_hours_urgent_note": "Los recordatorios marcados como urgentes ignoran el horario de silencio.",
+	"quiet_hours_urgent_note": "Las tareas que recuerdan también en horas de silencio siguen llegando.",
+	"settings_quiet_hours_heading": "Horas de silencio",
+	"settings_quiet_hours_help": "Los recordatorios que caen en este intervalo esperan a que termine.",
+	"settings_reminder_defaults_help": "Se usa en cada tarea que no tenga recordatorios propios.",
+	"settings_timezone_label": "Zona horaria",
+	"settings_timezone_help": "Los recordatorios y las horas de silencio usan esta zona horaria.",
+	"settings_timezone_change": "Cambiar zona horaria",
+	"settings_nav_label": "Secciones de ajustes",
+	"settings_section_account": "Cuenta",
+	"settings_section_appearance": "Apariencia e idioma",
+	"settings_section_lists": "Etiquetas y plantillas",
+	"settings_section_focus": "Enfoque y Karma",
+	"settings_section_data": "Tus datos",
+	"settings_section_danger": "Zona de peligro",
+	"file_picker_choose": "Elegir archivo",
+	"file_picker_none": "Ningún archivo elegido",
+	"file_picker_drop": "o suéltalo aquí",
+	"date_field_trigger_aria": "{label}: {value}",
+	"date_field_none": "Sin fecha",
 	"focus_settings_heading": "Temporizador de concentración",
 	"focus_settings_description": "Intervalos Pomodoro del temporizador de concentración.",
 	"focus_field_work_min": "Concentración (min)",
@@ -222,6 +261,7 @@
 	"security_sign_out": "Cerrar sesión",
 	"security_error_sign_out": "No se pudo completar el cierre de sesión. Inténtalo de nuevo.",
 	"security_passkeys_heading": "Claves de acceso",
+	"security_passkeys_empty": "Inicia sesión con tu huella, tu cara o el PIN del dispositivo en lugar de una contraseña.",
 	"security_add_passkey": "Añadir clave de acceso",
 	"security_passkey_unnamed": "Clave de acceso",
 	"security_passkey_remove": "Quitar",
@@ -252,11 +292,11 @@
 	"e2e_last_holder_ack": "Entiendo que estos archivos se perderán.",
 	"account_delete_confirm": "Eliminar mi cuenta para siempre",
 	"account_delete_failed": "No se pudo eliminar la cuenta.",
-	"priority_none": "Ninguna",
+	"priority_none": "Sin prioridad",
 	"priority_low": "Baja",
 	"priority_medium": "Media",
-	"priority_medium_short": "Med",
 	"priority_high": "Alta",
+	"priority_coded": "{code} {name}",
 	"due_today": "Hoy",
 	"due_tomorrow": "Mañana",
 	"list_completed_count": [
@@ -274,12 +314,29 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} artículo en el carrito",
+				"countPlural=many": "{countNum} artículos en el carrito",
+				"countPlural=other": "{countNum} artículos en el carrito"
+			}
+		}
+	],
 	"list_change_icon": "Cambiar el icono de la lista",
 	"list_display_options": "Opciones de visualización de la lista",
+	"list_reorder_mode": "Reordenar",
+	"list_reorder_hint": "Arrastra las asas para reordenar.",
+	"list_reorder_done": "Listo",
 	"list_completed_heading": "Elementos completados",
 	"list_completed_sink": "Bajar los elementos completados",
 	"list_completed_keep": "Dejarlas en su sitio",
-	"list_completed_hide": "Ocultar los elementos completados",
 	"list_group_by_assignee": "Agrupar por responsable",
 	"list_save_as_template": "Guardar como plantilla",
 	"list_add_from_template": "Añadir desde plantilla",
@@ -287,11 +344,23 @@
 	"list_add_task_placeholder": "Añade una tarea",
 	"title_suggest_label": "Sugerencias de tus elementos anteriores",
 	"list_add_task": "Añadir tarea",
+	"list_add_item_placeholder": "Añade un elemento",
+	"list_add_item": "Añadir elemento",
+	"list_add_habit_placeholder": "Añade un hábito",
+	"list_add_habit": "Añadir hábito",
 	"quickadd_input_label": "Añadir tarea rápida",
 	"quickadd_sheet_title": "Añadir rápido",
 	"quickadd_placeholder": "p. ej. Comprar leche {date} {priority} {label} {list}",
 	"quickadd_placeholder_nodate": "p. ej. Comprar leche {priority} {label} {list}",
 	"quickadd_example_date": "mañana",
+	"syntax_hint_title": "Consejos de escritura",
+	"syntax_hint_word": "nombre",
+	"syntax_hint_priority": "Prioridad, p1 es la más alta",
+	"syntax_hint_example": "Ejemplo: Llamar al fontanero {date} {priority} #casa",
+	"syntax_hint_example_nodate": "Ejemplo: Llamar al fontanero {priority} #casa",
+	"syntax_hint_dismiss": "Ocultar consejos de escritura",
+	"syntax_hint_inline_lead": "Abrir añadir rápido ({key})",
+	"syntax_hint_inline_lead_nokey": "Abrir añadir rápido",
 	"quickadd_adding_to": "Se añadirá a {list}",
 	"quickadd_no_list": "No hay ninguna lista disponible",
 	"quickadd_failed": "No se pudo añadir la tarea.",
@@ -384,10 +453,31 @@
 	"shopping_qty_placeholder": "Cant.",
 	"shopping_unit_placeholder": "Unidad",
 	"shopping_quantity_for": "Cantidad de {title}",
+	"shopping_quantity_add": "{label}, añadir cantidad a {title}",
+	"shopping_quantity_edit": "{amount}, editar cantidad de {title}",
+	"shopping_quantity_invalid": "Escribe un número mayor que 0, como 2 o 1,5",
 	"shopping_unit_for": "Unidad de {title}",
 	"shopping_category_other": "Otros",
 	"task_reorder_handle": "Reordenar la tarea",
 	"task_priority_aria": "Prioridad: {priority}",
+	"task_open_details": "Abrir detalles",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} de {totalNum} subtarea hecha",
+				"totalPlural=many": "{doneNum} de {totalNum} subtareas hechas",
+				"totalPlural=other": "{doneNum} de {totalNum} subtareas hechas"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -424,6 +514,19 @@
 	"task_delete_named": "Eliminar {title}",
 	"task_move_to_list": "Mover a otra lista",
 	"task_delete": "Eliminar la tarea",
+	"task_detail_done_aria": "Hecha",
+	"task_detail_more": "Más opciones",
+	"task_more_repeats": "Se repite",
+	"task_more_reminder": "Recordatorio {time}",
+	"task_more_urgent": "Urgente",
+	"task_due_add": "Añadir fecha",
+	"task_due_trigger_aria": "Fecha límite: {value}",
+	"task_due_next_week": "La próxima semana",
+	"task_due_type_placeholder": "Escribe una fecha, como mañana",
+	"task_due_type_placeholder_iso": "Escribe una fecha como AAAA-MM-DD",
+	"task_due_type_invalid": "No se pudo leer esa fecha.",
+	"time_field_placeholder": "Añadir hora",
+	"time_field_invalid": "Escribe una hora como {example}.",
 	"action_add": "Añadir",
 	"recurrence_repeat": "Repetir",
 	"recurrence_does_not_repeat": "No se repite",
@@ -575,10 +678,17 @@
 	"reminder_ack_aria": "{status}. Confirmar el recordatorio",
 	"reminder_ack_chip": "{status} - Confirmar",
 	"reminder_channel_unverified": "canal de entrega sin verificar",
-	"reminder_urgent_label": "Urgente (ignora el horario de silencio)",
-	"reminder_override_defaults": "Cambiar los valores predeterminados",
-	"escalation_inherit_default": "Heredar el valor predeterminado",
-	"escalation_off": "desactivado",
+	"reminder_urgent_label": "Recordar también en horas de silencio",
+	"reminder_override_defaults": "Usar recordatorios propios para esta tarea",
+	"reminder_urgent_help": "Para cosas que no deben esperar a que terminen las horas de silencio.",
+	"escalation_inherit_default": "Usar mi valor predeterminado",
+	"escalation_minutes_suffix": "minutos",
+	"escalation_repeats_suffix": "veces",
+	"escalation_repeat_help_default": "Déjalo vacío para recordar solo una vez.",
+	"escalation_repeat_help_task": "Déjalo vacío para usar tu valor predeterminado.",
+	"escalation_fallback_help": "Recibe el recordatorio cuando nadie responde al último envío.",
+	"escalation_needs_repeat": "Primero indica cada cuánto repetir. Hasta entonces hay un solo recordatorio y no se avisa a nadie más.",
+	"escalation_fallback_unknown": "Alguien que ya no está en tus espacios",
 	"field_name": "Nombre",
 	"field_status": "Estado",
 	"field_title": "Título",
@@ -600,7 +710,7 @@
 	"filter_due_none": "Sin fecha de vencimiento",
 	"group_no_label": "Sin etiqueta",
 	"builtin_view_today": "Hoy",
-	"builtin_view_all_my_tasks": "Todas mis tareas",
+	"builtin_view_all_my_tasks": "Todas las tareas",
 	"builtin_view_assigned_to_me": "Asignados a mí",
 	"filter_op_is": "es",
 	"filter_op_before": "antes de",
@@ -627,7 +737,7 @@
 	"filter_remove_group": "Quitar el grupo",
 	"filter_add_condition": "Condición",
 	"filter_add_group": "Grupo",
-	"filter_no_conditions": "Todavía no hay condiciones — coincide con todo.",
+	"filter_no_conditions": "Todavía no hay condiciones, así que coincide con todo.",
 	"filter_no_options": "Sin opciones.",
 	"filter_multi_any": "Cualquiera",
 	"filter_assignee_me": "Yo",
@@ -667,6 +777,8 @@
 	"calendar_agenda_heading": "Agenda",
 	"calendar_viewing_as_agenda": "Viendo como agenda",
 	"calendar_chip_recurring": "{title}, se repite",
+	"calendar_chip_priority": "{name}, {priority}",
+	"calendar_chip_done": "{name}, completada",
 	"calendar_day_today": "{date}, hoy",
 	"filter_multi_selected": [
 		{
@@ -804,6 +916,7 @@
 	"panel_title_placeholder": "Título del panel",
 	"panel_mobile_hint": "En el móvil, los paneles se apilan en el orden del dashboard.",
 	"panel_no_matches": "No hay tareas que coincidan",
+	"panel_all_done": "No queda nada pendiente",
 	"panel_show_all": [
 		{
 			"declarations": ["input count", "local countNum = count: number"],
@@ -860,6 +973,22 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: racha de {countNum} día. Abrir la tarea",
+				"countPlural=many": "{title}: racha de {countNum} días. Abrir la tarea",
+				"countPlural=other": "{title}: racha de {countNum} días. Abrir la tarea"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: sin repetición configurada. Abrir la tarea",
 	"panel_streak_no_recurrence": "Sin repetición",
 	"panel_streak_missing": "Falta el hábito (se eliminó o no está compartido contigo)",
@@ -890,13 +1019,10 @@
 		}
 	],
 	"panel_focus_own_only": "Solo tus sesiones",
-	"habit_no_recurrence_hint": "Configura una repetición para empezar a seguir este hábito.",
 	"habit_skip_action": "Saltar",
 	"habit_undo_action": "Deshacer",
+	"habit_track_daily": "Seguir a diario",
 	"habit_done_action": "Hecho hoy",
-	"habit_done_state": "Hecho",
-	"habit_mark_done_aria": "Marcar como hecho hoy",
-	"habit_done_today_aria": "Hecho hoy",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -1268,10 +1394,12 @@
 	"login_backup_code_label": "Código de respaldo",
 	"login_email_placeholder": "correo",
 	"login_password_placeholder": "contraseña",
+	"login_new_here": "¿Nuevo por aquí?",
 	"login_signup": "Crear cuenta",
 	"login_signin": "Iniciar sesión",
 	"login_signin_passkey": "Iniciar sesión con clave de acceso",
 	"login_continue_google": "Continuar con Google",
+	"login_or": "o",
 	"login_two_factor_title": "Verificación en dos pasos",
 	"login_backup_code_placeholder": "Código de respaldo",
 	"login_verify_code": "Verificar el código",
@@ -1313,10 +1441,226 @@
 	"auth_error_registration_disabled": "Las cuentas nuevas están desactivadas en esta instancia.",
 	"auth_error_invalid_origin": "El servidor no confía en esta dirección. Pide al operador que la añada a los orígenes de confianza de la instancia.",
 	"mutation_failed": "Algo ha salido mal.",
+	"mutation_offline_not_saved": "Estás sin conexión, este cambio no se guardó. Vuelve a conectarte e inténtalo de nuevo.",
+	"sync_synced_title": "Sincronizado",
+	"sync_synced_detail": "Conectado. Tus cambios se guardan en el servidor al instante.",
+	"sync_syncing_title": "Sincronizando",
+	"sync_syncing_detail": "Tus cambios están guardados en este dispositivo y se están enviando al servidor.",
+	"sync_offline_title": "Sin conexión",
+	"sync_offline_detail": "No se puede contactar con el servidor. Tus cambios están guardados en este dispositivo y se sincronizarán cuando vuelva la conexión.",
+	"sync_stopped_title": "Sin sincronizar",
+	"sync_stopped_detail": "No se puede contactar con el servidor y ahora no se pueden guardar cambios nuevos. Recarga la página para intentarlo de nuevo.",
+	"sync_rejected_title": "Un cambio no se guardó",
+	"sync_rejected_detail": "El servidor rechazó un cambio, así que se deshizo. Revisa el elemento e inténtalo de nuevo.",
+	"sync_rejected_dismiss": "Cerrar",
+	"sync_reauth_title": "Inicia sesión para sincronizar",
+	"sync_reauth_detail": "Tu sesión caducó mientras no estabas. Tus cambios se quedan en este dispositivo y se sincronizarán cuando vuelvas a iniciar sesión.",
+	"sync_reauth_action": "Iniciar sesión de nuevo",
+	"sync_pending_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} cambio reciente sin sincronizar",
+				"countPlural=many": "{countNum} cambios recientes sin sincronizar",
+				"countPlural=other": "{countNum} cambios recientes sin sincronizar"
+			}
+		}
+	],
 	"mutator_error_denied": "No tienes permiso para hacer eso.",
 	"mutator_error_label_name_taken": "Ya existe una etiqueta con ese nombre.",
 	"modal_close_label": "Cerrar",
 	"action_close": "Cerrar",
+	"action_undo": "Deshacer",
+	"snackbar_task_completed": "Completado: {title}",
+	"snackbar_task_moved": "Movida a {list}: {title}",
+	"snackbar_task_complete_failed": "No se pudo completar: {title}",
+	"snackbar_task_move_failed": "No se pudo mover: {title}",
+	"selection_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tarea seleccionada",
+				"countPlural=many": "{countNum} tareas seleccionadas",
+				"countPlural=other": "{countNum} tareas seleccionadas"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} artículo marcado.",
+				"countPlural=many": "{countNum} artículos marcados.",
+				"countPlural=other": "{countNum} artículos marcados."
+			}
+		}
+	],
+	"snackbar_bulk_completed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tarea completada.",
+				"countPlural=many": "{countNum} tareas completadas.",
+				"countPlural=other": "{countNum} tareas completadas."
+			}
+		}
+	],
+	"snackbar_bulk_undo_skips_recurring": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Deshacer omite {countNum} tarea recurrente.",
+				"countPlural=many": "Deshacer omite {countNum} tareas recurrentes.",
+				"countPlural=other": "Deshacer omite {countNum} tareas recurrentes."
+			}
+		}
+	],
+	"snackbar_bulk_recurring_advanced": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tarea recurrente pasó a su próxima fecha.",
+				"countPlural=many": "{countNum} tareas recurrentes pasaron a su próxima fecha.",
+				"countPlural=other": "{countNum} tareas recurrentes pasaron a su próxima fecha."
+			}
+		}
+	],
+	"snackbar_bulk_complete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "No se pudo completar {countNum} tarea",
+				"countPlural=many": "No se pudieron completar {countNum} tareas",
+				"countPlural=other": "No se pudieron completar {countNum} tareas"
+			}
+		}
+	],
+	"snackbar_bulk_moved": [
+		{
+			"declarations": [
+				"input count",
+				"input list",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tarea movida a {list}",
+				"countPlural=many": "{countNum} tareas movidas a {list}",
+				"countPlural=other": "{countNum} tareas movidas a {list}"
+			}
+		}
+	],
+	"snackbar_bulk_move_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "No se pudo mover {countNum} tarea",
+				"countPlural=many": "No se pudieron mover {countNum} tareas",
+				"countPlural=other": "No se pudieron mover {countNum} tareas"
+			}
+		}
+	],
+	"snackbar_bulk_update_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "No se pudo actualizar {countNum} tarea",
+				"countPlural=many": "No se pudieron actualizar {countNum} tareas",
+				"countPlural=other": "No se pudieron actualizar {countNum} tareas"
+			}
+		}
+	],
+	"snackbar_bulk_delete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "No se pudo eliminar {countNum} tarea",
+				"countPlural=many": "No se pudieron eliminar {countNum} tareas",
+				"countPlural=other": "No se pudieron eliminar {countNum} tareas"
+			}
+		}
+	],
+	"bulk_delete_title": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "¿Eliminar {countNum} tarea?",
+				"countPlural=many": "¿Eliminar {countNum} tareas?",
+				"countPlural=other": "¿Eliminar {countNum} tareas?"
+			}
+		}
+	],
+	"bulk_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Se eliminará {countNum} tarea con sus subtareas. Esto no se puede deshacer.",
+				"countPlural=many": "Se eliminarán {countNum} tareas con sus subtareas. Esto no se puede deshacer.",
+				"countPlural=other": "Se eliminarán {countNum} tareas con sus subtareas. Esto no se puede deshacer."
+			}
+		}
+	],
 	"action_delete": "Eliminar",
 	"action_remove": "Quitar",
 	"confirm_cancel": "Cancelar",
@@ -1327,8 +1671,11 @@
 	"list_reorder_handle": "Reordenar la lista",
 	"workspace_switcher_title": "Workspaces",
 	"workspace_name_fallback": "Workspace",
-	"views_nav_label": "Vistas",
-	"dashboards_nav_label": "Dashboards",
+	"workspace_manage_members": "Gestionar miembros",
+	"workspace_private_note": "Tu workspace personal es privado. Los workspaces compartidos aparecen aquí cuando alguien te invita.",
+	"workspace_kind_personal": "Personal",
+	"workspace_kind_shared": "Compartido",
+	"sidebar_folder_empty": "Aún no hay listas",
 	"view_actions": "Acciones de la vista",
 	"view_set_home": "Usar como inicio",
 	"view_pin": "Fijar",
@@ -1429,9 +1776,14 @@
 	"app_loading": "Cargando…",
 	"tasks_loading": "Cargando tareas…",
 	"list_empty": "Aquí todavía no hay nada.",
-	"list_empty_action": "Añadir un elemento",
 	"view_empty_welcome_title": "Te damos la bienvenida a Ditero",
-	"view_empty_welcome_hint": "Crea una lista abajo para añadir tu primera tarea.",
+	"view_empty_welcome_hint": "Las tareas viven en listas. Crea una para empezar.",
+	"view_empty_welcome_action": "Crea tu primera lista",
+	"view_empty_welcome_starters": "O empieza con una plantilla",
+	"starter_name_shopping": "Compras",
+	"starter_name_checklist": "Lista de equipaje",
+	"starter_name_tasks": "Tareas de casa",
+	"starter_name_habits": "Hábitos diarios",
 	"view_empty_no_match": "Ahora mismo no hay nada que coincida con esta vista.",
 	"action_continue": "Continuar",
 	"action_retry": "Inténtalo de nuevo",
@@ -1693,5 +2045,31 @@
 	"activation_container_change_failed": "No se pudo guardar el cambio. Revisa las tareas en pausa e inténtalo de nuevo.",
 	"activation_task_change_failed": "No se pudo cambiar esta tarea. Inténtalo de nuevo.",
 	"activation_badge_pending": "Importación pendiente",
-	"activation_badge_blocked": "Revisión necesaria"
+	"activation_badge_blocked": "Revisión necesaria",
+	"sync_save_pending_failed": "No se pudieron guardar los cambios pendientes en este dispositivo. Inténtalo de nuevo.",
+	"display_settings_label": "Tamaño del texto y contraste",
+	"display_size_label": "Tamaño de lectura",
+	"display_size_description": "Ajusta el texto, los controles y el espaciado juntos.",
+	"display_size_standard": "Estándar",
+	"display_size_comfortable": "Cómodo",
+	"display_size_large": "Grande",
+	"display_contrast_label": "Alto contraste",
+	"display_contrast_description": "Haz que el texto, los bordes y los controles se distingan mejor en cualquier tema.",
+	"display_device_note": "Estos ajustes se guardan para tu cuenta en este dispositivo.",
+	"display_save_failed": "Tus cambios se aplican ahora, pero no se pudieron guardar en este dispositivo.",
+	"login_password_guidance": "Usa entre {min} y {max} caracteres. Una contraseña larga y única es más fácil de mantener segura.",
+	"login_recovery_label": "¿No puedes iniciar sesión?",
+	"login_recovery_admin_guidance": "Pregunta al administrador de esta instancia de Ditero cómo recuperar el acceso. Si tu cuenta es administrada, pregunta a tu padre, madre o tutor.",
+	"login_existing_account": "¿Ya tienes cuenta?",
+	"syntax_hint_inline_literal": "Este campo guarda el texto tal como lo escribes.",
+	"syntax_hint_details": "Sintaxis de añadir rápido",
+	"aggregate_scope_all": "En todos tus espacios de trabajo",
+	"aggregate_scope_selected": "En: {workspaces}",
+	"scope_source_personal": "{workspace} · Personal",
+	"scope_source_shared": "{workspace} · Compartido",
+	"calendar_go_today": "Hoy",
+	"calendar_show_earlier": "Mostrar fechas anteriores",
+	"calendar_hide_earlier": "Ocultar fechas anteriores",
+	"habit_occurrence_skipped": "Esta vez omitido",
+	"habit_occurrence_unavailable": "Repetición no disponible. Abre el hábito para revisar su horario."
 }

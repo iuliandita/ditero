@@ -56,6 +56,12 @@ const PRIORITY_RANK: Record<string, 0 | 1 | 2 | 3> = {
 	"4": 0,
 };
 
+/** Stored priority level for a consumed `p1`-`p4` token, else null. */
+export function priorityFromToken(text: string): 0 | 1 | 2 | 3 | null {
+	const match = /^p([1-4])$/.exec(text);
+	return match ? PRIORITY_RANK[match[1]] : null;
+}
+
 const emptyParse = (): QuickAddParse => ({
 	title: "",
 	dueAt: null,

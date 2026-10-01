@@ -10,6 +10,8 @@ import {
 } from "@dnd-kit/core";
 import { CalendarClock, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
 import { type JSX, useMemo, useRef, useState } from "react";
+import { checkShapeFor } from "@/lib/check-shape";
+import { priorityLabel } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
 import { localDay, shiftDay } from "../../../domain/local-day.ts";
 import { expand } from "../../../domain/recurrence.ts";
@@ -20,7 +22,9 @@ import {
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import type { Task } from "../../../zero/schema.gen.ts";
+import { useLocalDay } from "../../hooks/useLocalDay.ts";
 import { EmptyState } from "../ui/empty-state.tsx";
+import { agendaDayKeys } from "./calendar-agenda.ts";
 import type { ViewEntry } from "./ViewRenderer.tsx";
 
 const DAY_MS = 86_400_000;
@@ -74,7 +78,73 @@ function monthOf(dayKey: string): number {
 	return Number(dayKey.slice(5, 7));
 }
 
-type DayItem = { entry: ViewEntry; occurrence: boolean };
+type DayItem = {
+	entry: ViewEntry;
+	occurrence: boolean;
+	status?: "done" | "skipped" | "pending";
+};
+
+// The cue is the task checkbox in miniature: round for a task, square for an
+// item, ringed in its priority tone and filled once done. It is decoration;
+// the accessible name (chipName) carries the same facts in words.
+const TONE_RING: Record<number, string> = {
+	1: "border-priority-1",
+	2: "border-priority-2",
+	3: "border-priority-3",
+};
+const TONE_FILL: Record<number, string> = {
+	1: "bg-priority-1",
+	2: "bg-priority-2",
+	3: "bg-priority-3",
+};
+
+function ChipCue({ item }: { item: DayItem }): JSX.Element {
+	const { task, kind } = item.entry;
+	const p = task.priority ?? 0;
+	const done =
+		item.status === "done" || ((task.done ?? false) && !item.occurrence);
+	return (
+		<span
+			aria-hidden
+			data-testid="calendar-chip-cue"
+			className={cn(
+				"mt-[3px] size-2.5 shrink-0 border-[1.5px]",
+				checkShapeFor(kind) === "round" ? "rounded-full" : "rounded-[2px]",
+				TONE_RING[p] ?? "border-control-border",
+				done && (TONE_FILL[p] ?? "bg-control-border"),
+			)}
+		/>
+	);
+}
+
+// A recurring occurrence has no done state of its own; only the concrete task
+// reports completion.
+function chipName(item: DayItem): string {
+	const task = item.entry.task;
+	let name = item.occurrence
+		? m.calendar_chip_recurring({ title: task.title })
+		: task.title;
+	if ((task.priority ?? 0) > 0)
+		name = m.calendar_chip_priority({
+			name,
+			priority: priorityLabel(task.priority),
+		});
+	if (item.status === "done" || (task.done && !item.occurrence))
+		name = m.calendar_chip_done({ name });
+	if (item.status === "skipped")
+		name = `${name}, ${m.habit_occurrence_skipped()}`;
+	return item.entry.sourceContext
+		? `${name}, ${item.entry.listTitle}, ${item.entry.sourceContext}`
+		: name;
+}
+
+function isQuiet(item: DayItem): boolean {
+	return (
+		item.status === "done" ||
+		item.status === "skipped" ||
+		((item.entry.task.done ?? false) && !item.occurrence)
+	);
+}
 
 // Same rule as weekdayNames: built per call. Formats the key's PARTS through a
 // local Date -- passing the key to `new Date()` would parse it as UTC midnight
@@ -117,27 +187,36 @@ function Chip({
 			data-testid="calendar-chip"
 			style={style}
 			onClick={() => onOpen(task)}
-			aria-label={
-				item.occurrence
-					? m.calendar_chip_recurring({ title: task.title })
-					: task.title
-			}
+			aria-label={chipName(item)}
+			title={chipName(item)}
 			className={cn(
-				"flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-start text-xs text-foreground",
+				"flex w-full items-start gap-1 rounded px-1 py-0.5 text-start text-xs",
 				"focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-				// Occurrences read as "generated" via a dashed border + muted fill +
-				// the repeat glyph, not low-contrast text (keeps AA at this size).
+				// Occurrences read as "generated" via a dashed border + the repeat
+				// glyph, not low-contrast text (keeps AA at this size). Done tasks
+				// drop their fill and step back to secondary text.
 				item.occurrence
-					? "border border-dashed border-border bg-muted/50"
-					: "bg-primary/10",
+					? "border border-dashed border-border text-foreground"
+					: isQuiet(item)
+						? "text-muted-foreground"
+						: "bg-muted text-foreground",
 				dragEnabled && "cursor-grab touch-none",
 			)}
 			{...(dragEnabled ? { ...attributes, ...listeners } : {})}
 		>
-			{item.occurrence && (
-				<Repeat className="size-3 shrink-0" aria-hidden="true" />
+			{item.occurrence ? (
+				<Repeat className="mt-px size-3 shrink-0" aria-hidden="true" />
+			) : (
+				<ChipCue item={item} />
 			)}
-			<span className="truncate">{task.title}</span>
+			<span
+				className={cn(
+					"line-clamp-2 min-w-0 break-words",
+					isQuiet(item) && "line-through",
+				)}
+			>
+				{task.title}
+			</span>
 		</button>
 	);
 }
@@ -243,23 +322,45 @@ function Agenda({
 									type="button"
 									data-testid="agenda-item"
 									onClick={() => onOpen(it.entry.task)}
-									aria-label={
-										it.occurrence
-											? m.calendar_chip_recurring({
-													title: it.entry.task.title,
-												})
-											: it.entry.task.title
-									}
+									aria-label={chipName(it)}
 									className={cn(
-										"flex w-full items-center gap-1.5 rounded px-1 py-1 text-start text-sm",
+										"flex min-h-11 w-full items-start gap-2 rounded px-1 py-1.5 text-start text-sm md:min-h-9",
 										"focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-										it.occurrence && "text-muted-foreground",
+										(it.occurrence || isQuiet(it)) && "text-muted-foreground",
 									)}
 								>
-									{it.occurrence && (
-										<Repeat className="size-3.5 shrink-0" aria-hidden="true" />
+									{it.occurrence ? (
+										<Repeat
+											className="mt-0.5 size-3.5 shrink-0"
+											aria-hidden="true"
+										/>
+									) : (
+										<span className="mt-0.5 flex size-3.5 shrink-0 items-center justify-center">
+											<ChipCue item={it} />
+										</span>
 									)}
-									<span className="truncate">{it.entry.task.title}</span>
+									<span
+										className={cn(
+											"line-clamp-2 min-w-0 break-words",
+											isQuiet(it) && "line-through",
+										)}
+									>
+										{it.entry.task.title}
+										{it.status === "done" && (
+											<span className="sr-only">{m.status_done()}</span>
+										)}
+										{it.status === "skipped" && (
+											<span className="block text-xs">
+												{m.habit_occurrence_skipped()}
+											</span>
+										)}
+										<span className="mt-0.5 block text-xs text-muted-foreground">
+											{it.entry.listTitle}
+											{it.entry.sourceContext
+												? ` · ${it.entry.sourceContext}`
+												: ""}
+										</span>
+									</span>
 								</button>
 							</li>
 						))}
@@ -285,6 +386,7 @@ export function CalendarLayout({
 	onReschedule,
 	canDrag,
 	timeZone,
+	habitOccurrenceOnly = false,
 }: {
 	entries: ViewEntry[];
 	isDesktop: boolean;
@@ -292,11 +394,13 @@ export function CalendarLayout({
 	onReschedule: (taskId: string, dueAt: number) => void;
 	canDrag: (taskId: string) => boolean;
 	timeZone: string;
+	habitOccurrenceOnly?: boolean;
 }): JSX.Element {
-	const today = localDay(new Date(), timeZone);
+	const today = useLocalDay(timeZone);
 	// First day of the displayed month, as a day key.
 	const [monthKey, setMonthKey] = useState(() => `${today.slice(0, 7)}-01`);
 	const [activeIdx, setActiveIdx] = useState(0);
+	const [includeEarlier, setIncludeEarlier] = useState(false);
 	// changeLocale reloads the page, so locale is constant for this component's
 	// lifetime; without the memo DndContext's pointer-move renders would rebuild
 	// both formatters on every frame of a drag.
@@ -347,7 +451,22 @@ export function CalendarLayout({
 		const to = new Date(gridEndMs);
 		for (const entry of entries) {
 			const task = entry.task;
-			if (task.rrule) {
+			if (entry.kind === "habits" && habitOccurrenceOnly && entry.occurrence) {
+				const occurrence = entry.occurrence;
+				if (
+					occurrence.date &&
+					occurrence.status !== "unavailable" &&
+					occurrence.status != null &&
+					occurrence.dueAt != null &&
+					occurrence.dueAt >= gridStartMs &&
+					occurrence.dueAt < gridEndMs
+				)
+					push(occurrence.date, {
+						entry,
+						occurrence: true,
+						status: occurrence.status,
+					});
+			} else if (task.rrule) {
 				// A malformed rrule is best-effort here (write-side validates); skip its
 				// occurrences rather than crash the whole month surface.
 				let occ: Date[] = [];
@@ -366,16 +485,19 @@ export function CalendarLayout({
 			}
 		}
 		return map;
-	}, [entries, gridStartMs, gridEndMs, timeZone]);
+	}, [entries, gridStartMs, gridEndMs, timeZone, habitOccurrenceOnly]);
 
 	const agendaGroups = useMemo(
 		() =>
 			[...byDate.keys()].sort().map((key) => ({
 				key,
-				label: longDate(key),
+				label:
+					key === today
+						? m.calendar_day_today({ date: longDate(key) })
+						: longDate(key),
 				items: byDate.get(key) ?? [],
 			})),
-		[byDate],
+		[byDate, today],
 	);
 
 	function shiftMonth(delta: number) {
@@ -383,6 +505,7 @@ export function CalendarLayout({
 		const next = new Date(Date.UTC(year, monthIndex - 1 + delta, 1));
 		setMonthKey(next.toISOString().slice(0, 10));
 		setActiveIdx(0);
+		setIncludeEarlier(false);
 	}
 
 	function reschedule(taskId: string, targetKey: string) {
@@ -438,46 +561,82 @@ export function CalendarLayout({
 	}
 
 	const agenda = <Agenda groups={agendaGroups} onOpen={onOpenTask} />;
+	const monthNavigation = (
+		<div className="flex items-center justify-between gap-2">
+			<h2 className="text-sm font-medium" aria-live="polite">
+				{monthLabel}
+			</h2>
+			<div className="flex shrink-0 items-center gap-1">
+				<button
+					type="button"
+					data-testid="calendar-today"
+					onClick={() => {
+						setMonthKey(`${today.slice(0, 7)}-01`);
+						setIncludeEarlier(false);
+						setActiveIdx(0);
+					}}
+					className="min-h-11 rounded px-2 text-xs font-medium hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-7"
+				>
+					{m.calendar_go_today()}
+				</button>
+				<button
+					type="button"
+					data-testid="calendar-prev"
+					aria-label={m.calendar_prev_month()}
+					onClick={() => shiftMonth(-1)}
+					className="flex size-11 items-center justify-center rounded border border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:size-7"
+				>
+					<ChevronLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
+				</button>
+				<button
+					type="button"
+					data-testid="calendar-next"
+					aria-label={m.calendar_next_month()}
+					onClick={() => shiftMonth(1)}
+					className="flex size-11 items-center justify-center rounded border border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:size-7"
+				>
+					<ChevronRight className="size-4 rtl:rotate-180" aria-hidden="true" />
+				</button>
+			</div>
+		</div>
+	);
 
 	if (!isDesktop) {
+		const visibleKeys = new Set(
+			agendaDayKeys([...byDate.keys()], monthKey, today, includeEarlier),
+		);
+		const hasEarlier =
+			monthKey.slice(0, 7) === today.slice(0, 7) &&
+			[...byDate.keys()].some(
+				(key) => key.slice(0, 7) === monthKey.slice(0, 7) && key < today,
+			);
 		return (
-			<div data-testid="calendar-surface">
-				<p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-					<CalendarClock className="size-3.5" />
-					{m.calendar_viewing_as_agenda()}
-				</p>
-				{agenda}
+			<div data-testid="calendar-surface" className="flex flex-col gap-3">
+				{monthNavigation}
+				<Agenda
+					groups={agendaGroups.filter((g) => visibleKeys.has(g.key))}
+					onOpen={onOpenTask}
+				/>
+				{hasEarlier && (
+					<button
+						type="button"
+						data-testid="calendar-earlier"
+						aria-expanded={includeEarlier}
+						onClick={() => setIncludeEarlier((value) => !value)}
+						className="min-h-11 self-start rounded px-2 text-xs font-medium text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+					>
+						{includeEarlier
+							? m.calendar_hide_earlier()
+							: m.calendar_show_earlier()}
+					</button>
+				)}
 			</div>
 		);
 	}
 
 	return (
 		<div data-testid="calendar-surface" className="flex flex-col gap-4">
-			<div className="flex items-center justify-between">
-				<h2 className="text-sm font-medium">{monthLabel}</h2>
-				{/* Both glyphs mirror: the time axis itself reverses under RTL, so
-				    previous points right and next points left. */}
-				<div className="flex items-center gap-1">
-					<button
-						type="button"
-						data-testid="calendar-prev"
-						aria-label={m.calendar_prev_month()}
-						onClick={() => shiftMonth(-1)}
-						className="flex size-7 items-center justify-center rounded border border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-					>
-						<ChevronLeft className="size-4 rtl:rotate-180" />
-					</button>
-					<button
-						type="button"
-						data-testid="calendar-next"
-						aria-label={m.calendar_next_month()}
-						onClick={() => shiftMonth(1)}
-						className="flex size-7 items-center justify-center rounded border border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-					>
-						<ChevronRight className="size-4 rtl:rotate-180" />
-					</button>
-				</div>
-			</div>
+			{monthNavigation}
 			<DndContext
 				sensors={sensors}
 				collisionDetection={closestCenter}

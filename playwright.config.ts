@@ -56,12 +56,15 @@ const appEnv = {
 	DITERO_SCHEDULER_LATE_THRESHOLD_MS: "5000",
 };
 
+const SERIAL_SPECS =
+	/(?:^|[/\\])(?:ack-live|auth-hardening|channels|dashboards|domain|e2e-invite-fragment|navigation|notifications|sharing|spine)\.spec\.ts$/;
 const CROSS_ENGINE_SPEC = /crypto-vectors\.spec\.ts$/;
 
 export default defineConfig({
 	testDir: "tests/e2e",
 	globalSetup: "./tests/e2e/global-setup.ts",
 	fullyParallel: false,
+	// Combined full-suite runs stay serial; CI enables two workers only for isolated projects.
 	workers: 1,
 	retries: 0,
 	timeout: 45_000,
@@ -76,7 +79,17 @@ export default defineConfig({
 		timezoneId: "America/New_York",
 	},
 	projects: [
-		{ name: "chromium", use: { ...devices["Desktop Chrome"] } },
+		{
+			name: "chromium",
+			use: { ...devices["Desktop Chrome"] },
+			testIgnore: SERIAL_SPECS,
+		},
+		{
+			name: "chromium-serial",
+			use: { ...devices["Desktop Chrome"] },
+			testMatch: SERIAL_SPECS,
+			workers: 1,
+		},
 		// The crypto vector gate (design 13) is the only spec that must clear all
 		// three engines: it re-runs the key layer's vectors in the runtimes that
 		// actually hold user keys, and WebKit is the strict one about ArrayBuffer
@@ -125,7 +138,7 @@ export default defineConfig({
 				BETTER_AUTH_URL: "http://localhost:3001",
 				DITERO_SMTP_HOST: "127.0.0.1",
 				DITERO_SMTP_PORT: String(SMTP_PORT),
-				DITERO_SMTP_FROM: "Ditero <ditero@t.dev>",
+				DITERO_SMTP_FROM: "Ditero <ditero@example.test>",
 				// The sink speaks cleartext SMTP; opt out of the TLS-required default.
 				DITERO_SMTP_ALLOW_INSECURE: "true",
 				// Passive API replica: no scan/drain/poll, so it shares the DB with

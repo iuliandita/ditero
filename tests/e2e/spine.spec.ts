@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { Pool } from "pg";
+import { openShared, signUp, uniqueEmail } from "./helpers.ts";
 
 // Two users, two browser contexts. Proves (1) workspace isolation: a list in a
 // user's personal workspace never syncs to another user; (2) live sync: a task
@@ -11,21 +12,12 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 	const pb = await b.newPage();
 	const userIds: string[] = [];
 
-	// Sign up two users. Signup (email verification off) yields an active session.
+	// Each context keeps its own authenticated session for the sync assertions.
 	for (const [p, email] of [
-		[pa, "ana@t.dev"],
-		[pb, "bob@t.dev"],
+		[pa, uniqueEmail("ana")],
+		[pb, uniqueEmail("bob")],
 	] as const) {
-		await p.goto("/");
-		await p.getByTestId("email").fill(email);
-		await p.getByTestId("password").fill("pw-123456");
-		await p.getByTestId("signup").click();
-		await expect(p.getByTestId("workspace")).toBeVisible({ timeout: 15000 });
-		const session = await p.evaluate(async () => {
-			const response = await fetch("/api/auth/get-session");
-			return (await response.json()) as { user: { id: string } };
-		});
-		userIds.push(session.user.id);
+		userIds.push(await signUp(p, email));
 	}
 
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
@@ -52,8 +44,8 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 	await expect(pa.getByText("Ana secret")).toBeVisible();
 
 	// In the shared workspace, a task toggle propagates to Bob live.
-	await pa.getByTestId("open-shared").click();
-	await pb.getByTestId("open-shared").click();
+	await openShared(pa);
+	await openShared(pb);
 	// Both have the shared list open (live query subscribed) before the write.
 	// First render of the cold zero-cache view, so it gets the same budget the
 	// sync assertions below already carry.
@@ -68,7 +60,10 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 	// exact: the row's kebab is labelled "Actions for Buy milk", and getByLabel
 	// substring-matches by default, so a loose locator now resolves to two nodes.
 	await pa.getByLabel("Buy milk", { exact: true }).check();
-	await expect(pb.getByLabel("Buy milk", { exact: true })).toBeChecked({
-		timeout: 15000,
-	});
+	// Bob's row settles into his collapsed completed group once the write lands;
+	// the group's count is the end state, independent of the settle timing.
+	await expect(pb.getByTestId("completed-section")).toHaveText(
+		/1 item completed/,
+		{ timeout: 15000 },
+	);
 });

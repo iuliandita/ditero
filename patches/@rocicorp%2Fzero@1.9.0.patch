@@ -1,0 +1,177 @@
+diff --git a/out/replicache/src/replicache-impl.js b/out/replicache/src/replicache-impl.js
+index 1d08adc9423c0d88577355c6c8d5b604175d4ad5..2930550edee68de6b59863cb07cb27dff24d2bfa 100644
+--- a/out/replicache/src/replicache-impl.js
++++ b/out/replicache/src/replicache-impl.js
+@@ -148,6 +148,9 @@ var ReplicacheImpl = class {
+ 	#idbDatabases;
+ 	#lc;
+ 	#zero;
++	#closePromise;
++	#closePersisted = false;
++	#activeMutations = /* @__PURE__ */ new Set();
+ 	#closeAbortController = new AbortController();
+ 	#persistLock = new Lock();
+ 	#enableScheduledPersist;
+@@ -359,24 +362,43 @@ var ReplicacheImpl = class {
+ 	*
+ 	* When closed all subscriptions end and no more read or writes are allowed.
+ 	*/
+-	async close() {
++	close() {
++		if (this.#closePromise) return this.#closePromise;
++		const { promise, resolve, reject } = resolver();
++		this.#closePromise = promise;
+ 		this.#closed = true;
+-		const { promise, resolve } = resolver();
+-		closingInstances.set(this.name, promise);
++		const gate = resolver();
++		closingInstances.set(this.name, gate.promise);
+ 		this.#closeAbortController.abort();
+ 		getBrowserGlobal("document")?.removeEventListener("visibilitychange", this.#onVisibilityChange);
+-		await this.#ready;
+-		const closingPromises = [
+-			this.memdag.close(),
+-			this.perdag.close(),
+-			this.#idbDatabases.close()
+-		];
+-		this.#pullConnectionLoop.close();
+-		this.#pushConnectionLoop.close();
+-		this.#subscriptions.clear();
+-		await Promise.all(closingPromises);
+-		closingInstances.delete(this.name);
+-		resolve();
++		this.#closeDurably(gate).then(resolve, (error) => {
++			this.#closePromise = void 0;
++			reject(error);
++		});
++		return promise;
++	}
++	async #closeDurably(gate) {
++		try {
++			await this.#ready;
++			// Accepted local commits finish before their owner is persisted and closed.
++			await Promise.allSettled([...this.#activeMutations]);
++			if (!this.#closePersisted) {
++				await this.#persist(true);
++				this.#closePersisted = true;
++			}
++			const closingPromises = [
++				this.memdag.close(),
++				this.perdag.close(),
++				this.#idbDatabases.close()
++			];
++			this.#pullConnectionLoop.close();
++			this.#pushConnectionLoop.close();
++			this.#subscriptions.clear();
++			await Promise.all(closingPromises);
++		} finally {
++			if (closingInstances.get(this.name) === gate.promise) closingInstances.delete(this.name);
++			gate.resolve();
++		}
+ 	}
+ 	async maybeEndPull(syncHead, requestID) {
+ 		for (;;) {
+@@ -610,17 +632,22 @@ var ReplicacheImpl = class {
+ 		};
+ 	}
+ 	persist() {
++		return this.#persist(false);
++	}
++	#persist(duringClose) {
+ 		return this.#persistLock.withLock(async () => {
+ 			const { clientID } = this;
+ 			await this.#ready;
+-			if (this.#closed) return;
++			if (this.#closed && !duringClose) return;
+ 			try {
+-				await persistDD31(this.#lc, clientID, this.memdag, this.perdag, this.#mutatorRegistry, () => this.#closed, 7, this.#zero?.getTxData);
++				await persistDD31(this.#lc, clientID, this.memdag, this.perdag, this.#mutatorRegistry, () => this.#closed && !duringClose, 7, this.#zero?.getTxData);
+ 			} catch (e) {
++				if (duringClose) throw e;
+ 				if (e instanceof ClientStateNotFoundError) this.#clientStateNotFoundOnClient(clientID);
+ 				else if (this.#closed) this.#lc.debug?.("Exception persisting during close", e);
+ 				else throw e;
+ 			}
++			if (duringClose) return;
+ 			const clientGroupID = await this.#clientGroupIDPromise;
+ 			assert(clientGroupID, "Expected clientGroupID to be defined");
+ 			this.#onPersist({
+@@ -776,8 +803,12 @@ var ReplicacheImpl = class {
+ 	#register(name, mutatorImpl) {
+ 		this.#mutatorRegistry[name] = mutatorImpl;
+ 		return (args) => {
++			if (this.#closed) throw new Error("Replicache is closed");
+ 			const trackingData = name === "_zero_crud" ? void 0 : this.#zero?.trackMutation();
+ 			const result = this.#mutate(trackingData, name, mutatorImpl, args, performance.now());
++			this.#activeMutations.add(result);
++			const settled = () => this.#activeMutations.delete(result);
++			result.then(settled, settled);
+ 			if (trackingData) return {
+ 				client: result,
+ 				server: trackingData.serverPromise
+diff --git a/out/zero-client/src/client/zero.js b/out/zero-client/src/client/zero.js
+index c1793b96386c3ba5be6e0b0ff336c2caf495bc6b..8f5fc370b3a38c2da36ecca3c519087c9bd4235a 100644
+--- a/out/zero-client/src/client/zero.js
++++ b/out/zero-client/src/client/zero.js
+@@ -204,6 +204,8 @@ var Zero = class Zero {
+ 	#socketResolver = resolver();
+ 	#connectionReadyResolver = connectionReadyResolver();
+ 	#currentConnectAttempt;
++	#closePromise;
++	#closeSucceeded = false;
+ 	#closeAbortController = new AbortController();
+ 	#visibilityWatcher;
+ 	#connectionManager;
+@@ -613,25 +615,36 @@ var Zero = class Zero {
+ 	* Once a Zero instance has been closed it no longer syncs, you can no
+ 	* longer query or mutate data with it, and its query views stop updating.
+ 	*/
+-	async close() {
++	close() {
++		if (this.#closePromise) return this.#closePromise;
++		const { promise, resolve, reject } = resolver();
++		this.#closePromise = promise;
++		this.#closeDurably().then(resolve, (error) => {
++			this.#closePromise = void 0;
++			reject(error);
++		});
++		return promise;
++	}
++	async #closeDurably() {
+ 		const lc = this.#lc.withContext("close");
++		// Reject reentrant legacy and custom mutations before disconnect callbacks.
++		const closing = this.#rep.close();
+ 		try {
+-			if (this.closed) {
+-				lc.debug?.("close() called on already closed instance");
+-				return;
++			if (!this.closed) {
++				lc.debug?.("Closing Zero instance. Stack:", (/* @__PURE__ */ new Error()).stack);
++				this.#onlineManager.cleanup();
++				if (!this.#connectionManager.is("disconnected")) this.#disconnect(lc, new ClientError({
++					kind: ClientClosed,
++					message: "Zero instance closed by user"
++				}), CLOSE_CODE_NORMAL);
++				this.#closeAbortController.abort();
++				this.#metrics.stop();
++			}
++			await closing;
++			if (!this.#closeSucceeded) {
++				this.#unexpose();
++				this.#closeSucceeded = true;
+ 			}
+-			lc.debug?.("Closing Zero instance. Stack:", (/* @__PURE__ */ new Error()).stack);
+-			this.#onlineManager.cleanup();
+-			if (!this.#connectionManager.is("disconnected")) this.#disconnect(lc, new ClientError({
+-				kind: ClientClosed,
+-				message: "Zero instance closed by user"
+-			}), CLOSE_CODE_NORMAL);
+-			lc.debug?.("Aborting closeAbortController due to close()");
+-			this.#closeAbortController.abort();
+-			this.#metrics.stop();
+-			const ret = await this.#rep.close();
+-			this.#unexpose();
+-			return ret;
+ 		} catch (e) {
+ 			lc.error?.("Error closing Zero instance", e);
+ 			throw e;

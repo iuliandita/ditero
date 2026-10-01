@@ -1,6 +1,11 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { ListTodo, Paperclip, SlidersHorizontal } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import {
+	ListTodo,
+	MoreVertical,
+	Paperclip,
+	SlidersHorizontal,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -16,8 +21,10 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { addCopyFor } from "@/lib/kind-copy";
 import { ListIcon } from "@/lib/list-icon";
 import { runMutation } from "@/lib/run-mutation";
+import { useIsDesktop, useMediaQuery } from "@/lib/use-media-query";
 import type { ListKind } from "../../domain/icon-map.ts";
 import { randomId } from "../../domain/random-id.ts";
 import { WRITE_ROLES } from "../../domain/role.ts";
@@ -32,25 +39,36 @@ import {
 	AttachmentList,
 	type AttachmentListHandle,
 } from "../components/attachments/AttachmentList.tsx";
+import { BulkSelection } from "../components/list/BulkSelection.tsx";
 import { IconPicker } from "../components/list/IconPicker.tsx";
 import { ScheduleSheet } from "../components/list/ScheduleSheet.tsx";
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { TaskList } from "../components/list/TaskList.tsx";
 import { TitleSuggestInput } from "../components/list/TitleSuggestInput.tsx";
+import { InlineSyntaxHint } from "../components/quickadd/InlineSyntaxHint.tsx";
 import { TaskListSkeleton } from "../components/shell/AppSkeleton.tsx";
+import { ListProgress } from "../components/shell/ListProgress.tsx";
+import { SyncIndicator } from "../components/shell/SyncIndicator.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
-import { RowActions } from "../components/ui/row-actions.tsx";
+import { RowActionItems, RowActions } from "../components/ui/row-actions.tsx";
+import { useRowSelection } from "../hooks/useRowSelection.ts";
 import { useTaskImportActivationMap } from "../hooks/useTaskImportActivation.ts";
+import { useTaskToggle } from "../hooks/useTaskToggle.ts";
 
-const DISPLAY_MODES: CompletedDisplay[] = ["sink", "keep", "hide"];
+// `hide` stays a stored value but renders exactly like sink since #348 (both
+// collapse completed rows into a group), so the menu offers only the two
+// distinct behaviours and shows a hide list as sink.
+const DISPLAY_MODES = ["sink", "keep"] as const;
 
 // Thunks: resolving `m` at module scope would freeze the import-time locale.
-const DISPLAY_MODE_LABELS: Record<CompletedDisplay, () => string> = {
+const DISPLAY_MODE_LABELS: Record<
+	(typeof DISPLAY_MODES)[number],
+	() => string
+> = {
 	sink: m.list_completed_sink,
 	keep: m.list_completed_keep,
-	hide: m.list_completed_hide,
 };
 
 function lastKey(items: { sortKey: string }[]): string | null {
@@ -65,11 +83,14 @@ export function ListView({
 	listActions,
 	onBack,
 	onQuickAdd,
+	arrival,
 }: {
 	listId: string;
 	listActions: (list: List) => RowAction[];
 	onBack?: () => void;
 	onQuickAdd: () => void;
+	/** Set when first run just created this list: land ready to add. */
+	arrival?: { blank: boolean } | null;
 }) {
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
@@ -84,11 +105,15 @@ export function ListView({
 	const [error, setError] = useState<string | null>(null);
 	const [iconOpen, setIconOpen] = useState(false);
 	const [groupByAssignee, setGroupByAssignee] = useState(false);
+	const [reordering, setReordering] = useState(false);
+	const isDesktop = useIsDesktop();
+	const coarse = useMediaQuery("(pointer: coarse)");
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 	const [scheduleTaskId, setScheduleTaskId] = useState<string | null>(null);
 	const titleInput = useRef<HTMLInputElement>(null);
 	const attachmentsRef = useRef<AttachmentListHandle>(null);
 	const listHeaderRef = useRef<HTMLDivElement>(null);
+	const arrivedAt = useRef<string | null>(null);
 
 	// Zero reports per-query completeness; "no rows yet" and "no rows" are only
 	// distinguishable here, where the queries live. The row surface below is pure.
@@ -96,6 +121,17 @@ export function ListView({
 	const tasksLoading = listsLoading || tasksDetails.type !== "complete";
 
 	const list = lists.find((l) => l.id === listId);
+	// The phone's add field renders only once rows have synced.
+	const listReady = list != null && !tasksLoading;
+
+	// Once per arrival, after the list has synced: focus the add field where one
+	// is on screen, else open quick add for an empty list.
+	useEffect(() => {
+		if (!arrival || !listReady || arrivedAt.current === listId) return;
+		arrivedAt.current = listId;
+		if (titleInput.current?.getClientRects().length) titleInput.current.focus();
+		else if (arrival.blank) onQuickAdd();
+	}, [arrival, listReady, listId, onQuickAdd]);
 	const listTasks = useMemo(
 		() => tasks.filter((t) => t.listId === listId),
 		[tasks, listId],
@@ -206,10 +242,33 @@ export function ListView({
 		? (listTasks.find((t) => t.id === scheduleTaskId) ?? null)
 		: null;
 
-	function run(mutation: { client: Promise<unknown> }) {
+	const run = useCallback((mutation: { client: Promise<unknown> }) => {
 		setError(null);
 		return runMutation(mutation, setError);
-	}
+	}, []);
+	const toggleTask = useTaskToggle(run);
+
+	const selectRole = memberships.find(
+		(member) =>
+			member.workspaceId === list?.workspaceId && member.userId === zero.userID,
+	)?.role;
+	// Habits complete per occurrence, so they stay out of bulk editing; a viewer
+	// has nothing to apply, and a role that drops to viewer clears a held
+	// selection. A row an import paused (itself or a subtask) cannot be picked.
+	const canSelect =
+		list != null &&
+		list.kind !== "habits" &&
+		selectRole != null &&
+		WRITE_ROLES.has(selectRole);
+	const selection = useRowSelection({
+		enabled: canSelect && !tasksLoading,
+		resetKey: listId,
+		isSelectable: (id) =>
+			activation.canWriteTask(id) &&
+			(subtasksByParent.get(id) ?? []).every((sub) =>
+				activation.canWriteTask(sub.id),
+			),
+	});
 
 	async function createTask() {
 		const t = title.trim();
@@ -248,6 +307,9 @@ export function ListView({
 		(t) => t.kind === "task" && t.workspaceId === openList.workspaceId,
 	);
 	const kind = (list.kind ?? "tasks") as ListKind;
+	const addCopy = addCopyFor(kind);
+	// Same count as the sidebar bar: every task in the list, subtasks included.
+	const doneCount = listTasks.filter((t) => t.done).length;
 	const canEditContainer =
 		!tasksLoading &&
 		listTasks.every((task) => activation.canWriteTask(task.id));
@@ -258,6 +320,15 @@ export function ListView({
 			member.userId === zero.userID,
 	)?.role;
 	const canAttach = callerRole != null && WRITE_ROLES.has(callerRole);
+	// Touch drags from a grip that only exists in this mode; a pointer keeps the
+	// hover grip and the keyboard reorders from a focused grip either way.
+	const canReorder =
+		coarse &&
+		!groupByAssignee &&
+		kind !== "shopping" &&
+		kind !== "habits" &&
+		parents.length > 1;
+	const reorderActive = reordering && canReorder;
 	const rowActions: RowAction[] = [
 		...listActions(openList),
 		{
@@ -269,16 +340,20 @@ export function ListView({
 		},
 	];
 
+	const selectionFor = (task: Task) =>
+		selection.rowFor(task.id, m.selection_paused_reason());
+	const orderedSelected = (): Task[] => {
+		const byId = new Map(parents.map((t) => [t.id, t]));
+		return selection
+			.ordered()
+			.map((id) => byId.get(id))
+			.filter((t): t is Task => t != null);
+	};
+
 	const handlers = {
-		onToggle: (id: string, done: boolean) => {
-			if (!activation.canWriteTask(id)) return;
-			void run(
-				zero.mutate(
-					done
-						? mutators.task.update({ id, done: false })
-						: mutators.task.complete({ id }),
-				),
-			);
+		onToggle: (id: string) => {
+			const task = listTasks.find((t) => t.id === id);
+			if (task && activation.canWriteTask(id)) toggleTask(task);
 		},
 		onOpenDetail: (task: { id: string }) => setDetailTaskId(task.id),
 		onSchedule: (task: { id: string }) => {
@@ -332,21 +407,62 @@ export function ListView({
 		);
 	}
 
+	// One field, placed per shell: above the rows on desktop, after them on a
+	// phone, where the thumb already is and the floating add button sits.
+	const addForm = (
+		<div
+			className={
+				isDesktop ? "mb-5 flex flex-col gap-1" : "mt-2 flex flex-col gap-1"
+			}
+		>
+			<div data-reading-inline-add className="flex gap-2">
+				<TitleSuggestInput
+					inputRef={titleInput}
+					data-testid="new-task"
+					placeholder={addCopy.placeholder()}
+					value={title}
+					onChange={setTitle}
+					onSubmit={() => void createTask()}
+					candidates={titleCandidates}
+					listId={listId}
+				/>
+				<Button
+					data-testid="new-task-submit"
+					type="button"
+					className="min-h-11 md:min-h-0"
+					onClick={() => void createTask()}
+				>
+					{addCopy.action()}
+				</Button>
+			</div>
+			<InlineSyntaxHint
+				example={arrival?.blank === true}
+				onQuickAdd={onQuickAdd}
+			/>
+		</div>
+	);
+	const mobileAdd = isDesktop ? undefined : addForm;
+	const mobileSync = isDesktop ? null : <SyncIndicator placement="header" />;
+
 	return (
-		<div data-testid="list" className="max-w-3xl">
+		<div ref={selection.rootRef} data-testid="list" className="max-w-3xl">
 			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
-			<div ref={listHeaderRef} className="group mb-5 flex items-center gap-1.5">
+			<div
+				ref={listHeaderRef}
+				data-reading-list-header
+				className="group mb-5 flex items-center gap-1.5"
+			>
 				{backControl}
 				<button
 					type="button"
 					disabled={!canEditContainer}
 					aria-label={m.list_change_icon()}
 					onClick={() => setIconOpen(true)}
-					className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:size-9"
+					className="hidden size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:flex"
 				>
 					<ListIcon icon={list.icon} kind={kind} title={list.title} />
 				</button>
-				<h1 className="min-w-0 flex-1 truncate text-xl font-semibold md:text-2xl">
+				<h1 className="min-w-0 flex-1 break-words text-lg font-semibold">
 					{list.title}
 				</h1>
 				<DropdownMenu>
@@ -354,16 +470,33 @@ export function ListView({
 						<Button
 							variant="ghost"
 							size="icon-sm"
-							aria-label={m.list_display_options()}
+							aria-label={
+								isDesktop
+									? m.list_display_options()
+									: m.row_actions_for({ name: list.title })
+							}
+							data-testid={!isDesktop ? "row-actions" : undefined}
 							className="size-11 md:size-8"
 						>
-							<SlidersHorizontal />
+							{isDesktop ? <SlidersHorizontal /> : <MoreVertical />}
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
+						{!isDesktop && (
+							<>
+								<DropdownMenuItem
+									disabled={!canEditContainer}
+									onSelect={() => setIconOpen(true)}
+								>
+									{m.list_change_icon()}
+								</DropdownMenuItem>
+								<RowActionItems actions={rowActions} />
+								<DropdownMenuSeparator />
+							</>
+						)}
 						<DropdownMenuLabel>{m.list_completed_heading()}</DropdownMenuLabel>
 						<DropdownMenuRadioGroup
-							value={mode}
+							value={mode === "hide" ? "sink" : mode}
 							onValueChange={(v) => {
 								if (!canEditContainer) {
 									setError(m.activation_container_paused());
@@ -398,6 +531,15 @@ export function ListView({
 						>
 							{m.list_group_by_assignee()}
 						</DropdownMenuCheckboxItem>
+						{canReorder && (
+							<DropdownMenuCheckboxItem
+								data-testid="reorder-mode"
+								checked={reordering}
+								onCheckedChange={setReordering}
+							>
+								{m.list_reorder_mode()}
+							</DropdownMenuCheckboxItem>
+						)}
 						<DropdownMenuSeparator />
 						<DropdownMenuSub>
 							<DropdownMenuSubTrigger data-testid="add-from-template">
@@ -428,11 +570,23 @@ export function ListView({
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
-				<RowActions
-					actions={rowActions}
-					label={m.row_actions_for({ name: openList.title })}
-				/>
+				{isDesktop && (
+					<RowActions
+						actions={rowActions}
+						label={m.row_actions_for({ name: openList.title })}
+					/>
+				)}
+				{mobileSync}
 			</div>
+
+			{kind === "project" && !tasksLoading && (
+				<ListProgress
+					showLabel
+					done={doneCount}
+					total={listTasks.length}
+					className="-mt-3 mb-5"
+				/>
+			)}
 
 			<AttachmentList
 				ref={attachmentsRef}
@@ -446,26 +600,39 @@ export function ListView({
 				}
 			/>
 
-			<div className="mb-5 hidden gap-2 md:flex">
-				<TitleSuggestInput
-					inputRef={titleInput}
-					data-testid="new-task"
-					placeholder={m.list_add_task_placeholder()}
-					value={title}
-					onChange={setTitle}
-					onSubmit={() => void createTask()}
-					candidates={titleCandidates}
-					listId={listId}
-				/>
-				<Button
-					data-testid="new-task-submit"
-					type="button"
-					onClick={() => void createTask()}
-				>
-					{m.list_add_task()}
-				</Button>
-			</div>
+			{isDesktop && addForm}
 
+			{reorderActive && (
+				<div
+					data-testid="reorder-bar"
+					className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-muted ps-3 text-sm text-muted-foreground"
+				>
+					<span>{m.list_reorder_hint()}</span>
+					<Button
+						variant="ghost"
+						className="min-h-11"
+						onClick={() => setReordering(false)}
+					>
+						{m.list_reorder_done()}
+					</Button>
+				</div>
+			)}
+
+			{canSelect && (
+				<BulkSelection
+					count={selection.count}
+					selected={selection.count > 0 ? orderedSelected() : []}
+					variant={kind === "shopping" ? "shopping" : "tasks"}
+					moveTargets={lists.filter(
+						(l) =>
+							l.workspaceId === openList.workspaceId && l.id !== openList.id,
+					)}
+					allTasks={tasks}
+					showDueAndPriority={kind !== "checklist" && kind !== "shopping"}
+					run={run}
+					onDone={selection.finish}
+				/>
+			)}
 			{error && (
 				<p role="alert" className="mb-2 text-sm text-destructive">
 					{error}
@@ -491,7 +658,7 @@ export function ListView({
 							}
 						}}
 					>
-						{m.list_empty_action()}
+						{addCopy.action()}
 					</Button>
 				</EmptyState>
 			) : groupByAssignee ? (
@@ -508,9 +675,11 @@ export function ListView({
 								labelsByTask={labelsByTask}
 								handlers={handlers}
 								sortable={false}
+								selectionFor={selectionFor}
 							/>
 						</section>
 					))}
+					{mobileAdd}
 				</div>
 			) : (
 				<TaskList
@@ -519,8 +688,12 @@ export function ListView({
 					subtasksByParent={subtasksByParent}
 					labelsByTask={labelsByTask}
 					handlers={handlers}
+					reordering={reorderActive}
+					footer={mobileAdd}
+					selectionFor={selectionFor}
 				/>
 			)}
+			{!tasksLoading && parents.length === 0 && mobileAdd}
 
 			<IconPicker
 				open={iconOpen}

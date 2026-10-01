@@ -33,8 +33,9 @@ import { localDay } from "../domain/local-day.ts";
 import { LOCALES } from "../domain/locale.ts";
 import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { MutatorError } from "../domain/mutator-error.ts";
+import { isStorableQuantity, isValidUnit } from "../domain/quantity.ts";
 import { randomId } from "../domain/random-id.ts";
-import { nextDue, parseRule } from "../domain/recurrence.ts";
+import { initialRRule, nextDue, parseRule } from "../domain/recurrence.ts";
 import { ADMIN_ROLES, ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
@@ -578,6 +579,14 @@ function nextOccurrence(
 	});
 }
 
+// Bounds only: the number format is a client rule, since replayed offline
+// writes from before it may carry legacy free text (domain/quantity.ts).
+const quantityArg = z
+	.string()
+	.trim()
+	.refine(isStorableQuantity, "quantity is too long");
+const unitArg = z.string().trim().refine(isValidUnit, "unit is too long");
+
 export const mutators = defineMutators({
 	task: {
 		create: defineMutator(
@@ -591,8 +600,8 @@ export const mutators = defineMutators({
 				dueAllDay: z.boolean().optional(),
 				priority: z.number().optional(),
 				parentId: z.string().nullable().optional(),
-				quantity: z.string().optional(),
-				unit: z.string().optional(),
+				quantity: quantityArg.optional(),
+				unit: unitArg.optional(),
 				category: z.string().optional(),
 			}),
 			async ({ tx, ctx, args }) => {
@@ -609,6 +618,7 @@ export const mutators = defineMutators({
 					if (parent.listId !== args.listId)
 						throw new Error("parent in different list");
 				}
+				const rrule = initialRRule(list.kind, args.parentId);
 				await tx.mutate.task.insert({
 					id: args.id,
 					listId: args.listId,
@@ -623,6 +633,7 @@ export const mutators = defineMutators({
 					...(args.quantity !== undefined ? { quantity: args.quantity } : {}),
 					...(args.unit !== undefined ? { unit: args.unit } : {}),
 					...(args.category !== undefined ? { category: args.category } : {}),
+					...(rrule != null ? { rrule } : {}),
 				});
 			},
 		),
@@ -635,8 +646,8 @@ export const mutators = defineMutators({
 				dueAt: z.number().nullable().optional(),
 				dueAllDay: z.boolean().optional(),
 				priority: z.number().optional(),
-				quantity: z.string().nullable().optional(),
-				unit: z.string().nullable().optional(),
+				quantity: quantityArg.nullable().optional(),
+				unit: unitArg.nullable().optional(),
 				category: z.string().nullable().optional(),
 				sortKey: z.string().optional(),
 				rrule: z.string().nullable().optional(),
@@ -1929,6 +1940,8 @@ export const mutators = defineMutators({
 				// M3a: notification defaults. Null means "not configured", never
 				// collapsed to a default here -- the scheduler resolves inheritance.
 				timezone: timezoneArg.optional(),
+				// Set with a settings pick; browser detection writes timezone alone.
+				timezoneChosen: z.boolean().optional(),
 				quietHours: quietHoursArg.optional(),
 				escalationDefaults: escalationDefaultsArg.optional(),
 				// M-i18n: null means "no preference set" (falls back to Accept-Language).
@@ -1968,6 +1981,7 @@ export const mutators = defineMutators({
 						vacation: args.vacation ?? null,
 						focus: args.focus ?? null,
 						timezone: args.timezone ?? "UTC",
+						timezoneChosen: args.timezoneChosen ?? false,
 						quietHours: args.quietHours ?? null,
 						escalationDefaults: args.escalationDefaults ?? null,
 						locale: args.locale ?? null,

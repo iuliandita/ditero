@@ -62,14 +62,17 @@ function object(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function text(value: unknown): value is string {
+function sourceKey(value: unknown): value is string {
 	return (
 		typeof value === "string" &&
-		value.length > 0 &&
 		value.length <= 4096 &&
 		!value.includes("\u0000") &&
 		value.isWellFormed()
 	);
+}
+
+function text(value: unknown): value is string {
+	return sourceKey(value) && value.length > 0;
 }
 
 function mappings(value: unknown): ImportMappings {
@@ -85,9 +88,9 @@ function mappings(value: unknown): ImportMappings {
 	if (workspaces.length + principals.length > 50_000)
 		throw new ImportRequestError("mapping-limit", 413);
 	if (
-		workspaces.some(([key, target]) => !text(key) || !text(target)) ||
+		workspaces.some(([key, target]) => !sourceKey(key) || !text(target)) ||
 		principals.some(
-			([key, target]) => !text(key) || (target !== null && !text(target)),
+			([key, target]) => !sourceKey(key) || (target !== null && !text(target)),
 		)
 	)
 		throw new ImportRequestError("invalid-mappings", 400);

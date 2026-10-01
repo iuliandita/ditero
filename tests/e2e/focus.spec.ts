@@ -1,32 +1,21 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { goToSettings, leaveSettings } from "./helpers.ts";
+import {
+	goToSettings,
+	leaveSettings,
+	openMoreOptions,
+	signUp,
+	uniqueEmail,
+} from "./helpers.ts";
 
 // M2 focus/Pomodoro timer e2e. Configures the focus prefs (round-trips), starts a
 // task-bound focus session, and (via the dev-only time seam) lets the work interval
 // complete in seconds -- verifying a focus_session is logged (time-on-task updates),
 // the end-of-interval cue fires, and the timer advances. Plus the axe gate on the
 // pill + settings. Conventions mirror habits.spec.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });
@@ -73,6 +62,8 @@ async function openDetail(page: Page, title: string): Promise<Locator> {
 		.click();
 	const detail = page.getByRole("dialog");
 	await expect(detail.getByLabel("Task title")).toBeVisible();
+	// Every caller here works with repeat/focus controls behind the disclosure.
+	await openMoreOptions(detail);
 	return detail;
 }
 
@@ -153,14 +144,17 @@ test("focus: settings round-trip, task-bound session logs + advances, axe", asyn
 		"No focus time yet",
 	);
 	await detail.getByTestId("task-focus-start").click();
-	// Close the detail: it is a modal Sheet, which makes the app-level pill inert
-	// while open. The session is app-scoped and survives the close.
+	// Close the detail; the session is app-scoped and survives the close.
 	await page.keyboard.press("Escape");
 	await expect(page.getByRole("dialog")).toBeHidden({ timeout: 15000 });
 
 	// The docked pill appears, bound to the task, in the Focus phase.
 	const pill = page.getByTestId("focus-timer");
 	await expect(pill).toBeVisible();
+	// A solid floating surface, never frosted glass (DESIGN.md No Glass Rule).
+	expect(await pill.evaluate((el) => getComputedStyle(el).backdropFilter)).toBe(
+		"none",
+	);
 	await expect(pill.getByTestId("focus-phase")).toHaveText("Focus");
 	await expect(pill.getByTestId("focus-task")).toHaveText("Write report");
 

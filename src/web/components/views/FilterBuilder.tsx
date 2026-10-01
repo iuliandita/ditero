@@ -418,7 +418,7 @@ function GroupCard({
 					// biome-ignore lint/suspicious/noArrayIndexKey: filter nodes have no stable id; the AST is positional
 					<div key={i} className="flex flex-col gap-1">
 						{i > 0 && (
-							<span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+							<span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
 								{group.op === "or" ? m.filter_join_or() : m.filter_join_and()}
 							</span>
 						)}

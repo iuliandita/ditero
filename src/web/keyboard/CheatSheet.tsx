@@ -46,7 +46,14 @@ export function CheatSheet({
 					<DialogTitle>{m.cheatsheet_title()}</DialogTitle>
 					<DialogDescription>{m.cheatsheet_description()}</DialogDescription>
 				</DialogHeader>
-				<div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
+				{/* The list outgrows short viewports and holds nothing focusable, so
+				    the scroll container itself takes focus for keyboard scrolling. */}
+				<section
+					// biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll container must be focusable to be keyboard-scrollable
+					tabIndex={0}
+					aria-label={m.cheatsheet_title()}
+					className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+				>
 					{groups.map(([category, rows]) => (
 						<section key={category}>
 							<h3 className="mb-1 text-xs font-medium text-muted-foreground">
@@ -74,7 +81,7 @@ export function CheatSheet({
 							</ul>
 						</section>
 					))}
-				</div>
+				</section>
 			</DialogContent>
 		</Dialog>
 	);

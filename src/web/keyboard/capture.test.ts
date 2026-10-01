@@ -47,4 +47,24 @@ describe("stepCapture", () => {
 		});
 		expect(r.binding).toEqual(["j"]);
 	});
+
+	test("Shift over a named key becomes a Shift binding", () => {
+		const r = stepCapture(EMPTY_CAPTURE, {
+			key: "ArrowDown",
+			metaKey: false,
+			ctrlKey: false,
+			shiftKey: true,
+		});
+		expect(r.binding).toEqual(["Shift", "ArrowDown"]);
+	});
+
+	test("a shifted printable key keeps its own character", () => {
+		const r = stepCapture(EMPTY_CAPTURE, {
+			key: "?",
+			metaKey: false,
+			ctrlKey: false,
+			shiftKey: true,
+		});
+		expect(r.binding).toEqual(["?"]);
+	});
 });

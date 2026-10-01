@@ -1,44 +1,46 @@
-import { List, Search, Settings } from "lucide-react";
+import { List, Search, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 
 export type Section = "lists" | "settings";
+export type MobileTab = "today" | "lists";
 
-// Mobile bottom tab bar: exactly three destinations. Fixed to the bottom edge;
-// 44px+ touch targets. Search opens an overlay rather than switching section,
-// so it never carries aria-current.
+// Mobile bottom tab bar: three destinations, so each stays a wide thumb target.
+// Settings is not a tab: it is an occasional destination and lives in the
+// workspace switcher at the top of Today and Lists. Search opens an overlay
+// rather than switching tabs, so it never carries aria-current.
 export function BottomNav({
-	section,
-	onSection,
+	tab,
+	onTab,
 	onSearch,
 }: {
-	section: Section;
-	onSection: (section: Section) => void;
+	tab: MobileTab | null;
+	onTab: (tab: MobileTab) => void;
 	onSearch: () => void;
 }) {
 	return (
 		<nav
 			aria-label={m.nav_primary_label()}
-			className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] supports-backdrop-filter:bg-background/80 supports-backdrop-filter:backdrop-blur"
+			className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t bg-background pb-[env(safe-area-inset-bottom)]"
 		>
+			<Tab
+				testId="nav-tab-today"
+				label={m.builtin_view_today()}
+				active={tab === "today"}
+				onClick={() => onTab("today")}
+			>
+				<Sun className="size-5" />
+			</Tab>
 			<Tab
 				testId="nav-tab-lists"
 				label={m.nav_lists()}
-				active={section === "lists"}
-				onClick={() => onSection("lists")}
+				active={tab === "lists"}
+				onClick={() => onTab("lists")}
 			>
 				<List className="size-5" />
 			</Tab>
 			<Tab testId="nav-tab-search" label={m.nav_search()} onClick={onSearch}>
 				<Search className="size-5" />
-			</Tab>
-			<Tab
-				testId="nav-tab-settings"
-				label={m.nav_settings()}
-				active={section === "settings"}
-				onClick={() => onSection("settings")}
-			>
-				<Settings className="size-5" />
 			</Tab>
 		</nav>
 	);

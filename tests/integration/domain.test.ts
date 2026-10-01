@@ -1,5 +1,6 @@
 import type { Transaction } from "@rocicorp/zero";
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -529,6 +530,79 @@ describe("domain mutators", () => {
 				},
 			),
 		).rejects.toThrow(/different list/);
+	});
+
+	test("a new top-level habit starts daily; subtasks and tasks do not", async () => {
+		await db.insert(tables.list).values({
+			id: "l-habits",
+			workspaceId: "w1",
+			ownerId: "owner",
+			title: "Habits",
+			kind: "habits",
+			sortKey: "z0",
+		});
+		const create = (id: string, listId: string, parentId?: string) =>
+			call(
+				mutators.task.create,
+				{ id: "member" },
+				{ id, listId, title: id, sortKey: "d0", parentId },
+			);
+		await create("habit-new", "l-habits");
+		await create("habit-step", "l-habits", "habit-new");
+		await create("task-new", "l1");
+		const rrules = new Map(
+			(await db.query.task.findMany()).map((r) => [r.id, r.rrule]),
+		);
+		expect(rrules.get("habit-new")).toBe("FREQ=DAILY;INTERVAL=1");
+		expect(rrules.get("habit-step")).toBeNull();
+		expect(rrules.get("task-new")).toBeNull();
+		await call(mutators.task.delete, { id: "member" }, { id: "habit-new" });
+		await call(mutators.task.delete, { id: "member" }, { id: "task-new" });
+		await db.delete(tables.list).where(eq(tables.list.id, "l-habits"));
+	});
+
+	test("quantity and unit writes are bounded; legacy free text still replays", async () => {
+		await db.insert(tables.task).values({
+			id: "t-qty",
+			listId: "l1",
+			title: "Olives",
+			sortKey: "e0",
+			quantity: "a handful",
+		});
+		const update = (args: { quantity?: string; unit?: string }) =>
+			call(mutators.task.update, { id: "member" }, { id: "t-qty", ...args });
+		const create = (id: string, args: { quantity?: string; unit?: string }) =>
+			call(
+				mutators.task.create,
+				{ id: "member" },
+				{ id, listId: "l1", title: id, sortKey: "e1", ...args },
+			);
+		const row = async () =>
+			db.query.task.findFirst({ where: (t, { eq }) => eq(t.id, "t-qty") });
+
+		await expect(update({ quantity: "x".repeat(33) })).rejects.toThrow();
+		await expect(update({ unit: "x".repeat(17) })).rejects.toThrow();
+		await expect(
+			create("t-qty-bad", { quantity: "x".repeat(33) }),
+		).rejects.toThrow();
+		expect((await row())?.quantity).toBe("a handful");
+
+		// An offline edit queued before the number rule replays unharmed.
+		await update({ quantity: " 2 boxes " });
+		expect((await row())?.quantity).toBe("2 boxes");
+
+		// A unit-only change never re-checks the stored quantity.
+		await update({ unit: " jar " });
+		expect(await row()).toMatchObject({ quantity: "2 boxes", unit: "jar" });
+
+		await update({ quantity: "1,5" });
+		expect((await row())?.quantity).toBe("1,5");
+		await update({ quantity: "" });
+		expect((await row())?.quantity).toBe("");
+		await create("t-qty-ok", { quantity: "2.5", unit: "kg" });
+
+		await call(mutators.task.delete, { id: "member" }, { id: "t-qty" });
+		await call(mutators.task.delete, { id: "member" }, { id: "t-qty-ok" });
 	});
 
 	test("task.delete cascades subtasks", async () => {

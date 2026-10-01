@@ -34,13 +34,18 @@ function StreakRow({
 
 	// Whole message per case: the label must never be assembled from a
 	// translated fragment, since word order cannot move across that seam.
-	const label = streak
-		? m.panel_streak_row_aria({
-				title: task.title,
-				count: streak.current,
-				pct: streak.adherencePct,
-			})
-		: m.panel_streak_no_recurrence_row_aria({ title: task.title });
+	const label = !streak
+		? m.panel_streak_no_recurrence_row_aria({ title: task.title })
+		: streak.adherencePct == null
+			? m.panel_streak_row_new_aria({
+					title: task.title,
+					count: streak.current,
+				})
+			: m.panel_streak_row_aria({
+					title: task.title,
+					count: streak.current,
+					pct: streak.adherencePct,
+				});
 	return (
 		<button
 			type="button"
@@ -56,9 +61,11 @@ function StreakRow({
 						<Flame aria-hidden className="size-3.5 text-success" />
 						{streak.current}
 					</span>
-					<span className="text-xs text-muted-foreground tabular-nums">
-						{streak.adherencePct}%
-					</span>
+					{streak.adherencePct != null && (
+						<span className="text-xs text-muted-foreground tabular-nums">
+							{streak.adherencePct}%
+						</span>
+					)}
 				</>
 			) : (
 				<span className="text-xs text-muted-foreground">

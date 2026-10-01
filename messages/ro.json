@@ -4,7 +4,7 @@
 	"toggle_off": "Oprit",
 	"notifications_heading": "Notificări",
 	"notifications_channels_heading": "Canale",
-	"notifications_defaults_heading": "Valori implicite",
+	"notifications_defaults_heading": "Mementouri repetate",
 	"notifications_no_channels": "Niciun canal configurat încă - mementourile nu vor fi livrate în afara aplicației.",
 	"channel_label_ntfy": "ntfy",
 	"channel_label_telegram": "Telegram",
@@ -40,6 +40,7 @@
 	"channel_field_channelId": "ID canal",
 	"channel_field_address": "Adresă de email",
 	"channel_action_setup": "Configurează",
+	"channel_action_edit": "Editează",
 	"channel_action_save": "Salvează",
 	"channel_action_test": "Salvează și trimite un test",
 	"channel_action_remove": "Elimină",
@@ -92,9 +93,6 @@
 	"search_hint": "Scrie pentru a-ți căuta sarcinile.",
 	"nav_settings": "Setări",
 	"fab_quick_add": "Adăugare rapidă",
-	"sidebar_open_shared": "Deschide partajatele",
-	"sidebar_open_shared_short": "P",
-	"sidebar_members": "Membri",
 	"sidebar_lists_nav_label": "Liste",
 	"sidebar_views_heading": "Vizualizări",
 	"sidebar_dashboards_heading": "Dashboard-uri",
@@ -149,13 +147,36 @@
 	"palette_results_label": "Rezultate",
 	"palette_no_results": "Niciun rezultat",
 	"palette_group_commands": "Comenzi",
-	"palette_group_navigate": "Navigare",
-	"palette_group_search": "Căutare",
 	"palette_dashboard_item": "Dashboard: {name}",
+	"palette_group_recent": "Recente",
+	"palette_group_lists": "Liste",
+	"palette_group_views": "Vizualizări",
+	"palette_group_tasks": "Sarcini",
+	"cheatsheet_category_selection": "Selecție",
+	"command_selection_toggle": "Selectează sau deselectează sarcina",
+	"command_selection_extend_down": "Extinde selecția în jos",
+	"command_selection_extend_up": "Extinde selecția în sus",
+	"command_selection_all": "Selectează toate sarcinile",
+	"command_selection_clear": "Golește selecția",
+	"action_select": "Selectează",
+	"action_deselect": "Deselectează",
+	"task_select_aria": "Selectează {title}",
+	"selection_bar_label": "Sarcini selectate",
+	"selection_complete": "Finalizează",
+	"selection_move": "Mută",
+	"selection_due": "Termen",
+	"selection_priority": "Prioritate",
+	"selection_delete": "Șterge",
+	"selection_clear": "Golește selecția",
+	"selection_check": "Bifează",
+	"selection_uncheck": "Debifează",
+	"selection_clear_quantity": "Șterge cantitatea",
+	"selection_paused_reason": "Pusă pe pauză de un import, nu poate fi selectată",
 	"list_untitled_fallback": "Listă",
 	"palette_untitled_task": "Sarcină",
 	"cheatsheet_title": "Scurtături de tastatură",
 	"cheatsheet_description": "Scurtăturile funcționează oriunde în afara câmpurilor de text.",
+	"shortcut_hint": "Apasă {key} pentru scurtături de tastatură",
 	"cheatsheet_category_general": "General",
 	"cheatsheet_category_task": "Sarcină",
 	"cheatsheet_category_view": "Vizualizare",
@@ -174,12 +195,12 @@
 	"command_nav_up": "Mergi în sus",
 	"command_nav_open": "Deschide elementul selectat",
 	"command_task_toggle_done": "Comută starea de finalizare",
-	"escalation_repeat_every": "Repetă la fiecare (min)",
-	"escalation_max_repeats": "Repetări maxime",
-	"escalation_fallback_member": "Persoană de rezervă",
+	"escalation_repeat_every": "Repetă mementoul la fiecare",
+	"escalation_max_repeats": "Trimite de cel mult",
+	"escalation_fallback_member": "Dacă nu răspunde nimeni, anunță",
 	"escalation_fallback_nobody": "Nimeni",
-	"quiet_hours_start_label": "Liniște de la",
-	"quiet_hours_end_label": "până la",
+	"quiet_hours_start_label": "De la",
+	"quiet_hours_end_label": "Până la",
 	"quiet_hours_start_aria": "Începutul orelor de liniște",
 	"quiet_hours_end_aria": "Sfârșitul orelor de liniște",
 	"quiet_hours_clear": "Șterge",
@@ -188,7 +209,25 @@
 	"quiet_hours_timezone_detected": "Am detectat {timezone} - e corect?",
 	"quiet_hours_timezone": "Orele sunt în {timezone}.",
 	"quiet_hours_equal_warning": "Ora de început și cea de sfârșit trebuie să fie diferite. Ca să oprești complet notificările, dezactivează canalele de mai sus.",
-	"quiet_hours_urgent_note": "Mementourile marcate ca urgente ignoră orele de liniște.",
+	"quiet_hours_urgent_note": "Sarcinile setate să amintească și în orele de liniște ajung oricum.",
+	"settings_quiet_hours_heading": "Ore de liniște",
+	"settings_quiet_hours_help": "Mementourile care cad în acest interval așteaptă până se termină.",
+	"settings_reminder_defaults_help": "Se aplică fiecărei sarcini fără mementouri proprii.",
+	"settings_timezone_label": "Fus orar",
+	"settings_timezone_help": "Mementourile și orele de liniște folosesc acest fus orar.",
+	"settings_timezone_change": "Schimbă fusul orar",
+	"settings_nav_label": "Secțiunile setărilor",
+	"settings_section_account": "Cont",
+	"settings_section_appearance": "Aspect și limbă",
+	"settings_section_lists": "Etichete și șabloane",
+	"settings_section_focus": "Concentrare și Karma",
+	"settings_section_data": "Datele tale",
+	"settings_section_danger": "Zonă periculoasă",
+	"file_picker_choose": "Alege fișierul",
+	"file_picker_none": "Niciun fișier ales",
+	"file_picker_drop": "sau trage-l aici",
+	"date_field_trigger_aria": "{label}: {value}",
+	"date_field_none": "Fără dată",
 	"focus_settings_heading": "Cronometru de concentrare",
 	"focus_settings_description": "Intervalele Pomodoro pentru cronometrul de concentrare.",
 	"focus_field_work_min": "Concentrare (min)",
@@ -222,6 +261,7 @@
 	"security_sign_out": "Deconectează-te",
 	"security_error_sign_out": "Deconectarea nu s-a putut finaliza. Încearcă din nou.",
 	"security_passkeys_heading": "Passkey-uri",
+	"security_passkeys_empty": "Conectează-te cu amprenta, fața sau PIN-ul dispozitivului în loc de parolă.",
 	"security_add_passkey": "Adaugă un passkey",
 	"security_passkey_unnamed": "Passkey",
 	"security_passkey_remove": "Elimină",
@@ -252,11 +292,11 @@
 	"e2e_last_holder_ack": "Înțeleg că aceste fișiere se vor pierde.",
 	"account_delete_confirm": "Șterge-mi definitiv contul",
 	"account_delete_failed": "Contul nu a putut fi șters.",
-	"priority_none": "Fără",
+	"priority_none": "Fără prioritate",
 	"priority_low": "Scăzută",
 	"priority_medium": "Medie",
-	"priority_medium_short": "Med",
 	"priority_high": "Ridicată",
+	"priority_coded": "{code} {name}",
 	"due_today": "Azi",
 	"due_tomorrow": "Mâine",
 	"list_completed_count": [
@@ -274,12 +314,29 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} produs în coș",
+				"countPlural=few": "{countNum} produse în coș",
+				"countPlural=other": "{countNum} de produse în coș"
+			}
+		}
+	],
 	"list_change_icon": "Schimbă pictograma listei",
 	"list_display_options": "Opțiuni de afișare a listei",
+	"list_reorder_mode": "Reordonează",
+	"list_reorder_hint": "Trage de mânere pentru a reordona.",
+	"list_reorder_done": "Gata",
 	"list_completed_heading": "Elemente finalizate",
 	"list_completed_sink": "Mută elementele finalizate la final",
 	"list_completed_keep": "Lasă-le pe loc",
-	"list_completed_hide": "Ascunde elementele finalizate",
 	"list_group_by_assignee": "Grupează după responsabil",
 	"list_save_as_template": "Salvează ca șablon",
 	"list_add_from_template": "Adaugă din șablon",
@@ -287,11 +344,23 @@
 	"list_add_task_placeholder": "Adaugă o sarcină",
 	"title_suggest_label": "Sugestii din elementele tale anterioare",
 	"list_add_task": "Adaugă sarcina",
+	"list_add_item_placeholder": "Adaugă un element",
+	"list_add_item": "Adaugă elementul",
+	"list_add_habit_placeholder": "Adaugă un obicei",
+	"list_add_habit": "Adaugă obiceiul",
 	"quickadd_input_label": "Adăugare rapidă de sarcină",
 	"quickadd_sheet_title": "Adăugare rapidă",
 	"quickadd_placeholder": "ex. Cumpără lapte {date} {priority} {label} {list}",
 	"quickadd_placeholder_nodate": "de ex. Cumpără lapte {priority} {label} {list}",
 	"quickadd_example_date": "mâine",
+	"syntax_hint_title": "Sfaturi de scriere",
+	"syntax_hint_word": "nume",
+	"syntax_hint_priority": "Prioritate, p1 e cea mai mare",
+	"syntax_hint_example": "Exemplu: Sună instalatorul {date} {priority} #casă",
+	"syntax_hint_example_nodate": "Exemplu: Sună instalatorul {priority} #casă",
+	"syntax_hint_dismiss": "Ascunde sfaturile de scriere",
+	"syntax_hint_inline_lead": "Deschide adăugarea rapidă ({key})",
+	"syntax_hint_inline_lead_nokey": "Deschide adăugarea rapidă",
 	"quickadd_adding_to": "Se adaugă în {list}",
 	"quickadd_no_list": "Nicio listă disponibilă",
 	"quickadd_failed": "Nu am putut adăuga sarcina.",
@@ -384,10 +453,31 @@
 	"shopping_qty_placeholder": "Cant.",
 	"shopping_unit_placeholder": "Unitate",
 	"shopping_quantity_for": "Cantitate pentru {title}",
+	"shopping_quantity_add": "{label}, adaugă cantitate pentru {title}",
+	"shopping_quantity_edit": "{amount}, editează cantitatea pentru {title}",
+	"shopping_quantity_invalid": "Introdu un număr mai mare decât 0, de ex. 2 sau 1,5",
 	"shopping_unit_for": "Unitate pentru {title}",
 	"shopping_category_other": "Altele",
 	"task_reorder_handle": "Reordonează sarcina",
 	"task_priority_aria": "Prioritate: {priority}",
+	"task_open_details": "Deschide detaliile",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} din {totalNum} subsarcină finalizată",
+				"totalPlural=few": "{doneNum} din {totalNum} subsarcini finalizate",
+				"totalPlural=other": "{doneNum} din {totalNum} de subsarcini finalizate"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -424,6 +514,19 @@
 	"task_delete_named": "Șterge {title}",
 	"task_move_to_list": "Mută în altă listă",
 	"task_delete": "Șterge sarcina",
+	"task_detail_done_aria": "Finalizată",
+	"task_detail_more": "Mai multe opțiuni",
+	"task_more_repeats": "Se repetă",
+	"task_more_reminder": "Memento {time}",
+	"task_more_urgent": "Urgentă",
+	"task_due_add": "Adaugă o dată",
+	"task_due_trigger_aria": "Termen: {value}",
+	"task_due_next_week": "Săptămâna viitoare",
+	"task_due_type_placeholder": "Scrie o dată, de exemplu mâine",
+	"task_due_type_placeholder_iso": "Scrie o dată ca AAAA-LL-ZZ",
+	"task_due_type_invalid": "Data nu a putut fi citită.",
+	"time_field_placeholder": "Adaugă ora",
+	"time_field_invalid": "Scrie o oră ca {example}.",
 	"action_add": "Adaugă",
 	"recurrence_repeat": "Repetare",
 	"recurrence_does_not_repeat": "Nu se repetă",
@@ -575,10 +678,17 @@
 	"reminder_ack_aria": "{status}. Confirmă mementoul",
 	"reminder_ack_chip": "{status} - Confirmă",
 	"reminder_channel_unverified": "canal de livrare neverificat",
-	"reminder_urgent_label": "Urgent (ignoră orele de liniște)",
-	"reminder_override_defaults": "Suprascrie valorile implicite",
-	"escalation_inherit_default": "Moștenește valoarea implicită",
-	"escalation_off": "oprit",
+	"reminder_urgent_label": "Amintește și în orele de liniște",
+	"reminder_override_defaults": "Folosește mementouri proprii pentru această sarcină",
+	"reminder_urgent_help": "Pentru lucruri care nu ar trebui să aștepte sfârșitul orelor de liniște.",
+	"escalation_inherit_default": "Folosește setarea mea implicită",
+	"escalation_minutes_suffix": "minute",
+	"escalation_repeats_suffix": "ori",
+	"escalation_repeat_help_default": "Lasă gol ca să amintească o singură dată.",
+	"escalation_repeat_help_task": "Lasă gol ca să folosești setarea ta implicită.",
+	"escalation_fallback_help": "Primește mementoul când nimeni nu răspunde la ultima trimitere.",
+	"escalation_needs_repeat": "Setează mai întâi cât de des se repetă. Până atunci există un singur memento și nimeni altcineva nu e anunțat.",
+	"escalation_fallback_unknown": "Cineva care nu mai este în spațiile tale",
 	"field_name": "Nume",
 	"field_status": "Stare",
 	"field_title": "Titlu",
@@ -600,7 +710,7 @@
 	"filter_due_none": "Fără termen",
 	"group_no_label": "Fără etichetă",
 	"builtin_view_today": "Azi",
-	"builtin_view_all_my_tasks": "Toate sarcinile mele",
+	"builtin_view_all_my_tasks": "Toate sarcinile",
 	"builtin_view_assigned_to_me": "Atribuite mie",
 	"filter_op_is": "este",
 	"filter_op_before": "înainte de",
@@ -627,7 +737,7 @@
 	"filter_remove_group": "Elimină grupul",
 	"filter_add_condition": "Condiție",
 	"filter_add_group": "Grup",
-	"filter_no_conditions": "Nicio condiție încă — se potrivește cu tot.",
+	"filter_no_conditions": "Nicio condiție încă, deci se potrivește cu tot.",
 	"filter_no_options": "Nicio opțiune.",
 	"filter_multi_any": "Oricare",
 	"filter_assignee_me": "Eu",
@@ -667,6 +777,8 @@
 	"calendar_agenda_heading": "Agendă",
 	"calendar_viewing_as_agenda": "Afișare ca agendă",
 	"calendar_chip_recurring": "{title}, recurentă",
+	"calendar_chip_priority": "{name}, {priority}",
+	"calendar_chip_done": "{name}, finalizată",
 	"calendar_day_today": "{date}, azi",
 	"filter_multi_selected": [
 		{
@@ -804,6 +916,7 @@
 	"panel_title_placeholder": "Titlul panoului",
 	"panel_mobile_hint": "Pe telefon, panourile se așază unul sub altul, în ordinea din dashboard.",
 	"panel_no_matches": "Nicio sarcină potrivită",
+	"panel_all_done": "Nimic deschis aici",
 	"panel_show_all": [
 		{
 			"declarations": ["input count", "local countNum = count: number"],
@@ -860,6 +973,22 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title}: serie de {countNum} zi. Deschide sarcina",
+				"countPlural=few": "{title}: serie de {countNum} zile. Deschide sarcina",
+				"countPlural=other": "{title}: serie de {countNum} de zile. Deschide sarcina"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title}: fără recurență setată. Deschide sarcina",
 	"panel_streak_no_recurrence": "Fără recurență",
 	"panel_streak_missing": "Obicei lipsă (șters sau nepartajat cu tine)",
@@ -890,13 +1019,10 @@
 		}
 	],
 	"panel_focus_own_only": "Doar sesiunile tale",
-	"habit_no_recurrence_hint": "Setează o recurență ca să începi să urmărești acest obicei.",
 	"habit_skip_action": "Sari",
 	"habit_undo_action": "Anulează",
+	"habit_track_daily": "Urmărește zilnic",
 	"habit_done_action": "Făcut azi",
-	"habit_done_state": "Făcut",
-	"habit_mark_done_aria": "Marchează ca făcut pentru azi",
-	"habit_done_today_aria": "Făcut azi",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -1268,10 +1394,12 @@
 	"login_backup_code_label": "Cod de rezervă",
 	"login_email_placeholder": "email",
 	"login_password_placeholder": "parolă",
+	"login_new_here": "Prima vizită?",
 	"login_signup": "Creează cont",
 	"login_signin": "Conectează-te",
 	"login_signin_passkey": "Conectează-te cu passkey",
 	"login_continue_google": "Continuă cu Google",
+	"login_or": "sau",
 	"login_two_factor_title": "Autentificare în doi pași",
 	"login_backup_code_placeholder": "Cod de rezervă",
 	"login_verify_code": "Verifică codul",
@@ -1313,10 +1441,226 @@
 	"auth_error_registration_disabled": "Conturile noi sunt dezactivate pe această instanță.",
 	"auth_error_invalid_origin": "Serverul nu are încredere în această adresă. Cere-i operatorului să o adauge la originile de încredere ale instanței.",
 	"mutation_failed": "Ceva n-a mers bine.",
+	"mutation_offline_not_saved": "Ești offline, modificarea nu a fost salvată. Reconectează-te și încearcă din nou.",
+	"sync_synced_title": "Sincronizat",
+	"sync_synced_detail": "Conectat. Modificările tale se salvează imediat pe server.",
+	"sync_syncing_title": "Se sincronizează",
+	"sync_syncing_detail": "Modificările tale sunt salvate pe acest dispozitiv și sunt trimise către server.",
+	"sync_offline_title": "Offline",
+	"sync_offline_detail": "Serverul nu poate fi contactat. Modificările tale sunt salvate pe acest dispozitiv și se vor sincroniza când revine conexiunea.",
+	"sync_stopped_title": "Sincronizare oprită",
+	"sync_stopped_detail": "Serverul nu poate fi contactat și modificările noi nu pot fi salvate acum. Reîncarcă pagina ca să încerci din nou.",
+	"sync_rejected_title": "O modificare nu a fost salvată",
+	"sync_rejected_detail": "Serverul a refuzat o modificare, așa că a fost anulată. Verifică elementul și încearcă din nou.",
+	"sync_rejected_dismiss": "Închide",
+	"sync_reauth_title": "Autentifică-te ca să sincronizezi",
+	"sync_reauth_detail": "Autentificarea ta a expirat cât ai fost plecat. Modificările tale rămân pe acest dispozitiv și se sincronizează după ce te autentifici din nou.",
+	"sync_reauth_action": "Autentifică-te din nou",
+	"sync_pending_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} modificare recentă nesincronizată încă",
+				"countPlural=few": "{countNum} modificări recente nesincronizate încă",
+				"countPlural=other": "{countNum} de modificări recente nesincronizate încă"
+			}
+		}
+	],
 	"mutator_error_denied": "Nu ai permisiunea să faci asta.",
 	"mutator_error_label_name_taken": "Există deja o etichetă cu acest nume.",
 	"modal_close_label": "Închide",
 	"action_close": "Închide",
+	"action_undo": "Anulează",
+	"snackbar_task_completed": "Finalizat: {title}",
+	"snackbar_task_moved": "Mutată în {list}: {title}",
+	"snackbar_task_complete_failed": "Nu s-a putut finaliza: {title}",
+	"snackbar_task_move_failed": "Nu s-a putut muta: {title}",
+	"selection_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină selectată",
+				"countPlural=few": "{countNum} sarcini selectate",
+				"countPlural=other": "{countNum} de sarcini selectate"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} articol bifat.",
+				"countPlural=few": "{countNum} articole bifate.",
+				"countPlural=other": "{countNum} de articole bifate."
+			}
+		}
+	],
+	"snackbar_bulk_completed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină finalizată.",
+				"countPlural=few": "{countNum} sarcini finalizate.",
+				"countPlural=other": "{countNum} de sarcini finalizate."
+			}
+		}
+	],
+	"snackbar_bulk_undo_skips_recurring": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Anularea omite {countNum} sarcină recurentă.",
+				"countPlural=few": "Anularea omite {countNum} sarcini recurente.",
+				"countPlural=other": "Anularea omite {countNum} de sarcini recurente."
+			}
+		}
+	],
+	"snackbar_bulk_recurring_advanced": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină recurentă a trecut la următoarea dată.",
+				"countPlural=few": "{countNum} sarcini recurente au trecut la următoarea dată.",
+				"countPlural=other": "{countNum} de sarcini recurente au trecut la următoarea dată."
+			}
+		}
+	],
+	"snackbar_bulk_complete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut finaliza {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut finaliza {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut finaliza {countNum} de sarcini"
+			}
+		}
+	],
+	"snackbar_bulk_moved": [
+		{
+			"declarations": [
+				"input count",
+				"input list",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină mutată în {list}",
+				"countPlural=few": "{countNum} sarcini mutate în {list}",
+				"countPlural=other": "{countNum} de sarcini mutate în {list}"
+			}
+		}
+	],
+	"snackbar_bulk_move_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut muta {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut muta {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut muta {countNum} de sarcini"
+			}
+		}
+	],
+	"snackbar_bulk_update_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut actualiza {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut actualiza {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut actualiza {countNum} de sarcini"
+			}
+		}
+	],
+	"snackbar_bulk_delete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Nu s-a putut șterge {countNum} sarcină",
+				"countPlural=few": "Nu s-au putut șterge {countNum} sarcini",
+				"countPlural=other": "Nu s-au putut șterge {countNum} de sarcini"
+			}
+		}
+	],
+	"bulk_delete_title": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Ștergi {countNum} sarcină?",
+				"countPlural=few": "Ștergi {countNum} sarcini?",
+				"countPlural=other": "Ștergi {countNum} de sarcini?"
+			}
+		}
+	],
+	"bulk_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Se șterge {countNum} sarcină împreună cu subsarcinile ei. Această acțiune nu poate fi anulată.",
+				"countPlural=few": "Se șterg {countNum} sarcini împreună cu subsarcinile lor. Această acțiune nu poate fi anulată.",
+				"countPlural=other": "Se șterg {countNum} de sarcini împreună cu subsarcinile lor. Această acțiune nu poate fi anulată."
+			}
+		}
+	],
 	"action_delete": "Șterge",
 	"action_remove": "Elimină",
 	"confirm_cancel": "Anulează",
@@ -1327,8 +1671,11 @@
 	"list_reorder_handle": "Reordonează lista",
 	"workspace_switcher_title": "Workspace-uri",
 	"workspace_name_fallback": "Workspace",
-	"views_nav_label": "Vizualizări",
-	"dashboards_nav_label": "Dashboard-uri",
+	"workspace_manage_members": "Gestionează membrii",
+	"workspace_private_note": "Workspace-ul tău personal este privat. Workspace-urile comune apar aici când te invită cineva.",
+	"workspace_kind_personal": "Personal",
+	"workspace_kind_shared": "Comun",
+	"sidebar_folder_empty": "Încă nicio listă",
 	"view_actions": "Acțiuni pentru vizualizare",
 	"view_set_home": "Setează ca pagină de start",
 	"view_pin": "Fixează",
@@ -1429,17 +1776,22 @@
 	"app_loading": "Se încarcă…",
 	"tasks_loading": "Se încarcă sarcinile…",
 	"list_empty": "Încă nu e nimic aici.",
-	"list_empty_action": "Adaugă un element",
 	"view_empty_welcome_title": "Bine ai venit în Ditero",
-	"view_empty_welcome_hint": "Creează o listă mai jos ca să adaugi prima ta sarcină.",
+	"view_empty_welcome_hint": "Sarcinile stau în liste. Creează una ca să începi.",
+	"view_empty_welcome_action": "Creează prima ta listă",
+	"view_empty_welcome_starters": "Sau pornește de la un șablon",
+	"starter_name_shopping": "Cumpărături",
+	"starter_name_checklist": "Bagaje",
+	"starter_name_tasks": "Treburi casnice",
+	"starter_name_habits": "Obiceiuri zilnice",
 	"view_empty_no_match": "Momentan nimic nu corespunde acestei vizualizări.",
 	"action_continue": "Continuă",
 	"action_retry": "Încearcă din nou",
 	"e2e_enroll_title": "Activează criptarea",
-	"e2e_enroll_intro": "Fișierele pe care le atașezi sunt criptate pe acest dispozitiv înainte de a fi încărcate. Acest server păstrează doar copia criptată — nu vede nici conținutul, nici numele fișierului.",
+	"e2e_enroll_intro": "Fișierele pe care le atașezi sunt criptate pe acest dispozitiv înainte de a fi încărcate. Acest server păstrează doar copia criptată. Nu vede nici conținutul, nici numele fișierului.",
 	"e2e_enroll_passphrase_heading": "Alege o frază de acces pentru criptare",
 	"e2e_enroll_not_account_password": "Aceasta nu este parola contului tău. Alege altceva și ceva ce vei ține minte.",
-	"e2e_no_reset_note": "Nimeni nu poate reseta această frază de acces — nici tu, nici cine administrează acest server. Dacă o pierzi împreună cu codul de recuperare, fișierele tale criptate sunt pierdute definitiv.",
+	"e2e_no_reset_note": "Nimeni nu poate reseta această frază de acces, nici tu, nici cine administrează acest server. Dacă o pierzi împreună cu codul de recuperare, fișierele tale criptate sunt pierdute definitiv.",
 	"e2e_field_passphrase": "Frază de acces pentru criptare",
 	"e2e_field_passphrase_confirm": "Repetă fraza de acces",
 	"e2e_passphrase_too_short": "Folosește cel puțin 12 caractere.",
@@ -1461,7 +1813,7 @@
 	"e2e_recovery_confirm_label": "Scrie codul din nou ca să confirmi că l-ai salvat",
 	"e2e_recovery_confirm_submit": "Confirmă și finalizează",
 	"e2e_recovery_confirm_mismatch": "Nu se potrivește cu codul de mai sus.",
-	"e2e_recovery_confirm_checksum": "Verifică codul — un caracter pare greșit.",
+	"e2e_recovery_confirm_checksum": "Verifică codul. Un caracter pare greșit.",
 	"e2e_settings_heading": "Fișiere criptate",
 	"e2e_status_unenrolled": "Criptarea nu este încă configurată pentru acest cont.",
 	"e2e_setup_action": "Configurează criptarea",
@@ -1492,7 +1844,7 @@
 	"e2e_recovery_reset_heading": "Alege o frază de acces nouă",
 	"e2e_recovery_reset_intro": "Ai deblocat cu codul de recuperare, așa că stabilește o frază de acces pe care s-o poți folosi data viitoare.",
 	"e2e_recovery_reset_submit": "Salvează fraza de acces",
-	"e2e_recovery_must_confirm": "Confirmă codul înainte de a închide – nu mai poate fi afișat.",
+	"e2e_recovery_must_confirm": "Confirmă codul înainte de a închide. Nu mai poate fi afișat.",
 	"e2e_field_current_passphrase": "Fraza de acces actuală pentru criptare",
 	"e2e_change_passphrase": "Schimbă fraza de acces",
 	"e2e_change_passphrase_done": "Fraza de acces a fost schimbată. Codul de recuperare funcționează în continuare.",
@@ -1693,5 +2045,31 @@
 	"activation_container_change_failed": "Modificarea nu a putut fi salvată. Verifică sarcinile suspendate și încearcă din nou.",
 	"activation_task_change_failed": "Sarcina nu a putut fi modificată. Încearcă din nou.",
 	"activation_badge_pending": "Import în așteptare",
-	"activation_badge_blocked": "Verificare necesară"
+	"activation_badge_blocked": "Verificare necesară",
+	"sync_save_pending_failed": "Modificările în așteptare nu au putut fi salvate pe acest dispozitiv. Încearcă din nou.",
+	"display_settings_label": "Mărimea textului și contrastul",
+	"display_size_label": "Mărime pentru citire",
+	"display_size_description": "Ajustează împreună textul, comenzile și spațierea.",
+	"display_size_standard": "Standard",
+	"display_size_comfortable": "Confortabil",
+	"display_size_large": "Mare",
+	"display_contrast_label": "Contrast ridicat",
+	"display_contrast_description": "Fă textul, marginile și comenzile mai ușor de distins în orice temă.",
+	"display_device_note": "Aceste setări sunt salvate pentru contul tău pe acest dispozitiv.",
+	"display_save_failed": "Modificările se aplică acum, dar nu au putut fi salvate pe acest dispozitiv.",
+	"login_password_guidance": "Folosește între {min} și {max} de caractere. O parolă mai lungă și unică este mai ușor de păstrat în siguranță.",
+	"login_recovery_label": "Nu te poți conecta?",
+	"login_recovery_admin_guidance": "Întreabă administratorul acestei instanțe Ditero cum poți recupera accesul. Pentru un cont administrat, întreabă părintele sau tutorele.",
+	"login_existing_account": "Ai deja un cont?",
+	"syntax_hint_inline_literal": "Acest câmp salvează textul exact cum îl scrii.",
+	"syntax_hint_details": "Sintaxa adăugării rapide",
+	"aggregate_scope_all": "Din toate spațiile tale de lucru",
+	"aggregate_scope_selected": "Din: {workspaces}",
+	"scope_source_personal": "{workspace} · Personal",
+	"scope_source_shared": "{workspace} · Partajat",
+	"calendar_go_today": "Azi",
+	"calendar_show_earlier": "Arată datele anterioare",
+	"calendar_hide_earlier": "Ascunde datele anterioare",
+	"habit_occurrence_skipped": "Această repetare a fost omisă",
+	"habit_occurrence_unavailable": "Repetarea nu este disponibilă. Deschide obiceiul pentru a verifica programul."
 }

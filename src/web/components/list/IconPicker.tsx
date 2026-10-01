@@ -98,7 +98,7 @@ export function IconPicker({
 					<button
 						type="button"
 						onClick={() => pick(suggested)}
-						className="flex items-center gap-2 self-start rounded-lg border px-2.5 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+						className="flex items-center gap-2 self-start pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] rounded-lg border px-2.5 py-1.5 text-sm text-muted-foreground hover:text-foreground"
 					>
 						<SuggestedIcon className="size-4" />
 						{m.icon_picker_suggested()}
@@ -111,7 +111,10 @@ export function IconPicker({
 						<TabsTrigger value="emoji">{m.icon_picker_tab_emoji()}</TabsTrigger>
 					</TabsList>
 					<TabsContent value="icons">
-						<div className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto p-0.5">
+						<div
+							data-icon-picker-grid
+							className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto p-0.5 pointer-coarse:grid-cols-[repeat(auto-fit,minmax(44px,1fr))]"
+						>
 							{ICON_NAMES.map((name) => {
 								const Icon = ICONS[name];
 								return (
@@ -121,7 +124,7 @@ export function IconPicker({
 										aria-label={iconLabel(name)}
 										onClick={() => pick(name)}
 										className={cn(
-											"flex size-9 items-center justify-center rounded-lg border hover:bg-muted",
+											"flex size-9 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] items-center justify-center rounded-lg border hover:bg-muted",
 											current === name && "border-ring bg-muted",
 										)}
 									>
@@ -132,7 +135,10 @@ export function IconPicker({
 						</div>
 					</TabsContent>
 					<TabsContent value="emoji">
-						<div className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto p-0.5">
+						<div
+							data-icon-picker-grid
+							className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto p-0.5 pointer-coarse:grid-cols-[repeat(auto-fit,minmax(44px,1fr))]"
+						>
 							{/* The emoji character is deliberately its own label: a screen
 							    reader announces it by its CLDR short name in the READER's
 							    language. A keyed name would override that with the app's
@@ -144,7 +150,7 @@ export function IconPicker({
 									aria-label={emoji}
 									onClick={() => pick(emoji)}
 									className={cn(
-										"flex size-9 items-center justify-center rounded-lg border text-lg hover:bg-muted",
+										"flex size-9 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] items-center justify-center rounded-lg border text-lg hover:bg-muted",
 										current === emoji && "border-ring bg-muted",
 									)}
 								>

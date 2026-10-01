@@ -2,21 +2,15 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import type { Locale } from "../../src/domain/locale.ts";
 import { m } from "../../src/paraglide/messages.js";
-import { goToSettings } from "./helpers.ts";
+import { goToSettings, uniqueEmail } from "./helpers.ts";
 
 // M-i18n language switcher: pre-auth (Login) + post-auth (settings) mounts,
 // user_pref.locale persistence + round-trip across a reload, dir/lang
 // application, and the axe gate in RTL (design 2.14: zero serious/critical).
-test.describe.configure({ retries: 2, timeout: 60_000 });
+test.describe.configure({ timeout: 60_000 });
 
 const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
 
 // Freeze animations so axe samples the settled frame (matches focus.spec).
 async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
@@ -68,7 +62,7 @@ async function switchTo(
 // degenerating: without it, a switcher that silently no-ops would still pass
 // every locale whose string happened to match the base.
 const LOGIN_SURFACE = [
-	["signup", m.login_signup] as const,
+	["signup-mode", m.login_signup] as const,
 	["signin", m.login_signin] as const,
 	["signin-passkey", m.login_signin_passkey] as const,
 ];
@@ -128,6 +122,7 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 
 	// Sign up while ar is active; data-testid selectors are locale-independent.
 	await page.getByTestId("email").fill(uniqueEmail("locale"));
+	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill(PASSWORD);
 	await page.getByTestId("signup").click();
 	await expect(page.getByTestId("workspace")).toBeVisible({
@@ -141,7 +136,7 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	await expect(page.getByTestId("language-switcher")).toContainText("العربية");
 	// A real heading on the authed surface, so the catalog assertion covers a
 	// post-auth mount and not just the pre-auth one.
-	await expect(page.locator("#security-heading")).toHaveText(
+	await expect(page.locator("#settings-security-heading")).toHaveText(
 		m.security_heading({}, { locale: "ar" }),
 	);
 	// The back chevron mirrors: the glyph means "reverse", and reverse is

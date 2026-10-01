@@ -16,6 +16,7 @@ import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { copyText } from "../../lib/clipboard.ts";
+import { formatList } from "../../lib/intl-format.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
 import { MemberAvatar } from "./avatar.tsx";
 import { InviteMailNotice } from "./InviteMailNotice";
@@ -188,6 +189,15 @@ export function AssigneePicker({
 	return (
 		<div className="flex flex-col gap-1 text-sm">
 			<span className="text-muted-foreground">{m.field_assignees()}</span>
+			<p data-testid="assignee-names" className="min-w-0 wrap-anywhere text-sm">
+				{assignedCount > 0
+					? formatList(
+							[...assignedIds].map(
+								(id) => userMap.get(id)?.name ?? m.group_unknown_user(),
+							),
+						)
+					: m.group_unassigned()}
+			</p>
 			<Popover
 				onOpenChange={(o) => {
 					if (!o) {
@@ -204,7 +214,7 @@ export function AssigneePicker({
 						disabled={disabled}
 						variant="outline"
 						size="sm"
-						className="self-start"
+						className="self-start pointer-coarse:h-11"
 						data-testid="assignee-open"
 					>
 						<UserPlus />

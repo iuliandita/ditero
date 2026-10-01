@@ -3,6 +3,30 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
+/* Arabic companion face: unicode-range keeps it out of the non-Arabic
+   download path entirely, only the arabic-script subset ships. Noto Sans
+   Arabic pairs with Geist's x-height and neutral grotesque tone, and is
+   natively variable-weight like Geist rather than a single static cut. */
+@font-face {
+	font-family: "Noto Sans Arabic Variable";
+	font-style: normal;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url("@fontsource-variable/noto-sans-arabic/files/noto-sans-arabic-arabic-wght-normal.woff2")
+		format("woff2-variations");
+	unicode-range:
+		U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891,
+		U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41,
+		U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E,
+		U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F,
+		U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37,
+		U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F,
+		U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F,
+		U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77,
+		U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3,
+		U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+
 @custom-variant dark {
 	&:is(.dark *) {
 		@slot;
@@ -23,26 +47,22 @@
 
 @theme inline {
 	--font-heading: var(--font-sans);
-	--font-sans: "Geist Variable", sans-serif;
-	--color-sidebar-ring: var(--sidebar-ring);
+	--font-sans: "Geist Variable", "Noto Sans Arabic Variable", sans-serif;
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
 	--color-sidebar-accent: var(--sidebar-accent);
-	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-	--color-sidebar-primary: var(--sidebar-primary);
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar: var(--sidebar);
-	--color-chart-5: var(--chart-5);
-	--color-chart-4: var(--chart-4);
-	--color-chart-3: var(--chart-3);
-	--color-chart-2: var(--chart-2);
-	--color-chart-1: var(--chart-1);
 	--color-ring: var(--ring);
 	--color-input: var(--input);
+	--color-control-border: var(--control-border);
+	--color-scrim: var(--scrim);
 	--color-border: var(--border);
 	--color-destructive: var(--destructive);
 	--color-success: var(--success);
 	--color-info: var(--info);
+	--color-warning: var(--warning);
+	--color-warning-foreground: var(--warning-foreground);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-accent: var(--accent);
 	--color-muted-foreground: var(--muted-foreground);
@@ -76,48 +96,47 @@
 }
 
 :root {
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.205 0 0);
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-	--muted: oklch(0.97 0 0);
-	/* 0.46 (was 0.556) clears WCAG AA 4.5:1 for secondary text on light bg. */
-	--muted-foreground: oklch(0.46 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
-	--destructive: oklch(0.577 0.245 27.325);
-	--success: oklch(0.55 0.15 150);
-	--info: oklch(0.52 0.16 250);
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
-	--chart-1: oklch(0.87 0 0);
-	--chart-2: oklch(0.556 0 0);
-	--chart-3: oklch(0.439 0 0);
-	--chart-4: oklch(0.371 0 0);
-	--chart-5: oklch(0.269 0 0);
+	/* Calm canon palette: neutrals share one cool hue at chroma <= 0.014, the
+	   single owned accent (--primary, teal) marks the primary action, the
+	   selected nav row, focus and a checked box. DESIGN.md holds the roles. */
+	--background: oklch(0.99 0.002 210);
+	--foreground: oklch(0.225 0.009 220);
+	--card: oklch(0.995 0.0015 210);
+	--card-foreground: oklch(0.225 0.009 220);
+	--popover: oklch(0.995 0.0015 210);
+	--popover-foreground: oklch(0.225 0.009 220);
+	--primary: oklch(0.5 0.085 192);
+	--primary-foreground: oklch(0.985 0.005 192);
+	--secondary: oklch(0.955 0.006 210);
+	--secondary-foreground: oklch(0.26 0.01 220);
+	--muted: oklch(0.955 0.006 210);
+	--muted-foreground: oklch(0.47 0.013 215);
+	--accent: oklch(0.945 0.007 210);
+	--accent-foreground: oklch(0.24 0.01 220);
+	--destructive: oklch(0.55 0.18 27);
+	--success: oklch(0.53 0.11 155);
+	--info: oklch(0.52 0.11 245);
+	--warning: oklch(0.53 0.115 62);
+	--warning-foreground: oklch(0.985 0.01 80);
+	--border: oklch(0.915 0.007 210);
+	--input: oklch(0.87 0.009 210);
+	--control-border: oklch(0.6 0.014 215);
+	--ring: oklch(0.52 0.085 192);
+	--scrim: oklch(0.22 0.02 220 / 0.3);
+	--selection: oklch(0.9 0.045 192);
+	--sidebar: oklch(0.97 0.006 210);
+	--sidebar-foreground: oklch(0.24 0.01 220);
+	--sidebar-accent: oklch(0.925 0.026 192);
+	--sidebar-accent-foreground: oklch(0.3 0.05 192);
+	--sidebar-border: oklch(0.91 0.008 210);
+	--kind-tasks: oklch(0.55 0.11 252);
+	--kind-shopping: oklch(0.55 0.11 150);
+	--kind-checklist: oklch(0.58 0.1 80);
+	--kind-project: oklch(0.54 0.12 305);
+	--priority-1: oklch(0.56 0.1 250);
+	--priority-2: oklch(0.6 0.125 60);
+	--priority-3: oklch(0.56 0.165 27);
 	--radius: 0.625rem;
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: oklch(0.205 0 0);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
-	--kind-tasks: oklch(0.55 0.18 255);
-	--kind-shopping: oklch(0.55 0.15 150);
-	--kind-checklist: oklch(0.6 0.13 80);
-	--kind-project: oklch(0.55 0.19 300);
-	--priority-1: oklch(0.6 0.12 250);
-	--priority-2: oklch(0.68 0.15 65);
-	--priority-3: oklch(0.58 0.22 25);
 	/* Motion is theme-invariant, so it is declared once here and never in the
 	   dark palettes. Plain custom properties, not @theme entries: Tailwind has no
 	   --duration-* namespace, and @theme inline drops the variable after inlining
@@ -129,117 +148,452 @@
 	/* Elevation IS theme-dependent (a shadow tuned for white is invisible on
 	   near-black), so it is one of the tokens both dark palettes must mirror. */
 	--elevation-overlay:
-		0 4px 12px -2px oklch(0 0 0 / 0.1), 0 2px 4px -2px oklch(0 0 0 / 0.06);
+		0 4px 12px -2px oklch(0.22 0.02 220 / 0.1),
+		0 2px 4px -2px oklch(0.22 0.02 220 / 0.06);
 	--elevation-floating:
-		0 12px 28px -6px oklch(0 0 0 / 0.16), 0 4px 8px -4px oklch(0 0 0 / 0.08);
+		0 12px 28px -6px oklch(0.22 0.02 220 / 0.16),
+		0 4px 8px -4px oklch(0.22 0.02 220 / 0.08);
 }
 
 /* must mirror the prefers-color-scheme dark block below */
 .dark {
-	--background: oklch(0.145 0 0);
-	--foreground: oklch(0.985 0 0);
-	--card: oklch(0.205 0 0);
-	--card-foreground: oklch(0.985 0 0);
-	--popover: oklch(0.205 0 0);
-	--popover-foreground: oklch(0.985 0 0);
-	--primary: oklch(0.922 0 0);
-	--primary-foreground: oklch(0.205 0 0);
-	--secondary: oklch(0.269 0 0);
-	--secondary-foreground: oklch(0.985 0 0);
-	--muted: oklch(0.269 0 0);
-	--muted-foreground: oklch(0.708 0 0);
-	--accent: oklch(0.269 0 0);
-	--accent-foreground: oklch(0.985 0 0);
-	--destructive: oklch(0.704 0.191 22.216);
-	--success: oklch(0.72 0.15 150);
-	--info: oklch(0.7 0.15 250);
-	--border: oklch(1 0 0 / 10%);
-	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.556 0 0);
-	--chart-1: oklch(0.87 0 0);
-	--chart-2: oklch(0.556 0 0);
-	--chart-3: oklch(0.439 0 0);
-	--chart-4: oklch(0.371 0 0);
-	--chart-5: oklch(0.269 0 0);
-	--sidebar: oklch(0.205 0 0);
-	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.488 0.243 264.376);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.269 0 0);
-	--sidebar-accent-foreground: oklch(0.985 0 0);
-	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.556 0 0);
-	--kind-tasks: oklch(0.72 0.15 255);
-	--kind-shopping: oklch(0.75 0.15 150);
-	--kind-checklist: oklch(0.8 0.13 85);
-	--kind-project: oklch(0.72 0.16 300);
-	--priority-1: oklch(0.72 0.12 250);
-	--priority-2: oklch(0.78 0.15 70);
-	--priority-3: oklch(0.7 0.19 22);
+	--background: oklch(0.19 0.007 215);
+	--foreground: oklch(0.94 0.004 210);
+	--card: oklch(0.215 0.008 215);
+	--card-foreground: oklch(0.94 0.004 210);
+	--popover: oklch(0.235 0.009 215);
+	--popover-foreground: oklch(0.94 0.004 210);
+	--primary: oklch(0.76 0.085 192);
+	--primary-foreground: oklch(0.2 0.02 192);
+	--secondary: oklch(0.265 0.01 215);
+	--secondary-foreground: oklch(0.94 0.004 210);
+	--muted: oklch(0.265 0.01 215);
+	--muted-foreground: oklch(0.72 0.012 210);
+	--accent: oklch(0.28 0.011 215);
+	--accent-foreground: oklch(0.94 0.004 210);
+	--destructive: oklch(0.7 0.15 22);
+	--success: oklch(0.74 0.12 155);
+	--info: oklch(0.72 0.1 245);
+	--warning: oklch(0.8 0.115 75);
+	--warning-foreground: oklch(0.22 0.03 70);
+	--border: oklch(0.29 0.009 215);
+	--input: oklch(0.35 0.011 215);
+	--control-border: oklch(0.56 0.013 210);
+	--ring: oklch(0.74 0.09 192);
+	--scrim: oklch(0.1 0.01 215 / 0.6);
+	--selection: oklch(0.4 0.06 192);
+	--sidebar: oklch(0.165 0.007 215);
+	--sidebar-foreground: oklch(0.94 0.004 210);
+	--sidebar-accent: oklch(0.285 0.03 192);
+	--sidebar-accent-foreground: oklch(0.94 0.02 192);
+	--sidebar-border: oklch(0.26 0.009 215);
+	--kind-tasks: oklch(0.73 0.1 252);
+	--kind-shopping: oklch(0.75 0.11 150);
+	--kind-checklist: oklch(0.8 0.1 85);
+	--kind-project: oklch(0.73 0.11 305);
+	--priority-1: oklch(0.72 0.1 250);
+	--priority-2: oklch(0.78 0.12 65);
+	--priority-3: oklch(0.71 0.15 25);
 	--elevation-overlay:
-		0 4px 12px -2px oklch(0 0 0 / 0.5), 0 2px 4px -2px oklch(0 0 0 / 0.4);
+		0 4px 12px -2px oklch(0.08 0.01 215 / 0.5),
+		0 2px 4px -2px oklch(0.08 0.01 215 / 0.4);
 	--elevation-floating:
-		0 12px 28px -6px oklch(0 0 0 / 0.6), 0 4px 8px -4px oklch(0 0 0 / 0.45);
+		0 12px 28px -6px oklch(0.08 0.01 215 / 0.6),
+		0 4px 8px -4px oklch(0.08 0.01 215 / 0.45);
 }
 
 /* OS dark default (.light class wins); must mirror the .dark block above */
 @media (prefers-color-scheme: dark) {
 	:root:not(.light) {
-		--background: oklch(0.145 0 0);
-		--foreground: oklch(0.985 0 0);
-		--card: oklch(0.205 0 0);
-		--card-foreground: oklch(0.985 0 0);
-		--popover: oklch(0.205 0 0);
-		--popover-foreground: oklch(0.985 0 0);
-		--primary: oklch(0.922 0 0);
-		--primary-foreground: oklch(0.205 0 0);
-		--secondary: oklch(0.269 0 0);
-		--secondary-foreground: oklch(0.985 0 0);
-		--muted: oklch(0.269 0 0);
-		--muted-foreground: oklch(0.708 0 0);
-		--accent: oklch(0.269 0 0);
-		--accent-foreground: oklch(0.985 0 0);
-		--destructive: oklch(0.704 0.191 22.216);
-		--success: oklch(0.72 0.15 150);
-		--info: oklch(0.7 0.15 250);
-		--border: oklch(1 0 0 / 10%);
-		--input: oklch(1 0 0 / 15%);
-		--ring: oklch(0.556 0 0);
-		--chart-1: oklch(0.87 0 0);
-		--chart-2: oklch(0.556 0 0);
-		--chart-3: oklch(0.439 0 0);
-		--chart-4: oklch(0.371 0 0);
-		--chart-5: oklch(0.269 0 0);
-		--sidebar: oklch(0.205 0 0);
-		--sidebar-foreground: oklch(0.985 0 0);
-		--sidebar-primary: oklch(0.488 0.243 264.376);
-		--sidebar-primary-foreground: oklch(0.985 0 0);
-		--sidebar-accent: oklch(0.269 0 0);
-		--sidebar-accent-foreground: oklch(0.985 0 0);
-		--sidebar-border: oklch(1 0 0 / 10%);
-		--sidebar-ring: oklch(0.556 0 0);
-		--kind-tasks: oklch(0.72 0.15 255);
-		--kind-shopping: oklch(0.75 0.15 150);
-		--kind-checklist: oklch(0.8 0.13 85);
-		--kind-project: oklch(0.72 0.16 300);
-		--priority-1: oklch(0.72 0.12 250);
-		--priority-2: oklch(0.78 0.15 70);
-		--priority-3: oklch(0.7 0.19 22);
+		--background: oklch(0.19 0.007 215);
+		--foreground: oklch(0.94 0.004 210);
+		--card: oklch(0.215 0.008 215);
+		--card-foreground: oklch(0.94 0.004 210);
+		--popover: oklch(0.235 0.009 215);
+		--popover-foreground: oklch(0.94 0.004 210);
+		--primary: oklch(0.76 0.085 192);
+		--primary-foreground: oklch(0.2 0.02 192);
+		--secondary: oklch(0.265 0.01 215);
+		--secondary-foreground: oklch(0.94 0.004 210);
+		--muted: oklch(0.265 0.01 215);
+		--muted-foreground: oklch(0.72 0.012 210);
+		--accent: oklch(0.28 0.011 215);
+		--accent-foreground: oklch(0.94 0.004 210);
+		--destructive: oklch(0.7 0.15 22);
+		--success: oklch(0.74 0.12 155);
+		--info: oklch(0.72 0.1 245);
+		--warning: oklch(0.8 0.115 75);
+		--warning-foreground: oklch(0.22 0.03 70);
+		--border: oklch(0.29 0.009 215);
+		--input: oklch(0.35 0.011 215);
+		--control-border: oklch(0.56 0.013 210);
+		--ring: oklch(0.74 0.09 192);
+		--scrim: oklch(0.1 0.01 215 / 0.6);
+		--selection: oklch(0.4 0.06 192);
+		--sidebar: oklch(0.165 0.007 215);
+		--sidebar-foreground: oklch(0.94 0.004 210);
+		--sidebar-accent: oklch(0.285 0.03 192);
+		--sidebar-accent-foreground: oklch(0.94 0.02 192);
+		--sidebar-border: oklch(0.26 0.009 215);
+		--kind-tasks: oklch(0.73 0.1 252);
+		--kind-shopping: oklch(0.75 0.11 150);
+		--kind-checklist: oklch(0.8 0.1 85);
+		--kind-project: oklch(0.73 0.11 305);
+		--priority-1: oklch(0.72 0.1 250);
+		--priority-2: oklch(0.78 0.12 65);
+		--priority-3: oklch(0.71 0.15 25);
 		--elevation-overlay:
-			0 4px 12px -2px oklch(0 0 0 / 0.5), 0 2px 4px -2px oklch(0 0 0 / 0.4);
+			0 4px 12px -2px oklch(0.08 0.01 215 / 0.5),
+			0 2px 4px -2px oklch(0.08 0.01 215 / 0.4);
 		--elevation-floating:
-			0 12px 28px -6px oklch(0 0 0 / 0.6), 0 4px 8px -4px oklch(0 0 0 / 0.45);
+			0 12px 28px -6px oklch(0.08 0.01 215 / 0.6),
+			0 4px 8px -4px oklch(0.08 0.01 215 / 0.45);
 	}
 }
 
 @layer base {
 	* {
-		@apply border-border outline-ring/50;
+		@apply border-border outline-ring;
 	}
 	body {
 		@apply bg-background text-foreground;
 	}
 	html {
 		@apply font-sans;
+		accent-color: var(--primary);
+		scrollbar-color: var(--control-border) transparent;
+	}
+	/* Preflight's placeholder is 50% of currentColor, about 3.7:1 on the page. */
+	::placeholder {
+		color: var(--muted-foreground);
+	}
+	::selection {
+		background-color: var(--selection);
+		color: var(--foreground);
+	}
+	input,
+	textarea,
+	[contenteditable] {
+		caret-color: var(--primary);
+	}
+}
+
+/* Completion feedback: the check scales in on transform/opacity only, and only
+   while the checkbox carries .check-pop (set on an observed check, see
+   lib/completion-feedback.ts). */
+@keyframes check-pop {
+	from {
+		opacity: 0;
+		transform: scale(0.4);
+	}
+}
+.check-pop [data-slot="checkbox-indicator"] {
+	animation: check-pop var(--motion-base) var(--motion-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+	.check-pop [data-slot="checkbox-indicator"] {
+		animation: none;
+	}
+}
+
+/* Reading preferences use rems so the browser's default text size still wins.
+   The target and check sizes are 48/24px and 56/28px at a 16px default. */
+:root[data-reading-size="comfortable"] {
+	font-size: 114.2857%;
+	--reading-target: max(48px, 2.625rem);
+	--reading-check: max(24px, 1.3125rem);
+}
+
+:root[data-reading-size="large"] {
+	font-size: 128.5714%;
+	--reading-target: max(56px, 2.722223rem);
+	--reading-check: max(28px, 1.361112rem);
+}
+
+:root:is([data-reading-size="comfortable"], [data-reading-size="large"]) {
+	& [data-reading-sidebar-footer="expanded"] {
+		flex-wrap: wrap;
+		& [data-testid="nav-settings"] {
+			flex: 0 0 100%;
+		}
+	}
+	& [data-icon-picker-grid] {
+		grid-template-columns: repeat(auto-fit, minmax(var(--reading-target), 1fr));
+	}
+	& [data-reading-inline-add] {
+		flex-wrap: wrap;
+		& > div {
+			min-inline-size: 0;
+			flex-basis: min(100%, 10rem);
+		}
+		& > button {
+			max-inline-size: 100%;
+		}
+	}
+	&
+		:is(
+			button:not([data-slot="checkbox"]):not(.sr-only):not(
+				[aria-hidden="true"]
+			),
+			input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
+			textarea,
+			select,
+			[role="menuitem"],
+			[role="menuitemcheckbox"],
+			[role="menuitemradio"],
+			[data-slot="select-item"],
+			label:has(> input[type="radio"]),
+			label:has(> input[type="checkbox"])
+		) {
+		min-block-size: var(--reading-target);
+		min-inline-size: var(--reading-target);
+	}
+	&
+		:is(
+			[data-slot="button"],
+			[data-slot="select-trigger"],
+			[data-slot="select-item"],
+			[role^="menuitem"]
+		) {
+		block-size: auto;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+	& [data-slot="select-value"] {
+		-webkit-line-clamp: unset;
+	}
+	& :is([data-slot="checkbox"], input[type="radio"], input[type="checkbox"]) {
+		inline-size: var(--reading-check);
+		block-size: var(--reading-check);
+		&::after {
+			inset: auto;
+			inline-size: var(--reading-target);
+			block-size: var(--reading-target);
+			left: 50%;
+			top: 50%;
+			translate: -50% -50%;
+		}
+	}
+	& :is([data-slot="checkbox-preview"], [data-slot="checkbox-indicator"] svg) {
+		inline-size: calc(var(--reading-check) * 0.7);
+		block-size: calc(var(--reading-check) * 0.7);
+	}
+	& [data-reading-check-target] {
+		inline-size: var(--reading-target);
+		block-size: var(--reading-target);
+	}
+	& [data-reading-title] {
+		display: block;
+		white-space: normal;
+		overflow: visible;
+		overflow-wrap: anywhere;
+		-webkit-line-clamp: unset;
+	}
+	& [data-reading-metadata] :is(.truncate, [data-slot="badge"]) {
+		block-size: auto;
+		white-space: normal;
+		overflow: visible;
+		overflow-wrap: anywhere;
+	}
+	& [data-reading-metadata] > * {
+		max-inline-size: 100%;
+	}
+	& [data-reading-row="subtask"] {
+		gap: calc((var(--reading-target) - var(--reading-check)) / 2 + 0.5rem);
+		padding-inline-start: calc(
+			(var(--reading-target) - var(--reading-check)) /
+			2
+		);
+	}
+	& :is([data-reading-row="task"], [data-reading-row="shopping"]) {
+		flex-wrap: wrap;
+		& [data-kbd-nav] {
+			flex-basis: calc(100% - var(--reading-target) - 0.5rem);
+		}
+	}
+	& [data-reading-list-header] {
+		flex-wrap: wrap;
+		& h1 {
+			order: -1;
+			flex-basis: 100%;
+			white-space: normal;
+			overflow: visible;
+			overflow-wrap: anywhere;
+		}
+	}
+	& [data-reading-row="task"] [data-testid="task-priority"] {
+		margin-inline-start: calc(var(--reading-target) + 0.5rem);
+	}
+	& [data-reading-row="shopping"] {
+		flex-wrap: wrap;
+		padding-block: 0.25rem;
+		& [data-reading-title] {
+			flex-basis: 8rem;
+			flex-grow: 1;
+		}
+		&
+			:is(
+				fieldset,
+				[data-testid="shopping-qty-chip"],
+				[data-testid="shopping-qty-add"]
+			) {
+			max-inline-size: 100%;
+			margin-inline-start: auto;
+			flex-wrap: wrap;
+			white-space: normal;
+			overflow-wrap: anywhere;
+		}
+	}
+}
+
+/* Contrast is independent of light/dark and reading size. Tide keeps its hue;
+   priority still has its word, ring and distinct flag fill. */
+:root[data-high-contrast="true"] {
+	--foreground: oklch(0.19 0.009 220);
+	--card-foreground: var(--foreground);
+	--popover-foreground: var(--foreground);
+	--secondary-foreground: var(--foreground);
+	--accent-foreground: var(--foreground);
+	--sidebar-foreground: var(--foreground);
+	--muted-foreground: oklch(0.38 0.013 215);
+	--primary: oklch(0.4 0.075 192);
+	--primary-foreground: oklch(0.99 0.002 192);
+	--sidebar-accent-foreground: var(--primary);
+	--selection: oklch(0.925 0.026 192);
+	--destructive: oklch(0.4 0.12 27);
+	--success: oklch(0.4 0.08 155);
+	--info: oklch(0.4 0.08 245);
+	--warning: oklch(0.4 0.08 62);
+	--warning-foreground: oklch(0.99 0.002 80);
+	--border: oklch(0.48 0.014 215);
+	--input: var(--border);
+	--control-border: var(--border);
+	--sidebar-border: var(--border);
+	--ring: var(--primary);
+	--kind-tasks: oklch(0.4 0.08 252);
+	--kind-shopping: oklch(0.4 0.08 150);
+	--kind-checklist: oklch(0.4 0.08 80);
+	--kind-project: oklch(0.4 0.08 305);
+	--priority-1: oklch(0.4 0.08 250);
+	--priority-2: oklch(0.4 0.08 60);
+	--priority-3: oklch(0.4 0.12 27);
+	&
+		:is(
+			[data-slot="select-trigger"],
+			[class*="bg-input/"],
+			[class*="bg-destructive/"],
+			[class*="bg-warning/"],
+			[class*="bg-success/"],
+			[class*="bg-info/"]
+		) {
+		background-color: var(--card);
+	}
+	& [data-slot="badge"][data-variant="default"] {
+		background-color: var(--primary);
+	}
+	& [data-testid="task-priority-text"] {
+		display: inline;
+	}
+	& [class*="text-muted-foreground/"] {
+		color: var(--muted-foreground);
+	}
+	& [class*="text-foreground/"] {
+		color: var(--foreground);
+	}
+	& [class*="text-background/"] {
+		color: var(--background);
+	}
+	& :focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
+	}
+}
+
+:root.dark[data-high-contrast="true"] {
+	--foreground: oklch(0.98 0.004 210);
+	--card-foreground: var(--foreground);
+	--popover-foreground: var(--foreground);
+	--secondary-foreground: var(--foreground);
+	--accent-foreground: var(--foreground);
+	--sidebar-foreground: var(--foreground);
+	--muted-foreground: oklch(0.85 0.012 210);
+	--primary: oklch(0.85 0.075 192);
+	--primary-foreground: oklch(0.19 0.02 192);
+	--sidebar-accent-foreground: var(--foreground);
+	--selection: oklch(0.3 0.03 192);
+	--destructive: oklch(0.85 0.08 22);
+	--success: oklch(0.85 0.08 155);
+	--info: oklch(0.85 0.08 245);
+	--warning: oklch(0.85 0.08 75);
+	--warning-foreground: oklch(0.19 0.03 70);
+	--border: oklch(0.68 0.013 210);
+	--input: var(--border);
+	--control-border: var(--border);
+	--sidebar-border: var(--border);
+	--ring: var(--primary);
+	--kind-tasks: oklch(0.85 0.08 252);
+	--kind-shopping: oklch(0.85 0.08 150);
+	--kind-checklist: oklch(0.85 0.08 85);
+	--kind-project: oklch(0.85 0.08 305);
+	--priority-1: oklch(0.85 0.08 250);
+	--priority-2: oklch(0.85 0.08 65);
+	--priority-3: oklch(0.85 0.08 25);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not(.light)[data-high-contrast="true"] {
+		--foreground: oklch(0.98 0.004 210);
+		--card-foreground: var(--foreground);
+		--popover-foreground: var(--foreground);
+		--secondary-foreground: var(--foreground);
+		--accent-foreground: var(--foreground);
+		--sidebar-foreground: var(--foreground);
+		--muted-foreground: oklch(0.85 0.012 210);
+		--primary: oklch(0.85 0.075 192);
+		--primary-foreground: oklch(0.19 0.02 192);
+		--sidebar-accent-foreground: var(--foreground);
+		--selection: oklch(0.3 0.03 192);
+		--destructive: oklch(0.85 0.08 22);
+		--success: oklch(0.85 0.08 155);
+		--info: oklch(0.85 0.08 245);
+		--warning: oklch(0.85 0.08 75);
+		--warning-foreground: oklch(0.19 0.03 70);
+		--border: oklch(0.68 0.013 210);
+		--input: var(--border);
+		--control-border: var(--border);
+		--sidebar-border: var(--border);
+		--ring: var(--primary);
+		--kind-tasks: oklch(0.85 0.08 252);
+		--kind-shopping: oklch(0.85 0.08 150);
+		--kind-checklist: oklch(0.85 0.08 85);
+		--kind-project: oklch(0.85 0.08 305);
+		--priority-1: oklch(0.85 0.08 250);
+		--priority-2: oklch(0.85 0.08 65);
+		--priority-3: oklch(0.85 0.08 25);
+	}
+}
+
+@media (forced-colors: active) {
+	:root [data-slot="checkbox"][data-shape] {
+		border-color: ButtonText;
+		background: Canvas;
+		color: ButtonText;
+		&[data-state="checked"] {
+			background: Highlight;
+			color: HighlightText;
+		}
+	}
+	:root [data-testid="task-priority"] {
+		color: CanvasText;
+		& [data-testid="task-priority-text"] {
+			display: inline;
+		}
+		& svg {
+			color: CanvasText;
+		}
+	}
+	:root[data-reading-size] :focus-visible {
+		outline: 2px solid Highlight;
+		outline-offset: 2px;
 	}
 }

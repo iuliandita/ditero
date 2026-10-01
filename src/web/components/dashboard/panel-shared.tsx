@@ -1,10 +1,15 @@
-import { useZero } from "@rocicorp/zero/react";
+import { useQuery, useZero } from "@rocicorp/zero/react";
+import { Flag } from "lucide-react";
 import { type JSX, useMemo, useState } from "react";
 import { runMutation } from "@/lib/run-mutation";
+import { priorityLabel, priorityMeta } from "@/lib/task-display";
+import { cn } from "@/lib/utils";
 import type { ResolvedSource } from "../../../domain/dashboard.ts";
 import type { ListKind } from "../../../domain/icon-map.ts";
+import { localDay } from "../../../domain/local-day.ts";
 import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
+import { queries } from "../../../zero/queries.ts";
 import type {
 	Label,
 	List,
@@ -13,7 +18,10 @@ import type {
 	TaskAssignee,
 	TaskLabel,
 } from "../../../zero/schema.gen.ts";
+import { useLocalDay } from "../../hooks/useLocalDay.ts";
 import { useTaskImportActivationMap } from "../../hooks/useTaskImportActivation.ts";
+import { useUserPref } from "../../hooks/useUserPref.ts";
+import { habitOccurrence } from "../../views/habit-occurrence.ts";
 import { type RowHandlers, TaskRow } from "../list/TaskRow.tsx";
 import {
 	Dialog,
@@ -45,17 +53,49 @@ export function usePanelEntries(
 	ids: PanelIds,
 ): TaskEntry[] {
 	const { tasks, lists, labels, taskLabels, assignees } = data;
+	const [habitLogs] = useQuery(queries.habitLogs.mine());
+	const [workspaces] = useQuery(queries.workspaces.mine());
+	const { pref } = useUserPref();
+	const currentDay = useLocalDay(pref.timezone);
 	// `now` derives inside the memo (not a dep) so relative-date buckets refresh
 	// when the data changes without re-running on every render (M1c pattern).
 	return useMemo(
 		() =>
-			matchingTasks({ tasks, lists, labels, taskLabels, assignees }, resolved, {
-				userId: ids.currentUserId,
-				now: new Date(),
-				membershipWorkspaceIds: ids.membershipWorkspaceIds,
+			matchingTasks(
+				{
+					tasks,
+					lists,
+					labels,
+					taskLabels,
+					assignees,
+					habitLogs,
+					timeZone: pref.timezone,
+					currentDay,
+				},
+				resolved,
+				{
+					userId: ids.currentUserId,
+					now: new Date(),
+					membershipWorkspaceIds: ids.membershipWorkspaceIds,
+				},
+			).map((entry) => {
+				const list = lists.find((l) => l.id === entry.task.listId);
+				const workspace = workspaces.find((w) => w.id === list?.workspaceId);
+				return {
+					...entry,
+					sourceContext: workspace
+						? workspace.kind === "personal"
+							? m.scope_source_personal({ workspace: workspace.name })
+							: m.scope_source_shared({ workspace: workspace.name })
+						: undefined,
+				};
 			}),
 		[
 			tasks,
+			habitLogs,
+			currentDay,
+			workspaces,
+			pref.timezone,
 			lists,
 			labels,
 			taskLabels,
@@ -76,12 +116,39 @@ export function usePanelRowHandlers(onOpenTask: (task: Task) => void): {
 } {
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
+	const [tasks] = useQuery(queries.tasks.mine());
+	const [lists] = useQuery(queries.lists.mine());
+	const [habitLogs] = useQuery(queries.habitLogs.mine());
+	const { pref } = useUserPref();
 	const [error, setError] = useState<string | null>(null);
 	const handlers = useMemo<RowHandlers>(
 		() => ({
 			onToggle: (id, done) => {
 				if (!activation.canWriteTask(id)) return;
 				setError(null);
+				const task = tasks.find((t) => t.id === id);
+				if (
+					task &&
+					lists.find((l) => l.id === task.listId)?.kind === "habits"
+				) {
+					const date = localDay(new Date(), pref.timezone);
+					const occurrence = habitOccurrence(
+						task,
+						habitLogs,
+						new Date(),
+						pref.timezone,
+					);
+					if (occurrence.date !== date) return;
+					void runMutation(
+						zero.mutate(
+							occurrence.done
+								? mutators.habit.unlog({ habitId: id, date })
+								: mutators.habit.log({ habitId: id, date, status: "done" }),
+						),
+						setError,
+					);
+					return;
+				}
 				void runMutation(
 					zero.mutate(
 						done
@@ -93,17 +160,47 @@ export function usePanelRowHandlers(onOpenTask: (task: Task) => void): {
 			},
 			onOpenDetail: onOpenTask,
 		}),
-		[zero, onOpenTask, activation],
+		[zero, onOpenTask, activation, tasks, lists, habitLogs, pref.timezone],
 	);
 	return { handlers, error };
 }
 
-export function PanelTaskList({
+// How a panel lays out its rows: whether to label each row with its list
+// (the set spans lists) and whether to section rows by priority (the source
+// view groups by it).
+export type PanelRowOptions = {
+	listOf: ((listId: string) => { title: string; icon: string | null }) | null;
+	byPriority: boolean;
+};
+
+const PLAIN_ROWS: PanelRowOptions = { listOf: null, byPriority: false };
+
+const PRIORITY_SECTIONS = [3, 2, 1, 0];
+const priorityLevel = (t: Task) =>
+	PRIORITY_SECTIONS.includes(t.priority ?? 0) ? (t.priority ?? 0) : 0;
+
+// Stable: rows keep the source sort inside each priority, and a cap then keeps
+// the most urgent rows rather than whichever the sort put first.
+export function orderForPanel(
+	entries: TaskEntry[],
+	byPriority: boolean,
+): TaskEntry[] {
+	if (!byPriority) return entries;
+	return [...entries].sort(
+		(a, b) => priorityLevel(b.task) - priorityLevel(a.task),
+	);
+}
+
+function PanelRows({
 	entries,
 	handlers,
+	listOf,
+	surface,
 }: {
 	entries: TaskEntry[];
 	handlers: RowHandlers;
+	listOf: PanelRowOptions["listOf"];
+	surface: "card" | "popover";
 }): JSX.Element {
 	return (
 		<ul className="flex flex-col">
@@ -111,14 +208,73 @@ export function PanelTaskList({
 				<li key={e.task.id}>
 					<TaskRow
 						task={e.task}
+						occurrence={e.occurrence}
+						sourceContext={e.sourceContext}
 						kind={e.kind as ListKind}
 						subtasks={[]}
 						labels={e.labels}
 						handlers={handlers}
+						surface={surface}
+						list={listOf ? listOf(e.task.listId) : null}
 					/>
 				</li>
 			))}
 		</ul>
+	);
+}
+
+export function PanelTaskList({
+	entries,
+	handlers,
+	options,
+	surface = "card",
+}: {
+	entries: TaskEntry[];
+	handlers: RowHandlers;
+	options: PanelRowOptions;
+	surface?: "card" | "popover";
+}): JSX.Element {
+	if (!options.byPriority)
+		return (
+			<PanelRows
+				entries={entries}
+				handlers={handlers}
+				listOf={options.listOf}
+				surface={surface}
+			/>
+		);
+	return (
+		<div className="flex flex-col gap-3">
+			{PRIORITY_SECTIONS.map((p) => {
+				const rows = entries.filter((e) => priorityLevel(e.task) === p);
+				if (rows.length === 0) return null;
+				const tone = priorityMeta(p);
+				return (
+					<section
+						key={p}
+						aria-label={priorityLabel(p)}
+						data-testid="panel-priority-section"
+					>
+						<h3 className="mb-1 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+							{tone && (
+								<Flag
+									aria-hidden
+									className={cn("size-3.5 shrink-0 fill-current", tone.color)}
+								/>
+							)}
+							{priorityLabel(p)}
+							<span aria-hidden="true">{rows.length}</span>
+						</h3>
+						<PanelRows
+							entries={rows}
+							handlers={handlers}
+							listOf={options.listOf}
+							surface={surface}
+						/>
+					</section>
+				);
+			})}
+		</div>
 	);
 }
 
@@ -130,6 +286,7 @@ export function PanelExpandDialog({
 	label,
 	entries,
 	handlers,
+	options = PLAIN_ROWS,
 	error,
 }: {
 	open: boolean;
@@ -137,6 +294,7 @@ export function PanelExpandDialog({
 	label: string;
 	entries: TaskEntry[];
 	handlers: RowHandlers;
+	options?: PanelRowOptions;
 	error: string | null;
 }): JSX.Element {
 	return (
@@ -153,7 +311,12 @@ export function PanelExpandDialog({
 							{error}
 						</p>
 					)}
-					<PanelTaskList entries={entries} handlers={handlers} />
+					<PanelTaskList
+						entries={entries}
+						handlers={handlers}
+						options={options}
+						surface="popover"
+					/>
 				</div>
 			</DialogContent>
 		</Dialog>

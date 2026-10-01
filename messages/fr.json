@@ -4,7 +4,7 @@
 	"toggle_off": "Désactivé",
 	"notifications_heading": "Notifications",
 	"notifications_channels_heading": "Canaux",
-	"notifications_defaults_heading": "Par défaut",
+	"notifications_defaults_heading": "Rappels répétés",
 	"notifications_no_channels": "Aucun canal configuré pour l'instant - les rappels ne seront pas envoyés en dehors de l'appli.",
 	"channel_label_ntfy": "ntfy",
 	"channel_label_telegram": "Telegram",
@@ -40,6 +40,7 @@
 	"channel_field_channelId": "ID du canal",
 	"channel_field_address": "Adresse e-mail",
 	"channel_action_setup": "Configurer",
+	"channel_action_edit": "Modifier",
 	"channel_action_save": "Enregistrer",
 	"channel_action_test": "Enregistrer et tester",
 	"channel_action_remove": "Supprimer",
@@ -92,9 +93,6 @@
 	"search_hint": "Tape pour rechercher tes tâches.",
 	"nav_settings": "Réglages",
 	"fab_quick_add": "Ajout rapide",
-	"sidebar_open_shared": "Ouvrir le partagé",
-	"sidebar_open_shared_short": "P",
-	"sidebar_members": "Membres",
 	"sidebar_lists_nav_label": "Listes",
 	"sidebar_views_heading": "Vues",
 	"sidebar_dashboards_heading": "Dashboards",
@@ -149,13 +147,36 @@
 	"palette_results_label": "Résultats",
 	"palette_no_results": "Aucun résultat",
 	"palette_group_commands": "Commandes",
-	"palette_group_navigate": "Naviguer",
-	"palette_group_search": "Recherche",
 	"palette_dashboard_item": "Dashboard : {name}",
+	"palette_group_recent": "Récents",
+	"palette_group_lists": "Listes",
+	"palette_group_views": "Vues",
+	"palette_group_tasks": "Tâches",
+	"cheatsheet_category_selection": "Sélection",
+	"command_selection_toggle": "Sélectionner ou désélectionner la tâche",
+	"command_selection_extend_down": "Étendre la sélection vers le bas",
+	"command_selection_extend_up": "Étendre la sélection vers le haut",
+	"command_selection_all": "Sélectionner toutes les tâches",
+	"command_selection_clear": "Effacer la sélection",
+	"action_select": "Sélectionner",
+	"action_deselect": "Désélectionner",
+	"task_select_aria": "Sélectionner {title}",
+	"selection_bar_label": "Tâches sélectionnées",
+	"selection_complete": "Terminer",
+	"selection_move": "Déplacer",
+	"selection_due": "Échéance",
+	"selection_priority": "Priorité",
+	"selection_delete": "Supprimer",
+	"selection_clear": "Effacer la sélection",
+	"selection_check": "Cocher",
+	"selection_uncheck": "Décocher",
+	"selection_clear_quantity": "Effacer la quantité",
+	"selection_paused_reason": "En pause à cause d’une importation, impossible de la sélectionner",
 	"list_untitled_fallback": "Liste",
 	"palette_untitled_task": "Tâche",
 	"cheatsheet_title": "Raccourcis clavier",
 	"cheatsheet_description": "Les raccourcis fonctionnent partout, sauf dans les champs de texte.",
+	"shortcut_hint": "Appuie sur {key} pour les raccourcis clavier",
 	"cheatsheet_category_general": "Général",
 	"cheatsheet_category_task": "Tâche",
 	"cheatsheet_category_view": "Vue",
@@ -174,12 +195,12 @@
 	"command_nav_up": "Monter",
 	"command_nav_open": "Ouvrir l'élément ciblé",
 	"command_task_toggle_done": "Basculer terminé",
-	"escalation_repeat_every": "Répéter toutes les (min)",
-	"escalation_max_repeats": "Répétitions max.",
-	"escalation_fallback_member": "Personne de secours",
+	"escalation_repeat_every": "Répéter le rappel toutes les",
+	"escalation_max_repeats": "Envoyer au plus",
+	"escalation_fallback_member": "Si personne ne répond, prévenir",
 	"escalation_fallback_nobody": "Aucune",
-	"quiet_hours_start_label": "Silence de",
-	"quiet_hours_end_label": "à",
+	"quiet_hours_start_label": "De",
+	"quiet_hours_end_label": "Jusqu'à",
 	"quiet_hours_start_aria": "Début des heures calmes",
 	"quiet_hours_end_aria": "Fin des heures calmes",
 	"quiet_hours_clear": "Effacer",
@@ -188,7 +209,25 @@
 	"quiet_hours_timezone_detected": "Détecté : {timezone} - c'est bien ça ?",
 	"quiet_hours_timezone": "Les heures sont en {timezone}.",
 	"quiet_hours_equal_warning": "Le début et la fin doivent être différents. Pour ne plus rien recevoir du tout, désactive tes canaux ci-dessus.",
-	"quiet_hours_urgent_note": "Les rappels marqués urgents ignorent les heures calmes.",
+	"quiet_hours_urgent_note": "Les tâches réglées pour rappeler même pendant les heures calmes arrivent quand même.",
+	"settings_quiet_hours_heading": "Heures calmes",
+	"settings_quiet_hours_help": "Les rappels prévus dans cette plage attendent qu'elle se termine.",
+	"settings_reminder_defaults_help": "S'applique à chaque tâche sans rappels personnalisés.",
+	"settings_timezone_label": "Fuseau horaire",
+	"settings_timezone_help": "Les rappels et les heures calmes utilisent ce fuseau horaire.",
+	"settings_timezone_change": "Changer de fuseau horaire",
+	"settings_nav_label": "Sections des réglages",
+	"settings_section_account": "Compte",
+	"settings_section_appearance": "Apparence et langue",
+	"settings_section_lists": "Étiquettes et modèles",
+	"settings_section_focus": "Concentration et Karma",
+	"settings_section_data": "Tes données",
+	"settings_section_danger": "Zone de danger",
+	"file_picker_choose": "Choisir un fichier",
+	"file_picker_none": "Aucun fichier choisi",
+	"file_picker_drop": "ou dépose-le ici",
+	"date_field_trigger_aria": "{label} : {value}",
+	"date_field_none": "Pas de date",
 	"focus_settings_heading": "Minuteur focus",
 	"focus_settings_description": "Intervalles Pomodoro du minuteur focus.",
 	"focus_field_work_min": "Focus (min)",
@@ -222,6 +261,7 @@
 	"security_sign_out": "Se déconnecter",
 	"security_error_sign_out": "La déconnexion n'a pas pu se terminer. Réessaie.",
 	"security_passkeys_heading": "Passkeys",
+	"security_passkeys_empty": "Connecte-toi avec ton empreinte, ton visage ou le code de l'appareil au lieu d'un mot de passe.",
 	"security_add_passkey": "Ajouter une passkey",
 	"security_passkey_unnamed": "Passkey",
 	"security_passkey_remove": "Supprimer",
@@ -252,11 +292,11 @@
 	"e2e_last_holder_ack": "Je comprends que ces fichiers seront perdus.",
 	"account_delete_confirm": "Supprimer définitivement mon compte",
 	"account_delete_failed": "Le compte n'a pas pu être supprimé.",
-	"priority_none": "Aucune",
+	"priority_none": "Sans priorité",
 	"priority_low": "Basse",
 	"priority_medium": "Moyenne",
-	"priority_medium_short": "Moy.",
 	"priority_high": "Haute",
+	"priority_coded": "{code} {name}",
 	"due_today": "Aujourd'hui",
 	"due_tomorrow": "Demain",
 	"list_completed_count": [
@@ -274,12 +314,29 @@
 			}
 		}
 	],
+	"list_in_cart_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} article dans le panier",
+				"countPlural=many": "{countNum} articles dans le panier",
+				"countPlural=other": "{countNum} articles dans le panier"
+			}
+		}
+	],
 	"list_change_icon": "Changer l'icône de la liste",
 	"list_display_options": "Options d'affichage de la liste",
+	"list_reorder_mode": "Réorganiser",
+	"list_reorder_hint": "Fais glisser les poignées pour réorganiser.",
+	"list_reorder_done": "Terminé",
 	"list_completed_heading": "Éléments terminés",
 	"list_completed_sink": "Éléments terminés en bas",
 	"list_completed_keep": "Garder en place",
-	"list_completed_hide": "Masquer les éléments terminés",
 	"list_group_by_assignee": "Grouper par personne assignée",
 	"list_save_as_template": "Enregistrer comme modèle",
 	"list_add_from_template": "Ajouter depuis un modèle",
@@ -287,11 +344,23 @@
 	"list_add_task_placeholder": "Ajouter une tâche",
 	"title_suggest_label": "Suggestions issues de vos éléments précédents",
 	"list_add_task": "Ajouter la tâche",
+	"list_add_item_placeholder": "Ajouter un élément",
+	"list_add_item": "Ajouter l'élément",
+	"list_add_habit_placeholder": "Ajouter une habitude",
+	"list_add_habit": "Ajouter l'habitude",
 	"quickadd_input_label": "Ajout rapide d'une tâche",
 	"quickadd_sheet_title": "Ajout rapide",
 	"quickadd_placeholder": "ex. Acheter du lait {date} {priority} {label} {list}",
 	"quickadd_placeholder_nodate": "p. ex. Acheter du lait {priority} {label} {list}",
 	"quickadd_example_date": "demain",
+	"syntax_hint_title": "Astuces de saisie",
+	"syntax_hint_word": "nom",
+	"syntax_hint_priority": "Priorité, p1 est la plus haute",
+	"syntax_hint_example": "Exemple : Appeler le plombier {date} {priority} #maison",
+	"syntax_hint_example_nodate": "Exemple : Appeler le plombier {priority} #maison",
+	"syntax_hint_dismiss": "Masquer les astuces de saisie",
+	"syntax_hint_inline_lead": "Ouvrir l'ajout rapide ({key})",
+	"syntax_hint_inline_lead_nokey": "Ouvrir l'ajout rapide",
 	"quickadd_adding_to": "Ajout dans {list}",
 	"quickadd_no_list": "Aucune liste disponible",
 	"quickadd_failed": "Impossible d'ajouter la tâche.",
@@ -384,10 +453,31 @@
 	"shopping_qty_placeholder": "Qté",
 	"shopping_unit_placeholder": "Unité",
 	"shopping_quantity_for": "Quantité pour {title}",
+	"shopping_quantity_add": "{label}, ajouter une quantité pour {title}",
+	"shopping_quantity_edit": "{amount}, modifier la quantité pour {title}",
+	"shopping_quantity_invalid": "Saisis un nombre supérieur à 0, par ex. 2 ou 1,5",
 	"shopping_unit_for": "Unité pour {title}",
 	"shopping_category_other": "Autre",
 	"task_reorder_handle": "Réorganiser la tâche",
 	"task_priority_aria": "Priorité : {priority}",
+	"task_open_details": "Ouvrir les détails",
+	"task_subtask_progress_aria": [
+		{
+			"declarations": [
+				"input done",
+				"input total",
+				"local doneNum = done: number",
+				"local totalNum = total: number",
+				"local totalPlural = total: plural"
+			],
+			"selectors": ["totalPlural"],
+			"match": {
+				"totalPlural=one": "{doneNum} sur {totalNum} sous-tâche terminée",
+				"totalPlural=many": "{doneNum} sur {totalNum} sous-tâches terminées",
+				"totalPlural=other": "{doneNum} sur {totalNum} sous-tâches terminées"
+			}
+		}
+	],
 	"task_subtask_progress": [
 		{
 			"declarations": [
@@ -424,6 +514,19 @@
 	"task_delete_named": "Supprimer {title}",
 	"task_move_to_list": "Déplacer vers une liste",
 	"task_delete": "Supprimer la tâche",
+	"task_detail_done_aria": "Terminée",
+	"task_detail_more": "Plus d'options",
+	"task_more_repeats": "Se répète",
+	"task_more_reminder": "Rappel {time}",
+	"task_more_urgent": "Urgente",
+	"task_due_add": "Ajouter une date",
+	"task_due_trigger_aria": "Échéance : {value}",
+	"task_due_next_week": "La semaine prochaine",
+	"task_due_type_placeholder": "Tape une date, comme demain",
+	"task_due_type_placeholder_iso": "Tape une date au format AAAA-MM-JJ",
+	"task_due_type_invalid": "Impossible de lire cette date.",
+	"time_field_placeholder": "Ajouter une heure",
+	"time_field_invalid": "Saisis une heure comme {example}.",
 	"action_add": "Ajouter",
 	"recurrence_repeat": "Répétition",
 	"recurrence_does_not_repeat": "Ne se répète pas",
@@ -575,10 +678,17 @@
 	"reminder_ack_aria": "{status}. Confirmer le rappel",
 	"reminder_ack_chip": "{status} - Confirmer",
 	"reminder_channel_unverified": "canal d'envoi non vérifié",
-	"reminder_urgent_label": "Urgent (ignore les heures calmes)",
-	"reminder_override_defaults": "Remplacer les valeurs par défaut",
-	"escalation_inherit_default": "Valeur par défaut",
-	"escalation_off": "désactivé",
+	"reminder_urgent_label": "Rappeler même pendant les heures calmes",
+	"reminder_override_defaults": "Rappels personnalisés pour cette tâche",
+	"reminder_urgent_help": "Pour ce qui ne doit pas attendre la fin des heures calmes.",
+	"escalation_inherit_default": "Utiliser mon réglage par défaut",
+	"escalation_minutes_suffix": "minutes",
+	"escalation_repeats_suffix": "fois",
+	"escalation_repeat_help_default": "Laisse vide pour ne rappeler qu'une fois.",
+	"escalation_repeat_help_task": "Laisse vide pour utiliser ton réglage par défaut.",
+	"escalation_fallback_help": "Cette personne reçoit le rappel quand le dernier envoi reste sans réponse.",
+	"escalation_needs_repeat": "Choisis d'abord la fréquence de répétition. D'ici là, il n'y a qu'un rappel et personne d'autre n'est prévenu.",
+	"escalation_fallback_unknown": "Quelqu'un qui n'est plus dans tes espaces",
 	"field_name": "Nom",
 	"field_status": "Statut",
 	"field_title": "Titre",
@@ -600,7 +710,7 @@
 	"filter_due_none": "Sans échéance",
 	"group_no_label": "Sans étiquette",
 	"builtin_view_today": "Aujourd'hui",
-	"builtin_view_all_my_tasks": "Toutes mes tâches",
+	"builtin_view_all_my_tasks": "Toutes les tâches",
 	"builtin_view_assigned_to_me": "Assignés à moi",
 	"filter_op_is": "est",
 	"filter_op_before": "avant",
@@ -627,7 +737,7 @@
 	"filter_remove_group": "Supprimer le groupe",
 	"filter_add_condition": "Condition",
 	"filter_add_group": "Groupe",
-	"filter_no_conditions": "Aucune condition pour l'instant — tout correspond.",
+	"filter_no_conditions": "Aucune condition pour l'instant, donc tout correspond.",
 	"filter_no_options": "Aucune option.",
 	"filter_multi_any": "Indifférent",
 	"filter_assignee_me": "Moi",
@@ -667,6 +777,8 @@
 	"calendar_agenda_heading": "Agenda",
 	"calendar_viewing_as_agenda": "Affichage en agenda",
 	"calendar_chip_recurring": "{title}, récurrente",
+	"calendar_chip_priority": "{name}, {priority}",
+	"calendar_chip_done": "{name}, terminée",
 	"calendar_day_today": "{date}, aujourd'hui",
 	"filter_multi_selected": [
 		{
@@ -804,6 +916,7 @@
 	"panel_title_placeholder": "Titre du panel",
 	"panel_mobile_hint": "Sur téléphone, les panels s'empilent dans l'ordre du dashboard.",
 	"panel_no_matches": "Aucune tâche correspondante",
+	"panel_all_done": "Plus rien à faire ici",
 	"panel_show_all": [
 		{
 			"declarations": ["input count", "local countNum = count: number"],
@@ -860,6 +973,22 @@
 			}
 		}
 	],
+	"panel_streak_row_new_aria": [
+		{
+			"declarations": [
+				"input title",
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{title} : série de {countNum} jour. Ouvrir la tâche",
+				"countPlural=many": "{title} : série de {countNum} jours. Ouvrir la tâche",
+				"countPlural=other": "{title} : série de {countNum} jours. Ouvrir la tâche"
+			}
+		}
+	],
 	"panel_streak_no_recurrence_row_aria": "{title} : aucune répétition définie. Ouvrir la tâche",
 	"panel_streak_no_recurrence": "Aucune répétition",
 	"panel_streak_missing": "Habitude manquante (supprimée ou non partagée avec toi)",
@@ -890,13 +1019,10 @@
 		}
 	],
 	"panel_focus_own_only": "Tes sessions uniquement",
-	"habit_no_recurrence_hint": "Définis une répétition pour commencer à suivre cette habitude.",
 	"habit_skip_action": "Passer",
 	"habit_undo_action": "Annuler",
+	"habit_track_daily": "Suivre chaque jour",
 	"habit_done_action": "Fait aujourd'hui",
-	"habit_done_state": "Fait",
-	"habit_mark_done_aria": "Marquer comme fait pour aujourd'hui",
-	"habit_done_today_aria": "Fait aujourd'hui",
 	"habit_streak_days": [
 		{
 			"declarations": [
@@ -1268,10 +1394,12 @@
 	"login_backup_code_label": "Code de secours",
 	"login_email_placeholder": "e-mail",
 	"login_password_placeholder": "mot de passe",
-	"login_signup": "S'inscrire",
+	"login_new_here": "Nouveau ici ?",
+	"login_signup": "Créer un compte",
 	"login_signin": "Se connecter",
 	"login_signin_passkey": "Se connecter avec une passkey",
 	"login_continue_google": "Continuer avec Google",
+	"login_or": "ou",
 	"login_two_factor_title": "Double authentification",
 	"login_backup_code_placeholder": "Code de secours",
 	"login_verify_code": "Vérifier le code",
@@ -1313,10 +1441,226 @@
 	"auth_error_registration_disabled": "Les nouveaux comptes sont désactivés sur cette instance.",
 	"auth_error_invalid_origin": "Le serveur ne fait pas confiance à cette adresse. Demande à l'opérateur de l'ajouter aux origines de confiance de l'instance.",
 	"mutation_failed": "Un problème est survenu.",
+	"mutation_offline_not_saved": "Tu es hors ligne, cette modification n'a pas été enregistrée. Reconnecte-toi et réessaie.",
+	"sync_synced_title": "Synchronisé",
+	"sync_synced_detail": "Connecté. Tes modifications sont enregistrées sur le serveur tout de suite.",
+	"sync_syncing_title": "Synchronisation",
+	"sync_syncing_detail": "Tes modifications sont enregistrées sur cet appareil et partent vers le serveur.",
+	"sync_offline_title": "Hors ligne",
+	"sync_offline_detail": "Impossible de joindre le serveur. Tes modifications sont enregistrées sur cet appareil et seront synchronisées au retour de la connexion.",
+	"sync_stopped_title": "Synchronisation arrêtée",
+	"sync_stopped_detail": "Impossible de joindre le serveur, et les nouvelles modifications ne peuvent pas être enregistrées pour l'instant. Recharge la page pour réessayer.",
+	"sync_rejected_title": "Une modification n'a pas été enregistrée",
+	"sync_rejected_detail": "Le serveur a refusé une modification, elle a donc été annulée. Vérifie l'élément et réessaie.",
+	"sync_rejected_dismiss": "Fermer",
+	"sync_reauth_title": "Connecte-toi pour synchroniser",
+	"sync_reauth_detail": "Ta connexion a expiré pendant ton absence. Tes modifications restent sur cet appareil et seront synchronisées quand tu te reconnecteras.",
+	"sync_reauth_action": "Se reconnecter",
+	"sync_pending_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} modification récente pas encore synchronisée",
+				"countPlural=many": "{countNum} modifications récentes pas encore synchronisées",
+				"countPlural=other": "{countNum} modifications récentes pas encore synchronisées"
+			}
+		}
+	],
 	"mutator_error_denied": "Tu n'as pas la permission de faire cela.",
 	"mutator_error_label_name_taken": "Une étiquette portant ce nom existe déjà.",
 	"modal_close_label": "Fermer",
 	"action_close": "Fermer",
+	"action_undo": "Annuler",
+	"snackbar_task_completed": "Terminé : {title}",
+	"snackbar_task_moved": "Déplacée vers {list} : {title}",
+	"snackbar_task_complete_failed": "Impossible de terminer : {title}",
+	"snackbar_task_move_failed": "Impossible de déplacer : {title}",
+	"selection_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tâche sélectionnée",
+				"countPlural=many": "{countNum} tâches sélectionnées",
+				"countPlural=other": "{countNum} tâches sélectionnées"
+			}
+		}
+	],
+	"snackbar_bulk_checked": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} article coché.",
+				"countPlural=many": "{countNum} articles cochés.",
+				"countPlural=other": "{countNum} articles cochés."
+			}
+		}
+	],
+	"snackbar_bulk_completed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tâche terminée.",
+				"countPlural=many": "{countNum} tâches terminées.",
+				"countPlural=other": "{countNum} tâches terminées."
+			}
+		}
+	],
+	"snackbar_bulk_undo_skips_recurring": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Annuler ignore {countNum} tâche récurrente.",
+				"countPlural=many": "Annuler ignore {countNum} tâches récurrentes.",
+				"countPlural=other": "Annuler ignore {countNum} tâches récurrentes."
+			}
+		}
+	],
+	"snackbar_bulk_recurring_advanced": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tâche récurrente passe à sa prochaine date.",
+				"countPlural=many": "{countNum} tâches récurrentes passent à leur prochaine date.",
+				"countPlural=other": "{countNum} tâches récurrentes passent à leur prochaine date."
+			}
+		}
+	],
+	"snackbar_bulk_complete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Impossible de terminer {countNum} tâche",
+				"countPlural=many": "Impossible de terminer {countNum} tâches",
+				"countPlural=other": "Impossible de terminer {countNum} tâches"
+			}
+		}
+	],
+	"snackbar_bulk_moved": [
+		{
+			"declarations": [
+				"input count",
+				"input list",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tâche déplacée vers {list}",
+				"countPlural=many": "{countNum} tâches déplacées vers {list}",
+				"countPlural=other": "{countNum} tâches déplacées vers {list}"
+			}
+		}
+	],
+	"snackbar_bulk_move_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Impossible de déplacer {countNum} tâche",
+				"countPlural=many": "Impossible de déplacer {countNum} tâches",
+				"countPlural=other": "Impossible de déplacer {countNum} tâches"
+			}
+		}
+	],
+	"snackbar_bulk_update_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Impossible de modifier {countNum} tâche",
+				"countPlural=many": "Impossible de modifier {countNum} tâches",
+				"countPlural=other": "Impossible de modifier {countNum} tâches"
+			}
+		}
+	],
+	"snackbar_bulk_delete_failed": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Impossible de supprimer {countNum} tâche",
+				"countPlural=many": "Impossible de supprimer {countNum} tâches",
+				"countPlural=other": "Impossible de supprimer {countNum} tâches"
+			}
+		}
+	],
+	"bulk_delete_title": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Supprimer {countNum} tâche ?",
+				"countPlural=many": "Supprimer {countNum} tâches ?",
+				"countPlural=other": "Supprimer {countNum} tâches ?"
+			}
+		}
+	],
+	"bulk_delete_confirm": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "Cela supprime {countNum} tâche et ses sous-tâches. Cette action est irréversible.",
+				"countPlural=many": "Cela supprime {countNum} tâches et leurs sous-tâches. Cette action est irréversible.",
+				"countPlural=other": "Cela supprime {countNum} tâches et leurs sous-tâches. Cette action est irréversible."
+			}
+		}
+	],
 	"action_delete": "Supprimer",
 	"action_remove": "Retirer",
 	"confirm_cancel": "Annuler",
@@ -1327,8 +1671,11 @@
 	"list_reorder_handle": "Réorganiser la liste",
 	"workspace_switcher_title": "Workspaces",
 	"workspace_name_fallback": "Workspace",
-	"views_nav_label": "Vues",
-	"dashboards_nav_label": "Dashboards",
+	"workspace_manage_members": "Gérer les membres",
+	"workspace_private_note": "Ton workspace personnel est privé. Les workspaces partagés apparaissent ici dès que quelqu'un t'invite.",
+	"workspace_kind_personal": "Personnel",
+	"workspace_kind_shared": "Partagé",
+	"sidebar_folder_empty": "Pas encore de listes",
 	"view_actions": "Actions de la vue",
 	"view_set_home": "Définir comme accueil",
 	"view_pin": "Épingler",
@@ -1429,17 +1776,22 @@
 	"app_loading": "Chargement…",
 	"tasks_loading": "Chargement des tâches…",
 	"list_empty": "Il n'y a encore rien ici.",
-	"list_empty_action": "Ajouter un élément",
 	"view_empty_welcome_title": "Bienvenue dans Ditero",
-	"view_empty_welcome_hint": "Crée une liste ci-dessous pour ajouter ta première tâche.",
+	"view_empty_welcome_hint": "Les tâches vivent dans des listes. Crée-en une pour commencer.",
+	"view_empty_welcome_action": "Crée ta première liste",
+	"view_empty_welcome_starters": "Ou commence avec un modèle",
+	"starter_name_shopping": "Courses",
+	"starter_name_checklist": "Liste de voyage",
+	"starter_name_tasks": "Tâches ménagères",
+	"starter_name_habits": "Habitudes quotidiennes",
 	"view_empty_no_match": "Rien ne correspond à cette vue pour le moment.",
 	"action_continue": "Continuer",
 	"action_retry": "Réessayer",
 	"e2e_enroll_title": "Activer le chiffrement",
-	"e2e_enroll_intro": "Les fichiers que tu joins sont chiffrés sur cet appareil avant d’être envoyés. Ce serveur ne conserve que la copie chiffrée — il ne voit ni le contenu ni le nom du fichier.",
+	"e2e_enroll_intro": "Les fichiers que tu joins sont chiffrés sur cet appareil avant d’être envoyés. Ce serveur ne conserve que la copie chiffrée. Il ne voit ni le contenu ni le nom du fichier.",
 	"e2e_enroll_passphrase_heading": "Choisis une phrase secrète de chiffrement",
 	"e2e_enroll_not_account_password": "Ce n’est pas le mot de passe de ton compte. Choisis autre chose, et quelque chose dont tu te souviendras.",
-	"e2e_no_reset_note": "Personne ne peut réinitialiser cette phrase secrète — ni toi, ni la personne qui gère ce serveur. Si tu la perds ainsi que ton code de récupération, tes fichiers chiffrés sont perdus définitivement.",
+	"e2e_no_reset_note": "Personne ne peut réinitialiser cette phrase secrète, ni toi, ni la personne qui gère ce serveur. Si tu la perds ainsi que ton code de récupération, tes fichiers chiffrés sont perdus définitivement.",
 	"e2e_field_passphrase": "Phrase secrète de chiffrement",
 	"e2e_field_passphrase_confirm": "Répète la phrase secrète",
 	"e2e_passphrase_too_short": "Utilise au moins 12 caractères.",
@@ -1461,7 +1813,7 @@
 	"e2e_recovery_confirm_label": "Retape le code pour confirmer que tu l’as enregistré",
 	"e2e_recovery_confirm_submit": "Confirmer et terminer",
 	"e2e_recovery_confirm_mismatch": "Cela ne correspond pas au code ci-dessus.",
-	"e2e_recovery_confirm_checksum": "Vérifie le code — un caractère semble incorrect.",
+	"e2e_recovery_confirm_checksum": "Vérifie le code. Un caractère semble incorrect.",
 	"e2e_settings_heading": "Fichiers chiffrés",
 	"e2e_status_unenrolled": "Le chiffrement n’est pas encore configuré sur ce compte.",
 	"e2e_setup_action": "Configurer le chiffrement",
@@ -1693,5 +2045,31 @@
 	"activation_container_change_failed": "Impossible d’enregistrer cette modification. Vérifie les tâches suspendues et réessaie.",
 	"activation_task_change_failed": "Impossible de modifier cette tâche. Réessaie.",
 	"activation_badge_pending": "Importation en attente",
-	"activation_badge_blocked": "Vérification requise"
+	"activation_badge_blocked": "Vérification requise",
+	"sync_save_pending_failed": "Impossible d’enregistrer les modifications en attente sur cet appareil. Réessaie.",
+	"display_settings_label": "Taille du texte et contraste",
+	"display_size_label": "Taille de lecture",
+	"display_size_description": "Ajuste le texte, les commandes et les espacements ensemble.",
+	"display_size_standard": "Standard",
+	"display_size_comfortable": "Confortable",
+	"display_size_large": "Grande",
+	"display_contrast_label": "Contraste élevé",
+	"display_contrast_description": "Rends le texte, les bordures et les commandes plus faciles à distinguer dans chaque thème.",
+	"display_device_note": "Ces réglages sont enregistrés pour ton compte sur cet appareil.",
+	"display_save_failed": "Tes modifications sont appliquées, mais n’ont pas pu être enregistrées sur cet appareil.",
+	"login_password_guidance": "Utilise entre {min} et {max} caractères. Un mot de passe long et unique est plus facile à garder sûr.",
+	"login_recovery_label": "Tu ne peux pas te connecter ?",
+	"login_recovery_admin_guidance": "Demande à l'administrateur de cette instance Ditero comment retrouver l'accès. Pour un compte géré, demande à ton parent ou responsable.",
+	"login_existing_account": "Tu as déjà un compte ?",
+	"syntax_hint_inline_literal": "Ce champ enregistre ton texte tel quel.",
+	"syntax_hint_details": "Syntaxe de l'ajout rapide",
+	"aggregate_scope_all": "Dans tous tes espaces de travail",
+	"aggregate_scope_selected": "Dans : {workspaces}",
+	"scope_source_personal": "{workspace} · Personnel",
+	"scope_source_shared": "{workspace} · Partagé",
+	"calendar_go_today": "Aujourd’hui",
+	"calendar_show_earlier": "Afficher les dates précédentes",
+	"calendar_hide_earlier": "Masquer les dates précédentes",
+	"habit_occurrence_skipped": "Cette fois ignorée",
+	"habit_occurrence_unavailable": "Occurrence indisponible. Ouvre cette habitude pour vérifier sa fréquence."
 }

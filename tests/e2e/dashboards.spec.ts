@@ -2,6 +2,12 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import { browserToday, shiftDay } from "../support/browser-day.ts";
+import {
+	openWorkspaceSwitcher,
+	signUp,
+	uniqueEmail,
+	workspaceOption,
+} from "./helpers.ts";
 
 // M-dash dashboards e2e. Exercises the dashboard lifecycle (create from the
 // sidebar, empty state, add view-ref/inline panels), live task completion from
@@ -11,38 +17,10 @@ import { browserToday, shiftDay } from "../support/browser-day.ts";
 // palette/home navigation, and the axe merge gate on every new surface.
 // Conventions (signUp/uniqueEmail/testid locators/pg seeding/frozen-frame axe)
 // mirror views.spec + habits.spec + sharing.spec.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
 const SHARED_WORKSPACE_ID = "w_shared_e2e";
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
-
-// Sharing scenario only: one get-session call per user (never polled) to learn
-// the id for direct membership seeding, matching sharing.spec.
-async function signUpWithId(page: Page, email: string): Promise<string> {
-	await signUp(page, email);
-	const session = await page.evaluate(async () => {
-		const response = await fetch("/api/auth/get-session");
-		return (await response.json()) as { user: { id: string } };
-	});
-	return session.user.id;
-}
 
 function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });
@@ -246,6 +224,253 @@ async function joinShared(
 	}
 }
 
+// Preserve sync metadata, never auth frames or task contents, for sharing failures.
+type SharingSyncEvent = Record<string, unknown> & {
+	kind: string;
+	accountRole: "owner" | "member" | "outsider" | "viewer";
+	clientGroupID?: string;
+	clientID?: string;
+};
+
+function observeSharingSync(
+	page: Page,
+	accountRole: SharingSyncEvent["accountRole"],
+): SharingSyncEvent[] {
+	const events: SharingSyncEvent[] = [];
+	page.on("websocket", (socket) => {
+		const url = new URL(socket.url());
+		if (!url.pathname.includes("/sync/")) return;
+		const connection = {
+			accountRole,
+			clientGroupID: url.searchParams.get("clientGroupID") ?? undefined,
+			clientID: url.searchParams.get("clientID") ?? undefined,
+		};
+		if (events.length < 100)
+			events.push({
+				at: Date.now(),
+				kind: "connection",
+				...connection,
+				baseCookie: url.searchParams.get("baseCookie"),
+			});
+		socket.on("framereceived", ({ payload }) => {
+			if (events.length >= 100) return;
+			try {
+				const frame: unknown = JSON.parse(payload.toString());
+				if (!Array.isArray(frame)) return;
+				const [kind, data] = frame as [string, Record<string, unknown>];
+				if (!data || !["pokeStart", "pokePart", "pokeEnd"].includes(kind))
+					return;
+				const rows = Array.isArray(data.rowsPatch) ? data.rowsPatch : [];
+				events.push({
+					at: Date.now(),
+					kind,
+					...connection,
+					pokeID: data.pokeID,
+					baseCookie: data.baseCookie,
+					cookie: data.cookie,
+					gotQueriesPatch: data.gotQueriesPatch,
+					desiredQueriesPatches: data.desiredQueriesPatches,
+					rows: rows.map((row: Record<string, unknown>) => {
+						const value = row.value as Record<string, unknown> | undefined;
+						const key = row.id as Record<string, unknown> | undefined;
+						return {
+							op: row.op,
+							table: row.tableName,
+							id: value?.id ?? key?.id,
+							rowKey: key,
+							workspaceId: value?.workspace_id,
+							role: value?.role,
+							scope: value?.scope,
+						};
+					}),
+				});
+			} catch {
+				events.push({
+					at: Date.now(),
+					kind: "unparseable-sync-frame",
+					...connection,
+				});
+			}
+		});
+	});
+	return events;
+}
+
+async function attachSharingFailure(
+	accounts: Record<string, string>,
+	teamDash: string,
+	soloDash: string,
+	sync: SharingSyncEvent[],
+): Promise<void> {
+	const pool = new Pool({
+		connectionString: process.env.E2E_DATABASE_URL,
+		connectionTimeoutMillis: 3000,
+		query_timeout: 3000,
+	});
+	try {
+		const ids = Object.values(accounts);
+		const queries = {
+			accounts: `select id, deleted_at, two_factor_enabled from "user" where id = any($1)`,
+			memberships: `select id, user_id, workspace_id, role from membership where user_id = any($1)`,
+			preferences: `select id, home_view_ref, pinned_views, locale from user_pref where id = any($1)`,
+			dashboards: `select id, owner_id, workspace_id, scope, name from dashboard where owner_id = any($1) and name = any($2)`,
+		};
+		const database = await Promise.all(
+			Object.entries(queries).map(async ([name, sql]) => {
+				try {
+					const result = await pool.query(
+						sql,
+						name === "dashboards" ? [ids, [teamDash, soloDash]] : [ids],
+					);
+					return [name, result.rows];
+				} catch (error) {
+					console.error(
+						`dashboard sharing ${name} diagnostics failed:`,
+						error instanceof Error ? error.name : "unknown",
+					);
+					return [
+						name,
+						{ error: error instanceof Error ? error.name : "unknown" },
+					];
+				}
+			}),
+		);
+		const state: Record<string, unknown> = Object.fromEntries(database);
+		const observedGroups = [
+			...new Set(
+				sync.flatMap((event) =>
+					event.clientGroupID ? [event.clientGroupID] : [],
+				),
+			),
+		];
+		const groups = observedGroups.slice(0, 4);
+		const records = (name: string): Record<string, unknown>[] =>
+			Array.isArray(state[name]) ? state[name] : [];
+		const knownIDs = (values: unknown[]) =>
+			[...new Set(values)].filter(
+				(value): value is string => typeof value === "string",
+			);
+		const expected = [
+			...knownIDs(records("dashboards").map((row) => row.id)).map((id) => ({
+				table: "dashboard",
+				rowKey: { id },
+			})),
+			...knownIDs([
+				SHARED_WORKSPACE_ID,
+				...records("memberships").map((row) => row.workspace_id),
+				...records("dashboards").map((row) => row.workspace_id),
+			]).map((id) => ({ table: "workspace", rowKey: { id } })),
+			...knownIDs(records("memberships").map((row) => row.id)).map((id) => ({
+				table: "membership",
+				rowKey: { id },
+			})),
+		];
+		let cvr: Record<string, unknown> = {
+			groups,
+			expected,
+			limits: { groups: 4, rows: 200 },
+			truncated: { groups: observedGroups.length > groups.length },
+		};
+		if (groups.length === 0) {
+			console.error(
+				"dashboard sharing CVR diagnostics: no observed client group",
+			);
+			cvr.error = "no observed client group";
+		} else {
+			try {
+				const client = await pool.connect();
+				let transactionOpen = false;
+				try {
+					await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+					transactionOpen = true;
+					await client.query("SET LOCAL statement_timeout = '3s'");
+					// The E2E Compose stack uses Zero's default app/shard namespace.
+					const versions = await client.query(
+						`select g.id as "clientGroupID", i.version as "metadataVersion",
+						 rv.version as "rowsVersion", i."replicaVersion"
+						 from unnest($1::text[]) g(id)
+						 left join "zero_0/cvr".instances i on i."clientGroupID" = g.id
+						 left join "zero_0/cvr"."rowsVersion" rv on rv."clientGroupID" = g.id
+						 order by g.id limit 200`,
+						[groups],
+					);
+					const queries = await client.query(
+						`select "clientGroupID", "queryHash", "patchVersion",
+						 "transformationHash", "transformationVersion", "rowSetSignature", deleted,
+						 count(*) over () as "matchedRows"
+						 from "zero_0/cvr".queries
+						 where "clientGroupID" = any($1::text[]) and "queryName" = 'dashboards.mine'
+						 order by "clientGroupID", "queryHash" limit 200`,
+						[groups],
+					);
+					const rows = await client.query(
+						`with expected as (
+						 select * from jsonb_to_recordset($2::jsonb) as e("table" text, "rowKey" jsonb)
+						 ), q as (
+						 select "clientGroupID", "queryHash" from "zero_0/cvr".queries
+						 where "clientGroupID" = any($1::text[]) and "queryName" = 'dashboards.mine'
+						 )
+						 select g.id as "clientGroupID", e."table", e."rowKey",
+						 r."clientGroupID" is not null as "rowFound", r."schema",
+						 r."rowVersion", r."patchVersion", r."refCounts",
+						 r."refCounts" is null as "nullRefs", q."queryHash",
+						 r."refCounts" -> q."queryHash" as "dashboardQueryRefCount",
+						 count(*) over () as "matchedRows"
+						 from unnest($1::text[]) g(id) cross join expected e
+						 left join "zero_0/cvr".rows r on r."clientGroupID" = g.id
+						 and r."schema" = '' and r."table" = e."table" and r."rowKey" = e."rowKey"
+						 left join q on q."clientGroupID" = g.id
+						 order by g.id, e."table", e."rowKey", q."queryHash" limit 200`,
+						[groups, JSON.stringify(expected)],
+					);
+					await client.query("COMMIT");
+					transactionOpen = false;
+					cvr = {
+						...cvr,
+						truncated: {
+							groups: observedGroups.length > groups.length,
+							queries: Number(queries.rows[0]?.matchedRows ?? 0) > 200,
+							rows: Number(rows.rows[0]?.matchedRows ?? 0) > 200,
+						},
+						versions: versions.rows,
+						queries: queries.rows,
+						rows: rows.rows,
+					};
+				} finally {
+					try {
+						if (transactionOpen) await client.query("ROLLBACK");
+					} catch (error) {
+						console.error(
+							"dashboard sharing CVR rollback failed:",
+							error instanceof Error ? error.name : "unknown",
+						);
+					} finally {
+						client.release();
+					}
+				}
+			} catch (error) {
+				console.error(
+					"dashboard sharing CVR diagnostics failed:",
+					error instanceof Error ? error.name : "unknown",
+				);
+				cvr.error = error instanceof Error ? error.name : "unknown";
+			}
+		}
+		await test.info().attach("dashboard-sharing-state", {
+			contentType: "application/json",
+			body: JSON.stringify({
+				accounts,
+				expected: { teamDash, soloDash, workspaceId: SHARED_WORKSPACE_ID },
+				database: state,
+				cvr,
+				sync,
+			}),
+		});
+	} finally {
+		await pool.end();
+	}
+}
+
 // Gate per design 2.14: zero serious/critical violations. Freeze animations so
 // axe samples the settled frame (matches views.spec exactly).
 async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
@@ -347,16 +572,20 @@ test("dashboard: sidebar create, view-ref tasks panel + inline counter, completi
 		tasksPanel.getByText("Dash task one", { exact: true }),
 	).toBeVisible();
 
-	// Complete a task from the panel row: the row checks AND the counter drops,
+	// Complete a task from the panel row: the row leaves the panel (its view does
+	// not ask about completion, so done rows stay hidden) AND the counter drops,
 	// proving the row routes through the live task.complete path.
 	const checkbox = tasksPanel.getByRole("checkbox", { name: "Dash task one" });
 	await checkbox.click();
-	await expect(checkbox).toHaveAttribute("aria-checked", "true", {
-		timeout: 15000,
-	});
 	await expect(page.getByTestId("counter-tile")).toHaveText("1", {
 		timeout: 15000,
 	});
+	await expect(
+		tasksPanel.getByText("Dash task one", { exact: true }),
+	).toHaveCount(0);
+	await expect(
+		tasksPanel.getByText("Dash task two", { exact: true }),
+	).toBeVisible();
 });
 
 // --- Scenario 3: edit mode reorder (persists), resize preset, remove ---
@@ -429,6 +658,20 @@ test("dashboard edit mode: drag reorder persists, size preset applies, remove wi
 		timeout: 15000,
 	});
 
+	// Without a docked task detail the grid stays 12 columns at any md width,
+	// even where the content is under 672px (900px viewport, 280px sidebar).
+	await page.setViewportSize({ width: 900, height: 800 });
+	await expect
+		.poll(() =>
+			page
+				.getByTestId("dashboard-grid")
+				.evaluate(
+					(el) => getComputedStyle(el).gridTemplateColumns.split(" ").length,
+				),
+		)
+		.toBe(12);
+	await page.setViewportSize({ width: 1280, height: 720 });
+
 	// Remove Beta, accepting the in-app AlertDialog. A page.once("dialog")
 	// handler would silently do nothing here: the confirm is a DOM dialog, not
 	// a native one, so the click must be driven like any other control.
@@ -451,26 +694,33 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 	const ctxMember = await browser.newContext();
 	const ctxOutsider = await browser.newContext();
 	const ctxViewer = await browser.newContext();
+	const accounts: Record<string, string> = {};
+	const teamDash = `Team ${Date.now()}`;
+	const soloDash = `Solo ${Date.now()}`;
+	const sync: SharingSyncEvent[][] = [];
 	try {
-		const teamDash = `Team ${Date.now()}`;
-		const soloDash = `Solo ${Date.now()}`;
-
 		// Owner joins the seeded shared workspace and creates a workspace-shared
 		// dashboard in it, plus a personal one.
 		const pOwner = await ctxOwner.newPage();
-		const ownerId = await signUpWithId(pOwner, uniqueEmail("d4-owner"));
+		sync.push(observeSharingSync(pOwner, "owner"));
+		const ownerId = await signUp(pOwner, uniqueEmail("d4-owner"));
+		accounts.owner = ownerId;
 		await joinShared(ownerId, "owner");
 		await pOwner.reload();
 		await waitWorkspaceReady(pOwner);
-		await expect(
-			pOwner.getByRole("button", { name: "Household", exact: true }),
-		).toBeVisible({ timeout: 15000 });
+		await openWorkspaceSwitcher(pOwner);
+		await expect(workspaceOption(pOwner, "Household")).toBeVisible({
+			timeout: 15000,
+		});
+		await pOwner.keyboard.press("Escape");
 		await createDashboard(pOwner, teamDash, { workspace: "Household" });
 		await createDashboard(pOwner, soloDash);
 
 		// A second member sees the workspace dashboard, never the personal one.
 		const pMember = await ctxMember.newPage();
-		const memberId = await signUpWithId(pMember, uniqueEmail("d4-member"));
+		sync.push(observeSharingSync(pMember, "member"));
+		const memberId = await signUp(pMember, uniqueEmail("d4-member"));
+		accounts.member = memberId;
 		await joinShared(memberId, "member");
 		await pMember.reload();
 		await waitWorkspaceReady(pMember);
@@ -489,7 +739,8 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 
 		// A non-member never sees it (dashboards section is rendered, entry absent).
 		const pOutsider = await ctxOutsider.newPage();
-		await signUp(pOutsider, uniqueEmail("d4-outsider"));
+		sync.push(observeSharingSync(pOutsider, "outsider"));
+		accounts.outsider = await signUp(pOutsider, uniqueEmail("d4-outsider"));
 		await waitWorkspaceReady(pOutsider);
 		await pOutsider.getByTestId("sidebar-create").click();
 		await expect(pOutsider.getByTestId("new-dashboard")).toBeVisible();
@@ -503,10 +754,18 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 
 		// A viewer sees and opens the dashboard but gets no edit affordances.
 		const pViewer = await ctxViewer.newPage();
-		const viewerId = await signUpWithId(pViewer, uniqueEmail("d4-viewer"));
+		sync.push(observeSharingSync(pViewer, "viewer"));
+		const viewerId = await signUp(pViewer, uniqueEmail("d4-viewer"));
+		accounts.viewer = viewerId;
 		await joinShared(viewerId, "viewer");
 		await pViewer.reload();
 		await waitWorkspaceReady(pViewer);
+		await expect(
+			sidebarLists(pViewer).getByRole("button", {
+				name: teamDash,
+				exact: true,
+			}),
+		).toBeVisible({ timeout: 15000 });
 		await openDashboardFromSidebar(pViewer, teamDash);
 		await expect(
 			pViewer.getByRole("heading", { name: teamDash, level: 1 }),
@@ -514,6 +773,16 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		await expect(pViewer.getByTestId("dashboard-empty")).toBeVisible();
 		await expect(pViewer.getByTestId("dashboard-edit")).toHaveCount(0);
 		await expect(pViewer.getByTestId("dashboard-empty-add")).toHaveCount(0);
+	} catch (error) {
+		try {
+			await attachSharingFailure(accounts, teamDash, soloDash, sync.flat());
+		} catch (diagnosticError) {
+			console.error(
+				"dashboard sharing diagnostics failed:",
+				diagnosticError instanceof Error ? diagnosticError.name : "unknown",
+			);
+		}
+		throw error;
 	} finally {
 		await ctxOwner.close();
 		await ctxMember.close();
@@ -574,9 +843,9 @@ test("dashboard panels: streak shows seeded streak/adherence, focus shows count/
 test("dashboard nav: g d and palette open it, home ref survives reload, delete falls back to Today", async ({
 	page,
 }) => {
-	// user_pref is keyed by user id; scope the sync barriers to this user so a
-	// stale row from a prior in-test retry can't skew the unfiltered count.
-	const userId = await signUpWithId(page, uniqueEmail("d6"));
+	// user_pref is keyed by user id; scope the sync barriers to this user so
+	// other accounts cannot skew the unfiltered count.
+	const userId = await signUp(page, uniqueEmail("d6"));
 	await waitWorkspaceReady(page);
 
 	const dashName = `Homey ${Date.now()}`;
