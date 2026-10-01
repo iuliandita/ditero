@@ -1999,5 +1999,6 @@
 	"activation_container_change_failed": "Die Änderung konnte nicht gespeichert werden. Prüfe pausierte Aufgaben und versuche es erneut.",
 	"activation_task_change_failed": "Die Aufgabe konnte nicht geändert werden. Versuche es erneut.",
 	"activation_badge_pending": "Import ausstehend",
-	"activation_badge_blocked": "Prüfung nötig"
+	"activation_badge_blocked": "Prüfung nötig",
+	"sync_save_pending_failed": "Ausstehende Änderungen konnten auf diesem Gerät nicht gespeichert werden. Versuche es erneut."
 }

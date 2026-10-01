@@ -1999,5 +1999,6 @@
 	"activation_container_change_failed": "Could not save this change. Check paused tasks and try again.",
 	"activation_task_change_failed": "Could not change this task. Try again.",
 	"activation_badge_pending": "Import pending",
-	"activation_badge_blocked": "Review needed"
+	"activation_badge_blocked": "Review needed",
+	"sync_save_pending_failed": "Could not save pending changes on this device. Try again."
 }

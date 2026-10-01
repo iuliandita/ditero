@@ -8,7 +8,13 @@ import {
 	test,
 } from "@playwright/test";
 import { Pool } from "pg";
-import { goToSettings, openMoreOptions, setDueDate } from "./helpers.ts";
+import {
+	goToSettings,
+	openMoreOptions,
+	setDueDate,
+	signUp,
+	uniqueEmail,
+} from "./helpers.ts";
 
 // M3b Task 16 e2e: the five-row channel settings surface, the SMTP mail path
 // against a real loopback sink, the test-send ack round trip (durable through a
@@ -17,8 +23,8 @@ import { goToSettings, openMoreOptions, setDueDate } from "./helpers.ts";
 // POST -- the M3a in-app exit gate extended to an interactive provider, with an
 // open Zero client watching the ack land and a seeded sibling terminate.
 //
-// Conventions (signUp/uniqueEmail/testid locators/frozen-frame axe, describe-
-// level retries) mirror views.spec + notifications.spec.
+// Conventions (signUp/uniqueEmail/testid locators/frozen-frame axe)
+// mirror views.spec + notifications.spec.
 //
 // Provider chosen for the interactive ack: DISCORD. Its interactions endpoint's
 // callback IS the HTTP response body (no egress at the ack step), so the whole
@@ -27,7 +33,7 @@ import { goToSettings, openMoreOptions, setDueDate } from "./helpers.ts";
 // carries the ack token to the wire; the disabled discord app-mode row supplies
 // the signing key and channel binding the listener authorises against, without
 // any discord.com traffic.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
 const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
@@ -45,22 +51,6 @@ const SMTP_CAPTURE = process.env.E2E_SMTP_HTTP_URL ?? "http://127.0.0.1:4601";
 const DISCORD_INTERACTIONS =
 	"http://localhost:3000/api/notifications/discord/interactions";
 const ACK_ROUTE = "http://localhost:3000/api/notifications/ack";
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 async function waitWorkspaceReady(page: Page): Promise<void> {
 	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({

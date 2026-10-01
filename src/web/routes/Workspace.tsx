@@ -113,11 +113,7 @@ function NormalWorkspace() {
 	const activation = useTaskImportActivationMap();
 	const persistLocale = useCallback(
 		(locale: Locale) => {
-			// Best-effort by design, not a swallowed error: changeLocale() already
-			// applied the strategy chain + document locale before this runs, so a
-			// failed write only means cross-device sync doesn't happen yet -- Zero
-			// replays the queued mutation after reload/reconnect.
-			void runMutation(
+			return runMutation(
 				zero.mutate(mutators.userPref.set({ locale })),
 				(message) => console.error("userPref.set failed", message),
 			);

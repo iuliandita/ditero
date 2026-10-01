@@ -5,10 +5,12 @@ import {
 	type AutoLockMinutes,
 	isAutoLockMinutes,
 } from "../../domain/e2e/auto-lock.ts";
+import { m } from "../../paraglide/messages.js";
 import { getLocale, setLocale } from "../../paraglide/runtime.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
+import { useSnackbar } from "../components/ui/snackbar.tsx";
 import {
 	clampFocusConfig,
 	DEFAULT_FOCUS,
@@ -19,8 +21,13 @@ import {
 	isSupportedLocale,
 	type Locale,
 } from "../lib/locale.ts";
+import { reconcileStoredLocale } from "../lib/locale-reconciliation.ts";
 import { mutationServerSucceeded } from "../lib/pref-mutation.ts";
 import { timeZoneToDetect } from "../lib/timezone-detection.ts";
+import {
+	isZeroClientOwnerActive,
+	retireZeroClients,
+} from "../lib/zero-lifecycle.ts";
 
 export type KarmaGoals = { daily: number; weekly: number };
 export type Vacation = { active: boolean; until?: string };
@@ -93,18 +100,10 @@ function readEscalationDefaults(v: unknown): EscalationDefaults | null {
 // default unless the user picked it in settings (timezoneChosen); detection
 // replaces only the unchosen default, and only with a real zone.
 //
-// Both guards below are keyed to the signed-in user id, not a plain boolean:
-// passkey/2FA verification, signup, and sign-out do not reload the page, so a
-// same-tab account switch (user A signs out, user B signs in) would otherwise
-// leave a bare "already attempted" flag set from A's session and silently
-// suppress B's detection/reconcile. Keying to userId resets the guard exactly
-// when the signed-in user changes, while still firing at most once per user
-// per tab session (a reload after reconcile makes getLocale() match, so the
-// effect below no-ops on the next run for the same user -- no reload loop).
+// Key detection to the account so a same-tab sign-in cannot inherit the
+// previous account's attempt. Locale reconciliation belongs to each client.
 let detectionAttemptedForUserId: string | undefined;
 let detectionWrote = false;
-
-let localeReconcileAttemptedForUserId: string | undefined;
 
 function detectedTimeZone(): string | null {
 	try {
@@ -147,6 +146,7 @@ export function useUserPref(): {
 	timezoneDetected: boolean;
 } {
 	const zero = useZero<typeof schema>();
+	const { show } = useSnackbar();
 	const [rows, details] = useQuery(queries.userPrefs.mine());
 
 	const pref = useMemo<UserPrefState>(() => {
@@ -241,13 +241,22 @@ export function useUserPref(): {
 	}, [loading, pref, setPref, zero.userID]);
 
 	useEffect(() => {
-		if (loading || localeReconcileAttemptedForUserId === zero.userID) return;
-		localeReconcileAttemptedForUserId = zero.userID;
-		if (pref.locale && pref.locale !== getLocale()) {
-			applyDocumentLocale(pref.locale);
-			setLocale(pref.locale);
-		}
-	}, [loading, pref.locale, zero.userID]);
+		if (loading) return;
+		void reconcileStoredLocale(zero, pref.locale, {
+			currentLocale: getLocale,
+			isOwnerActive: () => isZeroClientOwnerActive(zero),
+			retireClients: (retryFailed) => retireZeroClients({ retryFailed }),
+			applyLocale: (locale) => {
+				applyDocumentLocale(locale);
+				setLocale(locale);
+			},
+			onError: (retry) =>
+				show({
+					message: m.sync_save_pending_failed(),
+					action: { label: m.action_retry(), run: retry },
+				}),
+		});
+	}, [loading, pref.locale, zero, show]);
 
 	return { pref, setPref, loading, timezoneDetected: detectionWrote };
 }

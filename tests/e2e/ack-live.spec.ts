@@ -7,6 +7,8 @@ import {
 	openMoreOptions,
 	openShared,
 	setDueDate,
+	signUp,
+	uniqueEmail,
 } from "./helpers.ts";
 
 // M3a Task 16 e2e: the live half of the durability gate.
@@ -28,7 +30,6 @@ import {
 test.describe.configure({ timeout: 120_000 });
 
 const SHARED_WORKSPACE_ID = "w_shared_e2e";
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
 // Pinned English, not the compiled message: this filters the ntfy row, and a
 // message that resolved to "" would silently degrade it to a title-only match.
@@ -48,21 +49,6 @@ let seq = 0;
 function unique(prefix: string): string {
 	seq += 1;
 	return `${prefix}-${Date.now()}-${seq}`;
-}
-
-async function signUp(page: Page, email: string): Promise<string> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-	const session = await page.evaluate(async () => {
-		const response = await fetch("/api/auth/get-session");
-		return (await response.json()) as { user: { id: string } };
-	});
-	return session.user.id;
 }
 
 async function joinShared(
@@ -270,7 +256,7 @@ test("live ack: a real tap's action URL acks a habit and the open client sees it
 	page,
 }) => {
 	const topic = unique("acklive");
-	await signUp(page, `${topic}@t.dev`);
+	await signUp(page, uniqueEmail("acklive"));
 	await waitWorkspaceReady(page);
 	await configureNtfy(page, topic);
 
@@ -341,13 +327,16 @@ test("live ack: assignment notifies through /api/zero/mutate, and one ack termin
 	try {
 		const topicA = unique("ackowner");
 		const topicB = unique("ackmember");
-		const ownerId = await signUp(pa, `${topicA}@t.dev`);
+		const ownerEmail = uniqueEmail("ackowner");
+		const ownerId = await signUp(pa, ownerEmail);
 		await joinShared(ownerId, "owner");
 		joined.push(ownerId);
-		const memberId = await signUp(pb, `${topicB}@t.dev`);
+		const memberEmail = uniqueEmail("ackmember");
+		const memberId = await signUp(pb, memberEmail);
 		await joinShared(memberId, "member");
 		joined.push(memberId);
-		const memberName = `${topicB}`;
+		const memberName = memberEmail.split("@")[0];
+		const ownerName = ownerEmail.split("@")[0];
 
 		await waitWorkspaceReady(pa);
 		await configureNtfy(pa, topicA);
@@ -382,7 +371,7 @@ test("live ack: assignment notifies through /api/zero/mutate, and one ack termin
 		const detail = await openDetail(pa, TASK);
 		await pa.getByTestId("assignee-open").click();
 		await expect(pa.getByTestId("assignee-picker")).toBeVisible();
-		for (const name of [memberName, topicA]) {
+		for (const name of [memberName, ownerName]) {
 			await pa
 				.getByTestId("assignee-picker")
 				.locator('[data-testid="assignee-option"]')

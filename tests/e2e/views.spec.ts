@@ -1,7 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { goToSettings, leaveSettings, openMobileLists } from "./helpers.ts";
+import {
+	goToSettings,
+	leaveSettings,
+	openMobileLists,
+	signUp,
+	uniqueEmail,
+} from "./helpers.ts";
 
 // M1c views + keyboard e2e. Exercises the saved-view lifecycle (build/save/
 // round-trip), the layout switch + board regroup, the command palette, the
@@ -13,36 +19,9 @@ import { goToSettings, leaveSettings, openMobileLists } from "./helpers.ts";
 // that guarantees the context is disposed even on failure, so one flake can
 // never leak a context and cascade into the following tests' signups.
 
-// views.spec is the last file in the run, so the shared single dev server + zero-
-// cache are the warmest here: signup/shell-mount latency creeps up under the
-// accumulated load. Scope a couple of retries + generous per-test budget to THIS
-// file only (domain/sharing keep the project defaults) so a load-induced slow
-// signup retries instead of failing the suite.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-// One get-session call, matching the model specs. `/api/auth/get-session` keeps
-// the default rate limit (only sign-in/up are relaxed under DITERO_E2E), so it
-// must NOT be polled -- a poll loop trips the limiter at the tail and starves the
-// app's own session checks. Tests that need the user resolve it from the DB by
-// email instead (seedOverdueTask), so no session round-trip is needed here.
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 // Desktop sidebar list/view nav (aria-label "Lists"): scopes clicks away from the
 // mobile index + create-list controls that share their labels with titles.
@@ -60,6 +39,8 @@ async function createListDesktop(page: Page, name: string): Promise<void> {
 	await waitWorkspaceReady(page);
 	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("sidebar-new-list").click();
+	// The menu mounts a fresh form after its focus trap closes.
+	await expect(page.getByTestId("new-list")).toBeFocused();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	await expect(

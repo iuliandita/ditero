@@ -8,6 +8,10 @@ import { Input } from "../components/ui/input.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { authErrorMessage } from "../lib/auth-messages.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
+import {
+	runAfterZeroRetirement,
+	ZeroRetirementError,
+} from "../lib/zero-lifecycle.ts";
 
 // Top-anchored on purpose: a centered column re-centers (and moves the logo)
 // whenever an error grows the content below it. A fixed top offset keeps
@@ -55,9 +59,13 @@ export function Login() {
 		setPending(true);
 		setError(null);
 		try {
-			await action();
-		} catch {
-			setError(fallback());
+			await runAfterZeroRetirement(action);
+		} catch (error) {
+			setError(
+				error instanceof ZeroRetirementError
+					? m.sync_save_pending_failed()
+					: fallback(),
+			);
 		} finally {
 			pendingRef.current = false;
 			setPending(false);

@@ -2,21 +2,15 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import type { Locale } from "../../src/domain/locale.ts";
 import { m } from "../../src/paraglide/messages.js";
-import { goToSettings } from "./helpers.ts";
+import { goToSettings, uniqueEmail } from "./helpers.ts";
 
 // M-i18n language switcher: pre-auth (Login) + post-auth (settings) mounts,
 // user_pref.locale persistence + round-trip across a reload, dir/lang
 // application, and the axe gate in RTL (design 2.14: zero serious/critical).
-test.describe.configure({ retries: 2, timeout: 60_000 });
+test.describe.configure({ timeout: 60_000 });
 
 const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
 
 // Freeze animations so axe samples the settled frame (matches focus.spec).
 async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {

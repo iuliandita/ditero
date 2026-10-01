@@ -10,7 +10,7 @@ import {
 // Each list kind reads as itself (#352): its own add verb, shopping quantity
 // only when set, habits that start daily with one Done label, and a labeled
 // project progress count.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
 async function expectNoSeriousA11y(page: Page, surface: string): Promise<void> {
 	await page.addStyleTag({

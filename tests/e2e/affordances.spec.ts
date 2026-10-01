@@ -3,7 +3,12 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import type { Locale } from "../../src/domain/locale.ts";
 import { m } from "../../src/paraglide/messages.js";
-import { goToSettings, switchWorkspace } from "./helpers.ts";
+import {
+	goToSettings,
+	signUp,
+	switchWorkspace,
+	uniqueEmail,
+} from "./helpers.ts";
 
 // M-ui row-affordances e2e. One RowAction[] descriptor renders three ways
 // (kebab, right-click, keyboard), and every destructive action now runs through
@@ -17,37 +22,17 @@ import { goToSettings, switchWorkspace } from "./helpers.ts";
 //
 // Conventions (signUp/uniqueEmail/testid locators/pg seeding/frozen-frame axe/
 // locale switching) mirror dashboards.spec + sharing.spec + locale.spec.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
 const SYSTEM_USER_ID = "u_system_e2e";
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
 
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
+let nameSeq = 0;
 // Names are asserted with exact locators, and the seeded shared fixtures persist
 // across the whole run, so every name a test creates has to be unique to it.
 function uniqueName(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix} ${Date.now()}-${emailSeq}`;
-}
-
-async function signUp(page: Page, email: string): Promise<string> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-	const session = await page.evaluate(async () => {
-		const response = await fetch("/api/auth/get-session");
-		return (await response.json()) as { user: { id: string } };
-	});
-	return session.user.id;
+	nameSeq += 1;
+	return `${prefix} ${Date.now()}-${nameSeq}`;
 }
 
 // The personal workspace name is minted server-side at signup (auth/bootstrap.ts

@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 import { useSyncStatus } from "../../hooks/useSyncStatus.ts";
 import type { SyncPhase } from "../../lib/sync-status.ts";
+import { retireZeroClients } from "../../lib/zero-lifecycle.ts";
 
 // Distinct shapes per state so color is never the only carrier.
 const PHASE: Record<
@@ -90,6 +91,9 @@ export function SyncIndicator({
 	const { phase, pending, dismissRejection } = useSyncStatus();
 	const [open, setOpen] = useState(false);
 	const [pinned, setPinned] = useState(false);
+	const [signingIn, setSigningIn] = useState(false);
+	const [saveFailed, setSaveFailed] = useState(false);
+	const signInPending = useRef(false);
 	const closeTimer = useRef<number | undefined>(undefined);
 	const state = PHASE[phase];
 	const Icon = state.icon;
@@ -108,6 +112,22 @@ export function SyncIndicator({
 			() => setOpen(false),
 			HOVER_CLOSE_DELAY_MS,
 		);
+	}
+
+	async function signInAgain() {
+		if (signInPending.current) return;
+		signInPending.current = true;
+		setSigningIn(true);
+		setSaveFailed(false);
+		try {
+			await retireZeroClients();
+			window.location.reload();
+		} catch {
+			setSaveFailed(true);
+		} finally {
+			signInPending.current = false;
+			setSigningIn(false);
+		}
 	}
 
 	return (
@@ -184,19 +204,18 @@ export function SyncIndicator({
 							{m.sync_pending_count({ count: pending })}
 						</p>
 					)}
-					{phase === "reauth" && (
+					{(phase === "reauth" || saveFailed || signingIn) && (
 						<Button
 							size="sm"
 							className="self-start"
 							data-testid="sync-sign-in"
-							// The session is gone, so a reload lands on sign-in. Zero's
-							// store is keyed by user, so signing back in as the same
-							// person reopens it and sends the queued edits.
-							onClick={() => window.location.reload()}
+							disabled={signingIn}
+							onClick={() => void signInAgain()}
 						>
 							{m.sync_reauth_action()}
 						</Button>
 					)}
+					{saveFailed && <p role="alert">{m.sync_save_pending_failed()}</p>}
 					{phase === "rejected" && (
 						<Button
 							variant="outline"

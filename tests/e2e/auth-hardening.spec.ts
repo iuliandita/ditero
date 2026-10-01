@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { currentTOTP } from "../totp.ts";
-import { goToSettings } from "./helpers.ts";
+import { goToSettings, signUp, uniqueEmail } from "./helpers.ts";
 
 // Every assertion here that waits on an auth round trip carries an explicit
 // budget: the default only ever fit while this file happened to run first, so
@@ -14,7 +14,10 @@ test.describe.configure({ timeout: 90_000 });
 const SIGNUP_TIMEOUT = 30_000;
 const ENROLL_TIMEOUT = 15_000;
 
-async function signUp(page: import("@playwright/test").Page, email: string) {
+async function signUpThroughForm(
+	page: import("@playwright/test").Page,
+	email: string,
+) {
 	await page.goto("/");
 	await page.getByTestId("email").fill(email);
 	await page.getByTestId("password").fill("pw-123456");
@@ -39,8 +42,8 @@ test("login form accepts Enter and has no serious accessibility violations", asy
 		violations.filter((v) => v.impact === "serious" || v.impact === "critical"),
 	).toEqual([]);
 
-	const email = `enter-login-${Date.now()}@t.dev`;
-	await signUp(page, email);
+	const email = uniqueEmail("enter-login");
+	await signUpThroughForm(page, email);
 	await page.getByTestId("sign-out").click();
 	await page.getByTestId("email").fill(email);
 	await page.getByTestId("password").fill("pw-123456");
@@ -89,7 +92,7 @@ test("login hierarchy: passkey and Google are secondary buttons, and an error do
 	const before = await logo.boundingBox();
 	if (!before) throw new Error("logo not found before the error");
 
-	await page.getByTestId("email").fill(`hierarchy-${Date.now()}@t.dev`);
+	await page.getByTestId("email").fill(uniqueEmail("hierarchy"));
 	await page.getByTestId("password").fill("wrong-password");
 	await page.getByTestId("signin").click();
 	await expect(page.getByRole("alert")).toBeVisible();
@@ -115,7 +118,8 @@ test("enrolls and signs in with a passkey", async ({ browser }) => {
 		},
 	});
 
-	await signUp(page, "passkey@test.invalid");
+	await signUp(page, uniqueEmail("passkey"));
+	await goToSettings(page);
 	await page.getByTestId("add-passkey").click();
 	await expect(page.getByTestId("passkey-item")).toContainText("This device", {
 		timeout: ENROLL_TIMEOUT,
@@ -133,9 +137,10 @@ test("enrolls and signs in with a passkey", async ({ browser }) => {
 test("supports TOTP enrollment, step-up, recovery, and disable", async ({
 	page,
 }) => {
-	const email = "totp@test.invalid";
+	const email = uniqueEmail("totp");
 	const password = "pw-123456";
 	await signUp(page, email);
+	await goToSettings(page);
 	await page.getByTestId("security-password").fill(password);
 	await page.getByTestId("enable-2fa").click();
 
@@ -205,7 +210,7 @@ test("an untrusted origin says so instead of failing blankly", async ({
 		await route.fulfill({ response });
 	});
 	await page.goto("/");
-	await page.getByTestId("email").fill(`origin-${Date.now()}@t.dev`);
+	await page.getByTestId("email").fill(uniqueEmail("origin"));
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signup").click();
 
@@ -235,7 +240,7 @@ test("the invite-only gate names itself instead of failing blankly", async ({
 		}),
 	);
 	await page.goto("/");
-	await page.getByTestId("email").fill(`gate-${Date.now()}@t.dev`);
+	await page.getByTestId("email").fill(uniqueEmail("gate"));
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signup").click();
 

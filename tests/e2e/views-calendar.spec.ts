@@ -1,33 +1,16 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
-import { openMobileLists } from "./helpers.ts";
+import { openMobileLists, signUp, uniqueEmail } from "./helpers.ts";
 
 // M2 calendar-layout e2e. Builds a calendar view, asserts a recurring task's
 // occurrences render on many dates (light chips) and a one-off dued task renders
 // on its day, reschedules the one-off by drag (dueAt updates, confirmed after a
 // reopen), and asserts the < md agenda collapse. Axe on month + agenda + mobile.
 // Conventions (signUp/uniqueEmail/Pool seed/frozen-frame axe) mirror views.spec.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 async function waitWorkspaceReady(page: Page): Promise<void> {
 	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({

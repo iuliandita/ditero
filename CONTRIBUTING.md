@@ -40,6 +40,16 @@ Keep subjects plain ASCII and at most 72 characters. Put detail in the body.
 - Remove dead code, obsolete files, and unneeded temp/cache artifacts as part of your change.
 - Match the surrounding style.
 
+## Sync dependency patch
+
+Zero is pinned to 1.9.0 with a Bun package patch under `patches/`. The patch makes
+`Zero.close()` persist accepted local edits before releasing the client, so sign-in
+and language reloads preserve queued changes. Frozen installs apply it in both
+application Docker stages. Prepare changes with `bun patch` before editing installed
+runtime files, which may share hardlinks with the install cache. When upgrading
+Zero, keep the close/reopen and storage failure regression checks passing before
+removing or replacing the patch.
+
 ## Before opening a PR
 
 Once the toolchain lands, PRs are expected to pass lint, typecheck, and tests. The PR
