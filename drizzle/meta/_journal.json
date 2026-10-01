@@ -309,6 +309,20 @@
       "when": 1790868321156,
       "tag": "0043_fresh_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790880341949,
+      "tag": "0044_completion_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1790880342516,
+      "tag": "0045_completion_history_rls",
+      "breakpoints": true
     }
   ]
 }

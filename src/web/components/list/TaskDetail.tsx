@@ -80,6 +80,7 @@ import type { RowAction } from "../ui/row-action.ts";
 import { RowActions } from "../ui/row-actions.tsx";
 import { useSnackbar } from "../ui/snackbar.tsx";
 import { ImportActivationRecovery } from "./ImportActivationRecovery.tsx";
+import { TaskCompletionHistory } from "./TaskCompletionHistory.tsx";
 
 // P1 first, matching quick-add's p1-p4 reading order.
 const PRIORITY_ORDER = [3, 2, 1, 0];
@@ -990,6 +991,13 @@ export function TaskDetail({
 					</div>
 				)}
 			</div>
+
+			<TaskCompletionHistory
+				key={JSON.stringify([t.id, list.workspaceId])}
+				taskId={t.id}
+				workspaceId={list.workspaceId}
+				detailOpen={open}
+			/>
 
 			<div className="border-t pt-4">
 				<CommentThread task={t} workspaceId={list.workspaceId} />

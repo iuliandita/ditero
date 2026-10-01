@@ -57,14 +57,46 @@ files alongside the phase's browser evidence.
 
 Dashboard sharing failures also attach scoped account, membership, and dashboard
 state, sanitized sync metadata tagged by scenario account role, and a read-only
-snapshot of the observed accounts' saved query records. Each owner, member,
+snapshot of the scenario accounts' saved query records. Each owner, member,
 outsider, and viewer page is observed before signup, with at most 100 events per
 page. The snapshot includes query versions and expected root/witness reference
-counts for at most four observed client groups and the scenario's known row keys.
-Each saved-query result has a 200-row limit; truncation is explicitly flagged.
+counts for at most four recovered client groups and the scenario's known row keys.
+Recovery uses the actual account-specific dashboard and preference query
+transformation hashes. It records partial, deleted, ambiguous, and truncated
+candidates; only a unique active double match selects a group. Browser observations
+corroborate recovery but do not widen its scope. Each candidate or saved-query
+result has a 200-row limit; truncation is explicitly flagged.
 It excludes credentials, query arguments, and row contents.
-Compare saved row versions with connection cookies before attributing a missing
-dashboard to query evaluation or catchup.
+
+After the original member or viewer dashboard-visibility assertion fails and its
+state is captured, a five-second observer opens one new context for that same
+account with cookies only and empty origin storage. It records whether the Team
+entry appears without changing preferences or retrying the failed assertion.
+A secondary snapshot selects the explicit new WebSocket client group only when
+its account-specific named-query transformations match. It compares up to four
+original groups plus that one proven fresh group, retaining the original failure.
+The new context closes in a finally block; diagnostic errors cannot replace the
+original error.
+
+The runner also supplies its exact Compose arguments through
+`E2E_DIAGNOSTIC_COMPOSE_ARGV`. On a sharing failure, the capture reads the active
+Zero container's serving path from a bounded worker startup log, then verifies
+WAL2 using its native SQLite consumer in a read-only transaction. Backup-enabled
+workers serve `replica.db-serving-copy`; the collector never selects a path by
+file existence. It verifies a native online backup against the pinned snapshot
+metadata and removes that temporary full snapshot before returning scoped data.
+It selects only versions, expected root/witness keys, and dashboard
+visibility predicates for at most four accounts, two dashboards, five workspaces,
+and eight memberships. A container-side hard kill bounds Node to four seconds,
+with a five-second host deadline and 32-KiB output cap; startup log inspection
+has a separate two-second deadline and returns no raw logs;
+errors omit stderr and never replace the test assertion. Direct Playwright runs
+without the runner hook report replica capture as unavailable.
+
+Replica capture precedes the CVR snapshot. Compare their timestamps, state and
+replica versions, saved-row versions, and connection cookies before attributing a
+missing dashboard to query evaluation or catchup. These are independent committed
+snapshots, not an atomic capture or a ViewSyncer's earlier held transaction.
 
 Routine authenticated fixtures use context-bound API signup with UUID addresses
 under the reserved `example.test` domain, then wait for the real workspace to sync.

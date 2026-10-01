@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type AckStore, type AckTask, completeForAck } from "./ack-complete.ts";
+import type { CompletionEventInput } from "./completion-history.ts";
 
 // 21:00 in New York -- already the next calendar day in UTC, which is exactly
 // where a UTC-framed karma date lands on the wrong day.
@@ -12,6 +13,7 @@ const PLAIN_TASK: AckTask = {
 	rrule: null,
 	recurrenceRelative: false,
 	dueAt: null,
+	dueAllDay: false,
 	done: false,
 	priority: 0,
 };
@@ -19,10 +21,15 @@ const PLAIN_TASK: AckTask = {
 function store(
 	task: AckTask,
 	timeZone: string,
-): AckStore & { awards: { delta: number; reason: string; date: string }[] } {
+): AckStore & {
+	awards: { delta: number; reason: string; date: string }[];
+	events: CompletionEventInput[];
+} {
 	const awards: { delta: number; reason: string; date: string }[] = [];
+	const events: CompletionEventInput[] = [];
 	return {
 		awards,
+		events,
 		async task() {
 			return task;
 		},
@@ -40,6 +47,9 @@ function store(
 		async awardKarma(_userId, delta, reason, date) {
 			awards.push({ delta, reason, date });
 		},
+		async appendEvent(event) {
+			events.push(event);
+		},
 	};
 }
 
@@ -50,6 +60,7 @@ describe("completeForAck karma day", () => {
 			s,
 			{ taskId: "t1", occurrenceAt: EVENING_NY, recipientUserId: "u1" },
 			"u1",
+			"member_mutation",
 			EVENING_NY,
 		);
 		expect(new Date(EVENING_NY).toISOString().slice(0, 10)).toBe("2026-07-15");
@@ -64,6 +75,7 @@ describe("completeForAck karma day", () => {
 			s,
 			{ taskId: "t1", occurrenceAt: EVENING_NY, recipientUserId: "u1" },
 			"u1",
+			"member_mutation",
 			EVENING_NY,
 		);
 		expect(s.awards).toEqual([
@@ -77,6 +89,7 @@ describe("completeForAck karma day", () => {
 			s,
 			{ taskId: "t1", occurrenceAt: EVENING_NY, recipientUserId: "u1" },
 			"u1",
+			"member_mutation",
 			EVENING_NY,
 		);
 		expect(s.awards[0].date).toBe("2026-07-15");
@@ -98,6 +111,7 @@ describe("completeForAck exhausted recurrence", () => {
 				s,
 				{ taskId: "t1", occurrenceAt: EVENING_NY, recipientUserId: "u1" },
 				"u1",
+				"member_mutation",
 				EVENING_NY,
 			),
 		).rejects.toThrow(/needs-start/);
@@ -125,23 +139,43 @@ describe("completeForAck exhausted recurrence", () => {
 			occurrenceAt: EVENING_NY,
 			recipientUserId: "u1",
 		};
-		await completeForAck(s, reminder, "u1", EVENING_NY);
+		await completeForAck(s, reminder, "u1", "member_mutation", EVENING_NY);
 		expect(task.done).toBe(false);
 		expect(task.recurrenceConsumed).toBe(1);
 		expect(task.recurrenceAnchorAt).toBe(EVENING_NY);
 		expect(task.dueAt).toBe(EVENING_NY + 86_400_000);
+		expect(s.events[0]).toMatchObject({
+			action: "complete",
+			beforeDueAt: EVENING_NY,
+			afterDueAt: task.dueAt,
+			afterDone: task.done,
+		});
 		await completeForAck(
 			s,
 			{ ...reminder, occurrenceAt: task.dueAt ?? 0 },
 			"u1",
+			"member_mutation",
 			EVENING_NY + 86_400_000,
 		);
 		expect(task.done).toBe(true);
 		expect(task.recurrenceConsumed).toBe(2);
 		expect(task.recurrenceAnchorAt).toBe(EVENING_NY);
-		await completeForAck(s, reminder, "u1", EVENING_NY + 2 * 86_400_000);
+		await completeForAck(
+			s,
+			reminder,
+			"u1",
+			"member_mutation",
+			EVENING_NY + 2 * 86_400_000,
+		);
 		expect(task.recurrenceConsumed).toBe(2);
 		expect(s.awards).toHaveLength(2);
+		expect(s.events).toHaveLength(2);
+		expect(s.events[1]).toMatchObject({
+			action: "complete",
+			beforeDueAt: EVENING_NY + 86_400_000,
+			afterDueAt: task.dueAt,
+			afterDone: true,
+		});
 	});
 	it("does not rewrite completion or award Karma on a second ack", async () => {
 		const task: AckTask = {
@@ -160,13 +194,33 @@ describe("completeForAck exhausted recurrence", () => {
 			occurrenceAt: EVENING_NY,
 			recipientUserId: "u1",
 		};
-		expect(await completeForAck(s, reminder, "u1", EVENING_NY)).toBe(
-			"completed",
-		);
-		expect(await completeForAck(s, reminder, "u1", EVENING_NY + 1_000)).toBe(
-			"completed",
-		);
+		expect(
+			await completeForAck(s, reminder, "u1", "member_mutation", EVENING_NY),
+		).toBe("completed");
+		expect(
+			await completeForAck(
+				s,
+				reminder,
+				"u1",
+				"member_mutation",
+				EVENING_NY + 1_000,
+			),
+		).toBe("completed");
 		expect(updates).toEqual([{ done: true, completedAt: EVENING_NY }]);
 		expect(s.awards).toHaveLength(1);
+		expect(s.events).toEqual([
+			{
+				taskId: "t1",
+				actorUserId: "u1",
+				recordedAt: EVENING_NY,
+				origin: "member_mutation",
+				action: "complete",
+				beforeDueAt: EVENING_NY,
+				beforeDueAllDay: false,
+				beforeDone: false,
+				afterDueAt: EVENING_NY,
+				afterDone: true,
+			},
+		]);
 	});
 });
