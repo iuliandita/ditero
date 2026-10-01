@@ -1,6 +1,44 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
+export function validateOrigin(value: unknown, label: string): string {
+	if (typeof value !== "string" || !value)
+		throw new Error(`${label} requires a configured HTTP origin`);
+	let url: URL;
+	try {
+		url = new URL(value);
+	} catch {
+		throw new Error(`${label} requires a valid HTTP origin`);
+	}
+	if (
+		!["http:", "https:"].includes(url.protocol) ||
+		url.username ||
+		url.password ||
+		url.pathname !== "/" ||
+		url.search ||
+		url.hash
+	)
+		throw new Error(
+			`${label} requires an HTTP origin without credentials, path, query, or fragment`,
+		);
+	return url.origin;
+}
+
+export function webOrigin(): string {
+	return validateOrigin(test.info().project.use.baseURL, "project baseURL");
+}
+
+export function configuredOrigin(
+	name:
+		| "E2E_API_URL"
+		| "E2E_MAIL_API_URL"
+		| "E2E_SMTP_HTTP_URL"
+		| "E2E_PUBLIC_ZERO_URL"
+		| "E2E_NTFY_URL",
+): string {
+	return validateOrigin(process.env[name], name);
+}
+
 const surface = (page: Page) => page.getByTestId("settings-surface");
 
 // Settings is a destination on both platforms (desktop sidebar footer; on
@@ -122,17 +160,11 @@ export function uniqueEmail(prefix: string): string {
 // Context-bound requests share the browser's cookie jar, including for contexts
 // created manually without a baseURL. Signup yields an active session directly.
 export async function signUp(page: Page, email: string): Promise<string> {
-	const baseURL = test.info().project.use.baseURL;
-	if (typeof baseURL !== "string" || !baseURL)
-		throw new Error("signup requires a configured project baseURL");
-	const webOrigin = new URL(baseURL).origin;
-	const response = await page.request.post(
-		`${webOrigin}/api/auth/sign-up/email`,
-		{
-			headers: { Origin: webOrigin },
-			data: { email, password: PASSWORD, name: email.split("@")[0] },
-		},
-	);
+	const origin = webOrigin();
+	const response = await page.request.post(`${origin}/api/auth/sign-up/email`, {
+		headers: { Origin: origin },
+		data: { email, password: PASSWORD, name: email.split("@")[0] },
+	});
 	expect(response.ok(), `signup failed with status ${response.status()}`).toBe(
 		true,
 	);
@@ -141,7 +173,7 @@ export async function signUp(page: Page, email: string): Promise<string> {
 	expect(typeof userId).toBe("string");
 	if (typeof userId !== "string" || !userId)
 		throw new Error("signup response is missing a user id");
-	await page.goto(webOrigin);
+	await page.goto(origin);
 	await expect(page.getByTestId("workspace")).toBeVisible({
 		timeout: SIGNUP_TIMEOUT,
 	});

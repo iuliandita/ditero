@@ -1,5 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
+import { validateOrigin } from "./tests/e2e/helpers.ts";
 import { privateHost } from "./tests/support/private-host.ts";
+
+// Workers inherit these values before spec modules load. Private configs may
+// explicitly replace them; specs never choose another deployment as a fallback.
+function origin(name: string, fallback: string): string {
+	const value = validateOrigin(process.env[name] ?? fallback, name);
+	process.env[name] = value;
+	return value;
+}
+const WEB_ORIGIN = origin("E2E_WEB_URL", "http://localhost:5173");
+const API_ORIGIN = origin("E2E_API_URL", "http://localhost:3000");
+const MAIL_ORIGIN = origin("E2E_MAIL_API_URL", "http://localhost:3001");
+const ZERO_ORIGIN = origin("E2E_PUBLIC_ZERO_URL", "http://localhost:4849");
 
 // The ntfy stub cannot live on loopback: safe-http refuses 127.0.0.0/8
 // unconditionally and no allowlist may re-enable it (that is the point of the
@@ -8,7 +21,7 @@ import { privateHost } from "./tests/support/private-host.ts";
 // one address for the API process only.
 const NTFY_HOST = privateHost();
 // Read by tests/e2e/notifications.spec.ts (workers inherit this process env).
-process.env.E2E_NTFY_URL = `http://${NTFY_HOST}:4599`;
+origin("E2E_NTFY_URL", `http://${NTFY_HOST}:4599`);
 
 const databaseURL =
 	process.env.E2E_DATABASE_URL ??
@@ -23,8 +36,7 @@ const databaseURL =
 // removable) on the SMTP-less one -- exactly the "SMTP later disappeared" case.
 const SMTP_PORT = 4600;
 const SMTP_HTTP_PORT = 4601;
-process.env.E2E_SMTP_HTTP_URL = `http://127.0.0.1:${SMTP_HTTP_PORT}`;
-process.env.E2E_MAIL_API_URL = "http://localhost:3001";
+origin("E2E_SMTP_HTTP_URL", `http://127.0.0.1:${SMTP_HTTP_PORT}`);
 
 // Env shared by both app servers; each overrides API_PORT + BETTER_AUTH_URL and
 // the SMTP server adds DITERO_SMTP_*.
@@ -39,13 +51,13 @@ const appEnv = {
 	DITERO_E2E_ENABLED: "true",
 	BETTER_AUTH_SECRET: "e2e-only-better-auth-secret-32-bytes",
 	DITERO_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString("base64"),
-	DITERO_PASSKEY_ORIGIN: "http://localhost:5173",
+	DITERO_PASSKEY_ORIGIN: WEB_ORIGIN,
 	DITERO_REGISTRATION_MODE: "open",
 	// Served to the web client from /api/config. tests/e2e/docker-compose.yml
 	// publishes zero-cache on 4849, not the 4848 default, and the browser reaches
 	// this through vite's /api proxy -- so it belongs on the API server, not the
 	// web one.
-	PUBLIC_ZERO_URL: "http://localhost:4849",
+	PUBLIC_ZERO_URL: ZERO_ORIGIN,
 	// Allows exactly the one private address the ntfy stub binds. Both servers
 	// drain the shared outbox under SKIP LOCKED, so the SMTP server must carry the
 	// same allowlist or it would fail an ntfy delivery it happens to claim.
@@ -71,7 +83,7 @@ export default defineConfig({
 	expect: { timeout: 7_000 },
 	reporter: [["list"]],
 	use: {
-		baseURL: "http://localhost:5173",
+		baseURL: WEB_ORIGIN,
 		trace: "retain-on-failure",
 		screenshot: "only-on-failure",
 		// Negative-offset on purpose: CI runners are UTC, where a date rendered in
@@ -120,7 +132,7 @@ export default defineConfig({
 			env: {
 				...appEnv,
 				API_PORT: "3000",
-				BETTER_AUTH_URL: "http://localhost:3000",
+				BETTER_AUTH_URL: API_ORIGIN,
 			},
 		},
 		{
@@ -135,7 +147,7 @@ export default defineConfig({
 			env: {
 				...appEnv,
 				API_PORT: "3001",
-				BETTER_AUTH_URL: "http://localhost:3001",
+				BETTER_AUTH_URL: MAIL_ORIGIN,
 				DITERO_SMTP_HOST: "127.0.0.1",
 				DITERO_SMTP_PORT: String(SMTP_PORT),
 				DITERO_SMTP_FROM: "Ditero <ditero@example.test>",
