@@ -6,6 +6,8 @@ import {
 	openMembers,
 	openShared,
 	openWorkspaceSwitcher,
+	signUp,
+	uniqueEmail,
 } from "./helpers.ts";
 
 // M1b sharing/people e2e. Two browser contexts = two clients; assertions are
@@ -104,26 +106,8 @@ test("personal workspace hides admission controls and lets its owner remove a le
 	}
 });
 
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
 function nameOf(email: string): string {
 	return email.split("@")[0];
-}
-
-async function signUp(page: Page, email: string): Promise<string> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({ timeout: 15000 });
-	const session = await page.evaluate(async () => {
-		const response = await fetch("/api/auth/get-session");
-		return (await response.json()) as { user: { id: string } };
-	});
-	return session.user.id;
 }
 
 // Add `userId` to the seeded shared workspace at `role`. Owner/admin see pending

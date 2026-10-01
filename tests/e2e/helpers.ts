@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 const surface = (page: Page) => page.getByTestId("settings-surface");
 
@@ -98,25 +99,39 @@ export async function leaveSettings(page: Page): Promise<void> {
 const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
 
-let emailSeq = 0;
-
-// Unique per call AND per run: the e2e database is seeded once and reused, so a
-// fixed address collides with a previous run's user.
+// UUIDs keep accounts distinct across workers, shards, and repeated runs.
 export function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
+	return `${prefix}-${randomUUID()}@example.test`;
 }
 
-// Signup (email verification is off) yields an active session directly. No
-// get-session round trip: only sign-in/up carry the relaxed E2E rate limit.
-export async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
+// Context-bound requests share the browser's cookie jar, including for contexts
+// created manually without a baseURL. Signup yields an active session directly.
+export async function signUp(page: Page, email: string): Promise<string> {
+	const baseURL = test.info().project.use.baseURL;
+	if (typeof baseURL !== "string" || !baseURL)
+		throw new Error("signup requires a configured project baseURL");
+	const webOrigin = new URL(baseURL).origin;
+	const response = await page.request.post(
+		`${webOrigin}/api/auth/sign-up/email`,
+		{
+			headers: { Origin: webOrigin },
+			data: { email, password: PASSWORD, name: email.split("@")[0] },
+		},
+	);
+	expect(response.ok(), `signup failed with status ${response.status()}`).toBe(
+		true,
+	);
+	const body: { user?: { id?: unknown } } = await response.json();
+	const userId = body.user?.id;
+	expect(typeof userId).toBe("string");
+	if (typeof userId !== "string" || !userId)
+		throw new Error("signup response is missing a user id");
+	await page.goto(webOrigin);
 	await expect(page.getByTestId("workspace")).toBeVisible({
 		timeout: SIGNUP_TIMEOUT,
 	});
+	await waitWorkspaceReady(page);
+	return userId;
 }
 
 // The workspace switcher names the active workspace only once the workspace

@@ -5,6 +5,8 @@ import {
 	leaveSettings,
 	openMoreOptions,
 	setDueDate,
+	signUp,
+	uniqueEmail,
 } from "./helpers.ts";
 
 // M3a Task 15 e2e (repaired for M3b Task 16): the notification settings surface
@@ -20,30 +22,13 @@ import {
 // unacked send reads "Sent ... not acknowledged". The channels.spec file owns the
 // M3b-specific coverage; this file's ntfy assertions are re-pointed at the new
 // surface so the M3a behaviours it guards stay under test.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
 // Set by playwright.config: a private, non-loopback address, since the SSRF
 // boundary refuses loopback unconditionally.
 const NTFY = process.env.E2E_NTFY_URL ?? "http://172.17.0.1:4599";
 const TOKEN = "tk_e2e_secret_value";
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });

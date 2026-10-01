@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { Pool } from "pg";
-import { openShared } from "./helpers.ts";
+import { openShared, signUp, uniqueEmail } from "./helpers.ts";
 
 // Two users, two browser contexts. Proves (1) workspace isolation: a list in a
 // user's personal workspace never syncs to another user; (2) live sync: a task
@@ -12,21 +12,12 @@ test("workspace isolation + live task sync", async ({ browser }) => {
 	const pb = await b.newPage();
 	const userIds: string[] = [];
 
-	// Sign up two users. Signup (email verification off) yields an active session.
+	// Each context keeps its own authenticated session for the sync assertions.
 	for (const [p, email] of [
-		[pa, "ana@t.dev"],
-		[pb, "bob@t.dev"],
+		[pa, uniqueEmail("ana")],
+		[pb, uniqueEmail("bob")],
 	] as const) {
-		await p.goto("/");
-		await p.getByTestId("email").fill(email);
-		await p.getByTestId("password").fill("pw-123456");
-		await p.getByTestId("signup").click();
-		await expect(p.getByTestId("workspace")).toBeVisible({ timeout: 15000 });
-		const session = await p.evaluate(async () => {
-			const response = await fetch("/api/auth/get-session");
-			return (await response.json()) as { user: { id: string } };
-		});
-		userIds.push(session.user.id);
+		userIds.push(await signUp(p, email));
 	}
 
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });

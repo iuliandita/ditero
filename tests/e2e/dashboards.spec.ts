@@ -2,7 +2,12 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import { browserToday, shiftDay } from "../support/browser-day.ts";
-import { openWorkspaceSwitcher, workspaceOption } from "./helpers.ts";
+import {
+	openWorkspaceSwitcher,
+	signUp,
+	uniqueEmail,
+	workspaceOption,
+} from "./helpers.ts";
 
 // M-dash dashboards e2e. Exercises the dashboard lifecycle (create from the
 // sidebar, empty state, add view-ref/inline panels), live task completion from
@@ -12,38 +17,10 @@ import { openWorkspaceSwitcher, workspaceOption } from "./helpers.ts";
 // palette/home navigation, and the axe merge gate on every new surface.
 // Conventions (signUp/uniqueEmail/testid locators/pg seeding/frozen-frame axe)
 // mirror views.spec + habits.spec + sharing.spec.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
 const SHARED_WORKSPACE_ID = "w_shared_e2e";
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
-
-// Sharing scenario only: one get-session call per user (never polled) to learn
-// the id for direct membership seeding, matching sharing.spec.
-async function signUpWithId(page: Page, email: string): Promise<string> {
-	await signUp(page, email);
-	const session = await page.evaluate(async () => {
-		const response = await fetch("/api/auth/get-session");
-		return (await response.json()) as { user: { id: string } };
-	});
-	return session.user.id;
-}
 
 function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });
@@ -477,7 +454,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		// Owner joins the seeded shared workspace and creates a workspace-shared
 		// dashboard in it, plus a personal one.
 		const pOwner = await ctxOwner.newPage();
-		const ownerId = await signUpWithId(pOwner, uniqueEmail("d4-owner"));
+		const ownerId = await signUp(pOwner, uniqueEmail("d4-owner"));
 		await joinShared(ownerId, "owner");
 		await pOwner.reload();
 		await waitWorkspaceReady(pOwner);
@@ -491,7 +468,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 
 		// A second member sees the workspace dashboard, never the personal one.
 		const pMember = await ctxMember.newPage();
-		const memberId = await signUpWithId(pMember, uniqueEmail("d4-member"));
+		const memberId = await signUp(pMember, uniqueEmail("d4-member"));
 		await joinShared(memberId, "member");
 		await pMember.reload();
 		await waitWorkspaceReady(pMember);
@@ -524,7 +501,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 
 		// A viewer sees and opens the dashboard but gets no edit affordances.
 		const pViewer = await ctxViewer.newPage();
-		const viewerId = await signUpWithId(pViewer, uniqueEmail("d4-viewer"));
+		const viewerId = await signUp(pViewer, uniqueEmail("d4-viewer"));
 		await joinShared(viewerId, "viewer");
 		await pViewer.reload();
 		await waitWorkspaceReady(pViewer);
@@ -595,9 +572,9 @@ test("dashboard panels: streak shows seeded streak/adherence, focus shows count/
 test("dashboard nav: g d and palette open it, home ref survives reload, delete falls back to Today", async ({
 	page,
 }) => {
-	// user_pref is keyed by user id; scope the sync barriers to this user so a
-	// stale row from a prior in-test retry can't skew the unfiltered count.
-	const userId = await signUpWithId(page, uniqueEmail("d6"));
+	// user_pref is keyed by user id; scope the sync barriers to this user so
+	// other accounts cannot skew the unfiltered count.
+	const userId = await signUp(page, uniqueEmail("d6"));
 	await waitWorkspaceReady(page);
 
 	const dashName = `Homey ${Date.now()}`;

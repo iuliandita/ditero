@@ -1,34 +1,18 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
+import { signUp, uniqueEmail } from "./helpers.ts";
 
 // #355: board cards, calendar chips and dashboard task panels carry the same
 // cues a list row does, a board saved with the form's default grouping still
 // groups, and sticky/floating bars and dashboard slots stay calm (no blur, no
 // dashed outlines). Conventions mirror views.spec: signup, Pool seed by email,
 // frozen-frame axe.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
 const LONG_TITLE =
 	"Replace the hallway light bulb and check the fuse box while the power is off";
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 async function waitWorkspaceReady(page: Page): Promise<void> {
 	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({

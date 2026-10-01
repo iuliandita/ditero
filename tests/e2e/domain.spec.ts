@@ -6,6 +6,8 @@ import {
 	openMobileLists,
 	openMoreOptions,
 	openShared,
+	signUp,
+	uniqueEmail,
 } from "./helpers.ts";
 
 // Task 10 cluster: NLP quick-add and drag reorder. Task 11 extends this file
@@ -18,19 +20,6 @@ import {
 
 const SHARED_WORKSPACE_ID = "w_shared_e2e";
 const PASSWORD = "pw-123456";
-
-async function signUp(page: Page, email: string): Promise<string> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({ timeout: 15000 });
-	const session = await page.evaluate(async () => {
-		const response = await fetch("/api/auth/get-session");
-		return (await response.json()) as { user: { id: string } };
-	});
-	return session.user.id;
-}
 
 async function signIn(page: Page, email: string): Promise<void> {
 	await page.goto("/");
@@ -63,12 +52,6 @@ async function betaAboveAlpha(page: Page): Promise<boolean> {
 // Vertical order of two list-index rows: true when Zeta sits above Shared list.
 async function zetaAboveShared(page: Page): Promise<boolean> {
 	return isAbove(page.getByTestId("list-index"), "Zeta", "Shared list");
-}
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
 }
 
 // Desktop sidebar list nav (aria-label "Lists") — scopes list-open clicks away

@@ -1,33 +1,22 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { browserToday } from "../support/browser-day.ts";
-import { goToSettings, openMoreOptions, setDueDate } from "./helpers.ts";
+import {
+	goToSettings,
+	openMoreOptions,
+	setDueDate,
+	signUp,
+	uniqueEmail,
+} from "./helpers.ts";
 
 // M2 recurrence editor e2e. Exercises the preset-driven recurrence control in the
 // task detail surface: enable, set a weekly every-2-weeks Mon/Wed rule, verify the
 // read-back, toggle fixed<->relative, round-trip across a close/reopen, and clear.
 // Plus the axe merge gate on the editor surface. Conventions (signUp/uniqueEmail/
 // testid locators/frozen-frame axe) mirror views.spec.
-test.describe.configure({ retries: 2, timeout: 90_000 });
+test.describe.configure({ timeout: 90_000 });
 
-const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
-
-let emailSeq = 0;
-function uniqueEmail(prefix: string): string {
-	emailSeq += 1;
-	return `${prefix}-${Date.now()}-${emailSeq}@t.dev`;
-}
-
-async function signUp(page: Page, email: string): Promise<void> {
-	await page.goto("/");
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill(PASSWORD);
-	await page.getByTestId("signup").click();
-	await expect(page.getByTestId("workspace")).toBeVisible({
-		timeout: SIGNUP_TIMEOUT,
-	});
-}
 
 function sidebarLists(page: Page): Locator {
 	return page.getByRole("navigation", { name: "Lists" });
