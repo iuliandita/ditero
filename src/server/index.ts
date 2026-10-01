@@ -79,6 +79,7 @@ import { startWorker } from "./notifications/worker.ts";
 import { importPlanRoutes } from "./portability/import-routes.ts";
 import { portabilityRoutes } from "./portability/routes.ts";
 import { publicConfig } from "./public-config.ts";
+import { nativeZeroPayload } from "./zero-auth.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
 const responseHeaders = securityHeaders(process.env);
@@ -129,6 +130,12 @@ const routes = new Elysia()
 		nativeAuthRoutes({
 			pool,
 			guards: { guardedPost },
+			async signZeroToken(session) {
+				const result = await auth.api.signJWT({
+					body: { payload: nativeZeroPayload(session) },
+				});
+				return result.token;
+			},
 			sessions: {
 				async createSession(userId) {
 					const context = await auth.$context;

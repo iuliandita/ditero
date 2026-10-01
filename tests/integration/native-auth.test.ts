@@ -15,6 +15,7 @@ import {
 	lookupNativeSession,
 } from "../../src/server/native-auth/session.ts";
 import { NativeGrantStore } from "../../src/server/native-auth/store.ts";
+import { nativeZeroPayload } from "../../src/server/zero-auth.ts";
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
@@ -548,6 +549,12 @@ test("real browser cookie and origin guards authorize the route exchange", async
 		sessions,
 		guards: makeGuards([origin], (headers) => auth.api.getSession({ headers })),
 		rateLimit: async () => true,
+		signZeroToken: async (session) =>
+			(
+				await auth.api.signJWT({
+					body: { payload: nativeZeroPayload(session) },
+				})
+			).token,
 	});
 	const post = (
 		path: string,

@@ -9,7 +9,7 @@ import {
 	readJsonObject,
 	type Sessions,
 } from "./contracts.ts";
-import { authenticateNative } from "./session.ts";
+import { authenticateNative, type NativeSession } from "./session.ts";
 import { NativeExchangeError, NativeGrantStore } from "./store.ts";
 
 export type NativeAuthDependencies = {
@@ -17,6 +17,7 @@ export type NativeAuthDependencies = {
 	sessions: Sessions;
 	guards: Pick<Guards, "guardedPost">;
 	rateLimit: (request: Request, peerAddress?: string) => Promise<boolean>;
+	signZeroToken: (session: NativeSession) => Promise<string>;
 };
 
 const NO_STORE = { "cache-control": "no-store" };
@@ -155,5 +156,13 @@ export function nativeAuthRoutes(deps: NativeAuthDependencies) {
 				firstSeenAt: session.firstSeenAt.toISOString(),
 				lastSeenAt: session.lastSeenAt.toISOString(),
 			});
+		})
+		.get("/api/native/token", async ({ request }) => {
+			if (request.headers.has("origin") || request.headers.has("cookie"))
+				return reply("credentials-not-allowed", 400);
+			if (!(await rateLimit(request))) return limited();
+			const session = await authenticateNative(deps.pool, request.headers);
+			if (!session) return reply("unauthorized", 401);
+			return ok({ token: await deps.signZeroToken(session) });
 		});
 }

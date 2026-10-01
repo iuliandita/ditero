@@ -1,7 +1,7 @@
 # Native authentication handoff
 
 This API prepares native authentication. Desktop and Android applications,
-browser approval screens, native credential storage, and native Zero tokens are
+browser approval screens and native credential storage are
 not delivered by this slice.
 
 The client generates a random PKCE verifier with 43 to 128 unreserved ASCII
@@ -14,6 +14,7 @@ Only S256 is supported. The verifier stays with the client.
 | `POST /api/native/grants/approve` | `{ "grantId": "..." }` | Browser session cookie and an allowed Origin; no Authorization header |
 | `POST /api/native/grants/exchange` | `{ "grantId": "...", "verifier": "..." }` | No Cookie, Origin, or Authorization header |
 | `GET /api/native/session` | No body | Native session token in the Bearer header; no Cookie or Origin header |
+| `GET /api/native/token` | No body | Native session token in the Bearer header; no Cookie or Origin header |
 
 Creation returns `grantId` and `expiresAt`. Grants expire after five minutes.
 Approval derives the user and approving session from the browser, not from
@@ -37,6 +38,18 @@ Native lookup requires an unexpired session, a persisted native link, a matching
 unrevoked device, and a user that has not been deleted. A browser token alone does
 not qualify. These checks are authoritative database reads on every lookup.
 Grant and native-link tables are excluded from Zero synchronization.
+
+The token endpoint returns a signed Zero JWT tied to the session and device.
+Browser Zero tokens also carry their session identity. Both kinds expire within
+five minutes, or when their session expires if sooner. The Zero query and mutation
+endpoints verify the configured issuer and audience and check live session and
+user state. Native tokens additionally require the exact linked, unrevoked device.
+Revocation stops new query and mutation requests. It does not immediately evict
+rows already cached in a client or prove an existing cache stream has closed;
+the stream may remain until reconnect or token expiry.
+
+Previously issued subject-only JWTs are refused. Existing signed-in browser
+clients can refresh through the usual cookie-authenticated token endpoint.
 
 All requests are rate limited. JSON bodies are bounded to 4 KiB and reject
 unexpected fields. Responses carry `Cache-Control: no-store`. The existing

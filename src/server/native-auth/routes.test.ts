@@ -13,13 +13,15 @@ function app(rateLimit = async () => true) {
 		connect: vi.fn(),
 	} as unknown as Pool;
 	const guardedPost = vi.fn(() => async () => new Response("Forbidden"));
+	const signZeroToken = vi.fn(async () => "signed");
 	const routes = nativeAuthRoutes({
 		pool,
 		sessions: { createSession: vi.fn(), deleteSession: vi.fn() },
 		guards: { guardedPost: guardedPost as never },
 		rateLimit,
+		signZeroToken,
 	});
-	return { routes, pool };
+	return { routes, pool, signZeroToken };
 }
 
 function post(
@@ -95,6 +97,37 @@ describe("native auth routes", () => {
 			expect(response.headers.get("cache-control")).toBe("no-store");
 			expect(pool.query).not.toHaveBeenCalled();
 		}
+	});
+
+	it("never signs a Zero token without a lone Bearer header", async () => {
+		const cases: Array<Record<string, string>> = [
+			{},
+			{ cookie: "better-auth.session_token=x" },
+			{ authorization: "Bearer abc", cookie: "x" },
+			{ authorization: "Bearer abc", origin: "http://localhost" },
+		];
+		for (const headers of cases) {
+			const { routes, pool, signZeroToken } = app();
+			const response = await routes.handle(
+				new Request("http://localhost/api/native/token", { headers }),
+			);
+			expect([400, 401]).toContain(response.status);
+			expect(response.headers.get("cache-control")).toBe("no-store");
+			expect(response.headers.has("set-cookie")).toBe(false);
+			expect(pool.query).not.toHaveBeenCalled();
+			expect(signZeroToken).not.toHaveBeenCalled();
+		}
+	});
+
+	it("answers 429 on the token route when the shared limiter refuses", async () => {
+		const { routes, signZeroToken } = app(async () => false);
+		const response = await routes.handle(
+			new Request("http://localhost/api/native/token", {
+				headers: { authorization: "Bearer abc" },
+			}),
+		);
+		expect(response.status).toBe(429);
+		expect(signZeroToken).not.toHaveBeenCalled();
 	});
 
 	it("marks guard rejections on approve as no-store", async () => {
