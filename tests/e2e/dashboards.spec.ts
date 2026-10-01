@@ -225,10 +225,28 @@ async function joinShared(
 }
 
 // Preserve sync metadata, never auth frames or task contents, for sharing failures.
-function observeSharingSync(page: Page): unknown[] {
-	const events: unknown[] = [];
+type SharingSyncEvent = Record<string, unknown> & {
+	kind: string;
+	clientGroupID?: string;
+	clientID?: string;
+};
+
+function observeSharingSync(page: Page): SharingSyncEvent[] {
+	const events: SharingSyncEvent[] = [];
 	page.on("websocket", (socket) => {
-		if (!new URL(socket.url()).pathname.includes("/sync/")) return;
+		const url = new URL(socket.url());
+		if (!url.pathname.includes("/sync/")) return;
+		const connection = {
+			clientGroupID: url.searchParams.get("clientGroupID") ?? undefined,
+			clientID: url.searchParams.get("clientID") ?? undefined,
+		};
+		if (events.length < 100)
+			events.push({
+				at: Date.now(),
+				kind: "connection",
+				...connection,
+				baseCookie: url.searchParams.get("baseCookie"),
+			});
 		socket.on("framereceived", ({ payload }) => {
 			if (events.length >= 100) return;
 			try {
@@ -241,6 +259,7 @@ function observeSharingSync(page: Page): unknown[] {
 				events.push({
 					at: Date.now(),
 					kind,
+					...connection,
 					pokeID: data.pokeID,
 					baseCookie: data.baseCookie,
 					cookie: data.cookie,
@@ -248,10 +267,12 @@ function observeSharingSync(page: Page): unknown[] {
 					desiredQueriesPatches: data.desiredQueriesPatches,
 					rows: rows.map((row: Record<string, unknown>) => {
 						const value = row.value as Record<string, unknown> | undefined;
+						const key = row.id as Record<string, unknown> | undefined;
 						return {
 							op: row.op,
 							table: row.tableName,
-							id: value?.id,
+							id: value?.id ?? key?.id,
+							rowKey: key,
 							workspaceId: value?.workspace_id,
 							role: value?.role,
 							scope: value?.scope,
@@ -270,7 +291,7 @@ async function attachSharingFailure(
 	accounts: Record<string, string>,
 	teamDash: string,
 	soloDash: string,
-	sync: unknown[],
+	sync: SharingSyncEvent[],
 ): Promise<void> {
 	const pool = new Pool({
 		connectionString: process.env.E2E_DATABASE_URL,
@@ -294,6 +315,10 @@ async function attachSharingFailure(
 					);
 					return [name, result.rows];
 				} catch (error) {
+					console.error(
+						`dashboard sharing ${name} diagnostics failed:`,
+						error instanceof Error ? error.name : "unknown",
+					);
 					return [
 						name,
 						{ error: error instanceof Error ? error.name : "unknown" },
@@ -301,12 +326,121 @@ async function attachSharingFailure(
 				}
 			}),
 		);
+		const state: Record<string, unknown> = Object.fromEntries(database);
+		const groups = [
+			...new Set(
+				sync.flatMap((event) =>
+					event.clientGroupID ? [event.clientGroupID] : [],
+				),
+			),
+		];
+		const records = (name: string): Record<string, unknown>[] =>
+			Array.isArray(state[name]) ? state[name] : [];
+		const knownIDs = (values: unknown[]) =>
+			[...new Set(values)].filter(
+				(value): value is string => typeof value === "string",
+			);
+		const expected = [
+			...knownIDs(records("dashboards").map((row) => row.id)).map((id) => ({
+				table: "dashboard",
+				rowKey: { id },
+			})),
+			...knownIDs([
+				SHARED_WORKSPACE_ID,
+				...records("memberships").map((row) => row.workspace_id),
+				...records("dashboards").map((row) => row.workspace_id),
+			]).map((id) => ({ table: "workspace", rowKey: { id } })),
+			...knownIDs(records("memberships").map((row) => row.id)).map((id) => ({
+				table: "membership",
+				rowKey: { id },
+			})),
+		];
+		let cvr: Record<string, unknown> = { groups, expected };
+		if (groups.length === 0) {
+			console.error(
+				"dashboard sharing CVR diagnostics: no observed client group",
+			);
+			cvr.error = "no observed client group";
+		} else {
+			try {
+				const client = await pool.connect();
+				let transactionOpen = false;
+				try {
+					await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+					transactionOpen = true;
+					await client.query("SET LOCAL statement_timeout = '3s'");
+					// The E2E Compose stack uses Zero's default app/shard namespace.
+					const versions = await client.query(
+						`select g.id as "clientGroupID", i.version as "metadataVersion",
+						 rv.version as "rowsVersion", i."replicaVersion"
+						 from unnest($1::text[]) g(id)
+						 left join "zero_0/cvr".instances i on i."clientGroupID" = g.id
+						 left join "zero_0/cvr"."rowsVersion" rv on rv."clientGroupID" = g.id
+						 order by g.id limit 200`,
+						[groups],
+					);
+					const queries = await client.query(
+						`select "clientGroupID", "queryHash", "patchVersion",
+						 "transformationHash", "transformationVersion", "rowSetSignature", deleted
+						 from "zero_0/cvr".queries
+						 where "clientGroupID" = any($1::text[]) and "queryName" = 'dashboards.mine'
+						 order by "clientGroupID", "queryHash" limit 200`,
+						[groups],
+					);
+					const rows = await client.query(
+						`with expected as (
+						 select * from jsonb_to_recordset($2::jsonb) as e("table" text, "rowKey" jsonb)
+						 ), q as (
+						 select "clientGroupID", "queryHash" from "zero_0/cvr".queries
+						 where "clientGroupID" = any($1::text[]) and "queryName" = 'dashboards.mine'
+						 )
+						 select g.id as "clientGroupID", e."table", e."rowKey",
+						 r."clientGroupID" is not null as "rowFound", r."schema",
+						 r."rowVersion", r."patchVersion", r."refCounts",
+						 r."refCounts" is null as "nullRefs", q."queryHash",
+						 r."refCounts" -> q."queryHash" as "dashboardQueryRefCount"
+						 from unnest($1::text[]) g(id) cross join expected e
+						 left join "zero_0/cvr".rows r on r."clientGroupID" = g.id
+						 and r."schema" = '' and r."table" = e."table" and r."rowKey" = e."rowKey"
+						 left join q on q."clientGroupID" = g.id
+						 order by g.id, e."table", e."rowKey", q."queryHash" limit 200`,
+						[groups, JSON.stringify(expected)],
+					);
+					await client.query("COMMIT");
+					transactionOpen = false;
+					cvr = {
+						...cvr,
+						versions: versions.rows,
+						queries: queries.rows,
+						rows: rows.rows,
+					};
+				} finally {
+					try {
+						if (transactionOpen) await client.query("ROLLBACK");
+					} catch (error) {
+						console.error(
+							"dashboard sharing CVR rollback failed:",
+							error instanceof Error ? error.name : "unknown",
+						);
+					} finally {
+						client.release();
+					}
+				}
+			} catch (error) {
+				console.error(
+					"dashboard sharing CVR diagnostics failed:",
+					error instanceof Error ? error.name : "unknown",
+				);
+				cvr.error = error instanceof Error ? error.name : "unknown";
+			}
+		}
 		await test.info().attach("dashboard-sharing-state", {
 			contentType: "application/json",
 			body: JSON.stringify({
 				accounts,
 				expected: { teamDash, soloDash, workspaceId: SHARED_WORKSPACE_ID },
-				database: Object.fromEntries(database),
+				database: state,
+				cvr,
 				sync,
 			}),
 		});
@@ -541,7 +675,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 	const accounts: Record<string, string> = {};
 	const teamDash = `Team ${Date.now()}`;
 	const soloDash = `Solo ${Date.now()}`;
-	let viewerSync: unknown[] = [];
+	let viewerSync: SharingSyncEvent[] = [];
 	try {
 		// Owner joins the seeded shared workspace and creates a workspace-shared
 		// dashboard in it, plus a personal one.
