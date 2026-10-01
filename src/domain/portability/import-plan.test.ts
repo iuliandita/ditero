@@ -289,6 +289,17 @@ describe("saved native dry-run plan", () => {
 		expect(next?.targetId).toBe(old?.targetId);
 		expect(next?.itemDigest).not.toBe(old?.itemDigest);
 	});
+	test("plans an empty folder source ID and its list reference exactly", async () => {
+		const source = fixture();
+		source.data.folders[0].id = "";
+		source.data.lists[0].folderId = "";
+		const result = await plan(source);
+		const folder = result.items.find((item) => item.collection === "folders");
+		const list = result.items.find((item) => item.collection === "lists");
+		expect(folder?.sourceId).toBe("");
+		expect(folder?.payload).toMatchObject({ id: folder?.targetId });
+		expect(list?.payload).toMatchObject({ folderId: folder?.targetId });
+	});
 	test("isolates source and owner while mappings only change plan identity", async () => {
 		const first = await plan();
 		const mapped = await buildImportPlan(fixture(), {

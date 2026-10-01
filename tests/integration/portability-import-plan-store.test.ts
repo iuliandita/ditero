@@ -199,6 +199,30 @@ test("concurrent duplicate saves return one immutable plan and no content writes
 	expect(await getImportPlanStatus(runtime, "alice", a.id)).toEqual(a);
 });
 
+test("saved plans retain empty source IDs and resolved references", async () => {
+	document.data.folders.push({
+		id: "",
+		workspaceId: "source",
+		name: "Empty source ID",
+		sortKey: "a0",
+	});
+	const list = document.data.lists[0];
+	if (!list) throw new Error("Missing fixture list");
+	list.folderId = "";
+	const saved = await save();
+	const items = await pool.query(
+		"select collection, source_id, target_id, payload from import_item where job_id = $1 and collection in ('folders', 'lists')",
+		[saved.id],
+	);
+	const folder = items.rows.find((row) => row.collection === "folders");
+	const storedList = items.rows.find((row) => row.collection === "lists");
+	expect(folder).toMatchObject({
+		source_id: "",
+		payload: { id: folder?.target_id },
+	});
+	expect(storedList?.payload.folderId).toBe(folder?.target_id);
+});
+
 test("runtime RLS hides all ledger rows from another owner and rejects cross-owner insertion", async () => {
 	const saved = await save();
 	expect(await getImportPlanStatus(runtime, "bob", saved.id)).toBeNull();

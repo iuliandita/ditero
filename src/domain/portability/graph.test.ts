@@ -250,6 +250,26 @@ describe("native import graph", () => {
 		});
 		expect(source).toEqual(before);
 	});
+	test("resolves empty source IDs and detects duplicate or missing empty references", () => {
+		const source = fixture();
+		source.data.folders[0].id = "";
+		source.data.lists[0].folderId = "";
+		expect(validateImportGraph(source)).toEqual({
+			valid: true,
+			errors: [],
+			warnings: [],
+		});
+		source.data.folders.push({ ...source.data.folders[0] });
+		expect(validateImportGraph(source).errors).toContainEqual({
+			code: "duplicate-id",
+			path: "data.folders[1].id",
+		});
+		source.data.folders = [];
+		expect(validateImportGraph(source).errors).toContainEqual({
+			code: "missing-reference",
+			path: "data.lists[0].folderId",
+		});
+	});
 	test("requires current task-workspace membership for assignment but permits former comment authors", () => {
 		const source = fixture();
 		expect(validateImportGraph(source).valid).toBe(true);

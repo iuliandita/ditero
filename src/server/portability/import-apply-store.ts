@@ -240,8 +240,8 @@ export async function applyImportBatch(
 				if (
 					![3, 4].includes(job.planner_version) ||
 					!assignee ||
+					typeof assignee.sourceUserId !== "string" ||
 					![
-						assignee.sourceUserId,
 						assignee.targetUserId,
 						assignee.workspaceId,
 						assignee.membershipId,

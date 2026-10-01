@@ -151,7 +151,7 @@ function validateV4Proof(
 		if (fallbackId !== null && fallbackId !== undefined) {
 			if (
 				!proof.fallback ||
-				!nonempty(proof.fallback.sourceUserId) ||
+				typeof proof.fallback.sourceUserId !== "string" ||
 				!nonempty(proof.fallback.membershipId) ||
 				proof.fallback.targetUserId !== fallbackId ||
 				proof.fallback.workspaceId !== proof.workspace.targetId
@@ -326,7 +326,7 @@ export async function sealImportApplyPlan(
 				const payload = candidate.payload;
 				const precondition = snapshot.targetPrecondition;
 				if (
-					!assignee?.sourceUserId ||
+					typeof assignee?.sourceUserId !== "string" ||
 					!assignee.membershipId ||
 					!payload ||
 					typeof payload !== "object" ||

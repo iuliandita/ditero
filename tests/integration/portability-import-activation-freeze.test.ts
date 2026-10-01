@@ -244,6 +244,83 @@ test("explicit v4 save freezes complete recipients and fallback with live seats"
 	).toBe(0);
 });
 
+test("v4 freezes an assignment to a task with an empty source ID", async () => {
+	const task = document.data.tasks[0];
+	const assignment = document.data.assignments[0];
+	if (!task || !assignment)
+		throw new Error("Missing source task or assignment");
+	task.id = "";
+	assignment.taskId = "";
+	const saved = await saveImportPlan(
+		runtime,
+		"alice",
+		source,
+		document,
+		mappings,
+		{ plannerVersion: 4 },
+	);
+	expect(saved.report).toMatchObject({ applySupported: true });
+	const rows = await frozenItems(saved.id);
+	const frozenTask = rows.find(
+		(row) => row.collection === "tasks" && row.source_id === "",
+	);
+	const frozenAssignment = rows.find((row) => row.collection === "assignments");
+	expect(frozenTask?.dependency_proof).toMatchObject({
+		activation: {
+			kind: "transition",
+			readinessOrdinal: frozenAssignment?.ordinal,
+			expectedRelationships: {
+				count: 2,
+				evidence: {
+					assignees: [{ userId: "bob", membershipId: "target-bob" }],
+				},
+			},
+		},
+	});
+	expect(frozenAssignment?.dependency_proof).toMatchObject({
+		taskActivationGeneration: 1,
+	});
+});
+
+test("v4 retains an empty principal source ID in assignee and fallback proofs", async () => {
+	const principal = document.data.principals.find((row) => row.id === "bob");
+	const memberships = document.data.memberships.filter(
+		(row) => row.userId === "bob",
+	);
+	const task = document.data.tasks[0];
+	const assignment = document.data.assignments[0];
+	if (!principal || memberships.length === 0 || !task || !assignment)
+		throw new Error("Missing source principal references");
+	principal.id = "";
+	for (const membership of memberships) membership.userId = "";
+	task.fallbackUserId = "";
+	assignment.userId = "";
+	delete mappings.principals.bob;
+	mappings.principals[""] = "bob";
+	const saved = await saveImportPlan(
+		runtime,
+		"alice",
+		source,
+		document,
+		mappings,
+		{ plannerVersion: 4 },
+	);
+	expect(saved.report).toMatchObject({ applySupported: true });
+	const rows = await frozenItems(saved.id);
+	const frozenTask = rows.find((row) => row.collection === "tasks");
+	const frozenAssignment = rows.find((row) => row.collection === "assignments");
+	expect(frozenTask?.dependency_proof?.fallback).toMatchObject({
+		sourceUserId: "",
+		targetUserId: "bob",
+		membershipId: "target-bob",
+	});
+	expect(frozenAssignment?.dependency_proof?.assignee).toMatchObject({
+		sourceUserId: "",
+		targetUserId: "bob",
+		membershipId: "target-bob",
+	});
+});
+
 test("a task without assignments freezes its list-owner base recipient", async () => {
 	document.data.assignments = [];
 	const saved = await saveImportPlan(

@@ -344,6 +344,27 @@ describe("sealed import apply plan", () => {
 		);
 		expect({ item, target }).toEqual(before);
 	});
+	test("accepts an empty assignee source user ID while requiring target seat evidence", async () => {
+		const { item, target } = assignment();
+		if (!target.dependencyProof.assignee)
+			throw new Error("Missing assignee fixture");
+		target.dependencyProof.assignee.sourceUserId = "";
+		await expect(
+			sealImportApplyPlan([item], new Map([[item.sourceKey, target]]), {
+				...context,
+				plannerVersion: 3,
+			}),
+		).resolves.toMatchObject({
+			items: [{ dependencyProof: { assignee: { sourceUserId: "" } } }],
+		});
+		target.dependencyProof.assignee.membershipId = "";
+		await expect(
+			sealImportApplyPlan([item], new Map([[item.sourceKey, target]]), {
+				...context,
+				plannerVersion: 3,
+			}),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
+	});
 	test("v4 binds fallback seats and assignment readiness to the task generation", async () => {
 		const task = candidate();
 		task.payload = {
@@ -365,7 +386,7 @@ describe("sealed import apply plan", () => {
 		assigned.target.dependencyProof.taskActivationGeneration = 1;
 		const taskTarget = snapshot();
 		taskTarget.dependencyProof.fallback = {
-			sourceUserId: "source-fallback",
+			sourceUserId: "",
 			targetUserId: "fallback-user",
 			workspaceId: "target-workspace",
 			membershipId: "fallback-seat",
@@ -407,6 +428,7 @@ describe("sealed import apply plan", () => {
 			...context,
 			plannerVersion: 4,
 		});
+		expect(plan.items[0].dependencyProof?.fallback?.sourceUserId).toBe("");
 		expect(plan.items[0].dependencyProof?.activation?.readinessOrdinal).toBe(1);
 		expect(
 			plan.items[0].dependencyProof?.activation?.expectedRelationships.evidence

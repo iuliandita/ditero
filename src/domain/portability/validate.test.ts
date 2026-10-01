@@ -295,6 +295,15 @@ describe("portable v1 validation", () => {
 		expect(parse(input)).toEqual(input);
 	});
 
+	test("preserves empty source IDs and references", () => {
+		const input = fixture();
+		input.sourceUserId = "";
+		input.data.principals[0].id = "";
+		input.data.folders[0].id = "";
+		input.data.lists[0].folderId = "";
+		expect(parse(input)).toEqual(input);
+	});
+
 	test("accepts nullable preferences, exported extended years, and existing smallint priorities", () => {
 		const input = fixture();
 		Object.assign(input.data.userPrefs[0], {
