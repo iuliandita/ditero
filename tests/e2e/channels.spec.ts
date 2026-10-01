@@ -9,11 +9,13 @@ import {
 } from "@playwright/test";
 import { Pool } from "pg";
 import {
+	configuredOrigin,
 	goToSettings,
 	openMoreOptions,
 	setDueDate,
 	signUp,
 	uniqueEmail,
+	webOrigin,
 } from "./helpers.ts";
 
 // M3b Task 16 e2e: the five-row channel settings surface, the SMTP mail path
@@ -39,18 +41,17 @@ const PASSWORD = "pw-123456";
 const SIGNUP_TIMEOUT = 30_000;
 // Private, non-loopback ntfy stub (playwright.config): the SSRF boundary refuses
 // loopback, so the tap binds a private interface and that one /32 is allowlisted.
-const NTFY = process.env.E2E_NTFY_URL ?? "http://172.17.0.1:4599";
+const NTFY = configuredOrigin("E2E_NTFY_URL");
 const NTFY_CAPTURED = `${NTFY}/_captured`;
 // The SMTP deployment is API-only (no web app): the mail wire is asserted
 // through an APIRequestContext, and the SMTP-less UI states render on the
 // default web app against the shared DB.
-const MAIL_API = process.env.E2E_MAIL_API_URL ?? "http://localhost:3001";
-const SMTP_CAPTURE = process.env.E2E_SMTP_HTTP_URL ?? "http://127.0.0.1:4601";
+const MAIL_API = configuredOrigin("E2E_MAIL_API_URL");
+const SMTP_CAPTURE = configuredOrigin("E2E_SMTP_HTTP_URL");
 // The interactions listener lives on the default app server, mounted ahead of
 // the CORS hook; POSTed directly so no proxy rewrites the signed bytes.
-const DISCORD_INTERACTIONS =
-	"http://localhost:3000/api/notifications/discord/interactions";
-const ACK_ROUTE = "http://localhost:3000/api/notifications/ack";
+const DISCORD_INTERACTIONS = `${configuredOrigin("E2E_API_URL")}/api/notifications/discord/interactions`;
+const ACK_ROUTE = `${configuredOrigin("E2E_API_URL")}/api/notifications/ack`;
 
 async function waitWorkspaceReady(page: Page): Promise<void> {
 	await expect(page.getByRole("button", { name: /'s space/ })).toBeVisible({
@@ -369,10 +370,10 @@ test("email test-send delivers real SMTP bytes to the sink", async ({
 }) => {
 	const email = uniqueEmail("mail-wire");
 	// Both guardedPost (requireSameOrigin) and Better Auth's own CSRF check refuse
-	// a POST whose Origin is not trusted; localhost:5173 is in both allow-lists on
-	// the SMTP server (requestOrigins and trustedAuthOrigins), so present it.
+	// a POST whose Origin is not trusted; the configured web origin is in both
+	// allow-lists on the SMTP server, so present it.
 	const api = await playwright.request.newContext({
-		extraHTTPHeaders: { Origin: "http://localhost:5173" },
+		extraHTTPHeaders: { Origin: webOrigin() },
 	});
 	let res = await api.post(`${MAIL_API}/api/auth/sign-up/email`, {
 		data: { email, password: PASSWORD, name: "Mail Wire" },

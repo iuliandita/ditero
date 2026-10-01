@@ -16,6 +16,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import { securityHeaders } from "../../src/server/http-policy.ts";
+import { configuredOrigin } from "./helpers.ts";
 
 type Rfc9180Vector = {
 	kem_id: number;
@@ -531,7 +532,7 @@ test("Argon2id derives under the production CSP", async ({ page }) => {
 	test.setTimeout(ARGON2_TIMEOUT);
 	const csp = securityHeaders({
 		NODE_ENV: "production",
-		PUBLIC_ZERO_URL: "http://localhost:4849",
+		PUBLIC_ZERO_URL: configuredOrigin("E2E_PUBLIC_ZERO_URL"),
 	})["content-security-policy"];
 
 	await page.route("**/__csp-gate", async (route) => {
