@@ -81,10 +81,15 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/reports/serial.json
-        run: >-
-          bun run test:e2e --project=chromium-serial --workers=1
-          --shard="$E2E_SHARD/3" --fail-on-flaky-tests
-          --reporter=list,json --output=test-results/serial
+        run: |
+          case "$E2E_SHARD" in
+            1) serial_specs=(tests/e2e/ack-live.spec.ts tests/e2e/auth-hardening.spec.ts tests/e2e/channels.spec.ts tests/e2e/dashboards.spec.ts) ;;
+            2) serial_specs=(tests/e2e/domain.spec.ts tests/e2e/e2e-invite-fragment.spec.ts tests/e2e/navigation.spec.ts) ;;
+            3) serial_specs=(tests/e2e/notifications.spec.ts tests/e2e/sharing.spec.ts tests/e2e/spine.spec.ts) ;;
+            *) echo "Unknown E2E_SHARD: $E2E_SHARD" >&2; exit 1 ;;
+          esac
+          bun run test:e2e "${serial_specs[@]}" --project=chromium-serial --workers=1 \
+            --fail-on-flaky-tests --reporter=list,json --output=test-results/serial
       - name: Upload browser reports and failure evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

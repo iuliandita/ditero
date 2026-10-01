@@ -39,6 +39,8 @@ async function createListDesktop(page: Page, name: string): Promise<void> {
 	await waitWorkspaceReady(page);
 	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("sidebar-new-list").click();
+	// The menu mounts a fresh form after its focus trap closes.
+	await expect(page.getByTestId("new-list")).toBeFocused();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	await expect(

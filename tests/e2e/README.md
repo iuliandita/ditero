@@ -13,7 +13,7 @@ Per-file ordering is preserved in both Chromium projects. Combined runs default
 to one worker; enable two workers only for the isolated phase.
 
 CI runs three shards, each with two sequential phases. Run the same phases locally
-by setting `E2E_SHARD` to 1, 2, or 3:
+in Bash or zsh by setting `E2E_SHARD` to 1, 2, or 3:
 
 ```sh
 export E2E_SHARD=1
@@ -21,11 +21,23 @@ PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/reports/isolated.json \
   bun run test:e2e --project=chromium --project=firefox --project=webkit \
   --workers=2 --shard="$E2E_SHARD/3" --fail-on-flaky-tests \
   --reporter=list,json --output=test-results/isolated
+case "$E2E_SHARD" in
+  1) serial_specs=(tests/e2e/ack-live.spec.ts tests/e2e/auth-hardening.spec.ts tests/e2e/channels.spec.ts tests/e2e/dashboards.spec.ts) ;;
+  2) serial_specs=(tests/e2e/domain.spec.ts tests/e2e/e2e-invite-fragment.spec.ts tests/e2e/navigation.spec.ts) ;;
+  3) serial_specs=(tests/e2e/notifications.spec.ts tests/e2e/sharing.spec.ts tests/e2e/spine.spec.ts) ;;
+  *) echo "Unknown E2E_SHARD: $E2E_SHARD" >&2; exit 1 ;;
+esac
 PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/reports/serial.json \
-  bun run test:e2e --project=chromium-serial --workers=1 \
-  --shard="$E2E_SHARD/3" --fail-on-flaky-tests \
-  --reporter=list,json --output=test-results/serial
+  bun run test:e2e "${serial_specs[@]}" --project=chromium-serial --workers=1 \
+  --fail-on-flaky-tests --reporter=list,json --output=test-results/serial
 ```
+
+The isolated phase uses Playwright sharding. The serial phase selects whole files
+explicitly: its three groups contain 25, 33, and 21 cases, with historical test
+work of 223.1, 327.6, and 234.2 seconds respectively. These groups balance total
+runner time against the isolated phase; count-based serial sharding left one
+runner on the critical path. They preserve all 79 serial cases without splitting
+file ordering or running serial suites concurrently.
 
 Run the second phase even if the first fails. Each invocation creates and removes
 a fresh test stack. Do not run phases, shards, or integration tests concurrently
