@@ -321,7 +321,10 @@ test("calendar: chips name priority and completion, done chips step back", async
 			),
 		);
 	expect(rendered).toBe(2);
-	await expect(long).toHaveAttribute("title", LONG_TITLE);
+	await expect(long).toHaveAttribute(
+		"title",
+		`${LONG_TITLE}, Groceries, ${source}`,
+	);
 
 	await expectNoSeriousA11y(page, "calendar chips");
 });

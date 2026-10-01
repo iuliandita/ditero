@@ -6,6 +6,7 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 test("the phone Appearance shortcut and section selector follow reading-size changes", async ({
 	page,
 }) => {
+	await page.emulateMedia({ reducedMotion: "reduce" });
 	await signUp(page, uniqueEmail("reading-sections"));
 	await goToSettings(page);
 	await page.getByTestId("display-size-large").check();
