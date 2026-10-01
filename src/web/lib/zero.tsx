@@ -7,6 +7,7 @@ import { mutators } from "../../zero/mutators.ts";
 import { schema } from "../../zero/schema.gen.ts";
 import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { Button } from "../components/ui/button.tsx";
+import { createExportBoundary } from "./export-boundary.ts";
 import { fetchPublicConfig } from "./public-config.ts";
 import {
 	createSyncTracker,
@@ -47,6 +48,15 @@ function createZeroClient(userID: string, token: string, cacheURL: string) {
 type ZeroClient = ReturnType<typeof createZeroClient>;
 
 const SyncTrackerContext = createContext<SyncTracker | null>(null);
+const ExportBoundaryContext = createContext<ReturnType<
+	typeof createExportBoundary
+> | null>(null);
+
+export function useExportBoundary() {
+	const boundary = useContext(ExportBoundaryContext);
+	if (!boundary) throw new Error("useExportBoundary outside AppZeroProvider");
+	return boundary;
+}
 
 export function useSyncTracker(): SyncTracker {
 	const tracker = useContext(SyncTrackerContext);
@@ -64,6 +74,7 @@ export function AppZeroProvider({
 	const [client, setClient] = useState<{
 		zero: ZeroClient;
 		tracker: SyncTracker;
+		exportBoundary: ReturnType<typeof createExportBoundary>;
 	} | null>(null);
 	const [startupFailed, setStartupFailed] = useState(false);
 	const [startupSaveFailed, setStartupSaveFailed] = useState(false);
@@ -93,6 +104,8 @@ export function AppZeroProvider({
 		let owner: ReturnType<typeof registerZeroClient> | undefined;
 		let stopAuthRefresh: (() => void) | undefined;
 		let stopConnectionWatch: (() => void) | undefined;
+		let stopExportWatch: (() => void) | undefined;
+		let exportBoundary: ReturnType<typeof createExportBoundary> | undefined;
 		let cancelled = false;
 		void (async () => {
 			await repairAccountBootstrap();
@@ -109,19 +122,49 @@ export function AppZeroProvider({
 						() => {
 							stopAuthRefresh?.();
 							stopConnectionWatch?.();
+							stopExportWatch?.();
+							exportBoundary?.dispose();
 						},
 						() => cancelled,
 					);
 					const tracker = createSyncTracker();
 					trackMutations(instance, tracker);
+					const boundary = createExportBoundary({
+						userID,
+						clientID: instance.clientID,
+						isConnected: () =>
+							!cancelled &&
+							navigator.onLine &&
+							instance.connection.state.current.name === "connected",
+					});
+					exportBoundary = boundary;
+					const mutate = instance.mutate as (...args: unknown[]) => {
+						client: Promise<unknown>;
+						server: Promise<unknown>;
+					};
+					const guarded = (...args: unknown[]) =>
+						boundary.wrapMutation(() => mutate(...args));
+					Object.assign(guarded, mutate);
+					Object.defineProperty(instance, "mutate", { value: guarded });
+					const refreshExport = () => {
+						boundary.refreshJournal();
+						boundary.connectionChanged();
+					};
+					window.addEventListener("storage", refreshExport);
+					window.addEventListener("offline", refreshExport);
+					stopExportWatch = () => {
+						window.removeEventListener("storage", refreshExport);
+						window.removeEventListener("offline", refreshExport);
+					};
 					stopConnectionWatch = instance.connection.state.subscribe((state) => {
 						if (state.name === "connected") tracker.connected();
+						boundary.connectionChanged();
 					});
 					stopAuthRefresh = watchZeroAuth(instance, undefined, undefined, {
 						onSessionExpired: tracker.setSessionExpired,
 						onAuthRejected: tracker.setAuthRejected,
 					});
-					return { zero: instance, tracker };
+					return { zero: instance, tracker, exportBoundary: boundary };
 				},
 				() => cancelled,
 			);
@@ -167,7 +210,9 @@ export function AppZeroProvider({
 	return (
 		<ZeroProvider zero={client.zero}>
 			<SyncTrackerContext.Provider value={client.tracker}>
-				{children}
+				<ExportBoundaryContext.Provider value={client.exportBoundary}>
+					{children}
+				</ExportBoundaryContext.Provider>
 			</SyncTrackerContext.Provider>
 		</ZeroProvider>
 	);
