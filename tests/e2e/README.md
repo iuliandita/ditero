@@ -56,9 +56,13 @@ changing the original test failure or preventing stack cleanup. CI uploads these
 files alongside the phase's browser evidence.
 
 Dashboard sharing failures also attach scoped account, membership, and dashboard
-state, sanitized sync metadata, and a read-only snapshot of the viewer's saved
-query records. The snapshot includes query versions and expected root/witness
-reference counts; it excludes credentials, query arguments, and row contents.
+state, sanitized sync metadata tagged by scenario account role, and a read-only
+snapshot of the observed accounts' saved query records. Each owner, member,
+outsider, and viewer page is observed before signup, with at most 100 events per
+page. The snapshot includes query versions and expected root/witness reference
+counts for at most four observed client groups and the scenario's known row keys.
+Each saved-query result has a 200-row limit; truncation is explicitly flagged.
+It excludes credentials, query arguments, and row contents.
 Compare saved row versions with connection cookies before attributing a missing
 dashboard to query evaluation or catchup.
 
