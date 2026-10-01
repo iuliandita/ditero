@@ -57,6 +57,7 @@ jobs:
         shard: [1, 2, 3]
     env:
       E2E_SHARD: ${{ matrix.shard }}
+      E2E_BROWSER_CONTAINER: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -67,17 +68,12 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       # Firefox and WebKit retain the cross-engine crypto gate.
-      - name: Browser system dependencies
+      - name: Browser image
+        id: browser-image
         timeout-minutes: 5
-        run: |
-          # Keep Noble sources and signature checks; avoid the runner's slow mirror.
-          sudo test -f /etc/apt/apt-mirrors.txt
-          printf '%s\n' 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
-          bunx playwright install-deps chromium firefox webkit
-      - name: Browser binaries
-        id: browser-binaries
-        timeout-minutes: 5
-        run: bunx playwright install chromium firefox webkit
+        run: >-
+          docker compose --project-name ditero-e2e
+          --file tests/e2e/docker-compose.yml --profile browser pull browser
       - name: Isolated browser tests
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/reports/isolated.json
@@ -88,7 +84,7 @@ jobs:
       # Each invocation tears down its stack. Once setup succeeds, collect both
       # phases unless cancelled; separate outputs preserve failure evidence.
       - name: Serial browser tests
-        if: ${{ !cancelled() && steps.browser-binaries.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.browser-image.outcome == 'success' }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/reports/serial.json
         run: |
