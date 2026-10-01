@@ -745,6 +745,43 @@ describe("recipients", () => {
 		expect(rows).toHaveLength(1);
 		expect(rows[0].occurrenceAt.toISOString()).toBe(OCCURRENCE.toISOString());
 	});
+
+	test("a known undated habit anchor reaches the locked reminder writer", async () => {
+		const id = "sched-r-anchor-habit";
+		await db
+			.update(tables.list)
+			.set({ kind: "habits" })
+			.where(eq(tables.list.id, LIST));
+		try {
+			await seedTask(id, {
+				dueAt: null,
+				rrule: "FREQ=DAILY",
+				recurrenceAnchorAt: DUE_AT,
+				recurrenceConsumed: 0,
+			});
+			await tick(ON_TIME);
+			const rows = await remindersFor(id);
+			expect(rows).toHaveLength(1);
+			expect(rows[0].occurrenceAt).toEqual(OCCURRENCE);
+		} finally {
+			await db
+				.update(tables.list)
+				.set({ kind: "tasks" })
+				.where(eq(tables.list.id, LIST));
+		}
+	});
+
+	test("an exhausted anchored COUNT series produces no reminder", async () => {
+		const id = "sched-r-anchor-exhausted";
+		await seedTask(id, {
+			done: true,
+			rrule: "FREQ=DAILY;COUNT=2",
+			recurrenceAnchorAt: DUE_AT,
+			recurrenceConsumed: 2,
+		});
+		await tick(ON_TIME);
+		expect(await remindersFor(id)).toHaveLength(0);
+	});
 });
 
 describe("scan isolation from unrelated rows", () => {

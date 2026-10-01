@@ -2211,5 +2211,7 @@
 	"calendar_show_earlier": "إظهار التواريخ السابقة",
 	"calendar_hide_earlier": "إخفاء التواريخ السابقة",
 	"habit_occurrence_skipped": "تم تخطي هذا التكرار",
-	"habit_occurrence_unavailable": "التكرار غير متاح. افتح العادة لمراجعة جدولها."
+	"habit_occurrence_unavailable": "التكرار غير متاح. افتح العادة لمراجعة جدولها.",
+	"recurrence_projection_needs_start": "حدّد تاريخ بداية لعرض هذا الجدول.",
+	"recurrence_projection_capped": "تعذّر التحقق من هذا الجدول بالكامل. افتح المهمة لمراجعته."
 }

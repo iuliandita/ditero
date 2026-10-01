@@ -10,6 +10,7 @@ import { saveImportPlan } from "../../src/server/portability/import-plan-store.t
 import {
 	digestImportTarget,
 	taskCreatedAtPresent,
+	taskRecurrencePresent,
 } from "../../src/server/portability/import-target.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
@@ -154,6 +155,7 @@ async function seedMappedTarget(jobId: string) {
 					target,
 					() => {},
 					taskCreatedAtPresent(collection, item.payload),
+					taskRecurrencePresent(collection, item.payload),
 				),
 				jobId,
 			],

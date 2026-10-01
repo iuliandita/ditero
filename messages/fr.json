@@ -2073,5 +2073,7 @@
 	"calendar_show_earlier": "Afficher les dates précédentes",
 	"calendar_hide_earlier": "Masquer les dates précédentes",
 	"habit_occurrence_skipped": "Cette fois ignorée",
-	"habit_occurrence_unavailable": "Occurrence indisponible. Ouvre cette habitude pour vérifier sa fréquence."
+	"habit_occurrence_unavailable": "Occurrence indisponible. Ouvre cette habitude pour vérifier sa fréquence.",
+	"recurrence_projection_needs_start": "Définis une date de début pour afficher ce calendrier.",
+	"recurrence_projection_capped": "Ce calendrier n’a pas pu être entièrement vérifié. Ouvre la tâche pour le vérifier."
 }

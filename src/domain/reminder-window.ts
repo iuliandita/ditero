@@ -1,4 +1,4 @@
-import { RRule } from "rrule";
+import { projectRecurrence } from "./recurrence.ts";
 import { DAY_MS, instantToWallClock, wallClockToInstant } from "./zoned.ts";
 
 export type ReminderSource = {
@@ -7,6 +7,10 @@ export type ReminderSource = {
 	rrule: string | null;
 	dueAt: Date | null;
 	done: boolean;
+	recurrenceAnchorAt?: Date | null;
+	recurrenceConsumed?: number | null;
+	recurrenceRelative?: boolean;
+	listKind?: string;
 };
 
 export type DueOccurrence = { taskId: string; occurrenceAt: Date };
@@ -23,15 +27,8 @@ export type ReminderWindowResult = {
 // per task per tick).
 export const MAX_OCCURRENCES_PER_TASK = 64;
 
-// Hard ceiling on rrule iterator callbacks per task, independent of the
-// distinct-date cap above: the iterator fires once per *occurrence*, and
-// occurrences-per-calendar-date is unbounded (FREQ=SECONDLY etc), so the
-// distinct-date cap alone does not bound iteration work -- a single
-// FREQ=SECONDLY task over a 3-day widened window took ~4s wall-clock before
-// this cap existed. 1000 gives ample headroom over the worst realistic
-// legitimate case (hourly reminders over a week-long grace-plus-widening
-// window: 24/day * ~9 days =~ 216) while keeping a pathological rule cheap
-// (well under a millisecond of iteration work).
+// Bounds emitted candidates independently of the distinct-date cap. The shared
+// evaluator also bounds pre-window periods, selector work, and allocations.
 export const MAX_ITERATIONS_PER_TASK = 1000;
 
 // Two independent effects stack, so a 1-day pad is not enough: (1) a local
@@ -55,7 +52,7 @@ export function reminderWindow(
 	for (const src of sources) {
 		if (!src.reminderTime) continue;
 		if (src.done && !src.rrule) continue;
-		if (!src.dueAt) continue;
+		if (!src.dueAt && !src.rrule) continue;
 
 		const { dates, capped } = occurrenceDates(src, timeZone, from, to);
 		if (capped) cappedTaskIds.push(src.taskId);
@@ -76,58 +73,53 @@ export function reminderWindow(
 	return { occurrences, cappedTaskIds };
 }
 
-// Reminder-window queries need dtstart pinned to the task's own dueAt (the
-// recurrence series anchor) rather than the scan window -- unlike
-// recurrence.expand(), which anchors dtstart to its `from` and so can't serve
-// an arbitrary window far from the series start. Iteration is capped inside
-// the between() callback (same pattern recurrence.expand uses) so a
-// pathological rule (FREQ=MINUTELY) can't materialize an unbounded array
-// before the cap applies.
 function occurrenceDates(
 	src: ReminderSource,
 	timeZone: string,
 	from: Date,
 	to: Date,
 ): { dates: string[]; capped: boolean } {
-	if (!src.dueAt) return { dates: [], capped: false };
 	if (!src.rrule) {
 		return {
-			dates: [instantToWallClock(src.dueAt, timeZone).date],
+			dates: src.dueAt ? [instantToWallClock(src.dueAt, timeZone).date] : [],
 			capped: false,
 		};
 	}
-
-	const o = RRule.parseString(src.rrule); // throws on malformed input
-	if (o.freq == null) {
-		throw new Error(`reminder-window: RRULE missing FREQ: ${src.rrule}`);
-	}
-	const rule = new RRule({ ...o, dtstart: src.dueAt });
-
+	const virtual = src.listKind === "habits";
+	const dayFrame = (date: Date) =>
+		new Date(`${instantToWallClock(date, timeZone).date}T00:00:00Z`);
+	const frame = (date: Date | null | undefined) =>
+		date == null ? null : virtual ? dayFrame(date) : date;
 	const widenedFrom = new Date(from.getTime() - WINDOW_PAD_MS);
 	const widenedTo = new Date(to.getTime() + WINDOW_PAD_MS);
-
-	// Dates are collected in iteration (== chronological) order, so a cap
-	// always keeps the earliest dates and drops the latest. That only matters
-	// if a single scan spans more than MAX_OCCURRENCES_PER_TASK distinct
-	// dates, which the grace window (about an hour, per the scheduler design)
-	// makes unreachable in normal operation -- it only shows up in synthetic
-	// windows like the cap test below.
+	const projected = projectRecurrence(
+		{
+			rrule: src.rrule,
+			relative: src.recurrenceRelative ?? false,
+			anchorAt: frame(src.recurrenceAnchorAt),
+			dueAt: frame(src.dueAt),
+			consumed: src.recurrenceConsumed ?? null,
+			exhausted: src.done,
+		},
+		virtual ? dayFrame(widenedFrom) : widenedFrom,
+		virtual ? dayFrame(widenedTo) : widenedTo,
+		{
+			includePast: virtual,
+			maxOutput: MAX_ITERATIONS_PER_TASK,
+		},
+	);
 	const seen = new Set<string>();
-	let iterations = 0;
-	rule.between(widenedFrom, widenedTo, true, (date) => {
-		iterations++;
-		seen.add(instantToWallClock(date, timeZone).date);
-		return (
-			iterations < MAX_ITERATIONS_PER_TASK &&
-			seen.size < MAX_OCCURRENCES_PER_TASK
+	for (const date of projected.occurrences) {
+		seen.add(
+			virtual
+				? date.toISOString().slice(0, 10)
+				: instantToWallClock(date, timeZone).date,
 		);
-	});
-	// A cap reaching its limit on the very last relevant occurrence (nothing
-	// left to drop) is reported as capped too -- a false positive is safe
-	// here, a false negative (silently incomplete data reported as complete)
-	// is not.
-	const capped =
-		iterations >= MAX_ITERATIONS_PER_TASK ||
-		seen.size >= MAX_OCCURRENCES_PER_TASK;
-	return { dates: [...seen], capped };
+		if (seen.size >= MAX_OCCURRENCES_PER_TASK) break;
+	}
+	return {
+		dates: [...seen],
+		capped:
+			projected.status !== "complete" || seen.size >= MAX_OCCURRENCES_PER_TASK,
+	};
 }

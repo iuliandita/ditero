@@ -1,4 +1,9 @@
-import { type Options, RRule } from "rrule";
+import {
+	type IterationLimitReason,
+	type IterationLimits,
+	type Options,
+	RRule,
+} from "rrule";
 
 export type RecurrencePreset =
 	| { freq: "daily"; interval: number }
@@ -182,4 +187,254 @@ export function expand(rrule: string, from: Date, to: Date, cap = 366): Date[] {
 		return out.length < cap;
 	});
 	return out;
+}
+
+export type RecurrenceSeries = {
+	rrule: string;
+	relative: boolean;
+	anchorAt: Date | null;
+	dueAt: Date | null;
+	consumed: number | null;
+	exhausted: boolean;
+};
+export type RecurrenceProjection = {
+	status: "complete" | "capped" | "needs-start";
+	occurrences: Date[];
+	reason?: IterationLimitReason;
+};
+export type RecurrenceTransition = {
+	status: "advanced" | "exhausted" | "capped" | "needs-start";
+	series: RecurrenceSeries;
+	reason?: IterationLimitReason;
+};
+
+function validateSeries(series: RecurrenceSeries): void {
+	for (const d of [series.anchorAt, series.dueAt])
+		if (d && !Number.isFinite(d.getTime()))
+			throw new Error("recurrence: invalid date");
+	if (
+		series.consumed != null &&
+		(!Number.isSafeInteger(series.consumed) || series.consumed < 0)
+	)
+		throw new Error("recurrence: invalid consumption");
+	if ((series.anchorAt == null) !== (series.consumed == null))
+		throw new Error("recurrence: incomplete schedule state");
+}
+function seriesAnchor(
+	series: RecurrenceSeries,
+	o: Partial<Options>,
+	from: Date,
+): Date | null {
+	if (series.anchorAt) return series.anchorAt;
+	if (series.dueAt) return series.dueAt;
+	// Only this phase-invariant legacy habit can project without a known start.
+	if (
+		!series.relative &&
+		o.freq === RRule.DAILY &&
+		(o.interval ?? 1) === 1 &&
+		o.count == null &&
+		o.until == null &&
+		Object.keys(o).every((key) => ["freq", "interval"].includes(key))
+	)
+		return new Date(
+			Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()),
+		);
+	return null;
+}
+
+function fixedRule(
+	o: Partial<Options>,
+	anchor: Date,
+	virtual: boolean,
+	limits: IterationLimits,
+) {
+	const original = new RRule({ ...o, dtstart: anchor });
+	if (virtual)
+		return { status: "complete" as const, rule: original, initialSlot: false };
+	// Selected task due is actionable even when a selector excludes DTSTART.
+	const first = original.afterBounded(anchor, true, limits);
+	if (first.status === "capped")
+		return { status: "capped" as const, reason: first.reason };
+	const initialSlot = first.value?.getTime() !== anchor.getTime();
+	return {
+		status: "complete" as const,
+		initialSlot,
+		rule: new RRule({
+			...o,
+			dtstart: anchor,
+			...(o.count != null && initialSlot ? { count: o.count - 1 } : {}),
+		}),
+	};
+}
+
+/** Inclusive window; includePast projects eligible virtual-habit history. */
+export function projectRecurrence(
+	series: RecurrenceSeries,
+	from: Date,
+	to: Date,
+	options: IterationLimits & { includePast?: boolean } = {},
+): RecurrenceProjection {
+	validateSeries(series);
+	if (
+		!Number.isFinite(from.getTime()) ||
+		!Number.isFinite(to.getTime()) ||
+		to < from
+	)
+		throw new Error("recurrence: invalid window");
+	const { includePast = false, ...limits } = options;
+	const o = parseOptions(series.rrule);
+	const empty: RecurrenceProjection = { status: "complete", occurrences: [] };
+	if (
+		!includePast &&
+		(series.exhausted || (o.count != null && (series.consumed ?? 0) >= o.count))
+	)
+		return empty;
+	if (series.relative && !includePast) {
+		if (!series.dueAt) return { status: "needs-start", occurrences: [] };
+		if (
+			series.exhausted ||
+			(o.count != null && (series.consumed ?? 0) >= o.count) ||
+			(o.until && series.dueAt > o.until)
+		)
+			return empty;
+		return {
+			status: "complete",
+			occurrences:
+				series.dueAt >= from && series.dueAt <= to
+					? [new Date(series.dueAt)]
+					: [],
+		};
+	}
+	const anchor = seriesAnchor(
+		includePast ? { ...series, relative: false } : series,
+		o,
+		from,
+	);
+	if (!anchor) return { status: "needs-start", occurrences: [] };
+	if (!includePast && o.count === 1)
+		return {
+			status: "complete",
+			occurrences:
+				anchor >= from && anchor <= to && (!o.until || anchor <= o.until)
+					? [new Date(anchor)]
+					: [],
+		};
+	const fixed = fixedRule(o, anchor, includePast, limits);
+	if (fixed.status === "capped")
+		return { status: "capped", occurrences: [], reason: fixed.reason };
+	let lower = Math.max(
+		from.getTime(),
+		anchor.getTime(),
+		includePast ? anchor.getTime() : (series.dueAt ?? anchor).getTime(),
+	);
+	const consumed = includePast ? 0 : (series.consumed ?? 0);
+	const eligibleConsumed = Math.max(0, consumed - (fixed.initialSlot ? 1 : 0));
+	if (eligibleConsumed > 0) {
+		// Determine spent ordinal boundary using the same bounded evaluator, not
+		// the possibly stale due cursor. No unbounded counting or private API.
+		const spent = new RRule({
+			...fixed.rule.origOptions,
+			count: eligibleConsumed,
+		}).betweenBounded(anchor, to, true, {
+			...limits,
+			// Ordinal history is internal, independent of displayed window capacity.
+			maxOutput: eligibleConsumed,
+		});
+		if (spent.status === "capped")
+			return { status: "capped", occurrences: [], reason: spent.reason };
+		if (spent.value.length < eligibleConsumed) return empty;
+		lower = Math.max(lower, spent.value[spent.value.length - 1].getTime() + 1);
+	}
+	const initial =
+		fixed.initialSlot &&
+		consumed === 0 &&
+		anchor.getTime() >= lower &&
+		anchor <= to &&
+		(!o.until || anchor <= o.until)
+			? [new Date(anchor)]
+			: [];
+	if (lower > to.getTime()) return { status: "complete", occurrences: initial };
+	const maxOutput = limits.maxOutput ?? 366;
+	// Reserve capacity for the extra selected slot; query one candidate to
+	// distinguish a genuinely complete one-slot window from truncated output.
+	const result = fixed.rule.betweenBounded(new Date(lower), to, true, {
+		...limits,
+		maxOutput: Math.max(1, maxOutput - initial.length),
+	});
+	const occurrences = [...initial, ...result.value];
+	if (occurrences.length > maxOutput)
+		return {
+			status: "capped",
+			occurrences: occurrences.slice(0, maxOutput),
+			reason: "output-limit",
+		};
+	return result.status === "capped"
+		? { status: "capped", occurrences, reason: result.reason }
+		: { status: "complete", occurrences };
+}
+
+/** Complete and skip share this transition; writers decide Karma effects. */
+export function transitionRecurrence(
+	series: RecurrenceSeries,
+	actionAt: Date,
+	limits: IterationLimits = {},
+): RecurrenceTransition {
+	validateSeries(series);
+	if (!Number.isFinite(actionAt.getTime()))
+		throw new Error("recurrence: invalid action date");
+	if (series.exhausted) return { status: "exhausted", series };
+	const o = parseOptions(series.rrule);
+	const anchor = seriesAnchor(series, o, actionAt);
+	if (!anchor || !series.dueAt) return { status: "needs-start", series };
+	if (o.count != null && (series.consumed ?? 0) >= o.count)
+		return { status: "exhausted", series: { ...series, exhausted: true } };
+	const consumed = (series.consumed ?? 0) + 1;
+	if (!Number.isSafeInteger(consumed))
+		throw new Error("recurrence: consumption overflow");
+	const adopted = { ...series, anchorAt: new Date(anchor), consumed };
+	const exhausted = (): RecurrenceTransition => ({
+		status: "exhausted",
+		series: { ...adopted, exhausted: true },
+	});
+	if (o.count != null && consumed >= o.count) return exhausted();
+	let next: Date | null;
+	if (series.relative)
+		next = nextDue(series.rrule, series.dueAt, {
+			relative: true,
+			completedAt: actionAt,
+		});
+	else {
+		const fixed = fixedRule(o, anchor, false, limits);
+		if (fixed.status === "capped")
+			return { status: "capped", series, reason: fixed.reason };
+		let currentDue = series.dueAt;
+		const eligibleConsumed = Math.max(
+			0,
+			(series.consumed ?? 0) - (fixed.initialSlot ? 1 : 0),
+		);
+		if ((series.consumed ?? 0) > 0) {
+			// A stale cursor must first select the first unspent eligible slot.
+			// A cap aborts the action before returning any changed state.
+			const current = new RRule({
+				...fixed.rule.origOptions,
+				count: eligibleConsumed + 1,
+			}).betweenBounded(
+				anchor,
+				new Date(Date.UTC(9999, 11, 31, 23, 59, 59)),
+				true,
+				{ ...limits, maxOutput: eligibleConsumed + 1 },
+			);
+			if (current.status === "capped")
+				return { status: "capped", series, reason: current.reason };
+			const firstUnspent = current.value[eligibleConsumed];
+			if (!firstUnspent) return exhausted();
+			if (firstUnspent > currentDue) currentDue = firstUnspent;
+		}
+		const result = fixed.rule.afterBounded(currentDue, false, limits);
+		if (result.status === "capped")
+			return { status: "capped", series, reason: result.reason };
+		next = result.value;
+	}
+	if (!next || (o.until && next > o.until)) return exhausted();
+	return { status: "advanced", series: { ...adopted, dueAt: next } };
 }

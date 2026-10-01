@@ -45,6 +45,8 @@ export const IMPORT_TARGETS = {
 			"category",
 			"rrule",
 			"recurrenceRelative",
+			"recurrenceAnchorAt",
+			"recurrenceConsumed",
 			"reminderTime",
 			"repeatEveryMin",
 			"maxRepeats",
@@ -77,15 +79,35 @@ export function taskCreatedAtPresent(
 	);
 }
 
+export function taskRecurrencePresent(
+	collection: ImportTargetCollection,
+	payload: unknown,
+): boolean {
+	return (
+		collection === "tasks" &&
+		payload !== null &&
+		typeof payload === "object" &&
+		!Array.isArray(payload) &&
+		(Object.hasOwn(payload, "recurrenceAnchorAt") ||
+			Object.hasOwn(payload, "recurrenceConsumed"))
+	);
+}
+
 export function importTargetProjection(
 	collection: ImportTargetCollection,
 	row: Record<string, unknown>,
 	withTaskCreatedAt = false,
+	withTaskRecurrence = false,
 ): Record<string, PortableJson> {
 	const projection: Record<string, PortableJson> = {};
 	for (const field of IMPORT_TARGETS[collection].fields) {
 		// Legacy saved plans and source maps retain their exact v1 projection.
 		if (field === "createdAt" && !withTaskCreatedAt) continue;
+		if (
+			(field === "recurrenceAnchorAt" || field === "recurrenceConsumed") &&
+			!withTaskRecurrence
+		)
+			continue;
 		const column = field.replace(
 			/[A-Z]/g,
 			(letter) => `_${letter.toLowerCase()}`,
@@ -93,7 +115,10 @@ export function importTargetProjection(
 		const value = row[column];
 		if (
 			collection === "tasks" &&
-			(field === "dueAt" || field === "completedAt" || field === "createdAt")
+			(field === "dueAt" ||
+				field === "completedAt" ||
+				field === "createdAt" ||
+				field === "recurrenceAnchorAt")
 		) {
 			if (value === null) projection[field] = null;
 			else if (value instanceof Date && Number.isFinite(value.getTime()))
@@ -116,12 +141,23 @@ export function digestImportTarget(
 	row: Record<string, unknown>,
 	checkpoint: () => void,
 	withTaskCreatedAt = false,
+	withTaskRecurrence = false,
 ) {
 	return hashImportValue(
-		collection === "tasks" && withTaskCreatedAt
-			? "ditero-import-target-v2"
-			: "ditero-import-target-v1",
-		[collection, importTargetProjection(collection, row, withTaskCreatedAt)],
+		collection === "tasks" && withTaskRecurrence
+			? "ditero-import-target-v3"
+			: collection === "tasks" && withTaskCreatedAt
+				? "ditero-import-target-v2"
+				: "ditero-import-target-v1",
+		[
+			collection,
+			importTargetProjection(
+				collection,
+				row,
+				withTaskCreatedAt,
+				withTaskRecurrence,
+			),
+		],
 		checkpoint,
 	);
 }

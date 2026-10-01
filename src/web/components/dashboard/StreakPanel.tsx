@@ -33,24 +33,56 @@ function StreakRow({
 	// computeStreak throws on an empty/malformed rule; only run with one set.
 	const streak = useMemo(
 		() =>
-			task.rrule ? computeStreak(task.rrule, entries, today, 30, since) : null,
-		[task.rrule, entries, today, since],
+			task.rrule
+				? computeStreak(task.rrule, entries, today, 30, since, {
+						anchorAt:
+							task.recurrenceAnchorAt == null
+								? null
+								: new Date(
+										`${localDay(new Date(task.recurrenceAnchorAt), pref.timezone)}T00:00:00Z`,
+									),
+						dueAt:
+							task.dueAt == null
+								? null
+								: new Date(
+										`${localDay(new Date(task.dueAt), pref.timezone)}T00:00:00Z`,
+									),
+						consumed: task.recurrenceConsumed ?? null,
+						relative: task.recurrenceRelative ?? false,
+						exhausted: task.done ?? false,
+					})
+				: null,
+		[
+			task.rrule,
+			task.recurrenceAnchorAt,
+			task.dueAt,
+			task.recurrenceConsumed,
+			task.recurrenceRelative,
+			task.done,
+			pref.timezone,
+			entries,
+			today,
+			since,
+		],
 	);
 
 	// Whole message per case: the label must never be assembled from a
 	// translated fragment, since word order cannot move across that seam.
-	const label = !streak
-		? m.panel_streak_no_recurrence_row_aria({ title: task.title })
-		: streak.adherencePct == null
-			? m.panel_streak_row_new_aria({
-					title: task.title,
-					count: streak.current,
-				})
-			: m.panel_streak_row_aria({
-					title: task.title,
-					count: streak.current,
-					pct: streak.adherencePct,
-				});
+	const label =
+		streak && streak.projectionStatus !== "complete"
+			? undefined
+			: !streak
+				? m.panel_streak_no_recurrence_row_aria({ title: task.title })
+				: streak.adherencePct == null
+					? m.panel_streak_row_new_aria({
+							title: task.title,
+							count: streak.current,
+						})
+					: m.panel_streak_row_aria({
+							title: task.title,
+							count: streak.current,
+							pct: streak.adherencePct,
+						});
 	return (
 		<button
 			type="button"
@@ -60,7 +92,13 @@ function StreakRow({
 			className="flex w-full items-center gap-2 rounded px-1 py-1.5 text-start hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 		>
 			<span className="min-w-0 flex-1 truncate text-sm">{task.title}</span>
-			{streak ? (
+			{streak && streak.projectionStatus !== "complete" ? (
+				<span className="text-xs text-muted-foreground">
+					{streak.projectionStatus === "needs-start"
+						? m.recurrence_projection_needs_start()
+						: m.recurrence_projection_capped()}
+				</span>
+			) : streak ? (
 				<>
 					<span className="inline-flex items-center gap-1 text-sm font-medium tabular-nums">
 						<Flame aria-hidden className="size-3.5 text-success" />

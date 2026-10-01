@@ -180,6 +180,7 @@ export default defineConfig({
 			port: 5173,
 			reuseExistingServer: false,
 			timeout: 60_000,
+			env: { NODE_ENV: "test", DITERO_E2E_SIGNUP_TRANSPORT: "1" },
 		},
 	],
 });

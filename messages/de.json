@@ -2027,5 +2027,7 @@
 	"calendar_show_earlier": "Frühere Tage anzeigen",
 	"calendar_hide_earlier": "Frühere Tage ausblenden",
 	"habit_occurrence_skipped": "Dieses Mal übersprungen",
-	"habit_occurrence_unavailable": "Wiederholung nicht verfügbar. Öffne die Gewohnheit und prüfe ihren Zeitplan."
+	"habit_occurrence_unavailable": "Wiederholung nicht verfügbar. Öffne die Gewohnheit und prüfe ihren Zeitplan.",
+	"recurrence_projection_needs_start": "Lege ein Startdatum fest, um diesen Zeitplan anzuzeigen.",
+	"recurrence_projection_capped": "Dieser Zeitplan konnte nicht vollständig geprüft werden. Öffne die Aufgabe, um ihn zu überprüfen."
 }

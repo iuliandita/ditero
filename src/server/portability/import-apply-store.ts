@@ -25,6 +25,7 @@ import {
 	IMPORT_TARGETS,
 	type ImportTargetCollection,
 	taskCreatedAtPresent,
+	taskRecurrencePresent,
 } from "./import-target.ts";
 
 export type ImportRunStatus = {
@@ -84,7 +85,10 @@ function payloadRow(item: FrozenImportItem): Row {
 		Object.entries(payloadOf(item)).map(([key, value]) => [
 			column(key),
 			item.collection === "tasks" &&
-			(key === "dueAt" || key === "completedAt" || key === "createdAt") &&
+			(key === "dueAt" ||
+				key === "completedAt" ||
+				key === "createdAt" ||
+				key === "recurrenceAnchorAt") &&
 			typeof value === "string"
 				? new Date(value)
 				: value,
@@ -649,6 +653,7 @@ export async function applyImportBatch(
 						payloadRow(item),
 						checkpoint,
 						taskCreatedAtPresent(collection, payload),
+						taskRecurrencePresent(collection, payload),
 					);
 					if (pre.kind === "mapped") {
 						if (
@@ -667,6 +672,7 @@ export async function applyImportBatch(
 								target,
 								checkpoint,
 								taskCreatedAtPresent(collection, payload),
+								taskRecurrencePresent(collection, payload),
 							)) !== pre.targetDigest
 						)
 							conflict("mapped-target-conflict");

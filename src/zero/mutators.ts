@@ -35,7 +35,11 @@ import { parseMentions, personMatchesHandle } from "../domain/mention.ts";
 import { MutatorError } from "../domain/mutator-error.ts";
 import { isStorableQuantity, isValidUnit } from "../domain/quantity.ts";
 import { randomId } from "../domain/random-id.ts";
-import { initialRRule, nextDue, parseRule } from "../domain/recurrence.ts";
+import {
+	initialRRule,
+	parseRule,
+	transitionRecurrence,
+} from "../domain/recurrence.ts";
 import { ADMIN_ROLES, ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import { keyBetween } from "../domain/sort-key.ts";
 import {
@@ -513,6 +517,8 @@ function zeroAckStore(tx: Transaction<Schema>): AckStore {
 				listKind: list.kind ?? "tasks",
 				rrule: row.rrule ?? null,
 				recurrenceRelative: row.recurrenceRelative ?? false,
+				recurrenceAnchorAt: row.recurrenceAnchorAt ?? null,
+				recurrenceConsumed: row.recurrenceConsumed ?? null,
 				dueAt: row.dueAt ?? null,
 				done: row.done ?? false,
 				priority: row.priority ?? 0,
@@ -530,6 +536,12 @@ function zeroAckStore(tx: Transaction<Schema>): AckStore {
 				done: patch.done,
 				completedAt: patch.completedAt,
 				...(patch.dueAt === undefined ? {} : { dueAt: patch.dueAt }),
+				...(patch.recurrenceAnchorAt === undefined
+					? {}
+					: { recurrenceAnchorAt: patch.recurrenceAnchorAt }),
+				...(patch.recurrenceConsumed === undefined
+					? {}
+					: { recurrenceConsumed: patch.recurrenceConsumed }),
 			});
 		},
 		async habitLog(habitId, date) {
@@ -565,23 +577,44 @@ function zeroAckStore(tx: Transaction<Schema>): AckStore {
 	};
 }
 
-// The next occurrence of a recurring task, or null when the series is exhausted
-// (fixed UNTIL/COUNT) -- relative series never exhaust. task.complete/skip and
-// task.update's done-invariant all derive it here so they cannot drift on what
-// "series exhausted" means. Non-recurring tasks return null.
-function nextOccurrence(
+function recurrenceTransition(
 	task: {
 		rrule: string | null;
 		dueAt: number | Date | null;
 		recurrenceRelative: boolean | null;
+		recurrenceAnchorAt?: number | Date | null;
+		recurrenceConsumed?: number | null;
+		done: boolean | null;
 	},
 	now: number,
-): Date | null {
-	if (task.rrule == null) return null;
-	return nextDue(task.rrule, new Date(task.dueAt ?? now), {
-		relative: task.recurrenceRelative ?? false,
-		completedAt: new Date(now),
-	});
+) {
+	if (!task.rrule) throw new Error("not a recurring task");
+	const result = transitionRecurrence(
+		{
+			rrule: task.rrule,
+			relative: task.recurrenceRelative ?? false,
+			anchorAt:
+				task.recurrenceAnchorAt == null
+					? null
+					: new Date(task.recurrenceAnchorAt),
+			dueAt:
+				task.dueAt == null && task.recurrenceAnchorAt == null
+					? null
+					: new Date(task.dueAt ?? task.recurrenceAnchorAt ?? 0),
+			consumed: task.recurrenceConsumed ?? null,
+			exhausted: task.done ?? false,
+		},
+		new Date(now),
+	);
+	if (result.status === "capped" || result.status === "needs-start")
+		throw new Error(`recurrence ${result.status}`);
+	return {
+		dueAt: result.series.dueAt?.getTime() ?? null,
+		recurrenceAnchorAt: result.series.anchorAt?.getTime() ?? null,
+		recurrenceConsumed: result.series.consumed,
+		done: result.series.exhausted,
+		completedAt: result.series.exhausted ? now : null,
+	};
 }
 
 // Bounds only: the number format is a client rule, since replayed offline
@@ -624,6 +657,7 @@ export const mutators = defineMutators({
 						throw new Error("parent in different list");
 				}
 				const rrule = initialRRule(list.kind, args.parentId);
+				const recurrenceAnchorAt = rrule ? (args.dueAt ?? Date.now()) : null;
 				await tx.mutate.task.insert({
 					id: args.id,
 					createdAt: taskCreatedAt(tx),
@@ -639,7 +673,9 @@ export const mutators = defineMutators({
 					...(args.quantity !== undefined ? { quantity: args.quantity } : {}),
 					...(args.unit !== undefined ? { unit: args.unit } : {}),
 					...(args.category !== undefined ? { category: args.category } : {}),
-					...(rrule != null ? { rrule } : {}),
+					...(rrule != null
+						? { rrule, recurrenceAnchorAt, recurrenceConsumed: 0 }
+						: {}),
 				});
 			},
 		),
@@ -701,30 +737,39 @@ export const mutators = defineMutators({
 				// Fail loud before any write if a non-null rrule is malformed, so the
 				// complete/skip paths never read back an unparseable recurrence.
 				if (args.rrule != null) parseRule(args.rrule);
-				// Invariant shared with task.complete (issue #24): `done && rrule` is
-				// reserved for an exhausted series. Reject a write whose resulting state
-				// would leave `done: true` on a live recurrence, so the scheduler never
-				// mistakes an active series for a finished one. Advance a recurring task
-				// through task.complete, or clear its rrule in the same write.
-				const effDone = args.done !== undefined ? args.done : task.done;
-				const effRrule = args.rrule !== undefined ? args.rrule : task.rrule;
-				if (effDone && effRrule != null) {
-					const next = nextOccurrence(
-						{
-							rrule: effRrule,
-							dueAt: args.dueAt !== undefined ? args.dueAt : task.dueAt,
-							recurrenceRelative:
-								args.recurrenceRelative !== undefined
-									? args.recurrenceRelative
-									: task.recurrenceRelative,
-						},
-						Date.now(),
+				const now = Date.now();
+				const effRrule =
+					args.rrule !== undefined ? args.rrule : (task.rrule ?? null);
+				const effDueAt = args.dueAt !== undefined ? args.dueAt : task.dueAt;
+				const effRelative =
+					args.recurrenceRelative ?? task.recurrenceRelative ?? false;
+				const scheduleChanged =
+					effRrule !== (task.rrule ?? null) ||
+					effRelative !== (task.recurrenceRelative ?? false) ||
+					(args.dueAt !== undefined && args.dueAt !== task.dueAt);
+				const reset = effRrule !== null && scheduleChanged;
+				const effDone =
+					args.done ??
+					(reset && (task.rrule ?? null) !== null ? false : task.done);
+				if (effRrule !== null && effDone && (!task.done || scheduleChanged))
+					throw new Error(
+						"cannot mark a recurring task done while its series is live; use task.complete",
 					);
-					if (next !== null)
-						throw new Error(
-							"cannot mark a recurring task done while its series is live; use task.complete",
-						);
-				}
+				if (
+					effRrule !== null &&
+					task.done &&
+					!scheduleChanged &&
+					args.done === false
+				)
+					throw new Error(
+						"reset recurrence schedule before reopening an exhausted series",
+					);
+				const recurrenceState =
+					effRrule === null
+						? { recurrenceAnchorAt: null, recurrenceConsumed: null }
+						: reset
+							? { recurrenceAnchorAt: effDueAt ?? now, recurrenceConsumed: 0 }
+							: {};
 				// The escalation fallback receives this task's title on a push, so it
 				// must be a member of the task's own workspace -- narrower than the
 				// user-level default's "shares any workspace with you". The scheduler
@@ -738,16 +783,14 @@ export const mutators = defineMutators({
 					if (!fallbackRole)
 						throw new Error("escalation fallback is not a member");
 				}
-				// Only a state change creates or clears the completion timestamp.
 				const completed =
-					args.done === undefined || args.done === task.done
-						? {}
-						: { completedAt: args.done ? Date.now() : null };
+					effDone === task.done ? {} : { completedAt: effDone ? now : null };
 				await tx.mutate.task.update({
 					id: args.id,
 					...(args.title !== undefined ? { title: args.title } : {}),
-					...(args.done !== undefined ? { done: args.done } : {}),
+					...(args.done !== undefined || reset ? { done: effDone } : {}),
 					...completed,
+					...recurrenceState,
 					...(args.notes !== undefined ? { notes: args.notes } : {}),
 					...(args.dueAt !== undefined ? { dueAt: args.dueAt } : {}),
 					...(args.dueAllDay !== undefined
@@ -938,21 +981,10 @@ export const mutators = defineMutators({
 				// occurrence to complete. Live recurring tasks remain open between calls.
 				if (task.done) return;
 				if (task.rrule) {
-					const next = nextOccurrence(task, now);
-					if (next !== null) {
-						await tx.mutate.task.update({
-							id: args.id,
-							dueAt: next.getTime(),
-							done: false,
-							completedAt: null,
-						});
-					} else {
-						await tx.mutate.task.update({
-							id: args.id,
-							done: true,
-							completedAt: now,
-						});
-					}
+					await tx.mutate.task.update({
+						id: args.id,
+						...recurrenceTransition(task, now),
+					});
 				} else {
 					await tx.mutate.task.update({
 						id: args.id,
@@ -987,14 +1019,13 @@ export const mutators = defineMutators({
 				if (!task) throw new Error("task not found");
 				list = task.list as List;
 				if (!task.rrule) throw new Error("not a recurring task");
+				if (list.kind === "habits")
+					throw new Error("habits skip via habit.log");
+				if (task.done) return;
 				const now = Date.now();
-				const next = nextOccurrence(task, now);
-				if (next === null) throw new Error("recurrence exhausted");
 				await tx.mutate.task.update({
 					id: args.id,
-					dueAt: next.getTime(),
-					done: false,
-					completedAt: null,
+					...recurrenceTransition(task, now),
 				});
 			},
 		),

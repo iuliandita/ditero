@@ -251,6 +251,51 @@ afterAll(async () => {
 });
 
 describe("ack route: success", () => {
+	test.each([
+		false,
+		true,
+	])("capability acknowledgments persist finite recurrence progress (relative=%s)", async (relative) => {
+		await db
+			.update(tables.task)
+			.set({
+				rrule: "FREQ=DAILY;COUNT=2",
+				recurrenceRelative: relative,
+				dueAt: OCCURRENCE,
+				recurrenceAnchorAt: OCCURRENCE,
+				recurrenceConsumed: 0,
+			})
+			.where(eq(tables.task.id, TASK));
+		try {
+			const firstId = await seedReminder("ak-r-finite-first", MEMBER);
+			expect(
+				(await postAck(await mintCapability(firstId, MEMBER))).status,
+			).toBe(200);
+			const first = await taskRow(TASK);
+			expect(first.done).toBe(false);
+			expect(first.recurrenceConsumed).toBe(1);
+			expect(first.recurrenceAnchorAt).toEqual(OCCURRENCE);
+			const secondId = await seedReminder("ak-r-finite-second", MEMBER, {
+				occurrenceAt: first.dueAt ?? OCCURRENCE,
+			});
+			expect(
+				(await postAck(await mintCapability(secondId, MEMBER))).status,
+			).toBe(200);
+			const last = await taskRow(TASK);
+			expect(last.done).toBe(true);
+			expect(last.recurrenceConsumed).toBe(2);
+			expect(last.recurrenceAnchorAt).toEqual(OCCURRENCE);
+		} finally {
+			await db
+				.update(tables.task)
+				.set({
+					rrule: null,
+					recurrenceRelative: false,
+					recurrenceAnchorAt: null,
+					recurrenceConsumed: null,
+				})
+				.where(eq(tables.task.id, TASK));
+		}
+	});
 	// The minted URL and the mounted route must agree, or every ack button 404s.
 	test("the mounted path is the path dispatch mints", async () => {
 		const token = await mintCapability(
@@ -284,7 +329,12 @@ describe("ack route: success", () => {
 	test("a later ack of an exhausted recurring task does not complete or award it again", async () => {
 		await db
 			.update(tables.task)
-			.set({ rrule: "FREQ=DAILY;COUNT=1" })
+			.set({
+				rrule: "FREQ=DAILY;COUNT=1",
+				dueAt: OCCURRENCE,
+				recurrenceAnchorAt: OCCURRENCE,
+				recurrenceConsumed: 0,
+			})
 			.where(eq(tables.task.id, TASK));
 		try {
 			const firstId = await seedReminder("ak-r-exhausted-first", MEMBER);
@@ -311,7 +361,11 @@ describe("ack route: success", () => {
 		} finally {
 			await db
 				.update(tables.task)
-				.set({ rrule: null })
+				.set({
+					rrule: null,
+					recurrenceAnchorAt: null,
+					recurrenceConsumed: null,
+				})
 				.where(eq(tables.task.id, TASK));
 		}
 	});

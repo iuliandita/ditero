@@ -67,7 +67,17 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       # Firefox and WebKit retain the cross-engine crypto gate.
-      - run: bunx playwright install --with-deps chromium firefox webkit
+      - name: Browser system dependencies
+        timeout-minutes: 5
+        run: |
+          # Keep Noble sources and signature checks; avoid the runner's slow mirror.
+          sudo test -f /etc/apt/apt-mirrors.txt
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+          bunx playwright install-deps chromium firefox webkit
+      - name: Browser binaries
+        id: browser-binaries
+        timeout-minutes: 5
+        run: bunx playwright install chromium firefox webkit
       - name: Isolated browser tests
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/reports/isolated.json
@@ -75,10 +85,10 @@ jobs:
           bun run test:e2e --project=chromium --project=firefox --project=webkit
           --workers=2 --shard="$E2E_SHARD/3" --fail-on-flaky-tests
           --reporter=list,json --output=test-results/isolated
-      # Each invocation tears down its stack. Always collect both phases unless
-      # cancelled; separate outputs preserve the first phase's failure evidence.
+      # Each invocation tears down its stack. Once setup succeeds, collect both
+      # phases unless cancelled; separate outputs preserve failure evidence.
       - name: Serial browser tests
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.browser-binaries.outcome == 'success' }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/reports/serial.json
         run: |

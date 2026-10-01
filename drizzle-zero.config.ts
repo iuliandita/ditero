@@ -61,6 +61,8 @@ export default drizzleZeroConfig(schema, {
 			unit: true,
 			category: true,
 			rrule: true,
+			recurrenceAnchorAt: true,
+			recurrenceConsumed: true,
 			recurrenceRelative: true,
 			reminderTime: true,
 			repeatEveryMin: true,

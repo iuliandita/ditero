@@ -258,6 +258,62 @@ function parse(value: unknown) {
 }
 
 describe("portable v1 validation", () => {
+	test("an early completion may put a relative task's next due before its immutable anchor", () => {
+		const value = fixture();
+		Object.assign(value.data.tasks[0], {
+			rrule: "FREQ=DAILY;COUNT=3",
+			recurrenceRelative: true,
+			recurrenceAnchorAt: stamp,
+			recurrenceConsumed: 1,
+			dueAt: new Date(new Date(stamp).getTime() - 86_400_000).toISOString(),
+		});
+		expect(parse(value)).toEqual(value);
+		value.data.tasks[0].recurrenceRelative = false;
+		expect(() => parse(value)).toThrow(PortableExportValidationError);
+	});
+	test("recurrence state remains omitted in legacy archives and preserves known or unknown paired state", () => {
+		const legacy = fixture();
+		expect(parse(legacy)).toEqual(legacy);
+		expect(
+			Object.hasOwn(parse(legacy).data.tasks[0], "recurrenceAnchorAt"),
+		).toBe(false);
+		for (const state of [
+			{ recurrenceAnchorAt: null, recurrenceConsumed: null },
+			{ recurrenceAnchorAt: stamp, recurrenceConsumed: 1 },
+		]) {
+			const value = fixture();
+			Object.assign(value.data.tasks[0], {
+				rrule: "FREQ=DAILY;COUNT=3",
+				...state,
+			});
+			expect(parse(value).data.tasks[0]).toMatchObject(state);
+		}
+		for (const state of [
+			{ recurrenceAnchorAt: stamp },
+			{ recurrenceConsumed: 0 },
+			{ recurrenceAnchorAt: null, recurrenceConsumed: 0 },
+			{ recurrenceAnchorAt: stamp, recurrenceConsumed: null },
+			{ recurrenceAnchorAt: stamp, recurrenceConsumed: -1 },
+			{ recurrenceAnchorAt: stamp, recurrenceConsumed: 1.5 },
+			{ recurrenceAnchorAt: stamp, recurrenceConsumed: 4 },
+			{ recurrenceAnchorAt: stamp, recurrenceConsumed: 3, done: false },
+			{ recurrenceAnchorAt: "invalid", recurrenceConsumed: 0 },
+		]) {
+			const value = fixture();
+			Object.assign(value.data.tasks[0], {
+				rrule: "FREQ=DAILY;COUNT=3",
+				...state,
+			});
+			expect(() => parse(value)).toThrow(PortableExportValidationError);
+		}
+		const noRule = fixture();
+		Object.assign(noRule.data.tasks[0], {
+			rrule: null,
+			recurrenceAnchorAt: stamp,
+			recurrenceConsumed: 0,
+		});
+		expect(() => parse(noRule)).toThrow(PortableExportValidationError);
+	});
 	test("creation provenance is optional without altering legacy source keys", () => {
 		const legacy = fixture();
 		const parsed = parse(legacy);

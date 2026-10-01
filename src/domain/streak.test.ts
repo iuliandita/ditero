@@ -17,6 +17,17 @@ const windowDates = (count = 30): string[] => {
 };
 
 const done = (date: string): HabitLogEntry => ({ date, status: "done" });
+const schedule = (
+	day: string,
+	overrides: Partial<import("./streak.ts").StreakSchedule> = {},
+) => ({
+	anchorAt: new Date(`${day}T00:00:00Z`),
+	dueAt: new Date(`${day}T00:00:00Z`),
+	consumed: 0,
+	relative: false,
+	exhausted: false,
+	...overrides,
+});
 const skipped = (date: string): HabitLogEntry => ({ date, status: "skipped" });
 
 describe("computeStreak", () => {
@@ -97,6 +108,7 @@ describe("computeStreak", () => {
 			TODAY,
 			30,
 			"2026-06-15",
+			schedule("2026-06-15"),
 		);
 		// Mondays in [2026-06-15, 2026-07-14]: 06-15,22,29, 07-06,13. 2026-07-07 is
 		// a Tuesday (ignored). Only 2026-07-06 (Mon) is done; the rest missed.
@@ -112,17 +124,14 @@ describe("computeStreak", () => {
 		expect(r.current).toBe(0); // most recent expected (07-13) is missed
 	});
 
-	test("INTERVAL>1 phase is window-edge-anchored (known limitation, pinned)", () => {
-		// FREQ=DAILY;INTERVAL=2 anchors on the window start (2026-06-15), not the
-		// habit's true epoch. Expected dates are every other day from that edge, so
-		// TODAY (2026-07-14, an odd offset) is NOT an occurrence. This asserts the
-		// current deferred behavior; epoch-anchoring would change it visibly.
+	test("INTERVAL>1 phase uses the same anchor across shifted windows", () => {
 		const r = computeStreak(
 			"FREQ=DAILY;INTERVAL=2",
 			[],
 			TODAY,
 			30,
 			"2026-06-15",
+			schedule("2026-06-15"),
 		);
 		expect(r.heatmap.map((h) => h.date)).toEqual([
 			"2026-06-15",
@@ -142,6 +151,17 @@ describe("computeStreak", () => {
 			"2026-07-13",
 		]);
 		expect(r.heatmap.some((h) => h.date === TODAY)).toBe(false);
+		const next = computeStreak(
+			"FREQ=DAILY;INTERVAL=2",
+			[],
+			"2026-07-15",
+			30,
+			"2026-06-15",
+			schedule("2026-06-15"),
+		);
+		expect(next.heatmap.map((h) => h.date).filter((d) => d <= TODAY)).toEqual(
+			r.heatmap.map((h) => h.date).filter((d) => d >= "2026-06-16"),
+		);
 	});
 
 	test("a habit started today with nothing logged has one pending day and no score", () => {
@@ -197,13 +217,14 @@ describe("computeStreak", () => {
 		expect(r.heatmap).toHaveLength(30);
 	});
 
-	test("INTERVAL>1 phase follows a tracking start inside the window", () => {
+	test("tracking start does not change the persisted schedule phase", () => {
 		const r = computeStreak(
 			"FREQ=DAILY;INTERVAL=2",
 			[],
 			TODAY,
 			30,
 			"2026-07-09",
+			schedule("2026-06-15"),
 		);
 		expect(r.heatmap.map((h) => h.date)).toEqual([
 			"2026-07-09",
@@ -211,6 +232,89 @@ describe("computeStreak", () => {
 			"2026-07-13",
 		]);
 		expect(r.adherencePct).toBe(0);
+	});
+
+	test("finite virtual history keeps original COUNT even after exhaustion or relative progress", () => {
+		for (const relative of [false, true]) {
+			const r = computeStreak(
+				"FREQ=DAILY;COUNT=3",
+				[
+					done("2026-07-01"),
+					done("2026-07-02"),
+					done("2026-07-03"),
+					done("2026-07-04"),
+				],
+				"2026-07-10",
+				30,
+				"2026-07-01",
+				schedule("2026-07-01", {
+					relative,
+					consumed: 3,
+					exhausted: true,
+					dueAt: new Date("2026-07-03T00:00:00Z"),
+				}),
+			);
+			expect(r.projectionStatus).toBe("complete");
+			expect(r.heatmap.map((h) => h.date)).toEqual([
+				"2026-07-01",
+				"2026-07-02",
+				"2026-07-03",
+			]);
+			expect(r.current).toBe(3);
+		}
+	});
+
+	test("UNTIL and calendar-month windows retain the same original interval phase", () => {
+		const state = schedule("2026-01-01");
+		const rrule = "FREQ=MONTHLY;INTERVAL=2;UNTIL=20260501T000000Z";
+		const april = computeStreak(
+			rrule,
+			[],
+			"2026-04-30",
+			30,
+			"2026-01-01",
+			state,
+		);
+		const may = computeStreak(
+			rrule,
+			[done("2026-05-01")],
+			"2026-05-31",
+			31,
+			"2026-01-01",
+			state,
+		);
+		expect(april.heatmap).toEqual([]);
+		expect(may.heatmap).toEqual([{ date: "2026-05-01", status: "done" }]);
+		expect(
+			computeStreak(rrule, [], "2026-04-30", 30, "2026-01-01", state),
+		).toEqual(april);
+	});
+
+	test("undated phase-sensitive legacy schedules need a start instead of inferring it from logs", () => {
+		const r = computeStreak(
+			"FREQ=DAILY;INTERVAL=2",
+			[done("2026-07-01")],
+			TODAY,
+		);
+		expect(r.projectionStatus).toBe("needs-start");
+		expect(r.heatmap).toEqual([]);
+		expect(r.adherencePct).toBeNull();
+	});
+
+	test("an old prefix or impossible selector reports incomplete without a false score", () => {
+		for (const rrule of ["FREQ=DAILY", "FREQ=DAILY;BYMONTH=2;BYMONTHDAY=30"]) {
+			const r = computeStreak(
+				rrule,
+				[],
+				TODAY,
+				30,
+				"2026-06-15",
+				schedule("1900-01-01"),
+			);
+			expect(r.projectionStatus).toBe("capped");
+			expect(r.adherencePct).toBeNull();
+			expect(r.heatmap).toEqual([]);
+		}
 	});
 
 	test("malformed rrule fails loud", () => {

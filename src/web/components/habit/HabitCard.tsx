@@ -57,8 +57,37 @@ export function HabitCard({
 	// so only run it for a habit that actually has a recurrence set.
 	const streak = useMemo(
 		() =>
-			task.rrule ? computeStreak(task.rrule, entries, today, 30, since) : null,
-		[task.rrule, entries, today, since],
+			task.rrule
+				? computeStreak(task.rrule, entries, today, 30, since, {
+						anchorAt:
+							task.recurrenceAnchorAt == null
+								? null
+								: new Date(
+										`${localDay(new Date(task.recurrenceAnchorAt), pref.timezone)}T00:00:00Z`,
+									),
+						dueAt:
+							task.dueAt == null
+								? null
+								: new Date(
+										`${localDay(new Date(task.dueAt), pref.timezone)}T00:00:00Z`,
+									),
+						consumed: task.recurrenceConsumed ?? null,
+						relative: task.recurrenceRelative ?? false,
+						exhausted: task.done ?? false,
+					})
+				: null,
+		[
+			task.rrule,
+			task.recurrenceAnchorAt,
+			task.dueAt,
+			task.recurrenceConsumed,
+			task.recurrenceRelative,
+			task.done,
+			pref.timezone,
+			entries,
+			today,
+			since,
+		],
 	);
 
 	function log(status: "done" | "skipped") {
@@ -128,7 +157,19 @@ export function HabitCard({
 
 			{streak ? (
 				<div className="mt-3">
-					<HabitTracker streak={streak} />
+					{streak.projectionStatus === "complete" ? (
+						<HabitTracker streak={streak} />
+					) : (
+						<button
+							type="button"
+							onClick={() => onOpenDetail(task)}
+							className="min-h-11 text-start text-sm text-muted-foreground underline underline-offset-2"
+						>
+							{streak.projectionStatus === "needs-start"
+								? m.recurrence_projection_needs_start()
+								: m.recurrence_projection_capped()}
+						</button>
+					)}
 				</div>
 			) : (
 				<Button

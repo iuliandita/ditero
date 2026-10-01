@@ -3,6 +3,7 @@ import {
 	digestImportTarget,
 	importTargetProjection,
 	taskCreatedAtPresent,
+	taskRecurrencePresent,
 } from "./import-target.ts";
 
 const task = {
@@ -47,6 +48,70 @@ test("target timestamps are ISO values and changes alter the fingerprint", async
 			await digestImportTarget("tasks", { ...task, ...change }, checkpoint),
 		).not.toBe(before);
 	}
+});
+
+test("recurrence fingerprints preserve both previous projections and include schedule progress only in v3", async () => {
+	const dated = { ...task, created_at: null };
+	const scheduled = {
+		...dated,
+		rrule: "FREQ=DAILY;COUNT=3",
+		recurrence_anchor_at: new Date("2026-01-01T12:00:00.000Z"),
+		recurrence_consumed: 1,
+	};
+	const {
+		recurrence_anchor_at: _anchor,
+		recurrence_consumed: _consumed,
+		...oldRow
+	} = scheduled;
+	for (const createdAt of [false, true]) {
+		expect(
+			await digestImportTarget("tasks", scheduled, checkpoint, createdAt),
+		).toBe(await digestImportTarget("tasks", oldRow, checkpoint, createdAt));
+		expect(
+			importTargetProjection("tasks", scheduled, createdAt),
+		).not.toHaveProperty("recurrenceAnchorAt");
+	}
+	expect(
+		taskRecurrencePresent("tasks", {
+			recurrenceAnchorAt: null,
+			recurrenceConsumed: null,
+		}),
+	).toBe(true);
+	expect(taskRecurrencePresent("tasks", { createdAt: null })).toBe(false);
+	expect(taskRecurrencePresent("lists", { recurrenceAnchorAt: null })).toBe(
+		false,
+	);
+	expect(importTargetProjection("tasks", scheduled, true, true)).toMatchObject({
+		recurrenceAnchorAt: "2026-01-01T12:00:00.000Z",
+		recurrenceConsumed: 1,
+	});
+	const current = await digestImportTarget(
+		"tasks",
+		scheduled,
+		checkpoint,
+		true,
+		true,
+	);
+	expect(current).not.toBe(
+		await digestImportTarget("tasks", scheduled, checkpoint, true),
+	);
+	for (const change of [
+		{ recurrence_anchor_at: new Date("2026-01-02T12:00:00.000Z") },
+		{ recurrence_consumed: 2 },
+	]) {
+		expect(
+			await digestImportTarget(
+				"tasks",
+				{ ...scheduled, ...change },
+				checkpoint,
+				true,
+				true,
+			),
+		).not.toBe(current);
+	}
+	expect(() => importTargetProjection("tasks", dated, true, true)).toThrow(
+		"Invalid import target timestamp",
+	);
 });
 
 test("unknown database fields cannot affect or leak into target projections", async () => {

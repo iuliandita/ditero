@@ -1007,3 +1007,60 @@ test.each([
 		expect(dispositions.rows[0]?.disposition).toBe("blocked");
 	}
 });
+
+test.each([
+	"known",
+	"unknown",
+	"legacy",
+] as const)("%s recurrence state survives saved-plan apply and unchanged replay", async (kind) => {
+	const anchor = new Date(now.getTime() - 2 * 86_400_000);
+	for (const row of document.data.tasks) {
+		if (kind === "legacy") {
+			delete row.recurrenceAnchorAt;
+			delete row.recurrenceConsumed;
+		} else if (kind === "known" && row.id === "a-root") {
+			Object.assign(row, {
+				rrule: "FREQ=DAILY;COUNT=3",
+				recurrenceRelative: false,
+				recurrenceAnchorAt: anchor.toISOString(),
+				recurrenceConsumed: 3,
+			});
+		} else {
+			row.recurrenceAnchorAt = null;
+			row.recurrenceConsumed = null;
+		}
+	}
+	const first = await save();
+	const evidence = async () =>
+		(
+			await pool.query(
+				"select item_digest,content_digest,payload from import_item where job_id=$1 and collection='tasks' order by ordinal",
+				[first.id],
+			)
+		).rows;
+	const frozen = await evidence();
+	for (const row of frozen)
+		expect(Object.hasOwn(row.payload, "recurrenceAnchorAt")).toBe(
+			kind !== "legacy",
+		);
+	await finish(first);
+	expect(await evidence()).toEqual(frozen);
+	const rootId = await targetId("tasks", "a-root");
+	const stored = (
+		await pool.query<{
+			recurrence_anchor_at: Date | null;
+			recurrence_consumed: number | null;
+		}>(
+			"select recurrence_anchor_at,recurrence_consumed from task where id=$1",
+			[rootId],
+		)
+	).rows[0];
+	expect(stored?.recurrence_anchor_at?.toISOString() ?? null).toBe(
+		kind === "known" ? anchor.toISOString() : null,
+	);
+	expect(stored?.recurrence_consumed).toBe(kind === "known" ? 3 : null);
+	await discardImportPlan(runtime, "alice", first.id);
+	const replay = await finish(await save());
+	expect(replay.appliedCount).toBe(0);
+	expect(replay.noopCount).toBe(6);
+});
