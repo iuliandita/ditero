@@ -408,6 +408,9 @@ test("touch: long-press Select starts selection mode and taps then select", asyn
 
 	await bar.getByTestId("selection-clear").tap();
 	await expect(bar).toHaveCount(0);
+	await expect(
+		page.getByRole("button", { name: "Quick add", exact: true }),
+	).toBeVisible();
 	await openButton(page, "Tap two").tap();
 	await expect(page.getByRole("dialog")).toBeVisible();
 	await ctx.close();

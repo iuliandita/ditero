@@ -28,7 +28,7 @@ export function InlineSyntaxHint({
 			aria-label={m.fab_quick_add()}
 			data-testid="syntax-hint-open-quickadd"
 			onClick={onQuickAdd}
-			className="inline-flex min-h-11 items-center rounded-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-7"
+			className="inline-flex min-h-11 items-center rounded-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-7 [body:has([data-selection-bar])_&]:hidden"
 		>
 			{keyLabel ? (
 				<KeyText
