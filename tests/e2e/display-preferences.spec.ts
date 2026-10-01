@@ -3,6 +3,40 @@ import { goToSettings, signUp, uniqueEmail } from "./helpers.ts";
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
+test("the phone Appearance shortcut and section selector follow reading-size changes", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("reading-sections"));
+	await goToSettings(page);
+	await page.getByTestId("display-size-large").check();
+	await page.getByTestId("settings-back").click();
+	await page.getByTestId("nav-tab-lists").click();
+	await page.getByTestId("workspace-switcher").click();
+	await page.getByTestId("switcher-appearance").click();
+	await expect(page.getByRole("menu")).toHaveCount(0);
+	await expect(page.locator("#settings-appearance-heading")).toBeFocused();
+	const selector = page.getByTestId("settings-section-select");
+	await expect(selector).toHaveText("Appearance and language");
+	const selectSection = async (name: string, id: string) => {
+		await selector.click();
+		await page.getByRole("option", { name, exact: true }).click();
+		await expect(page.getByRole("listbox")).toHaveCount(0);
+		await expect(page.locator(`#settings-${id}-heading`)).toBeFocused();
+		await expect(selector).toHaveText(name);
+	};
+	await selectSection("Account", "account");
+	await selectSection("Appearance and language", "appearance");
+	for (const preset of ["comfortable", "large"] as const) {
+		await page.getByTestId(`display-size-${preset}`).check();
+		await expect(page.locator("html")).toHaveAttribute(
+			"data-reading-size",
+			preset,
+		);
+		await selectSection("Account", "account");
+		await selectSection("Appearance and language", "appearance");
+	}
+});
+
 test("blocked appearance storage applies changes now and resets on reload and account change", async ({
 	page,
 }) => {
