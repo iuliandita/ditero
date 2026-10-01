@@ -182,6 +182,8 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 					listKind: tables.list.kind,
 					rrule: tables.task.rrule,
 					recurrenceRelative: tables.task.recurrenceRelative,
+					recurrenceAnchorAt: tables.task.recurrenceAnchorAt,
+					recurrenceConsumed: tables.task.recurrenceConsumed,
 					dueAt: tables.task.dueAt,
 					done: tables.task.done,
 					priority: tables.task.priority,
@@ -195,6 +197,7 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 			return {
 				...row,
 				dueAt: row.dueAt ? row.dueAt.getTime() : null,
+				recurrenceAnchorAt: row.recurrenceAnchorAt?.getTime() ?? null,
 			};
 		},
 		async role(userId, workspaceId) {
@@ -223,6 +226,17 @@ function drizzleAckStore(tx: DbTransaction): AckStore {
 				.update(tables.task)
 				.set({
 					done: patch.done,
+					...(patch.recurrenceConsumed === undefined
+						? {}
+						: { recurrenceConsumed: patch.recurrenceConsumed }),
+					...(patch.recurrenceAnchorAt === undefined
+						? {}
+						: {
+								recurrenceAnchorAt:
+									patch.recurrenceAnchorAt === null
+										? null
+										: new Date(patch.recurrenceAnchorAt),
+							}),
 					completedAt: patch.completedAt ? new Date(patch.completedAt) : null,
 					...(patch.dueAt === undefined
 						? {}

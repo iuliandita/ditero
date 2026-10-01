@@ -124,6 +124,10 @@ type TaskRow = {
 	done: boolean;
 	dueAt: Date | null;
 	rrule: string | null;
+	recurrenceRelative: boolean;
+	recurrenceAnchorAt: Date | null;
+	recurrenceConsumed: number | null;
+	listKind: string;
 	reminderTime: string | null;
 	repeatEveryMin: number | null;
 	maxRepeats: number | null;
@@ -320,6 +324,10 @@ async function loadTasks(
 			done: tables.task.done,
 			dueAt: tables.task.dueAt,
 			rrule: tables.task.rrule,
+			recurrenceRelative: tables.task.recurrenceRelative,
+			recurrenceAnchorAt: tables.task.recurrenceAnchorAt,
+			recurrenceConsumed: tables.task.recurrenceConsumed,
+			listKind: tables.list.kind,
 			reminderTime: tables.task.reminderTime,
 			repeatEveryMin: tables.task.repeatEveryMin,
 			maxRepeats: tables.task.maxRepeats,
@@ -334,7 +342,10 @@ async function loadTasks(
 			and(
 				producerVisible,
 				isNotNull(tables.task.reminderTime),
-				isNotNull(tables.task.dueAt),
+				or(
+					isNotNull(tables.task.dueAt),
+					isNotNull(tables.task.recurrenceAnchorAt),
+				),
 				or(
 					isNotNull(tables.task.rrule),
 					and(
@@ -405,6 +416,10 @@ async function createDueReminders(
 						taskId: task.id,
 						reminderTime: task.reminderTime,
 						rrule: task.rrule,
+						recurrenceRelative: task.recurrenceRelative,
+						recurrenceAnchorAt: task.recurrenceAnchorAt,
+						recurrenceConsumed: task.recurrenceConsumed,
+						listKind: task.listKind,
 						dueAt: task.dueAt,
 						done: task.done,
 					},
@@ -494,6 +509,10 @@ async function createReminder(
 								taskId,
 								reminderTime: task.reminderTime,
 								rrule: task.rrule,
+								recurrenceRelative: task.recurrenceRelative,
+								recurrenceAnchorAt: task.recurrenceAnchorAt,
+								recurrenceConsumed: task.recurrenceConsumed,
+								listKind: task.listKind,
 								dueAt: task.dueAt,
 								done: task.done,
 							},
@@ -602,6 +621,10 @@ async function loadSweepRows(
 		done: tables.task.done,
 		dueAt: tables.task.dueAt,
 		rrule: tables.task.rrule,
+		recurrenceRelative: tables.task.recurrenceRelative,
+		recurrenceAnchorAt: tables.task.recurrenceAnchorAt,
+		recurrenceConsumed: tables.task.recurrenceConsumed,
+		listKind: tables.list.kind,
 		reminderTime: tables.task.reminderTime,
 		repeatEveryMin: tables.task.repeatEveryMin,
 		maxRepeats: tables.task.maxRepeats,

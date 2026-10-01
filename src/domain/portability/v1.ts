@@ -46,6 +46,8 @@ export interface PortableRows {
 		category: string | null;
 		rrule: string | null;
 		recurrenceRelative: boolean;
+		recurrenceAnchorAt?: string | null;
+		recurrenceConsumed?: number | null;
 		reminderTime: string | null;
 		repeatEveryMin: number | null;
 		maxRepeats: number | null;

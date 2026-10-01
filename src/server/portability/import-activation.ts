@@ -5,7 +5,12 @@ import {
 	type ImportRelationshipEvidence,
 	type ImportTaskActivationProof,
 } from "../../domain/portability/import-apply-plan.ts";
-import { digestImportTarget, IMPORT_TARGETS } from "./import-target.ts";
+import {
+	digestImportTarget,
+	IMPORT_TARGETS,
+	taskCreatedAtPresent,
+	taskRecurrencePresent,
+} from "./import-target.ts";
 
 const MAX_ROWS = 50_000;
 const MAX_BYTES = 64 * 1024 * 1024;
@@ -108,7 +113,10 @@ function expectedTaskRow(item: ReadyItem): Record<string, unknown> {
 		);
 		const value = payload[field];
 		result[column] =
-			(field === "dueAt" || field === "completedAt") &&
+			(field === "dueAt" ||
+				field === "completedAt" ||
+				field === "createdAt" ||
+				field === "recurrenceAnchorAt") &&
 			typeof value === "string"
 				? new Date(value)
 				: value;
@@ -678,11 +686,19 @@ export async function publishV4Ready(
 		const live = task.rows[0];
 		if (
 			!live ||
-			(await digestImportTarget("tasks", live, checkpoint)) !==
+			(await digestImportTarget(
+				"tasks",
+				live,
+				checkpoint,
+				taskCreatedAtPresent("tasks", item.payload),
+				taskRecurrencePresent("tasks", item.payload),
+			)) !==
 				(await digestImportTarget(
 					"tasks",
 					expectedTaskRow(item),
 					checkpoint,
+					taskCreatedAtPresent("tasks", item.payload),
+					taskRecurrencePresent("tasks", item.payload),
 				)) ||
 			live.workspace_id !== evidence.workspaceId ||
 			live.fallback_user_id !== (evidence.escalationFallback?.userId ?? null) ||

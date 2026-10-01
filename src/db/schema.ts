@@ -235,6 +235,10 @@ export const task = pgTable(
 		unit: text("unit"),
 		category: text("category"),
 		rrule: text("rrule"), // null => non-recurring; RFC 5545 RRULE
+		recurrenceAnchorAt: timestamp("recurrence_anchor_at", {
+			withTimezone: true,
+		}),
+		recurrenceConsumed: integer("recurrence_consumed"),
 		recurrenceRelative: boolean("recurrence_relative").notNull().default(false), // true => next due from completion, not schedule
 		reminderTime: text("reminder_time"), // "HH:MM" local, nullable
 		repeatEveryMin: smallint("repeat_every_min"), // escalation repeat interval; null => inherit user-level default
@@ -250,6 +254,10 @@ export const task = pgTable(
 			foreignColumns: [t.id],
 			name: "task_parent_fk",
 		}),
+		check(
+			"task_recurrence_state",
+			sql`(${t.recurrenceAnchorAt} is null and ${t.recurrenceConsumed} is null) or (${t.recurrenceAnchorAt} is not null and ${t.recurrenceConsumed} is not null and ${t.recurrenceConsumed} >= 0)`,
+		),
 	],
 );
 

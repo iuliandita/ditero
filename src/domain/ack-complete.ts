@@ -12,7 +12,7 @@
 
 import { karmaForCompletion } from "./karma.ts";
 import { localDay } from "./local-day.ts";
-import { nextDue } from "./recurrence.ts";
+import { transitionRecurrence } from "./recurrence.ts";
 import { type Role, WRITE_ROLES } from "./role.ts";
 
 // Reminder statuses a sibling termination must not overwrite: already terminal,
@@ -25,6 +25,8 @@ export type AckTask = {
 	listKind: string;
 	rrule: string | null;
 	recurrenceRelative: boolean;
+	recurrenceAnchorAt?: number | null;
+	recurrenceConsumed?: number | null;
 	dueAt: number | null;
 	done: boolean;
 	priority: number;
@@ -42,7 +44,13 @@ export type AckStore = {
 	timezone(userId: string): Promise<string>;
 	updateTask(
 		id: string,
-		patch: { dueAt?: number | null; done: boolean; completedAt: number | null },
+		patch: {
+			dueAt?: number | null;
+			recurrenceAnchorAt?: number | null;
+			recurrenceConsumed?: number | null;
+			done: boolean;
+			completedAt: number | null;
+		},
 	): Promise<void>;
 	habitLog(habitId: string, date: string): Promise<AckHabitLog | null>;
 	putHabitLog(row: {
@@ -146,19 +154,32 @@ export async function completeForAck(
 	// including when a recurring series has been exhausted.
 	if (task.done) return "completed";
 	if (task.rrule) {
-		const next = nextDue(task.rrule, new Date(task.dueAt ?? now), {
-			relative: task.recurrenceRelative,
-			completedAt: new Date(now),
+		const result = transitionRecurrence(
+			{
+				rrule: task.rrule,
+				relative: task.recurrenceRelative,
+				anchorAt:
+					task.recurrenceAnchorAt == null
+						? null
+						: new Date(task.recurrenceAnchorAt),
+				dueAt:
+					task.dueAt == null && task.recurrenceAnchorAt == null
+						? null
+						: new Date(task.dueAt ?? task.recurrenceAnchorAt ?? 0),
+				consumed: task.recurrenceConsumed ?? null,
+				exhausted: task.done,
+			},
+			new Date(now),
+		);
+		if (result.status === "capped" || result.status === "needs-start")
+			throw new AckCompletionDenied(`recurrence ${result.status}`);
+		await store.updateTask(task.id, {
+			dueAt: result.series.dueAt?.getTime() ?? null,
+			recurrenceAnchorAt: result.series.anchorAt?.getTime() ?? null,
+			recurrenceConsumed: result.series.consumed,
+			done: result.series.exhausted,
+			completedAt: result.series.exhausted ? now : null,
 		});
-		if (next !== null) {
-			await store.updateTask(task.id, {
-				dueAt: next.getTime(),
-				done: false,
-				completedAt: null,
-			});
-		} else {
-			await store.updateTask(task.id, { done: true, completedAt: now });
-		}
 	} else {
 		await store.updateTask(task.id, { done: true, completedAt: now });
 	}

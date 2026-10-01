@@ -587,6 +587,34 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 	// exhausted series (issue #24). Guards mutators.ts task.update's live-series
 	// rejection.
 	describe("task.update recurrence-done invariant", () => {
+		test("undated legacy finite schedules require an explicit start and write nothing", async () => {
+			const id = "hm-t-fixed";
+			await db
+				.update(tables.task)
+				.set({
+					rrule: "FREQ=WEEKLY;INTERVAL=2;COUNT=3",
+					dueAt: null,
+					recurrenceAnchorAt: null,
+					recurrenceConsumed: null,
+				})
+				.where(eq(tables.task.id, id));
+			await expect(
+				call(mutators.task.complete, { id: "hm-owner" }, { id }),
+			).rejects.toThrow(/needs-start/);
+			await expect(
+				call(mutators.task.skipOccurrence, { id: "hm-owner" }, { id }),
+			).rejects.toThrow(/needs-start/);
+			expect((await taskRow(id)).recurrenceAnchorAt).toBeNull();
+			expect((await taskRow(id)).recurrenceConsumed).toBeNull();
+			expect(await karmaRow("hm-owner")).toBeUndefined();
+			await call(
+				mutators.task.update,
+				{ id: "hm-owner" },
+				{ id, dueAt: ANCHOR },
+			);
+			expect((await taskRow(id)).recurrenceAnchorAt?.getTime()).toBe(ANCHOR);
+			expect((await taskRow(id)).recurrenceConsumed).toBe(0);
+		});
 		test("rejects done:true on a live fixed recurring task, writes nothing", async () => {
 			await expect(
 				call(
@@ -631,6 +659,11 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 
 		test("allows done:true on an exhausted series (valid terminal state)", async () => {
 			await call(
+				mutators.task.complete,
+				{ id: "hm-owner" },
+				{ id: "hm-t-exhausted" },
+			);
+			await call(
 				mutators.task.update,
 				{ id: "hm-owner" },
 				{ id: "hm-t-exhausted", done: true },
@@ -662,7 +695,6 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 
 		test.each([
 			"hm-t-plain",
-			"hm-t-exhausted",
 		])("same done flag preserves completedAt while editing %s and explicit reopen clears it", async (id) => {
 			await call(mutators.task.complete, { id: "hm-owner" }, { id });
 			await db
@@ -682,6 +714,61 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 			const reopened = await taskRow(id);
 			expect(reopened.done).toBe(false);
 			expect(reopened.completedAt).toBeNull();
+		});
+
+		test.each([
+			false,
+			true,
+		])("completion and final skip consume COUNT once and retain the original anchor (relative=%s)", async (relative) => {
+			const id = "hm-t-fixed";
+			await call(
+				mutators.task.update,
+				{ id: "hm-owner" },
+				{
+					id,
+					rrule: "FREQ=DAILY;COUNT=2",
+					dueAt: ANCHOR,
+					recurrenceRelative: relative,
+				},
+			);
+			await call(mutators.task.complete, { id: "hm-owner" }, { id });
+			const first = await taskRow(id);
+			expect(first.recurrenceAnchorAt?.getTime()).toBe(ANCHOR);
+			expect(first.recurrenceConsumed).toBe(1);
+			expect(first.done).toBe(false);
+			await call(
+				mutators.task.update,
+				{ id: "hm-owner" },
+				{
+					id,
+					title: "edited",
+					rrule: "FREQ=DAILY;COUNT=2",
+					recurrenceRelative: relative,
+				},
+			);
+			expect((await taskRow(id)).recurrenceConsumed).toBe(1);
+			await call(mutators.task.skipOccurrence, { id: "hm-owner" }, { id });
+			const last = await taskRow(id);
+			expect(last.recurrenceAnchorAt?.getTime()).toBe(ANCHOR);
+			expect(last.recurrenceConsumed).toBe(2);
+			expect(last.done).toBe(true);
+			await call(mutators.task.complete, { id: "hm-owner" }, { id });
+			await call(mutators.task.skipOccurrence, { id: "hm-owner" }, { id });
+			expect((await taskRow(id)).recurrenceConsumed).toBe(2);
+			expect((await karmaRow("hm-owner")).points).toBe(5);
+			await expect(
+				call(mutators.task.update, { id: "hm-owner" }, { id, done: false }),
+			).rejects.toThrow(/reset recurrence/);
+			await call(
+				mutators.task.update,
+				{ id: "hm-owner" },
+				{ id, dueAt: ANCHOR + 2 * 86_400_000 },
+			);
+			const reset = await taskRow(id);
+			expect(reset.done).toBe(false);
+			expect(reset.completedAt).toBeNull();
+			expect(reset.recurrenceConsumed).toBe(0);
+			expect(reset.recurrenceAnchorAt?.getTime()).toBe(ANCHOR + 2 * 86_400_000);
 		});
 	});
 

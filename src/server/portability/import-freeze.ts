@@ -26,6 +26,7 @@ import {
 	IMPORT_TARGETS,
 	type ImportTargetCollection,
 	taskCreatedAtPresent,
+	taskRecurrencePresent,
 } from "./import-target.ts";
 
 export class ImportFreezeLimitError extends Error {
@@ -453,6 +454,7 @@ export async function freezeImportTargets(
 					target,
 					checkpoint,
 					taskCreatedAtPresent(collection, item.payload),
+					taskRecurrencePresent(collection, item.payload),
 				)) !== map.last_target_digest
 			)
 				block(item, "target-changed");

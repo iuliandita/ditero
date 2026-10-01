@@ -44,6 +44,9 @@ export type ProducerTask = {
 	done: boolean;
 	dueAt: Date | null;
 	rrule: string | null;
+	recurrenceRelative: boolean;
+	recurrenceAnchorAt: Date | null;
+	recurrenceConsumed: number | null;
 	reminderTime: string | null;
 	repeatEveryMin: number | null;
 	maxRepeats: number | null;
@@ -186,6 +189,9 @@ async function taskRow(
 		done: boolean;
 		due_at: Date | null;
 		rrule: string | null;
+		recurrence_relative: boolean;
+		recurrence_anchor_at: Date | null;
+		recurrence_consumed: number | null;
 		reminder_time: string | null;
 		repeat_every_min: number | null;
 		max_repeats: number | null;
@@ -196,6 +202,7 @@ async function taskRow(
 		list_kind: string;
 	}>(sql`
 		select t.id, t.list_id, t.title, t.done, t.due_at, t.rrule,
+			t.recurrence_relative, t.recurrence_anchor_at, t.recurrence_consumed,
 			t.reminder_time, t.repeat_every_min, t.max_repeats,
 			t.fallback_user_id, t.urgent, l.owner_id as list_owner_id,
 			l.workspace_id, l.kind as list_kind
@@ -210,6 +217,9 @@ async function taskRow(
 		done: row.done,
 		dueAt: dbInstantOrNull(row.due_at),
 		rrule: row.rrule,
+		recurrenceRelative: row.recurrence_relative,
+		recurrenceAnchorAt: dbInstantOrNull(row.recurrence_anchor_at),
+		recurrenceConsumed: row.recurrence_consumed,
 		reminderTime: row.reminder_time,
 		repeatEveryMin: row.repeat_every_min,
 		maxRepeats: row.max_repeats,

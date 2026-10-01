@@ -66,10 +66,13 @@ async function seedCalendarFixture(
 			 values ($1, $2, $3, 'a0', date_trunc('day', now() at time zone 'utc') + interval '12 hours', false, false, 0)`,
 			[crypto.randomUUID(), listId, oneOff],
 		);
-		// Daily recurrence: expands onto every visible day of the month grid.
+		// Daily recurrence has a concrete phase and expands across the current month.
 		await pool.query(
-			`insert into task (id, list_id, title, sort_key, rrule, done, priority)
-			 values ($1, $2, $3, 'a1', 'FREQ=DAILY;INTERVAL=1', false, 0)`,
+			`insert into task (id, list_id, title, sort_key, rrule, due_at,
+			 recurrence_anchor_at, recurrence_consumed, done, priority)
+			 values ($1, $2, $3, 'a1', 'FREQ=DAILY;INTERVAL=1',
+			 date_trunc('month', now() at time zone 'utc') + interval '12 hours',
+			 date_trunc('month', now() at time zone 'utc') + interval '12 hours', 0, false, 0)`,
 			[crypto.randomUUID(), listId, recurring],
 		);
 	} finally {
@@ -225,6 +228,137 @@ test("calendar: occurrences span the month, one-off reschedules by drag", async 
 	});
 	await expect(prevGlyph).toHaveCSS("rotate", "180deg");
 	await expect(nextGlyph).toHaveCSS("rotate", "180deg");
+});
+
+// The phase starts on the third, never the visible grid's first day. Four
+// occurrences cross the month boundary; a fifth must not appear after COUNT.
+test("calendar: finite interval phase survives month navigation", async ({
+	page,
+}) => {
+	const email = uniqueEmail("maya-calendar");
+	const userId = await signUp(page, email);
+	await waitWorkspaceReady(page);
+	await saveCalendarView(page, "Maya's schedule");
+	const surface = page.getByTestId("calendar-surface");
+	await expect(surface).toBeVisible({ timeout: 15000 });
+	const caption = surface.locator("caption");
+	const initialMonth = await caption.textContent();
+	if (!initialMonth) throw new Error("calendar month label is missing");
+	const monthStart = new Date(`${initialMonth} 1 12:00:00 UTC`);
+	if (Number.isNaN(monthStart.getTime()))
+		throw new Error("invalid calendar month");
+	const anchor = new Date(monthStart);
+	anchor.setUTCDate(3);
+	const title = "Water Maya's balcony plants";
+	const dates = Array.from(
+		{ length: 4 },
+		(_, i) => new Date(anchor.getTime() + i * 13 * 86_400_000),
+	);
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await pool.query(`update "user" set name = 'Maya Chen' where id = $1`, [
+			userId,
+		]);
+		const rows = await pool.query<{ wsId: string }>(
+			`select id as "wsId" from workspace where owner_id = $1 and kind = 'personal'`,
+			[userId],
+		);
+		const workspace = rows.rows[0];
+		if (!workspace) throw new Error("personal workspace not found");
+		const listId = crypto.randomUUID();
+		await pool.query(
+			`insert into list (id, workspace_id, owner_id, title, kind, sort_key)
+			 values ($1, $2, $3, 'Balcony chores', 'tasks', 'a0')`,
+			[listId, workspace.wsId, userId],
+		);
+		await pool.query(
+			`insert into task (id, list_id, title, sort_key, due_at, due_all_day,
+			 rrule, recurrence_anchor_at, recurrence_consumed, done, priority)
+			 values ($1, $2, $3, 'a0', $4, false, 'FREQ=DAILY;INTERVAL=13;COUNT=4', $4, 0, false, 0)`,
+			[crypto.randomUUID(), listId, title, anchor],
+		);
+	} finally {
+		await pool.end();
+	}
+
+	async function expectMonth(offset: number): Promise<number[]> {
+		const month = new Date(monthStart);
+		month.setUTCMonth(month.getUTCMonth() + offset);
+		const label = new Intl.DateTimeFormat("en", {
+			month: "long",
+			year: "numeric",
+			timeZone: "UTC",
+		}).format(month);
+		await expect(caption).toHaveText(label);
+		const cells = surface.locator("tbody td");
+		const start = new Date(month);
+		start.setUTCDate(1 - ((start.getUTCDay() + 6) % 7));
+		const count = await cells.count();
+		const positions = dates
+			.map((date) => (date.getTime() - start.getTime()) / 86_400_000)
+			.filter((index) => index >= 0 && index < count);
+		await expect
+			.poll(
+				() =>
+					cells.evaluateAll(
+						(nodes, text) =>
+							nodes.flatMap((node, index) =>
+								Array.from(
+									node.querySelectorAll('[data-testid="calendar-chip"]'),
+								).some((chip) => chip.textContent?.includes(text))
+									? [index]
+									: [],
+							),
+						title,
+					),
+				{ timeout: 15000 },
+			)
+			.toEqual(positions);
+		for (const index of positions) {
+			const date = new Date(start.getTime() + index * 86_400_000);
+			const dayLabel = new Intl.DateTimeFormat("en", {
+				weekday: "long",
+				year: "numeric",
+				month: "long",
+				day: "numeric",
+				timeZone: "UTC",
+			}).format(date);
+			await expect(
+				cells.nth(index).getByRole("button").first(),
+			).toHaveAttribute("aria-label", new RegExp(dayLabel));
+			await expect(
+				cells
+					.nth(index)
+					.getByTestId("calendar-chip")
+					.filter({ hasText: title }),
+			).toHaveCount(1);
+		}
+		if (offset === 1) {
+			const exhaustedIndex =
+				(anchor.getTime() + 4 * 13 * 86_400_000 - start.getTime()) / 86_400_000;
+			expect(exhaustedIndex).toBeGreaterThanOrEqual(0);
+			expect(exhaustedIndex).toBeLessThan(count);
+			await expect(
+				cells
+					.nth(exhaustedIndex)
+					.getByTestId("calendar-chip")
+					.filter({ hasText: title }),
+			).toHaveCount(0);
+		}
+		return positions;
+	}
+	const originalPositions = await expectMonth(0);
+	await page.getByTestId("calendar-next").click();
+	const nextPositions = await expectMonth(1);
+	expect(nextPositions.length).toBeGreaterThan(0);
+	await page.getByTestId("calendar-prev").click();
+	expect(await expectMonth(0)).toEqual(originalPositions);
+	await page.getByTestId("calendar-prev").click();
+	await expectMonth(-1);
+	await page.getByTestId("calendar-next").click();
+	expect(await expectMonth(0)).toEqual(originalPositions);
+	await page.getByTestId("calendar-next").click();
+	expect(await expectMonth(1)).toEqual(nextPositions);
 });
 
 // --- Mobile: the calendar collapses to a date-grouped agenda ---

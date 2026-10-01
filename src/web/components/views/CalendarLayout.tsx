@@ -14,7 +14,7 @@ import { checkShapeFor } from "@/lib/check-shape";
 import { priorityLabel } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
 import { localDay, shiftDay } from "../../../domain/local-day.ts";
-import { expand } from "../../../domain/recurrence.ts";
+import { projectRecurrence } from "../../../domain/recurrence.ts";
 import {
 	instantToWallClock,
 	wallClockToInstant,
@@ -55,9 +55,8 @@ function weekdayNames(): { key: string; short: string; full: string }[] {
 // A "YYYY-MM-DD" key is the user's LOCAL calendar day, the same frame habit
 // logs and karma events are written in. It used to be the UTC day, which put a
 // task due at 22:00 in New York on tomorrow's cell and highlighted the wrong
-// "today" every evening west of UTC. expand() returns real instants (seeded
-// from the task's dueAt), not date-only midnights, so zoning the key is a
-// straight substitution rather than a shift of the occurrence frame.
+// "today" every evening west of UTC. Ordinary schedule projections use real
+// instants; virtual habits use viewer-local day keys in a UTC date-only frame.
 //
 // Grid geometry is computed on the keys themselves (shiftDay), never by adding
 // 86_400_000 ms: a DST day is 23 or 25 hours, so instant arithmetic would skip
@@ -375,8 +374,8 @@ function Agenda({
 // today-ringed month grid (drag a chip to another day to reschedule dueAt) with
 // the agenda below; on < md it collapses to the agenda alone with a "viewing as
 // agenda" note (mirrors the board/table list-collapse affordance). Concrete
-// dued tasks render solid; recurring occurrences (recurrence.expand across the
-// visible range) render lighter/dashed so a rule instance reads as generated.
+// due tasks render solid; bounded recurring projections across the visible
+// range render lighter/dashed so a rule instance reads as generated.
 // The keyboard alternative to drag-reschedule is the task-detail due editor
 // (open a chip -> edit due); the grid is a native table, arrow-key navigable.
 export function CalendarLayout({
@@ -440,19 +439,28 @@ export function CalendarLayout({
 		year: "numeric",
 	}).format(new Date(Number(monthKey.slice(0, 4)), monthIndex - 1, 1));
 
-	const byDate = useMemo(() => {
+	const { byDate, projectionWarnings } = useMemo(() => {
+		const warnings: { entry: ViewEntry; status: "capped" | "needs-start" }[] =
+			[];
 		const map = new Map<string, DayItem[]>();
 		const push = (key: string, item: DayItem) => {
 			const bucket = map.get(key);
-			if (bucket) bucket.push(item);
-			else map.set(key, [item]);
+			if (bucket) {
+				if (
+					!bucket.some(
+						(existing) => existing.entry.task.id === item.entry.task.id,
+					)
+				)
+					bucket.push(item);
+			} else map.set(key, [item]);
 		};
 		const from = new Date(gridStartMs);
-		const to = new Date(gridEndMs);
 		for (const entry of entries) {
 			const task = entry.task;
 			if (entry.kind === "habits" && habitOccurrenceOnly && entry.occurrence) {
 				const occurrence = entry.occurrence;
+				if (occurrence.status === "unavailable")
+					warnings.push({ entry, status: "capped" });
 				if (
 					occurrence.date &&
 					occurrence.status !== "unavailable" &&
@@ -467,16 +475,52 @@ export function CalendarLayout({
 						status: occurrence.status,
 					});
 			} else if (task.rrule) {
-				// A malformed rrule is best-effort here (write-side validates); skip its
-				// occurrences rather than crash the whole month surface.
-				let occ: Date[] = [];
+				const virtual = entry.kind === "habits";
+				const frame = (timestamp: number | null | undefined) =>
+					timestamp == null
+						? null
+						: virtual
+							? new Date(`${localDay(new Date(timestamp), timeZone)}T00:00:00Z`)
+							: new Date(timestamp);
 				try {
-					occ = expand(task.rrule, from, to);
+					const projected = projectRecurrence(
+						{
+							rrule: task.rrule,
+							relative: task.recurrenceRelative ?? false,
+							anchorAt: frame(task.recurrenceAnchorAt),
+							dueAt: frame(task.dueAt),
+							consumed: task.recurrenceConsumed ?? null,
+							exhausted: task.done ?? false,
+						},
+						virtual ? new Date(`${localDay(from, timeZone)}T00:00:00Z`) : from,
+						virtual
+							? new Date(
+									`${localDay(new Date(gridEndMs - 1), timeZone)}T23:59:59.999Z`,
+								)
+							: new Date(gridEndMs - 1),
+						{ includePast: virtual },
+					);
+					if (projected.status !== "complete")
+						warnings.push({ entry, status: projected.status });
+					for (const d of projected.occurrences) {
+						const key = virtual
+							? d.toISOString().slice(0, 10)
+							: localDay(d, timeZone);
+						push(key, {
+							entry,
+							occurrence: true,
+							...(virtual &&
+							entry.occurrence?.date === key &&
+							entry.occurrence.status != null &&
+							entry.occurrence.status !== "unavailable"
+								? { status: entry.occurrence.status }
+								: {}),
+						});
+					}
 				} catch {
-					occ = [];
+					// Keep the month usable, but do not present an invalid schedule as empty.
+					warnings.push({ entry, status: "capped" });
 				}
-				for (const d of occ)
-					push(localDay(d, timeZone), { entry, occurrence: true });
 			} else if (task.dueAt != null) {
 				push(localDay(new Date(task.dueAt), timeZone), {
 					entry,
@@ -484,7 +528,7 @@ export function CalendarLayout({
 				});
 			}
 		}
-		return map;
+		return { byDate: map, projectionWarnings: warnings };
 	}, [entries, gridStartMs, gridEndMs, timeZone, habitOccurrenceOnly]);
 
 	const agendaGroups = useMemo(
@@ -560,6 +604,24 @@ export function CalendarLayout({
 		focusDay(next);
 	}
 
+	const incompleteSchedules = projectionWarnings.length > 0 && (
+		<ul className="flex flex-col gap-1">
+			{projectionWarnings.map(({ entry, status }) => (
+				<li key={entry.task.id}>
+					<button
+						type="button"
+						onClick={() => onOpenTask(entry.task)}
+						className="min-h-11 text-start text-sm text-muted-foreground underline underline-offset-2"
+					>
+						<span className="font-medium">{entry.task.title}</span>{" "}
+						{status === "needs-start"
+							? m.recurrence_projection_needs_start()
+							: m.recurrence_projection_capped()}
+					</button>
+				</li>
+			))}
+		</ul>
+	);
 	const agenda = <Agenda groups={agendaGroups} onOpen={onOpenTask} />;
 	const monthNavigation = (
 		<div className="flex items-center justify-between gap-2">
@@ -613,6 +675,7 @@ export function CalendarLayout({
 		return (
 			<div data-testid="calendar-surface" className="flex flex-col gap-3">
 				{monthNavigation}
+				{incompleteSchedules}
 				<Agenda
 					groups={agendaGroups.filter((g) => visibleKeys.has(g.key))}
 					onOpen={onOpenTask}
@@ -637,6 +700,7 @@ export function CalendarLayout({
 	return (
 		<div data-testid="calendar-surface" className="flex flex-col gap-4">
 			{monthNavigation}
+			{incompleteSchedules}
 			<DndContext
 				sensors={sensors}
 				collisionDetection={closestCenter}

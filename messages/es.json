@@ -2073,5 +2073,7 @@
 	"calendar_show_earlier": "Mostrar fechas anteriores",
 	"calendar_hide_earlier": "Ocultar fechas anteriores",
 	"habit_occurrence_skipped": "Esta vez omitido",
-	"habit_occurrence_unavailable": "Repetición no disponible. Abre el hábito para revisar su horario."
+	"habit_occurrence_unavailable": "Repetición no disponible. Abre el hábito para revisar su horario.",
+	"recurrence_projection_needs_start": "Define una fecha de inicio para mostrar este calendario.",
+	"recurrence_projection_capped": "No se pudo comprobar este calendario por completo. Abre la tarea para revisarlo."
 }

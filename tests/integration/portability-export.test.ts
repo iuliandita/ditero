@@ -35,7 +35,7 @@ const expectedFields = {
 	lists:
 		"id workspaceId ownerId title kind icon folderId sortKey completedDisplay",
 	tasks:
-		"id listId title done notes dueAt dueAllDay priority completedAt createdAt sortKey parentId quantity unit category rrule recurrenceRelative reminderTime repeatEveryMin maxRepeats fallbackUserId urgent",
+		"id listId title done notes dueAt dueAllDay priority completedAt createdAt sortKey parentId quantity unit category rrule recurrenceRelative recurrenceAnchorAt recurrenceConsumed reminderTime repeatEveryMin maxRepeats fallbackUserId urgent",
 	labels: "id workspaceId name color",
 	taskLabels: "id taskId labelId",
 	templates: "id workspaceId kind name icon content createdBy",
@@ -918,4 +918,25 @@ test("native export includes known creation timestamps and leaves unknown old ro
 	expect(
 		output.data.tasks.find((row) => row.id === "private-task")?.createdAt,
 	).toBeNull();
+});
+
+test("native export preserves the recurrence anchor and consumed count independently of creation provenance", async () => {
+	await db
+		.update(tables.task)
+		.set({
+			rrule: "FREQ=DAILY;COUNT=3",
+			recurrenceAnchorAt: now,
+			recurrenceConsumed: 1,
+		})
+		.where(eq(tables.task.id, "shared-task"));
+	const output = await exported();
+	expect(
+		output.data.tasks.find((row) => row.id === "shared-task"),
+	).toMatchObject({
+		recurrenceAnchorAt: now.toISOString(),
+		recurrenceConsumed: 1,
+	});
+	expect(
+		output.data.tasks.find((row) => row.id === "private-task"),
+	).toMatchObject({ recurrenceAnchorAt: null, recurrenceConsumed: null });
 });

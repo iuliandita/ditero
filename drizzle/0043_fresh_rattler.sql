@@ -1,0 +1,3 @@
+ALTER TABLE "task" ADD COLUMN "recurrence_anchor_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "task" ADD COLUMN "recurrence_consumed" integer;--> statement-breakpoint
+ALTER TABLE "task" ADD CONSTRAINT "task_recurrence_state" CHECK (("task"."recurrence_anchor_at" is null and "task"."recurrence_consumed" is null) or ("task"."recurrence_anchor_at" is not null and "task"."recurrence_consumed" is not null and "task"."recurrence_consumed" >= 0));

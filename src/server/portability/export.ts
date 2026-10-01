@@ -263,6 +263,8 @@ const projections = {
 		"category",
 		"rrule",
 		"recurrenceRelative",
+		"recurrenceAnchorAt",
+		"recurrenceConsumed",
 		"reminderTime",
 		"repeatEveryMin",
 		"maxRepeats",

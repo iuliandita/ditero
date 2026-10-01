@@ -205,7 +205,7 @@ describe("matchesOccurrenceFilter", () => {
 });
 
 describe("bounded habit recurrence projection", () => {
-	it("fast-forwards an old daily or weekly epoch without changing its phase", () => {
+	it("caps an old pre-window prefix rather than jumping its epoch", () => {
 		expect(
 			habitOccurrence(
 				{
@@ -216,8 +216,8 @@ describe("bounded habit recurrence projection", () => {
 				[],
 				now,
 				"UTC",
-			).date,
-		).toBe("2026-10-01");
+			),
+		).toMatchObject({ date: null, status: "unavailable", canToggle: false });
 		expect(
 			habitOccurrence(
 				{
@@ -228,8 +228,141 @@ describe("bounded habit recurrence projection", () => {
 				[],
 				now,
 				"UTC",
-			).date,
-		).toBe("2026-10-05");
+			),
+		).toMatchObject({ date: "2026-10-05", canToggle: false });
+	});
+	it("preserves original interval phase and COUNT across changed today dates and mutable due", () => {
+		const series = {
+			...task,
+			recurrenceAnchorAt: Date.parse("2026-09-19T00:00:00Z"),
+			recurrenceConsumed: 2,
+			dueAt: Date.parse("2026-09-25T00:00:00Z"),
+			rrule: "FREQ=DAILY;INTERVAL=2;COUNT=7",
+		};
+		expect(habitOccurrence(series, [], now, "UTC")).toMatchObject({
+			date: "2026-10-01",
+			canToggle: false,
+		});
+		expect(
+			habitOccurrence(
+				series,
+				[{ habitId: "habit", date: "2026-10-01", status: "done" }],
+				new Date("2026-10-01T12:00:00Z"),
+				"UTC",
+			),
+		).toMatchObject({ date: "2026-10-01", canToggle: true, done: true });
+		expect(
+			habitOccurrence(series, [], new Date("2026-10-02T12:00:00Z"), "UTC"),
+		).toMatchObject({ date: null, status: null, canToggle: false });
+	});
+	it("relative virtual habits retain fixed calendar eligibility despite progress and exhaustion", () => {
+		const series = {
+			...task,
+			recurrenceAnchorAt: Date.parse("2026-09-19T00:00:00Z"),
+			recurrenceConsumed: 7,
+			dueAt: Date.parse("2026-10-06T00:00:00Z"),
+			recurrenceRelative: true,
+			done: true,
+			rrule: "FREQ=DAILY;INTERVAL=2;COUNT=7",
+		};
+		expect(habitOccurrence(series, [], now, "UTC")).toMatchObject({
+			date: "2026-10-01",
+			canToggle: false,
+		});
+		expect(
+			habitOccurrence(series, [], new Date("2026-10-02T12:00:00Z"), "UTC"),
+		).toMatchObject({ date: null, status: null });
+	});
+	it("unknown legacy phase needs a start, while unlimited daily retains its date-independent fallback", () => {
+		const undated = { ...task, dueAt: null };
+		expect(
+			habitOccurrence(
+				{ ...undated, rrule: "FREQ=DAILY;INTERVAL=2" },
+				[],
+				now,
+				"UTC",
+			),
+		).toMatchObject({ date: null, status: "unavailable", canToggle: false });
+		expect(habitOccurrence(undated, [], now, "UTC")).toMatchObject({
+			date: "2026-09-30",
+			status: "pending",
+			canToggle: true,
+		});
+		expect(
+			habitOccurrence(
+				{ ...undated, rrule: "FREQ=DAILY;COUNT=2" },
+				[{ habitId: "habit", date: "2026-09-01", status: "done" }],
+				now,
+				"UTC",
+			),
+		).toMatchObject({ date: null, status: "unavailable" });
+	});
+	it("advanced date selectors remain supported without a narrow future horizon", () => {
+		const series = {
+			...task,
+			recurrenceAnchorAt: Date.parse("2026-07-01T00:00:00Z"),
+			recurrenceConsumed: 0,
+		};
+		expect(
+			habitOccurrence(
+				{
+					...series,
+					rrule: "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;COUNT=4",
+				},
+				[],
+				now,
+				"UTC",
+			),
+		).toMatchObject({ date: "2026-09-30", canToggle: true });
+		expect(
+			habitOccurrence(
+				{ ...series, rrule: "FREQ=MONTHLY;BYDAY=2MO" },
+				[],
+				now,
+				"UTC",
+			),
+		).toMatchObject({ date: "2026-10-12", canToggle: false });
+		expect(
+			habitOccurrence(
+				{
+					...series,
+					recurrenceAnchorAt: Date.parse("2026-01-01T00:00:00Z"),
+					rrule: "FREQ=YEARLY;INTERVAL=200;BYMONTH=2;BYMONTHDAY=-1",
+				},
+				[],
+				now,
+				"UTC",
+			),
+		).toMatchObject({ date: "2226-02-28", canToggle: false });
+	});
+	it("UNTIL exhaustion stays tied to the original anchor and inclusive end", () => {
+		const series = {
+			...task,
+			recurrenceAnchorAt: Date.parse("2026-09-19T00:00:00Z"),
+			recurrenceConsumed: 1,
+			rrule: "FREQ=DAILY;INTERVAL=2;UNTIL=20261001T000000Z",
+		};
+		expect(habitOccurrence(series, [], now, "UTC").date).toBe("2026-10-01");
+		expect(
+			habitOccurrence(series, [], new Date("2026-10-02T12:00:00Z"), "UTC"),
+		).toMatchObject({ date: null, status: null });
+	});
+	it("maps persisted anchor into the viewer's day frame rather than using browser UTC", () => {
+		const series = {
+			...task,
+			recurrenceAnchorAt: Date.parse("2026-09-19T01:00:00Z"),
+			recurrenceConsumed: 0,
+			dueAt: Date.parse("2026-09-25T01:00:00Z"),
+			rrule: "FREQ=DAILY;INTERVAL=2",
+		};
+		expect(
+			habitOccurrence(
+				series,
+				[],
+				new Date("2026-10-01T02:00:00Z"),
+				"America/New_York",
+			),
+		).toMatchObject({ date: "2026-09-30", canToggle: true });
 	});
 	it("refuses sub-day rules and caps complex old series with an explicit unavailable state", () => {
 		for (const rrule of [

@@ -2027,5 +2027,7 @@
 	"calendar_show_earlier": "Show earlier dates",
 	"calendar_hide_earlier": "Hide earlier dates",
 	"habit_occurrence_skipped": "Skipped this occurrence",
-	"habit_occurrence_unavailable": "Occurrence unavailable. Open the habit to review its schedule."
+	"habit_occurrence_unavailable": "Occurrence unavailable. Open the habit to review its schedule.",
+	"recurrence_projection_needs_start": "Set a start date to show this schedule.",
+	"recurrence_projection_capped": "This schedule could not be fully checked. Open the task to review it."
 }

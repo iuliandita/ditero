@@ -1,6 +1,6 @@
 import { RRule } from "rrule";
 import { localDay, shiftDay } from "../../domain/local-day.ts";
-import { rruleToPreset } from "../../domain/recurrence.ts";
+import { projectRecurrence } from "../../domain/recurrence.ts";
 import {
 	type FilterCtx,
 	type FilterGroup,
@@ -22,6 +22,10 @@ export type HabitOccurrenceTask = {
 	id: string;
 	dueAt?: number | null;
 	rrule?: string | null;
+	recurrenceAnchorAt?: number | null;
+	recurrenceConsumed?: number | null;
+	recurrenceRelative?: boolean | null;
+	done?: boolean | null;
 };
 export type OccurrenceLog = {
 	habitId: string;
@@ -46,14 +50,11 @@ export function habitOccurrence(
 		status: null,
 	};
 	if (!task.rrule) return empty;
-	const anchor =
-		task.dueAt == null ? today : localDay(new Date(task.dueAt), timeZone);
+	const unavailable: HabitOccurrence = { ...empty, status: "unavailable" };
 	try {
 		const options = RRule.parseString(task.rrule);
-		if (options.freq == null) return empty;
-		const unavailable: HabitOccurrence = { ...empty, status: "unavailable" };
-		// A habit is one check-in per calendar day. Sub-day recurrence must not
-		// enumerate millions of old instants in the rendering thread.
+		if (options.freq == null) return unavailable;
+		// Habits have one check-in per calendar day, not sub-day occurrences.
 		if (
 			options.freq > RRule.DAILY ||
 			options.byhour != null ||
@@ -61,60 +62,32 @@ export function habitOccurrence(
 			options.bysecond != null
 		)
 			return unavailable;
-		// Iteration callbacks cap emitted dates, not internal scanning. An
-		// impossible complex rule can scan to year 9999 without emitting once.
-		// Project only the editor's supported shapes, with finite COUNT/UNTIL
-		// modifiers; keep every other stored rule intact and visibly unavailable.
-		const projectionRule = task.rrule
-			.split(";")
-			.filter(
-				(part) => !part.startsWith("COUNT=") && !part.startsWith("UNTIL="),
-			)
-			.join(";");
-		const supported = rruleToPreset(projectionRule);
-		if (
-			!supported ||
-			!Number.isInteger(supported.interval) ||
-			supported.interval < 1 ||
-			(supported.freq === "monthly" &&
-				(!Number.isInteger(supported.monthday) ||
-					supported.monthday < 1 ||
-					supported.monthday > 31)) ||
-			(supported.freq === "weekly" &&
-				supported.weekdays.some(
-					(day) => !Number.isInteger(day) || day < 0 || day > 6,
-				))
-		)
-			return unavailable;
-		const start = new Date(`${today}T00:00:00Z`);
-		let epoch = new Date(`${anchor}T00:00:00Z`);
-		const preset = rruleToPreset(task.rrule);
-		if (preset?.freq === "daily" || preset?.freq === "weekly") {
-			const period =
-				preset.interval * (preset.freq === "weekly" ? 7 : 1) * 86_400_000;
-			const elapsed = Math.max(
-				0,
-				Math.floor((start.getTime() - epoch.getTime()) / period),
-			);
-			epoch = new Date(epoch.getTime() + elapsed * period);
-		}
-		const rule = new RRule({ ...options, dtstart: epoch });
-		let found: Date | null = null;
-		let capped = false;
-		rule.all((date, index) => {
-			if (index >= 512) {
-				capped = true;
-				return false;
-			}
-			if (date >= start) {
-				found = date;
-				return false;
-			}
-			return true;
-		});
-		if (capped) return unavailable;
-		const date = (found as Date | null)?.toISOString().slice(0, 10) ?? null;
-		if (date == null) return empty;
+		const frame = (timestamp: number | null | undefined) =>
+			timestamp == null
+				? null
+				: new Date(`${localDay(new Date(timestamp), timeZone)}T00:00:00Z`);
+		// Search through the evaluator's supported date domain, not a UI horizon.
+		const projected = projectRecurrence(
+			{
+				rrule: task.rrule,
+				anchorAt: frame(task.recurrenceAnchorAt),
+				dueAt: frame(task.dueAt),
+				consumed: task.recurrenceConsumed ?? null,
+				relative: task.recurrenceRelative ?? false,
+				exhausted: task.done ?? false,
+			},
+			new Date(`${today}T00:00:00Z`),
+			new Date("9999-12-31T23:59:59.999Z"),
+			{
+				includePast: true,
+				maxOutput: 1,
+			},
+		);
+		// The first ordered result proves the earliest eligible day even if later
+		// traversal caps. No result on a cap is unknown, not series exhaustion.
+		const date = projected.occurrences[0]?.toISOString().slice(0, 10) ?? null;
+		if (date == null)
+			return projected.status === "complete" ? empty : unavailable;
 		const status =
 			logs.find((log) => log.habitId === task.id && log.date === date)
 				?.status ?? "pending";
@@ -126,7 +99,7 @@ export function habitOccurrence(
 			status,
 		};
 	} catch {
-		return empty;
+		return unavailable;
 	}
 }
 

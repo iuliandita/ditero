@@ -259,30 +259,65 @@ const rows = {
 		sortKey: string,
 		completedDisplay: z.enum(["sink", "keep", "hide"]),
 	}),
-	tasks: z.strictObject({
-		id,
-		listId: id,
-		title: string,
-		done: z.boolean(),
-		notes: nullableString,
-		dueAt: timestamp.nullable(),
-		dueAllDay: z.boolean(),
-		priority: integer.min(-32768).max(32767),
-		completedAt: timestamp.nullable(),
-		createdAt: timestamp.nullable().optional(),
-		sortKey: string,
-		parentId: id.nullable(),
-		quantity: nullableString,
-		unit: nullableString,
-		category: nullableString,
-		rrule: recurrence,
-		recurrenceRelative: z.boolean(),
-		reminderTime: clock.nullable(),
-		repeatEveryMin,
-		maxRepeats,
-		fallbackUserId: id.nullable(),
-		urgent: z.boolean(),
-	}),
+	tasks: z
+		.strictObject({
+			id,
+			listId: id,
+			title: string,
+			done: z.boolean(),
+			notes: nullableString,
+			dueAt: timestamp.nullable(),
+			dueAllDay: z.boolean(),
+			priority: integer.min(-32768).max(32767),
+			completedAt: timestamp.nullable(),
+			createdAt: timestamp.nullable().optional(),
+			sortKey: string,
+			parentId: id.nullable(),
+			quantity: nullableString,
+			unit: nullableString,
+			category: nullableString,
+			rrule: recurrence,
+			recurrenceRelative: z.boolean(),
+			recurrenceAnchorAt: timestamp.nullable().optional(),
+			recurrenceConsumed: nonnegative.nullable().optional(),
+			reminderTime: clock.nullable(),
+			repeatEveryMin,
+			maxRepeats,
+			fallbackUserId: id.nullable(),
+			urgent: z.boolean(),
+		})
+		.refine((row) => {
+			const anchorPresent = Object.hasOwn(row, "recurrenceAnchorAt");
+			const consumedPresent = Object.hasOwn(row, "recurrenceConsumed");
+			if (anchorPresent !== consumedPresent) return false;
+			if (!anchorPresent) return true;
+			if (
+				(row.recurrenceAnchorAt === null) !==
+				(row.recurrenceConsumed === null)
+			)
+				return false;
+			if (row.recurrenceAnchorAt === null) return true;
+			if (typeof row.recurrenceAnchorAt !== "string") return false;
+			if (row.rrule === null) return false;
+			if (
+				!row.recurrenceRelative &&
+				row.dueAt !== null &&
+				new Date(row.dueAt).getTime() <
+					new Date(row.recurrenceAnchorAt).getTime()
+			)
+				return false;
+			try {
+				const count = parseRule(row.rrule).origOptions.count;
+				return (
+					count == null ||
+					(row.recurrenceConsumed != null &&
+						row.recurrenceConsumed <= count &&
+						(row.recurrenceConsumed < count || row.done))
+				);
+			} catch {
+				return false;
+			}
+		}, "Invalid recurrence schedule state"),
 	labels: z.strictObject({ id, workspaceId: id, name: string, color: string }),
 	taskLabels: z.strictObject({ id, taskId: id, labelId: id }),
 	templates: z

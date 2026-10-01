@@ -2073,5 +2073,7 @@
 	"calendar_show_earlier": "Arată datele anterioare",
 	"calendar_hide_earlier": "Ascunde datele anterioare",
 	"habit_occurrence_skipped": "Această repetare a fost omisă",
-	"habit_occurrence_unavailable": "Repetarea nu este disponibilă. Deschide obiceiul pentru a verifica programul."
+	"habit_occurrence_unavailable": "Repetarea nu este disponibilă. Deschide obiceiul pentru a verifica programul.",
+	"recurrence_projection_needs_start": "Setează o dată de început pentru a afișa acest program.",
+	"recurrence_projection_capped": "Acest program nu a putut fi verificat complet. Deschide sarcina pentru a-l verifica."
 }

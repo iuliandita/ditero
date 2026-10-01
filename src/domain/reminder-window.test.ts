@@ -219,6 +219,120 @@ describe("reminderWindow", () => {
 		expect(elapsedMs).toBeLessThan(500);
 	});
 
+	it("uses immutable COUNT and interval phase after the due cursor advances", () => {
+		const src = source({
+			rrule: "FREQ=DAILY;INTERVAL=2;COUNT=3",
+			recurrenceAnchorAt: new Date("2026-07-01T00:00:00Z"),
+			recurrenceConsumed: 1,
+			dueAt: new Date("2026-07-03T00:00:00Z"),
+		});
+		const result = reminderWindow(
+			[src],
+			TZ,
+			new Date("2026-07-01T00:00:00Z"),
+			new Date("2026-07-10T00:00:00Z"),
+		);
+		expect(result.occurrences.map((o) => o.occurrenceAt.toISOString())).toEqual(
+			["2026-07-03T05:00:00.000Z", "2026-07-05T05:00:00.000Z"],
+		);
+		expect(result.cappedTaskIds).toEqual([]);
+		expect(
+			reminderWindow(
+				[{ ...src, done: true }],
+				TZ,
+				new Date("2026-07-01T00:00:00Z"),
+				new Date("2026-07-10T00:00:00Z"),
+			).occurrences,
+		).toEqual([]);
+	});
+
+	it("ordinary relative schedules project only current due and preserve UNTIL", () => {
+		const src = source({
+			rrule: "FREQ=DAILY;COUNT=3;UNTIL=20260704T000000Z",
+			recurrenceRelative: true,
+			recurrenceAnchorAt: new Date("2026-07-01T00:00:00Z"),
+			recurrenceConsumed: 1,
+			dueAt: new Date("2026-07-03T00:00:00Z"),
+		});
+		const from = new Date("2026-07-01T00:00:00Z"),
+			to = new Date("2026-07-10T00:00:00Z");
+		expect(
+			reminderWindow([src], TZ, from, to).occurrences.map((o) =>
+				o.occurrenceAt.toISOString(),
+			),
+		).toEqual(["2026-07-03T05:00:00.000Z"]);
+		expect(
+			reminderWindow(
+				[{ ...src, dueAt: new Date("2026-07-05T00:00:00Z") }],
+				TZ,
+				from,
+				to,
+			).occurrences,
+		).toEqual([]);
+	});
+
+	it("virtual relative habits retain fixed eligible dates and local-day anchors across DST", () => {
+		const src = source({
+			listKind: "habits",
+			rrule: "FREQ=DAILY;INTERVAL=2;COUNT=2",
+			recurrenceRelative: true,
+			recurrenceAnchorAt: new Date("2026-10-24T21:00:00Z"),
+			recurrenceConsumed: 2,
+			dueAt: new Date("2026-10-26T22:00:00Z"),
+			done: true,
+		});
+		const result = reminderWindow(
+			[src],
+			TZ,
+			new Date("2026-10-25T00:00:00Z"),
+			new Date("2026-11-01T00:00:00Z"),
+		);
+		expect(result.occurrences.map((o) => o.occurrenceAt.toISOString())).toEqual(
+			["2026-10-25T06:00:00.000Z", "2026-10-27T06:00:00.000Z"],
+		);
+		expect(result.cappedTaskIds).toEqual([]);
+	});
+
+	it("a five-year daily schedule remains eligible without reanchoring its prefix", () => {
+		const src = source({
+			rrule: "FREQ=DAILY;INTERVAL=2",
+			recurrenceAnchorAt: new Date("2021-07-15T00:00:00Z"),
+			recurrenceConsumed: 1,
+			dueAt: new Date("2021-07-17T00:00:00Z"),
+		});
+		const result = reminderWindow(
+			[src],
+			TZ,
+			new Date("2026-07-14T00:00:00Z"),
+			new Date("2026-07-17T00:00:00Z"),
+		);
+		expect(result.cappedTaskIds).toEqual([]);
+		expect(result.occurrences.map((o) => o.occurrenceAt.toISOString())).toEqual(
+			["2026-07-15T05:00:00.000Z"],
+		);
+	});
+
+	it("bounds pre-window work and reports unknown legacy phase as incomplete", () => {
+		for (const src of [
+			source({ rrule: "FREQ=DAILY", dueAt: new Date("1900-01-01T00:00:00Z") }),
+			source({ rrule: "FREQ=DAILY;BYMONTH=2;BYMONTHDAY=30" }),
+			source({
+				listKind: "habits",
+				rrule: "FREQ=DAILY;INTERVAL=2",
+				dueAt: null,
+			}),
+		]) {
+			const result = reminderWindow(
+				[src],
+				TZ,
+				new Date("2026-07-15T00:00:00Z"),
+				new Date("2026-07-16T00:00:00Z"),
+			);
+			expect(result.occurrences).toEqual([]);
+			expect(result.cappedTaskIds).toEqual(["t1"]);
+		}
+	});
+
 	it("throws on a malformed reminderTime rather than swallowing it", () => {
 		expect(() =>
 			reminderWindow(

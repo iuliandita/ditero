@@ -84,6 +84,65 @@ describe("completeForAck karma day", () => {
 });
 
 describe("completeForAck exhausted recurrence", () => {
+	it("refuses an undated legacy finite schedule instead of inventing a start", async () => {
+		const s = store(
+			{ ...PLAIN_TASK, rrule: "FREQ=WEEKLY;INTERVAL=2;COUNT=3" },
+			"UTC",
+		);
+		let writes = 0;
+		s.updateTask = async () => {
+			writes++;
+		};
+		await expect(
+			completeForAck(
+				s,
+				{ taskId: "t1", occurrenceAt: EVENING_NY, recipientUserId: "u1" },
+				"u1",
+				EVENING_NY,
+			),
+		).rejects.toThrow(/needs-start/);
+		expect(writes).toBe(0);
+		expect(s.awards).toHaveLength(0);
+	});
+	it.each([
+		false,
+		true,
+	])("persists the anchor and COUNT progress across acknowledgments (relative=%s)", async (relative) => {
+		const task: AckTask = {
+			...PLAIN_TASK,
+			rrule: "FREQ=DAILY;COUNT=2",
+			recurrenceRelative: relative,
+			dueAt: EVENING_NY,
+			recurrenceAnchorAt: EVENING_NY,
+			recurrenceConsumed: 0,
+		};
+		const s = store(task, "UTC");
+		s.updateTask = async (_id, patch) => {
+			Object.assign(task, patch);
+		};
+		const reminder = {
+			taskId: task.id,
+			occurrenceAt: EVENING_NY,
+			recipientUserId: "u1",
+		};
+		await completeForAck(s, reminder, "u1", EVENING_NY);
+		expect(task.done).toBe(false);
+		expect(task.recurrenceConsumed).toBe(1);
+		expect(task.recurrenceAnchorAt).toBe(EVENING_NY);
+		expect(task.dueAt).toBe(EVENING_NY + 86_400_000);
+		await completeForAck(
+			s,
+			{ ...reminder, occurrenceAt: task.dueAt ?? 0 },
+			"u1",
+			EVENING_NY + 86_400_000,
+		);
+		expect(task.done).toBe(true);
+		expect(task.recurrenceConsumed).toBe(2);
+		expect(task.recurrenceAnchorAt).toBe(EVENING_NY);
+		await completeForAck(s, reminder, "u1", EVENING_NY + 2 * 86_400_000);
+		expect(task.recurrenceConsumed).toBe(2);
+		expect(s.awards).toHaveLength(2);
+	});
 	it("does not rewrite completion or award Karma on a second ack", async () => {
 		const task: AckTask = {
 			...PLAIN_TASK,
