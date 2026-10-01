@@ -77,7 +77,14 @@ test("task detail shows native changes, paginates only the opened history, and k
 		]);
 		await expect(history).toContainText("Updated history actor");
 		await page.keyboard.press("Escape");
-		await list.getByRole("checkbox", { name: "Record me" }).uncheck();
+		await expect(detail).toHaveCount(0);
+		const completed = list.getByTestId("completed-section");
+		await expect(completed).toHaveAttribute("aria-expanded", "false");
+		await completed.click();
+		const recordMe = list.getByRole("checkbox", { name: "Record me" });
+		await expect(recordMe).toBeVisible();
+		await expect(recordMe).toBeChecked();
+		await recordMe.uncheck();
 		await expect
 			.poll(
 				async () =>
