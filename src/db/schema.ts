@@ -20,7 +20,7 @@ import {
 	uuid,
 } from "drizzle-orm/pg-core";
 import { CHANNEL_ERROR_CODES } from "../domain/notification-retry.ts";
-import { user } from "./auth-schema.ts";
+import { session, user } from "./auth-schema.ts";
 
 export * from "./auth-schema.ts";
 
@@ -1440,6 +1440,51 @@ export const userDevice = pgTable("user_device", {
 		.notNull(),
 	revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
+
+export const nativeAuthGrant = pgTable(
+	"native_auth_grant",
+	{
+		id: text("id").primaryKey(),
+		challenge: text("challenge").notNull(),
+		deviceLabel: text("device_label").notNull(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+		approvedUserId: text("approved_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		approvedSessionId: text("approved_session_id").references(
+			() => session.id,
+			{
+				onDelete: "set null",
+			},
+		),
+		approvedAt: timestamp("approved_at", { withTimezone: true }),
+		consumedAt: timestamp("consumed_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [index("native_auth_grant_expiry_idx").on(t.expiresAt)],
+);
+
+export const nativeSessionLink = pgTable(
+	"native_session_link",
+	{
+		sessionId: text("session_id")
+			.primaryKey()
+			.references(() => session.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		deviceId: text("device_id")
+			.notNull()
+			.unique()
+			.references(() => userDevice.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [index("native_session_link_user_idx").on(t.userId)],
+);
 
 export const importSource = pgTable(
 	"import_source",
