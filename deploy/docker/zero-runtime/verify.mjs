@@ -11,7 +11,7 @@ const zeroManifest = new URL(
 );
 assert.equal(JSON.parse(readFileSync(zeroManifest, "utf8")).version, "1.9.0");
 const requireZero = createRequire(realpathSync(zeroManifest));
-assert.equal(requireZero("fastify/package.json").version, "5.12.3");
+assert.equal(requireZero("fastify/package.json").version, "5.12.5");
 const rimrafManifest = requireZero.resolve("rimraf/package.json");
 const requireRimraf = createRequire(realpathSync(rimrafManifest));
 assert.deepEqual(
@@ -121,6 +121,10 @@ const packagePaths = readdirSync(modules, { recursive: true });
 if (existsSync(new URL("undici/package.json", modules))) {
 	packagePaths.push("undici/package.json");
 }
+if (existsSync(new URL("fastify/package.json", modules))) {
+	packagePaths.push("fastify/package.json");
+}
+let fastifyCopies = 0;
 let undiciCopies = 0;
 let braceExpansionCopies = 0;
 const fastUriVersions = new Set();
@@ -148,10 +152,14 @@ for (const path of packagePaths) {
 			"2.1.7",
 		);
 	}
-	if (path.endsWith("/fastify/package.json")) {
+	if (
+		path === "fastify/package.json" ||
+		path.endsWith("/fastify/package.json")
+	) {
+		fastifyCopies += 1;
 		assert.equal(
 			JSON.parse(readFileSync(new URL(path, modules), "utf8")).version,
-			"5.12.3",
+			"5.12.5",
 		);
 	}
 	if (path === "undici/package.json" || path.endsWith("/undici/package.json")) {
@@ -170,6 +178,7 @@ for (const path of packagePaths) {
 }
 
 assert.deepEqual([...fastUriVersions].sort(), ["3.1.8", "4.1.5"]);
+assert.ok(fastifyCopies > 0, "No physical Fastify package found");
 assert.ok(undiciCopies > 0, "No physical undici package found");
 assert.ok(
 	braceExpansionCopies > 0,
@@ -181,5 +190,5 @@ const db = new Database(":memory:");
 assert.equal(db.prepare("select 1 as value").get().value, 1);
 db.close();
 console.log(
-	`Zero 1.9.0, Fastify 5.12.3, fast-uri 3.1.8/4.1.5 consumers, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
+	`Zero 1.9.0, Fastify 5.12.5, fast-uri 3.1.8/4.1.5 consumers, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
 );

@@ -7,7 +7,7 @@ settings:
 overrides:
   '@grpc/grpc-js': 1.14.5
   brace-expansion: 2.1.7
-  fastify: 5.12.3
+  fastify: 5.12.5
   cloudevents@10.0.0>uuid: 11.1.1
   '@opentelemetry/core@2.7.1': 2.8.0
   '@opentelemetry/propagator-jaeger@2.7.1': 2.9.0
@@ -1099,8 +1099,8 @@ packages:
   fastify-plugin@6.0.0:
     resolution: {integrity: sha512-fZOty7z3O7vOliF6d8bHE3wiEh1KcNnKEQensSgTk9C1DvN6nRLS++XVd86v33Hw/8u9Un8A1zDrQ8ujcQDHEg==}
 
-  fastify@5.12.3:
-    resolution: {integrity: sha512-reZ8wce5VNCcufIt9AVtzZa3L4u1j8esikn7OEgHWLVpRpL5R7Y2+Xzj70OUkv5zDfzUAxXZT6cu4Rt0zr3EKA==}
+  fastify@5.12.5:
+    resolution: {integrity: sha512-OB2k1dlxs5/NAABqeKV2FUHkSD2BbENsCak8yULVcymn3fHIPDVa9TI3SDnJSWYSllZmSYuZXy2gTnsT+Sut1A==}
 
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
@@ -2724,7 +2724,7 @@ snapshots:
       compare-utf8: 0.2.0
       defu: 6.1.7
       eventemitter3: 5.0.4
-      fastify: 5.12.3
+      fastify: 5.12.5
       is-in-subnet: 4.0.1
       jose: 5.10.0
       js-xxhash: 4.0.0
@@ -3063,7 +3063,7 @@ snapshots:
 
   fastify-plugin@6.0.0: {}
 
-  fastify@5.12.3:
+  fastify@5.12.5:
     dependencies:
       '@fastify/ajv-compiler': 4.0.6
       '@fastify/error': 4.2.0
