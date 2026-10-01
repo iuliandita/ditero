@@ -5,6 +5,46 @@ export interface ImportGraphFinding {
 	path: string;
 }
 
+type CommonGraphRows = Omit<PortableRows, "comments" | "templates"> & {
+	comments: Pick<PortableRows["comments"], "id" | "taskId">;
+	templates: Pick<
+		PortableRows["templates"],
+		"id" | "workspaceId" | "kind" | "content"
+	>;
+};
+
+export interface ImportGraphResult {
+	valid: boolean;
+	errors: ImportGraphFinding[];
+	warnings: ImportGraphFinding[];
+}
+
+export interface ImportGraphContext {
+	error: (code: string, path: string) => void;
+	requireRef: (
+		map: ReadonlyMap<string, unknown>,
+		id: string,
+		path: string,
+	) => void;
+	principals: ReadonlyMap<string, PortableRows["principals"]>;
+	tasks: ReadonlyMap<string, PortableRows["tasks"]>;
+}
+
+export interface ImportGraphHooks<Rows extends CommonGraphRows> {
+	onIndexed?: (context: ImportGraphContext) => void;
+	checkTemplateCreator: (
+		row: Rows["templates"],
+		path: string,
+		context: ImportGraphContext,
+	) => void;
+	checkCommentAuthor: (
+		row: Rows["comments"],
+		path: string,
+		context: ImportGraphContext,
+	) => void;
+	onComplete?: (context: ImportGraphContext) => void;
+}
+
 function object(value: PortableJson): Record<string, PortableJson> {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
 		? value
@@ -12,11 +52,13 @@ function object(value: PortableJson): Record<string, PortableJson> {
 }
 
 // Shape and total input-size validation must run first. All lookups are source-local.
-export function validateImportGraph(source: PortableExportV1): {
-	valid: boolean;
-	errors: ImportGraphFinding[];
-	warnings: ImportGraphFinding[];
-} {
+export function validateContentGraph<Rows extends CommonGraphRows>(
+	source: {
+		sourceUserId: string;
+		data: { [K in keyof CommonGraphRows]: Rows[K][] };
+	},
+	hooks: ImportGraphHooks<Rows>,
+): ImportGraphResult {
 	const errors: ImportGraphFinding[] = [];
 	const warnings: ImportGraphFinding[] = [];
 	const { data, sourceUserId } = source;
@@ -36,12 +78,12 @@ export function validateImportGraph(source: PortableExportV1): {
 	}
 	const error = (code: string, path: string) => finding(errors, code, path);
 	const warning = (code: string, path: string) => finding(warnings, code, path);
-	function index<K extends keyof PortableRows>(
+	function index<K extends keyof CommonGraphRows>(
 		key: K,
-	): Map<string, PortableRows[K]> {
-		const result = new Map<string, PortableRows[K]>();
+	): Map<string, Rows[K]> {
+		const result = new Map<string, Rows[K]>();
 		data[key].forEach((row, i) => {
-			const id = "id" in row ? row.id : (row as PortableRows["karma"]).userId;
+			const id = "id" in row ? row.id : (row as Rows["karma"]).userId;
 			if (result.has(id))
 				error(
 					"duplicate-id",
@@ -70,9 +112,18 @@ export function validateImportGraph(source: PortableExportV1): {
 	index("karma");
 	index("karmaEvents");
 	index("attachments");
-	function unique<K extends keyof PortableRows>(
+	function requireRef(
+		map: ReadonlyMap<string, unknown>,
+		id: string,
+		path: string,
+	) {
+		if (!map.has(id)) error("missing-reference", path);
+	}
+	const context: ImportGraphContext = { error, requireRef, principals, tasks };
+	hooks.onIndexed?.(context);
+	function unique<K extends keyof CommonGraphRows>(
 		key: K,
-		fields: (row: PortableRows[K]) => string[] | null,
+		fields: (row: Rows[K]) => string[] | null,
 	) {
 		const seen = new Set<string>();
 		data[key].forEach((row, i) => {
@@ -91,13 +142,6 @@ export function validateImportGraph(source: PortableExportV1): {
 	unique("workspaces", (row) =>
 		row.kind === "personal" ? [row.ownerId] : null,
 	);
-	function requireRef(
-		map: ReadonlyMap<string, unknown>,
-		id: string,
-		path: string,
-	) {
-		if (!map.has(id)) error("missing-reference", path);
-	}
 	function own(id: string, path: string) {
 		if (id !== sourceUserId) error("foreign-personal-owner", path);
 	}
@@ -190,7 +234,7 @@ export function validateImportGraph(source: PortableExportV1): {
 	data.templates.forEach((row, i) => {
 		const path = `data.templates[${i}]`;
 		requireRef(workspaces, row.workspaceId, `${path}.workspaceId`);
-		requireRef(principals, row.createdBy, `${path}.createdBy`);
+		hooks.checkTemplateCreator(row, path, context);
 		if (object(row.content).kind !== row.kind)
 			error("template-kind-mismatch", `${path}.content.kind`);
 	});
@@ -211,7 +255,7 @@ export function validateImportGraph(source: PortableExportV1): {
 	});
 	data.comments.forEach((row, i) => {
 		requireRef(tasks, row.taskId, `data.comments[${i}].taskId`);
-		requireRef(principals, row.authorId, `data.comments[${i}].authorId`);
+		hooks.checkCommentAuthor(row, `data.comments[${i}]`, context);
 	});
 	const isHabit = (id: string) => {
 		const task = tasks.get(id);
@@ -367,5 +411,17 @@ export function validateImportGraph(source: PortableExportV1): {
 			sameWorkspace(row.workspaceId, workspaceId, `${path}.parentId`);
 		}
 	});
+	hooks.onComplete?.(context);
 	return { valid: errors.length === 0, errors, warnings };
+}
+
+export function validateImportGraph(
+	source: PortableExportV1,
+): ImportGraphResult {
+	return validateContentGraph<PortableRows>(source, {
+		checkTemplateCreator: (row, path, { requireRef, principals }) =>
+			requireRef(principals, row.createdBy, `${path}.createdBy`),
+		checkCommentAuthor: (row, path, { requireRef, principals }) =>
+			requireRef(principals, row.authorId, `${path}.authorId`),
+	});
 }
