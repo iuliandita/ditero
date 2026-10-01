@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import {
 	goToSettings,
 	leaveSettings,
-	openMobileLists,
+	openAdvancedSection,
 	signUp,
 	uniqueEmail,
 } from "./helpers.ts";
@@ -598,7 +598,7 @@ test("mobile: a board view degrades to the grouped list affordance", async ({
 	await waitWorkspaceReady(page);
 
 	// Phones reach New view from the Views section of the Lists tab.
-	await openMobileLists(page);
+	await openAdvancedSection(page, "views");
 	await page.getByTestId("new-view").click();
 	await page.getByTestId("view-name").fill(`Mini board ${Date.now()}`);
 	await pickLabeled(page, "Layout", "Board");

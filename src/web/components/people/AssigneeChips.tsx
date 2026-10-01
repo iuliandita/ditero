@@ -45,28 +45,37 @@ export function AssigneeChips({ taskId }: { taskId: string }) {
 		<div
 			data-testid="assignee-chips"
 			role="img"
-			className="flex items-center -space-x-2"
+			className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5"
+			title={m.assignee_chips_aria({ names: formatList(names) })}
 			aria-label={m.assignee_chips_aria({ names: formatList(names) })}
 		>
-			{shown.map((a) => {
-				const u = users.get(a.userId);
-				return (
-					<MemberAvatar
-						key={a.userId}
-						name={u?.name ?? m.group_unknown_user()}
-						image={u?.image}
-						className="size-6 ring-2 ring-background"
-					/>
-				);
-			})}
-			{overflow > 0 && (
-				<span
-					aria-hidden="true"
-					className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[0.65rem] font-medium ring-2 ring-background"
-				>
-					+{overflow}
-				</span>
-			)}
+			<span className="inline-flex items-center -space-x-2" aria-hidden>
+				{shown.map((a) => {
+					const u = users.get(a.userId);
+					return (
+						<MemberAvatar
+							key={a.userId}
+							name={u?.name ?? m.group_unknown_user()}
+							image={u?.image}
+							className="size-6 ring-2 ring-background"
+						/>
+					);
+				})}
+				{overflow > 0 && (
+					<span
+						aria-hidden="true"
+						className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[0.65rem] font-medium ring-2 ring-background"
+					>
+						+{overflow}
+					</span>
+				)}
+			</span>
+			<span
+				aria-hidden
+				className="min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground"
+			>
+				{formatList(names)}
+			</span>
 		</div>
 	);
 }

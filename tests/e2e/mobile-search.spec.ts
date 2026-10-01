@@ -67,9 +67,11 @@ test("mobile search finds a task by substring and opens it", async ({
 
 	for (const title of ["Buy oat milk", "Call the plumber"]) {
 		await page.getByRole("button", { name: "Quick add", exact: true }).click();
+		await expect(page.getByTestId("quickadd-input")).toBeVisible();
 		await page.getByTestId("quickadd-input").fill(title);
 		await page.getByTestId("quickadd-submit").click();
 		await page.keyboard.press("Escape");
+		await expect(page.getByTestId("quickadd-sheet")).toHaveCount(0);
 		await expect(
 			page.getByTestId("list").getByText(title, { exact: true }),
 		).toBeVisible({ timeout: 15000 });

@@ -1,4 +1,4 @@
-import { useZero } from "@rocicorp/zero/react";
+import { useQuery, useZero } from "@rocicorp/zero/react";
 import {
 	Check,
 	ChevronRight,
@@ -51,6 +51,7 @@ import { keyBetween } from "../../../domain/sort-key.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
+import { queries } from "../../../zero/queries.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
 import { formatFocusedDuration } from "../../focus/timer-core.ts";
 import { useFocusTimer } from "../../focus/useFocusTimer.tsx";
@@ -196,6 +197,8 @@ export function TaskDetail({
 }) {
 	const docked = useMediaQuery(DOCKED_QUERY);
 	const zero = useZero<typeof schema>();
+	const [workspaces] = useQuery(queries.workspaces.mine());
+	const sourceWorkspace = workspaces.find((w) => w.id === list.workspaceId);
 	const focus = useFocusTimer();
 	const confirm = useConfirm();
 	const snackbar = useSnackbar();
@@ -598,6 +601,15 @@ export function TaskDetail({
 
 	const body = (
 		<div className="flex flex-col gap-6 px-4 pb-6">
+			<p
+				data-testid="task-visibility-context"
+				className="break-words text-xs text-muted-foreground"
+			>
+				{list.title}
+				{sourceWorkspace
+					? ` / ${sourceWorkspace.kind === "personal" ? m.scope_source_personal({ workspace: sourceWorkspace.name }) : m.scope_source_shared({ workspace: sourceWorkspace.name })}`
+					: ""}
+			</p>
 			{activation.status !== "native" && activation.status !== "active" && (
 				<ImportActivationRecovery
 					key={taskImportRecoveryKey(t.id, list.workspaceId, activation.status)}
@@ -780,6 +792,7 @@ export function TaskDetail({
 									<Button
 										variant="ghost"
 										size="icon-sm"
+										className="pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]"
 										aria-label={m.task_delete_named({ title: s.title })}
 										onClick={(event) =>
 											void removeSubtask(s, event.currentTarget)

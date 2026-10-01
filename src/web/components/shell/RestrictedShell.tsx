@@ -14,6 +14,7 @@ import {
 	useTaskImportActivation,
 	useTaskImportActivationMap,
 } from "../../hooks/useTaskImportActivation.ts";
+import { DisplaySettings } from "../settings/DisplaySettings.tsx";
 import { RestrictedTaskDetail } from "./RestrictedTaskDetail.tsx";
 import { SyncIndicator } from "./SyncIndicator.tsx";
 
@@ -53,7 +54,7 @@ function RestrictedRow({
 			>
 				<span
 					className={cn(
-						"block truncate text-lg",
+						"block text-lg [overflow-wrap:anywhere]",
 						task.done && "text-muted-foreground line-through",
 					)}
 				>
@@ -83,7 +84,7 @@ function RestrictedRow({
 }
 
 // Restricted ("kid") surface: a single cross-workspace "assigned to me" list.
-// No sidebar, switcher, folders, create-list, FAB, members, or settings -- the
+// No sidebar, switcher, folders, create-list, FAB, members, or account settings -- the
 // kid completes and comments on assigned tasks and nothing else. Mounted by
 // Workspace when the current user is a restricted managed account.
 export function RestrictedShell() {
@@ -144,6 +145,14 @@ export function RestrictedShell() {
 					</h1>
 					<SyncIndicator placement="header" />
 				</div>
+				<details className="mb-4 rounded-lg border p-3">
+					<summary className="min-h-11 cursor-pointer content-center text-sm font-medium">
+						{m.display_settings_label()}
+					</summary>
+					<div className="pt-4">
+						<DisplaySettings />
+					</div>
+				</details>
 
 				{error && (
 					<p role="alert" className="mb-2 text-sm text-destructive">

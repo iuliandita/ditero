@@ -182,3 +182,101 @@ describe("capEntries", () => {
 		expect(capEntries([1, 2], 50)).toEqual([1, 2]);
 	});
 });
+
+describe("habit task panels", () => {
+	it("filters and sorts current habit occurrences while preserving raw rows", () => {
+		const habit = {
+			...task("habit", {
+				listId: "habits",
+				dueAt: Date.parse("2026-07-04T00:00:00Z"),
+			}),
+			rrule: "FREQ=DAILY",
+		};
+		const rows = {
+			...data([
+				habit,
+				task("overdue", { dueAt: Date.parse("2026-07-10T00:00:00Z") }),
+			]),
+			lists: [
+				...lists,
+				{ id: "habits", workspaceId: "ws1", kind: "habits", folderId: null },
+			],
+			habitLogs: [
+				{ habitId: "habit", date: "2026-07-16", status: "done" as const },
+			],
+			timeZone: "Europe/Berlin",
+		};
+		const today = source({
+			filter: {
+				op: "or",
+				conditions: [
+					{ field: "due", operator: "is", value: "today" },
+					{ field: "due", operator: "is", value: "overdue" },
+				],
+			},
+			sort: { field: "due", dir: "asc" },
+		});
+		const entries = matchingTasks(rows, today, ctx);
+		expect(entries.map((entry) => entry.task.id)).toEqual(["overdue", "habit"]);
+		expect(entries[1].task).toBe(habit);
+		expect(entries[1].occurrence).toMatchObject({
+			date: "2026-07-16",
+			done: true,
+			status: "done",
+		});
+		expect(
+			matchingTasks(
+				rows,
+				source({
+					filter: {
+						op: "and",
+						conditions: [{ field: "done", operator: "is", value: true }],
+					},
+				}),
+				ctx,
+			).map((entry) => entry.task.id),
+		).toEqual(["habit"]);
+	});
+	it("does not match non-scheduled habits as overdue and retains explicit kind filters", () => {
+		const rows = {
+			...data([
+				{
+					...task("habit", {
+						listId: "habits",
+						dueAt: Date.parse("2026-07-04T00:00:00Z"),
+					}),
+					rrule: "FREQ=WEEKLY;BYDAY=MO",
+				},
+			]),
+			lists: [
+				...lists,
+				{ id: "habits", workspaceId: "ws1", kind: "habits", folderId: null },
+			],
+			timeZone: "UTC",
+		};
+		expect(
+			matchingTasks(
+				rows,
+				source({
+					filter: {
+						op: "and",
+						conditions: [{ field: "due", operator: "is", value: "today" }],
+					},
+				}),
+				ctx,
+			),
+		).toEqual([]);
+		expect(
+			matchingTasks(
+				rows,
+				source({
+					filter: {
+						op: "and",
+						conditions: [{ field: "kind", operator: "eq", value: "habits" }],
+					},
+				}),
+				ctx,
+			)[0].occurrence,
+		).toMatchObject({ date: "2026-07-20", canToggle: false });
+	});
+});

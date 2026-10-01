@@ -283,6 +283,7 @@ export function Sidebar({
 	onToggleSection,
 	section,
 	onOpenSettings,
+	onOpenAppearance,
 	shortcutHintKey,
 	onOpenShortcuts,
 	collapsed,
@@ -315,10 +316,11 @@ export function Sidebar({
 	onOpenDashboard: (id: string) => void;
 	onNewDashboard: () => void;
 	dashboardActions: (dashboard: Dashboard) => RowAction[];
-	isSectionOpen: (section: NavSection) => boolean;
-	onToggleSection: (section: NavSection) => void;
+	isSectionOpen: (section: NavSection, hasItems?: boolean) => boolean;
+	onToggleSection: (section: NavSection, hasItems?: boolean) => void;
 	section: Section;
 	onOpenSettings: () => void;
+	onOpenAppearance?: () => void;
 	/** Keycap for the cheat sheet while its hint is still due; null hides it. */
 	shortcutHintKey: string | null;
 	onOpenShortcuts: () => void;
@@ -370,6 +372,7 @@ export function Sidebar({
 					onManageMembers={onManageMembers}
 					canManageMembers={canManageMembers}
 					onOpenSettings={onOpenSettings}
+					onOpenAppearance={onOpenAppearance}
 					collapsed={collapsed}
 				/>
 			</div>
@@ -447,8 +450,12 @@ export function Sidebar({
 					<NavGroup
 						title={m.sidebar_views_heading()}
 						section="views"
-						open={isSectionOpen("views")}
-						onToggle={collapsed ? undefined : () => onToggleSection("views")}
+						open={isSectionOpen("views", pinnedViews.length > 0)}
+						onToggle={
+							collapsed
+								? undefined
+								: () => onToggleSection("views", pinnedViews.length > 0)
+						}
 						hideTitle={collapsed}
 					>
 						<ul className="flex flex-col gap-0.5">
@@ -461,9 +468,11 @@ export function Sidebar({
 					<NavGroup
 						title={m.sidebar_dashboards_heading()}
 						section="dashboards"
-						open={isSectionOpen("dashboards")}
+						open={isSectionOpen("dashboards", dashboards.length > 0)}
 						onToggle={
-							collapsed ? undefined : () => onToggleSection("dashboards")
+							collapsed
+								? undefined
+								: () => onToggleSection("dashboards", dashboards.length > 0)
 						}
 						hideTitle={collapsed}
 					>
@@ -571,6 +580,7 @@ export function Sidebar({
 			</div>
 
 			<div
+				data-reading-sidebar-footer={collapsed ? "collapsed" : "expanded"}
 				className={cn(
 					"flex items-center gap-1 border-t p-2",
 					collapsed && "flex-col",

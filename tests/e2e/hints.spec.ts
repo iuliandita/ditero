@@ -46,6 +46,9 @@ test("first run lands in the blank list, focused, with the grammar and one examp
 	await expect(page.getByTestId("new-task")).toBeFocused();
 	const hint = page.getByTestId("list").getByTestId("syntax-hint");
 	await expect(hint).toBeVisible();
+	await expect(hint).toContainText("This field saves your text as written.");
+	await expect(hint.getByTestId("syntax-hint-example")).not.toBeVisible();
+	await hint.getByTestId("syntax-hint-details").click();
 	await expect(hint.getByTestId("syntax-hint-example")).toHaveText(
 		"Example: Call the plumber tomorrow p1 #home",
 	);
@@ -126,6 +129,9 @@ test("dismissing the syntax hint retires it everywhere", async ({ page }) => {
 	await page.getByTestId("syntax-hint-dismiss").click();
 	await expect(page.getByTestId("new-task")).toBeVisible();
 	await expect(page.getByTestId("syntax-hint")).toHaveCount(0);
+	await page.getByRole("button", { name: "Quick add", exact: true }).click();
+	await expect(page.getByTestId("quickadd-input")).toBeVisible();
+	await page.keyboard.press("Escape");
 
 	await blur(page);
 	await page.keyboard.press("c");
@@ -134,6 +140,9 @@ test("dismissing the syntax hint retires it everywhere", async ({ page }) => {
 	await page.keyboard.press("Escape");
 
 	await reopenList(page, "Garden");
+	await expect(page.getByTestId("syntax-hint")).toHaveCount(0);
+	await page.getByRole("button", { name: "Quick add", exact: true }).click();
+	await expect(page.getByTestId("quickadd-input")).toBeVisible();
 	await expect(page.getByTestId("syntax-hint")).toHaveCount(0);
 });
 
@@ -190,6 +199,8 @@ test("on a phone a blank first list focuses the inline field with the grammar", 
 	await expect(page.getByTestId("new-task")).toBeFocused();
 	const hint = page.getByTestId("list").getByTestId("syntax-hint");
 	await expect(hint).toBeVisible();
+	await expect(hint.getByTestId("syntax-hint-example")).not.toBeVisible();
+	await hint.getByTestId("syntax-hint-details").click();
 	await expect(hint.getByTestId("syntax-hint-example")).toBeVisible();
 	// No keycap on touch: the lead just opens quick add.
 	await expect(hint.locator("kbd")).toHaveCount(0);

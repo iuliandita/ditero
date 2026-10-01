@@ -1,3 +1,4 @@
+import { localDay, shiftDay } from "../../domain/local-day.ts";
 import type {
 	FilterGroup,
 	FilterNode,
@@ -19,6 +20,7 @@ export type GroupTask = {
 	title: string;
 	done: boolean;
 	dueAt: Date | null;
+	occurrenceDate?: string | null;
 	priority: number;
 	assigneeIds: string[];
 	labelIds: string[];
@@ -26,6 +28,7 @@ export type GroupTask = {
 
 export type GroupCtx = {
 	now: Date;
+	timeZone?: string;
 	listTitle: (listId: string) => string;
 	memberName: (userId: string) => string;
 	labelName: (labelId: string) => string;
@@ -49,7 +52,20 @@ function pushInto(map: Map<string, GroupTask[]>, key: string, t: GroupTask) {
 
 // Due bucket by date only; completion state is ignored so every task lands in
 // exactly one bucket (a done+overdue task still buckets as overdue by its date).
-function dueBucketKey(dueAt: Date | null, now: Date): string {
+function dueBucketKey(
+	dueAt: Date | null,
+	now: Date,
+	occurrenceDate?: string | null,
+	timeZone = "UTC",
+): string {
+	if (occurrenceDate !== undefined) {
+		if (occurrenceDate == null) return "none";
+		const today = localDay(now, timeZone);
+		if (occurrenceDate < today) return "overdue";
+		if (occurrenceDate === today) return "today";
+		if (occurrenceDate < shiftDay(today, 7)) return "next7";
+		return "later";
+	}
 	if (dueAt === null) return "none";
 	const start = todayStart(now);
 	const due = dueAt.getTime();
@@ -159,7 +175,11 @@ export function groupTasks(
 		case "due": {
 			const buckets = new Map<string, GroupTask[]>();
 			for (const t of tasks)
-				pushInto(buckets, dueBucketKey(t.dueAt, ctx.now), t);
+				pushInto(
+					buckets,
+					dueBucketKey(t.dueAt, ctx.now, t.occurrenceDate, ctx.timeZone),
+					t,
+				);
 			return DUE_ORDER.filter((k) => buckets.has(k)).map((k) => ({
 				key: k,
 				label: DUE_LABELS[k](),

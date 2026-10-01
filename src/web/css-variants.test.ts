@@ -207,3 +207,66 @@ test("priority, warning and control tokens back their utilities", async () => {
 		expect(css).toContain(`var(${token})`);
 	expect(css).toContain('[data-state="checked"]');
 });
+
+// Each animated part needs its own state-specific override: one reduced-motion
+// utility on the overlay cannot stop the content's zoom or slide.
+test("shared overlay parts disable open and closed animation for reduced motion", async () => {
+	for (const file of [
+		"dialog.tsx",
+		"alert-dialog.tsx",
+		"sheet.tsx",
+		"popover.tsx",
+		"dropdown-menu.tsx",
+		"select.tsx",
+	]) {
+		const source = readFileSync(
+			path.join(root, "src/web/components/ui", file),
+			"utf8",
+		);
+		const animated = [
+			...source.matchAll(/"([^"\n]*data-open:animate-in[^"\n]*)"/g),
+		];
+		expect(animated.length, file).toBeGreaterThan(0);
+		for (const [, classes] of animated) {
+			const css = await build(classes.split(/\s+/));
+			for (const state of ["open", "closed"]) {
+				const reduced = blockAfter(
+					css,
+					`.motion-reduce\\:data-${state}\\:animate-none {`,
+				);
+				expect(reduced, file).toContain(
+					"@media (prefers-reduced-motion: reduce)",
+				);
+				expect(reduced, file).toContain(`[data-state="${state}"]`);
+				expect(reduced, file).toContain("animation: none");
+			}
+		}
+	}
+	const sheet = await build(candidatesOf("sheet.tsx"));
+	const reduced = blockAfter(sheet, ".motion-reduce\\:transition-none {");
+	expect(reduced).toContain("@media (prefers-reduced-motion: reduce)");
+	expect(reduced).toContain("transition-property: none");
+});
+
+test("secondary coarse-pointer targets compile to a fixed 44px minimum", async () => {
+	for (const file of [
+		"dialog.tsx",
+		"sheet.tsx",
+		"select.tsx",
+		"../task/DuePicker.tsx",
+		"../list/IconPicker.tsx",
+	]) {
+		const css = await build(candidatesOf(file));
+		for (const [axis, property] of [
+			["h", "height"],
+			["w", "width"],
+		]) {
+			const coarse = blockAfter(
+				css,
+				`.pointer-coarse\\:min-${axis}-\\[44px\\] {`,
+			);
+			expect(coarse, file).toContain("@media (pointer: coarse)");
+			expect(coarse, file).toContain(`min-${property}: 44px`);
+		}
+	}
+});

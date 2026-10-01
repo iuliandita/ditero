@@ -206,9 +206,9 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	await expect.poll(() => betaAboveAlpha(pa), { timeout: 15000 }).toBe(true);
 	await expect.poll(() => betaAboveAlpha(pb), { timeout: 15000 }).toBe(true);
 
-	// --- NLP quick-add (FAB is a mobile affordance) ---
+	// --- NLP quick-add through the visible mobile capture entry ---
 	await pa.setViewportSize({ width: 375, height: 812 });
-	await pa.getByLabel("Quick add").click();
+	await pa.getByRole("button", { name: "Quick add", exact: true }).click();
 	await pa.getByTestId("quickadd-input").fill("milk tomorrow p2 #store");
 	await expect(pa.getByTestId("chip-date")).toBeVisible();
 	await expect(pa.getByTestId("chip-priority")).toHaveText("P2 Medium");
@@ -243,6 +243,14 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	await pa.getByRole("button", { name: "New list" }).click();
 	await pa.getByTestId("new-list").fill("Zeta");
 	await pa.getByTestId("new-list-submit").click();
+	// The optimistic row can appear before the sheet finishes closing and
+	// returns focus to its trigger. Wait before placing focus on a drag grip.
+	await expect(
+		pa.getByRole("dialog", { name: "New list", exact: true }),
+	).toHaveCount(0);
+	await expect(
+		pa.getByRole("button", { name: "New list", exact: true }),
+	).toBeFocused();
 	await expect(
 		pa.getByTestId("list-index").getByText("Zeta", { exact: true }),
 	).toBeVisible({ timeout: 15000 });
@@ -253,16 +261,49 @@ test("quick-add chips + drag reorder sync across clients", async ({
 	expect(await zetaAboveShared(pa)).toBe(false);
 
 	// Keyboard reorder (a11y path): lift Shared list's grip, move below Zeta,
-	// drop. Small waits let dnd-kit settle each step. Reliable across viewports
-	// where pointer-drag emulation is finicky; same list.update sortKey path.
-	await pa.getByTestId("list-drag").first().focus();
+	// then drop through the same list.update sortKey path.
+	const listIndex = pa.getByTestId("list-index");
+	const sharedRow = listIndex.getByRole("listitem").filter({
+		has: pa.getByRole("button", { name: "Shared list", exact: true }),
+	});
+	const sharedGrip = sharedRow.getByTestId("list-drag");
+	const sharedId = await sharedRow
+		.getByRole("button", { name: "Shared list", exact: true })
+		.getAttribute("data-list-id");
+	const zetaId = await listIndex
+		.getByRole("button", { name: "Zeta", exact: true })
+		.getAttribute("data-list-id");
+	if (!sharedId || !zetaId) throw new Error("missing list reorder ids");
+	const announcement = listIndex.getByRole("status");
+	await sharedGrip.focus();
+	await expect(sharedGrip).toBeFocused();
 	await pa.keyboard.press("Space");
-	await pa.waitForTimeout(150);
+	await expect(sharedGrip).toHaveAttribute("aria-pressed", "true");
+	// The pickup announcement may already have advanced to the initial
+	// self-target announcement; both identify the item that was lifted.
+	await expect
+		.poll(async () =>
+			[
+				`Picked up draggable item ${sharedId}.`,
+				`Draggable item ${sharedId} was moved over droppable area ${sharedId}.`,
+			].includes((await announcement.textContent()) ?? ""),
+		)
+		.toBe(true);
 	await pa.keyboard.press("ArrowDown");
-	await pa.waitForTimeout(150);
+	await expect(announcement).toHaveText(
+		`Draggable item ${sharedId} was moved over droppable area ${zetaId}.`,
+	);
 	await pa.keyboard.press("Space");
+	await expect(announcement).toHaveText(
+		`Draggable item ${sharedId} was dropped over droppable area ${zetaId}`,
+	);
 
 	await expect.poll(() => zetaAboveShared(pa), { timeout: 15000 }).toBe(true);
+	await expect
+		.poll(() => isAbove(sidebarLists(pb), "Zeta", "Shared list"), {
+			timeout: 15000,
+		})
+		.toBe(true);
 });
 
 // --- Scenario 1: shopping starter renders category-grouped (phone viewport) ---
@@ -621,7 +662,7 @@ test("a11y: no serious/critical violations on core surfaces", async ({
 	});
 	const mp = await mctx.newPage();
 	await signIn(mp, email);
-	await mp.getByLabel("Quick add").click();
+	await mp.getByRole("button", { name: "Quick add", exact: true }).click();
 	await expect(mp.getByTestId("quickadd-input")).toBeVisible();
 	await expectNoSeriousA11y(mp, "quick-add sheet");
 	await mctx.close();

@@ -3,6 +3,7 @@ import { ConfirmProvider } from "./components/ui/confirm.tsx";
 import { SnackbarProvider } from "./components/ui/snackbar.tsx";
 import { useUserPref } from "./hooks/useUserPref.ts";
 import { authClient } from "./lib/auth-client.ts";
+import { DisplayPreferencesProvider } from "./lib/DisplayPreferencesProvider.tsx";
 import { KeyringProvider } from "./lib/e2e/KeyringProvider.tsx";
 import { AppZeroProvider } from "./lib/zero.tsx";
 import { AcceptInvite } from "./routes/AcceptInvite.tsx";
@@ -24,6 +25,21 @@ export function App() {
 
 function Routes() {
 	const { data: session, isPending } = authClient.useSession();
+	const userId = isPending ? null : (session?.user.id ?? null);
+	return (
+		<DisplayPreferencesProvider key={userId ?? "logged-out"} userId={userId}>
+			<SessionRoutes session={session} isPending={isPending} />
+		</DisplayPreferencesProvider>
+	);
+}
+
+function SessionRoutes({
+	session,
+	isPending,
+}: {
+	session: ReturnType<typeof authClient.useSession>["data"];
+	isPending: boolean;
+}) {
 	// Standalone redemption route: no router, but `/accept?token=` must render for
 	// both logged-out and logged-in invitees. AcceptInvite runs its own session +
 	// preview logic; every other path stays on the normal session-gated flow.

@@ -28,7 +28,7 @@ test("account deletion clears the session and releases the email address", async
 	).toEqual([]);
 
 	await page.getByTestId("delete-account-confirm").click();
-	await expect(page.getByTestId("signup")).toBeVisible();
+	await expect(page.getByTestId("signup-mode")).toBeVisible();
 
 	await signUp(page, email);
 	await expect(page.getByTestId("workspace")).toBeVisible();

@@ -1,5 +1,10 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { ListTodo, Paperclip, SlidersHorizontal } from "lucide-react";
+import {
+	ListTodo,
+	MoreVertical,
+	Paperclip,
+	SlidersHorizontal,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,7 +52,7 @@ import { SyncIndicator } from "../components/shell/SyncIndicator.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import { EmptyState } from "../components/ui/empty-state.tsx";
 import type { RowAction } from "../components/ui/row-action.ts";
-import { RowActions } from "../components/ui/row-actions.tsx";
+import { RowActionItems, RowActions } from "../components/ui/row-actions.tsx";
 import { useRowSelection } from "../hooks/useRowSelection.ts";
 import { useTaskImportActivationMap } from "../hooks/useTaskImportActivation.ts";
 import { useTaskToggle } from "../hooks/useTaskToggle.ts";
@@ -410,7 +415,7 @@ export function ListView({
 				isDesktop ? "mb-5 flex flex-col gap-1" : "mt-2 flex flex-col gap-1"
 			}
 		>
-			<div className="flex gap-2">
+			<div data-reading-inline-add className="flex gap-2">
 				<TitleSuggestInput
 					inputRef={titleInput}
 					data-testid="new-task"
@@ -442,18 +447,22 @@ export function ListView({
 	return (
 		<div ref={selection.rootRef} data-testid="list" className="max-w-3xl">
 			{/* `group` is what RowActions' md:group-hover reveal keys off. */}
-			<div ref={listHeaderRef} className="group mb-5 flex items-center gap-1.5">
+			<div
+				ref={listHeaderRef}
+				data-reading-list-header
+				className="group mb-5 flex items-center gap-1.5"
+			>
 				{backControl}
 				<button
 					type="button"
 					disabled={!canEditContainer}
 					aria-label={m.list_change_icon()}
 					onClick={() => setIconOpen(true)}
-					className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:size-9"
+					className="hidden size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:flex"
 				>
 					<ListIcon icon={list.icon} kind={kind} title={list.title} />
 				</button>
-				<h1 className="min-w-0 flex-1 truncate text-xl font-semibold md:text-2xl">
+				<h1 className="min-w-0 flex-1 break-words text-lg font-semibold">
 					{list.title}
 				</h1>
 				<DropdownMenu>
@@ -461,13 +470,30 @@ export function ListView({
 						<Button
 							variant="ghost"
 							size="icon-sm"
-							aria-label={m.list_display_options()}
+							aria-label={
+								isDesktop
+									? m.list_display_options()
+									: m.row_actions_for({ name: list.title })
+							}
+							data-testid={!isDesktop ? "row-actions" : undefined}
 							className="size-11 md:size-8"
 						>
-							<SlidersHorizontal />
+							{isDesktop ? <SlidersHorizontal /> : <MoreVertical />}
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
+						{!isDesktop && (
+							<>
+								<DropdownMenuItem
+									disabled={!canEditContainer}
+									onSelect={() => setIconOpen(true)}
+								>
+									{m.list_change_icon()}
+								</DropdownMenuItem>
+								<RowActionItems actions={rowActions} />
+								<DropdownMenuSeparator />
+							</>
+						)}
 						<DropdownMenuLabel>{m.list_completed_heading()}</DropdownMenuLabel>
 						<DropdownMenuRadioGroup
 							value={mode === "hide" ? "sink" : mode}
@@ -544,10 +570,12 @@ export function ListView({
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
-				<RowActions
-					actions={rowActions}
-					label={m.row_actions_for({ name: openList.title })}
-				/>
+				{isDesktop && (
+					<RowActions
+						actions={rowActions}
+						label={m.row_actions_for({ name: openList.title })}
+					/>
+				)}
 				{mobileSync}
 			</div>
 

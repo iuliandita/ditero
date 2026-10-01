@@ -11,8 +11,14 @@ import {
 	type FilterCtx,
 	type FilterTask,
 	resolveWorkspaceScope,
-	taskMatchesFilter,
 } from "../../../domain/view-filter.ts";
+
+import {
+	type HabitOccurrence,
+	habitOccurrence,
+	matchesOccurrenceFilter,
+	type OccurrenceLog,
+} from "../../views/habit-occurrence.ts";
 
 export type PanelTaskFields = {
 	id: string;
@@ -22,6 +28,7 @@ export type PanelTaskFields = {
 	dueAt?: number | null;
 	priority?: number | null;
 	sortKey: string;
+	rrule?: string | null;
 };
 export type PanelListFields = {
 	id: string;
@@ -30,7 +37,13 @@ export type PanelListFields = {
 	folderId?: string | null;
 };
 
-export type PanelEntry<T, L> = { task: T; kind: string; labels: L[] };
+export type PanelEntry<T, L> = {
+	task: T;
+	kind: string;
+	labels: L[];
+	occurrence?: HabitOccurrence;
+	sourceContext?: string;
+};
 
 export function matchingTasks<
 	T extends PanelTaskFields,
@@ -42,6 +55,9 @@ export function matchingTasks<
 		labels: readonly L[];
 		taskLabels: readonly { taskId: string; labelId: string }[];
 		assignees: readonly { taskId: string; userId: string }[];
+		habitLogs?: readonly OccurrenceLog[];
+		timeZone?: string;
+		currentDay?: string;
 	},
 	resolved: ResolvedSource,
 	ctx: FilterCtx,
@@ -68,21 +84,43 @@ export function matchingTasks<
 		if (!list) continue;
 		if (!scope.has(list.workspaceId)) continue;
 		const labelIds = labelIdsByTask.get(task.id) ?? [];
+		const occurrence =
+			list.kind === "habits"
+				? habitOccurrence(
+						task,
+						data.habitLogs ?? [],
+						ctx.now,
+						data.timeZone ?? "UTC",
+						data.currentDay,
+					)
+				: undefined;
+		const effectiveDue = occurrence ? occurrence.dueAt : task.dueAt;
 		const filterTask: FilterTask = {
 			id: task.id,
 			listId: task.listId,
 			workspaceId: list.workspaceId,
-			done: task.done ?? false,
-			dueAt: task.dueAt == null ? null : new Date(task.dueAt),
+			done: occurrence ? occurrence.done : (task.done ?? false),
+			dueAt: effectiveDue == null ? null : new Date(effectiveDue),
 			priority: task.priority ?? 0,
 			kind: list.kind ?? "tasks",
 			folderId: list.folderId ?? null,
 			labelIds,
 			assigneeIds: assigneeIdsByTask.get(task.id) ?? [],
 		};
-		if (!taskMatchesFilter(filterTask, resolved.filter, ctx)) continue;
+		if (
+			!matchesOccurrenceFilter(
+				filterTask,
+				resolved.filter,
+				ctx,
+				occurrence,
+				data.timeZone ?? "UTC",
+				data.currentDay,
+			)
+		)
+			continue;
 		out.push({
 			task,
+			occurrence,
 			kind: list.kind ?? "tasks",
 			labels: labelIds
 				.map((id) => labelById.get(id))
@@ -91,7 +129,23 @@ export function matchingTasks<
 	}
 	const dir = resolved.sort.dir === "desc" ? -1 : 1;
 	return out.sort(
-		(a, b) => dir * compareTasksBy(a.task, b.task, resolved.sort.field),
+		(a, b) =>
+			dir *
+			compareTasksBy(
+				{
+					...a.task,
+					...(a.occurrence
+						? { dueAt: a.occurrence.dueAt, done: a.occurrence.done }
+						: {}),
+				},
+				{
+					...b.task,
+					...(b.occurrence
+						? { dueAt: b.occurrence.dueAt, done: b.occurrence.done }
+						: {}),
+				},
+				resolved.sort.field,
+			),
 	);
 }
 
