@@ -1,0 +1,1 @@
+ALTER TABLE "task" ADD COLUMN "created_at" timestamp with time zone;

@@ -441,6 +441,10 @@ function seededIds(seed: string): () => string {
 	};
 }
 
+// Creation provenance is authoritative only after the server accepts the write.
+const taskCreatedAt = (tx: Transaction<Schema>): number | null =>
+	tx.location === "server" ? Date.now() : null;
+
 // Insert one instantiated task, applying the client-invisible column defaults
 // (done, dueAllDay, priority) exactly like task.create does.
 async function insertInstantiatedTask(
@@ -449,6 +453,7 @@ async function insertInstantiatedTask(
 ): Promise<void> {
 	await tx.mutate.task.insert({
 		id: t.id,
+		createdAt: taskCreatedAt(tx),
 		listId: t.listId,
 		title: t.title,
 		sortKey: t.sortKey,
@@ -621,6 +626,7 @@ export const mutators = defineMutators({
 				const rrule = initialRRule(list.kind, args.parentId);
 				await tx.mutate.task.insert({
 					id: args.id,
+					createdAt: taskCreatedAt(tx),
 					listId: args.listId,
 					title: args.title,
 					sortKey: args.sortKey,
