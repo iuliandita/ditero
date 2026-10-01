@@ -2111,5 +2111,6 @@
 	"completion_history_previous": "Înapoi",
 	"completion_history_next": "Înainte",
 	"completion_history_page": "Pagina {page}",
-	"completion_history_unavailable": "Istoricul acestei sarcini nu este disponibil."
+	"completion_history_unavailable": "Istoricul acestei sarcini nu este disponibil.",
+	"task_completed_by": "Finalizat de {name}"
 }

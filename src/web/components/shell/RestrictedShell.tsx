@@ -1,5 +1,5 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
 import { runMutation } from "@/lib/run-mutation";
@@ -14,6 +14,7 @@ import {
 	useTaskImportActivation,
 	useTaskImportActivationMap,
 } from "../../hooks/useTaskImportActivation.ts";
+import { CompletedBy } from "../list/CompletedBy.tsx";
 import { DisplaySettings } from "../settings/DisplaySettings.tsx";
 import { RestrictedTaskDetail } from "./RestrictedTaskDetail.tsx";
 import { SyncIndicator } from "./SyncIndicator.tsx";
@@ -32,15 +33,27 @@ function RestrictedRow({
 	onToggle: () => void;
 	onOpen: () => void;
 }) {
+	const completionId = useId();
 	const activation = useTaskImportActivation(task.id);
+	const activationId = `${completionId}-activation`;
+	const dueId = `${completionId}-due`;
+	const describedBy = [
+		completionId,
+		(activation.status === "pending" || activation.status === "blocked") &&
+			activationId,
+		task.dueAt != null && dueId,
+	]
+		.filter(Boolean)
+		.join(" ");
 	return (
 		<li
 			data-testid="restricted-task"
-			className="flex items-center gap-3 rounded-xl border p-4"
+			className="group/completion flex items-center gap-3 rounded-xl border p-4"
 		>
 			<Checkbox
 				disabled={!activation.canWrite}
 				aria-label={task.title}
+				aria-describedby={completionId}
 				checked={task.done ?? false}
 				onCheckedChange={onToggle}
 				shape={checkShapeFor(kind)}
@@ -49,6 +62,8 @@ function RestrictedRow({
 			/>
 			<button
 				type="button"
+				aria-label={task.title}
+				aria-describedby={describedBy}
 				onClick={onOpen}
 				className="min-w-0 flex-1 text-start"
 			>
@@ -60,9 +75,10 @@ function RestrictedRow({
 				>
 					{task.title}
 				</span>
+				<CompletedBy task={task} id={completionId} />
 				{(activation.status === "pending" ||
 					activation.status === "blocked") && (
-					<span className="block text-xs text-warning">
+					<span id={activationId} className="block text-xs text-warning">
 						{activation.status === "pending"
 							? m.activation_badge_pending()
 							: m.activation_badge_blocked()}
@@ -70,6 +86,7 @@ function RestrictedRow({
 				)}
 				{task.dueAt != null && (
 					<span
+						id={dueId}
 						className={cn(
 							"text-sm",
 							isOverdue(task) ? "text-destructive" : "text-muted-foreground",

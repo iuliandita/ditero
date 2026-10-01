@@ -48,6 +48,7 @@ import type { HabitOccurrence } from "../../views/habit-occurrence.ts";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
 import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
+import { CompletedBy } from "./CompletedBy.tsx";
 import { type RowSelection, SelectToggle } from "./SelectToggle.tsx";
 import { type Due, taskActions } from "./taskActions.ts";
 
@@ -401,6 +402,7 @@ export function TaskRow({
 	const metaId = `${ids}-meta`;
 	const progressId = `${ids}-progress`;
 	const priorityId = `${ids}-priority`;
+	const completionId = `${ids}-completion`;
 	const showBadge =
 		activationStatus === "pending" || activationStatus === "blocked";
 	const showProgress = kind === "project" && total > 0;
@@ -409,6 +411,7 @@ export function TaskRow({
 	// only repeat it, so it names its action and points at the row's details.
 	const describedBy =
 		[
+			completionId,
 			showBadge && badgeId,
 			(!bare || sourceContext || list) && metaId,
 			showProgress && progressId,
@@ -459,7 +462,7 @@ export function TaskRow({
 				    is what RowActions' md:group-hover reveal keys off. */}
 				<div
 					className={cn(
-						"group flex min-h-12 gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted",
+						"group group/completion flex min-h-12 gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted",
 						card ? "items-start" : "items-center",
 					)}
 					data-kbd-row
@@ -484,6 +487,7 @@ export function TaskRow({
 							<Checkbox
 								disabled={!canToggle}
 								aria-label={task.title}
+								aria-describedby={completionId}
 								checked={displayedDone}
 								onCheckedChange={() => {
 									if (canToggle) handlers.onToggle(task.id, displayedDone);
@@ -525,6 +529,12 @@ export function TaskRow({
 						>
 							<span className={strikeClass(displayedDone)}>{task.title}</span>
 						</span>
+						<CompletedBy
+							task={task}
+							done={displayedDone}
+							habitDate={occurrence?.date}
+							id={completionId}
+						/>
 						{showBadge && (
 							<Badge
 								id={badgeId}
@@ -674,11 +684,12 @@ export function TaskRow({
 						<li
 							key={s.id}
 							data-reading-row="subtask"
-							className="flex items-center gap-2 py-1"
+							className="group/completion flex items-center gap-2 py-1"
 						>
 							<Checkbox
 								disabled={!activation.canWriteTask(s.id)}
 								aria-label={s.title}
+								aria-describedby={`${ids}-completion-${s.id}`}
 								checked={s.done ?? false}
 								onCheckedChange={() => {
 									if (activation.canWriteTask(s.id))
@@ -691,13 +702,19 @@ export function TaskRow({
 								type="button"
 								aria-label={m.task_open_details()}
 								data-reading-title
+								aria-describedby={`${ids}-completion-${s.id}`}
 								onClick={() => handlers.onOpenDetail(s)}
 								className={cn(
-									"min-w-0 flex-1 truncate text-start text-sm",
+									"min-w-0 flex-1 text-start text-sm",
 									s.done && "text-muted-foreground",
 								)}
 							>
-								<span className={strikeClass(s.done ?? false)}>{s.title}</span>
+								<span
+									className={cn("block truncate", strikeClass(s.done ?? false))}
+								>
+									{s.title}
+								</span>
+								<CompletedBy task={s} id={`${ids}-completion-${s.id}`} />
 							</button>
 						</li>
 					))}

@@ -6,6 +6,7 @@ import {
 	openMoreOptions,
 	sidebarLists,
 	signUp,
+	switchWorkspace,
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
@@ -460,6 +461,194 @@ test("recurring task and habit controls show their distinct recorded transitions
 		await pool.query("delete from list where id=any($1::text[])", [
 			[taskListId, habitListId],
 		]);
+		await pool.end();
+	}
+});
+
+test("shared completion cues name other people and reveal time on desktop and mobile", async ({
+	browser,
+	page,
+}, testInfo) => {
+	const databaseURL = process.env.E2E_DATABASE_URL;
+	if (!databaseURL) throw new Error("E2E_DATABASE_URL is required");
+	const pool = new Pool({ connectionString: databaseURL });
+	const kidContext = await browser.newContext({
+		baseURL: new URL(testInfo.project.use.baseURL as string).origin,
+		viewport: { width: 390, height: 844 },
+		isMobile: true,
+		hasTouch: true,
+	});
+	const memberContext = await browser.newContext({
+		baseURL: new URL(testInfo.project.use.baseURL as string).origin,
+	});
+	const space = randomUUID(),
+		chores = randomUUID(),
+		routines = randomUUID(),
+		managed = randomUUID();
+	const water = randomUUID(),
+		books = randomUUID(),
+		walk = randomUUID();
+	try {
+		const owner = await signUp(page, uniqueEmail("cue-maya"));
+		const kid = await kidContext.newPage();
+		const child = await signUp(kid, uniqueEmail("cue-sam"));
+		const member = await memberContext.newPage();
+		const other = await signUp(member, uniqueEmail("cue-alex"));
+		for (const [id, name] of [
+			[owner, "Maya Chen"],
+			[child, "Sam Patel"],
+			[other, "Alex Rivera"],
+		]) {
+			await pool.query('update "user" set name=$1 where id=$2', [name, id]);
+			await pool.query(
+				"insert into user_pref(id,timezone,theme) values($1,'UTC','light') on conflict(id) do update set timezone='UTC',theme='light'",
+				[id],
+			);
+		}
+		await pool.query(
+			"insert into workspace(id,name,owner_id,kind) values($1,'Maple House',$2,'shared')",
+			[space, owner],
+		);
+		for (const [id, role] of [
+			[owner, "owner"],
+			[child, "member"],
+			[other, "member"],
+		])
+			await pool.query(
+				"insert into membership(id,workspace_id,user_id,role) values($1,$2,$3,$4)",
+				[randomUUID(), space, id, role],
+			);
+		await pool.query(
+			"insert into managed_account(id,user_id,guardian_id,restricted) values($1,$2,$3,true)",
+			[managed, child, owner],
+		);
+		await pool.query(
+			"insert into list(id,workspace_id,owner_id,title,kind,sort_key,completed_display) values($1,$3,$4,'Weekend chores','checklist','a0','keep'),($2,$3,$4,'Daily routines','habits','a1','keep')",
+			[chores, routines, space, owner],
+		);
+		await pool.query(
+			"insert into task(id,list_id,title,sort_key) values($1,$3,'Water the balcony plants','a0'),($2,$3,'Return library books','a1')",
+			[water, books, chores],
+		);
+		await pool.query(
+			"insert into task(id,list_id,title,sort_key,rrule) values($1,$2,'Walk Luna before breakfast','a0','FREQ=DAILY')",
+			[walk, routines],
+		);
+		for (const task of [water, books])
+			await pool.query(
+				"insert into task_assignee(id,task_id,user_id) values($1,$2,$3)",
+				[randomUUID(), task, child],
+			);
+		await expect(kid.getByTestId("restricted-shell")).toBeVisible();
+		await kid
+			.getByRole("checkbox", { name: "Water the balcony plants", exact: true })
+			.check();
+		await switchWorkspace(page, "Maple House");
+		await sidebarLists(page)
+			.getByRole("button", { name: "Weekend chores", exact: true })
+			.click();
+		const waterRow = page.locator("[data-kbd-row]").filter({
+			has: page.getByRole("checkbox", {
+				name: "Water the balcony plants",
+				exact: true,
+			}),
+		});
+		const cue = waterRow.getByTestId("completed-by");
+		await expect(cue).toContainText(/Done by.*Sam Patel/u);
+		await expect(kid.getByTestId("completed-by")).toHaveCount(0);
+		const visibleTime = cue.locator('[aria-hidden="true"]');
+		await page.mouse.move(0, 0);
+		await page.evaluate(() => {
+			if (document.activeElement instanceof HTMLElement)
+				document.activeElement.blur();
+		});
+		await expect(visibleTime).toBeHidden();
+		await waterRow.hover();
+		await expect(visibleTime).toBeVisible();
+		await page.mouse.move(0, 0);
+		await waterRow.getByRole("checkbox").focus();
+		await expect(visibleTime).toBeVisible();
+		await expect(waterRow.getByRole("checkbox")).toHaveAccessibleDescription(
+			/Done by.*Sam Patel.*Recorded/u,
+		);
+		for (const theme of ["light", "dark"]) {
+			await pool.query("update user_pref set theme=$1 where id=$2", [
+				theme,
+				owner,
+			]);
+			if (theme === "dark")
+				await expect(page.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
+			else
+				await expect(page.locator("html")).not.toHaveClass(/(^|\s)dark(\s|$)/);
+			await page.screenshot({
+				path: testInfo.outputPath(`shared-completion-desktop-${theme}.png`),
+				animations: "disabled",
+			});
+		}
+		await page
+			.getByRole("checkbox", { name: "Return library books", exact: true })
+			.check();
+		const kidBooks = kid
+			.getByTestId("restricted-task")
+			.filter({ hasText: "Return library books" });
+		await expect(kidBooks.getByTestId("completed-by")).toContainText(
+			/Done by.*Maya Chen/u,
+		);
+		await kidBooks.getByRole("checkbox").focus();
+		await expect(
+			kidBooks.getByTestId("completed-by").locator('[aria-hidden="true"]'),
+		).toBeVisible();
+		for (const theme of ["light", "dark"]) {
+			await pool.query("update user_pref set theme=$1 where id=$2", [
+				theme,
+				child,
+			]);
+			if (theme === "dark")
+				await expect(kid.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
+			else
+				await expect(kid.locator("html")).not.toHaveClass(/(^|\s)dark(\s|$)/);
+			const { violations } = await new AxeBuilder({ page: kid }).analyze();
+			expect(
+				violations.filter(
+					(v) => v.impact === "serious" || v.impact === "critical",
+				),
+			).toEqual([]);
+			await kid.screenshot({
+				path: testInfo.outputPath(`shared-completion-mobile-${theme}.png`),
+				animations: "disabled",
+			});
+		}
+		await switchWorkspace(member, "Maple House");
+		await sidebarLists(member)
+			.getByRole("button", { name: "Daily routines", exact: true })
+			.click();
+		await member.getByTestId("habit-done").click();
+		await sidebarLists(page)
+			.getByRole("button", { name: "Daily routines", exact: true })
+			.click();
+		await expect(
+			page.getByTestId("habit-card").getByTestId("completed-by"),
+		).toContainText(/Done by.*Alex Rivera/u);
+		await expect(member.getByTestId("completed-by")).toHaveCount(0);
+		await kid
+			.getByRole("checkbox", { name: "Water the balcony plants", exact: true })
+			.uncheck();
+		await sidebarLists(page)
+			.getByRole("button", { name: "Weekend chores", exact: true })
+			.click();
+		await expect(waterRow.getByTestId("completed-by")).toHaveCount(0);
+	} finally {
+		await kidContext.close();
+		await memberContext.close();
+		await pool.query("delete from managed_account where id=$1", [managed]);
+		await pool.query("delete from task where id=any($1::text[])", [
+			[water, books, walk],
+		]);
+		await pool.query("delete from list where id=any($1::text[])", [
+			[chores, routines],
+		]);
+		await pool.query("delete from membership where workspace_id=$1", [space]);
+		await pool.query("delete from workspace where id=$1", [space]);
 		await pool.end();
 	}
 });

@@ -2111,5 +2111,6 @@
 	"completion_history_previous": "Précédent",
 	"completion_history_next": "Suivant",
 	"completion_history_page": "Page {page}",
-	"completion_history_unavailable": "L’historique de cette tâche est indisponible."
+	"completion_history_unavailable": "L’historique de cette tâche est indisponible.",
+	"task_completed_by": "Terminé par {name}"
 }

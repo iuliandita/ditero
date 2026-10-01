@@ -77,6 +77,37 @@ export const queries = defineQueries({
 		),
 	},
 	taskCompletionEvents: {
+		latest: defineQuery(
+			z
+				.object({
+					taskId: z.string(),
+					habitDate: z
+						.string()
+						.regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)
+						.nullable(),
+				})
+				.strict(),
+			({ args, ctx }) => {
+				let latest = zql.taskCompletionEvent
+					.where("taskId", args.taskId)
+					.where(({ exists }) =>
+						exists("task", (task) =>
+							task.where(({ exists: related }) =>
+								related("list", (list) => list.where(workspaceVisible(ctx))),
+							),
+						),
+					);
+				latest =
+					args.habitDate === null
+						? latest.where("habitDate", "IS", null)
+						: latest.where("habitDate", args.habitDate);
+				return latest
+					.orderBy("recordedAt", "desc")
+					.orderBy("id", "desc")
+					.limit(1)
+					.related("actor");
+			},
+		),
 		page: defineQuery(
 			z
 				.object({

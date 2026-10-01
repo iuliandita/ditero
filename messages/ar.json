@@ -2249,5 +2249,6 @@
 	"completion_history_previous": "السابق",
 	"completion_history_next": "التالي",
 	"completion_history_page": "الصفحة {page}",
-	"completion_history_unavailable": "سجل هذه المهمة غير متاح."
+	"completion_history_unavailable": "سجل هذه المهمة غير متاح.",
+	"task_completed_by": "أكملها {name}"
 }

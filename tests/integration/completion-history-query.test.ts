@@ -38,6 +38,18 @@ const page = (
 		}),
 	);
 
+const latest = (
+	userId: string,
+	taskId = TASK,
+	habitDate: string | null = null,
+) =>
+	zdb.run(
+		queries.taskCompletionEvents.latest.fn({
+			args: { taskId, habitDate },
+			ctx: { id: userId },
+		}),
+	);
+
 async function clean() {
 	await db
 		.delete(tables.task)
@@ -152,8 +164,70 @@ test("bounded pages preserve timestamp ties and exact millisecond cursors", asyn
 	expect(await page(VIEWER, TASK, cursor(end))).toEqual([]);
 });
 
+test("latest completion is capped at one row and preserves timestamp tie ordering", async () => {
+	const rows = await latest(VIEWER);
+	expect(rows).toHaveLength(1);
+	expect(rows[0]?.id).toBe("00000000-0000-4000-8000-000000000101");
+	expect(rows[0]?.actor?.id).toBe(OWNER);
+});
+
+test("latest retains invalidating transitions and isolates the displayed habit date", async () => {
+	const ids = [
+		"10000000-0000-4000-8000-000000000001",
+		"10000000-0000-4000-8000-000000000002",
+		"10000000-0000-4000-8000-000000000003",
+	];
+	await db.insert(tables.taskCompletionEvent).values([
+		{
+			id: ids[0],
+			taskId: TASK,
+			actorUserId: OWNER,
+			recordedAt: new Date(STAMP + 1000),
+			origin: "member_mutation",
+			action: "reopen",
+			beforeDueAllDay: false,
+			beforeDone: true,
+			afterDone: false,
+		},
+		{
+			id: ids[1],
+			taskId: TASK,
+			actorUserId: OWNER,
+			recordedAt: new Date(STAMP + 2000),
+			origin: "member_mutation",
+			action: "habit_set",
+			habitDate: "2026-10-01",
+			afterHabitStatus: "done",
+		},
+		{
+			id: ids[2],
+			taskId: TASK,
+			actorUserId: OWNER,
+			recordedAt: new Date(STAMP + 3000),
+			origin: "member_mutation",
+			action: "habit_unlog",
+			habitDate: "2026-10-01",
+			beforeHabitStatus: "done",
+		},
+	]);
+	try {
+		expect((await latest(VIEWER))[0]?.action).toBe("reopen");
+		expect((await latest(VIEWER, TASK, "2026-10-01"))[0]?.action).toBe(
+			"habit_unlog",
+		);
+		expect(await latest(VIEWER, TASK, "2026-10-02")).toEqual([]);
+	} finally {
+		await db
+			.delete(tables.taskCompletionEvent)
+			.where(inArray(tables.taskCompletionEvent.id, ids));
+	}
+});
+
 test("foreign and missing tasks reveal no events, while a visible actor remains attributable", async () => {
 	expect(await page(OUTSIDER)).toEqual([]);
+	expect(await latest(OUTSIDER)).toEqual([]);
+	expect(await latest(VIEWER, "history-query-missing")).toEqual([]);
+	expect(await latest(VIEWER, FOREIGN_TASK)).toEqual([]);
 	expect(await page(VIEWER, "history-query-missing")).toEqual([]);
 	expect(await page(VIEWER, FOREIGN_TASK)).toEqual([]);
 	const rows = await page(VIEWER);
@@ -169,6 +243,7 @@ test("each page rechecks current membership", async () => {
 		.where(eq(tables.membership.id, "history-query-viewer-seat"));
 	try {
 		expect(await page(VIEWER, TASK, cursor(last))).toEqual([]);
+		expect(await latest(VIEWER)).toEqual([]);
 	} finally {
 		await db.insert(tables.membership).values({
 			id: "history-query-viewer-seat",
