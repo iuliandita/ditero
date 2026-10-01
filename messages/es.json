@@ -1453,6 +1453,8 @@
 	"sync_rejected_title": "Un cambio no se guardó",
 	"sync_rejected_detail": "El servidor rechazó un cambio, así que se deshizo. Revisa el elemento e inténtalo de nuevo.",
 	"sync_rejected_dismiss": "Cerrar",
+	"sync_auth_rejected_title": "Inicio de sesión para sincronizar rechazado",
+	"sync_auth_rejected_detail": "El servidor no acepta tu inicio de sesión. Se volverá a intentar con menos frecuencia. Tus cambios siguen guardados en este dispositivo.",
 	"sync_reauth_title": "Inicia sesión para sincronizar",
 	"sync_reauth_detail": "Tu sesión caducó mientras no estabas. Tus cambios se quedan en este dispositivo y se sincronizarán cuando vuelvas a iniciar sesión.",
 	"sync_reauth_action": "Iniciar sesión de nuevo",

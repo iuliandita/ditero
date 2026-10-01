@@ -41,6 +41,7 @@ export type SyncPhase =
 	| "syncing"
 	| "offline"
 	| "reauth"
+	| "auth-rejected"
 	| "stopped"
 	| "rejected";
 
@@ -51,6 +52,7 @@ export function deriveSyncPhase({
 	pending,
 	rejected,
 	sessionExpired,
+	authRejected,
 	offlineSettled,
 }: {
 	connection: ConnectionName;
@@ -59,6 +61,7 @@ export function deriveSyncPhase({
 	pending: number;
 	rejected: boolean;
 	sessionExpired: boolean;
+	authRejected: boolean;
 	// The browser reports no network, or a reconnect has outlasted the grace.
 	offlineSettled: boolean;
 }): SyncPhase {
@@ -73,6 +76,7 @@ export function deriveSyncPhase({
 		return "stopped";
 	if (connection === "needs-auth" && sessionExpired) return "reauth";
 	if (rejected) return "rejected";
+	if (connection !== "connected" && authRejected) return "auth-rejected";
 	if (connection !== "connected") return offlineSettled ? "offline" : "syncing";
 	return pending > 0 ? "syncing" : "synced";
 }
@@ -83,6 +87,7 @@ export type SyncSnapshot = {
 	pending: number;
 	rejected: boolean;
 	sessionExpired: boolean;
+	authRejected: boolean;
 };
 
 // Counts writes made in this tab that the server has not confirmed. A write
@@ -97,10 +102,12 @@ export function createSyncTracker() {
 	let awaitingReconnect = 0;
 	let rejected = false;
 	let sessionExpired = false;
+	let authRejected = false;
 	let snapshot: SyncSnapshot = {
 		pending: 0,
 		rejected: false,
 		sessionExpired: false,
+		authRejected: false,
 	};
 	const listeners = new Set<() => void>();
 
@@ -109,11 +116,13 @@ export function createSyncTracker() {
 			pending: inFlight + awaitingReconnect,
 			rejected,
 			sessionExpired,
+			authRejected,
 		};
 		if (
 			next.pending === snapshot.pending &&
 			next.rejected === snapshot.rejected &&
-			next.sessionExpired === snapshot.sessionExpired
+			next.sessionExpired === snapshot.sessionExpired &&
+			next.authRejected === snapshot.authRejected
 		)
 			return;
 		snapshot = next;
@@ -145,6 +154,10 @@ export function createSyncTracker() {
 		},
 		dismissRejection() {
 			rejected = false;
+			publish();
+		},
+		setAuthRejected(value: boolean) {
+			authRejected = value;
 			publish();
 		},
 		setSessionExpired(expired: boolean) {

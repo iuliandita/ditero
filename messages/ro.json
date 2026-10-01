@@ -1453,6 +1453,8 @@
 	"sync_rejected_title": "O modificare nu a fost salvată",
 	"sync_rejected_detail": "Serverul a refuzat o modificare, așa că a fost anulată. Verifică elementul și încearcă din nou.",
 	"sync_rejected_dismiss": "Închide",
+	"sync_auth_rejected_title": "Autentificarea pentru sincronizare a fost refuzată",
+	"sync_auth_rejected_detail": "Serverul nu acceptă autentificarea ta. Vom încerca din nou mai rar. Modificările tale rămân salvate pe acest dispozitiv.",
 	"sync_reauth_title": "Autentifică-te ca să sincronizezi",
 	"sync_reauth_detail": "Autentificarea ta a expirat cât ai fost plecat. Modificările tale rămân pe acest dispozitiv și se sincronizează după ce te autentifici din nou.",
 	"sync_reauth_action": "Autentifică-te din nou",

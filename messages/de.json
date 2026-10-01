@@ -1424,6 +1424,8 @@
 	"sync_rejected_title": "Eine Änderung wurde nicht gespeichert",
 	"sync_rejected_detail": "Der Server hat eine Änderung abgelehnt, deshalb wurde sie rückgängig gemacht. Prüf den Eintrag und versuch es noch einmal.",
 	"sync_rejected_dismiss": "Schließen",
+	"sync_auth_rejected_title": "Anmeldung zur Synchronisierung abgelehnt",
+	"sync_auth_rejected_detail": "Der Server akzeptiert deine Anmeldung nicht. Neue Versuche erfolgen seltener. Deine Änderungen bleiben auf diesem Gerät gespeichert.",
 	"sync_reauth_title": "Zum Synchronisieren anmelden",
 	"sync_reauth_detail": "Deine Anmeldung ist abgelaufen, während du weg warst. Deine Änderungen bleiben auf diesem Gerät und werden synchronisiert, sobald du dich wieder anmeldest.",
 	"sync_reauth_action": "Erneut anmelden",

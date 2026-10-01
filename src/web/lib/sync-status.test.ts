@@ -42,8 +42,34 @@ describe("deriveSyncPhase", () => {
 		pending: 0,
 		rejected: false,
 		sessionExpired: false,
+		authRejected: false,
 		offlineSettled: false,
 	};
+
+	it("distinguishes server auth rejection while preserving refusal precedence and queued edits", () => {
+		const rejected = {
+			...base,
+			connection: "needs-auth" as const,
+			authRejected: true,
+			pending: 2,
+		};
+		expect(deriveSyncPhase(rejected)).toBe("auth-rejected");
+		expect(deriveSyncPhase({ ...rejected, sessionExpired: true })).toBe(
+			"reauth",
+		);
+		expect(deriveSyncPhase({ ...rejected, rejected: true })).toBe("rejected");
+		expect(deriveSyncPhase({ ...rejected, connection: "closed" })).toBe(
+			"stopped",
+		);
+		expect(deriveSyncPhase({ ...rejected, connection: "connected" })).toBe(
+			"syncing",
+		);
+		const tracker = createSyncTracker();
+		tracker.setAuthRejected(true);
+		expect(tracker.getSnapshot().authRejected).toBe(true);
+		tracker.setAuthRejected(false);
+		expect(tracker.getSnapshot().authRejected).toBe(false);
+	});
 
 	it("is synced only when connected with nothing pending", () => {
 		expect(deriveSyncPhase(base)).toBe("synced");

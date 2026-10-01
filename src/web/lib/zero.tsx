@@ -119,6 +119,7 @@ export function AppZeroProvider({
 					});
 					stopAuthRefresh = watchZeroAuth(instance, undefined, undefined, {
 						onSessionExpired: tracker.setSessionExpired,
+						onAuthRejected: tracker.setAuthRejected,
 					});
 					return { zero: instance, tracker };
 				},
