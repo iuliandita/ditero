@@ -66,7 +66,7 @@ export type ImportTargetCollection = keyof typeof IMPORT_TARGETS;
 
 export function taskCreatedAtPresent(
 	collection: ImportTargetCollection,
-	payload: PortableJson,
+	payload: unknown,
 ): boolean {
 	return (
 		collection === "tasks" &&
