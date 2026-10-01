@@ -10,6 +10,7 @@ replacement Go module manifests and checksums, generated from that source with:
 
 ```sh
 go get golang.org/x/crypto@v0.56.0 google.golang.org/grpc@v1.83.2
+go get go.opentelemetry.io/otel/sdk@v1.45.0
 # Legacy only:
 go get filippo.io/age@v1.2.1
 go mod tidy
