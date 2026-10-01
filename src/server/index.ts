@@ -129,7 +129,7 @@ const routes = new Elysia()
 	.use(
 		nativeAuthRoutes({
 			pool,
-			guards: { guardedPost },
+			guards: { guardedPost, guardedGet },
 			async signZeroToken(session) {
 				const result = await auth.api.signJWT({
 					body: { payload: nativeZeroPayload(session) },

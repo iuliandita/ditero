@@ -658,3 +658,155 @@ test("real browser cookie and origin guards authorize the route exchange", async
 		).status,
 	).toBe(401);
 });
+
+test("grant preview exposes only metadata while pending and approved, then refuses a consumed claim", async () => {
+	const owner = await person();
+	const grantId = await pending();
+	const expiry = (
+		await admin.query("select expires_at from native_auth_grant where id=$1", [
+			grantId,
+		])
+	).rows[0].expires_at;
+	expect(await store.preview(grantId, owner.id, owner.browser.id)).toEqual({
+		deviceLabel: "Test device",
+		expiresAt: expiry,
+		state: "pending",
+	});
+	expect(await store.approve(grantId, owner.id, owner.browser.id)).toBe(
+		"approved",
+	);
+	expect(await store.preview(grantId, owner.id, owner.browser.id)).toEqual({
+		deviceLabel: "Test device",
+		expiresAt: expiry,
+		state: "approved",
+	});
+	await successful(grantId);
+	expect(await store.preview(grantId, owner.id, owner.browser.id)).toBeNull();
+});
+
+test("grant preview refuses unknown and expired metadata", async () => {
+	const owner = await person();
+	expect(
+		await store.preview(
+			randomBytes(32).toString("base64url"),
+			owner.id,
+			owner.browser.id,
+		),
+	).toBeNull();
+	const grantId = await pending();
+	await admin.query(
+		"update native_auth_grant set expires_at=now()-interval '1 second' where id=$1",
+		[grantId],
+	);
+	expect(await store.preview(grantId, owner.id, owner.browser.id)).toBeNull();
+});
+
+test("grant preview refuses another approved user and a revoked original approver even with a live replacement browser session", async () => {
+	const f = await approved();
+	const stranger = await person();
+	expect(
+		await store.preview(f.grantId, stranger.id, stranger.browser.id),
+	).toBeNull();
+	const replacement = await sessions.createSession(f.id);
+	expect(await store.preview(f.grantId, f.id, replacement.id)).toMatchObject({
+		state: "approved",
+	});
+	await sessions.deleteSession(f.browser.token);
+	expect(await store.preview(f.grantId, f.id, replacement.id)).toBeNull();
+});
+
+test("grant preview requires a live current browser and user, refusing native and missing sessions", async () => {
+	const f = await approved();
+	const native = await successful(f.grantId);
+	const grantId = await pending();
+	expect(await store.preview(grantId, f.id, native.sessionId)).toBeNull();
+	expect(await store.preview(grantId, f.id, randomUUID())).toBeNull();
+	const deleted = await sessions.createSession(f.id);
+	await sessions.deleteSession(deleted.token);
+	expect(await store.preview(grantId, f.id, deleted.id)).toBeNull();
+	const expired = await sessions.createSession(f.id);
+	await admin.query(
+		"update session set expires_at=now()-interval '1 second' where id=$1",
+		[expired.id],
+	);
+	expect(await store.preview(grantId, f.id, expired.id)).toBeNull();
+	expect(await store.preview(grantId, f.id, f.browser.id)).toMatchObject({
+		state: "pending",
+	});
+	await admin.query('update "user" set deleted_at=now() where id=$1', [f.id]);
+	expect(await store.preview(grantId, f.id, f.browser.id)).toBeNull();
+});
+
+test("grant preview GET uses real browser guards, validates the capability, and never caches metadata or refusals", async () => {
+	const owner = await person();
+	const grantId = await pending();
+	const context = await auth.$context;
+	const signed = `${owner.browser.token}.${await makeSignature(owner.browser.token, context.secret)}`;
+	const cookie = `${context.authCookies.sessionToken.name}=${encodeURIComponent(signed)}`;
+	const routes = nativeAuthRoutes({
+		pool: restricted,
+		sessions,
+		guards: makeGuards([origin], (headers) => auth.api.getSession({ headers })),
+		rateLimit: async () => true,
+		signZeroToken: async (session) =>
+			(
+				await auth.api.signJWT({
+					body: { payload: nativeZeroPayload(session) },
+				})
+			).token,
+	});
+	const get = async (query: string, headers: Record<string, string>) => {
+		const response = await routes.handle(
+			new Request(`${origin}/api/native/grants/preview${query}`, { headers }),
+		);
+		expect(response.headers.get("cache-control")).toBe("no-store");
+		return response;
+	};
+	const query = `?grantId=${grantId}`;
+	const preview = await get(query, { cookie });
+	expect(preview.status).toBe(200);
+	const expiry = (
+		await admin.query("select expires_at from native_auth_grant where id=$1", [
+			grantId,
+		])
+	).rows[0].expires_at as Date;
+	expect(await preview.json()).toEqual({
+		deviceLabel: "Test device",
+		expiresAt: expiry.toISOString(),
+		state: "pending",
+	});
+	const unknown = await get(
+		`?grantId=${randomBytes(32).toString("base64url")}`,
+		{ cookie },
+	);
+	expect(unknown.status).toBe(404);
+	expect(await unknown.json()).toEqual({ code: "invalid-grant" });
+	for (const malformed of ["", "?grantId=short", `${query}&grantId=${grantId}`])
+		expect((await get(malformed, { cookie })).status).toBe(400);
+	expect((await get(query, {})).status).toBe(401);
+	const orphan = await sessions.createSession(owner.id);
+	expect(
+		(await get(query, { authorization: `Bearer ${orphan.token}` })).status,
+	).toBe(401);
+	expect(
+		(await get(query, { cookie, origin: "https://foreign.example" })).status,
+	).toBe(403);
+	expect(
+		(
+			await get(query, {
+				cookie,
+				authorization: `Bearer ${owner.browser.token}`,
+			})
+		).status,
+	).toBe(400);
+	expect(await store.approve(grantId, owner.id, owner.browser.id)).toBe(
+		"approved",
+	);
+	expect(await (await get(query, { cookie })).json()).toEqual({
+		deviceLabel: "Test device",
+		expiresAt: expiry.toISOString(),
+		state: "approved",
+	});
+	await successful(grantId);
+	expect((await get(query, { cookie })).status).toBe(404);
+});

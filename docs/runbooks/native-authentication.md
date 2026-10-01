@@ -1,8 +1,7 @@
 # Native authentication handoff
 
-This API prepares native authentication. Desktop and Android applications,
-browser approval screens and native credential storage are
-not delivered by this slice.
+This API and browser approval screen prepare native authentication. Desktop and
+Android applications and native credential storage are not delivered by this slice.
 
 The client generates a random PKCE verifier with 43 to 128 unreserved ASCII
 characters, then computes its SHA-256 challenge in canonical unpadded base64url.
@@ -11,12 +10,19 @@ Only S256 is supported. The verifier stays with the client.
 | Endpoint | Request | Credentials |
 | --- | --- | --- |
 | `POST /api/native/grants` | `{ "challenge": "...", "deviceLabel": "Phone" }` | No Cookie, Origin, or Authorization header |
+| `GET /api/native/grants/preview?grantId=...` | No body | Browser session cookie; no Authorization header |
 | `POST /api/native/grants/approve` | `{ "grantId": "..." }` | Browser session cookie and an allowed Origin; no Authorization header |
 | `POST /api/native/grants/exchange` | `{ "grantId": "...", "verifier": "..." }` | No Cookie, Origin, or Authorization header |
 | `GET /api/native/session` | No body | Native session token in the Bearer header; no Cookie or Origin header |
 | `GET /api/native/token` | No body | Native session token in the Bearer header; no Cookie or Origin header |
 
 Creation returns `grantId` and `expiresAt`. Grants expire after five minutes.
+Open `/native/authorize?grantId=...` on the selected server in the system browser.
+The page uses the existing sign-in flow, shows the device and signed-in account,
+and requires an explicit approval. It returns no session token to the browser.
+Preview exposes only the device label, expiry, and pending or approved status.
+An approved grant is visible only to its approving account while the original
+approving session remains live. Cancel leaves the request unapproved.
 Approval derives the user and approving session from the browser, not from
 request fields. A native session cannot approve another grant. There is no
 caller-supplied callback URL.

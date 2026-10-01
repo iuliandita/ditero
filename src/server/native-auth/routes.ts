@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import type { Guards } from "../guards.ts";
 import {
 	hasAmbientCredentials,
+	isCanonicalId,
 	parseApprove,
 	parseCreate,
 	parseExchange,
@@ -15,7 +16,7 @@ import { NativeExchangeError, NativeGrantStore } from "./store.ts";
 export type NativeAuthDependencies = {
 	pool: Pool;
 	sessions: Sessions;
-	guards: Pick<Guards, "guardedPost">;
+	guards: Pick<Guards, "guardedPost" | "guardedGet">;
 	rateLimit: (request: Request, peerAddress?: string) => Promise<boolean>;
 	signZeroToken: (session: NativeSession) => Promise<string>;
 };
@@ -70,6 +71,21 @@ export function nativeAuthRoutes(deps: NativeAuthDependencies) {
 		if (outcome !== "approved") return reply("invalid-grant", 400);
 		return ok({ approved: true });
 	});
+	const preview = deps.guards.guardedGet(async (request, session) => {
+		if (request.headers.has("authorization"))
+			return reply("credentials-not-allowed", 400);
+		if (!(await rateLimit(request))) return limited();
+		const ids = new URL(request.url).searchParams.getAll("grantId");
+		if (ids.length !== 1 || !isCanonicalId(ids[0]))
+			return reply("invalid-request", 400);
+		const grant = await store.preview(
+			ids[0],
+			session.user.id,
+			session.session.id,
+		);
+		if (!grant) return reply("invalid-grant", 404);
+		return ok({ ...grant, expiresAt: grant.expiresAt.toISOString() });
+	});
 
 	return new Elysia()
 		.onError(() => {
@@ -80,6 +96,9 @@ export function nativeAuthRoutes(deps: NativeAuthDependencies) {
 			const peerAddress = server?.requestIP(request)?.address;
 			if (peerAddress) peers.set(request, peerAddress);
 		})
+		.get("/api/native/grants/preview", async (context) =>
+			noStore(await preview(context)),
+		)
 		.post(
 			"/api/native/grants",
 			async ({ request }) => {

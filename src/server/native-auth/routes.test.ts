@@ -17,7 +17,10 @@ function app(rateLimit = async () => true) {
 	const routes = nativeAuthRoutes({
 		pool,
 		sessions: { createSession: vi.fn(), deleteSession: vi.fn() },
-		guards: { guardedPost: guardedPost as never },
+		guards: {
+			guardedPost: guardedPost as never,
+			guardedGet: guardedPost as never,
+		},
 		rateLimit,
 		signZeroToken,
 	});

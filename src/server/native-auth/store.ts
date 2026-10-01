@@ -133,6 +133,39 @@ export class NativeGrantStore {
 		return { grantId, expiresAt: result.rows[0].expires_at };
 	}
 
+	async preview(grantId: string, userId: string, sessionId: string) {
+		const result = await this.pool.query<{
+			device_label: string;
+			expires_at: Date;
+			approved: boolean;
+		}>(
+			`select g.device_label, g.expires_at, g.approved_at is not null as approved
+			from native_auth_grant g
+			where g.id = $1 and g.expires_at > statement_timestamp()
+				and g.consumed_at is null
+				and (g.approved_user_id is null or g.approved_user_id = $2)
+				and exists (
+					select 1 from session s join "user" u on u.id = s.user_id
+					where s.id = $3 and s.user_id = $2
+						and s.expires_at > statement_timestamp() and u.deleted_at is null
+						and not exists (select 1 from native_session_link l where l.session_id = s.id)
+				)
+				and (g.approved_at is null or exists (
+					select 1 from session a where a.id = g.approved_session_id
+						and a.user_id = $2 and a.expires_at > statement_timestamp()
+				))`,
+			[grantId, userId, sessionId],
+		);
+		const row = result.rows[0];
+		return row
+			? {
+					deviceLabel: row.device_label,
+					expiresAt: row.expires_at,
+					state: row.approved ? ("approved" as const) : ("pending" as const),
+				}
+			: null;
+	}
+
 	// Bounded so unauthenticated creation cannot leave unlimited rows behind.
 	async prune(batch: number = PRUNE_BATCH): Promise<number> {
 		const result = await this.pool.query(
