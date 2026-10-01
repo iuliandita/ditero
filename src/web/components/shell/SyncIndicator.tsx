@@ -69,6 +69,13 @@ const PHASE: Record<
 		detail: m.sync_stopped_detail,
 		announce: true,
 	},
+	"auth-rejected": {
+		icon: CloudAlert,
+		tone: "text-warning",
+		title: m.sync_auth_rejected_title,
+		detail: m.sync_auth_rejected_detail,
+		announce: true,
+	},
 	rejected: {
 		icon: CloudAlert,
 		tone: "text-destructive",

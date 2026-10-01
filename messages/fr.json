@@ -1453,6 +1453,8 @@
 	"sync_rejected_title": "Une modification n'a pas été enregistrée",
 	"sync_rejected_detail": "Le serveur a refusé une modification, elle a donc été annulée. Vérifie l'élément et réessaie.",
 	"sync_rejected_dismiss": "Fermer",
+	"sync_auth_rejected_title": "Connexion pour la synchronisation refusée",
+	"sync_auth_rejected_detail": "Le serveur n’accepte pas ta connexion. Les tentatives sont moins fréquentes. Tes modifications restent enregistrées sur cet appareil.",
 	"sync_reauth_title": "Connecte-toi pour synchroniser",
 	"sync_reauth_detail": "Ta connexion a expiré pendant ton absence. Tes modifications restent sur cet appareil et seront synchronisées quand tu te reconnecteras.",
 	"sync_reauth_action": "Se reconnecter",

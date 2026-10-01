@@ -1424,6 +1424,8 @@
 	"sync_rejected_title": "A change wasn't saved",
 	"sync_rejected_detail": "The server refused a change, so it was undone. Check the item and try again.",
 	"sync_rejected_dismiss": "Dismiss",
+	"sync_auth_rejected_title": "Sync sign-in refused",
+	"sync_auth_rejected_detail": "The server is not accepting your sign-in. Trying again less often. Your changes remain saved on this device.",
 	"sync_reauth_title": "Sign in to sync",
 	"sync_reauth_detail": "Your sign-in expired while you were away. Your edits are kept on this device and sync after you sign in again.",
 	"sync_reauth_action": "Sign in again",

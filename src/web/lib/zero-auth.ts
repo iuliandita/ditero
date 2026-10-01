@@ -44,45 +44,130 @@ export function watchZeroAuth(
 	onError: (error: unknown) => void = console.error,
 	{
 		onSessionExpired = () => {},
+		onAuthRejected = () => {},
 		retrySignals = onNetworkOrFocus,
 	}: {
 		onSessionExpired?: (expired: boolean) => void;
+		onAuthRejected?: (rejected: boolean) => void;
 		retrySignals?: (retry: () => void) => () => void;
 	} = {},
 ): () => void {
 	let pending: Promise<void> | undefined;
 	let stopped = false;
-	let retryRequested = false;
+	let terminalRefusal = false;
+	let failures = 0;
+	let authRejections = 0;
+	let nextAttemptAt = 0;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	let cycle: { authSent: boolean; failed: boolean } | undefined;
+	let previousState = zero.connection.state.current.name;
 
-	const onState = (state: ConnectionState) => {
-		if (state.name !== "needs-auth" || pending || stopped) return;
+	function clearTimer() {
+		clearTimeout(timer);
+		timer = undefined;
+	}
+
+	function fail(attempt: NonNullable<typeof cycle>, authRejected = false) {
+		if (attempt.failed) return;
+		attempt.failed = true;
+		failures++;
+		nextAttemptAt =
+			Date.now() + Math.min(1000 * 2 ** Math.min(failures - 1, 5), 30_000);
+		if (authRejected) {
+			authRejections++;
+			onAuthRejected(authRejections >= 3);
+		}
+	}
+
+	function retry() {
+		if (
+			stopped ||
+			pending ||
+			(cycle?.authSent && !cycle.failed) ||
+			terminalRefusal ||
+			zero.connection.state.current.name !== "needs-auth"
+		)
+			return;
+		const remaining = nextAttemptAt - Date.now();
+		if (remaining > 0) {
+			if (timer === undefined)
+				timer = setTimeout(() => {
+					timer = undefined;
+					retry();
+				}, remaining);
+			return;
+		}
+		clearTimer();
+		const attempt = { authSent: false, failed: false };
+		cycle = attempt;
 		pending = (async () => {
 			const auth = await getToken();
+			if (
+				stopped ||
+				cycle !== attempt ||
+				zero.connection.state.current.name === "connected"
+			)
+				return;
 			onSessionExpired(false);
-			if (!stopped) await zero.connection.connect({ auth });
+			attempt.authSent = true;
+			await zero.connection.connect({ auth });
 		})()
 			.catch((error: unknown) => {
-				if (error instanceof SessionExpiredError) onSessionExpired(true);
+				if (stopped || cycle !== attempt) return;
+				fail(attempt);
+				if (error instanceof SessionExpiredError) {
+					terminalRefusal = true;
+					clearTimer();
+					onSessionExpired(true);
+				}
 				onError(error);
 			})
 			.finally(() => {
 				pending = undefined;
-				if (retryRequested) {
-					retryRequested = false;
-					onState(zero.connection.state.current);
-				}
+				if (!stopped && (cycle !== attempt || attempt.failed)) retry();
 			});
+	}
+
+	const onState = (state: ConnectionState) => {
+		if (stopped) return;
+		const transitioned = state.name !== previousState;
+		previousState = state.name;
+		if (state.name === "connected") {
+			clearTimer();
+			failures = 0;
+			authRejections = 0;
+			nextAttemptAt = 0;
+			cycle = undefined;
+			terminalRefusal = false;
+			onSessionExpired(false);
+			onAuthRejected(false);
+		} else if (state.name === "needs-auth") {
+			// The public needs-auth transition means the submitted credential was
+			// refused; duplicate state notifications are not new rejections.
+			if (transitioned && cycle?.authSent) fail(cycle, true);
+			retry();
+		}
 	};
 
 	const unsubscribe = zero.connection.state.subscribe(onState);
 	const stopRetry = retrySignals(() => {
-		if (stopped || zero.connection.state.current.name !== "needs-auth") return;
-		if (pending) retryRequested = true;
-		else onState(zero.connection.state.current);
+		if (
+			stopped ||
+			pending ||
+			(cycle?.authSent && !cycle.failed) ||
+			zero.connection.state.current.name !== "needs-auth" ||
+			Date.now() < nextAttemptAt
+		)
+			return;
+		// A refused session never starts a timer. Only a later explicit signal
+		// may check whether another tab has restored the session.
+		terminalRefusal = false;
+		retry();
 	});
 	onState(zero.connection.state.current);
 	return () => {
 		stopped = true;
+		clearTimer();
 		unsubscribe();
 		stopRetry();
 	};

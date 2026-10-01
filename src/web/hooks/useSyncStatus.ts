@@ -41,10 +41,8 @@ export function useSyncStatus(): {
 } {
 	const connection = useConnectionState();
 	const tracker = useSyncTracker();
-	const { pending, rejected, sessionExpired } = useSyncExternalStore(
-		tracker.subscribe,
-		tracker.getSnapshot,
-	);
+	const { pending, rejected, sessionExpired, authRejected } =
+		useSyncExternalStore(tracker.subscribe, tracker.getSnapshot);
 	const browserOnline = useSyncExternalStore(
 		subscribeOnline,
 		() => navigator.onLine,
@@ -69,6 +67,7 @@ export function useSyncStatus(): {
 			pending: pendingShown,
 			rejected,
 			sessionExpired,
+			authRejected,
 			offlineSettled: graceElapsed || !browserOnline,
 		}),
 		pending: pendingShown,

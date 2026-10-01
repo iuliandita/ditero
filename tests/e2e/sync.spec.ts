@@ -201,6 +201,80 @@ async function expireSession(email: string): Promise<void> {
 	}
 }
 
+test("desktop: rejected valid tokens back off and eventually deliver queued edits", async ({
+	page,
+	context,
+}) => {
+	test.setTimeout(90_000);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	let refusing = false;
+	let recovering = false;
+	const attempts: number[] = [];
+	const tokenStatuses: number[] = [];
+	page.on("response", (response) => {
+		if (
+			(refusing || recovering) &&
+			new URL(response.url()).pathname === "/api/auth/token"
+		)
+			tokenStatuses.push(response.status());
+	});
+	await page.routeWebSocket(/\/sync\/v\d+\/connect/, (ws) => {
+		if (refusing || recovering) attempts.push(performance.now());
+		if (!refusing) {
+			ws.connectToServer();
+			return;
+		}
+		ws.send(
+			JSON.stringify([
+				"error",
+				{
+					kind: "Unauthorized",
+					message: "token rejected",
+					origin: "zeroCache",
+				},
+			]),
+		);
+	});
+	await signUp(page, uniqueEmail("sync-backoff"));
+	await openNewList(page, "Backoff");
+	const indicator = page.getByTestId("sync-indicator");
+	await expect(indicator).toHaveAttribute("data-phase", "synced", {
+		timeout: 15000,
+	});
+	await context.setOffline(true);
+	await expect(indicator).toHaveAttribute("data-phase", "offline", {
+		timeout: 20000,
+	});
+	const title = `Queued through rejection ${uniqueEmail("edit")}`;
+	await addTask(page, title);
+	expect(await serverHasTask(title)).toBe(false);
+	refusing = true;
+	await context.setOffline(false);
+	await expect(indicator).toHaveAttribute("data-phase", "auth-rejected", {
+		timeout: 30000,
+	});
+	expect(attempts).toHaveLength(4);
+	expect(tokenStatuses.length).toBeGreaterThanOrEqual(3);
+	expect(tokenStatuses.every((status) => status === 200)).toBe(true);
+	await indicator.click();
+	const popover = page.getByTestId("sync-popover");
+	await expect(popover).toContainText(
+		"Your changes remain saved on this device",
+	);
+	await expect(popover.getByTestId("sync-sign-in")).toHaveCount(0);
+	expect(await serverHasTask(title)).toBe(false);
+	recovering = true;
+	refusing = false;
+	await expect(indicator).toHaveAttribute("data-phase", "synced", {
+		timeout: 20000,
+	});
+	await expect.poll(() => serverHasTask(title), { timeout: 30000 }).toBe(true);
+	expect(attempts[2] - attempts[1]).toBeGreaterThanOrEqual(950);
+	expect(attempts[3] - attempts[2]).toBeGreaterThanOrEqual(1950);
+	expect(attempts[4] - attempts[3]).toBeGreaterThanOrEqual(3950);
+	expect(tokenStatuses.every((status) => status === 200)).toBe(true);
+});
+
 test("desktop: an expired sign-in keeps queued edits until the user signs in again", async ({
 	page,
 	context,
