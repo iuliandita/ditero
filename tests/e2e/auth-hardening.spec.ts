@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { currentTOTP } from "../totp.ts";
-import { goToSettings, signUp, uniqueEmail } from "./helpers.ts";
+import { goToSettings, leaveSettings, signUp, uniqueEmail } from "./helpers.ts";
 
 // Every assertion here that waits on an auth round trip carries an explicit
 // budget: the default only ever fit while this file happened to run first, so
@@ -153,6 +153,52 @@ test("login hierarchy: passkey and Google are secondary buttons, and an error do
 	const after = await logo.boundingBox();
 	if (!after) throw new Error("logo not found after the error");
 	expect(after.y).toBe(before.y);
+});
+
+test("offline passkey loading reports failure and recovers on reopening settings", async ({
+	page,
+	context,
+}) => {
+	await signUp(page, uniqueEmail("offline-passkeys"));
+	const pageErrors: string[] = [];
+	page.on("pageerror", (error) =>
+		pageErrors.push(error.stack ?? error.message),
+	);
+	const failedLoad = page.waitForEvent("requestfailed", {
+		predicate: (request) =>
+			new URL(request.url()).pathname ===
+			"/api/auth/passkey/list-user-passkeys",
+	});
+	await context.setOffline(true);
+	try {
+		await goToSettings(page);
+		await failedLoad;
+		await expect(
+			page.locator("#settings-security").getByRole("alert"),
+		).toHaveText("Could not load passkeys");
+		await expect(page.getByTestId("passkeys-empty")).toHaveCount(0);
+		expect(pageErrors).toEqual([]);
+		await context.setOffline(false);
+		await leaveSettings(page);
+		const loaded = page.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname ===
+					"/api/auth/passkey/list-user-passkeys" && response.ok(),
+		);
+		await goToSettings(page);
+		await loaded;
+		await expect(page.getByTestId("passkeys-empty")).toBeVisible();
+		await expect(
+			page.locator("#settings-security").getByRole("alert"),
+		).toHaveCount(0);
+		expect(pageErrors).toEqual([]);
+	} finally {
+		await context.setOffline(false);
+		await test.info().attach("passkey-load-page-errors", {
+			body: JSON.stringify(pageErrors),
+			contentType: "application/json",
+		});
+	}
 });
 
 test("enrolls and signs in with a passkey", async ({ browser }) => {

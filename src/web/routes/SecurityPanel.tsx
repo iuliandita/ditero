@@ -23,15 +23,25 @@ export function SecurityPanel() {
 		Boolean(session?.user.twoFactorEnabled),
 	);
 	const [error, setError] = useState<string | null>(null);
+	const [passkeysLoadError, setPasskeysLoadError] = useState<string | null>(
+		null,
+	);
 
 	const loadPasskeys = useCallback(async () => {
-		const result = await authClient.passkey.listUserPasskeys();
-		if (result.error) {
-			setError(authErrorMessage(result.error, m.security_error_load_passkeys));
-			return;
+		try {
+			const result = await authClient.passkey.listUserPasskeys();
+			if (result.error) {
+				setPasskeysLoadError(
+					authErrorMessage(result.error, m.security_error_load_passkeys),
+				);
+				return;
+			}
+			setPasskeys(result.data ?? []);
+			setPasskeysLoaded(true);
+			setPasskeysLoadError(null);
+		} catch {
+			setPasskeysLoadError(m.security_error_load_passkeys());
 		}
-		setPasskeys(result.data ?? []);
-		setPasskeysLoaded(true);
 	}, []);
 
 	useEffect(() => {
@@ -250,9 +260,9 @@ export function SecurityPanel() {
 
 			{session?.user.id && <EncryptedFilesPanel userId={session.user.id} />}
 
-			{error ? (
+			{error || passkeysLoadError ? (
 				<p role="alert" className="text-sm text-destructive">
-					{error}
+					{error ?? passkeysLoadError}
 				</p>
 			) : null}
 		</div>
