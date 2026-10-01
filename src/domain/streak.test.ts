@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { localDay } from "./local-day.ts";
 import { computeStreak, type HabitLogEntry } from "./streak.ts";
 
 const DAILY = "FREQ=DAILY;INTERVAL=1";
@@ -215,4 +216,21 @@ describe("computeStreak", () => {
 	test("malformed rrule fails loud", () => {
 		expect(() => computeStreak("garbage", [], TODAY)).toThrow();
 	});
+});
+
+test("creation provenance starts habit tracking in the viewer's timezone without discarding older logs", () => {
+	const createdAt = new Date("2026-07-14T01:00:00.000Z");
+	const since = localDay(createdAt, "America/Los_Angeles");
+	expect(since).toBe("2026-07-13");
+	const result = computeStreak(DAILY, [], TODAY, 30, since);
+	expect(result.heatmap).toEqual([
+		{ date: "2026-07-13", status: "missed" },
+		{ date: TODAY, status: "none" },
+	]);
+	expect(
+		computeStreak(DAILY, [done("2026-07-12")], TODAY, 30, since).heatmap[0],
+	).toEqual({ date: "2026-07-12", status: "done" });
+	expect(computeStreak(DAILY, [], TODAY).heatmap).toEqual([
+		{ date: TODAY, status: "none" },
+	]);
 });

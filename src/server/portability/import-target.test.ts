@@ -1,5 +1,9 @@
 import { expect, test } from "vitest";
-import { digestImportTarget, importTargetProjection } from "./import-target.ts";
+import {
+	digestImportTarget,
+	importTargetProjection,
+	taskCreatedAtPresent,
+} from "./import-target.ts";
 
 const task = {
 	id: "task",
@@ -72,4 +76,43 @@ test("missing fields and invalid timestamps fail instead of hashing incomplete s
 			importTargetProjection("tasks", { ...task, due_at }),
 		).toThrow();
 	}
+});
+
+test("creation timestamp fingerprints are versioned without altering legacy maps", async () => {
+	const old = await digestImportTarget("tasks", task, checkpoint);
+	expect(old).toBe(
+		"020f43564da37763efa77a625ca8eca9b1909d762e865f4640db46d8d4cbaf0f",
+	);
+	const dated = { ...task, created_at: new Date("2026-01-01T00:00:00.000Z") };
+	expect(importTargetProjection("tasks", dated)).not.toHaveProperty(
+		"createdAt",
+	);
+	expect(await digestImportTarget("tasks", dated, checkpoint)).toBe(old);
+	expect(taskCreatedAtPresent("tasks", { id: "task" })).toBe(false);
+	expect(taskCreatedAtPresent("tasks", { createdAt: null })).toBe(true);
+	expect(taskCreatedAtPresent("folders", { createdAt: null })).toBe(false);
+	expect(importTargetProjection("tasks", dated, true).createdAt).toBe(
+		"2026-01-01T00:00:00.000Z",
+	);
+	const current = await digestImportTarget("tasks", dated, checkpoint, true);
+	expect(current).not.toBe(old);
+	expect(
+		await digestImportTarget(
+			"tasks",
+			{ ...dated, created_at: null },
+			checkpoint,
+			true,
+		),
+	).not.toBe(current);
+	expect(
+		await digestImportTarget(
+			"tasks",
+			{ ...dated, created_at: new Date("2026-01-02T00:00:00.000Z") },
+			checkpoint,
+			true,
+		),
+	).not.toBe(current);
+	expect(() => importTargetProjection("tasks", task, true)).toThrow(
+		"Invalid import target timestamp",
+	);
 });

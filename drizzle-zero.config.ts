@@ -54,6 +54,7 @@ export default drizzleZeroConfig(schema, {
 			dueAllDay: true,
 			priority: true,
 			completedAt: true,
+			createdAt: true,
 			sortKey: true,
 			parentId: true,
 			quantity: true,

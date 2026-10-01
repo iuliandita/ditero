@@ -22,14 +22,19 @@ function StreakRow({
 	const { logs } = useHabitLogs(task.id);
 	const { pref } = useUserPref();
 	const today = localDay(new Date(), pref.timezone);
+	const since =
+		task.createdAt == null
+			? today
+			: localDay(new Date(task.createdAt), pref.timezone);
 	const entries = useMemo<HabitLogEntry[]>(
 		() => logs.map((l) => ({ date: l.date, status: l.status })),
 		[logs],
 	);
 	// computeStreak throws on an empty/malformed rule; only run with one set.
 	const streak = useMemo(
-		() => (task.rrule ? computeStreak(task.rrule, entries, today) : null),
-		[task.rrule, entries, today],
+		() =>
+			task.rrule ? computeStreak(task.rrule, entries, today, 30, since) : null,
+		[task.rrule, entries, today, since],
 	);
 
 	// Whole message per case: the label must never be assembled from a

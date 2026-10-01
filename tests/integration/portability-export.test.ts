@@ -1,4 +1,5 @@
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Elysia } from "elysia";
 import { Client, Pool } from "pg";
@@ -34,7 +35,7 @@ const expectedFields = {
 	lists:
 		"id workspaceId ownerId title kind icon folderId sortKey completedDisplay",
 	tasks:
-		"id listId title done notes dueAt dueAllDay priority completedAt sortKey parentId quantity unit category rrule recurrenceRelative reminderTime repeatEveryMin maxRepeats fallbackUserId urgent",
+		"id listId title done notes dueAt dueAllDay priority completedAt createdAt sortKey parentId quantity unit category rrule recurrenceRelative reminderTime repeatEveryMin maxRepeats fallbackUserId urgent",
 	labels: "id workspaceId name color",
 	taskLabels: "id taskId labelId",
 	templates: "id workspaceId kind name icon content createdBy",
@@ -903,4 +904,18 @@ describe("portable export", () => {
 			revoker.release();
 		}
 	});
+});
+
+test("native export includes known creation timestamps and leaves unknown old rows null", async () => {
+	await db
+		.update(tables.task)
+		.set({ createdAt: now })
+		.where(eq(tables.task.id, "shared-task"));
+	const output = await exported();
+	expect(
+		output.data.tasks.find((row) => row.id === "shared-task")?.createdAt,
+	).toBe(now.toISOString());
+	expect(
+		output.data.tasks.find((row) => row.id === "private-task")?.createdAt,
+	).toBeNull();
 });

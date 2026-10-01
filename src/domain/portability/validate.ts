@@ -269,6 +269,7 @@ const rows = {
 		dueAllDay: z.boolean(),
 		priority: integer.min(-32768).max(32767),
 		completedAt: timestamp.nullable(),
+		createdAt: timestamp.nullable().optional(),
 		sortKey: string,
 		parentId: id.nullable(),
 		quantity: nullableString,

@@ -7,7 +7,10 @@ import type { ImportMappings } from "../../src/domain/portability/import-plan.ts
 import type { PortableExportV1 } from "../../src/domain/portability/v1.ts";
 import { exportPortableJson } from "../../src/server/portability/export.ts";
 import { saveImportPlan } from "../../src/server/portability/import-plan-store.ts";
-import { digestImportTarget } from "../../src/server/portability/import-target.ts";
+import {
+	digestImportTarget,
+	taskCreatedAtPresent,
+} from "../../src/server/portability/import-target.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 const databaseURL = process.env.DATABASE_URL;
@@ -146,7 +149,12 @@ async function seedMappedTarget(jobId: string) {
 				item.source_id,
 				item.target_id,
 				item.content_digest,
-				await digestImportTarget(collection, target, () => {}),
+				await digestImportTarget(
+					collection,
+					target,
+					() => {},
+					taskCreatedAtPresent(collection, item.payload),
+				),
 				jobId,
 			],
 		);

@@ -5,6 +5,7 @@ import {
 	ImportPlanError,
 } from "./import-plan.ts";
 import type { PortableExportV1, PortableRows } from "./v1.ts";
+import { parsePortableExportV1 } from "./validate.ts";
 
 const date = "2026-01-01T00:00:00.000Z";
 function task(
@@ -607,4 +608,28 @@ describe("saved native dry-run plan", () => {
 		source.data.attachments = [];
 		await expect(plan(source)).rejects.toMatchObject({ code: "finding-limit" });
 	});
+});
+
+test("legacy source and item digests survive parsing while supplied creation provenance changes identity", async () => {
+	const legacy = fixture();
+	const before = await buildImportPlan(legacy, context);
+	const parsed = parsePortableExportV1(JSON.stringify(legacy));
+	const after = await buildImportPlan(parsed, context);
+	expect(after).toEqual(before);
+	expect(Object.hasOwn(parsed.data.tasks[0], "createdAt")).toBe(false);
+	for (const createdAt of [null, date]) {
+		const value = fixture();
+		value.data.tasks[0].createdAt = createdAt;
+		const changed = await buildImportPlan(value, context);
+		expect(changed.documentDigest).not.toBe(before.documentDigest);
+		expect(
+			changed.items.find(
+				(row) => row.collection === "tasks" && row.sourceId === "task",
+			)?.itemDigest,
+		).not.toBe(
+			before.items.find(
+				(row) => row.collection === "tasks" && row.sourceId === "task",
+			)?.itemDigest,
+		);
+	}
 });

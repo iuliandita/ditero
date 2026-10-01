@@ -39,6 +39,10 @@ export function HabitCard({
 	const { logs } = useHabitLogs(task.id);
 	const { pref } = useUserPref();
 	const today = localDay(new Date(), pref.timezone);
+	const since =
+		task.createdAt == null
+			? today
+			: localDay(new Date(task.createdAt), pref.timezone);
 	// Undo and Track daily unmount once used; focus lands on Done, not the body.
 	const doneRef = useRef<HTMLButtonElement>(null);
 
@@ -52,8 +56,9 @@ export function HabitCard({
 	// Guard: computeStreak parses the RRULE and throws on an empty/malformed rule,
 	// so only run it for a habit that actually has a recurrence set.
 	const streak = useMemo(
-		() => (task.rrule ? computeStreak(task.rrule, entries, today) : null),
-		[task.rrule, entries, today],
+		() =>
+			task.rrule ? computeStreak(task.rrule, entries, today, 30, since) : null,
+		[task.rrule, entries, today, since],
 	);
 
 	function log(status: "done" | "skipped") {

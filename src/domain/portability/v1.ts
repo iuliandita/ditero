@@ -38,6 +38,7 @@ export interface PortableRows {
 		dueAllDay: boolean;
 		priority: number;
 		completedAt: string | null;
+		createdAt?: string | null;
 		sortKey: string;
 		parentId: string | null;
 		quantity: string | null;
