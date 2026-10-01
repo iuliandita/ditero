@@ -109,9 +109,7 @@
 				"local donePlural = done: plural",
 				"local totalNum = total: number"
 			],
-			"selectors": [
-				"donePlural"
-			],
+			"selectors": ["donePlural"],
 			"match": {
 				"donePlural=one": "{doneNum} din {totalNum} finalizată",
 				"donePlural=few": "{doneNum} din {totalNum} finalizate",
@@ -308,9 +306,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} element finalizat",
 				"countPlural=few": "{countNum} elemente finalizate",
@@ -325,9 +321,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} produs în coș",
 				"countPlural=few": "{countNum} produse în coș",
@@ -476,9 +470,7 @@
 				"local totalNum = total: number",
 				"local totalPlural = total: plural"
 			],
-			"selectors": [
-				"totalPlural"
-			],
+			"selectors": ["totalPlural"],
 			"match": {
 				"totalPlural=one": "{doneNum} din {totalNum} subsarcină finalizată",
 				"totalPlural=few": "{doneNum} din {totalNum} subsarcini finalizate",
@@ -556,13 +548,8 @@
 	"recurrence_invalid": "Recurență invalidă.",
 	"recurrence_unit_daily": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "zi",
 				"countPlural=few": "zile",
@@ -572,13 +559,8 @@
 	],
 	"recurrence_unit_weekly": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "săptămână",
 				"countPlural=few": "săptămâni",
@@ -588,13 +570,8 @@
 	],
 	"recurrence_unit_monthly": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "lună",
 				"countPlural=few": "luni",
@@ -604,13 +581,8 @@
 	],
 	"recurrence_unit_yearly": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "an",
 				"countPlural=few": "ani",
@@ -625,9 +597,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "În fiecare zi",
 				"countPlural=few": "La fiecare {countNum} zile",
@@ -643,9 +613,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "În fiecare săptămână, {days}",
 				"countPlural=few": "La fiecare {countNum} săptămâni, {days}",
@@ -662,9 +630,7 @@
 				"local countPlural = count: plural",
 				"local monthdayNum = monthday: number"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "În fiecare lună, în ziua {monthdayNum}",
 				"countPlural=few": "La fiecare {countNum} luni, în ziua {monthdayNum}",
@@ -679,9 +645,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "În fiecare an",
 				"countPlural=few": "La fiecare {countNum} ani",
@@ -823,9 +787,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} selectat",
 				"countPlural=few": "{countNum} selectate",
@@ -840,9 +802,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} element",
 				"countPlural=few": "{countNum} elemente",
@@ -874,9 +834,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} obicei",
 				"countPlural=few": "{countNum} obiceiuri",
@@ -961,10 +919,7 @@
 	"panel_all_done": "Nimic deschis aici",
 	"panel_show_all": [
 		{
-			"declarations": [
-				"input count",
-				"local countNum = count: number"
-			],
+			"declarations": ["input count", "local countNum = count: number"],
 			"selectors": [],
 			"match": {
 				"*": "Arată tot ({countNum})"
@@ -992,9 +947,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{label}: {countNum} sarcină potrivită. Afișează-le",
 				"countPlural=few": "{label}: {countNum} sarcini potrivite. Afișează-le",
@@ -1012,9 +965,7 @@
 				"local countPlural = count: plural",
 				"local pctNum = pct: number"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{title}: serie de {countNum} zi, {pctNum}% respectat. Deschide sarcina",
 				"countPlural=few": "{title}: serie de {countNum} zile, {pctNum}% respectat. Deschide sarcina",
@@ -1030,9 +981,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{title}: serie de {countNum} zi. Deschide sarcina",
 				"countPlural=few": "{title}: serie de {countNum} zile. Deschide sarcina",
@@ -1045,13 +994,8 @@
 	"panel_streak_missing": "Obicei lipsă (șters sau nepartajat cu tine)",
 	"panel_focus_sessions_unit": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "sesiune de concentrare",
 				"countPlural=few": "sesiuni de concentrare",
@@ -1066,9 +1010,7 @@
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
-			"selectors": [
-				"minutesPlural"
-			],
+			"selectors": ["minutesPlural"],
 			"match": {
 				"minutesPlural=one": "{minutesNum} min de concentrare",
 				"minutesPlural=few": "{minutesNum} min de concentrare",
@@ -1088,9 +1030,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} zi",
 				"countPlural=few": "{countNum} zile",
@@ -1100,10 +1040,7 @@
 	],
 	"habit_adherence": [
 		{
-			"declarations": [
-				"input pct",
-				"local pctNum = pct: number"
-			],
+			"declarations": ["input pct", "local pctNum = pct: number"],
 			"selectors": [],
 			"match": {
 				"*": "{pctNum}% respectat"
@@ -1147,9 +1084,7 @@
 				"local secondsNum = seconds: number",
 				"local secondsPlural = seconds: plural"
 			],
-			"selectors": [
-				"secondsPlural"
-			],
+			"selectors": ["secondsPlural"],
 			"match": {
 				"secondsPlural=one": "{secondsNum}s de concentrare",
 				"secondsPlural=few": "{secondsNum}s de concentrare",
@@ -1164,9 +1099,7 @@
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
-			"selectors": [
-				"minutesPlural"
-			],
+			"selectors": ["minutesPlural"],
 			"match": {
 				"minutesPlural=one": "{minutesNum}m de concentrare",
 				"minutesPlural=few": "{minutesNum}m de concentrare",
@@ -1182,9 +1115,7 @@
 				"local hoursNum = hours: number",
 				"local hoursPlural = hours: plural"
 			],
-			"selectors": [
-				"hoursPlural"
-			],
+			"selectors": ["hoursPlural"],
 			"match": {
 				"hoursPlural=one": "{hoursNum}h {minutes}m de concentrare",
 				"hoursPlural=few": "{hoursNum}h {minutes}m de concentrare",
@@ -1205,9 +1136,7 @@
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
-			"selectors": [
-				"pointsPlural"
-			],
+			"selectors": ["pointsPlural"],
 			"match": {
 				"pointsPlural=one": "Nivelul {levelNum}, nivel maxim atins, {pointsNum} punct",
 				"pointsPlural=few": "Nivelul {levelNum}, nivel maxim atins, {pointsNum} puncte",
@@ -1228,9 +1157,7 @@
 				"local spanNum = span: number",
 				"local spanPlural = span: plural"
 			],
-			"selectors": [
-				"spanPlural"
-			],
+			"selectors": ["spanPlural"],
 			"match": {
 				"spanPlural=one": "Nivelul {levelNum}, {intoNum} din {spanNum} punct până la nivelul {nextNum}",
 				"spanPlural=few": "Nivelul {levelNum}, {intoNum} din {spanNum} puncte până la nivelul {nextNum}",
@@ -1245,9 +1172,7 @@
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
-			"selectors": [
-				"pointsPlural"
-			],
+			"selectors": ["pointsPlural"],
 			"match": {
 				"pointsPlural=one": "{pointsNum} pct",
 				"pointsPlural=few": "{pointsNum} pct",
@@ -1258,10 +1183,7 @@
 	"karma_level_max": "Nivel maxim",
 	"karma_level_next": [
 		{
-			"declarations": [
-				"input points",
-				"local pointsNum = points: number"
-			],
+			"declarations": ["input points", "local pointsNum = points: number"],
 			"selectors": [],
 			"match": {
 				"*": "Următorul: {pointsNum}"
@@ -1412,9 +1334,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Responsabili ({countNum})",
 				"countPlural=few": "Responsabili ({countNum})",
@@ -1453,13 +1373,8 @@
 	"mention_invite_done": "Gata",
 	"mention_invite_created": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Invitație creată. Distribuie linkul; fiecare persoană se alătură când acceptă.",
 				"countPlural=few": "Invitații create. Distribuie linkurile; fiecare persoană se alătură când acceptă.",
@@ -1550,9 +1465,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} modificare recentă nesincronizată încă",
 				"countPlural=few": "{countNum} modificări recente nesincronizate încă",
@@ -1576,9 +1489,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} sarcină selectată",
 				"countPlural=few": "{countNum} sarcini selectate",
@@ -1593,9 +1504,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} articol bifat.",
 				"countPlural=few": "{countNum} articole bifate.",
@@ -1610,9 +1519,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} sarcină finalizată.",
 				"countPlural=few": "{countNum} sarcini finalizate.",
@@ -1627,9 +1534,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Anularea omite {countNum} sarcină recurentă.",
 				"countPlural=few": "Anularea omite {countNum} sarcini recurente.",
@@ -1644,9 +1549,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} sarcină recurentă a trecut la următoarea dată.",
 				"countPlural=few": "{countNum} sarcini recurente au trecut la următoarea dată.",
@@ -1661,9 +1564,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Nu s-a putut finaliza {countNum} sarcină",
 				"countPlural=few": "Nu s-au putut finaliza {countNum} sarcini",
@@ -1679,9 +1580,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} sarcină mutată în {list}",
 				"countPlural=few": "{countNum} sarcini mutate în {list}",
@@ -1696,9 +1595,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Nu s-a putut muta {countNum} sarcină",
 				"countPlural=few": "Nu s-au putut muta {countNum} sarcini",
@@ -1713,9 +1610,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Nu s-a putut actualiza {countNum} sarcină",
 				"countPlural=few": "Nu s-au putut actualiza {countNum} sarcini",
@@ -1730,9 +1625,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Nu s-a putut șterge {countNum} sarcină",
 				"countPlural=few": "Nu s-au putut șterge {countNum} sarcini",
@@ -1747,9 +1640,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Ștergi {countNum} sarcină?",
 				"countPlural=few": "Ștergi {countNum} sarcini?",
@@ -1764,9 +1655,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Se șterge {countNum} sarcină împreună cu subsarcinile ei. Această acțiune nu poate fi anulată.",
 				"countPlural=few": "Se șterg {countNum} sarcini împreună cu subsarcinile lor. Această acțiune nu poate fi anulată.",
@@ -1826,9 +1715,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Ștergi „{title}” și {countNum} element? Această acțiune nu poate fi anulată.",
 				"countPlural=few": "Ștergi „{title}” și {countNum} elemente? Această acțiune nu poate fi anulată.",
@@ -1856,9 +1743,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Ștergi „{title}”? Se șterge și {countNum} subsarcină. Această acțiune nu poate fi anulată.",
 				"countPlural=few": "Ștergi „{title}”? Se șterg și {countNum} subsarcini. Această acțiune nu poate fi anulată.",
@@ -1977,9 +1862,7 @@
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "și încă {countNum} persoană",
 				"countPlural=few": "și încă {countNum} persoane",
@@ -2009,9 +1892,7 @@
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} fișier",
 				"countPlural=few": "{countNum} fișiere",

@@ -311,6 +311,94 @@ test("separate recurring completions and skip each record their own due transiti
 	expect(karma.rows[0].count).toBe(2);
 });
 
+test.each([
+	false,
+	true,
+])("terminal COUNT skip records the persisted transition once (relative=%s)", async (relative) => {
+	await admin.query(
+		"update task set rrule='FREQ=DAILY;COUNT=2',recurrence_relative=$2,recurrence_anchor_at=due_at,recurrence_consumed=0 where id=$1",
+		[taskId, relative],
+	);
+	await push(1, "task.complete", { id: taskId });
+	let state = (
+		await admin.query(
+			"select due_at,done,recurrence_consumed from task where id=$1",
+			[taskId],
+		)
+	).rows[0];
+	let rows = await events();
+	expect(rows).toHaveLength(1);
+	expect(rows[0].after_due_at.getTime()).toBe(state.due_at.getTime());
+	expect(rows[0].after_done).toBe(state.done);
+	expect(state.recurrence_consumed).toBe(1);
+	const finalDue = state.due_at.getTime();
+	await push(2, "task.skipOccurrence", { id: taskId });
+	state = (
+		await admin.query(
+			"select due_at,done,recurrence_consumed from task where id=$1",
+			[taskId],
+		)
+	).rows[0];
+	rows = await events();
+	expect(rows).toHaveLength(2);
+	const skipped = rows.find((row) => row.action === "skip");
+	expect(skipped).toMatchObject({ before_done: false, after_done: true });
+	expect(skipped.before_due_at.getTime()).toBe(finalDue);
+	expect(skipped.after_due_at.getTime()).toBe(finalDue);
+	expect(state.due_at.getTime()).toBe(finalDue);
+	expect(state.done).toBe(true);
+	expect(state.recurrence_consumed).toBe(2);
+	const replay = await push(2, "task.skipOccurrence", { id: taskId });
+	expect(JSON.stringify(replay)).toMatch(/alreadyProcessed/);
+	await push(3, "task.skipOccurrence", { id: taskId });
+	expect(await events()).toHaveLength(2);
+	expect(
+		(
+			await admin.query(
+				"select count(*)::int as count from karma_event where user_id=$1",
+				[actor],
+			)
+		).rows[0].count,
+	).toBe(1);
+});
+
+test("schedule reset records implicit reopening once while replay and unchanged edits stay silent", async () => {
+	await admin.query(
+		"update task set rrule='FREQ=DAILY;COUNT=1',recurrence_anchor_at=due_at,recurrence_consumed=0 where id=$1",
+		[taskId],
+	);
+	await push(1, "task.complete", { id: taskId });
+	const nextDue = due + 86_400_000;
+	await push(2, "task.update", { id: taskId, dueAt: nextDue });
+	const rows = await events();
+	expect(rows).toHaveLength(2);
+	const reopened = rows.find((row) => row.action === "reopen");
+	expect(reopened).toMatchObject({ before_done: true, after_done: false });
+	expect(reopened.before_due_at.getTime()).toBe(due);
+	expect(reopened.after_due_at.getTime()).toBe(nextDue);
+	const state = (
+		await admin.query(
+			"select due_at,done,completed_at,recurrence_anchor_at,recurrence_consumed from task where id=$1",
+			[taskId],
+		)
+	).rows[0];
+	expect(state).toMatchObject({
+		done: false,
+		completed_at: null,
+		recurrence_consumed: 0,
+	});
+	expect(state.due_at.getTime()).toBe(nextDue);
+	expect(state.recurrence_anchor_at.getTime()).toBe(nextDue);
+	const replay = await push(2, "task.update", { id: taskId, dueAt: nextDue });
+	expect(JSON.stringify(replay)).toMatch(/alreadyProcessed/);
+	await push(3, "task.update", {
+		id: taskId,
+		dueAt: nextDue,
+		title: "Same schedule",
+	});
+	expect(await events()).toHaveLength(2);
+});
+
 test("denied viewer and pending activation write neither domain nor event", async () => {
 	await expect(
 		call(mutators.task.complete, viewer, { id: taskId }),

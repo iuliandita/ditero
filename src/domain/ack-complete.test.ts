@@ -144,6 +144,12 @@ describe("completeForAck exhausted recurrence", () => {
 		expect(task.recurrenceConsumed).toBe(1);
 		expect(task.recurrenceAnchorAt).toBe(EVENING_NY);
 		expect(task.dueAt).toBe(EVENING_NY + 86_400_000);
+		expect(s.events[0]).toMatchObject({
+			action: "complete",
+			beforeDueAt: EVENING_NY,
+			afterDueAt: task.dueAt,
+			afterDone: task.done,
+		});
 		await completeForAck(
 			s,
 			{ ...reminder, occurrenceAt: task.dueAt ?? 0 },
@@ -163,6 +169,13 @@ describe("completeForAck exhausted recurrence", () => {
 		);
 		expect(task.recurrenceConsumed).toBe(2);
 		expect(s.awards).toHaveLength(2);
+		expect(s.events).toHaveLength(2);
+		expect(s.events[1]).toMatchObject({
+			action: "complete",
+			beforeDueAt: EVENING_NY + 86_400_000,
+			afterDueAt: task.dueAt,
+			afterDone: true,
+		});
 	});
 	it("does not rewrite completion or award Karma on a second ack", async () => {
 		const task: AckTask = {

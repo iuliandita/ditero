@@ -109,9 +109,7 @@
 				"local donePlural = done: plural",
 				"local totalNum = total: number"
 			],
-			"selectors": [
-				"donePlural"
-			],
+			"selectors": ["donePlural"],
 			"match": {
 				"donePlural=one": "{doneNum} of {totalNum} done",
 				"donePlural=other": "{doneNum} of {totalNum} done"
@@ -307,9 +305,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} item completed",
 				"countPlural=other": "{countNum} items completed"
@@ -323,9 +319,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} item in cart",
 				"countPlural=other": "{countNum} items in cart"
@@ -473,9 +467,7 @@
 				"local totalNum = total: number",
 				"local totalPlural = total: plural"
 			],
-			"selectors": [
-				"totalPlural"
-			],
+			"selectors": ["totalPlural"],
 			"match": {
 				"totalPlural=one": "{doneNum} of {totalNum} subtask done",
 				"totalPlural=other": "{doneNum} of {totalNum} subtasks done"
@@ -552,13 +544,8 @@
 	"recurrence_invalid": "Invalid recurrence.",
 	"recurrence_unit_daily": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "day",
 				"countPlural=other": "days"
@@ -567,13 +554,8 @@
 	],
 	"recurrence_unit_weekly": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "week",
 				"countPlural=other": "weeks"
@@ -582,13 +564,8 @@
 	],
 	"recurrence_unit_monthly": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "month",
 				"countPlural=other": "months"
@@ -597,13 +574,8 @@
 	],
 	"recurrence_unit_yearly": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "year",
 				"countPlural=other": "years"
@@ -617,9 +589,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Every day",
 				"countPlural=other": "Every {countNum} days"
@@ -634,9 +604,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Every week on {days}",
 				"countPlural=other": "Every {countNum} weeks on {days}"
@@ -652,9 +620,7 @@
 				"local countPlural = count: plural",
 				"local monthdayNum = monthday: number"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Every month on day {monthdayNum}",
 				"countPlural=other": "Every {countNum} months on day {monthdayNum}"
@@ -668,9 +634,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Every year",
 				"countPlural=other": "Every {countNum} years"
@@ -811,9 +775,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} selected",
 				"countPlural=other": "{countNum} selected"
@@ -827,9 +789,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} item",
 				"countPlural=other": "{countNum} items"
@@ -860,9 +820,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} habit",
 				"countPlural=other": "{countNum} habits"
@@ -946,10 +904,7 @@
 	"panel_all_done": "Nothing open here",
 	"panel_show_all": [
 		{
-			"declarations": [
-				"input count",
-				"local countNum = count: number"
-			],
+			"declarations": ["input count", "local countNum = count: number"],
 			"selectors": [],
 			"match": {
 				"*": "Show all ({countNum})"
@@ -977,9 +932,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{label}: {countNum} matching task. Show them",
 				"countPlural=other": "{label}: {countNum} matching tasks. Show them"
@@ -996,9 +949,7 @@
 				"local countPlural = count: plural",
 				"local pctNum = pct: number"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{title}: {countNum} day streak, {pctNum}% on track. Open task",
 				"countPlural=other": "{title}: {countNum} day streak, {pctNum}% on track. Open task"
@@ -1013,9 +964,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{title}: {countNum} day streak. Open task",
 				"countPlural=other": "{title}: {countNum} day streak. Open task"
@@ -1027,13 +976,8 @@
 	"panel_streak_missing": "Habit missing (deleted or not shared with you)",
 	"panel_focus_sessions_unit": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "focus session",
 				"countPlural=other": "focus sessions"
@@ -1047,9 +991,7 @@
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
-			"selectors": [
-				"minutesPlural"
-			],
+			"selectors": ["minutesPlural"],
 			"match": {
 				"minutesPlural=one": "{minutesNum} min focused",
 				"minutesPlural=other": "{minutesNum} min focused"
@@ -1068,9 +1010,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} day",
 				"countPlural=other": "{countNum} days"
@@ -1079,10 +1019,7 @@
 	],
 	"habit_adherence": [
 		{
-			"declarations": [
-				"input pct",
-				"local pctNum = pct: number"
-			],
+			"declarations": ["input pct", "local pctNum = pct: number"],
 			"selectors": [],
 			"match": {
 				"*": "{pctNum}% on track"
@@ -1126,9 +1063,7 @@
 				"local secondsNum = seconds: number",
 				"local secondsPlural = seconds: plural"
 			],
-			"selectors": [
-				"secondsPlural"
-			],
+			"selectors": ["secondsPlural"],
 			"match": {
 				"secondsPlural=one": "{secondsNum}s focused",
 				"secondsPlural=other": "{secondsNum}s focused"
@@ -1142,9 +1077,7 @@
 				"local minutesNum = minutes: number",
 				"local minutesPlural = minutes: plural"
 			],
-			"selectors": [
-				"minutesPlural"
-			],
+			"selectors": ["minutesPlural"],
 			"match": {
 				"minutesPlural=one": "{minutesNum}m focused",
 				"minutesPlural=other": "{minutesNum}m focused"
@@ -1159,9 +1092,7 @@
 				"local hoursNum = hours: number",
 				"local hoursPlural = hours: plural"
 			],
-			"selectors": [
-				"hoursPlural"
-			],
+			"selectors": ["hoursPlural"],
 			"match": {
 				"hoursPlural=one": "{hoursNum}h {minutes}m focused",
 				"hoursPlural=other": "{hoursNum}h {minutes}m focused"
@@ -1181,9 +1112,7 @@
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
-			"selectors": [
-				"pointsPlural"
-			],
+			"selectors": ["pointsPlural"],
 			"match": {
 				"pointsPlural=one": "Level {levelNum}, max level reached, {pointsNum} point",
 				"pointsPlural=other": "Level {levelNum}, max level reached, {pointsNum} points"
@@ -1203,9 +1132,7 @@
 				"local spanNum = span: number",
 				"local spanPlural = span: plural"
 			],
-			"selectors": [
-				"spanPlural"
-			],
+			"selectors": ["spanPlural"],
 			"match": {
 				"spanPlural=one": "Level {levelNum}, {intoNum} of {spanNum} point toward level {nextNum}",
 				"spanPlural=other": "Level {levelNum}, {intoNum} of {spanNum} points toward level {nextNum}"
@@ -1219,9 +1146,7 @@
 				"local pointsNum = points: number",
 				"local pointsPlural = points: plural"
 			],
-			"selectors": [
-				"pointsPlural"
-			],
+			"selectors": ["pointsPlural"],
 			"match": {
 				"pointsPlural=one": "{pointsNum} pts",
 				"pointsPlural=other": "{pointsNum} pts"
@@ -1231,10 +1156,7 @@
 	"karma_level_max": "Max level",
 	"karma_level_next": [
 		{
-			"declarations": [
-				"input points",
-				"local pointsNum = points: number"
-			],
+			"declarations": ["input points", "local pointsNum = points: number"],
 			"selectors": [],
 			"match": {
 				"*": "Next: {pointsNum}"
@@ -1385,9 +1307,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Assignees ({countNum})",
 				"countPlural=other": "Assignees ({countNum})"
@@ -1425,13 +1345,8 @@
 	"mention_invite_done": "Done",
 	"mention_invite_created": [
 		{
-			"declarations": [
-				"input count",
-				"local countPlural = count: plural"
-			],
-			"selectors": [
-				"countPlural"
-			],
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Invite created. Share the link; each person joins on accept.",
 				"countPlural=other": "Invites created. Share the links; each person joins on accept."
@@ -1521,9 +1436,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} recent change not synced yet",
 				"countPlural=other": "{countNum} recent changes not synced yet"
@@ -1546,9 +1459,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} task selected",
 				"countPlural=other": "{countNum} tasks selected"
@@ -1562,9 +1473,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Checked {countNum} item.",
 				"countPlural=other": "Checked {countNum} items."
@@ -1578,9 +1487,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Completed {countNum} task.",
 				"countPlural=other": "Completed {countNum} tasks."
@@ -1594,9 +1501,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Undo skips {countNum} recurring task.",
 				"countPlural=other": "Undo skips {countNum} recurring tasks."
@@ -1610,9 +1515,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} recurring task moved to its next date.",
 				"countPlural=other": "{countNum} recurring tasks moved to their next date."
@@ -1626,9 +1529,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Could not complete {countNum} task",
 				"countPlural=other": "Could not complete {countNum} tasks"
@@ -1643,9 +1544,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Moved {countNum} task to {list}",
 				"countPlural=other": "Moved {countNum} tasks to {list}"
@@ -1659,9 +1558,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Could not move {countNum} task",
 				"countPlural=other": "Could not move {countNum} tasks"
@@ -1675,9 +1572,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Could not update {countNum} task",
 				"countPlural=other": "Could not update {countNum} tasks"
@@ -1691,9 +1586,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Could not delete {countNum} task",
 				"countPlural=other": "Could not delete {countNum} tasks"
@@ -1707,9 +1600,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Delete {countNum} task?",
 				"countPlural=other": "Delete {countNum} tasks?"
@@ -1723,9 +1614,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "This deletes {countNum} task and its subtasks. This cannot be undone.",
 				"countPlural=other": "This deletes {countNum} tasks and their subtasks. This cannot be undone."
@@ -1784,9 +1673,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Delete “{title}” and its {countNum} item? This cannot be undone.",
 				"countPlural=other": "Delete “{title}” and its {countNum} items? This cannot be undone."
@@ -1813,9 +1700,7 @@
 				"local countNum = count: number",
 				"local countPlural = count: plural"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "Delete “{title}”? This also deletes {countNum} subtask. This cannot be undone.",
 				"countPlural=other": "Delete “{title}”? This also deletes {countNum} subtasks. This cannot be undone."
@@ -1933,9 +1818,7 @@
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "and {countNum} other",
 				"countPlural=other": "and {countNum} others"
@@ -1964,9 +1847,7 @@
 				"local countPlural = count: plural",
 				"local countNum = count: number"
 			],
-			"selectors": [
-				"countPlural"
-			],
+			"selectors": ["countPlural"],
 			"match": {
 				"countPlural=one": "{countNum} file",
 				"countPlural=other": "{countNum} files"

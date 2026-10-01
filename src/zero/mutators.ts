@@ -842,7 +842,7 @@ export const mutators = defineMutators({
 						beforeDone: task.done ?? false,
 						afterDueAt:
 							args.dueAt === undefined ? (task.dueAt ?? null) : args.dueAt,
-						afterDone: effDone,
+						afterDone: effDone ?? false,
 					});
 				}
 			},
