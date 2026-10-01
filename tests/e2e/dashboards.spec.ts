@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
@@ -524,7 +525,9 @@ async function captureSharingReplica(selection: ReplicaSelection) {
 }
 
 async function sharingQueryHashes(accounts: Record<string, string>) {
-	const root = dirname(require.resolve("@rocicorp/zero"));
+	const root = dirname(
+		createRequire(import.meta.url).resolve("@rocicorp/zero"),
+	);
 	if (
 		JSON.parse(readFileSync(join(root, "../../../package.json"), "utf8"))
 			.version !== "1.9.0"
