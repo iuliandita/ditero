@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // Serial file execution is a correctness property here, not a preference, and
 // it must not depend on a flag one npm script happens to pass. The integration
@@ -14,5 +14,8 @@ export default defineConfig({
 	resolve: {
 		alias: { "@": fileURLToPath(new URL("./src/web", import.meta.url)) },
 	},
-	test: { fileParallelism: false },
+	test: {
+		fileParallelism: false,
+		exclude: [...configDefaults.exclude, "**/.*/**"],
+	},
 });
