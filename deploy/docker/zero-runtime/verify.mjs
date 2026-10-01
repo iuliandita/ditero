@@ -37,6 +37,84 @@ assert.throws(
 	RangeError,
 );
 
+const ajvManifest = requireCloudEvents.resolve("ajv/package.json");
+const requireAjv = createRequire(realpathSync(ajvManifest));
+assert.equal(requireAjv("fast-uri/package.json").version, "3.1.8");
+assert.equal(
+	requireAjv("fast-uri").resolve(
+		"https://example.test/schemas/root.json",
+		"value.json",
+	),
+	"https://example.test/schemas/value.json",
+);
+
+const requireFastify = createRequire(
+	realpathSync(requireZero.resolve("fastify/package.json")),
+);
+const requireCompiler = createRequire(
+	realpathSync(requireFastify.resolve("@fastify/ajv-compiler/package.json")),
+);
+const requireStringifier = createRequire(
+	realpathSync(requireFastify.resolve("fast-json-stringify/package.json")),
+);
+for (const consumer of [requireCompiler, requireStringifier]) {
+	assert.equal(consumer("fast-uri/package.json").version, "4.1.5");
+	assert.equal(
+		consumer("fast-uri").resolve(
+			"https://example.test/schemas/root.json",
+			"value.json#/definitions/value",
+		),
+		"https://example.test/schemas/value.json#/definitions/value",
+	);
+}
+
+const valueSchema = {
+	$id: "https://example.test/schemas/value.json",
+	definitions: { value: { type: "integer" } },
+};
+const rootSchema = {
+	$id: "https://example.test/schemas/root.json",
+	type: "object",
+	properties: { value: { $ref: "value.json#/definitions/value" } },
+	required: ["value"],
+};
+const Ajv = requireCloudEvents("ajv");
+const ajv = new Ajv();
+ajv.addSchema(valueSchema);
+const validate = ajv.compile(rootSchema);
+assert.equal(validate({ value: 7 }), true);
+assert.equal(validate({ value: "invalid" }), false);
+
+const buildCompiler = requireFastify("@fastify/ajv-compiler")();
+const compile = buildCompiler(
+	{ [valueSchema.$id]: valueSchema },
+	{ customOptions: {} },
+);
+const validateRequest = compile({
+	schema: rootSchema,
+	method: "POST",
+	url: "/verify",
+	httpPart: "body",
+});
+assert.equal(validateRequest({ value: 7 }), true);
+assert.equal(validateRequest({ value: "invalid" }), false);
+const stringify = requireFastify("fast-json-stringify")(
+	{
+		...rootSchema,
+		properties: {
+			value: {
+				$ref: requireStringifier("fast-uri").resolve(
+					rootSchema.$id,
+					rootSchema.properties.value.$ref,
+				),
+			},
+		},
+	},
+	{ schema: { [valueSchema.$id]: valueSchema } },
+);
+assert.equal(stringify({ value: 7 }), '{"value":7}');
+assert.throws(() => stringify({}));
+
 // Check physical packages too, so an unused vulnerable copy cannot survive.
 const modules = new URL("./node_modules/", import.meta.url);
 const packagePaths = readdirSync(modules, { recursive: true });
@@ -45,7 +123,21 @@ if (existsSync(new URL("undici/package.json", modules))) {
 }
 let undiciCopies = 0;
 let braceExpansionCopies = 0;
+const fastUriVersions = new Set();
 for (const path of packagePaths) {
+	if (
+		path === "fast-uri/package.json" ||
+		path.endsWith("/fast-uri/package.json")
+	) {
+		const version = JSON.parse(
+			readFileSync(new URL(path, modules), "utf8"),
+		).version;
+		assert.ok(
+			["3.1.8", "4.1.5"].includes(version),
+			`Unexpected fast-uri ${version}`,
+		);
+		fastUriVersions.add(version);
+	}
 	if (
 		path === "brace-expansion/package.json" ||
 		path.endsWith("/brace-expansion/package.json")
@@ -77,6 +169,7 @@ for (const path of packagePaths) {
 	}
 }
 
+assert.deepEqual([...fastUriVersions].sort(), ["3.1.8", "4.1.5"]);
 assert.ok(undiciCopies > 0, "No physical undici package found");
 assert.ok(
 	braceExpansionCopies > 0,
@@ -88,5 +181,5 @@ const db = new Database(":memory:");
 assert.equal(db.prepare("select 1 as value").get().value, 1);
 db.close();
 console.log(
-	`Zero 1.9.0, Fastify 5.12.3, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
+	`Zero 1.9.0, Fastify 5.12.3, fast-uri 3.1.8/4.1.5 consumers, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
 );
