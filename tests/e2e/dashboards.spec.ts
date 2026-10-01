@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -358,19 +358,36 @@ async function captureSharingReplica(selection: ReplicaSelection) {
 				compose[i + 1].length > 4096
 			)
 				throw new Error();
-		const startup = spawnSync(
-			"docker",
-			[...compose, "logs", "--no-color", "--tail", "1000", "zero-cache"],
-			{ encoding: "utf8", timeout: 2000, maxBuffer: 2 * 1024 * 1024 },
-		);
-		const servingPaths = [
-			...(startup.stdout ?? "").matchAll(
-				/setting (\/data\/replica\.db(?:-serving-copy)?) to wal2 mode/g,
-			),
-		];
-		const servingFile = servingPaths.at(-1)?.[1];
-		if (startup.status !== 0 || startup.error || !servingFile)
-			throw new Error("serving-proof");
+		const servingFile = await new Promise<string>((resolve, reject) => {
+			const child = spawn(
+				"docker",
+				[...compose, "logs", "--no-color", "zero-cache"],
+				{ stdio: ["ignore", "pipe", "ignore"] },
+			);
+			let prefix = "";
+			let bytes = 0;
+			let settled = false;
+			const finish = (path?: string) => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(timer);
+				child.kill("SIGKILL");
+				if (path) resolve(path);
+				else reject(new Error("serving-proof"));
+			};
+			const timer = setTimeout(() => finish(), 2000);
+			child.stdout.on("data", (chunk: Buffer) => {
+				bytes += chunk.length;
+				if (bytes > 2 * 1024 * 1024) return finish();
+				prefix += chunk.toString();
+				const path = prefix.match(
+					/"worker":"serving-replicator"[^\n]*"message":"setting (\/data\/replica\.db(?:-serving-copy)?) to wal2 mode"/,
+				)?.[1];
+				if (path) finish(path);
+			});
+			child.once("error", () => finish());
+			child.once("close", () => finish());
+		});
 		const source = readFileSync(
 			new URL("./sharing-replica.mjs", import.meta.url),
 			"utf8",
