@@ -12,6 +12,7 @@ WORKDIR /app
 
 # Deps first for layer caching.
 COPY package.json bun.lock ./
+COPY patches ./patches
 RUN bun install --frozen-lockfile
 
 # App sources.
@@ -24,6 +25,7 @@ RUN bunx vite build
 FROM ${RUNTIME_IMAGE} AS prod-deps
 WORKDIR /app
 COPY package.json bun.lock ./
+COPY patches ./patches
 RUN bun install --frozen-lockfile --production --omit=optional --omit=peer
 
 FROM rocicorp/zero:1.9.0@sha256:f80683bf3ddf08be26c68ddd94589fada29a0b8a4597668b090006c09041d4cd AS zero-base

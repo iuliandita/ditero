@@ -31,7 +31,7 @@ function Routes() {
 	if (isPending) return <BootSkeleton />;
 	if (!session) return <Login />;
 	return (
-		<AppZeroProvider userID={session.user.id}>
+		<AppZeroProvider key={session.user.id} userID={session.user.id}>
 			<KeyringGate userId={session.user.id} />
 		</AppZeroProvider>
 	);

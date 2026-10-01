@@ -9,6 +9,15 @@ import {
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
+import { installPersistenceControls } from "./zero-persistence-controls.ts";
+
+type BrowserBridge = typeof import("./zero-close-browser.ts");
+async function bridge(page: Page) {
+	return page.evaluate(async () => {
+		const path = "/tests/e2e/zero-close-browser.ts";
+		await import(path);
+	});
+}
 
 // Sync indicator (#354): a quiet synced state, an offline state that says
 // edits are still kept, a pending count, and the queue landing on reconnect.
@@ -27,6 +36,7 @@ async function openNewList(page: Page, name: string): Promise<void> {
 	await waitWorkspaceReady(page);
 	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("sidebar-new-list").click();
+	await expect(page.getByTestId("new-list")).toBeFocused();
 	await page.getByTestId("new-list").fill(name);
 	await page.getByTestId("new-list-submit").click();
 	const nav = sidebarLists(page).getByRole("button", { name, exact: true });
@@ -269,6 +279,7 @@ test("desktop: a real expired session returns to login and preserves queued edit
 	context,
 }) => {
 	test.setTimeout(120_000);
+	await page.addInitScript(installPersistenceControls);
 	await page.setViewportSize({ width: 1440, height: 900 });
 	let refuseConnection = false;
 	// Stand in for JWT expiry too: deleting a session does not revoke its
@@ -292,23 +303,244 @@ test("desktop: a real expired session returns to login and preserves queued edit
 	await expect(indicator).toHaveAttribute("data-phase", "synced", {
 		timeout: 15000,
 	});
+	await bridge(page);
 	await context.setOffline(true);
 	await expect(indicator).toHaveAttribute("data-phase", "offline", {
 		timeout: 20000,
 	});
 	const title = `Queued across session expiry ${Date.now()}`;
-	await addTask(page, title);
-	await expireSession(email);
-	const expiredToken = await page.request.get("/api/auth/token");
-	expect(expiredToken.status()).toBe(401);
-	refuseConnection = true;
-	await context.setOffline(false);
-	await expect(page.getByTestId("signin")).toBeVisible({ timeout: 30000 });
-	expect(await serverHasTask(title)).toBe(false);
-	refuseConnection = false;
-	await page.getByTestId("email").fill(email);
-	await page.getByTestId("password").fill("pw-123456");
-	await page.getByTestId("signin").click();
-	await waitWorkspaceReady(page);
-	await expect.poll(() => serverHasTask(title), { timeout: 30000 }).toBe(true);
+	await page.evaluate(async (title) => {
+		const path = "/tests/e2e/zero-close-browser.ts";
+		const sdk = (await import(path)) as BrowserBridge;
+		sdk.holdIdlePersistence(title);
+	}, title);
+	try {
+		await addTask(page, title);
+		await expect
+			.poll(() => page.evaluate(() => window.__zeroCloseControls.idleRequests))
+			.toBeGreaterThan(0);
+		expect(await page.evaluate(() => window.__zeroCloseControls.puts)).toBe(0);
+		await expireSession(email);
+		const expiredToken = await page.request.get("/api/auth/token");
+		expect(expiredToken.status()).toBe(401);
+		refuseConnection = true;
+		await context.setOffline(false);
+		await expect(page.getByTestId("signin")).toBeVisible({ timeout: 30000 });
+		expect(await serverHasTask(title)).toBe(false);
+		await expect
+			.poll(() =>
+				page.evaluate(() => window.__zeroCloseControls.completedTransactions),
+			)
+			.toBeGreaterThan(0);
+		refuseConnection = false;
+		await page.getByTestId("email").fill(email);
+		await page.getByTestId("password").fill("pw-123456");
+		await page.getByTestId("signin").click();
+		await waitWorkspaceReady(page);
+		await expect
+			.poll(() => serverHasTask(title), { timeout: 30000 })
+			.toBe(true);
+	} finally {
+		await page.evaluate(() => window.__zeroCloseControls.restore());
+	}
+});
+
+test("public Zero.close waits for accepted edits and durable persistence", async ({
+	page,
+	context,
+}) => {
+	test.setTimeout(120_000);
+	await page.addInitScript(installPersistenceControls);
+	const user = await signUp(page, uniqueEmail("sdk-close"));
+	await openNewList(page, "SDK durability");
+	await bridge(page);
+	try {
+		expect(
+			await page.evaluate(async (userID) => {
+				const path = "/tests/e2e/zero-close-browser.ts";
+				const sdk = (await import(path)) as BrowserBridge;
+				return sdk.openClient(userID, crypto.randomUUID(), "SDK durability");
+			}, user),
+		).toBe("connected");
+		expect(
+			await page.evaluate(async () => {
+				const path = "/tests/e2e/zero-close-browser.ts";
+				const sdk = (await import(path)) as BrowserBridge;
+				return sdk.closeConnectedClient();
+			}),
+		).toMatchObject({
+			before: "connected",
+			after: "closed",
+			beforeCloseReturned: true,
+			reentrant: { refused: true },
+		});
+		await expect
+			.poll(() =>
+				page.evaluate(async () => {
+					const path = "/tests/e2e/zero-close-browser.ts";
+					return ((await import(path)) as BrowserBridge).socketSnapshot();
+				}),
+			)
+			.toEqual([3]);
+		await page.evaluate(async () => {
+			const path = "/tests/e2e/zero-close-browser.ts";
+			await ((await import(path)) as BrowserBridge).reopenClient();
+		});
+		await context.setOffline(true);
+		const title = `SDK accepted ${crypto.randomUUID()}`;
+		expect(
+			await page.evaluate(async (title) => {
+				const path = "/tests/e2e/zero-close-browser.ts";
+				const sdk = (await import(path)) as BrowserBridge;
+				sdk.holdIdlePersistence(title, "hold");
+				return sdk.createTask(title, true);
+			}, title),
+		).toEqual({ type: "held" });
+		expect(
+			await page.evaluate(async () => {
+				const path = "/tests/e2e/zero-close-browser.ts";
+				return ((await import(path)) as BrowserBridge).beginClose();
+			}),
+		).toEqual({ samePromise: true });
+		expect(
+			await page.evaluate(async () => {
+				const path = "/tests/e2e/zero-close-browser.ts";
+				const sdk = (await import(path)) as BrowserBridge;
+				const before = sdk.closeSnapshot();
+				const late = await sdk.tryLateMutation();
+				return { before, late, commit: await sdk.releaseAcceptedMutation() };
+			}),
+		).toMatchObject({
+			before: { settled: false },
+			late: { refused: true },
+			commit: { type: "success" },
+		});
+		await expect
+			.poll(() =>
+				page.evaluate(() => window.__zeroCloseControls.completedTransactions),
+			)
+			.toBeGreaterThan(0);
+		expect(
+			await page.evaluate(async () => {
+				const path = "/tests/e2e/zero-close-browser.ts";
+				const sdk = (await import(path)) as BrowserBridge;
+				const pending = sdk.closeSnapshot();
+				sdk.releasePersistenceCompletion();
+				return { pending, result: await sdk.closeResults() };
+			}),
+		).toMatchObject({
+			pending: { settled: false },
+			result: { statuses: ["fulfilled", "fulfilled"] },
+		});
+		expect(await serverHasTask(title)).toBe(false);
+		await page.evaluate(async () => {
+			const path = "/tests/e2e/zero-close-browser.ts";
+			await ((await import(path)) as BrowserBridge).reopenClient();
+		});
+		await expect
+			.poll(() =>
+				page.evaluate(async () => {
+					const path = "/tests/e2e/zero-close-browser.ts";
+					return ((await import(path)) as BrowserBridge).cachedTasks();
+				}),
+			)
+			.toContain(title);
+		await context.setOffline(false);
+		await expect
+			.poll(() => serverHasTask(title), { timeout: 30000 })
+			.toBe(true);
+	} finally {
+		await context.setOffline(false);
+		await page.evaluate(async () => {
+			const path = "/tests/e2e/zero-close-browser.ts";
+			await ((await import(path)) as BrowserBridge).cleanupClient();
+		});
+	}
+});
+
+test("public Zero.close rejects persistence failure and recovers on explicit retry", async ({
+	page,
+	context,
+}) => {
+	test.setTimeout(120_000);
+	await page.addInitScript(installPersistenceControls);
+	const user = await signUp(page, uniqueEmail("sdk-close-failure"));
+	await openNewList(page, "SDK retry");
+	await bridge(page);
+	try {
+		await page.evaluate(async (userID) => {
+			const path = "/tests/e2e/zero-close-browser.ts";
+			await ((await import(path)) as BrowserBridge).openClient(
+				userID,
+				crypto.randomUUID(),
+				"SDK retry",
+			);
+		}, user);
+		await context.setOffline(true);
+		const title = `SDK failed persist ${crypto.randomUUID()}`;
+		expect(
+			await page.evaluate(async (title) => {
+				const path = "/tests/e2e/zero-close-browser.ts";
+				const sdk = (await import(path)) as BrowserBridge;
+				sdk.holdIdlePersistence(title, "fail");
+				return sdk.createTask(title);
+			}, title),
+		).toMatchObject({ type: "success" });
+		expect(
+			await page.evaluate(async () => {
+				const path = "/tests/e2e/zero-close-browser.ts";
+				const sdk = (await import(path)) as BrowserBridge;
+				return {
+					close: sdk.beginClose(),
+					result: await sdk.closeResults(),
+					late: await sdk.tryLateMutation(),
+				};
+			}),
+		).toMatchObject({
+			close: { samePromise: true },
+			result: {
+				statuses: ["rejected", "rejected"],
+				sameError: true,
+				injectedError: true,
+			},
+			late: { refused: true },
+		});
+		expect(
+			await page.evaluate(
+				() => window.__zeroCloseControls.completedTransactions,
+			),
+		).toBe(0);
+		await page.evaluate(async () => {
+			const path = "/tests/e2e/zero-close-browser.ts";
+			await ((await import(path)) as BrowserBridge).retryClose();
+		});
+		expect(
+			await page.evaluate(
+				() => window.__zeroCloseControls.completedTransactions,
+			),
+		).toBeGreaterThan(0);
+		expect(await serverHasTask(title)).toBe(false);
+		await page.evaluate(async () => {
+			const path = "/tests/e2e/zero-close-browser.ts";
+			await ((await import(path)) as BrowserBridge).reopenClient();
+		});
+		await expect
+			.poll(() =>
+				page.evaluate(async () => {
+					const path = "/tests/e2e/zero-close-browser.ts";
+					return ((await import(path)) as BrowserBridge).cachedTasks();
+				}),
+			)
+			.toContain(title);
+		await context.setOffline(false);
+		await expect
+			.poll(() => serverHasTask(title), { timeout: 30000 })
+			.toBe(true);
+	} finally {
+		await context.setOffline(false);
+		await page.evaluate(async () => {
+			const path = "/tests/e2e/zero-close-browser.ts";
+			await ((await import(path)) as BrowserBridge).cleanupClient();
+		});
+	}
 });

@@ -2045,5 +2045,6 @@
 	"activation_container_change_failed": "Modificarea nu a putut fi salvată. Verifică sarcinile suspendate și încearcă din nou.",
 	"activation_task_change_failed": "Sarcina nu a putut fi modificată. Încearcă din nou.",
 	"activation_badge_pending": "Import în așteptare",
-	"activation_badge_blocked": "Verificare necesară"
+	"activation_badge_blocked": "Verificare necesară",
+	"sync_save_pending_failed": "Modificările în așteptare nu au putut fi salvate pe acest dispozitiv. Încearcă din nou."
 }

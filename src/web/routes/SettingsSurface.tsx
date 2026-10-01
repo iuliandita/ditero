@@ -37,7 +37,7 @@ export function SettingsSurface({
 	activeId: string | null;
 	activeRole: Role | null;
 	isDesktop: boolean;
-	persistLocale: (locale: Locale) => void;
+	persistLocale: (locale: Locale) => Promise<boolean>;
 	onBack: () => void;
 	onOpenList: (id: string) => void;
 	// Phones arrive from a sheet that unmounts with its trigger; without a

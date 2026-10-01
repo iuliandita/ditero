@@ -2045,5 +2045,6 @@
 	"activation_container_change_failed": "Impossible d’enregistrer cette modification. Vérifie les tâches suspendues et réessaie.",
 	"activation_task_change_failed": "Impossible de modifier cette tâche. Réessaie.",
 	"activation_badge_pending": "Importation en attente",
-	"activation_badge_blocked": "Vérification requise"
+	"activation_badge_blocked": "Vérification requise",
+	"sync_save_pending_failed": "Impossible d’enregistrer les modifications en attente sur cet appareil. Réessaie."
 }
