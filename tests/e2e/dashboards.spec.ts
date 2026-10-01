@@ -271,6 +271,42 @@ function observeSharingSync(
 				...connection,
 				baseCookie: url.searchParams.get("baseCookie"),
 			});
+		socket.on("framesent", ({ payload }) => {
+			if (!isActive() || events.length >= 100) return;
+			let frame: unknown;
+			try {
+				frame = JSON.parse(payload.toString());
+			} catch {
+				events.push({
+					at: Date.now(),
+					kind: "unparseable-sync-frame",
+					...connection,
+				});
+				return;
+			}
+			if (!Array.isArray(frame)) return;
+			const data = frame[1] as Record<string, unknown> | undefined;
+			if (!data || !Array.isArray(data.desiredQueriesPatch)) return;
+			for (const value of data.desiredQueriesPatch) {
+				if (!value || typeof value !== "object") continue;
+				const patch = value as Record<string, unknown>;
+				if (patch.op !== "put" || patch.name !== "dashboards.mine") continue;
+				const args = Array.isArray(patch.args) ? patch.args[0] : undefined;
+				const workspaceIds: unknown = args?.workspaceIds;
+				if (
+					!Array.isArray(workspaceIds) ||
+					!workspaceIds.every((id) => typeof id === "string")
+				)
+					continue;
+				events.push({
+					at: Date.now(),
+					kind: "desired-query",
+					...connection,
+					hash: patch.hash,
+					workspaceIds,
+				});
+			}
+		});
 		socket.on("framereceived", ({ payload }) => {
 			if (!isActive() || events.length >= 100) return;
 			try {
@@ -581,7 +617,10 @@ async function captureSharingReplica(selection: ReplicaSelection) {
 	}
 }
 
-async function sharingQueryHashes(accounts: Record<string, string>) {
+async function sharingQueryHashes(
+	accounts: Record<string, string>,
+	sync: SharingSyncEvent[],
+) {
 	const root = dirname(
 		createRequire(import.meta.url).resolve("@rocicorp/zero"),
 	);
@@ -599,13 +638,30 @@ async function sharingQueryHashes(accounts: Record<string, string>) {
 			z.enum(["owner", "member", "outsider", "viewer"]).parse(accountRole);
 			diagnosticID.parse(accountID);
 			const names = ["dashboards.mine", "userPrefs.mine"];
+			const desired = sync
+				.filter(
+					(event) =>
+						event.accountRole === accountRole && event.kind === "desired-query",
+				)
+				.sort((a, b) => Number(a.at) - Number(b.at))
+				.at(-1);
+			if (!desired)
+				throw new Error("Dashboard query arguments were not observed");
+			const workspaceIds = z
+				.array(z.string())
+				.max(1000)
+				.parse(desired.workspaceIds);
 			const response = await handleQueryRequest({
 				schema,
 				userID: accountID,
 				query: {},
 				body: [
 					"transform",
-					names.map((name) => ({ id: name, name, args: [] })),
+					names.map((name) => ({
+						id: name,
+						name,
+						args: name === "dashboards.mine" ? [{ workspaceIds }] : [],
+					})),
 				],
 				handler: (name, args) =>
 					mustGetQuery(appQueries, name).fn({
@@ -725,7 +781,7 @@ async function attachSharingFailure(
 		let hashError: string | undefined;
 		try {
 			if (!selection.success) throw new RangeError();
-			hashes = await sharingQueryHashes(accounts);
+			hashes = await sharingQueryHashes(accounts, sync);
 		} catch (error) {
 			hashError = error instanceof RangeError ? "scope-cap" : "query-transform";
 			console.error(`dashboard sharing group recovery failed: ${hashError}`);
@@ -1344,11 +1400,21 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 
 		// A second member sees the workspace dashboard, never the personal one.
 		const pMember = await ctxMember.newPage();
-		sync.push(observeSharingSync(pMember, "member"));
+		const memberSync = observeSharingSync(pMember, "member");
+		sync.push(memberSync);
 		const memberId = await signUp(pMember, uniqueEmail("d4-member"));
 		accounts.member = memberId;
+		await expect
+			.poll(() =>
+				memberSync.filter((event) => event.kind === "desired-query").at(-1),
+			)
+			.toBeDefined();
+		const beforeJoin = memberSync
+			.filter((event) => event.kind === "desired-query")
+			.at(-1);
+		expect(beforeJoin?.workspaceIds).not.toContain(SHARED_WORKSPACE_ID);
+		expect(beforeJoin?.hash).toBeDefined();
 		await joinShared(memberId, "member");
-		await pMember.reload();
 		await waitWorkspaceReady(pMember);
 		failedSharingObserver = { page: pMember, accountRole: "member" };
 		await expect(
@@ -1357,6 +1423,19 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 				exact: true,
 			}),
 		).toBeVisible({ timeout: 15000 });
+		await expect
+			.poll(() =>
+				memberSync.find(
+					(event) =>
+						event.kind === "desired-query" &&
+						event.clientID === beforeJoin?.clientID &&
+						event.clientGroupID === beforeJoin?.clientGroupID &&
+						event.hash !== beforeJoin?.hash &&
+						Array.isArray(event.workspaceIds) &&
+						event.workspaceIds.includes(SHARED_WORKSPACE_ID),
+				),
+			)
+			.toBeDefined();
 		failedSharingObserver = undefined;
 		await expect(
 			sidebarLists(pMember).getByRole("button", {
@@ -1403,6 +1482,52 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 		await expect(pViewer.getByTestId("dashboard-empty")).toBeVisible();
 		await expect(pViewer.getByTestId("dashboard-edit")).toHaveCount(0);
 		await expect(pViewer.getByTestId("dashboard-empty-add")).toHaveCount(0);
+
+		// A fresh client must materialize cached dashboards before sync reconnects.
+		await pViewer.evaluate(async () => {
+			const path = "/src/web/lib/zero-lifecycle.ts";
+			const { retireZeroClients } = await import(path);
+			await retireZeroClients();
+		});
+		let blockedSyncConnections = 0;
+		await pViewer.routeWebSocket(/\/sync\//, (socket) => {
+			blockedSyncConnections++;
+			socket.close();
+		});
+		await pViewer.reload();
+		await expect.poll(() => blockedSyncConnections).toBeGreaterThan(0);
+		await expect(
+			sidebarLists(pViewer).getByRole("button", {
+				name: teamDash,
+				exact: true,
+			}),
+		).toBeVisible({ timeout: 15000 });
+
+		const memberSolo = `Personal ${Date.now()}`;
+		await createDashboard(pMember, memberSolo);
+		const revokePool = new Pool({
+			connectionString: process.env.E2E_DATABASE_URL,
+		});
+		try {
+			await revokePool.query(
+				"delete from membership where user_id = $1 and workspace_id = $2",
+				[memberId, SHARED_WORKSPACE_ID],
+			);
+		} finally {
+			await revokePool.end();
+		}
+		await expect(
+			sidebarLists(pMember).getByRole("button", {
+				name: teamDash,
+				exact: true,
+			}),
+		).toHaveCount(0, { timeout: 15000 });
+		await expect(
+			sidebarLists(pMember).getByRole("button", {
+				name: memberSolo,
+				exact: true,
+			}),
+		).toBeVisible();
 	} catch (error) {
 		try {
 			const originalCapture = await attachSharingFailure(
