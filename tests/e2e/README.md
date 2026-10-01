@@ -70,11 +70,16 @@ It excludes credentials, query arguments, and row contents.
 
 The runner also supplies its exact Compose arguments through
 `E2E_DIAGNOSTIC_COMPOSE_ARGV`. On a sharing failure, the capture reads the active
-Zero container's replica using its native SQLite consumer in a read-only
-transaction. It selects only versions, expected root/witness keys, and dashboard
+Zero container's serving path from a bounded worker startup log, then verifies
+WAL2 using its native SQLite consumer in a read-only transaction. Backup-enabled
+workers serve `replica.db-serving-copy`; the collector never selects a path by
+file existence. It verifies a native online backup against the pinned snapshot
+metadata and removes that temporary full snapshot before returning scoped data.
+It selects only versions, expected root/witness keys, and dashboard
 visibility predicates for at most four accounts, two dashboards, five workspaces,
 and eight memberships. A container-side hard kill bounds Node to four seconds,
-with a five-second host deadline and 32-KiB output cap;
+with a five-second host deadline and 32-KiB output cap; startup log inspection
+has a separate two-second deadline and returns no raw logs;
 errors omit stderr and never replace the test assertion. Direct Playwright runs
 without the runner hook report replica capture as unavailable.
 

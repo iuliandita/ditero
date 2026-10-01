@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -349,6 +349,19 @@ async function captureSharingReplica(selection: ReplicaSelection) {
 				compose[i + 1].length > 4096
 			)
 				throw new Error();
+		const startup = spawnSync(
+			"docker",
+			[...compose, "logs", "--no-color", "--tail", "1000", "zero-cache"],
+			{ encoding: "utf8", timeout: 2000, maxBuffer: 2 * 1024 * 1024 },
+		);
+		const servingPaths = [
+			...(startup.stdout ?? "").matchAll(
+				/setting (\/data\/replica\.db(?:-serving-copy)?) to wal2 mode/g,
+			),
+		];
+		const servingFile = servingPaths.at(-1)?.[1];
+		if (startup.status !== 0 || startup.error || !servingFile)
+			throw new Error("serving-proof");
 		const source = readFileSync(
 			new URL("./sharing-replica.mjs", import.meta.url),
 			"utf8",
@@ -360,6 +373,8 @@ async function captureSharingReplica(selection: ReplicaSelection) {
 					...compose,
 					"exec",
 					"-T",
+					"--env",
+					`E2E_DIAGNOSTIC_SERVING_FILE=${servingFile}`,
 					"zero-cache",
 					"/bin/busybox",
 					"timeout",
@@ -408,7 +423,14 @@ async function captureSharingReplica(selection: ReplicaSelection) {
 		const error = z
 			.object({
 				...times,
-				stage: z.enum(["input", "open", "query", "rollback", "close"]),
+				stage: z.enum([
+					"input",
+					"open",
+					"query",
+					"backup",
+					"rollback",
+					"close",
+				]),
 				error: z.enum(["Error", "RangeError"]),
 			})
 			.strict();
@@ -454,6 +476,12 @@ async function captureSharingReplica(selection: ReplicaSelection) {
 				z
 					.object({
 						...times,
+						servingFile: z.enum([
+							"/data/replica.db",
+							"/data/replica.db-serving-copy",
+						]),
+						journalMode: z.literal("wal2"),
+						backupVerified: z.literal(true),
 						metadata: z
 							.array(
 								z
@@ -482,6 +510,7 @@ async function captureSharingReplica(selection: ReplicaSelection) {
 			])
 			.parse(JSON.parse(output));
 		if ("rows" in result) {
+			if (result.servingFile !== servingFile) throw new Error("serving-proof");
 			const keys = {
 				dashboard: selection.dashboards,
 				workspace: selection.workspaces,
@@ -503,6 +532,7 @@ async function captureSharingReplica(selection: ReplicaSelection) {
 		}
 		return {
 			...result,
+			servingFileProof: "worker startup WAL2 message",
 			captureStartedAt: startedAt,
 			captureFinishedAt: Date.now(),
 		};
@@ -516,6 +546,7 @@ async function captureSharingReplica(selection: ReplicaSelection) {
 				"container-kill",
 				"container-exit",
 				"output-shape",
+				"serving-proof",
 			].includes(error.message)
 				? error.message
 				: "validation";

@@ -1,5 +1,7 @@
-import { readFileSync, realpathSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Runs only inside the runner's zero-cache container, with bounded IDs on stdin.
 let stage = "input";
@@ -7,6 +9,7 @@ const startedAt = Date.now();
 let db;
 let transactionOpen = false;
 let result;
+let backupDirectory;
 try {
 	const input = readFileSync(0, "utf8");
 	if (Buffer.byteLength(input) > 4096) throw new RangeError();
@@ -32,12 +35,19 @@ try {
 		realpathSync("/opt/app/node_modules/@rocicorp/zero/package.json"),
 	);
 	const Database = requireZero("@rocicorp/zero-sqlite3");
-	db = new Database("/data/replica.db", {
+	const servingFile = process.env.E2E_DIAGNOSTIC_SERVING_FILE;
+	if (
+		!["/data/replica.db", "/data/replica.db-serving-copy"].includes(servingFile)
+	)
+		throw new RangeError();
+	db = new Database(servingFile, {
 		readonly: true,
 		fileMustExist: true,
 	});
 	db.pragma("query_only = ON");
 	db.pragma("busy_timeout = 1000");
+	const journalMode = db.pragma("journal_mode", { simple: true });
+	if (journalMode !== "wal2") throw new Error();
 	db.exec("BEGIN");
 	transactionOpen = true;
 	stage = "query";
@@ -78,7 +88,33 @@ try {
 			predicate.get(accountID, dashboardID, dashboardID, accountID, accountID),
 		),
 	);
-	result = { startedAt, metadata, rows, visibility };
+	stage = "backup";
+	backupDirectory = mkdtempSync(join(tmpdir(), "sharing-replica-"));
+	const backupFile = join(backupDirectory, "snapshot.sqlite");
+	await db.backup(backupFile);
+	const backup = new Database(backupFile, {
+		readonly: true,
+		fileMustExist: true,
+	});
+	try {
+		const backupMetadata = backup
+			.prepare(`select s.stateVersion, s.writeTimeMs, c.replicaVersion
+			 from "_zero.replicationState" s join "_zero.replicationConfig" c using(lock)`)
+			.all();
+		if (JSON.stringify(backupMetadata) !== JSON.stringify(metadata))
+			throw new Error();
+	} finally {
+		backup.close();
+	}
+	result = {
+		startedAt,
+		servingFile,
+		journalMode,
+		backupVerified: true,
+		metadata,
+		rows,
+		visibility,
+	};
 } catch (error) {
 	result = {
 		startedAt,
@@ -93,6 +129,7 @@ try {
 	} finally {
 		try {
 			db?.close();
+			if (backupDirectory) rmSync(backupDirectory, { recursive: true });
 		} catch {
 			result = { startedAt, stage: "close", error: "Error" };
 		}
