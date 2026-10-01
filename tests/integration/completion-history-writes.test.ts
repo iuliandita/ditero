@@ -362,6 +362,68 @@ test.each([
 	).toBe(1);
 });
 
+test("undated COUNT skip records its persisted anchor without inventing a prior due date", async () => {
+	await push(1, "task.update", {
+		id: taskId,
+		dueAt: null,
+		rrule: "FREQ=DAILY;COUNT=1",
+	});
+	const before = (
+		await admin.query(
+			"select due_at,done,recurrence_anchor_at,recurrence_consumed from task where id=$1",
+			[taskId],
+		)
+	).rows[0];
+	expect(before).toMatchObject({
+		due_at: null,
+		done: false,
+		recurrence_consumed: 0,
+	});
+	expect(before.recurrence_anchor_at).toBeInstanceOf(Date);
+	expect(await events()).toHaveLength(0);
+	const skipped = await push(2, "task.skipOccurrence", { id: taskId });
+	expect(JSON.stringify(skipped)).not.toMatch(/error/i);
+	const after = (
+		await admin.query(
+			"select due_at,done,recurrence_anchor_at,recurrence_consumed from task where id=$1",
+			[taskId],
+		)
+	).rows[0];
+	expect(after).toMatchObject({ done: true, recurrence_consumed: 1 });
+	expect(after.due_at.getTime()).toBe(before.recurrence_anchor_at.getTime());
+	expect(after.recurrence_anchor_at.getTime()).toBe(
+		before.recurrence_anchor_at.getTime(),
+	);
+	const rows = await events();
+	expect(rows).toHaveLength(1);
+	expect(rows[0]).toMatchObject({
+		action: "skip",
+		before_due_at: null,
+		before_done: false,
+		after_done: true,
+	});
+	expect(rows[0].after_due_at.getTime()).toBe(after.due_at.getTime());
+	const replay = await push(2, "task.skipOccurrence", { id: taskId });
+	expect(JSON.stringify(replay)).toMatch(/alreadyProcessed/);
+	await push(3, "task.skipOccurrence", { id: taskId });
+	expect(await events()).toEqual(rows);
+	const unchanged = (
+		await admin.query(
+			"select due_at,done,recurrence_anchor_at,recurrence_consumed from task where id=$1",
+			[taskId],
+		)
+	).rows[0];
+	expect(unchanged).toEqual(after);
+	expect(
+		(
+			await admin.query(
+				"select count(*)::int as count from karma_event where user_id=$1",
+				[actor],
+			)
+		).rows[0].count,
+	).toBe(0);
+});
+
 test("schedule reset records implicit reopening once while replay and unchanged edits stay silent", async () => {
 	await admin.query(
 		"update task set rrule='FREQ=DAILY;COUNT=1',recurrence_anchor_at=due_at,recurrence_consumed=0 where id=$1",

@@ -36,7 +36,7 @@ CREATE TABLE "task_completion_event" (
 				or ("task_completion_event"."action" = 'reopen' and "task_completion_event"."before_done" = true and "task_completion_event"."after_done" = false)
 				or ("task_completion_event"."action" = 'skip' and "task_completion_event"."after_due_at" is not null
 					and ("task_completion_event"."after_done" = false or ("task_completion_event"."before_done" = false and "task_completion_event"."after_done" = true
-						and "task_completion_event"."after_due_at" is not distinct from "task_completion_event"."before_due_at")))
+						and ("task_completion_event"."before_due_at" is null or "task_completion_event"."after_due_at" is not distinct from "task_completion_event"."before_due_at"))))
 				or ("task_completion_event"."action" = 'habit_set' and "task_completion_event"."after_habit_status" is not null
 					and "task_completion_event"."after_habit_status" is distinct from "task_completion_event"."before_habit_status")
 				or ("task_completion_event"."action" = 'habit_unlog' and "task_completion_event"."before_habit_status" is not null

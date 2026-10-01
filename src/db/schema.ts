@@ -337,7 +337,7 @@ export const taskCompletionEvent = pgTable(
 				or (${t.action} = 'reopen' and ${t.beforeDone} = true and ${t.afterDone} = false)
 				or (${t.action} = 'skip' and ${t.afterDueAt} is not null
 					and (${t.afterDone} = false or (${t.beforeDone} = false and ${t.afterDone} = true
-						and ${t.afterDueAt} is not distinct from ${t.beforeDueAt})))
+						and (${t.beforeDueAt} is null or ${t.afterDueAt} is not distinct from ${t.beforeDueAt}))))
 				or (${t.action} = 'habit_set' and ${t.afterHabitStatus} is not null
 					and ${t.afterHabitStatus} is distinct from ${t.beforeHabitStatus})
 				or (${t.action} = 'habit_unlog' and ${t.beforeHabitStatus} is not null

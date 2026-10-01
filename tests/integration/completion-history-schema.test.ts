@@ -291,6 +291,19 @@ test("constraints accept terminal skip retaining its occurrence date", async () 
 	);
 });
 
+test("constraints accept terminal skip from an undated occurrence with a normalized anchor", async () => {
+	await insertEvent(
+		admin,
+		event({
+			action: "skip",
+			beforeDueAt: null,
+			beforeDone: false,
+			afterDueAt: recordedAt,
+			afterDone: true,
+		}),
+	);
+});
+
 test.each([
 	[
 		{ action: "complete", beforeDone: true },
@@ -298,6 +311,16 @@ test.each([
 	],
 	[{ action: "reopen", beforeDone: false }, "task_completion_event_transition"],
 	[{ action: "skip", afterDueAt: null }, "task_completion_event_transition"],
+	[
+		{
+			action: "skip",
+			beforeDueAt: null,
+			beforeDone: true,
+			afterDueAt: recordedAt,
+			afterDone: true,
+		},
+		"task_completion_event_transition",
+	],
 	[
 		{
 			action: "skip",

@@ -1,5 +1,5 @@
 {
-  "id": "c8a89e8e-20ef-4188-8628-237b36f5bef4",
+  "id": "d6c29637-abad-4dde-be51-430a244431d5",
   "prevId": "6193c367-a31e-4d5e-89b9-e0c0755e74de",
   "version": "7",
   "dialect": "postgresql",
@@ -3488,7 +3488,7 @@
         },
         "task_completion_event_transition": {
           "name": "task_completion_event_transition",
-          "value": "(\n\t\t\t\t(\"task_completion_event\".\"action\" = 'complete' and \"task_completion_event\".\"before_done\" = false)\n\t\t\t\tor (\"task_completion_event\".\"action\" = 'reopen' and \"task_completion_event\".\"before_done\" = true and \"task_completion_event\".\"after_done\" = false)\n\t\t\t\tor (\"task_completion_event\".\"action\" = 'skip' and \"task_completion_event\".\"after_due_at\" is not null\n\t\t\t\t\tand (\"task_completion_event\".\"after_done\" = false or (\"task_completion_event\".\"before_done\" = false and \"task_completion_event\".\"after_done\" = true\n\t\t\t\t\t\tand \"task_completion_event\".\"after_due_at\" is not distinct from \"task_completion_event\".\"before_due_at\")))\n\t\t\t\tor (\"task_completion_event\".\"action\" = 'habit_set' and \"task_completion_event\".\"after_habit_status\" is not null\n\t\t\t\t\tand \"task_completion_event\".\"after_habit_status\" is distinct from \"task_completion_event\".\"before_habit_status\")\n\t\t\t\tor (\"task_completion_event\".\"action\" = 'habit_unlog' and \"task_completion_event\".\"before_habit_status\" is not null\n\t\t\t\t\tand \"task_completion_event\".\"after_habit_status\" is null)\n\t\t\t)"
+          "value": "(\n\t\t\t\t(\"task_completion_event\".\"action\" = 'complete' and \"task_completion_event\".\"before_done\" = false)\n\t\t\t\tor (\"task_completion_event\".\"action\" = 'reopen' and \"task_completion_event\".\"before_done\" = true and \"task_completion_event\".\"after_done\" = false)\n\t\t\t\tor (\"task_completion_event\".\"action\" = 'skip' and \"task_completion_event\".\"after_due_at\" is not null\n\t\t\t\t\tand (\"task_completion_event\".\"after_done\" = false or (\"task_completion_event\".\"before_done\" = false and \"task_completion_event\".\"after_done\" = true\n\t\t\t\t\t\tand (\"task_completion_event\".\"before_due_at\" is null or \"task_completion_event\".\"after_due_at\" is not distinct from \"task_completion_event\".\"before_due_at\"))))\n\t\t\t\tor (\"task_completion_event\".\"action\" = 'habit_set' and \"task_completion_event\".\"after_habit_status\" is not null\n\t\t\t\t\tand \"task_completion_event\".\"after_habit_status\" is distinct from \"task_completion_event\".\"before_habit_status\")\n\t\t\t\tor (\"task_completion_event\".\"action\" = 'habit_unlog' and \"task_completion_event\".\"before_habit_status\" is not null\n\t\t\t\t\tand \"task_completion_event\".\"after_habit_status\" is null)\n\t\t\t)"
         },
         "task_completion_event_habit_date": {
           "name": "task_completion_event_habit_date",
