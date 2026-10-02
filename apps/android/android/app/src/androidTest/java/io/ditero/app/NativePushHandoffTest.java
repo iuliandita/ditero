@@ -87,7 +87,8 @@ public class NativePushHandoffTest {
             long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
             while(System.nanoTime()<deadline) {
                 List<WorkInfo> infos=work.getWorkInfosForUniqueWork(name).get(5,TimeUnit.SECONDS);
-                boolean oldFinished=work.getWorkInfoById(old.getId()).get(5,TimeUnit.SECONDS).getState().isFinished();
+                WorkInfo oldInfo=work.getWorkInfoById(old.getId()).get(5,TimeUnit.SECONDS);
+                boolean oldFinished=oldInfo==null?negativeControl==null:oldInfo.getState().isFinished();
                 boolean retry=infos.stream().anyMatch(info->!info.getId().equals(old.getId()) && info.getState()==WorkInfo.State.ENQUEUED && info.getRunAttemptCount()>0);
                 if(oldFinished && (negativeControl!=null || retry)) {
                     if(retry) {
