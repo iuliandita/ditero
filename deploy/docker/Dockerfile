@@ -119,7 +119,7 @@ RUN mkdir -p /rootfs/etc /rootfs/usr/bin /rootfs/usr/local/bin /rootfs/home/bun 
 	&& chown 1000:1000 /rootfs/home/bun /rootfs/data/attachments
 
 # gcr.io/distroless/base-debian13 (multi-arch index digest)
-FROM gcr.io/distroless/base-debian13@sha256:0ebad3510af52aefe45045cc01b07564570be4feecf8d9f93d3a05d1b5f2f93b AS runtime-debian
+FROM gcr.io/distroless/base-debian13@sha256:389cad21f73e4c37b94ffe5b13736d5a92bd5bd3c6c6b38c2be1c881e14ba2bd AS runtime-debian
 COPY --from=debian-prep /rootfs/ /
 
 # --- runtime stage ----------------------------------------------------------
