@@ -48,7 +48,7 @@ export const SCHEDULER_LOCK_KEY = 918274;
 
 type Database = NodePgDatabase<typeof tables>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
-type ChannelKind = (typeof tables.channelKindEnum.enumValues)[number];
+type ChannelKind = (typeof tables.outboxDeliveryKindEnum.enumValues)[number];
 
 export type TickSummary = {
 	created: number;

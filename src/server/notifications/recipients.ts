@@ -2,7 +2,7 @@
 // event enqueue path (events.ts): both need the same preferences, the same
 // enabled-channel fan-out, and the same never-suppress-on-a-broken-preference
 // quiet-hours rule.
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as tables from "../../db/schema.ts";
 import type { Locale } from "../../domain/locale.ts";
@@ -13,7 +13,7 @@ import {
 import { localeFromPref } from "../recipient-locale.ts";
 
 type Database = NodePgDatabase<typeof tables>;
-type ChannelKind = (typeof tables.channelKindEnum.enumValues)[number];
+type ChannelKind = (typeof tables.outboxDeliveryKindEnum.enumValues)[number];
 
 export type Pref = {
 	timezone: string;
@@ -80,6 +80,24 @@ export async function loadChannels(
 		const list = channels.get(row.userId) ?? [];
 		list.push(row.kind);
 		channels.set(row.userId, list);
+	}
+	const { rows: registrations } = await database.execute<{
+		user_id: string;
+	}>(sql`
+ select distinct r.user_id from native_push_registration r
+ join session s on s.id=r.session_id and s.user_id=r.user_id
+ join native_session_link l on l.session_id=s.id and l.user_id=r.user_id and l.device_id=r.device_id
+ join user_device d on d.id=r.device_id and d.user_id=r.user_id
+ where r.user_id in (${sql.join(
+		userIds.map((id) => sql`${id}`),
+		sql`,`,
+ )})
+ and s.expires_at > now() and d.revoked_at is null
+ `);
+	for (const row of registrations) {
+		const list = channels.get(row.user_id) ?? [];
+		list.push("nativepush");
+		channels.set(row.user_id, list);
 	}
 	return channels;
 }

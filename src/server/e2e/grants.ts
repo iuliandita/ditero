@@ -495,6 +495,7 @@ export async function notifyGrantCapable(
 					payload: {
 						kind: "key_grant",
 						workspaceName: row.workspace_name,
+						workspaceId: row.workspace_id,
 						locale: pref.locale,
 					},
 					// Keyed by the request, so re-running this after a retry does not

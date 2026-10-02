@@ -1,0 +1,3 @@
+CREATE TYPE "public"."outbox_delivery_kind" AS ENUM('ntfy', 'telegram', 'discord', 'slack', 'email', 'nativepush');--> statement-breakpoint
+ALTER TABLE "notification_outbox" ALTER COLUMN "channel_kind" SET DATA TYPE "public"."outbox_delivery_kind" USING "channel_kind"::text::"public"."outbox_delivery_kind";--> statement-breakpoint
+ALTER TABLE "notification_outbox" ADD COLUMN "native_registration_id" text;

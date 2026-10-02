@@ -84,6 +84,11 @@ export const channelKindEnum = pgEnum("channel_kind", [
 	"slack",
 	"email",
 ]);
+// Native registrations are server-only targets, never configurable channels.
+export const outboxDeliveryKindEnum = pgEnum("outbox_delivery_kind", [
+	...channelKindEnum.enumValues,
+	"nativepush",
+]);
 // Enum, not text: the column is Zero-synced, and a text column would let a
 // provider error body (credentials and all) reach every client of that user.
 // Values live in domain/notification-retry.ts with the mapping that produces
@@ -974,7 +979,8 @@ export const notificationOutbox = pgTable(
 		recipientUserId: text("recipient_user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		channelKind: channelKindEnum("channel_kind").notNull(),
+		channelKind: outboxDeliveryKindEnum("channel_kind").notNull(),
+		nativeRegistrationId: text("native_registration_id"),
 		payload: jsonb("payload").notNull(),
 		idempotencyKey: text("idempotency_key").notNull(),
 		status: outboxStatusEnum("status").notNull().default("queued"),

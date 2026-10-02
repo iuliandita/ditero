@@ -66,7 +66,8 @@ export function nativePushRoutes(deps: NativePushDependencies): Elysia {
 			"/api/native/push/config",
 			guarded(async () =>
 				reply({
-					deliveryReady: false,
+					deliveryReady:
+						!!store && !!(configuration.unifiedpush || configuration.fcm),
 					providers: {
 						unifiedpush: !!store && !!configuration.unifiedpush,
 						fcm: !!store && !!configuration.fcm,

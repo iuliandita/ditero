@@ -29,7 +29,7 @@ import { pruneAckCapabilities, pruneRateBuckets } from "./capability.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
-type ChannelKind = (typeof tables.channelKindEnum.enumValues)[number];
+type ChannelKind = (typeof tables.outboxDeliveryKindEnum.enumValues)[number];
 
 // Written by the reclaim path, which has no ProviderResult to classify: the
 // worker never heard back at all. Distinct from "transport" (we tried and the
@@ -41,6 +41,7 @@ export type OutboxRow = {
 	reminderStateId: string | null;
 	recipientUserId: string;
 	channelKind: ChannelKind;
+	nativeRegistrationId?: string | null;
 	payload: unknown;
 	attempts: number;
 };
@@ -150,7 +151,7 @@ export function claimBatchSql(limit: number, replicaId: string) {
 		from claimed c
 		where o.id = c.id
 		returning o.id, o.reminder_state_id, o.recipient_user_id, o.channel_kind,
-		          o.payload, o.attempts
+		          o.payload, o.attempts, o.native_registration_id
 	`;
 }
 
@@ -164,6 +165,7 @@ export async function claimBatch(
 		reminder_state_id: string | null;
 		recipient_user_id: string;
 		channel_kind: ChannelKind;
+		native_registration_id: string | null;
 		payload: unknown;
 		attempts: number;
 	}>(claimBatchSql(limit, replicaId));
@@ -172,6 +174,7 @@ export async function claimBatch(
 		reminderStateId: row.reminder_state_id,
 		recipientUserId: row.recipient_user_id,
 		channelKind: row.channel_kind,
+		nativeRegistrationId: row.native_registration_id,
 		payload: row.payload,
 		attempts: row.attempts,
 	}));
@@ -273,6 +276,7 @@ async function recordChannelHealth(
 	status: number | undefined,
 	errorCode: ChannelErrorCode | undefined,
 ): Promise<void> {
+	if (row.channelKind === "nativepush") return;
 	const owner = and(
 		eq(tables.notificationChannel.userId, row.recipientUserId),
 		eq(tables.notificationChannel.kind, row.channelKind),

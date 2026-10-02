@@ -164,7 +164,7 @@ test("real native admission exposes public config only and refuses mixed/browser
 	const a = await actor();
 	const config = await checked(await call("config", a.token), 200);
 	expect(config).toEqual({
-		deliveryReady: false,
+		deliveryReady: true,
 		providers: { unifiedpush: true, fcm: true },
 		vapidPublicKey: configuration.unifiedpush?.publicKey,
 		fcmProjectId: "test-project",

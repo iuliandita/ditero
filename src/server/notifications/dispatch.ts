@@ -18,6 +18,10 @@ import {
 import type { FieldKeyRing } from "../../security/field-encryption.ts";
 import type { safeFetch } from "../../security/safe-http.ts";
 import type { Network } from "../client-ip.ts";
+import {
+	type PushConfiguration,
+	pushConfiguration,
+} from "../native-push/contracts.ts";
 import { localeFromPref } from "../recipient-locale.ts";
 import { discordAdapter } from "./adapters/discord.ts";
 import { emailAdapter } from "./adapters/email.ts";
@@ -33,6 +37,7 @@ import {
 	ackToken,
 	hashAckToken,
 } from "./capability.ts";
+import { createNativeDelivery } from "./native-delivery.ts";
 import type { OutboxRow, SendFn } from "./worker.ts";
 
 type Database = NodePgDatabase<typeof tables>;
@@ -101,6 +106,7 @@ export type DispatchDeps = {
 	// Null disables the ack action entirely rather than emitting a relative URL
 	// no push client can follow.
 	ackBaseUrl: string | null;
+	nativeConfiguration?: PushConfiguration;
 	adapters?: Partial<Record<ChannelKind, ChannelAdapter>>;
 	fetch?: typeof safeFetch;
 };
@@ -214,6 +220,11 @@ export function createSendFn(deps: DispatchDeps): SendFn {
 	const adapters = deps.adapters ?? DEFAULT_ADAPTERS;
 	// Derived once: the ring is HKDF work per key and the send path is hot.
 	const ring = channelKeyRing();
+	const nativeDelivery = createNativeDelivery(
+		deps.database,
+		ring,
+		deps.nativeConfiguration ?? pushConfiguration(),
+	);
 	// Fail at construction, not per notification: a malformed origin would
 	// otherwise mint unfollowable ack links for every reminder, silently.
 	if (deps.ackBaseUrl !== null) {
@@ -227,6 +238,13 @@ export function createSendFn(deps: DispatchDeps): SendFn {
 	}
 	return async (row: OutboxRow, signal: AbortSignal) => {
 		try {
+			if (row.channelKind === "nativepush")
+				return await nativeDelivery(row, {
+					allowedPrivateCIDRs: deps.allowedPrivateCIDRs,
+					deadlineMs: deps.deadlineMs,
+					signal,
+					fetch: deps.fetch,
+				});
 			const adapter = adapters[row.channelKind];
 			// Permanent, not retryable: neither a missing adapter nor a channel the
 			// user has since deleted or disabled resolves itself on a retry.
