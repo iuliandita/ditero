@@ -88,29 +88,61 @@ unsigned or ad-hoc development builds. It does not publish a release or run an
 interactive consent/credential-store journey. The macOS CI job builds for its
 runner's native architecture; it does not produce a universal application.
 
-## Release signing is separate
+## Manual release signing hooks
 
-The development workflow reads no signing secrets. Do not distribute its artifacts
-as trusted production releases. A release workflow still needs signing,
-notarization where applicable, installation tests, and platform qualification.
+Development installer commands and CI remain unsigned/ad-hoc and read no signing
+secrets. Manual release hooks perform signing preflight, build the bundled UI,
+and invoke pinned Tauri 2.12.1 without `--debug`, with Cargo `--locked`.
+They do not publish artifacts or configure an updater.
 
-For macOS, replace the ad-hoc `bundle.macOS.signingIdentity` in a release-only
-configuration with a Developer ID identity. Protected CI secrets should be named
-`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, and `APPLE_SIGNING_IDENTITY`.
-Notarization can use `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID`, or the API
-credentials `APPLE_API_ISSUER`, `APPLE_API_KEY`, and `APPLE_API_KEY_PATH`. The latter
-path points to a securely materialized private key on the release runner. Follow
-[Tauri's macOS signing instructions](https://v2.tauri.app/distribute/sign/macos/).
+After frozen dependency installation and catalog compilation, set
+`DITERO_RELEASE_VERSION` to a semantic version without a `v` prefix. Run the
+command matching the build host from `apps/desktop`:
 
-For Windows, use protected `WINDOWS_CERTIFICATE` and
-`WINDOWS_CERTIFICATE_PASSWORD` secrets in a separate certificate-import step,
-then set `bundle.windows.certificateThumbprint`, `digestAlgorithm`, and
-`timestampUrl` in a release-only configuration. These secrets are not consumed
-automatically by the development workflow. Follow
-[Tauri's Windows signing instructions](https://v2.tauri.app/distribute/sign/windows/).
-Linux repository/package signing also remains a separate release responsibility.
-Never put certificates, private keys, passwords, or personal signing identities in
-tracked files. No updater or updater signing key is configured.
+```sh
+bun run release:linux
+bun run release:windows
+bun run release:macos
+```
+
+Linux builds `.deb` and AppImage packages. These hooks do not sign Linux packages;
+release operators must produce and authenticate checksums/signatures before
+publication. Package-manager trust and AppImage signing are separate from Tauri
+updater signatures. Never label an unsigned Linux artifact as signature-qualified.
+
+Windows requires an already imported, currently valid code-signing certificate
+with its private key in `Cert:\CurrentUser\My`. Set
+`DITERO_WINDOWS_CERTIFICATE_THUMBPRINT` to its 40 hexadecimal digits and
+`DITERO_WINDOWS_TIMESTAMP_URL` to the trusted signing provider's HTTPS RFC 3161
+service. The hook checks the certificate's code-signing usage and builds NSIS
+with SHA-256 signing and timestamping. It does not import certificates or bypass
+certificate trust. A successful signature does not guarantee SmartScreen reputation.
+
+macOS requires an already imported `Developer ID Application` certificate. Set
+`APPLE_SIGNING_IDENTITY` to its full identity, plus `APPLE_API_KEY`,
+`APPLE_API_ISSUER`, and `APPLE_API_KEY_PATH` for App Store Connect notarization.
+The API key must be a regular file accessible only to its owner. The hook requires
+this API credential route and rejects automatic certificate import and Apple ID
+credential overrides. It enables hardened runtime and builds `.app`/`.dmg`.
+Ad-hoc signing is unavailable through these release commands.
+
+The override configuration is written privately outside the checkout and removed
+on success or failure. Failed commands retain a private diagnostic log outside
+the checkout and report its path; signing output stays out of the console.
+`TAURI_CONFIG` must be unset. Supply credentials through a
+protected environment and private files, never command arguments or tracked files.
+
+Before distributing, verify Windows application and installer signatures with
+`signtool verify /pa /all`; verify macOS signing with `codesign --verify --deep
+--strict`, Gatekeeper with `spctl --assess --type execute`, and notarization with
+`xcrun stapler validate`. Test actual installation, launch, native credential-store
+access and upgrades on each supported architecture. Successful packaging alone
+is not OS-signature or runtime qualification. See the official
+[Windows signing](https://v2.tauri.app/distribute/sign/windows/) and
+[macOS signing](https://v2.tauri.app/distribute/sign/macos/) instructions.
+
+Public release workflows, signing credentials, Linux authenticated checksums,
+installer qualification and updater delivery remain separate unfinished work.
 
 ## Qualification status
 

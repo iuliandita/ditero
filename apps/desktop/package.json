@@ -7,7 +7,10 @@
 		"tauri": "tauri",
 		"package:linux": "tauri build --debug --bundles deb -- --locked",
 		"package:windows": "tauri build --debug --bundles nsis -- --locked",
-		"package:macos": "tauri build --debug --bundles app,dmg -- --locked"
+		"package:macos": "tauri build --debug --bundles app,dmg -- --locked",
+		"release:linux": "bun ../../scripts/desktop-release.ts linux",
+		"release:windows": "bun ../../scripts/desktop-release.ts windows",
+		"release:macos": "bun ../../scripts/desktop-release.ts macos"
 	},
 	"dependencies": {
 		"@tauri-apps/api": "2.12.1"
