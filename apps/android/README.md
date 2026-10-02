@@ -81,7 +81,10 @@ The connector and coordinator compile against the real SDK, and Java checks cove
 payload rejection, durable retirement, cleanup isolation, commit failure, and
 deduplication. Background delivery, distributor switching, interrupted registration,
 and permission flows still need device qualification. An optional Google relay is
-planned as a separate slice; this build includes no Firebase SDK or Google config.
+planned as a separate slice. The `independent` flavor uses UnifiedPush with a
+compatible distributor such as ntfy and includes no Firebase SDK, Google services
+plugin, or Google configuration. Both flavor identities remain `io.ditero.app`;
+there is no application ID suffix.
 
 ## Build a debug APK
 
@@ -108,12 +111,12 @@ cd apps/android
 bun run build
 bun run sync
 cd android
-./gradlew --no-daemon assembleDebug
+./gradlew --no-daemon testIndependentDebugUnitTest assembleIndependentDebug
 ```
 
 The resulting APK is
-`apps/android/android/app/build/outputs/apk/debug/app-debug.apk`. It uses Gradle's
-development signing configuration. Install it on an Android device or emulator
+`apps/android/android/app/build/outputs/apk/independent/debug/app-independent-debug.apk`.
+It uses Gradle's development signing configuration. Install it on an Android device or emulator
 running API 24 or later with `adb install -r` followed by that APK path. Debug APKs
 are test artifacts, not signed release or store distributions.
 
@@ -133,8 +136,9 @@ through a secret manager or protected CI environment:
 - `DITERO_ANDROID_KEY_PASSWORD`: signing key password.
 
 After building and syncing the bundled UI, run `./gradlew --no-daemon
-assembleRelease bundleRelease` from `apps/android/android`. The APK and AAB are
-under `app/build/outputs/apk/release/` and `app/build/outputs/bundle/release/`.
+assembleIndependentRelease bundleIndependentRelease` from `apps/android/android`.
+The APK and AAB are under `app/build/outputs/apk/independent/release/` and
+`app/build/outputs/bundle/independentRelease/`.
 Missing or incomplete signing configuration fails release packaging. Debug builds
 continue to use the development signing key. Keep the production keystore and
 passwords outside the repository; keystore files are ignored.
@@ -143,6 +147,27 @@ Choose and back up the distribution signing identity before publishing. A debug
 installation cannot be upgraded with an APK signed by a different key. These hooks
 do not provision a production identity, publish to Google Play, or establish store
 qualification.
+
+## Google flavor status
+
+The `google` flavor is build preparation only. Commands such as
+`./gradlew --no-daemon assembleGoogleDebug` and
+`./gradlew --no-daemon assembleGoogleRelease bundleGoogleRelease` always fail.
+Without a private `app/src/google/google-services.json` or
+`app/google-services.json`, they report missing configuration. Even with a file
+present, they refuse the unfinished Google push provider before executing build
+or packaging tasks. Configuration is not parsed or applied at this stage. No
+Google APK or AAB is available, and configuration alone does not enable delivery.
+The Google services plugin and Firebase dependencies are deliberately absent
+until the provider is integrated.
+
+Use explicit independent tasks for development and releases. Aggregate commands
+such as `assembleDebug`, `assembleRelease`, or `build` include the unavailable
+Google variant and therefore fail. Direct release packaging tasks, flavored
+release tasks, and aggregate release requests require all four signing variables;
+partial signing configuration also fails. Keep Google service and attestation
+configuration private; these files are ignored. Full application qualification
+and Google provider integration remain part of #346.
 
 ## Remaining work
 

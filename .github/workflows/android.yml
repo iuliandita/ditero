@@ -57,13 +57,13 @@ jobs:
       - name: Sync Capacitor Android project
         working-directory: apps/android
         run: bun run sync
-      - name: Assemble debug APK
+      - name: Assemble independent debug APK
         working-directory: apps/android/android
-        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+        run: ./gradlew --no-daemon testIndependentDebugUnitTest assembleIndependentDebug
       - name: Upload test APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: android-debug-apk-${{ github.sha }}
-          path: apps/android/android/app/build/outputs/apk/debug/app-debug.apk
+          name: android-independent-debug-apk-${{ github.sha }}
+          path: apps/android/android/app/build/outputs/apk/independent/debug/app-independent-debug.apk
           if-no-files-found: error
           retention-days: 7

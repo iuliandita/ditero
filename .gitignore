@@ -10,6 +10,7 @@ docs/local/
 
 # --- dependencies ---
 node_modules/
+/apps/android/node_modules
 .pnp
 .pnp.*
 
@@ -75,3 +76,7 @@ apps/android/android/app/src/main/assets/
 apps/android/android/capacitor-cordova-android-plugins/
 *.keystore
 *.jks
+
+# Private Google service and attestation configuration
+google-services.json
+*attestation*.json

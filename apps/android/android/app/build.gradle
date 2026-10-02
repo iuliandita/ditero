@@ -30,6 +30,11 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    flavorDimensions "pushProvider"
+    productFlavors {
+        independent { dimension "pushProvider" }
+        google { dimension "pushProvider" }
+    }
     signingConfigs {
         if (hasReleaseSigning) {
             release {
@@ -49,11 +54,18 @@ android {
     }
 }
 
-tasks.matching { it.name in ['packageRelease', 'packageReleaseBundle', 'assembleRelease', 'bundleRelease'] }.configureEach {
-    doFirst {
-        if (!hasReleaseSigning) {
-            throw new GradleException('Android release packaging requires an explicitly configured release keystore; use assembleDebug for development')
+// Inspect the resolved graph so abbreviated, aggregate and direct packaging requests
+// cannot bypass the variant or signing boundaries, including up-to-date outputs.
+gradle.taskGraph.whenReady { graph ->
+    def appTasks = graph.allTasks.findAll { it.project == project }
+    if (appTasks.any { it.name.contains('Google') }) {
+        if (!file('src/google/google-services.json').isFile() && !file('google-services.json').isFile()) {
+            throw new GradleException('Google Android builds require private google-services.json in app/src/google/ or app/; Google push provider integration is not implemented')
         }
+        throw new GradleException('Google Android builds are unavailable: Google push provider integration is not implemented; configuration alone cannot enable Google delivery')
+    }
+    if (appTasks.any { it.name ==~ /(?:assemble|bundle|package).*Release(?:Bundle|UniversalApk)?/ } && !hasReleaseSigning) {
+        throw new GradleException('Android release packaging requires an explicitly configured release keystore; use assembleIndependentDebug for development')
     }
 }
 
@@ -80,12 +92,3 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
-
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found; Google services plugin not applied")
-}
