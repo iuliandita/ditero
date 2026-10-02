@@ -48,6 +48,7 @@ final class NativePushCoordinator {
     private final java.util.function.BooleanSupplier permissionOverride,scheduleOverride;
     private final RegistrationTransport registrationTransport;
     private final NotificationSink notificationSink;
+    private boolean drainQueued,legacyCancelled;
     NativePushCoordinator(NativePushStore store,ExecutorService lane,java.util.function.BooleanSupplier permission,
                           java.util.function.BooleanSupplier schedule,RegistrationTransport registration,NotificationSink notifications) {
         context=null; main=null; http=null; this.store=store; this.lane=lane;
@@ -105,7 +106,6 @@ final class NativePushCoordinator {
         if(!store.retire()) {failure="storage-failed"; return false;}
         failure=null;
         if(!schedule()) {failure="storage-failed"; return false;}
-        lane.execute(this::cleanup);
         if(context!=null) ((NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE)).cancelAll();
         return true;
     }
@@ -116,14 +116,15 @@ final class NativePushCoordinator {
         if(session==null) {failure="no-session"; return;}
         NativePushStore.Owner active=store.active();
         boolean retrying=failure!=null;
-        if(store.current(active) && failure!=null) {
-            failure=null;
+        if(store.current(active)) {
             boolean pendingRegistration=store.prefs.getBoolean(active.instance+".pending",false);
             if(pendingRegistration || store.prefs.contains(active.instance+".messages")) {
+                failure=null;
                 if(pendingRegistration && !store.state(active,"enabling")) {failure="storage-failed"; return;}
                 if(!schedule()) failure="storage-failed";
                 return;
             }
+            if(failure!=null) failure=null;
         }
         if(store.current(active)) {
             String state=store.prefs.getString("state","disabled");
@@ -193,16 +194,40 @@ final class NativePushCoordinator {
             if(!schedule()) failure="storage-failed";
         } catch(Exception e) {setState(owner,"registration-failed");}
     }
-    private boolean schedule() {
-        if(scheduleOverride!=null) return scheduleOverride.getAsBoolean();
-        try {androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("native-push-maintenance",
-                androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE,
-                new androidx.work.OneTimeWorkRequest.Builder(MaintenanceWorker.class)
-                        .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL,30,TimeUnit.SECONDS).build())
-                    .getResult().get(5,TimeUnit.SECONDS);
+    private synchronized boolean schedule() {
+        if(scheduleOverride!=null && !scheduleOverride.getAsBoolean()) return false;
+        if(drainQueued) return true;
+        NativePushStore.Owner captured=store.active();
+        drainQueued=true;
+        try {
+            lane.execute(() -> {
+                synchronized(this) {drainQueued=false;}
+                if(scheduleOverride==null) {
+                    try {
+                        androidx.work.WorkManager work=androidx.work.WorkManager.getInstance(context);
+                        work.enqueueUniqueWork("native-push-drain",androidx.work.ExistingWorkPolicy.KEEP,
+                                new androidx.work.OneTimeWorkRequest.Builder(MaintenanceWorker.class)
+                                        .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL,30,TimeUnit.SECONDS).build())
+                                .getResult().get(5,TimeUnit.SECONDS);
+                        // Persist replacement recovery work before retiring the legacy blocked chain.
+                        if(!legacyCancelled) {
+                            work.cancelUniqueWork("native-push-maintenance").getResult().get(5,TimeUnit.SECONDS);
+                            legacyCancelled=true;
+                        }
+                    } catch(Exception e) {
+                        if(e instanceof InterruptedException) Thread.currentThread().interrupt();
+                        synchronized(this) {
+                            NativePushStore.Owner active=store.active();
+                            if((captured==null && active==null) || (captured!=null && active!=null && captured.instance.equals(active.instance)))
+                                failure="storage-failed";
+                        }
+                        return;
+                    }
+                }
+                drain();
+            });
             return true;
-        } catch(InterruptedException e) {Thread.currentThread().interrupt(); return false;}
-        catch(Exception e) {return false;}
+        } catch(RuntimeException e) {drainQueued=false; return false;}
     }
     synchronized void verificationAccepted() {
         NativePushStore.Owner owner=store.active();
@@ -224,7 +249,10 @@ final class NativePushCoordinator {
         return !store.prefs.contains(owner.instance+".messages") || store.clearDeferred(owner);
     }
     boolean maintenance() throws Exception {
-        return lane.submit(() -> {
+        return lane.submit(this::drain).get();
+    }
+    private boolean drain() {
+        try {
             synchronized(this) {reconcile();}
             if(!cleanup()) return false;
             NativePushStore.Owner owner;
@@ -252,7 +280,7 @@ final class NativePushCoordinator {
                 }
                 return replay(owner);
             } catch(Exception e) {setState(owner,"registration-failed"); return false;}
-        }).get();
+        } catch(Exception e) {return false;}
     }
     /** Only registration/cleanup is scheduled; reminders are received through UnifiedPush. */
     public static final class MaintenanceWorker extends androidx.work.Worker {

@@ -138,10 +138,11 @@ public class NativePushTest {
             assertEquals("storage-failed",coordinator.state()); assertTrue(shown.isEmpty());
             store.verified=true; schedule[0]=true;
             coordinator.enable(null);
-            assertEquals(2,schedules[0]); assertEquals("enabling",coordinator.state());
+            lane.submit(()->{}).get();
+            assertEquals(2,schedules[0]); assertEquals("registration-failed",coordinator.state());
             assertFalse(coordinator.maintenance()); assertEquals("registration-failed",coordinator.state());
             assertTrue(shown.isEmpty()); server[0]=true;
-            assertTrue(coordinator.maintenance()); assertEquals("active",coordinator.state());
+            coordinator.enable(null); lane.submit(()->{}).get(); assertEquals("active",coordinator.state());
             assertEquals(java.util.List.of("notification-1"),shown);
             assertFalse(durable.containsKey(store.owner.instance+".pending"));
         } finally {lane.shutdownNow();}
@@ -227,6 +228,60 @@ public class NativePushTest {
             assertEquals(java.util.List.of("notification-1"),shown);
             assertFalse(durable.containsKey(store.owner.instance+".messages"));
         } finally {lane.shutdownNow();}
+    }
+    @Test public void freshRegistrationDrainsWithoutWaitingForDurableBackoff() throws Exception {
+        FlowStore store=new FlowStore();
+        java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+        java.util.List<String> bodies=new java.util.ArrayList<>(); boolean[] server={false};
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->true,request->{
+            okio.Buffer buffer=new okio.Buffer(); request.body().writeTo(buffer); bodies.add(buffer.readUtf8());
+            if(!server[0]) throw new java.io.IOException("offline");
+            return Map.of("registrationId","registration-1","provider","unifiedpush");
+        },(owner,payload)->{throw new AssertionError();});
+        try {
+            assertTrue(store.endpoint(store.owner,"{\"attempt\":1}"));
+            assertFalse(coordinator.maintenance()); assertEquals("registration-failed",coordinator.state());
+            server[0]=true; assertTrue(store.endpoint(store.owner,"{\"attempt\":2}"));
+            coordinator.enable(null);
+            lane.submit(()->{}).get();
+            assertEquals(java.util.List.of("{\"attempt\":1}","{\"attempt\":2}"),bodies);
+            assertEquals("active",coordinator.state()); assertFalse(durable.containsKey(store.owner.instance+".pending"));
+        } finally {lane.shutdownNow();}
+    }
+    @Test public void acceptedVerificationCoalescesBurstIntoOneQueuedDrain() throws Exception {
+        FlowStore store=new FlowStore();
+        java.util.concurrent.ThreadPoolExecutor lane=(java.util.concurrent.ThreadPoolExecutor)java.util.concurrent.Executors.newFixedThreadPool(1);
+        java.util.concurrent.CountDownLatch started=new java.util.concurrent.CountDownLatch(1), release=new java.util.concurrent.CountDownLatch(1);
+        java.util.List<String> bodies=new java.util.ArrayList<>();
+        lane.submit(()->{started.countDown(); try {release.await();} catch(InterruptedException e) {Thread.currentThread().interrupt();}});
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->true,request->{
+            okio.Buffer buffer=new okio.Buffer(); request.body().writeTo(buffer); bodies.add(buffer.readUtf8());
+            return Map.of("registrationId","registration-1","provider","unifiedpush");
+        },(owner,payload)->{throw new AssertionError();});
+        try {
+            assertTrue(started.await(5,java.util.concurrent.TimeUnit.SECONDS));
+            for(int i=0;i<16;i++) {
+                assertTrue(store.endpoint(store.owner,"{\"attempt\":"+i+"}")); coordinator.verificationAccepted();
+            }
+            assertEquals(1,lane.getQueue().size());
+            release.countDown(); lane.submit(()->{}).get();
+            assertEquals(java.util.List.of("{\"attempt\":15}"),bodies); assertEquals("active",coordinator.state());
+        } finally {release.countDown(); lane.shutdownNow();}
+    }
+    @Test public void queuedDrainRejectsReplacedOwnerBeforeRegistration() throws Exception {
+        FlowStore store=new FlowStore();
+        java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+        java.util.concurrent.CountDownLatch started=new java.util.concurrent.CountDownLatch(1), release=new java.util.concurrent.CountDownLatch(1);
+        lane.submit(()->{started.countDown(); try {release.await();} catch(InterruptedException e) {Thread.currentThread().interrupt();}});
+        java.util.concurrent.atomic.AtomicInteger sends=new java.util.concurrent.atomic.AtomicInteger();
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->true,request->{sends.incrementAndGet(); throw new AssertionError("replacement must fence queued registration");},
+                (owner,payload)->{throw new AssertionError();});
+        try {
+            assertTrue(started.await(5,java.util.concurrent.TimeUnit.SECONDS));
+            assertTrue(store.endpoint(store.owner,"{}")); coordinator.verificationAccepted();
+            store.selection=captured("session-2"); release.countDown(); lane.submit(()->{}).get();
+            assertEquals(0,sends.get()); assertEquals(true,durable.get(store.owner.instance+".retired"));
+        } finally {release.countDown(); lane.shutdownNow();}
     }
     @Test public void capacityOverflowKeepsRetainedMessagesReplayable() throws Exception {
         FlowStore store=new FlowStore(); store.verified=false;
