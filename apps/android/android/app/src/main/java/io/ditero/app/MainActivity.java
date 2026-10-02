@@ -33,6 +33,12 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        if(zeroTransport!=null && (requestCode==7346 || requestCode==7347)) zeroTransport.pushPermissionResult(requestCode);
+    }
+
+    @Override
     public void onDestroy() {
         if (zeroTransport != null) zeroTransport.drain();
         zeroTransport = null;

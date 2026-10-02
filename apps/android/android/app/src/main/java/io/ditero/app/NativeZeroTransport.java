@@ -272,8 +272,12 @@ final class NativeZeroTransport {
         JSONObject build(int code, String raw) throws Reject, IOException;
     }
 
+    private final NativePushCoordinator push;
+    private NativeSessionVault.CapturedOwner pushPermissionOwner;
+
     private NativeZeroTransport(Activity activity) {
         this.activity = activity;
+        this.push = NativePushCoordinator.get(activity);
         this.prefs = new NativeSessionVault(activity).preferences();
         // No cookie jar, no logging interceptor, no redirects, no system proxy: the
         // bearer token only ever goes to the selected instance's HTTPS origin.
@@ -324,6 +328,7 @@ final class NativeZeroTransport {
     void drain() {
         if (closed) return;
         closed = true;
+        pushPermissionOwner=null;
         ready = false;
         attachments.cancelAll();
         generation++;
@@ -440,6 +445,13 @@ final class NativeZeroTransport {
                     requireReady(m);
                     forget(proxy, rid);
                     return;
+                case "push.state":
+                case "push.enable":
+                case "push.disable":
+                case "push.permission":
+                    requireReady(m);
+                    pushOperation(proxy,rid,op,m);
+                    return;
                 case "ws.open":
                     requireReady(m);
                     wsOpen(proxy, rid, cid, m);
@@ -472,6 +484,37 @@ final class NativeZeroTransport {
                     : obj("t", "reply", "rid", rid, "cid", cid, "ok", false, "code", r.getMessage()));
         } catch (IOException e) {
             sendToPage(proxy, obj("t", "reply", "rid", rid, "ok", false, "code", "invalid-message"));
+        }
+    }
+
+    private void pushOperation(JavaScriptReplyProxy proxy,int rid,String op,Map<String,Object> m) throws Reject {
+        if(page!=proxy || session==null || handle==null || !handle.equals(str(m.get("id")))) throw new Reject("no-session");
+        if(!new HashSet<>(Arrays.asList("op","rid","gen","id")).containsAll(m.keySet())) throw new Reject("invalid-message");
+        if(op.equals("push.disable")) retirePush();
+        if(op.equals("push.enable")) {
+            if(!push.permitted() && android.os.Build.VERSION.SDK_INT>=33) {
+                if(pushPermissionOwner!=null) throw new Reject("busy");
+                pushPermissionOwner=new NativeSessionVault(activity).capture();
+                if(pushPermissionOwner==null) throw new Reject("no-session");
+                activity.requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},7346);
+            } else push.enable(activity);
+        }
+        if(op.equals("push.permission") && !push.permitted() && android.os.Build.VERSION.SDK_INT>=33) {
+            if(pushPermissionOwner!=null) throw new Reject("busy");
+            activity.requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},7347);
+        }
+        sendToPage(proxy,obj("t","reply","rid",rid,"ok",true,"state",push.state(),
+                "permission",push.permitted()?"granted":"denied","provider","unifiedpush"));
+    }
+
+    private boolean retirePush() {pushPermissionOwner=null; return push.invalidate();}
+
+    void pushPermissionResult(int requestCode) {
+        NativeSessionVault.CapturedOwner captured=pushPermissionOwner;
+        pushPermissionOwner=null;
+        if(requestCode==7346 && captured!=null && new NativeSessionVault(activity).isCurrent(captured)) {
+            if(push.permitted()) push.enable(activity);
+            else push.denied();
         }
     }
 
@@ -565,6 +608,7 @@ final class NativeZeroTransport {
             return;
         }
         if (context == null || !context.origin.equals(next.origin)) {
+            if (!retirePush()) {fail(proxy,rid,"storage-failed"); return;}
             if (!prefs.edit().putString(PREF_SELECTED, next.origin).commit()) {
                 fail(proxy, rid, "storage-failed");
                 return;
@@ -936,6 +980,11 @@ final class NativeZeroTransport {
                             return;
                         }
                         Session next = outcome.session;
+                        if(!retirePush()) {
+                            revokeAbandoned(next.context,next.token);
+                            fail(proxy,rid,"storage-failed");
+                            return;
+                        }
                         if (!persistSession(next)) {
                             revokeAbandoned(next.context, next.token);
                             fail(proxy, rid, "storage-failed");
@@ -1145,6 +1194,7 @@ final class NativeZeroTransport {
             fail(proxy, rid, "busy");
             return;
         }
+        if (!retirePush()) {fail(proxy,rid,"storage-failed"); return;}
         if (!beginCheck(s)) {
             fail(proxy, rid, "storage-failed");
             return;
@@ -1204,6 +1254,7 @@ final class NativeZeroTransport {
 
     /** Local sign-out only: drops stored and in-memory credentials, no server revocation. */
     private void forget(JavaScriptReplyProxy proxy, int rid) {
+        if (!retirePush()) {fail(proxy,rid,"storage-failed"); return;}
         if (revoking != null) { fail(proxy, rid, "busy"); return; }
         exchange = null;
         revoking = null;
@@ -1220,6 +1271,7 @@ final class NativeZeroTransport {
 
     /** The instance said the token is dead: forget it locally, keep the selected instance. */
     private void dropSession(Session s) {
+        if(sameSession(session,s)) retirePush();
         clearPersisted(s);
         if (sameSession(session, s)) {
             String refusedHandle = handle;
@@ -1986,7 +2038,7 @@ final class NativeZeroTransport {
     }
 
     // Strict JSON: no leniency, no duplicate keys, bounded depth.
-    private static Object parse(String s) throws IOException {
+    static Object parse(String s) throws IOException {
         JsonReader r = new JsonReader(new StringReader(s));
         r.setLenient(false);
         Object v = readValue(r, 0);

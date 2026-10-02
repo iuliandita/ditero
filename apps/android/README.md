@@ -36,6 +36,48 @@ emulator check uploaded a file and saved it through the Storage Access Framework
 the saved 216-byte file matched the original. This does not qualify all document
 providers, file sizes, interruption paths, or physical devices.
 
+## Background reminders
+
+The Android host uses UnifiedPush connector 3.3.5. Install a compatible distributor
+such as ntfy and enable native push delivery on the selected Ditero server with
+its Web Push VAPID configuration. Enabling reminders explicitly requests Android
+13 notification permission and opens distributor selection when required. Denied
+permission, a missing distributor, an unavailable server provider, failed
+registration, and pending cleanup have separate states. Only a confirmed server
+registration is active.
+
+Reception runs in a native service without an Activity or WebView. A durable random
+subscription instance binds callbacks to an encrypted snapshot of the selected
+server, account, native session, and device. Session expiry uses the native session
+lifetime. Disable, sign-out, account replacement, and server selection retire that
+instance before cleanup; captured unregister requests run after pending registration
+requests and retain retry evidence across process death. One-off WorkManager
+maintenance replays encrypted pending registrations and retired-owner cleanup; it
+does not poll for reminders or create periodic reminder jobs. Replacement subscriptions
+wait for old cleanup. Credentials, distributor endpoints, and encryption keys are
+never returned to JavaScript.
+
+The fixed native bridge operations are `push.state`, `push.enable`, `push.disable`,
+and `push.permission`. Each requires the current main frame, page generation,
+and opaque auth handle in `id`. No caller body, endpoint, or URL is accepted.
+Replies include `state`, `permission` (`granted` or `denied`), and `provider`
+(`unifiedpush`). Poll state to observe asynchronous permission, distributor, and
+registration results. Android 13 enable resumes only for the account that opened
+the permission dialog.
+
+Only successfully decrypted, bounded payloads with exactly `version: "1"`,
+`notificationId`, and `registrationId` are accepted. The registration must match
+the current native owner; recent notification IDs are deduplicated durably.
+Notifications contain a generic private reminder, with an immutable explicit app
+launch intent. Tapping currently opens the app shell. Notification lookup,
+authorization, and task navigation remain unimplemented; no received URL is opened.
+
+The connector and coordinator compile against the real SDK, and Java checks cover
+payload rejection, durable retirement, cleanup isolation, commit failure, and
+deduplication. Background delivery, distributor switching, interrupted registration,
+and permission flows still need device qualification. An optional Google relay is
+planned as a separate slice; this build includes no Firebase SDK or Google config.
+
 ## Build a debug APK
 
 Install Bun 1.4.2, Java 21, and the Android SDK command-line tools. Set `JAVA_HOME`
@@ -101,7 +143,8 @@ qualification.
 
 - Broader encrypted-file qualification on physical devices and document providers.
 - Full offline recovery and account/server transition qualification on devices.
-- Native notification permission, background delivery, and push integration.
+- Device qualification of native notification permission and UnifiedPush background delivery.
+- Optional Google relay integration and authorized notification tap resolution.
 - Release signing identity, distribution pipelines, and store distribution.
 - Native deep links, update delivery, and complete application qualification.
 
