@@ -1,5 +1,19 @@
 apply plugin: 'com.android.application'
 
+def releaseSigning = [
+    storeFile: System.getenv('DITERO_ANDROID_KEYSTORE_PATH'),
+    storePassword: System.getenv('DITERO_ANDROID_KEYSTORE_PASSWORD'),
+    keyAlias: System.getenv('DITERO_ANDROID_KEY_ALIAS'),
+    keyPassword: System.getenv('DITERO_ANDROID_KEY_PASSWORD')
+]
+def hasReleaseSigning = releaseSigning.values().every { it != null && !it.isEmpty() }
+if (releaseSigning.values().any { it != null } && !hasReleaseSigning) {
+    throw new GradleException('Android release signing requires all four DITERO_ANDROID_KEYSTORE_PATH, DITERO_ANDROID_KEYSTORE_PASSWORD, DITERO_ANDROID_KEY_ALIAS and DITERO_ANDROID_KEY_PASSWORD environment variables')
+}
+if (hasReleaseSigning && !file(releaseSigning.storeFile).isFile()) {
+    throw new GradleException('Android release keystore is unavailable')
+}
+
 android {
     namespace = "io.ditero.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +30,29 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseSigning.storeFile)
+                storePassword releaseSigning.storePassword
+                keyAlias releaseSigning.keyAlias
+                keyPassword releaseSigning.keyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+tasks.matching { it.name in ['packageRelease', 'packageReleaseBundle', 'assembleRelease', 'bundleRelease'] }.configureEach {
+    doFirst {
+        if (!hasReleaseSigning) {
+            throw new GradleException('Android release packaging requires an explicitly configured release keystore; use assembleDebug for development')
         }
     }
 }
