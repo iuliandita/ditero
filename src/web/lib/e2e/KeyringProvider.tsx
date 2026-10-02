@@ -9,11 +9,12 @@ import {
 	useState,
 } from "react";
 import { autoLockMaxAgeMs } from "../../../domain/e2e/auto-lock.ts";
-import { authClient } from "../auth-client.ts";
 import { recoverCiphertextStages } from "./ciphertext-staging.ts";
 import { createDeriver } from "./derive.ts";
 import { deviceId } from "./device-id.ts";
+import { createDeviceStore } from "./device-store.ts";
 import { createKeyring, type KeyringState } from "./keyring.ts";
+import { browserE2eRuntime, type E2eRuntime } from "./runtime.ts";
 import { createSession, type IdentityResponse } from "./session.ts";
 import {
 	type OwnWorkspaceKey,
@@ -28,6 +29,7 @@ export type WorkspaceKeyMaterial = {
 };
 
 export type KeyringContextValue = {
+	runtime: E2eRuntime;
 	state: KeyringState;
 	/** False until the first identity fetch settles, so callers do not flash. */
 	ready: boolean;
@@ -77,10 +79,15 @@ const STATE_POLL_MS = 15_000;
 export function KeyringProvider({
 	userId,
 	autoLockMinutes,
+	storageScope,
+	runtime = browserE2eRuntime,
 	children,
 }: {
 	userId: string;
 	autoLockMinutes: number | null;
+	/** Server and verified account scope; changing it requires a keyed remount. */
+	storageScope?: string;
+	runtime?: E2eRuntime;
 	children: ReactNode;
 }) {
 	// Declared before the session that closes over it: the closure is only
@@ -88,11 +95,15 @@ export function KeyringProvider({
 	// a use-before-define and the next edit to either is where that stops being
 	// true.
 	useEffect(() => {
-		void recoverCiphertextStages().catch((error) => {
+		void recoverCiphertextStages(storageScope).catch((error) => {
 			console.error("attachments: staging recovery failed", error);
 		});
-	}, []);
+	}, [storageScope]);
 
+	const scopeStore = useMemo(
+		() => createDeviceStore(storageScope),
+		[storageScope],
+	);
 	const deriver = useMemo(() => createDeriver(), []);
 	useEffect(() => () => deriver.dispose(), [deriver]);
 
@@ -106,14 +117,20 @@ export function KeyringProvider({
 			createKeyring({
 				now: () => Date.now(),
 				maxAgeMs: autoLockMaxAgeMs(null),
+				clearDeviceStore: scopeStore.clearDeviceKey,
 				derive: (secret, salt, version) =>
 					deriver.derive(secret, salt, "passphrase", version),
 			}),
-		[deriver],
+		[deriver, scopeStore],
 	);
 	const session = useMemo(
-		() => createSession(keyring, () => deviceId()),
-		[keyring],
+		() =>
+			createSession(
+				keyring,
+				() => deviceId(undefined, storageScope),
+				scopeStore,
+			),
+		[keyring, storageScope, scopeStore],
 	);
 
 	const [state, setState] = useState<KeyringState>("unenrolled");
@@ -174,7 +191,7 @@ export function KeyringProvider({
 						userId,
 						publicKey,
 						(input, init) =>
-							fetch(input, { ...init, signal: controller.signal }),
+							runtime.fetcher(input, { ...init, signal: controller.signal }),
 					);
 				} catch (error) {
 					// Navigation aborts in-flight fetches while this provider unmounts.
@@ -192,7 +209,7 @@ export function KeyringProvider({
 					hydrationAbort.current = null;
 			}
 		},
-		[keyring, userId],
+		[keyring, runtime, userId],
 	);
 
 	const refresh = useCallback(async () => {
@@ -200,7 +217,7 @@ export function KeyringProvider({
 		const controller = new AbortController();
 		refreshAbort.current = controller;
 		try {
-			const response = await fetch("/api/e2e/identity", {
+			const response = await runtime.fetcher("/api/e2e/identity", {
 				credentials: "include",
 				signal: controller.signal,
 			});
@@ -229,12 +246,22 @@ export function KeyringProvider({
 				sync();
 			}
 		}
-	}, [hydrateWorkspaceKeys, session, sync, userId]);
+	}, [hydrateWorkspaceKeys, runtime, session, sync, userId]);
 
 	useEffect(() => {
 		void refresh();
 		return () => refreshAbort.current?.abort();
 	}, [refresh]);
+
+	useEffect(
+		() => () => {
+			hydrationAbort.current?.abort();
+			refreshAbort.current?.abort();
+			workspaceKeys.current = [];
+			session.lockNow();
+		},
+		[session],
+	);
 
 	useEffect(() => {
 		session.setAutoLockMinutes(autoLockMinutes);
@@ -248,6 +275,7 @@ export function KeyringProvider({
 
 	const value = useMemo<KeyringContextValue>(
 		() => ({
+			runtime,
 			state,
 			ready,
 			available,
@@ -275,11 +303,10 @@ export function KeyringProvider({
 				} finally {
 					sync();
 				}
-				const result = await authClient.signOut();
-				if (result.error) throw result.error;
+				await runtime.signOut();
 			},
 			async adoptPrivateKey(privateKey, remember) {
-				const response = await fetch("/api/e2e/identity", {
+				const response = await runtime.fetcher("/api/e2e/identity", {
 					credentials: "include",
 				});
 				if (!response.ok) return;
@@ -326,6 +353,7 @@ export function KeyringProvider({
 			lockedByTimeout,
 			ready,
 			refresh,
+			runtime,
 			session,
 			state,
 			sync,

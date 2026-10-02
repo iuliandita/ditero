@@ -38,6 +38,7 @@ export class KeyringError extends Error {
 }
 
 export type KeyringOptions = {
+	clearDeviceStore?: () => Promise<void>;
 	// Injected so the max-age transition is testable. Nothing in this module
 	// reads Date.now() directly: a module-scope clock cannot be pinned, and an
 	// unpinnable expiry is an untestable one.
@@ -82,15 +83,20 @@ const defaultDerive = (secret: string, salt: Uint8Array, version: number) =>
 
 export function createKeyring(options: KeyringOptions): Keyring {
 	const derive = options.derive ?? defaultDerive;
+	const clearStore = options.clearDeviceStore ?? clearDeviceKey;
 
 	let identity: EnrolledIdentity | null = null;
 	let privateKey: Uint8Array | null = null;
 	let unlockedAt = 0;
+	let epoch = 0;
 	let maxAgeMs = options.maxAgeMs;
 	const wdks = new Map<string, Uint8Array>();
 
 	const forget = () => {
+		epoch++;
+		privateKey?.fill(0);
 		privateKey = null;
+		for (const key of wdks.values()) key.fill(0);
 		// A WDK outliving its unlock would let a locked page keep decrypting.
 		wdks.clear();
 	};
@@ -117,16 +123,17 @@ export function createKeyring(options: KeyringOptions): Keyring {
 			if (!identity) {
 				throw new KeyringError("unenrolled", "keyring: no identity to unlock");
 			}
-			const kek = await derive(
-				secret,
-				identity.passphraseSalt,
-				identity.kdfVersion,
-			);
+			const owner = identity;
+			const started = epoch;
+			const kek = await derive(secret, owner.passphraseSalt, owner.kdfVersion);
+			if (started !== epoch)
+				throw new KeyringError("stale", "keyring: unlock was retired");
+			let opened: Uint8Array;
 			try {
-				privateKey = await decryptWrapped(
-					identity.passphraseWrapped,
+				opened = await decryptWrapped(
+					owner.passphraseWrapped,
 					kek,
-					aad.privateKeyPassphrase(identity.userId),
+					aad.privateKeyPassphrase(owner.userId),
 				);
 			} catch (error) {
 				// Stay locked. Assigning the reason by the envelope's own phase
@@ -142,13 +149,18 @@ export function createKeyring(options: KeyringOptions): Keyring {
 					error,
 				);
 			}
+			if (started !== epoch) {
+				opened.fill(0);
+				throw new KeyringError("stale", "keyring: unlock was retired");
+			}
+			privateKey = opened;
 			unlockedAt = options.now();
 		},
 		adopt(restored) {
 			if (!identity) {
 				throw new KeyringError("unenrolled", "keyring: no identity to adopt");
 			}
-			privateKey = restored;
+			privateKey = restored.slice();
 			unlockedAt = options.now();
 		},
 		lockNow: forget,
@@ -158,7 +170,7 @@ export function createKeyring(options: KeyringOptions): Keyring {
 		async clear() {
 			identity = null;
 			forget();
-			await clearDeviceKey();
+			await clearStore();
 		},
 		privateKey() {
 			const current = state();
@@ -174,7 +186,7 @@ export function createKeyring(options: KeyringOptions): Keyring {
 			if (state() !== "ready") {
 				throw new KeyringError("locked", "keyring: cannot cache while locked");
 			}
-			wdks.set(`${workspaceId}:${version}`, wdk);
+			wdks.set(`${workspaceId}:${version}`, wdk.slice());
 		},
 		wdkFor(workspaceId, version) {
 			if (state() !== "ready") return undefined;

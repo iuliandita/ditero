@@ -42,9 +42,11 @@ function boundary(
 	storage: Storage = new Journal(),
 	generation = "first",
 	userID = "user",
+	storageScope?: string,
 ) {
 	return createExportBoundary({
 		userID,
+		storageScope,
 		clientID: "client",
 		generation,
 		storage,
@@ -228,6 +230,34 @@ describe("export saved boundary", () => {
 		expect(await wait(boundary(storage, "second", "other-user"))).toBe(true);
 		const reusedGeneration = boundary(storage);
 		expect(reusedGeneration.getSnapshot().prior).toBe(true);
+	});
+
+	it("does not let a native server's uncertainty block the same user on another server", async () => {
+		const storage = new Journal();
+		boundary(storage, "first", "user", "server-a").wrapMutation(() => ({
+			client: Promise.resolve(success),
+			server: Promise.resolve(undefined),
+		}));
+		await flush();
+		expect(storage.length).toBe(1);
+		const otherServer = boundary(storage, "first", "user", "server-b");
+		expect(otherServer.getSnapshot()).toMatchObject({
+			prior: false,
+			uncertain: false,
+		});
+		expect(await wait(otherServer)).toBe(true);
+		expect(storage.length).toBe(1);
+	});
+
+	it("retains a native scope's prior journal when that scope returns", async () => {
+		const storage = new Journal();
+		boundary(storage, "first", "user", "server-a").wrapMutation(() => ({
+			client: Promise.resolve(success),
+			server: deferred().promise,
+		}));
+		const returned = boundary(storage, "second", "user", "server-a");
+		expect(returned.getSnapshot().prior).toBe(true);
+		expect(await wait(returned)).toBe(false);
 	});
 
 	it("rechecks other journals before accepting an otherwise clean boundary", async () => {

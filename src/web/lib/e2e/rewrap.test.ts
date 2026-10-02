@@ -272,6 +272,72 @@ describe("postRewrap", () => {
 });
 
 describe("fetchRecoveryIdentity", () => {
+	test("uses the injected transport for recovery and replacement without browser fetch", async () => {
+		const browserFetch = stubFetch(500);
+		const recovery = await buildReplacement({
+			userId: USER,
+			privateKey: PRIVATE_KEY,
+			secret: "recovery code",
+			purpose: "recovery",
+			version: CURRENT_KDF_VERSION,
+			previousWrapped: "previous recovery wrap",
+			derive,
+		});
+		const body: RecoveryIdentityResponse = {
+			enrolled: true,
+			recoveryWrapped: recovery.wrapped,
+			recoverySalt: recovery.salt,
+			formatVersion: CURRENT_KDF_VERSION,
+		};
+		const transport = vi.fn(
+			async (input: RequestInfo | URL, init?: RequestInit) => {
+				if (
+					input === "/api/e2e/identity/recovery" &&
+					init?.method === undefined
+				) {
+					return new Response(JSON.stringify(body), { status: 200 });
+				}
+				if (input === "/api/e2e/rewrap" && init?.method === "POST") {
+					return new Response(null, { status: 200 });
+				}
+				throw new Error("unexpected injected request");
+			},
+		);
+		const identity = await fetchRecoveryIdentity(transport);
+		const privateKey = await openRecoveryWrap({
+			userId: USER,
+			identity,
+			code: "recovery code",
+			derive,
+		});
+		expect(privateKey).toEqual(PRIVATE_KEY);
+		const replacement = await buildReplacement({
+			userId: USER,
+			privateKey,
+			secret: "new recovery code",
+			purpose: "recovery",
+			version: CURRENT_KDF_VERSION,
+			previousWrapped: recovery.wrapped,
+			derive,
+		});
+		const request = {
+			recovery: replacement,
+			formatVersion: CURRENT_KDF_VERSION,
+		};
+		await postRewrap(request, transport);
+		expect(transport).toHaveBeenCalledTimes(2);
+		expect(transport).toHaveBeenNthCalledWith(1, "/api/e2e/identity/recovery", {
+			credentials: "include",
+		});
+		expect(transport).toHaveBeenNthCalledWith(2, "/api/e2e/rewrap", {
+			method: "POST",
+			credentials: "include",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(request),
+		});
+		expect(browserFetch).not.toHaveBeenCalled();
+	});
+
 	test("returns the parsed body", async () => {
 		const body = {
 			enrolled: true,

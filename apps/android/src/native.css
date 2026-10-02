@@ -1,0 +1,7 @@
+@import "../../../src/web/index.css";
+@source "../../../src/web";
+@source "./";
+
+body {
+	padding-top: env(safe-area-inset-top);
+}

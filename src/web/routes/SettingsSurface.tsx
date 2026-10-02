@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { Role } from "../../domain/role.ts";
 import { m } from "../../paraglide/messages.js";
+import { EncryptedFilesPanel } from "../components/e2e/EncryptedFilesPanel.tsx";
 import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
 import { AccountDeletionPanel } from "../components/settings/AccountDeletionPanel.tsx";
 import { AccountPanel } from "../components/settings/AccountPanel.tsx";
@@ -12,6 +13,7 @@ import { KarmaSettings } from "../components/settings/KarmaSettings.tsx";
 import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
 import { LabelManager } from "../components/settings/LabelManager.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
+import { NativeBrowserSettings } from "../components/settings/NativeBrowserSettings.tsx";
 import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
 import {
 	SettingsNav,
@@ -27,6 +29,7 @@ import { TimeZoneSetting } from "../components/settings/TimeZoneSetting.tsx";
 import { SyncIndicator } from "../components/shell/SyncIndicator.tsx";
 import { BackButton } from "../components/ui/back-button.tsx";
 import type { Locale } from "../lib/locale.ts";
+import { useNativeAccount } from "../lib/native-account.tsx";
 import { SecurityPanel } from "./SecurityPanel.tsx";
 
 export function SettingsSurface({
@@ -50,6 +53,7 @@ export function SettingsSurface({
 	autoFocusBack?: boolean;
 	initialSection?: "account" | "appearance";
 }) {
+	const native = useNativeAccount();
 	const backRef = useRef<HTMLButtonElement>(null);
 	useEffect(() => {
 		if (initialSection === "appearance") {
@@ -119,11 +123,18 @@ export function SettingsSurface({
 					</SettingsSection>
 
 					<SettingsSection id="notifications" title={m.notifications_heading()}>
-						<NotificationSettings />
+						{native ? <NativeBrowserSettings /> : <NotificationSettings />}
 					</SettingsSection>
 
 					<SettingsSection id="security" title={m.security_heading()}>
-						<SecurityPanel />
+						{native ? (
+							<div className="flex flex-col gap-8">
+								<EncryptedFilesPanel userId={native.profile.id} />
+								<NativeBrowserSettings />
+							</div>
+						) : (
+							<SecurityPanel />
+						)}
 					</SettingsSection>
 
 					{activeId && (
@@ -150,8 +161,14 @@ export function SettingsSurface({
 					)}
 
 					<SettingsSection id="data" title={m.settings_section_data()}>
-						<DataPortabilityPanel />
-						<ImportPlanPanel />
+						{native ? (
+							<NativeBrowserSettings />
+						) : (
+							<>
+								<DataPortabilityPanel />
+								<ImportPlanPanel />
+							</>
+						)}
 					</SettingsSection>
 
 					<SettingsSection
@@ -159,7 +176,7 @@ export function SettingsSurface({
 						title={m.settings_section_danger()}
 						tone="danger"
 					>
-						<AccountDeletionPanel />
+						{native ? <NativeBrowserSettings /> : <AccountDeletionPanel />}
 					</SettingsSection>
 				</div>
 			</div>

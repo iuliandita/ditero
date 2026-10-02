@@ -52,6 +52,48 @@ function stageBrowser() {
 }
 
 describe("upload stage lifecycle", () => {
+	test("recovers only its scope while preserving other orphans and held stages", async () => {
+		const { files, held } = stageBrowser();
+		const ownScope = "https://first.example/u_1";
+		const otherScope = `${ownScope}-other`;
+		async function stageName(scope?: string): Promise<string> {
+			let created: string | undefined;
+			await withCiphertextStage(async () => {
+				created = [...files.keys()][0];
+			}, scope);
+			if (!created) throw new Error("stage was not created");
+			return created;
+		}
+		const ownOrphan = await stageName(ownScope);
+		const ownActive = await stageName(ownScope);
+		const otherOrphan = await stageName(otherScope);
+		const browserOrphan = await stageName();
+		// Terminated owners release their locks without deleting their files.
+		for (const name of [ownOrphan, ownActive, otherOrphan, browserOrphan]) {
+			files.set(name, { kind: "file" });
+		}
+		held.add(ownActive);
+		await recoverCiphertextStages(ownScope);
+		expect(files.has(ownOrphan)).toBe(false);
+		expect([...files.keys()]).toEqual([ownActive, otherOrphan, browserOrphan]);
+		expect(held.has(ownActive)).toBe(true);
+		held.delete(ownActive);
+		await recoverCiphertextStages(ownScope);
+		expect([...files.keys()]).toEqual([otherOrphan, browserOrphan]);
+		await recoverCiphertextStages();
+		expect([...files.keys()]).toEqual([otherOrphan]);
+		await recoverCiphertextStages(otherScope);
+		expect(files.size).toBe(0);
+		for (const scope of ["", " ", "\t"]) {
+			await expect(recoverCiphertextStages(scope)).rejects.toThrow(
+				"storage scope must be nonempty",
+			);
+			await expect(
+				withCiphertextStage(async () => undefined, scope),
+			).rejects.toThrow("storage scope must be nonempty");
+		}
+	});
+
 	test("removes the stage when acquiring its writable fails", async () => {
 		const { files, createWritable } = stageBrowser();
 		const failure = new DOMException("quota", "QuotaExceededError");

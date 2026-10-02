@@ -86,25 +86,25 @@ function safeStorage(): Storage | null {
 	}
 }
 
-export function useNavSections(userId: string | null | undefined): {
+export function useNavSections(storageScope: string | null | undefined): {
 	isOpen: (section: NavSection, hasItems?: boolean) => boolean;
 	toggle: (section: NavSection, hasItems?: boolean) => void;
 } {
 	const [preferences, setPreferences] = useState<NavSectionPreferences>(() =>
-		userId ? readNavSections(userId) : {},
+		storageScope ? readNavSections(storageScope) : {},
 	);
 	useEffect(() => {
-		setPreferences(userId ? readNavSections(userId) : {});
-	}, [userId]);
+		setPreferences(storageScope ? readNavSections(storageScope) : {});
+	}, [storageScope]);
 	const toggle = useCallback(
 		(section: NavSection, hasItems = true) => {
 			setPreferences((prev) => {
 				const next = toggleNavSection(prev, section, hasItems);
-				if (userId) writeNavSections(userId, next);
+				if (storageScope) writeNavSections(storageScope, next);
 				return next;
 			});
 		},
-		[userId],
+		[storageScope],
 	);
 	const isOpen = useCallback(
 		(section: NavSection, hasItems = true) =>

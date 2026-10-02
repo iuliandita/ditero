@@ -79,6 +79,7 @@ import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
 import { canCreateFolder, canCreateList } from "../lib/create-gates.ts";
 import { shortcutHintVisible } from "../lib/hints.ts";
 import type { Locale } from "../lib/locale.ts";
+import { useAccountStorageScope } from "../lib/native-account.tsx";
 import { viewIcon } from "../lib/nav-icon.tsx";
 import { useNavSections } from "../lib/nav-sections.ts";
 import { recordRecent } from "../lib/recents.ts";
@@ -109,6 +110,7 @@ export function Workspace() {
 }
 
 function NormalWorkspace() {
+	const storageScope = useAccountStorageScope();
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
@@ -164,7 +166,7 @@ function NormalWorkspace() {
 	const [collapsed, setCollapsed] = useState(false);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
 	const [membersOpen, setMembersOpen] = useState(false);
-	const navSections = useNavSections(zero.userID);
+	const navSections = useNavSections(storageScope);
 	const [cheatOpen, setCheatOpen] = useState(false);
 	// One-shot: a "dashboard:<id>" home ref lands on that dashboard after sync.
 	const [homeApplied, setHomeApplied] = useState(false);
@@ -340,30 +342,29 @@ function NormalWorkspace() {
 		setActiveId(id);
 		if (isDesktop || contentState.kind !== "index") openHome();
 	}
-	const userId = zero.userID;
 	const openList = useCallback(
 		(id: string) => {
 			setDetailTaskId(null);
 			dispatchContent({ kind: "list", id });
-			recordRecent(userId, { kind: "list", id });
+			recordRecent(storageScope, { kind: "list", id });
 		},
-		[userId],
+		[storageScope],
 	);
 	const openView = useCallback(
 		(id: string) => {
 			setDetailTaskId(null);
 			dispatchContent({ kind: "view", id });
-			recordRecent(userId, { kind: "view", id });
+			recordRecent(storageScope, { kind: "view", id });
 		},
-		[userId],
+		[storageScope],
 	);
 	const openDashboard = useCallback(
 		(id: string) => {
 			setDetailTaskId(null);
 			dispatchContent({ kind: "dashboard", id });
-			recordRecent(userId, { kind: "dashboard", id });
+			recordRecent(storageScope, { kind: "dashboard", id });
 		},
-		[userId],
+		[storageScope],
 	);
 	// A task found by search opens over its list: the docked panel on desktop,
 	// the sheet on a phone.

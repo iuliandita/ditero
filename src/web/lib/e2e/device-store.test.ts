@@ -1,12 +1,17 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
+import { aad, encryptWrapped } from "../../../domain/e2e/envelope.ts";
+import { encodeBytes, encodeWrapped } from "../../../domain/e2e/wire.ts";
 import {
 	clearDeviceKey,
+	createDeviceStore,
 	DeviceStoreError,
 	loadWrappedPrivateKey,
 	readDeviceKeyForTest,
 	storeWrappedPrivateKey,
 } from "./device-store.ts";
+import { createKeyring } from "./keyring.ts";
+import { createSession, type IdentityResponse } from "./session.ts";
 
 // The wrapping key cannot be exported, but the private-key round trip below
 // is available to any same-origin code. Persistence does not isolate secrets
@@ -18,6 +23,77 @@ beforeEach(async () => {
 });
 
 describe("device-store", () => {
+	it("isolates remembered keys across scopes with the same identity and device", async () => {
+		for (const scope of ["", " ", "\t"]) {
+			expect(() => createDeviceStore(scope)).toThrow(
+				"storage scope must be nonempty",
+			);
+		}
+		const scopes = ["https://first.example/u_1", "https://second.example/u_1"];
+		const stores = scopes.map((scope) => createDeviceStore(scope));
+		const keys = [secret(), secret()];
+		try {
+			for (const [index, store] of stores.entries()) {
+				await store.storeWrappedPrivateKey("u_1", "d_1", keys[index]);
+				expect((await store.readDeviceKeyForTest()).extractable).toBe(false);
+			}
+			for (const [index, scope] of scopes.entries()) {
+				expect(
+					await createDeviceStore(scope).loadWrappedPrivateKey("u_1", "d_1"),
+				).toEqual(keys[index]);
+			}
+			await expect(loadWrappedPrivateKey("u_1", "d_1")).rejects.toMatchObject({
+				reason: "absent",
+			});
+		} finally {
+			await Promise.all(stores.map((store) => store.clearDeviceKey()));
+		}
+	});
+
+	it("scoped session logout clears only its own remembered key", async () => {
+		const first = createDeviceStore("https://first.example/logout/u_1");
+		const second = createDeviceStore("https://second.example/logout/u_1");
+		const browserKey = secret();
+		const firstKey = secret();
+		const secondKey = secret();
+		const kek = secret();
+		const identity: IdentityResponse = {
+			enrolled: true,
+			publicKey: encodeBytes(secret()),
+			formatVersion: 1,
+			passphraseWrapped: encodeWrapped(
+				await encryptWrapped(firstKey, kek, aad.privateKeyPassphrase("u_1")),
+			),
+			passphraseSalt: encodeBytes(new Uint8Array(16)),
+		};
+		const keyring = createKeyring({
+			now: () => 0,
+			maxAgeMs: 60_000,
+			clearDeviceStore: first.clearDeviceKey,
+		});
+		const session = createSession(keyring, () => "d_1", first);
+		try {
+			await storeWrappedPrivateKey("u_1", "d_1", browserKey);
+			await second.storeWrappedPrivateKey("u_1", "d_1", secondKey);
+			await session.enrolled("u_1", identity, firstKey, true);
+			keyring.lockNow();
+			await session.adoptIdentity("u_1", identity);
+			expect(session.state()).toBe("ready");
+			expect(keyring.privateKey()).toEqual(firstKey);
+			await session.signOut();
+			expect(session.state()).toBe("unenrolled");
+			await expect(
+				first.loadWrappedPrivateKey("u_1", "d_1"),
+			).rejects.toMatchObject({ reason: "absent" });
+			expect(await second.loadWrappedPrivateKey("u_1", "d_1")).toEqual(
+				secondKey,
+			);
+			expect(await loadWrappedPrivateKey("u_1", "d_1")).toEqual(browserKey);
+		} finally {
+			await Promise.all([first.clearDeviceKey(), second.clearDeviceKey()]);
+		}
+	});
+
 	it("creates a non-extractable device key", async () => {
 		await storeWrappedPrivateKey("u_1", "d_1", secret());
 		const key = await readDeviceKeyForTest();

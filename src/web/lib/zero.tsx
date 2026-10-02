@@ -8,36 +8,39 @@ import { schema } from "../../zero/schema.gen.ts";
 import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { createExportBoundary } from "./export-boundary.ts";
-import { fetchPublicConfig } from "./public-config.ts";
 import {
 	createSyncTracker,
 	OFFLINE_EDIT_WINDOW_MS,
 	type SyncTracker,
 	trackMutations,
 } from "./sync-status.ts";
-import { fetchZeroToken, watchZeroAuth } from "./zero-auth.ts";
+import { watchZeroAuth } from "./zero-auth.ts";
 import {
 	createAfterZeroRetirement,
 	registerZeroClient,
 	retireZeroClients,
 	ZeroRetirementError,
 } from "./zero-lifecycle.ts";
-
-async function repairAccountBootstrap(): Promise<void> {
-	const res = await fetch("/api/bootstrap", {
-		method: "POST",
-		credentials: "include",
-	});
-	if (!res.ok) throw new Error(`account bootstrap failed: ${res.status}`);
-}
+import {
+	browserZeroRuntime,
+	type ZeroRuntime,
+	zeroStorageScope,
+} from "./zero-runtime.ts";
 
 // Client-side context ({ id }) is passed for optimistic synced-query evaluation;
 // the server re-derives the authoritative ctx from the JWT. Let TS infer the full
-// Zero generic from the constructor rather than restating it.
-function createZeroClient(userID: string, token: string, cacheURL: string) {
+// Zero generic from the constructor rather than restating it. userID stays the
+// canonical account ID; only a verified native scope may change Zero's storageKey.
+function createZeroClient(
+	userID: string,
+	token: string,
+	cacheURL: string,
+	storageKey?: string,
+) {
 	return new Zero({
 		cacheURL,
 		userID,
+		storageKey,
 		schema,
 		mutators,
 		auth: token,
@@ -66,9 +69,11 @@ export function useSyncTracker(): SyncTracker {
 
 export function AppZeroProvider({
 	userID,
+	runtime = browserZeroRuntime,
 	children,
 }: {
 	userID: string;
+	runtime?: ZeroRuntime;
 	children: ReactNode;
 }) {
 	const [client, setClient] = useState<{
@@ -108,14 +113,20 @@ export function AppZeroProvider({
 		let exportBoundary: ReturnType<typeof createExportBoundary> | undefined;
 		let cancelled = false;
 		void (async () => {
-			await repairAccountBootstrap();
+			const storageScope = zeroStorageScope(runtime);
+			await runtime.bootstrap();
 			const [config, token] = await Promise.all([
-				fetchPublicConfig(),
-				fetchZeroToken(),
+				runtime.fetchConfig(),
+				runtime.getAuth(),
 			]);
 			const created = await createAfterZeroRetirement(
 				() => {
-					const instance = createZeroClient(userID, token, config.zeroURL);
+					const instance = createZeroClient(
+						userID,
+						token,
+						config.zeroURL,
+						storageScope,
+					);
 					owner = registerZeroClient(
 						userID,
 						instance,
@@ -131,6 +142,7 @@ export function AppZeroProvider({
 					trackMutations(instance, tracker);
 					const boundary = createExportBoundary({
 						userID,
+						storageScope,
 						clientID: instance.clientID,
 						isConnected: () =>
 							!cancelled &&
@@ -160,10 +172,15 @@ export function AppZeroProvider({
 						if (state.name === "connected") tracker.connected();
 						boundary.connectionChanged();
 					});
-					stopAuthRefresh = watchZeroAuth(instance, undefined, undefined, {
-						onSessionExpired: tracker.setSessionExpired,
-						onAuthRejected: tracker.setAuthRejected,
-					});
+					stopAuthRefresh = watchZeroAuth(
+						instance,
+						() => runtime.getAuth(),
+						undefined,
+						{
+							onSessionExpired: tracker.setSessionExpired,
+							onAuthRejected: tracker.setAuthRejected,
+						},
+					);
 					return { zero: instance, tracker, exportBoundary: boundary };
 				},
 				() => cancelled,
@@ -191,7 +208,7 @@ export function AppZeroProvider({
 			});
 			setClient(null);
 		};
-	}, [userID, startupAttempt]);
+	}, [userID, runtime, startupAttempt]);
 
 	if (startupFailed)
 		return (

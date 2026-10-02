@@ -65,7 +65,7 @@ export function EnrollmentWizard({
 	pendingFileName?: string | null;
 	onCancelled?: () => void;
 }) {
-	const { adoptPrivateKey } = useKeyring();
+	const { adoptPrivateKey, runtime } = useKeyring();
 	const [pane, setPane] = useState<Pane>("passphrase");
 	const [passphrase, setPassphrase] = useState("");
 	const [confirmPassphrase, setConfirmPassphrase] = useState("");
@@ -202,7 +202,7 @@ export function EnrollmentWizard({
 		setBusy(true);
 		setEnrollError(null);
 		try {
-			const response = await fetch("/api/e2e/enroll", {
+			const response = await runtime.fetcher("/api/e2e/enroll", {
 				method: "POST",
 				credentials: "include",
 				headers: { "content-type": "application/json" },

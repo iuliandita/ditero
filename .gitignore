@@ -37,8 +37,8 @@ test-results/
 src-tauri/target/
 src-tauri/gen/
 # Capacitor (mobile) generated native projects
-android/
-ios/
+/android/
+/ios/
 .capacitor/
 
 # --- logs / caches ---
@@ -67,3 +67,11 @@ Thumbs.db
 
 # Paraglide compiled output (regenerated on compile/build)
 /src/paraglide/
+
+# Android build and local signing configuration
+apps/android/android/.gradle/
+apps/android/android/local.properties
+apps/android/android/app/src/main/assets/
+apps/android/android/capacitor-cordova-android-plugins/
+*.keystore
+*.jks

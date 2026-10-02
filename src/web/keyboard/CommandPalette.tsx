@@ -1,4 +1,4 @@
-import { useQuery, useZero } from "@rocicorp/zero/react";
+import { useQuery } from "@rocicorp/zero/react";
 import { Circle, LayoutDashboard, type LucideIcon, Search } from "lucide-react";
 import {
 	type ReactNode,
@@ -14,10 +14,11 @@ import type { ListKind } from "../../domain/icon-map.ts";
 import { searchTasks } from "../../domain/search.ts";
 import { m } from "../../paraglide/messages.js";
 import { queries } from "../../zero/queries.ts";
-import type { List, schema } from "../../zero/schema.gen.ts";
+import type { List } from "../../zero/schema.gen.ts";
 import { useDashboards } from "../hooks/useDashboards.ts";
 import { useViews } from "../hooks/useViews.ts";
 import { ICONS, ListIcon } from "../lib/list-icon.tsx";
+import { useAccountStorageScope } from "../lib/native-account.tsx";
 import { loadRecents } from "../lib/recents.ts";
 import { BUILTIN_VIEWS } from "../views/builtins.ts";
 import { formatBinding } from "./binding-label.ts";
@@ -87,7 +88,7 @@ export function CommandPalette({
 	onNavigateDashboard: (dashboardId: string) => void;
 	onOpenTask: (taskId: string, listId: string) => void;
 }) {
-	const zero = useZero<typeof schema>();
+	const storageScope = useAccountStorageScope();
 	const { isOpen, close, run } = useCommands();
 	const [lists] = useQuery(queries.lists.mine());
 	const [tasks] = useQuery(queries.tasks.mine());
@@ -118,8 +119,8 @@ export function CommandPalette({
 
 	// Read once per opening: recording happens elsewhere while it is closed.
 	const recents = useMemo(
-		() => (isOpen ? loadRecents(zero.userID) : []),
-		[isOpen, zero.userID],
+		() => (isOpen ? loadRecents(storageScope) : []),
+		[isOpen, storageScope],
 	);
 
 	const q = query.trim().toLowerCase();

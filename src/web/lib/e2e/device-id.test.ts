@@ -19,6 +19,26 @@ beforeEach(() => {
 });
 
 describe("deviceId", () => {
+	it("keeps scoped device ids stable and preserves the browser id", () => {
+		storage.setItem(DEVICE_ID_STORAGE_KEY, "existing-browser-id");
+		const firstScope = "https://first.example/u_1";
+		const secondScope = "https://second.example/u_1";
+		const first = deviceId(read(), firstScope);
+		const second = deviceId(read(), secondScope);
+		expect(first).not.toBe(second);
+		expect(first).not.toBe("existing-browser-id");
+		expect(second).not.toBe("existing-browser-id");
+		expect(deviceId(read(), firstScope)).toBe(first);
+		expect(deviceId(read(), secondScope)).toBe(second);
+		expect(deviceId(read())).toBe("existing-browser-id");
+		expect(storage.getItem(DEVICE_ID_STORAGE_KEY)).toBe("existing-browser-id");
+		for (const scope of ["", " ", "\t"]) {
+			expect(() => deviceId(read(), scope)).toThrow(
+				"storage scope must be nonempty",
+			);
+		}
+	});
+
 	it("is stable across calls", () => {
 		const first = deviceId(read());
 		// The device wrap binds this value as AAD, so a value that changed per

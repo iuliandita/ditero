@@ -49,7 +49,7 @@ export function PassphraseDialog({
 	onOpenChange: (open: boolean) => void;
 	userId: string;
 }) {
-	const { identity, refresh } = useKeyring();
+	const { identity, refresh, runtime } = useKeyring();
 	const [pane, setPane] = useState<Pane>("verify");
 	const [current, setCurrent] = useState("");
 	const [next, setNext] = useState("");
@@ -113,18 +113,21 @@ export function PassphraseDialog({
 			});
 
 			if (mode === "change") {
-				await postRewrap({
-					passphrase: await buildReplacement({
-						userId,
-						privateKey,
-						secret: next,
-						purpose: "passphrase",
-						version,
-						previousWrapped: identity.passphraseWrapped,
-						derive: deriver.derive,
-					}),
-					formatVersion: version,
-				});
+				await postRewrap(
+					{
+						passphrase: await buildReplacement({
+							userId,
+							privateKey,
+							secret: next,
+							purpose: "passphrase",
+							version,
+							previousWrapped: identity.passphraseWrapped,
+							derive: deriver.derive,
+						}),
+						formatVersion: version,
+					},
+					runtime.fetcher,
+				);
 				// The stored wrap moved, so the context copy the next rewrap would
 				// use as its compare-and-set token is now stale.
 				await refresh();
@@ -132,23 +135,26 @@ export function PassphraseDialog({
 				return;
 			}
 
-			const recoveryIdentity = await fetchRecoveryIdentity();
+			const recoveryIdentity = await fetchRecoveryIdentity(runtime.fetcher);
 			if (!recoveryIdentity.recoveryWrapped) {
 				throw new RewrapError("failed", "passphrase: no recovery wrap");
 			}
 			const recovery = await generateRecoveryCode();
-			await postRewrap({
-				recovery: await buildReplacement({
-					userId,
-					privateKey,
-					secret: recovery.canonical,
-					purpose: "recovery",
-					version,
-					previousWrapped: recoveryIdentity.recoveryWrapped,
-					derive: deriver.derive,
-				}),
-				formatVersion: version,
-			});
+			await postRewrap(
+				{
+					recovery: await buildReplacement({
+						userId,
+						privateKey,
+						secret: recovery.canonical,
+						purpose: "recovery",
+						version,
+						previousWrapped: recoveryIdentity.recoveryWrapped,
+						derive: deriver.derive,
+					}),
+					formatVersion: version,
+				},
+				runtime.fetcher,
+			);
 			setIssued({ display: recovery.display, canonical: recovery.canonical });
 			setPane("display");
 		} catch (caught) {

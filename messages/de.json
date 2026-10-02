@@ -2089,5 +2089,17 @@
 	"native_authorize_reload": "Neu laden",
 	"native_authorize_error_title": "Die Anfrage konnte nicht geprüft werden",
 	"native_authorize_error_body": "Der Server hat nicht wie erwartet geantwortet. Prüfe deine Verbindung und versuch es erneut.",
-	"native_authorize_retry": "Erneut versuchen"
+	"native_authorize_retry": "Erneut versuchen",
+	"native_connect_title": "Mit Ditero verbinden",
+	"native_connect_intro": "Gib die HTTPS-Adresse deines Ditero-Servers ein.",
+	"native_connect_action": "Verbinden",
+	"native_browser_signin": "Im Browser anmelden",
+	"native_finish_signin": "Anmeldung abschließen",
+	"native_approval_intro": "Bestätige die Anfrage im Browser und kehre dann hierher zurück.",
+	"native_connect_failed": "Verbindung fehlgeschlagen. Prüfe die Serveradresse und Verbindung.",
+	"native_change_server": "Server wechseln",
+	"native_approval_pending": "Die Anfrage wartet noch auf Bestätigung.",
+	"native_signin_failed": "Anmeldung fehlgeschlagen. Versuche es erneut.",
+	"native_settings_browser_note": "Verwalte diese Einstellungen im Browser auf deinem ausgewählten Server. Möglicherweise musst du dich dort anmelden.",
+	"native_settings_open_browser": "Im Browser öffnen"
 }

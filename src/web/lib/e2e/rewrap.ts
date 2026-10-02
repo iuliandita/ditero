@@ -14,6 +14,9 @@ import {
 } from "../../../domain/e2e/wire.ts";
 import type { Deriver } from "./derive.ts";
 import { KeyringError } from "./keyring.ts";
+import type { E2eFetcher } from "./workspace-keys.ts";
+
+const defaultFetcher: E2eFetcher = (input, init) => fetch(input, init);
 
 /** The wire shape of GET /api/e2e/identity/recovery. */
 export type RecoveryIdentityResponse = {
@@ -53,8 +56,10 @@ const AAD_FOR: Record<KekPurpose, (userId: string) => Uint8Array> = {
 	recovery: aad.privateKeyRecovery,
 };
 
-export async function fetchRecoveryIdentity(): Promise<RecoveryIdentityResponse> {
-	const response = await fetch("/api/e2e/identity/recovery", {
+export async function fetchRecoveryIdentity(
+	fetcher: E2eFetcher = defaultFetcher,
+): Promise<RecoveryIdentityResponse> {
+	const response = await fetcher("/api/e2e/identity/recovery", {
 		credentials: "include",
 	});
 	if (!response.ok) {
@@ -183,8 +188,11 @@ export async function buildReplacement(options: {
 	};
 }
 
-export async function postRewrap(body: RewrapRequest): Promise<void> {
-	const response = await fetch("/api/e2e/rewrap", {
+export async function postRewrap(
+	body: RewrapRequest,
+	fetcher: E2eFetcher = defaultFetcher,
+): Promise<void> {
+	const response = await fetcher("/api/e2e/rewrap", {
 		method: "POST",
 		credentials: "include",
 		headers: { "content-type": "application/json" },
