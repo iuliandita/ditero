@@ -10,6 +10,7 @@ import {
 	integer,
 	jsonb,
 	pgEnum,
+	pgPolicy,
 	pgTable,
 	primaryKey,
 	smallint,
@@ -142,6 +143,31 @@ export const membership = pgTable(
 	},
 	(t) => [unique("membership_user_workspace").on(t.userId, t.workspaceId)],
 );
+
+// A relationship-free sync projection; canonical membership remains authoritative.
+// The table owner is trusted for maintenance, just as it is trusted for DDL.
+export const workspaceAccessScope = pgTable(
+	"workspace_access_scope",
+	{
+		id: text("id")
+			.primaryKey()
+			.references(() => membership.id, { onDelete: "cascade" }),
+		userId: text("user_id").notNull(),
+		workspaceId: text("workspace_id").notNull(),
+	},
+	(t) => [
+		index("workspace_access_scope_user_id_idx").on(t.userId),
+		pgPolicy("workspace_access_scope_own_select", {
+			for: "select",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("workspace_access_scope_owner_maintenance", {
+			for: "all",
+			using: sql`current_user = pg_catalog.pg_get_userbyid((SELECT relowner FROM pg_catalog.pg_class WHERE oid = 'public.workspace_access_scope'::pg_catalog.regclass))`,
+			withCheck: sql`current_user = pg_catalog.pg_get_userbyid((SELECT relowner FROM pg_catalog.pg_class WHERE oid = 'public.workspace_access_scope'::pg_catalog.regclass))`,
+		}),
+	],
+).enableRLS();
 
 export const folder = pgTable("folder", {
 	id: text("id").primaryKey(),

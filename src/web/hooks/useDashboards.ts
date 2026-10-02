@@ -8,12 +8,12 @@ export function useDashboards(): {
 	dashboards: Dashboard[];
 	loading: boolean;
 } {
-	const [memberships, membershipDetails] = useQuery(queries.memberships.own());
-	const membershipsReady = membershipDetails.type === "complete";
+	const [scopes, scopeDetails] = useQuery(queries.workspaceAccessScopes.own());
+	const scopesReady = scopeDetails.type === "complete";
 
-	// Membership changes need fresh hydration; names and row order must not restart it.
+	// Access changes need fresh hydration; names and row order must not restart it.
 	const idsKey = JSON.stringify(
-		[...new Set(memberships.map((m) => m.workspaceId))].sort(),
+		[...new Set(scopes.map((scope) => scope.workspaceId))].sort(),
 	);
 	const workspaceIds = useMemo(() => JSON.parse(idsKey) as string[], [idsKey]);
 
@@ -27,6 +27,6 @@ export function useDashboards(): {
 	);
 	return {
 		dashboards,
-		loading: !membershipsReady || details.type !== "complete",
+		loading: !scopesReady || details.type !== "complete",
 	};
 }

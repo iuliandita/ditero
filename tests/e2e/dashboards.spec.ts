@@ -948,7 +948,7 @@ async function attachSharingFailure(
 						 "transformationHash", "transformationVersion", "rowSetSignature", deleted,
 						 count(*) over () as "matchedRows"
 						 from "zero_0/cvr".queries
-						 where "clientGroupID" = any($1::text[]) and "queryName" in ('dashboards.mine', 'memberships.own')
+						 where "clientGroupID" = any($1::text[]) and "queryName" in ('dashboards.mine', 'workspaceAccessScopes.own')
 						 order by "clientGroupID", "queryHash" limit 200`,
 						[groups],
 					);
