@@ -44,6 +44,7 @@ import { withZeroUserContext } from "../zero/task-activation.ts";
 import { accountDeletionRoutes } from "./account-deletion.ts";
 import { attachmentRoutes } from "./attachments/routes.ts";
 import { startAttachmentSweep } from "./attachments/sweep.ts";
+import { resolveClientRateKey, trustedProxyCIDRsFromEnv } from "./client-ip.ts";
 import { ctxFromAuthHeader } from "./ctx.ts";
 import { lookupUsers } from "./discovery.ts";
 import { notifyGrantCapable } from "./e2e/grants.ts";
@@ -52,7 +53,8 @@ import { e2eRoutes } from "./e2e/routes.ts";
 import { makeGuards } from "./guards.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
 import { sendInviteMail } from "./mail/invite-mail.ts";
-import { ackBaseUrl } from "./notifications/capability.ts";
+import { nativeAuthRoutes } from "./native-auth/routes.ts";
+import { ackBaseUrl, takeRateToken } from "./notifications/capability.ts";
 import {
 	ChannelError,
 	channelCapabilities,
@@ -77,6 +79,7 @@ import { startWorker } from "./notifications/worker.ts";
 import { importPlanRoutes } from "./portability/import-routes.ts";
 import { portabilityRoutes } from "./portability/routes.ts";
 import { publicConfig } from "./public-config.ts";
+import { nativeZeroPayload } from "./zero-auth.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
 const responseHeaders = securityHeaders(process.env);
@@ -94,6 +97,9 @@ const { guardedPost, guardedGet, foreignOrigin } = makeGuards(
 );
 const attachmentConfig = attachmentStorageConfig(process.env);
 const attachmentStore = await createAttachmentBlobStore(attachmentConfig);
+const nativeTrustedProxies = trustedProxyCIDRsFromEnv(
+	process.env.DITERO_TRUSTED_PROXIES,
+);
 
 // Shared JSON-body + ChannelError shape for the three channel writes. The body
 // is the error's stable CODE, never its prose: the prose named deployment env
@@ -120,6 +126,46 @@ async function channelWrite(
 }
 
 const routes = new Elysia()
+	.use(
+		nativeAuthRoutes({
+			pool,
+			guards: { guardedPost, guardedGet },
+			async signZeroToken(session) {
+				const result = await auth.api.signJWT({
+					body: { payload: nativeZeroPayload(session) },
+				});
+				return result.token;
+			},
+			sessions: {
+				async createSession(userId) {
+					const context = await auth.$context;
+					const session = await context.internalAdapter.createSession(
+						userId,
+						false,
+					);
+					if (!session) throw new Error("Native session creation failed");
+					return session;
+				},
+				async deleteSession(token) {
+					const context = await auth.$context;
+					await context.internalAdapter.deleteSession(token);
+				},
+			},
+			rateLimit(request, peerAddress) {
+				const key = resolveClientRateKey({
+					peerAddress,
+					forwardedFor: request.headers.get("x-forwarded-for"),
+					trustedProxies: nativeTrustedProxies,
+				});
+				return takeRateToken(
+					db,
+					`native:${new URL(request.url).pathname}:${key}`,
+					12,
+					0.2,
+				);
+			},
+		}),
+	)
 	.use(portabilityRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	.use(importPlanRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	// Public capability ack, mounted AHEAD of the global CORS plugin: the button

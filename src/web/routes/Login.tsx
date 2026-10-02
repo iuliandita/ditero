@@ -20,7 +20,7 @@ import {
 // Top-anchored on purpose: a centered column re-centers (and moves the logo)
 // whenever an error grows the content below it. A fixed top offset keeps
 // everything above the growing region pinned regardless of what appears below.
-function AuthShell({ children }: { children: ReactNode }) {
+export function AuthShell({ children }: { children: ReactNode }) {
 	return (
 		<main className="flex min-h-dvh justify-center bg-background px-6 pt-16 pb-10 text-foreground sm:pt-24">
 			<div className="flex w-full max-w-sm flex-col">
@@ -43,7 +43,9 @@ function AuthShell({ children }: { children: ReactNode }) {
 	);
 }
 
-export function Login() {
+// `callbackURL` only carries a same-origin return path through the Google
+// redirect; the caller builds it, and the other sign-in flows ignore it.
+export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 	const [mode, setMode] = useState<"signin" | "signup">("signin");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
@@ -110,7 +112,10 @@ export function Login() {
 
 	function signInGoogle() {
 		void runAction(async () => {
-			const res = await authClient.signIn.social({ provider: "google" });
+			const res = await authClient.signIn.social({
+				provider: "google",
+				...(callbackURL ? { callbackURL } : {}),
+			});
 			if (res.error)
 				setError(authErrorMessage(res.error, m.login_error_sign_in_failed));
 		}, m.login_error_sign_in_failed);

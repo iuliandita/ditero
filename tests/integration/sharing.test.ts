@@ -142,6 +142,36 @@ afterAll(async () => {
 });
 
 describe("sharing read-permission isolation", () => {
+	test("own workspace access scopes exclude co-members and retract a removed row", async () => {
+		const member = await zdb.run(
+			queries.workspaceAccessScopes.own.fn(ctx("member")),
+		);
+		expect(member.map((row) => row.id)).toEqual(["membership-member"]);
+		const outsider = await zdb.run(
+			queries.workspaceAccessScopes.own.fn(ctx("outsider")),
+		);
+		expect(outsider.map((row) => row.id)).toEqual(["membership-outsider"]);
+		const id = "membership-own-revocation";
+		try {
+			await db.insert(tables.membership).values({
+				id,
+				userId: "guardian",
+				workspaceId: "shared",
+				role: "viewer",
+			});
+			expect(
+				(
+					await zdb.run(queries.workspaceAccessScopes.own.fn(ctx("guardian")))
+				).map((row) => row.id),
+			).toEqual([id]);
+			await db.delete(tables.membership).where(eq(tables.membership.id, id));
+			expect(
+				await zdb.run(queries.workspaceAccessScopes.own.fn(ctx("guardian"))),
+			).toEqual([]);
+		} finally {
+			await db.delete(tables.membership).where(eq(tables.membership.id, id));
+		}
+	});
 	test("outsider reads no shared memberships", async () => {
 		const rows = await zdb.run(queries.memberships.mine.fn(ctx("outsider")));
 		expect(rows.map((r) => r.workspaceId)).not.toContain("shared");

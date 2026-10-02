@@ -178,6 +178,11 @@ export const queries = defineQueries({
 			),
 		),
 	},
+	workspaceAccessScopes: {
+		own: defineQuery(({ ctx }) =>
+			zql.workspaceAccessScope.where("userId", ctx.id),
+		),
+	},
 	// Co-members: memberships in any workspace the user belongs to. Powers members
 	// panel, assignee/mention pickers, and client-side connection derivation.
 	memberships: {

@@ -281,10 +281,9 @@ test("desktop: an expired sign-in keeps queued edits until the user signs in aga
 }) => {
 	test.setTimeout(120_000);
 	await page.setViewportSize({ width: 1440, height: 900 });
-	// zero-cache reports an expired sign-in only once the short-lived token
-	// runs out, and the token endpoint refuses once the session is gone. The
-	// routes answer the reconnect the way both then would; the real session is
-	// deleted before signing in again, so that part runs for real.
+	// Simulate the cache stream refusing an expired token. Live API session
+	// checks do not immediately close an existing cache connection. The real
+	// session is deleted before signing in again, so that part runs for real.
 	let refuseAuth = false;
 	let refusedRefreshes = 0;
 	await page.route("**/api/auth/token", (route) => {
@@ -356,8 +355,8 @@ test("desktop: a real expired session returns to login and preserves queued edit
 	await page.addInitScript(installPersistenceControls);
 	await page.setViewportSize({ width: 1440, height: 900 });
 	let refuseConnection = false;
-	// Stand in for JWT expiry too: deleting a session does not revoke its
-	// already-issued token, which would otherwise remain valid on reconnect.
+	// Stand in for cache token expiry. Live API revocation is checked separately;
+	// the cache can retain an existing connection until the token expires.
 	await page.routeWebSocket(/\/sync\/v\d+\/connect/, (ws) => {
 		if (!refuseConnection) {
 			ws.connectToServer();

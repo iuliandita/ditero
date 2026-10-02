@@ -10,6 +10,7 @@ import {
 	sanitizeAuthRequest,
 	trustedProxyCIDRsFromEnv,
 } from "../server/client-ip.ts";
+import { zeroJwtOptions } from "../server/zero-auth.ts";
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
 import { withFieldEncryption } from "./encrypted-adapter.ts";
 import { emailHasRedeemableInvite } from "./invite-bypass.ts";
@@ -130,7 +131,8 @@ export const auth = betterAuth({
 			},
 		},
 	},
-	// jwt plugin exposes /api/auth/token and JWKS at /api/auth/jwks.
+	// jwt plugin exposes /api/auth/token and JWKS at /api/auth/jwks; the Zero
+	// token lifetime, issuer and audience are pinned in zero-auth.ts.
 	plugins: [
 		passkey(
 			passkeyOptions({
@@ -148,7 +150,7 @@ export const auth = betterAuth({
 				durationSeconds: 15 * 60,
 			},
 		}),
-		jwt(),
+		jwt({ jwt: zeroJwtOptions() }),
 	],
 });
 

@@ -12,6 +12,7 @@ export default drizzleZeroConfig(schema, {
 			rotationRequired: true,
 		},
 		membership: { id: true, userId: true, workspaceId: true, role: true },
+		workspaceAccessScope: { id: true, userId: true, workspaceId: true },
 		list: {
 			id: true,
 			workspaceId: true,

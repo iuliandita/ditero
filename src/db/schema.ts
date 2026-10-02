@@ -10,6 +10,7 @@ import {
 	integer,
 	jsonb,
 	pgEnum,
+	pgPolicy,
 	pgTable,
 	primaryKey,
 	smallint,
@@ -20,7 +21,7 @@ import {
 	uuid,
 } from "drizzle-orm/pg-core";
 import { CHANNEL_ERROR_CODES } from "../domain/notification-retry.ts";
-import { user } from "./auth-schema.ts";
+import { session, user } from "./auth-schema.ts";
 
 export * from "./auth-schema.ts";
 
@@ -142,6 +143,31 @@ export const membership = pgTable(
 	},
 	(t) => [unique("membership_user_workspace").on(t.userId, t.workspaceId)],
 );
+
+// A relationship-free sync projection; canonical membership remains authoritative.
+// The table owner is trusted for maintenance, just as it is trusted for DDL.
+export const workspaceAccessScope = pgTable(
+	"workspace_access_scope",
+	{
+		id: text("id")
+			.primaryKey()
+			.references(() => membership.id, { onDelete: "cascade" }),
+		userId: text("user_id").notNull(),
+		workspaceId: text("workspace_id").notNull(),
+	},
+	(t) => [
+		index("workspace_access_scope_user_id_idx").on(t.userId),
+		pgPolicy("workspace_access_scope_own_select", {
+			for: "select",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("workspace_access_scope_owner_maintenance", {
+			for: "all",
+			using: sql`current_user = pg_catalog.pg_get_userbyid((SELECT relowner FROM pg_catalog.pg_class WHERE oid = 'public.workspace_access_scope'::pg_catalog.regclass))`,
+			withCheck: sql`current_user = pg_catalog.pg_get_userbyid((SELECT relowner FROM pg_catalog.pg_class WHERE oid = 'public.workspace_access_scope'::pg_catalog.regclass))`,
+		}),
+	],
+).enableRLS();
 
 export const folder = pgTable("folder", {
 	id: text("id").primaryKey(),
@@ -1440,6 +1466,51 @@ export const userDevice = pgTable("user_device", {
 		.notNull(),
 	revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
+
+export const nativeAuthGrant = pgTable(
+	"native_auth_grant",
+	{
+		id: text("id").primaryKey(),
+		challenge: text("challenge").notNull(),
+		deviceLabel: text("device_label").notNull(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+		approvedUserId: text("approved_user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		approvedSessionId: text("approved_session_id").references(
+			() => session.id,
+			{
+				onDelete: "set null",
+			},
+		),
+		approvedAt: timestamp("approved_at", { withTimezone: true }),
+		consumedAt: timestamp("consumed_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [index("native_auth_grant_expiry_idx").on(t.expiresAt)],
+);
+
+export const nativeSessionLink = pgTable(
+	"native_session_link",
+	{
+		sessionId: text("session_id")
+			.primaryKey()
+			.references(() => session.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		deviceId: text("device_id")
+			.notNull()
+			.unique()
+			.references(() => userDevice.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [index("native_session_link_user_idx").on(t.userId)],
+);
 
 export const importSource = pgTable(
 	"import_source",

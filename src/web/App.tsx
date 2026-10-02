@@ -8,6 +8,7 @@ import { KeyringProvider } from "./lib/e2e/KeyringProvider.tsx";
 import { AppZeroProvider } from "./lib/zero.tsx";
 import { AcceptInvite } from "./routes/AcceptInvite.tsx";
 import { Login } from "./routes/Login.tsx";
+import { NativeAuthorize } from "./routes/NativeAuthorize.tsx";
 import { Workspace } from "./routes/Workspace.tsx";
 
 // The provider sits above every route because Workspace itself calls useConfirm
@@ -44,6 +45,10 @@ function SessionRoutes({
 	// both logged-out and logged-in invitees. AcceptInvite runs its own session +
 	// preview logic; every other path stays on the normal session-gated flow.
 	if (window.location.pathname === "/accept") return <AcceptInvite />;
+	// Browser consent for a native sign-in: it only needs the session cookie, so
+	// it never mounts Zero or the keyring.
+	if (window.location.pathname === "/native/authorize")
+		return <NativeAuthorize session={session} isPending={isPending} />;
 	if (isPending) return <BootSkeleton />;
 	if (!session) return <Login />;
 	return (
