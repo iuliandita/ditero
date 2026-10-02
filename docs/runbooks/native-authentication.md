@@ -60,3 +60,44 @@ clients can refresh through the usual cookie-authenticated token endpoint.
 All requests are rate limited. JSON bodies are bounded to 4 KiB and reject
 unexpected fields. Responses carry `Cache-Control: no-store`. The existing
 browser origin checks and cookie authentication remain in place.
+
+## Native application operations
+
+Two endpoints let a signed-in native client prepare its account before sync.
+Both authenticate only a native session token in the Bearer header, using the
+same live check as `GET /api/native/session`: an unexpired session, a native
+link, an unrevoked matching device, and a user that is not deleted.
+
+| Endpoint | Request | Response |
+| --- | --- | --- |
+| `GET /api/native/profile` | No body; query parameters are ignored | `{ "id", "name", "email" }` |
+| `POST /api/native/bootstrap` | No body, or an empty JSON object `{}` | `{ "workspaceId" }` |
+
+Profile reads the current user fresh and returns those three fields for the
+session's own user only. It never returns database rows, session or device
+records, tokens, or secrets. A user deleted since authentication gets 401.
+
+Bootstrap holds a live-user lock through the existing personal-workspace
+helper, so account deletion cannot leave a newly provisioned workspace behind.
+It is idempotent: repeating it returns the same workspace, and it restores a missing
+owner membership, which in turn restores the sync access projection through the
+existing trigger. The caller supplies no user, account, or workspace id; any
+JSON key, array, non-object, malformed or non-JSON body is refused (400, or 415
+for the wrong content type, 413 over 4 KiB).
+
+Admission and errors, in order: a Cookie or Origin header of any value, even an
+empty one, returns 400 `credentials-not-allowed`; the native rate limiter returns
+429; a missing, malformed, browser, orphan, expired, revoked, or deleted-user
+credential returns 401 `unauthorized`; then body validation. Errors use the same
+`{ "code" }` shape as the rest of this API, and an unexpected failure returns a
+500 category without detail. Every response carries `Cache-Control: no-store`
+and none sets a cookie.
+
+The credential boundary stays native. These endpoints do not enable a global
+Bearer plugin, synthesize Cookie or Origin headers, or expose a generic
+authenticated fetch. The native session token and Zero JWT remain in native
+credential storage; only the profile fields above may reach JavaScript.
+
+The complete applications are still unfinished. These endpoints are server
+source and focused integration tests only; they do not deliver the native
+shell, its startup flow, or credential storage.

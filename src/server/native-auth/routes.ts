@@ -2,6 +2,11 @@ import { Elysia } from "elysia";
 import type { Pool } from "pg";
 import type { Guards } from "../guards.ts";
 import {
+	bootstrapNativeWorkspace,
+	readBootstrapBody,
+	readNativeProfile,
+} from "./application.ts";
+import {
 	hasAmbientCredentials,
 	isCanonicalId,
 	parseApprove,
@@ -176,6 +181,32 @@ export function nativeAuthRoutes(deps: NativeAuthDependencies) {
 				lastSeenAt: session.lastSeenAt.toISOString(),
 			});
 		})
+		.get("/api/native/profile", async ({ request }) => {
+			if (request.headers.has("origin") || request.headers.has("cookie"))
+				return reply("credentials-not-allowed", 400);
+			if (!(await rateLimit(request))) return limited();
+			const session = await authenticateNative(deps.pool, request.headers);
+			if (!session) return reply("unauthorized", 401);
+			const profile = await readNativeProfile(deps.pool, session);
+			if (!profile) return reply("unauthorized", 401);
+			return ok(profile);
+		})
+		.post(
+			"/api/native/bootstrap",
+			async ({ request }) => {
+				if (request.headers.has("origin") || request.headers.has("cookie"))
+					return reply("credentials-not-allowed", 400);
+				if (!(await rateLimit(request))) return limited();
+				const session = await authenticateNative(deps.pool, request.headers);
+				if (!session) return reply("unauthorized", 401);
+				const body = await readBootstrapBody(request);
+				if (!body.ok) return reply("invalid-request", body.status);
+				const workspaceId = await bootstrapNativeWorkspace(deps.pool, session);
+				if (!workspaceId) return reply("unauthorized", 401);
+				return ok({ workspaceId });
+			},
+			{ parse: "none" },
+		)
 		.get("/api/native/token", async ({ request }) => {
 			if (request.headers.has("origin") || request.headers.has("cookie"))
 				return reply("credentials-not-allowed", 400);
