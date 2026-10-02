@@ -1,0 +1,18 @@
+{
+	"name": "ditero-desktop",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "cd ../.. && vite build apps/desktop --config apps/desktop/vite.config.ts",
+		"tauri": "tauri",
+		"package:linux": "tauri build --debug --bundles deb -- --locked",
+		"package:windows": "tauri build --debug --bundles nsis -- --locked",
+		"package:macos": "tauri build --debug --bundles app,dmg -- --locked"
+	},
+	"dependencies": {
+		"@tauri-apps/api": "2.12.1"
+	},
+	"devDependencies": {
+		"@tauri-apps/cli": "2.12.1"
+	}
+}

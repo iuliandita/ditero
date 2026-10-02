@@ -1,0 +1,91 @@
+name: Desktop development installers
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  development-installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux-unsigned
+            package: package:linux
+            artifact: apps/desktop/src-tauri/target/debug/bundle/deb/*.deb
+          - runner: windows-2025
+            platform: windows-unsigned
+            package: package:windows
+            artifact: apps/desktop/src-tauri/target/debug/bundle/nsis/*.exe
+          - runner: macos-15
+            platform: macos-adhoc
+            package: package:macos
+            artifact: apps/desktop/src-tauri/target/debug/bundle/dmg/*.dmg
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_BUILD_JOBS: 2
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libdbus-1-dev libayatana-appindicator3-dev librsvg2-dev
+      - name: Select Rust toolchain
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt
+          rustup default 1.98.1
+          rustc --version
+          cargo --version
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+      - name: Install desktop dependencies
+        working-directory: apps/desktop
+        run: bun install --frozen-lockfile
+      - name: Compile shared messages
+        run: bun run i18n:compile
+      - name: Check desktop TypeScript
+        run: bunx tsc --noEmit --project apps/desktop/tsconfig.json
+      - name: Test desktop bridge lifecycle
+        run: bunx vitest run apps/desktop/src/transport.test.ts
+      - name: Build bundled UI
+        working-directory: apps/desktop
+        run: bun run build
+      - name: Check native formatting and lifecycle
+        working-directory: apps/desktop/src-tauri
+        run: |
+          set -euo pipefail
+          cargo fmt --check
+          cargo test --locked
+      - name: Build development installer
+        working-directory: apps/desktop
+        run: bun run ${{ matrix.package }}
+      - name: Upload development installer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-${{ matrix.platform }}-development-${{ github.sha }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 7

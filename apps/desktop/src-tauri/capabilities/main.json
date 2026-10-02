@@ -1,0 +1,12 @@
+{
+	"identifier": "main",
+	"windows": ["main"],
+	"permissions": [
+		"allow-native-attach",
+		"allow-native-post",
+		"allow-native-drain",
+		"core:event:allow-listen",
+		"core:event:allow-unlisten",
+		"core:window:allow-destroy"
+	]
+}
