@@ -5,6 +5,7 @@ import { habitOccurrence } from "../../views/habit-occurrence.ts";
 import { type TableEntry, TableLayout } from "./TableLayout.tsx";
 
 vi.mock("../people/AssigneeChips.tsx", () => ({ AssigneeChips: () => null }));
+vi.mock("../list/CompletedBy.tsx", () => ({ CompletedBy: () => null }));
 
 function task(id: string, dueAt: number): Task {
 	return {
