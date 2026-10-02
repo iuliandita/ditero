@@ -457,6 +457,7 @@ async function insertInstantiatedTask(
 	t: InstantiatedTask,
 ): Promise<void> {
 	await tx.mutate.task.insert({
+		hasImportActivation: false,
 		id: t.id,
 		createdAt: taskCreatedAt(tx),
 		listId: t.listId,
@@ -664,6 +665,7 @@ export const mutators = defineMutators({
 				const rrule = initialRRule(list.kind, args.parentId);
 				const recurrenceAnchorAt = rrule ? (args.dueAt ?? Date.now()) : null;
 				await tx.mutate.task.insert({
+					hasImportActivation: false,
 					id: args.id,
 					createdAt: taskCreatedAt(tx),
 					listId: args.listId,

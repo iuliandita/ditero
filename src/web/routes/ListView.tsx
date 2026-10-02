@@ -341,7 +341,14 @@ export function ListView({
 	];
 
 	const selectionFor = (task: Task) =>
-		selection.rowFor(task.id, m.selection_paused_reason());
+		selection.rowFor(
+			task.id,
+			[task, ...(subtasksByParent.get(task.id) ?? [])].some((row) =>
+				["pending", "blocked"].includes(activation.statusForTask(row.id)),
+			)
+				? m.selection_paused_reason()
+				: m.activation_unknown_explanation(),
+		);
 	const orderedSelected = (): Task[] => {
 		const byId = new Map(parents.map((t) => [t.id, t]));
 		return selection
