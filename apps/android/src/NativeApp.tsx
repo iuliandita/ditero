@@ -13,6 +13,7 @@ import { DisplayPreferencesProvider } from "../../../src/web/lib/DisplayPreferen
 import { KeyringProvider } from "../../../src/web/lib/e2e/KeyringProvider.tsx";
 import {
 	NativeAccountContext,
+	type NativeNotificationNavigation,
 	type NativePush,
 } from "../../../src/web/lib/native-account.tsx";
 import { AppZeroProvider } from "../../../src/web/lib/zero.tsx";
@@ -22,6 +23,7 @@ import {
 	bridgeState,
 	completeOnce,
 	connectBridge,
+	createNativeNotificationNavigation,
 	createNativePush,
 	installNativeWebSocket,
 	NativeError,
@@ -44,6 +46,7 @@ type Active = {
 	profile: NativeProfile;
 	origin: string;
 	push: NativePush;
+	notifications: NativeNotificationNavigation;
 };
 
 function NativeWorkspace({ active }: { active: Active }) {
@@ -147,6 +150,10 @@ function NativeAppRoutes() {
 			profile,
 			origin: context.origin,
 			push: createNativePush(context.gen, context.authHandle),
+			notifications: createNativeNotificationNavigation(
+				context.gen,
+				context.authHandle,
+			),
 		});
 	}
 
@@ -232,6 +239,7 @@ function NativeAppRoutes() {
 						origin: active.origin,
 						storageScope: active.runtime.scope,
 						push: active.push,
+						notifications: active.notifications,
 						changeServer,
 					}}
 				>

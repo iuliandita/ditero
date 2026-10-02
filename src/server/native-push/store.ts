@@ -10,7 +10,11 @@ import {
 	type FieldKeyRing,
 } from "../../security/field-encryption.ts";
 import type { NativeSession } from "../native-auth/session.ts";
-import type { PushRegistration } from "./contracts.ts";
+import type {
+	PushOpenInput,
+	PushOpenTarget,
+	PushRegistration,
+} from "./contracts.ts";
 export class PushAuthorityError extends Error {}
 export function nativePushConfigContext(
 	id: string,
@@ -21,17 +25,26 @@ export function nativePushConfigContext(
 export class NativePushStore {
 	constructor(
 		private pool: Pool,
-		private ring: FieldKeyRing,
+		private ring: FieldKeyRing | null,
 	) {}
 	private async owned<T>(
 		owner: NativeSession,
 		run: (client: PoolClient) => Promise<T>,
+		lockUser = false,
 	): Promise<T> {
 		try {
 			return await withLiveUserContext(
 				this.pool,
 				owner.userId,
 				async (client) => {
+					if (lockUser) {
+						// Keep account, then session/device, then registration lock order.
+						const user = await client.query(
+							'select id from "user" where id=$1 and deleted_at is null for share',
+							[owner.userId],
+						);
+						if (user.rowCount !== 1) throw new PushAuthorityError();
+					}
 					const live = await client.query(
 						`select s.id from session s join native_session_link l on l.session_id=s.id and l.user_id=s.user_id join user_device d on d.id=l.device_id and d.user_id=s.user_id where s.id=$1 and s.user_id=$2 and d.id=$3 and s.expires_at>clock_timestamp() and d.revoked_at is null for update of s,l,d`,
 						[owner.sessionId, owner.userId, owner.deviceId],
@@ -45,6 +58,68 @@ export class NativePushStore {
 			throw error;
 		}
 	}
+	async open(
+		owner: NativeSession,
+		input: PushOpenInput,
+	): Promise<PushOpenTarget | null> {
+		return this.owned(
+			owner,
+			async (client) => {
+				const registration = await client.query(
+					"select id from native_push_registration where id=$1 and session_id=$2 and user_id=$3 and device_id=$4 for share",
+					[input.registrationId, owner.sessionId, owner.userId, owner.deviceId],
+				);
+				if (registration.rowCount !== 1) return null;
+				const notification = await client.query<{ payload: unknown }>(
+					"select payload from notification_outbox where id=$1 and recipient_user_id=$2 and native_registration_id=$3 and channel_kind='nativepush' for share",
+					[input.notificationId, owner.userId, input.registrationId],
+				);
+				const payload = notification.rows[0]?.payload;
+				if (!payload || typeof payload !== "object" || Array.isArray(payload))
+					return null;
+				const raw = payload as Record<string, unknown>;
+				if (typeof raw.taskId === "string" && raw.taskId) {
+					const target = await client.query<{
+						task_id: string;
+						list_id: string;
+						workspace_id: string;
+					}>(
+						`select t.id as task_id,l.id as list_id,w.id as workspace_id
+					from task t join list l on l.id=t.list_id
+					join workspace w on w.id=l.workspace_id
+					join membership m on m.workspace_id=w.id and m.user_id=$2
+					where t.id=$1 for share of t,l,w,m`,
+						[raw.taskId, owner.userId],
+					);
+					const row = target.rows[0];
+					return row
+						? {
+								kind: "task",
+								workspaceId: row.workspace_id,
+								listId: row.list_id,
+								taskId: row.task_id,
+							}
+						: null;
+				}
+				if (
+					Object.hasOwn(raw, "taskId") ||
+					raw.kind !== "key_grant" ||
+					typeof raw.workspaceId !== "string" ||
+					!raw.workspaceId
+				)
+					return null;
+				const target = await client.query<{ workspace_id: string }>(
+					"select w.id as workspace_id from workspace w join membership m on m.workspace_id=w.id and m.user_id=$2 where w.id=$1 for share of w,m",
+					[raw.workspaceId, owner.userId],
+				);
+				return target.rows[0]
+					? { kind: "workspace", workspaceId: target.rows[0].workspace_id }
+					: null;
+			},
+			true,
+		);
+	}
+
 	async register(
 		owner: NativeSession,
 		input: PushRegistration,
@@ -52,6 +127,8 @@ export class NativePushStore {
 		registrationId: string;
 		provider: PushRegistration["provider"];
 	}> {
+		const ring = this.ring;
+		if (!ring) throw new Error("Native push encryption is unavailable");
 		return this.owned(owner, async (client) => {
 			const existing = await client.query<{
 				id: string;
@@ -67,7 +144,7 @@ export class NativePushStore {
 				decryptField(
 					row.config_ciphertext,
 					nativePushConfigContext(row.id, owner),
-					this.ring,
+					ring,
 				).plaintext === serialized
 			)
 				return { registrationId: row.id, provider: input.provider };
@@ -80,7 +157,7 @@ export class NativePushStore {
 			const encrypted = encryptField(
 				serialized,
 				nativePushConfigContext(id, owner),
-				this.ring,
+				ring,
 			);
 			await client.query(
 				"insert into native_push_registration (id,session_id,user_id,device_id,provider,config_ciphertext) values ($1,$2,$3,$4,$5,$6)",

@@ -81,6 +81,10 @@ beforeAll(async () => {
 	await admin.query(
 		`grant select,insert,update,delete on "user",session,user_device,native_auth_grant,native_session_link,native_push_registration to "${role}"`,
 	);
+	// Row locks require UPDATE privilege even though navigation only reads rows.
+	await admin.query(
+		`grant select,update on notification_outbox,task,list,workspace,membership to "${role}"`,
+	);
 	const adapter = (await auth.$context).internalAdapter;
 	sessions = {
 		createSession: (id) => adapter.createSession(id, false),
@@ -531,4 +535,247 @@ test("backfill skips a retired ID and never overwrites concurrent registration r
 		),
 	).toEqual({ provider: "fcm", token: "new-token" });
 	expect(await backfillNativePushConfigs(admin, rotating)).toBe(0);
+});
+
+async function navigationFixture() {
+	const a = await actor();
+	const registration = await checked(await call("register", a.token, fcm), 200);
+	const workspaceId = randomUUID(),
+		listId = randomUUID(),
+		taskId = randomUUID();
+	await admin.query(
+		"insert into workspace(id,name,owner_id) values($1,'Push navigation',$2)",
+		[workspaceId, a.owner.userId],
+	);
+	await admin.query(
+		"insert into membership(id,user_id,workspace_id,role) values($1,$2,$3,'owner')",
+		[randomUUID(), a.owner.userId, workspaceId],
+	);
+	await admin.query(
+		"insert into list(id,workspace_id,owner_id,title,sort_key) values($1,$2,$3,'Private list','a0')",
+		[listId, workspaceId, a.owner.userId],
+	);
+	await admin.query(
+		"insert into task(id,list_id,title,sort_key) values($1,$2,'Private task','a0')",
+		[taskId, listId],
+	);
+	async function notification(
+		payload: unknown = { kind: "assign", taskId },
+		recipient = a.owner.userId,
+		registrationId = registration.registrationId,
+		kind = "nativepush",
+	) {
+		const notificationId = randomUUID();
+		await admin.query(
+			"insert into notification_outbox(id,recipient_user_id,native_registration_id,channel_kind,payload,idempotency_key,status) values($1,$2,$3,$4,$5,$1,'sending')",
+			[
+				notificationId,
+				recipient,
+				registrationId,
+				kind,
+				JSON.stringify(payload),
+			],
+		);
+		return { notificationId, registrationId };
+	}
+	return {
+		a,
+		registration,
+		workspaceId,
+		listId,
+		taskId,
+		notification,
+		cleanup: async () => {
+			await admin.query(
+				"delete from notification_outbox where recipient_user_id=any($1::text[])",
+				[users],
+			);
+			await admin.query("delete from task where list_id=$1", [listId]);
+			await admin.query("delete from list where id=$1", [listId]);
+			await admin.query("delete from membership where workspace_id=$1", [
+				workspaceId,
+			]);
+			await admin.query("delete from workspace where id=$1", [workspaceId]);
+		},
+	};
+}
+test("least-privilege notification open derives live IDs and refuses recipient, channel and registration mismatches uniformly", async () => {
+	const f = await navigationFixture();
+	try {
+		const input = await f.notification({
+			kind: "assign",
+			taskId: f.taskId,
+			url: "https://attacker.example",
+			workspaceId: "wrong",
+			listId: "wrong",
+		});
+		expect(await checked(await call("open", f.a.token, input), 200)).toEqual({
+			target: {
+				kind: "task",
+				workspaceId: f.workspaceId,
+				listId: f.listId,
+				taskId: f.taskId,
+			},
+		});
+		const noRing = nativePushRoutes({
+			pool,
+			ring: null,
+			configuration: {},
+			rateLimit: async () => true,
+		});
+		expect(
+			await checked(await call("open", f.a.token, input, {}, noRing), 200),
+		).toEqual({
+			target: {
+				kind: "task",
+				workspaceId: f.workspaceId,
+				listId: f.listId,
+				taskId: f.taskId,
+			},
+		});
+		const verifier = "q".repeat(43);
+		const grant = await grants.create(
+			s256Challenge(verifier),
+			"Second push device",
+		);
+		expect(
+			await grants.approve(grant.grantId, f.a.owner.userId, f.a.browser.id),
+		).toBe("approved");
+		const second = await grants.exchange(grant.grantId, verifier);
+		if (second.kind !== "ok") throw new Error("Second native exchange failed");
+		const secondRegistration = await checked(
+			await call("register", second.token, fcm),
+			200,
+		);
+		const secondNotification = await f.notification(
+			{ taskId: f.taskId },
+			f.a.owner.userId,
+			secondRegistration.registrationId,
+		);
+		expect(
+			await checked(await call("open", f.a.token, secondNotification), 404),
+		).toEqual({ code: "notification-unavailable" });
+		expect(
+			await checked(await call("open", second.token, secondNotification), 200),
+		).toEqual({
+			target: {
+				kind: "task",
+				workspaceId: f.workspaceId,
+				listId: f.listId,
+				taskId: f.taskId,
+			},
+		});
+		const b = await actor();
+		for (const unavailable of [
+			{ ...input, notificationId: randomUUID() },
+			{ ...input, registrationId: randomUUID() },
+			await f.notification({ taskId: f.taskId }, b.owner.userId),
+			await f.notification(
+				{ taskId: f.taskId },
+				f.a.owner.userId,
+				randomUUID(),
+			),
+			await f.notification(
+				{ taskId: f.taskId },
+				f.a.owner.userId,
+				f.registration.registrationId,
+				"ntfy",
+			),
+			await f.notification({ taskId: randomUUID() }),
+		])
+			expect(
+				await checked(await call("open", f.a.token, unavailable), 404),
+			).toEqual({ code: "notification-unavailable" });
+		await admin.query("delete from notification_outbox where id=$1", [
+			input.notificationId,
+		]);
+		expect(await checked(await call("open", f.a.token, input), 404)).toEqual({
+			code: "notification-unavailable",
+		});
+	} finally {
+		await f.cleanup();
+	}
+});
+test("notification open rejects retired registrations, removed membership and deleted tasks; key grants require current membership", async () => {
+	const f = await navigationFixture();
+	try {
+		const task = await f.notification();
+		const key = await f.notification({
+			kind: "key_grant",
+			workspaceId: f.workspaceId,
+		});
+		expect(await checked(await call("open", f.a.token, key), 200)).toEqual({
+			target: { kind: "workspace", workspaceId: f.workspaceId },
+		});
+		await admin.query("delete from membership where workspace_id=$1", [
+			f.workspaceId,
+		]);
+		expect(await checked(await call("open", f.a.token, task), 404)).toEqual({
+			code: "notification-unavailable",
+		});
+		await admin.query(
+			"insert into membership(id,user_id,workspace_id,role) values($1,$2,$3,'owner')",
+			[randomUUID(), f.a.owner.userId, f.workspaceId],
+		);
+		await admin.query("delete from task where id=$1", [f.taskId]);
+		expect(await checked(await call("open", f.a.token, task), 404)).toEqual({
+			code: "notification-unavailable",
+		});
+		await admin.query("delete from membership where workspace_id=$1", [
+			f.workspaceId,
+		]);
+		expect(await checked(await call("open", f.a.token, key), 404)).toEqual({
+			code: "notification-unavailable",
+		});
+		await admin.query(
+			"insert into membership(id,user_id,workspace_id,role) values($1,$2,$3,'owner')",
+			[randomUUID(), f.a.owner.userId, f.workspaceId],
+		);
+		expect(await checked(await call("open", f.a.token, key), 200)).toEqual({
+			target: { kind: "workspace", workspaceId: f.workspaceId },
+		});
+		await checked(
+			await call("register", f.a.token, { ...fcm, token: "replacement-token" }),
+			200,
+		);
+		expect(await checked(await call("open", f.a.token, key), 404)).toEqual({
+			code: "notification-unavailable",
+		});
+		await revokeNativeSession(pool, f.a.owner);
+		expect(await checked(await call("open", f.a.token, key), 401)).toEqual({
+			code: "unauthorized",
+		});
+	} finally {
+		await f.cleanup();
+	}
+});
+test("notification open revalidates expiry, revocation and account tombstones after admission", async () => {
+	for (const retire of [
+		async (a: Awaited<ReturnType<typeof actor>>) =>
+			admin.query(
+				"update session set expires_at=now()-interval '1 second' where id=$1",
+				[a.sessionId],
+			),
+		async (a: Awaited<ReturnType<typeof actor>>) =>
+			admin.query("update user_device set revoked_at=now() where id=$1", [
+				a.deviceId,
+			]),
+		async (a: Awaited<ReturnType<typeof actor>>) =>
+			admin.query("delete from native_session_link where session_id=$1", [
+				a.sessionId,
+			]),
+		async (a: Awaited<ReturnType<typeof actor>>) =>
+			admin.query('update "user" set deleted_at=now() where id=$1', [
+				a.owner.userId,
+			]),
+	]) {
+		const a = await actor();
+		await retire(a);
+		await expect(
+			new NativePushStore(pool, ring).open(a.owner, {
+				notificationId: "missing",
+				registrationId: "missing",
+			}),
+		).rejects.toThrow();
+	}
 });

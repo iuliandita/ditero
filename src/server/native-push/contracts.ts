@@ -10,6 +10,25 @@ export type PushRegistration =
 			keys: { p256dh: string; auth: string };
 	  }
 	| { provider: "fcm"; token: string };
+export type PushOpenInput = { notificationId: string; registrationId: string };
+export type PushOpenTarget =
+	| { kind: "task"; workspaceId: string; listId: string; taskId: string }
+	| { kind: "workspace"; workspaceId: string };
+const OPEN_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
+export function parsePushOpen(
+	body: Record<string, unknown>,
+): PushOpenInput | null {
+	return exact(body, ["notificationId", "registrationId"]) &&
+		typeof body.notificationId === "string" &&
+		OPEN_ID.test(body.notificationId) &&
+		typeof body.registrationId === "string" &&
+		OPEN_ID.test(body.registrationId)
+		? {
+				notificationId: body.notificationId,
+				registrationId: body.registrationId,
+			}
+		: null;
+}
 export type PushConfiguration = {
 	unifiedpush?: { publicKey: string; privateKey: string; subject: string };
 	fcm?: { projectId: string; clientEmail: string; privateKey: string };

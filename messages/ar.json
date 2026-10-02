@@ -2308,5 +2308,6 @@
 	"native_push_retry_disable": "إعادة محاولة الإيقاف",
 	"native_push_disable": "إيقاف",
 	"native_push_refresh": "تحديث الحالة",
-	"native_push_action_failed": "تعذر تغيير إشعارات الهاتف. حدّث الحالة قبل المحاولة مجددًا."
+	"native_push_action_failed": "تعذر تغيير إشعارات الهاتف. حدّث الحالة قبل المحاولة مجددًا.",
+	"native_notification_unavailable": "لم يعد هذا الإشعار متاحًا."
 }

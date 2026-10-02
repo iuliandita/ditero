@@ -2124,5 +2124,6 @@
 	"native_push_retry_disable": "Ausschalten erneut versuchen",
 	"native_push_disable": "Ausschalten",
 	"native_push_refresh": "Status aktualisieren",
-	"native_push_action_failed": "Handy-Benachrichtigungen konnten nicht geändert werden. Aktualisiere den Status, bevor du es erneut versuchst."
+	"native_push_action_failed": "Handy-Benachrichtigungen konnten nicht geändert werden. Aktualisiere den Status, bevor du es erneut versuchst.",
+	"native_notification_unavailable": "Diese Benachrichtigung ist nicht mehr verfügbar."
 }

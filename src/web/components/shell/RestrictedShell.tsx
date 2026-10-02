@@ -10,6 +10,7 @@ import { m } from "../../../paraglide/messages.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
+import { useNativeNotificationNavigation } from "../../hooks/useNativeNotificationNavigation.ts";
 import {
 	useTaskImportActivation,
 	useTaskImportActivationMap,
@@ -104,12 +105,16 @@ function RestrictedRow({
 // No sidebar, switcher, folders, create-list, FAB, members, or account settings -- the
 // kid completes and comments on assigned tasks and nothing else. Mounted by
 // Workspace when the current user is a restricted managed account.
-export function RestrictedShell() {
+export function RestrictedShell({
+	notificationReady = false,
+}: {
+	notificationReady?: boolean;
+}) {
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
-	const [assignees] = useQuery(queries.assignees.mine());
-	const [tasks] = useQuery(queries.tasks.mine());
-	const [lists] = useQuery(queries.lists.mine());
+	const [assignees, assigneesDetails] = useQuery(queries.assignees.mine());
+	const [tasks, tasksDetails] = useQuery(queries.tasks.mine());
+	const [lists, listsDetails] = useQuery(queries.lists.mine());
 	const [error, setError] = useState<string | null>(null);
 	const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
@@ -138,6 +143,28 @@ export function RestrictedShell() {
 	const detailList = detailTask
 		? (lists.find((l) => l.id === detailTask.listId) ?? null)
 		: null;
+	useNativeNotificationNavigation(
+		notificationReady &&
+			assigneesDetails.type === "complete" &&
+			tasksDetails.type === "complete" &&
+			listsDetails.type === "complete",
+		(target) => {
+			if (target.kind !== "task") return false;
+			const task = myTasks.find(
+				(row) => row.id === target.taskId && row.listId === target.listId,
+			);
+			if (
+				!task ||
+				!lists.some(
+					(row) =>
+						row.id === task.listId && row.workspaceId === target.workspaceId,
+				)
+			)
+				return false;
+			setDetailTaskId(task.id);
+			return true;
+		},
+	);
 
 	function toggle(task: Task) {
 		if (!activation.canWriteTask(task.id)) return;

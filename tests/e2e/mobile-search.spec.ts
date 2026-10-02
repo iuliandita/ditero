@@ -113,7 +113,7 @@ test("mobile search finds a task by substring and opens it", async ({
 	await expect(results).toHaveCount(1);
 	await results.first().click();
 	await expect(sheet).toHaveCount(0);
-	await expect(page.locator('input[aria-label="Task title"]')).toHaveValue(
+	await expect(page.getByTestId("task-detail-title")).toHaveValue(
 		"Call the plumber",
 		{ timeout: 15000 },
 	);

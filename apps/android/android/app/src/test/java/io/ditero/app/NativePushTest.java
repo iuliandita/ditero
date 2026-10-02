@@ -172,17 +172,26 @@ public class NativePushTest {
         for(boolean replacement:new boolean[]{false,true}) {
             durable.clear(); FlowStore store=new FlowStore(); store.verified=false;
             java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+            java.util.concurrent.CountDownLatch started=new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.CountDownLatch release=new java.util.concurrent.CountDownLatch(1);
             java.util.List<String> shown=new java.util.ArrayList<>();
             NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->true,request->{throw new AssertionError("retired owner must not register");},
                     (owner,payload)->shown.add(payload.get("notificationId")));
             try {
+                lane.submit(()->{started.countDown(); release.await(); return null;});
+                assertTrue(started.await(5,java.util.concurrent.TimeUnit.SECONDS));
                 coordinator.message(json(valid),true,store.owner.instance);
                 assertTrue(durable.containsKey(store.owner.instance+".messages"));
                 store.selection=replacement?captured("session-2"):null; store.verified=true;
                 coordinator.state(); coordinator.verificationAccepted();
+                release.countDown();
+                lane.submit(()->{}).get(5,java.util.concurrent.TimeUnit.SECONDS);
                 assertTrue(shown.isEmpty()); assertFalse(durable.containsKey(store.owner.instance+".messages"));
                 assertEquals(true,durable.get(store.owner.instance+".retired"));
-            } finally {lane.shutdownNow();}
+            } finally {
+                release.countDown(); lane.shutdownNow();
+                assertTrue(lane.awaitTermination(5,java.util.concurrent.TimeUnit.SECONDS));
+            }
         }
     }
     @Test public void unavailableOwnerKeysPreserveDeferredEvidence() throws Exception {

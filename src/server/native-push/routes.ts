@@ -10,6 +10,7 @@ import {
 } from "../native-auth/session.ts";
 import {
 	type PushConfiguration,
+	parsePushOpen,
 	parseRegistration,
 	pushConfiguration,
 	validatePushEndpoint,
@@ -32,6 +33,7 @@ export function nativePushRoutes(deps: NativePushDependencies): Elysia {
 	const configuration = deps.configuration ?? pushConfiguration();
 	const ring = deps.ring === undefined ? channelKeyRing() : deps.ring;
 	const store = ring ? new NativePushStore(deps.pool, ring) : null;
+	const openStore = store ?? new NativePushStore(deps.pool, null);
 	const peers = new WeakMap<Request, string>();
 	const guarded =
 		(
@@ -78,6 +80,19 @@ export function nativePushRoutes(deps: NativePushDependencies): Elysia {
 					fcmProjectId: store ? (configuration.fcm?.projectId ?? null) : null,
 				}),
 			),
+		)
+		.post(
+			"/api/native/push/open",
+			guarded(async (request, session) => {
+				const body = await readJsonObject(request, 1024);
+				if (!body.ok) return reply({ code: "invalid-body" }, 400);
+				const input = parsePushOpen(body.value);
+				if (!input) return reply({ code: "invalid-body" }, 400);
+				const target = await openStore.open(session, input);
+				return target
+					? reply({ target })
+					: reply({ code: "notification-unavailable" }, 404);
+			}),
 		)
 		.post(
 			"/api/native/push/register",

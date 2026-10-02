@@ -2170,5 +2170,6 @@
 	"native_push_retry_disable": "Réessayer la désactivation",
 	"native_push_disable": "Désactiver",
 	"native_push_refresh": "Actualiser l’état",
-	"native_push_action_failed": "Impossible de modifier les notifications. Actualise leur état avant de réessayer."
+	"native_push_action_failed": "Impossible de modifier les notifications. Actualise leur état avant de réessayer.",
+	"native_notification_unavailable": "Cette notification n’est plus disponible."
 }

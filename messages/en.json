@@ -2124,5 +2124,6 @@
 	"native_push_retry_disable": "Retry turning off",
 	"native_push_disable": "Turn off",
 	"native_push_refresh": "Refresh status",
-	"native_push_action_failed": "Could not change phone notifications. Refresh the status before trying again."
+	"native_push_action_failed": "Could not change phone notifications. Refresh the status before trying again.",
+	"native_notification_unavailable": "This notification is no longer available."
 }
