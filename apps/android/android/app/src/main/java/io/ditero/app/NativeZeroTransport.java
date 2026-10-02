@@ -8,8 +8,6 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
-import android.security.keystore.KeyGenParameterSpec;
-import android.security.keystore.KeyProperties;
 import android.util.Base64;
 import android.util.JsonReader;
 import android.util.JsonToken;
@@ -35,13 +33,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.text.ParsePosition;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.TimeZone;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,11 +51,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.GCMParameterSpec;
 
 import okhttp3.MediaType;
 import okhttp3.Call;
@@ -117,9 +106,7 @@ final class NativeZeroTransport {
     private static final Pattern CREDENTIAL_NAME =
             Pattern.compile("auth|cookie|token|secret|session|bearer|key|jwt|credential|origin", Pattern.CASE_INSENSITIVE);
 
-    private static final String KEY_ALIAS = "io.ditero.app.native.session.v1";
-    private static final String PREFS = "ditero_native_session";
-    private static final String PREF_SELECTED = "selected";
+    private static final String PREF_SELECTED = NativeSessionVault.PREF_SELECTED;
     private static final MediaType JSON_TYPE = MediaType.get("application/json; charset=utf-8");
 
     private static final Set<String> MESSAGE_FIELDS = new HashSet<>(Arrays.asList(
@@ -287,7 +274,7 @@ final class NativeZeroTransport {
 
     private NativeZeroTransport(Activity activity) {
         this.activity = activity;
-        this.prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        this.prefs = new NativeSessionVault(activity).preferences();
         // No cookie jar, no logging interceptor, no redirects, no system proxy: the
         // bearer token only ever goes to the selected instance's HTTPS origin.
         this.http = new OkHttpClient.Builder()
@@ -1747,61 +1734,18 @@ final class NativeZeroTransport {
 
     // ---- credential storage ---------------------------------------------------------
 
-    private static String blobKey(String scope) {
-        return "s." + hex(sha256(scope.getBytes(StandardCharsets.UTF_8)));
-    }
-
-    private static String pointerKey(ServerContext ctx) {
-        return "a." + hex(sha256(ctx.origin.getBytes(StandardCharsets.UTF_8)));
-    }
-
-    private SecretKey storeKey() throws GeneralSecurityException, IOException {
-        KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
-        ks.load(null);
-        if (!ks.containsAlias(KEY_ALIAS)) {
-            KeyGenerator gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
-            gen.init(new KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setKeySize(256)
-                    .build());
-            gen.generateKey();
-        }
-        return (SecretKey) ks.getKey(KEY_ALIAS, null);
-    }
-
-    private static byte[] aad(String scope) {
-        return ("ditero-native-session-v2\n" + scope).getBytes(StandardCharsets.UTF_8);
-    }
-
-    private static boolean unexpired(String value) {
-        if (value == null || !value.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z")) return false;
-        String normalized = value.length() == 20 ? value.substring(0, 19) + ".000Z" : value;
-        SimpleDateFormat parser = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
-        parser.setLenient(false);
-        parser.setTimeZone(TimeZone.getTimeZone("UTC"));
-        ParsePosition position = new ParsePosition(0);
-        Date parsed = parser.parse(normalized, position);
-        return parsed != null && position.getIndex() == normalized.length()
-                && parsed.getTime() > System.currentTimeMillis();
-    }
+    private static String blobKey(String scope) { return NativeSessionVault.blobKey(scope); }
+    private static String pointerKey(ServerContext ctx) { return NativeSessionVault.pointerKey(ctx); }
+    private static boolean unexpired(String value) { return NativeSessionVault.unexpired(value); }
 
     private static void restoreProof(Session restored, Map<String, Object> m) throws Reject {
-        if (!Boolean.TRUE.equals(m.get("verified")) || !(m.get("profile") instanceof Map)) return;
-        Map<String, Object> profile = asMap(m.get("profile"));
-        String name = str(profile.get("name")), email = str(profile.get("email"));
-        String endpoint = str(m.get("zeroUrl")), workspace = str(m.get("workspaceId"));
-        if (!restored.userId.equals(profile.get("id")) || name == null || name.length() > 512
-                || email == null || email.length() > 512 || !validId(workspace)) return;
-        try {
-            restored.zeroUrl = ServerContext.ZeroEndpoint.parse(endpoint).httpsUrl;
-            restored.profileName = name;
-            restored.profileEmail = email;
-            restored.workspaceId = workspace;
-            restored.verified = true;
-        } catch (IllegalArgumentException e) {
-            // A legacy or invalid record cannot supply offline startup proof.
-        }
+        NativeSessionVault.Proof proof = NativeSessionVault.proof(restored.userId, m);
+        if (proof == null) return;
+        restored.zeroUrl = proof.zeroUrl;
+        restored.profileName = proof.name;
+        restored.profileEmail = proof.email;
+        restored.workspaceId = proof.workspaceId;
+        restored.verified = true;
     }
 
     private static boolean offlineReady(Session s) {
@@ -1810,7 +1754,7 @@ final class NativeZeroTransport {
     }
 
     private String checkKey(Session s) {
-        return "v." + hex(sha256((s.scope() + "\n" + s.sessionId).getBytes(StandardCharsets.UTF_8)));
+        return NativeSessionVault.checkKey(s.scope(), s.sessionId);
     }
 
     // Mark verification durably before sending: a refused response cannot resurrect a cached session
@@ -1886,12 +1830,7 @@ final class NativeZeroTransport {
                     "deviceId", s.deviceId, "expiresAt", s.expiresAt, "profile", s.profileName == null ? null
                     : obj("id", s.userId, "name", s.profileName, "email", s.profileEmail),
                     "zeroUrl", s.zeroUrl, "workspaceId", s.workspaceId, "verified", s.verified).toString();
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, storeKey());
-            cipher.updateAAD(aad(scope));
-            byte[] ct = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
-            String blob = "v2." + Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP)
-                    + "." + Base64.encodeToString(ct, Base64.NO_WRAP);
+            String blob = NativeSessionVault.encode(scope, plain);
             SharedPreferences.Editor editor = prefs.edit().putString(blobKey(scope), blob)
                     .putString(pointerKey(s.context), s.userId);
             String previousUser = prefs.getString(pointerKey(s.context), null);
@@ -1947,25 +1886,9 @@ final class NativeZeroTransport {
         String scope = ctx.scope(userId);
         String blob = prefs.getString(blobKey(scope), null);
         if (blob == null) return null;
-        SecretKey key;
         try {
-            key = storeKey();
-        } catch (GeneralSecurityException | IOException | RuntimeException e) {
-            return null;
-        }
-        try {
-            String[] parts = blob.split("\\.", -1);
-            if (parts.length != 3 || !parts[0].equals("v2")) throw new Reject("format");
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, Base64.decode(parts[1], Base64.NO_WRAP)));
-            cipher.updateAAD(aad(scope));
-            String plain = new String(cipher.doFinal(Base64.decode(parts[2], Base64.NO_WRAP)), StandardCharsets.UTF_8);
-            Map<String, Object> m = asMap(parse(plain));
+            Map<String, Object> m = NativeSessionVault.decode(scope, userId, blob);
             String token = str(m.get("token"));
-            if (token == null || !BEARER.matcher(token).matches() || !userId.equals(m.get("userId"))
-                    || !validId(str(m.get("sessionId"))) || !validId(str(m.get("deviceId")))
-                    || str(m.get("expiresAt")) == null || !ISO.matcher(str(m.get("expiresAt"))).matches())
-                throw new Reject("fields");
             Session restored = new Session(ctx, token, str(m.get("sessionId")), userId, str(m.get("deviceId")),
                     str(m.get("expiresAt")));
             Verification known = verification.get(checkKey(restored));
@@ -1976,6 +1899,8 @@ final class NativeZeroTransport {
             // after interrupted verification or a known refusal whose deletion failed.
             if (prefs.getBoolean(checkKey(restored), false)) restored.verified = false;
             return restored;
+        } catch (NativeSessionVault.KeyUnavailableException e) {
+            return null;
         } catch (BadPaddingException | IllegalBlockSizeException
                  | IllegalArgumentException | IOException | Reject e) {
             if (!allowExpired) prefs.edit().remove(blobKey(scope)).remove(pointerKey(ctx)).commit();
