@@ -3,6 +3,7 @@ import {
 	bridgeState,
 	completeOnce,
 	connectBridge,
+	createNativePush,
 	type Hello,
 	NativeWebSocket,
 	readBridgeState,
@@ -244,4 +245,78 @@ test("stale-request refusal reaches only the current same-session page", async (
 	expect(ended).toHaveBeenCalledTimes(1);
 	emit(2, "current-page");
 	expect(ended).toHaveBeenCalledTimes(1);
+});
+
+test("push uses only fixed account-bound operations and validates every state", async () => {
+	snapshot.session = session;
+	await connectBridge();
+	const push = createNativePush(1, session.authHandle);
+	for (const [method, op] of [
+		["read", "push.state"],
+		["enable", "push.enable"],
+		["disable", "push.disable"],
+		["permission", "push.permission"],
+	] as const) {
+		const result = push[method]();
+		const command = sent.at(-1);
+		if (!command) throw new Error("missing push command");
+		expect(command).toEqual({
+			op,
+			id: session.authHandle,
+			gen: 1,
+			rid: expect.any(Number),
+		});
+		reply(command, {
+			state: "cleanup-pending",
+			permission: "granted",
+			provider: "unifiedpush",
+		});
+		expect(await result).toEqual({
+			state: "cleanup-pending",
+			permission: "granted",
+			provider: "unifiedpush",
+		});
+	}
+	for (const fields of [
+		{ state: "active", permission: "denied", provider: "unifiedpush" },
+		{ state: "unknown", permission: "granted", provider: "unifiedpush" },
+		{ state: "active", permission: "granted", provider: "google" },
+		{ state: "active", permission: true, provider: "unifiedpush" },
+	]) {
+		const result = push.read();
+		const refused = expect(result).rejects.toMatchObject({
+			code: "invalid-reply",
+		});
+		const command = sent.at(-1);
+		if (!command) throw new Error("missing push command");
+		reply(command, fields);
+		await refused;
+	}
+});
+
+test("push cannot post for a retired account or accept its late result", async () => {
+	snapshot.session = session;
+	await connectBridge();
+	const push = createNativePush(1, session.authHandle);
+	const pendingPush = push.enable();
+	const refused = expect(pendingPush).rejects.toMatchObject({
+		code: "stale-generation",
+	});
+	const command = sent.at(-1);
+	if (!command) throw new Error("missing push command");
+	snapshot = {
+		...snapshot,
+		gen: 2,
+		session: { ...session, authHandle: "opaque-2" },
+	};
+	await readBridgeState();
+	reply(command, {
+		state: "active",
+		permission: "granted",
+		provider: "unifiedpush",
+	});
+	await refused;
+	const before = sent.length;
+	await expect(push.read()).rejects.toMatchObject({ code: "stale-generation" });
+	expect(sent).toHaveLength(before);
 });

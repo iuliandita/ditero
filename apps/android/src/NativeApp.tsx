@@ -11,7 +11,10 @@ import {
 import { useUserPref } from "../../../src/web/hooks/useUserPref.ts";
 import { DisplayPreferencesProvider } from "../../../src/web/lib/DisplayPreferencesProvider.tsx";
 import { KeyringProvider } from "../../../src/web/lib/e2e/KeyringProvider.tsx";
-import { NativeAccountContext } from "../../../src/web/lib/native-account.tsx";
+import {
+	NativeAccountContext,
+	type NativePush,
+} from "../../../src/web/lib/native-account.tsx";
 import { AppZeroProvider } from "../../../src/web/lib/zero.tsx";
 import { retireZeroClients } from "../../../src/web/lib/zero-lifecycle.ts";
 import { Workspace } from "../../../src/web/routes/Workspace.tsx";
@@ -19,6 +22,7 @@ import {
 	bridgeState,
 	completeOnce,
 	connectBridge,
+	createNativePush,
 	installNativeWebSocket,
 	NativeError,
 	type NativeProfile,
@@ -39,6 +43,7 @@ type Active = {
 	runtime: NativeRuntimes;
 	profile: NativeProfile;
 	origin: string;
+	push: NativePush;
 };
 
 function NativeWorkspace({ active }: { active: Active }) {
@@ -137,7 +142,12 @@ function NativeAppRoutes() {
 		await retireZeroClients();
 		if (owner !== epoch.current) return;
 		setApproval(false);
-		setActive({ runtime, profile, origin: context.origin });
+		setActive({
+			runtime,
+			profile,
+			origin: context.origin,
+			push: createNativePush(context.gen, context.authHandle),
+		});
 	}
 
 	useEffect(() => {
@@ -221,6 +231,7 @@ function NativeAppRoutes() {
 						profile: active.profile,
 						origin: active.origin,
 						storageScope: active.runtime.scope,
+						push: active.push,
 						changeServer,
 					}}
 				>
