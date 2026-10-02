@@ -1,3 +1,9 @@
+import {
+	NATIVE_PUSH_STATES,
+	type NativePush,
+	type NativePushState,
+} from "../../../src/web/lib/native-account.tsx";
+
 // Page side of the NativeDitero message-listener bridge (NativeZeroTransport.java) and an
 // EventTarget-compatible WebSocket adapter for Zero. The page only ever holds an opaque
 // auth handle: the session token, the JWT and the PKCE verifier stay in Java.
@@ -87,9 +93,12 @@ export type AttachmentOp =
 	| "stage.read"
 	| "stage.cancel";
 
+type PushOp = "push.state" | "push.enable" | "push.disable" | "push.permission";
+
 type Command =
 	| { op: "server.select"; origin: string }
 	| { op: SimpleOp }
+	| { op: PushOp; id: string }
 	| { op: E2eOp; id?: string; body?: Record<string, unknown> }
 	| { op: AttachmentOp; body: Record<string, unknown> };
 
@@ -940,4 +949,39 @@ export function installNativeWebSocket(): () => void {
 		restoreHook = undefined;
 	};
 	return restoreHook;
+}
+
+/** Fixed native operations, bound to the verified account that owns this UI. */
+export function createNativePush(gen: number, authHandle: string): NativePush {
+	const assertCurrent = () => {
+		const current = requireState();
+		if (current.gen !== gen || current.session?.authHandle !== authHandle)
+			throw new NativeError("stale-generation");
+	};
+	const call = async (op: PushOp): Promise<NativePushState> => {
+		assertCurrent();
+		return request({ op, id: authHandle }, (reply) => {
+			assertCurrent();
+			ok(reply);
+			if (
+				!NATIVE_PUSH_STATES.some((value) => value === reply.state) ||
+				(reply.permission !== "granted" && reply.permission !== "denied") ||
+				reply.provider !== "unifiedpush" ||
+				(reply.state === "active" && reply.permission !== "granted")
+			)
+				throw new NativeError("invalid-reply");
+			return {
+				state: reply.state as NativePushState["state"],
+				permission: reply.permission,
+				provider: reply.provider,
+			};
+		});
+	};
+	return {
+		identity: JSON.stringify([gen, authHandle]),
+		read: () => call("push.state"),
+		enable: () => call("push.enable"),
+		disable: () => call("push.disable"),
+		permission: () => call("push.permission"),
+	};
 }

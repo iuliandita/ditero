@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, type Response, test } from "@playwright/test";
 import { Pool } from "pg";
 import {
 	goToSettings,
@@ -129,14 +129,43 @@ test("imported authors stay distinct from local people and cannot claim comment 
 		});
 		await memberPage.keyboard.press("Escape");
 		await goToSettings(memberPage);
-		const response = memberPage.waitForResponse((result) =>
-			result.url().endsWith("/api/portability/export"),
-		);
-		await memberPage.getByRole("button", { name: "Download JSON" }).click();
-		expect((await response).status()).toBe(409);
-		await expect(memberPage.getByRole("alert")).toContainText(
-			"Use a version 2 archive",
-		);
+		const exportStatuses: number[] = [];
+		const observeExport = (response: Response) => {
+			if (new URL(response.url()).pathname === "/api/portability/export")
+				exportStatuses.push(response.status());
+		};
+		memberPage.on("response", observeExport);
+		try {
+			const exportAlert = memberPage
+				.locator("#data-portability")
+				.getByRole("alert");
+			await memberPage.getByRole("button", { name: "Download JSON" }).click();
+			// The export boundary can wait up to ten seconds before refusing.
+			await expect(exportAlert).toContainText(
+				/Use a version 2 archive|Some edits are still pending/,
+				{ timeout: 15_000 },
+			);
+			if (
+				(await exportAlert.textContent())?.includes(
+					"Some edits are still pending",
+				)
+			) {
+				await expect(exportAlert).toHaveText(
+					"Some edits are still pending, were refused, or could not be confirmed. No file was downloaded. You can wait and retry, or download only the server-saved content.",
+				);
+				expect(exportStatuses).toEqual([]);
+				await memberPage
+					.getByRole("button", {
+						name: "Download server-saved snapshot anyway",
+						exact: true,
+					})
+					.click();
+			}
+			await expect(exportAlert).toContainText("Use a version 2 archive");
+			expect(exportStatuses).toEqual([409]);
+		} finally {
+			memberPage.off("response", observeExport);
+		}
 		const archive = await memberPage.request.get(
 			"/api/portability/export?version=2",
 		);
