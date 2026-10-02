@@ -36,6 +36,7 @@ import { workerTiming } from "../config/worker.ts";
 import { db, pool } from "../db/client.ts";
 import { verifyRuntimeDatabaseRole } from "../db/runtime-role.ts";
 import { verifyZeroShardAccess, zeroShardSchema } from "../db/zero-shard.ts";
+import { channelKeyRing } from "../security/channel-config.ts";
 import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
 import type { Schema } from "../zero/schema.gen.ts";
@@ -60,6 +61,8 @@ import { sendInviteMail } from "./mail/invite-mail.ts";
 import { nativeAttachmentRoutes } from "./native-auth/attachment-routes.ts";
 import { nativeE2ERoutes } from "./native-auth/e2e-routes.ts";
 import { nativeAuthRoutes } from "./native-auth/routes.ts";
+import { pushConfiguration } from "./native-push/contracts.ts";
+import { startRelayRecovery } from "./native-push/relay-recovery.ts";
 import { nativePushRoutes } from "./native-push/routes.ts";
 import { ackBaseUrl, takeRateToken } from "./notifications/capability.ts";
 import {
@@ -611,6 +614,17 @@ if (import.meta.main) {
 			timing,
 		);
 	}
+	const relay = pushConfiguration()["fcm-relay"],
+		relayRing = channelKeyRing();
+	if (relay && relayRing)
+		startRelayRecovery(
+			pool,
+			relayRing,
+			relay,
+			notifyAllowedPrivateCIDRs(
+				process.env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
+			),
+		);
 	app.listen(PORT);
 	console.log(`ditero api on :${PORT}`);
 }

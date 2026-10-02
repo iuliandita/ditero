@@ -1557,7 +1557,7 @@ export const nativePushRegistration = pgTable(
 		}).onDelete("cascade"),
 		check(
 			"native_push_registration_provider",
-			sql`${t.provider} in ('unifiedpush','fcm','desktop')`,
+			sql`${t.provider} in ('unifiedpush','fcm','desktop','fcm-relay')`,
 		),
 		unique("native_push_registration_id_owner").on(t.id, t.userId),
 		pgPolicy("native_push_registration_owner", {
@@ -1568,6 +1568,43 @@ export const nativePushRegistration = pgTable(
 		}),
 	],
 ).enableRLS();
+
+// Sender recovery survives account/session cascades. Immutable owner IDs authenticate ciphertext.
+// Server-only, deliberately absent from the Zero table allowlist.
+export const nativeRelayAuthority = pgTable(
+	"native_relay_authority",
+	{
+		id: text("id").primaryKey(),
+		operationId: text("operation_id").notNull().unique(),
+		userId: text("user_id").notNull(),
+		sessionId: text("session_id").notNull(),
+		deviceId: text("device_id").notNull(),
+		registrationId: text("registration_id").notNull().unique(),
+		requestDigest: text("request_digest").notNull(),
+		configCiphertext: text("config_ciphertext").notNull(),
+		offerToken: text("offer_token").notNull(),
+		state: text("state").notNull(),
+		generation: integer("generation").notNull().default(1),
+		credentialVersion: integer("credential_version").notNull().default(1),
+		offerExpires: timestamp("offer_expires", { withTimezone: true }).notNull(),
+		receipt: text("receipt"),
+		nextAttempt: timestamp("next_attempt", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+		attempts: integer("attempts").notNull().default(0),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+	},
+	(t) => [
+		index("native_relay_recovery_due").on(t.nextAttempt),
+		index("native_relay_session").on(t.sessionId),
+		check(
+			"native_relay_state",
+			sql`${t.state} in ('issued','active','retiring')`,
+		),
+	],
+);
 
 // Opaque delivery receipts remain server-only; outbox pruning bounds retention.
 export const nativeDesktopMailbox = pgTable(

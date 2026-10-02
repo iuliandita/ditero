@@ -2,6 +2,10 @@ import { createECDH, createPrivateKey, ECDH } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { notifyAllowedPrivateCIDRs } from "../../config/notify-egress.ts";
 import { resolvePinnedTarget } from "../../security/safe-http.ts";
+import {
+	type RelayConfiguration,
+	relayConfiguration,
+} from "./relay-configuration.ts";
 
 export type PushRegistration =
 	| {
@@ -30,6 +34,7 @@ export function parsePushOpen(
 		: null;
 }
 export type PushConfiguration = {
+	"fcm-relay"?: RelayConfiguration;
 	unifiedpush?: { publicKey: string; privateKey: string; subject: string };
 	fcm?: { projectId: string; clientEmail: string; privateKey: string };
 };
@@ -171,5 +176,7 @@ export function pushConfiguration(
 			privateKey: value.private_key,
 		};
 	}
+	const relay = relayConfiguration(env);
+	if (relay) config["fcm-relay"] = relay;
 	return config;
 }

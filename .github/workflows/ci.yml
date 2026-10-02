@@ -122,9 +122,39 @@ jobs:
       - run: tests/container/zero.sh
       - run: tests/container/zero-shard.sh
 
+  push-relay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun run i18n:compile
+      - run: bun run push-relay:typecheck
+      - run: bun run push-relay:test
+      - run: bun run push-relay:integration
+      - run: bun run native-relay-instance:integration
+      - run: docker build --file apps/push-relay/Dockerfile --tag ditero-push-relay:check .
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ditero-push-relay:check
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          version: "v0.70.0"
+      - run: bun run push-relay:integration
+        env:
+          RELAY_TEST_IMAGE: ditero-push-relay:check
+          RELAY_TEST_SMOKE_ONLY: "1"
+
   verify:
     if: ${{ always() }}
-    needs: [checks, integration, e2e, containers]
+    needs: [checks, integration, e2e, containers, push-relay]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -133,5 +163,5 @@ jobs:
           JOB_RESULTS: ${{ toJSON(needs) }}
         run: >-
           jq --exit-status
-          'length == 4 and all(.[]; .result == "success")'
+          'length == 5 and all(.[]; .result == "success")'
           <<< "$JOB_RESULTS"

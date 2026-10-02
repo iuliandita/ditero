@@ -10,6 +10,7 @@
 // to the pre-backfill value.
 import type { Pool } from "pg";
 import type { ChannelKind } from "../domain/notification-channel.ts";
+import { backfillRelayAuthorities } from "../server/native-push/relay-recovery.ts";
 import { nativePushConfigContext } from "../server/native-push/store.ts";
 import { channelKeyRing, reencryptChannelConfig } from "./channel-config.ts";
 import { type FieldKeyRing, reencryptField } from "./field-encryption.ts";
@@ -133,7 +134,8 @@ export async function backfillCredentialConfigs(
 ): Promise<number> {
 	return (
 		(await backfillChannelConfigs(pool, ring)) +
-		(await backfillNativePushConfigs(pool, ring))
+		(await backfillNativePushConfigs(pool, ring)) +
+		(await backfillRelayAuthorities(pool, ring))
 	);
 }
 
