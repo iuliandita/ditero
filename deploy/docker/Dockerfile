@@ -32,7 +32,7 @@ FROM rocicorp/zero:1.9.0@sha256:f80683bf3ddf08be26c68ddd94589fada29a0b8a4597668b
 
 # Keep upstream's PostgreSQL patch, but rebuild its dependency tree
 # from the reviewed lock so the vulnerable packages are actually replaced.
-FROM node:22.23.3-alpine3.24@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS zero-node
+FROM node:26.10.0-alpine3.24@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS zero-node
 
 FROM zero-base AS zero-deps
 COPY --from=zero-node /usr/local/bin/node /usr/local/bin/node
@@ -119,7 +119,7 @@ RUN mkdir -p /rootfs/etc /rootfs/usr/bin /rootfs/usr/local/bin /rootfs/home/bun 
 	&& chown 1000:1000 /rootfs/home/bun /rootfs/data/attachments
 
 # gcr.io/distroless/base-debian13 (multi-arch index digest)
-FROM gcr.io/distroless/base-debian13@sha256:0ebad3510af52aefe45045cc01b07564570be4feecf8d9f93d3a05d1b5f2f93b AS runtime-debian
+FROM gcr.io/distroless/base-debian13@sha256:389cad21f73e4c37b94ffe5b13736d5a92bd5bd3c6c6b38c2be1c881e14ba2bd AS runtime-debian
 COPY --from=debian-prep /rootfs/ /
 
 # --- runtime stage ----------------------------------------------------------
