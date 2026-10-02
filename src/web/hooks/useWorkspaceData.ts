@@ -5,6 +5,32 @@ import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { shareableWorkspaces } from "../lib/create-gates.ts";
 
+export function workspaceViewRowsLoading({
+	tasks,
+	lists,
+	workspaces,
+	tasksType,
+	listsType,
+}: {
+	tasks: readonly { listId: string }[];
+	lists: readonly { id: string; workspaceId: string }[];
+	workspaces: readonly { id: string }[];
+	tasksType: "unknown" | "complete" | "error";
+	listsType: "unknown" | "complete" | "error";
+}): boolean {
+	if (tasksType === "complete" && listsType === "complete") return false;
+	if (tasksType === "error" || listsType === "error" || tasks.length === 0)
+		return true;
+	const workspaceIds = new Set(workspaces.map((workspace) => workspace.id));
+	const workspaceByList = new Map(
+		lists.map((list) => [list.id, list.workspaceId]),
+	);
+	return tasks.some((task) => {
+		const workspaceId = workspaceByList.get(task.listId);
+		return workspaceId === undefined || !workspaceIds.has(workspaceId);
+	});
+}
+
 // The workspace's synced row sets and the derivations that read only those rows.
 // Anything that also reads component state (the active workspace, the open task)
 // stays at the call site -- it is state, not data.
@@ -19,10 +45,15 @@ export function useWorkspaceData() {
 	const [taskLabels] = useQuery(queries.taskLabels.mine());
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
-	// The view surface joins tasks onto lists, so it is only settled once both
-	// queries are; until then "no rows" means "not synced", not "nothing here".
-	const viewRowsLoading =
-		tasksDetails.type !== "complete" || listsDetails.type !== "complete";
+	// Cached rows can render before a reconnect confirms query completeness. Keep unknown
+	// empty or incomplete joins loading so they cannot become a false empty view.
+	const viewRowsLoading = workspaceViewRowsLoading({
+		tasks,
+		lists,
+		workspaces,
+		tasksType: tasksDetails.type,
+		listsType: listsDetails.type,
+	});
 
 	// The caller's own role per workspace; the mutators re-check on write, this
 	// only keeps the menu from offering what would fail.

@@ -38,6 +38,10 @@ import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.text.ParsePosition;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.TimeZone;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -192,6 +196,13 @@ final class NativeZeroTransport {
     private long jwtExp;
     private Pending pending;
     private final Map<Integer, Sock> socks = new HashMap<>();
+    private final Map<String, Verification> verification = new HashMap<>();
+
+    private static final class Verification {
+        int pending;
+        boolean refused;
+        boolean invalid;
+    }
 
     private static final class Exchange {
         final Pending pending;
@@ -207,7 +218,13 @@ final class NativeZeroTransport {
         final String sessionId;
         final String userId;
         final String deviceId;
-        final String expiresAt;
+        String expiresAt;
+        String profileName;
+        String profileEmail;
+        String zeroUrl;
+        String workspaceId;
+        boolean verified;
+        boolean refused;
 
         Session(ServerContext context, String token, String sessionId, String userId, String deviceId,
                 String expiresAt) {
@@ -573,6 +590,7 @@ final class NativeZeroTransport {
             return;
         }
         final int g = generation;
+        final Session owner = session;
         final Request request = new Request.Builder().url(ctx.url("/api/config"))
                 .header("Accept", "application/json").get().build();
         dispatch(request, new Done() {
@@ -583,7 +601,16 @@ final class NativeZeroTransport {
                     return;
                 }
                 try {
-                    if (result == null) throw new Reject("network");
+                    if (result == null) {
+                        if (owner == session && offlineReady(owner)) {
+                            zero = ServerContext.ZeroEndpoint.parse(owner.zeroUrl);
+                            sendToPage(proxy, obj("t", "reply", "rid", rid, "ok", true, "origin", ctx.origin,
+                                    "zeroURL", zero.httpsUrl, "queryUrl", ctx.queryUrl(), "mutateUrl", ctx.mutateUrl()));
+                            return;
+                        }
+                        throw new Reject("network");
+                    }
+                    if (result.code == -1) throw new Reject("transport-refused");
                     if (result.code != 200) throw new Reject("http-" + result.code);
                     if (result.body == null) throw new Reject("invalid-response");
                     String zeroUrl = str(asMap(parse(result.body)).get("zeroURL"));
@@ -594,6 +621,10 @@ final class NativeZeroTransport {
                         throw new Reject("invalid-config");
                     }
                     zero = endpoint;
+                    if (owner != null && owner == session) {
+                        owner.zeroUrl = endpoint.httpsUrl;
+                        if (!persistSession(owner)) throw new Reject("storage-failed");
+                    }
                     sendToPage(proxy, obj("t", "reply", "rid", rid, "ok", true, "origin", ctx.origin,
                             "zeroURL", endpoint.httpsUrl, "queryUrl", ctx.queryUrl(),
                             "mutateUrl", ctx.mutateUrl()));
@@ -614,7 +645,9 @@ final class NativeZeroTransport {
                         || !session.deviceId.equals(out.get("deviceId")))
                     throw new Reject("invalid-response");
                 String expiresAt = str(out.get("expiresAt"));
-                if (expiresAt == null || !ISO.matcher(expiresAt).matches()) throw new Reject("invalid-response");
+                if (!unexpired(expiresAt)) throw new Reject("invalid-response");
+                session.expiresAt = expiresAt;
+                markVerified(session);
                 return obj("ok", true, "scope", session.scope(), "userId", session.userId,
                         "deviceId", session.deviceId, "expiresAt", expiresAt);
             }
@@ -633,6 +666,8 @@ final class NativeZeroTransport {
                 if (!session.userId.equals(id) || name == null || name.length() > 512
                         || email == null || email.length() > 512)
                     throw new Reject("invalid-response");
+                session.profileName = name;
+                session.profileEmail = email;
                 return obj("ok", true, "id", id, "name", name, "email", email);
             }
         });
@@ -645,6 +680,7 @@ final class NativeZeroTransport {
                 if (code != 200) throw new Reject("http-" + code);
                 String workspaceId = str(asMap(parse(raw)).get("workspaceId"));
                 if (!validId(workspaceId)) throw new Reject("invalid-response");
+                session.workspaceId = workspaceId;
                 return obj("ok", true, "workspaceId", workspaceId);
             }
         });
@@ -907,8 +943,11 @@ final class NativeZeroTransport {
                 String token = str(asMap(parse(raw)).get("token"));
                 if (token == null || token.length() > MAX_JWT || !JWT.matcher(token).matches())
                     throw new Reject("jwt-rejected");
+                long expiry = jwtExpiry(token);
+                if (expiry <= System.currentTimeMillis() / 1000) throw new Reject("jwt-rejected");
                 jwt = token;
-                jwtExp = jwtExpiry(token);
+                jwtExp = expiry;
+                markVerified(session);
                 return obj("ok", true, "refreshedAt", System.currentTimeMillis(), "jwtExp", jwtExp);
             }
         });
@@ -928,37 +967,65 @@ final class NativeZeroTransport {
             return;
         }
         final int g = generation;
+        if (clearOnUnauthorized && !beginCheck(s)) {
+            fail(proxy, rid, "storage-failed");
+            return;
+        }
         Request.Builder builder = new Request.Builder().url(ctx.url(path))
                 .header("Accept", "application/json")
                 .header("Authorization", "Bearer " + s.token);
         if (post) builder.post(RequestBody.create(body == null ? "{}" : body, JSON_TYPE));
         else builder.get();
         dispatch(builder.build(), new Done() {
+            boolean settled;
+            private boolean settle(boolean usable) {
+                if (!clearOnUnauthorized || settled) return true;
+                settled = true;
+                return finishCheck(s, usable);
+            }
             @Override
             public void run(HttpResult result) {
-                if (!current(g, ctx) || session != s) {
+                boolean ownsPage = current(g, ctx) && session == s && page == proxy;
+                if (instanceUnauthorized(result) && clearOnUnauthorized) {
+                    s.refused = true;
+                    settle(false);
+                    dropSession(s);
+                    if (ownsPage) fail(proxy, rid, "unauthorized");
+                    else cancelled(proxy, rid);
+                    return;
+                }
+                if (!ownsPage) {
+                    settle(result == null);
                     cancelled(proxy, rid);
                     return;
                 }
                 if (result == null) {
+                    boolean cached = clearOnUnauthorized && offlineReady(s);
+                    if (!settle(true)) {
+                        fail(proxy, rid, "storage-failed");
+                        return;
+                    }
+                    if (cached && cachedReply(proxy, rid, path, s)) return;
                     fail(proxy, rid, "network");
                     return;
                 }
-                if (instanceUnauthorized(result) && clearOnUnauthorized) {
-                    dropSession(s);
-                    fail(proxy, rid, "unauthorized");
-                    return;
-                }
-                if (result.body == null) {
-                    fail(proxy, rid, "invalid-response");
+                if (result.code == -1 || result.body == null) {
+                    settle(false);
+                    fail(proxy, rid, result.code == -1 ? "transport-refused" : "invalid-response");
                     return;
                 }
                 try {
                     JSONObject out = reply.build(result.code, result.body);
+                    if (clearOnUnauthorized && !persistSession(s)) throw new Reject("storage-failed");
+                    if (!settle(true)) {
+                        fail(proxy, rid, "storage-failed");
+                        return;
+                    }
                     put(out, "t", "reply");
                     put(out, "rid", rid);
                     sendToPage(proxy, out);
                 } catch (Reject | IOException e) {
+                    settle(false);
                     fail(proxy, rid, e instanceof Reject ? e.getMessage() : "invalid-response");
                 }
             }
@@ -978,6 +1045,10 @@ final class NativeZeroTransport {
         }
         if (revoking != null || exchange != null) {
             fail(proxy, rid, "busy");
+            return;
+        }
+        if (!beginCheck(s)) {
+            fail(proxy, rid, "storage-failed");
             return;
         }
         final int g = generation;
@@ -1008,10 +1079,14 @@ final class NativeZeroTransport {
                     if (!remote) failure = "invalid-response";
                 }
                 if (failure != null) {
+                    boolean restored = finishCheck(s, result == null);
+                    if (!restored && result == null) failure = "storage-failed";
                     if (current(g, ctx) && session == s) fail(proxy, rid, failure);
                     else cancelled(proxy, rid);
                     return;
                 }
+                s.refused = true;
+                finishCheck(s, false);
                 // Confirmed: the captured namespace goes, whatever page or context is current now.
                 boolean cleared = clearPersisted(s);
                 boolean live = !closed && sameSession(session, s);
@@ -1047,7 +1122,12 @@ final class NativeZeroTransport {
     /** The instance said the token is dead: forget it locally, keep the selected instance. */
     private void dropSession(Session s) {
         clearPersisted(s);
-        if (sameSession(session, s)) dropMemory();
+        if (sameSession(session, s)) {
+            String refusedHandle = handle;
+            dropMemory();
+            if (ready && page != null) sendToPage(page, obj("t", "session-refused", "gen", generation,
+                    "authHandle", refusedHandle));
+        }
     }
 
     private static boolean sameSession(Session first, Session second) {
@@ -1070,16 +1150,18 @@ final class NativeZeroTransport {
         void run(HttpResult result);
     }
 
-    /** Runs the request off the main thread; the result is null on any transport failure. */
+    /** Only an unavailable transport before any response may use cached startup proof. */
     private void dispatch(final Request request, final Done done) {
         io.execute(new Runnable() {
             @Override
             public void run() {
-                HttpResult res = null;
+                HttpResult res;
                 try {
                     res = call(request);
-                } catch (IOException | RuntimeException e) {
-                    // reported as network by the callback
+                } catch (IOException e) {
+                    res = offlineFailure(e) ? null : new HttpResult(-1, null);
+                } catch (RuntimeException e) {
+                    res = new HttpResult(-1, null);
                 }
                 final HttpResult result = res;
                 main.post(new Runnable() {
@@ -1092,35 +1174,146 @@ final class NativeZeroTransport {
         });
     }
 
+    private static boolean offlineFailure(IOException error) {
+        List<Throwable> pending = new ArrayList<>();
+        Set<Throwable> seen = new HashSet<>();
+        pending.add(error);
+        for (int i = 0; i < pending.size(); i++) {
+            Throwable current = pending.get(i);
+            if (!seen.add(current)) continue;
+            if (current instanceof javax.net.ssl.SSLException || current instanceof java.net.ProtocolException
+                    || current instanceof java.net.UnknownServiceException) return false;
+            if (current.getCause() != null) pending.add(current.getCause());
+            pending.addAll(Arrays.asList(current.getSuppressed()));
+        }
+        return true;
+    }
+
     private HttpResult call(Request request) throws IOException {
-        if (!request.url().isHttps()) throw new IOException("cleartext refused");
-        try (Response response = http.newCall(request).execute()) {
+        if (!request.url().isHttps())
+            throw new IOException("cleartext refused", new java.net.UnknownServiceException("cleartext refused"));
+        Response response;
+        try {
+            response = http.newCall(request).execute();
+        } catch (IOException error) {
+            if (!offlineFailure(error)) throw new IOException("transport refused", error);
+            throw error;
+        }
+        try (Response received = response) {
+            return readResponse(received);
+        }
+    }
+
+    private static HttpResult readResponse(Response response) {
+        int status = response.code();
+        try {
             byte[] bytes = response.peekBody(MAX_BODY + 1L).bytes();
-            return new HttpResult(response.code(),
+            return new HttpResult(status,
                     bytes.length > MAX_BODY ? null : new String(bytes, StandardCharsets.UTF_8));
+        } catch (IOException | RuntimeException error) {
+            // A received status is never a transport outage, even when its body is truncated.
+            return new HttpResult(status, null);
         }
     }
 
     // ---- websocket ------------------------------------------------------------------
 
-    private void wsOpen(JavaScriptReplyProxy proxy, int rid, Integer cid, Map<String, Object> m) throws Reject {
+    private void wsOpen(final JavaScriptReplyProxy proxy, final int rid, final Integer cid,
+                        final Map<String, Object> m) throws Reject {
         if (cid == null || socks.containsKey(cid) || socks.size() >= MAX_SOCKETS) throw new Reject("invalid-socket");
         if (context == null || zero == null) throw new Reject("no-config");
-        if (session == null || handle == null || jwt == null) throw new Reject("no-token");
-        String url = str(m.get("url"));
-        String protocol = str(m.get("protocol"));
+        if (session == null || handle == null || !unexpired(session.expiresAt)) throw new Reject("no-session");
+        String url = str(m.get("url")), protocol = str(m.get("protocol"));
         if (url == null || protocol == null) throw new Reject("invalid-message");
+        zeroTarget(url);
+        final Session owner = session;
+        final ServerContext ctx = context;
+        final int g = generation;
+        final Sock sock = new Sock(cid, g, proxy);
+        socks.put(cid, sock);
+        if (jwt != null && jwtExp > System.currentTimeMillis() / 1000) {
+            try {
+                openSocket(proxy, rid, sock, url, protocol);
+            } catch (Reject e) {
+                socks.remove(cid);
+                throw e;
+            }
+            return;
+        }
+        if (!beginCheck(owner)) {
+            socks.remove(cid);
+            throw new Reject("storage-failed");
+        }
+        final Request request = new Request.Builder().url(ctx.url("/api/native/token"))
+                .header("Accept", "application/json").header("Authorization", "Bearer " + owner.token).get().build();
+        dispatch(request, new Done() {
+            boolean settled;
+            private boolean settle(boolean usable) {
+                if (settled) return true;
+                settled = true;
+                return finishCheck(owner, usable);
+            }
+            @Override public void run(HttpResult result) {
+                boolean stopped;
+                synchronized (sock) {
+                    stopped = sock.closeRequested || sock.detached || sock.terminal;
+                }
+                boolean ownsSocket = current(g, ctx) && session == owner && page == proxy
+                        && socks.get(cid) == sock && !stopped;
+                if (instanceUnauthorized(result)) {
+                    owner.refused = true;
+                    settle(false);
+                    dropSession(owner);
+                    if (ownsSocket) sendToPage(proxy, obj("t", "reply", "rid", rid, "cid", cid,
+                            "ok", false, "code", "unauthorized"));
+                    else if (page == proxy) sendToPage(proxy, obj("t", "reply", "rid", rid, "cid", cid,
+                            "ok", false, "code", "cancelled"));
+                    return;
+                }
+                if (!ownsSocket) {
+                    settle(result == null);
+                    if (socks.get(cid) == sock) socks.remove(cid);
+                    if (page == proxy) sendToPage(proxy, obj("t", "reply", "rid", rid, "cid", cid,
+                            "ok", false, "code", "cancelled"));
+                    return;
+                }
+                try {
+                    if (result == null) {
+                        if (!settle(true)) throw new Reject("storage-failed");
+                        throw new Reject("network");
+                    }
+                    if (result.code != 200 || result.body == null)
+                        throw new Reject(result.code == -1 ? "transport-refused" : "invalid-response");
+                    String token = str(asMap(parse(result.body)).get("token"));
+                    if (token == null || token.length() > MAX_JWT || !JWT.matcher(token).matches())
+                        throw new Reject("jwt-rejected");
+                    long expiry = jwtExpiry(token);
+                    if (expiry <= System.currentTimeMillis() / 1000) throw new Reject("jwt-rejected");
+                    markVerified(owner);
+                    if (!persistSession(owner)) throw new Reject("storage-failed");
+                    if (!settle(true)) throw new Reject("storage-failed");
+                    jwt = token;
+                    jwtExp = expiry;
+                    openSocket(proxy, rid, sock, str(m.get("url")), str(m.get("protocol")));
+                } catch (Reject | IOException e) {
+                    // A transport failure keeps offline authority; a server/protocol refusal does not.
+                    if (result != null) settle(false);
+                    if (socks.get(cid) == sock) socks.remove(cid);
+                    sendToPage(proxy, obj("t", "reply", "rid", rid, "cid", cid, "ok", false,
+                            "code", e instanceof Reject ? e.getMessage() : "invalid-response"));
+                }
+            }
+        });
+    }
+
+    private void openSocket(JavaScriptReplyProxy proxy, int rid, Sock sock, String url, String protocol) throws Reject {
         String target = zeroTarget(url);
         boolean[] embedded = new boolean[1];
         String outProtocol = spliceProtocol(protocol, embedded);
-        final Sock sock = new Sock(cid, generation, proxy);
-        socks.put(cid, sock);
         Request request = new Request.Builder().url(target)
                 .header("Sec-WebSocket-Protocol", outProtocol).build();
-        // The page learns the socket was accepted before any event can be queued for it.
-        sendToPage(proxy, obj("t", "reply", "rid", rid, "cid", cid, "ok", true,
+        sendToPage(proxy, obj("t", "reply", "rid", rid, "cid", sock.cid, "ok", true,
                 "initPath", embedded[0] ? "embedded" : "late"));
-        // newWebSocket starts the connection before returning; onOpen may run first.
         WebSocket created = wsHttp.newWebSocket(request, sock);
         boolean cancel;
         synchronized (sock) {
@@ -1468,12 +1661,118 @@ final class NativeZeroTransport {
         return ("ditero-native-session-v2\n" + scope).getBytes(StandardCharsets.UTF_8);
     }
 
+    private static boolean unexpired(String value) {
+        if (value == null || !value.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z")) return false;
+        String normalized = value.length() == 20 ? value.substring(0, 19) + ".000Z" : value;
+        SimpleDateFormat parser = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+        parser.setLenient(false);
+        parser.setTimeZone(TimeZone.getTimeZone("UTC"));
+        ParsePosition position = new ParsePosition(0);
+        Date parsed = parser.parse(normalized, position);
+        return parsed != null && position.getIndex() == normalized.length()
+                && parsed.getTime() > System.currentTimeMillis();
+    }
+
+    private static void restoreProof(Session restored, Map<String, Object> m) throws Reject {
+        if (!Boolean.TRUE.equals(m.get("verified")) || !(m.get("profile") instanceof Map)) return;
+        Map<String, Object> profile = asMap(m.get("profile"));
+        String name = str(profile.get("name")), email = str(profile.get("email"));
+        String endpoint = str(m.get("zeroUrl")), workspace = str(m.get("workspaceId"));
+        if (!restored.userId.equals(profile.get("id")) || name == null || name.length() > 512
+                || email == null || email.length() > 512 || !validId(workspace)) return;
+        try {
+            restored.zeroUrl = ServerContext.ZeroEndpoint.parse(endpoint).httpsUrl;
+            restored.profileName = name;
+            restored.profileEmail = email;
+            restored.workspaceId = workspace;
+            restored.verified = true;
+        } catch (IllegalArgumentException e) {
+            // A legacy or invalid record cannot supply offline startup proof.
+        }
+    }
+
+    private static boolean offlineReady(Session s) {
+        return s != null && !s.refused && s.verified && unexpired(s.expiresAt)
+                && s.profileName != null && s.profileEmail != null && s.zeroUrl != null && s.workspaceId != null;
+    }
+
+    private String checkKey(Session s) {
+        return "v." + hex(sha256((s.scope() + "\n" + s.sessionId).getBytes(StandardCharsets.UTF_8)));
+    }
+
+    // Mark verification durably before sending: a refused response cannot resurrect a cached session
+    // even if removing its encrypted record subsequently fails. Interrupted verification fails closed.
+    private void markVerified(Session s) {
+        Verification state = verification.get(checkKey(s));
+        if (state != null && state.refused) return;
+        s.verified = true;
+        if (state != null) state.invalid = false;
+    }
+
+    private boolean beginCheck(Session s) {
+        String key = checkKey(s);
+        Verification state = verification.get(key);
+        if (s.refused || (state != null && state.refused)
+                || !prefs.edit().putBoolean(key, true).commit()) return false;
+        if (state == null) {
+            state = new Verification();
+            verification.put(key, state);
+        }
+        state.pending++;
+        return true;
+    }
+
+    private boolean finishCheck(Session s, boolean usable) {
+        String key = checkKey(s);
+        Verification state = verification.get(key);
+        if (state == null) return usable && !s.refused;
+        if (!usable) {
+            s.verified = false;
+            state.invalid = true;
+        }
+        if (s.refused) state.refused = true;
+        if (state.refused) s.refused = true;
+        if (state.pending > 0) state.pending--;
+        if (!usable || state.refused || state.invalid || !s.verified || state.pending != 0)
+            return usable && !state.refused;
+        boolean cleared = prefs.edit().remove(key).commit();
+        if (cleared) verification.remove(key);
+        return cleared;
+    }
+
+    private boolean cachedReply(JavaScriptReplyProxy proxy, int rid, String path, Session s) {
+        JSONObject out;
+        switch (path) {
+            case "/api/native/session":
+                out = obj("ok", true, "scope", s.scope(), "userId", s.userId,
+                        "deviceId", s.deviceId, "expiresAt", s.expiresAt);
+                break;
+            case "/api/native/profile":
+                out = obj("ok", true, "id", s.userId, "name", s.profileName,
+                        "email", s.profileEmail);
+                break;
+            case "/api/native/bootstrap":
+                out = obj("ok", true, "workspaceId", s.workspaceId);
+                break;
+            case "/api/native/token":
+                fail(proxy, rid, "offline-ready");
+                return true;
+            default: return false;
+        }
+        put(out, "t", "reply");
+        put(out, "rid", rid);
+        sendToPage(proxy, out);
+        return true;
+    }
+
     /** One checked commit writes the encrypted session and the selected-account pointer. */
     private boolean persistSession(Session s) {
         try {
             String scope = s.scope();
             String plain = obj("token", s.token, "sessionId", s.sessionId, "userId", s.userId,
-                    "deviceId", s.deviceId, "expiresAt", s.expiresAt).toString();
+                    "deviceId", s.deviceId, "expiresAt", s.expiresAt, "profile", s.profileName == null ? null
+                    : obj("id", s.userId, "name", s.profileName, "email", s.profileEmail),
+                    "zeroUrl", s.zeroUrl, "workspaceId", s.workspaceId, "verified", s.verified).toString();
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, storeKey());
             cipher.updateAAD(aad(scope));
@@ -1494,7 +1793,12 @@ final class NativeZeroTransport {
     /** Removes exactly the captured namespace; the pointer only if it still names this account. */
     private boolean clearPersisted(Session s) {
         try {
-            SharedPreferences.Editor editor = prefs.edit().remove(blobKey(s.scope()));
+            Session stored = session != null && session.scope().equals(s.scope())
+                    ? session : restoreSession(s.context, true);
+            if (stored != null && stored.scope().equals(s.scope()) && !sameSession(stored, s))
+                return prefs.edit().remove(checkKey(s)).commit();
+            if (stored == null && prefs.getString(blobKey(s.scope()), null) != null) return false;
+            SharedPreferences.Editor editor = prefs.edit().remove(blobKey(s.scope())).remove(checkKey(s));
             if (s.userId.equals(prefs.getString(pointerKey(s.context), null)))
                 editor.remove(pointerKey(s.context));
             return editor.commit();
@@ -1521,6 +1825,10 @@ final class NativeZeroTransport {
      * or tampered data removes only that namespace; an unavailable keystore removes nothing.
      */
     private Session restoreSession(ServerContext ctx) {
+        return restoreSession(ctx, false);
+    }
+
+    private Session restoreSession(ServerContext ctx, boolean allowExpired) {
         String userId = prefs.getString(pointerKey(ctx), null);
         if (!validId(userId)) return null;
         String scope = ctx.scope(userId);
@@ -1545,11 +1853,19 @@ final class NativeZeroTransport {
                     || !validId(str(m.get("sessionId"))) || !validId(str(m.get("deviceId")))
                     || str(m.get("expiresAt")) == null || !ISO.matcher(str(m.get("expiresAt"))).matches())
                 throw new Reject("fields");
-            return new Session(ctx, token, str(m.get("sessionId")), userId, str(m.get("deviceId")),
+            Session restored = new Session(ctx, token, str(m.get("sessionId")), userId, str(m.get("deviceId")),
                     str(m.get("expiresAt")));
+            Verification known = verification.get(checkKey(restored));
+            if (!allowExpired && known != null && known.refused) return null;
+            if (!allowExpired && !unexpired(restored.expiresAt)) return null;
+            restoreProof(restored, m);
+            // Keep credentials available for a live recheck, but never unlock cached rows
+            // after interrupted verification or a known refusal whose deletion failed.
+            if (prefs.getBoolean(checkKey(restored), false)) restored.verified = false;
+            return restored;
         } catch (BadPaddingException | IllegalBlockSizeException
                  | IllegalArgumentException | IOException | Reject e) {
-            prefs.edit().remove(blobKey(scope)).remove(pointerKey(ctx)).commit();
+            if (!allowExpired) prefs.edit().remove(blobKey(scope)).remove(pointerKey(ctx)).commit();
             return null;
         } catch (GeneralSecurityException | RuntimeException e) {
             return null;

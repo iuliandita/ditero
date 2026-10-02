@@ -8,6 +8,7 @@ import {
 	readBridgeState,
 	readConfig,
 	revokeSession,
+	setNativeSessionRefusalHandler,
 } from "./bridge.ts";
 
 const origin = "https://example.test";
@@ -177,4 +178,70 @@ test("snapshots retain sockets, UTF-8 oversized sends are refused, and native re
 	if (!send) throw new Error("missing send command");
 	reply(send, { ok: false, cid: send.cid, code: "not-open" });
 	expect(next.readyState).toBe(NativeWebSocket.CLOSED);
+});
+
+test("only confirmed current socket refusal removes native authority", async () => {
+	snapshot.session = session;
+	await connectBridge();
+	await readConfig();
+	const ended = vi.fn();
+	setNativeSessionRefusalHandler(snapshot.gen, session.authHandle, ended);
+	const socket = new NativeWebSocket(
+		"wss://zero.example.test/sync/v51/connect",
+		"opaque",
+	);
+	const command = [...sent].reverse().find((entry) => entry.op === "ws.open");
+	if (!command) throw new Error("socket open was not posted");
+	reply(command, { ok: false, cid: command.cid, code: "http-401" });
+	expect(bridgeState().session?.userId).toBe("user-1");
+	expect(ended).not.toHaveBeenCalled();
+	const current = new NativeWebSocket(
+		"wss://zero.example.test/sync/v51/connect",
+		"opaque",
+	);
+	const open = [...sent].reverse().find((entry) => entry.op === "ws.open");
+	if (!open) throw new Error("socket open was not posted");
+	reply(open, { ok: false, cid: open.cid, code: "unauthorized" });
+	expect(bridgeState().session).toBeNull();
+	expect(ended).toHaveBeenCalledTimes(1);
+	await vi.advanceTimersByTimeAsync(0);
+	expect(current.readyState).toBe(NativeWebSocket.CLOSED);
+	expect(socket.readyState).toBe(NativeWebSocket.CLOSED);
+	snapshot = {
+		...snapshot,
+		gen: 2,
+		session: { ...session, authHandle: "opaque-2" },
+	};
+	await readBridgeState();
+	const nextEnded = vi.fn();
+	setNativeSessionRefusalHandler(2, "opaque-2", nextEnded);
+	current.nativeReply(false, open.rid, "unauthorized");
+	expect(bridgeState().session?.authHandle).toBe("opaque-2");
+	expect(nextEnded).not.toHaveBeenCalled();
+});
+
+test("stale-request refusal reaches only the current same-session page", async () => {
+	snapshot = {
+		...snapshot,
+		gen: 2,
+		session: { ...session, authHandle: "current-page" },
+	};
+	await connectBridge();
+	const ended = vi.fn();
+	setNativeSessionRefusalHandler(2, "current-page", ended);
+	const emit = (gen: number, authHandle: string) =>
+		native.onmessage?.(
+			new MessageEvent("message", {
+				data: JSON.stringify({ t: "session-refused", gen, authHandle }),
+			}),
+		);
+	emit(1, "current-page");
+	emit(2, "replaced-session");
+	expect(bridgeState().session?.authHandle).toBe("current-page");
+	expect(ended).not.toHaveBeenCalled();
+	emit(2, "current-page");
+	expect(bridgeState().session).toBeNull();
+	expect(ended).toHaveBeenCalledTimes(1);
+	emit(2, "current-page");
+	expect(ended).toHaveBeenCalledTimes(1);
 });

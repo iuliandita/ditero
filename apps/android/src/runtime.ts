@@ -18,6 +18,7 @@ import {
 	readSession,
 	refreshToken,
 	revokeSession,
+	setNativeSessionRefusalHandler,
 } from "./bridge.ts";
 
 export class StaleNativeContextError extends Error {
@@ -41,8 +42,8 @@ export type NativeContext = {
 const verified = new WeakSet<object>();
 
 /**
- * Captures the current context after native confirmed the session with the instance
- * (session.read). Rejects if the generation or account moved while that was in flight.
+ * Captures the current context after native confirmed live or complete unexpired cached
+ * session evidence (session.read). Rejects if the generation or account moved while that was in flight.
  */
 export async function captureVerifiedContext(): Promise<NativeContext> {
 	const before = bridgeState();
@@ -283,9 +284,26 @@ export function createNativeRuntime(
 		// Refreshes the Java-held JWT, then hands Zero the opaque handle, never the token.
 		async getAuth() {
 			assertCurrent(context);
+			setNativeSessionRefusalHandler(context.gen, context.authHandle, () => {
+				void hooks
+					.retireZero()
+					.then(() => {
+						const current = bridgeState();
+						if (current.gen === context.gen && !current.session)
+							hooks.onSessionEnded();
+					})
+					.catch(() => {
+						if (bridgeState().gen === context.gen) hooks.onSessionEndFailed?.();
+					});
+			});
 			try {
 				await refreshToken();
 			} catch (error) {
+				// Java permits this only with complete, unexpired, exact-session offline proof.
+				if (error instanceof NativeError && error.code === "offline-ready") {
+					assertCurrent(context);
+					return context.authHandle;
+				}
 				if (
 					error instanceof NativeError &&
 					["unauthorized", "no-session"].includes(error.code)
