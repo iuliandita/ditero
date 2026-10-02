@@ -2186,5 +2186,10 @@
 	"desktop_push_read_failed": "Impossible de vérifier les notifications de bureau. Actualise le statut pour réessayer.",
 	"desktop_push_loading": "Vérification des notifications de bureau…",
 	"desktop_push_enable": "Activer les notifications de bureau",
-	"desktop_push_action_failed": "Impossible de modifier les notifications de bureau. Actualise le statut avant de réessayer."
+	"desktop_push_action_failed": "Impossible de modifier les notifications de bureau. Actualise le statut avant de réessayer.",
+	"google_push_help": "Reçois des rappels via Google. Ton serveur doit activer le relais optionnel de Ditero.",
+	"google_push_enabling": "Vérification de ce téléphone et activation des notifications Google.",
+	"google_push_active": "Les notifications Google sont activées. Leur réception dépend des services Google et de ta connexion.",
+	"google_push_server_unavailable": "Ce serveur ne peut pas encore envoyer de notifications Google. Demande à son administrateur d’activer le relais optionnel.",
+	"google_push_unsupported": "Les notifications Google ne sont pas disponibles dans cette appli ou sur ce téléphone."
 }

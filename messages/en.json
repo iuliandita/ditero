@@ -2140,5 +2140,10 @@
 	"desktop_push_read_failed": "Could not check desktop notifications. Refresh to try again.",
 	"desktop_push_loading": "Checking desktop notifications…",
 	"desktop_push_enable": "Enable desktop notifications",
-	"desktop_push_action_failed": "Could not change desktop notifications. Refresh the status before trying again."
+	"desktop_push_action_failed": "Could not change desktop notifications. Refresh the status before trying again.",
+	"google_push_help": "Receive reminders through Google push. Your server must enable the optional Ditero relay.",
+	"google_push_enabling": "Verifying this phone and enabling Google notifications.",
+	"google_push_active": "Google notifications are enabled. Delivery depends on Google services and your connection.",
+	"google_push_server_unavailable": "This server is not ready to send Google notifications. Ask its administrator to enable the optional relay.",
+	"google_push_unsupported": "Google notifications are unavailable in this app or on this phone."
 }

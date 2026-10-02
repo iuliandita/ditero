@@ -78,6 +78,18 @@ final class NativeSessionVault {
         return decode(scope, userId, blob, key);
     }
 
+    static Map<String,Object> decodeObject(String scope,String blob) throws GeneralSecurityException,IOException {
+        SecretKey key;
+        try {key=storeKey();} catch(GeneralSecurityException|IOException|RuntimeException e) {throw new KeyUnavailableException();}
+        String[] parts=blob.split("\\.",-1);
+        if(parts.length!=3 || !"v2".equals(parts[0])) throw new IOException("format");
+        Object parsed=parse(new String(decrypt(scope,Base64.decode(parts[1],Base64.NO_WRAP),
+                Base64.decode(parts[2],Base64.NO_WRAP),key),StandardCharsets.UTF_8));
+        if(!(parsed instanceof Map)) throw new IOException("object");
+        @SuppressWarnings("unchecked") Map<String,Object> result=(Map<String,Object>)parsed;
+        return result;
+    }
+
     static final class KeyUnavailableException extends GeneralSecurityException {}
 
     private static Map<String, Object> decode(String scope, String userId, String blob, SecretKey key)
@@ -149,6 +161,13 @@ final class NativeSessionVault {
         }
         Request pushUnregisterRequest() {
             return request("/api/native/push/unregister").post(RequestBody.create("{}", MediaType.get("application/json; charset=utf-8"))).build();
+        }
+        Request relayOfferRequest(String body) {return relayRequest("offer",body);}
+        Request relayActivateRequest(String body) {return relayRequest("activate",body);}
+        Request relayUpdateRequest(String body) {return relayRequest("update",body);}
+        Request relayCancelRequest(String body) {return relayRequest("cancel",body);}
+        private Request relayRequest(String action,String body) {
+            return request("/api/native/push/relay/"+action).post(RequestBody.create(body,MediaType.get("application/json; charset=utf-8"))).build();
         }
         private Request.Builder request(String path) {
             return new Request.Builder().url(context.url(path)).header("Accept", "application/json")

@@ -33,6 +33,7 @@ export type SessionMeta = {
 };
 
 export type Hello = {
+	pushProvider?: NativePushState["provider"];
 	gen: number;
 	server: ServerMeta | null;
 	session: SessionMeta | null;
@@ -235,7 +236,16 @@ function parseSession(
 
 function parseHello(reply: Reply): Hello {
 	const server = parseServer(reply.server);
+	const provider = reply.pushProvider;
+	if (
+		provider !== undefined &&
+		provider !== "unifiedpush" &&
+		provider !== "google" &&
+		provider !== "desktop"
+	)
+		throw new NativeError("invalid-reply");
 	return {
+		...(provider === undefined ? {} : { pushProvider: provider }),
 		gen: count(reply, "gen"),
 		server,
 		session: parseSession(reply.session, server),
@@ -410,8 +420,9 @@ export async function connectBridge(): Promise<Hello> {
 
 /** Credential-free metadata snapshot of the current generation. */
 export function bridgeState(): Hello {
-	const { gen, server, session } = requireState();
+	const { gen, server, session, pushProvider } = requireState();
 	return {
+		...(pushProvider === undefined ? {} : { pushProvider }),
 		gen,
 		server: server && { ...server },
 		session: session && { ...session },

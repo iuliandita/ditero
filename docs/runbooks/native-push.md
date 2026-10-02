@@ -97,5 +97,22 @@ PostgreSQL integration and generated-request checks establish server behavior.
 They do not establish delivery by a real UnifiedPush distributor or Google project,
 Android permission handling, or background display. Those gates require actual
 provider credentials and physical or qualified emulator execution. The hosted
-relay source and instance integration are implemented; real Google enrollment,
-background delivery, and the Google Android client remain separate qualification gates.
+relay source and instance integration are implemented. The Google Android flavor
+uses packaged relay trust, native device proofs, App Check, and encrypted recovery
+state. Its source and fixture checks are separate from real Google enrollment and
+background delivery qualification.
+
+The Google build requires private Firebase Android configuration and
+`app/src/google/assets/native-relay.json` containing the trusted `relayOrigin` and
+`receiptKeys`. See the [Android build instructions](../../apps/android/README.md).
+The independent build includes no Google SDK and continues to use UnifiedPush.
+Installing a different flavor requires provider migration; an instance-confirmed
+unregister delegates remote cleanup to the server before new enrollment. A lost
+unregister response must be recovered before enrolling the replacement. Old
+owner cleanup never unregisters the entire Firebase installation.
+
+Generic Google reminders contain no delivery generation. Local owner and
+registration checks suppress reminders during enrollment, replacement, or
+cancellation, but cannot distinguish an already accepted generic reminder for the
+same registration solely because its FID changed. Opening a reminder rechecks
+current server authority.

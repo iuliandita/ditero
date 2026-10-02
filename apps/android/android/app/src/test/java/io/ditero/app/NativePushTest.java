@@ -103,9 +103,10 @@ public class NativePushTest {
         NativeSessionVault.CapturedOwner selection;
         boolean verified=true, unavailable;
         final Map<String,Map<String,Object>> records=new HashMap<>();
-        FlowStore() throws Exception {
+        FlowStore() throws Exception {this("unifiedpush");}
+        FlowStore(String provider) throws Exception {
             super(prefs(),null);
-            selection=captured("session-1"); owner=new Owner("11111111-1111-4111-8111-111111111111",selection);
+            selection=captured("session-1"); owner=new Owner("11111111-1111-4111-8111-111111111111",selection,provider);
             durable.put("active",owner.instance); durable.put("state","active");
             durable.put(owner.instance+".registration","registration-1");
             records.put(owner.instance+".blob",new HashMap<>());
@@ -335,4 +336,76 @@ public class NativePushTest {
             assertFalse(durable.containsKey(store.owner.instance+".messages"));
         } finally {lane.shutdownNow();}
     }
+    @Test public void delegatedGoogleRetirementWaitsForInstanceAckAndNeverUnregistersNewUnifiedPush() throws Exception {
+        FlowStore store=new FlowStore();
+        String old="22222222-2222-4222-8222-222222222222";
+        durable.put(old+".retired",true);durable.put(old+".relay","retained encrypted target");
+        assertTrue(store.endpoint(store.owner,"{}"));
+        java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+        int[] unregistrations={0},registrations={0};boolean[] online={false};
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->true,request->{
+            registrations[0]++;return Map.of("registrationId","registration-1","provider","unifiedpush");
+        },(owner,payload)->{});
+        java.lang.reflect.Field relay=NativePushCoordinator.class.getDeclaredField("relayStore");relay.setAccessible(true);relay.set(coordinator,new NativeRelayStore(prefs()));
+        java.lang.reflect.Field cleanup=NativePushCoordinator.class.getDeclaredField("cleanupTransport");cleanup.setAccessible(true);
+        cleanup.set(coordinator,(NativePushCoordinator.CleanupTransport)request->{
+            unregistrations[0]++;assertTrue(request.url().encodedPath().endsWith("/unregister"));
+            if(!online[0])throw new java.io.IOException("lost unregister response");return true;
+        });
+        try {
+            assertFalse(coordinator.maintenance());assertEquals(0,registrations[0]);assertFalse(durable.containsKey(old+".relay-delegated"));
+            online[0]=true;assertTrue(coordinator.maintenance());assertEquals(1,registrations[0]);assertEquals(true,durable.get(old+".relay-delegated"));
+            assertTrue(coordinator.maintenance());assertEquals(2,unregistrations[0]);assertEquals(1,registrations[0]);
+            assertEquals("retained encrypted target",durable.get(old+".relay"));assertEquals(store.owner.instance,durable.get("active"));
+        } finally {lane.shutdownNow();}
+    }
+
+    @Test public void olderFidCallbackCannotRemoveNewerCallbackDisplayFence() throws Exception {
+        FlowStore store=new FlowStore("google");
+        java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+        java.util.concurrent.CountDownLatch extracting=new java.util.concurrent.CountDownLatch(1),allowExtract=new java.util.concurrent.CountDownLatch(1),configuring=new java.util.concurrent.CountDownLatch(1),allowConfig=new java.util.concurrent.CountDownLatch(1);
+        java.util.List<String> shown=new java.util.ArrayList<>();
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->true,request->{throw new AssertionError();},(owner,payload)->shown.add(payload.get("notificationId")));
+        NativePushProvider provider=new NativePushProvider() {
+            public String id(){return "google";}public boolean available(){return true;}
+            public void enable(android.app.Activity activity,NativePushStore.Owner owner){}public void resume(NativePushStore.Owner owner){}public void retire(NativePushStore.Owner owner){}
+        };
+        NativeRelayStore relayStore=new NativeRelayStore(prefs(),new NativeRelayStore.Codec() {
+            public String seal(String scope,Map<String,Object> value){return NativeRelayProtocol.canonical(value);}
+            public Map<String,Object> open(String scope,String value){return NativeRelayProtocol.parseObject(value);}
+        });
+        java.security.KeyPairGenerator generator=java.security.KeyPairGenerator.getInstance("EC");generator.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+        java.security.KeyPair key=generator.generateKeyPair();Map<String,Object> jwk=NativeRelayProtocol.publicJwk(key.getPublic());
+        assertTrue(relayStore.installation(Map.of("installationId",NativeRelayProtocol.opaqueId(),"deviceKey",jwk)));
+        assertTrue(relayStore.save(store.owner.instance,Map.of("phase","active","registrationId","registration-1","fid","fid-A","installationId",NativeRelayProtocol.opaqueId(),"deviceKey",jwk,"managementSecret",NativeRelayProtocol.opaqueId(),"targetId",NativeRelayProtocol.opaqueId(),"generation",1,"credentialVersion",1)));
+        java.util.concurrent.atomic.AtomicInteger keyReads=new java.util.concurrent.atomic.AtomicInteger();
+        NativeRelayClient relayClient=new NativeRelayClient(relayStore,provider,new NativeRelayClient.Authority() {
+            public boolean current(NativePushStore.Owner owner){return store.current(owner);}public boolean activate(NativePushStore.Owner owner,String registration){return true;}
+        },request->{throw new AssertionError();},new NativeRelayClient.DeviceKey() {
+            public java.security.PrivateKey privateKey(){return key.getPrivate();}
+            public Map<String,Object> publicKey() throws Exception {
+                if(keyReads.incrementAndGet()==1){extracting.countDown();assertTrue(allowExtract.await(5,java.util.concurrent.TimeUnit.SECONDS));}
+                return jwk;
+            }
+        });
+        for(Map.Entry<String,Object> entry:Map.<String,Object>of("provider",provider,"relayStore",relayStore,"relayClient",relayClient).entrySet()) {
+            java.lang.reflect.Field field=NativePushCoordinator.class.getDeclaredField(entry.getKey());field.setAccessible(true);field.set(coordinator,entry.getValue());
+        }
+        java.lang.reflect.Field http=NativePushCoordinator.class.getDeclaredField("http");http.setAccessible(true);
+        java.util.concurrent.atomic.AtomicInteger requests=new java.util.concurrent.atomic.AtomicInteger();
+        http.set(coordinator,new okhttp3.OkHttpClient.Builder().addInterceptor(chain->{
+            if(requests.incrementAndGet()==1){configuring.countDown();try{assertTrue(allowConfig.await(5,java.util.concurrent.TimeUnit.SECONDS));}catch(InterruptedException e){throw new java.io.IOException(e);}}
+            throw new java.io.IOException("offline config");
+        }).build());
+        try {
+            coordinator.googleRegistered(store.owner,"fid-A");assertTrue(extracting.await(5,java.util.concurrent.TimeUnit.SECONDS));
+            coordinator.googleRegistered(store.owner,"fid-B");String newerEpoch=(String)durable.get(store.owner.instance+".google-fid-pending");
+            allowExtract.countDown();assertTrue(configuring.await(5,java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(newerEpoch,durable.get(store.owner.instance+".google-fid-pending"));
+            coordinator.googleMessage(Map.of("version","1","registrationId","registration-1","notificationId","old-fid-reminder"));assertTrue(shown.isEmpty());
+            allowConfig.countDown();lane.submit(()->{}).get(5,java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals("replace",relayStore.target(store.owner.instance).get("phase"));assertTrue(shown.isEmpty());
+        } finally {allowExtract.countDown();allowConfig.countDown();lane.shutdownNow();}
+    }
+
 }

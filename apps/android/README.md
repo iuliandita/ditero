@@ -66,7 +66,7 @@ The fixed native bridge operations are `push.state`, `push.enable`, `push.disabl
 and `push.permission`. Each requires the current main frame, page generation,
 and opaque auth handle in `id`. No caller body, endpoint, or URL is accepted.
 Replies include `state`, `permission` (`granted` or `denied`), and `provider`
-(`unifiedpush`). Poll state to observe asynchronous permission, distributor, and
+(`unifiedpush` or `google`). Poll state to observe asynchronous permission, distributor, and
 registration results. Android 13 enable resumes only for the account that opened
 the permission dialog.
 
@@ -89,12 +89,12 @@ the ntfy distributor was exempt. This qualifies only that emulator and distribut
 setup. Stock power behavior, physical devices, distributor switching, interrupted
 registration, and permission flows still need device qualification.
 
-An optional Google relay is planned as a separate slice. No Firebase project or
-public relay origin is configured, and the Google provider is unavailable. The
-`independent` flavor uses UnifiedPush with a compatible distributor such as ntfy
-and includes no Firebase SDK, Google services
-plugin, or Google configuration. Both flavor identities remain `io.ditero.app`;
-there is no application ID suffix.
+The optional Google flavor uses Firebase installation-ID registration and a
+separately operated relay. Its SDK dependencies, service and attestation providers
+are confined to that flavor. The `independent` flavor uses UnifiedPush and contains
+no Firebase SDK classes or Google configuration. Both flavor identities remain
+`io.ditero.app`; there is no application ID suffix. No Firebase project or public
+relay is configured for this repository, so Google delivery remains unqualified.
 
 ## Build a debug APK
 
@@ -160,31 +160,53 @@ qualification.
 
 ## Google flavor status
 
-The `google` flavor is build preparation only. Commands such as
-`./gradlew --no-daemon assembleGoogleDebug` and
-`./gradlew --no-daemon assembleGoogleRelease bundleGoogleRelease` always fail.
-Without a private `app/src/google/google-services.json` or
-`app/google-services.json`, they report missing configuration. Even with a file
-present, they refuse the unfinished Google push provider before executing build
-or packaging tasks. Configuration is not parsed or applied at this stage. No
-Google APK or AAB is available, and configuration alone does not enable delivery.
-The Google services plugin and Firebase dependencies are deliberately absent
-until the provider is integrated.
+The Google provider source and unit checks run without operator configuration:
 
-Use explicit independent tasks for development and releases. Aggregate commands
-such as `assembleDebug`, `assembleRelease`, or `build` include the unavailable
-Google variant and therefore fail. Direct release packaging tasks, flavored
-release tasks, and aggregate release requests require all four signing variables;
-partial signing configuration also fails. Keep Google service and attestation
-configuration private; these files are ignored. Full application qualification
-and Google provider integration remain part of #346.
+```sh
+./gradlew --no-daemon testGoogleDebugUnitTest compileGoogleReleaseJavaWithJavac
+```
+
+Google packaging requires private `app/src/google/google-services.json` or
+`app/google-services.json`, plus `app/src/google/assets/native-relay.json`.
+The relay configuration has exactly `relayOrigin` (a canonical HTTPS origin with
+no path) and `receiptKeys` (a nonempty object mapping key IDs to public P-256 JWKs
+with `kty`, `crv`, `x`, and `y`). Provision these trusted pins independently of the
+selected Ditero server. They must never come from an enrollment response or server
+discovery. Both configuration files are ignored by Git.
+
+`assembleGoogleDebug`, `assembleGoogleRelease`, `bundleGoogleRelease` and direct
+Google packaging tasks refuse missing or invalid trusted configuration. Aggregate
+commands such as `assembleDebug`, `assembleRelease`, or `build` also include Google
+packaging and require configuration. Runtime availability independently refuses
+missing or invalid pins and missing Firebase options. Google SDK automatic
+registration, notification delegation and analytics collection are disabled.
+Registration begins only through the native notification controls.
+
+Google debug builds use the App Check debug provider for development. Google
+release builds include only Play Integrity attestation. Configure the Firebase
+project, allowlisted debug attestation and production Play signing through private
+operator setup. Do not distribute debug attestation credentials or treat a debug
+registration as production qualification. Native App Check tokens, management
+secrets and session credentials remain outside JavaScript.
+
+After building and syncing the interface, configured operators can run
+`assembleGoogleDebug` for development or `assembleGoogleRelease bundleGoogleRelease`
+with the four release signing variables. The relay target follows captured native
+account ownership and durable enrollment/retirement. Retiring an old account's
+relay target does not unregister the installation's FID, because a replacement
+account can still reference that installation. Pending enrollment or replacement
+suppresses generic notification display until the target becomes active.
+
+Source compilation and fixtures do not qualify real registration, App Check/Play
+Integrity enrollment, Play signing, public relay delivery, or background/Doze behavior.
+Those checks need an operator-configured project, a public relay and real devices.
 
 ## Remaining work
 
 - Broader encrypted-file qualification on physical devices and document providers.
 - Full offline recovery and account/server transition qualification on devices.
 - Broader device qualification of native notification permission and UnifiedPush background delivery.
-- Optional Google relay integration and Google delivery qualification.
+- Operator Firebase/relay setup and real Google delivery qualification.
 - Release signing identity, distribution pipelines, and store distribution.
 - Native deep links, update delivery, and complete application qualification.
 

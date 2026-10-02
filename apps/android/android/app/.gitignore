@@ -1,2 +1,5 @@
 /build/*
 !/build/.npmkeep
+
+# Operator-pinned relay trust configuration
+/src/google/assets/native-relay.json

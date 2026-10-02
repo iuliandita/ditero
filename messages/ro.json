@@ -2186,5 +2186,10 @@
 	"desktop_push_read_failed": "Nu s-au putut verifica notificările desktop. Actualizează starea pentru a încerca din nou.",
 	"desktop_push_loading": "Se verifică notificările desktop…",
 	"desktop_push_enable": "Activează notificările desktop",
-	"desktop_push_action_failed": "Nu s-au putut modifica notificările desktop. Actualizează starea înainte să încerci din nou."
+	"desktop_push_action_failed": "Nu s-au putut modifica notificările desktop. Actualizează starea înainte să încerci din nou.",
+	"google_push_help": "Primește mementouri prin Google. Serverul tău trebuie să activeze serviciul opțional de retransmitere Ditero.",
+	"google_push_enabling": "Se verifică acest telefon și se activează notificările Google.",
+	"google_push_active": "Notificările Google sunt activate. Livrarea depinde de serviciile Google și de conexiunea ta.",
+	"google_push_server_unavailable": "Acest server nu poate trimite încă notificări Google. Cere administratorului să activeze serviciul opțional de retransmitere.",
+	"google_push_unsupported": "Notificările Google nu sunt disponibile în această aplicație sau pe acest telefon."
 }

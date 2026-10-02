@@ -138,6 +138,7 @@ test("native settings never mount browser account panels, retain native encrypti
 
 test.each([
 	"unifiedpush",
+	"google",
 	"desktop",
 ] as const)("%s notification controls use the platform copy in native settings", (provider) => {
 	control.native = true;
@@ -170,7 +171,10 @@ test.each([
 	const prefix = provider === "desktop" ? "desktop_push" : "native_push";
 	const other = provider === "desktop" ? "native_push" : "desktop_push";
 	expect(phone).toContain(`${prefix}_heading`);
-	expect(phone).toContain(`${prefix}_help`);
+	expect(phone).toContain(
+		provider === "google" ? "google_push_help" : `${prefix}_help`,
+	);
+	if (provider === "google") expect(phone).not.toContain("native_push_help");
 	expect(phone).toContain(`${prefix}_loading`);
 	expect(phone).not.toContain(`${other}_heading`);
 	expect(phone).toContain('data-testid="native-browser-settings"');

@@ -2140,5 +2140,10 @@
 	"desktop_push_read_failed": "Desktop-Benachrichtigungen konnten nicht geprüft werden. Aktualisiere den Status.",
 	"desktop_push_loading": "Desktop-Benachrichtigungen werden geprüft…",
 	"desktop_push_enable": "Desktop-Benachrichtigungen aktivieren",
-	"desktop_push_action_failed": "Desktop-Benachrichtigungen konnten nicht geändert werden. Aktualisiere den Status, bevor du es erneut versuchst."
+	"desktop_push_action_failed": "Desktop-Benachrichtigungen konnten nicht geändert werden. Aktualisiere den Status, bevor du es erneut versuchst.",
+	"google_push_help": "Erhalte Erinnerungen über Google Push. Dein Server muss den optionalen Ditero-Relay aktivieren.",
+	"google_push_enabling": "Dieses Smartphone wird geprüft und Google-Benachrichtigungen werden aktiviert.",
+	"google_push_active": "Google-Benachrichtigungen sind aktiviert. Die Zustellung hängt von den Google-Diensten und deiner Verbindung ab.",
+	"google_push_server_unavailable": "Dieser Server kann noch keine Google-Benachrichtigungen senden. Bitte die Administration, den optionalen Relay zu aktivieren.",
+	"google_push_unsupported": "Google-Benachrichtigungen sind in dieser App oder auf diesem Smartphone nicht verfügbar."
 }
