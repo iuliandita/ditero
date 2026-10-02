@@ -140,6 +140,13 @@ jobs:
       - run: bun run push-relay:integration
       - run: bun run native-relay-instance:integration
       - run: docker build --file apps/push-relay/Dockerfile --tag ditero-push-relay:check .
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ditero-push-relay:check
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          version: "v0.70.0"
       - run: bun run push-relay:integration
         env:
           RELAY_TEST_IMAGE: ditero-push-relay:check
