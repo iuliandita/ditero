@@ -1845,7 +1845,10 @@ final class NativeZeroTransport {
         if (!usable || state.refused || state.invalid || !s.verified || state.pending != 0)
             return usable && !state.refused;
         boolean cleared = prefs.edit().remove(key).commit();
-        if (cleared) verification.remove(key);
+        if (cleared) {
+            verification.remove(key);
+            if(push!=null) push.verificationAccepted();
+        }
         return cleared;
     }
 

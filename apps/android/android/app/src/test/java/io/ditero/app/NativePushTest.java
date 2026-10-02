@@ -89,4 +89,113 @@ public class NativePushTest {
         failCommit=true; assertTrue(store.seen(old,"n-failed"));
         assertFalse(durable.get("old.seen").toString().contains("n-failed"));
     }
+
+    private NativeSessionVault.CapturedOwner captured(String session) throws Exception {
+        Map<String,Object> record=new HashMap<>();
+        record.put("token","private-token"); record.put("sessionId",session); record.put("userId","user-1");
+        record.put("deviceId","device-1"); record.put("expiresAt","2099-01-01T00:00:00Z"); record.put("verified",true);
+        record.put("profile",Map.of("id","user-1","name","User","email","user@example.test"));
+        record.put("zeroUrl","https://zero.example.test"); record.put("workspaceId","workspace-1");
+        return NativeSessionVault.capture(ServerContext.parse("https://example.test"),record,false);
+    }
+    private final class FlowStore extends NativePushStore {
+        final Owner owner;
+        NativeSessionVault.CapturedOwner selection;
+        boolean verified=true, unavailable;
+        final Map<String,Map<String,Object>> records=new HashMap<>();
+        FlowStore() throws Exception {
+            super(prefs(),null);
+            selection=captured("session-1"); owner=new Owner("11111111-1111-4111-8111-111111111111",selection);
+            durable.put("active",owner.instance); durable.put("state","active");
+            durable.put(owner.instance+".registration","registration-1");
+            records.put(owner.instance+".blob",new HashMap<>());
+        }
+        @Override Owner active() {return owner.instance.equals(durable.get("active"))?owner:null;}
+        @Override Owner load(String instance) {return unavailable?null:owner;}
+        @Override boolean keysUnavailable() {return unavailable;}
+        @Override NativeSessionVault.CapturedOwner selectedOwner() {return unavailable?null:selection;}
+        @Override NativeSessionVault.CapturedOwner verifiedOwner() {return verified && !unavailable?selection:null;}
+        @Override Map<String,Object> readRecord(Owner owner,String suffix) {return new HashMap<>(records.get(owner.instance+suffix));}
+        @Override boolean writeRecord(Owner owner,String suffix,Map<String,Object> record,SharedPreferences.Editor edit) {
+            if(!edit.putString(owner.instance+suffix,"encrypted-fixture").commit()) return false;
+            records.put(owner.instance+suffix,new HashMap<>(record)); return true;
+        }
+    }
+    @Test public void explicitStorageFailureRetryReschedulesAndRequiresRegistrationSuccess() throws Exception {
+        FlowStore store=new FlowStore();
+        java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+        boolean[] schedule={false}, server={false}; int[] schedules={0}; java.util.List<String> shown=new java.util.ArrayList<>();
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->{schedules[0]++; return schedule[0];},request->{
+            assertEquals("https://example.test/api/native/push/register",request.url().toString());
+            assertEquals("Bearer private-token",request.header("Authorization"));
+            if(!server[0]) throw new java.io.IOException("offline");
+            return Map.of("registrationId","registration-1","provider","unifiedpush");
+        },(owner,payload)->shown.add(payload.get("notificationId")));
+        try {
+            assertTrue(store.endpoint(store.owner,"{}"));
+            store.verified=false;
+            coordinator.message(json(valid),true,store.owner.instance);
+            assertEquals("storage-failed",coordinator.state()); assertTrue(shown.isEmpty());
+            store.verified=true; schedule[0]=true;
+            coordinator.enable(null);
+            assertEquals(2,schedules[0]); assertEquals("enabling",coordinator.state());
+            assertFalse(coordinator.maintenance()); assertEquals("registration-failed",coordinator.state());
+            assertTrue(shown.isEmpty()); server[0]=true;
+            assertTrue(coordinator.maintenance()); assertEquals("active",coordinator.state());
+            assertEquals(java.util.List.of("notification-1"),shown);
+            assertFalse(durable.containsKey(store.owner.instance+".pending"));
+        } finally {lane.shutdownNow();}
+    }
+    @Test public void pendingVerificationRetainsEndpointAndMessageUntilExactOwnerIsAccepted() throws Exception {
+        FlowStore store=new FlowStore(); store.verified=false;
+        java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+        java.util.List<String> shown=new java.util.ArrayList<>(); int[] sends={0}, schedules={0};
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->{schedules[0]++; return true;},request->{
+            sends[0]++; return Map.of("registrationId","registration-1","provider","unifiedpush");
+        },(owner,payload)->shown.add(payload.get("notificationId")));
+        try {
+            assertTrue(store.endpoint(store.owner,"{}"));
+            coordinator.message(json(valid),true,store.owner.instance);
+            assertTrue(durable.containsKey(store.owner.instance+".messages"));
+            assertFalse(coordinator.maintenance()); assertEquals(0,sends[0]); assertTrue(shown.isEmpty());
+            coordinator.verificationAccepted(); assertEquals(1,schedules[0]);
+            store.verified=true; coordinator.verificationAccepted(); assertEquals(2,schedules[0]);
+            assertTrue(coordinator.maintenance()); assertEquals(1,sends[0]);
+            assertEquals(java.util.List.of("notification-1"),shown);
+            assertFalse(durable.containsKey(store.owner.instance+".messages"));
+            coordinator.message(json(valid),true,store.owner.instance);
+            assertEquals(1,shown.size());
+        } finally {lane.shutdownNow();}
+    }
+    @Test public void refusalAndReplacementDiscardDeferredMessagesWithoutShowingThem() throws Exception {
+        for(boolean replacement:new boolean[]{false,true}) {
+            durable.clear(); FlowStore store=new FlowStore(); store.verified=false;
+            java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+            java.util.List<String> shown=new java.util.ArrayList<>();
+            NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->true,request->{throw new AssertionError("retired owner must not register");},
+                    (owner,payload)->shown.add(payload.get("notificationId")));
+            try {
+                coordinator.message(json(valid),true,store.owner.instance);
+                assertTrue(durable.containsKey(store.owner.instance+".messages"));
+                store.selection=replacement?captured("session-2"):null; store.verified=true;
+                coordinator.state(); coordinator.verificationAccepted();
+                assertTrue(shown.isEmpty()); assertFalse(durable.containsKey(store.owner.instance+".messages"));
+                assertEquals(true,durable.get(store.owner.instance+".retired"));
+            } finally {lane.shutdownNow();}
+        }
+    }
+    @Test public void unavailableOwnerKeysPreserveDeferredEvidence() throws Exception {
+        FlowStore store=new FlowStore(); store.verified=false;
+        java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+        java.util.List<String> shown=new java.util.ArrayList<>();
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->true,request->{throw new AssertionError();},
+                (owner,payload)->shown.add(payload.get("notificationId")));
+        try {
+            coordinator.message(json(valid),true,store.owner.instance);
+            store.unavailable=true; coordinator.state(); coordinator.verificationAccepted();
+            assertFalse(coordinator.maintenance());
+            assertEquals(store.owner.instance,durable.get("active"));
+            assertTrue(durable.containsKey(store.owner.instance+".messages")); assertTrue(shown.isEmpty());
+        } finally {lane.shutdownNow();}
+    }
 }

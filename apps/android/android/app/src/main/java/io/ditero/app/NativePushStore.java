@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /** Durable epochs and encrypted captured credentials survive Activity and process death. */
-final class NativePushStore {
+class NativePushStore {
     final SharedPreferences prefs;
     final NativeSessionVault vault;
     NativePushStore(Context context) {
@@ -22,13 +22,15 @@ final class NativePushStore {
     Owner active() {return load(prefs.getString("active",null));}
     Owner load(String instance) {
         if(instance==null || !instance.matches("[a-f0-9-]{36}")) return null;
+        keysUnavailable=false;
         try {
             String origin=prefs.getString(instance+".origin",null), user=prefs.getString(instance+".user",null);
             ServerContext context=ServerContext.parse(origin);
             Map<String,Object> record=NativeSessionVault.decode(context.scope(user),user,prefs.getString(instance+".blob",""));
             NativeSessionVault.CapturedOwner owner=NativeSessionVault.capture(context,record,false);
             return owner==null ? null : new Owner(instance,owner);
-        } catch(Exception e) {return null;}
+        } catch(NativeSessionVault.KeyUnavailableException e) {keysUnavailable=true; return null;}
+        catch(Exception e) {return null;}
     }
     Owner create(NativeSessionVault.CapturedOwner session) {
         String instance=UUID.randomUUID().toString();
@@ -40,24 +42,31 @@ final class NativePushStore {
                 .putString(instance+".blob",blob).putString("active",instance).putString("state","enabling").commit()) return null;
         return new Owner(instance,session);
     }
-    boolean selected(Owner owner) {
-        if(owner==null || !owner.instance.equals(prefs.getString("active",null))) return false;
+    private boolean keysUnavailable;
+    boolean keysUnavailable() {return keysUnavailable;}
+    NativeSessionVault.CapturedOwner selectedOwner() {
         try {
             ServerContext context=ServerContext.parse(vault.preferences().getString(NativeSessionVault.PREF_SELECTED,null));
             String user=vault.preferences().getString(NativeSessionVault.pointerKey(context),null);
-            if(!owner.session.userId.equals(user)) return false;
             Map<String,Object> record=NativeSessionVault.decode(context.scope(user),user,
                     vault.preferences().getString(NativeSessionVault.blobKey(context.scope(user)),""));
-            return NativeSessionVault.sameOwner(owner.session,NativeSessionVault.capture(context,record,false));
-        } catch(Exception e) {return false;}
+            return NativeSessionVault.capture(context,record,false);
+        } catch(NativeSessionVault.KeyUnavailableException e) {keysUnavailable=true; return null;}
+        catch(Exception e) {return null;}
+    }
+    NativeSessionVault.CapturedOwner verifiedOwner() {return vault.capture();}
+    boolean selected(Owner owner) {
+        return owner!=null && owner.instance.equals(prefs.getString("active",null))
+                && NativeSessionVault.sameOwner(owner.session,selectedOwner());
     }
     boolean current(Owner owner) {
-        return owner!=null && owner.instance.equals(prefs.getString("active",null)) && vault.isCurrent(owner.session);
+        return owner!=null && owner.instance.equals(prefs.getString("active",null))
+                && NativeSessionVault.sameOwner(owner.session,verifiedOwner());
     }
     boolean retire() {
         String instance=prefs.getString("active",null);
         SharedPreferences.Editor edit=prefs.edit().remove("active").putString("state","disabled");
-        if(instance!=null) edit.putBoolean(instance+".retired",true);
+        if(instance!=null) edit.putBoolean(instance+".retired",true).remove(instance+".messages");
         return edit.commit();
     }
     boolean clear(String instance) {
@@ -67,21 +76,58 @@ final class NativePushStore {
     }
     boolean state(Owner owner,String value) {return current(owner) && prefs.edit().putString("state",value).commit();}
     boolean endpoint(Owner owner,String body) {
-        if(!current(owner)) return false;
+        if(!selected(owner)) return false;
         try {
-            Map<String,Object> record=NativeSessionVault.decode(owner.session.scope,owner.session.userId,prefs.getString(owner.instance+".blob",""));
+            Map<String,Object> record=readRecord(owner,".blob");
             record.put("pushBody",body);
-            return prefs.edit().putString(owner.instance+".blob",NativeSessionVault.encode(owner.session.scope,new org.json.JSONObject(record).toString()))
-                    .putBoolean(owner.instance+".pending",true).commit();
+            return writeRecord(owner,".blob",record,prefs.edit().putBoolean(owner.instance+".pending",true));
         } catch(Exception e) {return false;}
     }
     String pending(Owner owner) {
         if(owner==null || !prefs.getBoolean(owner.instance+".pending",false)) return null;
         try {
-            Object body=NativeSessionVault.decode(owner.session.scope,owner.session.userId,prefs.getString(owner.instance+".blob","")).get("pushBody");
+            Object body=readRecord(owner,".blob").get("pushBody");
             return body instanceof String && ((String)body).length()<=8192 ? (String)body : null;
         } catch(Exception e) {return null;}
     }
+    Map<String,Object> readRecord(Owner owner,String suffix) throws Exception {
+        return NativeSessionVault.decode(owner.session.scope,owner.session.userId,prefs.getString(owner.instance+suffix,""));
+    }
+    boolean writeRecord(Owner owner,String suffix,Map<String,Object> record,SharedPreferences.Editor edit) throws Exception {
+        return edit.putString(owner.instance+suffix,NativeSessionVault.encode(owner.session.scope,new org.json.JSONObject(record).toString())).commit();
+    }
+    boolean defer(Owner owner,Map<String,String> payload) {
+        if(!selected(owner) || !payload.get("registrationId").equals(registration(owner))) return false;
+        try {
+            Map<String,Object> record=prefs.contains(owner.instance+".messages")?readRecord(owner,".messages"):readRecord(owner,".blob");
+            java.util.List<Map<String,String>> messages=messages(record);
+            for(Map<String,String> existing:messages) if(existing.equals(payload)) return true;
+            if(messages.size()>=64) return false;
+            messages.add(new java.util.HashMap<>(payload)); record.put("pushMessages",messages);
+            return writeRecord(owner,".messages",record,prefs.edit());
+        } catch(Exception e) {return false;}
+    }
+    private static java.util.List<Map<String,String>> messages(Map<String,Object> record) {
+        java.util.List<Map<String,String>> result=new java.util.ArrayList<>();
+        Object stored=record.get("pushMessages");
+        if(!(stored instanceof java.util.List)) return result;
+        for(Object item:(java.util.List<?>)stored) {
+            if(!(item instanceof Map)) continue;
+            Map<?,?> map=(Map<?,?>)item;
+            if(map.size()!=3 || !"1".equals(map.get("version")) || !(map.get("notificationId") instanceof String)
+                    || !(map.get("registrationId") instanceof String)) continue;
+            String notification=(String)map.get("notificationId"), registration=(String)map.get("registrationId");
+            if(!notification.matches("[A-Za-z0-9_.:-]{1,128}") || !registration.matches("[A-Za-z0-9_.:-]{1,128}")) continue;
+            result.add(Map.of("version","1","notificationId",notification,"registrationId",registration));
+            if(result.size()>=64) break;
+        }
+        return result;
+    }
+    java.util.List<Map<String,String>> deferred(Owner owner) throws Exception {
+        if(!current(owner) || !prefs.contains(owner.instance+".messages")) return java.util.List.of();
+        return messages(readRecord(owner,".messages"));
+    }
+    boolean clearDeferred(Owner owner) {return current(owner) && prefs.edit().remove(owner.instance+".messages").commit();}
     boolean registration(Owner owner,String id,String body) {
         if(!body.equals(pending(owner))) return false;
         return current(owner) && prefs.edit().putString(owner.instance+".registration",id)

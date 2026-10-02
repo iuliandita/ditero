@@ -40,16 +40,29 @@ final class NativePushCoordinator {
     }
     private final Context context;
     private final NativePushStore store;
-    private final ExecutorService lane=Executors.newSingleThreadExecutor();
-    private final Handler main=new Handler(Looper.getMainLooper());
-    private final OkHttpClient http=new OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
-            .proxy(Proxy.NO_PROXY).connectTimeout(10,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS)
-            .writeTimeout(15,TimeUnit.SECONDS).callTimeout(30,TimeUnit.SECONDS).build();
+    private final ExecutorService lane;
+    private final Handler main;
+    private final OkHttpClient http;
+    interface RegistrationTransport {Map<String,Object> register(Request request) throws Exception;}
+    interface NotificationSink {void show(NativePushStore.Owner owner,Map<String,String> payload);}
+    private final java.util.function.BooleanSupplier permissionOverride,scheduleOverride;
+    private final RegistrationTransport registrationTransport;
+    private final NotificationSink notificationSink;
+    NativePushCoordinator(NativePushStore store,ExecutorService lane,java.util.function.BooleanSupplier permission,
+                          java.util.function.BooleanSupplier schedule,RegistrationTransport registration,NotificationSink notifications) {
+        context=null; main=null; http=null; this.store=store; this.lane=lane;
+        permissionOverride=permission; scheduleOverride=schedule; registrationTransport=registration; notificationSink=notifications;
+    }
     private String failure;
     private NativePushCoordinator(Context context) {
         this.context=context; store=new NativePushStore(context);
+        lane=Executors.newSingleThreadExecutor(); main=new Handler(Looper.getMainLooper());
+        http=new OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).proxy(Proxy.NO_PROXY)
+                .connectTimeout(10,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS).writeTimeout(15,TimeUnit.SECONDS)
+                .callTimeout(30,TimeUnit.SECONDS).build();
+        permissionOverride=null; scheduleOverride=null; registrationTransport=this::registerRequest; notificationSink=this::show;
         synchronized(this) {reconcile();}
-        for(String key:store.prefs.getAll().keySet()) if(key.endsWith(".retired") || key.endsWith(".pending")) {schedule(); break;}
+        for(String key:store.prefs.getAll().keySet()) if(key.endsWith(".retired") || key.endsWith(".pending") || key.endsWith(".messages")) {schedule(); break;}
         lane.execute(() -> {
             if(!cleanup()) return;
             NativePushStore.Owner owner;
@@ -69,6 +82,7 @@ final class NativePushCoordinator {
         });
     }
     boolean permitted() {
+        if(permissionOverride!=null) return permissionOverride.getAsBoolean();
         return (Build.VERSION.SDK_INT<33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED)
                 && NotificationManagerCompat.from(context).areNotificationsEnabled();
     }
@@ -83,29 +97,40 @@ final class NativePushCoordinator {
     }
     private void reconcile() {
         NativePushStore.Owner owner=store.active();
-        if(store.prefs.contains("active") && (!store.selected(owner) || !permitted())) invalidate();
+        boolean selected=store.selected(owner);
+        if(store.keysUnavailable()) return;
+        if(store.prefs.contains("active") && (!selected || !permitted())) invalidate();
     }
     synchronized boolean invalidate() {
         if(!store.retire()) {failure="storage-failed"; return false;}
         failure=null;
         if(!schedule()) {failure="storage-failed"; return false;}
         lane.execute(this::cleanup);
-        ((NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE)).cancelAll();
+        if(context!=null) ((NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE)).cancelAll();
         return true;
     }
     synchronized void enable(Activity activity) {
         reconcile();
         if(!permitted()) {failure="denied"; return;}
-        NativeSessionVault.CapturedOwner session=store.vault.capture();
+        NativeSessionVault.CapturedOwner session=store.verifiedOwner();
         if(session==null) {failure="no-session"; return;}
         NativePushStore.Owner active=store.active();
+        boolean retrying=failure!=null;
+        if(store.current(active) && failure!=null) {
+            failure=null;
+            if(!store.state(active,"enabling")) {failure="storage-failed"; return;}
+            if(store.prefs.getBoolean(active.instance+".pending",false)) {
+                if(!schedule()) failure="storage-failed";
+                return;
+            }
+        }
         if(store.current(active)) {
             String state=store.prefs.getString("state","disabled");
-            if(state.equals("active") || state.equals("enabling")) return;
+            if((state.equals("active") || state.equals("enabling")) && failure==null && !retrying) return;
         }
         failure=null;
         final NativePushStore.Owner owner=store.current(active)?active:store.create(session);
-        if(owner!=null) store.state(owner,"enabling");
+        if(owner!=null && !store.state(owner,"enabling")) {failure="storage-failed"; return;}
         if(owner==null) {failure="storage-failed"; return;}
         lane.execute(() -> {
             if(!cleanup()) {setState(owner,"cleanup-pending"); return;}
@@ -154,7 +179,7 @@ final class NativePushCoordinator {
     }
     synchronized void endpoint(PushEndpoint endpoint,String instance) {
         NativePushStore.Owner owner=store.active();
-        if(!current(owner) || !owner.instance.equals(instance)) return;
+        if(owner==null || !owner.instance.equals(instance) || !store.selected(owner) || !permitted()) return;
         try {
             if(endpoint.getPubKeySet()==null || endpoint.getUrl().length()>2048) throw new IllegalArgumentException();
             java.net.URI uri=new java.net.URI(endpoint.getUrl());
@@ -168,6 +193,7 @@ final class NativePushCoordinator {
         } catch(Exception e) {setState(owner,"registration-failed");}
     }
     private boolean schedule() {
+        if(scheduleOverride!=null) return scheduleOverride.getAsBoolean();
         try {androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("native-push-maintenance",
                 androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE,
                 new androidx.work.OneTimeWorkRequest.Builder(MaintenanceWorker.class)
@@ -177,6 +203,25 @@ final class NativePushCoordinator {
         } catch(InterruptedException e) {Thread.currentThread().interrupt(); return false;}
         catch(Exception e) {return false;}
     }
+    synchronized void verificationAccepted() {
+        NativePushStore.Owner owner=store.active();
+        if(!current(owner)) return;
+        if(store.prefs.getBoolean(owner.instance+".pending",false) || store.prefs.contains(owner.instance+".messages"))
+            if(!schedule()) failure="storage-failed";
+    }
+    private Map<String,Object> registerRequest(Request request) throws Exception {
+        JSONObject response=request(request);
+        if(response.length()!=2) throw new IllegalArgumentException();
+        return Map.of("registrationId",response.get("registrationId"),"provider",response.get("provider"));
+    }
+    private synchronized boolean replay(NativePushStore.Owner owner) throws Exception {
+        if(!current(owner)) return false;
+        for(Map<String,String> payload:store.deferred(owner)) {
+            if(!current(owner)) return false;
+            if(payload.get("registrationId").equals(store.registration(owner))) deliver(owner,payload);
+        }
+        return !store.prefs.contains(owner.instance+".messages") || store.clearDeferred(owner);
+    }
     boolean maintenance() throws Exception {
         return lane.submit(() -> {
             synchronized(this) {reconcile();}
@@ -185,21 +230,26 @@ final class NativePushCoordinator {
             String body;
             synchronized(this) {
                 owner=store.active();
-                if(!current(owner)) return owner==null || !store.selected(owner);
+                if(store.keysUnavailable()) return false;
+                if(!current(owner)) {
+                    boolean selected=store.selected(owner);
+                    return !store.keysUnavailable() && (owner==null || !selected);
+                }
                 body=store.pending(owner);
             }
-            if(body==null) return !store.prefs.getBoolean(owner.instance+".pending",false);
+            if(body==null) return !store.prefs.getBoolean(owner.instance+".pending",false) && replay(owner);
             try {
-                JSONObject response=request(owner.session.pushRegisterRequest(body));
-                String id=response.optString("registrationId","");
-                if(response.length()!=2 || !id.matches("[A-Za-z0-9_.:-]{1,128}")
-                        || !"unifiedpush".equals(response.optString("provider"))) throw new IllegalArgumentException();
+                Map<String,Object> response=registrationTransport.register(owner.session.pushRegisterRequest(body));
+                Object value=response.get("registrationId");
+                String id=value instanceof String?(String)value:"";
+                if(response.size()!=2 || !id.matches("[A-Za-z0-9_.:-]{1,128}")
+                        || !"unifiedpush".equals(response.get("provider"))) throw new IllegalArgumentException();
                 synchronized(this) {
-                    if(!current(owner)) return true;
-                    if(!body.equals(store.pending(owner))) return true;
+                    if(!current(owner)) return !store.selected(owner);
+                    if(!body.equals(store.pending(owner))) return false;
                     if(!store.registration(owner,id,body)) {failure="storage-failed"; return false;}
                 }
-                return true;
+                return replay(owner);
             } catch(Exception e) {setState(owner,"registration-failed"); return false;}
         }).get();
     }
@@ -254,11 +304,22 @@ final class NativePushCoordinator {
         reconcile();
         NativePushStore.Owner owner=store.active();
         Map<String,String> payload=payload(content,decrypted);
-        if(!current(owner) || !owner.instance.equals(instance) || payload==null
+        if(owner==null || !owner.instance.equals(instance) || !store.selected(owner) || !permitted() || payload==null
                 || !payload.get("registrationId").equals(store.registration(owner))) return;
-        if(store.seen(owner,payload.get("notificationId"))) return;
+        if(!current(owner)) {
+            if(!store.defer(owner,payload) || !schedule()) failure="storage-failed";
+            return;
+        }
+        deliver(owner,payload);
+    }
+    private void deliver(NativePushStore.Owner owner,Map<String,String> payload) {
+        if(!current(owner) || store.seen(owner,payload.get("notificationId"))) return;
+        notificationSink.show(owner,payload);
+    }
+    private void show(NativePushStore.Owner owner,Map<String,String> payload) {
+        String instance=owner.instance;
         NotificationManager manager=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if(Build.VERSION.SDK_INT>=26) manager.createNotificationChannel(new NotificationChannel("native-reminders","Ditero reminders",NotificationManager.IMPORTANCE_DEFAULT));
+        if(Build.VERSION.SDK_INT>=26) manager.createNotificationChannel(new NotificationChannel("native-reminders",context.getString(R.string.native_push_channel),NotificationManager.IMPORTANCE_DEFAULT));
         Intent launch=new Intent(context,MainActivity.class).setAction("io.ditero.app.PUSH_OPEN")
                 .setData(android.net.Uri.parse("ditero-push:"+instance+":"+payload.get("notificationId")))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -266,7 +327,7 @@ final class NativePushCoordinator {
         PendingIntent tap=PendingIntent.getActivity(context,0,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         try {manager.notify(instance+":"+payload.get("notificationId"),0,new NotificationCompat.Builder(context,"native-reminders")
                 .setSmallIcon(io.ditero.app.R.mipmap.ic_launcher).setContentTitle("Ditero")
-                .setContentText("You have a new reminder").setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setContentText(context.getString(R.string.native_push_body)).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                 .setAutoCancel(true).setContentIntent(tap).build());}
         catch(SecurityException e) {invalidate(); failure="denied";}
     }
