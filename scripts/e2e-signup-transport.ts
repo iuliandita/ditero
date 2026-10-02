@@ -148,6 +148,8 @@ export const configureSignupTransport: NonNullable<
 		);
 	});
 	proxy.on("proxyRes", (upstream, req) => {
+		// The proxy copies these headers over the early response middleware.
+		upstream.headers.connection = "close";
 		const record = requests.get(req);
 		if (!record) return;
 		record("upstream", "response");

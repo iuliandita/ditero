@@ -1,5 +1,26 @@
 import { describe, expect, test } from "vitest";
-import { corsPolicy, securityHeaders } from "./http-policy.ts";
+import {
+	corsPolicy,
+	fixtureConnectionHeaders,
+	securityHeaders,
+} from "./http-policy.ts";
+
+describe("fixtureConnectionHeaders", () => {
+	test("prevents connection pooling only in the opted-in test fixture", () => {
+		expect(
+			fixtureConnectionHeaders({ NODE_ENV: "test", DITERO_E2E: "1" }),
+		).toEqual({ connection: "close" });
+		for (const env of [
+			{},
+			{ NODE_ENV: "test" },
+			{ NODE_ENV: "test", DITERO_E2E: "0" },
+			{ NODE_ENV: "development", DITERO_E2E: "1" },
+			{ NODE_ENV: "production", DITERO_E2E: "1" },
+		]) {
+			expect(fixtureConnectionHeaders(env)).toEqual({});
+		}
+	});
+});
 
 describe("corsPolicy", () => {
 	test("disables cross-origin access in production", () => {

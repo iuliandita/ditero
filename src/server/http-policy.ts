@@ -3,9 +3,18 @@ import { zeroPublicURL } from "./public-config.ts";
 
 type HttpEnvironment = {
 	NODE_ENV?: string;
+	DITERO_E2E?: string;
 	TRUSTED_ORIGINS?: string;
 	PUBLIC_ZERO_URL?: string;
 };
+
+export function fixtureConnectionHeaders(
+	env: HttpEnvironment,
+): Record<string, string> {
+	return env.NODE_ENV === "test" && env.DITERO_E2E === "1"
+		? { connection: "close" }
+		: {};
+}
 
 export function corsPolicy(env: HttpEnvironment): CORSConfig {
 	if (env.NODE_ENV === "production") {
