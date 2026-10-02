@@ -51,7 +51,11 @@ import { notifyGrantCapable } from "./e2e/grants.ts";
 import { e2eInviteRoutes } from "./e2e/invite-routes.ts";
 import { e2eRoutes } from "./e2e/routes.ts";
 import { makeGuards } from "./guards.ts";
-import { corsPolicy, securityHeaders } from "./http-policy.ts";
+import {
+	corsPolicy,
+	fixtureConnectionHeaders,
+	securityHeaders,
+} from "./http-policy.ts";
 import { sendInviteMail } from "./mail/invite-mail.ts";
 import { nativeAttachmentRoutes } from "./native-auth/attachment-routes.ts";
 import { nativeE2ERoutes } from "./native-auth/e2e-routes.ts";
@@ -85,7 +89,10 @@ import { publicConfig } from "./public-config.ts";
 import { nativeZeroPayload } from "./zero-auth.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
-const responseHeaders = securityHeaders(process.env);
+const responseHeaders = {
+	...securityHeaders(process.env),
+	...fixtureConnectionHeaders(process.env),
+};
 const requestOrigins = [
 	process.env.BETTER_AUTH_URL ?? `http://localhost:${PORT}`,
 	...trustedAuthOrigins(process.env),

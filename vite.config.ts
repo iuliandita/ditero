@@ -11,6 +11,22 @@ import { configureSignupTransport } from "./scripts/e2e-signup-transport.ts";
 export default defineConfig({
 	plugins: [
 		{
+			name: "e2e-fresh-http-connections",
+			apply: "serve",
+			configureServer(server) {
+				if (
+					process.env.NODE_ENV !== "test" ||
+					process.env.DITERO_E2E_SIGNUP_TRANSPORT !== "1"
+				)
+					return;
+				// Setup requests must not inherit an earlier response's idle socket.
+				server.middlewares.use((_request, response, next) => {
+					response.setHeader("Connection", "close");
+					next();
+				});
+			},
+		},
+		{
 			name: "public-pwa-shell",
 			apply: "build",
 			generateBundle(_options, bundle) {

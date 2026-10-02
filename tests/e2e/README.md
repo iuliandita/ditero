@@ -1,5 +1,14 @@
 # Browser tests
 
+The test web server closes each HTTP response when `NODE_ENV=test` and
+`DITERO_E2E_SIGNUP_TRANSPORT=1`. This prevents signup setup from inheriting an
+earlier request's idle connection, including an API GET from another context.
+The proxy preserves this contract when upstream responses advertise keep-alive.
+Normal development and production keep their existing connection behavior.
+The API fixture also closes each HTTP response when `NODE_ENV=test` and
+`DITERO_E2E=1`, including the separate SMTP origin used for direct API signup.
+Interrupted requests still fail, and signup POSTs are not retried.
+
 Run the suite with `bun run test:e2e`. Filters and Playwright flags are forwarded:
 
 ```sh
