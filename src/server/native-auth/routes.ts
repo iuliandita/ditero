@@ -15,6 +15,7 @@ import {
 	readJsonObject,
 	type Sessions,
 } from "./contracts.ts";
+import { revokeNativeSession } from "./revoke.ts";
 import { authenticateNative, type NativeSession } from "./session.ts";
 import { NativeExchangeError, NativeGrantStore } from "./store.ts";
 
@@ -204,6 +205,22 @@ export function nativeAuthRoutes(deps: NativeAuthDependencies) {
 				const workspaceId = await bootstrapNativeWorkspace(deps.pool, session);
 				if (!workspaceId) return reply("unauthorized", 401);
 				return ok({ workspaceId });
+			},
+			{ parse: "none" },
+		)
+		.post(
+			"/api/native/session/revoke",
+			async ({ request }) => {
+				if (request.headers.has("origin") || request.headers.has("cookie"))
+					return reply("credentials-not-allowed", 400);
+				if (!(await rateLimit(request))) return limited();
+				const session = await authenticateNative(deps.pool, request.headers);
+				if (!session) return reply("unauthorized", 401);
+				const body = await readBootstrapBody(request);
+				if (!body.ok) return reply("invalid-request", body.status);
+				if (!(await revokeNativeSession(deps.pool, session)))
+					return reply("unauthorized", 401);
+				return ok({ revoked: true });
 			},
 			{ parse: "none" },
 		)

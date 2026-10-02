@@ -15,6 +15,7 @@ Only S256 is supported. The verifier stays with the client.
 | `POST /api/native/grants/exchange` | `{ "grantId": "...", "verifier": "..." }` | No Cookie, Origin, or Authorization header |
 | `GET /api/native/session` | No body | Native session token in the Bearer header; no Cookie or Origin header |
 | `GET /api/native/token` | No body | Native session token in the Bearer header; no Cookie or Origin header |
+| `POST /api/native/session/revoke` | No body, or an empty JSON object `{}` | Native session token in the Bearer header; no Cookie or Origin header |
 
 Creation returns `grantId` and `expiresAt`. Grants expire after five minutes.
 Open `/native/authorize?grantId=...` on the selected server in the system browser.
@@ -122,3 +123,18 @@ The native bridge must select named encryption operations and keep session
 credentials in native storage. These routes do not authorize an arbitrary
 authenticated URL fetch or embedded remote pages. Native attachments and
 application integration remain unfinished.
+
+## Native sign-out
+
+`POST /api/native/session/revoke` revokes the authenticated native device and
+deletes its session in one live-user transaction. It accepts no caller-selected
+session or device. Success returns `{ "revoked": true }`; already invalid,
+expired, revoked, or deleted-user credentials return 401. Browser sessions and
+other devices remain usable. New native lookups and previously issued Zero JWTs
+lose authorization after commit; the existing cache-stream limitation above
+still applies.
+
+The native client must retire its local sync client before changing account
+ownership and report network or local credential-cleanup failures truthfully.
+Local forgetting alone does not prove server revocation. The endpoint retains
+the same admission, no-store, and empty-body contract as native bootstrap.
