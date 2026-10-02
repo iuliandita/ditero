@@ -118,8 +118,9 @@ final class NativePushCoordinator {
         boolean retrying=failure!=null;
         if(store.current(active) && failure!=null) {
             failure=null;
-            if(!store.state(active,"enabling")) {failure="storage-failed"; return;}
-            if(store.prefs.getBoolean(active.instance+".pending",false)) {
+            boolean pendingRegistration=store.prefs.getBoolean(active.instance+".pending",false);
+            if(pendingRegistration || store.prefs.contains(active.instance+".messages")) {
+                if(pendingRegistration && !store.state(active,"enabling")) {failure="storage-failed"; return;}
                 if(!schedule()) failure="storage-failed";
                 return;
             }
@@ -307,7 +308,9 @@ final class NativePushCoordinator {
         if(owner==null || !owner.instance.equals(instance) || !store.selected(owner) || !permitted() || payload==null
                 || !payload.get("registrationId").equals(store.registration(owner))) return;
         if(!current(owner)) {
-            if(!store.defer(owner,payload) || !schedule()) failure="storage-failed";
+            NativePushStore.Deferred result=store.defer(owner,payload);
+            if(result==NativePushStore.Deferred.FAILED || (result==NativePushStore.Deferred.STORED && !schedule()))
+                failure="storage-failed";
             return;
         }
         deliver(owner,payload);
@@ -326,7 +329,7 @@ final class NativePushCoordinator {
         // The explicit component only opens the shell; no URL or task navigation is consumed.
         PendingIntent tap=PendingIntent.getActivity(context,0,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         try {manager.notify(instance+":"+payload.get("notificationId"),0,new NotificationCompat.Builder(context,"native-reminders")
-                .setSmallIcon(io.ditero.app.R.mipmap.ic_launcher).setContentTitle("Ditero")
+                .setSmallIcon(io.ditero.app.R.drawable.ic_notification).setContentTitle("Ditero")
                 .setContentText(context.getString(R.string.native_push_body)).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                 .setAutoCancel(true).setContentIntent(tap).build());}
         catch(SecurityException e) {invalidate(); failure="denied";}

@@ -198,4 +198,53 @@ public class NativePushTest {
             assertTrue(durable.containsKey(store.owner.instance+".messages")); assertTrue(shown.isEmpty());
         } finally {lane.shutdownNow();}
     }
+
+    @Test public void queueOnlyStorageRetryReplaysWhileConfigurationIsOffline() throws Exception {
+        FlowStore store=new FlowStore(); store.verified=false;
+        java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+        java.util.List<String> shown=new java.util.ArrayList<>(); boolean[] schedule={false}; int[] schedules={0};
+        java.util.concurrent.atomic.AtomicInteger configurations=new java.util.concurrent.atomic.AtomicInteger();
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->{schedules[0]++; return schedule[0];},
+                request->{throw new AssertionError("queue-only replay must not register again");},
+                (owner,payload)->shown.add(payload.get("notificationId")));
+        java.lang.reflect.Field http=NativePushCoordinator.class.getDeclaredField("http"); http.setAccessible(true);
+        http.set(coordinator,new okhttp3.OkHttpClient.Builder().addInterceptor(chain->{
+            configurations.incrementAndGet();
+            assertEquals("https://example.test/api/native/push/config",chain.request().url().toString());
+            throw new java.io.IOException("configuration is offline");
+        }).build());
+        try {
+            coordinator.message(json(valid),true,store.owner.instance);
+            assertEquals("storage-failed",coordinator.state());
+            assertTrue(durable.containsKey(store.owner.instance+".messages"));
+            assertFalse(durable.containsKey(store.owner.instance+".pending"));
+            store.verified=true; schedule[0]=true;
+            coordinator.enable(null);
+            lane.submit(()->{}).get();
+            assertEquals(2,schedules[0]); assertEquals(0,configurations.get());
+            assertEquals("active",coordinator.state());
+            assertTrue(coordinator.maintenance());
+            assertEquals(java.util.List.of("notification-1"),shown);
+            assertFalse(durable.containsKey(store.owner.instance+".messages"));
+        } finally {lane.shutdownNow();}
+    }
+    @Test public void capacityOverflowKeepsRetainedMessagesReplayable() throws Exception {
+        FlowStore store=new FlowStore(); store.verified=false;
+        java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+        java.util.List<String> shown=new java.util.ArrayList<>(); int[] schedules={0};
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->{schedules[0]++; return true;},
+                request->{throw new AssertionError("message replay does not register");},
+                (owner,payload)->shown.add(payload.get("notificationId")));
+        try {
+            for(int i=1;i<=65;i++) coordinator.message(json(valid.replace("notification-1","notification-"+i)),true,store.owner.instance);
+            assertEquals(64,schedules[0]);
+            assertEquals("active",coordinator.state()); assertTrue(shown.isEmpty());
+            assertTrue(durable.containsKey(store.owner.instance+".messages"));
+            store.verified=true; coordinator.verificationAccepted();
+            assertTrue(coordinator.maintenance());
+            assertEquals(64,shown.size()); assertFalse(shown.contains("notification-65"));
+            for(int i=1;i<=64;i++) assertTrue(shown.contains("notification-"+i));
+            assertFalse(durable.containsKey(store.owner.instance+".messages"));
+        } finally {lane.shutdownNow();}
+    }
 }

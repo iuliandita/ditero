@@ -96,16 +96,17 @@ class NativePushStore {
     boolean writeRecord(Owner owner,String suffix,Map<String,Object> record,SharedPreferences.Editor edit) throws Exception {
         return edit.putString(owner.instance+suffix,NativeSessionVault.encode(owner.session.scope,new org.json.JSONObject(record).toString())).commit();
     }
-    boolean defer(Owner owner,Map<String,String> payload) {
-        if(!selected(owner) || !payload.get("registrationId").equals(registration(owner))) return false;
+    enum Deferred {STORED, FULL, FAILED, STALE}
+    Deferred defer(Owner owner,Map<String,String> payload) {
+        if(!selected(owner) || !payload.get("registrationId").equals(registration(owner))) return Deferred.STALE;
         try {
             Map<String,Object> record=prefs.contains(owner.instance+".messages")?readRecord(owner,".messages"):readRecord(owner,".blob");
             java.util.List<Map<String,String>> messages=messages(record);
-            for(Map<String,String> existing:messages) if(existing.equals(payload)) return true;
-            if(messages.size()>=64) return false;
+            for(Map<String,String> existing:messages) if(existing.equals(payload)) return Deferred.STORED;
+            if(messages.size()>=64) return Deferred.FULL;
             messages.add(new java.util.HashMap<>(payload)); record.put("pushMessages",messages);
-            return writeRecord(owner,".messages",record,prefs.edit());
-        } catch(Exception e) {return false;}
+            return writeRecord(owner,".messages",record,prefs.edit())?Deferred.STORED:Deferred.FAILED;
+        } catch(Exception e) {return Deferred.FAILED;}
     }
     private static java.util.List<Map<String,String>> messages(Map<String,Object> record) {
         java.util.List<Map<String,String>> result=new java.util.ArrayList<>();
