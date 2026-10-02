@@ -9,8 +9,12 @@ services:
       - "127.0.0.1:53000:3000"
     volumes:
       - ../../node_modules/playwright-core:/opt/playwright-core:ro
+      - ../../scripts/e2e-client-transport.cjs:/opt/e2e-client-transport.cjs:ro
+    environment:
+      NODE_ENV: test
+      DITERO_E2E_SIGNUP_TRANSPORT: ${DITERO_E2E_SIGNUP_TRANSPORT:-0}
     command:
-      [node, /opt/playwright-core/cli.js, run-server, --host, 0.0.0.0, --port, "3000"]
+      [node, --require, /opt/e2e-client-transport.cjs, /opt/playwright-core/cli.js, run-server, --host, 0.0.0.0, --port, "3000"]
     healthcheck:
       test:
         - CMD

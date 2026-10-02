@@ -16,6 +16,8 @@ const env = {
 	DATABASE_URL: databaseURL,
 	E2E_DATABASE_URL: databaseURL,
 	NODE_ENV: "test",
+	DITERO_E2E_SIGNUP_TRANSPORT:
+		process.env.DITERO_E2E_SIGNUP_TRANSPORT ?? (process.env.CI ? "1" : "0"),
 };
 
 const isolatedBrowser = process.env.E2E_BROWSER_CONTAINER === "1";
@@ -124,6 +126,14 @@ function preserveDiagnostics() {
 		"--timestamps",
 		"--tail",
 		"1000",
+	]);
+	// Keep preload activation and earlier socket history before teardown.
+	capture("browser-transport.log", [
+		...project,
+		"logs",
+		"--no-color",
+		"--timestamps",
+		"browser",
 	]);
 	capture("compose-ps.json", [...project, "ps", "--all", "--format", "json"]);
 	const ids = capture("container-ids.txt", [
