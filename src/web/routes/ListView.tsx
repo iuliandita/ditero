@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { addCopyFor } from "@/lib/kind-copy";
 import { ListIcon } from "@/lib/list-icon";
+import { listRowsLoading } from "@/lib/list-loading";
 import { runMutation } from "@/lib/run-mutation";
 import { useIsDesktop, useMediaQuery } from "@/lib/use-media-query";
 import type { ListKind } from "../../domain/icon-map.ts";
@@ -119,12 +120,19 @@ export function ListView({
 	// distinguishable here, where the queries live. The row surface below is pure.
 	const listsLoading = listsDetails.type !== "complete";
 	const tasksLoading = listsLoading || tasksDetails.type !== "complete";
+	const rowsLoading = listRowsLoading({
+		listId,
+		lists,
+		tasks,
+		listsType: listsDetails.type,
+		tasksType: tasksDetails.type,
+	});
 
 	const list = lists.find((l) => l.id === listId);
-	// The phone's add field renders only once rows have synced.
-	const listReady = list != null && !tasksLoading;
+	// The phone's add field renders once synced or cached rows are ready.
+	const listReady = list != null && !rowsLoading;
 
-	// Once per arrival, after the list has synced: focus the add field where one
+	// Once per arrival, after synced or cached rows are ready: focus the add field where one
 	// is on screen, else open quick add for an empty list.
 	useEffect(() => {
 		if (!arrival || !listReady || arrivedAt.current === listId) return;
@@ -646,7 +654,7 @@ export function ListView({
 				</p>
 			)}
 
-			{tasksLoading ? (
+			{rowsLoading ? (
 				<TaskListSkeleton />
 			) : parents.length === 0 ? (
 				<EmptyState
@@ -700,7 +708,7 @@ export function ListView({
 					selectionFor={selectionFor}
 				/>
 			)}
-			{!tasksLoading && parents.length === 0 && mobileAdd}
+			{!rowsLoading && parents.length === 0 && mobileAdd}
 
 			<IconPicker
 				open={iconOpen}
