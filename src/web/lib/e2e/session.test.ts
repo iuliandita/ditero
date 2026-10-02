@@ -2,7 +2,11 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { aad, encryptWrapped } from "../../../domain/e2e/envelope.ts";
 import { encodeBytes, encodeWrapped } from "../../../domain/e2e/wire.ts";
-import { clearDeviceKey, loadWrappedPrivateKey } from "./device-store.ts";
+import {
+	clearDeviceKey,
+	DeviceStoreError,
+	loadWrappedPrivateKey,
+} from "./device-store.ts";
 import { createKeyring } from "./keyring.ts";
 import {
 	createSession,
@@ -238,4 +242,60 @@ describe("session", () => {
 		clock += 2 * 60_000;
 		expect(s.state()).toBe("locked");
 	});
+});
+
+it("does not restore keys after account retirement and preserves remembered storage", async () => {
+	let finish!: (value: Uint8Array) => void;
+	const pending = new Promise<Uint8Array>((resolve) => {
+		finish = resolve;
+	});
+	let erased = 0;
+	const ring = createKeyring({ now: () => clock, maxAgeMs: 60_000, derive });
+	const scoped = createSession(ring, () => DEVICE, {
+		loadWrappedPrivateKey: () => pending,
+		storeWrappedPrivateKey: async () => {},
+		clearDeviceKey: async () => {
+			erased++;
+		},
+	});
+	const restore = scoped.adoptIdentity(USER, await identityFor(USER));
+	scoped.lockNow();
+	const restored = PRIVATE_KEY.slice();
+	finish(restored);
+	await expect(restore).rejects.toMatchObject({ reason: "stale" });
+	expect(ring.state()).toBe("locked");
+	expect(restored).toEqual(new Uint8Array(32));
+	expect(erased).toBe(0);
+});
+
+it("locking during remembered-key persistence never writes zeroed key material", async () => {
+	let writing!: () => void;
+	const started = new Promise<void>((resolve) => {
+		writing = resolve;
+	});
+	let resume!: () => void;
+	const held = new Promise<void>((resolve) => {
+		resume = resolve;
+	});
+	let saved: Uint8Array | undefined;
+	const ring = createKeyring({ now: () => clock, maxAgeMs: 60_000, derive });
+	const scoped = createSession(ring, () => DEVICE, {
+		loadWrappedPrivateKey: async () => {
+			throw new DeviceStoreError("absent", "fixture has no remembered key");
+		},
+		clearDeviceKey: async () => {},
+		storeWrappedPrivateKey: async (_user, _device, key) => {
+			writing();
+			await held;
+			saved = key.slice();
+		},
+	});
+	await scoped.adoptIdentity(USER, await identityFor(USER));
+	const remember = scoped.unlock("correct-horse", true);
+	await started;
+	scoped.lockNow();
+	resume();
+	await remember;
+	expect(saved).toEqual(PRIVATE_KEY);
+	expect(ring.state()).toBe("locked");
 });

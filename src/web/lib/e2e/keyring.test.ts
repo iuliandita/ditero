@@ -241,3 +241,18 @@ describe("keyring: adopt and setMaxAge", () => {
 		expect(ring.state()).toBe("ready");
 	});
 });
+
+it("does not reinstall a key when a pending unlock finishes after locking", async () => {
+	let finish!: (value: Uint8Array) => void;
+	const pending = new Promise<Uint8Array>((resolve) => {
+		finish = resolve;
+	});
+	const ring = createKeyring({ now, maxAgeMs: 60_000, derive: () => pending });
+	ring.discover(await enrolled());
+	const unlock = ring.unlock("correct-horse");
+	ring.lockNow();
+	finish(KEK);
+	await expect(unlock).rejects.toMatchObject({ reason: "stale" });
+	expect(ring.state()).toBe("locked");
+	expect(() => ring.privateKey()).toThrow(KeyringError);
+});

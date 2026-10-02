@@ -9,7 +9,16 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        NativeBridgeLockdown lockdown = new NativeBridgeLockdown();
+        bridgeBuilder.addPluginInstance(lockdown);
         super.onCreate(savedInstanceState);
+        if (!lockdown.isReady()) {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().stopLoading();
+                getBridge().getWebView().loadUrl("about:blank");
+            }
+            return;
+        }
         // Shell policy first: it replaces the bridge's clients. If it fails closed, the view
         // is parked on about:blank and no native transport is attached.
         // Dedicated message listener only; null means registration failed closed.

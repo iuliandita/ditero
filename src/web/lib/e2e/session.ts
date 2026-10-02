@@ -78,6 +78,11 @@ export function createSession(
 	},
 ): Session {
 	let currentUserId: string | null = null;
+	let epoch = 0;
+	const current = (started: number) => {
+		if (started !== epoch)
+			throw new KeyringError("stale", "session: operation was retired");
+	};
 
 	const remember = async (privateKey: Uint8Array, keep: boolean) => {
 		if (!currentUserId) return;
@@ -89,20 +94,33 @@ export function createSession(
 			await store.clearDeviceKey();
 			return;
 		}
-		await store.storeWrappedPrivateKey(currentUserId, deviceId(), privateKey);
+		const snapshot = privateKey.slice();
+		try {
+			await store.storeWrappedPrivateKey(currentUserId, deviceId(), snapshot);
+		} finally {
+			snapshot.fill(0);
+		}
 	};
 
 	return {
 		state: keyring.state,
 
 		async adoptIdentity(userId, response) {
+			const started = ++epoch;
 			currentUserId = userId;
 			const identity = toEnrolledIdentity(userId, response);
 			keyring.discover(identity);
 			if (!identity) return;
 			try {
-				keyring.adopt(await store.loadWrappedPrivateKey(userId, deviceId()));
+				const restored = await store.loadWrappedPrivateKey(userId, deviceId());
+				if (started !== epoch) {
+					restored.fill(0);
+					current(started);
+				}
+				keyring.adopt(restored);
+				restored.fill(0);
 			} catch (error) {
+				current(started);
 				// Absent is the ordinary case on a new device. A record that will
 				// not open is ALSO ordinary -- a different user on the same browser
 				// -- so it is dropped rather than surfaced: the user simply gets
@@ -113,11 +131,14 @@ export function createSession(
 		},
 
 		async unlock(secret, keep) {
+			const started = epoch;
 			await keyring.unlock(secret);
+			current(started);
 			await remember(keyring.privateKey(), keep);
 		},
 
 		async enrolled(userId, response, privateKey, keep) {
+			epoch++;
 			currentUserId = userId;
 			const identity = toEnrolledIdentity(userId, response);
 			if (!identity) {
@@ -131,13 +152,17 @@ export function createSession(
 			await remember(privateKey, keep);
 		},
 
-		lockNow: keyring.lockNow,
+		lockNow() {
+			epoch++;
+			keyring.lockNow();
+		},
 
 		setAutoLockMinutes(minutes) {
 			keyring.setMaxAge(autoLockMaxAgeMs(minutes));
 		},
 
 		async signOut() {
+			epoch++;
 			currentUserId = null;
 			await keyring.clear();
 		},

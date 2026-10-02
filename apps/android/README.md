@@ -16,7 +16,7 @@ existing storage keys.
 
 ## Build a debug APK
 
-Install Bun 1.3.14, Java 21, and the Android SDK command-line tools. Set `JAVA_HOME`
+Install Bun 1.4.2, Java 21, and the Android SDK command-line tools. Set `JAVA_HOME`
 to Java 21 and `ANDROID_HOME` to the SDK directory. Accept the Android SDK licenses
 with `sdkmanager --licenses`, then install the required packages:
 

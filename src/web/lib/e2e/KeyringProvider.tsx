@@ -253,6 +253,16 @@ export function KeyringProvider({
 		return () => refreshAbort.current?.abort();
 	}, [refresh]);
 
+	useEffect(
+		() => () => {
+			hydrationAbort.current?.abort();
+			refreshAbort.current?.abort();
+			workspaceKeys.current = [];
+			session.lockNow();
+		},
+		[session],
+	);
+
 	useEffect(() => {
 		session.setAutoLockMinutes(autoLockMinutes);
 		sync();

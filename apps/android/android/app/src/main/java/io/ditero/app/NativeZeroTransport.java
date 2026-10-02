@@ -61,6 +61,8 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 import okhttp3.MediaType;
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -778,8 +780,12 @@ final class NativeZeroTransport {
                 main.post(new Runnable() {
                     @Override
                     public void run() {
-                        if (closed) return;
+                        if (closed) {
+                            if (outcome.session != null) revokeAbandoned(outcome.session.context, outcome.session.token);
+                            return;
+                        }
                         if (exchange != ex || g != generation || context != ctx) {
+                            if (outcome.session != null) revokeAbandoned(outcome.session.context, outcome.session.token);
                             // Signed out, retired or replaced meanwhile: nothing may be
                             // persisted or installed.
                             cancelled(proxy, rid);
@@ -797,6 +803,7 @@ final class NativeZeroTransport {
                         }
                         Session next = outcome.session;
                         if (!persistSession(next)) {
+                            revokeAbandoned(next.context, next.token);
                             fail(proxy, rid, "storage-failed");
                             return;
                         }
@@ -822,6 +829,7 @@ final class NativeZeroTransport {
      */
     private Exchanged exchangeAndVerify(ServerContext ctx, String body) {
         Exchanged out = new Exchanged();
+        String mintedToken = null;
         try {
             HttpResult res = call(new Request.Builder().url(ctx.url("/api/native/grants/exchange"))
                     .header("Accept", "application/json")
@@ -835,6 +843,7 @@ final class NativeZeroTransport {
             if (res.body == null) throw new Reject("invalid-response");
             Map<String, Object> m = asMap(parse(res.body));
             String token = str(m.get("token"));
+            if (token != null && BEARER.matcher(token).matches()) mintedToken = token;
             String sessionId = str(m.get("sessionId"));
             String userId = str(m.get("userId"));
             String deviceId = str(m.get("deviceId"));
@@ -858,7 +867,36 @@ final class NativeZeroTransport {
             // Plain IOException comes from the strict parser; transport failures are subclasses.
             out.error = e.getClass() == IOException.class ? "invalid-response" : "network";
         }
+        if (out.session == null && mintedToken != null) revokeAbandoned(ctx, mintedToken);
         return out;
+    }
+
+    // A successfully exchanged token that was never installed must not become an orphan.
+    private void revokeAbandoned(ServerContext ctx, String token) {
+        Request request = new Request.Builder().url(ctx.url("/api/native/session/revoke"))
+                .header("Accept", "application/json")
+                .header("Authorization", "Bearer " + token)
+                .post(RequestBody.create("{}", JSON_TYPE)).build();
+        http.newCall(request).enqueue(new Callback() {
+            @Override public void onFailure(@NonNull Call call, @NonNull IOException error) {
+                Log.w(TAG, "abandoned session revocation failed");
+            }
+            @Override public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try (Response ignored = response) {
+                    if (response.code() != 200)
+                        Log.w(TAG, "abandoned session revocation refused");
+                }
+            }
+        });
+    }
+
+    private static boolean instanceUnauthorized(HttpResult result) {
+        if (result == null || result.code != 401 || result.body == null) return false;
+        try {
+            return NativeResponsePolicy.confirmsUnauthorized(result.code, asMap(parse(result.body)));
+        } catch (Reject | IOException error) {
+            return false;
+        }
     }
 
     private void refresh(final JavaScriptReplyProxy proxy, final int rid) {
@@ -906,7 +944,7 @@ final class NativeZeroTransport {
                     fail(proxy, rid, "network");
                     return;
                 }
-                if (result.code == 401 && clearOnUnauthorized) {
+                if (instanceUnauthorized(result) && clearOnUnauthorized) {
                     dropSession(s);
                     fail(proxy, rid, "unauthorized");
                     return;
@@ -957,7 +995,7 @@ final class NativeZeroTransport {
                 boolean unusable = false;
                 if (result == null) {
                     failure = "network";
-                } else if (result.code == 401) {
+                } else if (instanceUnauthorized(result)) {
                     unusable = true;
                 } else if (result.code != 200 || result.body == null) {
                     failure = result.code != 200 ? "http-" + result.code : "invalid-response";
