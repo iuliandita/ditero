@@ -6,7 +6,6 @@ import type { db as defaultDb } from "../../db/client.ts";
 import { withLiveUserContext, withUserContext } from "../../db/user-context.ts";
 import { KDF_PARAMS } from "../../domain/e2e/kdf.ts";
 import { isWellFormedCommitment } from "../../domain/e2e/wdk-commitment.ts";
-import type { Guards } from "../guards.ts";
 import {
 	type GrantFailure,
 	markGrantFailed,
@@ -215,19 +214,35 @@ const enrollBody = z.object({
 	formatVersion,
 });
 
-export function e2eRoutes(
+// The only session field this module reads. Browser Guards satisfy it
+// structurally; the native verifier supplies exactly this and nothing else.
+export type E2EPrincipal = { user: { id: string } };
+
+export type E2EGuards = {
+	guardedPost: (
+		handler: (request: Request, session: E2EPrincipal) => Promise<unknown>,
+	) => (context: { request: Request }) => Promise<unknown>;
+	guardedGet: (
+		handler: (request: Request, session: E2EPrincipal) => Promise<unknown>,
+	) => (context: { request: Request }) => Promise<unknown>;
+};
+
+export type E2EBasePath = "/api/e2e" | "/api/native/e2e";
+
+export function e2eRoutes<const BasePath extends E2EBasePath>(
 	pool: Pool,
 	database: typeof defaultDb,
-	guards: Guards,
+	guards: E2EGuards,
+	basePath: BasePath,
 ) {
 	return new Elysia()
 		.get(
-			"/api/e2e/members/:workspaceId/keys",
+			`${basePath}/members/:workspaceId/keys`,
 			guards.guardedGet(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				const workspaceId = workspaceIdFromPath(
 					request,
-					"/api/e2e/members/",
+					`${basePath}/members/`,
 					"/keys",
 				);
 				if (!workspaceId) return new Response("Bad Request", { status: 400 });
@@ -242,12 +257,12 @@ export function e2eRoutes(
 			}),
 		)
 		.post(
-			"/api/e2e/workspaces/:workspaceId/rotate",
+			`${basePath}/workspaces/:workspaceId/rotate`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				const workspaceId = workspaceIdFromPath(
 					request,
-					"/api/e2e/workspaces/",
+					`${basePath}/workspaces/`,
 					"/rotate",
 				);
 				if (!workspaceId) return new Response("Bad Request", { status: 400 });
@@ -283,7 +298,7 @@ export function e2eRoutes(
 			}),
 		)
 		.get(
-			"/api/e2e/identity",
+			`${basePath}/identity`,
 			guards.guardedGet(async (_request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				return await withUserContext(pool, session.user.id, async (client) => {
@@ -329,7 +344,7 @@ export function e2eRoutes(
 			}),
 		)
 		.post(
-			"/api/e2e/enroll",
+			`${basePath}/enroll`,
 			guards.guardedPost(async (request, session) => {
 				// Read per request, not at mount time: the flag decides whether the
 				// feature EXISTS, and a disabled deployment must answer 404 rather
@@ -404,7 +419,7 @@ export function e2eRoutes(
 			}),
 		)
 		.get(
-			"/api/e2e/identity/recovery",
+			`${basePath}/identity/recovery`,
 			guards.guardedGet(async (_request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				return await withUserContext(pool, session.user.id, async (client) => {
@@ -440,7 +455,7 @@ export function e2eRoutes(
 			}),
 		)
 		.post(
-			"/api/e2e/rewrap",
+			`${basePath}/rewrap`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 
@@ -532,7 +547,7 @@ export function e2eRoutes(
 			}),
 		)
 		.post(
-			"/api/e2e/identity/rotate",
+			`${basePath}/identity/rotate`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 
@@ -560,7 +575,7 @@ export function e2eRoutes(
 			}),
 		)
 		.get(
-			"/api/e2e/provision/pending",
+			`${basePath}/provision/pending`,
 			guards.guardedGet(async (_request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				return await withUserContext(pool, session.user.id, async (client) => ({
@@ -569,7 +584,7 @@ export function e2eRoutes(
 			}),
 		)
 		.post(
-			"/api/e2e/provision",
+			`${basePath}/provision`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 
@@ -598,7 +613,7 @@ export function e2eRoutes(
 			}),
 		)
 		.get(
-			"/api/e2e/keys/mine",
+			`${basePath}/keys/mine`,
 			guards.guardedGet(async (_request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				return await withUserContext(pool, session.user.id, async (client) => ({
@@ -607,7 +622,7 @@ export function e2eRoutes(
 			}),
 		)
 		.get(
-			"/api/e2e/grants/pending",
+			`${basePath}/grants/pending`,
 			guards.guardedGet(async (_request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				return await withUserContext(pool, session.user.id, async (client) => ({
@@ -616,7 +631,7 @@ export function e2eRoutes(
 			}),
 		)
 		.post(
-			"/api/e2e/grants/request",
+			`${basePath}/grants/request`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				let parsed: z.infer<typeof requestGrantBody>;
@@ -649,7 +664,7 @@ export function e2eRoutes(
 			}),
 		)
 		.get(
-			"/api/e2e/grants/mine",
+			`${basePath}/grants/mine`,
 			guards.guardedGet(async (_request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				return await withUserContext(pool, session.user.id, async (client) => ({
@@ -658,7 +673,7 @@ export function e2eRoutes(
 			}),
 		)
 		.post(
-			"/api/e2e/grants",
+			`${basePath}/grants`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 
@@ -682,7 +697,7 @@ export function e2eRoutes(
 			}),
 		)
 		.post(
-			"/api/e2e/grants/fail",
+			`${basePath}/grants/fail`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 

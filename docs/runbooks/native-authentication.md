@@ -101,3 +101,24 @@ credential storage; only the profile fields above may reach JavaScript.
 The complete applications are still unfinished. These endpoints are server
 source and focused integration tests only; they do not deliver the native
 shell, its startup flow, or credential storage.
+
+## Native encryption operations
+
+`/api/native/e2e` exposes the existing identity, workspace-key provisioning,
+key-grant, rewrap, recovery, and rotation operations under native device-session
+authentication. The suffixes and payloads match the browser `/api/e2e` API.
+Permission checks, user-context RLS, live-user write locks, and the deployment's
+encryption flag use the same handlers. Browser paths retain cookie and origin
+guards; a native bearer cannot authenticate there.
+
+A Cookie or Origin header of any value is refused before native admission.
+Requests are rate limited and must carry a live native session. Only its verified
+user id reaches the encryption handlers. Native responses carry
+`Cache-Control: no-store`, set no cookie, and unexpected failures expose no
+internal details. Parameterized workspace routes share a fixed rate-limit
+identity, including their trailing-slash forms.
+
+The native bridge must select named encryption operations and keep session
+credentials in native storage. These routes do not authorize an arbitrary
+authenticated URL fetch or embedded remote pages. Native attachments and
+application integration remain unfinished.

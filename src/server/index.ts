@@ -53,6 +53,7 @@ import { e2eRoutes } from "./e2e/routes.ts";
 import { makeGuards } from "./guards.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
 import { sendInviteMail } from "./mail/invite-mail.ts";
+import { nativeE2ERoutes } from "./native-auth/e2e-routes.ts";
 import { nativeAuthRoutes } from "./native-auth/routes.ts";
 import { ackBaseUrl, takeRateToken } from "./notifications/capability.ts";
 import {
@@ -100,6 +101,26 @@ const attachmentStore = await createAttachmentBlobStore(attachmentConfig);
 const nativeTrustedProxies = trustedProxyCIDRsFromEnv(
 	process.env.DITERO_TRUSTED_PROXIES,
 );
+
+// One bucket policy for every native route, keyed path/client.
+function nativeRateLimit(request: Request, peerAddress?: string) {
+	const key = resolveClientRateKey({
+		peerAddress,
+		forwardedFor: request.headers.get("x-forwarded-for"),
+		trustedProxies: nativeTrustedProxies,
+	});
+	const route = new URL(request.url).pathname
+		.replace(/\/$/, "")
+		.replace(
+			/^\/api\/native\/e2e\/members\/[^/]+\/keys$/,
+			"/api/native/e2e/members/:workspaceId/keys",
+		)
+		.replace(
+			/^\/api\/native\/e2e\/workspaces\/[^/]+\/rotate$/,
+			"/api/native/e2e/workspaces/:workspaceId/rotate",
+		);
+	return takeRateToken(db, `native:${route}:${key}`, 12, 0.2);
+}
 
 // Shared JSON-body + ChannelError shape for the three channel writes. The body
 // is the error's stable CODE, never its prose: the prose named deployment env
@@ -151,21 +172,10 @@ const routes = new Elysia()
 					await context.internalAdapter.deleteSession(token);
 				},
 			},
-			rateLimit(request, peerAddress) {
-				const key = resolveClientRateKey({
-					peerAddress,
-					forwardedFor: request.headers.get("x-forwarded-for"),
-					trustedProxies: nativeTrustedProxies,
-				});
-				return takeRateToken(
-					db,
-					`native:${new URL(request.url).pathname}:${key}`,
-					12,
-					0.2,
-				);
-			},
+			rateLimit: nativeRateLimit,
 		}),
 	)
+	.use(nativeE2ERoutes({ pool, database: db, rateLimit: nativeRateLimit }))
 	.use(portabilityRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	.use(importPlanRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	// Public capability ack, mounted AHEAD of the global CORS plugin: the button
@@ -185,7 +195,7 @@ const routes = new Elysia()
 	.use(slackInteractionRoutes(db))
 	// Authenticated E2E key endpoints. Mounted unconditionally; each handler
 	// checks DITERO_E2E_ENABLED per request and answers 404 when it is off.
-	.use(e2eRoutes(pool, db, { guardedPost, guardedGet, foreignOrigin }))
+	.use(e2eRoutes(pool, db, { guardedPost, guardedGet }, "/api/e2e"))
 	.use(e2eInviteRoutes(pool, db, { guardedPost, guardedGet, foreignOrigin }))
 	.use(
 		attachmentRoutes(
