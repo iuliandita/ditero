@@ -46,6 +46,11 @@ permission, a missing distributor, an unavailable server provider, failed
 registration, and pending cleanup have separate states. Only a confirmed server
 registration is active.
 
+Open Settings, then Notifications, and use "Enable phone notifications" under
+"On this phone". "Allow notifications" opens Android's permission prompt;
+"Refresh status" checks enrollment, and "Turn off" retires this phone's
+subscription. These controls are available only in the Android app.
+
 Reception runs in a native service without an Activity or WebView. A durable random
 subscription instance binds callbacks to an encrypted snapshot of the selected
 server, account, native session, and device. Session expiry uses the native session
@@ -68,7 +73,7 @@ the permission dialog.
 Only successfully decrypted, bounded payloads with exactly `version: "1"`,
 `notificationId`, and `registrationId` are accepted. The registration must match
 the current native owner; recent notification IDs are deduplicated durably.
-Notifications contain a generic private reminder, with an immutable explicit app
+Notifications contain a generic private notice, with an immutable explicit app
 launch intent. Tapping currently opens the app shell. Notification lookup,
 authorization, and task navigation remain unimplemented; no received URL is opened.
 
