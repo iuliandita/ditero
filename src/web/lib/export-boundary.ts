@@ -40,18 +40,21 @@ function browserStorage(): Storage | undefined {
 // This journal records uncertainty only. It never inspects or clears Zero's queue.
 export function createExportBoundary({
 	userID,
+	storageScope = userID,
 	clientID,
 	storage = browserStorage(),
 	isConnected,
 	generation = randomId(),
 }: {
 	userID: string;
+	// Native runtimes scope the journal like Zero's storageKey; the browser omits it.
+	storageScope?: string;
 	clientID: string;
 	storage?: Storage;
 	isConnected: () => boolean;
 	generation?: string;
 }) {
-	const prefix = `ditero:export:v1:${encodeURIComponent(userID)}:`;
+	const prefix = `ditero:export:v1:${encodeURIComponent(storageScope)}:`;
 	const key = `${prefix}${encodeURIComponent(clientID)}:${encodeURIComponent(generation)}`;
 	let snapshot: ExportSnapshot = {
 		pending: 0,

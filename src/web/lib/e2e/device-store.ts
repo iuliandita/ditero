@@ -45,121 +45,155 @@ function request<T>(req: IDBRequest<T>): Promise<T> {
 	});
 }
 
-function openDb(): Promise<IDBDatabase> {
-	return new Promise((resolve, reject) => {
-		const req = indexedDB.open(DB_NAME, DB_VERSION);
-		req.onupgradeneeded = () => {
-			if (!req.result.objectStoreNames.contains(STORE)) {
-				req.result.createObjectStore(STORE);
-			}
-		};
-		req.onsuccess = () => resolve(req.result);
-		req.onerror = () => reject(req.error);
-	});
-}
+export function createDeviceStore(storageScope?: string) {
+	if (storageScope !== undefined && !storageScope.trim()) {
+		throw new Error("device-store: storage scope must be nonempty");
+	}
+	const dbName =
+		storageScope === undefined
+			? DB_NAME
+			: `${DB_NAME}:${encodeURIComponent(storageScope)}`;
 
-async function withStore<T>(
-	mode: IDBTransactionMode,
-	run: (store: IDBObjectStore) => Promise<T>,
-): Promise<T> {
-	const db = await openDb();
-	try {
-		const tx = db.transaction(STORE, mode);
-		const result = await run(tx.objectStore(STORE));
-		await new Promise<void>((resolve, reject) => {
-			tx.oncomplete = () => resolve();
-			tx.onerror = () => reject(tx.error);
-			tx.onabort = () => reject(tx.error);
+	function openDb(): Promise<IDBDatabase> {
+		return new Promise((resolve, reject) => {
+			const req = indexedDB.open(dbName, DB_VERSION);
+			req.onupgradeneeded = () => {
+				if (!req.result.objectStoreNames.contains(STORE)) {
+					req.result.createObjectStore(STORE);
+				}
+			};
+			req.onsuccess = () => resolve(req.result);
+			req.onerror = () => reject(req.error);
 		});
-		return result;
-	} finally {
-		db.close();
 	}
-}
 
-async function readRecord(): Promise<DeviceRecord | undefined> {
-	return await withStore("readonly", (store) =>
-		request<DeviceRecord | undefined>(store.get(RECORD_KEY)),
-	);
-}
+	async function withStore<T>(
+		mode: IDBTransactionMode,
+		run: (store: IDBObjectStore) => Promise<T>,
+	): Promise<T> {
+		const db = await openDb();
+		try {
+			const tx = db.transaction(STORE, mode);
+			const result = await run(tx.objectStore(STORE));
+			await new Promise<void>((resolve, reject) => {
+				tx.oncomplete = () => resolve();
+				tx.onerror = () => reject(tx.error);
+				tx.onabort = () => reject(tx.error);
+			});
+			return result;
+		} finally {
+			db.close();
+		}
+	}
 
-// Structured clone carries a CryptoKey without ever exposing its material, so
-// the key is stored as itself rather than as bytes.
-export async function storeWrappedPrivateKey(
-	userId: string,
-	deviceId: string,
-	privateKey: Uint8Array,
-): Promise<void> {
-	const deviceKey = await crypto.subtle.generateKey(
-		{ name: "AES-GCM", length: 256 },
-		false,
-		["encrypt", "decrypt"],
-	);
-	const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
-	const ciphertext = await crypto.subtle.encrypt(
-		{
-			name: "AES-GCM",
-			iv: bytes(nonce),
-			additionalData: bytes(aad.privateKeyDevice(userId, deviceId)),
-		},
-		deviceKey,
-		bytes(privateKey),
-	);
-	await withStore("readwrite", async (store) => {
-		store.put(
-			{ deviceKey, nonce: nonce.buffer, ciphertext } satisfies DeviceRecord,
-			RECORD_KEY,
+	async function readRecord(): Promise<DeviceRecord | undefined> {
+		return await withStore("readonly", (store) =>
+			request<DeviceRecord | undefined>(store.get(RECORD_KEY)),
 		);
-	});
-}
-
-export async function loadWrappedPrivateKey(
-	userId: string,
-	deviceId: string,
-): Promise<Uint8Array> {
-	const record = await readRecord();
-	if (!record) {
-		throw new DeviceStoreError("absent", "device-store: no key on this device");
 	}
-	try {
-		const plaintext = await crypto.subtle.decrypt(
+
+	// Structured clone carries a CryptoKey without ever exposing its material, so
+	// the key is stored as itself rather than as bytes.
+	async function storeWrappedPrivateKey(
+		userId: string,
+		deviceId: string,
+		privateKey: Uint8Array,
+	): Promise<void> {
+		const deviceKey = await crypto.subtle.generateKey(
+			{ name: "AES-GCM", length: 256 },
+			false,
+			["encrypt", "decrypt"],
+		);
+		const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
+		const ciphertext = await crypto.subtle.encrypt(
 			{
 				name: "AES-GCM",
-				iv: bytes(new Uint8Array(record.nonce)),
+				iv: bytes(nonce),
 				additionalData: bytes(aad.privateKeyDevice(userId, deviceId)),
 			},
-			record.deviceKey,
-			record.ciphertext,
+			deviceKey,
+			bytes(privateKey),
 		);
-		return new Uint8Array(plaintext);
-	} catch (error) {
-		// The ids are bound as additional data, so a mismatch surfaces here as a
-		// bare OperationError. Classified, not rethrown: the caller needs to know
-		// this record belongs to someone else rather than that AES failed.
-		throw new DeviceStoreError(
-			"cannot-open",
-			"device-store: the stored key does not open for these ids",
-			error,
-		);
+		await withStore("readwrite", async (store) => {
+			store.put(
+				{ deviceKey, nonce: nonce.buffer, ciphertext } satisfies DeviceRecord,
+				RECORD_KEY,
+			);
+		});
 	}
+
+	async function loadWrappedPrivateKey(
+		userId: string,
+		deviceId: string,
+	): Promise<Uint8Array> {
+		const record = await readRecord();
+		if (!record) {
+			throw new DeviceStoreError(
+				"absent",
+				"device-store: no key on this device",
+			);
+		}
+		try {
+			const plaintext = await crypto.subtle.decrypt(
+				{
+					name: "AES-GCM",
+					iv: bytes(new Uint8Array(record.nonce)),
+					additionalData: bytes(aad.privateKeyDevice(userId, deviceId)),
+				},
+				record.deviceKey,
+				record.ciphertext,
+			);
+			return new Uint8Array(plaintext);
+		} catch (error) {
+			// The ids are bound as additional data, so a mismatch surfaces here as a
+			// bare OperationError. Classified, not rethrown: the caller needs to know
+			// this record belongs to someone else rather than that AES failed.
+			throw new DeviceStoreError(
+				"cannot-open",
+				"device-store: the stored key does not open for these ids",
+				error,
+			);
+		}
+	}
+
+	// Logout and identity rotation clear this browser's record. This cannot erase
+	// key material already copied by same-origin code or another browser.
+	async function clearDeviceKey(): Promise<void> {
+		await withStore("readwrite", async (store) => {
+			store.delete(RECORD_KEY);
+		});
+	}
+
+	async function readDeviceKeyForTest(): Promise<CryptoKey> {
+		const record = await readRecord();
+		if (!record)
+			throw new DeviceStoreError("absent", "device-store: no record");
+		return record.deviceKey;
+	}
+
+	async function readRecordForTest(): Promise<DeviceRecord> {
+		const record = await readRecord();
+		if (!record)
+			throw new DeviceStoreError("absent", "device-store: no record");
+		return record;
+	}
+
+	return {
+		storeWrappedPrivateKey,
+		loadWrappedPrivateKey,
+		clearDeviceKey,
+		readDeviceKeyForTest,
+		readRecordForTest,
+	};
 }
 
-// Logout and identity rotation clear this browser's record. This cannot erase
-// key material already copied by same-origin code or another browser.
-export async function clearDeviceKey(): Promise<void> {
-	await withStore("readwrite", async (store) => {
-		store.delete(RECORD_KEY);
-	});
-}
+export type DeviceStore = ReturnType<typeof createDeviceStore>;
 
-export async function readDeviceKeyForTest(): Promise<CryptoKey> {
-	const record = await readRecord();
-	if (!record) throw new DeviceStoreError("absent", "device-store: no record");
-	return record.deviceKey;
-}
-
-export async function readRecordForTest(): Promise<DeviceRecord> {
-	const record = await readRecord();
-	if (!record) throw new DeviceStoreError("absent", "device-store: no record");
-	return record;
-}
+const browserStore = createDeviceStore();
+export const {
+	storeWrappedPrivateKey,
+	loadWrappedPrivateKey,
+	clearDeviceKey,
+	readDeviceKeyForTest,
+	readRecordForTest,
+} = browserStore;

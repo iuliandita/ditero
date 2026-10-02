@@ -1,0 +1,16 @@
+{
+	"name": "ditero-android",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "cd ../.. && vite build apps/android --config apps/android/vite.config.ts",
+		"sync": "cap sync android"
+	},
+	"dependencies": {
+		"@capacitor/core": "8.5.2",
+		"@capacitor/android": "8.5.2"
+	},
+	"devDependencies": {
+		"@capacitor/cli": "8.5.2"
+	}
+}

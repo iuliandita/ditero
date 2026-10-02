@@ -33,6 +33,7 @@ export type AttachmentUploadProgress = {
 export type AttachmentUploadOptions = {
 	id?: string;
 	fetcher?: E2eFetcher;
+	storageScope?: string;
 	thumbnailer?: (file: File) => Promise<Blob | null>;
 	signal?: AbortSignal;
 	onProgress?: (progress: AttachmentUploadProgress) => void;
@@ -273,7 +274,7 @@ async function uploadCiphertextFromPrivateFile(
 			await writable.abort().catch(() => undefined);
 			throw error;
 		}
-	});
+	}, options.storageScope);
 }
 
 export async function uploadAttachment(

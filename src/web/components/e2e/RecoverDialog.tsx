@@ -45,7 +45,7 @@ export function RecoverDialog({
 	onDismissable: (dismissable: boolean) => void;
 	onDone: () => void;
 }) {
-	const { adoptPrivateKey, identity } = useKeyring();
+	const { adoptPrivateKey, identity, runtime } = useKeyring();
 	const [pane, setPane] = useState<Pane>("code");
 	const [code, setCode] = useState("");
 	const [codeError, setCodeError] = useState<string | null>(null);
@@ -86,7 +86,7 @@ export function RecoverDialog({
 			// Checksum first, so a mistyped character fails in milliseconds
 			// instead of paying the Argon2 derivation to say the same thing.
 			const canonical = await normaliseRecoveryCode(code);
-			const recoveryIdentity = await fetchRecoveryIdentity();
+			const recoveryIdentity = await fetchRecoveryIdentity(runtime.fetcher);
 			setPrivateKey(
 				await openRecoveryWrap({
 					userId,
@@ -136,27 +136,30 @@ export function RecoverDialog({
 			if (!identity?.passphraseWrapped || !previousRecovery) {
 				throw new RewrapError("failed", "recover: identity is incomplete");
 			}
-			await postRewrap({
-				passphrase: await buildReplacement({
-					userId,
-					privateKey,
-					secret: passphrase,
-					purpose: "passphrase",
-					version,
-					previousWrapped: identity.passphraseWrapped,
-					derive: deriver.derive,
-				}),
-				recovery: await buildReplacement({
-					userId,
-					privateKey,
-					secret: recovery.canonical,
-					purpose: "recovery",
-					version,
-					previousWrapped: previousRecovery,
-					derive: deriver.derive,
-				}),
-				formatVersion: version,
-			});
+			await postRewrap(
+				{
+					passphrase: await buildReplacement({
+						userId,
+						privateKey,
+						secret: passphrase,
+						purpose: "passphrase",
+						version,
+						previousWrapped: identity.passphraseWrapped,
+						derive: deriver.derive,
+					}),
+					recovery: await buildReplacement({
+						userId,
+						privateKey,
+						secret: recovery.canonical,
+						purpose: "recovery",
+						version,
+						previousWrapped: previousRecovery,
+						derive: deriver.derive,
+					}),
+					formatVersion: version,
+				},
+				runtime.fetcher,
+			);
 			setIssued({ display: recovery.display, canonical: recovery.canonical });
 			setPane("display");
 		} catch (error) {

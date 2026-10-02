@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { checkShapeFor, checkToneFor } from "@/lib/check-shape";
+import { useAccountStorageScope } from "@/lib/native-account";
 import { recordRecent } from "@/lib/recents";
 import {
 	type MutationFailure,
@@ -196,6 +197,7 @@ export function TaskDetail({
 	allLabels: Label[];
 	taskLabelIds: string[];
 }) {
+	const storageScope = useAccountStorageScope();
 	const docked = useMediaQuery(DOCKED_QUERY);
 	const zero = useZero<typeof schema>();
 	const [workspaces] = useQuery(queries.workspaces.mine());
@@ -317,8 +319,8 @@ export function TaskDetail({
 	const shownId = open && task ? task.id : null;
 
 	useEffect(() => {
-		if (shownId) recordRecent(zero.userID, { kind: "task", id: shownId });
-	}, [shownId, zero.userID]);
+		if (shownId) recordRecent(storageScope, { kind: "task", id: shownId });
+	}, [shownId, storageScope]);
 
 	// Docked is non-modal, so focus is managed by hand: into the panel on open
 	// and on every swap, back to the row that opened it on close.

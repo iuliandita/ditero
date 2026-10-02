@@ -2273,5 +2273,17 @@
 	"native_authorize_reload": "إعادة التحميل",
 	"native_authorize_error_title": "تعذّر التحقق من الطلب",
 	"native_authorize_error_body": "لم يستجب الخادم كما هو متوقع. تحقق من اتصالك وحاول مرة أخرى.",
-	"native_authorize_retry": "إعادة المحاولة"
+	"native_authorize_retry": "إعادة المحاولة",
+	"native_connect_title": "الاتصال بـ Ditero",
+	"native_connect_intro": "أدخل عنوان HTTPS لخادم Ditero الخاص بك.",
+	"native_connect_action": "اتصال",
+	"native_browser_signin": "تسجيل الدخول في المتصفح",
+	"native_finish_signin": "إكمال تسجيل الدخول",
+	"native_approval_intro": "وافق على الطلب في المتصفح، ثم عد إلى هنا.",
+	"native_connect_failed": "تعذر الاتصال. تحقق من عنوان الخادم والاتصال.",
+	"native_change_server": "تغيير الخادم",
+	"native_approval_pending": "لا يزال الطلب ينتظر الموافقة.",
+	"native_signin_failed": "تعذر إكمال تسجيل الدخول. حاول مرة أخرى.",
+	"native_settings_browser_note": "أدر هذه الإعدادات في المتصفح على الخادم الذي اخترته. قد تحتاج إلى تسجيل الدخول هناك.",
+	"native_settings_open_browser": "فتح في المتصفح"
 }

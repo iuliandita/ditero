@@ -2135,5 +2135,17 @@
 	"native_authorize_reload": "Recharger",
 	"native_authorize_error_title": "Impossible de vérifier la demande",
 	"native_authorize_error_body": "Le serveur n’a pas répondu comme prévu. Vérifie ta connexion et réessaie.",
-	"native_authorize_retry": "Réessayer"
+	"native_authorize_retry": "Réessayer",
+	"native_connect_title": "Se connecter à Ditero",
+	"native_connect_intro": "Saisis l’adresse HTTPS de ton serveur Ditero.",
+	"native_connect_action": "Se connecter",
+	"native_browser_signin": "Se connecter dans le navigateur",
+	"native_finish_signin": "Terminer la connexion",
+	"native_approval_intro": "Approuve la demande dans ton navigateur, puis reviens ici.",
+	"native_connect_failed": "Connexion impossible. Vérifie l’adresse du serveur et la connexion.",
+	"native_change_server": "Changer de serveur",
+	"native_approval_pending": "La demande attend encore une approbation.",
+	"native_signin_failed": "Impossible de terminer la connexion. Réessaie.",
+	"native_settings_browser_note": "Gère ces réglages dans ton navigateur sur le serveur choisi. Tu devras peut-être t’y connecter.",
+	"native_settings_open_browser": "Ouvrir dans le navigateur"
 }

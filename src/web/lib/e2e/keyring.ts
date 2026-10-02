@@ -38,6 +38,7 @@ export class KeyringError extends Error {
 }
 
 export type KeyringOptions = {
+	clearDeviceStore?: () => Promise<void>;
 	// Injected so the max-age transition is testable. Nothing in this module
 	// reads Date.now() directly: a module-scope clock cannot be pinned, and an
 	// unpinnable expiry is an untestable one.
@@ -82,6 +83,7 @@ const defaultDerive = (secret: string, salt: Uint8Array, version: number) =>
 
 export function createKeyring(options: KeyringOptions): Keyring {
 	const derive = options.derive ?? defaultDerive;
+	const clearStore = options.clearDeviceStore ?? clearDeviceKey;
 
 	let identity: EnrolledIdentity | null = null;
 	let privateKey: Uint8Array | null = null;
@@ -158,7 +160,7 @@ export function createKeyring(options: KeyringOptions): Keyring {
 		async clear() {
 			identity = null;
 			forget();
-			await clearDeviceKey();
+			await clearStore();
 		},
 		privateKey() {
 			const current = state();

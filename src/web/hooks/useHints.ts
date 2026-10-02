@@ -1,4 +1,3 @@
-import { useZero } from "@rocicorp/zero/react";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import {
 	createHintStore,
@@ -6,6 +5,7 @@ import {
 	markShortcutsSeen,
 	recordSyntaxUse,
 } from "../lib/hints.ts";
+import { useAccountStorageScope } from "../lib/native-account.tsx";
 
 const store = createHintStore(() => {
 	try {
@@ -16,20 +16,22 @@ const store = createHintStore(() => {
 });
 
 export function useHints() {
-	const userId = useZero().userID ?? "";
-	const hints = useSyncExternalStore(store.subscribe, () => store.get(userId));
+	const storageScope = useAccountStorageScope();
+	const hints = useSyncExternalStore(store.subscribe, () =>
+		store.get(storageScope),
+	);
 	const recordUse = useCallback(
 		(tokenCount: number) =>
-			store.update(userId, (h) => recordSyntaxUse(h, tokenCount)),
-		[userId],
+			store.update(storageScope, (h) => recordSyntaxUse(h, tokenCount)),
+		[storageScope],
 	);
 	const dismissSyntax = useCallback(
-		() => store.update(userId, dismissSyntaxHint),
-		[userId],
+		() => store.update(storageScope, dismissSyntaxHint),
+		[storageScope],
 	);
 	const shortcutsSeen = useCallback(
-		() => store.update(userId, markShortcutsSeen),
-		[userId],
+		() => store.update(storageScope, markShortcutsSeen),
+		[storageScope],
 	);
 	return useMemo(
 		() => ({ hints, recordUse, dismissSyntax, shortcutsSeen }),

@@ -2135,5 +2135,17 @@
 	"native_authorize_reload": "Reîncarcă",
 	"native_authorize_error_title": "Cererea nu a putut fi verificată",
 	"native_authorize_error_body": "Serverul nu a răspuns cum se aștepta. Verifică conexiunea și încearcă din nou.",
-	"native_authorize_retry": "Încearcă din nou"
+	"native_authorize_retry": "Încearcă din nou",
+	"native_connect_title": "Conectează-te la Ditero",
+	"native_connect_intro": "Introdu adresa HTTPS a serverului tău Ditero.",
+	"native_connect_action": "Conectare",
+	"native_browser_signin": "Autentifică-te în browser",
+	"native_finish_signin": "Finalizează autentificarea",
+	"native_approval_intro": "Aprobă cererea în browser, apoi revino aici.",
+	"native_connect_failed": "Conectarea nu a reușit. Verifică adresa serverului și conexiunea.",
+	"native_change_server": "Schimbă serverul",
+	"native_approval_pending": "Cererea încă așteaptă aprobarea.",
+	"native_signin_failed": "Autentificarea nu a putut fi finalizată. Încearcă din nou.",
+	"native_settings_browser_note": "Gestionează aceste setări în browser, pe serverul ales. Este posibil să fie nevoie să te autentifici acolo.",
+	"native_settings_open_browser": "Deschide în browser"
 }

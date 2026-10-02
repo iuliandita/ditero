@@ -2089,5 +2089,17 @@
 	"native_authorize_reload": "Reload",
 	"native_authorize_error_title": "Could not check the request",
 	"native_authorize_error_body": "The server did not respond as expected. Check your connection and try again.",
-	"native_authorize_retry": "Try again"
+	"native_authorize_retry": "Try again",
+	"native_connect_title": "Connect to Ditero",
+	"native_connect_intro": "Enter the HTTPS address of your Ditero server.",
+	"native_connect_action": "Connect",
+	"native_browser_signin": "Sign in in your browser",
+	"native_finish_signin": "Finish signing in",
+	"native_approval_intro": "Approve the request in your browser, then return here.",
+	"native_connect_failed": "Could not connect. Check the server address and connection.",
+	"native_change_server": "Change server",
+	"native_approval_pending": "The request is still waiting for approval.",
+	"native_signin_failed": "Could not finish signing in. Try again.",
+	"native_settings_browser_note": "Manage these settings in your browser on your selected server. You may need to sign in there.",
+	"native_settings_open_browser": "Open in browser"
 }
