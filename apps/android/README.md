@@ -75,12 +75,34 @@ checks and retains the APK for seven days. It does not run an emulator or valida
 HTTPS consent, Keystore persistence, authenticated sync, or encryption on a device.
 Those runtime checks remain part of #346.
 
+## Signed release APK and app bundle
+
+Release packaging requires a supplied keystore. Set these environment variables
+through a secret manager or protected CI environment:
+
+- `DITERO_ANDROID_KEYSTORE_PATH`: path to the private keystore file.
+- `DITERO_ANDROID_KEYSTORE_PASSWORD`: keystore password.
+- `DITERO_ANDROID_KEY_ALIAS`: signing key alias.
+- `DITERO_ANDROID_KEY_PASSWORD`: signing key password.
+
+After building and syncing the bundled UI, run `./gradlew --no-daemon
+assembleRelease bundleRelease` from `apps/android/android`. The APK and AAB are
+under `app/build/outputs/apk/release/` and `app/build/outputs/bundle/release/`.
+Missing or incomplete signing configuration fails release packaging. Debug builds
+continue to use the development signing key. Keep the production keystore and
+passwords outside the repository; keystore files are ignored.
+
+Choose and back up the distribution signing identity before publishing. A debug
+installation cannot be upgraded with an APK signed by a different key. These hooks
+do not provision a production identity, publish to Google Play, or establish store
+qualification.
+
 ## Remaining work
 
 - Broader encrypted-file qualification on physical devices and document providers.
 - Full offline recovery and account/server transition qualification on devices.
 - Native notification permission, background delivery, and push integration.
-- Release signing, packaging, and store distribution.
+- Release signing identity, distribution pipelines, and store distribution.
 - Native deep links, update delivery, and complete application qualification.
 
 Some shared browser-only account settings and integrations still need explicit
