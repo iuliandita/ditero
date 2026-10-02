@@ -5,7 +5,7 @@ import { e2eEnabled } from "../../config/e2e.ts";
 import { withUserContext } from "../../db/user-context.ts";
 import { storageKeyFor } from "../../domain/attachment.ts";
 import { e2eBlobSchema } from "../e2e/input.ts";
-import type { Guards } from "../guards.ts";
+import type { BodyResult } from "../native-auth/contracts.ts";
 import type { BlobStore } from "../storage/blob-store.ts";
 import {
 	type AttachmentAccessFailure,
@@ -16,7 +16,23 @@ import {
 } from "./quota.ts";
 import { type AttachmentState, assertAttachmentTransition } from "./state.ts";
 
+export type AttachmentPrincipal = { user: { id: string } };
+
+type AttachmentHandler = (
+	request: Request,
+	principal: AttachmentPrincipal,
+) => Promise<unknown>;
+export type AttachmentGuards = {
+	guardedGet: (
+		handler: AttachmentHandler,
+	) => (context: { request: Request }) => Promise<unknown>;
+	guardedPost: (
+		handler: AttachmentHandler,
+	) => (context: { request: Request }) => Promise<unknown>;
+};
+
 export type AttachmentRouteOptions = {
+	readJson?: (request: Request) => Promise<BodyResult>;
 	quotaBytes?: number;
 	maxFileBytes?: number;
 	reservationTtlMs?: number;
@@ -100,8 +116,9 @@ function errorForInvalidation(failure: AttachmentAccessFailure): Response {
 function attachmentIdFromPath(
 	request: Request,
 	action: "upload" | "download" | "thumbnail",
+	prefix: "/api/attachments" | "/api/native/attachments",
 ): string | null {
-	const match = new RegExp(`^/api/attachments/([^/]+)/${action}$`).exec(
+	const match = new RegExp(`^${prefix}/([^/]+)/${action}$`).exec(
 		new URL(request.url).pathname,
 	);
 	if (!match) return null;
@@ -142,8 +159,14 @@ function responseBody(
 async function parseJson<T>(
 	request: Request,
 	schema: z.ZodType<T>,
-): Promise<T | null> {
+	reader?: AttachmentRouteOptions["readJson"],
+): Promise<T | null | Response> {
 	try {
+		if (reader) {
+			const body = await reader(request);
+			if (!body.ok) return new Response("Bad Request", { status: body.status });
+			return schema.parse(body.value);
+		}
 		return schema.parse(await request.json());
 	} catch {
 		return null;
@@ -409,9 +432,10 @@ async function downloadResponse(
 
 export function attachmentRoutes(
 	pool: Pool,
-	guards: Guards,
+	guards: AttachmentGuards,
 	store: BlobStore,
 	options: AttachmentRouteOptions = {},
+	prefix: "/api/attachments" | "/api/native/attachments" = "/api/attachments",
 ) {
 	const quotaBytes = options.quotaBytes ?? DEFAULT_QUOTA_BYTES;
 	const maxFileBytes = options.maxFileBytes ?? quotaBytes;
@@ -438,17 +462,22 @@ export function attachmentRoutes(
 
 	return new Elysia()
 		.get(
-			"/api/attachments/config",
+			`${prefix}/config`,
 			guards.guardedGet(async () => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
 				return { maxFileBytes };
 			}),
 		)
 		.post(
-			"/api/attachments/reserve",
+			`${prefix}/reserve`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
-				const body = await parseJson(request, reserveBody);
+				const body = await parseJson(
+					request,
+					options.readJson ? reserveBody.strict() : reserveBody,
+					options.readJson,
+				);
+				if (body instanceof Response) return body;
 				if (!body) return new Response("Bad Request", { status: 400 });
 				return await withUserContext(pool, session.user.id, async (client) => {
 					const context: AttachmentContext = body;
@@ -527,12 +556,13 @@ export function attachmentRoutes(
 					};
 				});
 			}),
+			options.readJson ? { parse: "none" } : {},
 		)
 		.post(
-			"/api/attachments/:id/upload",
+			`${prefix}/:id/upload`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
-				const id = attachmentIdFromPath(request, "upload");
+				const id = attachmentIdFromPath(request, "upload", prefix);
 				if (!id) return new Response("Bad Request", { status: 400 });
 				try {
 					const result = await withUserContext(
@@ -596,10 +626,10 @@ export function attachmentRoutes(
 			{ parse: "none" },
 		)
 		.post(
-			"/api/attachments/:id/thumbnail",
+			`${prefix}/:id/thumbnail`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
-				const id = attachmentIdFromPath(request, "thumbnail");
+				const id = attachmentIdFromPath(request, "thumbnail", prefix);
 				if (!id) return new Response("Bad Request", { status: 400 });
 				try {
 					const result = await withUserContext(
@@ -661,10 +691,15 @@ export function attachmentRoutes(
 			{ parse: "none" },
 		)
 		.post(
-			"/api/attachments/finalize",
+			`${prefix}/finalize`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
-				const body = await parseJson(request, finalizeBody);
+				const body = await parseJson(
+					request,
+					options.readJson ? finalizeBody.strict() : finalizeBody,
+					options.readJson,
+				);
+				if (body instanceof Response) return body;
 				if (!body) return new Response("Bad Request", { status: 400 });
 				const result = await withUserContext(
 					pool,
@@ -756,12 +791,18 @@ export function attachmentRoutes(
 				);
 				return await cleanupAndReturn(store, result);
 			}),
+			options.readJson ? { parse: "none" } : {},
 		)
 		.post(
-			"/api/attachments/abort",
+			`${prefix}/abort`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
-				const body = await parseJson(request, finalizeBody);
+				const body = await parseJson(
+					request,
+					options.readJson ? finalizeBody.strict() : finalizeBody,
+					options.readJson,
+				);
+				if (body instanceof Response) return body;
 				if (!body) return new Response("Bad Request", { status: 400 });
 				const result = await withUserContext(
 					pool,
@@ -791,12 +832,18 @@ export function attachmentRoutes(
 				);
 				return await cleanupAndReturn(store, result);
 			}),
+			options.readJson ? { parse: "none" } : {},
 		)
 		.post(
-			"/api/attachments/delete",
+			`${prefix}/delete`,
 			guards.guardedPost(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
-				const body = await parseJson(request, finalizeBody);
+				const body = await parseJson(
+					request,
+					options.readJson ? finalizeBody.strict() : finalizeBody,
+					options.readJson,
+				);
+				if (body instanceof Response) return body;
 				if (!body) return new Response("Bad Request", { status: 400 });
 				return await withUserContext(pool, session.user.id, async (client) => {
 					const row = await attachmentForUpdate(client, body.id);
@@ -824,12 +871,13 @@ export function attachmentRoutes(
 					return result;
 				});
 			}),
+			options.readJson ? { parse: "none" } : {},
 		)
 		.get(
-			"/api/attachments/:id/download",
+			`${prefix}/:id/download`,
 			guards.guardedGet(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
-				const id = attachmentIdFromPath(request, "download");
+				const id = attachmentIdFromPath(request, "download", prefix);
 				if (!id) return new Response("Bad Request", { status: 400 });
 				return await downloadResponse(
 					pool,
@@ -841,10 +889,10 @@ export function attachmentRoutes(
 			}),
 		)
 		.get(
-			"/api/attachments/:id/thumbnail",
+			`${prefix}/:id/thumbnail`,
 			guards.guardedGet(async (request, session) => {
 				if (!e2eEnabled()) return new Response("Not Found", { status: 404 });
-				const id = attachmentIdFromPath(request, "thumbnail");
+				const id = attachmentIdFromPath(request, "thumbnail", prefix);
 				if (!id) return new Response("Bad Request", { status: 400 });
 				return await downloadResponse(
 					pool,

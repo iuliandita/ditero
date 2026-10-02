@@ -440,6 +440,73 @@ pub fn e2e(v: &Value) -> Result<(bool, String, Option<String>)> {
     };
     Ok((post, format!("/api/native/e2e{path}"), body))
 }
+pub fn attachment(v: &Value) -> Result<(bool, String, Option<String>)> {
+    let op = string(v, "op")?;
+    let (post, action, required, optional): (bool, &str, &[&str], &[&str]) = match op {
+        "attachment.config" => (false, "config", &[], &[]),
+        "attachment.reserve" => (
+            true,
+            "reserve",
+            &[
+                "id",
+                "workspaceId",
+                "parentKind",
+                "parentId",
+                "keyVersion",
+                "filenameCiphertext",
+                "contentTypeCiphertext",
+                "dekWrapped",
+                "declaredBytes",
+            ],
+            &["thumbnailDeclaredBytes"],
+        ),
+        "attachment.finalize" => (true, "finalize", &["id"], &[]),
+        "attachment.abort" => (true, "abort", &["id"], &[]),
+        "attachment.delete" => (true, "delete", &["id"], &[]),
+        _ => return Err("unknown-op"),
+    };
+    let body = v
+        .get("body")
+        .and_then(Value::as_object)
+        .ok_or("invalid-body")?;
+    if required.iter().any(|k| !body.contains_key(*k))
+        || body
+            .keys()
+            .any(|k| !required.contains(&k.as_str()) && !optional.contains(&k.as_str()))
+    {
+        return Err("invalid-body");
+    }
+    for key in ["id", "workspaceId", "parentId"] {
+        if let Some(value) = body.get(key) {
+            let id = value.as_str().ok_or("invalid-id")?;
+            if id.is_empty()
+                || id.len() > 128
+                || !id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"_-".contains(&b))
+            {
+                return Err("invalid-id");
+            }
+        }
+    }
+    let raw = Value::Object(body.clone()).to_string();
+    Ok((
+        post,
+        format!("/api/native/attachments/{action}"),
+        post.then_some(raw),
+    ))
+}
+pub fn file_operation(op: &str) -> bool {
+    op.starts_with("attachment.")
+        || op.starts_with("upload.")
+        || op.starts_with("download.")
+        || op.starts_with("stage.")
+        || op.starts_with("save.")
+}
+pub fn file_chunk(op: &str) -> bool {
+    matches!(op, "upload.write" | "stage.write" | "save.write")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -515,5 +582,25 @@ mod tests {
             scope("https://a.example", "u1"),
             scope("https://b.example", "u1")
         );
+    }
+    #[test]
+    fn attachment_controls_have_closed_fields_and_fixed_native_paths() {
+        assert_eq!(
+            attachment(&json!({"op":"attachment.config","body":{}})).unwrap(),
+            (false, "/api/native/attachments/config".into(), None)
+        );
+        let value =
+            attachment(&json!({"op":"attachment.finalize","body":{"id":"safe-1"}})).unwrap();
+        assert_eq!(value.1, "/api/native/attachments/finalize");
+        for body in [
+            json!({"id":"../secret"}),
+            json!({"id":"safe","url":"https://other.example"}),
+            json!({"id":"safe","authorization":"secret"}),
+        ] {
+            assert!(attachment(&json!({"op":"attachment.finalize","body":body})).is_err());
+        }
+        assert!(!file_chunk("attachment.reserve"));
+        assert!(file_chunk("upload.write"));
+        assert!(file_operation("save.cancelPending"));
     }
 }

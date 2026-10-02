@@ -13,9 +13,10 @@ tauri = { version = "=2.12.1", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 reqwest = { version = "=0.13.5", default-features = false, features = ["native-tls", "json", "stream"] }
-tokio = { version = "1", features = ["sync", "time", "macros"] }
+tokio = { version = "1", features = ["sync", "time", "macros", "fs", "io-util"] }
 tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "native-tls"] }
 futures-util = { version = "0.3", features = ["sink"] }
+tokio-util = { version = "0.7", features = ["io"] }
 keyring-core = "=1.0.0"
 base64 = "0.22"
 sha2 = "0.10"
@@ -29,3 +30,6 @@ zbus-secret-service-keyring-store = { version = "=1.0.1", features = ["crypto-ru
 apple-native-keyring-store = { version = "=1.0.2", features = ["keychain"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-native-keyring-store = "=1.1.0"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rfd = { version = "=0.16.0", default-features = false, features = ["xdg-portal", "async-std", "wayland"] }

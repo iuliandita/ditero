@@ -1,6 +1,7 @@
 package io.ditero.app;
 
 import android.os.Bundle;
+import android.content.Intent;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -23,6 +24,12 @@ public class MainActivity extends BridgeActivity {
         // is parked on about:blank and no native transport is attached.
         // Dedicated message listener only; null means registration failed closed.
         zeroTransport = NativeShellPolicy.install(this) ? NativeZeroTransport.attach(this) : null;
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (zeroTransport != null && zeroTransport.activityResult(requestCode,resultCode,data)) return;
+        super.onActivityResult(requestCode,resultCode,data);
     }
 
     @Override

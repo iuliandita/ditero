@@ -181,7 +181,7 @@ ordering constraints between them, are documented in [.env.example](.env.example
 
 ### Encrypted attachments
 
-Files attached to tasks, comments, and lists are encrypted in the browser before upload.
+Files attached to tasks, comments, and lists are encrypted on the client before upload.
 The server stores and proxies only ciphertext, including encrypted filenames, declared media
 types, and thumbnails. It can still see the parent record, uploader, byte counts, lifecycle
 state, and storage location because authorization, quota enforcement, and garbage collection
@@ -194,6 +194,27 @@ and the server cannot scan encrypted files for malware. Read the
 [storage and backup runbook](docs/runbooks/attachment-storage.md), and
 [key-loss runbook](docs/runbooks/e2e-key-loss.md) before enabling attachments for data that has
 no other copy. All attachment configuration is documented in [.env.example](.env.example).
+
+### Browser installation and native development apps
+
+Production browser builds include a PWA manifest and a bounded offline public
+app shell. The qualified build caches 17 static public files, with no API, auth,
+Zero, or private user responses. Offline shell loading does not replace session
+checks; private synced records remain in Zero's separate local storage. Updates
+show a notice and reload only on user choice, after durable local sync retirement.
+HTTPS and browser-secure loopback origins are supported. Browser qualification
+covered installability, offline shell recovery, and manual update; it did not
+perform an OS installation or test a signed-in queued Zero edit during update.
+
+The [Android](apps/android/README.md) and [desktop](apps/desktop/README.md)
+development apps support native browser-consent sign-in, scoped local storage,
+and encrypted attachment upload, download/save, delete, and in-app image preview.
+Encrypted files require `DITERO_E2E_ENABLED` on the server and account key enrollment.
+Native credentials stay outside JavaScript; file transfers use named native HTTPS
+operations and system save pickers, with complete integrity verification before
+plaintext save writes. Bounded Android and Linux desktop file journeys have passed.
+Native OS notifications, deep links, updater delivery, release distribution, and
+broader platform qualification remain unfinished.
 
 ### Planned distribution
 

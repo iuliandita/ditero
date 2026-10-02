@@ -19,7 +19,22 @@ verified native session evidence remains unexpired. That evidence is encrypted
 with the session and bound to the selected server, account, and session. Only
 network failures permit this fallback; invalid credentials, trust failures,
 expired evidence, and failed revocation storage stay unavailable. Offline task
-editing after a cold start still needs the readiness fix tracked in #465.
+editing and account/server transitions still require broader device qualification.
+
+## Encrypted files
+
+Enable `DITERO_E2E_ENABLED` on the server and enroll the account's encryption keys
+before using attachments. Upload, download, delete, and in-app image previews use
+the shared encrypted-file interface. The native host streams bounded chunks over
+HTTPS through named attachment operations. Credentials stay native, and each
+transfer captures its server, account, session, and page owner; cancellation or
+ownership changes stop the transfer.
+
+Saving opens Android's system document chooser. The client verifies the complete
+encrypted stream before writing plaintext to the selected document. A bounded
+emulator check uploaded a file and saved it through the Storage Access Framework;
+the saved 216-byte file matched the original. This does not qualify all document
+providers, file sizes, interruption paths, or physical devices.
 
 ## Build a debug APK
 
@@ -62,11 +77,11 @@ Those runtime checks remain part of #346.
 
 ## Remaining work
 
-- Native file upload and download integration and device qualification.
+- Broader encrypted-file qualification on physical devices and document providers.
 - Full offline recovery and account/server transition qualification on devices.
 - Native notification permission, background delivery, and push integration.
 - Release signing, packaging, and store distribution.
-- The separate desktop application runtime and delivery checks.
+- Native deep links, update delivery, and complete application qualification.
 
 Some shared browser-only account settings and integrations still need explicit
 native support. Keep unsupported operations unavailable until their native
