@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { createLocalJWKSet } from "jose";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { auth } from "../../src/auth/auth.ts";
@@ -9,7 +10,11 @@ import {
 } from "../../src/server/native-auth/contracts.ts";
 import { nativeAuthRoutes } from "../../src/server/native-auth/routes.ts";
 import { NativeGrantStore } from "../../src/server/native-auth/store.ts";
-import { nativeZeroPayload } from "../../src/server/zero-auth.ts";
+import {
+	browserZeroPayload,
+	nativeZeroPayload,
+	zeroAuthConfig,
+} from "../../src/server/zero-auth.ts";
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
@@ -434,9 +439,137 @@ test.each([
 	const refused = expectPrivate(await profile(bearer(subject.token)), 401);
 	expect(await refused.json()).toEqual({ code: "unauthorized" });
 	expectPrivate(await bootstrap(bearer(subject.token)), 401);
+	expectPrivate(await revoke(bearer(subject.token)), 401);
 	expect(await counts(subject.id)).toEqual({
 		workspaces: 0,
 		memberships: 0,
 		scopes: 0,
 	});
+});
+
+async function revoke(headers: Record<string, string>, body?: string) {
+	return routes.handle(
+		new Request(`${origin}/api/native/session/revoke`, {
+			method: "POST",
+			headers,
+			body,
+		}),
+	);
+}
+
+test("native revocation removes only its own session and invalidates already issued Zero authority", async () => {
+	const subject = await actor("Subject");
+	const foreign = await actor("Foreign");
+	const grant = await store.create(s256Challenge(verifier), "Other device");
+	grants.push(grant.grantId);
+	expect(
+		await store.approve(grant.grantId, subject.id, subject.browser.id),
+	).toBe("approved");
+	const other = await store.exchange(grant.grantId, verifier);
+	if (other.kind !== "ok") throw new Error(`Exchange failed: ${other.kind}`);
+	const tokenFor = async (token: string) => {
+		const response = expectPrivate(
+			await routes.handle(
+				new Request(`${origin}/api/native/token`, { headers: bearer(token) }),
+			),
+			200,
+		);
+		return ((await response.json()) as { token: string }).token;
+	};
+	const issued = await tokenFor(subject.token);
+	const otherIssued = await tokenFor(other.token);
+	const browserIssued = (
+		await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: subject.id,
+					iat: Math.floor(Date.now() / 1000),
+					...browserZeroPayload({ session: subject.browser }),
+				},
+			},
+		})
+	).token;
+	const jwks = await auth.handler(new Request(`${origin}/api/auth/jwks`));
+	expect(jwks.status).toBe(200);
+	const { createZeroVerifier } = await import("../../src/server/ctx.ts");
+	const verify = createZeroVerifier({
+		pool: restricted,
+		keys: createLocalJWKSet(await jwks.json()),
+		...zeroAuthConfig(),
+	});
+	for (const token of [issued, otherIssued, browserIssued])
+		expect(await verify(`Bearer ${token}`)).toEqual({ id: subject.id });
+
+	const response = expectPrivate(await revoke(bearer(subject.token)), 200);
+	expect(await response.json()).toEqual({ revoked: true });
+	expectPrivate(await profile(bearer(subject.token)), 401);
+	expectPrivate(
+		await routes.handle(
+			new Request(`${origin}/api/native/token`, {
+				headers: bearer(subject.token),
+			}),
+		),
+		401,
+	);
+	expectPrivate(await revoke(bearer(subject.token)), 401);
+	expect(await verify(`Bearer ${issued}`)).toBeUndefined();
+	for (const token of [otherIssued, browserIssued])
+		expect(await verify(`Bearer ${token}`)).toEqual({ id: subject.id });
+	expectPrivate(await profile(bearer(other.token)), 200);
+	expectPrivate(await profile(bearer(foreign.token)), 200);
+	expect(
+		(
+			await admin.query("select id from session where id = $1", [
+				subject.sessionId,
+			])
+		).rows,
+	).toEqual([]);
+	expect(
+		(
+			await admin.query(
+				"select session_id from native_session_link where session_id = $1",
+				[subject.sessionId],
+			)
+		).rows,
+	).toEqual([]);
+	expect(
+		(
+			await admin.query("select revoked_at from user_device where id = $1", [
+				subject.deviceId,
+			])
+		).rows[0].revoked_at,
+	).toBeInstanceOf(Date);
+});
+
+test("native revocation refuses ambient credentials and malformed input without affecting live sessions", async () => {
+	const subject = await actor("Subject");
+	const foreign = await actor("Foreign");
+	const json = { ...bearer(subject.token), "content-type": "application/json" };
+	const ambientHeaders: Record<string, string>[] = [
+		{ cookie: "" },
+		{ cookie: "browser=present" },
+		{ origin: "" },
+		{ origin },
+	];
+	for (const ambient of ambientHeaders)
+		expectPrivate(await revoke({ ...bearer(subject.token), ...ambient }), 400);
+	const cases: Array<[Record<string, string>, string, number]> = [
+		[json, JSON.stringify({ sessionId: foreign.sessionId }), 400],
+		[json, JSON.stringify({ deviceId: foreign.deviceId }), 400],
+		[json, "null", 400],
+		[json, "[]", 400],
+		[json, "{", 400],
+		[json, JSON.stringify({ pad: "x".repeat(5000) }), 413],
+		[{ ...json, "content-type": "text/plain" }, "{}", 415],
+		[bearer(subject.token), "{}", 415],
+	];
+	for (const [headers, body, status] of cases)
+		expectPrivate(await revoke(headers, body), status);
+	for (const token of [subject.browser.token, "not-a-session"])
+		expectPrivate(await revoke(bearer(token)), 401);
+	expectPrivate(await profile(bearer(subject.token)), 200);
+	expectPrivate(await profile(bearer(foreign.token)), 200);
+	const response = expectPrivate(await revoke(json, "{}"), 200);
+	expect(await response.json()).toEqual({ revoked: true });
+	expectPrivate(await profile(bearer(foreign.token)), 200);
 });
