@@ -1512,8 +1512,55 @@ export const nativeSessionLink = pgTable(
 			.defaultNow()
 			.notNull(),
 	},
-	(t) => [index("native_session_link_user_idx").on(t.userId)],
+	(t) => [
+		index("native_session_link_user_idx").on(t.userId),
+		unique("native_session_link_owner_unique").on(
+			t.sessionId,
+			t.userId,
+			t.deviceId,
+		),
+	],
 );
+
+// Server-only provider capabilities; deliberately absent from the Zero allowlist.
+export const nativePushRegistration = pgTable(
+	"native_push_registration",
+	{
+		id: text("id").primaryKey(),
+		sessionId: text("session_id").notNull().unique(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		deviceId: text("device_id")
+			.notNull()
+			.references(() => userDevice.id, { onDelete: "cascade" }),
+		provider: text("provider").notNull(),
+		configCiphertext: text("config_ciphertext").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		foreignKey({
+			columns: [t.sessionId, t.userId, t.deviceId],
+			foreignColumns: [
+				nativeSessionLink.sessionId,
+				nativeSessionLink.userId,
+				nativeSessionLink.deviceId,
+			],
+		}).onDelete("cascade"),
+		check(
+			"native_push_registration_provider",
+			sql`${t.provider} in ('unifiedpush','fcm')`,
+		),
+		pgPolicy("native_push_registration_owner", {
+			for: "all",
+			to: "public",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+	],
+).enableRLS();
 
 export const importSource = pgTable(
 	"import_source",

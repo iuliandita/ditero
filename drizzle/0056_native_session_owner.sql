@@ -1,0 +1,1 @@
+ALTER TABLE "native_session_link" ADD CONSTRAINT "native_session_link_owner_unique" UNIQUE("session_id","user_id","device_id");
