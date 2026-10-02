@@ -12,7 +12,8 @@ on dark backgrounds. Teal is the default symbol and application accent.
 - [Palette values](palettes.json)
 
 All PNGs have transparent backgrounds. These are raster assets; editable vector
-masters are not included. Keep the symbol and lettering proportions intact.
+masters are not included. Keep the symbol and lettering proportions intact. The
+horizontal wordmarks use a smaller symbol and wider gap than the palette studies.
 
 ## Accent themes
 

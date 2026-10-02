@@ -5,13 +5,13 @@
   </picture>
 </p>
 
-<h1 align="center">Ditero</h1>
-
 <p align="center"><strong>Shared tasks for the people you share life with.</strong></p>
 
-[![CI](https://github.com/iuliandita/ditero/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/iuliandita/ditero/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)
+<p align="center">
+  <a href="https://github.com/iuliandita/ditero/actions/workflows/ci.yml"><img src="https://github.com/iuliandita/ditero/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/status-pre--alpha-orange" alt="Status: pre-alpha">
+</p>
 
 Ditero is a free, self-hosted, local-first task app for families, friends, clubs,
 and small teams. Share a shopping list, divide the chores, plan a project, or keep
