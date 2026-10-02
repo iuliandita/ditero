@@ -14,6 +14,7 @@ import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
 import { LabelManager } from "../components/settings/LabelManager.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { NativeBrowserSettings } from "../components/settings/NativeBrowserSettings.tsx";
+import { NativePushSettings } from "../components/settings/NativePushSettings.tsx";
 import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
 import {
 	SettingsNav,
@@ -123,7 +124,14 @@ export function SettingsSurface({
 					</SettingsSection>
 
 					<SettingsSection id="notifications" title={m.notifications_heading()}>
-						{native ? <NativeBrowserSettings /> : <NotificationSettings />}
+						{native ? (
+							<div className="flex flex-col gap-8">
+								<NativePushSettings />
+								<NativeBrowserSettings />
+							</div>
+						) : (
+							<NotificationSettings />
+						)}
 					</SettingsSection>
 
 					<SettingsSection id="security" title={m.security_heading()}>

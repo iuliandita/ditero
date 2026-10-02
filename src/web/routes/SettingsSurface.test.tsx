@@ -135,3 +135,38 @@ test("native settings never mount browser account panels, retain native encrypti
 		expect(browser).toContain(marker);
 	expect(browser).not.toContain('data-testid="native-browser-settings"');
 });
+
+test("phone push controls are reachable through the native notifications section", () => {
+	control.native = true;
+	const state = async () => ({
+		state: "disabled" as const,
+		permission: "granted" as const,
+		provider: "unifiedpush" as const,
+	});
+	const phone = renderToStaticMarkup(
+		<NativeAccountContext
+			value={{
+				profile: { id: "maya", name: "Maya Chen", email: "maya@example.test" },
+				origin: "https://chosen.example.test",
+				storageScope: "native-maya",
+				changeServer: async () => {},
+				push: {
+					identity: "native-maya:session",
+					read: state,
+					enable: state,
+					disable: state,
+					permission: state,
+				},
+			}}
+		>
+			{surface}
+		</NativeAccountContext>,
+	);
+	expect(phone).toContain('aria-labelledby="native-push-heading"');
+	expect(phone).toContain('data-testid="native-browser-settings"');
+	expect(phone).not.toContain("browser-notifications");
+	control.native = false;
+	expect(renderToStaticMarkup(surface)).not.toContain(
+		'id="native-push-heading"',
+	);
+});

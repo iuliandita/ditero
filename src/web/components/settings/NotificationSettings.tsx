@@ -10,7 +10,6 @@ import { useUserPref } from "../../hooks/useUserPref.ts";
 import { EscalationFields } from "../task/EscalationFields.tsx";
 import { ChannelRow } from "./ChannelRow.tsx";
 import { CHANNEL_ORDER, type ChannelHealthRow } from "./channel-form.ts";
-import { NativePushSettings } from "./NativePushSettings.tsx";
 import { QuietHoursEditor } from "./QuietHoursEditor.tsx";
 
 function EscalationDefaults() {
@@ -86,7 +85,6 @@ export function NotificationSettings() {
 	}, [rows]);
 	return (
 		<div className="flex flex-col gap-8" data-testid="notification-settings">
-			<NativePushSettings />
 			<section aria-labelledby="notification-channels-heading">
 				<h3
 					id="notification-channels-heading"

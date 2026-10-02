@@ -37,6 +37,7 @@ function statusText(state: NativePushState["state"]): string {
 function PhonePush({ push }: { push: NativePush }) {
 	const [snapshot, setSnapshot] = useState<NativePushState | null>(null);
 	const [busy, setBusy] = useState(false);
+	const [reading, setReading] = useState(false);
 	const [failed, setFailed] = useState<"read" | "action" | null>(null);
 	const owner = useRef(0);
 	const inFlight = useRef(false);
@@ -71,6 +72,7 @@ function PhonePush({ push }: { push: NativePush }) {
 		const read = async () => {
 			if (inFlight.current || document.visibilityState === "hidden") return;
 			inFlight.current = true;
+			setReading(true);
 			try {
 				const next = await push.read();
 				if (!current()) return;
@@ -82,6 +84,7 @@ function PhonePush({ push }: { push: NativePush }) {
 			} finally {
 				if (current()) {
 					inFlight.current = false;
+					setReading(false);
 					schedule();
 				}
 			}
@@ -162,8 +165,8 @@ function PhonePush({ push }: { push: NativePush }) {
 			<div className="mt-3 flex flex-wrap gap-2">
 				{controls.enable && (
 					<Button
-						className="min-h-11 h-auto whitespace-normal text-start"
-						disabled={busy || !snapshot}
+						className="min-h-11 h-auto max-w-full whitespace-normal text-start"
+						disabled={busy || reading || !snapshot}
 						onClick={() => void act("enable")}
 					>
 						{state === "disabled"
@@ -174,8 +177,8 @@ function PhonePush({ push }: { push: NativePush }) {
 				{controls.permission && (
 					<Button
 						variant="outline"
-						className="min-h-11 h-auto whitespace-normal text-start"
-						disabled={busy}
+						className="min-h-11 h-auto max-w-full whitespace-normal text-start"
+						disabled={busy || reading}
 						onClick={() => void act("permission")}
 					>
 						{m.native_push_permission()}
@@ -184,8 +187,8 @@ function PhonePush({ push }: { push: NativePush }) {
 				{controls.disable && (
 					<Button
 						variant="outline"
-						className="min-h-11 h-auto whitespace-normal text-start"
-						disabled={busy}
+						className="min-h-11 h-auto max-w-full whitespace-normal text-start"
+						disabled={busy || reading}
 						onClick={() => void act("disable")}
 					>
 						{cleanup ? m.native_push_retry_disable() : m.native_push_disable()}
@@ -193,8 +196,8 @@ function PhonePush({ push }: { push: NativePush }) {
 				)}
 				<Button
 					variant="ghost"
-					className="min-h-11 h-auto whitespace-normal text-start"
-					disabled={busy}
+					className="min-h-11 h-auto max-w-full whitespace-normal text-start"
+					disabled={busy || reading}
 					onClick={() => {
 						if (!inFlight.current) setRevision((value) => value + 1);
 					}}
