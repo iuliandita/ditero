@@ -109,6 +109,18 @@ type State = Hello & {
 };
 
 let state: State | undefined;
+let refusalHandler:
+	| { gen: number; authHandle: string; run: () => void }
+	| undefined;
+
+/** Only the active Zero owner receives a confirmed native socket-session refusal. */
+export function setNativeSessionRefusalHandler(
+	gen: number,
+	authHandle: string,
+	run: () => void,
+): void {
+	refusalHandler = { gen, authHandle, run };
+}
 let rid = 0;
 let nextCid = 0;
 const pending = new Map<number, Waiter>();
@@ -226,6 +238,22 @@ function dropSessionState(): void {
 	if (state) state = { ...state, session: null };
 }
 
+function sessionRefused(gen: unknown, authHandle: unknown): void {
+	if (
+		!state ||
+		state.gen !== gen ||
+		!state.session ||
+		state.session.authHandle !== authHandle
+	)
+		return;
+	const observer = refusalHandler;
+	refusalHandler = undefined;
+	dropSessionState();
+	abortSockets();
+	if (observer && observer.gen === gen && observer.authHandle === authHandle)
+		observer.run();
+}
+
 function onNative(event: MessageEvent): void {
 	let message: unknown;
 	try {
@@ -234,6 +262,10 @@ function onNative(event: MessageEvent): void {
 		return;
 	}
 	if (!isRecord(message)) return;
+	if (message.t === "session-refused") {
+		sessionRefused(message.gen, message.authHandle);
+		return;
+	}
 	if (message.t === "reply") {
 		const id = message.rid;
 		const waiter = typeof id === "number" ? pending.get(id) : undefined;
@@ -242,7 +274,9 @@ function onNative(event: MessageEvent): void {
 			clearTimeout(waiter.timer);
 			waiter.settle({ ...message, ok: message.ok === true });
 		} else if (typeof message.cid === "number") {
-			sockets.get(message.cid)?.nativeReply(message.ok === true, message.rid);
+			sockets
+				.get(message.cid)
+				?.nativeReply(message.ok === true, message.rid, message.code);
 		}
 		return;
 	}
@@ -639,6 +673,7 @@ export class NativeWebSocket extends EventTarget {
 	#url: string;
 	#cid: number;
 	#gen: number;
+	#authHandle: string | undefined;
 	#state = 0;
 	#openRid = 0;
 	#finished = false;
@@ -662,6 +697,7 @@ export class NativeWebSocket extends EventTarget {
 		this.#url = parsed.toString();
 		this.#cid = ++nextCid;
 		this.#gen = current.gen;
+		this.#authHandle = current.session?.authHandle;
 		for (const name of OPENISH) {
 			this.addEventListener(name, (event) => {
 				const handler = this[`on${name}` as "onopen"] as
@@ -742,8 +778,17 @@ export class NativeWebSocket extends EventTarget {
 	}
 
 	/** Refused sends must end the socket so Zero cannot silently lose a frame. */
-	nativeReply(accepted: boolean, replyRid: unknown): void {
+	nativeReply(accepted: boolean, replyRid: unknown, code?: unknown): void {
 		if (accepted) return;
+		if (
+			replyRid === this.#openRid &&
+			(code === "unauthorized" || code === "no-session") &&
+			state?.gen === this.#gen &&
+			state.session?.authHandle === this.#authHandle
+		) {
+			sessionRefused(this.#gen, this.#authHandle);
+			return;
+		}
 		// A refused open never reaches the network: end like a failed connect, from
 		// CONNECTING or from CLOSING (close() raced the refusal). #finish is once-only.
 		if (

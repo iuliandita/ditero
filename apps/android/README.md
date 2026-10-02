@@ -14,6 +14,13 @@ recent items, and navigation preferences use scopes derived from the canonical
 server origin and the server-verified account. The browser application retains its
 existing storage keys.
 
+A warmed account can reopen cached views offline while its complete, previously
+verified native session evidence remains unexpired. That evidence is encrypted
+with the session and bound to the selected server, account, and session. Only
+network failures permit this fallback; invalid credentials, trust failures,
+expired evidence, and failed revocation storage stay unavailable. Offline task
+editing after a cold start still needs the readiness fix tracked in #465.
+
 ## Build a debug APK
 
 Install Bun 1.4.2, Java 21, and the Android SDK command-line tools. Set `JAVA_HOME`
