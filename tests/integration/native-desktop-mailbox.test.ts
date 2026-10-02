@@ -48,7 +48,7 @@ beforeAll(async () => {
 	);
 	await admin.query(`grant usage on schema public to "${role}"`);
 	await admin.query(
-		`grant select,insert,update,delete on "user",session,user_device,native_session_link,native_push_registration,native_desktop_mailbox to "${role}"`,
+		`grant select,insert,update,delete on "user",session,user_device,native_session_link,native_push_registration,native_relay_authority,native_desktop_mailbox to "${role}"`,
 	);
 	await admin.query(
 		`grant select,update on notification_outbox,task,list,workspace,membership to "${role}"`,

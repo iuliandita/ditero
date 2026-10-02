@@ -79,7 +79,7 @@ beforeAll(async () => {
 	);
 	await admin.query(`grant usage on schema public to "${role}"`);
 	await admin.query(
-		`grant select,insert,update,delete on "user",session,user_device,native_auth_grant,native_session_link,native_push_registration to "${role}"`,
+		`grant select,insert,update,delete on "user",session,user_device,native_auth_grant,native_session_link,native_push_registration,native_relay_authority to "${role}"`,
 	);
 	// Row locks require UPDATE privilege even though navigation only reads rows.
 	await admin.query(
