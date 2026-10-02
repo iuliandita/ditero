@@ -33,6 +33,12 @@ Receiving, opening, or dismissing it does not complete a task or acknowledge a
 reminder. Expired messages and revoked registrations retire their exact local
 retry entries; temporary failures remain pending.
 
+A bounded Linux host check confirmed that the system notification service accepted
+a scheduled reminder. Its actual Open action resolved the canonical task and
+focused the native Wayland window. The delivery receipt was stored durably, and
+the task remained unfinished. Focused tests cover pending, revoked, and expired
+notification cleanup. This does not qualify Windows or macOS notification behavior.
+
 Account retirement cancels notification callbacks and attempts to remove owned
 popups. Shutdown gives removal one three-second budget. A stalled system service
 can still display a delayed generic popup after exit; removal is best effort.
@@ -186,13 +192,19 @@ They do not qualify full encryption enrollment/recovery or prove durable close
 with queued offline edits. Focused tests separately cover protocol, credential
 cleanup, vault retry, and bounded socket writes.
 
-Windows and macOS runtime and credential-store behavior remain unqualified.
+Theme radio controls and reading-preference controls have been corrected. An actual
+WebKitGTK CSS check covered dark, light, system, Large text, and high contrast
+settings; it does not qualify a new installer or a complete platform journey.
+
+Windows and macOS have successful development builds only; actual sign-in,
+credential-store access, offline behavior, and notification clicks remain unqualified.
 Offline recovery, account/server changes, revoke/restore failures, reload behavior,
 worker execution, OPFS/locks, and installer execution still require platform checks.
 The desktop uses each platform's native TLS trust; server certificates must also
 be trusted by the user's system browser. No certificate bypass is supported.
 
-Broader encrypted-file qualification, notification/background integration, deep
-links, updater delivery, and release signing remain unfinished. Shared browser-only
-settings and integrations retain the Android core's limitations. A successful installer build alone does not prove
-complete desktop application delivery.
+Broader encrypted-file qualification, Windows/macOS notification integration,
+deep links, updater delivery, release signing, and complete installer qualification
+remain unfinished. Shared browser-only settings and integrations retain the Android
+core's limitations. A successful installer build alone does not prove complete
+desktop application delivery.

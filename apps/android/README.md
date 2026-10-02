@@ -74,15 +74,25 @@ Only successfully decrypted, bounded payloads with exactly `version: "1"`,
 `notificationId`, and `registrationId` are accepted. The registration must match
 the current native owner; recent notification IDs are deduplicated durably.
 Notifications contain a generic private notice, with an immutable explicit app
-launch intent. Tapping currently opens the app shell. Notification lookup,
-authorization, and task navigation remain unimplemented; no received URL is opened.
+launch intent. Opening a notification resolves its destination through the selected
+server and account using the current native session and normal task permissions,
+then navigates to the task. No received URL is accepted, and
+receiving or opening a notification does not complete a task or acknowledge a reminder.
 
 The connector and coordinator compile against the real SDK, and Java checks cover
 payload rejection, durable retirement, cleanup isolation, commit failure, and
-deduplication. Background delivery, distributor switching, interrupted registration,
-and permission flows still need device qualification. An optional Google relay is
-planned as a separate slice. The `independent` flavor uses UnifiedPush with a
-compatible distributor such as ntfy and includes no Firebase SDK, Google services
+deduplication. Pending, revoked, and expired notification cleanup also has focused
+test coverage. A bounded emulator check received a scheduled reminder through the
+native receiver and displayed a generic system notice while the installed app was
+stopped and the emulator was in deep Doze (`IDLE`). Ditero had no battery exemption;
+the ntfy distributor was exempt. This qualifies only that emulator and distributor
+setup. Stock power behavior, physical devices, distributor switching, interrupted
+registration, and permission flows still need device qualification.
+
+An optional Google relay is planned as a separate slice. No Firebase project or
+public relay origin is configured, and the Google provider is unavailable. The
+`independent` flavor uses UnifiedPush with a compatible distributor such as ntfy
+and includes no Firebase SDK, Google services
 plugin, or Google configuration. Both flavor identities remain `io.ditero.app`;
 there is no application ID suffix.
 
@@ -173,8 +183,8 @@ and Google provider integration remain part of #346.
 
 - Broader encrypted-file qualification on physical devices and document providers.
 - Full offline recovery and account/server transition qualification on devices.
-- Device qualification of native notification permission and UnifiedPush background delivery.
-- Optional Google relay integration and authorized notification tap resolution.
+- Broader device qualification of native notification permission and UnifiedPush background delivery.
+- Optional Google relay integration and Google delivery qualification.
 - Release signing identity, distribution pipelines, and store distribution.
 - Native deep links, update delivery, and complete application qualification.
 
