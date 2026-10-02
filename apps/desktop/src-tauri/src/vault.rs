@@ -42,6 +42,49 @@ pub fn valid_expiry(s: &str) -> bool {
 pub struct Registry {
     pub selected: Option<String>,
     pub sessions: BTreeMap<String, Session>,
+    #[serde(default)]
+    pub notifications: BTreeMap<String, DesktopRegistration>,
+    #[serde(default)]
+    pub retired_notifications: Vec<DesktopRegistration>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DesktopRegistration {
+    pub session: Session,
+    pub registration_id: String,
+    #[serde(default)]
+    pub seen: Vec<String>,
+    #[serde(default)]
+    pub receipts: Vec<String>,
+    #[serde(default = "default_locale")]
+    pub locale: String,
+}
+fn default_locale() -> String {
+    "en".into()
+}
+impl DesktopRegistration {
+    pub fn valid(&self) -> bool {
+        self.session.valid()
+            && protocol::id(&self.registration_id)
+            && self.seen.len() <= 256
+            && self.receipts.len() <= 128
+            && self.seen.iter().all(|id| protocol::id(id))
+            && self
+                .receipts
+                .iter()
+                .all(|id| protocol::id(id) && self.seen.contains(id))
+            && matches!(
+                self.locale.as_str(),
+                "en" | "de" | "es" | "fr" | "ro" | "ar"
+            )
+    }
+}
+pub fn same_session(a: &Session, b: &Session) -> bool {
+    a.origin == b.origin
+        && a.user_id == b.user_id
+        && a.session_id == b.session_id
+        && a.device_id == b.device_id
+        && a.token == b.token
 }
 pub trait Vault: Send + Sync {
     fn load(&self) -> Result<Registry>;
@@ -88,6 +131,13 @@ fn load_from(
             .sessions
             .iter()
             .any(|(origin, s)| origin != &s.origin || !s.valid())
+        || registry.notifications.len() > 64
+        || registry.retired_notifications.len() > 64
+        || registry
+            .notifications
+            .iter()
+            .any(|(origin, r)| origin != &r.session.origin || !r.valid())
+        || registry.retired_notifications.iter().any(|r| !r.valid())
     {
         return Err("vault-invalid");
     }

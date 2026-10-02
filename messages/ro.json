@@ -2171,5 +2171,20 @@
 	"native_push_disable": "Oprește",
 	"native_push_refresh": "Actualizează starea",
 	"native_push_action_failed": "Nu s-au putut modifica notificările. Actualizează starea înainte de a încerca din nou.",
-	"native_notification_unavailable": "Această notificare nu mai este disponibilă."
+	"native_notification_unavailable": "Această notificare nu mai este disponibilă.",
+	"desktop_push_heading": "Pe acest computer",
+	"desktop_push_help": "Primește mementouri cât timp Ditero este deschis sau minimizat. Închiderea aplicației oprește notificările.",
+	"desktop_push_unsupported": "Notificările desktop nu sunt disponibile pe acest sistem. Pe Linux, verifică dacă rulează un serviciu de notificări.",
+	"desktop_push_disabled": "Notificările desktop sunt dezactivate.",
+	"desktop_push_enabling": "Se activează notificările desktop…",
+	"desktop_push_active": "Notificările desktop sunt activate cât timp Ditero este deschis sau minimizat. Livrarea depinde de conexiunea ta.",
+	"desktop_push_denied": "Permisiunea pentru notificările desktop este refuzată. Permite-le în setările sistemului, apoi încearcă din nou.",
+	"desktop_push_server_unavailable": "Acest server nu poate trimite încă notificări desktop. Cere administratorului să activeze livrarea.",
+	"desktop_push_temporary_unavailable": "Notificările desktop sunt temporar indisponibile. Verifică conexiunea și încearcă din nou.",
+	"desktop_push_storage_failed": "Acest computer nu a putut salva setările notificărilor. Încearcă din nou.",
+	"desktop_push_no_session": "Autentifică-te din nou pentru a gestiona notificările desktop.",
+	"desktop_push_read_failed": "Nu s-au putut verifica notificările desktop. Actualizează starea pentru a încerca din nou.",
+	"desktop_push_loading": "Se verifică notificările desktop…",
+	"desktop_push_enable": "Activează notificările desktop",
+	"desktop_push_action_failed": "Nu s-au putut modifica notificările desktop. Actualizează starea înainte să încerci din nou."
 }

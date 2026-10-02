@@ -1,3 +1,4 @@
+import { getLocale } from "../../../src/paraglide/runtime.js";
 import {
 	NATIVE_PUSH_STATES,
 	type NativeNotificationNavigation,
@@ -100,7 +101,7 @@ type PushOp = "push.state" | "push.enable" | "push.disable" | "push.permission";
 type Command =
 	| { op: "server.select"; origin: string }
 	| { op: SimpleOp }
-	| { op: PushOp; id: string }
+	| { op: PushOp; id: string; locale?: "en" | "de" | "es" | "fr" | "ro" | "ar" }
 	| { op: "push.open"; id: string }
 	| { op: "push.dismissOpen"; id: string; body: { token: string } }
 	| { op: E2eOp; id?: string; body?: Record<string, unknown> }
@@ -962,7 +963,11 @@ export function installNativeWebSocket(): () => void {
 }
 
 /** Fixed native operations, bound to the verified account that owns this UI. */
-export function createNativePush(gen: number, authHandle: string): NativePush {
+export function createNativePush(
+	gen: number,
+	authHandle: string,
+	provider: NativePushState["provider"] = "unifiedpush",
+): NativePush {
 	const assertCurrent = () => {
 		const current = requireState();
 		if (current.gen !== gen || current.session?.authHandle !== authHandle)
@@ -970,25 +975,33 @@ export function createNativePush(gen: number, authHandle: string): NativePush {
 	};
 	const call = async (op: PushOp): Promise<NativePushState> => {
 		assertCurrent();
-		return request({ op, id: authHandle }, (reply) => {
+		const command: Command = { op, id: authHandle };
+		if (provider === "desktop" && op !== "push.disable") {
+			const locale = getLocale();
+			if (!["en", "de", "es", "fr", "ro", "ar"].includes(locale))
+				throw new NativeError("invalid-locale");
+			command.locale = locale;
+		}
+		return request(command, (reply) => {
 			assertCurrent();
 			ok(reply);
 			if (
 				!NATIVE_PUSH_STATES.some((value) => value === reply.state) ||
 				(reply.permission !== "granted" && reply.permission !== "denied") ||
-				reply.provider !== "unifiedpush" ||
+				reply.provider !== provider ||
 				(reply.state === "active" && reply.permission !== "granted")
 			)
 				throw new NativeError("invalid-reply");
 			return {
 				state: reply.state as NativePushState["state"],
 				permission: reply.permission,
-				provider: reply.provider,
+				provider,
 			};
 		});
 	};
 	return {
-		identity: JSON.stringify([gen, authHandle]),
+		identity: JSON.stringify([gen, authHandle, provider]),
+		provider,
 		read: () => call("push.state"),
 		enable: () => call("push.enable"),
 		disable: () => call("push.disable"),

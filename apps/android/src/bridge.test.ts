@@ -1,4 +1,10 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { getLocale } from "../../../src/paraglide/runtime.js";
+
+vi.mock("../../../src/paraglide/runtime.js", () => ({
+	getLocale: vi.fn(() => "en"),
+}));
+
 import {
 	bridgeState,
 	completeOnce,
@@ -51,6 +57,7 @@ function reply(
 
 beforeEach(() => {
 	vi.useFakeTimers();
+	vi.mocked(getLocale).mockReturnValue("en");
 	sent = [];
 	snapshot = {
 		gen: 1,
@@ -282,6 +289,7 @@ test("push uses only fixed account-bound operations and validates every state", 
 		{ state: "active", permission: "denied", provider: "unifiedpush" },
 		{ state: "unknown", permission: "granted", provider: "unifiedpush" },
 		{ state: "active", permission: "granted", provider: "google" },
+		{ state: "active", permission: "granted", provider: "desktop" },
 		{ state: "active", permission: true, provider: "unifiedpush" },
 	]) {
 		const result = push.read();
@@ -293,6 +301,55 @@ test("push uses only fixed account-bound operations and validates every state", 
 		reply(command, fields);
 		await refused;
 	}
+});
+
+test("desktop push sends current locale only to locale-aware operations", async () => {
+	snapshot.session = session;
+	await connectBridge();
+	const push = createNativePush(1, session.authHandle, "desktop");
+	expect(push.provider).toBe("desktop");
+	for (const locale of ["en", "de", "es", "fr", "ro", "ar"] as const) {
+		vi.mocked(getLocale).mockReturnValue(locale);
+		for (const [method, op] of [
+			["read", "push.state"],
+			["enable", "push.enable"],
+			["permission", "push.permission"],
+			["disable", "push.disable"],
+		] as const) {
+			const result = push[method]();
+			const command = sent.at(-1);
+			if (!command) throw new Error("missing push command");
+			expect(command).toEqual({
+				op,
+				id: session.authHandle,
+				gen: 1,
+				rid: expect.any(Number),
+				...(method === "disable" ? {} : { locale }),
+			});
+			reply(command, {
+				state: "unsupported",
+				permission: "denied",
+				provider: "desktop",
+			});
+			expect(await result).toEqual({
+				state: "unsupported",
+				permission: "denied",
+				provider: "desktop",
+			});
+		}
+	}
+	const result = push.read();
+	const refused = expect(result).rejects.toMatchObject({
+		code: "invalid-reply",
+	});
+	const command = sent.at(-1);
+	if (!command) throw new Error("missing push command");
+	reply(command, {
+		state: "active",
+		permission: "granted",
+		provider: "unifiedpush",
+	});
+	await refused;
 });
 
 test("push cannot post for a retired account or accept its late result", async () => {

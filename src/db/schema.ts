@@ -1557,9 +1557,42 @@ export const nativePushRegistration = pgTable(
 		}).onDelete("cascade"),
 		check(
 			"native_push_registration_provider",
-			sql`${t.provider} in ('unifiedpush','fcm')`,
+			sql`${t.provider} in ('unifiedpush','fcm','desktop')`,
 		),
+		unique("native_push_registration_id_owner").on(t.id, t.userId),
 		pgPolicy("native_push_registration_owner", {
+			for: "all",
+			to: "public",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+	],
+).enableRLS();
+
+// Opaque delivery receipts remain server-only; outbox pruning bounds retention.
+export const nativeDesktopMailbox = pgTable(
+	"native_desktop_mailbox",
+	{
+		notificationId: text("notification_id")
+			.primaryKey()
+			.references(() => notificationOutbox.id, { onDelete: "cascade" }),
+		registrationId: text("registration_id").notNull(),
+		userId: text("user_id").notNull(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+		receivedAt: timestamp("received_at", { withTimezone: true }),
+	},
+	(t) => [
+		foreignKey({
+			columns: [t.registrationId, t.userId],
+			foreignColumns: [
+				nativePushRegistration.id,
+				nativePushRegistration.userId,
+			],
+		}).onDelete("cascade"),
+		index("native_desktop_mailbox_poll")
+			.on(t.registrationId, t.notificationId)
+			.where(sql`${t.receivedAt} is null`),
+		pgPolicy("native_desktop_mailbox_owner", {
 			for: "all",
 			to: "public",
 			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,

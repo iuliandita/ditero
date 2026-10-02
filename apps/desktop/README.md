@@ -20,6 +20,26 @@ instances from overwriting each other's state. Local UI and sync persistence ret
 server/account scopes. Closing waits for durable local sync retirement before
 native sockets are drained and the window is destroyed; a failure keeps it open.
 
+## System notifications
+
+Linux system notifications require a notification service with action support.
+Enable them in Settings after signing in. They arrive while Ditero is open or
+minimized; closing the application stops reception. Windows and macOS currently
+report this delivery mode as unavailable.
+
+System popups contain generic text, never task titles or other task content.
+Opening a popup resolves its destination through the current server and account.
+Receiving, opening, or dismissing it does not complete a task or acknowledge a
+reminder. Expired messages and revoked registrations retire their exact local
+retry entries; temporary failures remain pending.
+
+Account retirement cancels notification callbacks and attempts to remove owned
+popups. Shutdown gives removal one three-second budget. A stalled system service
+can still display a delayed generic popup after exit; removal is best effort.
+Popups request a five-minute expiry and transient handling, which the system
+service may override. In-app reminders and other configured delivery channels
+retain their own behavior.
+
 ## Encrypted files
 
 Enable `DITERO_E2E_ENABLED` on the server and enroll the account's encryption keys

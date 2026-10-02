@@ -414,6 +414,20 @@
       "when": 1790932141966,
       "tag": "0058_green_runaways",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1790948773291,
+      "tag": "0059_bored_golden_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1790948773864,
+      "tag": "0060_fast_the_renegades",
+      "breakpoints": true
     }
   ]
 }

@@ -2125,5 +2125,20 @@
 	"native_push_disable": "Turn off",
 	"native_push_refresh": "Refresh status",
 	"native_push_action_failed": "Could not change phone notifications. Refresh the status before trying again.",
-	"native_notification_unavailable": "This notification is no longer available."
+	"native_notification_unavailable": "This notification is no longer available.",
+	"desktop_push_heading": "On this computer",
+	"desktop_push_help": "Receive reminders while Ditero is open or minimized. Closing the app stops notifications.",
+	"desktop_push_unsupported": "Desktop notifications are unavailable on this system. On Linux, check that a notification service is running.",
+	"desktop_push_disabled": "Desktop notifications are off.",
+	"desktop_push_enabling": "Enabling desktop notifications…",
+	"desktop_push_active": "Desktop notifications are enabled while Ditero is open or minimized. Delivery depends on your connection.",
+	"desktop_push_denied": "Desktop notification permission is denied. Allow notifications in your system settings, then try again.",
+	"desktop_push_server_unavailable": "This server is not ready to send desktop notifications. Ask its administrator to enable delivery.",
+	"desktop_push_temporary_unavailable": "Desktop notifications are temporarily unavailable. Check your connection and try again.",
+	"desktop_push_storage_failed": "This computer could not save notification settings. Try again.",
+	"desktop_push_no_session": "Sign in again to manage desktop notifications.",
+	"desktop_push_read_failed": "Could not check desktop notifications. Refresh to try again.",
+	"desktop_push_loading": "Checking desktop notifications…",
+	"desktop_push_enable": "Enable desktop notifications",
+	"desktop_push_action_failed": "Could not change desktop notifications. Refresh the status before trying again."
 }

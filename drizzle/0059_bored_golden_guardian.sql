@@ -1,0 +1,3 @@
+ALTER TABLE "native_push_registration" DROP CONSTRAINT "native_push_registration_provider";--> statement-breakpoint
+ALTER TABLE "native_push_registration" ADD CONSTRAINT "native_push_registration_id_owner" UNIQUE("id","user_id");--> statement-breakpoint
+ALTER TABLE "native_push_registration" ADD CONSTRAINT "native_push_registration_provider" CHECK ("native_push_registration"."provider" in ('unifiedpush','fcm','desktop'));

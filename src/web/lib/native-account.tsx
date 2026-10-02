@@ -2,6 +2,7 @@ import { useZero } from "@rocicorp/zero/react";
 import { createContext, useContext } from "react";
 
 export const NATIVE_PUSH_STATES = [
+	"unsupported",
 	"disabled",
 	"enabling",
 	"active",
@@ -17,10 +18,11 @@ export const NATIVE_PUSH_STATES = [
 export type NativePushState = {
 	state: (typeof NATIVE_PUSH_STATES)[number];
 	permission: "granted" | "denied";
-	provider: "unifiedpush";
+	provider: "unifiedpush" | "desktop";
 };
 export type NativePush = {
 	readonly identity: string;
+	readonly provider: NativePushState["provider"];
 	read(): Promise<NativePushState>;
 	enable(): Promise<NativePushState>;
 	disable(): Promise<NativePushState>;
