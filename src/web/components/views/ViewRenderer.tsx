@@ -365,7 +365,16 @@ export function ViewRenderer(props: {
 	});
 	const selectionFor = (task: Task): RowSelection | undefined =>
 		eligible(task)
-			? selection.rowFor(task.id, m.selection_paused_reason())
+			? selection.rowFor(
+					task.id,
+					tasks
+						.filter((row) => row.id === task.id || row.parentId === task.id)
+						.some((row) =>
+							["pending", "blocked"].includes(activation.statusForTask(row.id)),
+						)
+						? m.selection_paused_reason()
+						: m.activation_unknown_explanation(),
+				)
 			: undefined;
 	const selectedTasks = (): Task[] =>
 		selection

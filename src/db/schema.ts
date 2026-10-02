@@ -255,6 +255,9 @@ export const task = pgTable(
 			.references(() => list.id),
 		title: text("title").notNull(),
 		done: boolean("done").notNull().default(false),
+		hasImportActivation: boolean("has_import_activation")
+			.notNull()
+			.default(false),
 		notes: text("notes"),
 		dueAt: timestamp("due_at", { withTimezone: true }),
 		dueAllDay: boolean("due_all_day").notNull().default(false),

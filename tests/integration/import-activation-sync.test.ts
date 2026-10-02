@@ -1,8 +1,11 @@
+import { readFile } from "node:fs/promises";
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
 import { Pool } from "pg";
 import { afterAll, beforeEach, expect, test } from "vitest";
+import { mutators } from "../../src/zero/mutators.ts";
 import { queries } from "../../src/zero/queries.ts";
 import { schema } from "../../src/zero/schema.gen.ts";
+import { withZeroUserContext } from "../../src/zero/task-activation.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 const connectionString = process.env.DATABASE_URL;
@@ -89,4 +92,164 @@ test("the generated client schema excludes provenance and recipient evidence", (
 		Object.keys(schema.tables.taskNotificationActivation.columns).sort(),
 	).toEqual(["status", "taskId"]);
 	expect(Object.keys(schema.tables)).not.toContain("taskNotificationRecipient");
+});
+
+test("native creation is false and activation adoption atomically promotes a permanent marker", async () => {
+	const markers = async () =>
+		(
+			await pool.query(
+				"select id,has_import_activation from task where list_id='visible-list' order by id",
+			)
+		).rows;
+	expect(await markers()).toEqual([
+		{ id: "visible-active", has_import_activation: true },
+		{ id: "visible-blocked", has_import_activation: true },
+		{ id: "visible-native", has_import_activation: false },
+		{ id: "visible-pending", has_import_activation: true },
+	]);
+	const client = await pool.connect();
+	try {
+		await client.query("begin");
+		await client.query(
+			"insert into task_notification_activation (task_id,status,generation) values ('visible-native','pending',1)",
+		);
+		expect(
+			(
+				await client.query(
+					"select has_import_activation from task where id='visible-native'",
+				)
+			).rows[0].has_import_activation,
+		).toBe(true);
+		expect(
+			(
+				await pool.query(
+					"select has_import_activation from task where id='visible-native'",
+				)
+			).rows[0].has_import_activation,
+		).toBe(false);
+		await client.query("commit");
+	} finally {
+		client.release();
+	}
+	await pool.query(
+		"delete from task_notification_activation where task_id='visible-native'",
+	);
+	expect(
+		(
+			await pool.query(
+				"select has_import_activation from task where id='visible-native'",
+			)
+		).rows[0].has_import_activation,
+	).toBe(true);
+	const visibleTasks = await zdb.run(
+		queries.tasks.mine.fn({ args: undefined, ctx: { id: "viewer" } }),
+	);
+	expect(visibleTasks).toHaveLength(4);
+	expect(visibleTasks.every((task) => task.hasImportActivation === true)).toBe(
+		true,
+	);
+});
+
+test("client creation and updates cannot set the server maintained marker", async () => {
+	const args = {
+		id: "client-task",
+		listId: "visible-list",
+		title: "Client",
+		sortKey: "a0",
+		hasImportActivation: true,
+	};
+	await zdb.transaction((tx) =>
+		withZeroUserContext(tx, "owner", () =>
+			mutators.task.create.fn({ tx, ctx: { id: "owner" }, args }),
+		),
+	);
+	expect(
+		(
+			await pool.query(
+				"select has_import_activation from task where id='client-task'",
+			)
+		).rows[0].has_import_activation,
+	).toBe(false);
+	const update = {
+		id: "visible-active",
+		title: "Updated",
+		hasImportActivation: false,
+	};
+	await zdb.transaction((tx) =>
+		withZeroUserContext(tx, "owner", () =>
+			mutators.task.update.fn({ tx, ctx: { id: "owner" }, args: update }),
+		),
+	);
+	expect(
+		(
+			await pool.query(
+				"select has_import_activation from task where id='visible-active'",
+			)
+		).rows[0].has_import_activation,
+	).toBe(true);
+});
+
+test("migration backfills authoritative activation presence and preserves native rows", async () => {
+	const client = await pool.connect();
+	try {
+		await client.query("begin");
+		await client.query(
+			"create role readiness_migration_owner nosuperuser nocreatedb nocreaterole nobypassrls",
+		);
+		await client.query(
+			"create schema readiness_migration_test authorization readiness_migration_owner",
+		);
+		await client.query("set local role readiness_migration_owner");
+		await client.query("set local search_path to readiness_migration_test");
+		await client.query(
+			"create table task (id text primary key); create table task_notification_activation (task_id text primary key)",
+		);
+		await client.query(
+			"insert into task values ('native'),('imported'); insert into task_notification_activation values ('imported')",
+		);
+		await client.query(`alter table task_notification_activation enable row level security;
+   alter table task_notification_activation force row level security;
+   create policy task_notification_activation_service_select on task_notification_activation for select using
+   (current_setting('ditero.activation_scope', true) in ('producer','invite','ack','account-delete'))`);
+		expect(
+			(await client.query("select * from task_notification_activation")).rows,
+		).toEqual([]);
+		await client.query(
+			"select set_config('ditero.activation_scope','previous-test-scope',true)",
+		);
+		const sql = await readFile(
+			new URL("../../drizzle/0055_melted_prima.sql", import.meta.url),
+			"utf8",
+		);
+		await client.query(sql);
+		expect(
+			(
+				await client.query(
+					"select current_setting('ditero.activation_scope',true) as scope",
+				)
+			).rows[0].scope,
+		).toBe("previous-test-scope");
+		expect((await client.query("select * from task order by id")).rows).toEqual(
+			[
+				{ id: "imported", has_import_activation: true },
+				{ id: "native", has_import_activation: false },
+			],
+		);
+		await client.query(
+			"create policy test_activation_insert on task_notification_activation for insert with check (true)",
+		);
+		await client.query(
+			"insert into task values ('new'); insert into task_notification_activation values ('new')",
+		);
+		expect(
+			(
+				await client.query(
+					"select has_import_activation from task where id='new'",
+				)
+			).rows[0].has_import_activation,
+		).toBe(true);
+	} finally {
+		await client.query("rollback");
+		client.release();
+	}
 });

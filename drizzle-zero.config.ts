@@ -46,6 +46,7 @@ export default drizzleZeroConfig(schema, {
 			deletedAt: true,
 		},
 		task: {
+			hasImportActivation: true,
 			id: true,
 			listId: true,
 			title: true,

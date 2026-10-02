@@ -12,16 +12,28 @@ export type TaskImportActivationStatus =
 
 export function resolveTaskImportActivation(
 	rows: readonly Pick<TaskNotificationActivation, "taskId" | "status">[],
-	complete: boolean,
+	queryType: "unknown" | "complete" | "error",
 	taskId: string | null | undefined,
+	hasImportActivation?: unknown,
 ): TaskImportActivationStatus {
-	if (!complete || taskId == null) return "unknown";
+	if (queryType === "error" || taskId == null) return "unknown";
 	const row = rows.find((candidate) => candidate.taskId === taskId);
-	if (!row) return "native";
+	if (!row) return hasImportActivation === false ? "native" : "unknown";
 	return row.status === "active" ||
 		row.status === "pending" ||
 		row.status === "blocked"
 		? row.status
+		: "unknown";
+}
+
+export function resolveCachedTaskImportActivation(
+	rows: readonly Pick<TaskNotificationActivation, "taskId" | "status">[],
+	queryType: "unknown" | "complete" | "error",
+	taskId: string,
+	byTask: ReadonlyMap<string, unknown>,
+): TaskImportActivationStatus {
+	return byTask.has(taskId)
+		? resolveTaskImportActivation(rows, queryType, taskId, byTask.get(taskId))
 		: "unknown";
 }
 
@@ -38,12 +50,8 @@ export function taskImportRecoveryKey(
 }
 
 export function useTaskImportActivation(taskId: string | null | undefined) {
-	const [rows, details] = useQuery(queries.taskImportActivations.mine());
-	const status = useMemo(
-		() =>
-			resolveTaskImportActivation(rows, details.type === "complete", taskId),
-		[rows, details.type, taskId],
-	);
+	const activation = useTaskImportActivationMap();
+	const status = taskId == null ? "unknown" : activation.statusForTask(taskId);
 	return {
 		status,
 		canWrite: taskActivationAllowsWrites(status),
@@ -54,22 +62,20 @@ export function useTaskImportActivation(taskId: string | null | undefined) {
 
 export function useTaskImportActivationMap() {
 	const [rows, details] = useQuery(queries.taskImportActivations.mine());
-	const complete = details.type === "complete";
+	const [tasks, taskDetails] = useQuery(queries.tasks.mine());
 	const byTask = useMemo(
-		() => new Map(rows.map((row) => [row.taskId, row.status])),
-		[rows],
+		() => new Map(tasks.map((task) => [task.id, task.hasImportActivation])),
+		[tasks],
 	);
 	const statusForTask = useCallback(
-		(taskId: string): TaskImportActivationStatus => {
-			if (!complete) return "unknown";
-			const status = byTask.get(taskId);
-			return status === "active" || status === "pending" || status === "blocked"
-				? status
-				: status === undefined
-					? "native"
-					: "unknown";
-		},
-		[complete, byTask],
+		(taskId: string): TaskImportActivationStatus =>
+			resolveCachedTaskImportActivation(
+				rows,
+				taskDetails.type === "error" ? "error" : details.type,
+				taskId,
+				byTask,
+			),
+		[rows, details.type, taskDetails.type, byTask],
 	);
 	const canWriteTask = useCallback(
 		(taskId: string) => taskActivationAllowsWrites(statusForTask(taskId)),
