@@ -15,6 +15,7 @@ import {
 	NativeAccountContext,
 	type NativeNotificationNavigation,
 	type NativePush,
+	type NativePushState,
 } from "../../../src/web/lib/native-account.tsx";
 import { AppZeroProvider } from "../../../src/web/lib/zero.tsx";
 import { retireZeroClients } from "../../../src/web/lib/zero-lifecycle.ts";
@@ -64,17 +65,25 @@ function NativeWorkspace({ active }: { active: Active }) {
 	);
 }
 
-export function NativeApp() {
+export function NativeApp({
+	pushProvider = "unifiedpush",
+}: {
+	pushProvider?: NativePushState["provider"];
+}) {
 	return (
 		<ConfirmProvider>
 			<SnackbarProvider>
-				<NativeAppRoutes />
+				<NativeAppRoutes pushProvider={pushProvider} />
 			</SnackbarProvider>
 		</ConfirmProvider>
 	);
 }
 
-function NativeAppRoutes() {
+function NativeAppRoutes({
+	pushProvider,
+}: {
+	pushProvider: NativePushState["provider"];
+}) {
 	const { show } = useSnackbar();
 	const [restart, setRestart] = useState(0);
 	const [active, setActive] = useState<Active | null>(null);
@@ -149,7 +158,7 @@ function NativeAppRoutes() {
 			runtime,
 			profile,
 			origin: context.origin,
-			push: createNativePush(context.gen, context.authHandle),
+			push: createNativePush(context.gen, context.authHandle, pushProvider),
 			notifications: createNativeNotificationNavigation(
 				context.gen,
 				context.authHandle,

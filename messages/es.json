@@ -2171,5 +2171,20 @@
 	"native_push_disable": "Desactivar",
 	"native_push_refresh": "Actualizar estado",
 	"native_push_action_failed": "No se pudieron cambiar las notificaciones. Actualiza el estado antes de volver a intentarlo.",
-	"native_notification_unavailable": "Esta notificación ya no está disponible."
+	"native_notification_unavailable": "Esta notificación ya no está disponible.",
+	"desktop_push_heading": "En este ordenador",
+	"desktop_push_help": "Recibe recordatorios mientras Ditero esté abierto o minimizado. Al cerrar la app, las notificaciones se detienen.",
+	"desktop_push_unsupported": "Las notificaciones de escritorio no están disponibles en este sistema. En Linux, comprueba que haya un servicio de notificaciones en ejecución.",
+	"desktop_push_disabled": "Las notificaciones de escritorio están desactivadas.",
+	"desktop_push_enabling": "Activando las notificaciones de escritorio…",
+	"desktop_push_active": "Las notificaciones de escritorio están activadas mientras Ditero esté abierto o minimizado. La entrega depende de tu conexión.",
+	"desktop_push_denied": "El permiso para las notificaciones de escritorio está denegado. Permítelas en los ajustes del sistema y vuelve a intentarlo.",
+	"desktop_push_server_unavailable": "Este servidor aún no puede enviar notificaciones de escritorio. Pide a su administrador que active la entrega.",
+	"desktop_push_temporary_unavailable": "Las notificaciones de escritorio no están disponibles temporalmente. Comprueba tu conexión y vuelve a intentarlo.",
+	"desktop_push_storage_failed": "Este ordenador no pudo guardar los ajustes de notificaciones. Vuelve a intentarlo.",
+	"desktop_push_no_session": "Vuelve a iniciar sesión para gestionar las notificaciones de escritorio.",
+	"desktop_push_read_failed": "No se pudieron comprobar las notificaciones de escritorio. Actualiza el estado para intentarlo de nuevo.",
+	"desktop_push_loading": "Comprobando las notificaciones de escritorio…",
+	"desktop_push_enable": "Activar notificaciones de escritorio",
+	"desktop_push_action_failed": "No se pudieron cambiar las notificaciones de escritorio. Actualiza el estado antes de volver a intentarlo."
 }

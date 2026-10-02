@@ -2309,5 +2309,20 @@
 	"native_push_disable": "إيقاف",
 	"native_push_refresh": "تحديث الحالة",
 	"native_push_action_failed": "تعذر تغيير إشعارات الهاتف. حدّث الحالة قبل المحاولة مجددًا.",
-	"native_notification_unavailable": "لم يعد هذا الإشعار متاحًا."
+	"native_notification_unavailable": "لم يعد هذا الإشعار متاحًا.",
+	"desktop_push_heading": "على هذا الكمبيوتر",
+	"desktop_push_help": "تلقَّ التذكيرات ما دام Ditero مفتوحًا أو مصغّرًا. إغلاق التطبيق يوقف الإشعارات.",
+	"desktop_push_unsupported": "إشعارات سطح المكتب غير متاحة على هذا النظام. على Linux، تأكد من تشغيل خدمة إشعارات.",
+	"desktop_push_disabled": "إشعارات سطح المكتب متوقفة.",
+	"desktop_push_enabling": "جارٍ تفعيل إشعارات سطح المكتب…",
+	"desktop_push_active": "إشعارات سطح المكتب مفعّلة ما دام Ditero مفتوحًا أو مصغّرًا. يعتمد وصولها على اتصالك.",
+	"desktop_push_denied": "إذن إشعارات سطح المكتب مرفوض. اسمح بها في إعدادات النظام، ثم حاول مجددًا.",
+	"desktop_push_server_unavailable": "هذا الخادم غير جاهز لإرسال إشعارات سطح المكتب. اطلب من المسؤول تفعيل الإرسال.",
+	"desktop_push_temporary_unavailable": "إشعارات سطح المكتب غير متاحة مؤقتًا. تحقق من اتصالك وحاول مجددًا.",
+	"desktop_push_storage_failed": "لم يتمكن هذا الكمبيوتر من حفظ إعدادات الإشعارات. حاول مجددًا.",
+	"desktop_push_no_session": "سجّل الدخول مجددًا لإدارة إشعارات سطح المكتب.",
+	"desktop_push_read_failed": "تعذّر التحقق من إشعارات سطح المكتب. حدّث الحالة للمحاولة مجددًا.",
+	"desktop_push_loading": "جارٍ التحقق من إشعارات سطح المكتب…",
+	"desktop_push_enable": "تفعيل إشعارات سطح المكتب",
+	"desktop_push_action_failed": "تعذّر تغيير إشعارات سطح المكتب. حدّث الحالة قبل المحاولة مجددًا."
 }

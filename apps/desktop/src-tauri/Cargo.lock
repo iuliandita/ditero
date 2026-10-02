@@ -972,6 +972,7 @@ dependencies = [
  "tokio-util",
  "url",
  "windows-native-keyring-store",
+ "zbus",
  "zbus-secret-service-keyring-store",
 ]
 

@@ -15,6 +15,10 @@ import {
 	pushConfiguration,
 	validatePushEndpoint,
 } from "./contracts.ts";
+import {
+	parseDesktopEnrollment,
+	parseDesktopPoll,
+} from "./desktop-contracts.ts";
 import { NativePushStore, PushAuthorityError } from "./store.ts";
 export type NativePushDependencies = {
 	pool: Pool;
@@ -81,6 +85,62 @@ export function nativePushRoutes(deps: NativePushDependencies): Elysia {
 				}),
 			),
 		)
+		.get(
+			"/api/native/push/desktop/config",
+			guarded(async () => reply({ deliveryReady: !!store })),
+		)
+		.post(
+			"/api/native/push/desktop/register",
+			guarded(async (request, session) => {
+				const body = await readJsonObject(request, 1024);
+				if (!body.ok) return reply({ code: "invalid-body" }, body.status);
+				const input = parseDesktopEnrollment(body.value);
+				if (!input) return reply({ code: "invalid-body" }, 400);
+				if (!store) return reply({ code: "provider-unavailable" }, 409);
+				return reply(await store.register(session, input));
+			}),
+		)
+		.post(
+			"/api/native/push/desktop/unregister",
+			guarded(async (request, session) => {
+				const body = await readJsonObject(request, 1024);
+				if (!body.ok) return reply({ code: "invalid-body" }, body.status);
+				const input = parseDesktopPoll(body.value);
+				if (!input) return reply({ code: "invalid-body" }, 400);
+				await openStore.unregisterDesktop(session, input.registrationId);
+				return reply({ unregistered: true });
+			}),
+		)
+
+		.post(
+			"/api/native/push/desktop/poll",
+			guarded(async (request, session) => {
+				const body = await readJsonObject(request, 1024);
+				if (!body.ok) return reply({ code: "invalid-body" }, body.status);
+				const input = parseDesktopPoll(body.value);
+				if (!input) return reply({ code: "invalid-body" }, 400);
+				const messages = await openStore.pollDesktop(
+					session,
+					input.registrationId,
+				);
+				return messages
+					? reply({ messages })
+					: reply({ code: "notification-unavailable" }, 404);
+			}),
+		)
+		.post(
+			"/api/native/push/desktop/receipt",
+			guarded(async (request, session) => {
+				const body = await readJsonObject(request, 1024);
+				if (!body.ok) return reply({ code: "invalid-body" }, body.status);
+				const input = parsePushOpen(body.value);
+				if (!input) return reply({ code: "invalid-body" }, 400);
+				return (await openStore.receiptDesktop(session, input))
+					? reply({ received: true })
+					: reply({ code: "notification-unavailable" }, 404);
+			}),
+		)
+
 		.post(
 			"/api/native/push/open",
 			guarded(async (request, session) => {

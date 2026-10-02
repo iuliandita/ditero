@@ -1,7 +1,8 @@
 use crate::{
     attachments::{self, Transfers},
+    notifications::{self, Event as NotificationEvent},
     protocol::{self, Result, MAX_BODY, MAX_SEND},
-    vault::{self, Registry, Session, SystemVault, Vault},
+    vault::{self, DesktopRegistration, Registry, Session, SystemVault, Vault},
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use futures_util::{SinkExt, StreamExt};
@@ -42,6 +43,13 @@ enum Work {
     Drain(oneshot::Sender<()>),
     Ended(u64, u64),
     FileReply(attachments::Context, u64, Result<Value>),
+    Notification(NotificationEvent),
+    NotificationCleaned(DesktopRegistration),
+}
+struct NotificationTap {
+    owner: notifications::Owner,
+    notification: String,
+    token: String,
 }
 struct Pending {
     grant: String,
@@ -73,10 +81,18 @@ struct Actor {
     sockets: HashMap<u64, Socket>,
     files: Transfers,
     pages: Arc<AtomicU64>,
+    push: Option<notifications::Receiver>,
+    push_tasks: Vec<tauri::async_runtime::JoinHandle<()>>,
+    push_state: &'static str,
+    verified: bool,
+    tap: Option<NotificationTap>,
+    app: Option<tauri::AppHandle>,
     #[cfg(test)]
     responses: std::collections::VecDeque<(u16, String, bool)>,
     #[cfg(test)]
     requests: std::sync::Mutex<Vec<(String, String, Option<String>)>>,
+    #[cfg(test)]
+    push_supported: bool,
 }
 fn random(n: usize) -> String {
     let mut bytes = vec![0; n];
@@ -201,10 +217,18 @@ pub fn run() {
         sockets: HashMap::new(),
         files: Transfers::default(),
         pages: page.clone(),
+        push: None,
+        push_tasks: Vec::new(),
+        push_state: "disabled",
+        verified: false,
+        tap: None,
+        app: None,
         #[cfg(test)]
         responses: Default::default(),
         #[cfg(test)]
         requests: Default::default(),
+        #[cfg(test)]
+        push_supported: true,
     };
 
     tauri::Builder::default()
@@ -220,6 +244,7 @@ pub fn run() {
             native_drain
         ])
         .setup(move |app| {
+            actor.app = Some(app.handle().clone());
             actor
                 .files
                 .set_root(app.path().app_cache_dir()?.join("ciphertext-stages"));
@@ -262,8 +287,18 @@ impl Actor {
                 }
                 Work::Drain(ack) => {
                     self.drain();
+                    if !notifications::drain(
+                        std::mem::take(&mut self.push_tasks),
+                        Duration::from_secs(3),
+                    )
+                    .await
+                    {
+                        eprintln!("notification withdrawal unconfirmed");
+                    }
                     let _ = ack.send(());
                 }
+                Work::Notification(event) => self.notification_event(event),
+                Work::NotificationCleaned(registration) => self.notification_cleaned(&registration),
                 Work::Ended(gen, cid) => {
                     if gen == self.gen {
                         self.sockets.remove(&cid);
@@ -323,6 +358,8 @@ impl Actor {
         self.gen = self.clock.fetch_add(1, Ordering::SeqCst) + 1;
     }
     fn drain(&mut self) {
+        self.stop_notifications();
+        self.verified = false;
         self.advance();
         self.files.cancel_all();
         for (_, s) in self.sockets.drain() {
@@ -337,6 +374,8 @@ impl Actor {
         self.zero = None;
     }
     fn drop_memory(&mut self) {
+        self.stop_notifications();
+        self.verified = false;
         self.files.cancel_all();
         for (cid, s) in self.sockets.drain() {
             s.task.abort();
@@ -368,6 +407,488 @@ impl Actor {
         self.vault.save(&next)?;
         self.registry = next;
         Ok(())
+    }
+    fn stop_notifications(&mut self) {
+        if let Some(receiver) = self.push.take() {
+            receiver.owner.cancel();
+            self.push_tasks.push(receiver.task);
+        }
+        self.tap = None;
+    }
+    fn notification_current(&self, owner: &notifications::Owner) -> bool {
+        self.verified
+            && self
+                .session
+                .as_ref()
+                .is_some_and(|s| owner.matches(s, &self.handle, self.gen, self.page))
+            && self
+                .registry
+                .notifications
+                .get(&owner.registration.session.origin)
+                .is_some_and(|r| {
+                    r.registration_id == owner.registration.registration_id
+                        && vault::same_session(&r.session, &owner.registration.session)
+                })
+    }
+    fn retire_finished_receiver(&mut self) -> bool {
+        if self
+            .push
+            .as_ref()
+            .is_some_and(|r| r.finished.load(Ordering::SeqCst))
+        {
+            self.stop_notifications();
+            true
+        } else {
+            false
+        }
+    }
+    fn start_notifications(&mut self) {
+        if !self.verified || self.push.is_some() {
+            return;
+        }
+        let Some(session) = &self.session else {
+            return;
+        };
+        let Some(registration) = self
+            .registry
+            .notifications
+            .get(&session.origin)
+            .filter(|r| vault::same_session(&r.session, session))
+            .cloned()
+        else {
+            self.push_state = if self.registry.retired_notifications.is_empty() {
+                "disabled"
+            } else {
+                "cleanup-pending"
+            };
+            return;
+        };
+        let owner = notifications::Owner {
+            locale: Arc::new(std::sync::RwLock::new(registration.locale.clone())),
+            registration,
+            gen: self.gen,
+            page: self.page,
+            handle: self.handle.clone(),
+            clock: self.clock.clone(),
+            pages: self.pages.clone(),
+            retired: Arc::new(AtomicBool::new(false)),
+            wake: Arc::new(tokio::sync::Notify::new()),
+        };
+        let (events, mut receive) = mpsc::channel(32);
+        let tx = self.tx.clone();
+        tauri::async_runtime::spawn(async move {
+            while let Some(event) = receive.recv().await {
+                if tx.try_send(Work::Notification(event)).is_err() {
+                    break;
+                }
+            }
+        });
+        self.push = Some(notifications::start(owner, self.http.clone(), events));
+        self.push_state = "active";
+    }
+    fn cleanup_notifications(&mut self) {
+        for registration in self.registry.retired_notifications.clone() {
+            let http = self.http.clone();
+            let tx = self.tx.clone();
+            tauri::async_runtime::spawn(async move {
+                let result = notifications::request(
+                    &http,
+                    &registration.session,
+                    "unregister",
+                    Some(json!({"registrationId":registration.registration_id})),
+                )
+                .await;
+                if result.is_ok_and(|(status, v)| notifications::cleanup_terminal(status, &v)) {
+                    let _ = tx.try_send(Work::NotificationCleaned(registration));
+                }
+            });
+        }
+    }
+    fn notification_cleaned(&mut self, registration: &DesktopRegistration) {
+        let mut next = self.registry.clone();
+        let previous = next.retired_notifications.len();
+        next.retired_notifications.retain(|r| {
+            r.registration_id != registration.registration_id
+                || !vault::same_session(&r.session, &registration.session)
+        });
+        if previous == next.retired_notifications.len() {
+            return;
+        }
+        if self.persist(next).is_err() {
+            self.push_state = "storage-failed";
+            return;
+        }
+        if self.push_state == "cleanup-pending" && self.registry.retired_notifications.is_empty() {
+            self.push_state = if self.session.is_none() || !self.verified {
+                "no-session"
+            } else if self.session.as_ref().is_some_and(|s| {
+                self.registry
+                    .notifications
+                    .get(&s.origin)
+                    .is_some_and(|r| vault::same_session(&r.session, s))
+            }) {
+                "active"
+            } else {
+                "disabled"
+            };
+        }
+    }
+    fn update_notification_locale(&mut self, locale: &str) -> Result<()> {
+        let Some(session) = &self.session else {
+            return Ok(());
+        };
+        let Some(record) = self
+            .registry
+            .notifications
+            .get(&session.origin)
+            .filter(|r| vault::same_session(&r.session, session))
+        else {
+            return Ok(());
+        };
+        if record.locale == locale {
+            return Ok(());
+        }
+        let mut next = self.registry.clone();
+        next.notifications.get_mut(&session.origin).unwrap().locale = locale.into();
+        self.persist(next)?;
+        if let Some(receiver) = &self.push {
+            *receiver
+                .owner
+                .locale
+                .write()
+                .map_err(|_| "storage-failed")? = locale.into();
+        }
+        Ok(())
+    }
+    async fn notification_supported(&self) -> bool {
+        #[cfg(test)]
+        {
+            self.push_supported
+        }
+        #[cfg(not(test))]
+        {
+            notifications::supported().await
+        }
+    }
+    fn retire_in(next: &mut Registry, session: &Session) -> Result<()> {
+        if next
+            .notifications
+            .get(&session.origin)
+            .is_some_and(|r| vault::same_session(&r.session, session))
+        {
+            if next.retired_notifications.len() >= 64 {
+                return Err("storage-failed");
+            }
+            let r = next.notifications.remove(&session.origin).unwrap();
+            next.retired_notifications.push(r);
+        }
+        Ok(())
+    }
+    fn notification_event(&mut self, event: NotificationEvent) {
+        match event {
+            NotificationEvent::Accepted(owner, notification, reply) => {
+                let mut accepted = false;
+                if self.notification_current(&owner) {
+                    let mut next = self.registry.clone();
+                    let r = next
+                        .notifications
+                        .get_mut(&owner.registration.session.origin)
+                        .unwrap();
+                    if r.receipts.len() < 128 && !r.seen.contains(&notification) {
+                        while r.seen.len() >= 256 {
+                            if let Some(i) = r.seen.iter().position(|id| !r.receipts.contains(id)) {
+                                r.seen.remove(i);
+                            } else {
+                                break;
+                            }
+                        }
+                        r.seen.push(notification.clone());
+                        r.receipts.push(notification);
+                        accepted = self.persist(next).is_ok();
+                    }
+                    if !accepted {
+                        self.push_state = "storage-failed";
+                        self.stop_notifications();
+                    }
+                }
+                let _ = reply.send(accepted);
+            }
+            NotificationEvent::Received(owner, notification) => {
+                if !self.notification_current(&owner) {
+                    return;
+                }
+                let mut next = self.registry.clone();
+                next.notifications
+                    .get_mut(&owner.registration.session.origin)
+                    .unwrap()
+                    .receipts
+                    .retain(|id| id != &notification);
+                if self.persist(next).is_err() {
+                    self.push_state = "storage-failed";
+                    self.stop_notifications();
+                }
+            }
+            NotificationEvent::Action(owner, notification) => {
+                if !self.notification_current(&owner)
+                    || !self.registry.notifications[&owner.registration.session.origin]
+                        .seen
+                        .contains(&notification)
+                {
+                    return;
+                }
+                self.tap = Some(NotificationTap {
+                    owner: owner.clone(),
+                    notification,
+                    token: random(24),
+                });
+                self.emit(json!({"t":"push.open","gen":self.gen}));
+                if let Some(app) = &self.app {
+                    let app = app.clone();
+                    let main = app.clone();
+                    let (tx, rx) = oneshot::channel();
+                    if app
+                        .run_on_main_thread(move || {
+                            let result = if owner.current() {
+                                main.get_webview_window("main")
+                                    .ok_or("closed")
+                                    .and_then(|window| {
+                                        window.show().map_err(|_| "focus-failed")?;
+                                        window.unminimize().map_err(|_| "focus-failed")?;
+                                        window.set_focus().map_err(|_| "focus-failed")
+                                    })
+                            } else {
+                                Err("cancelled")
+                            };
+                            let _ = tx.send(result);
+                        })
+                        .is_ok()
+                    {
+                        self.push_tasks
+                            .push(tauri::async_runtime::spawn(async move {
+                                let _ = tokio::time::timeout(Duration::from_secs(3), rx).await;
+                            }));
+                    }
+                }
+            }
+            NotificationEvent::State(owner, state) => {
+                if self.notification_current(&owner) {
+                    self.push_state = state;
+                }
+            }
+            NotificationEvent::Stopped(owner, state) => {
+                if self
+                    .push
+                    .as_ref()
+                    .is_some_and(|r| Arc::ptr_eq(&r.owner.retired, &owner.retired))
+                    && self.verified
+                    && self
+                        .session
+                        .as_ref()
+                        .is_some_and(|s| vault::same_session(s, &owner.registration.session))
+                    && owner.handle == self.handle
+                    && owner.gen == self.gen
+                    && owner.page == self.page
+                    && self.current().is_ok()
+                    && self.pages.load(Ordering::SeqCst) == self.page
+                {
+                    self.push_state = state;
+                    self.tap = None;
+                }
+            }
+            NotificationEvent::Unauthorized(owner) => {
+                if !self.notification_current(&owner) {
+                    return;
+                }
+                let mut next = self.registry.clone();
+                let _ = Self::retire_in(&mut next, &owner.registration.session);
+                vault::remove_session(&mut next, &owner.registration.session);
+                let _ = self.persist(next);
+                self.drop_memory();
+                self.push_state = "no-session";
+                self.emit(json!({"t":"session-refused","gen":self.gen,"authHandle":owner.handle}));
+            }
+        }
+    }
+    fn push_reply(&self) -> Value {
+        json!({"ok":true,"state":self.push_state,"permission":if matches!(self.push_state,"unsupported"|"denied"|"no-session") {"denied"} else {"granted"},"provider":"desktop"})
+    }
+    async fn push_post(&mut self, v: &Value) -> Result<Value> {
+        let op = protocol::string(v, "op")?;
+        let fields: &[&str] = if op == "push.dismissOpen" {
+            &["op", "rid", "gen", "id", "body"]
+        } else if v.get("locale").is_some()
+            && matches!(op, "push.state" | "push.enable" | "push.permission")
+        {
+            &["op", "rid", "gen", "id", "locale"]
+        } else {
+            &["op", "rid", "gen", "id"]
+        };
+        if !notifications::exact(v, fields) {
+            return Err("invalid-message");
+        }
+        let locale = match v.get("locale") {
+            Some(value) => value.as_str().ok_or("invalid-message")?,
+            None => "en",
+        };
+        if !["en", "de", "es", "fr", "ro", "ar"].contains(&locale) {
+            return Err("invalid-message");
+        }
+        if self.session.is_none() || !self.verified {
+            if matches!(op, "push.state" | "push.permission" | "push.enable") {
+                self.push_state = "no-session";
+                return Ok(self.push_reply());
+            }
+            return Err("no-session");
+        }
+        if protocol::string(v, "id")? != self.handle {
+            return Err("invalid-message");
+        }
+        if op == "push.open" {
+            let Some(tap) = &self.tap else {
+                return Ok(json!({"ok":true,"open":null}));
+            };
+            if !self.notification_current(&tap.owner) {
+                self.tap = None;
+                return Ok(json!({"ok":true,"open":null}));
+            }
+            let token = tap.token.clone();
+            let owner = tap.owner.clone();
+            let body = json!({"notificationId":tap.notification,"registrationId":tap.owner.registration.registration_id}).to_string();
+            let (status, raw) = self
+                .authed("/api/native/push/open", true, Some(&body), true)
+                .await?;
+            if !self.notification_current(&owner)
+                || !self.tap.as_ref().is_some_and(|t| t.token == token)
+            {
+                return Err("cancelled");
+            }
+            if status == 404 {
+                self.tap = None;
+                return Err("notification-unavailable");
+            }
+            if status != 200 {
+                return Err("network");
+            }
+            let out = protocol::parse(&raw)?;
+            if !notifications::exact(&out, &["target"]) {
+                return Err("invalid-response");
+            }
+            return Ok(
+                json!({"ok":true,"open":{"token":token,"target":notifications::target(&out["target"])?}}),
+            );
+        }
+        if op == "push.dismissOpen" {
+            if !notifications::exact(&v["body"], &["token"]) {
+                return Err("invalid-message");
+            }
+            let token = protocol::string(&v["body"], "token")?;
+            if self.tap.as_ref().is_some_and(|t| t.token == token) {
+                self.tap = None;
+            }
+            return Ok(json!({"ok":true}));
+        }
+        if op == "push.disable" {
+            let session = self.session.clone().unwrap();
+            let verified = self.verified;
+            self.stop_notifications();
+            self.verified = verified;
+            let mut next = self.registry.clone();
+            Self::retire_in(&mut next, &session)?;
+            if self.persist(next).is_err() {
+                self.push_state = "storage-failed";
+                return Ok(self.push_reply());
+            }
+            self.push_state = if self.registry.retired_notifications.is_empty() {
+                "disabled"
+            } else {
+                "cleanup-pending"
+            };
+            self.cleanup_notifications();
+            return Ok(self.push_reply());
+        }
+        if !matches!(op, "push.state" | "push.enable" | "push.permission") {
+            return Err("unknown-op");
+        }
+        if v.get("locale").is_some() && self.update_notification_locale(locale).is_err() {
+            self.push_state = "storage-failed";
+            return Ok(self.push_reply());
+        }
+        if !self.notification_supported().await {
+            self.stop_notifications();
+            self.push_state = "unsupported";
+            return Ok(self.push_reply());
+        }
+        self.current()?;
+        if self.push_state == "unsupported" {
+            self.stop_notifications();
+        }
+        self.retire_finished_receiver();
+        self.start_notifications();
+        if op != "push.enable" {
+            return Ok(self.push_reply());
+        }
+        let session = self.session.clone().unwrap();
+        if self
+            .registry
+            .notifications
+            .get(&session.origin)
+            .is_some_and(|r| vault::same_session(&r.session, &session))
+        {
+            self.start_notifications();
+            return Ok(self.push_reply());
+        }
+        self.push_state = "enabling";
+        let (status, raw) = self
+            .authed("/api/native/push/desktop/config", false, None, true)
+            .await?;
+        let config = protocol::parse(&raw)?;
+        if status != 200
+            || !notifications::exact(&config, &["deliveryReady"])
+            || config["deliveryReady"] != true
+        {
+            self.push_state = "server-unavailable";
+            return Ok(self.push_reply());
+        }
+        let (status, raw) = self
+            .authed("/api/native/push/desktop/register", true, Some("{}"), true)
+            .await?;
+        let out = protocol::parse(&raw)?;
+        if status != 200
+            || !notifications::exact(&out, &["registrationId", "provider"])
+            || out["provider"] != "desktop"
+            || !out["registrationId"].as_str().is_some_and(protocol::id)
+        {
+            self.push_state = "registration-failed";
+            return Ok(self.push_reply());
+        }
+        let registration = DesktopRegistration {
+            session: session.clone(),
+            registration_id: out["registrationId"].as_str().unwrap().to_owned(),
+            seen: Vec::new(),
+            receipts: Vec::new(),
+            locale: locale.into(),
+        };
+        let mut next = self.registry.clone();
+        next.notifications
+            .insert(session.origin, registration.clone());
+        if self.persist(next).is_err() {
+            self.push_state = "storage-failed";
+            let http = self.http.clone();
+            self.push_tasks
+                .push(tauri::async_runtime::spawn(async move {
+                    let _ = notifications::request(
+                        &http,
+                        &registration.session,
+                        "unregister",
+                        Some(json!({"registrationId":registration.registration_id})),
+                    )
+                    .await;
+                }));
+            return Ok(self.push_reply());
+        }
+        self.start_notifications();
+        self.cleanup_notifications();
+        Ok(self.push_reply())
     }
     async fn call_unfenced(
         &mut self,
@@ -457,6 +978,7 @@ impl Actor {
             .await?;
         if clear && unauthorized(result.0, &result.1) {
             let mut next = self.registry.clone();
+            let _ = Self::retire_in(&mut next, &s);
             vault::remove_session(&mut next, &s);
             let _ = self.persist(next);
             self.drop_memory();
@@ -551,7 +1073,7 @@ impl Actor {
         if map.keys().any(|k| {
             ![
                 "op", "rid", "cid", "gen", "id", "body", "origin", "url", "protocol", "data",
-                "code", "reason",
+                "code", "reason", "locale",
             ]
             .contains(&k.as_str())
         }) || !v
@@ -590,6 +1112,7 @@ impl Actor {
             return Err("stale-generation");
         }
         match op {
+            op if op.starts_with("push.") => self.push_post(v).await,
             "state.read" => Ok(self.snapshot()),
             "server.select" => {
                 if !self.sockets.is_empty() {
@@ -664,9 +1187,11 @@ impl Actor {
                 if !vault::valid_expiry(expiry) {
                     return Err("invalid-response");
                 }
-                Ok(
-                    json!({"ok":true,"scope":s.scope(),"userId":s.user_id,"deviceId":s.device_id,"expiresAt":expiry}),
-                )
+                let reply = json!({"ok":true,"scope":s.scope(),"userId":s.user_id,"deviceId":s.device_id,"expiresAt":expiry});
+                self.verified = true;
+                self.start_notifications();
+                self.cleanup_notifications();
+                Ok(reply)
             }
             "profile.read" => {
                 let (status, raw) = self
@@ -736,6 +1261,7 @@ impl Actor {
             "forget" => {
                 let mut next = self.registry.clone();
                 if let Some(s) = &self.session {
+                    Self::retire_in(&mut next, s)?;
                     vault::remove_session(&mut next, s);
                 }
                 let result = self.persist(next);
@@ -888,6 +1414,11 @@ impl Actor {
         verify_session(&protocol::parse(&raw)?, &s)?;
         self.current()?;
         let mut next = self.registry.clone();
+        if let Some(old) = next.sessions.get(origin).cloned() {
+            if !vault::same_session(&old, &s) {
+                Self::retire_in(&mut next, &old)?;
+            }
+        }
         next.sessions.insert(origin.into(), s.clone());
         self.vault.save(&next)?;
         if let Err(error) = self.current() {
@@ -896,9 +1427,13 @@ impl Actor {
         }
         self.registry = next;
         self.install(Some(s));
+        self.verified = true;
+        self.start_notifications();
+        self.cleanup_notifications();
         Ok(json!({"ok":true,"state":"signed-in","session":self.meta()}))
     }
     async fn revoke(&mut self) -> Result<Value> {
+        self.stop_notifications();
         self.files.cancel_all();
         let s = self.session.clone().ok_or("no-session")?;
         let (status, raw) = self
@@ -917,6 +1452,7 @@ impl Actor {
             return Err("revoke-refused");
         }
         let mut next = self.registry.clone();
+        Self::retire_in(&mut next, &s)?;
         vault::remove_session(&mut next, &s);
         let result = self.persist(next);
         self.drop_memory();
@@ -1131,10 +1667,18 @@ mod tests {
             sockets: HashMap::new(),
             files: Transfers::default(),
             pages: Arc::new(AtomicU64::new(1)),
+            push: None,
+            push_tasks: Vec::new(),
+            push_state: "disabled",
+            verified: false,
+            tap: None,
+            app: None,
             #[cfg(test)]
             responses: Default::default(),
             #[cfg(test)]
             requests: Default::default(),
+            #[cfg(test)]
+            push_supported: true,
         }
     }
     #[tokio::test]
@@ -1189,6 +1733,386 @@ mod tests {
             device_id: "d1".into(),
             expires_at: "2026-12-01T00:00:00Z".into(),
         }
+    }
+    fn push_owner(host: &mut Actor) -> notifications::Owner {
+        let session = session();
+        host.install(Some(session.clone()));
+        host.verified = true;
+        let registration = DesktopRegistration {
+            session: session.clone(),
+            registration_id: "registration".into(),
+            seen: vec!["notification".into()],
+            receipts: vec!["notification".into()],
+            locale: "en".into(),
+        };
+        host.registry
+            .notifications
+            .insert(session.origin, registration.clone());
+        notifications::Owner {
+            registration,
+            gen: host.gen,
+            page: host.page,
+            handle: host.handle.clone(),
+            clock: host.clock.clone(),
+            pages: host.pages.clone(),
+            retired: Arc::new(AtomicBool::new(false)),
+            wake: Arc::new(tokio::sync::Notify::new()),
+            locale: Arc::new(std::sync::RwLock::new("en".into())),
+        }
+    }
+    #[tokio::test]
+    async fn unverified_restore_and_retired_callbacks_have_no_notification_authority() {
+        let mut restored = actor(false);
+        let owner = push_owner(&mut restored);
+        restored.verified = false;
+        restored.start_notifications();
+        assert!(restored.push.is_none());
+        for retirement in 0..4 {
+            let mut host = actor(false);
+            let owner = push_owner(&mut host);
+            match retirement {
+                0 => host.drop_memory(),
+                1 => {
+                    host.pages.fetch_add(1, Ordering::SeqCst);
+                }
+                2 => {
+                    let mut replacement = session();
+                    replacement.token = "replacement-token".into();
+                    host.install(Some(replacement));
+                    host.verified = true;
+                }
+                _ => owner.cancel(),
+            }
+            let saved = host.registry.notifications.clone();
+            let (tx, rx) = oneshot::channel();
+            host.notification_event(NotificationEvent::Accepted(
+                owner.clone(),
+                "later".into(),
+                tx,
+            ));
+            assert!(!rx.await.unwrap());
+            host.notification_event(NotificationEvent::Received(
+                owner.clone(),
+                "notification".into(),
+            ));
+            host.notification_event(NotificationEvent::Action(owner, "notification".into()));
+            assert!(host.tap.is_none());
+            assert_eq!(
+                serde_json::to_value(saved).unwrap(),
+                serde_json::to_value(&host.registry.notifications).unwrap()
+            );
+        }
+        assert!(!restored.notification_current(&owner));
+    }
+    #[tokio::test]
+    async fn accepted_display_requires_protected_storage_and_receipt_uses_exact_owner() {
+        let mut host = actor(true);
+        let owner = push_owner(&mut host);
+        let (tx, rx) = oneshot::channel();
+        host.notification_event(NotificationEvent::Accepted(owner, "new".into(), tx));
+        assert!(!rx.await.unwrap());
+        assert_eq!(host.push_state, "storage-failed");
+        assert!(host.verified);
+        assert_eq!(host.push_reply()["state"], "storage-failed");
+        let mut host = actor(false);
+        let owner = push_owner(&mut host);
+        host.notification_event(NotificationEvent::Received(owner, "notification".into()));
+        assert!(host.registry.notifications["https://a.example"]
+            .receipts
+            .is_empty());
+        let old = session();
+        let mut next = host.registry.clone();
+        let mut replacement = next.notifications[&old.origin].clone();
+        replacement.session.token = "replacement-token".into();
+        replacement.registration_id = "replacement-registration".into();
+        next.notifications.insert(old.origin.clone(), replacement);
+        Actor::retire_in(&mut next, &old).unwrap();
+        assert_eq!(
+            next.notifications[&old.origin].registration_id,
+            "replacement-registration"
+        );
+        assert!(next.retired_notifications.is_empty());
+        Actor::retire_in(&mut host.registry, &old).unwrap();
+        assert!(host.registry.notifications.is_empty());
+        assert_eq!(
+            host.registry.retired_notifications[0].registration_id,
+            "registration"
+        );
+    }
+    #[tokio::test]
+    async fn terminal_cleanup_is_exact_and_durable_state_does_not_replace_active_owner() {
+        let mut host = actor(false);
+        let owner = push_owner(&mut host);
+        let old = owner.registration.clone();
+        host.registry.notifications.clear();
+        host.registry.retired_notifications.push(old.clone());
+        let mut newer = old.clone();
+        newer.session.token = "newer-token".into();
+        host.registry.retired_notifications.push(newer.clone());
+        host.push_state = "cleanup-pending";
+        host.notification_cleaned(&old);
+        assert_eq!(host.registry.retired_notifications.len(), 1);
+        assert_eq!(
+            host.registry.retired_notifications[0].session.token,
+            "newer-token"
+        );
+        assert_eq!(host.push_state, "cleanup-pending");
+        host.notification_cleaned(&newer);
+        assert!(host.registry.retired_notifications.is_empty());
+        assert_eq!(host.push_state, "disabled");
+        host.registry.retired_notifications.push(old.clone());
+        host.drop_memory();
+        host.push_state = "cleanup-pending";
+        host.notification_cleaned(&old);
+        assert_eq!(host.push_state, "no-session");
+        let current = push_owner(&mut host);
+        host.registry.retired_notifications.push(old.clone());
+        host.push_state = "active";
+        host.notification_cleaned(&old);
+        assert_eq!(host.push_state, "active");
+        assert!(host.notification_current(&current));
+        let mut failed = actor(true);
+        failed.registry.retired_notifications.push(old.clone());
+        failed.push_state = "cleanup-pending";
+        failed.notification_cleaned(&old);
+        assert_eq!(failed.registry.retired_notifications.len(), 1);
+        assert_eq!(failed.push_state, "storage-failed");
+    }
+    #[tokio::test]
+    async fn state_refresh_recovers_daemon_without_registering_and_locale_preserves_live_owner_and_tap(
+    ) {
+        let mut empty = actor(false);
+        empty.install(Some(session()));
+        empty.verified = true;
+        empty.push_state = "unsupported";
+        let reply = empty
+            .push_post(
+                &json!({"op":"push.state","rid":1,"gen":empty.gen,"id":empty.handle,"locale":"en"}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(reply["state"], "disabled");
+        assert!(empty.push.is_none());
+        let mut host = actor(false);
+        let owner = push_owner(&mut host);
+        host.push_state = "unsupported";
+        host.push = Some(notifications::Receiver {
+            owner: owner.clone(),
+            task: tauri::async_runtime::JoinHandle::Tokio(tokio::spawn(async {})),
+            finished: Arc::new(AtomicBool::new(true)),
+        });
+        let state =
+            json!({"op":"push.state","rid":1,"gen":host.gen,"id":host.handle,"locale":"en"});
+        let reply = host.push_post(&state).await.unwrap();
+        assert_eq!(reply["state"], "active");
+        assert!(owner.retired.load(Ordering::SeqCst));
+        assert!(host.push.as_ref().unwrap().owner.current());
+        assert!(host.requests.lock().unwrap().is_empty());
+        let live = host.push.as_ref().unwrap().owner.clone();
+        host.tap = Some(NotificationTap {
+            owner: live.clone(),
+            notification: "notification".into(),
+            token: "tap-token".into(),
+        });
+        let reply = host
+            .push_post(
+                &json!({"op":"push.state","rid":2,"gen":host.gen,"id":host.handle,"locale":"de"}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(reply["state"], "active");
+        assert_eq!(
+            host.registry.notifications["https://a.example"].locale,
+            "de"
+        );
+        assert_eq!(
+            notifications::notification_copy(&live).unwrap(),
+            notifications::copy("de")
+        );
+        assert_eq!(host.tap.as_ref().unwrap().token, "tap-token");
+        assert!(host.notification_current(&live));
+        assert!(Arc::ptr_eq(
+            &live.retired,
+            &host.push.as_ref().unwrap().owner.retired
+        ));
+        host.push_supported = false;
+        let reply = host.push_post(&state).await.unwrap();
+        assert_eq!(reply["state"], "unsupported");
+        assert!(host.push.is_none());
+        assert!(!live.current());
+        host.stop_notifications();
+    }
+    #[tokio::test]
+    async fn unavailable_receipt_retires_pending_but_retains_seen_only_for_current_owner() {
+        let mut host = actor(false);
+        let owner = push_owner(&mut host);
+        assert!(notifications::receipt_terminal(
+            404,
+            &json!({"code":"notification-unavailable"})
+        ));
+        host.notification_event(NotificationEvent::Received(
+            owner.clone(),
+            "notification".into(),
+        ));
+        let record = &host.registry.notifications["https://a.example"];
+        assert!(record.receipts.is_empty());
+        assert_eq!(record.seen, vec!["notification"]);
+        host.registry
+            .notifications
+            .get_mut("https://a.example")
+            .unwrap()
+            .receipts
+            .push("notification".into());
+        owner.cancel();
+        host.notification_event(NotificationEvent::Received(owner, "notification".into()));
+        assert_eq!(
+            host.registry.notifications["https://a.example"].receipts,
+            vec!["notification"]
+        );
+    }
+    #[tokio::test]
+    async fn failed_locale_persistence_preserves_existing_popups_and_pending_tap() {
+        let mut host = actor(true);
+        let owner = push_owner(&mut host);
+        host.push_state = "active";
+        host.push = Some(notifications::Receiver {
+            owner: owner.clone(),
+            task: tauri::async_runtime::JoinHandle::Tokio(tokio::spawn(async {})),
+            finished: Arc::new(AtomicBool::new(false)),
+        });
+        host.tap = Some(NotificationTap {
+            owner: owner.clone(),
+            notification: "notification".into(),
+            token: "preserved-tap".into(),
+        });
+        let reply = host
+            .push_post(
+                &json!({"op":"push.state","rid":1,"gen":host.gen,"id":host.handle,"locale":"es"}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(reply["state"], "storage-failed");
+        assert_eq!(
+            host.registry.notifications["https://a.example"].locale,
+            "en"
+        );
+        assert_eq!(
+            notifications::notification_copy(&owner).unwrap(),
+            notifications::copy("en")
+        );
+        assert!(host.notification_current(&owner));
+        assert_eq!(host.tap.as_ref().unwrap().token, "preserved-tap");
+        host.stop_notifications();
+    }
+    #[tokio::test]
+    async fn background_refusal_carries_captured_handle_and_rejects_held_callbacks() {
+        let mut host = actor(false);
+        let owner = push_owner(&mut host);
+        let emitted = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let capture = emitted.clone();
+        host.channel = Some(Channel::new(move |body| {
+            let tauri::ipc::InvokeResponseBody::Json(raw) = body else {
+                panic!("unexpected raw event")
+            };
+            let message: String = serde_json::from_str(&raw).unwrap();
+            capture
+                .lock()
+                .unwrap()
+                .push(serde_json::from_str(&message).unwrap());
+            Ok(())
+        }));
+        host.notification_event(NotificationEvent::Unauthorized(owner.clone()));
+        assert_eq!(
+            *emitted.lock().unwrap(),
+            vec![json!({"t":"session-refused","gen":host.gen,"authHandle":owner.handle})]
+        );
+        assert!(host.handle.is_empty());
+        assert!(!host.verified);
+        let (reply, receive) = oneshot::channel();
+        host.notification_event(NotificationEvent::Accepted(
+            owner.clone(),
+            "late".into(),
+            reply,
+        ));
+        assert!(!receive.await.unwrap());
+        host.notification_event(NotificationEvent::Action(
+            owner.clone(),
+            "notification".into(),
+        ));
+        host.notification_event(NotificationEvent::Received(owner, "notification".into()));
+        assert!(host.tap.is_none());
+        assert!(host.registry.notifications.is_empty());
+        assert_eq!(emitted.lock().unwrap().len(), 1);
+    }
+    #[tokio::test]
+    async fn no_session_states_and_finished_receiver_recovery_preserve_authority() {
+        for op in ["push.state", "push.permission", "push.enable"] {
+            let mut host = actor(false);
+            let reply = host
+                .push_post(&json!({"op":op,"rid":1,"gen":host.gen,"id":"","locale":"en"}))
+                .await
+                .unwrap();
+            assert_eq!(
+                reply,
+                json!({"ok":true,"state":"no-session","permission":"denied","provider":"desktop"})
+            );
+            let owner = push_owner(&mut host);
+            host.verified = false;
+            let reply = host
+                .push_post(&json!({"op":op,"rid":1,"gen":host.gen,"id":owner.handle,"locale":"de"}))
+                .await
+                .unwrap();
+            assert_eq!(reply["state"], "no-session");
+            assert!(host.push.is_none());
+        }
+        let mut host = actor(false);
+        let owner = push_owner(&mut host);
+        let completion = Arc::new(AtomicBool::new(false));
+        host.push = Some(notifications::Receiver {
+            owner: owner.clone(),
+            task: tauri::async_runtime::JoinHandle::Tokio(tokio::spawn(async {})),
+            finished: completion.clone(),
+        });
+        assert!(!host.retire_finished_receiver());
+        assert!(host.push.is_some());
+        completion.store(true, Ordering::SeqCst);
+        assert!(host.retire_finished_receiver());
+        assert!(host.push.is_none());
+        assert!(host.verified);
+        assert!(owner.retired.load(Ordering::SeqCst));
+        assert!(host.session.is_some());
+        host.push_state = "unsupported";
+        assert_eq!(host.push_reply()["permission"], "denied");
+        host.drop_memory();
+        assert!(!host.verified);
+    }
+    #[tokio::test]
+    async fn pending_tap_survives_offline_and_is_consumed_only_by_exact_dismiss_or_404() {
+        let mut host = actor(false);
+        let owner = push_owner(&mut host);
+        host.notification_event(NotificationEvent::Action(owner, "notification".into()));
+        let open = json!({"op":"push.open","rid":1,"gen":host.gen,"id":host.handle});
+        let token = host.tap.as_ref().unwrap().token.clone();
+        host.responses.push_back((503, "{}".into(), false));
+        assert_eq!(host.push_post(&open).await, Err("network"));
+        assert_eq!(host.tap.as_ref().unwrap().token, token);
+        host.responses.push_back((
+            200,
+            json!({"target":{"kind":"workspace","workspaceId":"w"}}).to_string(),
+            false,
+        ));
+        let resolved = host.push_post(&open).await.unwrap();
+        assert_eq!(resolved["open"]["token"], token);
+        host.push_post(&json!({"op":"push.dismissOpen","rid":2,"gen":host.gen,"id":host.handle,"body":{"token":"other"}})).await.unwrap();
+        assert!(host.tap.is_some());
+        host.push_post(&json!({"op":"push.dismissOpen","rid":2,"gen":host.gen,"id":host.handle,"body":{"token":token}})).await.unwrap();
+        assert!(host.tap.is_none());
+        let owner = push_owner(&mut host);
+        host.notification_event(NotificationEvent::Action(owner, "notification".into()));
+        let open = json!({"op":"push.open","rid":1,"gen":host.gen,"id":host.handle});
+        host.responses.push_back((404, "{}".into(), false));
+        assert_eq!(host.push_post(&open).await, Err("notification-unavailable"));
+        assert!(host.tap.is_none());
     }
     #[tokio::test]
     async fn unknown_401_keeps_authority_but_exact_native_unauthorized_retires_it() {

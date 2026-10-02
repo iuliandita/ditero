@@ -15,6 +15,26 @@ import type {
 	PushOpenTarget,
 	PushRegistration,
 } from "./contracts.ts";
+import {
+	DESKTOP_POLL_LIMIT,
+	type DesktopPushMessage,
+	type DesktopPushRegistration,
+} from "./desktop-contracts.ts";
+
+type StoredPushRegistration = PushRegistration | DesktopPushRegistration;
+
+// Authority is checked and locked at retrieval, not assumed from enqueue time.
+const desktopAuthority = `(
+ (jsonb_typeof(o.payload->'taskId')='string' and o.payload->>'taskId'<>'' and exists (
+  select 1 from task t join list l on l.id=t.list_id join workspace w on w.id=l.workspace_id
+  join membership m on m.workspace_id=w.id and m.user_id=$2
+  where t.id=o.payload->>'taskId' for share of t,l,w,m
+ )) or (not (o.payload ? 'taskId') and o.payload->>'kind'='key_grant'
+ and jsonb_typeof(o.payload->'workspaceId')='string' and exists (
+  select 1 from workspace w join membership m on m.workspace_id=w.id and m.user_id=$2
+  where w.id=o.payload->>'workspaceId' for share of w,m
+ ))
+)`;
 export class PushAuthorityError extends Error {}
 export function nativePushConfigContext(
 	id: string,
@@ -120,12 +140,71 @@ export class NativePushStore {
 		);
 	}
 
+	private async desktopOwned<T>(
+		owner: NativeSession,
+		registrationId: string,
+		run: (client: PoolClient) => Promise<T>,
+	): Promise<T | null> {
+		return this.owned(
+			owner,
+			async (client) => {
+				const registration = await client.query(
+					"select id from native_push_registration where id=$1 and user_id=$2 and session_id=$3 and device_id=$4 and provider='desktop' for share",
+					[registrationId, owner.userId, owner.sessionId, owner.deviceId],
+				);
+				return registration.rowCount === 1 ? run(client) : null;
+			},
+			true,
+		);
+	}
+	async pollDesktop(
+		owner: NativeSession,
+		registrationId: string,
+	): Promise<DesktopPushMessage[] | null> {
+		return this.desktopOwned(owner, registrationId, async (client) => {
+			const messages = await client.query<{ notification_id: string }>(
+				`select b.notification_id from native_desktop_mailbox b join notification_outbox o on o.id=b.notification_id
+				where b.registration_id=$1 and b.user_id=$2 and b.received_at is null and b.expires_at>clock_timestamp()
+				and o.recipient_user_id=$2 and o.native_registration_id=$1 and o.channel_kind='nativepush'
+				and ${desktopAuthority} order by b.notification_id limit $3 for share of b,o`,
+				[registrationId, owner.userId, DESKTOP_POLL_LIMIT],
+			);
+			return messages.rows.map((row) => ({
+				version: "1",
+				notificationId: row.notification_id,
+				registrationId,
+			}));
+		});
+	}
+	async receiptDesktop(
+		owner: NativeSession,
+		input: PushOpenInput,
+	): Promise<boolean> {
+		return (
+			(await this.desktopOwned(owner, input.registrationId, async (client) => {
+				const notification = await client.query<{ notification_id: string }>(
+					`select b.notification_id from native_desktop_mailbox b join notification_outbox o on o.id=b.notification_id
+				where b.registration_id=$1 and b.user_id=$2 and b.notification_id=$3 and b.expires_at>clock_timestamp()
+				and o.recipient_user_id=$2 and o.native_registration_id=$1 and o.channel_kind='nativepush'
+				and ${desktopAuthority} for update of b for share of o`,
+					[input.registrationId, owner.userId, input.notificationId],
+				);
+				if (notification.rowCount !== 1) return false;
+				await client.query(
+					"update native_desktop_mailbox set received_at=coalesce(received_at,clock_timestamp()) where notification_id=$1",
+					[input.notificationId],
+				);
+				return true;
+			})) ?? false
+		);
+	}
+
 	async register(
 		owner: NativeSession,
-		input: PushRegistration,
+		input: StoredPushRegistration,
 	): Promise<{
 		registrationId: string;
-		provider: PushRegistration["provider"];
+		provider: StoredPushRegistration["provider"];
 	}> {
 		const ring = this.ring;
 		if (!ring) throw new Error("Native push encryption is unavailable");
@@ -173,6 +252,22 @@ export class NativePushStore {
 			return { registrationId: id, provider: input.provider };
 		});
 	}
+	async unregisterDesktop(
+		owner: NativeSession,
+		registrationId: string,
+	): Promise<void> {
+		await this.owned(
+			owner,
+			async (client) => {
+				await client.query(
+					"delete from native_push_registration where id=$1 and user_id=$2 and session_id=$3 and device_id=$4 and provider='desktop'",
+					[registrationId, owner.userId, owner.sessionId, owner.deviceId],
+				);
+			},
+			true,
+		);
+	}
+
 	async unregister(owner: NativeSession): Promise<void> {
 		await this.owned(owner, async (client) => {
 			await client.query(

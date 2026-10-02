@@ -2125,5 +2125,20 @@
 	"native_push_disable": "Ausschalten",
 	"native_push_refresh": "Status aktualisieren",
 	"native_push_action_failed": "Handy-Benachrichtigungen konnten nicht geändert werden. Aktualisiere den Status, bevor du es erneut versuchst.",
-	"native_notification_unavailable": "Diese Benachrichtigung ist nicht mehr verfügbar."
+	"native_notification_unavailable": "Diese Benachrichtigung ist nicht mehr verfügbar.",
+	"desktop_push_heading": "Auf diesem Computer",
+	"desktop_push_help": "Erhalte Erinnerungen, solange Ditero geöffnet oder minimiert ist. Beim Schließen der App enden die Benachrichtigungen.",
+	"desktop_push_unsupported": "Desktop-Benachrichtigungen sind auf diesem System nicht verfügbar. Prüfe unter Linux, ob ein Benachrichtigungsdienst läuft.",
+	"desktop_push_disabled": "Desktop-Benachrichtigungen sind aus.",
+	"desktop_push_enabling": "Desktop-Benachrichtigungen werden aktiviert…",
+	"desktop_push_active": "Desktop-Benachrichtigungen sind aktiviert, solange Ditero geöffnet oder minimiert ist. Die Zustellung hängt von deiner Verbindung ab.",
+	"desktop_push_denied": "Desktop-Benachrichtigungen sind nicht erlaubt. Erlaube sie in den Systemeinstellungen und versuche es erneut.",
+	"desktop_push_server_unavailable": "Dieser Server kann noch keine Desktop-Benachrichtigungen senden. Bitte den Administrator, die Zustellung zu aktivieren.",
+	"desktop_push_temporary_unavailable": "Desktop-Benachrichtigungen sind vorübergehend nicht verfügbar. Prüfe deine Verbindung und versuche es erneut.",
+	"desktop_push_storage_failed": "Dieser Computer konnte die Benachrichtigungseinstellungen nicht speichern. Versuche es erneut.",
+	"desktop_push_no_session": "Melde dich erneut an, um Desktop-Benachrichtigungen zu verwalten.",
+	"desktop_push_read_failed": "Desktop-Benachrichtigungen konnten nicht geprüft werden. Aktualisiere den Status.",
+	"desktop_push_loading": "Desktop-Benachrichtigungen werden geprüft…",
+	"desktop_push_enable": "Desktop-Benachrichtigungen aktivieren",
+	"desktop_push_action_failed": "Desktop-Benachrichtigungen konnten nicht geändert werden. Aktualisiere den Status, bevor du es erneut versuchst."
 }

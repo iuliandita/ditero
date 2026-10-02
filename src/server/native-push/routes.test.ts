@@ -122,3 +122,201 @@ describe("native push open route", () => {
 		expect(open).not.toHaveBeenCalled();
 	});
 });
+
+function desktopRequest(
+	path: string,
+	body?: unknown,
+	headers: Record<string, string> = {},
+) {
+	return new Request(`http://localhost/api/native/push/desktop/${path}`, {
+		method: body === undefined ? "GET" : "POST",
+		headers: {
+			authorization: "Bearer token",
+			"content-type": "application/json",
+			...headers,
+		},
+		...(body === undefined
+			? {}
+			: { body: typeof body === "string" ? body : JSON.stringify(body) }),
+	});
+}
+describe("desktop push routes", () => {
+	it("reports desktop readiness separately and preserves exact Android config", async () => {
+		const { routes } = setup();
+		await checked(await routes.handle(desktopRequest("config")), 200, {
+			deliveryReady: true,
+		});
+		await checked(
+			await routes.handle(
+				new Request("http://localhost/api/native/push/config", {
+					headers: { authorization: "Bearer token" },
+				}),
+			),
+			200,
+			{
+				deliveryReady: false,
+				providers: { unifiedpush: false, fcm: false },
+				vapidPublicKey: null,
+				fcmProjectId: null,
+			},
+		);
+		const disabled = setup(true, false).routes;
+		await checked(await disabled.handle(desktopRequest("config")), 200, {
+			deliveryReady: false,
+		});
+		await checked(await disabled.handle(desktopRequest("register", {})), 409, {
+			code: "provider-unavailable",
+		});
+	});
+	it("enrolls the exact server-chosen provider and returns only opaque polled IDs", async () => {
+		const { routes } = setup();
+		const register = vi
+			.spyOn(NativePushStore.prototype, "register")
+			.mockResolvedValue({ registrationId: "r", provider: "desktop" });
+		const messages = [
+			{ version: "1" as const, notificationId: "n", registrationId: "r" },
+		];
+		const poll = vi
+			.spyOn(NativePushStore.prototype, "pollDesktop")
+			.mockResolvedValue(messages);
+		const receipt = vi
+			.spyOn(NativePushStore.prototype, "receiptDesktop")
+			.mockResolvedValue(true);
+		await checked(await routes.handle(desktopRequest("register", {})), 200, {
+			registrationId: "r",
+			provider: "desktop",
+		});
+		expect(register).toHaveBeenCalledWith(owner, { provider: "desktop" });
+		await checked(
+			await routes.handle(desktopRequest("poll", { registrationId: "r" })),
+			200,
+			{ messages },
+		);
+		expect(poll).toHaveBeenCalledWith(owner, "r");
+		await checked(await routes.handle(desktopRequest("receipt", input)), 200, {
+			received: true,
+		});
+		expect(receipt).toHaveBeenCalledWith(owner, input);
+	});
+	it.each([
+		"poll",
+		"receipt",
+	])("hides foreign, stale and wrong-provider %s capabilities", async (path) => {
+		const { routes } = setup();
+		vi.spyOn(NativePushStore.prototype, "pollDesktop").mockResolvedValue(null);
+		vi.spyOn(NativePushStore.prototype, "receiptDesktop").mockResolvedValue(
+			false,
+		);
+		await checked(
+			await routes.handle(
+				desktopRequest(path, path === "poll" ? { registrationId: "r" } : input),
+			),
+			404,
+			{ code: "notification-unavailable" },
+		);
+	});
+	it.each([
+		"config",
+		"register",
+		"poll",
+		"receipt",
+		"unregister",
+	])("retains authentication, rate limit and browser credential refusal for %s", async (path) => {
+		const body =
+			path === "config"
+				? undefined
+				: path === "register"
+					? {}
+					: path === "poll" || path === "unregister"
+						? { registrationId: "r" }
+						: input;
+		for (const header of ["cookie", "origin"]) {
+			const { routes } = setup();
+			vi.mocked(authenticateNative).mockClear();
+			await checked(
+				await routes.handle(desktopRequest(path, body, { [header]: "" })),
+				400,
+				{ code: "credentials-not-allowed" },
+			);
+			expect(authenticateNative).not.toHaveBeenCalled();
+		}
+		const denied = setup(false).routes;
+		vi.mocked(authenticateNative).mockClear();
+		await checked(await denied.handle(desktopRequest(path, body)), 429, {
+			code: "rate-limited",
+		});
+		expect(authenticateNative).not.toHaveBeenCalled();
+		const unauthenticated = setup().routes;
+		vi.mocked(authenticateNative).mockResolvedValue(null);
+		await checked(
+			await unauthenticated.handle(desktopRequest(path, body)),
+			401,
+			{ code: "unauthorized" },
+		);
+	});
+	it.each([
+		["register", { provider: "desktop" }],
+		["register", { endpoint: "https://example.test" }],
+		["poll", { registrationId: "r", userId: "u" }],
+		["poll", { registrationId: "" }],
+		["receipt", { ...input, taskId: "t" }],
+		["receipt", { registrationId: "r" }],
+		["unregister", {}],
+		["unregister", { registrationId: "r", userId: "u" }],
+		["unregister", { registrationId: "" }],
+		["poll", "{"],
+		["register", "[]"],
+	])("rejects malformed and caller-directed %s input", async (path, body) => {
+		const { routes } = setup();
+		await checked(
+			await routes.handle(desktopRequest(path as string, body)),
+			400,
+			{ code: "invalid-body" },
+		);
+	});
+	it("revalidates live authority after native admission", async () => {
+		const { routes } = setup();
+		vi.spyOn(NativePushStore.prototype, "pollDesktop").mockRejectedValue(
+			new PushAuthorityError(),
+		);
+		await checked(
+			await routes.handle(desktopRequest("poll", { registrationId: "r" })),
+			401,
+			{ code: "unauthorized" },
+		);
+	});
+});
+
+describe("desktop registration retirement", () => {
+	it("retires only the captured ID without an encryption ring and permits an idempotent repeat", async () => {
+		const { routes } = setup(true, false);
+		const retire = vi
+			.spyOn(NativePushStore.prototype, "unregisterDesktop")
+			.mockResolvedValue();
+		const generic = vi.spyOn(NativePushStore.prototype, "unregister");
+		for (let count = 0; count < 2; count++)
+			await checked(
+				await routes.handle(
+					desktopRequest("unregister", { registrationId: "old" }),
+				),
+				200,
+				{ unregistered: true },
+			);
+		expect(retire).toHaveBeenCalledTimes(2);
+		expect(retire).toHaveBeenCalledWith(owner, "old");
+		expect(generic).not.toHaveBeenCalled();
+	});
+	it("rejects retirement when native authority expires after admission", async () => {
+		const { routes } = setup();
+		vi.spyOn(NativePushStore.prototype, "unregisterDesktop").mockRejectedValue(
+			new PushAuthorityError(),
+		);
+		await checked(
+			await routes.handle(
+				desktopRequest("unregister", { registrationId: "old" }),
+			),
+			401,
+			{ code: "unauthorized" },
+		);
+	});
+});

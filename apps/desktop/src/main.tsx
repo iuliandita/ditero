@@ -17,7 +17,7 @@ root.render(<BootSkeleton />);
 try {
 	await installTransport();
 	const { NativeApp } = await import("../../android/src/NativeApp.tsx");
-	root.render(<NativeApp />);
+	root.render(<NativeApp pushProvider="desktop" />);
 } catch (error) {
 	console.error("Desktop startup failed", error);
 	root.render(

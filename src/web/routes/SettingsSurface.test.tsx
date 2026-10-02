@@ -136,12 +136,15 @@ test("native settings never mount browser account panels, retain native encrypti
 	expect(browser).not.toContain('data-testid="native-browser-settings"');
 });
 
-test("phone push controls are reachable through the native notifications section", () => {
+test.each([
+	"unifiedpush",
+	"desktop",
+] as const)("%s notification controls use the platform copy in native settings", (provider) => {
 	control.native = true;
 	const state = async () => ({
 		state: "disabled" as const,
 		permission: "granted" as const,
-		provider: "unifiedpush" as const,
+		provider,
 	});
 	const phone = renderToStaticMarkup(
 		<NativeAccountContext
@@ -152,6 +155,7 @@ test("phone push controls are reachable through the native notifications section
 				changeServer: async () => {},
 				push: {
 					identity: "native-maya:session",
+					provider,
 					read: state,
 					enable: state,
 					disable: state,
@@ -163,6 +167,12 @@ test("phone push controls are reachable through the native notifications section
 		</NativeAccountContext>,
 	);
 	expect(phone).toContain('aria-labelledby="native-push-heading"');
+	const prefix = provider === "desktop" ? "desktop_push" : "native_push";
+	const other = provider === "desktop" ? "native_push" : "desktop_push";
+	expect(phone).toContain(`${prefix}_heading`);
+	expect(phone).toContain(`${prefix}_help`);
+	expect(phone).toContain(`${prefix}_loading`);
+	expect(phone).not.toContain(`${other}_heading`);
 	expect(phone).toContain('data-testid="native-browser-settings"');
 	expect(phone).not.toContain("browser-notifications");
 	control.native = false;

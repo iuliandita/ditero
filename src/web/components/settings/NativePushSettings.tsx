@@ -7,8 +7,34 @@ import {
 } from "../../lib/native-account.tsx";
 import { Button } from "../ui/button.tsx";
 
-function statusText(state: NativePushState["state"]): string {
+function statusText(state: NativePushState["state"], desktop: boolean): string {
+	if (desktop) {
+		switch (state) {
+			case "unsupported":
+			case "missing-distributor":
+				return m.desktop_push_unsupported();
+			case "disabled":
+				return m.desktop_push_disabled();
+			case "enabling":
+				return m.desktop_push_enabling();
+			case "active":
+				return m.desktop_push_active();
+			case "denied":
+				return m.desktop_push_denied();
+			case "server-unavailable":
+				return m.desktop_push_server_unavailable();
+			case "temporary-unavailable":
+				return m.desktop_push_temporary_unavailable();
+			case "storage-failed":
+				return m.desktop_push_storage_failed();
+			case "no-session":
+				return m.desktop_push_no_session();
+		}
+	}
+
 	switch (state) {
+		case "unsupported":
+			return m.desktop_push_unsupported();
 		case "disabled":
 			return m.native_push_disabled();
 		case "enabling":
@@ -34,7 +60,8 @@ function statusText(state: NativePushState["state"]): string {
 	}
 }
 
-function PhonePush({ push }: { push: NativePush }) {
+function DevicePush({ push }: { push: NativePush }) {
+	const desktop = push.provider === "desktop";
 	const [snapshot, setSnapshot] = useState<NativePushState | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [reading, setReading] = useState(false);
@@ -135,24 +162,34 @@ function PhonePush({ push }: { push: NativePush }) {
 	}
 	const state = snapshot?.state;
 	const cleanup = state === "cleanup-pending";
+	const unsupported =
+		state === "unsupported" || (desktop && state === "missing-distributor");
 	const controls = {
 		enable:
 			!!snapshot &&
+			!unsupported &&
 			state !== "no-session" &&
 			!cleanup &&
 			state !== "active" &&
 			state !== "enabling",
 		permission:
-			snapshot?.permission === "denied" && state !== "no-session" && !cleanup,
-		disable: !!snapshot && state !== "disabled" && state !== "no-session",
+			snapshot?.permission === "denied" &&
+			state !== "no-session" &&
+			!cleanup &&
+			!unsupported,
+		disable:
+			!!snapshot &&
+			!unsupported &&
+			state !== "disabled" &&
+			state !== "no-session",
 	};
 	return (
 		<section aria-labelledby="native-push-heading">
 			<h3 id="native-push-heading" className="text-sm font-semibold">
-				{m.native_push_heading()}
+				{desktop ? m.desktop_push_heading() : m.native_push_heading()}
 			</h3>
 			<p className="mt-0.5 max-w-prose text-sm text-muted-foreground">
-				{m.native_push_help()}
+				{desktop ? m.desktop_push_help() : m.native_push_help()}
 			</p>
 			<p
 				role="status"
@@ -162,11 +199,17 @@ function PhonePush({ push }: { push: NativePush }) {
 			>
 				{failed
 					? failed === "action"
-						? m.native_push_action_failed()
-						: m.native_push_read_failed()
+						? desktop
+							? m.desktop_push_action_failed()
+							: m.native_push_action_failed()
+						: desktop
+							? m.desktop_push_read_failed()
+							: m.native_push_read_failed()
 					: snapshot
-						? statusText(snapshot.state)
-						: m.native_push_loading()}
+						? statusText(snapshot.state, desktop)
+						: desktop
+							? m.desktop_push_loading()
+							: m.native_push_loading()}
 			</p>
 			<div className="mt-3 flex flex-wrap gap-2">
 				{controls.enable && (
@@ -176,7 +219,9 @@ function PhonePush({ push }: { push: NativePush }) {
 						onClick={() => void act("enable")}
 					>
 						{state === "disabled"
-							? m.native_push_enable()
+							? desktop
+								? m.desktop_push_enable()
+								: m.native_push_enable()
 							: m.native_push_retry()}
 					</Button>
 				)}
@@ -218,6 +263,6 @@ function PhonePush({ push }: { push: NativePush }) {
 export function NativePushSettings() {
 	const account = useNativeAccount();
 	return account?.push ? (
-		<PhonePush key={account.push.identity} push={account.push} />
+		<DevicePush key={account.push.identity} push={account.push} />
 	) : null;
 }

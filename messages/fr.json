@@ -2171,5 +2171,20 @@
 	"native_push_disable": "Désactiver",
 	"native_push_refresh": "Actualiser l’état",
 	"native_push_action_failed": "Impossible de modifier les notifications. Actualise leur état avant de réessayer.",
-	"native_notification_unavailable": "Cette notification n’est plus disponible."
+	"native_notification_unavailable": "Cette notification n’est plus disponible.",
+	"desktop_push_heading": "Sur cet ordinateur",
+	"desktop_push_help": "Reçois des rappels tant que Ditero est ouvert ou réduit. Fermer l’app arrête les notifications.",
+	"desktop_push_unsupported": "Les notifications de bureau ne sont pas disponibles sur ce système. Sous Linux, vérifie qu’un service de notifications est en cours d’exécution.",
+	"desktop_push_disabled": "Les notifications de bureau sont désactivées.",
+	"desktop_push_enabling": "Activation des notifications de bureau…",
+	"desktop_push_active": "Les notifications de bureau sont activées tant que Ditero est ouvert ou réduit. La réception dépend de ta connexion.",
+	"desktop_push_denied": "L’autorisation des notifications de bureau est refusée. Autorise-les dans les paramètres du système, puis réessaie.",
+	"desktop_push_server_unavailable": "Ce serveur ne peut pas encore envoyer de notifications de bureau. Demande à son administrateur d’activer l’envoi.",
+	"desktop_push_temporary_unavailable": "Les notifications de bureau sont temporairement indisponibles. Vérifie ta connexion et réessaie.",
+	"desktop_push_storage_failed": "Cet ordinateur n’a pas pu enregistrer les paramètres des notifications. Réessaie.",
+	"desktop_push_no_session": "Reconnecte-toi pour gérer les notifications de bureau.",
+	"desktop_push_read_failed": "Impossible de vérifier les notifications de bureau. Actualise le statut pour réessayer.",
+	"desktop_push_loading": "Vérification des notifications de bureau…",
+	"desktop_push_enable": "Activer les notifications de bureau",
+	"desktop_push_action_failed": "Impossible de modifier les notifications de bureau. Actualise le statut avant de réessayer."
 }
