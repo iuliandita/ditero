@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { validateContentGraph } from "./graph.ts";
 import { validateImportGraphV2 } from "./graph-v2.ts";
 import type { PortableExportV2, PortableRowsV2 } from "./v2.ts";
 
@@ -362,5 +363,37 @@ describe("v2 import graph", () => {
 			code: "finding-limit",
 			path: "data",
 		});
+	});
+
+	test("can interrupt midway through v2 source-reference checks", () => {
+		const source = fixture();
+		source.data.completionEvents = Array.from({ length: 100 }, (_, i) =>
+			event(String(i)),
+		);
+		const expected = validateImportGraphV2(source);
+		expect(validateImportGraphV2(source, () => {})).toEqual(expected);
+		let calls = 0;
+		let indexedAt = 0;
+		validateContentGraph<PortableRowsV2>(
+			source,
+			{
+				onIndexed: () => {
+					indexedAt = calls;
+				},
+				checkTemplateCreator: () => {},
+				checkCommentAuthor: () => {},
+			},
+			() => {
+				calls++;
+			},
+		);
+		const interrupted = new Error("interrupt-source-refs");
+		calls = 0;
+		expect(() =>
+			validateImportGraphV2(source, () => {
+				if (++calls === indexedAt + 30) throw interrupted;
+			}),
+		).toThrow(interrupted);
+		expect(calls).toBe(indexedAt + 30);
 	});
 });
