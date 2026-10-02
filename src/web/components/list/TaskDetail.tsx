@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
 	type ReactNode,
+	useCallback,
 	useEffect,
 	useId,
 	useMemo,
@@ -169,6 +170,15 @@ function tailKey(tasks: Task[]): string {
 	return keyBetween(last, null);
 }
 
+function resizeTitle(el: HTMLTextAreaElement) {
+	el.style.height = "auto";
+	const style = getComputedStyle(el);
+	const border =
+		Number.parseFloat(style.borderTopWidth) +
+		Number.parseFloat(style.borderBottomWidth);
+	el.style.height = `${el.scrollHeight + border}px`;
+}
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
 	return (
 		<div className="flex flex-col gap-1.5 text-sm">
@@ -211,7 +221,44 @@ export function TaskDetail({
 	const [moreOpen, setMoreOpen] = useState(readMoreOpen);
 	const moreId = useId();
 	const panelRef = useRef<HTMLDivElement>(null);
-	const titleRef = useRef<HTMLInputElement>(null);
+	const titleRef = useRef<HTMLTextAreaElement>(null);
+	const setTitleRef = useCallback((el: HTMLTextAreaElement | null) => {
+		titleRef.current = el;
+		if (!el) return;
+		let frame = 0;
+		let active = true;
+		let layout = "";
+		function scheduleResize() {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(() => {
+				if (active && el) resizeTitle(el);
+			});
+		}
+		const observer = new ResizeObserver(() => {
+			const style = getComputedStyle(el);
+			const next = `${el.clientWidth}:${style.font}:${style.lineHeight}`;
+			// Height changes from our own measurement must not schedule another resize.
+			if (next === layout) return;
+			layout = next;
+			scheduleResize();
+		});
+		observer.observe(el);
+		const displayObserver = new MutationObserver(scheduleResize);
+		displayObserver.observe(document.documentElement, { attributes: true });
+		document.fonts.addEventListener("loadingdone", scheduleResize);
+		void document.fonts.ready.then(() => {
+			if (active) scheduleResize();
+		});
+		scheduleResize();
+		return () => {
+			active = false;
+			cancelAnimationFrame(frame);
+			observer.disconnect();
+			displayObserver.disconnect();
+			document.fonts.removeEventListener("loadingdone", scheduleResize);
+			titleRef.current = null;
+		};
+	}, []);
 	// An unsaved title edit, kept outside the input: crossing the lg breakpoint
 	// swaps panel and sheet, which remounts the input without a blur.
 	const titleDraft = useRef<{ id: string; value: string } | null>(null);
@@ -300,6 +347,7 @@ export function TaskDetail({
 		if (!el || !task || document.activeElement !== el) return false;
 		if (el.value === task.title) return false;
 		el.value = task.title;
+		resizeTitle(el);
 		titleDraft.current = null;
 		return true;
 	}
@@ -410,11 +458,12 @@ export function TaskDetail({
 		);
 	}
 
-	function saveTitle(el: HTMLInputElement) {
+	function saveTitle(el: HTMLTextAreaElement) {
 		titleDraft.current = null;
 		const v = el.value.trim();
 		if (!v) {
 			el.value = t.title;
+			resizeTitle(el);
 			return;
 		}
 		if (v !== t.title) update({ id: t.id, title: v });
@@ -544,7 +593,7 @@ export function TaskDetail({
 	);
 
 	const header = (
-		<div className="flex items-center gap-3 px-4 pt-4 pb-3">
+		<div className="flex items-start gap-3 px-4 pt-4 pb-3">
 			<Checkbox
 				disabled={!activation.canWrite}
 				checked={checked}
@@ -554,8 +603,9 @@ export function TaskDetail({
 				shape={checkShapeFor(kind ?? "tasks")}
 				priority={checkToneFor(kind ?? "tasks", t.priority)}
 			/>
-			<Input
-				ref={titleRef}
+			<textarea
+				ref={setTitleRef}
+				rows={1}
 				disabled={!activation.canWrite}
 				defaultValue={
 					titleDraft.current?.id === t.id ? titleDraft.current.value : t.title
@@ -563,15 +613,18 @@ export function TaskDetail({
 				key={t.id}
 				onChange={(e) => {
 					titleDraft.current = { id: t.id, value: e.currentTarget.value };
+					resizeTitle(e.currentTarget);
 				}}
 				aria-label={m.task_detail_title_field()}
 				data-testid="task-detail-title"
 				className={cn(
-					"h-9 min-w-0 flex-1 border-transparent px-1.5 text-base font-medium focus-visible:border-input",
+					"min-h-11 max-h-48 w-full min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-base font-medium transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-input focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:min-h-9 dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
 					checked && "text-muted-foreground line-through",
 				)}
 				onBlur={(e) => saveTitle(e.currentTarget)}
 				onKeyDown={(e) => {
+					if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229)
+						return;
 					if (e.key === "Enter") {
 						e.preventDefault();
 						saveTitle(e.currentTarget);
