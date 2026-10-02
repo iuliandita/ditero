@@ -4,6 +4,8 @@ import type { Task } from "../../../zero/schema.gen.ts";
 import { CalendarLayout } from "./CalendarLayout.tsx";
 import type { ViewEntry } from "./ViewRenderer.tsx";
 
+vi.mock("../list/CompletedBy.tsx", () => ({ CompletedBy: () => null }));
+
 function entry(id: string, date: string): ViewEntry {
 	return {
 		task: {

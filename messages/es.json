@@ -2111,5 +2111,6 @@
 	"completion_history_previous": "Anterior",
 	"completion_history_next": "Siguiente",
 	"completion_history_page": "Página {page}",
-	"completion_history_unavailable": "El historial de esta tarea no está disponible."
+	"completion_history_unavailable": "El historial de esta tarea no está disponible.",
+	"task_completed_by": "Completado por {name}"
 }

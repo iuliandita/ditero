@@ -27,6 +27,7 @@ import type { Task } from "../../../zero/schema.gen.ts";
 import { useTaskImportActivation } from "../../hooks/useTaskImportActivation.ts";
 import type { RowAction } from "../ui/row-action.ts";
 import { useRowContextMenu } from "../ui/row-actions.tsx";
+import { CompletedBy } from "./CompletedBy.tsx";
 import { type RowSelection, SelectToggle } from "./SelectToggle.tsx";
 
 export type ShoppingHandlers = {
@@ -51,6 +52,15 @@ export function ShoppingRow({
 	selection?: RowSelection;
 }) {
 	const activation = useTaskImportActivation(task.id);
+	const completionId = useId();
+	const activationId = `${completionId}-activation`;
+	const describedBy = [
+		completionId,
+		(activation.status === "pending" || activation.status === "blocked") &&
+			activationId,
+	]
+		.filter(Boolean)
+		.join(" ");
 	const justCompleted = useJustCompleted(task.done ?? false);
 	const [editing, setEditing] = useState(false);
 	const [invalid, setInvalid] = useState(false);
@@ -149,7 +159,7 @@ export function ShoppingRow({
 	return (
 		<div>
 			<div
-				className="group flex min-h-12 items-center gap-2 rounded-md px-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted md:min-h-10"
+				className="group group/completion flex min-h-12 items-center gap-2 rounded-md px-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted md:min-h-10"
 				data-kbd-row
 				data-reading-row="shopping"
 				data-selected={selection?.selected || undefined}
@@ -169,6 +179,7 @@ export function ShoppingRow({
 						<Checkbox
 							disabled={!canEdit}
 							aria-label={task.title}
+							aria-describedby={completionId}
 							checked={task.done ?? false}
 							onCheckedChange={() =>
 								handlers.onToggle(task.id, task.done ?? false)
@@ -185,6 +196,8 @@ export function ShoppingRow({
 				<button
 					type="button"
 					data-kbd-nav
+					aria-label={task.title}
+					aria-describedby={describedBy}
 					data-reading-title
 					data-task-id={task.id}
 					onMouseDown={(event) => {
@@ -193,14 +206,19 @@ export function ShoppingRow({
 					}}
 					onClick={onOpenClick}
 					className={cn(
-						"min-h-11 min-w-0 flex-1 truncate text-start md:min-h-9",
+						"min-h-11 min-w-0 flex-1 text-start md:min-h-9",
 						task.done && "text-muted-foreground",
 					)}
 				>
-					<span className={strikeClass(task.done ?? false)}>{task.title}</span>
+					<span
+						className={cn("block truncate", strikeClass(task.done ?? false))}
+					>
+						{task.title}
+					</span>
+					<CompletedBy task={task} id={completionId} />
 					{(activation.status === "pending" ||
 						activation.status === "blocked") && (
-						<span className="block text-xs text-warning">
+						<span id={activationId} className="block text-xs text-warning">
 							{activation.status === "pending"
 								? m.activation_badge_pending()
 								: m.activation_badge_blocked()}

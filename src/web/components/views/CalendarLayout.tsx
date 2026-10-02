@@ -9,7 +9,7 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import { CalendarClock, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
-import { type JSX, useMemo, useRef, useState } from "react";
+import { type JSX, useId, useMemo, useRef, useState } from "react";
 import { checkShapeFor } from "@/lib/check-shape";
 import { priorityLabel } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,7 @@ import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import type { Task } from "../../../zero/schema.gen.ts";
 import { useLocalDay } from "../../hooks/useLocalDay.ts";
+import { CompletedBy } from "../list/CompletedBy.tsx";
 import { EmptyState } from "../ui/empty-state.tsx";
 import { agendaDayKeys } from "./calendar-agenda.ts";
 import type { ViewEntry } from "./ViewRenderer.tsx";
@@ -171,6 +172,7 @@ function Chip({
 	onOpen: (task: Task) => void;
 }): JSX.Element {
 	const task = item.entry.task;
+	const completionId = useId();
 	const { attributes, listeners, setNodeRef, transform } = useDraggable({
 		id: dragId,
 		data: { taskId: task.id },
@@ -181,15 +183,22 @@ function Chip({
 		: undefined;
 	return (
 		<button
+			{...(dragEnabled ? { ...attributes, ...listeners } : {})}
 			ref={setNodeRef}
 			type="button"
 			data-testid="calendar-chip"
 			style={style}
 			onClick={() => onOpen(task)}
 			aria-label={chipName(item)}
+			aria-describedby={[
+				dragEnabled && attributes["aria-describedby"],
+				completionId,
+			]
+				.filter(Boolean)
+				.join(" ")}
 			title={chipName(item)}
 			className={cn(
-				"flex w-full items-start gap-1 rounded px-1 py-0.5 text-start text-xs",
+				"group/completion flex w-full items-start gap-1 rounded px-1 py-0.5 text-start text-xs",
 				"focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
 				// Occurrences read as "generated" via a dashed border + the repeat
 				// glyph, not low-contrast text (keeps AA at this size). Done tasks
@@ -201,20 +210,26 @@ function Chip({
 						: "bg-muted text-foreground",
 				dragEnabled && "cursor-grab touch-none",
 			)}
-			{...(dragEnabled ? { ...attributes, ...listeners } : {})}
 		>
 			{item.occurrence ? (
 				<Repeat className="mt-px size-3 shrink-0" aria-hidden="true" />
 			) : (
 				<ChipCue item={item} />
 			)}
-			<span
-				className={cn(
-					"line-clamp-2 min-w-0 break-words",
-					isQuiet(item) && "line-through",
-				)}
-			>
-				{task.title}
+			<span className="min-w-0 break-words">
+				<span className={cn("line-clamp-2", isQuiet(item) && "line-through")}>
+					{task.title}
+				</span>
+				<CompletedBy
+					task={task}
+					done={item.status === "done" || (!item.occurrence && !!task.done)}
+					habitDate={
+						item.entry.kind === "habits"
+							? item.entry.occurrence?.date
+							: undefined
+					}
+					id={completionId}
+				/>
 			</span>
 		</button>
 	);
@@ -298,6 +313,7 @@ function Agenda({
 	groups: { key: string; label: string; items: DayItem[] }[];
 	onOpen: (task: Task) => void;
 }): JSX.Element {
+	const completionId = useId();
 	if (groups.length === 0) {
 		return (
 			<EmptyState
@@ -322,8 +338,9 @@ function Agenda({
 									data-testid="agenda-item"
 									onClick={() => onOpen(it.entry.task)}
 									aria-label={chipName(it)}
+									aria-describedby={`${completionId}-${g.key}-${it.entry.task.id}`}
 									className={cn(
-										"flex min-h-11 w-full items-start gap-2 rounded px-1 py-1.5 text-start text-sm md:min-h-9",
+										"group/completion flex min-h-11 w-full items-start gap-2 rounded px-1 py-1.5 text-start text-sm md:min-h-9",
 										"focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
 										(it.occurrence || isQuiet(it)) && "text-muted-foreground",
 									)}
@@ -338,13 +355,28 @@ function Agenda({
 											<ChipCue item={it} />
 										</span>
 									)}
-									<span
-										className={cn(
-											"line-clamp-2 min-w-0 break-words",
-											isQuiet(it) && "line-through",
-										)}
-									>
-										{it.entry.task.title}
+									<span className="min-w-0 break-words">
+										<span
+											className={cn(
+												"line-clamp-2",
+												isQuiet(it) && "line-through",
+											)}
+										>
+											{it.entry.task.title}
+										</span>
+										<CompletedBy
+											task={it.entry.task}
+											done={
+												it.status === "done" ||
+												(!it.occurrence && !!it.entry.task.done)
+											}
+											habitDate={
+												it.entry.kind === "habits"
+													? it.entry.occurrence?.date
+													: undefined
+											}
+											id={`${completionId}-${g.key}-${it.entry.task.id}`}
+										/>
 										{it.status === "done" && (
 											<span className="sr-only">{m.status_done()}</span>
 										)}

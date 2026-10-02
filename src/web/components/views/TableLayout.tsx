@@ -1,4 +1,5 @@
 import { Flag } from "lucide-react";
+import { useId } from "react";
 import { Badge } from "@/components/ui/badge";
 import { formatDue, isOverdue, priorityMeta } from "@/lib/task-display";
 import { cn } from "@/lib/utils";
@@ -6,6 +7,7 @@ import { m } from "../../../paraglide/messages.js";
 import type { Label, Task } from "../../../zero/schema.gen.ts";
 import { formatDayKey } from "../../lib/intl-format.ts";
 import type { HabitOccurrence } from "../../views/habit-occurrence.ts";
+import { CompletedBy } from "../list/CompletedBy.tsx";
 import { AssigneeChips } from "../people/AssigneeChips.tsx";
 import type { ViewSort } from "./ViewRenderer.tsx";
 
@@ -77,6 +79,7 @@ export function TableLayout({
 	listTitle: (listId: string) => string;
 	onOpenTask: (task: Task) => void;
 }) {
+	const completionId = useId();
 	return (
 		<div className="overflow-x-auto">
 			<table className="w-full border-collapse text-start text-sm">
@@ -106,17 +109,32 @@ export function TableLayout({
 							: isOverdue(task);
 						const done = occurrence ? occurrence.done : task.done;
 						return (
-							<tr key={task.id} className="border-b hover:bg-muted/40">
+							<tr
+								key={task.id}
+								className="group/completion border-b hover:bg-muted/40"
+							>
 								<td className="max-w-xs px-3 py-2">
 									<button
 										type="button"
+										aria-label={task.title}
+										aria-describedby={`${completionId}-${task.id}`}
 										onClick={() => onOpenTask(task)}
 										className={cn(
-											"block max-w-full truncate text-start",
-											done && "text-muted-foreground line-through",
+											"block max-w-full text-start",
+											done && "text-muted-foreground",
 										)}
 									>
-										{task.title}
+										<span
+											className={cn("block truncate", done && "line-through")}
+										>
+											{task.title}
+										</span>
+										<CompletedBy
+											task={task}
+											done={done ?? false}
+											habitDate={occurrence?.date}
+											id={`${completionId}-${task.id}`}
+										/>
 									</button>
 								</td>
 								<td className="px-3 py-2">

@@ -2065,5 +2065,6 @@
 	"completion_history_previous": "Zurück",
 	"completion_history_next": "Weiter",
 	"completion_history_page": "Seite {page}",
-	"completion_history_unavailable": "Der Verlauf dieser Aufgabe ist nicht verfügbar."
+	"completion_history_unavailable": "Der Verlauf dieser Aufgabe ist nicht verfügbar.",
+	"task_completed_by": "Erledigt von {name}"
 }

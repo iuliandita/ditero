@@ -1,6 +1,6 @@
 import { useZero } from "@rocicorp/zero/react";
 import { Check, Repeat, RotateCcw, SkipForward } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { useId, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ListIcon } from "@/lib/list-icon";
 import { runMutation } from "@/lib/run-mutation";
@@ -14,6 +14,7 @@ import type { List, schema, Task } from "../../../zero/schema.gen.ts";
 import { useHabitLogs } from "../../hooks/useHabitLogs.ts";
 import { useTaskImportActivation } from "../../hooks/useTaskImportActivation.ts";
 import { useUserPref } from "../../hooks/useUserPref.ts";
+import { CompletedBy } from "../list/CompletedBy.tsx";
 import { ReminderChip } from "../task/ReminderChip.tsx";
 import { HabitTracker } from "./HabitTracker.tsx";
 
@@ -34,9 +35,20 @@ export function HabitCard({
 	list: List;
 	onOpenDetail: (task: Task) => void;
 }) {
+	const completionId = useId();
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivation(task.id);
-	const { logs } = useHabitLogs(task.id);
+	const activationId = `${completionId}-activation`;
+	const reminderId = `${completionId}-reminder`;
+	const describedBy = [
+		completionId,
+		(activation.status === "pending" || activation.status === "blocked") &&
+			activationId,
+		task.reminderTime && reminderId,
+	]
+		.filter(Boolean)
+		.join(" ");
+	const { logs, loading: logsLoading } = useHabitLogs(task.id);
 	const { pref } = useUserPref();
 	const today = localDay(new Date(), pref.timezone);
 	const since =
@@ -120,7 +132,10 @@ export function HabitCard({
 	const done = todayStatus === "done";
 
 	return (
-		<div className="rounded-lg border p-3" data-testid="habit-card">
+		<div
+			className="group/completion rounded-lg border p-3"
+			data-testid="habit-card"
+		>
 			<div className="flex items-start gap-2">
 				<ListIcon
 					icon={list.icon}
@@ -131,21 +146,32 @@ export function HabitCard({
 				<button
 					type="button"
 					data-kbd-nav
+					aria-label={task.title}
+					aria-describedby={describedBy}
 					data-task-id={task.id}
 					onClick={() => onOpenDetail(task)}
 					className="min-w-0 flex-1 text-start"
 				>
 					<span className="block truncate font-medium">{task.title}</span>
+					<CompletedBy
+						task={task}
+						done={done && !logsLoading}
+						habitDate={today}
+						completedAt={
+							logs.find((row) => row.date === today)?.completedAt ?? null
+						}
+						id={completionId}
+					/>
 					{(activation.status === "pending" ||
 						activation.status === "blocked") && (
-						<span className="block text-xs text-warning">
+						<span id={activationId} className="block text-xs text-warning">
 							{activation.status === "pending"
 								? m.activation_badge_pending()
 								: m.activation_badge_blocked()}
 						</span>
 					)}
 					{task.reminderTime && (
-						<span className="text-xs text-muted-foreground">
+						<span id={reminderId} className="text-xs text-muted-foreground">
 							{task.reminderTime}
 						</span>
 					)}
@@ -225,6 +251,7 @@ export function HabitCard({
 				</div>
 				<Button
 					ref={doneRef}
+					aria-describedby={completionId}
 					disabled={!activation.canWrite}
 					type="button"
 					variant={done ? "default" : "outline"}

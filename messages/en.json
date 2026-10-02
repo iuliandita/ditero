@@ -2065,5 +2065,6 @@
 	"completion_history_previous": "Previous",
 	"completion_history_next": "Next",
 	"completion_history_page": "Page {page}",
-	"completion_history_unavailable": "This task's history is unavailable."
+	"completion_history_unavailable": "This task's history is unavailable.",
+	"task_completed_by": "Done by {name}"
 }
