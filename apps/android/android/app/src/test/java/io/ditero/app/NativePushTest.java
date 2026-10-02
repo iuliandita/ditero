@@ -283,6 +283,30 @@ public class NativePushTest {
             assertEquals(0,sends.get()); assertEquals(true,durable.get(store.owner.instance+".retired"));
         } finally {release.countDown(); lane.shutdownNow();}
     }
+    @Test public void concurrentWorkersShareOneQueuedDrain() throws Exception {
+        FlowStore store=new FlowStore(); assertTrue(store.endpoint(store.owner,"{}"));
+        java.util.concurrent.ThreadPoolExecutor lane=(java.util.concurrent.ThreadPoolExecutor)java.util.concurrent.Executors.newFixedThreadPool(1);
+        java.util.List<Thread> threads=java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        java.util.concurrent.ExecutorService workers=java.util.concurrent.Executors.newFixedThreadPool(8,r->{Thread t=new Thread(r); threads.add(t); return t;});
+        java.util.concurrent.CountDownLatch started=new java.util.concurrent.CountDownLatch(1),release=new java.util.concurrent.CountDownLatch(1),called=new java.util.concurrent.CountDownLatch(8);
+        java.util.concurrent.atomic.AtomicInteger sends=new java.util.concurrent.atomic.AtomicInteger();
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->true,()->true,request->{
+            sends.incrementAndGet(); return Map.of("registrationId","registration-1","provider","unifiedpush");
+        },(owner,payload)->{throw new AssertionError();});
+        lane.submit(()->{started.countDown(); try {release.await();} catch(InterruptedException e) {Thread.currentThread().interrupt();}});
+        try {
+            assertTrue(started.await(5,java.util.concurrent.TimeUnit.SECONDS));
+            java.util.List<java.util.concurrent.Future<Boolean>> results=new java.util.ArrayList<>();
+            for(int i=0;i<8;i++) results.add(workers.submit(()->{called.countDown(); return coordinator.maintenance();}));
+            assertTrue(called.await(5,java.util.concurrent.TimeUnit.SECONDS));
+            long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+            while(threads.stream().anyMatch(t->t.getState()!=Thread.State.WAITING) && System.nanoTime()<deadline) Thread.sleep(10);
+            assertTrue(threads.stream().allMatch(t->t.getState()==Thread.State.WAITING));
+            assertEquals(1,lane.getQueue().size()); release.countDown();
+            for(java.util.concurrent.Future<Boolean> result:results) assertTrue(result.get(5,java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(1,sends.get()); assertEquals("active",coordinator.state());
+        } finally {release.countDown(); workers.shutdownNow(); lane.shutdownNow();}
+    }
     @Test public void capacityOverflowKeepsRetainedMessagesReplayable() throws Exception {
         FlowStore store=new FlowStore(); store.verified=false;
         java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();

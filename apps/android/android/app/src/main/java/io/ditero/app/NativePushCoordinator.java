@@ -45,14 +45,23 @@ final class NativePushCoordinator {
     private final OkHttpClient http;
     interface RegistrationTransport {Map<String,Object> register(Request request) throws Exception;}
     interface NotificationSink {void show(NativePushStore.Owner owner,Map<String,String> payload);}
+    interface DurableScheduler {void persist(androidx.work.ExistingWorkPolicy policy) throws Exception;}
     private final java.util.function.BooleanSupplier permissionOverride,scheduleOverride;
     private final RegistrationTransport registrationTransport;
     private final NotificationSink notificationSink;
+    private final DurableScheduler durableScheduler;
     private boolean drainQueued,legacyCancelled;
+    private java.util.concurrent.Future<Boolean> workerDrainQueued;
     NativePushCoordinator(NativePushStore store,ExecutorService lane,java.util.function.BooleanSupplier permission,
                           java.util.function.BooleanSupplier schedule,RegistrationTransport registration,NotificationSink notifications) {
+        this(store,lane,permission,schedule,registration,notifications,null);
+    }
+    NativePushCoordinator(NativePushStore store,ExecutorService lane,java.util.function.BooleanSupplier permission,
+                          java.util.function.BooleanSupplier schedule,RegistrationTransport registration,NotificationSink notifications,
+                          DurableScheduler durableScheduler) {
         context=null; main=null; http=null; this.store=store; this.lane=lane;
         permissionOverride=permission; scheduleOverride=schedule; registrationTransport=registration; notificationSink=notifications;
+        this.durableScheduler=durableScheduler;
     }
     private String failure;
     private NativePushCoordinator(Context context) {
@@ -62,6 +71,7 @@ final class NativePushCoordinator {
                 .connectTimeout(10,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS).writeTimeout(15,TimeUnit.SECONDS)
                 .callTimeout(30,TimeUnit.SECONDS).build();
         permissionOverride=null; scheduleOverride=null; registrationTransport=this::registerRequest; notificationSink=this::show;
+        durableScheduler=this::persistRecovery;
         synchronized(this) {reconcile();}
         for(String key:store.prefs.getAll().keySet()) if(key.endsWith(".retired") || key.endsWith(".pending") || key.endsWith(".messages")) {schedule(); break;}
         lane.execute(() -> {
@@ -202,18 +212,9 @@ final class NativePushCoordinator {
         try {
             lane.execute(() -> {
                 synchronized(this) {drainQueued=false;}
-                if(scheduleOverride==null) {
+                if(durableScheduler!=null) {
                     try {
-                        androidx.work.WorkManager work=androidx.work.WorkManager.getInstance(context);
-                        work.enqueueUniqueWork("native-push-drain",androidx.work.ExistingWorkPolicy.KEEP,
-                                new androidx.work.OneTimeWorkRequest.Builder(MaintenanceWorker.class)
-                                        .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL,30,TimeUnit.SECONDS).build())
-                                .getResult().get(5,TimeUnit.SECONDS);
-                        // Persist replacement recovery work before retiring the legacy blocked chain.
-                        if(!legacyCancelled) {
-                            work.cancelUniqueWork("native-push-maintenance").getResult().get(5,TimeUnit.SECONDS);
-                            legacyCancelled=true;
-                        }
+                        durableScheduler.persist(androidx.work.ExistingWorkPolicy.REPLACE);
                     } catch(Exception e) {
                         if(e instanceof InterruptedException) Thread.currentThread().interrupt();
                         synchronized(this) {
@@ -228,6 +229,18 @@ final class NativePushCoordinator {
             });
             return true;
         } catch(RuntimeException e) {drainQueued=false; return false;}
+    }
+    private void persistRecovery(androidx.work.ExistingWorkPolicy policy) throws Exception {
+        androidx.work.WorkManager work=androidx.work.WorkManager.getInstance(context);
+        work.enqueueUniqueWork("native-push-drain",policy,
+                new androidx.work.OneTimeWorkRequest.Builder(MaintenanceWorker.class)
+                        .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL,30,TimeUnit.SECONDS).build())
+                .getResult().get(5,TimeUnit.SECONDS);
+        // Persist replacement recovery work before retiring the legacy blocked chain.
+        if(!legacyCancelled) {
+            work.cancelUniqueWork("native-push-maintenance").getResult().get(5,TimeUnit.SECONDS);
+            legacyCancelled=true;
+        }
     }
     synchronized void verificationAccepted() {
         NativePushStore.Owner owner=store.active();
@@ -249,7 +262,19 @@ final class NativePushCoordinator {
         return !store.prefs.contains(owner.instance+".messages") || store.clearDeferred(owner);
     }
     boolean maintenance() throws Exception {
-        return lane.submit(this::drain).get();
+        java.util.concurrent.Future<Boolean> attempt;
+        synchronized(this) {
+            if(workerDrainQueued==null) {
+                java.util.concurrent.FutureTask<Boolean> task=new java.util.concurrent.FutureTask<>(() -> {
+                    synchronized(this) {workerDrainQueued=null;}
+                    return drain();
+                });
+                workerDrainQueued=task;
+                try {lane.execute(task);} catch(RuntimeException e) {workerDrainQueued=null; throw e;}
+            }
+            attempt=workerDrainQueued;
+        }
+        return attempt.get();
     }
     private boolean drain() {
         try {
