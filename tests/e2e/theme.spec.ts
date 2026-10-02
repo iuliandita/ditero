@@ -29,11 +29,13 @@ test("switches light/dark/system and the computed background actually changes", 
 	await selectTheme(page, m.theme_dark());
 	await expect(page.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
 	await expect(page.locator("html")).not.toHaveClass(/(^|\s)light(\s|$)/);
+	await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
 	const darkBg = await bodyBackground(page);
 
 	await selectTheme(page, m.theme_light());
 	await expect(page.locator("html")).toHaveClass(/(^|\s)light(\s|$)/);
 	await expect(page.locator("html")).not.toHaveClass(/(^|\s)dark(\s|$)/);
+	await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
 	const lightBg = await bodyBackground(page);
 
 	expect(
@@ -44,6 +46,11 @@ test("switches light/dark/system and the computed background actually changes", 
 	await selectTheme(page, m.theme_system());
 	await expect(page.locator("html")).not.toHaveClass(/(^|\s)dark(\s|$)/);
 	await expect(page.locator("html")).not.toHaveClass(/(^|\s)light(\s|$)/);
+
+	await page.emulateMedia({ colorScheme: "dark" });
+	await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+	await page.emulateMedia({ colorScheme: "light" });
+	await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
 
 	// Same-device persistence across a reload. This does NOT prove the choice
 	// round-tripped through user_pref -- localStorage survives a reload, so the
