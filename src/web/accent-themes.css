@@ -1,0 +1,93 @@
+/* Accent preferences change interaction tokens, never task/status colors. */
+:root,
+:root[data-accent-theme="teal"] {
+	--brand-color: #1f8a7a;
+	--brand-light-primary: #17695d;
+	--brand-light-foreground: #ffffff;
+	--brand-light-soft: #e3f2ef;
+	--brand-dark-primary: #3fb4a0;
+	--brand-dark-foreground: #0f1a18;
+	--brand-dark-soft: #1b3532;
+}
+
+:root[data-accent-theme="blue"] {
+	--brand-color: #3b73c9;
+	--brand-light-primary: #2559a8;
+	--brand-light-foreground: #ffffff;
+	--brand-light-soft: #e6eefa;
+	--brand-dark-primary: #6fa0f0;
+	--brand-dark-foreground: #0c1424;
+	--brand-dark-soft: #1b2a44;
+}
+
+:root[data-accent-theme="clay"] {
+	--brand-color: #c75b3f;
+	--brand-light-primary: #a64428;
+	--brand-light-foreground: #ffffff;
+	--brand-light-soft: #faeae4;
+	--brand-dark-primary: #e88a6c;
+	--brand-dark-foreground: #1f0f0a;
+	--brand-dark-soft: #3a2119;
+}
+
+:root[data-accent-theme="violet"] {
+	--brand-color: #8061d0;
+	--brand-light-primary: #6144b5;
+	--brand-light-foreground: #ffffff;
+	--brand-light-soft: #efebfa;
+	--brand-dark-primary: #a590f0;
+	--brand-dark-foreground: #140f29;
+	--brand-dark-soft: #2a2347;
+}
+
+:root[data-accent-theme="berry"] {
+	--brand-color: #c2457a;
+	--brand-light-primary: #a32d63;
+	--brand-light-foreground: #ffffff;
+	--brand-light-soft: #fae8f0;
+	--brand-dark-primary: #ee7fa9;
+	--brand-dark-foreground: #2a0e1b;
+	--brand-dark-soft: #3c1a2b;
+}
+
+:root[data-accent-theme="ochre"] {
+	--brand-color: #a87a0c;
+	--brand-light-primary: #7f5a00;
+	--brand-light-foreground: #ffffff;
+	--brand-light-soft: #f7efd9;
+	--brand-dark-primary: #d0a030;
+	--brand-dark-foreground: #1f1700;
+	--brand-dark-soft: #352b12;
+}
+
+:root {
+	--brand-primary: var(--brand-light-primary);
+	--brand-foreground: var(--brand-light-foreground);
+	--brand-soft: var(--brand-light-soft);
+}
+:root.dark {
+	--brand-primary: var(--brand-dark-primary);
+	--brand-foreground: var(--brand-dark-foreground);
+	--brand-soft: var(--brand-dark-soft);
+}
+@media (prefers-color-scheme: dark) {
+	:root:not(.light) {
+		--brand-primary: var(--brand-dark-primary);
+		--brand-foreground: var(--brand-dark-foreground);
+		--brand-soft: var(--brand-dark-soft);
+	}
+}
+:root[data-high-contrast="true"] {
+	--brand-primary: color-mix(in srgb, var(--brand-light-primary) 70%, #1b1d21);
+	--brand-foreground: #f2f1ed;
+}
+:root.dark[data-high-contrast="true"] {
+	--brand-primary: color-mix(in srgb, var(--brand-dark-primary) 70%, #f2f1ed);
+	--brand-foreground: #1b1d21;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not(.light)[data-high-contrast="true"] {
+		--brand-primary: color-mix(in srgb, var(--brand-dark-primary) 70%, #f2f1ed);
+		--brand-foreground: #1b1d21;
+	}
+}

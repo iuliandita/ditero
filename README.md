@@ -45,7 +45,7 @@ Every incumbent gates or breaks something. Ditero's design targets the gaps dire
 - Invitation links, managed accounts, comments, and recorded task completion history
 - Email/password, passkeys, TOTP, recovery codes, and optional Google sign-in
 - English, German, Spanish, French, Romanian, and Arabic, including RTL layout
-- Light, dark, and system themes, reading-size presets, and independent high contrast
+- Light, dark, and system modes with six accent themes (teal by default), reading-size presets, and independent high contrast
 - Saved views, dashboards, calendar/board/table layouts, keyboard shortcuts, and a focus timer
 - Encrypted attachments with filesystem or S3-compatible server storage
 - JSON export and reviewed, resumable native import for supported records; see

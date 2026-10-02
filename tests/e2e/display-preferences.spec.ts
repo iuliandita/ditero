@@ -3,6 +3,64 @@ import { goToSettings, signUp, uniqueEmail } from "./helpers.ts";
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
+test("accent choices change controls, preserve task colors and survive account reloads", async ({
+	page,
+}) => {
+	await page.emulateMedia({ reducedMotion: "reduce" });
+	await signUp(page, uniqueEmail("accent"));
+	await goToSettings(page);
+	await expect(page.getByTestId("display-accent-teal")).toBeChecked();
+	for (const mode of ["Light", "Dark"]) {
+		await page.getByTestId("theme-switcher").click();
+		await page.getByRole("option", { name: mode, exact: true }).click();
+		const seen = new Set<string>();
+		let semantic: string[] | undefined;
+		for (const accent of ["teal", "blue", "clay", "violet", "berry", "ochre"]) {
+			await page.getByTestId(`display-accent-${accent}`).check();
+			await expect(page.locator("html")).toHaveAttribute(
+				"data-accent-theme",
+				accent,
+			);
+			const colors = await page.evaluate(() => {
+				const root = getComputedStyle(document.documentElement);
+				const probe = document.createElement("span");
+				probe.style.color = "var(--primary)";
+				document.body.append(probe);
+				const primary = getComputedStyle(probe).color;
+				probe.remove();
+				return {
+					primary,
+					semantic: [
+						"--priority-1",
+						"--priority-2",
+						"--priority-3",
+						"--kind-shopping",
+						"--success",
+						"--destructive",
+					].map((token) => root.getPropertyValue(token)),
+				};
+			});
+			if (semantic) expect(colors.semantic).toEqual(semantic);
+			semantic = colors.semantic;
+			seen.add(colors.primary);
+		}
+		expect(seen.size).toBe(6);
+	}
+	await page.getByTestId("display-accent-violet").check();
+	await page.reload();
+	await goToSettings(page);
+	await expect(page.getByTestId("display-accent-violet")).toBeChecked();
+	await page.getByRole("button", { name: "Sign out", exact: true }).click();
+	await expect(page.getByTestId("email")).toBeVisible();
+	await expect(page.locator("html")).toHaveAttribute(
+		"data-accent-theme",
+		"teal",
+	);
+	await signUp(page, uniqueEmail("accent-other"));
+	await goToSettings(page);
+	await expect(page.getByTestId("display-accent-teal")).toBeChecked();
+});
+
 test("the phone Appearance shortcut and section selector follow reading-size changes", async ({
 	page,
 }) => {
