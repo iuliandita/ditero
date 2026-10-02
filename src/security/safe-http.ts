@@ -2,6 +2,7 @@ import { resolve4, resolve6 } from "node:dns/promises";
 import type { IncomingMessage, RequestOptions } from "node:http";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
+import { isIP } from "node:net";
 import ipaddr from "ipaddr.js";
 import type { Network } from "../server/client-ip.ts";
 
@@ -236,9 +237,9 @@ export async function safeFetch(
 // `lookup` returns that one address and nothing else, so the transport never
 // re-resolves the hostname and a DNS server cannot answer public for the policy
 // check then private for the connect. `servername` keeps TLS pointed at the
-// real hostname so the certificate is still validated against the name, not the
-// pinned IP. This is the node path that replaces undici, whose connector Bun
-// ignores.
+// real DNS hostname. IP literals omit SNI; the original URL still supplies the
+// certificate identity. This is the node path that replaces undici, whose
+// connector Bun ignores.
 async function pinnedRequest(
 	url: URL,
 	target: { address: string; family: 4 | 6 },
@@ -249,6 +250,7 @@ async function pinnedRequest(
 	// The body budget is on top of the headers wait, never below it.
 	const bodyTimeout = Math.max(15_000, headersTimeout + 5_000);
 	const limit = options.maxResponseBytes ?? 1_048_576;
+	const hostname = normalizedHostname(url.hostname);
 
 	return await new Promise<Response>((resolve, reject) => {
 		let settled = false;
@@ -262,7 +264,7 @@ async function pinnedRequest(
 			method: options.method ?? "GET",
 			headers: toOutgoingHeaders(options.headers),
 			signal: options.signal,
-			servername: normalizedHostname(url.hostname),
+			...(isIP(hostname) ? {} : { servername: hostname }),
 			lookup: (_hostname, lookupOptions, callback) => {
 				const entry = { address: target.address, family: target.family };
 				// Modern node and Bun both request the "all" form (an array); the
