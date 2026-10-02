@@ -18,7 +18,7 @@ export const NATIVE_PUSH_STATES = [
 export type NativePushState = {
 	state: (typeof NATIVE_PUSH_STATES)[number];
 	permission: "granted" | "denied";
-	provider: "unifiedpush" | "desktop";
+	provider: "unifiedpush" | "google" | "desktop";
 };
 export type NativePush = {
 	readonly identity: string;

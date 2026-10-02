@@ -17,7 +17,9 @@ class NativePushStore {
     static final class Owner {
         final String instance;
         final NativeSessionVault.CapturedOwner session;
-        Owner(String instance, NativeSessionVault.CapturedOwner session) {this.instance=instance; this.session=session;}
+        final String provider;
+        Owner(String instance,NativeSessionVault.CapturedOwner session) {this(instance,session,"unifiedpush");}
+        Owner(String instance,NativeSessionVault.CapturedOwner session,String provider) {this.instance=instance;this.session=session;this.provider=provider;}
     }
     Owner active() {return load(prefs.getString("active",null));}
     Owner load(String instance) {
@@ -28,19 +30,20 @@ class NativePushStore {
             ServerContext context=ServerContext.parse(origin);
             Map<String,Object> record=NativeSessionVault.decode(context.scope(user),user,prefs.getString(instance+".blob",""));
             NativeSessionVault.CapturedOwner owner=NativeSessionVault.capture(context,record,false);
-            return owner==null ? null : new Owner(instance,owner);
+            return owner==null ? null : new Owner(instance,owner,prefs.getString(instance+".provider","unifiedpush"));
         } catch(NativeSessionVault.KeyUnavailableException e) {keysUnavailable=true; return null;}
         catch(Exception e) {return null;}
     }
-    Owner create(NativeSessionVault.CapturedOwner session) {
+    Owner create(NativeSessionVault.CapturedOwner session) {return create(session,"unifiedpush");}
+    Owner create(NativeSessionVault.CapturedOwner session,String provider) {
         String instance=UUID.randomUUID().toString();
         String origin=session.pushConfigRequest().url().newBuilder().encodedPath("/").build().toString();
         origin=ServerContext.parse(origin).origin;
         String blob=vault.preferences().getString(NativeSessionVault.blobKey(session.scope),null);
         if(blob==null || !vault.isCurrent(session)) return null;
         if(!prefs.edit().putString(instance+".origin",origin).putString(instance+".user",session.userId)
-                .putString(instance+".blob",blob).putString("active",instance).putString("state","enabling").commit()) return null;
-        return new Owner(instance,session);
+                .putString(instance+".blob",blob).putString(instance+".provider",provider).putString("active",instance).putString("state","enabling").commit()) return null;
+        return new Owner(instance,session,provider);
     }
     private boolean keysUnavailable;
     boolean keysUnavailable() {return keysUnavailable;}

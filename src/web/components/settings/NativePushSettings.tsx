@@ -7,7 +7,24 @@ import {
 } from "../../lib/native-account.tsx";
 import { Button } from "../ui/button.tsx";
 
-function statusText(state: NativePushState["state"], desktop: boolean): string {
+function statusText(
+	state: NativePushState["state"],
+	provider: NativePushState["provider"],
+): string {
+	const desktop = provider === "desktop";
+	if (provider === "google") {
+		switch (state) {
+			case "unsupported":
+			case "missing-distributor":
+				return m.google_push_unsupported();
+			case "enabling":
+				return m.google_push_enabling();
+			case "active":
+				return m.google_push_active();
+			case "server-unavailable":
+				return m.google_push_server_unavailable();
+		}
+	}
 	if (desktop) {
 		switch (state) {
 			case "unsupported":
@@ -62,6 +79,7 @@ function statusText(state: NativePushState["state"], desktop: boolean): string {
 
 function DevicePush({ push }: { push: NativePush }) {
 	const desktop = push.provider === "desktop";
+	const google = push.provider === "google";
 	const [snapshot, setSnapshot] = useState<NativePushState | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [reading, setReading] = useState(false);
@@ -163,7 +181,8 @@ function DevicePush({ push }: { push: NativePush }) {
 	const state = snapshot?.state;
 	const cleanup = state === "cleanup-pending";
 	const unsupported =
-		state === "unsupported" || (desktop && state === "missing-distributor");
+		state === "unsupported" ||
+		((desktop || google) && state === "missing-distributor");
 	const controls = {
 		enable:
 			!!snapshot &&
@@ -189,7 +208,11 @@ function DevicePush({ push }: { push: NativePush }) {
 				{desktop ? m.desktop_push_heading() : m.native_push_heading()}
 			</h3>
 			<p className="mt-0.5 max-w-prose text-sm text-muted-foreground">
-				{desktop ? m.desktop_push_help() : m.native_push_help()}
+				{desktop
+					? m.desktop_push_help()
+					: google
+						? m.google_push_help()
+						: m.native_push_help()}
 			</p>
 			<p
 				role="status"
@@ -206,7 +229,7 @@ function DevicePush({ push }: { push: NativePush }) {
 							? m.desktop_push_read_failed()
 							: m.native_push_read_failed()
 					: snapshot
-						? statusText(snapshot.state, desktop)
+						? statusText(snapshot.state, push.provider)
 						: desktop
 							? m.desktop_push_loading()
 							: m.native_push_loading()}

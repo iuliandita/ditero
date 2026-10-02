@@ -452,3 +452,52 @@ test("notification events and late targets cannot cross account generations", as
 	expect(listener).toHaveBeenCalledTimes(1);
 	unsubscribe();
 });
+
+test("Google build identity comes from native hello and mismatched push replies are refused", async () => {
+	snapshot.session = session;
+	snapshot.pushProvider = "google";
+	const hello = await connectBridge();
+	expect(hello.pushProvider).toBe("google");
+	const current = bridgeState();
+	expect(current.pushProvider).toBe("google");
+	const push = createNativePush(
+		current.gen,
+		session.authHandle,
+		current.pushProvider,
+	);
+	const result = push.read();
+	const command = sent.at(-1);
+	if (!command) throw new Error("missing push command");
+	reply(command, {
+		state: "enabling",
+		permission: "granted",
+		provider: "google",
+	});
+	expect(await result).toEqual({
+		state: "enabling",
+		permission: "granted",
+		provider: "google",
+	});
+	const mismatch = push.read();
+	const refused = expect(mismatch).rejects.toMatchObject({
+		code: "invalid-reply",
+	});
+	const next = sent.at(-1);
+	if (!next) throw new Error("missing push command");
+	reply(next, {
+		state: "active",
+		permission: "granted",
+		provider: "unifiedpush",
+	});
+	await refused;
+});
+
+test("native hello rejects an unknown push provider", async () => {
+	native.postMessage = (raw) => {
+		const command = JSON.parse(raw) as Record<string, unknown>;
+		reply(command, { ...snapshot, pushProvider: "unexpected" });
+	};
+	await expect(connectBridge()).rejects.toMatchObject({
+		code: "invalid-reply",
+	});
+});

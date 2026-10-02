@@ -2186,5 +2186,10 @@
 	"desktop_push_read_failed": "No se pudieron comprobar las notificaciones de escritorio. Actualiza el estado para intentarlo de nuevo.",
 	"desktop_push_loading": "Comprobando las notificaciones de escritorio…",
 	"desktop_push_enable": "Activar notificaciones de escritorio",
-	"desktop_push_action_failed": "No se pudieron cambiar las notificaciones de escritorio. Actualiza el estado antes de volver a intentarlo."
+	"desktop_push_action_failed": "No se pudieron cambiar las notificaciones de escritorio. Actualiza el estado antes de volver a intentarlo.",
+	"google_push_help": "Recibe recordatorios a través de Google. Tu servidor debe habilitar el servicio de retransmisión opcional de Ditero.",
+	"google_push_enabling": "Verificando este teléfono y activando las notificaciones de Google.",
+	"google_push_active": "Las notificaciones de Google están activadas. La entrega depende de los servicios de Google y de tu conexión.",
+	"google_push_server_unavailable": "Este servidor aún no puede enviar notificaciones de Google. Pide a su administrador que habilite el servicio de retransmisión opcional.",
+	"google_push_unsupported": "Las notificaciones de Google no están disponibles en esta app o en este teléfono."
 }

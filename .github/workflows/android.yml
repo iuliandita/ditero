@@ -60,6 +60,20 @@ jobs:
       - name: Assemble independent debug APK
         working-directory: apps/android/android
         run: ./gradlew --no-daemon testIndependentDebugUnitTest assembleIndependentDebug
+      - name: Check Google source without private configuration
+        working-directory: apps/android/android
+        run: ./gradlew --no-daemon testGoogleDebugUnitTest
+      - name: Refuse Google packaging without private configuration
+        working-directory: apps/android/android
+        shell: bash
+        run: |
+          set -euo pipefail
+          refusal="$RUNNER_TEMP/google-package-refusal.log"
+          if ./gradlew --no-daemon assembleGoogleDebug > "$refusal" 2>&1; then
+            echo "Google packaging unexpectedly succeeded without private configuration"
+            exit 1
+          fi
+          grep -F "Google Android packaging requires private google-services.json and src/google/assets/native-relay.json with a trusted relay origin and receipt keys" "$refusal"
       - name: Upload test APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

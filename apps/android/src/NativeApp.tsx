@@ -66,7 +66,7 @@ function NativeWorkspace({ active }: { active: Active }) {
 }
 
 export function NativeApp({
-	pushProvider = "unifiedpush",
+	pushProvider,
 }: {
 	pushProvider?: NativePushState["provider"];
 }) {
@@ -82,7 +82,7 @@ export function NativeApp({
 function NativeAppRoutes({
 	pushProvider,
 }: {
-	pushProvider: NativePushState["provider"];
+	pushProvider?: NativePushState["provider"];
 }) {
 	const { show } = useSnackbar();
 	const [restart, setRestart] = useState(0);
@@ -158,7 +158,11 @@ function NativeAppRoutes({
 			runtime,
 			profile,
 			origin: context.origin,
-			push: createNativePush(context.gen, context.authHandle, pushProvider),
+			push: createNativePush(
+				context.gen,
+				context.authHandle,
+				pushProvider ?? current.pushProvider ?? "unifiedpush",
+			),
 			notifications: createNativeNotificationNavigation(
 				context.gen,
 				context.authHandle,

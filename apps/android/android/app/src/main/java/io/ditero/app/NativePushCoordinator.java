@@ -43,6 +43,11 @@ final class NativePushCoordinator {
     private final ExecutorService lane;
     private final Handler main;
     private final OkHttpClient http;
+    private final NativePushProvider provider;
+    private final NativeRelayStore relayStore;
+    private final NativeRelayClient relayClient;
+    interface CleanupTransport {boolean unregister(Request request) throws Exception;}
+    private CleanupTransport cleanupTransport;
     interface RegistrationTransport {Map<String,Object> register(Request request) throws Exception;}
     interface NotificationSink {void show(NativePushStore.Owner owner,Map<String,String> payload);}
     interface DurableScheduler {void persist(androidx.work.ExistingWorkPolicy policy) throws Exception;}
@@ -61,7 +66,7 @@ final class NativePushCoordinator {
                           DurableScheduler durableScheduler) {
         context=null; main=null; http=null; this.store=store; this.lane=lane;
         permissionOverride=permission; scheduleOverride=schedule; registrationTransport=registration; notificationSink=notifications;
-        this.durableScheduler=durableScheduler;
+        this.durableScheduler=durableScheduler; provider=null; relayStore=null; relayClient=null;
     }
     private String failure;
     private NativePushCoordinator(Context context) {
@@ -72,25 +77,101 @@ final class NativePushCoordinator {
                 .callTimeout(30,TimeUnit.SECONDS).build();
         permissionOverride=null; scheduleOverride=null; registrationTransport=this::registerRequest; notificationSink=this::show;
         durableScheduler=this::persistRecovery;
+        provider=NativePushProviderFactory.create(context,this);
+        relayStore=new NativeRelayStore(store.prefs);
+        relayClient=new NativeRelayClient(relayStore,provider,new NativeRelayClient.Authority() {
+            public boolean current(NativePushStore.Owner owner) {return NativePushCoordinator.this.current(owner);}
+            public boolean activate(NativePushStore.Owner owner,String registration) {
+                synchronized(NativePushCoordinator.this) {
+                    return current(owner) && store.prefs.edit().putString(owner.instance+".registration",registration)
+                            .putString("state","active").commit();
+                }
+            }
+        });
         synchronized(this) {reconcile();}
-        for(String key:store.prefs.getAll().keySet()) if(key.endsWith(".retired") || key.endsWith(".pending") || key.endsWith(".messages")) {schedule(); break;}
+        for(String key:store.prefs.getAll().keySet()) if(key.endsWith(".retired") || key.endsWith(".pending") || key.endsWith(".messages") || key.endsWith(".relay")) {schedule(); break;}
         lane.execute(() -> {
             if(!cleanup()) return;
             NativePushStore.Owner owner;
             synchronized(this) {owner=store.active();}
             if(!current(owner)) return;
+            provider.resume(owner);
+        });
+    }
+    String providerId() {return provider==null?"unifiedpush":provider.id();}
+    void unifiedResume(NativePushStore.Owner owner) {
+        lane.execute(() -> {
+            if(!current(owner)) return;
             try {
                 JSONObject config=request(owner.session.pushConfigRequest());
                 String vapid=config.optString("vapidPublicKey","");
                 if(!Boolean.TRUE.equals(config.opt("deliveryReady")) || !Boolean.TRUE.equals(config.getJSONObject("providers").opt("unifiedpush"))
-                        || !vapid.matches("[A-Za-z0-9_-]{87}")) {setState(owner,"server-unavailable"); return;}
+                        || !vapid.matches("[A-Za-z0-9_-]{87}")) {setState(owner,"server-unavailable");return;}
                 synchronized(this) {
                     if(!current(owner)) return;
-                    if(UnifiedPush.getSavedDistributor(context)==null) {setState(owner,"missing-distributor"); return;}
+                    if(UnifiedPush.getSavedDistributor(context)==null) {setState(owner,"missing-distributor");return;}
                     UnifiedPush.register(context,owner.instance,"Ditero",vapid);
                 }
             } catch(Exception e) {setState(owner,"server-unavailable");}
         });
+    }
+    void unifiedRetire(NativePushStore.Owner owner) {if(owner!=null) UnifiedPush.unregister(context,owner.instance);}
+    void googleRegistered(String fid) {
+        NativePushStore.Owner owner;
+        synchronized(this) {reconcile();owner=store.active();}
+        googleRegistered(owner,fid);
+    }
+    void googleRegistered(NativePushStore.Owner owner,String fid) {
+        final String callbackEpoch=java.util.UUID.randomUUID().toString();
+        synchronized(this) {
+            if(provider==null || !"google".equals(provider.id()) || !current(owner) || fid==null || !fid.matches("[A-Za-z0-9._:-]{1,4096}")) return;
+            if(!store.prefs.edit().putString(owner.instance+".google-fid-pending",callbackEpoch).commit()) {failure="storage-failed";return;}
+        }
+        lane.execute(() -> {
+            if(provider==null || !"google".equals(provider.id()) || !current(owner)) return;
+            try {
+                relayClient.registered(owner,fid);
+                synchronized(this) {
+                    if(callbackEpoch.equals(store.prefs.getString(owner.instance+".google-fid-pending",null))
+                            && !store.prefs.edit().remove(owner.instance+".google-fid-pending").commit()) {failure="storage-failed";return;}
+                    if(!current(owner)) return;
+                    if(!schedule()) {failure="storage-failed";return;}
+                }
+                JSONObject config=request(owner.session.pushConfigRequest());
+                if(!Boolean.TRUE.equals(config.opt("deliveryReady")) || !Boolean.TRUE.equals(config.getJSONObject("providers").opt("fcm-relay"))) {
+                    setState(owner,"server-unavailable");return;
+                }
+
+            } catch(Exception e) {setState(owner,"registration-failed");}
+        });
+    }
+    synchronized void googleMessage(Map<String,String> data) {
+        if(provider==null || !"google".equals(provider.id())) return;
+        reconcile();NativePushStore.Owner owner=store.active();
+        if(!current(owner) || data==null || !data.keySet().equals(java.util.Set.of("version","notificationId","registrationId"))
+                || !"1".equals(data.get("version"))) return;
+        String registration=data.get("registrationId"),notification=data.get("notificationId");
+        if(registration==null || notification==null || !registration.matches("[A-Za-z0-9_-]{1,128}")
+                || !notification.matches("[A-Za-z0-9_-]{1,128}")) return;
+        try {
+            if(store.prefs.contains(owner.instance+".google-fid-pending")) return;
+            if(relayStore.suppressed(owner.instance)) {
+                if(relayStore.challenge(owner.instance,registration,notification) && !schedule()) failure="storage-failed";
+                return;
+            }
+            if(registration.equals(store.registration(owner))) deliver(owner,data);
+        } catch(Exception e) {failure="storage-failed";}
+    }
+    synchronized void googleUnregistered(String fid) {
+        if(relayStore==null || fid==null) return;
+        NativePushStore.Owner owner=store.active();
+        if(!current(owner)) return;
+        try {
+            Map<String,Object> value=relayStore.target(owner.instance);
+            if(value!=null && (fid.equals(value.get("fid")) || fid.equals(value.get("nextFid")))) {
+                invalidate();failure="registration-failed";
+            }
+        } catch(Exception e) {failure="storage-failed";}
     }
     boolean permitted() {
         if(permissionOverride!=null) return permissionOverride.getAsBoolean();
@@ -110,7 +191,7 @@ final class NativePushCoordinator {
         NativePushStore.Owner owner=store.active();
         boolean selected=store.selected(owner);
         if(store.keysUnavailable()) return;
-        if(store.prefs.contains("active") && (!selected || !permitted())) invalidate();
+        if(store.prefs.contains("active") && (!selected || !permitted() || (owner!=null && !providerId().equals(owner.provider)))) invalidate();
     }
     synchronized boolean invalidate() {
         if(!store.retire()) {failure="storage-failed"; return false;}
@@ -125,6 +206,13 @@ final class NativePushCoordinator {
         NativeSessionVault.CapturedOwner session=store.verifiedOwner();
         if(session==null) {failure="no-session"; return;}
         NativePushStore.Owner active=store.active();
+        if(provider!=null && "google".equals(provider.id())) {
+            if(!provider.available()) {failure="server-unavailable";return;}
+            failure=null;
+            NativePushStore.Owner owner=store.current(active)?active:store.create(session,providerId());
+            if(owner==null || !store.state(owner,"enabling")) {failure="storage-failed";return;}
+            provider.enable(activity,owner);return;
+        }
         boolean retrying=failure!=null;
         if(store.current(active)) {
             boolean pendingRegistration=store.prefs.getBoolean(active.instance+".pending",false);
@@ -141,9 +229,12 @@ final class NativePushCoordinator {
             if((state.equals("active") || state.equals("enabling")) && failure==null && !retrying) return;
         }
         failure=null;
-        final NativePushStore.Owner owner=store.current(active)?active:store.create(session);
+        final NativePushStore.Owner owner=store.current(active)?active:store.create(session,providerId());
         if(owner!=null && !store.state(owner,"enabling")) {failure="storage-failed"; return;}
         if(owner==null) {failure="storage-failed"; return;}
+        if(provider==null) unifiedEnable(activity,owner);else provider.enable(activity,owner);
+    }
+    void unifiedEnable(Activity activity,NativePushStore.Owner owner) {
         lane.execute(() -> {
             if(!cleanup()) {setState(owner,"cleanup-pending"); return;}
             if(!current(owner)) return;
@@ -179,11 +270,26 @@ final class NativePushCoordinator {
             String instance=entry.getKey().substring(0,entry.getKey().length()-8);
             NativePushStore.Owner owner=store.load(instance);
             try {
-                UnifiedPush.unregister(context,instance);
-                if(owner!=null) {
-                    JSONObject response=request(owner.session.pushUnregisterRequest(),true);
-                    if(!response.optBoolean("unregistered")) {ok=false; continue;}
-                } else if(!store.expired(instance)) {ok=false; continue;}
+                boolean relay=relayStore!=null && relayStore.hasTarget(instance);
+                boolean delegated=store.prefs.getBoolean(instance+".relay-delegated",false);
+                if(relay && !delegated) {
+                    if(owner!=null) {
+                        if(!unregister(owner.session.pushUnregisterRequest())) {ok=false;continue;}
+                    } else if(!store.expired(instance)) {ok=false;continue;}
+                    if(!store.prefs.edit().putBoolean(instance+".relay-delegated",true).commit()) {ok=false;continue;}
+                    delegated=true;
+                }
+                if(relay) {
+                    if(!"google".equals(providerId()) || !provider.available()) continue;
+                    // A captured instance ack transferred retirement to durable sender recovery.
+                    // Device cleanup is best effort after that ack, retaining encrypted evidence on any refusal.
+                    try {if(!relayClient.retire(instance)) continue;}catch(Exception e) {continue;}
+                } else UnifiedPush.unregister(context,instance);
+                if(!delegated) {
+                    if(owner!=null) {
+                        if(!unregister(owner.session.pushUnregisterRequest())) {ok=false;continue;}
+                    } else if(!store.expired(instance)) {ok=false;continue;}
+                }
                 if(!store.clear(instance)) ok=false;
             } catch(Exception e) {ok=false;}
         }
@@ -245,7 +351,7 @@ final class NativePushCoordinator {
     synchronized void verificationAccepted() {
         NativePushStore.Owner owner=store.active();
         if(!current(owner)) return;
-        if(store.prefs.getBoolean(owner.instance+".pending",false) || store.prefs.contains(owner.instance+".messages"))
+        if((relayStore!=null && relayStore.hasTarget(owner.instance)) || store.prefs.getBoolean(owner.instance+".pending",false) || store.prefs.contains(owner.instance+".messages"))
             if(!schedule()) failure="storage-failed";
     }
     private Map<String,Object> registerRequest(Request request) throws Exception {
@@ -291,6 +397,11 @@ final class NativePushCoordinator {
                 }
                 body=store.pending(owner);
             }
+            if(relayStore!=null && "google".equals(providerId()) && relayStore.hasTarget(owner.instance)) {
+                boolean active=relayClient.drain(owner);
+                if(!active) setState(owner,"enabling");
+                return active;
+            }
             if(body==null) return !store.prefs.getBoolean(owner.instance+".pending",false) && replay(owner);
             try {
                 Map<String,Object> response=registrationTransport.register(owner.session.pushRegisterRequest(body));
@@ -321,6 +432,10 @@ final class NativePushCoordinator {
             if(!current(owner) || !owner.instance.equals(instance)) return;
             if(unregister) {invalidate(); failure=state;} else setState(owner,state);
         }
+    }
+    private boolean unregister(Request request) throws Exception {
+        if(cleanupTransport!=null) return cleanupTransport.unregister(request);
+        return request(request,true).optBoolean("unregistered");
     }
     private JSONObject request(Request request) throws Exception {return request(request,false);}
     private JSONObject request(Request request,boolean cleanup) throws Exception {

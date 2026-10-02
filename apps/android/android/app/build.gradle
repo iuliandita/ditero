@@ -1,5 +1,9 @@
 apply plugin: 'com.android.application'
 
+def googleServices = file('src/google/google-services.json').isFile() || file('google-services.json').isFile()
+if (googleServices) apply plugin: 'com.google.gms.google-services'
+def relayConfiguration = file('src/google/assets/native-relay.json')
+
 def releaseSigning = [
     storeFile: System.getenv('DITERO_ANDROID_KEYSTORE_PATH'),
     storePassword: System.getenv('DITERO_ANDROID_KEYSTORE_PASSWORD'),
@@ -30,10 +34,15 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    compileOptions { coreLibraryDesugaringEnabled true }
     flavorDimensions "pushProvider"
     productFlavors {
         independent { dimension "pushProvider" }
         google { dimension "pushProvider" }
+    }
+    sourceSets {
+        googleDebug {}
+        googleRelease {}
     }
     signingConfigs {
         if (hasReleaseSigning) {
@@ -58,11 +67,27 @@ android {
 // cannot bypass the variant or signing boundaries, including up-to-date outputs.
 gradle.taskGraph.whenReady { graph ->
     def appTasks = graph.allTasks.findAll { it.project == project }
-    if (appTasks.any { it.name.contains('Google') }) {
-        if (!file('src/google/google-services.json').isFile() && !file('google-services.json').isFile()) {
-            throw new GradleException('Google Android builds require private google-services.json in app/src/google/ or app/; Google push provider integration is not implemented')
+    def packagesGoogle = appTasks.any { it.name ==~ /(?:assemble|bundle|package)Google(?:Debug|Release)(?:Bundle|UniversalApk|AndroidTest)?/ }
+    if (packagesGoogle) {
+        if (!googleServices || !relayConfiguration.isFile()) {
+            throw new GradleException('Google Android packaging requires private google-services.json and src/google/assets/native-relay.json with a trusted relay origin and receipt keys')
         }
-        throw new GradleException('Google Android builds are unavailable: Google push provider integration is not implemented; configuration alone cannot enable Google delivery')
+        try {
+            def config = new groovy.json.JsonSlurper().parse(relayConfiguration)
+            def origin = new URI(config.relayOrigin as String)
+            if (config.keySet() != ['relayOrigin', 'receiptKeys'] as Set || origin.scheme != 'https' || origin.host == null
+                    || origin.userInfo != null || origin.query != null || origin.fragment != null || origin.path != ''
+                    || origin.port == 0 || origin.port > 65535 || origin.port == 443 || origin.toASCIIString() != config.relayOrigin
+                    || origin.host != origin.host.toLowerCase(Locale.ROOT)
+                    || !(config.receiptKeys instanceof Map) || config.receiptKeys.isEmpty() || config.receiptKeys.size() > 8
+                    || config.receiptKeys.any { kid, key -> !(kid ==~ /[A-Za-z0-9_-]{1,128}/) || !(key instanceof Map)
+                        || key.keySet() != ['kty', 'crv', 'x', 'y'] as Set || key.kty != 'EC' || key.crv != 'P-256'
+                        || !(key.x ==~ /[A-Za-z0-9_-]{43}/) || !(key.y ==~ /[A-Za-z0-9_-]{43}/) }) {
+                throw new IllegalArgumentException()
+            }
+        } catch (Exception e) {
+            throw new GradleException('Google Android trusted relay configuration is invalid')
+        }
     }
     if (appTasks.any { it.name ==~ /(?:assemble|bundle|package).*Release(?:Bundle|UniversalApk)?/ } && !hasReleaseSigning) {
         throw new GradleException('Android release packaging requires an explicitly configured release keystore; use assembleIndependentDebug for development')
@@ -75,7 +100,13 @@ repositories {
     }
 }
 
+configurations {
+    googleDebugImplementation {}
+    googleReleaseImplementation {}
+}
+
 dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
@@ -83,6 +114,12 @@ dependencies {
     implementation project(':capacitor-android')
     implementation "androidx.webkit:webkit:$androidxWebkitVersion"
     implementation "com.squareup.okhttp3:okhttp:5.4.0"
+    googleImplementation platform('com.google.firebase:firebase-bom:34.19.0')
+    googleImplementation 'com.google.firebase:firebase-messaging:25.1.3'
+    googleImplementation 'com.google.firebase:firebase-installations'
+    googleImplementation 'com.google.firebase:firebase-appcheck'
+    googleDebugImplementation 'com.google.firebase:firebase-appcheck-debug:19.4.1'
+    googleReleaseImplementation 'com.google.firebase:firebase-appcheck-playintegrity:19.4.1'
     implementation "org.unifiedpush.android:connector:3.3.5"
     implementation "androidx.work:work-runtime:2.12.0"
     testImplementation "junit:junit:$junitVersion"
@@ -92,3 +129,8 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+// The independent flavor never consumes Google configuration or generated resources.
+tasks.configureEach { task ->
+    if (task.name.startsWith('processIndependent') && task.name.endsWith('GoogleServices')) task.enabled = false
+}

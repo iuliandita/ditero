@@ -579,7 +579,7 @@ final class NativeZeroTransport {
             activity.requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},7347);
         }
         sendToPage(proxy,obj("t","reply","rid",rid,"ok",true,"state",push.state(),
-                "permission",push.permitted()?"granted":"denied","provider","unifiedpush"));
+                "permission",push.permitted()?"granted":"denied","provider",push.providerId()));
     }
 
     private boolean retirePush() {pendingPushOpen=null; pushPermissionOwner=null; return push.invalidate();}
@@ -639,6 +639,7 @@ final class NativeZeroTransport {
         if(pendingPushOpen!=null && !ownsPushOpen(pendingPushOpen,false)) pendingPushOpen=null;
         JSONObject reply = obj("t", "reply", "rid", rid, "ok", true, "gen", generation,
                 "bridge", "native-zero-2", "authReserve", HANDLE_CHARS, "maxSockets", MAX_SOCKETS);
+        put(reply,"pushProvider",push.providerId());
         put(reply, "server", serverMeta());
         put(reply, "session", sessionMeta());
         sendToPage(proxy, reply);
@@ -649,6 +650,7 @@ final class NativeZeroTransport {
         JSONObject reply = obj("t", "reply", "rid", rid, "ok", true, "gen", generation,
                 "exchanging", exchange != null, "revoking", revoking != null,
                 "grantPending", pending != null && pending.context == context);
+        put(reply,"pushProvider",push.providerId());
         put(reply, "server", serverMeta());
         put(reply, "session", sessionMeta());
         sendToPage(proxy, reply);
@@ -700,6 +702,7 @@ final class NativeZeroTransport {
             handle = session == null ? null : newHandle();
         }
         JSONObject reply = obj("t", "reply", "rid", rid, "ok", true, "gen", generation);
+        put(reply,"pushProvider",push.providerId());
         put(reply, "server", serverMeta());
         put(reply, "session", sessionMeta());
         sendToPage(proxy, reply);
