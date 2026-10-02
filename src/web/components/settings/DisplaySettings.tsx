@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { m } from "../../../paraglide/messages.js";
+import { ACCENT_PALETTES } from "../../lib/accent-palettes.ts";
 import { useDisplayPreferences } from "../../lib/DisplayPreferencesProvider.tsx";
 
 export function DisplaySettings() {
@@ -10,6 +11,15 @@ export function DisplaySettings() {
 		{ value: "standard", label: m.display_size_standard() },
 		{ value: "comfortable", label: m.display_size_comfortable() },
 		{ value: "large", label: m.display_size_large() },
+	] as const;
+
+	const accents = [
+		{ value: "teal", label: m.accent_theme_teal() },
+		{ value: "blue", label: m.accent_theme_blue() },
+		{ value: "clay", label: m.accent_theme_clay() },
+		{ value: "violet", label: m.accent_theme_violet() },
+		{ value: "berry", label: m.accent_theme_berry() },
+		{ value: "ochre", label: m.accent_theme_ochre() },
 	] as const;
 
 	return (
@@ -67,6 +77,39 @@ export function DisplaySettings() {
 					{preferences.highContrast ? m.toggle_on() : m.toggle_off()}
 				</Button>
 			</div>
+			<fieldset aria-describedby={`${id}-accent-description`}>
+				<legend className="font-medium">{m.accent_theme_label()}</legend>
+				<p
+					id={`${id}-accent-description`}
+					className="mt-1 text-muted-foreground"
+				>
+					{m.accent_theme_description()}
+				</p>
+				<div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
+					{accents.map((accent) => (
+						<label
+							key={accent.value}
+							className="flex min-h-11 cursor-pointer items-center gap-2"
+						>
+							<input
+								type="radio"
+								name={`${id}-accent`}
+								value={accent.value}
+								checked={preferences.accentTheme === accent.value}
+								data-testid={`display-accent-${accent.value}`}
+								className="size-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+								onChange={() => setPreferences({ accentTheme: accent.value })}
+							/>
+							<span
+								aria-hidden="true"
+								className="size-5 shrink-0 rounded-full border border-foreground/20"
+								style={{ backgroundColor: ACCENT_PALETTES[accent.value].main }}
+							/>
+							{accent.label}
+						</label>
+					))}
+				</div>
+			</fieldset>
 			<p className="text-muted-foreground">{m.display_device_note()}</p>
 			{saveFailed && (
 				<p role="status" className="text-foreground">

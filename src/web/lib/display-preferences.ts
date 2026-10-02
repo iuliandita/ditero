@@ -1,11 +1,22 @@
 export const READING_SIZES = ["standard", "comfortable", "large"] as const;
 export type ReadingSize = (typeof READING_SIZES)[number];
+export const ACCENT_THEMES = [
+	"teal",
+	"blue",
+	"clay",
+	"violet",
+	"berry",
+	"ochre",
+] as const;
+export type AccentTheme = (typeof ACCENT_THEMES)[number];
 export type DisplayPreferences = {
+	accentTheme: AccentTheme;
 	readingSize: ReadingSize;
 	highContrast: boolean;
 };
 
 export const DEFAULT_DISPLAY_PREFERENCES: Readonly<DisplayPreferences> = {
+	accentTheme: "teal",
 	readingSize: "standard",
 	highContrast: false,
 };
@@ -24,12 +35,21 @@ export function parseDisplayPreferences(
 	try {
 		const value: unknown = raw ? JSON.parse(raw) : null;
 		if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-			const { readingSize, highContrast } = value as Record<string, unknown>;
+			const { readingSize, highContrast, accentTheme } = value as Record<
+				string,
+				unknown
+			>;
 			if (
 				READING_SIZES.some((size) => size === readingSize) &&
 				typeof highContrast === "boolean"
 			)
-				return { readingSize: readingSize as ReadingSize, highContrast };
+				return {
+					readingSize: readingSize as ReadingSize,
+					highContrast,
+					accentTheme: ACCENT_THEMES.some((theme) => theme === accentTheme)
+						? (accentTheme as AccentTheme)
+						: "teal",
+				};
 		}
 	} catch {
 		// Invalid stored settings use the same defaults as a new account.
@@ -79,6 +99,7 @@ export function applyDisplayPreferences(
 	preferences: DisplayPreferences,
 	root: Pick<HTMLElement, "dataset">,
 ): void {
+	root.dataset.accentTheme = preferences.accentTheme;
 	root.dataset.readingSize = preferences.readingSize;
 	root.dataset.highContrast = String(preferences.highContrast);
 }

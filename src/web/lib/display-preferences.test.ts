@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+	ACCENT_THEMES,
 	applyDisplayPreferences,
 	DEFAULT_DISPLAY_PREFERENCES,
 	displayPreferencesKey,
@@ -23,11 +24,42 @@ describe("display preferences", () => {
 	test("accepts every preset and an independent contrast choice", () => {
 		for (const readingSize of ["standard", "comfortable", "large"] as const) {
 			for (const highContrast of [false, true]) {
-				const preferences = { readingSize, highContrast };
+				const preferences = { readingSize, highContrast, accentTheme: "teal" };
 				expect(parseDisplayPreferences(JSON.stringify(preferences))).toEqual(
 					preferences,
 				);
 			}
+		}
+	});
+
+	test("legacy and invalid accent settings preserve reading preferences", () => {
+		for (const accentTheme of [undefined, "unknown", null, 1, {}, true]) {
+			expect(
+				parseDisplayPreferences(
+					JSON.stringify({
+						readingSize: "large",
+						highContrast: true,
+						accentTheme,
+					}),
+				),
+			).toEqual({
+				readingSize: "large",
+				highContrast: true,
+				accentTheme: "teal",
+			});
+		}
+	});
+
+	test("accepts every accent independently of reading and contrast preferences", () => {
+		for (const accentTheme of ACCENT_THEMES) {
+			const preferences = {
+				readingSize: "comfortable",
+				highContrast: true,
+				accentTheme,
+			};
+			expect(parseDisplayPreferences(JSON.stringify(preferences))).toEqual(
+				preferences,
+			);
 		}
 	});
 
@@ -49,8 +81,16 @@ describe("display preferences", () => {
 
 	test("persists each account separately and never creates an anonymous bucket", () => {
 		const storage = memory();
-		const first = { readingSize: "large", highContrast: true } as const;
-		const second = { readingSize: "comfortable", highContrast: false } as const;
+		const first = {
+			readingSize: "large",
+			highContrast: true,
+			accentTheme: "berry",
+		} as const;
+		const second = {
+			readingSize: "comfortable",
+			highContrast: false,
+			accentTheme: "blue",
+		} as const;
 		expect(writeDisplayPreferences("first", first, storage)).toBe(true);
 		expect(readDisplayPreferences("first", storage)).toEqual(first);
 		expect(readDisplayPreferences("second", storage)).toEqual(
@@ -108,31 +148,34 @@ describe("display preferences", () => {
 		);
 	});
 
-	test("replaces both document attributes on account switch and sign-out", () => {
+	test("replaces all document attributes on account switch and sign-out", () => {
 		const root = {
 			dataset: { readingSize: "standard", highContrast: "false" },
 		};
 		const storage = memory();
 		writeDisplayPreferences(
 			"first",
-			{ readingSize: "large", highContrast: true },
+			{ readingSize: "large", highContrast: true, accentTheme: "berry" },
 			storage,
 		);
 		applyDisplayPreferences(readDisplayPreferences("first", storage), root);
 		expect(root.dataset).toEqual({
 			readingSize: "large",
 			highContrast: "true",
+			accentTheme: "berry",
 		});
 		applyDisplayPreferences(readDisplayPreferences("second", storage), root);
 		expect(root.dataset).toEqual({
 			readingSize: "standard",
 			highContrast: "false",
+			accentTheme: "teal",
 		});
 		applyDisplayPreferences(readDisplayPreferences("first", storage), root);
 		applyDisplayPreferences(readDisplayPreferences(null, storage), root);
 		expect(root.dataset).toEqual({
 			readingSize: "standard",
 			highContrast: "false",
+			accentTheme: "teal",
 		});
 	});
 });
