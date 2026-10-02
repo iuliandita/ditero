@@ -50,6 +50,7 @@ function PhonePush({ push }: { push: NativePush }) {
 	useEffect(() => {
 		const epoch = ++owner.current;
 		inFlight.current = false;
+		pollBudget.current = 0;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		const deadline = Date.now() + 15_000;
 		const current = () => epoch === owner.current;
@@ -57,13 +58,18 @@ function PhonePush({ push }: { push: NativePush }) {
 			if (
 				document.visibilityState === "hidden" ||
 				!current() ||
-				lastState.current?.state !== "enabling" ||
+				(lastState.current?.state !== "enabling" &&
+					lastState.current?.state !== "cleanup-pending") ||
 				pollBudget.current >= 10 ||
 				Date.now() >= deadline
 			)
 				return;
 			timer = setTimeout(() => {
-				if (lastState.current?.state !== "enabling" || Date.now() >= deadline)
+				if (
+					(lastState.current?.state !== "enabling" &&
+						lastState.current?.state !== "cleanup-pending") ||
+					Date.now() >= deadline
+				)
 					return;
 				pollBudget.current++;
 				void read();
@@ -113,16 +119,16 @@ function PhonePush({ push }: { push: NativePush }) {
 			if (epoch !== owner.current) return;
 			lastState.current = next;
 			setSnapshot(next);
-			if (next.state === "enabling") {
-				pollBudget.current = 0;
-			}
 		} catch {
 			if (epoch === owner.current) setFailed("action");
 		} finally {
 			if (epoch === owner.current) {
 				inFlight.current = false;
 				setBusy(false);
-				if (lastState.current?.state === "enabling")
+				if (
+					lastState.current?.state === "enabling" ||
+					lastState.current?.state === "cleanup-pending"
+				)
 					setRevision((value) => value + 1);
 			}
 		}
