@@ -1,12 +1,62 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import ts from "typescript";
 import { defineConfig } from "vite";
 import { paraglideOptions } from "./paraglide.options.ts";
 import { configureSignupTransport } from "./scripts/e2e-signup-transport.ts";
 export default defineConfig({
 	plugins: [
+		{
+			name: "public-pwa-shell",
+			apply: "build",
+			generateBundle(_options, bundle) {
+				const assets = Object.values(bundle).filter((item) =>
+					item.fileName.startsWith("assets/"),
+				);
+				const bytes = assets.reduce(
+					(sum, item) =>
+						sum +
+						(item.type === "chunk"
+							? Buffer.byteLength(item.code)
+							: typeof item.source === "string"
+								? Buffer.byteLength(item.source)
+								: item.source.length),
+					0,
+				);
+				if (assets.length > 512 || bytes > 64 * 1024 * 1024)
+					throw new Error("PWA public shell exceeds cache budget");
+				const files = [
+					"/index.html",
+					"/manifest.webmanifest",
+					"/icon-192.png",
+					"/icon-512.png",
+					...assets.map((item) => `/${item.fileName}`),
+				].sort();
+				const version = createHash("sha256")
+					.update(JSON.stringify(files))
+					.update(readFileSync("index.html"))
+					.update(readFileSync("public/manifest.webmanifest"))
+					.update(readFileSync("public/icon-192.png"))
+					.update(readFileSync("public/icon-512.png"))
+					.update(readFileSync("src/web/service-worker.ts"))
+					.digest("hex")
+					.slice(0, 20);
+				const source = ts
+					.transpileModule(readFileSync("src/web/service-worker.ts", "utf8"), {
+						compilerOptions: {
+							target: ts.ScriptTarget.ES2022,
+							module: ts.ModuleKind.ESNext,
+						},
+					})
+					.outputText.replaceAll("__PWA_FILES__", JSON.stringify(files))
+					.replaceAll("__PWA_VERSION__", JSON.stringify(version));
+				this.emitFile({ type: "asset", fileName: "sw.js", source });
+			},
+		},
 		react(),
 		tailwindcss(),
 		paraglideVitePlugin({ ...paraglideOptions }),

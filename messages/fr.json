@@ -2147,5 +2147,6 @@
 	"native_approval_pending": "La demande attend encore une approbation.",
 	"native_signin_failed": "Impossible de terminer la connexion. Réessaie.",
 	"native_settings_browser_note": "Gère ces réglages dans ton navigateur sur le serveur choisi. Tu devras peut-être t’y connecter.",
-	"native_settings_open_browser": "Ouvrir dans le navigateur"
+	"native_settings_open_browser": "Ouvrir dans le navigateur",
+	"pwa_update_available": "Une mise à jour est prête. Recharge l’application quand tu veux."
 }

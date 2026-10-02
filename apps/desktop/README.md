@@ -20,6 +20,21 @@ instances from overwriting each other's state. Local UI and sync persistence ret
 server/account scopes. Closing waits for durable local sync retirement before
 native sockets are drained and the window is destroyed; a failure keeps it open.
 
+## Encrypted files
+
+Enable `DITERO_E2E_ENABLED` on the server and enroll the account's encryption keys
+before using attachments. Upload, download, delete, and in-app image previews use
+the shared encrypted-file interface. Named native operations stream bounded chunks
+over HTTPS without exposing a general HTTP or filesystem bridge. Transfers capture
+the server, account, session, and page owner; cancellation and ownership changes
+retire their capabilities and stop their I/O.
+
+Downloads use a private, account-scoped temporary stage containing ciphertext
+only. The client verifies the complete encrypted stream before any plaintext save
+writes. The operating system save dialog supplies an opaque destination capability;
+Rust writes a private temporary file and commits the final save atomically.
+Canceled or retired operations clean up their temporary files.
+
 ## Development installers and checks
 
 Use Bun 1.4.2 and Rust 1.98.1, matching the CI toolchain. The official Tauri CLI,
@@ -109,6 +124,10 @@ webview against a trusted HTTPS server:
 - Cold session restore from the OS credential store, with Large text and high
   contrast preferences retained.
 - A native window-close request that terminated the application within two seconds.
+- Startup and the native save dialog alongside the Linux OS credential store.
+- A second file uploaded with its encrypted attachment row committed on the server.
+- Native download/save of a 216-byte file matching the original hash, with owner-only
+  read/write permissions on the saved file.
 
 These checks cover the Linux core journey and webview key-storage primitives.
 They do not qualify full encryption enrollment/recovery or prove durable close
@@ -121,7 +140,7 @@ worker execution, OPFS/locks, and installer execution still require platform che
 The desktop uses each platform's native TLS trust; server certificates must also
 be trusted by the user's system browser. No certificate bypass is supported.
 
-Native attachment upload/download, notification/background integration, and release
-signing remain unfinished. Shared browser-only settings and integrations retain
-the Android core's limitations. A successful installer build alone does not prove
+Broader encrypted-file qualification, notification/background integration, deep
+links, updater delivery, and release signing remain unfinished. Shared browser-only
+settings and integrations retain the Android core's limitations. A successful installer build alone does not prove
 complete desktop application delivery.

@@ -9,6 +9,12 @@ import {
 	useRef,
 	useState,
 } from "react";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { isPreviewable } from "../../../domain/attachment.ts";
 import { StreamError } from "../../../domain/e2e/stream.ts";
 import { randomId } from "../../../domain/random-id.ts";
@@ -24,6 +30,7 @@ import {
 } from "../../lib/e2e/attachment-api.ts";
 import {
 	type DecryptedAttachmentMetadata,
+	type DownloadDestination,
 	DownloadMemoryLimitError,
 	decryptAttachmentMetadata,
 	downloadAttachment,
@@ -75,6 +82,7 @@ type ResolvedRow = {
 };
 
 type Thumbnail = { url: string; revoke: () => void };
+type NativePreview = Thumbnail & { filename: string };
 
 export type AttachmentListHandle = {
 	openPicker: () => void;
@@ -153,6 +161,11 @@ export const AttachmentList = forwardRef<
 	const workspace = workspaces.find((row) => row.id === workspaceId);
 	const workspaceName = workspace?.name ?? m.field_workspace();
 	const gate = useAttachmentGate(workspaceId);
+	const nativeAttachments = keyring.runtime.attachments;
+	const attachmentFetcher = nativeAttachments?.fetcher;
+	const runtimeFetcher = keyring.runtime.fetcher;
+	const previewRef = useRef<NativePreview | null>(null);
+	const [preview, setPreview] = useState<NativePreview | null>(null);
 	const dropzone = useRef<AttachmentDropzoneHandle>(null);
 	const itemRefs = useRef(new Map<string, HTMLLIElement>());
 	const thumbnailLoads = useRef(new Set<string>());
@@ -199,8 +212,15 @@ export const AttachmentList = forwardRef<
 		setPending((rows) => rows.filter((row) => !attachmentIds.has(row.id)));
 	}, [attachmentIds]);
 
+	const closePreview = useCallback(() => {
+		previewRef.current?.revoke();
+		previewRef.current = null;
+		setPreview(null);
+	}, []);
+
 	useEffect(() => {
 		if (keyring.state === "ready") return;
+		closePreview();
 		for (const controller of downloadControllers.current.values())
 			controller.abort();
 		for (const thumbnail of thumbnailRef.current.values()) thumbnail.revoke();
@@ -208,7 +228,7 @@ export const AttachmentList = forwardRef<
 		thumbnailLoads.current.clear();
 		setThumbnails(new Map());
 		setResolved(new Map());
-	}, [keyring.state]);
+	}, [closePreview, keyring.state]);
 
 	useEffect(() => {
 		pendingRef.current = pending;
@@ -216,6 +236,7 @@ export const AttachmentList = forwardRef<
 
 	useEffect(
 		() => () => {
+			previewRef.current?.revoke();
 			for (const thumbnail of thumbnailRef.current.values()) thumbnail.revoke();
 			for (const upload of pendingRef.current) upload.controller.abort();
 			for (const controller of downloadControllers.current.values())
@@ -243,12 +264,12 @@ export const AttachmentList = forwardRef<
 	const refreshAccess = useCallback(async () => {
 		await keyring.refreshWorkspaceKeys();
 		try {
-			setGrants(await fetchMyGrants());
+			setGrants(await fetchMyGrants(runtimeFetcher));
 		} catch (caught) {
 			console.error("attachments: grant state failed", caught);
 		}
 		setAccessRevision((value) => value + 1);
-	}, [keyring]);
+	}, [keyring, runtimeFetcher]);
 
 	useEffect(() => {
 		if (keyring.state !== "ready" || attachments.length === 0) return;
@@ -284,7 +305,7 @@ export const AttachmentList = forwardRef<
 			setResolved(next);
 			if (missing) {
 				try {
-					setGrants(await fetchMyGrants());
+					setGrants(await fetchMyGrants(runtimeFetcher));
 				} catch (caught) {
 					console.error("attachments: grant state failed", caught);
 				}
@@ -293,7 +314,7 @@ export const AttachmentList = forwardRef<
 		return () => {
 			active = false;
 		};
-	}, [accessRevision, attachments, keyring, workspaceId]);
+	}, [accessRevision, attachments, keyring, runtimeFetcher, workspaceId]);
 
 	const unresolved =
 		keyring.state === "ready" &&
@@ -325,7 +346,9 @@ export const AttachmentList = forwardRef<
 				.workspaceKey(workspaceId, row.keyVersion)
 				.then(async (key) => {
 					if (!key) return null;
-					return await downloadAttachmentThumbnail(row, key.wdk);
+					return await downloadAttachmentThumbnail(row, key.wdk, {
+						fetcher: attachmentFetcher,
+					});
 				})
 				.then((thumbnail) => {
 					if (!thumbnail) return;
@@ -345,7 +368,7 @@ export const AttachmentList = forwardRef<
 		return () => {
 			active = false;
 		};
-	}, [attachments, keyring, resolved, workspaceId]);
+	}, [attachmentFetcher, attachments, keyring, resolved, workspaceId]);
 
 	function updatePending(id: string, patch: Partial<PendingUpload>) {
 		setPending((rows) =>
@@ -375,6 +398,7 @@ export const AttachmentList = forwardRef<
 					},
 					{
 						id: upload.id,
+						fetcher: attachmentFetcher,
 						signal: upload.controller.signal,
 						onProgress: (progress) =>
 							updatePending(upload.id, {
@@ -429,24 +453,42 @@ export const AttachmentList = forwardRef<
 		if (downloadControllers.current.has(row.id)) return;
 		const controller = new AbortController();
 		downloadControllers.current.set(row.id, controller);
-		setRowProgress((current) =>
-			new Map(current).set(row.id, {
-				phase: "transferring",
-				loaded: 0,
-				total: row.declaredBytes,
-			}),
-		);
 		setRowError(row.id, null);
+		let target: DownloadDestination | undefined = destination;
+		let saved = false;
 		try {
-			if (mode === "open") {
-				const metadata = await decryptAttachmentMetadata(row, key.wdk);
-				if (!isPreviewable(metadata.contentType)) {
-					setRowError(row.id, m.attachment_preview_unavailable());
+			const metadata = await decryptAttachmentMetadata(row, key.wdk);
+			if (mode === "open" && !isPreviewable(metadata.contentType)) {
+				setRowError(row.id, m.attachment_preview_unavailable());
+				return;
+			}
+			// Native always uses the OS picker, even for small files.
+			if (mode === "download" && nativeAttachments) {
+				try {
+					target = await nativeAttachments.pickFile(
+						metadata.filename,
+						controller.signal,
+					);
+				} catch (caught) {
+					if (
+						!(caught instanceof DOMException && caught.name === "AbortError")
+					) {
+						console.error("attachments: file picker failed", caught);
+						setRowError(row.id, m.attachment_error_download_failed());
+					}
 					return;
 				}
 			}
+			setRowProgress((current) =>
+				new Map(current).set(row.id, {
+					phase: "transferring",
+					loaded: 0,
+					total: row.declaredBytes,
+				}),
+			);
 			const options = {
 				signal: controller.signal,
+				fetcher: attachmentFetcher,
 				onProgress: (progress: AttachmentProgress) =>
 					setRowProgress((current) => {
 						const next = new Map(current);
@@ -454,11 +496,30 @@ export const AttachmentList = forwardRef<
 						return next;
 					}),
 			};
-			if (destination) {
-				await saveAttachmentToFile(row, key.wdk, destination, options);
+			if (target) {
+				await saveAttachmentToFile(row, key.wdk, target, {
+					...options,
+					withStage: nativeAttachments?.withStage,
+				});
+				saved = true;
 			} else {
 				const result = await downloadAttachment(row, key.wdk, options);
-				triggerBlob(result, mode === "download");
+				if (nativeAttachments) {
+					if (controller.signal.aborted) {
+						result.revoke();
+						return;
+					}
+					closePreview();
+					const next = {
+						url: result.url,
+						revoke: result.revoke,
+						filename: result.filename,
+					};
+					previewRef.current = next;
+					setPreview(next);
+				} else {
+					triggerBlob(result, mode === "download");
+				}
 			}
 		} catch (caught) {
 			if (controller.signal.aborted) return;
@@ -474,6 +535,7 @@ export const AttachmentList = forwardRef<
 						: m.attachment_error_download_failed(),
 			);
 		} finally {
+			if (target && !saved) await target.cancel?.().catch(() => undefined);
 			downloadControllers.current.delete(row.id);
 			setRowProgress((current) => {
 				const next = new Map(current);
@@ -486,7 +548,18 @@ export const AttachmentList = forwardRef<
 	async function openRow(row: Attachment, mode: "open" | "download") {
 		if (downloadControllers.current.has(row.id)) return;
 		let destination: FileSystemFileHandle | undefined;
-		if (row.declaredBytes > MEMORY_DOWNLOAD_BYTES) {
+		// Native picks inside the ready-key action, so a deferred unlock never strands a picked file.
+		if (nativeAttachments) {
+			if (mode === "open" && row.declaredBytes > MEMORY_DOWNLOAD_BYTES) {
+				setRowError(
+					row.id,
+					m.attachment_preview_too_large({
+						limit: formatBytes(MEMORY_DOWNLOAD_BYTES),
+					}),
+				);
+				return;
+			}
+		} else if (row.declaredBytes > MEMORY_DOWNLOAD_BYTES) {
 			if (mode === "open") {
 				setRowError(
 					row.id,
@@ -536,7 +609,7 @@ export const AttachmentList = forwardRef<
 		});
 		if (!ok) return;
 		try {
-			await deleteAttachment(row.id);
+			await deleteAttachment(row.id, attachmentFetcher);
 			const next = attachments[index + 1] ?? attachments[index - 1];
 			requestAnimationFrame(() => {
 				if (next) itemRefs.current.get(next.id)?.focus();
@@ -606,6 +679,27 @@ export const AttachmentList = forwardRef<
 	const previews = tiles.filter((tile) => tile.preview !== null);
 	const chips = tiles.filter((tile) => tile.preview === null);
 	const count = attachments.length + pending.length;
+	const previewDialog = (
+		<Dialog
+			open={preview !== null}
+			onOpenChange={(open) => {
+				if (!open) closePreview();
+			}}
+		>
+			<DialogContent aria-describedby={undefined} className="sm:max-w-3xl">
+				<DialogHeader>
+					<DialogTitle className="break-all">{preview?.filename}</DialogTitle>
+				</DialogHeader>
+				{preview && (
+					<img
+						src={preview.url}
+						alt={preview.filename}
+						className="max-h-[70vh] w-full object-contain"
+					/>
+				)}
+			</DialogContent>
+		</Dialog>
+	);
 
 	const content = (
 		<>
@@ -740,6 +834,7 @@ export const AttachmentList = forwardRef<
 			<span role="status" className="sr-only">
 				{announcement}
 			</span>
+			{nativeAttachments && previewDialog}
 		</AttachmentDropzone>
 	);
 });

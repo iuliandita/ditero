@@ -274,14 +274,35 @@ export function pickDownloadFile(
 	return picker.call(window, { suggestedName: sanitiseFilename(filename) });
 }
 
+export type AttachmentFileWriter = {
+	write: (chunk: Uint8Array<ArrayBuffer>) => Promise<void>;
+	close: () => Promise<void>;
+	abort: () => Promise<void>;
+};
+
+export type DownloadDestination = {
+	createWritable: () => Promise<AttachmentFileWriter>;
+	cancel?: () => Promise<void>;
+};
+
+export type CiphertextStage = {
+	createWritable: () => Promise<AttachmentFileWriter>;
+	getFile: () => Promise<{ stream: () => ReadableStream<Uint8Array> }>;
+};
+
+export type CiphertextStageRunner = <T>(
+	use: (handle: CiphertextStage) => Promise<T>,
+) => Promise<T>;
+
 type FileDownloadOptions = AttachmentDownloadOptions & {
-	withStage?: typeof withCiphertextStage;
+	withStage?: CiphertextStageRunner;
+	storageScope?: string;
 };
 
 export async function saveAttachmentToFile(
 	row: AttachmentCiphertextMetadata,
 	wdk: Uint8Array,
-	destination: Pick<FileSystemFileHandle, "createWritable">,
+	destination: DownloadDestination,
 	options: FileDownloadOptions = {},
 ): Promise<void> {
 	const dek = await unwrapDek(row, wdk);
@@ -306,7 +327,10 @@ export async function saveAttachmentToFile(
 				? Number(rawLength)
 				: 0;
 		let loaded = 0;
-		await (options.withStage ?? withCiphertextStage)(async (handle) => {
+		const withStage: CiphertextStageRunner =
+			options.withStage ??
+			((use) => withCiphertextStage(use, options.storageScope));
+		await withStage(async (handle) => {
 			const stageWriter = await handle.createWritable();
 			try {
 				for await (const chunk of responseBytes(source, (count) => {

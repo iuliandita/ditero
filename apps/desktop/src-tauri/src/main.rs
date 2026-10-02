@@ -1,3 +1,4 @@
+mod attachments;
 mod host;
 mod protocol;
 mod vault;

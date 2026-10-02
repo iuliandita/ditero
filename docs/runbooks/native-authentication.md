@@ -1,7 +1,10 @@
 # Native authentication handoff
 
-This API and browser approval screen prepare native authentication. Desktop and
-Android applications and native credential storage are not delivered by this slice.
+Android and desktop development runtimes use this API and browser approval screen.
+Their native hosts retain credentials in Android Keystore or the operating system
+credential store. Complete native application delivery remains in progress; see
+[Android development](../../apps/android/README.md) and
+[desktop development](../../apps/desktop/README.md) for build and qualification limits.
 
 The client generates a random PKCE verifier with 43 to 128 unreserved ASCII
 characters, then computes its SHA-256 challenge in canonical unpadded base64url.
@@ -58,8 +61,8 @@ the stream may remain until reconnect or token expiry.
 Previously issued subject-only JWTs are refused. Existing signed-in browser
 clients can refresh through the usual cookie-authenticated token endpoint.
 
-All requests are rate limited. JSON bodies are bounded to 4 KiB and reject
-unexpected fields. Responses carry `Cache-Control: no-store`. The existing
+All authentication requests are rate limited. Their JSON bodies are bounded to
+4 KiB and reject unexpected fields. Responses carry `Cache-Control: no-store`. The existing
 browser origin checks and cookie authentication remain in place.
 
 ## Native application operations
@@ -99,9 +102,8 @@ Bearer plugin, synthesize Cookie or Origin headers, or expose a generic
 authenticated fetch. The native session token and Zero JWT remain in native
 credential storage; only the profile fields above may reach JavaScript.
 
-The complete applications are still unfinished. These endpoints are server
-source and focused integration tests only; they do not deliver the native
-shell, its startup flow, or credential storage.
+The development runtimes use these endpoints during verified sign-in and startup.
+Platform qualification and complete application delivery remain unfinished.
 
 ## Native encryption operations
 
@@ -119,10 +121,47 @@ user id reaches the encryption handlers. Native responses carry
 internal details. Parameterized workspace routes share a fixed rate-limit
 identity, including their trailing-slash forms.
 
-The native bridge must select named encryption operations and keep session
-credentials in native storage. These routes do not authorize an arbitrary
-authenticated URL fetch or embedded remote pages. Native attachments and
-application integration remain unfinished.
+The native bridges select named encryption operations and keep session credentials
+in native storage. These routes do not authorize an arbitrary authenticated URL
+fetch or embedded remote pages.
+
+## Native attachment operations
+
+Enable `DITERO_E2E_ENABLED` on the server before using encrypted attachments.
+`/api/native/attachments` reuses the browser attachment payloads, quotas,
+reservation expiry, uploader checks, and parent-record permissions. The following
+routes require a live native session in the Bearer header:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/native/attachments/config` | Read enabled storage and upload limits |
+| `POST /api/native/attachments/reserve` | Reserve attachment metadata and ciphertext sizes |
+| `POST /api/native/attachments/:id/upload` | Stream encrypted file bytes |
+| `POST /api/native/attachments/:id/thumbnail` | Stream encrypted thumbnail bytes |
+| `POST /api/native/attachments/finalize` | Commit a completed reservation |
+| `POST /api/native/attachments/abort` | Abort the caller's reservation |
+| `POST /api/native/attachments/delete` | Delete an authorized attachment |
+| `GET /api/native/attachments/:id/download` | Stream authorized file ciphertext |
+| `GET /api/native/attachments/:id/thumbnail` | Stream authorized thumbnail ciphertext |
+
+Cookie or Origin headers are refused, requests are rate limited, and every
+response carries `Cache-Control: no-store`. JSON controls reject unexpected fields
+and have a 2 MiB server limit for escaped opaque metadata. Only the native bridge's
+reserve control permits that larger envelope; other controls remain bounded to
+8 KiB. Upload and download capabilities expose at most 32 KiB per chunk, monotonic
+sequence numbers, and cancellation, without caller-selected URLs or headers.
+Session credentials remain native.
+
+Each transfer captures its server and verified account/session/page owner.
+Changing ownership or revoking, forgetting, or draining that context cancels its
+I/O and capabilities, including stale save-dialog completions. The system save
+picker returns an opaque destination capability. Complete encrypted-stream
+integrity is checked before plaintext save writes. Desktop downloads stage only
+ciphertext in private scoped temporary files and commit the final selected save
+atomically. Native image previews render inside the app.
+
+Bounded Android and Linux desktop upload/save journeys have passed. Other document
+providers, platforms, large-file and interruption cases still require qualification.
 
 ## Native sign-out
 

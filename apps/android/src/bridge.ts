@@ -64,10 +64,34 @@ export type E2eOp =
 	| "e2e.grantSubmit"
 	| "e2e.grantFail";
 
+export type AttachmentOp =
+	| "attachment.config"
+	| "attachment.reserve"
+	| "attachment.finalize"
+	| "attachment.abort"
+	| "attachment.delete"
+	| "attachment.cancel"
+	| "upload.begin"
+	| "upload.write"
+	| "upload.finish"
+	| "download.begin"
+	| "download.read"
+	| "save.pick"
+	| "save.write"
+	| "save.finish"
+	| "save.cancel"
+	| "save.cancelPending"
+	| "stage.begin"
+	| "stage.write"
+	| "stage.rewind"
+	| "stage.read"
+	| "stage.cancel";
+
 type Command =
 	| { op: "server.select"; origin: string }
 	| { op: SimpleOp }
-	| { op: E2eOp; id?: string; body?: Record<string, unknown> };
+	| { op: E2eOp; id?: string; body?: Record<string, unknown> }
+	| { op: AttachmentOp; body: Record<string, unknown> };
 
 type NativeObject = {
 	postMessage(message: string): void;
@@ -298,13 +322,14 @@ function nextRid(): number {
 function request<T>(
 	command: Command | { op: "hello" },
 	handle: (reply: Reply) => T,
+	timeout = CALL_TIMEOUT_MS,
 ): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
 		const id = nextRid();
 		const timer = setTimeout(() => {
 			pending.delete(id);
 			reject(new NativeError("timeout"));
-		}, CALL_TIMEOUT_MS);
+		}, timeout);
 		pending.set(id, {
 			timer,
 			reject,
@@ -648,6 +673,31 @@ export async function callE2e(
 			);
 		return { status, body };
 	});
+}
+
+/** Closed file operations; callers still validate each operation's fields. */
+export function callAttachment(
+	op: AttachmentOp,
+	body: Record<string, unknown> = {},
+): Promise<Reply> {
+	return request(
+		{ op, body },
+		(reply) => {
+			// HTTP refusals remain responses. Only native policy/transport failures throw.
+			if (
+				!reply.ok &&
+				!(
+					typeof reply.status === "number" &&
+					Number.isInteger(reply.status) &&
+					reply.status >= 300 &&
+					reply.status <= 599
+				)
+			)
+				ok(reply);
+			return reply;
+		},
+		op === "save.pick" ? 300_000 : CALL_TIMEOUT_MS,
+	);
 }
 
 // ---- WebSocket adapter ------------------------------------------------------------

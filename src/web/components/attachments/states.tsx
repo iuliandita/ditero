@@ -78,6 +78,8 @@ export function useAttachmentGate(
 	const zero = useZero<typeof schema>();
 	const [workspaces] = useQuery(queries.workspaces.mine());
 	const keyring = useKeyring();
+	const runtimeFetcher = keyring.runtime.fetcher;
+	const attachmentFetcher = keyring.runtime.attachments?.fetcher;
 	const workspace = workspaces.find((row) => row.id === workspaceId);
 	const [enrolling, setEnrolling] = useState(false);
 	const [unlocking, setUnlocking] = useState(false);
@@ -106,7 +108,7 @@ export function useAttachmentGate(
 			return;
 		}
 		let active = true;
-		void fetchWorkspaceRotationPlan(workspaceId)
+		void fetchWorkspaceRotationPlan(workspaceId, runtimeFetcher)
 			.then((plan) => {
 				if (active) setRotationPlan(plan);
 			})
@@ -117,7 +119,7 @@ export function useAttachmentGate(
 		return () => {
 			active = false;
 		};
-	}, [blocked, workspaceId]);
+	}, [blocked, runtimeFetcher, workspaceId]);
 
 	const continueWithKey = useCallback(
 		async (current: PendingAction): Promise<boolean> => {
@@ -168,7 +170,7 @@ export function useAttachmentGate(
 			}
 			let limit: number;
 			try {
-				limit = (await fetchAttachmentConfig()).maxFileBytes;
+				limit = (await fetchAttachmentConfig(attachmentFetcher)).maxFileBytes;
 				maxFileBytes.current = limit;
 			} catch (caught) {
 				console.error("attachments: config failed", caught);
@@ -181,7 +183,7 @@ export function useAttachmentGate(
 			}
 			return await begin({ files, action });
 		},
-		[begin],
+		[attachmentFetcher, begin],
 	);
 
 	const runWithKey = useCallback(
@@ -248,7 +250,7 @@ export function useAttachmentGate(
 		setRotationBusy(true);
 		setError(null);
 		try {
-			const result = await rotateWorkspaceKey(workspaceId);
+			const result = await rotateWorkspaceKey(workspaceId, runtimeFetcher);
 			if (result.wdk) {
 				keyring.cacheWorkspaceKey(workspaceId, result.version, result.wdk);
 			}
@@ -269,7 +271,7 @@ export function useAttachmentGate(
 		} finally {
 			setRotationBusy(false);
 		}
-	}, [keyring, resume, rotationBusy, workspaceId]);
+	}, [keyring, resume, rotationBusy, runtimeFetcher, workspaceId]);
 
 	return useMemo(
 		() => ({

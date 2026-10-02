@@ -176,6 +176,7 @@ final class NativeZeroTransport {
     private final OkHttpClient http;
     private final OkHttpClient wsHttp;
     private final SharedPreferences prefs;
+    private final NativeAttachmentTransfers attachments;
 
     // Everything below is touched on the main thread only, except Sock internals.
     private boolean closed;
@@ -298,6 +299,7 @@ final class NativeZeroTransport {
                 .writeTimeout(15, TimeUnit.SECONDS)
                 .build();
         this.wsHttp = http.newBuilder().readTimeout(0, TimeUnit.MILLISECONDS).build();
+        this.attachments = new NativeAttachmentTransfers(activity, http);
     }
 
     /**
@@ -336,6 +338,7 @@ final class NativeZeroTransport {
         if (closed) return;
         closed = true;
         ready = false;
+        attachments.cancelAll();
         generation++;
         for (Sock s : new ArrayList<>(socks.values())) s.detach();
         socks.clear();
@@ -348,6 +351,7 @@ final class NativeZeroTransport {
         revoking = null;
         context = null;
         zero = null;
+        attachments.shutdown();
         io.shutdownNow();
         http.dispatcher().cancelAll();
         http.connectionPool().evictAll();
@@ -374,7 +378,7 @@ final class NativeZeroTransport {
             return;
         }
         String data = message.getType() == WebMessageCompat.TYPE_STRING ? message.getData() : null;
-        if (data == null || data.length() > MAX_SEND + MAX_CONTROL) {
+        if (data == null || data.length() > 2 * 1024 * 1024) {
             sendToPage(proxy, obj("t", "reply", "ok", false, "code", "invalid-message"));
             return;
         }
@@ -391,7 +395,10 @@ final class NativeZeroTransport {
             String op = m.get("op") instanceof String ? (String) m.get("op") : "";
             boolean socketOp = op.equals("ws.send") || op.equals("ws.open");
             boolean e2eOp = op.startsWith("e2e.");
-            if (!socketOp && data.length() > (e2eOp ? MAX_BODY + MAX_CONTROL : MAX_CONTROL))
+            boolean fileOp = op.startsWith("attachment.") || op.startsWith("upload.")
+                    || op.startsWith("download.") || op.startsWith("save.");
+            boolean fileChunk = op.equals("upload.write") || op.equals("save.write");
+            if (!socketOp && data.length() > (e2eOp ? MAX_BODY + MAX_CONTROL : fileChunk ? MAX_BODY : op.equals("attachment.reserve") ? 2 * 1024 * 1024 : MAX_CONTROL))
                 throw new Reject("invalid-message");
             if (!MESSAGE_FIELDS.containsAll(m.keySet())) throw new Reject("invalid-message");
             switch (op) {
@@ -459,6 +466,12 @@ final class NativeZeroTransport {
                     wsClose(proxy, rid, cid, m);
                     return;
                 default:
+                    if (fileOp) {
+                        requireReady(m);
+                        if(page != proxy) throw new Reject("stale-generation");
+                        attachment(proxy,rid,op,m);
+                        return;
+                    }
                     if (e2eOp) {
                         requireReady(m);
                         e2e(proxy, rid, op, m);
@@ -506,6 +519,7 @@ final class NativeZeroTransport {
         // A new page load invalidates everything bound to the previous generation.
         for (Sock s : new ArrayList<>(socks.values())) s.detach();
         socks.clear();
+        attachments.cancelAll();
         generation++;
         page = proxy;
         jwt = null;
@@ -568,7 +582,8 @@ final class NativeZeroTransport {
                 fail(proxy, rid, "storage-failed");
                 return;
             }
-            generation++;
+            attachments.cancelAll();
+        generation++;
             context = next;
             zero = null;
             pending = null;
@@ -727,6 +742,102 @@ final class NativeZeroTransport {
                 if (parseable) put(out, "body", raw);
                 return out;
             }
+        });
+    }
+
+    boolean activityResult(int requestCode, int resultCode, Intent data) {
+        return attachments.activityResult(requestCode,resultCode,data);
+    }
+
+    private static void fileFields(Map<String,Object> body, String... fields) throws Reject {
+        if (!new HashSet<>(Arrays.asList(fields)).containsAll(body.keySet())) throw new Reject("invalid-body");
+    }
+    private static String fileId(Object value) throws Reject {
+        String id=str(value);
+        if(id==null || !id.matches("^[A-Za-z0-9_-]{1,128}$"))throw new Reject("invalid-id");
+        return id;
+    }
+    private static boolean thumbnail(Map<String,Object> body) throws Reject {
+        if(!(body.get("thumbnail") instanceof Boolean))throw new Reject("invalid-body");
+        return (Boolean)body.get("thumbnail");
+    }
+    private void attachment(final JavaScriptReplyProxy proxy, final int rid, String op, Map<String,Object> m) throws Reject {
+        fileFields(m,"op","rid","gen","body");
+        final Session s=session;
+        final ServerContext ctx=context;
+        if(s==null || ctx==null || s.context!=ctx || s.refused || !unexpired(s.expiresAt) || revoking!=null)throw new Reject("no-session");
+        final int g=generation;
+        final String owner=s.scope()+"\n"+s.sessionId+"\n"+s.deviceId+"\n"+g+"\n"+System.identityHashCode(proxy);
+        final Map<String,Object> body=asMap(m.get("body"));
+        final NativeAttachmentTransfers.Reply observer = value -> main.post(() -> {
+            Object status=value.get("status"), raw=value.get("body");
+            if(status instanceof Number && instanceUnauthorized(new HttpResult(((Number)status).intValue(),raw instanceof String?(String)raw:null))) {
+                s.refused=true;
+                dropSession(s);
+            }
+        });
+        final NativeAttachmentTransfers.Reply reply = value -> main.post(() -> {
+            Object status=value.get("status"), raw=value.get("body");
+            if(status instanceof Number && instanceUnauthorized(new HttpResult(((Number)status).intValue(),raw instanceof String?(String)raw:null))) {
+                s.refused=true;
+                dropSession(s);
+            }
+            if(!current(g,ctx) || session!=s || page!=proxy) {
+                Object id=value.containsKey("transferId")?value.get("transferId"):value.get("saveId");
+                if(id instanceof String)try { attachments.cancel((String)id,owner); } catch(IllegalArgumentException ignored) {}
+                cancelled(proxy,rid); return;
+            }
+            JSONObject out=new JSONObject(value);
+            put(out,"t","reply"); put(out,"rid",rid);
+            sendToPage(proxy,out);
+        });
+        try {
+            switch(op) {
+                case "attachment.config":
+                    fileFields(body);
+                    attachmentControl(proxy,rid,false,"/api/native/attachments/config",null); return;
+                case "attachment.reserve":
+                    fileFields(body,"id","workspaceId","parentKind","parentId","keyVersion","filenameCiphertext","contentTypeCiphertext","dekWrapped","declaredBytes","thumbnailDeclaredBytes");
+                    fileId(body.get("id")); fileId(body.get("workspaceId")); fileId(body.get("parentId"));
+                    NativeAttachmentTransfers.positiveBytes(body.get("declaredBytes"));
+                    NativeAttachmentTransfers.optionalPositiveBytes(body.get("thumbnailDeclaredBytes"),JSONObject.NULL);
+                    attachmentControl(proxy,rid,true,"/api/native/attachments/reserve",new JSONObject(body).toString()); return;
+                case "attachment.finalize": case "attachment.abort": case "attachment.delete":
+                    fileFields(body,"id"); fileId(body.get("id"));
+                    attachmentControl(proxy,rid,true,"/api/native/attachments/"+op.substring(11),new JSONObject(body).toString()); return;
+                case "upload.begin":
+                    fileFields(body,"attachmentId","thumbnail","bytes");
+                    attachments.upload(owner,ctx.url(NativeAttachmentTransfers.attachmentPath(fileId(body.get("attachmentId")),thumbnail(body),true)),s.token,NativeAttachmentTransfers.positiveBytes(body.get("bytes")),reply,observer);return;
+                case "download.begin":
+                    fileFields(body,"attachmentId","thumbnail");
+                    attachments.download(owner,ctx.url(NativeAttachmentTransfers.attachmentPath(fileId(body.get("attachmentId")),thumbnail(body),false)),s.token,reply);return;
+                case "upload.write": case "save.write":
+                    fileFields(body,op.startsWith("save.")?"saveId":"transferId","seq","data");
+                    attachments.write(owner,fileId(body.get(op.startsWith("save.")?"saveId":"transferId")),smallInt(body.get("seq"),0,Integer.MAX_VALUE,-1),str(body.get("data")),op.startsWith("save."),reply); return;
+                case "upload.finish": case "save.finish":
+                    fileFields(body,op.startsWith("save.")?"saveId":"transferId","seq");
+                    attachments.finish(owner,fileId(body.get(op.startsWith("save.")?"saveId":"transferId")),smallInt(body.get("seq"),0,Integer.MAX_VALUE,-1),op.startsWith("save."),reply);return;
+                case "download.read":
+                    fileFields(body,"transferId","seq");
+                    attachments.read(owner,fileId(body.get("transferId")),smallInt(body.get("seq"),0,Integer.MAX_VALUE,-1),reply);return;
+                case "attachment.cancel": case "save.cancel":
+                    fileFields(body,op.equals("save.cancel")?"saveId":"transferId");
+                    attachments.cancel(fileId(body.get(op.equals("save.cancel")?"saveId":"transferId")),owner);reply.done(NativeAttachmentTransfers.value("ok",true));return;
+                case "save.cancelPending":
+                    fileFields(body); attachments.cancelPending(owner);reply.done(NativeAttachmentTransfers.value("ok",true));return;
+                case "save.pick":
+                    fileFields(body,"filename"); attachments.pick(owner,str(body.get("filename")),reply);return;
+                default: throw new Reject("unknown-op");
+            }
+        } catch(IllegalArgumentException error) { throw new Reject(error.getMessage()); }
+    }
+    private void attachmentControl(JavaScriptReplyProxy proxy, int rid, boolean post, String path, String body) throws Reject {
+        if(body!=null && body.getBytes(StandardCharsets.UTF_8).length>(path.endsWith("/reserve")?2*1024*1024:MAX_CONTROL))throw new Reject("invalid-body");
+        authed(proxy,rid,post,path,body,true,(code,raw) -> {
+            boolean parseable=false;
+            try { parse(raw); parseable=true; } catch(IOException ignored) {}
+            return obj("ok",code>=200 && code<300 && parseable,"status",code,"body",raw,
+                    "code",code>=200 && code<300 ? "invalid-response" : "http-"+code);
         });
     }
 
@@ -1052,6 +1163,7 @@ final class NativeZeroTransport {
             return;
         }
         final int g = generation;
+        attachments.cancelAll();
         revoking = s;
         final Request request = new Request.Builder().url(ctx.url("/api/native/session/revoke"))
                 .header("Accept", "application/json")
@@ -1136,6 +1248,7 @@ final class NativeZeroTransport {
     }
 
     private void dropMemory() {
+        attachments.cancelAll();
         for (Sock s : new ArrayList<>(socks.values())) s.detach(true);
         socks.clear();
         session = null;

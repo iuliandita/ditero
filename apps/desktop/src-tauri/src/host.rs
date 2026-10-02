@@ -1,4 +1,5 @@
 use crate::{
+    attachments::{self, Transfers},
     protocol::{self, Result, MAX_BODY, MAX_SEND},
     vault::{self, Registry, Session, SystemVault, Vault},
 };
@@ -33,12 +34,14 @@ pub struct Host {
     tx: mpsc::Sender<Work>,
     clock: Arc<AtomicU64>,
     page: Arc<AtomicU64>,
+    files: Transfers,
 }
 enum Work {
     Attach(Channel<String>, u64, oneshot::Sender<Result<u64>>),
     Post(String, u64),
     Drain(oneshot::Sender<()>),
     Ended(u64, u64),
+    FileReply(attachments::Context, u64, Result<Value>),
 }
 struct Pending {
     grant: String,
@@ -57,6 +60,7 @@ struct Actor {
     ready: bool,
     page: u64,
     http: reqwest::Client,
+    file_http: reqwest::Client,
     vault: Box<dyn Vault>,
     registry: Registry,
     origin: Option<String>,
@@ -67,6 +71,8 @@ struct Actor {
     zero: Option<String>,
     pending: Option<Pending>,
     sockets: HashMap<u64, Socket>,
+    files: Transfers,
+    pages: Arc<AtomicU64>,
     #[cfg(test)]
     responses: std::collections::VecDeque<(u16, String, bool)>,
     #[cfg(test)]
@@ -104,8 +110,12 @@ async fn native_attach(
     channel: Channel<String>,
 ) -> Result<u64> {
     trusted(&window)?;
-    let page = host.page.fetch_add(1, Ordering::SeqCst) + 1;
-    host.clock.fetch_add(1, Ordering::SeqCst);
+    let page = {
+        let _guard = host.files.retirement();
+        let page = host.page.fetch_add(1, Ordering::SeqCst) + 1;
+        host.clock.fetch_add(1, Ordering::SeqCst);
+        page
+    };
     let (tx, rx) = oneshot::channel();
     host.tx
         .send(Work::Attach(channel, page, tx))
@@ -124,7 +134,7 @@ fn native_post(
     if host.page.load(Ordering::SeqCst) != page {
         return Err("stale-page");
     }
-    if message.len() > MAX_SEND + 8192 {
+    if message.len() > 2 * 1024 * 1024 {
         return Err("invalid-message");
     }
     host.tx
@@ -137,7 +147,10 @@ async fn native_drain(window: WebviewWindow, host: State<'_, Host>, page: u64) -
     if host.page.load(Ordering::SeqCst) != page {
         return Err("stale-page");
     }
-    host.clock.fetch_add(1, Ordering::SeqCst);
+    {
+        let _guard = host.files.retirement();
+        host.clock.fetch_add(1, Ordering::SeqCst);
+    }
     let (tx, rx) = oneshot::channel();
     host.tx.send(Work::Drain(tx)).await.map_err(|_| "closed")?;
     rx.await.map_err(|_| "closed")
@@ -155,9 +168,19 @@ pub fn run() {
         .timeout(Duration::from_secs(25))
         .build()
         .expect("native HTTPS client");
+    let file_http = reqwest::Client::builder()
+        .tls_backend_native()
+        .https_only(true)
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
+        .referer(false)
+        .connect_timeout(Duration::from_secs(10))
+        .read_timeout(Duration::from_secs(15))
+        .build()
+        .expect("native streaming HTTPS client");
     let clock = Arc::new(AtomicU64::new(0));
     let page = Arc::new(AtomicU64::new(0));
-    let actor = Actor {
+    let mut actor = Actor {
         tx: tx.clone(),
         channel: None,
         clock: clock.clone(),
@@ -165,6 +188,7 @@ pub fn run() {
         ready: false,
         page: 0,
         http,
+        file_http,
         vault: Box::new(SystemVault),
         registry: Registry::default(),
         origin: None,
@@ -175,6 +199,8 @@ pub fn run() {
         zero: None,
         pending: None,
         sockets: HashMap::new(),
+        files: Transfers::default(),
+        pages: page.clone(),
         #[cfg(test)]
         responses: Default::default(),
         #[cfg(test)]
@@ -182,13 +208,21 @@ pub fn run() {
     };
 
     tauri::Builder::default()
-        .manage(Host { tx, clock, page })
+        .manage(Host {
+            tx,
+            clock,
+            page,
+            files: actor.files.clone(),
+        })
         .invoke_handler(tauri::generate_handler![
             native_attach,
             native_post,
             native_drain
         ])
         .setup(move |app| {
+            actor
+                .files
+                .set_root(app.path().app_cache_dir()?.join("ciphertext-stages"));
             let data = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data)?;
             let lock = std::fs::OpenOptions::new()
@@ -235,6 +269,7 @@ impl Actor {
                         self.sockets.remove(&cid);
                     }
                 }
+                Work::FileReply(context, rid, result) => self.file_reply(context, rid, result),
                 Work::Post(raw, page) => {
                     if self.page != page || self.clock.load(Ordering::SeqCst) != self.gen {
                         continue;
@@ -246,6 +281,18 @@ impl Actor {
                         .and_then(|v| v.get("rid"))
                         .and_then(Value::as_u64)
                         .unwrap_or(0);
+                    if let Ok(v) = &parsed {
+                        if v.get("op")
+                            .and_then(Value::as_str)
+                            .is_some_and(protocol::file_operation)
+                        {
+                            let result = self.file_post(v, raw.len(), rid);
+                            if let Err(code) = result {
+                                self.emit(json!({"t":"reply","rid":rid,"ok":false,"code":code}));
+                            }
+                            continue;
+                        }
+                    }
                     let cid = parsed.as_ref().ok().and_then(|v| v.get("cid")).cloned();
                     let outcome = match parsed {
                         Ok(v) => self.post(&v, raw.len()).await,
@@ -272,10 +319,12 @@ impl Actor {
         }
     }
     fn advance(&mut self) {
+        let _guard = self.files.retirement();
         self.gen = self.clock.fetch_add(1, Ordering::SeqCst) + 1;
     }
     fn drain(&mut self) {
         self.advance();
+        self.files.cancel_all();
         for (_, s) in self.sockets.drain() {
             s.task.abort();
         }
@@ -288,6 +337,7 @@ impl Actor {
         self.zero = None;
     }
     fn drop_memory(&mut self) {
+        self.files.cancel_all();
         for (cid, s) in self.sockets.drain() {
             s.task.abort();
             if let Some(c) = &self.channel {
@@ -413,6 +463,87 @@ impl Actor {
             return Err("unauthorized");
         }
         Ok(result)
+    }
+    fn file_reply(&mut self, context: attachments::Context, rid: u64, result: Result<Value>) {
+        if context.gen != self.gen || context.page != self.page || self.current().is_err() {
+            return;
+        }
+        if !self.session.as_ref().is_some_and(|s| {
+            s.session_id == context.session.session_id
+                && s.token == context.session.token
+                && s.origin == context.session.origin
+        }) {
+            return;
+        }
+        let mut reply = match result {
+            Ok(value) => value,
+            Err(code) => json!({"ok":false,"code":code}),
+        };
+        if reply.get("status").and_then(Value::as_u64) == Some(401)
+            && reply
+                .get("body")
+                .and_then(Value::as_str)
+                .is_some_and(|body| unauthorized(401, body))
+        {
+            let mut next = self.registry.clone();
+            vault::remove_session(&mut next, &context.session);
+            let _ = self.persist(next);
+            self.drop_memory();
+        }
+        reply["t"] = json!("reply");
+        reply["rid"] = json!(rid);
+        self.emit(reply);
+    }
+    fn file_post(&mut self, v: &Value, size: usize, rid: u64) -> Result<()> {
+        let op = protocol::string(v, "op")?;
+        if size
+            > if protocol::file_chunk(op) {
+                65536
+            } else if op == "attachment.reserve" {
+                2 * 1024 * 1024
+            } else {
+                8192
+            }
+            || !self.ready
+            || v.get("gen").and_then(Value::as_u64) != Some(self.gen)
+        {
+            return Err("invalid-message");
+        }
+        let map = v.as_object().ok_or("invalid-message")?;
+        if map
+            .keys()
+            .any(|key| !["op", "rid", "gen", "body"].contains(&key.as_str()))
+        {
+            return Err("invalid-message");
+        }
+        let context = attachments::Context::new(
+            self.gen,
+            self.page,
+            self.session.clone().ok_or("no-session")?,
+            self.clock.clone(),
+            self.pages.clone(),
+        );
+        let captured = context.clone();
+        let tx = self.tx.clone();
+        self.files.dispatch(
+            context,
+            if matches!(
+                protocol::string(v, "op")?,
+                "upload.begin" | "download.begin"
+            ) {
+                self.file_http.clone()
+            } else {
+                self.http.clone()
+            },
+            v.clone(),
+            Arc::new(move |result| {
+                let tx = tx.clone();
+                let context = captured.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = tx.send(Work::FileReply(context, rid, result)).await;
+                });
+            }),
+        )
     }
     async fn post(&mut self, v: &Value, size: usize) -> Result<Value> {
         let map = v.as_object().ok_or("invalid-message")?;
@@ -768,6 +899,7 @@ impl Actor {
         Ok(json!({"ok":true,"state":"signed-in","session":self.meta()}))
     }
     async fn revoke(&mut self) -> Result<Value> {
+        self.files.cancel_all();
         let s = self.session.clone().ok_or("no-session")?;
         let (status, raw) = self
             .call(
@@ -983,6 +1115,7 @@ mod tests {
             ready: true,
             page: 1,
             http: reqwest::Client::new(),
+            file_http: reqwest::Client::new(),
             vault: Box::new(TestVault {
                 value: Mutex::new(Registry::default()),
                 reject,
@@ -996,6 +1129,8 @@ mod tests {
             zero: None,
             pending: None,
             sockets: HashMap::new(),
+            files: Transfers::default(),
+            pages: Arc::new(AtomicU64::new(1)),
             #[cfg(test)]
             responses: Default::default(),
             #[cfg(test)]
@@ -1229,5 +1364,43 @@ mod tests {
             .await;
         assert_eq!(result, Err("send-failed"));
         assert!(host.sockets.is_empty());
+    }
+    #[tokio::test]
+    async fn file_refusals_retire_only_the_exact_current_native_session() {
+        let mut host = actor(false);
+        let original = session();
+        host.registry
+            .sessions
+            .insert(original.origin.clone(), original.clone());
+        host.install(Some(original.clone()));
+        let captured = attachments::Context::new(
+            host.gen,
+            host.page,
+            original.clone(),
+            host.clock.clone(),
+            host.pages.clone(),
+        );
+        host.file_reply(
+            captured.clone(),
+            1,
+            Ok(json!({"ok":false,"status":401,"body":r#"{"code":"unauthorized","gateway":true}"#})),
+        );
+        assert!(host.session.is_some());
+        assert_eq!(host.registry.sessions.len(), 1);
+        let mut stale = captured.clone();
+        stale.page += 1;
+        host.file_reply(
+            stale,
+            2,
+            Ok(json!({"ok":false,"status":401,"body":r#"{"code":"unauthorized"}"#})),
+        );
+        assert!(host.session.is_some());
+        host.file_reply(
+            captured,
+            3,
+            Ok(json!({"ok":false,"status":401,"body":r#"{"code":"unauthorized"}"#})),
+        );
+        assert!(host.session.is_none());
+        assert!(host.registry.sessions.is_empty());
     }
 }

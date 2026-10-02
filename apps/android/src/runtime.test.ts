@@ -35,6 +35,7 @@ vi.mock("./bridge.ts", () => ({
 	readConfig: vi.fn(),
 	ensureBootstrap: vi.fn(),
 	callE2e: vi.fn(),
+	callAttachment: vi.fn(),
 	revokeSession: vi.fn(),
 }));
 beforeEach(() => {

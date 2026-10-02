@@ -2147,5 +2147,6 @@
 	"native_approval_pending": "Cererea încă așteaptă aprobarea.",
 	"native_signin_failed": "Autentificarea nu a putut fi finalizată. Încearcă din nou.",
 	"native_settings_browser_note": "Gestionează aceste setări în browser, pe serverul ales. Este posibil să fie nevoie să te autentifici acolo.",
-	"native_settings_open_browser": "Deschide în browser"
+	"native_settings_open_browser": "Deschide în browser",
+	"pwa_update_available": "O actualizare este pregătită. Reîncarcă aplicația când ești gata."
 }

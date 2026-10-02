@@ -7,6 +7,7 @@ import type { E2eRuntime } from "../../../src/web/lib/e2e/runtime.ts";
 import type { E2eFetcher } from "../../../src/web/lib/e2e/workspace-keys.ts";
 import { SessionExpiredError } from "../../../src/web/lib/zero-auth.ts";
 import type { NativeZeroRuntime } from "../../../src/web/lib/zero-runtime.ts";
+import { createAttachmentRuntime } from "./attachment-runtime.ts";
 import {
 	bridgeState,
 	callE2e,
@@ -328,6 +329,11 @@ export function createNativeRuntime(
 
 	const e2e: E2eRuntime = {
 		fetcher: createFetcher(context),
+		attachments: createAttachmentRuntime(
+			() => assertCurrent(context),
+			context.scope,
+			"__TAURI_INTERNALS__" in globalThis,
+		),
 		// Confirmed replies prove durable cleanup. A snapshot can only prove absent
 		// authority; that outcome leaves the account UI with an explicit failure notice.
 		async signOut() {
