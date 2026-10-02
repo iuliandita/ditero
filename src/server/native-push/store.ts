@@ -47,7 +47,7 @@ export class NativePushStore {
 		private pool: Pool,
 		private ring: FieldKeyRing | null,
 	) {}
-	private async owned<T>(
+	protected async owned<T>(
 		owner: NativeSession,
 		run: (client: PoolClient) => Promise<T>,
 		lockUser = false,
@@ -216,6 +216,11 @@ export class NativePushStore {
 				"select id,config_ciphertext from native_push_registration where session_id=$1",
 				[owner.sessionId],
 			);
+			// A newer provider choice cancels every pending relay offer for this live session.
+			await client.query(
+				"update native_relay_authority set state='retiring',next_attempt=clock_timestamp() where session_id=$1 and user_id=$2 and device_id=$3 and state='issued'",
+				[owner.sessionId, owner.userId, owner.deviceId],
+			);
 			const serialized = JSON.stringify(input);
 			const row = existing.rows[0];
 			if (
@@ -270,6 +275,10 @@ export class NativePushStore {
 
 	async unregister(owner: NativeSession): Promise<void> {
 		await this.owned(owner, async (client) => {
+			await client.query(
+				"update native_relay_authority set state='retiring',next_attempt=clock_timestamp() where session_id=$1 and user_id=$2 and device_id=$3",
+				[owner.sessionId, owner.userId, owner.deviceId],
+			);
 			await client.query(
 				"delete from native_push_registration where session_id=$1",
 				[owner.sessionId],

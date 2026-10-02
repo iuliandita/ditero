@@ -428,6 +428,13 @@
       "when": 1790948773864,
       "tag": "0060_fast_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790959294820,
+      "tag": "0061_native_relay_authority",
+      "breakpoints": true
     }
   ]
 }

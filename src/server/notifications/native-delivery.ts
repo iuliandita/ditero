@@ -13,8 +13,10 @@ import {
 	DESKTOP_MAILBOX_LIMIT,
 	parseDesktopRegistration,
 } from "../native-push/desktop-contracts.ts";
+import { relayRegistration } from "../native-push/relay-contracts.ts";
 import { nativePushConfigContext } from "../native-push/store.ts";
 import { createNativePushSender } from "./adapters/native-push.ts";
+import { createRelayPushSender } from "./adapters/relay-push.ts";
 import type { AdapterContext } from "./adapters/types.ts";
 import { permanent } from "./adapters/types.ts";
 import type { OutboxRow } from "./worker.ts";
@@ -26,6 +28,7 @@ export function createNativeDelivery(
 	configuration: PushConfiguration,
 ) {
 	const send = createNativePushSender(configuration);
+	const relaySend = createRelayPushSender(configuration["fcm-relay"]);
 	return async (row: OutboxRow, ctx: AdapterContext) => {
 		if (!ring || !row.nativeRegistrationId)
 			return permanent("native push target unavailable");
@@ -134,6 +137,23 @@ export function createNativeDelivery(
 						values(${row.id},${target.id},${row.recipientUserId},${source.rows[0].expires_at}) on conflict(notification_id) do nothing
 					`);
 					return { ok: true as const, status: 202 };
+				}
+
+				if (target.provider === "fcm-relay") {
+					const parsed = relayRegistration.safeParse(decoded);
+					if (!parsed.success || parsed.data.registrationId !== target.id)
+						return permanent("native relay config invalid");
+					const outcome = await relaySend(
+						parsed.data,
+						{ version: "1", notificationId: row.id, registrationId: target.id },
+						ctx,
+						raw?.urgent === true,
+					);
+					if (outcome.expired)
+						await tx.execute(
+							sql`delete from native_push_registration where id=${target.id} and config_ciphertext=${target.config_ciphertext}`,
+						);
+					return outcome.result;
 				}
 
 				const registration =

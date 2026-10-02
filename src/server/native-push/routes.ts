@@ -19,6 +19,7 @@ import {
 	parseDesktopEnrollment,
 	parseDesktopPoll,
 } from "./desktop-contracts.ts";
+import { nativeRelayRoutes } from "./relay-routes.ts";
 import { NativePushStore, PushAuthorityError } from "./store.ts";
 export type NativePushDependencies = {
 	pool: Pool;
@@ -61,7 +62,7 @@ export function nativePushRoutes(deps: NativePushDependencies): Elysia {
 				return reply({ code: "native-push-failed" }, 500);
 			}
 		};
-	const app = new Elysia();
+	const app = new Elysia().use(nativeRelayRoutes(deps));
 	app
 		.onRequest(({ request, server }) => {
 			const peer = server?.requestIP(request)?.address;
@@ -73,10 +74,16 @@ export function nativePushRoutes(deps: NativePushDependencies): Elysia {
 			guarded(async () =>
 				reply({
 					deliveryReady:
-						!!store && !!(configuration.unifiedpush || configuration.fcm),
+						!!store &&
+						!!(
+							configuration.unifiedpush ||
+							configuration.fcm ||
+							configuration["fcm-relay"]
+						),
 					providers: {
 						unifiedpush: !!store && !!configuration.unifiedpush,
 						fcm: !!store && !!configuration.fcm,
+						...(configuration["fcm-relay"] ? { "fcm-relay": !!store } : {}),
 					},
 					vapidPublicKey: store
 						? (configuration.unifiedpush?.publicKey ?? null)

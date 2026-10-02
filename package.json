@@ -17,7 +17,13 @@
 		"typecheck": "bun run i18n:compile && tsc --noEmit",
 		"test": "vitest run src/ scripts/",
 		"test:integration": "bun run tests/integration/run.ts",
-		"test:e2e": "bun run tests/e2e/run.ts"
+		"test:e2e": "bun run tests/e2e/run.ts",
+		"push-relay:start": "bun run apps/push-relay/src/index.ts",
+		"push-relay:migrate": "bun run apps/push-relay/scripts/migrate.ts",
+		"push-relay:typecheck": "tsc --noEmit --project apps/push-relay/tsconfig.json",
+		"push-relay:test": "vitest run apps/push-relay/tests/contracts.test.ts apps/push-relay/tests/proof.test.ts apps/push-relay/tests/app-check.test.ts apps/push-relay/tests/fcm.test.ts",
+		"push-relay:integration": "bun run apps/push-relay/tests/run.ts",
+		"native-relay-instance:integration": "bun run tests/native-relay-instance/run.ts"
 	},
 	"devDependencies": {
 		"@axe-core/playwright": "^4.12.1",

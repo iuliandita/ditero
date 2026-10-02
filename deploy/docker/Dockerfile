@@ -138,6 +138,7 @@ ENV NODE_ENV=production \
 COPY --from=prod-deps --chown=bun:bun /app/node_modules ./node_modules
 COPY --from=build --chown=bun:bun /app/dist ./dist
 COPY --from=build --chown=bun:bun /app/src ./src
+COPY --from=build --chown=bun:bun /app/apps/push-relay/src/contracts.ts /app/apps/push-relay/src/proof.ts ./apps/push-relay/src/
 COPY --from=build --chown=bun:bun /app/drizzle ./drizzle
 COPY --from=build --chown=bun:bun /app/package.json /app/bun.lock ./
 COPY --chmod=755 --chown=bun:bun deploy/docker/entrypoint.sh ./entrypoint.sh
