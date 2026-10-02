@@ -14,7 +14,7 @@ import { withDrizzleProducerTaskActivation } from "./task-activation-drizzle.ts"
 
 type Database = NodePgDatabase<typeof tables>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
-type ChannelKind = (typeof tables.channelKindEnum.enumValues)[number];
+type ChannelKind = (typeof tables.outboxDeliveryKindEnum.enumValues)[number];
 
 const MAX_RELATIONSHIPS = 50_000;
 const MAX_EVIDENCE_BYTES = 64 * 1024 * 1024;

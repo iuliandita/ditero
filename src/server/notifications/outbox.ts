@@ -6,10 +6,11 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as tables from "../../db/schema.ts";
+import { withRecipientContext } from "./recipients.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
-type ChannelKind = (typeof tables.channelKindEnum.enumValues)[number];
+type ChannelKind = (typeof tables.outboxDeliveryKindEnum.enumValues)[number];
 
 export type OutboxInsert = {
 	reminderStateId: string | null;
@@ -18,6 +19,7 @@ export type OutboxInsert = {
 	payload: unknown;
 	idempotencyKey: string;
 	nextAttemptAt: Date;
+	nativeRegistrationId?: string;
 };
 
 export type EnqueueOptions = {
@@ -45,6 +47,32 @@ export async function enqueueOutbox(
 	row: OutboxInsert,
 	options: EnqueueOptions,
 ): Promise<EnqueueOutcome> {
+	if (row.channelKind === "nativepush" && !row.nativeRegistrationId) {
+		return withRecipientContext(database, row.recipientUserId, async (tx) => {
+			const { rows: targets } = await tx.execute<{ id: string }>(sql`
+ select r.id from native_push_registration r
+ join session s on s.id=r.session_id and s.user_id=r.user_id
+ join native_session_link l on l.session_id=s.id and l.user_id=r.user_id and l.device_id=r.device_id
+ join user_device d on d.id=r.device_id and d.user_id=r.user_id
+ where r.user_id=${row.recipientUserId} and s.expires_at>now() and d.revoked_at is null
+ order by r.id
+ `);
+			let outcome: EnqueueOutcome = "duplicate";
+			for (const target of targets) {
+				const result = await enqueueOutbox(
+					tx,
+					{
+						...row,
+						nativeRegistrationId: target.id,
+						idempotencyKey: `${row.idempotencyKey}:${target.id}`,
+					},
+					options,
+				);
+				if (result === "inserted" || outcome === "duplicate") outcome = result;
+			}
+			return outcome;
+		});
+	}
 	const { rows } = await database.execute<{
 		queued: number;
 		inserted: number;
@@ -58,12 +86,12 @@ export async function enqueueOutbox(
 		ins as (
 			insert into notification_outbox (
 				id, reminder_state_id, recipient_user_id, channel_kind,
-				payload, idempotency_key, status, next_attempt_at
+				payload, idempotency_key, status, next_attempt_at, native_registration_id
 			)
 			select
 				${randomUUID()}, ${row.reminderStateId}, ${row.recipientUserId},
-				${row.channelKind}::channel_kind, ${JSON.stringify(row.payload)}::jsonb,
-				${row.idempotencyKey}, 'queued', ${row.nextAttemptAt.toISOString()}::timestamptz
+				${row.channelKind}::outbox_delivery_kind, ${JSON.stringify(row.payload)}::jsonb,
+				${row.idempotencyKey}, 'queued', ${row.nextAttemptAt.toISOString()}::timestamptz, ${row.nativeRegistrationId ?? null}
 			from cap
 			where cap.queued < ${options.maxQueuedPerUser}
 			on conflict do nothing

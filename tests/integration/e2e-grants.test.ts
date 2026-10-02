@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -30,6 +31,7 @@ import {
 import { notifyGrantCapable } from "../../src/server/e2e/grants.ts";
 import { app } from "../../src/server/index.ts";
 import { renderPayload } from "../../src/server/notifications/dispatch.ts";
+import { loadChannels } from "../../src/server/notifications/recipients.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 15. A grant is the first write in this subsystem where the writer
@@ -705,7 +707,8 @@ describe("notification", () => {
 			"grant usage on schema public to ditero_grants_runtime_test",
 		);
 		await pool.query(`grant select on key_grant_request, workspace,
-			membership_key, membership, user_key, user_pref, notification_channel
+			membership_key, membership, user_key, user_pref, notification_channel,
+			native_push_registration, session, native_session_link, user_device
 			to ditero_grants_runtime_test`);
 		await pool.query(`grant select, insert on notification_outbox
 			to ditero_grants_runtime_test`);
@@ -748,6 +751,7 @@ describe("notification", () => {
 		expect(rows[0]?.payload).toEqual({
 			kind: "key_grant",
 			workspaceName: "Grants",
+			workspaceId: WORKSPACE,
 			locale: "en",
 		});
 		// The row is rendered by five channel adapters and lands in ntfy
@@ -801,6 +805,165 @@ describe("notification", () => {
 		expect(await outboxRows()).toHaveLength(1);
 	});
 
+	async function nativeTarget(userId: string) {
+		const id = crypto.randomUUID();
+		await pool.query(
+			"insert into session(id, token, user_id, expires_at, created_at, updated_at) values($1,$1,$2,now()+interval '1 day',now(),now())",
+			[id, userId],
+		);
+		await pool.query(
+			"insert into user_device(id,user_id,label) values($1,$2,'Grant recipient')",
+			[id, userId],
+		);
+		await pool.query(
+			"insert into native_session_link(session_id,user_id,device_id) values($1,$2,$1)",
+			[id, userId],
+		);
+		await pool.query(
+			"insert into native_push_registration(id,session_id,user_id,device_id,provider,config_ciphertext) values($1,$1,$2,$1,'fcm','encrypted fixture')",
+			[id, userId],
+		);
+		return id;
+	}
+
+	test("native grant notifications use recipient RLS and never leave that context on the pool", async () => {
+		const target = await nativeTarget(owner);
+		await nativeTarget(stranger);
+		await makeInvite("tok_native");
+		const accepted = await accept(
+			"tok_native",
+			newcomer,
+			"gr-new@test.invalid",
+		);
+		const id = accepted.grantRequestId as string;
+		for (const caller of [stranger, owner]) {
+			expect(await notifyGrantCapable(runtimeDb, id, caller)).toBe(0);
+		}
+		expect(await outboxRows()).toEqual([]);
+		expect(await notifyGrantCapable(runtimeDb, id, newcomer)).toBe(2);
+		expect(await notifyGrantCapable(runtimeDb, id, newcomer)).toBe(0);
+		const native = await pool.query(
+			"select recipient_user_id,native_registration_id,payload from notification_outbox where channel_kind='nativepush'",
+		);
+		expect(native.rows).toEqual([
+			{
+				recipient_user_id: owner,
+				native_registration_id: target,
+				payload: {
+					kind: "key_grant",
+					workspaceName: "Grants",
+					workspaceId: WORKSPACE,
+					locale: "en",
+				},
+			},
+		]);
+		expect(
+			(await runtimePool.query("select id from native_push_registration")).rows,
+		).toEqual([]);
+		expect(
+			(await runtimePool.query("select id from user_device")).rows,
+		).toEqual([]);
+		expect(
+			(await runtimePool.query("select id from key_grant_request")).rows,
+		).toEqual([]);
+	});
+
+	test("retired native targets do not suppress another live grant recipient target", async () => {
+		const expired = await nativeTarget(owner);
+		const revoked = await nativeTarget(owner);
+		const live = await nativeTarget(owner);
+		await pool.query(
+			"update session set expires_at=now()-interval '1 second' where id=$1",
+			[expired],
+		);
+		await pool.query("update user_device set revoked_at=now() where id=$1", [
+			revoked,
+		]);
+		await makeInvite("tok_native_live");
+		const accepted = await accept(
+			"tok_native_live",
+			newcomer,
+			"gr-new@test.invalid",
+		);
+		expect(
+			await notifyGrantCapable(
+				runtimeDb,
+				accepted.grantRequestId as string,
+				newcomer,
+			),
+		).toBe(2);
+		expect(
+			(
+				await pool.query(
+					"select native_registration_id from notification_outbox where channel_kind='nativepush'",
+				)
+			).rows,
+		).toEqual([{ native_registration_id: live }]);
+	});
+
+	test("native discovery restores an enclosing requester's context", async () => {
+		await nativeTarget(owner);
+		await runtimeDb.transaction(async (tx) => {
+			await tx.execute(
+				sql`select set_config('ditero.user_id', ${newcomer}, true)`,
+			);
+			expect((await loadChannels(tx, [owner])).get(owner)).toEqual([
+				"ntfy",
+				"nativepush",
+			]);
+			const context = await tx.execute<{ user_id: string }>(
+				sql`select current_setting('ditero.user_id') as user_id`,
+			);
+			expect(context.rows).toEqual([{ user_id: newcomer }]);
+			expect(
+				(await tx.execute(sql`select id from native_push_registration`)).rows,
+			).toEqual([]);
+		});
+	});
+
+	test("a failed native enqueue rolls back the other channels and clears recipient context", async () => {
+		const target = await nativeTarget(owner);
+		await makeInvite("tok_native_rollback");
+		const accepted = await accept(
+			"tok_native_rollback",
+			newcomer,
+			"gr-new@test.invalid",
+		);
+		await pool.query(
+			`alter table notification_outbox add constraint grants_native_failure check (native_registration_id is distinct from '${target}')`,
+		);
+		try {
+			await expect(
+				notifyGrantCapable(
+					runtimeDb,
+					accepted.grantRequestId as string,
+					newcomer,
+				),
+			).rejects.toMatchObject({
+				cause: { code: "23514", constraint: "grants_native_failure" },
+			});
+			expect(await outboxRows()).toEqual([]);
+			expect(
+				(await runtimePool.query("select id from native_push_registration"))
+					.rows,
+			).toEqual([]);
+			expect(
+				(await runtimePool.query("select id from key_grant_request")).rows,
+			).toEqual([]);
+		} finally {
+			await pool.query(
+				"alter table notification_outbox drop constraint grants_native_failure",
+			);
+		}
+		expect(
+			await notifyGrantCapable(
+				runtimeDb,
+				accepted.grantRequestId as string,
+				newcomer,
+			),
+		).toBe(2);
+	});
+
 	test("a pending request notifies once under runtime RLS and clears its user context", async () => {
 		await makeInvite("tok_runtime");
 		const accepted = await accept(
@@ -815,7 +978,12 @@ describe("notification", () => {
 		expect(await outboxRows()).toEqual([
 			{
 				recipient_user_id: owner,
-				payload: { kind: "key_grant", workspaceName: "Grants", locale: "en" },
+				payload: {
+					kind: "key_grant",
+					workspaceName: "Grants",
+					workspaceId: WORKSPACE,
+					locale: "en",
+				},
 			},
 		]);
 		// The one-connection pool reuses the discovery connection after commit.

@@ -84,6 +84,11 @@ export const channelKindEnum = pgEnum("channel_kind", [
 	"slack",
 	"email",
 ]);
+// Native registrations are server-only targets, never configurable channels.
+export const outboxDeliveryKindEnum = pgEnum("outbox_delivery_kind", [
+	...channelKindEnum.enumValues,
+	"nativepush",
+]);
 // Enum, not text: the column is Zero-synced, and a text column would let a
 // provider error body (credentials and all) reach every client of that user.
 // Values live in domain/notification-retry.ts with the mapping that produces
@@ -974,7 +979,8 @@ export const notificationOutbox = pgTable(
 		recipientUserId: text("recipient_user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		channelKind: channelKindEnum("channel_kind").notNull(),
+		channelKind: outboxDeliveryKindEnum("channel_kind").notNull(),
+		nativeRegistrationId: text("native_registration_id"),
 		payload: jsonb("payload").notNull(),
 		idempotencyKey: text("idempotency_key").notNull(),
 		status: outboxStatusEnum("status").notNull().default("queued"),
@@ -1512,8 +1518,55 @@ export const nativeSessionLink = pgTable(
 			.defaultNow()
 			.notNull(),
 	},
-	(t) => [index("native_session_link_user_idx").on(t.userId)],
+	(t) => [
+		index("native_session_link_user_idx").on(t.userId),
+		unique("native_session_link_owner_unique").on(
+			t.sessionId,
+			t.userId,
+			t.deviceId,
+		),
+	],
 );
+
+// Server-only provider capabilities; deliberately absent from the Zero allowlist.
+export const nativePushRegistration = pgTable(
+	"native_push_registration",
+	{
+		id: text("id").primaryKey(),
+		sessionId: text("session_id").notNull().unique(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		deviceId: text("device_id")
+			.notNull()
+			.references(() => userDevice.id, { onDelete: "cascade" }),
+		provider: text("provider").notNull(),
+		configCiphertext: text("config_ciphertext").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		foreignKey({
+			columns: [t.sessionId, t.userId, t.deviceId],
+			foreignColumns: [
+				nativeSessionLink.sessionId,
+				nativeSessionLink.userId,
+				nativeSessionLink.deviceId,
+			],
+		}).onDelete("cascade"),
+		check(
+			"native_push_registration_provider",
+			sql`${t.provider} in ('unifiedpush','fcm')`,
+		),
+		pgPolicy("native_push_registration_owner", {
+			for: "all",
+			to: "public",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+	],
+).enableRLS();
 
 export const importSource = pgTable(
 	"import_source",

@@ -47,7 +47,7 @@ import { withDrizzleProducerActivationScan } from "./task-activation-drizzle.ts"
 
 type Database = NodePgDatabase<typeof tables>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
-type ChannelKind = (typeof tables.channelKindEnum.enumValues)[number];
+type ChannelKind = (typeof tables.outboxDeliveryKindEnum.enumValues)[number];
 
 export const OVERDUE_LOCK_KEY = 918275;
 

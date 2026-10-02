@@ -56,6 +56,7 @@ import { sendInviteMail } from "./mail/invite-mail.ts";
 import { nativeAttachmentRoutes } from "./native-auth/attachment-routes.ts";
 import { nativeE2ERoutes } from "./native-auth/e2e-routes.ts";
 import { nativeAuthRoutes } from "./native-auth/routes.ts";
+import { nativePushRoutes } from "./native-push/routes.ts";
 import { ackBaseUrl, takeRateToken } from "./notifications/capability.ts";
 import {
 	ChannelError,
@@ -180,6 +181,7 @@ const routes = new Elysia()
 			rateLimit: nativeRateLimit,
 		}),
 	)
+	.use(nativePushRoutes({ pool, rateLimit: nativeRateLimit }))
 	.use(nativeE2ERoutes({ pool, database: db, rateLimit: nativeRateLimit }))
 	.use(
 		nativeAttachmentRoutes({
