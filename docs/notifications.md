@@ -3,9 +3,9 @@
 Ditero can remind you about due tasks and habit occurrences, and can notify you
 about assignments, `@`-mentions, and overdue tasks.
 
-**Only one delivery channel ships today: ntfy.** The database and the settings UI
-list Telegram, Discord, Slack, and email, but they have no adapter yet and the
-server rejects any attempt to configure them. Do not plan around them.
+ntfy, Telegram, Discord, Slack, and email are supported. Email requires operator
+SMTP configuration. Discord and Slack have send-only webhook modes and interactive
+app modes; app modes require a public listener on your Ditero server.
 
 Read the [disclaimers](#disclaimers) before relying on this for anything that
 matters. Especially before relying on it for medication.
@@ -47,6 +47,47 @@ control is readable by anyone who knows or guesses its name — see
 
 Delete or disable a channel and pending sends for it fail permanently rather
 than queueing forever.
+
+### Private ntfy servers
+
+The operator can allow specific private destinations with
+`DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS`. Use the narrowest CIDR for the intended
+server; it permits every instance user to send to that range. Loopback, link-local,
+metadata, and other never-allowed ranges remain blocked. See the
+[egress boundary](security.md#notification-egress-and-ntfy-topics).
+
+## Other channel setup
+
+Add a channel under Settings -> Notifications and use **Send test** after saving.
+Secrets are masked on read. A successful send confirms delivery to the provider;
+use the test message's acknowledgement control to verify the return path too.
+
+| Channel | Configuration | Acknowledgement |
+| --- | --- | --- |
+| Telegram | Bot token and chat ID or `@username` | Inline Done button; polling is the default, as described below |
+| Discord webhook | Incoming webhook URL | Send-only; acknowledge in Ditero |
+| Discord app | Bot token, application public key, and channel ID | Interactive button through the configured interactions URL |
+| Slack webhook | Incoming webhook URL | Send-only; acknowledge in Ditero |
+| Slack app | Bot token, signing secret, and channel ID | Interactive button through the configured interactions URL |
+| Email | Destination address; operator sets `DITERO_SMTP_HOST` and related SMTP variables | Link opens Ditero's acknowledgement flow |
+
+Settings supplies the Discord and Slack interactions URLs for provider setup.
+App mode is refused without `DITERO_PUBLIC_URL` or a usable `BETTER_AUTH_URL`.
+Email configuration is refused when SMTP is unavailable. SMTP settings and secrets
+are documented in [.env.example](../.env.example).
+
+## Native system notices
+
+Android development builds support encrypted UnifiedPush delivery, with an optional
+Google flavor using a separately configured relay. Linux desktop builds can receive
+system notices while open or minimized. Native notices display generic text and
+resolve task navigation through the current server and account; opening or dismissing
+one never completes the task or acknowledges its reminder.
+
+Delivery depends on native permission, distributor or relay availability, and OS power
+behavior. The Google path remains unqualified for real delivery; desktop Windows/macOS
+notifications are unavailable. See the [Android](../apps/android/README.md) and
+[desktop](../apps/desktop/README.md) guides for setup and qualification limits.
 
 ## Quiet hours
 
@@ -94,9 +135,9 @@ Two paths, both ending in the same place:
 
 - **In app** — the reminder's Done control. Authenticated; the only check is
   that the reminder is yours.
-- **From the notification** — ntfy renders a "Done" action button that POSTs to
-  a capability URL. The URL is unauthenticated by construction (the push client
-  holds no session), so **the token in it is the credential**.
+- **From the notification** — ntfy and Telegram provide Done buttons, Discord
+  and Slack app modes receive interactions, and email provides an acknowledgement
+  link. The capability is bound to the recipient; **the token is the credential**.
 
 Either way, the ack completes the task (or logs the habit occurrence, or just
 silences the reminder for a viewer), and terminates every sibling reminder on
@@ -269,8 +310,9 @@ in one window (more than 64 distinct dates, or more than 1000 rrule iterations)
 is capped, and the scheduler logs a warning naming the task. The remaining
 occurrences in that window are not materialized.
 
-`reminder_state.status` is the user-visible record of a drop. `failed` and
-`expired` mean it did not arrive.
+`reminder_state.status` records the reminder lifecycle, not proof of delivery.
+`failed` means nothing could be queued; `expired` can follow successful sends that
+were never acknowledged. Provider acceptance also does not prove a device displayed it.
 
 ### Not medical-grade
 

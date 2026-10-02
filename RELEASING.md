@@ -13,7 +13,8 @@ directly to `develop` or `main`.
 
 ## Channels and image tags
 
-Images publish to `ghcr.io/iuliandita/ditero` and `docker.io/iuliandita/ditero`.
+Nightly images publish to `ghcr.io/iuliandita/ditero`. Tagged release workflows
+publish to both that registry and `docker.io/iuliandita/ditero`.
 
 | Tag | Meaning | Produced by |
 | --- | --- | --- |
@@ -22,8 +23,10 @@ Images publish to `ghcr.io/iuliandita/ditero` and `docker.io/iuliandita/ditero`.
 | `:latest` | The newest release | `release.yml` |
 | `:stable` | A release that soaked without a follow-up patch | `promote-stable.yml` |
 
-Each app tag has a `-debian` counterpart (e.g. `:latest-debian`) and each channel has a
-`-zero` counterpart for the zero-cache service. Unsuffixed app images are Alpine.
+Tagged app releases have a `-debian` counterpart (e.g. `:latest-debian`), and
+channel tags have a `-zero` counterpart for the zero-cache service. Nightly builds
+publish the Alpine app and Zero images only. Their commit-specific tags are
+`:nightly-<sha>` and `:nightly-zero-<sha>` respectively. Unsuffixed app images are Alpine.
 
 ## Flow
 
@@ -44,3 +47,12 @@ Each app tag has a `-debian` counterpart (e.g. `:latest-debian`) and each channe
 - Pre-`1.0.0`: `0.x.y` from `develop`. Breaking changes are expected.
 - `1.0.0` onward: semver from `main`. Patch releases are `vX.Y.Z`; a patch resets the
   one-week soak clock before the next `:stable` promotion.
+
+## Native development artifacts
+
+Android CI produces a debug APK; desktop CI produces unsigned or ad-hoc development
+installers. They are separate from the container release workflow and are not public
+native releases. Manual release signing hooks exist, but signing identities,
+distribution, upgrades, and platform qualification still need completion. Follow the
+[Android](apps/android/README.md#signed-release-apk-and-app-bundle) and
+[desktop](apps/desktop/README.md#manual-release-signing-hooks) guides before packaging.

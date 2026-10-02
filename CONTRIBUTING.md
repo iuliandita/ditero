@@ -1,7 +1,9 @@
 # Contributing to Ditero
 
-Ditero is pre-alpha. The application spine is still being built, so the dev setup below is a
-work in progress and will firm up as milestones land.
+Ditero is pre-alpha. Development targets `develop`; breaking changes are expected.
+Use [Docker Compose](README.md#run-it-docker-compose) to run the application, and
+the [Android](apps/android/README.md) or [desktop](apps/desktop/README.md) guides
+for native builds.
 
 ## Workflow
 
@@ -52,8 +54,20 @@ removing or replacing the patch.
 
 ## Before opening a PR
 
-Once the toolchain lands, PRs are expected to pass lint, typecheck, and tests. The PR
-template lists the checks. CI runs them too.
+Install dependencies with `bun install --frozen-lockfile`, then run:
+
+```sh
+bun run lint
+bun run i18n:compile
+bun run i18n:validate
+bun run typecheck
+bun run test
+```
+
+Run `bun run test:integration` and `bun run test:e2e` for changes affecting server,
+sync, or user workflows. These checks start isolated Docker fixtures. CI also runs
+container smoke checks and requires every job through its aggregate verification gate.
+See the [browser test guide](tests/e2e/README.md) for projects, shards, and artifacts.
 
 Run host Chromium E2E tests separately from container lifecycle checks. Starting or stopping
 unrelated containers can change host network interfaces and interrupt browser requests with

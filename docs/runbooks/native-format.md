@@ -84,6 +84,10 @@ as unknown while retaining its source reference. None of these claims grants aut
 permissions or replays completion, Karma, or notifications. Version 2 import remains
 unsupported.
 
+Internal historical planning and replay-identity storage are implemented for comments,
+templates, and completion events. They do not expose version 2 import through Settings
+or the public plan/apply endpoints; those routes still reject history archives.
+
 Version 1 cannot represent retained comment authors or template creators. If such rows
 are visible, a version 1 export fails with HTTP 409 and `history-requires-v2` before
 returning a file. Use version 2 instead; no records are silently omitted or attributed

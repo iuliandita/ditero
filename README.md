@@ -13,10 +13,10 @@ no paywalls.
 
 </div>
 
-> **Status: pre-alpha.** Ditero is under active design and construction on the `develop`
-> branch. There is no installable release yet. The sync and authorization foundation is proven
-> (see [project status](#project-status)); the application is being built milestone by
-> milestone toward `v1.0.0`. Watch/star to follow along.
+> **Status: pre-alpha.** The `develop` branch and nightly containers include a working
+> web application. There is no tagged release yet. Android and desktop development
+> builds are available, with platform qualification and release distribution still
+> in progress. Breaking changes are expected before `v1.0.0`.
 
 ## Why Ditero
 
@@ -27,14 +27,14 @@ Every incumbent gates or breaks something. Ditero's design targets the gaps dire
 - **No paywalls.** Reminders, calendar views, attachments, and multi-member sharing are
   free because you host it. Nothing essential is locked behind a plan.
 - **Sharing built for groups.** Shared lists with per-item assignment, a purpose-built
-  shopping list, chores and habits with streaks, and fine-grained roles (a kid or junior
-  member can complete but not delete).
+  shopping list, chores and habits with streaks, workspace roles, and a simplified
+  managed-account view.
 - **Sync you can trust.** Conflict-safe, observable synchronization — the thing every
   competitor's users complain about most.
 - **Yours to keep.** Self-hosted on Kubernetes, Docker, unraid, or Synology. Bring your own
   PostgreSQL or run the bundled one.
 
-## Features (planned for v1.0)
+## Available on develop
 
 - Unified typed lists: tasks, shopping lists, checklists, and projects
 - Subtasks, labels, priorities, due dates, folders, and drag-to-reorder
@@ -42,13 +42,19 @@ Every incumbent gates or breaks something. Ditero's design targets the gaps dire
 - Reminders with escalation and acknowledgement, delivered to ntfy, Telegram, Discord,
   Slack, or email
 - Multi-workspace sharing with Owner / Admin / Member / Viewer roles
-- No-account guest links, simplified kid view, comments, and activity history
-- Login with Google, GitHub, Apple, email, or a local account
-- Web UI plus native apps for Android, iOS, Linux, Windows, and macOS
-- Multi-language from day one and flexible theming beyond dark/light
-- Saved views, dashboards, calendar/board/table layouts, focus timer, and voice capture
-- JSON export plus Todoist, TickTick, Microsoft To Do, and Trello importers
-- A documented REST API, agent-first CLI with MCP, and a full-screen TUI
+- Invitation links, managed accounts, comments, and recorded task completion history
+- Email/password, passkeys, TOTP, recovery codes, and optional Google sign-in
+- English, German, Spanish, French, Romanian, and Arabic, including RTL layout
+- Light, dark, and system themes, reading-size presets, and independent high contrast
+- Saved views, dashboards, calendar/board/table layouts, keyboard shortcuts, and a focus timer
+- Encrypted attachments with filesystem or S3-compatible server storage
+- JSON export and reviewed, resumable native import for supported records; see
+  [data portability](docs/runbooks/data-portability.md) for exclusions
+- Browser installation plus Android and desktop development apps; see
+  [native app status](#browser-installation-and-native-development-apps)
+
+iOS, third-party importers, voice capture, and a public API/CLI/TUI remain planned.
+The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
 
 ## Tech stack
 
@@ -64,28 +70,42 @@ Every incumbent gates or breaks something. Ditero's design targets the gaps dire
 
 ## Run it (Docker Compose)
 
-The `deploy/docker` stack runs the whole spine: the app (web UI + API served
+The `deploy/docker` stack runs the app (web UI + API served
 same-origin on one port), PostgreSQL, and the Zero sync cache.
 
 Published images are on GHCR, so no checkout is needed to run it — but the
 Compose file is in this repo, so either clone it or download that one file.
 
 ```sh
-# From the repo root.
-POSTGRES_PASSWORD=$(openssl rand -hex 24) \
-DITERO_MIGRATION_DB_PASSWORD=$(openssl rand -hex 24) \
-DITERO_RUNTIME_DB_PASSWORD=$(openssl rand -hex 24) \
-BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
-DITERO_ENCRYPTION_KEY=$(openssl rand -base64 32) \
-ZERO_ADMIN_PASSWORD=$(openssl rand -hex 32) \
-  docker compose -f deploy/docker/docker-compose.yml --profile bundled up
+# From the repo root, create this private file once for a new installation.
+(
+set -euC # Refuse to overwrite an existing file.
+umask 077
+cat > deploy/docker/.env <<EOF
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
+DITERO_MIGRATION_DB_PASSWORD=$(openssl rand -hex 24)
+DITERO_RUNTIME_DB_PASSWORD=$(openssl rand -hex 24)
+BETTER_AUTH_SECRET=$(openssl rand -hex 32)
+DITERO_ENCRYPTION_KEY=$(openssl rand -base64 32)
+ZERO_ADMIN_PASSWORD=$(openssl rand -hex 32)
+EOF
+docker compose --env-file deploy/docker/.env \
+  -f deploy/docker/docker-compose.yml --profile bundled up
+)
 ```
 
 Then open http://localhost:3000 and sign up. The first account becomes the
 owner; later ones need an invitation.
 
-That pulls `ghcr.io/iuliandita/ditero:nightly`. Set `DITERO_IMAGE_TAG` to pin a
-different tag, or add `--build` to build from this checkout instead.
+Reuse and back up that environment file for restarts and upgrades. Do not regenerate
+database passwords or encryption keys for an existing volume. The file is gitignored;
+mounted secrets with `_FILE` variables are also supported.
+
+That pulls `ghcr.io/iuliandita/ditero:nightly` and `:nightly-zero`. Add `--build`
+to build from this checkout instead. After tagged releases are available,
+`DITERO_IMAGE_TAG` selects their matching app and Zero tags. Commit-specific
+nightly tags use different suffix ordering for app and Zero, so pin those two
+service images separately in a Compose override; see [image tags](RELEASING.md#channels-and-image-tags).
 
 To reach it from anything other than the machine it runs on, set
 `BETTER_AUTH_URL` and `PUBLIC_ZERO_URL` to addresses that machine's browsers can
@@ -98,7 +118,8 @@ name and `localhost`, say — list the extras in `TRUSTED_ORIGINS`:
 ```sh
 BETTER_AUTH_URL=http://ditero.example.lan:3000 \
 TRUSTED_ORIGINS=http://localhost:3000 \
-  docker compose -f deploy/docker/docker-compose.yml --profile bundled up
+  docker compose --env-file deploy/docker/.env \
+    -f deploy/docker/docker-compose.yml --profile bundled up
 ```
 
 The same variable is the CORS allowlist **outside** production, where it also
@@ -126,7 +147,7 @@ All configuration is environment-driven. The common variables:
 | `PUBLIC_ZERO_URL` | `http://localhost:4848` | Address browsers dial zero-cache on. Served to the web client at runtime and used for the CSP. |
 | `DITERO_ZERO_SHARD_SCHEMA` | `zero_0` | Schema zero-cache keeps sync bookkeeping in. Both app roles need access to it; see [database roles](docs/runbooks/database-roles.md). |
 | `DITERO_IMAGE_TAG` | `nightly` | Image tag the Compose stack runs. The zero-cache image is that tag plus `-zero`. |
-| `DITERO_REGISTRATION_MODE` | `bootstrap` | `open`, `bootstrap` (first account only), or `closed`. Invitations extend bootstrap mode in M1. |
+| `DITERO_REGISTRATION_MODE` | `bootstrap` | `open`, `bootstrap` (first account plus eligible invitations), or `closed` (eligible invitations only). |
 
 > **Note:** the web client fetches `PUBLIC_ZERO_URL` from `/api/config` at
 > startup, so one built image serves any hostname. Set it to the address
@@ -143,13 +164,13 @@ Zero DSNs and omit that profile:
 DITERO_DATABASE_URL=postgres://runtime:pass@db.example.com:5432/ditero \
 DITERO_MIGRATION_DATABASE_URL=postgres://owner:pass@db.example.com:5432/ditero \
 DITERO_ZERO_DATABASE_URL=postgres://zero:pass@db.example.com:5432/ditero \
-BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
-DITERO_ENCRYPTION_KEY=$(openssl rand -base64 32) \
-ZERO_ADMIN_PASSWORD=$(openssl rand -hex 32) \
-  docker compose -f deploy/docker/docker-compose.yml up --build app zero-cache
+  docker compose --env-file deploy/docker/.env \
+    -f deploy/docker/docker-compose.yml up --build app zero-cache
 ```
 
-The runtime role must not own tables or bypass RLS. The Zero DSN must be direct,
+Reuse the private secrets file created above; replace the example DSNs with your
+database credentials. The runtime role must not own tables or bypass RLS. The Zero
+DSN must be direct,
 non-pooled, and able to create replication slots. See [security architecture](docs/security.md),
 [database roles](docs/runbooks/database-roles.md), and the
 [backup/restore runbook](docs/runbooks/backup-restore.md).
@@ -198,7 +219,7 @@ no other copy. All attachment configuration is documented in [.env.example](.env
 ### Browser installation and native development apps
 
 Production browser builds include a PWA manifest and a bounded offline public
-app shell. The qualified build caches 17 static public files, with no API, auth,
+app shell. The service worker caches static public files, with no API, auth,
 Zero, or private user responses. Offline shell loading does not replace session
 checks; private synced records remain in Zero's separate local storage. Updates
 show a notice and reload only on user choice, after durable local sync retirement.
@@ -213,16 +234,21 @@ Encrypted files require `DITERO_E2E_ENABLED` on the server and account key enrol
 Native credentials stay outside JavaScript; file transfers use named native HTTPS
 operations and system save pickers, with complete integrity verification before
 plaintext save writes. Bounded Android and Linux desktop file journeys have passed.
-Native OS notifications, deep links, updater delivery, release distribution, and
-broader platform qualification remain unfinished.
+Android supports encrypted UnifiedPush notices and task navigation; a bounded emulator
+check covered reception while stopped in deep Doze with an exempt ntfy distributor.
+Linux desktop notices arrive while the app is open or minimized and can open the task.
+These notices contain generic text; opening them does not complete or acknowledge a task.
+The optional [Google push relay](apps/push-relay/README.md) requires separate operator
+configuration and remains unqualified for real delivery. Physical-device coverage,
+Windows/macOS notifications, general deep links, updates, and release distribution
+remain unfinished. See each app's guide for the precise qualification limits.
 
-### Planned distribution
+### Container distribution
 
-Ditero will also ship as multi-arch container images on GHCR and Docker Hub, with
-a Helm chart and Kustomize manifests for Kubernetes, Alpine images by default plus
-a `-debian` variant. Images use channel tags: `:nightly` (bleeding edge),
-`:latest` (newest release), `:stable` (a release that has soaked). See
-[RELEASING.md](RELEASING.md).
+Nightly app and Zero images publish to GHCR for amd64 and arm64. The release workflows
+provide GHCR and Docker Hub images, an Alpine app default, and a Debian app variant
+when a release is cut. `:latest` and `:stable` are release channels, not current nightly
+tags. A Helm chart and Kustomize manifests remain planned. See [RELEASING.md](RELEASING.md).
 
 ## Project status
 

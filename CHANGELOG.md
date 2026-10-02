@@ -8,6 +8,27 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Shared typed lists, folders, subtasks, labels, priorities, assignments, comments,
+  invitations, and managed accounts with a simplified task view.
+- Saved views, board/table/calendar layouts, dashboards, keyboard shortcuts, a command
+  palette, recurring tasks and habits, streaks, Karma, and a focus timer.
+- Six interface languages, Arabic RTL layout, light/dark/system themes, reading-size
+  presets, and independent high contrast.
+- JSON export and reviewed, resumable native import with explicit workspace/person
+  mappings and notification activation safeguards. Unsupported content is reported;
+  imports do not create permissions or replay historical notifications.
+- Recorded task completion history and version 2 history archives with source attribution.
+  Historical storage and replay planning are implemented internally; public version 2
+  import remains unavailable.
+- Browser installation manifest, bounded offline public app-shell caching, and an
+  explicit update prompt that waits for durable local sync retirement before reload.
+- Android and desktop development apps with system-browser consent, native credential
+  storage, scoped sync, and encrypted attachment transfers using system save pickers.
+- Android encrypted UnifiedPush notices with task navigation, Linux desktop system
+  notices while open or minimized, and a separately configured optional Google relay.
+  Google delivery, broader device coverage, and native release distribution remain
+  unqualified.
+
 - Notification delivery engine: leader-elected scheduler, an outbox worker on every replica
   with `FOR UPDATE SKIP LOCKED` claims, lease reclaim and fenced completion writes, a retry
   ladder bounded at 15 attempts, quiet hours, escalation to a fallback member, and per-user
@@ -33,3 +54,15 @@ All notable changes to this project are documented here. The format is based on
   holder for shared encrypted files.
 - Repository foundation: license, contributor docs, issue/PR templates, and the
   CI/nightly/release/promote-stable workflows that implement the channel-based release flow.
+
+### Fixed
+
+- Accepted offline edits persist before client shutdown, reauthentication, language
+  navigation, and export. Cached nonempty lists render after an offline reload without
+  requiring a fresh server response.
+- Recurring series preserve their phase and finite progress through completion and skip.
+- Shared dashboards refresh membership visibility and shared task completions retain
+  recipient attribution.
+- Native form controls follow the active theme and reading preferences.
+- Notification HTTP connections pin validated DNS addresses and omit TLS SNI for IP
+  endpoints.

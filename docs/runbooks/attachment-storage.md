@@ -1,6 +1,6 @@
 # Attachment Storage
 
-Ditero encrypts file content, thumbnails, filenames, and declared media types in the browser. The
+Ditero encrypts file content, thumbnails, filenames, and declared media types on the client. The
 storage driver sees ciphertext only, but PostgreSQL and the blob store must still be backed up as
 one logical set.
 
@@ -31,6 +31,12 @@ retaining plaintext, then decrypts the same file snapshot again into the selecte
 This uses bounded memory but requires enough temporary browser storage for the ciphertext and
 two decryption passes. Unsupported browsers refuse large files with an explanatory message.
 The server quota does not imply browser support for an equally large preview.
+
+Android and desktop development apps use native HTTPS transfers and system save
+pickers. Downloads stage ciphertext privately and verify the complete stream before
+writing plaintext to the chosen destination. Their platform qualification is bounded;
+see the [Android](../../apps/android/README.md#encrypted-files) and
+[desktop](../../apps/desktop/README.md#encrypted-files) guides.
 
 Only ciphertext is staged in OPFS. New stages are protected by per-file Web Locks while active;
 startup and subsequent transfers recover abandoned stages after a renderer crash. Legacy
