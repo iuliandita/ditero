@@ -701,6 +701,7 @@ async function attachSharingFailure(
 		clientGroupID: string;
 		originalGroups: Record<string, string>;
 	},
+	retainedMembershipIds: readonly string[] = [],
 ) {
 	const pool = new Pool({
 		connectionString: process.env.E2E_DATABASE_URL,
@@ -759,7 +760,10 @@ async function attachSharingFailure(
 				...records("memberships").map((row) => row.workspace_id),
 				...records("dashboards").map((row) => row.workspace_id),
 			]).map((id) => ({ table: "workspace", rowKey: { id } })),
-			...knownIDs(records("memberships").map((row) => row.id)).map((id) => ({
+			...knownIDs([
+				...records("memberships").map((row) => row.id),
+				...retainedMembershipIds,
+			]).map((id) => ({
 				table: "membership",
 				rowKey: { id },
 			})),
@@ -772,7 +776,10 @@ async function attachSharingFailure(
 					.filter((row) => row.table === "workspace")
 					.map((row) => row.rowKey.id),
 			),
-			memberships: knownIDs(records("memberships").map((row) => row.id)),
+			memberships: knownIDs([
+				...records("memberships").map((row) => row.id),
+				...retainedMembershipIds,
+			]),
 		});
 		const replica = selection.success
 			? await captureSharingReplica(selection.data)
@@ -937,11 +944,11 @@ async function attachSharingFailure(
 						[groups],
 					);
 					const queries = await client.query(
-						`select "clientGroupID", "queryHash", "patchVersion",
+						`select "clientGroupID", "queryHash", "queryName", "patchVersion",
 						 "transformationHash", "transformationVersion", "rowSetSignature", deleted,
 						 count(*) over () as "matchedRows"
 						 from "zero_0/cvr".queries
-						 where "clientGroupID" = any($1::text[]) and "queryName" = 'dashboards.mine'
+						 where "clientGroupID" = any($1::text[]) and "queryName" in ('dashboards.mine', 'memberships.own')
 						 order by "clientGroupID", "queryHash" limit 200`,
 						[groups],
 					);
@@ -1013,7 +1020,12 @@ async function attachSharingFailure(
 					contentType: "application/json",
 					body: JSON.stringify({
 						accounts,
-						expected: { teamDash, soloDash, workspaceId: SHARED_WORKSPACE_ID },
+						expected: {
+							teamDash,
+							soloDash,
+							workspaceId: SHARED_WORKSPACE_ID,
+							retainedMembershipIds,
+						},
 						database: state,
 						replica,
 						snapshotRelationship:
@@ -1377,6 +1389,7 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 	const teamDash = `Team ${Date.now()}`;
 	const soloDash = `Solo ${Date.now()}`;
 	const sync: SharingSyncEvent[][] = [];
+	let retainedOwnMembershipIds: string[] = [];
 	let failedSharingObserver:
 		| { page: Page; accountRole: "member" | "viewer" }
 		| undefined;
@@ -1509,6 +1522,11 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 			connectionString: process.env.E2E_DATABASE_URL,
 		});
 		try {
+			const retained = await revokePool.query<{ id: string }>(
+				"select id from membership where user_id = $1 and workspace_id = $2 limit 2",
+				[memberId, SHARED_WORKSPACE_ID],
+			);
+			retainedOwnMembershipIds = retained.rows.map((row) => row.id);
 			await revokePool.query(
 				"delete from membership where user_id = $1 and workspace_id = $2",
 				[memberId, SHARED_WORKSPACE_ID],
@@ -1535,6 +1553,8 @@ test("dashboard sharing: member sees workspace dashboard, outsider and co-member
 				teamDash,
 				soloDash,
 				sync.flat(),
+				undefined,
+				retainedOwnMembershipIds,
 			);
 			if (failedSharingObserver)
 				await attachFreshSharingComparison(
