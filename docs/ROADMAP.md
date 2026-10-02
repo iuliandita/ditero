@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-09-10 | Status: pre-v1, building on `develop`
+> Updated: 2026-10-02 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -11,27 +11,38 @@ small businesses: shared lists, shopping lists, projects, and habit/chore tracki
 reminders that actually fire. Web plus native apps, mobile-first, themeable, multilingual,
 with a public API and push to Discord/Slack/Telegram/ntfy.
 
-The design is locked. Workspace/membership read isolation and role-gated writes are proven in
-the real application. The notification engine has landed: durable at-least-once delivery with a
-single-leader scheduler, an every-replica outbox worker, quiet hours, escalation, and
-acknowledgement from in-app or from the message itself — validated by a rig that runs real
-replicas and kills them mid-send. All five channels deliver: ntfy, Telegram, Discord, Slack,
-and email. The completed attachment milestone delivers browser-encrypted attachments, E2E key
-enrollment and recovery, workspace grants and forward-only removal rotation, filesystem and
-S3-compatible ciphertext storage, and account-deletion safeguards. The application spine has
-landed on `develop` (auth issuing JWTs, live sync between two users with workspace
-isolation, a list with tasks that create and toggle live, deployable via Docker Compose).
-The rest of v1 is being built milestone by milestone, each producing working, testable
-software on its own. Import, export, and capture are next; their scope is outlined, with the
-detailed execution plan still to be written.
+The web application on `develop` includes shared workspaces and role-gated sync,
+typed lists, views and dashboards, recurrence and habits, focus/Karma, and six
+languages with RTL support. Reminders deliver through ntfy, Telegram, Discord,
+Slack, and email with quiet hours, escalation, and acknowledgement. Browser-encrypted
+attachments support filesystem and S3-compatible ciphertext storage.
 
-Nothing is released yet. Development happens on `develop` with `0.x.y` pre-release images;
-`1.0.0` cuts to `main` when the full v1 set lands.
+Native JSON export, validated saved import previews, resumable apply, assignment
+mapping, and explicit notification activation have landed. Task history and portable
+history archives preserve transitions and attribution. History archive version 2 is
+export-only in the public import interface; replay planning and storage foundations
+are implemented, but applying those archives is not yet available.
+
+The web app is installable as a PWA. Android and Tauri desktop application cores,
+scoped native authentication, encrypted file handling, and development artifact
+builds are implemented. Android UnifiedPush and Linux system notifications have
+bounded runtime checks; Google relay source and enrollment/recovery are implemented,
+but real Google delivery remains unqualified. Windows and macOS have development
+builds, with full runtime qualification still pending. See the
+[Android](../apps/android/README.md) and [desktop](../apps/desktop/README.md)
+qualification notes. Native delivery remains open in issue #346.
+
+There is no tagged release yet. Development happens on `develop`; published nightly
+container images and native development artifacts are distinct from signed public
+releases. `1.0.0` requires the complete v1 contract below.
 
 ## What v1 Delivers
 
 Useful `0.x.y` increments may ship while the complete feature set is built. `1.0.0` is reserved
 for the full v1 contract.
+
+The sections below describe the full target, including work still pending. The
+current shipped subset is described above and in the [README](../README.md).
 
 ### Core
 
@@ -109,7 +120,7 @@ discussion.
 - **Reading / media lists.** A `books` (or general collection) list kind for TBR piles,
   watchlists, and the like, with status, rating, and optional metadata lookup. The typed-
   container model already accommodates this cleanly.
-- **Two-way calendar sync.** v1 already exports an iCal feed; live bidirectional sync with
+- **Two-way calendar sync.** The planned v1 iCal feed is one-way; live bidirectional sync with
   Google Calendar and Apple (CalDAV) is a larger, later step.
 - **Chat commands.** Beyond reminder acknowledgement buttons, react to messages like
   `/add milk` or `/done` in a shared Telegram/Discord/Slack channel, riding the same bot
@@ -137,8 +148,9 @@ Good ideas with no timeline yet.
 
 Security is a first-class goal, not an afterthought.
 
-- **Authentication:** passkeys and multi-factor are required before the first public release,
-  alongside social and email/password sign-in, httpOnly session cookies, and CSRF protection.
+- **Authentication:** passkeys, TOTP, social and email/password sign-in, httpOnly
+  session cookies, and CSRF protection are implemented. Native device sessions use
+  scoped consent and revocation; complete platform qualification remains pending.
 - **Encryption at rest:** secrets and sensitive fields are encrypted with AES-256-GCM using a
   key derived via HKDF, with key rotation support.
 - **End-to-end encryption for attachments:** files are encrypted in your browser before
@@ -147,8 +159,7 @@ Security is a first-class goal, not an afterthought.
   a separate E2E passphrase and there is no admin backdoor, an independent **recovery code** is
   issued at E2E enrollment; losing both means encrypted files cannot be recovered.
 - **Hardening:** strict content-security-policy and security headers, rate limiting,
-  pre-request address validation for outbound requests (with the documented Bun DNS-pinning
-  limitation), non-root signed container images, and a recurring automated security-audit
+  validated and DNS-pinned outbound HTTP, non-root signed container images, and a recurring automated security-audit
   pipeline.
 
 Honest scope: on a self-hosted install you are the operator and own the box, so the server can
@@ -161,8 +172,18 @@ that is down will not fire a reminder, and ditero is never marketed otherwise.
 
 ## Shipped Highlights
 
-- Browser-encrypted attachments, key enrollment and recovery, workspace grants and rotation,
-  filesystem/S3 storage, and account-deletion safeguards landed on `develop` in PR #271.
-- The milestone passed CI and Security; post-merge CI, Security, and Nightly also passed.
+- Validated import previews, resumable apply, assignment mapping, and explicit
+  notification activation (PRs #292, #296, #301, #329).
+- Readability presets, high contrast, bulk task actions, clearer navigation and
+  settings, and durable offline edits through session transitions (PRs #376,
+  #377, #390, #412, #426).
+- Finite recurrence progress, task transition history, shared completion attribution,
+  and portable history archives (PRs #436, #336, #445, #453).
+- Installable PWA, Android and desktop cores, scoped native sessions and encryption,
+  native files, release signing hooks, and development build artifacts (PRs #455-#471).
+- Android UnifiedPush, task opening from notifications, Linux desktop notifications,
+  and optional Google relay enrollment/recovery, with the qualification limits
+  described above (PRs #478, #486, #494, #495).
+- Cached tasks render after offline reload (PR #497).
 
-For release-by-release detail once releases begin, see [CHANGELOG.md](../CHANGELOG.md).
+For user-facing change details, see [CHANGELOG.md](../CHANGELOG.md).

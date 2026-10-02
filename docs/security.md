@@ -5,13 +5,20 @@
 - Zero sync reads are filtered server-side and writes use custom mutators. Raw CRUD mutations are disabled.
 - Better Auth owns identity tables. Workspace membership and roles remain Ditero domain data.
 - Backend-owned secret tables are excluded from Zero, use a non-owner database role, and force row-level security.
-- User-configured outbound URLs must use `safeFetch`; it validates every DNS answer before the request. The address pin itself is inert under Bun (issue #31) — see [Notification Egress](#notification-egress-and-ntfy-topics).
+- User-configured outbound URLs must use `safeFetch`; it validates every DNS answer and pins the socket to an approved address. See [Notification Egress](#notification-egress-and-ntfy-topics).
 
 ## Authentication
 
 Email/password, passkeys, TOTP, and recovery codes are supported. Cookie-authenticated mutations require an exact configured origin. Sensitive auth routes use PostgreSQL-backed rate limits. Proxy headers are ignored unless the direct peer is within `DITERO_TRUSTED_PROXIES`.
 
-Production defaults to `DITERO_REGISTRATION_MODE=bootstrap`: only the first account can register without an invitation. Use `closed` after provisioning when invitations are not needed.
+Production defaults to `DITERO_REGISTRATION_MODE=bootstrap`: only the first account
+can register without an invitation. `closed` disables uninvited registration,
+including the first account; eligible invitations can still admit accounts.
+
+Android and desktop use explicit system-browser consent to obtain a device-bound
+native session. Credentials remain in native storage; session revocation stops
+authenticated operations and sync. See [Native authentication](runbooks/native-authentication.md)
+for the grant, device-session, and transport boundaries.
 
 Invitations and managed-account admission require a shared workspace. Outstanding personal-workspace
 invites cannot be redeemed or used to bypass registration restrictions. A personal workspace's
@@ -27,7 +34,7 @@ Set secrets directly or with the corresponding `_FILE` variable. When `_FILE` is
 ## Operator-Blind Attachments
 
 Attachment content, thumbnails, filenames, declared media types, per-file data keys, and
-workspace data keys are encrypted in the browser. The server and blob store receive ciphertext
+workspace data keys are encrypted on the client. The server and blob store receive ciphertext
 and cannot decrypt it. The server deliberately retains the parent reference, workspace, uploader,
 key version, lifecycle state, observed byte counts, ciphertext hash, storage key, and timestamps;
 those fields are required for authorization, quota enforcement, integrity checks, and garbage
@@ -126,11 +133,20 @@ Notification channel URLs are supplied by users, so every outbound send goes thr
 
 Widening this is the operator's decision and the operator's risk. Every CIDR listed becomes reachable from any URL any user of the instance can save. On a multi-user instance that is an SSRF primitive into your internal network, granted to everyone who can reach the settings page. List the narrowest prefix that covers your ntfy host, never a whole site range.
 
-**Known limitation: the DNS-rebinding pin is inert under Bun (issue #31).** `safeFetch` builds a connector that pins the request to the address it validated, but Bun's bundled `undici` shim ignores custom connectors, so the pin does not take effect on the runtime the app ships on. The policy checks still run before the request, so the address boundary itself holds. What is lost is protection against a DNS server that answers with a public address for the validation and a private one for the connection. Closing it needs a transport that honors a custom connector.
+**DNS pinning.** `safeFetch` uses Node-compatible HTTP/HTTPS requests with a custom
+DNS lookup that returns only the validated address. It retains the original host
+for certificate validation and sends SNI only for DNS names, not IP literals.
+The transport does not resolve the hostname a second time during connection.
 
 **ntfy topics are a shared secret, and a weak one.** An ntfy topic is unauthenticated and guessable by default: knowing the name is the whole access control. Ditero's acknowledge link is a bearer credential with a 24-hour life, delivered into that topic. Anyone who can read the topic can therefore complete tasks and log habit occurrences on behalf of the recipient, in a workspace they hold no membership in. This is intrinsic to how ntfy works, not a defect in Ditero, which is precisely why it has to be stated. Use a long random topic name, configure an ntfy access token, and prefer an ntfy server that requires authentication for both publish and subscribe. Treat a leaked topic as a leaked credential and rotate it.
 
-**Channel credentials at rest.** The secret half of `notification_channel.config` (the ntfy token today) is stored in an AES-256-GCM envelope under `DITERO_ENCRYPTION_KEY`; public fields such as the server URL and topic stay readable so an operator can inspect a config. Secrets are never returned to the browser in any form, not even as ciphertext — reads hand back a masked placeholder, and writes restore the stored value from the caller's own row. A value that looks enveloped but fails to decrypt is a hard error rather than a ciphertext string shipped to a provider as a bearer token. Rotation requires running the channel-config re-encryption step; see [Field-Key Rotation](runbooks/key-rotation.md), where skipping it leaves every channel token undecryptable once the old key is retired.
+**Channel credentials at rest.** Secret fields in `notification_channel.config`,
+including tokens, webhook URLs, and signing secrets, use AES-256-GCM envelopes under
+`DITERO_ENCRYPTION_KEY`. Public destination fields remain readable. Reads return
+masked placeholders, and writes restore masked secrets only from the caller's own
+row. A decryption failure is a hard error. Rotation requires the channel-config
+re-encryption step in [Field-Key Rotation](runbooks/key-rotation.md) before retiring
+the old key.
 
 ## Acknowledge Capabilities
 

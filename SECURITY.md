@@ -20,8 +20,13 @@ Reach out to [@iuliandita](https://github.com/iuliandita) via GitHub.
 
 ## Scope
 
-This policy covers the Ditero application code, container images, Helm chart, and Kubernetes manifests in this repository. It does not cover third-party services Ditero integrates with (identity providers, notification channels, or a user-supplied PostgreSQL instance).
+This policy covers the Ditero web, Android, and desktop application code, container
+images, deployment files, and optional push relay in this repository. It does not
+cover third-party services Ditero integrates with (identity providers, notification
+channels, or a user-supplied PostgreSQL instance).
 
 ## Supported Versions
 
-Only the latest release is supported with security fixes. Run the most recent version.
+There is no tagged release yet. Security fixes land on `develop` and its nightly
+images; development artifacts have no stable support window. Once releases exist,
+only the latest release will receive security fixes.
