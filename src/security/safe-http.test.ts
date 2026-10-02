@@ -106,6 +106,27 @@ describe("outbound connection pinning", () => {
 		expect(calls[0].options.servername).toBe("hooks.example.test");
 	});
 
+	test.each([
+		["93.184.216.34", "93.184.216.34", 4, []],
+		["[2001:4860:4860::8888]", "2001:4860:4860::8888", 6, []],
+		["192.168.1.20", "192.168.1.20", 4, ["192.168.1.0/24"]],
+		["[fd00::20]", "fd00::20", 6, ["fd00::/8"]],
+	] as const)("omits SNI for IP literal %s while preserving its URL and pin", async (host, address, family, cidrs) => {
+		const { calls, requestFn } = fakeTransport();
+		const input = `https://${host}/webhook`;
+		await safeFetch(
+			input,
+			{ allowedPrivateCIDRs: parseTrustedProxyCIDRs([...cidrs]) },
+			{ resolver: publicResolver, requestFn },
+		);
+		expect(calls).toHaveLength(1);
+		expect(calls[0].options).not.toHaveProperty("servername");
+		expect(calls[0].url.href).toBe(input);
+		expect(await drainLookup(calls[0].options.lookup)).toEqual([
+			{ address, family },
+		]);
+	});
+
 	it("returns the transport's response as a Response", async () => {
 		const { requestFn } = fakeTransport({ status: 202, body: "pong" });
 		const response = await safeFetch(
