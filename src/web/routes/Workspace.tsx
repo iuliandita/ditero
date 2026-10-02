@@ -55,6 +55,7 @@ import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
 import { useDashboards } from "../hooks/useDashboards.ts";
 import { useHints } from "../hooks/useHints.ts";
+import { useNativeNotificationNavigation } from "../hooks/useNativeNotificationNavigation.ts";
 import { useSyncedTheme } from "../hooks/useSyncedTheme.ts";
 import { useTaskImportActivationMap } from "../hooks/useTaskImportActivation.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
@@ -101,15 +102,24 @@ export function Workspace() {
 	const zero = useZero<typeof schema>();
 	// Above the restricted/normal split so both shells get the synced theme.
 	useSyncedTheme();
-	const [managed] = useQuery(queries.managedAccounts.mine());
+	const [managed, managedDetails] = useQuery(queries.managedAccounts.mine());
 	const restricted = managed.some(
 		(row) => row.userId === zero.userID && row.restricted,
 	);
-	if (restricted) return <RestrictedShell />;
-	return <NormalWorkspace />;
+	if (restricted)
+		return (
+			<RestrictedShell notificationReady={managedDetails.type === "complete"} />
+		);
+	return (
+		<NormalWorkspace notificationReady={managedDetails.type === "complete"} />
+	);
 }
 
-function NormalWorkspace() {
+function NormalWorkspace({
+	notificationReady,
+}: {
+	notificationReady: boolean;
+}) {
 	const storageScope = useAccountStorageScope();
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
@@ -134,6 +144,7 @@ function NormalWorkspace() {
 		assignees,
 		memberships,
 		viewRowsLoading,
+		notificationRowsReady,
 		roleByWorkspace,
 		shareable,
 		members,
@@ -374,6 +385,29 @@ function NormalWorkspace() {
 			setDetailTaskId(taskId);
 		},
 		[openList],
+	);
+	useNativeNotificationNavigation(
+		notificationReady && notificationRowsReady,
+		(target) => {
+			if (!workspaces.some((row) => row.id === target.workspaceId))
+				return false;
+			if (target.kind === "workspace") {
+				selectWorkspace(target.workspaceId);
+				return true;
+			}
+			const list = lists.find(
+				(row) =>
+					row.id === target.listId && row.workspaceId === target.workspaceId,
+			);
+			if (
+				!list ||
+				!tasks.some((row) => row.id === target.taskId && row.listId === list.id)
+			)
+				return false;
+			setActiveId(target.workspaceId);
+			openTask(target.taskId, list.id);
+			return true;
+		},
 	);
 	const arriveAt = useCallback(
 		(listId: string, blank: boolean) => {

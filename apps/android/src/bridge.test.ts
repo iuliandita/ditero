@@ -3,6 +3,7 @@ import {
 	bridgeState,
 	completeOnce,
 	connectBridge,
+	createNativeNotificationNavigation,
 	createNativePush,
 	type Hello,
 	NativeWebSocket,
@@ -319,4 +320,78 @@ test("push cannot post for a retired account or accept its late result", async (
 	const before = sent.length;
 	await expect(push.read()).rejects.toMatchObject({ code: "stale-generation" });
 	expect(sent).toHaveLength(before);
+});
+
+test("notification navigation validates fixed targets and rejects caller URLs", async () => {
+	snapshot.session = session;
+	await connectBridge();
+	const navigation = createNativeNotificationNavigation(1, session.authHandle);
+	const target = { kind: "task", workspaceId: "w", listId: "l", taskId: "t" };
+	for (const open of [
+		null,
+		{ token: "tap-1", target },
+		{ token: "tap-2", target: { kind: "workspace", workspaceId: "w" } },
+	]) {
+		const result = navigation.read();
+		const command = sent.at(-1);
+		if (!command) throw new Error("missing command");
+		expect(command).toMatchObject({
+			op: "push.open",
+			id: session.authHandle,
+			gen: 1,
+		});
+		reply(command, { open });
+		expect(await result).toEqual(open);
+	}
+	for (const open of [
+		{ token: "tap", target: { ...target, url: "https://evil.test" } },
+		{ token: "tap", target: { kind: "task", workspaceId: "w", listId: "l" } },
+		{ token: "tap", target: { kind: "workspace", workspaceId: "w/evil" } },
+	]) {
+		const result = navigation.read();
+		const rejected = expect(result).rejects.toMatchObject({
+			code: "invalid-reply",
+		});
+		const command = sent.at(-1);
+		if (!command) throw new Error("missing command");
+		reply(command, { open });
+		await rejected;
+	}
+});
+
+test("notification events and late targets cannot cross account generations", async () => {
+	snapshot.session = session;
+	await connectBridge();
+	const navigation = createNativeNotificationNavigation(1, session.authHandle);
+	const listener = vi.fn();
+	const unsubscribe = navigation.subscribe(listener);
+	const emit = (gen: number) =>
+		native.onmessage?.(
+			new MessageEvent("message", {
+				data: JSON.stringify({ t: "push.open", gen }),
+			}),
+		);
+	emit(0);
+	expect(listener).not.toHaveBeenCalled();
+	emit(1);
+	expect(listener).toHaveBeenCalledTimes(1);
+	const result = navigation.read();
+	const rejected = expect(result).rejects.toMatchObject({
+		code: "stale-generation",
+	});
+	const command = sent.at(-1);
+	if (!command) throw new Error("missing command");
+	snapshot = {
+		...snapshot,
+		gen: 2,
+		session: { ...session, authHandle: "other" },
+	};
+	await readBridgeState();
+	reply(command, {
+		open: { token: "tap", target: { kind: "workspace", workspaceId: "w" } },
+	});
+	await rejected;
+	emit(2);
+	expect(listener).toHaveBeenCalledTimes(1);
+	unsubscribe();
 });

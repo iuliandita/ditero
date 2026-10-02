@@ -2170,5 +2170,6 @@
 	"native_push_retry_disable": "Reîncearcă oprirea",
 	"native_push_disable": "Oprește",
 	"native_push_refresh": "Actualizează starea",
-	"native_push_action_failed": "Nu s-au putut modifica notificările. Actualizează starea înainte de a încerca din nou."
+	"native_push_action_failed": "Nu s-au putut modifica notificările. Actualizează starea înainte de a încerca din nou.",
+	"native_notification_unavailable": "Această notificare nu mai este disponibilă."
 }

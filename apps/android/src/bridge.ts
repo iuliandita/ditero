@@ -1,5 +1,7 @@
 import {
 	NATIVE_PUSH_STATES,
+	type NativeNotificationNavigation,
+	type NativeNotificationTarget,
 	type NativePush,
 	type NativePushState,
 } from "../../../src/web/lib/native-account.tsx";
@@ -99,6 +101,8 @@ type Command =
 	| { op: "server.select"; origin: string }
 	| { op: SimpleOp }
 	| { op: PushOp; id: string }
+	| { op: "push.open"; id: string }
+	| { op: "push.dismissOpen"; id: string; body: { token: string } }
 	| { op: E2eOp; id?: string; body?: Record<string, unknown> }
 	| { op: AttachmentOp; body: Record<string, unknown> };
 
@@ -287,6 +291,8 @@ function sessionRefused(gen: unknown, authHandle: unknown): void {
 		observer.run();
 }
 
+const notificationListeners = new Set<() => void>();
+
 function onNative(event: MessageEvent): void {
 	let message: unknown;
 	try {
@@ -295,6 +301,10 @@ function onNative(event: MessageEvent): void {
 		return;
 	}
 	if (!isRecord(message)) return;
+	if (message.t === "push.open" && state && message.gen === state.gen) {
+		for (const listener of notificationListeners) listener();
+		return;
+	}
 	if (message.t === "session-refused") {
 		sessionRefused(message.gen, message.authHandle);
 		return;
@@ -983,5 +993,82 @@ export function createNativePush(gen: number, authHandle: string): NativePush {
 		enable: () => call("push.enable"),
 		disable: () => call("push.disable"),
 		permission: () => call("push.permission"),
+	};
+}
+
+export function createNativeNotificationNavigation(
+	gen: number,
+	authHandle: string,
+): NativeNotificationNavigation {
+	const assertCurrent = () => {
+		const current = requireState();
+		if (current.gen !== gen || current.session?.authHandle !== authHandle)
+			throw new NativeError("stale-generation");
+	};
+	return {
+		identity: JSON.stringify([gen, authHandle]),
+		async read() {
+			assertCurrent();
+			return request({ op: "push.open", id: authHandle }, (reply) => {
+				assertCurrent();
+				ok(reply);
+				if (reply.open === null) return null;
+				if (!isRecord(reply.open) || Object.keys(reply.open).length !== 2)
+					throw new NativeError("invalid-reply");
+				const { token, target } = reply.open;
+				const validId = (value: unknown): value is string =>
+					typeof value === "string" && /^[A-Za-z0-9_.:-]{1,128}$/.test(value);
+				if (
+					!validId(token) ||
+					!isRecord(target) ||
+					!validId(target.workspaceId)
+				)
+					throw new NativeError("invalid-reply");
+				let parsed: NativeNotificationTarget;
+				if (
+					target.kind === "task" &&
+					Object.keys(target).length === 4 &&
+					validId(target.listId) &&
+					validId(target.taskId)
+				) {
+					parsed = {
+						kind: "task",
+						workspaceId: target.workspaceId,
+						listId: target.listId,
+						taskId: target.taskId,
+					};
+				} else if (
+					target.kind === "workspace" &&
+					Object.keys(target).length === 2
+				) {
+					parsed = { kind: "workspace", workspaceId: target.workspaceId };
+				} else throw new NativeError("invalid-reply");
+				return { token, target: parsed };
+			});
+		},
+		async dismiss(token) {
+			assertCurrent();
+			await request(
+				{ op: "push.dismissOpen", id: authHandle, body: { token } },
+				(reply) => {
+					assertCurrent();
+					ok(reply);
+				},
+			);
+		},
+		subscribe(listener) {
+			const guarded = () => {
+				try {
+					assertCurrent();
+				} catch {
+					return;
+				}
+				listener();
+			};
+			notificationListeners.add(guarded);
+			return () => {
+				notificationListeners.delete(guarded);
+			};
+		},
 	};
 }

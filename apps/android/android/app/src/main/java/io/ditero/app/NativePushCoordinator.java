@@ -372,14 +372,23 @@ final class NativePushCoordinator {
         if(!current(owner) || store.seen(owner,payload.get("notificationId"))) return;
         notificationSink.show(owner,payload);
     }
+    synchronized NativePushStore.Owner openOwner(NativePushOpen tap,boolean verified) {
+        if(tap==null) return null;
+        reconcile();
+        NativePushStore.Owner owner=store.active();
+        if(tap==null || owner==null || !tap.matches(owner.instance,store.registration(owner),store.selected(owner),
+                store.hasSeen(owner,tap.notificationId)) || (verified && !store.current(owner))) return null;
+        return owner;
+    }
     private void show(NativePushStore.Owner owner,Map<String,String> payload) {
         String instance=owner.instance;
         NotificationManager manager=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
         if(Build.VERSION.SDK_INT>=26) manager.createNotificationChannel(new NotificationChannel("native-reminders",context.getString(R.string.native_push_channel),NotificationManager.IMPORTANCE_DEFAULT));
-        Intent launch=new Intent(context,MainActivity.class).setAction("io.ditero.app.PUSH_OPEN")
-                .setData(android.net.Uri.parse("ditero-push:"+instance+":"+payload.get("notificationId")))
+        Intent launch=new Intent(context,MainActivity.class).setAction(NativePushOpen.ACTION)
+                .setData(new android.net.Uri.Builder().scheme("ditero-push").authority("open")
+                        .appendPath(instance).appendPath(payload.get("registrationId")).appendPath(payload.get("notificationId")).build())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        // The explicit component only opens the shell; no URL or task navigation is consumed.
+        // Immutable explicit intent carries only the captured opaque notification identity.
         PendingIntent tap=PendingIntent.getActivity(context,0,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         try {manager.notify(instance+":"+payload.get("notificationId"),0,new NotificationCompat.Builder(context,"native-reminders")
                 .setSmallIcon(io.ditero.app.R.drawable.ic_notification).setContentTitle("Ditero")

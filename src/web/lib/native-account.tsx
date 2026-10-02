@@ -27,11 +27,26 @@ export type NativePush = {
 	permission(): Promise<NativePushState>;
 };
 
+export type NativeNotificationTarget =
+	| { kind: "task"; workspaceId: string; listId: string; taskId: string }
+	| { kind: "workspace"; workspaceId: string };
+export type NativeNotificationOpen = {
+	token: string;
+	target: NativeNotificationTarget;
+};
+export type NativeNotificationNavigation = {
+	readonly identity: string;
+	read(): Promise<NativeNotificationOpen | null>;
+	dismiss(token: string): Promise<void>;
+	subscribe(listener: () => void): () => void;
+};
+
 export type NativeAccount = {
 	profile: { id: string; name: string; email: string };
 	origin: string;
 	storageScope: string;
 	push?: NativePush;
+	notifications?: NativeNotificationNavigation;
 	changeServer(): Promise<void>;
 };
 export const NativeAccountContext = createContext<NativeAccount | null>(null);

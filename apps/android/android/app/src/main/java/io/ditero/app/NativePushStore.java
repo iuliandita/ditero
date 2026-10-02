@@ -143,6 +143,9 @@ class NativePushStore {
             return !NativeSessionVault.unexpired((String)record.get("expiresAt"));
         } catch(Exception e) {return false;}
     }
+    boolean hasSeen(Owner owner,String notification) {
+        return owner!=null && prefs.getString(owner.instance+".seen","").contains("\n"+notification+"\n");
+    }
     boolean seen(Owner owner,String notification) {
         String key=owner.instance+".seen";
         String seen=prefs.getString(key,"");

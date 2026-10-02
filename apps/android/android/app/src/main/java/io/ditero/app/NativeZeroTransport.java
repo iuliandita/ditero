@@ -274,6 +274,15 @@ final class NativeZeroTransport {
 
     private final NativePushCoordinator push;
     private NativeSessionVault.CapturedOwner pushPermissionOwner;
+    private PushOpen pendingPushOpen;
+    private static final class PushOpen {
+        final NativePushOpen tap;
+        final NativeSessionVault.CapturedOwner owner;
+        final String token;
+        PushOpen(NativePushOpen tap,NativeSessionVault.CapturedOwner owner,String token) {
+            this.tap=tap; this.owner=owner; this.token=token;
+        }
+    }
 
     private NativeZeroTransport(Activity activity) {
         this.activity = activity;
@@ -328,6 +337,7 @@ final class NativeZeroTransport {
     void drain() {
         if (closed) return;
         closed = true;
+        pendingPushOpen=null;
         pushPermissionOwner=null;
         ready = false;
         attachments.cancelAll();
@@ -445,6 +455,11 @@ final class NativeZeroTransport {
                     requireReady(m);
                     forget(proxy, rid);
                     return;
+                case "push.open":
+                case "push.dismissOpen":
+                    requireReady(m);
+                    pushOpenOperation(proxy,rid,op,m);
+                    return;
                 case "push.state":
                 case "push.enable":
                 case "push.disable":
@@ -487,6 +502,66 @@ final class NativeZeroTransport {
         }
     }
 
+    void pushOpenIntent(Intent intent) {
+        NativePushOpen tap;
+        try {tap=NativePushOpen.parse(intent.getAction(),intent.getDataString(),intent.getExtras()!=null);}
+        catch(RuntimeException e) {return;}
+        NativePushStore.Owner owner=push.openOwner(tap,false);
+        if(closed || owner==null) return;
+        pendingPushOpen=new PushOpen(tap,owner.session,b64url(randomBytes(32)));
+        if(ready && page!=null) sendToPage(page,obj("t","push.open","gen",generation));
+    }
+
+    private boolean ownsPushOpen(PushOpen open,boolean verified) {
+        NativePushStore.Owner owner=push.openOwner(open.tap,verified);
+        return owner!=null && NativeSessionVault.sameOwner(open.owner,owner.session);
+    }
+
+    private void pushOpenOperation(JavaScriptReplyProxy proxy,int rid,String op,Map<String,Object> m) throws Reject {
+        if(page!=proxy || session==null || handle==null || !handle.equals(str(m.get("id")))) throw new Reject("no-session");
+        Set<String> fields=new HashSet<>(Arrays.asList("op","rid","gen","id"));
+        if(op.equals("push.dismissOpen")) fields.add("body");
+        if(!fields.containsAll(m.keySet())) throw new Reject("invalid-message");
+        final PushOpen open=pendingPushOpen;
+        if(open!=null && (!ownsPushOpen(open,false) || !session.scope().equals(open.owner.scope)
+                || !session.sessionId.equals(open.owner.sessionId) || !session.deviceId.equals(open.owner.deviceId))) {
+            pendingPushOpen=null;
+            throw new Reject("notification-unavailable");
+        }
+        if(op.equals("push.dismissOpen")) {
+            Map<String,Object> body=asMap(m.get("body"));
+            if(body.size()!=1 || !body.containsKey("token") || !(body.get("token") instanceof String)) throw new Reject("invalid-message");
+            if(open==null || !open.token.equals(body.get("token"))) throw new Reject("notification-unavailable");
+            pendingPushOpen=null;
+            sendToPage(proxy,obj("t","reply","rid",rid,"ok",true));
+            return;
+        }
+        if(open==null) {sendToPage(proxy,obj("t","reply","rid",rid,"ok",true,"open",null)); return;}
+        if(!session.verified || session.refused || !unexpired(session.expiresAt) || revoking!=null || !ownsPushOpen(open,true))
+            throw new Reject("no-session");
+        authed(proxy,rid,true,"/api/native/push/open",obj("notificationId",open.tap.notificationId,
+                "registrationId",open.tap.registrationId).toString(),false,new Reply() {
+            @Override public JSONObject build(int code,String raw) throws Reject,IOException {
+                if(instanceUnauthorized(new HttpResult(code,raw))) {
+                    session.refused=true; dropSession(session); throw new Reject("unauthorized");
+                }
+                if(pendingPushOpen!=open) throw new Reject("notification-unavailable");
+                if(!ownsPushOpen(open,false)) {pendingPushOpen=null; throw new Reject("notification-unavailable");}
+                if(code==404) {pendingPushOpen=null; return obj("ok",false,"code","notification-unavailable");}
+                if(code!=200) throw new Reject("http-"+code);
+                Map<String,Object> response=asMap(parse(raw));
+                Map<String,Object> target=asMap(response.get("target"));
+                String kind=str(target.get("kind"));
+                boolean task="task".equals(kind), workspace="workspace".equals(kind);
+                boolean validTaskIds=NativePushOpen.id(str(target.get("listId"))) && NativePushOpen.id(str(target.get("taskId")));
+                if(response.size()!=1 || (!task && !workspace) || target.size()!=(task?4:2)
+                        || !NativePushOpen.id(str(target.get("workspaceId"))) || (task && !validTaskIds))
+                    throw new Reject("invalid-response");
+                return obj("ok",true,"open",obj("token",open.token,"target",new JSONObject(target)));
+            }
+        });
+    }
+
     private void pushOperation(JavaScriptReplyProxy proxy,int rid,String op,Map<String,Object> m) throws Reject {
         if(page!=proxy || session==null || handle==null || !handle.equals(str(m.get("id")))) throw new Reject("no-session");
         if(!new HashSet<>(Arrays.asList("op","rid","gen","id")).containsAll(m.keySet())) throw new Reject("invalid-message");
@@ -507,7 +582,7 @@ final class NativeZeroTransport {
                 "permission",push.permitted()?"granted":"denied","provider","unifiedpush"));
     }
 
-    private boolean retirePush() {pushPermissionOwner=null; return push.invalidate();}
+    private boolean retirePush() {pendingPushOpen=null; pushPermissionOwner=null; return push.invalidate();}
 
     void pushPermissionResult(int requestCode) {
         NativeSessionVault.CapturedOwner captured=pushPermissionOwner;
@@ -561,6 +636,7 @@ final class NativeZeroTransport {
         session = context == null ? null : restoreSession(context);
         handle = session == null ? null : newHandle();
         ready = true;
+        if(pendingPushOpen!=null && !ownsPushOpen(pendingPushOpen,false)) pendingPushOpen=null;
         JSONObject reply = obj("t", "reply", "rid", rid, "ok", true, "gen", generation,
                 "bridge", "native-zero-2", "authReserve", HANDLE_CHARS, "maxSockets", MAX_SOCKETS);
         put(reply, "server", serverMeta());

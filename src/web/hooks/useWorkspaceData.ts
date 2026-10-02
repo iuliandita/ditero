@@ -36,7 +36,7 @@ export function workspaceViewRowsLoading({
 // stays at the call site -- it is state, not data.
 export function useWorkspaceData() {
 	const zero = useZero<typeof schema>();
-	const [workspaces] = useQuery(queries.workspaces.mine());
+	const [workspaces, workspacesDetails] = useQuery(queries.workspaces.mine());
 	const [lists, listsDetails] = useQuery(queries.lists.mine());
 	const [folders] = useQuery(queries.folders.mine());
 	const [templates] = useQuery(queries.templates.mine());
@@ -111,6 +111,10 @@ export function useWorkspaceData() {
 		assignees,
 		memberships,
 		viewRowsLoading,
+		notificationRowsReady:
+			workspacesDetails.type === "complete" &&
+			listsDetails.type === "complete" &&
+			tasksDetails.type === "complete",
 		roleByWorkspace,
 		shareable,
 		members,

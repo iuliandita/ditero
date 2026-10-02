@@ -24,6 +24,20 @@ public class MainActivity extends BridgeActivity {
         // is parked on about:blank and no native transport is attached.
         // Dedicated message listener only; null means registration failed closed.
         zeroTransport = NativeShellPolicy.install(this) ? NativeZeroTransport.attach(this) : null;
+        consumePushIntent(getIntent());
+    }
+
+    private void consumePushIntent(Intent intent) {
+        if(intent==null || !NativePushOpen.ACTION.equals(intent.getAction())) return;
+        if(zeroTransport!=null) zeroTransport.pushOpenIntent(intent);
+        // The launch intent must not replay when the Activity is recreated.
+        setIntent(new Intent(this,MainActivity.class));
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        consumePushIntent(intent);
     }
 
     @Override
