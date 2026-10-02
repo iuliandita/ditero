@@ -20,8 +20,10 @@ export default defineConfig({
 				)
 					return;
 				// Setup requests must not inherit an earlier response's idle socket.
-				server.middlewares.use((_request, response, next) => {
-					response.setHeader("Connection", "close");
+				server.middlewares.use((request, response, next) => {
+					const path = request.url?.split("?", 1)[0];
+					if (path === "/api" || path?.startsWith("/api/"))
+						response.setHeader("Connection", "close");
 					next();
 				});
 			},

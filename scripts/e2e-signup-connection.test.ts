@@ -145,9 +145,12 @@ async function fixture(nodeEnv = "test", enabled = true) {
 					response.end(
 						`<div data-testid="workspace">${request.headers.cookie ?? ""}</div><div data-testid="workspace-switcher" data-workspace-id="fixture-workspace"></div>`,
 					);
-				} else if (request.url === "/fixture-error") {
+				} else if (request.url === "/api/fixture-error") {
 					response.statusCode = 503;
 					response.end("fixture unavailable");
+				} else if (request.url === "/fixture-module.js") {
+					response.setHeader("Content-Type", "application/javascript");
+					response.end(`export const priorRequests = ${prior};`);
 				} else next();
 			});
 		},
@@ -317,13 +320,28 @@ test.each([
 	20_000,
 );
 
-test("the early middleware closes non-proxy error responses", async () => {
+test("the early middleware closes API error responses", async () => {
 	const server = await fixture();
 	const ctx = await context();
 	try {
-		const response = await ctx.get(`${server.origin}/fixture-error`);
+		const response = await ctx.get(`${server.origin}/api/fixture-error`);
 		expect(response.status()).toBe(503);
 		expect(response.headers().connection).toBe("close");
+	} finally {
+		await ctx.dispose();
+		await server.close();
+	}
+});
+
+test("frontend documents and modules retain connection reuse", async () => {
+	const server = await fixture();
+	const ctx = await context();
+	try {
+		const document = await ctx.get(server.origin);
+		expect(document.headers().connection).toBe("keep-alive");
+		const module = await ctx.get(`${server.origin}/fixture-module.js`);
+		expect(module.headers().connection).toBe("keep-alive");
+		expect(await module.text()).toBe("export const priorRequests = 1;");
 	} finally {
 		await ctx.dispose();
 		await server.close();
