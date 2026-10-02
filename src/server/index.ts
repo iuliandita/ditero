@@ -53,6 +53,7 @@ import { e2eRoutes } from "./e2e/routes.ts";
 import { makeGuards } from "./guards.ts";
 import { corsPolicy, securityHeaders } from "./http-policy.ts";
 import { sendInviteMail } from "./mail/invite-mail.ts";
+import { nativeAttachmentRoutes } from "./native-auth/attachment-routes.ts";
 import { nativeE2ERoutes } from "./native-auth/e2e-routes.ts";
 import { nativeAuthRoutes } from "./native-auth/routes.ts";
 import { ackBaseUrl, takeRateToken } from "./notifications/capability.ts";
@@ -118,6 +119,10 @@ function nativeRateLimit(request: Request, peerAddress?: string) {
 		.replace(
 			/^\/api\/native\/e2e\/workspaces\/[^/]+\/rotate$/,
 			"/api/native/e2e/workspaces/:workspaceId/rotate",
+		)
+		.replace(
+			/^\/api\/native\/attachments\/[^/]+\/(upload|download|thumbnail)$/,
+			"/api/native/attachments/:id/$1",
 		);
 	return takeRateToken(db, `native:${route}:${key}`, 12, 0.2);
 }
@@ -176,6 +181,14 @@ const routes = new Elysia()
 		}),
 	)
 	.use(nativeE2ERoutes({ pool, database: db, rateLimit: nativeRateLimit }))
+	.use(
+		nativeAttachmentRoutes({
+			pool,
+			store: attachmentStore,
+			options: { quotaBytes: attachmentConfig.quotaBytes },
+			rateLimit: nativeRateLimit,
+		}),
+	)
 	.use(portabilityRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	.use(importPlanRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	// Public capability ack, mounted AHEAD of the global CORS plugin: the button
@@ -198,12 +211,9 @@ const routes = new Elysia()
 	.use(e2eRoutes(pool, db, { guardedPost, guardedGet }, "/api/e2e"))
 	.use(e2eInviteRoutes(pool, db, { guardedPost, guardedGet, foreignOrigin }))
 	.use(
-		attachmentRoutes(
-			pool,
-			{ guardedPost, guardedGet, foreignOrigin },
-			attachmentStore,
-			{ quotaBytes: attachmentConfig.quotaBytes },
-		),
+		attachmentRoutes(pool, { guardedPost, guardedGet }, attachmentStore, {
+			quotaBytes: attachmentConfig.quotaBytes,
+		}),
 	)
 	.use(
 		accountDeletionRoutes(pool, {
