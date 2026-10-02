@@ -1,5 +1,6 @@
 import { errorMonitor } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Socket } from "node:net";
 import type { ProxyOptions } from "vite";
 
 type Source = "incoming" | "downstream" | "outgoing" | "upstream" | "proxy";
@@ -23,6 +24,9 @@ export const configureSignupTransport: NonNullable<
 	)
 		return;
 	let ordinal = 0;
+	let sequence = 0;
+	let socketOrdinal = 0;
+	const sockets = new WeakMap<Socket, { id: number; requests: number }>();
 	const started = performance.now();
 	const requests = new WeakMap<
 		IncomingMessage,
@@ -34,12 +38,60 @@ export const configureSignupTransport: NonNullable<
 		) => void
 	>();
 	proxy.on("start", (req: IncomingMessage, res: ServerResponse) => {
+		const socket = req.socket;
+		let socketState = sockets.get(socket);
+		if (!socketState) {
+			socketState = { id: ++socketOrdinal, requests: 0 };
+			sockets.set(socket, socketState);
+			const socketRecord = (
+				event: "end" | "close" | "error",
+				error?: unknown,
+			) => {
+				const code =
+					error && typeof error === "object" && "code" in error
+						? error.code
+						: undefined;
+				console.warn(
+					"[e2e-signup-transport]",
+					JSON.stringify({
+						sequence: ++sequence,
+						timeMs: performance.now() - started,
+						wallTime: new Date().toISOString(),
+						pid: process.pid,
+						role: "vite-proxy",
+						source: "incoming-socket",
+						event,
+						socket: sockets.get(socket)?.id,
+						destroyed: socket.destroyed,
+						bytesRead: socket.bytesRead,
+						bytesWritten: socket.bytesWritten,
+						code:
+							typeof code === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(code)
+								? code
+								: undefined,
+					}),
+				);
+			};
+			socket.on("end", () => socketRecord("end"));
+			socket.on("close", () => socketRecord("close"));
+			socket.on(errorMonitor, (error) => socketRecord("error", error));
+		}
+		const priorRequests = socketState.requests++;
 		if (
 			req.method !== "POST" ||
 			req.url?.split("?", 1)[0] !== "/api/auth/sign-up/email"
 		)
 			return;
 		const request = ++ordinal;
+
+		const value = req.headers["x-ditero-e2e-transport-id"];
+		const correlation =
+			typeof value === "string" &&
+			/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+				value,
+			)
+				? value
+				: undefined;
 		const record = (
 			source: Source,
 			event: Event,
@@ -54,6 +106,15 @@ export const configureSignupTransport: NonNullable<
 				"[e2e-signup-transport]",
 				JSON.stringify({
 					request,
+					correlation,
+					sequence: ++sequence,
+					wallTime: new Date().toISOString(),
+					pid: process.pid,
+					role: "vite-proxy",
+					socket: socketState.id,
+					priorRequests,
+					bytesRead: socket.bytesRead,
+					bytesWritten: socket.bytesWritten,
 					timeMs: performance.now() - started,
 					source,
 					event,

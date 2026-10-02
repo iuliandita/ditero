@@ -161,10 +161,41 @@ export function uniqueEmail(prefix: string): string {
 // created manually without a baseURL. Signup yields an active session directly.
 export async function signUp(page: Page, email: string): Promise<string> {
 	const origin = webOrigin();
-	const response = await page.request.post(`${origin}/api/auth/sign-up/email`, {
-		headers: { Origin: origin },
-		data: { email, password: PASSWORD, name: email.split("@")[0] },
-	});
+	const correlation =
+		process.env.NODE_ENV === "test" &&
+		process.env.DITERO_E2E_SIGNUP_TRANSPORT === "1"
+			? randomUUID()
+			: undefined;
+	const started = performance.now();
+	let sequence = 0;
+	const record = (event: "start" | "failure") => {
+		if (!correlation) return;
+		console.warn(
+			"[e2e-signup-client]",
+			JSON.stringify({
+				correlation,
+				sequence: ++sequence,
+				event,
+				pid: process.pid,
+				role: "test-worker",
+				wallTime: new Date().toISOString(),
+				timeMs: performance.now() - started,
+			}),
+		);
+	};
+	record("start");
+	const response = await page.request
+		.post(`${origin}/api/auth/sign-up/email`, {
+			headers: {
+				Origin: origin,
+				...(correlation ? { "X-Ditero-E2E-Transport-ID": correlation } : {}),
+			},
+			data: { email, password: PASSWORD, name: email.split("@")[0] },
+		})
+		.catch((error: unknown) => {
+			record("failure");
+			throw error;
+		});
 	expect(response.ok(), `signup failed with status ${response.status()}`).toBe(
 		true,
 	);
