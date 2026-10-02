@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type * as tables from "../../db/schema.ts";
+import { withRecipientContext } from "./recipients.ts";
 
 type Database = NodePgDatabase<typeof tables>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -47,7 +48,8 @@ export async function enqueueOutbox(
 	options: EnqueueOptions,
 ): Promise<EnqueueOutcome> {
 	if (row.channelKind === "nativepush" && !row.nativeRegistrationId) {
-		const { rows: targets } = await database.execute<{ id: string }>(sql`
+		return withRecipientContext(database, row.recipientUserId, async (tx) => {
+			const { rows: targets } = await tx.execute<{ id: string }>(sql`
  select r.id from native_push_registration r
  join session s on s.id=r.session_id and s.user_id=r.user_id
  join native_session_link l on l.session_id=s.id and l.user_id=r.user_id and l.device_id=r.device_id
@@ -55,20 +57,21 @@ export async function enqueueOutbox(
  where r.user_id=${row.recipientUserId} and s.expires_at>now() and d.revoked_at is null
  order by r.id
  `);
-		let outcome: EnqueueOutcome = "duplicate";
-		for (const target of targets) {
-			const result = await enqueueOutbox(
-				database,
-				{
-					...row,
-					nativeRegistrationId: target.id,
-					idempotencyKey: `${row.idempotencyKey}:${target.id}`,
-				},
-				options,
-			);
-			if (result === "inserted" || outcome === "duplicate") outcome = result;
-		}
-		return outcome;
+			let outcome: EnqueueOutcome = "duplicate";
+			for (const target of targets) {
+				const result = await enqueueOutbox(
+					tx,
+					{
+						...row,
+						nativeRegistrationId: target.id,
+						idempotencyKey: `${row.idempotencyKey}:${target.id}`,
+					},
+					options,
+				);
+				if (result === "inserted" || outcome === "duplicate") outcome = result;
+			}
+			return outcome;
+		});
 	}
 	const { rows } = await database.execute<{
 		queued: number;

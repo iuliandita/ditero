@@ -13,6 +13,28 @@ import {
 import { localeFromPref } from "../recipient-locale.ts";
 
 type Database = NodePgDatabase<typeof tables>;
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+export type RecipientDatabase = Database | Transaction;
+
+// Recipients come from server-side authority checks. Scope only the native
+// owner rows needed for discovery, and preserve any enclosing caller context.
+export async function withRecipientContext<T>(
+	database: RecipientDatabase,
+	userId: string,
+	run: (tx: Transaction) => Promise<T>,
+): Promise<T> {
+	return database.transaction(async (tx) => {
+		const { rows } = await tx.execute<{ user_id: string | null }>(
+			sql`select current_setting('ditero.user_id', true) as user_id`,
+		);
+		await tx.execute(sql`select set_config('ditero.user_id', ${userId}, true)`);
+		const result = await run(tx);
+		await tx.execute(
+			sql`select set_config('ditero.user_id', ${rows[0].user_id ?? ""}, true)`,
+		);
+		return result;
+	});
+}
 type ChannelKind = (typeof tables.outboxDeliveryKindEnum.enumValues)[number];
 
 export type Pref = {
@@ -32,7 +54,7 @@ export const DEFAULT_PREF: Pref = {
 };
 
 export async function loadPrefs(
-	database: Database,
+	database: RecipientDatabase,
 	userIds: string[],
 ): Promise<Map<string, Pref>> {
 	const prefs = new Map<string, Pref>();
@@ -59,7 +81,7 @@ export async function loadPrefs(
 }
 
 export async function loadChannels(
-	database: Database,
+	database: RecipientDatabase,
 	userIds: string[],
 ): Promise<Map<string, ChannelKind[]>> {
 	const channels = new Map<string, ChannelKind[]>();
@@ -81,23 +103,26 @@ export async function loadChannels(
 		list.push(row.kind);
 		channels.set(row.userId, list);
 	}
-	const { rows: registrations } = await database.execute<{
-		user_id: string;
-	}>(sql`
+	for (const userId of userIds) {
+		const registrations = await withRecipientContext(
+			database,
+			userId,
+			async (tx) => {
+				const { rows } = await tx.execute<{ user_id: string }>(sql`
  select distinct r.user_id from native_push_registration r
  join session s on s.id=r.session_id and s.user_id=r.user_id
  join native_session_link l on l.session_id=s.id and l.user_id=r.user_id and l.device_id=r.device_id
  join user_device d on d.id=r.device_id and d.user_id=r.user_id
- where r.user_id in (${sql.join(
-		userIds.map((id) => sql`${id}`),
-		sql`,`,
- )})
- and s.expires_at > now() and d.revoked_at is null
+ where r.user_id=${userId} and s.expires_at > now() and d.revoked_at is null
  `);
-	for (const row of registrations) {
-		const list = channels.get(row.user_id) ?? [];
-		list.push("nativepush");
-		channels.set(row.user_id, list);
+				return rows;
+			},
+		);
+		for (const row of registrations) {
+			const list = channels.get(row.user_id) ?? [];
+			list.push("nativepush");
+			channels.set(row.user_id, list);
+		}
 	}
 	return channels;
 }
@@ -107,7 +132,7 @@ export async function loadChannels(
 // derives recipients from them must re-check here or an ex-member keeps
 // receiving task titles from a workspace they left.
 export async function loadMemberships(
-	database: Database,
+	database: RecipientDatabase,
 	userIds: string[],
 ): Promise<Set<string>> {
 	const members = new Set<string>();

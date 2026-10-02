@@ -425,7 +425,7 @@ export async function markGrantFailed(
  * evidence they can open the WDK, and an enrolled member without it has nothing
  * to pass on.
  *
- * The payload carries a workspace NAME and nothing else. No wrap, no
+ * The payload carries workspace identity for dispatch authorization. No wrap, no
  * commitment, no public key: this row is rendered by five channel adapters and
  * ends up in ntfy servers, Telegram, Discord, Slack and mail spools.
  */
@@ -435,12 +435,12 @@ export async function notifyGrantCapable(
 	requesterId: string,
 	now: Date = new Date(),
 ): Promise<number> {
-	const found = await database.transaction(async (tx) => {
+	return database.transaction(async (tx) => {
 		// Key-table reads enforce RLS even for the runtime table owner.
 		await tx.execute(
 			sql`select set_config('ditero.user_id', ${requesterId}, true)`,
 		);
-		return tx.execute<{
+		const found = await tx.execute<{
 			workspace_id: string;
 			workspace_name: string;
 			requested_version: number;
@@ -466,47 +466,47 @@ export async function notifyGrantCapable(
 		  -- invite fast path is exactly that shape -- and the failure it
 		  -- prevents is telling someone they are waiting on themselves.
 		  and m.user_id <> r.user_id`);
-	});
-	const rows = found.rows ?? [];
-	if (rows.length === 0) return 0;
+		const rows = found.rows ?? [];
+		if (rows.length === 0) return 0;
 
-	const recipients = [...new Set(rows.map((row) => row.recipient))];
-	const prefs = await loadPrefs(database, recipients);
-	const channels = await loadChannels(database, recipients);
-	const cap = {
-		maxQueuedPerUser: maxQueuedPerUser(process.env),
-		refusedLogged: new Set<string>(),
-	};
+		const recipients = [...new Set(rows.map((row) => row.recipient))];
+		const prefs = await loadPrefs(tx, recipients);
+		const channels = await loadChannels(tx, recipients);
+		const cap = {
+			maxQueuedPerUser: maxQueuedPerUser(process.env),
+			refusedLogged: new Set<string>(),
+		};
 
-	let enqueued = 0;
-	for (const row of rows) {
-		const userChannels = channels.get(row.recipient) ?? [];
-		const pref = prefs.get(row.recipient) ?? DEFAULT_PREF;
-		const decision = decideQuietHours(pref, false, now, row.recipient);
-		for (const channelKind of userChannels) {
-			const outcome = await enqueueOutbox(
-				database,
-				{
-					// No reminder_state row, like every other event notification:
-					// nothing escalates this and dispatch mints no ack capability.
-					reminderStateId: null,
-					recipientUserId: row.recipient,
-					channelKind,
-					payload: {
-						kind: "key_grant",
-						workspaceName: row.workspace_name,
-						workspaceId: row.workspace_id,
-						locale: pref.locale,
+		let enqueued = 0;
+		for (const row of rows) {
+			const userChannels = channels.get(row.recipient) ?? [];
+			const pref = prefs.get(row.recipient) ?? DEFAULT_PREF;
+			const decision = decideQuietHours(pref, false, now, row.recipient);
+			for (const channelKind of userChannels) {
+				const outcome = await enqueueOutbox(
+					tx,
+					{
+						// No reminder_state row, like every other event notification:
+						// nothing escalates this and dispatch mints no ack capability.
+						reminderStateId: null,
+						recipientUserId: row.recipient,
+						channelKind,
+						payload: {
+							kind: "key_grant",
+							workspaceName: row.workspace_name,
+							workspaceId: row.workspace_id,
+							locale: pref.locale,
+						},
+						// Keyed by the request, so re-running this after a retry does not
+						// notify the same member twice for the same wait.
+						idempotencyKey: `key_grant:${requestId}:${row.recipient}:${channelKind}`,
+						nextAttemptAt: decision.kind === "defer" ? decision.until : now,
 					},
-					// Keyed by the request, so re-running this after a retry does not
-					// notify the same member twice for the same wait.
-					idempotencyKey: `key_grant:${requestId}:${row.recipient}:${channelKind}`,
-					nextAttemptAt: decision.kind === "defer" ? decision.until : now,
-				},
-				cap,
-			);
-			if (outcome === "inserted") enqueued++;
+					cap,
+				);
+				if (outcome === "inserted") enqueued++;
+			}
 		}
-	}
-	return enqueued;
+		return enqueued;
+	});
 }
