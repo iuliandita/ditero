@@ -3,7 +3,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { signUp, uniqueEmail } from "./helpers.ts";
+import { configuredOrigin, signUp, uniqueEmail, webOrigin } from "./helpers.ts";
 
 test.use({
 	screenshot: "off",
@@ -33,9 +33,9 @@ test("system browser retains the native grant and approves only after explicit c
 		expect(named.ok()).toBe(true);
 		await context.clearCookies();
 	}
-	const web = process.env.E2E_WEB_URL ?? "http://localhost:5173";
+	const web = webOrigin();
 	const api = await playwright.request.newContext({
-		baseURL: process.env.E2E_API_URL ?? "http://localhost:3000",
+		baseURL: configuredOrigin("E2E_API_URL"),
 	});
 	const verifier = randomBytes(32).toString("base64url");
 	const challenge = createHash("sha256").update(verifier).digest("base64url");
@@ -62,7 +62,10 @@ test("system browser retains the native grant and approves only after explicit c
 		await expect(page.getByTestId("signin")).toBeVisible();
 		await page.getByTestId("email").fill(credentials.email);
 		await page.getByTestId("password").fill(credentials.password);
-		await page.getByTestId("signin").click();
+		await Promise.all([
+			page.waitForEvent("domcontentloaded"),
+			page.getByTestId("signin").click(),
+		]);
 		const panel = page.getByTestId("native-authorize");
 		await expect(panel).toBeVisible();
 		await expect(page).toHaveURL(`${web}${authorize}`);
