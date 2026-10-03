@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { apiTaskCompleteSchema } from "../../domain/public-api-completion.ts";
 import {
 	PUBLIC_API_RESOURCES,
 	publicApiResourceSchemas,
@@ -156,6 +157,36 @@ export function publicApiOpenApi() {
 				description: "Idempotent replay returning the current authorized task",
 			},
 			...errors,
+		},
+	};
+	paths["/api/v1/tasks/{id}/complete"] = {
+		post: {
+			operationId: "complete_task",
+			tags: ["tasks"],
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Complete the observed task occurrence using a write token and a writable workspace membership. The required list and due instant guard against moved tasks and changed recurring occurrences. Habits require a separate occurrence workflow. Reuse the same key and body after an uncertain outcome; replay returns the current authorized task without completing it again.",
+			parameters: [
+				{ name: "id", in: "path", required: true, schema: { type: "string" } },
+				{
+					name: "Idempotency-Key",
+					in: "header",
+					required: true,
+					schema: { type: "string", format: "uuid" },
+				},
+			],
+			requestBody: {
+				required: true,
+				content: {
+					"application/json": {
+						schema: z.toJSONSchema(apiTaskCompleteSchema, { io: "input" }),
+					},
+				},
+			},
+			responses: {
+				"200": response(z.toJSONSchema(publicApiResourceSchemas.tasks)),
+				...errors,
+			},
 		},
 	};
 	paths["/api/v1/me"] = {
