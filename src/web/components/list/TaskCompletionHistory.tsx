@@ -1,6 +1,6 @@
 import { useConnectionState, useQuery, useZero } from "@rocicorp/zero/react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type {
 	HistoryCursor as Cursor,
@@ -73,9 +73,13 @@ function historyAction(row: HistoryRow, person: string) {
 function HistoryPage({
 	taskId,
 	workspaceId,
+	refused,
+	onAuthorization,
 }: {
 	taskId: string;
 	workspaceId: string;
+	refused: boolean;
+	onAuthorization: (available: boolean) => void;
 }) {
 	const [cursors, setCursors] = useState<(Cursor | null)[]>([null]);
 	const page = cursors.length - 1;
@@ -128,11 +132,15 @@ function HistoryPage({
 			controller.signal,
 		).then(
 			(data) => {
-				if (!controller.signal.aborted)
+				if (!controller.signal.aborted) {
+					onAuthorization(true);
 					setRequest({ key, status: "complete", data });
+				}
 			},
 			(error) => {
-				if (!controller.signal.aborted)
+				if (!controller.signal.aborted) {
+					if (error instanceof TaskHistoryUnavailableError)
+						onAuthorization(false);
 					setRequest({
 						key,
 						status:
@@ -141,12 +149,22 @@ function HistoryPage({
 								: "error",
 						data: null,
 					});
+				}
 			},
 		);
 		return () => controller.abort();
-	}, [taskId, workspaceId, key, browserOnline, revision, nativeRevision]);
-	const rows: readonly HistoryRow[] =
-		request.key === key && request.data
+	}, [
+		taskId,
+		workspaceId,
+		key,
+		browserOnline,
+		revision,
+		nativeRevision,
+		onAuthorization,
+	]);
+	const rows: readonly HistoryRow[] = refused
+		? []
+		: request.key === key && request.data
 			? request.data.rows
 			: nativeRows.map((row) => ({
 					recordedAt: row.recordedAt,
@@ -171,7 +189,11 @@ function HistoryPage({
 					provenanceRedactedAt: null,
 				}));
 	const details = {
-		type: request.key === key ? request.status : "loading",
+		type: refused
+			? "unavailable"
+			: request.key === key
+				? request.status
+				: "loading",
 		retry: () => retry((current) => current + 1),
 	};
 	useEffect(() => {
@@ -268,9 +290,18 @@ function HistoryPage({
 					</ol>
 				)}
 			{details.type === "unavailable" ? (
-				<p role="status" className="text-sm text-muted-foreground">
-					{m.completion_history_unavailable()}
-				</p>
+				<div className="space-y-2 text-sm text-muted-foreground">
+					<p role="status">{m.completion_history_unavailable()}</p>
+					<Button
+						type="button"
+						variant="outline"
+						onClick={details.retry}
+						disabled={!browserOnline || request.status === "loading"}
+						className="min-h-11"
+					>
+						{m.completion_history_retry()}
+					</Button>
+				</div>
 			) : details.type === "error" ? (
 				<div role="alert" className="space-y-2 text-sm text-destructive">
 					<p>{m.completion_history_error()}</p>
@@ -343,6 +374,12 @@ export function TaskCompletionHistory({
 }) {
 	const zero = useZero<typeof schema>();
 	const panelId = useId();
+	const scope = JSON.stringify([zero.userID, taskId, workspaceId]);
+	const [refusedScope, setRefusedScope] = useState<string | null>(null);
+	const onAuthorization = useCallback(
+		(available: boolean) => setRefusedScope(available ? null : scope),
+		[scope],
+	);
 	const [expanded, setExpanded] = useState(false);
 	const [memberships, membershipDetails] = useQuery(queries.memberships.mine());
 	const [tasks, taskDetails] = useQuery(queries.tasks.mine());
@@ -386,9 +423,11 @@ export function TaskCompletionHistory({
 				<div id={panelId}>
 					{visible ? (
 						<HistoryPage
-							key={JSON.stringify([zero.userID, taskId, workspaceId])}
+							key={scope}
 							taskId={taskId}
 							workspaceId={workspaceId}
+							refused={refusedScope === scope}
+							onAuthorization={onAuthorization}
 						/>
 					) : (
 						<p role="status" className="pt-2 text-sm text-muted-foreground">

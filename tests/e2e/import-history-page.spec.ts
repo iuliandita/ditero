@@ -176,3 +176,161 @@ test("requested mixed history uses complete total pages and source attribution a
 		await pool.end();
 	}
 });
+
+test("an authoritative history refusal stays hidden offline and through pending retries until authorized success", async ({
+	page,
+}) => {
+	const url = process.env.E2E_DATABASE_URL;
+	if (!url) throw new Error("E2E_DATABASE_URL is required");
+	const pool = new Pool({ connectionString: url });
+	const listId = randomUUID();
+	const taskId = randomUUID();
+	const otherTaskId = randomUUID();
+	const title = `Refusal history ${taskId.slice(0, 8)}`;
+	let mode: "pass" | "deny" | "hold" = "pass";
+	const pending = new Set<(authorized: boolean) => void>();
+	await page.route("**/api/tasks/history?*", async (route) => {
+		if (new URL(route.request().url()).searchParams.get("taskId") !== taskId)
+			return route.continue();
+		if (mode === "deny")
+			return route.fulfill({
+				status: 404,
+				json: { code: "history-unavailable" },
+			});
+		if (mode === "hold") {
+			const authorized = await new Promise<boolean>((resolve) =>
+				pending.add(resolve),
+			);
+			if (!authorized)
+				return route.fulfill({
+					status: 503,
+					json: { code: "history-load-failed" },
+				});
+		}
+		return route.continue();
+	});
+	try {
+		const email = uniqueEmail("history-refusal");
+		await signUp(page, email);
+		await waitWorkspaceReady(page);
+		const actor = (
+			await pool.query<{ id: string }>('select id from "user" where email=$1', [
+				email,
+			])
+		).rows[0]?.id;
+		if (!actor) throw new Error("Missing refusal account");
+		const workspace = (
+			await pool.query<{ id: string }>(
+				"select id from workspace where owner_id=$1 and kind='personal'",
+				[actor],
+			)
+		).rows[0]?.id;
+		if (!workspace) throw new Error("Missing refusal workspace");
+		await pool.query(
+			"insert into list(id,workspace_id,owner_id,title,sort_key) values ($1,$2,$3,$4,'a0')",
+			[listId, workspace, actor, title],
+		);
+		await pool.query(
+			"insert into task(id,list_id,title,sort_key) values ($1,$3,'Cached history','a0'),($2,$3,'Other history','a1')",
+			[taskId, otherTaskId, listId],
+		);
+		for (const id of [taskId, otherTaskId])
+			await pool.query(
+				`insert into task_completion_event(id,task_id,actor_user_id,recorded_at,origin,action,before_due_all_day,before_done,after_done) values($1,$2,$3,$4,'member_mutation','complete',false,false,true)`,
+				[randomUUID(), id, actor, new Date("2020-01-02T03:04:05Z")],
+			);
+		await sidebarLists(page)
+			.getByRole("button", { name: title, exact: true })
+			.click();
+		await page
+			.getByTestId("list")
+			.getByText("Cached history", { exact: true })
+			.click();
+		const detail = page.getByTestId("task-detail");
+		const toggle = detail.getByRole("button", {
+			name: "Completion history",
+			exact: true,
+		});
+		await toggle.click();
+		const history = detail.getByTestId("completion-history-page");
+		const rows = history.getByTestId("completion-history-row");
+		await expect(rows).toHaveCount(1);
+		// Positive offline control: the native row and its task/member context are cached.
+		await page.context().setOffline(true);
+		await expect(history).toContainText("not fully available offline");
+		await expect(rows).toHaveCount(1);
+		const allowed = page.waitForResponse(
+			(response) =>
+				response.url().includes("/api/tasks/history?") &&
+				response.status() === 200,
+		);
+		await page.context().setOffline(false);
+		await allowed;
+		mode = "deny";
+		await pool.query('update "user" set name=$1 where id=$2', [
+			"Cached refusal actor",
+			actor,
+		]);
+		await expect(history).toContainText("This task's history is unavailable.");
+		await expect(rows).toHaveCount(0);
+		await expect(
+			detail.getByText("Cached history", { exact: true }),
+		).toBeVisible();
+		await page.context().setOffline(true);
+		await expect(history).toContainText("This task's history is unavailable.");
+		await expect(rows).toHaveCount(0);
+		await toggle.click();
+		await expect(history).toHaveCount(0);
+		await toggle.click();
+		await expect(history).toContainText("This task's history is unavailable.");
+		await expect(rows).toHaveCount(0);
+		mode = "hold";
+		await page.context().setOffline(false);
+		await expect.poll(() => pending.size).toBeGreaterThan(0);
+		await expect(history).toContainText("This task's history is unavailable.");
+		await expect(rows).toHaveCount(0);
+		const retry = history.getByRole("button", {
+			name: "Try again",
+			exact: true,
+		});
+		await expect(retry).toBeDisabled();
+		for (const release of pending) release(false);
+		pending.clear();
+		await expect(retry).toBeEnabled();
+		await expect(rows).toHaveCount(0);
+		await retry.click();
+		await expect.poll(() => pending.size).toBeGreaterThan(0);
+		await expect(history).toContainText("This task's history is unavailable.");
+		await expect(rows).toHaveCount(0);
+		for (const release of pending) release(true);
+		pending.clear();
+		mode = "pass";
+		await expect(rows).toHaveCount(1);
+		await expect(history).toContainText("Cached refusal actor");
+		await expect(history).not.toContainText(
+			"This task's history is unavailable.",
+		);
+		await page.keyboard.press("Escape");
+		await expect(detail).toHaveCount(0);
+		await page
+			.getByTestId("list")
+			.getByText("Other history", { exact: true })
+			.click();
+		await page
+			.getByTestId("task-detail")
+			.getByRole("button", { name: "Completion history", exact: true })
+			.click();
+		await expect(page.getByTestId("completion-history-row")).toHaveCount(1);
+	} finally {
+		mode = "pass";
+		for (const release of pending) release(false);
+		pending.clear();
+		await page.context().setOffline(false);
+		await page.unrouteAll({ behavior: "wait" });
+		await pool.query("delete from task where id=any($1::text[])", [
+			[taskId, otherTaskId],
+		]);
+		await pool.query("delete from list where id=$1", [listId]);
+		await pool.end();
+	}
+});
