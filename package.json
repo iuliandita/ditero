@@ -3,6 +3,7 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
+		"cli": "bun run src/cli/index.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "bun run src/db/migrate.ts",
 		"security:rotate-auth-secrets": "bun run src/security/rotate-auth-secrets.ts",
