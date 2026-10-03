@@ -129,8 +129,11 @@ a current member of the task's destination workspace. Missing or changed mapping
 evidence blocks the affected task; a failed intended assignment also blocks its
 notification-bearing task rather than replacing the assignee with the list owner.
 Version 2 and 3 plans keep their older dated-task and notification-setting exclusions.
-Comments, templates, views, dashboards, focus records, preferences, Karma, and habit
-logs remain blocked pending their import policies. Attachment files remain excluded.
+Version 1 archives and older planners still block comments and templates.
+Qualified version 2 archives use planner 5 for comments, templates and retained
+completion history, with source claims kept separate from current authorship.
+Views, dashboards, focus records, preferences, Karma and habit logs remain blocked
+pending their import policies. Attachment files remain excluded.
 Unresolved references and mapping conflicts block affected records and their
 dependents. The report distinguishes candidate records, excluded metadata, and
 blocked records. Candidates are not a promise that an eventual apply will pass
