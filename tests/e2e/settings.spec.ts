@@ -289,12 +289,15 @@ test("the vacation end date uses the app's own date field", async ({
 	const until = page.getByTestId("karma-vacation-until");
 	await expect(until).toHaveText("No date", { timeout: 15_000 });
 
-	// No browser date, time or select widget anywhere on the page. The quiet
-	// hours field proves the query can see the page's inputs at all.
+	// Scope date/time controls to their sections; appearance has a theme select.
 	const surface = page.getByTestId("settings-surface");
-	await expect(surface.getByTestId("quiet-start")).toHaveCount(1);
+	const dateSections = surface.locator(
+		'[data-section="notifications"], [data-section="focus"]',
+	);
+	await expect(dateSections.getByTestId("quiet-start")).toHaveCount(1);
+	await expect(dateSections.getByTestId("karma-vacation-until")).toHaveCount(1);
 	await expect(
-		surface.locator('input[type="date"], input[type="time"], select'),
+		dateSections.locator('input[type="date"], input[type="time"], select'),
 	).toHaveCount(0);
 
 	await until.click();
