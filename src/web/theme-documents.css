@@ -1,0 +1,78 @@
+/* Only validated theme aliases enter these declarations. Contrast overrides follow in index.css. */
+:root[data-theme-document="true"] {
+	--background: var(--theme-light-background);
+	--foreground: var(--theme-light-foreground);
+	--card: var(--theme-light-card);
+	--card-foreground: var(--theme-light-card-foreground);
+	--popover: var(--theme-light-popover);
+	--popover-foreground: var(--theme-light-popover-foreground);
+	--primary: var(--theme-light-primary);
+	--primary-foreground: var(--theme-light-primary-foreground);
+	--secondary: var(--theme-light-secondary);
+	--secondary-foreground: var(--theme-light-secondary-foreground);
+	--muted: var(--theme-light-muted);
+	--muted-foreground: var(--theme-light-muted-foreground);
+	--accent: var(--theme-light-accent);
+	--accent-foreground: var(--theme-light-accent-foreground);
+	--border: var(--theme-light-border);
+	--input: var(--theme-light-input);
+	--control-border: var(--theme-light-control-border);
+	--ring: var(--theme-light-ring);
+	--sidebar: var(--theme-light-sidebar);
+	--sidebar-foreground: var(--theme-light-sidebar-foreground);
+	--sidebar-accent: var(--theme-light-sidebar-accent);
+	--sidebar-accent-foreground: var(--theme-light-sidebar-accent-foreground);
+	--sidebar-border: var(--theme-light-sidebar-border);
+}
+:root.dark[data-theme-document="true"] {
+	--background: var(--theme-dark-background);
+	--foreground: var(--theme-dark-foreground);
+	--card: var(--theme-dark-card);
+	--card-foreground: var(--theme-dark-card-foreground);
+	--popover: var(--theme-dark-popover);
+	--popover-foreground: var(--theme-dark-popover-foreground);
+	--primary: var(--theme-dark-primary);
+	--primary-foreground: var(--theme-dark-primary-foreground);
+	--secondary: var(--theme-dark-secondary);
+	--secondary-foreground: var(--theme-dark-secondary-foreground);
+	--muted: var(--theme-dark-muted);
+	--muted-foreground: var(--theme-dark-muted-foreground);
+	--accent: var(--theme-dark-accent);
+	--accent-foreground: var(--theme-dark-accent-foreground);
+	--border: var(--theme-dark-border);
+	--input: var(--theme-dark-input);
+	--control-border: var(--theme-dark-control-border);
+	--ring: var(--theme-dark-ring);
+	--sidebar: var(--theme-dark-sidebar);
+	--sidebar-foreground: var(--theme-dark-sidebar-foreground);
+	--sidebar-accent: var(--theme-dark-sidebar-accent);
+	--sidebar-accent-foreground: var(--theme-dark-sidebar-accent-foreground);
+	--sidebar-border: var(--theme-dark-sidebar-border);
+}
+@media (prefers-color-scheme: dark) {
+	:root:not(.light)[data-theme-document="true"] {
+		--background: var(--theme-dark-background);
+		--foreground: var(--theme-dark-foreground);
+		--card: var(--theme-dark-card);
+		--card-foreground: var(--theme-dark-card-foreground);
+		--popover: var(--theme-dark-popover);
+		--popover-foreground: var(--theme-dark-popover-foreground);
+		--primary: var(--theme-dark-primary);
+		--primary-foreground: var(--theme-dark-primary-foreground);
+		--secondary: var(--theme-dark-secondary);
+		--secondary-foreground: var(--theme-dark-secondary-foreground);
+		--muted: var(--theme-dark-muted);
+		--muted-foreground: var(--theme-dark-muted-foreground);
+		--accent: var(--theme-dark-accent);
+		--accent-foreground: var(--theme-dark-accent-foreground);
+		--border: var(--theme-dark-border);
+		--input: var(--theme-dark-input);
+		--control-border: var(--theme-dark-control-border);
+		--ring: var(--theme-dark-ring);
+		--sidebar: var(--theme-dark-sidebar);
+		--sidebar-foreground: var(--theme-dark-sidebar-foreground);
+		--sidebar-accent: var(--theme-dark-sidebar-accent);
+		--sidebar-accent-foreground: var(--theme-dark-sidebar-accent-foreground);
+		--sidebar-border: var(--theme-dark-sidebar-border);
+	}
+}

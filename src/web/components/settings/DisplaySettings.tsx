@@ -3,9 +3,16 @@ import { Button } from "@/components/ui/button";
 import { m } from "../../../paraglide/messages.js";
 import { ACCENT_PALETTES } from "../../lib/accent-palettes.ts";
 import { useDisplayPreferences } from "../../lib/DisplayPreferencesProvider.tsx";
+import { NamedThemeSettings } from "./NamedThemeSettings.tsx";
 
 export function DisplaySettings() {
-	const { preferences, setPreferences, saveFailed } = useDisplayPreferences();
+	const {
+		preferences,
+		setPreferences,
+		saveFailed,
+		themeLibrary,
+		themePreviewActive,
+	} = useDisplayPreferences();
 	const id = useId();
 	const presets = [
 		{ value: "standard", label: m.display_size_standard() },
@@ -24,6 +31,7 @@ export function DisplaySettings() {
 
 	return (
 		<div className="flex flex-col gap-4 text-sm" data-testid="display-settings">
+			<NamedThemeSettings />
 			<fieldset aria-describedby={`${id}-description`}>
 				<legend className="font-medium">{m.display_size_label()}</legend>
 				<p id={`${id}-description`} className="mt-1 text-muted-foreground">
@@ -85,6 +93,11 @@ export function DisplaySettings() {
 				>
 					{m.accent_theme_description()}
 				</p>
+				{themePreviewActive && (
+					<p className="mt-1 text-muted-foreground">
+						{m.theme_editor_accent_note()}
+					</p>
+				)}
 				<div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
 					{accents.map((accent) => (
 						<label
@@ -95,7 +108,11 @@ export function DisplaySettings() {
 								type="radio"
 								name={`${id}-accent`}
 								value={accent.value}
-								checked={preferences.accentTheme === accent.value}
+								disabled={themePreviewActive}
+								checked={
+									themeLibrary.useAccent &&
+									preferences.accentTheme === accent.value
+								}
 								data-testid={`display-accent-${accent.value}`}
 								className="size-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
 								onChange={() => setPreferences({ accentTheme: accent.value })}

@@ -16,6 +16,13 @@ All notable changes to this project are documented here. The format is based on
   labels, using the same permissions and mutations as the web interface.
 - Bounded CLI discovery with stable JSON and eight read-only MCP tools over stdio.
   Credentials and the trusted server origin are configured at process startup.
+- Named Paper and Slate light/dark palettes, validated theme JSON import/export
+  and a runtime color editor with contrast guards, preview and cancellation.
+  Custom palettes are currently account-scoped on this device.
+
+### Fixed
+
+- Hexadecimal color fields retain left-to-right notation in RTL interfaces.
 
 ## [0.0.1-alpha.1] - 2026-10-03
 

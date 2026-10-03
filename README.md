@@ -52,6 +52,8 @@ of those choices. Accent preferences stay with your account on this device.
 - Email/password, passkeys, TOTP, recovery codes, and optional Google sign-in
 - English, German, Spanish, French, Romanian, and Arabic, including RTL layout
 - Light, dark, and system modes, six accent themes, reading-size presets, and high contrast
+- Named light/dark palettes, runtime color editing and validated JSON sharing;
+  [custom palettes](docs/themes.md) are currently saved on this device
 - Saved views, dashboards, calendar/board/table layouts, keyboard shortcuts, and a focus timer
 - Encrypted attachments with filesystem or S3-compatible server storage
 - JSON export and reviewed, resumable native import for supported records; see

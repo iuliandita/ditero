@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./accent-themes.css";
+@import "./theme-documents.css";
 @import "tw-animate-css";
 /* Preserved shadcn 4.13.0 styles; license: vendor/shadcn-LICENSE.md. */
 @import "./vendor/shadcn-tailwind.css";
