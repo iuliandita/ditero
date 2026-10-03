@@ -340,6 +340,7 @@ async function removeAccount(
 		[userId],
 	);
 	for (const [table, column] of [
+		["personal_access_token", "user_id"],
 		["import_source", "owner_user_id"],
 		["notification_channel", "user_id"],
 		["task_assignee", "user_id"],

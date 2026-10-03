@@ -6,6 +6,7 @@ export type SettingsSectionId =
 	| "appearance"
 	| "notifications"
 	| "security"
+	| "access-tokens"
 	| "lists"
 	| "focus"
 	| "keyboard"

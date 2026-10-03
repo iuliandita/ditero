@@ -25,6 +25,50 @@ import { session, user } from "./auth-schema.ts";
 
 export * from "./auth-schema.ts";
 
+export const personalAccessToken = pgTable(
+	"personal_access_token",
+	{
+		id: uuid("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		tokenHash: text("token_hash").notNull().unique(),
+		hint: text("hint").notNull(),
+		access: text("access").$type<"read" | "write">().notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+		revokedAt: timestamp("revoked_at", { withTimezone: true }),
+	},
+	(t) => [
+		index("personal_access_token_user_idx").on(t.userId),
+		check(
+			"personal_access_token_access",
+			sql`${t.access} in ('read', 'write')`,
+		),
+		check(
+			"personal_access_token_name",
+			sql`char_length(${t.name}) between 1 and 80`,
+		),
+		check(
+			"personal_access_token_expiry",
+			sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '365 days'`,
+		),
+		pgPolicy("personal_access_token_owner", {
+			for: "all",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		// Authentication can see only the row matching the presented secret's hash.
+		pgPolicy("personal_access_token_authenticate", {
+			for: "select",
+			using: sql`${t.tokenHash} = current_setting('ditero.pat_hash', true)`,
+		}),
+	],
+).enableRLS();
+
 export const roleEnum = pgEnum("role", ["owner", "admin", "member", "viewer"]);
 export const workspaceKindEnum = pgEnum("workspace_kind", [
 	"personal",

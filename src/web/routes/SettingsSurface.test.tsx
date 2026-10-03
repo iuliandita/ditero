@@ -32,6 +32,9 @@ vi.mock("../components/settings/ImportPlanPanel.tsx", () => ({
 vi.mock("../components/settings/AccountDeletionPanel.tsx", () => ({
 	AccountDeletionPanel: browserOnly("browser-deletion"),
 }));
+vi.mock("../components/settings/PersonalAccessTokensPanel.tsx", () => ({
+	PersonalAccessTokensPanel: browserOnly("browser-access-tokens"),
+}));
 vi.mock("../components/e2e/EncryptedFilesPanel.tsx", () => ({
 	EncryptedFilesPanel: ({ userId }: { userId: string }) =>
 		`native-encryption:${userId}`,
@@ -104,10 +107,10 @@ test("native settings never mount browser account panels, retain native encrypti
 		</NativeAccountContext>,
 	);
 	expect(native.match(/data-testid="native-browser-settings"/g)).toHaveLength(
-		4,
+		5,
 	);
 	expect(native.match(/href="https:\/\/chosen.example.test\/"/g)).toHaveLength(
-		4,
+		5,
 	);
 	expect(native).toContain("min-h-11");
 	expect(native).toContain("native-encryption:canonical-user");
@@ -128,6 +131,7 @@ test("native settings never mount browser account panels, retain native encrypti
 	for (const marker of [
 		"browser-notifications",
 		"browser-security",
+		"browser-access-tokens",
 		"browser-export",
 		"browser-import",
 		"browser-deletion",

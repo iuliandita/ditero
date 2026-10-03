@@ -16,6 +16,7 @@ import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { NativeBrowserSettings } from "../components/settings/NativeBrowserSettings.tsx";
 import { NativePushSettings } from "../components/settings/NativePushSettings.tsx";
 import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
+import { PersonalAccessTokensPanel } from "../components/settings/PersonalAccessTokensPanel.tsx";
 import {
 	SettingsNav,
 	type SettingsNavItem,
@@ -76,6 +77,7 @@ export function SettingsSurface({
 			{ id: "appearance", label: m.settings_section_appearance() },
 			{ id: "notifications", label: m.notifications_heading() },
 			{ id: "security", label: m.security_heading() },
+			{ id: "access-tokens", label: m.pat_heading() },
 		];
 		if (activeId)
 			items.push({ id: "lists", label: m.settings_section_lists() });
@@ -143,6 +145,10 @@ export function SettingsSurface({
 						) : (
 							<SecurityPanel />
 						)}
+					</SettingsSection>
+
+					<SettingsSection id="access-tokens" title={m.pat_heading()}>
+						{native ? <NativeBrowserSettings /> : <PersonalAccessTokensPanel />}
 					</SettingsSection>
 
 					{activeId && (
