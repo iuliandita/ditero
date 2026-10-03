@@ -5,6 +5,7 @@ set -eu
 
 load_secret DITERO_MIGRATION_DB_PASSWORD required
 load_secret DITERO_RUNTIME_DB_PASSWORD required
+export DITERO_MIGRATION_DB_PASSWORD DITERO_RUNTIME_DB_PASSWORD
 
 # zero-cache keeps its per-shard bookkeeping in a schema it creates on first
 # boot, owned by whichever role it connects as -- `postgres` here. Both app
@@ -25,10 +26,10 @@ load_secret DITERO_RUNTIME_DB_PASSWORD required
 zero_shard_schema=${DITERO_ZERO_SHARD_SCHEMA:-zero_0}
 
 psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-	--set=migration_password="$DITERO_MIGRATION_DB_PASSWORD" \
-	--set=runtime_password="$DITERO_RUNTIME_DB_PASSWORD" \
 	--set=database_name="$POSTGRES_DB" \
 	--set=zero_shard_schema="$zero_shard_schema" <<'SQL'
+\getenv migration_password DITERO_MIGRATION_DB_PASSWORD
+\getenv runtime_password DITERO_RUNTIME_DB_PASSWORD
 CREATE ROLE ditero_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS PASSWORD :'migration_password';
 CREATE ROLE ditero_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS PASSWORD :'runtime_password';
 ALTER DATABASE :"database_name" OWNER TO ditero_migrator;

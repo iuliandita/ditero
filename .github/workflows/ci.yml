@@ -122,6 +122,7 @@ jobs:
       - run: tests/container/zero.sh
       - run: tests/container/zero-shard.sh
       - run: bun run tests/cnpg/bootstrap.ts
+      - run: bun run tests/container/postgres-init-secrets.ts
 
   push-relay:
     runs-on: ubuntu-24.04
