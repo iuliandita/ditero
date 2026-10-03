@@ -8,8 +8,10 @@ import ts from "typescript";
 import { defineConfig } from "vite";
 import { paraglideOptions } from "./paraglide.options.ts";
 import { configureSignupTransport } from "./scripts/e2e-signup-transport.ts";
+import { vendorLicenses } from "./scripts/vendor-licenses.ts";
 export default defineConfig({
 	plugins: [
+		vendorLicenses(),
 		{
 			name: "e2e-fresh-http-connections",
 			apply: "serve",

@@ -1,0 +1,149 @@
+{{- range $component := list "app" "zero" }}
+{{- $settings := index $.Values $component }}
+{{- $port := ternary 3000 4848 (eq $component "app") }}
+{{- $probe := ternary "/health" "/keepalive" (eq $component "app") }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ditero.fullname" $ }}-{{ $component }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "ditero.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  replicas: 1
+  # Both services use local state. Never mount the same claim in two revisions.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+      app.kubernetes.io/name: ditero
+      app.kubernetes.io/component: {{ $component }}
+  template:
+    metadata:
+      labels:
+        {{- include "ditero.labels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $component }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $component }}
+          image: {{ include "ditero.image" $settings.image | quote }}
+          imagePullPolicy: {{ $settings.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: http
+              containerPort: {{ $port }}
+              protocol: TCP
+          env:
+            - name: HOME
+              value: /tmp
+            {{- if eq $component "app" }}
+            - name: NODE_ENV
+              value: production
+            - name: API_PORT
+              value: "3000"
+            - name: SERVE_STATIC_DIR
+              value: /app/dist
+            - name: BETTER_AUTH_URL
+              value: {{ $.Values.app.publicUrl | quote }}
+            - name: PUBLIC_ZERO_URL
+              value: {{ $.Values.app.publicZeroUrl | quote }}
+            - name: DITERO_REGISTRATION_MODE
+              value: {{ $.Values.app.registrationMode | quote }}
+            - name: DITERO_ATTACHMENT_STORAGE_DRIVER
+              value: filesystem
+            - name: DITERO_ATTACHMENT_FS_PATH
+              value: /data/attachments
+            {{- range $key := list "DATABASE_URL" "DATABASE_MIGRATION_URL" "BETTER_AUTH_SECRET" "DITERO_ENCRYPTION_KEY" }}
+            - name: {{ $key }}_FILE
+              value: /run/secrets/ditero/{{ $key }}
+            {{- end }}
+            {{- else }}
+            - name: ZERO_PORT
+              value: "4848"
+            - name: ZERO_NUM_SYNC_WORKERS
+              value: {{ $.Values.zero.syncWorkers | quote }}
+            - name: ZERO_REPLICA_FILE
+              value: /data/replica.db
+            - name: ZERO_QUERY_URL
+              value: http://{{ include "ditero.fullname" $ }}-app:3000/api/zero/query
+            - name: ZERO_MUTATE_URL
+              value: http://{{ include "ditero.fullname" $ }}-app:3000/api/zero/mutate
+            - name: ZERO_ENABLE_CRUD_MUTATIONS
+              value: "false"
+            {{- range $key := list "ZERO_UPSTREAM_DB" "ZERO_ADMIN_PASSWORD" }}
+            - name: {{ $key }}_FILE
+              value: /run/secrets/ditero/{{ $key }}
+            {{- end }}
+            {{- end }}
+            {{- with $settings.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: {{ $probe }}
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: {{ $probe }}
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: {{ $probe }}
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml $settings.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ ternary "/data/attachments" "/data" (eq $component "app") }}
+            - name: secrets
+              mountPath: /run/secrets/ditero
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-%s" (include "ditero.fullname" $) $component) $settings.persistence.existingClaim }}
+        - name: secrets
+          secret:
+            secretName: {{ $.Values.existingSecret }}
+            defaultMode: 0440
+            items:
+              {{- $keys := ternary (list "DATABASE_URL" "DATABASE_MIGRATION_URL" "BETTER_AUTH_SECRET" "DITERO_ENCRYPTION_KEY") (list "ZERO_UPSTREAM_DB" "ZERO_ADMIN_PASSWORD") (eq $component "app") }}
+              {{- range $keys }}
+              - key: {{ . }}
+                path: {{ . }}
+              {{- end }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+{{- end }}

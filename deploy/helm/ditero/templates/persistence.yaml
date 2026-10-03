@@ -1,0 +1,27 @@
+{{- range $component := list "app" "zero" }}
+{{- $persistence := (index $.Values $component).persistence }}
+{{- if not $persistence.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ditero.fullname" $ }}-{{ $component }}
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "ditero.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  accessModes:
+    {{- toYaml $persistence.accessModes | nindent 4 }}
+  {{- if eq $persistence.storageClass "-" }}
+  storageClassName: ""
+  {{- else if $persistence.storageClass }}
+  storageClassName: {{ $persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $persistence.size | quote }}
+{{- end }}
+{{- end }}

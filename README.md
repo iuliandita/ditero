@@ -10,7 +10,7 @@
 <p align="center">
   <a href="https://github.com/iuliandita/ditero/actions/workflows/ci.yml"><img src="https://github.com/iuliandita/ditero/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/status-pre--alpha-orange" alt="Status: pre-alpha">
+  <img src="https://img.shields.io/badge/status-alpha-orange" alt="Status: alpha">
 </p>
 
 Ditero is a free, self-hosted, local-first task app for families, friends, clubs,
@@ -22,10 +22,12 @@ are included, with no subscriptions or paid feature unlocks.
 
 [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Brand assets](assets/brand/README.md)
 
-> **Pre-alpha.** The `develop` branch and nightly containers include a working web
-> application. There is no tagged release yet. Android and desktop development
-> builds are available; platform qualification and release distribution remain
-> in progress. Breaking changes are expected before `v1.0.0`.
+> **Alpha.** The first release is `v0.0.1-alpha.1`. Its pipeline packages server
+> containers, Helm/Compose deployment files, desktop installers and signed Android
+> downloads. Native platform qualification remains in progress; Windows builds are
+> unsigned and macOS builds use ad-hoc signatures. Breaking changes are expected
+> before `v1.0.0`. See [release instructions](RELEASING.md) and
+> [published downloads](https://github.com/iuliandita/ditero/releases).
 
 ## Made for shared days
 
@@ -244,7 +246,7 @@ Linux desktop notices arrive while the app is open or minimized and can open the
 These notices contain generic text; opening them does not complete or acknowledge a task.
 The optional [Google push relay](apps/push-relay/README.md) requires separate operator
 configuration and remains unqualified for real delivery. Physical-device coverage,
-Windows/macOS notifications, general deep links, updates, and release distribution
+Windows/macOS notifications, general deep links, updates, and trusted desktop signing
 remain unfinished. See each app's guide for the precise qualification limits.
 
 ### Container distribution
@@ -252,7 +254,9 @@ remain unfinished. See each app's guide for the precise qualification limits.
 Nightly app and Zero images publish to GHCR for amd64 and arm64. The release workflows
 provide GHCR and Docker Hub images, an Alpine app default, and a Debian app variant
 when a release is cut. `:latest` and `:stable` are release channels, not current nightly
-tags. A Helm chart and Kustomize manifests remain planned. See [RELEASING.md](RELEASING.md).
+tags. Prereleases use explicit version tags and never move `latest` or `stable`.
+A [Helm chart](deploy/helm/ditero/README.md) packages app and Zero with an external
+PostgreSQL database. Kustomize manifests remain planned. See [RELEASING.md](RELEASING.md).
 
 ## Project status
 

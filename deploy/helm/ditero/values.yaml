@@ -1,0 +1,71 @@
+# Optional stable resource-name override and private-registry credentials.
+fullnameOverride: ""
+imagePullSecrets: []
+
+# Create this Secret in the release namespace before installation. Required keys:
+# DATABASE_URL, DATABASE_MIGRATION_URL, ZERO_UPSTREAM_DB, BETTER_AUTH_SECRET,
+# DITERO_ENCRYPTION_KEY, ZERO_ADMIN_PASSWORD. Values are never stored in this chart.
+existingSecret: ditero-secrets
+
+app:
+  image:
+    repository: ghcr.io/iuliandita/ditero
+    tag: 0.0.1-alpha.1
+    # A digest, when supplied, takes precedence over the tag.
+    digest: ""
+    pullPolicy: IfNotPresent
+  # Public browser origins. For local testing, port-forward both services.
+  publicUrl: http://localhost:3000
+  publicZeroUrl: http://localhost:4848
+  registrationMode: bootstrap
+  # Extra non-secret environment variables, or valueFrom Secret references.
+  extraEnv: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  persistence:
+    # An existing PVC suppresses creation of the attachment claim.
+    existingClaim: ""
+    size: 10Gi
+    # Empty uses the cluster default. Use "-" to request no storage class.
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: ""
+    # Existing TLS Secret in the release namespace; empty omits TLS.
+    tlsSecretName: ""
+
+zero:
+  # Bound worker count independently of the Kubernetes node's CPU count.
+  syncWorkers: 1
+  image:
+    repository: ghcr.io/iuliandita/ditero
+    tag: 0.0.1-alpha.1-zero
+    digest: ""
+    pullPolicy: IfNotPresent
+  extraEnv: []
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  persistence:
+    existingClaim: ""
+    size: 10Gi
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: ""
+    tlsSecretName: ""

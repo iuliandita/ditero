@@ -32,9 +32,10 @@ builds, with full runtime qualification still pending. See the
 [Android](../apps/android/README.md) and [desktop](../apps/desktop/README.md)
 qualification notes. Native delivery remains open in issue #346.
 
-There is no tagged release yet. Development happens on `develop`; published nightly
-container images and native development artifacts are distinct from signed public
-releases. `1.0.0` requires the complete v1 contract below.
+Development happens on `develop`. The `0.0.1-alpha.1` pipeline packages containers,
+Helm/Compose deployment files and experimental native downloads; Windows downloads
+are unsigned and macOS downloads use ad-hoc signatures. Native qualification remains
+open. `1.0.0` requires the complete v1 contract below.
 
 ## What v1 Delivers
 

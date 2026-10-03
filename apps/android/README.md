@@ -137,6 +137,11 @@ Those runtime checks remain part of #346.
 
 ## Signed release APK and app bundle
 
+The tagged alpha pipeline builds the independent signed APK and AAB from the
+validated release commit and publishes versioned downloads with checksums. It
+requires a retained signing identity in repository Actions secrets. See
+[Releasing](../../RELEASING.md) for the secret names and artifact limits.
+
 Release packaging requires a supplied keystore. Set these environment variables
 through a secret manager or protected CI environment:
 
@@ -207,7 +212,7 @@ Those checks need an operator-configured project, a public relay and real device
 - Full offline recovery and account/server transition qualification on devices.
 - Broader device qualification of native notification permission and UnifiedPush background delivery.
 - Operator Firebase/relay setup and real Google delivery qualification.
-- Release signing identity, distribution pipelines, and store distribution.
+- Store distribution and broader release installation/upgrade qualification.
 - Native deep links, update delivery, and complete application qualification.
 
 Some shared browser-only account settings and integrations still need explicit

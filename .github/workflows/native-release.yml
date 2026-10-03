@@ -1,0 +1,248 @@
+name: Native release packages
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Verified release commit SHA
+        type: string
+        required: true
+      version:
+        description: Release version without the v prefix
+        type: string
+        required: true
+      android-version-code:
+        description: Monotonically increasing Android version code
+        type: number
+        default: 1
+    secrets:
+      DITERO_ANDROID_KEYSTORE_BASE64:
+        required: true
+      DITERO_ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      DITERO_ANDROID_KEY_ALIAS:
+        required: true
+      DITERO_ANDROID_KEY_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux
+            label: linux-x64-unsigned
+            target: x86_64-unknown-linux-gnu
+            bundles: deb,appimage
+          - runner: windows-2025
+            platform: windows
+            label: windows-x64-unsigned
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+          - runner: macos-15
+            platform: macos
+            label: macos-arm64-adhoc
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_BUILD_JOBS: 2
+      CARGO_INCREMENTAL: 0
+      RELEASE_REF: ${{ inputs.ref }}
+      DITERO_RELEASE_VERSION: ${{ inputs.version }}
+      DESKTOP_TARGET: ${{ matrix.target }}
+      DESKTOP_BUNDLES: ${{ matrix.bundles }}
+      DESKTOP_PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Validate release source and version
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_REF" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$RELEASE_REF"
+          python3 -c 'import json, os, re; v = os.environ["DITERO_RELEASE_VERSION"]; assert re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", v), "invalid release version"; print(json.dumps({"version": v}))' > "$RUNNER_TEMP/desktop-release-config.json"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libdbus-1-dev libayatana-appindicator3-dev librsvg2-dev
+      - name: Select Rust toolchain
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt
+          rustup default 1.98.1
+          rustup target add "$DESKTOP_TARGET"
+          rustc --version
+          cargo --version
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+      - name: Install desktop dependencies
+        working-directory: apps/desktop
+        run: bun install --frozen-lockfile
+      - name: Compile shared messages
+        run: bun run i18n:compile
+      - name: Check desktop TypeScript
+        run: bunx tsc --noEmit --project apps/desktop/tsconfig.json
+      - name: Test desktop bridge lifecycle
+        run: bunx vitest run apps/desktop/src/transport.test.ts
+      - name: Build bundled UI
+        working-directory: apps/desktop
+        run: bun run build
+      - name: Check native formatting and lifecycle
+        working-directory: apps/desktop/src-tauri
+        run: |
+          set -euo pipefail
+          cargo fmt --check
+          cargo test --locked
+      - name: Build optimized unsigned or ad hoc packages
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          bun run tauri build --config "$RUNNER_TEMP/desktop-release-config.json" \
+            --target "$DESKTOP_TARGET" --bundles "$DESKTOP_BUNDLES" -- --locked
+      - name: Collect release packages
+        run: |
+          set -euo pipefail
+          python3 scripts/native-artifacts.py --platform "$DESKTOP_PLATFORM" \
+            --version "$DITERO_RELEASE_VERSION" --output release-native
+      - name: Upload release packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-native-${{ matrix.label }}
+          path: release-native/*
+          if-no-files-found: error
+          retention-days: 7
+
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELEASE_REF: ${{ inputs.ref }}
+      DITERO_RELEASE_VERSION: ${{ inputs.version }}
+      DITERO_ANDROID_VERSION_CODE: ${{ inputs.android-version-code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Validate release source and signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DITERO_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.DITERO_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.DITERO_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.DITERO_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_REF" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$RELEASE_REF"
+          : "${KEYSTORE_BASE64:?Android release keystore is required}"
+          : "${KEYSTORE_PASSWORD:?Android keystore password is required}"
+          : "${KEY_ALIAS:?Android key alias is required}"
+          : "${KEY_PASSWORD:?Android key password is required}"
+          python3 -c 'import os, re; v = os.environ["DITERO_RELEASE_VERSION"]; c = os.environ["DITERO_ANDROID_VERSION_CODE"]; assert re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", v), "invalid release version"; assert re.fullmatch(r"[1-9][0-9]*", c) and int(c) <= 2100000000, "invalid Android version code"'
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      - name: Select Java 21 and Android SDK
+        run: |
+          set -euo pipefail
+          : "${JAVA_HOME_21_X64:?Runner Java 21 is required}"
+          : "${ANDROID_HOME:?Runner Android SDK is required}"
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          "$JAVA_HOME_21_X64/bin/java" -XshowSettings:properties -version 2>&1 \
+            | grep -E 'java.specification.version = 21$' > /dev/null
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          "$sdkmanager" --install "platform-tools" "platforms;android-36" \
+            "build-tools;35.0.0" "build-tools;36.0.0"
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+      - name: Install Android dependencies
+        working-directory: apps/android
+        run: bun install --frozen-lockfile
+      - name: Compile messages
+        run: bun run i18n:compile
+      - name: Check Android TypeScript
+        run: bunx tsc --noEmit --project apps/android/tsconfig.json
+      - name: Test native bridge lifecycle
+        run: bunx vitest run apps/android/src/bridge.test.ts
+      - name: Build bundled UI
+        working-directory: apps/android
+        run: bun run build
+      - name: Sync Capacitor Android project
+        working-directory: apps/android
+        run: bun run sync
+      - name: Restore private signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DITERO_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir "$RUNNER_TEMP/ditero-android-signing"
+          python3 -c 'import base64, os, pathlib; p = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ditero-android-signing/release.keystore"; p.write_bytes(base64.b64decode(os.environ["KEYSTORE_BASE64"], validate=True)); assert p.stat().st_size > 0, "empty Android keystore"'
+      - name: Test and build independent signed release packages
+        working-directory: apps/android/android
+        env:
+          DITERO_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/ditero-android-signing/release.keystore
+          DITERO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.DITERO_ANDROID_KEYSTORE_PASSWORD }}
+          DITERO_ANDROID_KEY_ALIAS: ${{ secrets.DITERO_ANDROID_KEY_ALIAS }}
+          DITERO_ANDROID_KEY_PASSWORD: ${{ secrets.DITERO_ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon testIndependentReleaseUnitTest assembleIndependentRelease bundleIndependentRelease
+      - name: Verify signed Android packages
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs \
+            apps/android/android/app/build/outputs/apk/independent/release/app-independent-release.apk \
+            | tee "$RUNNER_TEMP/android-signature.txt"
+          python3 - <<'PYTHON'
+          import json, os, pathlib, re
+          expected = json.loads(pathlib.Path('release.json').read_text())['androidSigningCertificateSha256']
+          actual = pathlib.Path(os.environ['RUNNER_TEMP'], 'android-signature.txt').read_text()
+          digests = re.findall(r'^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-f]{64})$', actual, re.MULTILINE)
+          if digests != [expected]:
+              raise SystemExit('APK signing identity does not match the retained release certificate')
+          PYTHON
+          test -s apps/android/android/app/build/outputs/bundle/independentRelease/app-independent-release.aab
+      - name: Collect release packages
+        run: |
+          set -euo pipefail
+          python3 scripts/native-artifacts.py --platform android \
+            --version "$DITERO_RELEASE_VERSION" --output release-native
+      - name: Remove private signing material
+        if: always()
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/ditero-android-signing"
+      - name: Upload release packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-native-android-independent-signed
+          path: release-native/*
+          if-no-files-found: error
+          retention-days: 7
