@@ -3,6 +3,7 @@ import {
 	PUBLIC_API_RESOURCES,
 	publicApiResourceSchemas,
 } from "../../domain/public-api-resources.ts";
+import { apiTaskCreateSchema } from "../../domain/public-api-writes.ts";
 
 const problem = {
 	description: "Request refused",
@@ -26,6 +27,10 @@ const errors = {
 	"401": problem,
 	"403": problem,
 	"404": problem,
+	"409": problem,
+	"410": problem,
+	"413": problem,
+	"415": problem,
 	"429": problem,
 	"500": problem,
 	"503": problem,
@@ -117,6 +122,42 @@ export function publicApiOpenApi() {
 			},
 		};
 	}
+	(paths["/api/v1/tasks"] as Record<string, unknown>).post = {
+		operationId: "create_task",
+		tags: ["tasks"],
+		security: [{ personalAccessToken: [] }],
+		description:
+			"Create a task using a write token and an existing Member, Admin, or Owner membership. Assignees must be active workspace members and labels must belong to the workspace. No invitations or access grants are created. Retry the same canonical request with the same key after uncertain transport outcomes.",
+		parameters: [
+			{
+				name: "Idempotency-Key",
+				in: "header",
+				required: true,
+				schema: { type: "string", format: "uuid" },
+				description:
+					"Account-scoped request identity. Reuse with another payload returns 409; a deleted task returns 410 while its original list remains accessible.",
+			},
+		],
+		requestBody: {
+			required: true,
+			content: {
+				"application/json": {
+					schema: z.toJSONSchema(apiTaskCreateSchema, { io: "input" }),
+				},
+			},
+		},
+		responses: {
+			"201": {
+				...response(z.toJSONSchema(publicApiResourceSchemas.tasks)),
+				description: "Task created",
+			},
+			"200": {
+				...response(z.toJSONSchema(publicApiResourceSchemas.tasks)),
+				description: "Idempotent replay returning the current authorized task",
+			},
+			...errors,
+		},
+	};
 	paths["/api/v1/me"] = {
 		get: {
 			operationId: "get_profile",
@@ -153,7 +194,7 @@ export function publicApiOpenApi() {
 			title: "Ditero public API",
 			version: "1",
 			description:
-				"Membership-scoped discovery for scripts and agents. Results use stable IDs; dashboard tasks are stored in authorized backing lists. Collection pages are ordered by ID and are live reads, not frozen snapshots.",
+				"Membership-scoped discovery and idempotent task creation for scripts and agents. Results use stable IDs; dashboard tasks are stored in authorized backing lists. Collection pages are ordered by ID and are live reads, not frozen snapshots.",
 		},
 		paths,
 		components: {

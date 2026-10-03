@@ -38,7 +38,7 @@ are unsigned and macOS downloads use ad-hoc signatures. Native qualification rem
 open. `1.0.0` requires the complete v1 contract below.
 
 The versioned public API provides membership-scoped discovery, expiring personal
-access tokens and OpenAPI. Task writes, feeds, webhooks and terminal clients remain
+access tokens, idempotent task creation and OpenAPI. Further writes, feeds, webhooks and terminal clients remain
 in progress; see [API access](runbooks/public-api.md).
 
 ## What v1 Delivers

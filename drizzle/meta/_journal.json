@@ -449,6 +449,20 @@
       "when": 1791035425392,
       "tag": "0063_personal_access_token_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1791038659117,
+      "tag": "0064_public_api_request",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1791038702130,
+      "tag": "0065_public_api_request_rls",
+      "breakpoints": true
     }
   ]
 }

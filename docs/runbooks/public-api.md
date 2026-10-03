@@ -1,8 +1,8 @@
 # Public API
 
-The versioned API currently provides read-only discovery. Task writes, iCal feeds,
-webhooks and terminal clients remain under development. Write tokens reserve a
-permission ceiling for future write operations; they do not grant workspace access.
+The versioned API provides discovery and idempotent task creation. Other task
+writes, iCal feeds, webhooks and terminal write commands remain under development.
+Write tokens do not grant workspace access.
 
 ## Tokens
 
@@ -49,6 +49,51 @@ name is not an account ID, and a label is not an assignment. Ambiguous names,
 multiple possible lists and invitations require an explicit choice; discovery
 never grants access. Resolve relative dates using the account's timezone, and
 ask for a timezone when `timezoneChosen` is false.
+
+## Task creation
+
+`POST /api/v1/tasks` requires a write token, `Content-Type: application/json`,
+and a UUID `Idempotency-Key` header. The caller must be a Member, Admin, or Owner
+in the target list's workspace. Viewer memberships cannot create tasks. No query
+parameters are accepted, and the UTF-8 JSON body is limited to 64 KiB.
+
+```json
+{
+  "listId": "LIST_ID",
+  "title": "Buy coffee",
+  "notes": "Ground coffee",
+  "dueAt": "2026-10-03T17:00:00+02:00",
+  "dueAllDay": false,
+  "priority": 1,
+  "assigneeIds": ["USER_ID"],
+  "labelIds": ["LABEL_ID"]
+}
+```
+
+Only `listId` and `title` are required. Title is trimmed and limited to 500
+characters; notes are limited to 32,768 characters. `dueAt` is an ISO 8601 instant
+with a timezone offset, or null. Resolve relative dates using the profile timezone
+before submitting. `dueAllDay: true` requires a due instant. Priority is an integer
+from 0 to 3. Assignees are up to 20 unique active workspace member IDs, and labels
+are up to 50 unique IDs from the same workspace. Unknown fields and duplicate IDs
+are rejected. Names, invitations, and access grants are not accepted implicitly.
+
+Creation appends a top-level task to the list and returns the task envelope with
+201. The task, assignments, labels, and request receipt commit together. Assignment
+notification intents enqueue after commit, using the same semantics as browser
+mutations; a crash between commit and enqueue can lose a notification.
+
+Keep the UUID with the intended request until the result is known. Retrying the
+same key and canonical payload returns 200 with the current authorized task,
+without recreating it or sending another assignment notice. Omitted defaults,
+equivalent due instants, and reordered assignee or label IDs canonicalize to the
+same request. Reusing a key with a different payload returns 409. Keys are scoped
+to the account, including across its tokens.
+
+Deleting the task retains the receipt: a retry returns 410 and never recreates
+the task while the original list remains visible. Inaccessible tasks or lists
+return 404, and revoked credentials return 401. Account deletion removes receipts.
+After a timeout or temporary 503, retry the same key and payload to avoid duplicates.
 
 Errors use `application/problem+json` with stable `code`, `status`, `type` and
 `title` fields. Invalid/expired/revoked tokens return 401, permission refusals 403,
