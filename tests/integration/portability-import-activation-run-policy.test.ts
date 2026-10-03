@@ -160,7 +160,7 @@ test("restricted runtime can write runs for saved v2/v3/v4 plans but rejects for
 		),
 	);
 	expect(foreignUpdate.rowCount).toBe(0);
-	const futureJob = await cloneJob(v4, 5, true);
+	const futureJob = await cloneJob(v4, 6, true);
 	await expect(insertRun("alice", futureJob)).rejects.toMatchObject({
 		code: "42501",
 	});
