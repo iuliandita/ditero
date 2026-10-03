@@ -30,7 +30,7 @@ API request; the server cannot grant access or create another token.
 `127.0.0.1`, or `[::1]`. Other startup flags are rejected. Tool inputs cannot change
 the server, account, credentials, transport, filesystem, or shell. No MCP HTTP
 listener, OAuth endpoint, or hosted inference is provided. Read tools work with a
-read token; task planning and creation require a write token.
+read token; task planning, creation, and completion require a write token.
 
 The read tools are `get_profile`, `list_workspaces`, `list_lists`, `list_tasks`,
 `list_people`, `list_labels`, `list_views`, and `list_dashboards`. Collection tools
@@ -61,7 +61,17 @@ Write access, membership, and current creation permissions are rechecked by the
 API. Planning is read-only; creation adds a task and is idempotent only because
 the request ID is required. Treat planning results as proposals, not approval.
 
-Each read or creation call returns one API envelope as JSON text and matching
+`complete_task` accepts exactly `{ "taskId": "TASK_ID", "requestId": "<UUID>",
+"completion": { "listId": "LIST_ID", "expectedDueAt": null } }`. Supply the
+previously inspected list and due instant, using null for an undated task.
+Completion changes the existing task and can advance a recurring occurrence to
+a new due date; it is advertised as destructive and idempotent with the required
+key. It sends one POST without discovery or automatic retry. Preserve the exact
+body and UUID after an uncertain result, then explicitly retry them together.
+A fresh key with an old occurrence returns 409; a deleted original task returns
+410. The API rechecks current write authority for every attempt.
+
+Each read or write call returns one API envelope as JSON text and matching
 `structuredContent`: `{ "version": 1, "data": ..., "nextCursor": null }`.
 For collection pages, `nextCursor` can instead be an opaque string. Continue it
 with unchanged filters. Pages reflect current server rows rather than a fixed

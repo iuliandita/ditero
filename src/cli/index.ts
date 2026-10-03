@@ -6,7 +6,8 @@ export const HELP = `Ditero CLI
 
 Usage: ditero <command> [options]
 Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards,
-          plan-task (task intent JSON stdin), create-task (API task JSON stdin)
+          plan-task (task intent JSON stdin), create-task (API task JSON stdin),
+          complete-task (observed completion JSON stdin)
 
 Options:
   --json                  Compact JSON output (default: formatted JSON)
@@ -18,14 +19,16 @@ Options:
   --workspace <id>        Filter a collection by workspace
   --list <id>             Filter tasks by list
   --done <true|false>     Filter tasks by completion
-  --request-id <UUID>     Required only for create-task; preserve for exact retries
+  --task <id>            Required only for complete-task; use the observed task ID
+  --request-id <UUID>     Required for writes; preserve for exact retries
   --help                  Show this help without accessing the server
 
 Set DITERO_TOKEN through the environment. Credentials are never accepted as flags.
 Exit codes: 0 success, 2 usage/request, 3 authentication, 4 permission,
 5 missing resource, 6 rate limit, 7 network, 8 invalid/bounded response, 9 server,
 10 request ID conflict, 11 original task deleted.
-Planning never writes; create-task makes one POST without automatic retries.
+Planning never writes; create-task and complete-task make one POST without retries.
+Completion requires the inspected listId and expectedDueAt; recurring tasks advance.
 Workflow stdin is at most 64 KiB. No files, invitations, or mentions are supported.
 `;
 
@@ -43,10 +46,11 @@ export async function runCli(
 			output.stdout(HELP);
 			return 0;
 		}
-		const result =
-			options.command === "plan-task" || options.command === "create-task"
-				? await taskWorkflow(options, fetcher, stdinReader)
-				: await discover(options, fetcher);
+		const result = ["plan-task", "create-task", "complete-task"].includes(
+			options.command,
+		)
+			? await taskWorkflow(options, fetcher, stdinReader)
+			: await discover(options, fetcher);
 		output.stdout(
 			`${JSON.stringify(result, null, options.json ? undefined : 2)}\n`,
 		);
