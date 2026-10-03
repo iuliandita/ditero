@@ -1,5 +1,19 @@
 import type { Pool, PoolClient } from "pg";
 
+// Queries using this predicate bind the attachment row as a.
+export const ATTACHMENT_PARENT_PRESENT_SQL = `case a.parent_kind
+ when 'list' then exists(select 1 from list l where l.id=a.parent_id and l.workspace_id=a.workspace_id)
+ when 'task' then exists(select 1 from task t join list l on l.id=t.list_id where t.id=a.parent_id and l.workspace_id=a.workspace_id)
+ when 'comment' then exists(select 1 from comment c join task t on t.id=c.task_id join list l on l.id=t.list_id where c.id=a.parent_id and l.workspace_id=a.workspace_id)
+ else false end`;
+
+// A live parent in another workspace needs attachment migration, not GC.
+export const ATTACHMENT_PARENT_EXISTS_SQL = `case a.parent_kind
+ when 'list' then exists(select 1 from list l where l.id=a.parent_id)
+ when 'task' then exists(select 1 from task t join list l on l.id=t.list_id where t.id=a.parent_id)
+ when 'comment' then exists(select 1 from comment c join task t on t.id=c.task_id join list l on l.id=t.list_id where c.id=a.parent_id)
+ else false end`;
+
 export type AttachmentState =
 	| "reserved"
 	| "uploading"

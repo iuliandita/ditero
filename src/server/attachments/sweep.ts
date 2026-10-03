@@ -8,7 +8,7 @@ import {
 } from "../../config/attachment-sweep.ts";
 import { withLeaderLock } from "../notifications/scheduler.ts";
 import type { BlobStore } from "../storage/blob-store.ts";
-import type { AttachmentState } from "./state.ts";
+import { ATTACHMENT_PARENT_EXISTS_SQL, type AttachmentState } from "./state.ts";
 
 type SweepRow = {
 	id: string;
@@ -126,10 +126,11 @@ export async function attachmentSweep(
 		throw new Error("attachment sweep retention produces an invalid cutoff");
 	}
 	const candidates = await pool.query<{ id: string }>(
-		`select id from attachment
+		`select id from attachment a
 		 where (state = any($1::attachment_state[])
 		        and reservation_expires_at <= $2)
 		    or (state = 'deleting' and deleted_at <= $3)
+		    or (state = 'committed' and not (${ATTACHMENT_PARENT_EXISTS_SQL}))
 		 order by id limit $4`,
 		[["reserved", "uploading", "aborted"], now, deletingBefore, batchSize],
 	);
@@ -140,6 +141,16 @@ export async function attachmentSweep(
 		try {
 			await client.query("begin");
 			const row = await lockedRow(client, candidate.id);
+			if (row?.state === "committed") {
+				await client.query(
+					`update attachment a set state='deleting', deleted_at=$2
+					 where a.id=$1 and a.state='committed'
+					 and not (${ATTACHMENT_PARENT_EXISTS_SQL})`,
+					[row.id, now],
+				);
+				await client.query("commit");
+				continue;
+			}
 			if (!row || !eligible(row, now, deletingBefore)) {
 				await client.query("commit");
 				continue;
