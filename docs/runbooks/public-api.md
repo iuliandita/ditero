@@ -1,7 +1,7 @@
 # Public API
 
-The versioned API provides discovery and idempotent task creation. Other task
-writes, iCal feeds, webhooks and terminal write commands remain under development.
+The versioned API provides discovery, idempotent task creation and observed task
+completion. Further task writes, iCal feeds and webhooks remain under development.
 Write tokens do not grant workspace access.
 
 ## Tokens
@@ -99,3 +99,27 @@ Errors use `application/problem+json` with stable `code`, `status`, `type` and
 `title` fields. Invalid/expired/revoked tokens return 401, permission refusals 403,
 invalid queries 400, rate limits 429 and temporary database contention 503.
 Authenticated responses are marked `Cache-Control: no-store`.
+
+## Task completion
+
+`POST /api/v1/tasks/{id}/complete` requires a write token, a writable workspace
+membership, JSON content and a UUID `Idempotency-Key`. No query parameters are
+accepted. The JSON body is limited to 4 KiB and requires both fields:
+
+```json
+{ "listId": "LIST_ID", "expectedDueAt": null }
+```
+
+Copy `listId` and `dueAt` from the observed task. Supply its due instant as
+`expectedDueAt`, or null when it has no due date. A changed list or due instant
+returns 409 before completing anything. Recurring tasks advance through the same
+completion path as the browser, including completion history and Karma. Habits
+require their own occurrence workflow and are refused here. Imported tasks with
+pending or blocked activation return `409 activation-pending` without effects.
+
+The completion and account-scoped receipt commit together. Replaying the same
+key and canonical body returns the current authorized task without advancing
+another occurrence or awarding Karma again. Keys are shared with task creation;
+reuse for another operation or body returns 409. A deleted task returns 410 while
+its original list remains visible, or 404 when inaccessible. Read the task again
+before intentionally completing its next occurrence with a new key.

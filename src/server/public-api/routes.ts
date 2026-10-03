@@ -4,14 +4,17 @@ import { z } from "zod";
 import { UserContextError } from "../../db/user-context.ts";
 import {
 	apiResult,
+	PUBLIC_API_ID,
 	PublicApiError,
 	publicApiProblem,
 } from "../../domain/public-api.ts";
+import { parseApiTaskComplete } from "../../domain/public-api-completion.ts";
 import {
 	parseApiIdempotencyKey,
 	parseApiTaskCreate,
 } from "../../domain/public-api-writes.ts";
 import type { Guards } from "../guards.ts";
+import { completeApiTask } from "./complete.ts";
 import {
 	bearerToken,
 	PUBLIC_API_RESOURCES,
@@ -187,6 +190,43 @@ export function publicApiRoutes(
 					input,
 					requestId,
 					flushEvents,
+				);
+			}),
+		)
+		.post("/api/v1/tasks/:id/complete", ({ request, server, params }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				if (
+					request.headers
+						.get("content-type")
+						?.split(";")[0]
+						.trim()
+						.toLowerCase() !== "application/json"
+				)
+					throw new PublicApiError(
+						415,
+						"unsupported-media-type",
+						"A JSON request body is required",
+					);
+				const requestId = parseApiIdempotencyKey(
+					request.headers.get("idempotency-key"),
+				);
+				if (!PUBLIC_API_ID.safeParse(params.id).success)
+					throw new PublicApiError(400, "invalid-id", "Invalid task ID");
+				const input = parseApiTaskComplete(await boundedJson(request));
+				return completeApiTask(
+					pool,
+					bearerToken(request.headers),
+					params.id,
+					input,
+					requestId,
 				);
 			}),
 		)
