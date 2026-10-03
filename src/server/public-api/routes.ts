@@ -8,6 +8,7 @@ import {
 	PublicApiError,
 	publicApiProblem,
 } from "../../domain/public-api.ts";
+import { parseCalendarQuery } from "../../domain/public-api-calendar.ts";
 import { parseApiTaskComplete } from "../../domain/public-api-completion.ts";
 import { parseApiTaskDelete } from "../../domain/public-api-task-deletion.ts";
 import { parseApiTaskUpdate } from "../../domain/public-api-task-update.ts";
@@ -16,6 +17,7 @@ import {
 	parseApiTaskCreate,
 } from "../../domain/public-api-writes.ts";
 import type { Guards } from "../guards.ts";
+import { downloadApiCalendar } from "./calendar.ts";
 import { completeApiTask } from "./complete.ts";
 import {
 	bearerToken,
@@ -164,6 +166,17 @@ export function publicApiRoutes(
 	flushEvents?: FlushApiEvents,
 ) {
 	const app = new Elysia()
+		.get("/api/v1/calendar.ics", ({ request, server }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				return downloadApiCalendar(
+					pool,
+					bearerToken(request.headers),
+					parseCalendarQuery(new URL(request.url)),
+				);
+			}),
+		)
 		.get("/api/v1/tasks/:id/observation", ({ request, server, params }) =>
 			apiRequest(async () => {
 				if (!(await rateLimit(request, server?.requestIP(request)?.address)))

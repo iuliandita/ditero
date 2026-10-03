@@ -1,7 +1,8 @@
 # Public API
 
 The versioned API provides discovery, idempotent task creation, scalar updates and
-observed task completion and deletion. iCal feeds and webhooks remain under development.
+observed task completion and deletion, and authenticated iCalendar snapshots. Public
+calendar subscriptions and webhooks remain under development.
 Write tokens do not grant workspace access.
 
 ## Tokens
@@ -218,3 +219,35 @@ account namespace with create, complete and update; another operation or body
 returns `409 idempotency-conflict`. Preserve the key and body after an uncertain
 outcome. Missing/inaccessible origin lists return 404, viewers/read tokens 403,
 and invalid, expired or revoked credentials and deleted accounts 401.
+
+## Calendar download snapshot
+
+`GET /api/v1/calendar.ics` requires a Bearer PAT with Read or Write access. Viewers
+may export their visible tasks. Optional `workspaceId` and `listId` filters use
+stable IDs from discovery; combined filters must refer to the same workspace.
+Unknown, repeated and empty parameters are rejected. Missing/inaccessible filtered
+resources return 404. Tokens in query parameters and browser cookies do not grant
+access. This is a download snapshot, not a public URL or subscription capability.
+
+Success is an attachment named `ditero-tasks.ics` with `text/calendar; charset=utf-8`,
+`Cache-Control: no-store` and `nosniff`. Errors retain `application/problem+json`.
+One database cursor snapshots authorized persisted tasks and the caller's timezone;
+credentials, actor and exported-workspace membership are checked before release.
+
+Each task is a VTODO with a deterministic opaque UID, snapshot DTSTAMP, title,
+optional notes, completion status, priority, optional DUE and completion instant.
+All-day DUE uses the caller's local Gregorian date; timed DUE and COMPLETED use UTC
+seconds. TEXT values are escaped and Unicode lines fold at 75 UTF-8 bytes according
+to [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545.html). No account identity,
+assignees, credentials, attachment URLs or notification configuration is exported.
+
+Recurring tasks and habits contribute only their current persisted task row.
+No future instances, RRULE, alarms, habit logs or completion history are generated.
+The snapshot does not schedule notifications or carry an update/replay identity.
+
+The whole snapshot is limited to 10,000 tasks, 8 MiB of encoded output and 128 KiB
+of combined title/notes UTF-8 text per task. Overflow returns
+`422 calendar-too-large`; unsupported stored text returns `422 invalid-calendar-data`.
+A five-second export deadline returns 503. No failure returns a partial calendar.
+Use a narrower filter for a large snapshot. An authorized empty selection produces
+a valid calendar with no VTODO components.

@@ -304,6 +304,35 @@ export function publicApiOpenApi() {
 			...errors,
 		},
 	};
+	paths["/api/v1/calendar.ics"] = {
+		get: {
+			operationId: "download_calendar_snapshot",
+			tags: ["tasks"],
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Authenticated download of current persisted tasks as VTODO. Read tokens and viewers are permitted. This bounded snapshot contains no future recurrence instances, RRULE or alarms. All-day DUE dates use the caller timezone; timed DUE values are UTC. Maximum 10000 tasks, 8 MiB output and 128 KiB combined text per task; overflow returns a JSON problem, never a partial calendar. No query-token or public-feed access.",
+			parameters: [
+				{
+					name: "workspaceId",
+					in: "query",
+					schema: { type: "string", minLength: 1, maxLength: 256 },
+				},
+				{
+					name: "listId",
+					in: "query",
+					schema: { type: "string", minLength: 1, maxLength: 256 },
+				},
+			],
+			responses: {
+				"200": {
+					description: "Calendar download snapshot",
+					content: { "text/calendar": { schema: { type: "string" } } },
+				},
+				...errors,
+				"422": problem,
+			},
+		},
+	};
 	paths["/api/v1/me"] = {
 		get: {
 			operationId: "get_profile",

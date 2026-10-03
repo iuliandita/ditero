@@ -12,7 +12,7 @@ const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(18);
+	expect(Object.keys(document.paths)).toHaveLength(19);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
@@ -134,4 +134,26 @@ test("OpenAPI exposes explicit observed deletion without changing the task DTO",
 	expect(document.paths).toHaveProperty(
 		"/api/v1/tasks/{id}/deletion-observation",
 	);
+});
+
+test("OpenAPI declares a Bearer-only calendar download with JSON errors and strict scope filters", () => {
+	const document = publicApiOpenApi();
+	const operation = (
+		document.paths["/api/v1/calendar.ics"] as {
+			get: {
+				parameters: { name: string }[];
+				responses: Record<string, { content: Record<string, unknown> }>;
+				security: unknown;
+			};
+		}
+	).get;
+	expect(operation.parameters.map((value) => value.name)).toEqual([
+		"workspaceId",
+		"listId",
+	]);
+	expect(operation.responses["200"].content).toHaveProperty("text/calendar");
+	expect(operation.responses["422"].content).toHaveProperty(
+		"application/problem+json",
+	);
+	expect(operation.security).toEqual([{ personalAccessToken: [] }]);
 });
