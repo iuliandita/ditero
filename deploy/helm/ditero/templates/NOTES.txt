@@ -1,0 +1,12 @@
+Ditero {{ .Chart.AppVersion }} uses an external PostgreSQL database and Secret
+{{ .Values.existingSecret }} in namespace {{ .Release.Namespace }}.
+
+Review deploy/helm/ditero/README.md for database roles, public URLs and backups.
+Both workloads run one replica with Recreate updates and persistent volumes.
+Upgrades interrupt service; this chart does not provide high availability.
+
+For local testing with the default public URLs, run in separate terminals:
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "ditero.fullname" . }}-app 3000:3000
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "ditero.fullname" . }}-zero 4848:4848
+
+Open {{ .Values.app.publicUrl }}.

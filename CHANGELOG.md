@@ -6,7 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.0.1-alpha.1] - 2026-10-03
+
 ### Added
+
+- Complete alpha artifact pipeline: versioned multi-architecture containers, Helm and
+  Compose packages, signed independent Android APK/AAB, experimental desktop installers,
+  image SBOMs/digests and download checksums.
 
 - Shared typed lists, folders, subtasks, labels, priorities, assignments, comments,
   invitations, and managed accounts with a simplified task view.
@@ -28,8 +34,7 @@ All notable changes to this project are documented here. The format is based on
   storage, scoped sync, and encrypted attachment transfers using system save pickers.
 - Android encrypted UnifiedPush notices with task navigation, Linux desktop system
   notices while open or minimized, and a separately configured optional Google relay.
-  Google delivery, broader device coverage, and native release distribution remain
-  unqualified.
+  Google delivery and broader device coverage remain unqualified.
 
 - Notification delivery engine: leader-elected scheduler, an outbox worker on every replica
   with `FOR UPDATE SKIP LOCKED` claims, lease reclaim and fenced completion writes, a retry

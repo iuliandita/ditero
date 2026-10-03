@@ -116,6 +116,12 @@ runner's native architecture; it does not produce a universal application.
 
 ## Manual release signing hooks
 
+The tagged alpha pipeline separately produces optimized Linux x86_64 DEB/AppImage,
+unsigned Windows x86_64 installers and ad-hoc signed macOS Apple Silicon DMGs.
+Downloads have checksums and explicit signing labels. It does not use the
+certificate-required Windows/macOS hooks below. See
+[Releasing](../../RELEASING.md) for the artifact pipeline and remaining limits.
+
 Development installer commands and CI remain unsigned/ad-hoc and read no signing
 secrets. Manual release hooks perform signing preflight, build the bundled UI,
 and invoke pinned Tauri 2.12.1 without `--debug`, with Cargo `--locked`.
@@ -167,8 +173,8 @@ is not OS-signature or runtime qualification. See the official
 [Windows signing](https://v2.tauri.app/distribute/sign/windows/) and
 [macOS signing](https://v2.tauri.app/distribute/sign/macos/) instructions.
 
-Public release workflows, signing credentials, Linux authenticated checksums,
-installer qualification and updater delivery remain separate unfinished work.
+Trusted desktop signing credentials, Linux package signatures, installer
+qualification and updater delivery remain unfinished.
 
 ## Qualification status
 

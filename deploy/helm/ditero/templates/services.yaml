@@ -1,0 +1,22 @@
+{{- range $component := list "app" "zero" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ditero.fullname" $ }}-{{ $component }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "ditero.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ ternary 3000 4848 (eq $component "app") }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+    app.kubernetes.io/name: ditero
+    app.kubernetes.io/component: {{ $component }}
+{{- end }}

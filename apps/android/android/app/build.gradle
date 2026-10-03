@@ -4,6 +4,16 @@ def googleServices = file('src/google/google-services.json').isFile() || file('g
 if (googleServices) apply plugin: 'com.google.gms.google-services'
 def relayConfiguration = file('src/google/assets/native-relay.json')
 
+def releaseVersion = System.getenv('DITERO_RELEASE_VERSION')
+def releaseVersionCode = System.getenv('DITERO_ANDROID_VERSION_CODE')
+if ((releaseVersion != null) != (releaseVersionCode != null)) {
+    throw new GradleException('Android release version requires both DITERO_RELEASE_VERSION and DITERO_ANDROID_VERSION_CODE')
+}
+if (releaseVersion != null && (!(releaseVersion ==~ /(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?/)
+        || !(releaseVersionCode ==~ /[1-9][0-9]*/) || new BigInteger(releaseVersionCode) > 2100000000)) {
+    throw new GradleException('Android release version must be semantic and its version code must be an integer from 1 to 2100000000')
+}
+
 def releaseSigning = [
     storeFile: System.getenv('DITERO_ANDROID_KEYSTORE_PATH'),
     storePassword: System.getenv('DITERO_ANDROID_KEYSTORE_PASSWORD'),
@@ -25,8 +35,8 @@ android {
         applicationId "io.ditero.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode releaseVersionCode != null ? Integer.parseInt(releaseVersionCode) : 1
+        versionName releaseVersion != null ? releaseVersion : "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

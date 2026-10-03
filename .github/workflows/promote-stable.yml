@@ -47,10 +47,15 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          if [[ ! "$TAG" =~ ^v[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Only stable v1.0.0 and later releases can be promoted"
+            exit 1
+          fi
           if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
             echo "::error::Tag $TAG has no GitHub release; cannot promote"
             exit 1
           fi
+          test "$(gh release view "$TAG" --repo "$REPO" --json isPrerelease,isDraft --jq '.isPrerelease or .isDraft')" = false
           published_at=$(gh release view "$TAG" --repo "$REPO" --json publishedAt -q '.publishedAt')
           age_days=$(( ( $(date -u +%s) - $(date -u -d "$published_at" +%s) ) / 86400 ))
           echo "published_at=$published_at age_days=$age_days"
