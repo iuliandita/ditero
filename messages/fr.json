@@ -3,7 +3,7 @@
 	"theme_editor_accent_note": "Enregistre ou annule la modification du thème pour choisir une couleur d’accent.",
 	"theme_editor_customize": "Personnaliser le thème",
 	"theme_editor_heading": "Modifier le thème",
-	"theme_editor_preview_note": "Les changements valides sont affichés immédiatement. Enregistrer les garde pour ce compte sur cet appareil ; Annuler restaure ton thème enregistré. Les changements invalides gardent le dernier aperçu lisible.",
+	"theme_editor_preview_note": "Les modifications valides apparaissent immédiatement. Enregistrer synchronise ta palette avec ton compte. Annuler abandonne les modifications que tu n’as pas encore envoyées. Les modifications invalides gardent le dernier aperçu lisible.",
 	"theme_editor_invalid": "Utilise un nom et des couleurs hexadécimales à six chiffres. Le contraste du texte doit atteindre 4,5:1, avec des surfaces claires en mode clair et sombres en mode sombre. Tu pourras enregistrer une fois ces conditions remplies.",
 	"theme_editor_save": "Enregistrer le thème",
 	"theme_editor_picker_label": "Choisir {color} pour {mode}",
@@ -39,7 +39,7 @@
 	"named_theme_default": "Ditero par défaut",
 	"named_theme_paper": "Papier",
 	"named_theme_slate": "Ardoise",
-	"named_theme_local_note": "Les palettes et les thèmes importés sont enregistrés uniquement pour ce compte sur cet appareil.",
+	"named_theme_local_note": "Les palettes et les thèmes importés se synchronisent entre les appareils pour ce compte.",
 	"named_theme_accent_note": "Choisir une couleur d’accent remplace les couleurs des boutons et du focus du thème. Les modes clair, sombre et à contraste élevé restent indépendants.",
 	"named_theme_import": "Importer un thème JSON",
 	"named_theme_export": "Exporter le thème JSON",
@@ -2119,7 +2119,7 @@
 	"accent_theme_violet": "Violet",
 	"accent_theme_berry": "Baie",
 	"accent_theme_ochre": "Ocre",
-	"display_device_note": "Ces réglages sont enregistrés pour ton compte sur cet appareil.",
+	"display_device_note": "La taille de lecture et le contraste élevé restent sur cet appareil. Les palettes et les couleurs d’accent se synchronisent avec ton compte.",
 	"display_save_failed": "Tes modifications sont appliquées, mais n’ont pas pu être enregistrées sur cet appareil.",
 	"login_password_guidance": "Utilise entre {min} et {max} caractères. Un mot de passe long et unique est plus facile à garder sûr.",
 	"login_recovery_label": "Tu ne peux pas te connecter ?",
@@ -2291,5 +2291,9 @@
 	"pat_error_invalid": "Utilise un nom de 1-80 caractères et une durée de 1-365 jours.",
 	"pat_error_retry": "Le serveur est occupé. Attends un instant et réessaie.",
 	"pat_error_missing": "Ce jeton n'existe plus. Actualise la liste.",
-	"pat_error_failed": "La demande a échoué. Vérifie ta connexion et réessaie."
+	"pat_error_failed": "La demande a échoué. Vérifie ta connexion et réessaie.",
+	"appearance_saving": "Enregistrement du thème...",
+	"appearance_waiting": "Les modifications du thème sont en attente. Le serveur doit encore les confirmer.",
+	"appearance_save_failed": "Ces modifications du thème n’ont pas pu être enregistrées dans ton compte. Elles sont toujours disponibles ; réessaie.",
+	"appearance_cache_failed": "Ton thème est enregistré dans ton compte, mais son cache local de démarrage n’a pas pu être mis à jour."
 }

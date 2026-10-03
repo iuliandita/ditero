@@ -1,14 +1,9 @@
 export const READING_SIZES = ["standard", "comfortable", "large"] as const;
 export type ReadingSize = (typeof READING_SIZES)[number];
-export const ACCENT_THEMES = [
-	"teal",
-	"blue",
-	"clay",
-	"violet",
-	"berry",
-	"ochre",
-] as const;
-export type AccentTheme = (typeof ACCENT_THEMES)[number];
+
+import { ACCENT_THEMES, type AccentTheme } from "../../domain/appearance.ts";
+
+export { ACCENT_THEMES, type AccentTheme } from "../../domain/appearance.ts";
 export type DisplayPreferences = {
 	accentTheme: AccentTheme;
 	readingSize: ReadingSize;

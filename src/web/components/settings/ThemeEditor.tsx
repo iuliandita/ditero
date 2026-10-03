@@ -27,10 +27,14 @@ export function ThemeEditor({
 	sourceId: string;
 	onClose: () => void;
 }) {
-	const { themeLibrary, setThemeLibrary, setThemePreview } =
+	const { themeLibrary, setThemeLibrary, setThemePreview, appearanceAccepted } =
 		useDisplayPreferences();
 	const [draft, setDraft] = useState(() => structuredClone(initial));
 	const [saveFailed, setSaveFailed] = useState(false);
+	const [saving, setSaving] = useState(false);
+	const active = useRef(true);
+	const currentDraft = useRef(draft);
+	currentDraft.current = draft;
 	const nameInput = useRef<HTMLInputElement>(null);
 	const id = useId();
 	const valid = useMemo(() => {
@@ -45,7 +49,11 @@ export function ThemeEditor({
 	}, [valid, setThemePreview]);
 	useLayoutEffect(() => () => setThemePreview(null), [setThemePreview]);
 	useEffect(() => {
+		active.current = true;
 		nameInput.current?.focus();
+		return () => {
+			active.current = false;
+		};
 	}, []);
 
 	const labels: Record<ThemeToken, string> = {
@@ -135,9 +143,11 @@ export function ThemeEditor({
 			aria-labelledby={`${id}-heading`}
 			aria-describedby={`${id}-note`}
 			className="flex flex-col gap-4 rounded-lg border p-3"
-			onSubmit={(event) => {
+			onSubmit={async (event) => {
 				event.preventDefault();
-				if (!valid) return;
+				if (!valid || saving) return;
+				const submitted = draft;
+				setSaving(true);
 				try {
 					const next = saveEditedTheme(
 						themeLibrary,
@@ -145,14 +155,17 @@ export function ThemeEditor({
 						valid,
 						randomId(),
 					);
-					if (!setThemeLibrary(next)) {
-						setSaveFailed(true);
+					if (!(await setThemeLibrary(next))) {
+						if (active.current) setSaveFailed(true);
 						return;
 					}
+					if (!active.current || currentDraft.current !== submitted) return;
 					setThemePreview(null);
 					onClose();
 				} catch {
-					setSaveFailed(true);
+					if (active.current) setSaveFailed(true);
+				} finally {
+					if (active.current) setSaving(false);
 				}
 			}}
 			onKeyDown={(event) => {
@@ -255,12 +268,17 @@ export function ThemeEditor({
 					{m.theme_editor_invalid()}
 				</p>
 			)}
-			{saveFailed && <p role="alert">{m.display_save_failed()}</p>}
+			{saving && (
+				<p role="status">
+					{appearanceAccepted ? m.appearance_waiting() : m.appearance_saving()}
+				</p>
+			)}
+			{saveFailed && <p role="alert">{m.appearance_save_failed()}</p>}
 			<div className="flex flex-wrap gap-2">
 				<Button
 					type="submit"
 					data-testid="theme-editor-save"
-					disabled={!valid}
+					disabled={!valid || saving}
 					aria-describedby={!valid ? `${id}-invalid` : undefined}
 				>
 					{m.theme_editor_save()}

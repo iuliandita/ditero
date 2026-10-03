@@ -3,7 +3,7 @@
 	"theme_editor_accent_note": "Guarda o cancela la edición del tema para elegir un acento.",
 	"theme_editor_customize": "Personalizar tema",
 	"theme_editor_heading": "Editar tema",
-	"theme_editor_preview_note": "Los cambios válidos se muestran al instante. Guardar los conserva para esta cuenta en este dispositivo; Cancelar restaura tu tema guardado. Los cambios no válidos mantienen la última vista previa legible.",
+	"theme_editor_preview_note": "Los cambios válidos se muestran al instante. Guardar sincroniza tu paleta con tu cuenta. Cancelar descarta los cambios que aún no has enviado. Los cambios no válidos mantienen la última vista previa legible.",
 	"theme_editor_invalid": "Usa un nombre y colores hexadecimales de seis dígitos. El contraste del texto debe ser al menos 4,5:1, con superficies claras en Claro y oscuras en Oscuro. Podrás guardar cuando se cumplan estas condiciones.",
 	"theme_editor_save": "Guardar tema",
 	"theme_editor_picker_label": "Elegir {color} para {mode}",
@@ -39,7 +39,7 @@
 	"named_theme_default": "Predeterminado de Ditero",
 	"named_theme_paper": "Papel",
 	"named_theme_slate": "Pizarra",
-	"named_theme_local_note": "Las paletas y los temas importados se guardan solo para esta cuenta en este dispositivo.",
+	"named_theme_local_note": "Las paletas y los temas importados se sincronizan entre dispositivos para esta cuenta.",
 	"named_theme_accent_note": "Elegir un acento reemplaza los colores de botones y foco del tema. Los modos claro, oscuro y de alto contraste siguen siendo independientes.",
 	"named_theme_import": "Importar tema JSON",
 	"named_theme_export": "Exportar tema JSON",
@@ -2119,7 +2119,7 @@
 	"accent_theme_violet": "Violeta",
 	"accent_theme_berry": "Baya",
 	"accent_theme_ochre": "Ocre",
-	"display_device_note": "Estos ajustes se guardan para tu cuenta en este dispositivo.",
+	"display_device_note": "El tamaño de lectura y el contraste alto se quedan en este dispositivo. Las paletas y los colores de acento se sincronizan con tu cuenta.",
 	"display_save_failed": "Tus cambios se aplican ahora, pero no se pudieron guardar en este dispositivo.",
 	"login_password_guidance": "Usa entre {min} y {max} caracteres. Una contraseña larga y única es más fácil de mantener segura.",
 	"login_recovery_label": "¿No puedes iniciar sesión?",
@@ -2291,5 +2291,9 @@
 	"pat_error_invalid": "Usa un nombre de 1-80 caracteres y una duración de 1-365 días.",
 	"pat_error_retry": "El servidor está ocupado. Espera un momento e inténtalo de nuevo.",
 	"pat_error_missing": "Este token ya no existe. Actualiza la lista.",
-	"pat_error_failed": "No se pudo completar la solicitud. Comprueba tu conexión e inténtalo de nuevo."
+	"pat_error_failed": "No se pudo completar la solicitud. Comprueba tu conexión e inténtalo de nuevo.",
+	"appearance_saving": "Guardando tema...",
+	"appearance_waiting": "Los cambios del tema están en cola. Esperando la confirmación del servidor.",
+	"appearance_save_failed": "No se pudieron guardar estos cambios del tema en tu cuenta. Tus cambios siguen disponibles; inténtalo de nuevo.",
+	"appearance_cache_failed": "Tu tema está guardado en tu cuenta, pero no se pudo actualizar su caché local de inicio."
 }

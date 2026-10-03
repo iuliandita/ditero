@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { Pool } from "pg";
 import { BUILTIN_THEME_DOCUMENTS } from "../../src/domain/theme-document.ts";
 import { goToSettings, signUp, uniqueEmail } from "./helpers.ts";
 
@@ -23,6 +24,17 @@ test("named palettes follow mode and keep task colors and contrast controls", as
 		});
 	const before = await semantics();
 	await page.getByTestId("named-theme-select").selectOption("paper");
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				Object.entries(localStorage).some(
+					([key, raw]) =>
+						key.startsWith("ditero.themes.") &&
+						JSON.parse(raw).selected === "paper",
+				),
+			),
+		)
+		.toBe(true);
 	await expect(page.locator("body")).toHaveCSS(
 		"background-color",
 		"rgb(250, 247, 240)",
@@ -172,7 +184,7 @@ test("theme editor previews without saving, cancels, then saves paired palettes"
 	);
 });
 
-test("theme editor keeps the saved palette intact when local persistence fails", async ({
+test("server-confirmed theme survives a refused local startup cache", async ({
 	page,
 }) => {
 	await signUp(page, uniqueEmail("theme-editor-storage"));
@@ -191,18 +203,20 @@ test("theme editor keeps the saved palette intact when local persistence fails",
 		};
 	});
 	await page.getByTestId("theme-editor-save").click();
+	await expect(page.getByTestId("theme-editor")).toHaveCount(0);
 	await expect(
-		page.getByTestId("theme-editor").getByRole("alert"),
+		page.getByRole("status").filter({ hasText: "local startup cache" }),
 	).toBeVisible();
-	await page.getByTestId("theme-editor-cancel").click();
-	await expect(page.getByTestId("named-theme-select")).toHaveValue("paper");
 	await expect(page.locator("body")).toHaveCSS(
 		"background-color",
-		"rgb(250, 247, 240)",
+		"rgb(255, 255, 255)",
 	);
 	await page.reload();
 	await goToSettings(page);
-	await expect(page.getByTestId("named-theme-select")).toHaveValue("paper");
+	await expect(page.locator("body")).toHaveCSS(
+		"background-color",
+		"rgb(255, 255, 255)",
+	);
 });
 
 test("theme editor rejects unreadable drafts and restores the saved palette on navigation", async ({
@@ -236,4 +250,192 @@ test("theme editor rejects unreadable drafts and restores the saved palette on n
 		"background-color",
 		"rgb(250, 247, 240)",
 	);
+});
+
+test("account palettes and accents reach a fresh browser context after server acknowledgment and offline reconnect", async ({
+	page,
+	context,
+	browser,
+}) => {
+	const userId = await signUp(page, uniqueEmail("theme-sync"));
+	const second = await browser.newContext({
+		viewport: { width: 390, height: 844 },
+		storageState: {
+			cookies: (await context.storageState()).cookies,
+			origins: [],
+		},
+	});
+	const other = await second.newPage();
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await other.goto(page.url());
+		await goToSettings(other);
+		await goToSettings(page);
+		await page.getByTestId("named-theme-select").selectOption("slate");
+		await expect(other.getByTestId("named-theme-select")).toHaveValue("slate");
+		await expect
+			.poll(
+				async () =>
+					(
+						await pool.query(
+							"select appearance->>'selected' as selected from user_pref where id=$1",
+							[userId],
+						)
+					).rows[0]?.selected,
+			)
+			.toBe("slate");
+		await page.getByTestId("display-size-large").check();
+		await expect(other.locator("html")).toHaveAttribute(
+			"data-reading-size",
+			"standard",
+		);
+		await context.setOffline(true);
+		await page.getByTestId("named-theme-select").selectOption("paper");
+		await expect(
+			page.getByRole("status").filter({ hasText: "Waiting for the server" }),
+		).toBeVisible();
+		await expect(page.getByTestId("named-theme-select")).toHaveValue("paper");
+		await expect(other.getByTestId("named-theme-select")).toHaveValue("slate");
+		expect(
+			(
+				await pool.query(
+					"select appearance->>'selected' as selected from user_pref where id=$1",
+					[userId],
+				)
+			).rows[0].selected,
+		).toBe("slate");
+		await context.setOffline(false);
+		await expect(other.getByTestId("named-theme-select")).toHaveValue("paper");
+		await expect(
+			page.getByRole("status").filter({ hasText: "Waiting for the server" }),
+		).toHaveCount(0);
+		await page.getByTestId("display-accent-blue").check();
+		await expect(other.getByTestId("display-accent-blue")).toBeChecked();
+		await other.reload();
+		await goToSettings(other);
+		await expect(other.getByTestId("named-theme-select")).toHaveValue("paper");
+		await expect(other.getByTestId("display-accent-blue")).toBeChecked();
+	} finally {
+		await context.setOffline(false);
+		await second.close();
+		await pool.end();
+	}
+});
+
+test("legacy themes remain hints until the first explicit action migrates the library", async ({
+	page,
+	context,
+	browser,
+}) => {
+	const userId = await signUp(page, uniqueEmail("theme-legacy"));
+	const legacy = {
+		selected: "legacy-palette",
+		useAccent: false,
+		documents: [
+			{
+				id: "legacy-palette",
+				document: {
+					...BUILTIN_THEME_DOCUMENTS.paper,
+					name: "Earlier device palette",
+				},
+			},
+		],
+	};
+	await page.evaluate(
+		({ userId, legacy }) =>
+			localStorage.setItem(`ditero.themes.${userId}`, JSON.stringify(legacy)),
+		{ userId, legacy },
+	);
+	await page.reload();
+	await goToSettings(page);
+	await expect(page.getByTestId("named-theme-select")).toHaveValue("default");
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	const second = await browser.newContext({
+		viewport: { width: 390, height: 844 },
+		storageState: {
+			cookies: (await context.storageState()).cookies,
+			origins: [],
+		},
+	});
+	try {
+		expect(
+			(
+				await pool.query("select appearance from user_pref where id=$1", [
+					userId,
+				])
+			).rows[0]?.appearance ?? null,
+		).toBeNull();
+		await page.getByTestId("named-theme-select").selectOption("paper");
+		await expect(page.getByTestId("named-theme-select")).toBeEnabled();
+		const other = await second.newPage();
+		await other.goto(page.url());
+		await goToSettings(other);
+		await expect(
+			other.getByRole("option", {
+				name: "Earlier device palette",
+				exact: true,
+			}),
+		).toHaveCount(1);
+		await expect(other.getByTestId("named-theme-select")).toHaveValue("paper");
+		await page.reload();
+		await goToSettings(page);
+		await expect(page.getByTestId("named-theme-select")).toHaveValue("paper");
+	} finally {
+		await second.close();
+		await pool.end();
+	}
+});
+
+test("server rejection keeps an editable draft and retry submits the preserved change", async ({
+	page,
+}) => {
+	const userId = await signUp(page, uniqueEmail("theme-refusal"));
+	await goToSettings(page);
+	await page.getByTestId("named-theme-select").selectOption("paper");
+	await expect(page.getByTestId("named-theme-select")).toBeEnabled();
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await pool.query(
+			`create function theme_sync_refuse() returns trigger language plpgsql as $$ begin if NEW.id = '${userId}' then raise exception 'Theme fixture refusal'; end if; return NEW; end $$`,
+		);
+		await pool.query(
+			"create trigger theme_sync_refuse before update on user_pref for each row execute function theme_sync_refuse()",
+		);
+		await page.getByTestId("named-theme-customize").click();
+		await page.getByTestId("theme-editor-name").fill("Preserved draft");
+		await page.getByTestId("theme-editor-light-background").fill("#ffffff");
+		await page.getByTestId("theme-editor-save").click();
+		await expect(
+			page.getByTestId("theme-editor").getByRole("alert"),
+		).toContainText("Could not save");
+		await expect(page.getByTestId("theme-editor-name")).toHaveValue(
+			"Preserved draft",
+		);
+		await expect(page.getByTestId("theme-editor-save")).toBeEnabled();
+		expect(
+			(
+				await pool.query(
+					"select appearance->>'selected' as selected from user_pref where id=$1",
+					[userId],
+				)
+			).rows[0].selected,
+		).toBe("paper");
+		await pool.query("drop trigger theme_sync_refuse on user_pref");
+		await pool.query("drop function theme_sync_refuse()");
+		await page.getByTestId("theme-editor-name").fill("Retried draft");
+		await page.getByTestId("theme-editor-save").click();
+		await expect(page.getByTestId("theme-editor")).toHaveCount(0);
+		await expect(
+			page.getByTestId("named-theme-select").locator("option:checked"),
+		).toHaveText("Retried draft");
+		await page.reload();
+		await goToSettings(page);
+		await expect(
+			page.getByTestId("named-theme-select").locator("option:checked"),
+		).toHaveText("Retried draft");
+	} finally {
+		await pool.query("drop trigger if exists theme_sync_refuse on user_pref");
+		await pool.query("drop function if exists theme_sync_refuse()");
+		await pool.end();
+	}
 });

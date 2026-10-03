@@ -12,6 +12,12 @@ export function DisplaySettings() {
 		saveFailed,
 		themeLibrary,
 		themePreviewActive,
+		appearanceLoading,
+		appearancePending,
+		appearanceAccepted,
+		appearanceSaveFailed,
+		appearanceCacheFailed,
+		retryAppearance,
 	} = useDisplayPreferences();
 	const id = useId();
 	const presets = [
@@ -32,6 +38,28 @@ export function DisplaySettings() {
 	return (
 		<div className="flex flex-col gap-4 text-sm" data-testid="display-settings">
 			<NamedThemeSettings />
+			{appearanceLoading && <p role="status">{m.app_loading()}</p>}
+			{appearancePending && (
+				<p role="status">
+					{appearanceAccepted ? m.appearance_waiting() : m.appearance_saving()}
+				</p>
+			)}
+			{appearanceSaveFailed && (
+				<div>
+					<p role="alert">{m.appearance_save_failed()}</p>
+					<Button
+						type="button"
+						variant="outline"
+						disabled={appearancePending}
+						onClick={retryAppearance}
+					>
+						{m.action_retry()}
+					</Button>
+				</div>
+			)}
+			{appearanceCacheFailed && (
+				<p role="status">{m.appearance_cache_failed()}</p>
+			)}
 			<fieldset aria-describedby={`${id}-description`}>
 				<legend className="font-medium">{m.display_size_label()}</legend>
 				<p id={`${id}-description`} className="mt-1 text-muted-foreground">
@@ -108,7 +136,7 @@ export function DisplaySettings() {
 								type="radio"
 								name={`${id}-accent`}
 								value={accent.value}
-								disabled={themePreviewActive}
+								disabled={themePreviewActive || appearanceLoading}
 								checked={
 									themeLibrary.useAccent &&
 									preferences.accentTheme === accent.value

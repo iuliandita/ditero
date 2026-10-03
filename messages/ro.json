@@ -3,7 +3,7 @@
 	"theme_editor_accent_note": "Salvează sau anulează editarea temei ca să alegi un accent.",
 	"theme_editor_customize": "Personalizează tema",
 	"theme_editor_heading": "Editează tema",
-	"theme_editor_preview_note": "Modificările valide sunt afișate imediat. Salvarea le păstrează pentru acest cont pe acest dispozitiv; Anularea restabilește tema salvată. Modificările invalide păstrează ultima previzualizare lizibilă.",
+	"theme_editor_preview_note": "Modificările valide apar imediat în previzualizare. Salvarea sincronizează paleta cu contul tău. Anularea elimină modificările pe care nu le-ai trimis încă. Modificările invalide păstrează ultima previzualizare lizibilă.",
 	"theme_editor_invalid": "Folosește un nume și culori hexazecimale de șase cifre. Contrastul textului trebuie să fie cel puțin 4,5:1, cu suprafețe luminoase în modul luminos și întunecate în modul întunecat. Poți salva după îndeplinirea acestor condiții.",
 	"theme_editor_save": "Salvează tema",
 	"theme_editor_picker_label": "Alege {color} pentru {mode}",
@@ -39,7 +39,7 @@
 	"named_theme_default": "Implicit Ditero",
 	"named_theme_paper": "Hârtie",
 	"named_theme_slate": "Ardezie",
-	"named_theme_local_note": "Paletele și temele importate sunt salvate doar pentru acest cont pe acest dispozitiv.",
+	"named_theme_local_note": "Paletele și temele importate se sincronizează între dispozitive pentru acest cont.",
 	"named_theme_accent_note": "Alegerea unui accent înlocuiește culorile butoanelor și ale focalizării din temă. Modurile luminos, întunecat și cu contrast ridicat rămân independente.",
 	"named_theme_import": "Importă tema JSON",
 	"named_theme_export": "Exportă tema JSON",
@@ -2119,7 +2119,7 @@
 	"accent_theme_violet": "Violet",
 	"accent_theme_berry": "Fructe de pădure",
 	"accent_theme_ochre": "Ocru",
-	"display_device_note": "Aceste setări sunt salvate pentru contul tău pe acest dispozitiv.",
+	"display_device_note": "Dimensiunea pentru citire și contrastul ridicat rămân pe acest dispozitiv. Paletele și culorile de accent se sincronizează cu contul tău.",
 	"display_save_failed": "Modificările se aplică acum, dar nu au putut fi salvate pe acest dispozitiv.",
 	"login_password_guidance": "Folosește între {min} și {max} de caractere. O parolă mai lungă și unică este mai ușor de păstrat în siguranță.",
 	"login_recovery_label": "Nu te poți conecta?",
@@ -2291,5 +2291,9 @@
 	"pat_error_invalid": "Folosește un nume de 1-80 de caractere și o durată de 1-365 de zile.",
 	"pat_error_retry": "Serverul este ocupat. Așteaptă puțin și încearcă din nou.",
 	"pat_error_missing": "Acest token nu mai există. Reîncarcă lista.",
-	"pat_error_failed": "Cererea nu a putut fi finalizată. Verifică conexiunea și încearcă din nou."
+	"pat_error_failed": "Cererea nu a putut fi finalizată. Verifică conexiunea și încearcă din nou.",
+	"appearance_saving": "Se salvează tema...",
+	"appearance_waiting": "Modificările temei sunt în așteptare. Așteptăm confirmarea serverului.",
+	"appearance_save_failed": "Nu am putut salva aceste modificări ale temei în contul tău. Modificările sunt încă disponibile; încearcă din nou.",
+	"appearance_cache_failed": "Tema este salvată în contul tău, dar memoria cache locală pentru pornire nu a putut fi actualizată."
 }

@@ -1,51 +1,23 @@
-import { z } from "zod";
 import {
-	BUILTIN_THEME_DOCUMENTS,
+	DEFAULT_THEME_LIBRARY,
+	type ThemeLibrary,
+	validateThemeLibrary,
+} from "../../domain/appearance.ts";
+import {
 	THEME_TOKENS,
 	type ThemeDocument,
-	validateThemeDocument,
 } from "../../domain/theme-document.ts";
 import { ACCENT_PALETTES, type AccentTheme } from "./accent-palettes.ts";
 
-export const MAX_CUSTOM_THEMES = 20;
-export type ThemeLibrary = {
-	selected: string;
-	useAccent: boolean;
-	documents: { id: string; document: ThemeDocument }[];
-};
-export const DEFAULT_THEME_LIBRARY: ThemeLibrary = {
-	selected: "default",
-	useAccent: true,
-	documents: [],
-};
-type ThemeStorage = Pick<Storage, "getItem" | "setItem">;
-const librarySchema = z
-	.object({
-		selected: z.string().max(128),
-		useAccent: z.boolean(),
-		documents: z
-			.array(
-				z
-					.object({ id: z.string().min(1).max(128), document: z.unknown() })
-					.strict(),
-			)
-			.max(MAX_CUSTOM_THEMES),
-	})
-	.strict();
+export {
+	DEFAULT_THEME_LIBRARY,
+	MAX_CUSTOM_THEMES,
+	selectedThemeDocument,
+	type ThemeLibrary,
+	validateThemeLibrary,
+} from "../../domain/appearance.ts";
 
-export function selectedThemeDocument(
-	library: ThemeLibrary,
-): ThemeDocument | null {
-	if (library.selected === "default") return null;
-	if (Object.hasOwn(BUILTIN_THEME_DOCUMENTS, library.selected))
-		return BUILTIN_THEME_DOCUMENTS[
-			library.selected as keyof typeof BUILTIN_THEME_DOCUMENTS
-		];
-	return (
-		library.documents.find((entry) => entry.id === library.selected)
-			?.document ?? null
-	);
-}
+type ThemeStorage = Pick<Storage, "getItem" | "setItem">;
 
 function storage(): ThemeStorage | null {
 	try {
@@ -53,46 +25,6 @@ function storage(): ThemeStorage | null {
 	} catch {
 		return null;
 	}
-}
-
-export function validateThemeLibrary(input: unknown): ThemeLibrary {
-	if (
-		typeof input !== "object" ||
-		input === null ||
-		Array.isArray(input) ||
-		Object.keys(input).some(
-			(key) => !["selected", "useAccent", "documents"].includes(key),
-		)
-	)
-		throw new Error("Unexpected theme library fields");
-	const rawDocuments = (input as Record<string, unknown>).documents;
-	if (Array.isArray(rawDocuments))
-		for (const entry of rawDocuments)
-			if (
-				typeof entry !== "object" ||
-				entry === null ||
-				Object.keys(entry).some((key) => !["id", "document"].includes(key))
-			)
-				throw new Error("Unexpected saved theme fields");
-	const value = librarySchema.parse(input);
-	const documents = value.documents.map((entry) => {
-		if (Object.keys(entry).some((key) => !["id", "document"].includes(key)))
-			throw new Error("Unexpected saved theme fields");
-		return { id: entry.id, document: validateThemeDocument(entry.document) };
-	});
-	if (
-		new Set(documents.map((entry) => entry.id)).size !== documents.length ||
-		documents.some(
-			(entry) =>
-				entry.id === "default" ||
-				Object.hasOwn(BUILTIN_THEME_DOCUMENTS, entry.id),
-		)
-	)
-		throw new Error("Invalid theme identity");
-	const library = { ...value, documents };
-	if (library.selected !== "default" && !selectedThemeDocument(library))
-		throw new Error("Missing selected theme");
-	return library;
 }
 
 export function readThemeLibrary(
