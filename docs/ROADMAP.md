@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-10-03 | Status: pre-v1, building on `develop`
+> Updated: 2026-10-04 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -19,9 +19,9 @@ attachments support filesystem and S3-compatible ciphertext storage.
 
 Native JSON export, validated saved import previews, resumable apply, assignment
 mapping, and explicit notification activation have landed. Task history and portable
-history archives preserve transitions and attribution. History archive version 2 is
-export-only in the public import interface; replay planning and storage foundations
-are implemented, but applying those archives is not yet available.
+history archives preserve transitions and attribution. Settings accepts version 2
+archives through reviewed, resumable history import, with explicit source claims
+and retained replay identity. Provider imports and voice capture remain unfinished.
 
 The web app is installable as a PWA. Android and Tauri desktop application cores,
 scoped native authentication, encrypted file handling, and development artifact
@@ -38,10 +38,17 @@ are unsigned and macOS downloads use ad-hoc signatures. Native qualification rem
 open. `1.0.0` requires the complete v1 contract below.
 
 The versioned public API provides membership-scoped discovery, expiring personal
-access tokens, idempotent task creation and OpenAPI. The CLI supports discovery,
-task planning and creation; read-only stdio MCP tools are available. Further
-writes, feeds, webhooks, MCP task workflows and the terminal UI remain in progress;
-see [API access](runbooks/public-api.md), [CLI use](cli.md) and [MCP tools](mcp.md).
+access tokens, OpenAPI, and idempotent task creation, completion, updates and
+deletion. CLI and stdio MCP tools support discovery, planning, creation and
+completion; the terminal UI supports browsing, creation and completion. Further
+API coverage, feeds and webhooks remain in progress. See
+[API access](runbooks/public-api.md), [CLI use](cli.md), [MCP tools](mcp.md) and
+[terminal UI](tui.md).
+
+Helm and Kustomize packages target externally managed PostgreSQL, with an optional
+CloudNativePG overlay. Complete cluster install, upgrade and restore qualification
+remains in progress. These additions describe `develop`, not the complete feature
+set of the first published alpha.
 
 ## What v1 Delivers
 

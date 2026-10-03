@@ -29,6 +29,9 @@ are included, with no subscriptions or paid feature unlocks.
 > before `v1.0.0`. See [release instructions](RELEASING.md) and
 > [published downloads](https://github.com/iuliandita/ditero/releases).
 
+The capabilities below describe `develop`; additions since the first alpha are
+available from source or nightly images until the next release.
+
 ## Made for shared days
 
 Keep personal lists alongside shared workspaces. Assign tasks, leave comments,
@@ -38,7 +41,8 @@ and habit streaks cover the everyday work that falls between a calendar and a ch
 The interface supports six languages, including Arabic and RTL layout. Choose
 light, dark, or system mode, then choose an accent: teal by default, or blue,
 clay, violet, berry, or ochre. Reading-size presets and high contrast are independent
-of those choices. Accent preferences stay with your account on this device.
+of those choices. Palettes and accent preferences sync with your account; reading
+size and high contrast stay on each device.
 
 ## Available on develop
 
@@ -53,20 +57,22 @@ of those choices. Accent preferences stay with your account on this device.
 - English, German, Spanish, French, Romanian, and Arabic, including RTL layout
 - Light, dark, and system modes, six accent themes, reading-size presets, and high contrast
 - Named light/dark palettes, runtime color editing and validated JSON sharing;
-  [custom palettes](docs/themes.md) are currently saved on this device
+  [custom palettes](docs/themes.md) sync with your account
 - Saved views, dashboards, calendar/board/table layouts, keyboard shortcuts, and a focus timer
 - Encrypted attachments with filesystem or S3-compatible server storage
-- JSON export and reviewed, resumable native import for supported records; see
+- JSON export and reviewed, resumable native import, including version 2 history
+  and attribution; see
   [data portability](docs/runbooks/data-portability.md) for exclusions
 - Browser installation plus Android and desktop development apps; see
   [native app status](#browser-installation-and-native-development-apps)
-- Membership-scoped public API with expiring personal access tokens, idempotent
-  task creation and OpenAPI; see [API access](docs/runbooks/public-api.md)
-- [CLI discovery and task planning/creation](docs/cli.md) for agents and terminal use
-- Read-only [local MCP tools](docs/mcp.md)
+- Membership-scoped public API with expiring personal access tokens, OpenAPI,
+  and idempotent task creation, completion, updates and deletion; see
+  [API access](docs/runbooks/public-api.md)
+- [CLI](docs/cli.md) and [local MCP tools](docs/mcp.md) for discovery, task planning,
+  creation and completion, plus an interactive [terminal UI](docs/tui.md)
 
-iOS, third-party importers, voice capture, further API writes, MCP task workflows
-and a terminal UI remain planned.
+iOS, third-party importers, voice capture, feeds, webhooks and further API coverage
+remain planned.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
 
 ## Tech stack
@@ -85,6 +91,9 @@ The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaini
 
 The `deploy/docker` stack runs the app (web UI + API served
 same-origin on one port), PostgreSQL, and the Zero sync cache.
+Clients collaborate through this shared server. PostgreSQL must provide logical
+replication and direct connections; PGlite and other embedded databases are not
+supported substitutes. See [database roles](docs/runbooks/database-roles.md).
 
 Published images are on GHCR, so no checkout is needed to run it — but the
 Compose file is in this repo, so either clone it or download that one file.
@@ -263,7 +272,10 @@ provide GHCR and Docker Hub images, an Alpine app default, and a Debian app vari
 when a release is cut. `:latest` and `:stable` are release channels, not current nightly
 tags. Prereleases use explicit version tags and never move `latest` or `stable`.
 A [Helm chart](deploy/helm/ditero/README.md) packages app and Zero with an external
-PostgreSQL database. Kustomize manifests remain planned. See [RELEASING.md](RELEASING.md).
+PostgreSQL database. [Kustomize packages](deploy/kustomize/README.md) also support
+externally managed PostgreSQL, with an optional CloudNativePG overlay. Live cluster
+install, upgrade and restore qualification remains in progress. See
+[RELEASING.md](RELEASING.md).
 
 ## Project status
 
