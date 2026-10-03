@@ -105,6 +105,10 @@ export async function withPersonalAccessToken<T>(
 	token: string | null,
 	access: "read" | "write",
 	run: (client: PoolClient, actor: ApiActor) => Promise<T>,
+	beforeActorLock?: (
+		client: PoolClient,
+		candidateUserId: string,
+	) => Promise<void>,
 ): Promise<T> {
 	const unauthorized = () =>
 		new PublicApiError(
@@ -120,16 +124,22 @@ export async function withPersonalAccessToken<T>(
 			"select set_config('statement_timeout', '5000', true), set_config('lock_timeout', '1000', true), set_config('ditero.pat_hash', $1, true)",
 			[hashPAT(token)],
 		);
-		const initial = await client.query<{ id: string; user_id: string }>(
-			`select id, user_id from personal_access_token
+		const initial = await client.query<{
+			id: string;
+			user_id: string;
+			access: "read" | "write";
+		}>(
+			`select id, user_id, access from personal_access_token
 			where token_hash = $1 and revoked_at is null and expires_at > statement_timestamp()`,
 			[hashPAT(token)],
 		);
 		const candidate = initial.rows[0];
 		if (!candidate) throw unauthorized();
+		if (access === "write" && candidate.access === "write")
+			await beforeActorLock?.(client, candidate.user_id);
 		// User-first order matches account deletion; recheck the token after locking.
 		const live = await client.query(
-			'select id from "user" where id = $1 and deleted_at is null for share',
+			`select id from "user" where id = $1 and deleted_at is null for ${access === "write" ? "update" : "share"}`,
 			[candidate.user_id],
 		);
 		if (!live.rowCount) throw unauthorized();

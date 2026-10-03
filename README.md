@@ -58,10 +58,10 @@ of those choices. Accent preferences stay with your account on this device.
   [data portability](docs/runbooks/data-portability.md) for exclusions
 - Browser installation plus Android and desktop development apps; see
   [native app status](#browser-installation-and-native-development-apps)
-- Membership-scoped public discovery API with expiring personal access tokens and
-  OpenAPI; see [API access](docs/runbooks/public-api.md)
+- Membership-scoped public API with expiring personal access tokens, idempotent
+  task creation and OpenAPI; see [API access](docs/runbooks/public-api.md)
 
-iOS, third-party importers, voice capture, API writes and CLI/MCP/TUI remain planned.
+iOS, third-party importers, voice capture, further API writes and CLI/MCP/TUI remain planned.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
 
 ## Tech stack

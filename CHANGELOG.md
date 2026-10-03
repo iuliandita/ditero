@@ -12,6 +12,8 @@ All notable changes to this project are documented here. The format is based on
   deletion cleanup. Membership-scoped discovery endpoints expose workspaces,
   lists, tasks, people, labels, views and dashboards with bounded pagination and
   an OpenAPI description.
+- Idempotent public task creation with explicit list, due date, assignments and
+  labels, using the same permissions and mutations as the web interface.
 
 ## [0.0.1-alpha.1] - 2026-10-03
 

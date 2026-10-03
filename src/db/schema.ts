@@ -69,6 +69,37 @@ export const personalAccessToken = pgTable(
 	],
 ).enableRLS();
 
+export const publicApiRequest = pgTable(
+	"public_api_request",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		requestId: uuid("request_id").notNull(),
+		requestHash: text("request_hash").notNull(),
+		// Keep the receipt after task deletion so a retry cannot recreate it.
+		taskId: text("task_id").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.userId, t.requestId] }),
+		pgPolicy("public_api_request_read", {
+			for: "select",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("public_api_request_insert", {
+			for: "insert",
+			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("public_api_request_delete", {
+			for: "delete",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+	],
+).enableRLS();
+
 export const roleEnum = pgEnum("role", ["owner", "admin", "member", "viewer"]);
 export const workspaceKindEnum = pgEnum("workspace_kind", [
 	"personal",

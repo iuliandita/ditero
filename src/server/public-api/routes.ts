@@ -7,6 +7,10 @@ import {
 	PublicApiError,
 	publicApiProblem,
 } from "../../domain/public-api.ts";
+import {
+	parseApiIdempotencyKey,
+	parseApiTaskCreate,
+} from "../../domain/public-api-writes.ts";
 import type { Guards } from "../guards.ts";
 import {
 	bearerToken,
@@ -21,6 +25,7 @@ import {
 	revokePersonalAccessToken,
 	withPersonalAccessToken,
 } from "./tokens.ts";
+import { type FlushApiEvents, writeApiTask } from "./write.ts";
 
 type RateLimit = (request: Request, peerAddress?: string) => Promise<boolean>;
 
@@ -37,7 +42,9 @@ async function apiRequest(run: () => Promise<unknown>): Promise<unknown> {
 			error &&
 			typeof error === "object" &&
 			"code" in error &&
-			(error.code === "55P03" || error.code === "57014")
+			(error.code === "55P03" ||
+				error.code === "57014" ||
+				error.code === "40P01")
 		) {
 			return publicApiProblem(
 				new PublicApiError(503, "temporarily-unavailable", "Try again shortly"),
@@ -54,7 +61,10 @@ async function apiRequest(run: () => Promise<unknown>): Promise<unknown> {
 	}
 }
 
-async function boundedJson(request: Request): Promise<unknown> {
+async function boundedJson(
+	request: Request,
+	maximumBytes = 4096,
+): Promise<unknown> {
 	const reader = request.body?.getReader();
 	if (!reader)
 		throw new PublicApiError(
@@ -69,7 +79,7 @@ async function boundedJson(request: Request): Promise<unknown> {
 			const { done, value } = await reader.read();
 			if (done) break;
 			bytes += value.byteLength;
-			if (bytes > 4096) {
+			if (bytes > maximumBytes) {
 				await reader.cancel();
 				throw new PublicApiError(
 					413,
@@ -80,7 +90,9 @@ async function boundedJson(request: Request): Promise<unknown> {
 			chunks.push(value);
 		}
 		try {
-			return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+			return JSON.parse(
+				new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)),
+			);
 		} catch {
 			throw new PublicApiError(
 				400,
@@ -137,8 +149,47 @@ export function personalAccessTokenRoutes(
 		);
 }
 
-export function publicApiRoutes(pool: Pool, rateLimit: RateLimit) {
+export function publicApiRoutes(
+	pool: Pool,
+	rateLimit: RateLimit,
+	flushEvents?: FlushApiEvents,
+) {
 	const app = new Elysia()
+		.post("/api/v1/tasks", ({ request, server }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				if (
+					request.headers
+						.get("content-type")
+						?.split(";")[0]
+						.trim()
+						.toLowerCase() !== "application/json"
+				)
+					throw new PublicApiError(
+						415,
+						"unsupported-media-type",
+						"A JSON request body is required",
+					);
+				const requestId = parseApiIdempotencyKey(
+					request.headers.get("idempotency-key"),
+				);
+				const input = parseApiTaskCreate(await boundedJson(request, 65_536));
+				return writeApiTask(
+					pool,
+					bearerToken(request.headers),
+					input,
+					requestId,
+					flushEvents,
+				);
+			}),
+		)
 		.get("/api/v1/openapi.json", () =>
 			Response.json(publicApiOpenApi(), {
 				headers: {
