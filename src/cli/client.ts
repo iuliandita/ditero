@@ -104,7 +104,7 @@ function httpError(status: number): CliError {
 		404: ["not_found", "The requested resource or API was not found.", 5],
 		409: [
 			"request_conflict",
-			"The request ID was already used for a different task.",
+			"The request conflicts with the current task state or an existing request ID.",
 			10,
 		],
 		410: [
@@ -218,7 +218,11 @@ export async function discover(
 	budget: ResponseBudget = { bytes: 0 },
 	callerSignal?: AbortSignal,
 ): Promise<CliResult> {
-	if (options.command === "plan-task" || options.command === "create-task")
+	if (
+		options.command === "plan-task" ||
+		options.command === "create-task" ||
+		options.command === "complete-task"
+	)
 		throw new CliError(
 			"invalid_arguments",
 			"Discovery requires a read command.",

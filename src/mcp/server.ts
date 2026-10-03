@@ -8,6 +8,7 @@ import { CliError, type CliOptions, parseArguments } from "../cli/arguments.ts";
 import { discover, type Fetcher } from "../cli/client.ts";
 import { taskWorkflow } from "../cli/task-workflow.ts";
 import { PUBLIC_API_ID, PUBLIC_API_PAGE_SIZE } from "../domain/public-api.ts";
+import { apiTaskCompleteSchema } from "../domain/public-api-completion.ts";
 import {
 	PUBLIC_API_RESOURCES,
 	publicApiProfileSchema,
@@ -182,13 +183,16 @@ export function createDiteroMcp(
 		);
 	}
 	function workflow(
-		command: "plan-task" | "create-task",
+		command: "plan-task" | "create-task" | "complete-task",
 		input: unknown,
 		requestId?: string,
+		taskId?: string,
 	) {
 		return execute(() =>
-			taskWorkflow({ ...fixed, command, requestId }, fetcher, async () =>
-				new TextEncoder().encode(JSON.stringify(input)),
+			taskWorkflow(
+				{ ...fixed, command, requestId, taskId },
+				fetcher,
+				async () => new TextEncoder().encode(JSON.stringify(input)),
 			),
 		);
 	}
@@ -256,6 +260,36 @@ export function createDiteroMcp(
 		},
 		({ requestId, task }) =>
 			workflow("create-task", task, requestId.toLowerCase()),
+	);
+	server.registerTool(
+		"complete_task",
+		{
+			description:
+				"Complete an inspected task using its previously observed listId and expectedDueAt (null when undated), plus an explicit UUID requestId. Recurring completion advances that observed occurrence. After an uncertain outcome, explicitly retry the identical completion body and key; never read a new due instant or choose a new key for that retry.",
+			inputSchema: guardedInput(
+				z
+					.object({
+						taskId: PUBLIC_API_ID,
+						requestId: z.uuid(),
+						completion: apiTaskCompleteSchema,
+					})
+					.strict(),
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: publicApiResourceSchemas.tasks,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		({ taskId, requestId, completion }) =>
+			workflow("complete-task", completion, requestId.toLowerCase(), taskId),
 	);
 	return server;
 }

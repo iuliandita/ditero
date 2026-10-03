@@ -22,7 +22,12 @@ export class CliError extends Error {
 }
 
 export interface CliOptions {
-	command: "profile" | PublicApiResource | "plan-task" | "create-task";
+	command:
+		| "profile"
+		| PublicApiResource
+		| "plan-task"
+		| "create-task"
+		| "complete-task";
 	server: string;
 	token: string;
 	json: boolean;
@@ -33,6 +38,7 @@ export interface CliOptions {
 	listId?: string;
 	done?: string;
 	requestId?: string;
+	taskId?: string;
 }
 
 export function usageError(): never {
@@ -99,6 +105,7 @@ export function parseArguments(
 		"--list",
 		"--done",
 		"--request-id",
+		"--task",
 	];
 	for (let index = 0; index < argv.length; index++) {
 		const argument = argv[index];
@@ -112,25 +119,42 @@ export function parseArguments(
 			values.set(argument, value);
 		} else if (
 			!command &&
-			(["profile", "plan-task", "create-task"].includes(argument) ||
+			(["profile", "plan-task", "create-task", "complete-task"].includes(
+				argument,
+			) ||
 				PUBLIC_API_RESOURCES.some((resource) => resource === argument))
 		) {
 			command = argument as CliOptions["command"];
 		} else usageError();
 	}
 	if (!command) usageError();
-	const workflow = command === "plan-task" || command === "create-task";
+	const workflow = ["plan-task", "create-task", "complete-task"].includes(
+		command,
+	);
 	if (
 		workflow &&
 		(flags.has("--all") ||
 			[...values.keys()].some(
-				(key) => !["--server", "--request-id"].includes(key),
+				(key) =>
+					![
+						"--server",
+						"--request-id",
+						...(command === "complete-task" ? ["--task"] : []),
+					].includes(key),
 			))
 	)
 		usageError();
-	if (command !== "create-task" && values.has("--request-id")) usageError();
+	if (
+		!["create-task", "complete-task"].includes(command) &&
+		values.has("--request-id")
+	)
+		usageError();
+	if (command !== "complete-task" && values.has("--task")) usageError();
+	const taskId = values.get("--task");
+	if (command === "complete-task" && !PUBLIC_API_ID.safeParse(taskId).success)
+		usageError();
 	let requestId: string | undefined;
-	if (command === "create-task") {
+	if (command === "create-task" || command === "complete-task") {
 		try {
 			requestId = parseApiIdempotencyKey(values.get("--request-id") ?? null);
 		} catch {
@@ -183,5 +207,6 @@ export function parseArguments(
 		listId,
 		done,
 		requestId,
+		taskId,
 	};
 }

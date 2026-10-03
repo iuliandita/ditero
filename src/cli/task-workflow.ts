@@ -4,6 +4,8 @@ import {
 	TaskPlanError,
 	taskIntentSchema,
 } from "../agent/task-plan.ts";
+import { PUBLIC_API_ID } from "../domain/public-api.ts";
+import { apiTaskCompleteSchema } from "../domain/public-api-completion.ts";
 import { publicApiResourceSchemas } from "../domain/public-api-resources.ts";
 import { apiTaskCreateSchema } from "../domain/public-api-writes.ts";
 import { CliError, type CliOptions } from "./arguments.ts";
@@ -70,12 +72,25 @@ export async function taskWorkflow(
 	callerSignal?: AbortSignal,
 ): Promise<unknown> {
 	const raw = await input(reader);
-	if (options.command === "create-task") {
-		const parsed = apiTaskCreateSchema.safeParse(raw);
+	if (
+		options.command === "create-task" ||
+		options.command === "complete-task"
+	) {
+		const completing = options.command === "complete-task";
+		const parsed = completing
+			? apiTaskCompleteSchema.safeParse(raw)
+			: apiTaskCreateSchema.safeParse(raw);
 		if (!parsed.success || !options.requestId) invalidInput();
+		if (completing && !PUBLIC_API_ID.safeParse(options.taskId).success)
+			invalidInput();
 		const result = await requestJson(
 			options,
-			new URL("/api/v1/tasks", options.server),
+			new URL(
+				completing
+					? `/api/v1/tasks/${encodeURIComponent(options.taskId ?? "")}/complete`
+					: "/api/v1/tasks",
+				options.server,
+			),
 			fetcher,
 			{ body: JSON.stringify(parsed.data), requestId: options.requestId },
 			undefined,

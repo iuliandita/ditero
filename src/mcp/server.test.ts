@@ -45,7 +45,7 @@ async function protocol(
 	return client;
 }
 
-test("lists eight read tools and two fixed workflow tools with strict bounded schemas and honest annotations", async () => {
+test("lists eight read tools and three fixed workflow tools with strict bounded schemas and honest annotations", async () => {
 	const client = await protocol();
 	const { tools } = await client.listTools();
 	expect(tools.map((tool) => tool.name)).toEqual([
@@ -59,14 +59,15 @@ test("lists eight read tools and two fixed workflow tools with strict bounded sc
 		"list_dashboards",
 		"plan_task",
 		"create_task",
+		"complete_task",
 	]);
 	for (const tool of tools) {
 		expect(tool.description).toBeTruthy();
 		expect(tool.inputSchema.additionalProperties).toBe(false);
 		expect(tool.annotations).toMatchObject({
-			readOnlyHint: tool.name !== "create_task",
+			readOnlyHint: !["create_task", "complete_task"].includes(tool.name),
 			idempotentHint: true,
-			destructiveHint: false,
+			destructiveHint: tool.name === "complete_task",
 			openWorldHint: true,
 		});
 		expect(JSON.stringify(tool)).not.toContain(token);
@@ -285,7 +286,7 @@ test("real Bun stdio speaks SDK protocol, rejects API redirects, and prints no p
 	client.onerror = (error) => errors.push(error);
 	await client.connect(transport);
 	cleanup.push(() => client.close());
-	expect((await client.listTools()).tools).toHaveLength(10);
+	expect((await client.listTools()).tools).toHaveLength(11);
 	expect(
 		(await client.callTool({ name: "get_profile", arguments: {} }))
 			.structuredContent,

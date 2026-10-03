@@ -1,7 +1,7 @@
 # Ditero CLI
 
 The CLI uses the version 1 public API to discover member-visible content, plan a
-task, and create it with an explicit retry key. Packaged CLI releases are not
+task, create it, and complete an observed task with an explicit retry key. Packaged CLI releases are not
 available yet.
 
 The [terminal interface](tui.md) provides interactive browsing, reviewed creation
@@ -29,7 +29,7 @@ accepted: credentials, paths, query strings, and fragments are rejected. For loc
 development, `--allow-loopback-http` permits HTTP for exactly `localhost`,
 `127.0.0.1`, or `[::1]`. Redirects are rejected and TLS verification stays enabled.
 
-Discovery and creation success print `{ "version": 1, "data": ..., "nextCursor": ... }` to stdout.
+Discovery and write success print `{ "version": 1, "data": ..., "nextCursor": ... }` to stdout.
 `--json` produces one compact JSON line; otherwise JSON is indented. Collections
 default to 50 items, with `--limit` from 1 to 100. Pass the opaque `nextCursor` as
 `--cursor` with the same filters to continue. A null cursor ends the collection.
@@ -59,7 +59,7 @@ are not retried automatically.
 | 7 | Network, timeout, or response stream failure |
 | 8 | Invalid response, size bound, or pagination bound |
 | 9 | Other HTTP or internal failure |
-| 10 | Request ID already used for a different task |
+| 10 | Request conflict or stale observed task |
 | 11 | Original task deleted; retry cannot recreate it |
 
 ## Plan and create a task
@@ -136,7 +136,27 @@ proposal; do not resolve "tomorrow" again or generate a new UUID for that retry.
 A 409 means that UUID belongs to another payload; a 410 means its original task
 was deleted and will not be recreated. Neither failure retries automatically.
 
-Both commands accept JSON stdin up to 64 KiB with strict UTF-8, bounded nesting,
+All task workflow commands accept JSON stdin up to 64 KiB with strict UTF-8, bounded nesting,
 prototype-key rejection, and unknown-field rejection. They do not accept file
 paths, collection filters, credentials as flags, or automatic retry options.
 Planning ambiguity errors include `choices` in the JSON error envelope.
+
+## Complete an observed task
+
+Inspect the task first, then supply its observed list ID and due instant. Use
+`null` only when the inspected task has no due date. `complete-task` accepts
+exactly these two fields on stdin and requires both task ID and a request UUID:
+
+```sh
+bun run cli complete-task --task TASK_ID --request-id 00000000-0000-4000-8000-000000000002 --json <<'JSON'
+{ "listId": "LIST_ID", "expectedDueAt": "2026-10-25T11:00:00.000Z" }
+JSON
+```
+
+Completion sends one POST without discovery or automatic retries. A recurring
+task advances the inspected occurrence; its returned task can remain incomplete
+with a new due date. A stale observation returns 409. After an uncertain result,
+retry with the identical task ID, completion body, and UUID. Never read a newer
+due date or generate another key for that retry. A deleted original task returns
+410. Completion requires current write authority. `--task` is accepted only by
+`complete-task`; discovery filters are rejected on writes.
