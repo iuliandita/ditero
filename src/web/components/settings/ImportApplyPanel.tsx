@@ -17,7 +17,7 @@ type Plan = {
 	id: string;
 	planDigest: string;
 	report: {
-		plannerVersion: 1 | 2 | 3 | 4;
+		plannerVersion: 1 | 2 | 3 | 4 | 5;
 		applySupported: boolean;
 		counts: { ensure: number; ignored: number; blocked: number };
 	};
@@ -50,7 +50,8 @@ export function ImportApplyPanel({
 		plan.report.applySupported &&
 		(plan.report.plannerVersion === 2 ||
 			plan.report.plannerVersion === 3 ||
-			plan.report.plannerVersion === 4);
+			plan.report.plannerVersion === 4 ||
+			plan.report.plannerVersion === 5);
 	const counts = plan.report.counts;
 	const total = counts.ensure + counts.ignored + counts.blocked;
 	const number = (value: number) =>

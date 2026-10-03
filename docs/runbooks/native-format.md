@@ -1,6 +1,6 @@
 # Native data format
 
-The default native JSON format identifies itself with `format: "ditero"` and
+The legacy version 1 format, still the API default, identifies itself with `format: "ditero"` and
 `schemaVersion: 1`. It records `exportedAt`, `sourceUserId`, explicit `boundaries`,
 and named collections under `data`. The row fields are defined in
 `src/domain/portability/v1.ts`. IDs belong to the source; they do not grant access
@@ -47,10 +47,11 @@ report cannot authorize an incomplete import plan.
 
 An explicit `GET /api/portability/export?version=2` returns `schemaVersion: 2`.
 Its types are defined in `src/domain/portability/v2.ts`; its parser and graph validator
-remain separate. The current import UI rejects version 2 uploads. The authenticated
-plan endpoint can save a version 5 preview, but that preview cannot be applied.
-The default download remains version 1; existing saved plans retain their format
-and planner versions.
+remain separate. Settings accepts version 1 and version 2 native files. New version 2
+dry runs use planner version 5 and can apply supported ordinary content and historical
+comments, task and list templates, and recorded completion events after confirmation.
+Settings downloads version 2; the API without a version selector remains version 1.
+Existing saved plans retain their format and planner versions.
 
 Version 2 adds `sourceNamespace`, a stable installation UUID. Comments, templates,
 and completion events carry `sourceRef` with `namespace`, a canonical collection name,
@@ -82,17 +83,19 @@ local ingestion time does not replace historical time. Imported comments have no
 author and cannot be edited; workspace admins can delete them. A template's local
 operational owner is separate from its historical creator. Redacted attribution exports
 as unknown while retaining its source reference. None of these claims grants author
-permissions or replays completion, Karma, or notifications. Version 2 import remains
-unsupported.
+permissions or replays completion, Karma, or notifications.
 
 The plan endpoint preserves normalized source claims for comments, templates, and
 completion events, together with current writable-parent and replay-identity checks.
 Absent tasks require an explicit dependency on a frozen ordinary task candidate.
 Changed historical content conflicts; deleted historical targets remain tombstones.
-Version 5 reports return `applySupported: false` and
-`applyBlockedReason: "history-apply-unsupported"`. Saving writes only the immutable
-preview ledger. It does not import history or ordinary content, and the apply endpoint
-refuses the preview. Settings does not yet expose this preview workflow.
+New version 5 reports return `applySupported: true`. Saving writes only the immutable
+plan, not imported content. Apply rechecks current write access and exact saved evidence
+in atomic batches of at most 100 items. Historical content and replay identity commit
+together. Ordinary notification readiness and assignment rules still apply; historical
+records themselves never run completion mutators, award Karma, or send notifications.
+Previously saved previews with `applySupported: false` remain immutable and cannot be
+applied. Upload their original archive and save a new dry run.
 
 Version 1 cannot represent retained comment authors or template creators. If such rows
 are visible, a version 1 export fails with HTTP 409 and `history-requires-v2` before
@@ -102,8 +105,8 @@ to a local account. Native-only version 1 exports remain unchanged.
 ## Saved dry runs
 
 Settings can validate a native file, map its workspaces and people, and save a
-dry-run report. Saving does not import content. New plans use planner version 4
-and freeze destination checks for later application. Saved version 2 and 3 plans
+dry-run report. Saving does not import content. New version 1 plans use planner version 4;
+version 2 archives use planner version 5. Both freeze destination checks for later application. Saved version 2 and 3 plans
 remain applicable with their original exclusions; save a new plan to include
 newly supported task notification settings. Older version 1 plans remain
 non-applicable; upload their file again to create a current plan.
@@ -126,8 +129,11 @@ a current member of the task's destination workspace. Missing or changed mapping
 evidence blocks the affected task; a failed intended assignment also blocks its
 notification-bearing task rather than replacing the assignee with the list owner.
 Version 2 and 3 plans keep their older dated-task and notification-setting exclusions.
-Comments, templates, views, dashboards, focus records, preferences, Karma, and habit
-logs remain blocked pending their import policies. Attachment files remain excluded.
+Version 1 archives and older planners still block comments and templates.
+Qualified version 2 archives use planner 5 for comments, templates and retained
+completion history, with source claims kept separate from current authorship.
+Views, dashboards, focus records, preferences, Karma and habit logs remain blocked
+pending their import policies. Attachment files remain excluded.
 Unresolved references and mapping conflicts block affected records and their
 dependents. The report distinguishes candidate records, excluded metadata, and
 blocked records. Candidates are not a promise that an eventual apply will pass

@@ -8,6 +8,7 @@ import {
 	useState,
 } from "react";
 import type { PortableExportV1 } from "../../../domain/portability/v1.ts";
+import type { PortableExportV2 } from "../../../domain/portability/v2.ts";
 import { randomId } from "../../../domain/random-id.ts";
 import { type Role, WRITE_ROLES } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
@@ -34,14 +35,14 @@ type Status = {
 	sourceLabel: string;
 	createdAt: string;
 	report: {
-		plannerVersion: 1 | 2 | 3 | 4;
+		plannerVersion: 1 | 2 | 3 | 4 | 5;
 		applySupported: boolean;
 		counts: { ensure: number; ignored: number; blocked: number };
 		findings: { code: string; path: string }[];
 	};
 };
 type Source = { id: string; label: string; jobs: Status[] };
-type Loaded = { text: string; document: PortableExportV1 };
+type Loaded = { text: string; document: PortableExportV1 | PortableExportV2 };
 // Radix Select reserves "" for "no value", so the empty choice needs a token.
 const NONE = "__none";
 const trigger = "w-full sm:w-72 pointer-coarse:data-[size=default]:h-11";
@@ -282,7 +283,8 @@ export function ImportPlanPanel() {
 		report?.report.applySupported &&
 		(report.report.plannerVersion === 2 ||
 			report.report.plannerVersion === 3 ||
-			report.report.plannerVersion === 4);
+			report.report.plannerVersion === 4 ||
+			report.report.plannerVersion === 5);
 	return (
 		<section id="import-plan" aria-labelledby="import-plan-heading">
 			<h3 id="import-plan-heading" className="text-sm font-semibold">
@@ -495,13 +497,18 @@ export function ImportPlanPanel() {
 					</h4>
 					<p className="text-sm">
 						{applicable
-							? report.report.plannerVersion === 4
+							? report.report.plannerVersion >= 4
 								? m.import_apply_boundary_activation()
 								: report.report.plannerVersion === 3
 									? m.import_apply_boundary_assignments()
 									: m.import_apply_boundary()
-							: m.import_plan_boundary()}
+							: report.report.plannerVersion === 5
+								? m.import_history_preview_closed()
+								: m.import_plan_boundary()}
 					</p>
+					{applicable && report.report.plannerVersion === 5 && (
+						<p className="mt-2 text-sm">{m.import_apply_boundary_history()}</p>
+					)}
 					<dl className="mt-2 text-sm">
 						{(
 							[

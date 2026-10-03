@@ -347,7 +347,14 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 								source.data,
 								document,
 								mapping,
-								{ signal: request.signal, deadline, plannerVersion: 4 },
+								{
+									signal: request.signal,
+									deadline,
+									plannerVersion: 4,
+									...(document.schemaVersion === 2
+										? { historyApply: true }
+										: {}),
+								},
 							),
 						);
 					} finally {

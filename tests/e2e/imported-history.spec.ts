@@ -139,17 +139,16 @@ test("imported authors stay distinct from local people and cannot claim comment 
 			const exportAlert = memberPage
 				.locator("#data-portability")
 				.getByRole("alert");
+			const downloadEvent = memberPage.waitForEvent("download");
 			await memberPage.getByRole("button", { name: "Download JSON" }).click();
-			// The export boundary can wait up to ten seconds before refusing.
-			await expect(exportAlert).toContainText(
-				/Use a version 2 archive|Some edits are still pending/,
-				{ timeout: 15_000 },
-			);
-			if (
-				(await exportAlert.textContent())?.includes(
-					"Some edits are still pending",
+			await expect
+				.poll(
+					async () =>
+						exportStatuses.length > 0 || (await exportAlert.count()) > 0,
+					{ timeout: 15_000 },
 				)
-			) {
+				.toBe(true);
+			if ((await exportAlert.count()) > 0) {
 				await expect(exportAlert).toHaveText(
 					"Some edits are still pending, were refused, or could not be confirmed. No file was downloaded. You can wait and retry, or download only the server-saved content.",
 				);
@@ -161,8 +160,21 @@ test("imported authors stay distinct from local people and cannot claim comment 
 					})
 					.click();
 			}
-			await expect(exportAlert).toContainText("Use a version 2 archive");
-			expect(exportStatuses).toEqual([409]);
+			const download = await downloadEvent;
+			expect(download.suggestedFilename()).toBe("ditero-history-v2.json");
+			const stream = await download.createReadStream();
+			const chunks: Buffer[] = [];
+			for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+			const downloaded = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+			expect(downloaded.schemaVersion).toBe(2);
+			expect(
+				downloaded.data.comments.filter(
+					(row: { author: { kind: string } }) =>
+						row.author.kind === "source_claim",
+				),
+			).toHaveLength(2);
+			expect(exportStatuses).toEqual([200]);
+			await expect(exportAlert).toHaveCount(0);
 		} finally {
 			memberPage.off("response", observeExport);
 		}

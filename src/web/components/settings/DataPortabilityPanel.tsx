@@ -41,7 +41,7 @@ export function DataPortabilityPanel() {
 				}
 			}
 			setWaiting(false);
-			const response = await fetch("/api/portability/export", {
+			const response = await fetch("/api/portability/export?version=2", {
 				credentials: "same-origin",
 				signal: controller.signal,
 			});
@@ -67,7 +67,7 @@ export function DataPortabilityPanel() {
 			const url = URL.createObjectURL(blob);
 			const link = document.createElement("a");
 			link.href = url;
-			link.download = "ditero-export-v1.json";
+			link.download = "ditero-history-v2.json";
 			link.click();
 			// Allow the browser to begin consuming the download before releasing it.
 			setTimeout(() => URL.revokeObjectURL(url), 1000);
