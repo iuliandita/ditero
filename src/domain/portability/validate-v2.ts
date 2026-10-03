@@ -97,6 +97,16 @@ const habitEvent = z
 		"Invalid habit history transition",
 	);
 const event = z.union([taskEvent, habitEvent]);
+export const portableHistoryRowsV2 = {
+	comments: portableCommentBase.safeExtend({
+		sourceRef: sourceRef("comments"),
+		author,
+	}),
+	templates: portableTemplateBase
+		.safeExtend({ sourceRef: sourceRef("templates"), creator: author })
+		.refine(templateKindMatches, "Template kind mismatch"),
+	completionEvents: event,
+};
 
 const documentSchema = z.strictObject({
 	format: z.literal("ditero"),
@@ -121,18 +131,9 @@ const documentSchema = z.strictObject({
 		tasks: z.array(portableRows.tasks),
 		labels: z.array(portableRows.labels),
 		taskLabels: z.array(portableRows.taskLabels),
-		templates: z.array(
-			portableTemplateBase
-				.safeExtend({ sourceRef: sourceRef("templates"), creator: author })
-				.refine(templateKindMatches, "Template kind mismatch"),
-		),
+		templates: z.array(portableHistoryRowsV2.templates),
 		assignments: z.array(portableRows.assignments),
-		comments: z.array(
-			portableCommentBase.safeExtend({
-				sourceRef: sourceRef("comments"),
-				author,
-			}),
-		),
+		comments: z.array(portableHistoryRowsV2.comments),
 		habitLogs: z.array(portableRows.habitLogs),
 		views: z.array(portableRows.views),
 		dashboards: z.array(portableRows.dashboards),
@@ -141,7 +142,7 @@ const documentSchema = z.strictObject({
 		karma: z.array(portableRows.karma),
 		karmaEvents: z.array(portableRows.karmaEvents),
 		attachments: z.array(portableRows.attachments),
-		completionEvents: z.array(event),
+		completionEvents: z.array(portableHistoryRowsV2.completionEvents),
 	}),
 }) satisfies z.ZodType<PortableExportV2>;
 

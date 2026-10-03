@@ -6,6 +6,7 @@ import {
 	sealImportApplyPlan,
 } from "../../domain/portability/import-apply-plan.ts";
 import {
+	type HistoryApplyReport,
 	type HistoryPreviewReport,
 	sealHistoryPreviewPlan,
 } from "../../domain/portability/import-apply-plan-v2.ts";
@@ -52,7 +53,8 @@ export type ImportPlanStatus = {
 	report:
 		| Awaited<ReturnType<typeof buildImportPlan>>["report"]
 		| ImportApplyReport
-		| HistoryPreviewReport;
+		| HistoryPreviewReport
+		| HistoryApplyReport;
 };
 export type ImportSourceStatus = {
 	id: string;
@@ -334,6 +336,7 @@ export async function saveImportPlan(
 		signal?: AbortSignal;
 		deadline?: number;
 		plannerVersion?: 1 | 2 | 3 | 4;
+		historyApply?: boolean;
 	} = {},
 ): Promise<ImportPlanStatus> {
 	const archive = input.schemaVersion === 2 ? input : null;
@@ -536,6 +539,7 @@ export async function saveImportPlan(
 							mappingDigest: basePlan.mappingDigest,
 							signal: options.signal,
 							deadline,
+							historyApply: options.historyApply,
 						},
 					);
 				}

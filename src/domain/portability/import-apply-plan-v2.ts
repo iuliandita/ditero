@@ -91,7 +91,11 @@ export type HistoryPreviewReport = {
 	counts: { ensure: number; ignored: number; blocked: number };
 	findings: { code: string; path: string }[];
 };
-type HistoryPreviewItem = {
+export type HistoryApplyReport = Omit<
+	HistoryPreviewReport,
+	"applySupported" | "applyBlockedReason"
+> & { applySupported: true };
+export type HistoryPreviewItem = {
 	ordinal: number;
 	collection: HistoricalImportItem["collection"];
 	sourceId: string;
@@ -122,6 +126,7 @@ export async function sealHistoryPreviewPlan(
 		mappingDigest: string;
 		signal?: AbortSignal;
 		deadline?: number;
+		historyApply?: boolean;
 	},
 ) {
 	const checkpoint = () => {
@@ -131,13 +136,21 @@ export async function sealHistoryPreviewPlan(
 			throw new ImportPlanError("planning-timeout");
 	};
 	checkpoint();
-	const report: HistoryPreviewReport = {
+	const previewReport: HistoryPreviewReport = {
 		plannerVersion: 5,
 		applySupported: false,
 		applyBlockedReason: "history-apply-unsupported",
 		counts: { ensure: 0, ignored: 0, blocked: 0 },
 		findings: [],
 	};
+	const report: HistoryPreviewReport | HistoryApplyReport = context.historyApply
+		? {
+				plannerVersion: 5,
+				applySupported: true,
+				counts: previewReport.counts,
+				findings: previewReport.findings,
+			}
+		: previewReport;
 	const items: (FrozenImportItem | HistoryPreviewItem)[] = ordinary.map(
 		(item) => structuredClone(item),
 	);
