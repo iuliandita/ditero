@@ -17,6 +17,9 @@ All notable changes to this project are documented here. The format is based on
 - Bounded CLI discovery with stable JSON and eight read-only MCP tools over stdio.
   Credentials and the trusted server origin are configured at process startup.
 
+- CLI task planning with private dashboard resolution, account-local dates and
+  explicit assignees/labels, plus idempotent creation of reviewed proposals.
+
 ## [0.0.1-alpha.1] - 2026-10-03
 
 ### Added

@@ -60,9 +60,10 @@ of those choices. Accent preferences stay with your account on this device.
   [native app status](#browser-installation-and-native-development-apps)
 - Membership-scoped public API with expiring personal access tokens, idempotent
   task creation and OpenAPI; see [API access](docs/runbooks/public-api.md)
-- Read-only [CLI discovery](docs/cli.md) and [local MCP tools](docs/mcp.md)
+- [CLI discovery and task planning/creation](docs/cli.md) for agents and terminal use
+- Read-only [local MCP tools](docs/mcp.md)
 
-iOS, third-party importers, voice capture, further API writes, CLI/MCP task workflows
+iOS, third-party importers, voice capture, further API writes, MCP task workflows
 and a terminal UI remain planned.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
 
