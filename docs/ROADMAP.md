@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-10-02 | Status: pre-v1, building on `develop`
+> Updated: 2026-10-03 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -32,10 +32,14 @@ builds, with full runtime qualification still pending. See the
 [Android](../apps/android/README.md) and [desktop](../apps/desktop/README.md)
 qualification notes. Native delivery remains open in issue #346.
 
-Development happens on `develop`. The `0.0.1-alpha.1` pipeline packages containers,
+Development happens on `develop`. The published `0.0.1-alpha.1` release packages containers,
 Helm/Compose deployment files and experimental native downloads; Windows downloads
 are unsigned and macOS downloads use ad-hoc signatures. Native qualification remains
 open. `1.0.0` requires the complete v1 contract below.
+
+The versioned public API provides membership-scoped discovery, expiring personal
+access tokens and OpenAPI. Task writes, feeds, webhooks and terminal clients remain
+in progress; see [API access](runbooks/public-api.md).
 
 ## What v1 Delivers
 
@@ -98,6 +102,15 @@ current shipped subset is described above and in the [README](../README.md).
 - Public REST API with OpenAPI/Swagger and personal access tokens.
 - Agent-first CLI with stable `--json` output, a native MCP server for AI agents, and a
   full-screen terminal UI.
+
+### Agent workflows
+
+First-class agent workflows are part of the API, CLI and MCP contract. An agent
+can discover authorized dashboards and backing lists, resolve dates in the user's
+timezone, find people, create and assign tasks, and verify the result. Ambiguous
+names and invitations that grant access require explicit decisions. Private
+workspace boundaries and membership roles apply to agents just as they do to the
+web interface. Track delivery in issues #511, #512 and #515.
 
 ### Polish
 

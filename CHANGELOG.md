@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Expiring personal access tokens with one-time reveal, revocation and account
+  deletion cleanup. Membership-scoped discovery endpoints expose workspaces,
+  lists, tasks, people, labels, views and dashboards with bounded pagination and
+  an OpenAPI description.
+
 ## [0.0.1-alpha.1] - 2026-10-03
 
 ### Added

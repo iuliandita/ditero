@@ -88,6 +88,10 @@ import { telegramWebhookRoutes } from "./notifications/telegram-webhook.ts";
 import { startWorker } from "./notifications/worker.ts";
 import { importPlanRoutes } from "./portability/import-routes.ts";
 import { portabilityRoutes } from "./portability/routes.ts";
+import {
+	personalAccessTokenRoutes,
+	publicApiRoutes,
+} from "./public-api/routes.ts";
 import { publicConfig } from "./public-config.ts";
 import { nativeZeroPayload } from "./zero-auth.ts";
 
@@ -163,6 +167,23 @@ async function channelWrite(
 }
 
 const routes = new Elysia()
+	.use(
+		personalAccessTokenRoutes(
+			pool,
+			{ guardedPost, guardedGet, foreignOrigin },
+			nativeRateLimit,
+		),
+	)
+	.use(
+		publicApiRoutes(pool, async (request, peerAddress) => {
+			const key = resolveClientRateKey({
+				peerAddress,
+				forwardedFor: request.headers.get("x-forwarded-for"),
+				trustedProxies: nativeTrustedProxies,
+			});
+			return takeRateToken(db, `public-api:${key}`, 120, 2);
+		}),
+	)
 	.use(
 		nativeAuthRoutes({
 			pool,
