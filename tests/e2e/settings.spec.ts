@@ -23,7 +23,7 @@ test("sections read in a fixed order with the danger zone last", async ({
 }) => {
 	await openSettings(page, "settings-order");
 	const sections = page.getByTestId("settings-section");
-	await expect(sections).toHaveCount(9);
+	await expect(sections).toHaveCount(10);
 	expect(
 		await sections.evaluateAll((els) =>
 			els.map((el) => (el as HTMLElement).dataset.section),
@@ -33,6 +33,7 @@ test("sections read in a fixed order with the danger zone last", async ({
 		"appearance",
 		"notifications",
 		"security",
+		"access-tokens",
 		"lists",
 		"focus",
 		"keyboard",
@@ -60,7 +61,7 @@ test("sections read in a fixed order with the danger zone last", async ({
 
 	// The desktop section nav lands focus on the heading it names.
 	const nav = page.getByTestId("settings-nav");
-	await expect(nav.locator("a")).toHaveCount(9);
+	await expect(nav.locator("a")).toHaveCount(10);
 	await nav.getByText("Danger zone", { exact: true }).click();
 	await expect(page.locator("#settings-danger-heading")).toBeFocused();
 	// The fragment carries invite secrets; section links must never write it.
