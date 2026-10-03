@@ -15,6 +15,20 @@ All PNGs have transparent backgrounds. These are raster assets; editable vector
 masters are not included. Keep the symbol and lettering proportions intact. The
 horizontal wordmarks use a smaller symbol and wider gap than the palette studies.
 
+The login and native server selector use these wordmarks. Installed PWA, desktop,
+and Android artwork is generated from the standalone symbol with Python 3 and
+ImageMagick 7:
+
+```sh
+python3 scripts/generate-branding.py
+python3 scripts/test-branding.py
+```
+
+The generator preserves the raster geometry, centers the Android adaptive mark
+inside its safe circle, and derives white notification artwork from the same alpha
+shape. `--output-root` generates an isolated copy for verification. The earlier
+`assets/branding/icon.svg` is not an installed artwork source.
+
 ## Accent themes
 
 | Theme | Logo color | Light/dark identity sheet |
