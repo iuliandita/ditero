@@ -87,8 +87,9 @@ intent: it permits only the caller's personal backing lists, and for dashboards
 also requires a caller-owned personal dashboard. It does not change permissions.
 Duplicate names return an error with authorized ID/name choices; select a known
 ID and plan again. Missing people are refused without sending invitations.
-Habit destinations are refused because this workflow does not create a habit
-schedule; an unscheduled habit would not appear as a dashboard occurrence.
+Habit destinations are refused because an ordinary task intent does not request
+a habit schedule. The shared creation path defaults top-level habits to daily
+recurrence, which this workflow must not choose implicitly.
 
 The planner reads the account profile and all pages of workspaces, lists, people,
 labels, views, and dashboards sequentially. The combined context is capped at
