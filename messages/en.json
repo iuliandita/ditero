@@ -2249,5 +2249,20 @@
 	"appearance_saving": "Saving theme...",
 	"appearance_waiting": "Theme changes are queued. Waiting for the server to confirm.",
 	"appearance_save_failed": "Could not save these theme changes to your account. Your changes are still available; try again.",
-	"appearance_cache_failed": "Your theme is saved to your account, but its local startup cache could not be updated."
+	"appearance_cache_failed": "Your theme is saved to your account, but its local startup cache could not be updated.",
+	"tui_footer": "q quit | ? help | Enter open | Esc back | p next | r refresh | n add | c complete",
+	"tui_footer_review": "q quit | y confirm/retry | Esc cancel before sending",
+	"tui_footer_form": "Esc cancel | Enter continue",
+	"tui_due_prompt": "Due day: today, tomorrow, YYYY-MM-DD, or leave empty",
+	"tui_review_create": "Review task creation",
+	"tui_review_complete": "Review task completion",
+	"tui_review_recurring": "Completing advances this recurring task to its next occurrence.",
+	"tui_uncertain": "The result is unconfirmed. Retry the same request; do not create a new one.",
+	"tui_error": "Request failed ({code}). Check access and connection before retrying.",
+	"tui_people": "People",
+	"tui_ready": "Ready",
+	"tui_help_navigation": "Use arrows and Enter to browse. Esc returns. p loads the next page; r starts a fresh collection.",
+	"tui_help_writes": "n adds to a selected list or dashboard. c completes a task. Review first, then press y to send.",
+	"tui_help_exit": "q quits. Ctrl-C always exits. Pasted text never confirms an action.",
+	"tui_terminal_required": "Use an interactive terminal with a supported TERM."
 }

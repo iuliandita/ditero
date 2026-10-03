@@ -5,6 +5,7 @@
 	"scripts": {
 		"mcp": "bun run src/mcp/index.ts",
 		"cli": "bun run src/cli/index.ts",
+		"tui": "bun run src/tui/index.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "bun run src/db/migrate.ts",
 		"security:rotate-auth-secrets": "bun run src/security/rotate-auth-secrets.ts",

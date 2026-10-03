@@ -2249,5 +2249,20 @@
 	"appearance_saving": "Design wird gespeichert...",
 	"appearance_waiting": "Designänderungen sind vorgemerkt. Die Bestätigung des Servers steht noch aus.",
 	"appearance_save_failed": "Diese Designänderungen konnten nicht in deinem Konto gespeichert werden. Deine Änderungen sind noch vorhanden; versuche es erneut.",
-	"appearance_cache_failed": "Dein Design ist in deinem Konto gespeichert, aber der lokale Zwischenspeicher für den Start konnte nicht aktualisiert werden."
+	"appearance_cache_failed": "Dein Design ist in deinem Konto gespeichert, aber der lokale Zwischenspeicher für den Start konnte nicht aktualisiert werden.",
+	"tui_footer": "q beenden | ? Hilfe | Enter öffnen | Esc zurück | p weiter | r neu laden | n hinzufügen | c erledigen",
+	"tui_footer_review": "q beenden | y bestätigen/wiederholen | Esc vor dem Senden abbrechen",
+	"tui_footer_form": "Esc abbrechen | Enter weiter",
+	"tui_due_prompt": "Fälligkeit: today, tomorrow, YYYY-MM-DD oder leer lassen",
+	"tui_review_create": "Aufgabe vor dem Anlegen prüfen",
+	"tui_review_complete": "Erledigen der Aufgabe prüfen",
+	"tui_review_recurring": "Das Erledigen setzt diese wiederkehrende Aufgabe auf den nächsten Termin.",
+	"tui_uncertain": "Das Ergebnis ist unbestätigt. Wiederhole dieselbe Anfrage; erstelle keine neue.",
+	"tui_error": "Anfrage fehlgeschlagen ({code}). Prüfe Zugriff und Verbindung vor dem nächsten Versuch.",
+	"tui_people": "Personen",
+	"tui_ready": "Bereit",
+	"tui_help_navigation": "Nutze Pfeile und Enter zum Durchsehen. Esc geht zurück. p lädt die nächste Seite; r beginnt neu.",
+	"tui_help_writes": "n fügt eine Aufgabe zur ausgewählten Liste oder zum Dashboard hinzu. c erledigt eine Aufgabe. Prüfe sie und sende mit y.",
+	"tui_help_exit": "q beendet. Ctrl-C beendet immer. Eingefügter Text bestätigt keine Aktion.",
+	"tui_terminal_required": "Nutze ein interaktives Terminal mit einem unterstützten TERM."
 }

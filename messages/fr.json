@@ -2295,5 +2295,20 @@
 	"appearance_saving": "Enregistrement du thème...",
 	"appearance_waiting": "Les modifications du thème sont en attente. Le serveur doit encore les confirmer.",
 	"appearance_save_failed": "Ces modifications du thème n’ont pas pu être enregistrées dans ton compte. Elles sont toujours disponibles ; réessaie.",
-	"appearance_cache_failed": "Ton thème est enregistré dans ton compte, mais son cache local de démarrage n’a pas pu être mis à jour."
+	"appearance_cache_failed": "Ton thème est enregistré dans ton compte, mais son cache local de démarrage n’a pas pu être mis à jour.",
+	"tui_footer": "q quitter | ? aide | Enter ouvrir | Esc retour | p suite | r actualiser | n ajouter | c terminer",
+	"tui_footer_review": "q quitter | y confirmer/réessayer | Esc annuler avant envoi",
+	"tui_footer_form": "Esc annuler | Enter continuer",
+	"tui_due_prompt": "Échéance : today, tomorrow, YYYY-MM-DD ou laisse vide",
+	"tui_review_create": "Vérifier la création de la tâche",
+	"tui_review_complete": "Vérifier la fin de la tâche",
+	"tui_review_recurring": "Terminer cette tâche récurrente la fait passer à sa prochaine échéance.",
+	"tui_uncertain": "Le résultat est non confirmé. Réessaie la même requête ; ne crée pas de nouvelle requête.",
+	"tui_error": "Échec de la requête ({code}). Vérifie ton accès et ta connexion avant de réessayer.",
+	"tui_people": "Personnes",
+	"tui_ready": "Prêt",
+	"tui_help_navigation": "Utilise les flèches et Enter pour parcourir. Esc revient. p charge la page suivante ; r recommence.",
+	"tui_help_writes": "n ajoute à la liste ou au dashboard sélectionné. c termine une tâche. Vérifie puis appuie sur y pour envoyer.",
+	"tui_help_exit": "q quitte. Ctrl-C quitte toujours. Le texte collé ne confirme jamais une action.",
+	"tui_terminal_required": "Utilise un terminal interactif avec un TERM pris en charge."
 }

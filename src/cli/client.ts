@@ -44,7 +44,15 @@ function assertSafeJson(value: unknown, depth = 0): void {
 	}
 }
 
-async function readBody(response: Response): Promise<Uint8Array> {
+function cancelled(): never {
+	throw new CliError("cancelled", "The request was cancelled.", 7);
+}
+
+async function readBody(
+	response: Response,
+	signal: AbortSignal,
+	abortFailure: () => never,
+): Promise<Uint8Array> {
 	const declared = response.headers.get("content-length");
 	if (
 		declared &&
@@ -55,11 +63,18 @@ async function readBody(response: Response): Promise<Uint8Array> {
 	}
 	if (!response.body) invalidResponse();
 	const reader = response.body.getReader();
+	const abort = () => {
+		void reader.cancel().catch(() => {});
+	};
+	signal.addEventListener("abort", abort, { once: true });
+	if (signal.aborted) abort();
 	const chunks: Uint8Array[] = [];
 	let length = 0;
 	try {
 		while (true) {
+			if (signal.aborted) abortFailure();
 			const chunk = await reader.read();
+			if (signal.aborted) abortFailure();
 			if (chunk.done) break;
 			length += chunk.value.byteLength;
 			if (length > MAX_RESPONSE_BYTES) {
@@ -69,6 +84,7 @@ async function readBody(response: Response): Promise<Uint8Array> {
 			chunks.push(chunk.value);
 		}
 	} finally {
+		signal.removeEventListener("abort", abort);
 		reader.releaseLock();
 	}
 	const bytes = new Uint8Array(length);
@@ -120,7 +136,13 @@ export async function requestJson(
 	fetcher: Fetcher = fetch,
 	write?: { body: string; requestId: string },
 	budget: ResponseBudget = { bytes: 0 },
+	callerSignal?: AbortSignal,
 ): Promise<unknown> {
+	if (callerSignal?.aborted) cancelled();
+	const signal = AbortSignal.any([
+		AbortSignal.timeout(15_000),
+		...(callerSignal ? [callerSignal] : []),
+	]);
 	let response: Response;
 	try {
 		response = await fetcher(url, {
@@ -137,10 +159,11 @@ export async function requestJson(
 						}
 					: {}),
 			},
-			signal: AbortSignal.timeout(15_000),
+			signal,
 			...(write ? { body: write.body } : {}),
 		});
 	} catch {
+		if (callerSignal?.aborted) cancelled();
 		throw new CliError(
 			"network_error",
 			"Could not reach the server within the request timeout.",
@@ -161,7 +184,14 @@ export async function requestJson(
 	}
 	let bytes: Uint8Array;
 	try {
-		bytes = await readBody(response);
+		bytes = await readBody(response, signal, () => {
+			if (callerSignal?.aborted) cancelled();
+			throw new CliError(
+				"network_error",
+				"The server response could not be read.",
+				7,
+			);
+		});
 	} catch (error) {
 		if (error instanceof CliError) throw error;
 		throw new CliError(
@@ -186,6 +216,7 @@ export async function discover(
 	options: CliOptions,
 	fetcher: Fetcher = fetch,
 	budget: ResponseBudget = { bytes: 0 },
+	callerSignal?: AbortSignal,
 ): Promise<CliResult> {
 	if (options.command === "plan-task" || options.command === "create-task")
 		throw new CliError(
@@ -211,7 +242,14 @@ export async function discover(
 			if (options.done !== undefined)
 				url.searchParams.set("done", options.done);
 		}
-		const raw = await requestJson(options, url, fetcher, undefined, budget);
+		const raw = await requestJson(
+			options,
+			url,
+			fetcher,
+			undefined,
+			budget,
+			callerSignal,
+		);
 		const parsed = envelope.safeParse(raw);
 		if (!parsed.success) invalidResponse();
 		if (options.command === "profile") {

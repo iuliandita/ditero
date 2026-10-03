@@ -4,6 +4,9 @@ The CLI uses the version 1 public API to discover member-visible content, plan a
 task, and create it with an explicit retry key. Packaged CLI releases are not
 available yet.
 
+The [terminal interface](tui.md) provides interactive browsing, reviewed creation
+and completion through the same public API.
+
 Install the repository dependencies with `bun install --frozen-lockfile`, then run
 `bun run cli --help`. This source CLI requires Bun. Configure `DITERO_URL` with an
 HTTPS server origin and provide a personal access token through `DITERO_TOKEN`
