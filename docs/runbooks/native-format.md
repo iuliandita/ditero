@@ -47,9 +47,10 @@ report cannot authorize an incomplete import plan.
 
 An explicit `GET /api/portability/export?version=2` returns `schemaVersion: 2`.
 Its types are defined in `src/domain/portability/v2.ts`; its parser and graph validator
-remain separate. It is an archive only: the current import UI and plan endpoint reject
-it with an unsupported-version message and create no saved plan. The default download
-remains version 1; existing saved plans retain their format and planner versions.
+remain separate. The current import UI rejects version 2 uploads. The authenticated
+plan endpoint can save a version 5 preview, but that preview cannot be applied.
+The default download remains version 1; existing saved plans retain their format
+and planner versions.
 
 Version 2 adds `sourceNamespace`, a stable installation UUID. Comments, templates,
 and completion events carry `sourceRef` with `namespace`, a canonical collection name,
@@ -84,9 +85,14 @@ as unknown while retaining its source reference. None of these claims grants aut
 permissions or replays completion, Karma, or notifications. Version 2 import remains
 unsupported.
 
-Internal historical planning and replay-identity storage are implemented for comments,
-templates, and completion events. They do not expose version 2 import through Settings
-or the public plan/apply endpoints; those routes still reject history archives.
+The plan endpoint preserves normalized source claims for comments, templates, and
+completion events, together with current writable-parent and replay-identity checks.
+Absent tasks require an explicit dependency on a frozen ordinary task candidate.
+Changed historical content conflicts; deleted historical targets remain tombstones.
+Version 5 reports return `applySupported: false` and
+`applyBlockedReason: "history-apply-unsupported"`. Saving writes only the immutable
+preview ledger. It does not import history or ordinary content, and the apply endpoint
+refuses the preview. Settings does not yet expose this preview workflow.
 
 Version 1 cannot represent retained comment authors or template creators. If such rows
 are visible, a version 1 export fails with HTTP 409 and `history-requires-v2` before

@@ -6,11 +6,22 @@ import {
 	sealImportApplyPlan,
 } from "../../domain/portability/import-apply-plan.ts";
 import {
+	type HistoryPreviewReport,
+	sealHistoryPreviewPlan,
+} from "../../domain/portability/import-apply-plan-v2.ts";
+import { hashImportValue } from "../../domain/portability/import-digest.ts";
+import { ordinaryArchiveContent } from "../../domain/portability/import-document.ts";
+import {
 	buildImportPlan,
 	type ImportMappings,
 	ImportPlanError,
 } from "../../domain/portability/import-plan.ts";
+import {
+	buildHistoricalImportPlan,
+	HistoricalImportPlanError,
+} from "../../domain/portability/import-plan-v2.ts";
 import type { PortableExportV1 } from "../../domain/portability/v1.ts";
+import type { PortableExportV2 } from "../../domain/portability/v2.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 import {
 	discoverV4Authority,
@@ -22,6 +33,10 @@ import {
 	freezeImportTargets,
 	ImportFreezeLimitError,
 } from "./import-freeze.ts";
+import {
+	freezeHistoricalTargets,
+	HistoricalTargetError,
+} from "./import-history-target.ts";
 
 export type ImportSourceSelection =
 	| { mode: "new"; id: string; label: string }
@@ -36,7 +51,8 @@ export type ImportPlanStatus = {
 	planDigest: string;
 	report:
 		| Awaited<ReturnType<typeof buildImportPlan>>["report"]
-		| ImportApplyReport;
+		| ImportApplyReport
+		| HistoryPreviewReport;
 };
 export type ImportSourceStatus = {
 	id: string;
@@ -312,7 +328,7 @@ export async function saveImportPlan(
 	pool: Pool,
 	ownerId: string,
 	sourceSelection: ImportSourceSelection,
-	document: PortableExportV1,
+	input: PortableExportV1 | PortableExportV2,
 	mappings: ImportMappings,
 	options: {
 		signal?: AbortSignal;
@@ -320,6 +336,12 @@ export async function saveImportPlan(
 		plannerVersion?: 1 | 2 | 3 | 4;
 	} = {},
 ): Promise<ImportPlanStatus> {
+	const archive = input.schemaVersion === 2 ? input : null;
+	const document = archive
+		? ordinaryArchiveContent(archive)
+		: (input as PortableExportV1);
+	if (archive && options.plannerVersion !== 4)
+		fail("history-preview-requires-current-planner", 400);
 	const deadline = Math.min(
 		options.deadline ?? Number.POSITIVE_INFINITY,
 		performance.now() + 15_000,
@@ -391,15 +413,16 @@ export async function saveImportPlan(
 				fail("source-not-found", 404);
 			if (
 				source &&
-				(source.format !== document.format ||
-					source.schema_version !== document.schemaVersion ||
-					source.source_user_id !== document.sourceUserId ||
+				(source.format !== input.format ||
+					source.schema_version !== input.schemaVersion ||
+					source.source_user_id !== input.sourceUserId ||
 					(selection.mode === "new" && source.label !== selection.label))
 			)
 				fail("source-binding-conflict");
 			let plan:
 				| typeof basePlan
-				| Awaited<ReturnType<typeof sealImportApplyPlan>> = basePlan;
+				| Awaited<ReturnType<typeof sealImportApplyPlan>>
+				| Awaited<ReturnType<typeof sealHistoryPreviewPlan>> = basePlan;
 			if (
 				options.plannerVersion === 2 ||
 				options.plannerVersion === 3 ||
@@ -435,6 +458,87 @@ export async function saveImportPlan(
 					signal: options.signal,
 					deadline,
 				});
+				if (archive) {
+					const checkpoint = () => {
+						if (options.signal?.aborted)
+							throw new ImportPlanError("planning-cancelled");
+						if (performance.now() >= deadline)
+							throw new ImportPlanError("planning-timeout");
+					};
+					const taskParents = new Map<string, string>();
+					for (const task of archive.data.tasks)
+						taskParents.set(
+							task.id,
+							await hashImportValue(
+								"ditero-import-target-id-v1",
+								[ownerId, selection.id, "tasks", task.id],
+								checkpoint,
+							),
+						);
+					const history = await buildHistoricalImportPlan(
+						archive,
+						{
+							tasks: taskParents,
+							workspaces: new Map(Object.entries(mappings.workspaces)),
+						},
+						{ signal: options.signal, deadline },
+					);
+					const tasks = new Map(
+						plan.items
+							.filter((item) => item.collection === "tasks")
+							.map((item) => [item.sourceId, item]),
+					);
+					const eligible = history.filter(
+						(item) =>
+							item.parentKind === "workspace" ||
+							tasks.get(item.archiveParentId)?.disposition === "ensure",
+					);
+					const plannedTasks = new Map(
+						plan.items
+							.filter(
+								(item) =>
+									item.collection === "tasks" &&
+									item.disposition === "ensure" &&
+									item.targetId &&
+									item.targetPrecondition?.kind === "absent",
+							)
+							.map((item) => [
+								item.targetId as string,
+								{
+									workspaceId: item.dependencyProof?.workspace.targetId ?? "",
+									dependencySourceKey: item.sourceKey,
+								},
+							]),
+					);
+					const historicalSnapshots = await freezeHistoricalTargets(
+						client,
+						ownerId,
+						eligible,
+						{ signal: options.signal, deadline, plannedTasks },
+					);
+					const documentDigest = await hashImportValue(
+						"ditero-import-document-v5",
+						{
+							ordinaryDocumentDigest: basePlan.documentDigest,
+							sourceNamespace: archive.sourceNamespace.toLowerCase(),
+							historicalContent: history.map((item) => item.semanticDigest),
+						},
+						checkpoint,
+					);
+					plan = await sealHistoryPreviewPlan(
+						plan.items,
+						history,
+						historicalSnapshots,
+						{
+							ownerUserId: ownerId,
+							sourceId: selection.id,
+							documentDigest,
+							mappingDigest: basePlan.mappingDigest,
+							signal: options.signal,
+							deadline,
+						},
+					);
+				}
 			}
 			const duplicate = await findStatus(client, ownerId, plan.planDigest);
 			if (duplicate) return duplicate;
@@ -465,9 +569,9 @@ export async function saveImportPlan(
 						selection.id,
 						ownerId,
 						selection.label,
-						document.format,
-						document.schemaVersion,
-						document.sourceUserId,
+						input.format,
+						input.schemaVersion,
+						input.sourceUserId,
 					],
 				);
 				if (created.rowCount !== 1) fail("source-binding-conflict");
@@ -513,6 +617,28 @@ export async function saveImportPlan(
 				}
 			: undefined,
 	).catch((error: unknown) => {
+		if (error instanceof HistoricalTargetError)
+			fail(
+				error.code,
+				error.code === "historical-parent-unavailable"
+					? 403
+					: error.code === "import-target-limit"
+						? 413
+						: error.code === "planning-timeout"
+							? 503
+							: error.code === "planning-cancelled"
+								? 408
+								: 400,
+			);
+		if (error instanceof HistoricalImportPlanError)
+			fail(
+				error.code,
+				error.code === "planning-timeout"
+					? 503
+					: error.code === "planning-cancelled"
+						? 408
+						: 400,
+			);
 		if (error instanceof ImportFreezeLimitError) fail(error.code, error.status);
 		if (error instanceof ImportActivationLimitError)
 			fail(error.code, error.status);

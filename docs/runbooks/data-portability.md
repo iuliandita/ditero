@@ -78,7 +78,10 @@ attribution for comments, templates, and completion events. It includes only con
 you can currently access. It does not reconstruct earlier events or include attachment
 files or keys.
 
-This archive cannot yet be imported. Settings **Download JSON** and the endpoint
+This archive cannot yet be imported. The authenticated plan endpoint supports an
+immutable version 5 preview with historical source claims and destination checks;
+its report explicitly disables apply. Settings still rejects version 2 uploads.
+Settings **Download JSON** and the endpoint
 without a version selector still produce version 1 for the existing import workflow.
 An explicit `?version=1` produces the same file. Unsupported or repeated version
 selectors return HTTP 400. Both formats share the limits below.

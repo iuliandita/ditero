@@ -146,7 +146,12 @@ const documentSchema = z.strictObject({
 }) satisfies z.ZodType<PortableExportV2>;
 
 export function parsePortableExportV2(input: string): PortableExportV2 {
-	const parsed = parseBoundedPortableJson(input);
+	return validatePortableExportV2Value(parseBoundedPortableJson(input));
+}
+
+export function validatePortableExportV2Value(
+	parsed: unknown,
+): PortableExportV2 {
 	const validated = documentSchema.safeParse(parsed);
 	if (!validated.success || !unchanged(parsed, validated.data))
 		throw new PortableExportValidationError("invalid-export");
