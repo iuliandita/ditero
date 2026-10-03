@@ -1,7 +1,7 @@
 # Public API
 
-The versioned API provides discovery, idempotent task creation and observed task
-completion. Further task writes, iCal feeds and webhooks remain under development.
+The versioned API provides discovery, idempotent task creation, scalar updates and
+observed task completion. Task deletion, iCal feeds and webhooks remain under development.
 Write tokens do not grant workspace access.
 
 ## Tokens
@@ -123,3 +123,51 @@ another occurrence or awarding Karma again. Keys are shared with task creation;
 reuse for another operation or body returns 409. A deleted task returns 410 while
 its original list remains visible, or 404 when inaccessible. Read the task again
 before intentionally completing its next occurrence with a new key.
+
+## Scalar task updates
+
+Read `GET /api/v1/tasks/{id}/observation` before editing. Read tokens and Viewer
+memberships can observe visible tasks. Its envelope contains `data.snapshot` and
+`data.stateToken`; existing task response schemas remain unchanged. The versioned
+snapshot captures task/list/workspace IDs, title, notes, due instant, all-day flag,
+priority, creation/completion state and recurrence evidence. Instants are normalized
+to UTC milliseconds. The token is SHA256 of that canonical snapshot. It describes
+only those fields, without locking a row or covering assignments, labels or other
+relationships. It is not a monotonic revision: returning to the same scalar state
+can produce the same token.
+
+`PATCH /api/v1/tasks/{id}` requires a write token, current Member/Admin/Owner
+membership, JSON content and a UUID `Idempotency-Key`. Supply the observed list and
+token, and a nonempty patch:
+
+```json
+{
+  "listId": "LIST_ID",
+  "expectedState": "0000000000000000000000000000000000000000000000000000000000000000",
+  "patch": { "title": "Buy coffee", "notes": null, "priority": 1 }
+}
+```
+
+Replace the example token with `stateToken` from the observation. Accepted fields
+are `title`, `notes`, `dueAt`, `dueAllDay` and `priority`, with the creation endpoint's
+bounds and date format. Omitted fields preserve current values; null clears notes
+or the due instant. The effective all-day flag requires a non-null due instant.
+Unknown fields, empty patches and query parameters are rejected. The complete UTF-8
+JSON body is limited to 64 KiB, including the observation and patch envelope.
+
+Recurring tasks and habits permit title, notes and priority only. Any `dueAt` or
+`dueAllDay` field returns `400 recurrence-workflow-required`, even if its value is
+unchanged. Completion, moving, sorting, assignments, labels and recurrence rules
+are separate workflows. Pending or blocked import activation returns
+`409 activation-pending` before effects. A changed captured state or list returns
+`409 task-state-changed`; read a new observation before intentionally submitting a
+new update. Scope and membership refusals take precedence over stale-state errors.
+
+The native mutation and receipt commit atomically. Same-key canonical replay
+returns the current authorized task without applying the patch again, even after a
+later edit. Current write access and writable membership are required for replay.
+Keys share the account namespace with creation and completion; a different body or
+operation returns `409 idempotency-conflict`. A deleted task returns 410 while its
+original list remains writable and visible, or 404 when inaccessible. Revoked or
+expired credentials return 401. Preserve the same key and body after an uncertain
+transport result; no automatic retry or replanning occurs.
