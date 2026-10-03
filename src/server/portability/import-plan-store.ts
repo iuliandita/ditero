@@ -21,6 +21,12 @@ import {
 	buildHistoricalImportPlan,
 	HistoricalImportPlanError,
 } from "../../domain/portability/import-plan-v2.ts";
+import { validateProviderConversion } from "../../domain/portability/providers/common.ts";
+import {
+	type ProviderInputBinding,
+	parseProviderBinding,
+	providerDocumentDigest,
+} from "../../domain/portability/providers/input.ts";
 import type { PortableExportV1 } from "../../domain/portability/v1.ts";
 import type { PortableExportV2 } from "../../domain/portability/v2.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
@@ -46,6 +52,7 @@ export type ImportPlanStatus = {
 	id: string;
 	sourceId: string;
 	sourceLabel: string;
+	inputBinding: ProviderInputBinding | null;
 	createdAt: string;
 	documentDigest: string;
 	mappingDigest: string;
@@ -62,6 +69,7 @@ export type ImportSourceStatus = {
 	format: string;
 	schemaVersion: number;
 	sourceUserId: string;
+	inputBinding: ProviderInputBinding | null;
 	createdAt: string;
 	jobs: ImportPlanStatus[];
 };
@@ -235,7 +243,7 @@ export async function importTransaction<T>(
 	}
 }
 
-const statusProjection = `j.id, j.source_id as "sourceId", s.label as "sourceLabel", j.created_at as "createdAt", j.document_digest as "documentDigest", j.mapping_digest as "mappingDigest", j.plan_digest as "planDigest", j.report`;
+const statusProjection = `j.id, j.source_id as "sourceId", s.label as "sourceLabel", j.created_at as "createdAt", j.document_digest as "documentDigest", j.mapping_digest as "mappingDigest", j.plan_digest as "planDigest", j.report, j.input_binding as "inputBinding"`;
 type StatusRow = Omit<ImportPlanStatus, "createdAt"> & { createdAt: Date };
 const status = (row: StatusRow): ImportPlanStatus => ({
 	...row,
@@ -337,8 +345,32 @@ export async function saveImportPlan(
 		deadline?: number;
 		plannerVersion?: 1 | 2 | 3 | 4;
 		historyApply?: boolean;
+		inputBinding?: ProviderInputBinding;
 	} = {},
 ): Promise<ImportPlanStatus> {
+	const binding = options.inputBinding
+		? parseProviderBinding(options.inputBinding, options)
+		: null;
+	if (binding) {
+		if (
+			input.schemaVersion !== 1 ||
+			options.plannerVersion !== 4 ||
+			options.historyApply
+		)
+			fail("invalid-provider-plan", 400);
+		validateProviderConversion(
+			{
+				adapter: binding.adapter,
+				adapterVersion: binding.adapterVersion,
+				sourceNamespace: binding.sourceNamespace,
+				identityMode: binding.identityMode,
+				document: input,
+				findings: [{ code: "untrusted-migration-owner", path: "sourceUserId" }],
+			},
+			options,
+		);
+	}
+	const sourceFormat = binding?.adapter ?? input.format;
 	const archive = input.schemaVersion === 2 ? input : null;
 	const document = archive
 		? ordinaryArchiveContent(archive)
@@ -365,6 +397,12 @@ export async function saveImportPlan(
 			fail("import-cancelled", 408);
 		throw error;
 	});
+	const documentDigest = binding
+		? await providerDocumentDigest(binding, basePlan.documentDigest, {
+				signal: options.signal,
+				deadline,
+			})
+		: basePlan.documentDigest;
 	const v4Candidates =
 		options.plannerVersion === 4
 			? projectImportApply(document, basePlan.items, {
@@ -407,8 +445,9 @@ export async function saveImportPlan(
 				format: string;
 				schema_version: number;
 				source_user_id: string;
+				input_binding: ProviderInputBinding | null;
 			}>(
-				"select label, format, schema_version, source_user_id from import_source where id = $1 and owner_user_id = $2",
+				"select label, format, schema_version, source_user_id, input_binding from import_source where id = $1 and owner_user_id = $2",
 				[selection.id, ownerId],
 			);
 			const source = sources.rows[0];
@@ -416,7 +455,10 @@ export async function saveImportPlan(
 				fail("source-not-found", 404);
 			if (
 				source &&
-				(source.format !== input.format ||
+				(source.format !== sourceFormat ||
+					JSON.stringify(
+						source.input_binding && parseProviderBinding(source.input_binding),
+					) !== JSON.stringify(binding) ||
 					source.schema_version !== input.schemaVersion ||
 					source.source_user_id !== input.sourceUserId ||
 					(selection.mode === "new" && source.label !== selection.label))
@@ -456,7 +498,7 @@ export async function saveImportPlan(
 					plannerVersion: options.plannerVersion,
 					ownerUserId: ownerId,
 					sourceId: selection.id,
-					documentDigest: basePlan.documentDigest,
+					documentDigest,
 					mappingDigest: basePlan.mappingDigest,
 					signal: options.signal,
 					deadline,
@@ -568,20 +610,21 @@ export async function saveImportPlan(
 				fail("import-quota-exceeded", 413);
 			if (!source && selection.mode === "new") {
 				const created = await client.query(
-					`insert into import_source (id, owner_user_id, label, format, schema_version, source_user_id) values ($1,$2,$3,$4,$5,$6) on conflict do nothing returning id`,
+					`insert into import_source (id, owner_user_id, label, format, schema_version, source_user_id, input_binding) values ($1,$2,$3,$4,$5,$6,$7::jsonb) on conflict do nothing returning id`,
 					[
 						selection.id,
 						ownerId,
 						selection.label,
-						input.format,
+						sourceFormat,
 						input.schemaVersion,
 						input.sourceUserId,
+						binding ? JSON.stringify(binding) : null,
 					],
 				);
 				if (created.rowCount !== 1) fail("source-binding-conflict");
 			}
 			await client.query(
-				`insert into import_job (id, source_id, owner_user_id, document_digest, mapping_digest, plan_digest, report, payload_bytes, planner_version, apply_supported) values ($1,$2,$3,$4,$5,$1,$6::jsonb,$7,$8,$9)`,
+				`insert into import_job (id, source_id, owner_user_id, document_digest, mapping_digest, plan_digest, report, payload_bytes, planner_version, apply_supported, input_binding) values ($1,$2,$3,$4,$5,$1,$6::jsonb,$7,$8,$9,$10::jsonb)`,
 				[
 					plan.planDigest,
 					selection.id,
@@ -592,6 +635,7 @@ export async function saveImportPlan(
 					payloadBytes,
 					plan.report.plannerVersion,
 					plan.report.applySupported,
+					binding ? JSON.stringify(binding) : null,
 				],
 			);
 			await client.query(
@@ -662,7 +706,7 @@ export async function listImportSources(
 		const sources = await client.query<
 			Omit<ImportSourceStatus, "createdAt" | "jobs"> & { createdAt: Date }
 		>(
-			`select id, label, format, schema_version as "schemaVersion", source_user_id as "sourceUserId", created_at as "createdAt" from import_source where owner_user_id = $1 order by created_at, id`,
+			`select id, label, format, schema_version as "schemaVersion", source_user_id as "sourceUserId", input_binding as "inputBinding", created_at as "createdAt" from import_source where owner_user_id = $1 order by created_at, id`,
 			[ownerId],
 		);
 		const jobs = await client.query<StatusRow>(

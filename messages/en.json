@@ -2266,5 +2266,13 @@
 	"tui_help_navigation": "Use arrows and Enter to browse. Esc returns. p loads the next page; r starts a fresh collection.",
 	"tui_help_writes": "n adds to a selected list or dashboard. c completes a task. Review first, then press y to send.",
 	"tui_help_exit": "q quits. Ctrl-C always exits. Pasted text never confirms an action.",
-	"tui_terminal_required": "Use an interactive terminal with a supported TERM."
+	"tui_terminal_required": "Use an interactive terminal with a supported TERM.",
+	"import_provider_format": "Import format",
+	"import_provider_native": "Native Ditero JSON",
+	"import_provider_csv": "Ditero CSV v1",
+	"import_provider_namespace": "CSV source namespace: {namespace}",
+	"import_provider_policy": "CSV imports only lists, tasks and one subtask level with stable IDs. It excludes assignments, labels, comments, templates, history, attachments, recurrence, reminders, personal state, folders, list customization, shopping fields, task creation times and urgency. This migration owner is not an authorship claim. Keep the same namespace and IDs when reimporting.",
+	"import_provider_acknowledge": "I accept these exclusions and the stable source identity.",
+	"import_provider_file": "Ditero CSV file",
+	"import_provider_invalid": "This file is not a valid Ditero CSV v1 file, or its references are inconsistent."
 }

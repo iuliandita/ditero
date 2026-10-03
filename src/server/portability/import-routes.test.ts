@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
 import { Elysia } from "elysia";
 import type { Pool } from "pg";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { CSV_V1_EXCLUSIONS } from "../../domain/portability/providers/input.ts";
 import type { PortableExportV1 } from "../../domain/portability/v1.ts";
 import { makeGuards, type Session } from "../guards.ts";
 import { V4ApplyConflict } from "./import-activation.ts";
@@ -465,4 +467,108 @@ describe("native import execution transport", () => {
 			"saved",
 		);
 	});
+});
+
+function csvPayload() {
+	const { document: _document, ...base } = payload();
+	return {
+		...base,
+		input: {
+			kind: "provider",
+			version: 1,
+			adapter: "ditero-csv",
+			adapterVersion: 1,
+			sourceNamespace: "fcb28f31-12ae-4c9d-82f2-1289d9fcb411",
+			identityMode: "stable-ids",
+			exclusions: [...CSV_V1_EXCLUSIONS],
+			originalCsvBase64: readFileSync(
+				new URL(
+					"../../../tests/fixtures/portability/providers/csv-v1.csv",
+					import.meta.url,
+				),
+			).toString("base64"),
+		},
+	};
+}
+test("reparses original CSV and passes only validated binding and ordinary content to storage", async () => {
+	const value = csvPayload();
+	const result = await app().handle(request(JSON.stringify(value)));
+	expect(result.status).toBe(200);
+	expect(
+		store.save.mock.calls[0]?.[3].data.tasks.map(
+			(row: { title: string }) => row.title,
+		),
+	).toEqual(["Prepare groceries", "Buy apples"]);
+	expect(store.save.mock.calls[0]?.[5]).toMatchObject({
+		plannerVersion: 4,
+		inputBinding: {
+			adapter: "ditero-csv",
+			identityMode: "stable-ids",
+			exclusions: CSV_V1_EXCLUSIONS,
+		},
+	});
+	expect(store.save.mock.calls[0]?.[5]).not.toHaveProperty("historyApply");
+	expect(store.save.mock.calls[0]?.[5].inputBinding).not.toHaveProperty(
+		"originalCsvBase64",
+	);
+});
+test.each([
+	"native-mix",
+	"policy",
+	"namespace",
+	"encoding",
+	"extra",
+])("refuses CSV %s before persistence", async (change) => {
+	const value = csvPayload();
+	const body: Record<string, unknown> = value;
+	if (change === "native-mix") body.document = JSON.stringify(document());
+	if (change === "policy") value.input.exclusions.reverse();
+	if (change === "namespace")
+		value.input.sourceNamespace = "11111111-1111-4111-8111-111111111111";
+	if (change === "encoding")
+		value.input.originalCsvBase64 = Buffer.from([255]).toString("base64");
+	if (change === "extra") body.convertedDocument = document();
+	expect((await app().handle(request(JSON.stringify(body)))).status).toBe(400);
+	expect(store.save).not.toHaveBeenCalled();
+});
+
+function paddedRequestBody(value: unknown, bytes: number): string {
+	const json = JSON.stringify(value);
+	return `${json}${" ".repeat(bytes - Buffer.byteLength(json))}`;
+}
+function chunkedBody(text: string): ReadableStream<Uint8Array> {
+	const bytes = new TextEncoder().encode(text);
+	let offset = 0;
+	return new ReadableStream({
+		pull(controller) {
+			if (offset === bytes.length) {
+				controller.close();
+				return;
+			}
+			controller.enqueue(bytes.subarray(offset, offset + 65_536));
+			offset = Math.min(offset + 65_536, bytes.length);
+		},
+	});
+}
+test.each([
+	"padded",
+	"chunked",
+])("provider cap counts actual %s upload bytes before conversion", async (kind) => {
+	const value = csvPayload();
+	value.source.label = "Café source";
+	const text = paddedRequestBody(value, 32 * 1024 * 1024 + 1);
+	expect(Buffer.byteLength(text)).toBe(32 * 1024 * 1024 + 1);
+	const response = await app().handle(
+		request(kind === "chunked" ? chunkedBody(text) : text),
+	);
+	expect(response.status).toBe(413);
+	expect(await response.json()).toEqual({ code: "request-limit" });
+	expect(store.save).not.toHaveBeenCalled();
+});
+test("provider exact cap and native upload above provider cap retain their positive limits", async () => {
+	const provider = paddedRequestBody(csvPayload(), 32 * 1024 * 1024);
+	expect((await app().handle(request(chunkedBody(provider)))).status).toBe(200);
+	const native = paddedRequestBody(payload(), 33 * 1024 * 1024);
+	expect((await app().handle(request(native))).status).toBe(200);
+	expect(store.save).toHaveBeenCalledTimes(2);
 });

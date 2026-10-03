@@ -1725,6 +1725,7 @@ export const importSource = pgTable(
 		format: text("format").notNull(),
 		schemaVersion: integer("schema_version").notNull(),
 		sourceUserId: text("source_user_id").notNull(),
+		inputBinding: jsonb("input_binding"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
@@ -1748,6 +1749,7 @@ export const importJob = pgTable(
 		ownerUserId: text("owner_user_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
+		inputBinding: jsonb("input_binding"),
 		documentDigest: text("document_digest").notNull(),
 		mappingDigest: text("mapping_digest").notNull(),
 		planDigest: text("plan_digest").notNull(),

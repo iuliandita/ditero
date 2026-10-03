@@ -18,6 +18,22 @@ Assignments and fallback recipients require explicit mappings to current destina
 members. Import never creates permissions or sends assignment notices. Keep normal
 database and attachment-storage backups for disaster recovery.
 
+## CSV import
+
+Choose **Ditero CSV v1** in Settings to upload a UTF-8 CSV using the
+[CSV contract](native-format.md#csv-provider-input). Review the displayed source
+namespace and exclusions, map its workspace, and explicitly accept the policy
+before saving and applying the dry run. The same namespace and stable list/task
+IDs must be retained for subsequent files from that source.
+
+CSV supports lists, tasks and one subtask level, including literal text, completion
+state, explicit dates, priority and ordering. It excludes assignments, labels,
+comments, templates, history, attachments, recurrence, reminders, personal state,
+folders, list customization, shopping fields, task creation times and urgency.
+The migration owner establishes operational mapping only, not historical authorship.
+It creates no account, membership or source claim. Other providers' CSV formats are
+not accepted by this adapter.
+
 ## Imported task notifications
 
 A task imported with planner version 4 or 5 can show **Pending** while its assignments are still being applied,

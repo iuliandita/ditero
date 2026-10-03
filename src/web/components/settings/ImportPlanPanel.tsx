@@ -7,6 +7,10 @@ import {
 	useRef,
 	useState,
 } from "react";
+import type {
+	ProviderImportInput,
+	ProviderInputBinding,
+} from "../../../domain/portability/providers/input.ts";
 import type { PortableExportV1 } from "../../../domain/portability/v1.ts";
 import type { PortableExportV2 } from "../../../domain/portability/v2.ts";
 import { randomId } from "../../../domain/random-id.ts";
@@ -33,6 +37,7 @@ type Status = {
 	planDigest: string;
 	sourceId: string;
 	sourceLabel: string;
+	inputBinding?: ProviderInputBinding | null;
 	createdAt: string;
 	report: {
 		plannerVersion: 1 | 2 | 3 | 4 | 5;
@@ -42,7 +47,11 @@ type Status = {
 	};
 };
 type Source = { id: string; label: string; jobs: Status[] };
-type Loaded = { text: string; document: PortableExportV1 | PortableExportV2 };
+type Loaded = {
+	text?: string;
+	input?: ProviderImportInput;
+	document: PortableExportV1 | PortableExportV2;
+};
 // Radix Select reserves "" for "no value", so the empty choice needs a token.
 const NONE = "__none";
 const trigger = "w-full sm:w-72 pointer-coarse:data-[size=default]:h-11";
@@ -78,6 +87,8 @@ export function ImportPlanPanel() {
 	const [newId, setNewId] = useState(() => randomId());
 	const [label, setLabel] = useState("");
 	const [loaded, setLoaded] = useState<Loaded | null>(null);
+	const [format, setFormat] = useState<"native" | "csv">("native");
+	const [policyAccepted, setPolicyAccepted] = useState(false);
 	const [fileName, setFileName] = useState<string | null>(null);
 	const limitsId = useId();
 	const labelInputId = useId();
@@ -152,6 +163,7 @@ export function ImportPlanPanel() {
 		worker.current = null;
 		changed();
 		setLoaded(null);
+		setPolicyAccepted(false);
 		setWorkspaceMap({});
 		setPrincipalMap({});
 		setParsing(false);
@@ -201,7 +213,7 @@ export function ImportPlanPanel() {
 				worker.current = null;
 			}
 		};
-		parser.postMessage(file);
+		parser.postMessage({ file, format });
 	}
 	async function request(path: string, body?: unknown) {
 		if (active.current || applying) return;
@@ -278,7 +290,8 @@ export function ImportPlanPanel() {
 		loaded?.document.data.workspaces.every((w) =>
 			writable.some((target) => target.id === workspaceMap[w.id]),
 		) &&
-		(source || label.trim());
+		(source || label.trim()) &&
+		(!loaded.input || policyAccepted);
 	const applicable =
 		report?.report.applySupported &&
 		(report.report.plannerVersion === 2 ||
@@ -293,10 +306,61 @@ export function ImportPlanPanel() {
 			<p className="mt-2 text-sm text-muted-foreground">
 				{m.import_apply_intro()}
 			</p>
+			{(loaded?.input || report?.inputBinding) && (
+				<div className="mt-3 space-y-2 text-sm">
+					<p>
+						{m.import_provider_namespace({
+							namespace:
+								(report?.inputBinding ?? loaded?.input)?.sourceNamespace ?? "",
+						})}
+					</p>
+					<p>{m.import_provider_policy()}</p>
+					<label className="flex items-start gap-2">
+						<input
+							type="checkbox"
+							data-testid="import-provider-policy"
+							disabled={locked}
+							checked={policyAccepted}
+							onChange={(event) => {
+								setPolicyAccepted(event.target.checked);
+							}}
+						/>
+						{m.import_provider_acknowledge()}
+					</label>
+				</div>
+			)}
 			<fieldset disabled={locked} className="mt-3 space-y-3">
+				<Field label={m.import_provider_format()}>
+					{(labelId) => (
+						<Select
+							value={format}
+							onValueChange={(next) => {
+								if (next !== "native" && next !== "csv") return;
+								setFormat(next);
+								selectFile(undefined);
+							}}
+						>
+							<SelectTrigger
+								aria-labelledby={labelId}
+								data-testid="import-format"
+								className={trigger}
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="native">
+									{m.import_provider_native()}
+								</SelectItem>
+								<SelectItem value="csv">{m.import_provider_csv()}</SelectItem>
+							</SelectContent>
+						</Select>
+					)}
+				</Field>
 				<FilePicker
-					label={m.import_plan_file()}
-					accept="application/json,.json"
+					label={
+						format === "csv" ? m.import_provider_file() : m.import_plan_file()
+					}
+					accept={format === "csv" ? "text/csv,.csv" : "application/json,.json"}
 					fileName={fileName}
 					disabled={locked}
 					describedBy={limitsId}
@@ -462,7 +526,9 @@ export function ImportPlanPanel() {
 								source: source
 									? { mode: "existing", id: source }
 									: { mode: "new", id: newId, label: label.trim() },
-								document: loaded.text,
+								...(loaded.input
+									? { input: loaded.input }
+									: { document: loaded.text }),
 								mappings: {
 									workspaces: workspaceMap,
 									principals: principalMap,
@@ -486,7 +552,9 @@ export function ImportPlanPanel() {
 									: error === "limit"
 										? m.import_plan_limits()
 										: error === "invalid"
-											? m.import_plan_invalid()
+											? format === "csv"
+												? m.import_provider_invalid()
+												: m.import_plan_invalid()
 											: m.import_plan_failed()}
 				</p>
 			)}
@@ -556,7 +624,7 @@ export function ImportPlanPanel() {
 					key={report.id}
 					plan={report}
 					onBusy={setApplying}
-					disabled={busy}
+					disabled={busy || (!!report.inputBinding && !policyAccepted)}
 				/>
 			)}
 			<h4 className="mt-5 text-sm font-medium">{m.import_plan_saved()}</h4>
@@ -582,6 +650,7 @@ export function ImportPlanPanel() {
 								disabled={locked}
 								onClick={() => {
 									setReport(job);
+									setPolicyAccepted(false);
 									setError(null);
 								}}
 							>

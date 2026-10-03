@@ -5,6 +5,7 @@ import type {
 } from "../../domain/portability/import-apply-plan.ts";
 import type { HistoryPreviewItem } from "../../domain/portability/import-apply-plan-v2.ts";
 import { hashImportValue } from "../../domain/portability/import-digest.ts";
+import { parseProviderBinding } from "../../domain/portability/providers/input.ts";
 import type { PortableJson } from "../../domain/portability/v1.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 import {
@@ -149,16 +150,32 @@ export async function applyImportBatch(
 				await client.query<{
 					source_id: string;
 					source_schema_version: number;
+					source_binding: unknown;
+					input_binding: unknown;
 					planner_version: number;
 					apply_supported: boolean;
 					plan_digest: string;
 					report: ImportApplyReport;
 				}>(
-					`select j.source_id, s.schema_version as source_schema_version, j.planner_version, j.apply_supported, j.plan_digest, j.report from import_source s join import_job j on j.source_id = s.id where j.id = $1 and j.owner_user_id = $2 and s.owner_user_id = $2`,
+					`select j.source_id, s.schema_version as source_schema_version, s.input_binding as source_binding, j.input_binding, j.planner_version, j.apply_supported, j.plan_digest, j.report from import_source s join import_job j on j.source_id = s.id where j.id = $1 and j.owner_user_id = $2 and s.owner_user_id = $2`,
 					[jobId, ownerId],
 				)
 			).rows[0];
 			if (!job) fail("plan-not-found", 404);
+			if (job.input_binding !== null || job.source_binding !== null) {
+				try {
+					const binding = parseProviderBinding(job.input_binding);
+					if (
+						JSON.stringify(binding) !==
+							JSON.stringify(parseProviderBinding(job.source_binding)) ||
+						job.planner_version !== 4 ||
+						job.source_schema_version !== 1
+					)
+						fail("source-binding-conflict");
+				} catch {
+					fail("source-binding-conflict");
+				}
+			}
 			if (
 				![2, 3, 4, 5].includes(job.planner_version) ||
 				job.planner_version !== discoveredVersion ||
