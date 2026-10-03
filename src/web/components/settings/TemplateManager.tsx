@@ -6,6 +6,7 @@ import { randomId } from "../../../domain/random-id.ts";
 import type { Role } from "../../../domain/role.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Template } from "../../../zero/schema.gen.ts";
@@ -109,9 +110,41 @@ export function TemplateManager({
 							data-testid="template-row"
 							className="group flex items-center gap-2 rounded-lg px-1 py-1"
 						>
-							<span className="min-w-0 flex-1 truncate text-sm">
-								{template.name}
-							</span>
+							{template.importedAt != null ? (
+								<details
+									className="min-w-0 flex-1 text-sm"
+									data-testid="template-attribution"
+								>
+									<summary className="min-h-11 cursor-pointer py-3 wrap-anywhere">
+										<bdi>{template.name}</bdi>
+									</summary>
+									<div className="space-y-1 pb-3 text-xs text-muted-foreground wrap-anywhere">
+										<p>
+											{template.historicalCreatorKind === "source_claim" &&
+											template.historicalCreatorName
+												? m.template_imported_creator({
+														name: `\u2068${template.historicalCreatorName}\u2069`,
+													})
+												: m.template_imported_creator_unknown()}
+										</p>
+										<p>
+											{m.template_imported_time({
+												time: new Intl.DateTimeFormat(getLocale(), {
+													dateStyle: "medium",
+													timeStyle: "short",
+												}).format(template.importedAt),
+											})}
+										</p>
+										{template.provenanceRedactedAt != null && (
+											<p>{m.completion_history_imported_redacted()}</p>
+										)}
+									</div>
+								</details>
+							) : (
+								<span className="min-w-0 flex-1 truncate text-sm">
+									{template.name}
+								</span>
+							)}
 							<RowActions
 								label={m.row_actions_for({ name: template.name })}
 								actions={templateActions({

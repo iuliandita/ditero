@@ -2,23 +2,20 @@ import { useConnectionState, useQuery, useZero } from "@rocicorp/zero/react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import type {
+	HistoryCursor as Cursor,
+	HistoryPage as HistoryPageData,
+	HistoryRow,
+} from "../../../domain/task-history.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import { formatDayKey } from "../../lib/intl-format.ts";
-
-type Cursor = { recordedAt: number; id: string };
-type HistoryRow = Cursor & {
-	action: "complete" | "reopen" | "skip" | "habit_set" | "habit_unlog";
-	origin: "member_mutation" | "capability_recipient";
-	beforeDueAt: number | null;
-	beforeDueAllDay: boolean | null;
-	habitDate: string | null;
-	beforeHabitStatus: "done" | "skipped" | null;
-	afterHabitStatus: "done" | "skipped" | null;
-	actor?: { name: string | null } | null;
-};
+import {
+	loadTaskHistory,
+	TaskHistoryUnavailableError,
+} from "../../lib/task-history.ts";
 
 function formatInstant(at: number, allDay = false) {
 	return new Intl.DateTimeFormat(getLocale(), {
@@ -28,7 +25,23 @@ function formatInstant(at: number, allDay = false) {
 }
 
 function historyAction(row: HistoryRow, person: string) {
-	const reminder = row.origin === "capability_recipient";
+	if (row.sourceKind === "imported") {
+		switch (row.action) {
+			case "complete":
+				return m.completion_history_imported_complete();
+			case "reopen":
+				return m.completion_history_imported_reopen();
+			case "skip":
+				return m.completion_history_imported_skip();
+			case "habit_set":
+				return row.afterHabitStatus === "done"
+					? m.completion_history_imported_habit_done()
+					: m.completion_history_imported_habit_skipped();
+			case "habit_unlog":
+				return m.completion_history_imported_habit_removed();
+		}
+	}
+	const reminder = row.origin.mechanism === "capability_recipient";
 	switch (row.action) {
 		case "complete":
 			return reminder
@@ -57,16 +70,110 @@ function historyAction(row: HistoryRow, person: string) {
 	}
 }
 
-function HistoryPage({ taskId }: { taskId: string }) {
+function HistoryPage({
+	taskId,
+	workspaceId,
+}: {
+	taskId: string;
+	workspaceId: string;
+}) {
 	const [cursors, setCursors] = useState<(Cursor | null)[]>([null]);
 	const page = cursors.length - 1;
 	const connection = useConnectionState();
 	const [browserOnline, setBrowserOnline] = useState(
 		() => typeof navigator === "undefined" || navigator.onLine,
 	);
-	const [rows, details] = useQuery(
-		queries.taskCompletionEvents.page({ taskId, cursor: cursors[page] }),
+	const cursor = cursors[page] ?? null;
+	const [nativeRows] = useQuery(
+		queries.taskCompletionEvents.page({
+			taskId,
+			cursor: cursor
+				? {
+						recordedAt: cursor.recordedAt,
+						id: cursor.sourceKind === "native" ? cursor.id : "",
+					}
+				: null,
+		}),
 	);
+	const key = JSON.stringify(cursor);
+	const [request, setRequest] = useState<{
+		key: string;
+		status: "loading" | "complete" | "error" | "unavailable";
+		data: HistoryPageData | null;
+	}>({ key, status: "loading", data: null });
+	const [revision, retry] = useState(0);
+	const nativeRevision = JSON.stringify(
+		nativeRows.map((row) => [row.id, row.recordedAt, row.actor?.name]),
+	);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Retries and synced native events refresh the merged page.
+	useEffect(() => {
+		const controller = new AbortController();
+		if (!browserOnline) {
+			setRequest((current) => ({
+				key,
+				status: "loading",
+				data: current.key === key ? current.data : null,
+			}));
+			return () => controller.abort();
+		}
+		setRequest((current) => ({
+			key,
+			status: "loading",
+			data: current.key === key ? current.data : null,
+		}));
+		void loadTaskHistory(
+			taskId,
+			workspaceId,
+			JSON.parse(key) as Cursor | null,
+			controller.signal,
+		).then(
+			(data) => {
+				if (!controller.signal.aborted)
+					setRequest({ key, status: "complete", data });
+			},
+			(error) => {
+				if (!controller.signal.aborted)
+					setRequest({
+						key,
+						status:
+							error instanceof TaskHistoryUnavailableError
+								? "unavailable"
+								: "error",
+						data: null,
+					});
+			},
+		);
+		return () => controller.abort();
+	}, [taskId, workspaceId, key, browserOnline, revision, nativeRevision]);
+	const rows: readonly HistoryRow[] =
+		request.key === key && request.data
+			? request.data.rows
+			: nativeRows.map((row) => ({
+					recordedAt: row.recordedAt,
+					id: row.id,
+					sourceKind: "native" as const,
+					action: row.action,
+					origin: {
+						kind: "native" as const,
+						mechanism: row.origin,
+						label: null,
+					},
+					actor: {
+						kind: row.actor?.name
+							? ("native_user" as const)
+							: ("unknown" as const),
+						displayName: row.actor?.name ?? null,
+					},
+					beforeDueAt: row.beforeDueAt ?? null,
+					beforeDueAllDay: row.beforeDueAllDay ?? null,
+					habitDate: row.habitDate ?? null,
+					afterHabitStatus: row.afterHabitStatus ?? null,
+					provenanceRedactedAt: null,
+				}));
+	const details = {
+		type: request.key === key ? request.status : "loading",
+		retry: () => retry((current) => current + 1),
+	};
 	useEffect(() => {
 		const update = () => setBrowserOnline(navigator.onLine);
 		window.addEventListener("online", update);
@@ -78,54 +185,93 @@ function HistoryPage({ taskId }: { taskId: string }) {
 	}, []);
 
 	const complete = details.type === "complete";
-	const hasNext = complete && rows.length === 100;
-	const showPartial = !complete && details.type !== "error";
+	const knownNext = request.key === key && request.data?.nextCursor != null;
+	const hasNext = complete && browserOnline && knownNext;
+	const showPartial =
+		(!complete || !browserOnline) &&
+		details.type !== "error" &&
+		details.type !== "unavailable";
 	return (
 		<div className="space-y-3 pt-2" data-testid="completion-history-page">
 			<p className="text-xs text-muted-foreground">
 				{m.completion_history_future_only()}
 			</p>
-			{rows.length > 0 && details.type !== "error" && (
-				<ol className="space-y-2">
-					{rows.map((row) => {
-						const person =
-							row.actor?.name?.trim() ||
-							m.completion_history_person_unavailable();
-						const occurrence =
-							row.habitDate != null
-								? formatDayKey(row.habitDate, {
-										dateStyle: "medium",
-									})
-								: row.beforeDueAt == null
-									? m.completion_history_occurrence_unknown()
-									: formatInstant(
-											row.beforeDueAt,
-											row.beforeDueAllDay === true,
-										);
-						return (
-							<li
-								key={row.id}
-								className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-sm"
-								data-testid="completion-history-row"
-							>
-								<p className="font-medium">{historyAction(row, person)}</p>
-								<p className="mt-1 text-xs text-muted-foreground">
-									{m.completion_history_occurrence({ occurrence })}
-								</p>
-								<time
-									dateTime={new Date(row.recordedAt).toISOString()}
-									className="block text-xs text-muted-foreground"
+			{rows.length > 0 &&
+				details.type !== "error" &&
+				details.type !== "unavailable" && (
+					<ol className="space-y-2">
+						{rows.map((row) => {
+							const person =
+								row.actor.displayName?.trim() ||
+								m.completion_history_person_unavailable();
+							const occurrence =
+								row.habitDate != null
+									? formatDayKey(row.habitDate, {
+											dateStyle: "medium",
+										})
+									: row.beforeDueAt == null
+										? m.completion_history_occurrence_unknown()
+										: formatInstant(
+												row.beforeDueAt,
+												row.beforeDueAllDay === true,
+											);
+							return (
+								<li
+									key={JSON.stringify([row.sourceKind, row.id])}
+									className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-sm wrap-anywhere"
+									data-testid="completion-history-row"
 								>
-									{m.completion_history_recorded({
-										time: formatInstant(row.recordedAt),
-									})}
-								</time>
-							</li>
-						);
-					})}
-				</ol>
-			)}
-			{details.type === "error" ? (
+									<p className="font-medium">{historyAction(row, person)}</p>
+									{row.sourceKind === "imported" && (
+										<div
+											className="mt-1 text-xs text-muted-foreground"
+											data-testid="history-imported-attribution"
+										>
+											<p>
+												{row.actor.kind === "source_claim" &&
+												row.actor.displayName
+													? m.completion_history_imported_actor({
+															name: `\u2068${row.actor.displayName}\u2069`,
+														})
+													: m.completion_history_imported_actor_unknown()}
+											</p>
+											<p>
+												{row.origin.kind === "source_claim"
+													? m.completion_history_imported_origin({
+															origin: `\u2068${row.origin.label || (row.origin.mechanism === "capability_recipient" ? m.completion_history_origin_link() : row.origin.mechanism === "member_mutation" ? m.completion_history_origin_member() : m.completion_history_origin_unknown())}\u2069`,
+														})
+													: m.completion_history_imported_origin_unknown()}
+											</p>
+											{row.provenanceRedactedAt != null && (
+												<p>{m.completion_history_imported_redacted()}</p>
+											)}
+										</div>
+									)}
+									<p className="mt-1 text-xs text-muted-foreground">
+										{m.completion_history_occurrence({ occurrence })}
+									</p>
+									<time
+										dateTime={new Date(row.recordedAt).toISOString()}
+										className="block text-xs text-muted-foreground"
+									>
+										{row.sourceKind === "imported"
+											? m.completion_history_occurred({
+													time: formatInstant(row.recordedAt),
+												})
+											: m.completion_history_recorded({
+													time: formatInstant(row.recordedAt),
+												})}
+									</time>
+								</li>
+							);
+						})}
+					</ol>
+				)}
+			{details.type === "unavailable" ? (
+				<p role="status" className="text-sm text-muted-foreground">
+					{m.completion_history_unavailable()}
+				</p>
+			) : details.type === "error" ? (
 				<div role="alert" className="space-y-2 text-sm text-destructive">
 					<p>{m.completion_history_error()}</p>
 					<Button
@@ -151,7 +297,7 @@ function HistoryPage({ taskId }: { taskId: string }) {
 						: m.completion_history_end()}
 				</p>
 			) : null}
-			{(page > 0 || hasNext) && (
+			{(page > 0 || knownNext) && (
 				<div className="flex flex-wrap items-center justify-between gap-2">
 					<Button
 						type="button"
@@ -172,12 +318,9 @@ function HistoryPage({ taskId }: { taskId: string }) {
 						className="min-h-11"
 						disabled={!hasNext}
 						onClick={() => {
-							const last = rows.at(-1);
-							if (last)
-								setCursors((current) => [
-									...current,
-									{ recordedAt: last.recordedAt, id: last.id },
-								]);
+							const next = request.data?.nextCursor;
+							if (next && complete && browserOnline)
+								setCursors((current) => [...current, next]);
 						}}
 					>
 						{m.completion_history_next()}
@@ -223,7 +366,7 @@ export function TaskCompletionHistory({
 
 	return (
 		<section className="border-t pt-3" data-testid="completion-history">
-			<h3>
+			<h2>
 				<Button
 					type="button"
 					variant="ghost"
@@ -238,13 +381,14 @@ export function TaskCompletionHistory({
 						className={expanded ? "rotate-180" : undefined}
 					/>
 				</Button>
-			</h3>
+			</h2>
 			{expanded && detailOpen && (
 				<div id={panelId}>
 					{visible ? (
 						<HistoryPage
-							key={JSON.stringify([taskId, workspaceId])}
+							key={JSON.stringify([zero.userID, taskId, workspaceId])}
 							taskId={taskId}
+							workspaceId={workspaceId}
 						/>
 					) : (
 						<p role="status" className="pt-2 text-sm text-muted-foreground">
