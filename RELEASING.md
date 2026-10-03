@@ -8,15 +8,15 @@ from `main`. Every change lands through a PR.
 
 Every push and PR builds Android development APKs and unsigned or ad-hoc desktop
 installers. These test artifacts expire after seven days. Release packaging checks
-also retain Helm and Compose packages for 30 days.
+also retain Helm, Kustomize and Compose packages for 30 days.
 
 Tagged releases include:
 
 - Alpine and Debian app containers and the Zero container, for amd64 and arm64,
   at `ghcr.io/iuliandita/ditero` and `docker.io/iuliandita/ditero`.
 - Container signatures, provenance and SPDX SBOMs, plus immutable image digest files.
-- A Helm chart for app and Zero with external PostgreSQL, and a Compose archive
-  containing the bundled PostgreSQL initialization scripts.
+- Helm and Kustomize packages for app and Zero with external PostgreSQL, and a
+  Compose archive containing the bundled PostgreSQL initialization scripts.
 - Linux x86_64 DEB and AppImage, unsigned Windows x86_64 installer, and an ad-hoc
   signed macOS Apple Silicon DMG.
 - A signed independent Android universal APK and AAB. This flavor uses UnifiedPush;
@@ -50,7 +50,7 @@ Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
 ## Release procedure
 
 1. Update `release.json` with the version and a strictly increasing Android version
-   code. Align Helm chart metadata and default app/Zero tags with that version.
+   code. Align Helm chart metadata and Helm/Kustomize app/Zero image tags with that version.
    Native packaging applies the release version to Tauri and Android without
    rewriting generated files; Cargo's package version remains the base version.
 2. Merge the release PR into `develop` for prereleases or `main` for stable releases.
