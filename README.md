@@ -1,38 +1,42 @@
-<div align="center">
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/ditero-wordmark-dark.png">
+    <img src="assets/brand/ditero-wordmark-light.png" alt="Ditero" width="420">
+  </picture>
+</p>
 
-# Ditero
+<p align="center"><strong>Shared tasks for the people you share life with.</strong></p>
 
-**A self-hosted, local-first task app for the groups you share life with.**
+<p align="center">
+  <a href="https://github.com/iuliandita/ditero/actions/workflows/ci.yml"><img src="https://github.com/iuliandita/ditero/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/status-pre--alpha-orange" alt="Status: pre-alpha">
+</p>
 
-Family, club, friend group, or small business — shared todo lists, shopping lists,
-projects, chores, and habits. Fast, offline-capable, and free. Your data, your server,
-no paywalls.
+Ditero is a free, self-hosted, local-first task app for families, friends, clubs,
+and small teams. Share a shopping list, divide the chores, plan a project, or keep
+up with daily habits. Work offline and sync when you're connected again.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)
+Your data lives on your server. Reminders, attachments, calendars, and sharing
+are included, with no subscriptions or paid feature unlocks.
 
-</div>
+[Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Brand assets](assets/brand/README.md)
 
-> **Status: pre-alpha.** The `develop` branch and nightly containers include a working
-> web application. There is no tagged release yet. Android and desktop development
-> builds are available, with platform qualification and release distribution still
+> **Pre-alpha.** The `develop` branch and nightly containers include a working web
+> application. There is no tagged release yet. Android and desktop development
+> builds are available; platform qualification and release distribution remain
 > in progress. Breaking changes are expected before `v1.0.0`.
 
-## Why Ditero
+## Made for shared days
 
-Every incumbent gates or breaks something. Ditero's design targets the gaps directly:
+Keep personal lists alongside shared workspaces. Assign tasks, leave comments,
+and invite people with the access they need. Shopping lists, recurring chores,
+and habit streaks cover the everyday work that falls between a calendar and a chat.
 
-- **Local-first, instant UI.** Reads and writes hit a local store first and sync in the
-  background — no spinners, works offline, stays fast at scale.
-- **No paywalls.** Reminders, calendar views, attachments, and multi-member sharing are
-  free because you host it. Nothing essential is locked behind a plan.
-- **Sharing built for groups.** Shared lists with per-item assignment, a purpose-built
-  shopping list, chores and habits with streaks, workspace roles, and a simplified
-  managed-account view.
-- **Sync you can trust.** Conflict-safe, observable synchronization — the thing every
-  competitor's users complain about most.
-- **Yours to keep.** Self-hosted on Kubernetes, Docker, unraid, or Synology. Bring your own
-  PostgreSQL or run the bundled one.
+The interface supports six languages, including Arabic and RTL layout. Choose
+light, dark, or system mode, then choose an accent: teal by default, or blue,
+clay, violet, berry, or ochre. Reading-size presets and high contrast are independent
+of those choices. Accent preferences stay with your account on this device.
 
 ## Available on develop
 
@@ -45,7 +49,7 @@ Every incumbent gates or breaks something. Ditero's design targets the gaps dire
 - Invitation links, managed accounts, comments, and recorded task completion history
 - Email/password, passkeys, TOTP, recovery codes, and optional Google sign-in
 - English, German, Spanish, French, Romanian, and Arabic, including RTL layout
-- Light, dark, and system modes with six accent themes (teal by default), reading-size presets, and independent high contrast
+- Light, dark, and system modes, six accent themes, reading-size presets, and high contrast
 - Saved views, dashboards, calendar/board/table layouts, keyboard shortcuts, and a focus timer
 - Encrypted attachments with filesystem or S3-compatible server storage
 - JSON export and reviewed, resumable native import for supported records; see
@@ -267,6 +271,17 @@ the build, and both are now settled in the application itself:
 Both spikes have been removed now that the production code supersedes them. The build proceeds
 through a milestone roadmap on `develop`.
 
+## Documentation
+
+- [Development setup and checks](CONTRIBUTING.md), [changelog](CHANGELOG.md), and [release channels](RELEASING.md)
+- [Security architecture](docs/security.md) and [private security reporting](SECURITY.md)
+- [Notifications and delivery limits](docs/notifications.md)
+- [Backup and restore](docs/runbooks/backup-restore.md), [database roles](docs/runbooks/database-roles.md), and [trusted proxies](docs/runbooks/trusted-proxy.md)
+- [Data portability](docs/runbooks/data-portability.md) and [native import format](docs/runbooks/native-format.md)
+- [Encrypted attachment storage](docs/runbooks/attachment-storage.md), [key-loss recovery](docs/runbooks/e2e-key-loss.md), and [key rotation](docs/runbooks/key-rotation.md)
+- [Android](apps/android/README.md), [desktop](apps/desktop/README.md), [native authentication](docs/runbooks/native-authentication.md), and [native push](docs/runbooks/native-push.md)
+- [Optional Google push relay](apps/push-relay/README.md) and [roadmap](docs/ROADMAP.md)
+
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
@@ -275,3 +290,8 @@ branch/PR workflow and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 ## License
 
 [MIT](LICENSE) © Ditero Contributors
+
+## Find Ditero
+
+Self-hosted todo app, local-first task manager, Todoist alternative, shared shopping
+lists, chore tracker, habit tracker, family organizer, and group task management.

@@ -12,7 +12,7 @@ DITERO_ENCRYPTION_KEY_NEXT="$NEW_KEY" \
 bun run security:rotate-auth-secrets
 ```
 
-5. Rotate the notification channel credentials with the same DSN and key pair:
+5. Rotate notification channel credentials, native push registrations, and relay recovery authorities with the same DSN and key pair:
 
 ```sh
 DATABASE_MIGRATION_URL='postgres://...' \
@@ -21,9 +21,12 @@ DITERO_ENCRYPTION_KEY_NEXT="$NEW_KEY" \
 bun run security:encrypt-channel-configs
 ```
 
-   Skipping this leaves every channel token under the old key, and step 7's retirement makes them
-   undecryptable -- every user has to re-enter their credentials. The reported row count should
-   match the number of configured channels; `0 row(s)` here means nothing rotated.
+   Skipping this can leave credentials under the old key and make them unreadable
+   after its retirement. The reported count totals only rewritten rows across the
+   three credential stores, rather than configured channels. An idempotent rerun
+   can report `0 row(s)`; this alone does not prove all credentials have rotated.
+   Before retiring the old key, verify retained encrypted credentials use the new
+   key and exercise the affected channel, native push, and relay recovery operations.
 
 6. Exercise passkey/TOTP login, OAuth refresh, Zero JWT issuance, and send a test notification on each configured channel.
 7. Promote the new value to `DITERO_ENCRYPTION_KEY`, remove `DITERO_ENCRYPTION_KEY_NEXT`, restart, and repeat the checks.

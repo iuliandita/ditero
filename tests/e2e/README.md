@@ -114,25 +114,23 @@ They do not depend on signup-form interaction. Dedicated registration, refusal,
 and locale tests still exercise the real form. Use the shared fixture helpers
 rather than timestamp addresses or another signup wrapper.
 
-For the CI optimization, the baseline is exactly 230 browser cases: 216 Chromium,
-7 Firefox, and 7 WebKit. The candidate preserves those cases and adds two public
-Zero shutdown regressions: 232 total, with 139 isolated and 79 serial Chromium
-cases. Before timing runs, compare the six phase/shard discoveries with both the
-original baseline and reviewed candidate, using browser, file, and title as the
-identity (normalize `chromium-serial` to `chromium`). Their union must contain every
-original case and exactly the two added regressions, with no duplicates. The
-shutdown tests control browser idle scheduling and IndexedDB completion to verify
-accepted edits, persistence failure, explicit retry, and offline cache recovery.
+The October 1 CI optimization in issue #381 used a historical baseline of 230
+browser cases (216 Chromium, 7 Firefox, and 7 WebKit). Its candidate added two
+public Zero shutdown regressions for 232 total cases, with 139 isolated and 79
+serial Chromium cases. Acceptance required three complete workflows at the same
+candidate commit, each within 18 minutes 20 seconds, preserving the baseline and
+executing every candidate case without skips or retry-only passes. Those counts
+and timing requirements applied to that candidate; they are not current suite
+counts or a general acceptance policy for later changes. The shutdown tests
+continue to cover accepted edits, persistence failure, explicit retry, and offline
+cache recovery.
 
-Repeat the complete CI workflow three times at the same candidate commit. For
-each run, inspect all six JSON reports and require all 232 candidate cases to execute and
-pass without skips or retry-only passes. Also require checks, integration, all
-three container smokes, and the aggregate `verify` job to pass. Measure whole
-workflow wall time from its start through `verify`, including runner setup and
-both browser phases; each run must finish within 18 minutes 20 seconds, leaving
-margin under 20 minutes. Record run URLs,
-revision, case totals, results, and elapsed time for all three runs. A green label
-check or discovery-only run is not execution or timing proof.
+Current CI runs six browser phases across three shards and requires the aggregate
+`verify` job to pass. Its gates include checks, integration, browser tests, all
+three container smokes, and push-relay verification, including native relay instance
+integration and relay image checks. Use the current suite discovery and workflow
+reports to verify coverage. A green label check or discovery-only run does not
+prove execution.
 
 For hosts where Docker interface changes interrupt Chromium requests with
 `net::ERR_NETWORK_CHANGED`, isolate the browsers in a container:

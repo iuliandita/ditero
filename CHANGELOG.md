@@ -12,8 +12,10 @@ All notable changes to this project are documented here. The format is based on
   invitations, and managed accounts with a simplified task view.
 - Saved views, board/table/calendar layouts, dashboards, keyboard shortcuts, a command
   palette, recurring tasks and habits, streaks, Karma, and a focus timer.
-- Six interface languages, Arabic RTL layout, light/dark/system themes, reading-size
-  presets, and independent high contrast.
+- Six interface languages, Arabic RTL layout, light/dark/system modes, six accent
+  themes with teal as the default, reading-size presets, and independent high contrast.
+- Transparent logo and wordmark assets with light/dark variants and all six accent
+  palettes in `assets/brand/`.
 - JSON export and reviewed, resumable native import with explicit workspace/person
   mappings and notification activation safeguards. Unsupported content is reported;
   imports do not create permissions or replay historical notifications.
