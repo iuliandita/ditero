@@ -1,0 +1,163 @@
+import {
+	PUBLIC_API_ID,
+	PUBLIC_API_MAX_PAGE_SIZE,
+	PUBLIC_API_PAGE_SIZE,
+} from "../domain/public-api.ts";
+import {
+	PUBLIC_API_RESOURCES,
+	type PublicApiResource,
+} from "../domain/public-api-resources.ts";
+
+export class CliError extends Error {
+	constructor(
+		readonly code: string,
+		message: string,
+		readonly exitCode: number,
+		readonly status: number | null = null,
+	) {
+		super(message);
+	}
+}
+
+export interface CliOptions {
+	command: "profile" | PublicApiResource;
+	server: string;
+	token: string;
+	json: boolean;
+	all: boolean;
+	limit: number;
+	cursor?: string;
+	workspaceId?: string;
+	listId?: string;
+	done?: string;
+}
+
+export function usageError(): never {
+	throw new CliError(
+		"invalid_arguments",
+		"Invalid arguments. Run ditero --help for usage.",
+		2,
+	);
+}
+
+export function canonicalServer(value: string, allowLoopback: boolean): string {
+	let url: URL;
+	try {
+		url = new URL(value);
+	} catch {
+		return usageError();
+	}
+	if (
+		value.length > 2048 ||
+		value.trim() !== value ||
+		Array.from(value).some(
+			(character) =>
+				character === "\\" ||
+				character.charCodeAt(0) <= 32 ||
+				character.charCodeAt(0) === 127,
+		) ||
+		url.username ||
+		url.password ||
+		url.search ||
+		url.hash ||
+		url.pathname !== "/"
+	)
+		usageError();
+	const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+	if (
+		url.protocol !== "https:" &&
+		!(allowLoopback && loopback && url.protocol === "http:")
+	)
+		usageError();
+	// Refuse alternate numeric/address spellings normalized by URL parsing.
+	if (
+		!value.startsWith(`${url.origin}`) ||
+		![url.origin, `${url.origin}/`].includes(value)
+	)
+		usageError();
+	return url.origin;
+}
+
+export function parseArguments(
+	argv: string[],
+	env: Record<string, string | undefined>,
+): CliOptions | null {
+	if (argv.length === 1 && ["--help", "-h", "help"].includes(argv[0]))
+		return null;
+	let command: CliOptions["command"] | undefined;
+	const flags = new Set<string>();
+	const values = new Map<string, string>();
+	const booleans = ["--json", "--all", "--allow-loopback-http"];
+	const valued = [
+		"--server",
+		"--limit",
+		"--cursor",
+		"--workspace",
+		"--list",
+		"--done",
+	];
+	for (let index = 0; index < argv.length; index++) {
+		const argument = argv[index];
+		if (booleans.includes(argument)) {
+			if (flags.has(argument)) usageError();
+			flags.add(argument);
+		} else if (valued.includes(argument)) {
+			const value = argv[++index];
+			if (values.has(argument) || !value || value.startsWith("--"))
+				usageError();
+			values.set(argument, value);
+		} else if (
+			!command &&
+			(argument === "profile" ||
+				PUBLIC_API_RESOURCES.some((resource) => resource === argument))
+		) {
+			command = argument as CliOptions["command"];
+		} else usageError();
+	}
+	if (!command) usageError();
+	if (
+		command === "profile" &&
+		(flags.has("--all") || [...values.keys()].some((key) => key !== "--server"))
+	)
+		usageError();
+	if (command !== "tasks" && (values.has("--list") || values.has("--done")))
+		usageError();
+	const rawLimit = values.get("--limit");
+	if (
+		rawLimit &&
+		(!/^[1-9][0-9]{0,2}$/.test(rawLimit) ||
+			Number(rawLimit) > PUBLIC_API_MAX_PAGE_SIZE)
+	)
+		usageError();
+	const cursor = values.get("--cursor");
+	if (cursor && !/^[A-Za-z0-9_-]{1,2048}$/.test(cursor)) usageError();
+	const workspaceId = values.get("--workspace");
+	const listId = values.get("--list");
+	for (const id of [workspaceId, listId])
+		if (id !== undefined && !PUBLIC_API_ID.safeParse(id).success) usageError();
+	const done = values.get("--done");
+	if (done !== undefined && !["true", "false"].includes(done)) usageError();
+	const server = values.get("--server") ?? env.DITERO_URL;
+	if (!server)
+		throw new CliError("missing_server", "Set DITERO_URL or pass --server.", 2);
+	const origin = canonicalServer(server, flags.has("--allow-loopback-http"));
+	const token = env.DITERO_TOKEN;
+	if (!token || !/^ditero_pat_[A-Za-z0-9_-]{43}$/.test(token))
+		throw new CliError(
+			"missing_token",
+			"Set DITERO_TOKEN to a personal access token.",
+			2,
+		);
+	return {
+		command,
+		server: origin,
+		token,
+		json: flags.has("--json"),
+		all: flags.has("--all"),
+		limit: rawLimit ? Number(rawLimit) : PUBLIC_API_PAGE_SIZE,
+		cursor,
+		workspaceId,
+		listId,
+		done,
+	};
+}
