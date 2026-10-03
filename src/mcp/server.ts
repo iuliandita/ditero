@@ -1,13 +1,57 @@
-import { McpServer } from "@modelcontextprotocol/server";
+import {
+	McpServer,
+	type StandardSchemaWithJSON,
+} from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { taskIntentSchema } from "../agent/task-plan.ts";
 import { CliError, type CliOptions, parseArguments } from "../cli/arguments.ts";
 import { discover, type Fetcher } from "../cli/client.ts";
+import { taskWorkflow } from "../cli/task-workflow.ts";
 import { PUBLIC_API_ID, PUBLIC_API_PAGE_SIZE } from "../domain/public-api.ts";
 import {
 	PUBLIC_API_RESOURCES,
 	publicApiProfileSchema,
 	publicApiResourceSchemas,
 } from "../domain/public-api-resources.ts";
+import { apiTaskCreateSchema } from "../domain/public-api-writes.ts";
+
+function safeInput(value: unknown, depth = 0): boolean {
+	if (depth > 32) return false;
+	if (!value || typeof value !== "object") return true;
+	if (Object.getOwnPropertySymbols(value).length) return false;
+	return Object.entries(value).every(
+		([key, child]) =>
+			!["__proto__", "constructor", "prototype"].includes(key) &&
+			safeInput(child, depth + 1),
+	);
+}
+
+function guardedInput<S extends z.ZodType>(
+	schema: S,
+): StandardSchemaWithJSON<z.input<S>, z.output<S>> {
+	const standard = schema["~standard"];
+	return {
+		"~standard": {
+			...standard,
+			validate: async (value) => {
+				const invalid = {
+					issues: [{ message: "Invalid or oversized tool arguments." }],
+				};
+				if (!safeInput(value)) return invalid;
+				try {
+					if (
+						new TextEncoder().encode(JSON.stringify(value)).byteLength > 65_536
+					)
+						return invalid;
+					const result = await standard.validate(value);
+					return result.issues ? invalid : result;
+				} catch {
+					return invalid;
+				}
+			},
+		},
+	};
+}
 
 const pageFields = {
 	limit: z.number().int().min(1).max(100).optional(),
@@ -62,47 +106,23 @@ export function createDiteroMcp(
 	const fixed = Object.freeze({ ...configuration });
 	const server = new McpServer(
 		{ name: "ditero", version: "1.0.0" },
-		{ capabilities: { tools: {} }, maxToolInputElements: 16 },
+		{ capabilities: { tools: {} }, maxToolInputElements: 256 },
 	);
 	let active = 0;
-	async function read(
-		command: CliOptions["command"],
-		args: {
-			limit?: number;
-			cursor?: string;
-			workspaceId?: string;
-			listId?: string;
-			done?: boolean;
-		},
-	) {
+	async function execute(operation: () => Promise<unknown>) {
 		try {
 			if (active >= 4)
 				throw new CliError(
 					"busy",
-					"Four reads are already running. Try again shortly.",
+					"Four tool calls are already running. Try again shortly.",
 					6,
 					429,
 				);
 			active++;
 			try {
-				const result = await discover(
-					{
-						...fixed,
-						command,
-						all: false,
-						limit: args.limit ?? PUBLIC_API_PAGE_SIZE,
-						cursor: args.cursor,
-						workspaceId: args.workspaceId,
-						listId: args.listId,
-						done: args.done === undefined ? undefined : String(args.done),
-					},
-					fetcher,
-				);
-				const output = {
-					version: result.version,
-					data: result.data,
-					nextCursor: result.nextCursor,
-				};
+				const result = await operation();
+				// Every operation returns a validated, versioned object.
+				const output = result as Record<string, unknown>;
 				return {
 					content: [{ type: "text" as const, text: JSON.stringify(output) }],
 					structuredContent: output,
@@ -116,7 +136,7 @@ export function createDiteroMcp(
 					? error
 					: new CliError(
 							"internal_error",
-							"The read could not be completed.",
+							"The tool call could not be completed.",
 							9,
 						);
 			const output = {
@@ -125,6 +145,7 @@ export function createDiteroMcp(
 					code: failure.code,
 					status: failure.status,
 					message: failure.message,
+					...(failure.choices?.length ? { choices: failure.choices } : {}),
 				},
 			};
 			return {
@@ -134,12 +155,49 @@ export function createDiteroMcp(
 			};
 		}
 	}
+	function read(
+		command: CliOptions["command"],
+		args: {
+			limit?: number;
+			cursor?: string;
+			workspaceId?: string;
+			listId?: string;
+			done?: boolean;
+		},
+	) {
+		return execute(() =>
+			discover(
+				{
+					...fixed,
+					command,
+					all: false,
+					limit: args.limit ?? PUBLIC_API_PAGE_SIZE,
+					cursor: args.cursor,
+					workspaceId: args.workspaceId,
+					listId: args.listId,
+					done: args.done === undefined ? undefined : String(args.done),
+				},
+				fetcher,
+			),
+		);
+	}
+	function workflow(
+		command: "plan-task" | "create-task",
+		input: unknown,
+		requestId?: string,
+	) {
+		return execute(() =>
+			taskWorkflow({ ...fixed, command, requestId }, fetcher, async () =>
+				new TextEncoder().encode(JSON.stringify(input)),
+			),
+		);
+	}
 	server.registerTool(
 		"get_profile",
 		{
 			description:
 				"Read the configured account's profile, timezone choice, locale, and token access.",
-			inputSchema: z.object({}).strict(),
+			inputSchema: guardedInput(z.object({}).strict()),
 			outputSchema: z
 				.object({
 					version: z.literal(1),
@@ -156,7 +214,7 @@ export function createDiteroMcp(
 			`list_${resource}`,
 			{
 				description: `Read one member-visible ${resource} page. Continue with nextCursor and unchanged filters.`,
-				inputSchema: resource === "tasks" ? taskInput : pageInput,
+				inputSchema: guardedInput(resource === "tasks" ? taskInput : pageInput),
 				outputSchema: z
 					.object({
 						version: z.literal(1),
@@ -169,5 +227,35 @@ export function createDiteroMcp(
 			(args) => read(resource, args),
 		);
 	}
+	server.registerTool(
+		"plan_task",
+		{
+			description:
+				"Resolve a task intent against bounded authorized discovery without writing. Inspect the proposal and resolve ambiguous choices before creation.",
+			inputSchema: guardedInput(taskIntentSchema),
+			annotations,
+		},
+		(intent) => workflow("plan-task", intent),
+	);
+	server.registerTool(
+		"create_task",
+		{
+			description:
+				"Create one task from an inspected canonical proposal and an explicit UUID requestId. Reuse exactly that key and task after an uncertain outcome; conflicts and deleted replays are never recreated automatically.",
+			inputSchema: guardedInput(
+				z.object({ requestId: z.uuid(), task: apiTaskCreateSchema }).strict(),
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: publicApiResourceSchemas.tasks,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: { ...annotations, readOnlyHint: false },
+		},
+		({ requestId, task }) =>
+			workflow("create-task", task, requestId.toLowerCase()),
+	);
 	return server;
 }

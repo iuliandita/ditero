@@ -12,7 +12,7 @@ export function startMcp(
 	const configuration = mcpConfiguration(env, argv);
 	return serveStdio(() => createDiteroMcp(configuration), {
 		transport: new StdioServerTransport(process.stdin, process.stdout, {
-			maxBufferSize: 16_384,
+			maxBufferSize: 65_536,
 		}),
 		onerror: () => process.stderr.write("Ditero MCP transport error.\n"),
 	});
