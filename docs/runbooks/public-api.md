@@ -1,7 +1,7 @@
 # Public API
 
 The versioned API provides discovery, idempotent task creation, scalar updates and
-observed task completion. Task deletion, iCal feeds and webhooks remain under development.
+observed task completion and deletion. iCal feeds and webhooks remain under development.
 Write tokens do not grant workspace access.
 
 ## Tokens
@@ -171,3 +171,50 @@ operation returns `409 idempotency-conflict`. A deleted task returns 410 while i
 original list remains writable and visible, or 404 when inaccessible. Revoked or
 expired credentials return 401. Preserve the same key and body after an uncertain
 transport result; no automatic retry or replanning occurs.
+
+## Observed task deletion
+
+Read `GET /api/v1/tasks/{id}/deletion-observation` with a read or write token.
+Viewers may observe visible tasks. The envelope contains the existing scalar
+`snapshot` and `stateToken`, plus `childrenState` with `version: 1`, `count` and
+`token`. The child SHA256 token binds every persisted child task field, ordered by
+ID, to the parent and origin list. A server cursor uses one snapshot and 256-row
+pages; a five-second overall deadline refuses incomplete observations with 503.
+The parent token retains the scalar scope described above. Tokens describe state,
+not monotonic revisions. Related comments, assignments and files are not separately
+observed: they belong to the explicitly acknowledged deletion scope.
+
+`DELETE /api/v1/tasks/{id}` requires a write token, current writable origin-list
+membership, JSON content and a UUID `Idempotency-Key`. No query parameters are
+accepted. The complete UTF-8 body is limited to 4 KiB. All fields are required:
+
+```json
+{
+  "listId": "LIST_ID",
+  "expectedState": "COPY_PARENT_STATE_TOKEN",
+  "expectedChildrenState": { "version": 1, "count": 0, "token": "COPY_CHILD_TOKEN" },
+  "cascadeChildren": false
+}
+```
+
+Copy the tokens and count from the deletion observation. `cascadeChildren: false`
+requires no children. Set it to true only to acknowledge deletion of the exact
+observed children and their dependent content. Parent scalar changes, moved tasks,
+child additions/removals or any child task-field change return
+`409 task-state-changed` before deletion. Read a new observation before submitting
+an intentional new request; there is no automatic replanning.
+
+Deletion uses the native task path: committed parent/child/comment attachments
+are retired for garbage collection, and task dependencies follow their existing
+cascade rules. Retained import-history replay ledgers remain intact. Pending import
+activation does not block authorized deletion.
+
+Success returns `data: { taskId, listId, deleted: true, deletedChildren }` with 200.
+The deletion and receipt commit atomically. Matching replay returns the original
+result without deleting a recreated task ID. Current write-token and origin-list
+write authority are required even for replay. The origin list is identified by ID;
+a recreated list with that ID follows current membership authority. Keys share the
+account namespace with create, complete and update; another operation or body
+returns `409 idempotency-conflict`. Preserve the key and body after an uncertain
+outcome. Missing/inaccessible origin lists return 404, viewers/read tokens 403,
+and invalid, expired or revoked credentials and deleted accounts 401.

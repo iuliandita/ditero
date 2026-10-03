@@ -12,7 +12,7 @@ const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(17);
+	expect(Object.keys(document.paths)).toHaveLength(18);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
@@ -119,4 +119,19 @@ test("unauthorized errors challenge bearer auth without disclosing token state",
 		status: 401,
 		code: "unauthorized",
 	});
+});
+
+test("OpenAPI exposes explicit observed deletion without changing the task DTO", () => {
+	const document = publicApiOpenApi();
+	const operation = (
+		document.paths["/api/v1/tasks/{id}"] as { delete: unknown }
+	).delete;
+	const encoded = JSON.stringify(operation);
+	expect(encoded).toContain('"operationId":"delete_task"');
+	expect(encoded).toContain('"expectedChildrenState"');
+	expect(encoded).toContain('"cascadeChildren"');
+	expect(encoded).toContain('"additionalProperties":false');
+	expect(document.paths).toHaveProperty(
+		"/api/v1/tasks/{id}/deletion-observation",
+	);
 });

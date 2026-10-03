@@ -9,6 +9,7 @@ import {
 	publicApiProblem,
 } from "../../domain/public-api.ts";
 import { parseApiTaskComplete } from "../../domain/public-api-completion.ts";
+import { parseApiTaskDelete } from "../../domain/public-api-task-deletion.ts";
 import { parseApiTaskUpdate } from "../../domain/public-api-task-update.ts";
 import {
 	parseApiIdempotencyKey,
@@ -21,6 +22,8 @@ import {
 	PUBLIC_API_RESOURCES,
 	parsePageQuery,
 } from "./contracts.ts";
+import { deleteApiTask } from "./delete.ts";
+import { readApiTaskDeletionObservation } from "./deletion-observation.ts";
 import { publicApiOpenApi } from "./openapi.ts";
 import { readApiProfile, readApiResource } from "./read.ts";
 import { readApiTaskObservation } from "./task-observation.ts";
@@ -180,6 +183,68 @@ export function publicApiRoutes(
 					(client, actor) => readApiTaskObservation(client, actor, params.id),
 				);
 			}),
+		)
+		.get(
+			"/api/v1/tasks/:id/deletion-observation",
+			({ request, server, params }) =>
+				apiRequest(async () => {
+					if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+						throw new PublicApiError(429, "rate-limited", "Too many requests");
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					if (!PUBLIC_API_ID.safeParse(params.id).success)
+						throw new PublicApiError(400, "invalid-id", "Invalid task ID");
+					return withPersonalAccessToken(
+						pool,
+						bearerToken(request.headers),
+						"read",
+						(client, actor) =>
+							readApiTaskDeletionObservation(client, actor, params.id),
+					);
+				}),
+		)
+		.delete(
+			"/api/v1/tasks/:id",
+			({ request, server, params }) =>
+				apiRequest(async () => {
+					if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+						throw new PublicApiError(429, "rate-limited", "Too many requests");
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					if (
+						request.headers
+							.get("content-type")
+							?.split(";")[0]
+							.trim()
+							.toLowerCase() !== "application/json"
+					)
+						throw new PublicApiError(
+							415,
+							"unsupported-media-type",
+							"A JSON request body is required",
+						);
+					const requestId = parseApiIdempotencyKey(
+						request.headers.get("idempotency-key"),
+					);
+					if (!PUBLIC_API_ID.safeParse(params.id).success)
+						throw new PublicApiError(400, "invalid-id", "Invalid task ID");
+					return deleteApiTask(
+						pool,
+						bearerToken(request.headers),
+						params.id,
+						parseApiTaskDelete(await boundedJson(request)),
+						requestId,
+					);
+				}),
+			{ parse: "none" },
 		)
 		.patch(
 			"/api/v1/tasks/:id",

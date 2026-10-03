@@ -5,6 +5,11 @@ import {
 	publicApiResourceSchemas,
 } from "../../domain/public-api-resources.ts";
 import {
+	apiTaskDeletedSchema,
+	apiTaskDeleteSchema,
+	apiTaskDeletionObservationSchema,
+} from "../../domain/public-api-task-deletion.ts";
+import {
 	apiTaskObservationSchema,
 	apiTaskUpdateSchema,
 } from "../../domain/public-api-task-update.ts";
@@ -244,6 +249,58 @@ export function publicApiOpenApi() {
 		},
 		responses: {
 			"200": response(z.toJSONSchema(publicApiResourceSchemas.tasks)),
+			...errors,
+		},
+	};
+	paths["/api/v1/tasks/{id}/deletion-observation"] = {
+		get: {
+			operationId: "observe_task_deletion",
+			tags: ["tasks"],
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Read the parent scalar snapshot and a count/token of every persisted child task field from one cursor snapshot. Read tokens and viewers may observe. Related comments, files and assignments are covered by the explicit deletion scope, not this token.",
+			parameters: [
+				{
+					name: "id",
+					in: "path",
+					required: true,
+					schema: { type: "string", minLength: 1, maxLength: 256 },
+				},
+			],
+			responses: {
+				"200": response(z.toJSONSchema(apiTaskDeletionObservationSchema)),
+				...errors,
+			},
+		},
+	};
+	(paths["/api/v1/tasks/{id}"] as Record<string, unknown>).delete = {
+		operationId: "delete_task",
+		tags: ["tasks"],
+		security: [{ personalAccessToken: [] }],
+		description:
+			"Delete an observed task using a write token and current writable origin-list membership. Supply parent state, child count/token, and explicit cascadeChildren. False requires no children. True deletes the exact observed children and dependent content through the native path. Stale parent or child state returns 409. JSON is limited to 4 KiB. Same-key replay acknowledges the original deletion without touching a recreated ID, and still requires current origin-list write authority. Keys share the account create/complete/update namespace.",
+		parameters: [
+			{
+				name: "id",
+				in: "path",
+				required: true,
+				schema: { type: "string", minLength: 1, maxLength: 256 },
+			},
+			{
+				name: "Idempotency-Key",
+				in: "header",
+				required: true,
+				schema: { type: "string", format: "uuid" },
+			},
+		],
+		requestBody: {
+			required: true,
+			content: {
+				"application/json": { schema: z.toJSONSchema(apiTaskDeleteSchema) },
+			},
+		},
+		responses: {
+			"200": response(z.toJSONSchema(apiTaskDeletedSchema)),
 			...errors,
 		},
 	};
