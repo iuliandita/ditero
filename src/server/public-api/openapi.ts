@@ -4,6 +4,10 @@ import {
 	PUBLIC_API_RESOURCES,
 	publicApiResourceSchemas,
 } from "../../domain/public-api-resources.ts";
+import {
+	apiTaskObservationSchema,
+	apiTaskUpdateSchema,
+} from "../../domain/public-api-task-update.ts";
 import { apiTaskCreateSchema } from "../../domain/public-api-writes.ts";
 
 const problem = {
@@ -187,6 +191,60 @@ export function publicApiOpenApi() {
 				"200": response(z.toJSONSchema(publicApiResourceSchemas.tasks)),
 				...errors,
 			},
+		},
+	};
+	paths["/api/v1/tasks/{id}/observation"] = {
+		get: {
+			operationId: "observe_task",
+			tags: ["tasks"],
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Read a versioned scalar task snapshot and its SHA256 state token. This is a live read of the listed fields, not a relationship revision or a lock. Viewer memberships and read tokens are permitted.",
+			parameters: [
+				{
+					name: "id",
+					in: "path",
+					required: true,
+					schema: { type: "string", minLength: 1, maxLength: 256 },
+				},
+			],
+			responses: {
+				"200": response(z.toJSONSchema(apiTaskObservationSchema)),
+				...errors,
+			},
+		},
+	};
+	(paths["/api/v1/tasks/{id}"] as Record<string, unknown>).patch = {
+		operationId: "update_task",
+		tags: ["tasks"],
+		security: [{ personalAccessToken: [] }],
+		description:
+			"Update title, notes, dueAt, dueAllDay or priority with a write token and current writable membership. Supply listId and stateToken from the observation as expectedState. Stale scalar state returns 409 before effects. Recurring tasks and habits accept title/notes/priority only; any due field is refused. The JSON body is bounded to 64 KiB. Same-key replay returns the current authorized task without applying the patch again; current write authority is required. Keys share the create/complete namespace.",
+		parameters: [
+			{
+				name: "id",
+				in: "path",
+				required: true,
+				schema: { type: "string", minLength: 1, maxLength: 256 },
+			},
+			{
+				name: "Idempotency-Key",
+				in: "header",
+				required: true,
+				schema: { type: "string", format: "uuid" },
+			},
+		],
+		requestBody: {
+			required: true,
+			content: {
+				"application/json": {
+					schema: z.toJSONSchema(apiTaskUpdateSchema, { io: "input" }),
+				},
+			},
+		},
+		responses: {
+			"200": response(z.toJSONSchema(publicApiResourceSchemas.tasks)),
+			...errors,
 		},
 	};
 	paths["/api/v1/me"] = {

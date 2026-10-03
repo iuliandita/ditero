@@ -12,10 +12,22 @@ const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(16);
+	expect(Object.keys(document.paths)).toHaveLength(17);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
+});
+
+test("OpenAPI exposes strict scalar update and a separate observation without changing the task DTO", () => {
+	const document = publicApiOpenApi();
+	const encoded = JSON.stringify(document.paths["/api/v1/tasks/{id}"]);
+	expect(encoded).toContain('"operationId":"update_task"');
+	expect(encoded).toContain('"expectedState"');
+	expect(encoded).toContain('"additionalProperties":false');
+	expect(document.paths).toHaveProperty("/api/v1/tasks/{id}/observation");
+	const taskGet = (document.paths["/api/v1/tasks/{id}"] as { get: unknown })
+		.get;
+	expect(JSON.stringify(taskGet)).not.toContain("stateToken");
 });
 
 describe("public API cursor contract", () => {
