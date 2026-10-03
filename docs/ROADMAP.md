@@ -38,10 +38,10 @@ are unsigned and macOS downloads use ad-hoc signatures. Native qualification rem
 open. `1.0.0` requires the complete v1 contract below.
 
 The versioned public API provides membership-scoped discovery, expiring personal
-access tokens, idempotent task creation and OpenAPI. CLI discovery and read-only
-stdio MCP tools are available. Further writes, feeds, webhooks, agent task workflows
-and the terminal UI remain in progress; see [API access](runbooks/public-api.md),
-[CLI discovery](cli.md) and [MCP tools](mcp.md).
+access tokens, idempotent task creation and OpenAPI. The CLI supports discovery,
+task planning and creation; read-only stdio MCP tools are available. Further
+writes, feeds, webhooks, MCP task workflows and the terminal UI remain in progress;
+see [API access](runbooks/public-api.md), [CLI use](cli.md) and [MCP tools](mcp.md).
 
 ## What v1 Delivers
 

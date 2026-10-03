@@ -24,6 +24,9 @@ All notable changes to this project are documented here. The format is based on
 
 - Hexadecimal color fields retain left-to-right notation in RTL interfaces.
 
+- CLI task planning with private dashboard resolution, account-local dates and
+  explicit assignees/labels, plus idempotent creation of reviewed proposals.
+
 ## [0.0.1-alpha.1] - 2026-10-03
 
 ### Added

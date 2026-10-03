@@ -7,6 +7,7 @@ import {
 	PUBLIC_API_RESOURCES,
 	type PublicApiResource,
 } from "../domain/public-api-resources.ts";
+import { parseApiIdempotencyKey } from "../domain/public-api-writes.ts";
 
 export class CliError extends Error {
 	constructor(
@@ -14,13 +15,14 @@ export class CliError extends Error {
 		message: string,
 		readonly exitCode: number,
 		readonly status: number | null = null,
+		readonly choices?: { id: string; name: string }[],
 	) {
 		super(message);
 	}
 }
 
 export interface CliOptions {
-	command: "profile" | PublicApiResource;
+	command: "profile" | PublicApiResource | "plan-task" | "create-task";
 	server: string;
 	token: string;
 	json: boolean;
@@ -30,6 +32,7 @@ export interface CliOptions {
 	workspaceId?: string;
 	listId?: string;
 	done?: string;
+	requestId?: string;
 }
 
 export function usageError(): never {
@@ -95,6 +98,7 @@ export function parseArguments(
 		"--workspace",
 		"--list",
 		"--done",
+		"--request-id",
 	];
 	for (let index = 0; index < argv.length; index++) {
 		const argument = argv[index];
@@ -108,13 +112,32 @@ export function parseArguments(
 			values.set(argument, value);
 		} else if (
 			!command &&
-			(argument === "profile" ||
+			(["profile", "plan-task", "create-task"].includes(argument) ||
 				PUBLIC_API_RESOURCES.some((resource) => resource === argument))
 		) {
 			command = argument as CliOptions["command"];
 		} else usageError();
 	}
 	if (!command) usageError();
+	const workflow = command === "plan-task" || command === "create-task";
+	if (
+		workflow &&
+		(flags.has("--all") ||
+			[...values.keys()].some(
+				(key) => !["--server", "--request-id"].includes(key),
+			))
+	)
+		usageError();
+	if (command !== "create-task" && values.has("--request-id")) usageError();
+	let requestId: string | undefined;
+	if (command === "create-task") {
+		try {
+			requestId = parseApiIdempotencyKey(values.get("--request-id") ?? null);
+		} catch {
+			usageError();
+		}
+	}
+
 	if (
 		command === "profile" &&
 		(flags.has("--all") || [...values.keys()].some((key) => key !== "--server"))
@@ -159,5 +182,6 @@ export function parseArguments(
 		workspaceId,
 		listId,
 		done,
+		requestId,
 	};
 }

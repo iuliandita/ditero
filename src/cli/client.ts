@@ -8,7 +8,7 @@ import { CliError, type CliOptions } from "./arguments.ts";
 
 export const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 export const MAX_PAGES = 100;
-const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+export const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
 const envelope = z
 	.object({
 		version: z.literal(PUBLIC_API_VERSION),
@@ -86,6 +86,16 @@ function httpError(status: number): CliError {
 		401: ["unauthorized", "The token is invalid, expired, or revoked.", 3],
 		403: ["forbidden", "The token cannot access this resource.", 4],
 		404: ["not_found", "The requested resource or API was not found.", 5],
+		409: [
+			"request_conflict",
+			"The request ID was already used for a different task.",
+			10,
+		],
+		410: [
+			"task_deleted",
+			"The task for this request ID was deleted. It will not be recreated.",
+			11,
+		],
 		429: [
 			"rate_limited",
 			"The server rate limit was reached. Try again later.",
@@ -100,15 +110,93 @@ function httpError(status: number): CliError {
 	return new CliError(code, message, exit, status);
 }
 
+export interface ResponseBudget {
+	bytes: number;
+}
+
+export async function requestJson(
+	options: CliOptions,
+	url: URL,
+	fetcher: Fetcher = fetch,
+	write?: { body: string; requestId: string },
+	budget: ResponseBudget = { bytes: 0 },
+): Promise<unknown> {
+	let response: Response;
+	try {
+		response = await fetcher(url, {
+			method: write ? "POST" : "GET",
+			redirect: "error",
+			credentials: "omit",
+			headers: {
+				authorization: `Bearer ${options.token}`,
+				accept: "application/json",
+				...(write
+					? {
+							"content-type": "application/json",
+							"idempotency-key": write.requestId,
+						}
+					: {}),
+			},
+			signal: AbortSignal.timeout(15_000),
+			...(write ? { body: write.body } : {}),
+		});
+	} catch {
+		throw new CliError(
+			"network_error",
+			"Could not reach the server within the request timeout.",
+			7,
+		);
+	}
+	if (response.status !== 200 && !(write && response.status === 201)) {
+		await response.body?.cancel();
+		throw httpError(response.status);
+	}
+	if (
+		response.redirected ||
+		response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !==
+			"application/json"
+	) {
+		await response.body?.cancel();
+		invalidResponse();
+	}
+	let bytes: Uint8Array;
+	try {
+		bytes = await readBody(response);
+	} catch (error) {
+		if (error instanceof CliError) throw error;
+		throw new CliError(
+			"network_error",
+			"The server response could not be read.",
+			7,
+		);
+	}
+	budget.bytes += bytes.length;
+	if (budget.bytes > MAX_TOTAL_BYTES) invalidResponse();
+	let raw: unknown;
+	try {
+		raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+	} catch {
+		invalidResponse();
+	}
+	assertSafeJson(raw);
+	return raw;
+}
+
 export async function discover(
 	options: CliOptions,
 	fetcher: Fetcher = fetch,
+	budget: ResponseBudget = { bytes: 0 },
 ): Promise<CliResult> {
+	if (options.command === "plan-task" || options.command === "create-task")
+		throw new CliError(
+			"invalid_arguments",
+			"Discovery requires a read command.",
+			2,
+		);
 	const results: unknown[] = [];
 	const seen = new Set<string>();
 	let cursor = options.cursor;
 	if (cursor) seen.add(cursor);
-	let totalBytes = 0;
 	for (let page = 0; page < MAX_PAGES; page++) {
 		const url = new URL(
 			`/api/v1/${options.command === "profile" ? "me" : options.command}`,
@@ -123,60 +211,7 @@ export async function discover(
 			if (options.done !== undefined)
 				url.searchParams.set("done", options.done);
 		}
-		let response: Response;
-		try {
-			response = await fetcher(url, {
-				method: "GET",
-				redirect: "error",
-				credentials: "omit",
-				headers: {
-					authorization: `Bearer ${options.token}`,
-					accept: "application/json",
-				},
-				signal: AbortSignal.timeout(15_000),
-			});
-		} catch {
-			throw new CliError(
-				"network_error",
-				"Could not reach the server within the request timeout.",
-				7,
-			);
-		}
-		if (response.status !== 200) {
-			await response.body?.cancel();
-			throw httpError(response.status);
-		}
-		if (
-			response.redirected ||
-			response.headers
-				.get("content-type")
-				?.split(";")[0]
-				.trim()
-				.toLowerCase() !== "application/json"
-		) {
-			await response.body?.cancel();
-			invalidResponse();
-		}
-		let bytes: Uint8Array;
-		try {
-			bytes = await readBody(response);
-		} catch (error) {
-			if (error instanceof CliError) throw error;
-			throw new CliError(
-				"network_error",
-				"The server response could not be read.",
-				7,
-			);
-		}
-		totalBytes += bytes.length;
-		if (totalBytes > MAX_TOTAL_BYTES) invalidResponse();
-		let raw: unknown;
-		try {
-			raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-		} catch {
-			invalidResponse();
-		}
-		assertSafeJson(raw);
+		const raw = await requestJson(options, url, fetcher, undefined, budget);
 		const parsed = envelope.safeParse(raw);
 		if (!parsed.success) invalidResponse();
 		if (options.command === "profile") {
