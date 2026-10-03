@@ -13,6 +13,12 @@
 		"enabled": true,
 		"indentStyle": "tab"
 	},
+	"overrides": [
+		{
+			"includes": ["src/web/vendor/shadcn-tailwind.css"],
+			"formatter": { "enabled": false }
+		}
+	],
 	"linter": {
 		"enabled": true,
 		"rules": {
