@@ -147,7 +147,7 @@ describe("native import plan transport", () => {
 			report: { plannerVersion: 4, applySupported: true },
 		});
 	});
-	test("refuses history archives explicitly without saving a plan", async () => {
+	test("dispatches validated history archives to saved preview without enabling apply", async () => {
 		const source = document();
 		const archive = {
 			...source,
@@ -156,14 +156,37 @@ describe("native import plan transport", () => {
 			boundaries: { ...source.boundaries, taskHistory: "recorded-events-only" },
 			data: { ...source.data, completionEvents: [] },
 		};
+		store.save.mockResolvedValueOnce({
+			id: "saved-v5",
+			report: {
+				plannerVersion: 5,
+				applySupported: false,
+				applyBlockedReason: "history-apply-unsupported",
+			},
+		});
 		const result = await app().handle(
 			request(
 				JSON.stringify({ ...payload(), document: JSON.stringify(archive) }),
 			),
 		);
-		expect(result.status).toBe(400);
+		expect(result.status).toBe(200);
 		expect(result.headers.get("cache-control")).toBe("no-store");
-		expect(await result.json()).toEqual({ code: "unsupported-import-version" });
+		expect(await result.json()).toMatchObject({
+			report: {
+				plannerVersion: 5,
+				applySupported: false,
+				applyBlockedReason: "history-apply-unsupported",
+			},
+		});
+		expect(store.save).toHaveBeenCalledWith(
+			expect.anything(),
+			"caller",
+			expect.anything(),
+			archive,
+			expect.anything(),
+			expect.objectContaining({ plannerVersion: 4 }),
+		);
+		store.save.mockClear();
 		const malformed = await app().handle(
 			request(JSON.stringify({ ...payload(), document: '{"schemaVersion":2' })),
 		);

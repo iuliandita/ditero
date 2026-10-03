@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
 	freezeHistoricalImportItem,
+	type HistoricalFrozenTarget,
 	type HistoricalTargetSnapshot,
+	sealHistoryPreviewPlan,
 } from "./import-apply-plan-v2.ts";
 import type { HistoricalImportItem } from "./import-plan-v2.ts";
 
@@ -99,5 +101,107 @@ describe("v5 historical freeze decisions", () => {
 			disposition: "conflict",
 			code: "historical-target-conflict",
 		});
+	});
+});
+
+describe("sealed history previews", () => {
+	const context = {
+		ownerUserId: "owner",
+		sourceId: "source",
+		documentDigest: "document",
+		mappingDigest: "mappings",
+	};
+	const frozen = (): HistoricalFrozenTarget => ({
+		parent: {
+			kind: "task",
+			id: "target-task",
+			workspaceId: "space",
+			membershipId: "seat",
+			listId: "list",
+			dependencySourceKey: null,
+		},
+		snapshot: mapped(),
+		decision: { disposition: "replay", targetId: "saved-target" },
+	});
+	const key = JSON.stringify([item.collection, item.archiveRowId]);
+	test("retains normalized history and exact parent evidence without enabling apply", async () => {
+		const value = frozen();
+		const first = await sealHistoryPreviewPlan(
+			[],
+			[item],
+			new Map([[key, value]]),
+			context,
+		);
+		const second = await sealHistoryPreviewPlan(
+			[],
+			[item],
+			new Map([[key, value]]),
+			context,
+		);
+		expect(first).toEqual(second);
+		expect(first.report).toMatchObject({
+			plannerVersion: 5,
+			applySupported: false,
+			applyBlockedReason: "history-apply-unsupported",
+			counts: { ensure: 1, ignored: 0, blocked: 0 },
+		});
+		expect(first.items[0]).toMatchObject({
+			ordinal: 0,
+			sourceId: item.archiveRowId,
+			payload: { body: "Original" },
+			targetId: "saved-target",
+			targetPrecondition: mapped(),
+			dependencyProof: { parent: value.parent, ledger: item.ledger },
+		});
+		const changed = frozen();
+		changed.parent.membershipId = "replacement-seat";
+		expect(
+			(
+				await sealHistoryPreviewPlan(
+					[],
+					[item],
+					new Map([[key, changed]]),
+					context,
+				)
+			).planDigest,
+		).not.toBe(first.planDigest);
+	});
+	test("reports blocked parents and immutable-content conflicts separately", async () => {
+		const blocked = await sealHistoryPreviewPlan(
+			[],
+			[item],
+			new Map(),
+			context,
+		);
+		expect(blocked.items[0]).toMatchObject({
+			disposition: "blocked",
+			codes: ["blocked-dependency"],
+			targetId: null,
+		});
+		const value = frozen();
+		if (value.snapshot.kind !== "mapped") throw new Error("fixture");
+		value.snapshot.semanticDigest = "changed";
+		const conflict = await sealHistoryPreviewPlan(
+			[],
+			[item],
+			new Map([[key, value]]),
+			context,
+		);
+		expect(conflict.items[0]).toMatchObject({
+			disposition: "blocked",
+			codes: ["historical-content-conflict"],
+		});
+	});
+	test("rejects mismatched parent authority and invented absent-parent dependencies", async () => {
+		const value = frozen();
+		value.parent.id = "other-task";
+		await expect(
+			sealHistoryPreviewPlan([], [item], new Map([[key, value]]), context),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
+		value.parent.id = item.ledger.targetParentId;
+		value.parent.dependencySourceKey = "invented";
+		await expect(
+			sealHistoryPreviewPlan([], [item], new Map([[key, value]]), context),
+		).rejects.toMatchObject({ code: "invalid-mappings" });
 	});
 });

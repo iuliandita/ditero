@@ -335,7 +335,9 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 						)
 							throw new ImportRequestError("invalid-source", 400);
 						const mapping = mappings(raw.mappings);
-						const document = parseImportDocument(raw.document);
+						const document = parseImportDocument(raw.document, {
+							historyPreview: true,
+						});
 						if (request.signal.aborted)
 							throw new ImportRequestError("request-cancelled", 408);
 						return response(
