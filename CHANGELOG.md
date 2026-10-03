@@ -14,6 +14,8 @@ All notable changes to this project are documented here. The format is based on
   an OpenAPI description.
 - Idempotent public task creation with explicit list, due date, assignments and
   labels, using the same permissions and mutations as the web interface.
+- Bounded CLI discovery with stable JSON and eight read-only MCP tools over stdio.
+  Credentials and the trusted server origin are configured at process startup.
 
 ## [0.0.1-alpha.1] - 2026-10-03
 
