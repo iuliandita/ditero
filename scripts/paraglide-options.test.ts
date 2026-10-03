@@ -49,10 +49,16 @@ describe("no entry point declares its own compile options", () => {
 	test.each([
 		"tests/e2e/run.ts",
 		".github/workflows/ci.yml",
-		".github/workflows/release.yml",
+		".github/workflows/native-release.yml",
 	])("%s compiles via the package script", async (path) => {
 		const src = await read(path);
 		expect(src).toContain("i18n:compile");
 		expect(src).not.toContain("paraglide-js compile");
+	});
+
+	test("the release orchestrator delegates native compilation", async () => {
+		expect(await read(".github/workflows/release.yml")).toContain(
+			"uses: ./.github/workflows/native-release.yml",
+		);
 	});
 });

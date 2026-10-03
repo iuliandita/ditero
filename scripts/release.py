@@ -23,6 +23,8 @@ def metadata() -> dict:
         raise ValueError("Invalid release version")
     if type(data["androidVersionCode"]) is not int or not 1 <= data["androidVersionCode"] <= 2100000000:
         raise ValueError("Invalid Android version code")
+    if not re.fullmatch(r"[0-9a-f]{64}", data.get("androidSigningCertificateSha256", "")):
+        raise ValueError("Invalid retained Android signing certificate fingerprint")
     return data
 
 
@@ -116,10 +118,13 @@ def publish(output: Path) -> None:
     if remote.split()[0] != sha:
         raise ValueError("Remote annotated tag changed since preparation")
     sums = []
+    digests = {}
     for name in sorted(names):
         with (output / name).open("rb") as stream:
-            sums.append(f"{hashlib.file_digest(stream, 'sha256').hexdigest()}  {name}\n")
+            digests[name] = hashlib.file_digest(stream, "sha256").hexdigest()
+            sums.append(f"{digests[name]}  {name}\n")
     (output / "SHA256SUMS.txt").write_text("".join(sums))
+    digests["SHA256SUMS.txt"] = hashlib.sha256((output / "SHA256SUMS.txt").read_bytes()).hexdigest()
     names.add("SHA256SUMS.txt")
     prerelease = version.startswith("0.") or "-" in version
     notes = f"""Ditero {version} is an experimental alpha for self-hosted testing. Back up your database and attachments before upgrading.
@@ -158,6 +163,8 @@ Verify downloads with `sha256sum -c SHA256SUMS.txt`. Checksums verify downloaded
     assets = json.loads(command("gh", "release", "view", tag, "--repo", repo, "--json", "assets"))["assets"]
     if {asset["name"] for asset in assets} != names or any(asset["size"] != (output / asset["name"]).stat().st_size for asset in assets):
         raise ValueError("Uploaded release asset inventory or size mismatch")
+    if any(asset.get("digest") != f"sha256:{digests[asset['name']]}" for asset in assets):
+        raise ValueError("GitHub upload digests do not match the local release downloads")
     args = ["gh", "release", "edit", tag, "--repo", repo, "--draft=false", f"--prerelease={str(prerelease).lower()}"]
     if prerelease:
         args.append("--latest=false")

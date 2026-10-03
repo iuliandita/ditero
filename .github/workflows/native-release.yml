@@ -218,7 +218,16 @@ jobs:
         run: |
           set -euo pipefail
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs \
-            apps/android/android/app/build/outputs/apk/independent/release/app-independent-release.apk
+            apps/android/android/app/build/outputs/apk/independent/release/app-independent-release.apk \
+            | tee "$RUNNER_TEMP/android-signature.txt"
+          python3 - <<'PYTHON'
+          import json, os, pathlib, re
+          expected = json.loads(pathlib.Path('release.json').read_text())['androidSigningCertificateSha256']
+          actual = pathlib.Path(os.environ['RUNNER_TEMP'], 'android-signature.txt').read_text()
+          digests = re.findall(r'^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-f]{64})$', actual, re.MULTILINE)
+          if digests != [expected]:
+              raise SystemExit('APK signing identity does not match the retained release certificate')
+          PYTHON
           test -s apps/android/android/app/build/outputs/bundle/independentRelease/app-independent-release.aab
       - name: Collect release packages
         run: |

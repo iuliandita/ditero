@@ -64,6 +64,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Removed a component-generator CLI dependency carrying an unpatched high-severity
+  advisory while preserving its bundled styles and MIT license in all clients.
 - Accepted offline edits persist before client shutdown, reauthentication, language
   navigation, and export. Cached nonempty lists render after an offline reload without
   requiring a fresh server response.

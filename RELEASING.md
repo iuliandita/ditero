@@ -96,6 +96,8 @@ Android release builds require these repository Actions secrets:
 Secrets must never be committed or passed as command-line values. The workflow restores
 the keystore into a private runner directory, verifies the APK signature and deletes
 runner signing material after the build. It never invents a disposable update identity.
+The APK certificate must match the public fingerprint recorded in `release.json`;
+changing a secret cannot silently replace the Android update identity.
 Manual certificate-backed desktop hooks remain available for future trusted Windows
 signatures and macOS signing/notarization; see the native guides.
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -72,6 +73,32 @@ class ReleaseTests(unittest.TestCase):
         with patch.dict(os.environ, {"TAG": "v0.0.1-alpha.1", "WORKFLOW_SHA": "b" * 40}), patch.object(release, "command", side_effect=command):
             with self.assertRaisesRegex(ValueError, "provenance"):
                 release.prepare()
+
+    def test_publish_requires_matching_uploaded_bytes(self):
+        sha = "a" * 40
+        for corrupted in (True, False):
+            with self.subTest(corrupted=corrupted), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory)
+                for name in release.expected_assets("0.0.1-alpha.1"):
+                    (output / name).write_bytes(b"artifact")
+                def command(*args):
+                    if args[0] == "git":
+                        return f"{sha}\trefs/tags/v0.0.1-alpha.1^{{}}" if args[1] == "ls-remote" else sha
+                    if args[1] == "api":
+                        return "[[]]"
+                    assets = [{"name": path.name, "size": path.stat().st_size, "digest": f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"} for path in output.iterdir()]
+                    if corrupted:
+                        assets[0]["digest"] = "sha256:" + "0" * 64
+                    return json.dumps({"assets": assets})
+                env = {"TAG": "v0.0.1-alpha.1", "REPO": "owner/repo", "RELEASE_SHA": sha}
+                with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release.subprocess, "run") as run:
+                    if corrupted:
+                        with self.assertRaisesRegex(ValueError, "upload digests"):
+                            release.publish(output)
+                    else:
+                        release.publish(output)
+                    published = any("--draft=false" in call.args[0] for call in run.call_args_list)
+                    self.assertEqual(published, not corrupted)
 
     def test_metadata_rejects_unsafe_version_and_code(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(release, "ROOT", Path(directory)):
