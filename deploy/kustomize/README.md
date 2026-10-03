@@ -5,6 +5,10 @@ Kubernetes, with two ClusterIP Services and two persistent volume claims. It use
 an external PostgreSQL 18 database and an existing Secret. It does not deploy a
 database, CloudNativePG, an external routing controller, or a TLS issuer.
 
+The optional [CloudNativePG overlay](cnpg/README.md) adds a separately managed
+single-instance PostgreSQL cluster. Its credential, privilege and recovery
+requirements are explicit; the external-database base remains unchanged.
+
 The published image pair is a prerelease. The base is locally renderable; live
 cluster installation, CSI behavior, upgrades, backups, and restore still require
 operator qualification. It does not provide high availability.
