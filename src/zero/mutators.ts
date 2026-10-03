@@ -21,6 +21,7 @@ import {
 	ackedPatch,
 	completeForAck,
 } from "../domain/ack-complete.ts";
+import { appearanceSchema } from "../domain/appearance.ts";
 import { panelsSchema } from "../domain/dashboard.ts";
 import { AUTO_LOCK_CHOICES } from "../domain/e2e/auto-lock.ts";
 import {
@@ -2057,6 +2058,7 @@ export const mutators = defineMutators({
 				// null means "follow the OS", which is the default and is not the
 				// same as a stored "light".
 				theme: themeArg.optional(),
+				appearance: appearanceSchema.nullable().optional(),
 				// null means "unset"; domain/e2e/auto-lock.ts resolves it. 0 is a
 				// real choice ("never"), not an absence.
 				e2eAutoLockMinutes: autoLockArg.optional(),
@@ -2094,6 +2096,7 @@ export const mutators = defineMutators({
 						escalationDefaults: args.escalationDefaults ?? null,
 						locale: args.locale ?? null,
 						theme: args.theme ?? null,
+						appearance: args.appearance ?? null,
 						e2eAutoLockMinutes: args.e2eAutoLockMinutes ?? null,
 					});
 			},

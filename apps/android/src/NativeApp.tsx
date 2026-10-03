@@ -10,7 +10,10 @@ import {
 	useSnackbar,
 } from "../../../src/web/components/ui/snackbar.tsx";
 import { useUserPref } from "../../../src/web/hooks/useUserPref.ts";
-import { DisplayPreferencesProvider } from "../../../src/web/lib/DisplayPreferencesProvider.tsx";
+import {
+	DisplayPreferencesProvider,
+	SyncedDisplayPreferencesProvider,
+} from "../../../src/web/lib/DisplayPreferencesProvider.tsx";
 import { KeyringProvider } from "../../../src/web/lib/e2e/KeyringProvider.tsx";
 import {
 	NativeAccountContext,
@@ -257,18 +260,18 @@ function NativeAppRoutes({
 						changeServer,
 					}}
 				>
-					<DisplayPreferencesProvider
-						key={active.runtime.scope}
-						userId={active.runtime.scope}
+					<AppZeroProvider
+						key={`${active.runtime.scope}:${restart}`}
+						userID={active.profile.id}
+						runtime={active.runtime.zero}
 					>
-						<AppZeroProvider
-							key={`${active.runtime.scope}:${restart}`}
-							userID={active.profile.id}
-							runtime={active.runtime.zero}
+						<SyncedDisplayPreferencesProvider
+							key={active.runtime.scope}
+							userId={active.runtime.scope}
 						>
 							<NativeWorkspace active={active} />
-						</AppZeroProvider>
-					</DisplayPreferencesProvider>
+						</SyncedDisplayPreferencesProvider>
+					</AppZeroProvider>
 				</NativeAccountContext>
 			) : (
 				<DisplayPreferencesProvider userId={null}>

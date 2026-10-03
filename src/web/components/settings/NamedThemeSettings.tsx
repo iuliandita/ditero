@@ -18,7 +18,7 @@ import {
 import { ThemeEditor } from "./ThemeEditor.tsx";
 
 export function NamedThemeSettings() {
-	const { preferences, themeLibrary, setThemeLibrary } =
+	const { preferences, themeLibrary, setThemeLibrary, appearanceLoading } =
 		useDisplayPreferences();
 	const id = useId();
 	const input = useRef<HTMLInputElement>(null);
@@ -69,16 +69,18 @@ export function NamedThemeSettings() {
 				data-testid="named-theme-select"
 				className="min-h-11 w-full rounded-md border border-input bg-background px-3 sm:w-56"
 				value={themeLibrary.selected}
-				disabled={busy}
-				onChange={(event) => {
+				disabled={busy || appearanceLoading}
+				onChange={async (event) => {
 					setFailed(false);
-					setThemeLibrary({
+					setBusy(true);
+					await setThemeLibrary({
 						...themeLibrary,
 						selected: event.target.value,
 						useAccent: !themeLibrary.documents.some(
 							(entry) => entry.id === event.target.value,
 						),
 					});
+					if (active.current) setBusy(false);
 				}}
 			>
 				<option value="default">{m.named_theme_default()}</option>
@@ -102,6 +104,7 @@ export function NamedThemeSettings() {
 					data-testid="named-theme-customize"
 					disabled={
 						!selected ||
+						appearanceLoading ||
 						busy ||
 						(!isCustom && themeLibrary.documents.length >= MAX_CUSTOM_THEMES)
 					}
@@ -123,7 +126,11 @@ export function NamedThemeSettings() {
 					type="button"
 					variant="outline"
 					onClick={() => input.current?.click()}
-					disabled={busy || themeLibrary.documents.length >= MAX_CUSTOM_THEMES}
+					disabled={
+						busy ||
+						appearanceLoading ||
+						themeLibrary.documents.length >= MAX_CUSTOM_THEMES
+					}
 				>
 					{m.named_theme_import()}
 				</Button>
@@ -158,16 +165,20 @@ export function NamedThemeSettings() {
 					<Button
 						type="button"
 						variant="outline"
-						disabled={busy}
-						onClick={() => {
-							setThemeLibrary({
+						disabled={busy || appearanceLoading}
+						onClick={async () => {
+							setBusy(true);
+							await setThemeLibrary({
 								selected: "default",
 								useAccent: true,
 								documents: themeLibrary.documents.filter(
 									(entry) => entry.id !== themeLibrary.selected,
 								),
 							});
-							setFailed(false);
+							if (active.current) {
+								setBusy(false);
+								setFailed(false);
+							}
 						}}
 					>
 						{m.named_theme_remove()}
@@ -194,7 +205,7 @@ export function NamedThemeSettings() {
 						const theme = parseThemeDocument(await file.text());
 						if (!active.current) return;
 						const themeId = randomId();
-						setThemeLibrary({
+						await setThemeLibrary({
 							selected: themeId,
 							useAccent: false,
 							documents: [
@@ -202,7 +213,7 @@ export function NamedThemeSettings() {
 								{ id: themeId, document: theme },
 							],
 						});
-						setFailed(false);
+						if (active.current) setFailed(false);
 					} catch {
 						if (active.current) setFailed(true);
 					} finally {

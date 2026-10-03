@@ -3,7 +3,7 @@
 	"theme_editor_accent_note": "Speichere dein Theme oder brich die Bearbeitung ab, bevor du eine Akzentfarbe wählst.",
 	"theme_editor_customize": "Theme anpassen",
 	"theme_editor_heading": "Theme bearbeiten",
-	"theme_editor_preview_note": "Gültige Änderungen werden sofort angezeigt. Speichern behält sie für dieses Konto auf diesem Gerät; Abbrechen stellt dein gespeichertes Theme wieder her. Ungültige Änderungen behalten die letzte lesbare Vorschau.",
+	"theme_editor_preview_note": "Gültige Änderungen werden sofort angezeigt. Speichern synchronisiert deine Palette mit deinem Konto. Abbrechen verwirft Änderungen, die du noch nicht abgeschickt hast. Ungültige Änderungen behalten die letzte lesbare Vorschau bei.",
 	"theme_editor_invalid": "Verwende einen Namen und sechsstellige Hex-Farben. Der Textkontrast muss mindestens 4,5:1 betragen, mit hellen Flächen im hellen und dunklen Flächen im dunklen Modus. Erst dann kannst du speichern.",
 	"theme_editor_save": "Theme speichern",
 	"theme_editor_picker_label": "{color} für {mode} wählen",
@@ -39,7 +39,7 @@
 	"named_theme_default": "Ditero-Standard",
 	"named_theme_paper": "Papier",
 	"named_theme_slate": "Schiefer",
-	"named_theme_local_note": "Farbpaletten und importierte Themes werden nur für dieses Konto auf diesem Gerät gespeichert.",
+	"named_theme_local_note": "Farbpaletten und importierte Designs werden für dieses Konto geräteübergreifend synchronisiert.",
 	"named_theme_accent_note": "Eine Akzentfarbe ersetzt die Schaltflächen- und Fokusfarben des Themes. Hell, dunkel und hoher Kontrast bleiben unabhängig.",
 	"named_theme_import": "Theme-JSON importieren",
 	"named_theme_export": "Theme-JSON exportieren",
@@ -2073,7 +2073,7 @@
 	"accent_theme_violet": "Violett",
 	"accent_theme_berry": "Beere",
 	"accent_theme_ochre": "Ocker",
-	"display_device_note": "Diese Einstellungen werden für dein Konto auf diesem Gerät gespeichert.",
+	"display_device_note": "Lesegröße und hoher Kontrast bleiben auf diesem Gerät. Farbpaletten und Akzentfarben werden mit deinem Konto synchronisiert.",
 	"display_save_failed": "Deine Änderungen gelten jetzt, konnten aber auf diesem Gerät nicht gespeichert werden.",
 	"login_password_guidance": "Verwende {min} bis {max} Zeichen. Ein längeres, einzigartiges Passwort lässt sich leichter sicher halten.",
 	"login_recovery_label": "Du kannst dich nicht anmelden?",
@@ -2227,5 +2227,9 @@
 	"pat_error_invalid": "Verwende einen Namen mit 1-80 Zeichen und eine Gültigkeit von 1-365 Tagen.",
 	"pat_error_retry": "Der Server ist beschäftigt. Warte kurz und versuche es erneut.",
 	"pat_error_missing": "Dieses Token existiert nicht mehr. Lade die Liste neu.",
-	"pat_error_failed": "Die Anfrage konnte nicht abgeschlossen werden. Prüfe deine Verbindung und versuche es erneut."
+	"pat_error_failed": "Die Anfrage konnte nicht abgeschlossen werden. Prüfe deine Verbindung und versuche es erneut.",
+	"appearance_saving": "Design wird gespeichert...",
+	"appearance_waiting": "Designänderungen sind vorgemerkt. Die Bestätigung des Servers steht noch aus.",
+	"appearance_save_failed": "Diese Designänderungen konnten nicht in deinem Konto gespeichert werden. Deine Änderungen sind noch vorhanden; versuche es erneut.",
+	"appearance_cache_failed": "Dein Design ist in deinem Konto gespeichert, aber der lokale Zwischenspeicher für den Start konnte nicht aktualisiert werden."
 }

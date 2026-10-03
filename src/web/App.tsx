@@ -1,9 +1,13 @@
+import type { ReactNode } from "react";
 import { BootSkeleton } from "./components/shell/AppSkeleton.tsx";
 import { ConfirmProvider } from "./components/ui/confirm.tsx";
 import { SnackbarProvider } from "./components/ui/snackbar.tsx";
 import { useUserPref } from "./hooks/useUserPref.ts";
 import { authClient } from "./lib/auth-client.ts";
-import { DisplayPreferencesProvider } from "./lib/DisplayPreferencesProvider.tsx";
+import {
+	DisplayPreferencesProvider,
+	SyncedDisplayPreferencesProvider,
+} from "./lib/DisplayPreferencesProvider.tsx";
 import { KeyringProvider } from "./lib/e2e/KeyringProvider.tsx";
 import { AppZeroProvider } from "./lib/zero.tsx";
 import { AcceptInvite } from "./routes/AcceptInvite.tsx";
@@ -26,12 +30,7 @@ export function App() {
 
 function Routes() {
 	const { data: session, isPending } = authClient.useSession();
-	const userId = isPending ? null : (session?.user.id ?? null);
-	return (
-		<DisplayPreferencesProvider key={userId ?? "logged-out"} userId={userId}>
-			<SessionRoutes session={session} isPending={isPending} />
-		</DisplayPreferencesProvider>
-	);
+	return <SessionRoutes session={session} isPending={isPending} />;
 }
 
 function SessionRoutes({
@@ -41,19 +40,33 @@ function SessionRoutes({
 	session: ReturnType<typeof authClient.useSession>["data"];
 	isPending: boolean;
 }) {
+	const userId = isPending ? null : (session?.user.id ?? null);
+	const standalone = (children: ReactNode) => (
+		<DisplayPreferencesProvider key={userId ?? "logged-out"} userId={userId}>
+			{children}
+		</DisplayPreferencesProvider>
+	);
 	// Standalone redemption route: no router, but `/accept?token=` must render for
 	// both logged-out and logged-in invitees. AcceptInvite runs its own session +
 	// preview logic; every other path stays on the normal session-gated flow.
-	if (window.location.pathname === "/accept") return <AcceptInvite />;
+	if (window.location.pathname === "/accept")
+		return standalone(<AcceptInvite />);
 	// Browser consent for a native sign-in: it only needs the session cookie, so
 	// it never mounts Zero or the keyring.
 	if (window.location.pathname === "/native/authorize")
-		return <NativeAuthorize session={session} isPending={isPending} />;
-	if (isPending) return <BootSkeleton />;
-	if (!session) return <Login />;
+		return standalone(
+			<NativeAuthorize session={session} isPending={isPending} />,
+		);
+	if (isPending) return standalone(<BootSkeleton />);
+	if (!session) return standalone(<Login />);
 	return (
 		<AppZeroProvider key={session.user.id} userID={session.user.id}>
-			<KeyringGate userId={session.user.id} />
+			<SyncedDisplayPreferencesProvider
+				key={session.user.id}
+				userId={session.user.id}
+			>
+				<KeyringGate userId={session.user.id} />
+			</SyncedDisplayPreferencesProvider>
 		</AppZeroProvider>
 	);
 }

@@ -859,6 +859,7 @@ export const userPref = pgTable("user_pref", {
 	escalationDefaults: jsonb("escalation_defaults"), // { repeatEveryMin, maxRepeats, fallbackUserId } | null
 	locale: text("locale"), // Locale from src/domain/locale.ts; null => browser/Accept-Language default
 	theme: text("theme"), // "light" | "dark"; null => follow the OS
+	appearance: jsonb("appearance"),
 	// M-E2E: minutes the keyring stays unlocked. 0 => never lock; null => the
 	// domain default (see domain/e2e/auto-lock.ts). Not defaulted in SQL: the
 	// domain owns which value "unset" resolves to, and a column default would

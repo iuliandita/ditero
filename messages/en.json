@@ -3,7 +3,7 @@
 	"theme_editor_accent_note": "Finish or cancel your theme edit to choose an accent.",
 	"theme_editor_customize": "Customize theme",
 	"theme_editor_heading": "Edit theme",
-	"theme_editor_preview_note": "Valid changes preview immediately. Save keeps them for this account on this device; Cancel restores your saved theme. Invalid changes leave the last readable preview.",
+	"theme_editor_preview_note": "Valid changes preview immediately. Save syncs your palette to your account. Cancel discards changes you have not submitted. Invalid changes keep the last readable preview.",
 	"theme_editor_invalid": "Use a name and six-digit hex colors. Text contrast must be at least 4.5:1, with light surfaces in Light and dark surfaces in Dark. Save is unavailable until these checks pass.",
 	"theme_editor_save": "Save theme",
 	"theme_editor_picker_label": "Choose {color} for {mode}",
@@ -39,7 +39,7 @@
 	"named_theme_default": "Ditero default",
 	"named_theme_paper": "Paper",
 	"named_theme_slate": "Slate",
-	"named_theme_local_note": "Theme palettes and imported themes are saved for this account on this device only.",
+	"named_theme_local_note": "Theme palettes and imported themes sync across devices for this account.",
 	"named_theme_accent_note": "Choosing an accent replaces the theme's button and focus colors. Light, dark and high contrast still work independently.",
 	"named_theme_import": "Import theme JSON",
 	"named_theme_export": "Export theme JSON",
@@ -2073,7 +2073,7 @@
 	"accent_theme_violet": "Violet",
 	"accent_theme_berry": "Berry",
 	"accent_theme_ochre": "Ochre",
-	"display_device_note": "These settings are saved for your account on this device.",
+	"display_device_note": "Reading size and high contrast stay on this device. Theme palettes and accents sync with your account.",
 	"display_save_failed": "Your changes apply now, but could not be saved on this device.",
 	"login_password_guidance": "Use {min} to {max} characters. A longer, unique password is easier to keep secure.",
 	"login_recovery_label": "Can't sign in?",
@@ -2227,5 +2227,9 @@
 	"pat_error_invalid": "Use a name of 1-80 characters and a lifetime of 1-365 days.",
 	"pat_error_retry": "The server is busy. Wait a moment and try again.",
 	"pat_error_missing": "This token no longer exists. Refresh the list.",
-	"pat_error_failed": "Could not complete the request. Check your connection and try again."
+	"pat_error_failed": "Could not complete the request. Check your connection and try again.",
+	"appearance_saving": "Saving theme...",
+	"appearance_waiting": "Theme changes are queued. Waiting for the server to confirm.",
+	"appearance_save_failed": "Could not save these theme changes to your account. Your changes are still available; try again.",
+	"appearance_cache_failed": "Your theme is saved to your account, but its local startup cache could not be updated."
 }
