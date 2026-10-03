@@ -1,5 +1,8 @@
 # External Database Roles
 
+Configure verified connections using the [database TLS guide](database-tls.md);
+private CA configuration differs between the application and Zero.
+
 Use three database logins:
 
 - A migration owner that owns the database schema but is not a superuser.

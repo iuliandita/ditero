@@ -121,7 +121,7 @@ class ReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch.object(release.subprocess, "run"):
             root = Path(directory)
             shutil.copytree(release.ROOT / "deploy", root / "deploy")
-            for name in ("RELEASING.md", "LICENSE", "docs/runbooks/database-roles.md"):
+            for name in ("RELEASING.md", "LICENSE", "docs/runbooks/database-roles.md", "docs/runbooks/database-tls.md"):
                 target = root / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(release.ROOT / name, target)
@@ -139,6 +139,11 @@ class ReleaseTests(unittest.TestCase):
                 self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/README.md", names)
                 self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/cnpg/roles.sql", names)
                 self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/cnpg/cluster.yaml", names)
+                self.assertIn("ditero-0.0.1-alpha.1/docs/runbooks/database-tls.md", names)
+                guide = archive.extractfile("ditero-0.0.1-alpha.1/docs/runbooks/database-tls.md").read().decode()
+                self.assertIn("NODE_EXTRA_CA_CERTS", guide)
+                roles = archive.extractfile("ditero-0.0.1-alpha.1/docs/runbooks/database-roles.md").read().decode()
+                self.assertIn("(database-tls.md)", roles)
                 readme = archive.extractfile("ditero-0.0.1-alpha.1/deploy/kustomize/cnpg/README.md").read().decode()
                 self.assertIn("https://github.com/iuliandita/ditero/blob/develop/docs/runbooks/backup-restore.md", readme)
 
