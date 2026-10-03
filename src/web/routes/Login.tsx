@@ -1,4 +1,4 @@
-import { KeyRound, ListChecks } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 import {
 	PASSWORD_MAX_LENGTH,
@@ -6,6 +6,7 @@ import {
 } from "../../auth/password-policy.ts";
 import { m } from "../../paraglide/messages.js";
 import { GoogleMark } from "../components/auth/GoogleMark.tsx";
+import { BrandLogo } from "../components/BrandLogo.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input } from "../components/ui/input.tsx";
@@ -24,16 +25,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 	return (
 		<main className="flex min-h-dvh justify-center bg-background px-6 pt-16 pb-10 text-foreground sm:pt-24">
 			<div className="flex w-full max-w-sm flex-col">
-				<div className="mb-7 flex items-center gap-2.5">
-					<div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-						<ListChecks
-							aria-hidden="true"
-							className="size-4"
-							strokeWidth={2.2}
-						/>
-					</div>
-					<span className="text-sm font-semibold">Ditero</span>
-				</div>
+				<BrandLogo className="mb-7" />
 				{children}
 				<div className="mt-8">
 					<LanguageSwitcher compact />

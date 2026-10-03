@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { m } from "../../../src/paraglide/messages.js";
+import { BrandLogo } from "../../../src/web/components/BrandLogo.tsx";
 import { BootSkeleton } from "../../../src/web/components/shell/AppSkeleton.tsx";
 import { Button } from "../../../src/web/components/ui/button.tsx";
 import { ConfirmProvider } from "../../../src/web/components/ui/confirm.tsx";
@@ -274,9 +275,7 @@ function NativeAppRoutes({
 					<main className="flex min-h-dvh items-center justify-center px-6 py-10">
 						<div className="w-full max-w-sm space-y-6">
 							<div className="space-y-2">
-								<p className="text-sm font-medium text-muted-foreground">
-									Ditero
-								</p>
+								<BrandLogo />
 								<h1 className="text-2xl font-semibold tracking-tight">
 									{m.native_connect_title()}
 								</h1>
