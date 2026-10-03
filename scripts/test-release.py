@@ -129,6 +129,7 @@ class ReleaseTests(unittest.TestCase):
             local.mkdir()
             (local / "private.env").write_text("PRIVATE=must-not-ship")
             (root / "deploy/kustomize/base/private.env").write_text("PRIVATE=must-not-ship")
+            (root / "deploy/kustomize/cnpg/private.env").write_text("PRIVATE=must-not-ship")
             with patch.object(release, "ROOT", root), patch.object(release, "metadata", return_value={"version": "0.0.1-alpha.1"}):
                 release.deployment(root / "output")
             with tarfile.open(root / "output/ditero-0.0.1-alpha.1-kustomize.tar.gz") as archive:
@@ -136,6 +137,10 @@ class ReleaseTests(unittest.TestCase):
                 self.assertFalse(any("private.env" in name or "/overlay/" in name for name in names))
                 self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/base/name-reference.yaml", names)
                 self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/README.md", names)
+                self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/cnpg/roles.sql", names)
+                self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/cnpg/cluster.yaml", names)
+                readme = archive.extractfile("ditero-0.0.1-alpha.1/deploy/kustomize/cnpg/README.md").read().decode()
+                self.assertIn("https://github.com/iuliandita/ditero/blob/develop/docs/runbooks/backup-restore.md", readme)
 
     def test_metadata_rejects_unsafe_version_and_code(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(release, "ROOT", Path(directory)):

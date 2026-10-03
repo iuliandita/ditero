@@ -96,6 +96,8 @@ def deployment(output: Path) -> None:
             "base/ditero-app-service.yaml", "base/ditero-app-persistentvolumeclaim.yaml",
             "base/ditero-zero-deployment.yaml", "base/ditero-zero-service.yaml",
             "base/ditero-zero-persistentvolumeclaim.yaml",
+            "cnpg/README.md", "cnpg/kustomization.yaml", "cnpg/cluster.yaml",
+            "cnpg/name-reference.yaml", "cnpg/roles.sql",
         )
         for name in files:
             archive.add(kustomize / name, arcname=f"ditero-{version}/deploy/kustomize/{name}", recursive=False)

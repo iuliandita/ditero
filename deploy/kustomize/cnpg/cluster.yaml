@@ -1,0 +1,58 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: ditero-db
+  namespace: ditero
+  labels:
+    app.kubernetes.io/name: ditero
+    app.kubernetes.io/component: database
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie@sha256:99bc64e413d59b017d169ce2ff25746f1d68c5d7210a19f12c0464a109216ee1
+  enableSuperuserAccess: false
+  bootstrap:
+    initdb:
+      database: ditero
+      owner: ditero_migrator
+      secret:
+        name: ditero-db-migrator
+      postInitApplicationSQLRefs:
+        configMapRefs:
+        - name: ditero-db-bootstrap
+          key: roles.sql
+  managed:
+    roles:
+    - name: ditero_runtime
+      ensure: present
+      login: true
+      superuser: false
+      createdb: false
+      createrole: false
+      inherit: false
+      bypassrls: false
+      passwordSecret:
+        name: ditero-db-runtime
+    - name: ditero_zero
+      ensure: present
+      login: true
+      superuser: true
+      createdb: false
+      createrole: false
+      inherit: false
+      replication: true
+      passwordSecret:
+        name: ditero-db-zero
+  postgresql:
+    parameters:
+      wal_level: logical
+      max_replication_slots: "20"
+      max_wal_senders: "20"
+  storage:
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi

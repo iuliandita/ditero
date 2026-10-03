@@ -1,0 +1,8 @@
+nameReference:
+- kind: ConfigMap
+  version: v1
+  fieldSpecs:
+  - group: postgresql.cnpg.io
+    version: v1
+    kind: Cluster
+    path: spec/bootstrap/initdb/postInitApplicationSQLRefs/configMapRefs/name

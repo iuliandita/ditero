@@ -121,6 +121,7 @@ jobs:
       - run: tests/container/compose.sh
       - run: tests/container/zero.sh
       - run: tests/container/zero-shard.sh
+      - run: bun run tests/cnpg/bootstrap.ts
 
   push-relay:
     runs-on: ubuntu-24.04
