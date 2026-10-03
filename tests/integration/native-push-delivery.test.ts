@@ -42,14 +42,17 @@ const user = randomUUID(),
 	list = randomUUID(),
 	task = randomUUID();
 const pair = createECDH("prime256v1");
-pair.generateKeys();
+// Exercise a leading-zero scalar: ECDH exports omit padding required by VAPID.
+pair.setPrivateKey(Buffer.from("01", "hex"));
+const scalar = pair.getPrivateKey();
+const privateKey = Buffer.concat([Buffer.alloc(32 - scalar.length), scalar]);
 const ring = createFieldKeyRing({
 	current: Buffer.alloc(32, 7).toString("base64"),
 });
 const configuration = {
 	unifiedpush: {
 		publicKey: pair.getPublicKey().toString("base64url"),
-		privateKey: pair.getPrivateKey().toString("base64url"),
+		privateKey: privateKey.toString("base64url"),
 		subject: "mailto:push@example.test",
 	},
 };
@@ -266,12 +269,9 @@ test("each device has independent idempotency, retry, opaque encrypted requests,
 		nativeConfiguration: configuration,
 		fetch,
 	});
-	await completeDelivery(
-		db,
-		first,
-		await send(first, ctx.signal),
-		"native-fixture",
-	);
+	const retry = await send(first, ctx.signal);
+	expect(retry).toMatchObject({ ok: false, status: 503 });
+	await completeDelivery(db, first, retry, "native-fixture");
 	await completeDelivery(
 		db,
 		second,
@@ -298,7 +298,10 @@ test("each device has independent idempotency, retry, opaque encrypted requests,
 		nativeConfiguration: configuration,
 		fetch: async () => new Response("", { status: 410 }),
 	});
-	expect((await expired(first, ctx.signal)).ok).toBe(false);
+	expect(await expired(first, ctx.signal)).toMatchObject({
+		ok: false,
+		status: 410,
+	});
 	expect(
 		(
 			await pool.query(
