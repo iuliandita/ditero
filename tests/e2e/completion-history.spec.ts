@@ -13,7 +13,7 @@ import {
 
 test.describe.configure({ timeout: 90_000 });
 
-test("task detail shows native changes, paginates only the opened history, and keeps a complete cached page offline", async ({
+test("task detail shows native changes and preserves cached rows while merged paging waits for online completeness", async ({
 	page,
 }) => {
 	const databaseURL = process.env.E2E_DATABASE_URL;
@@ -115,13 +115,22 @@ test("task detail shows native changes, paginates only the opened history, and k
 			pageOfHistory.getByTestId("completion-history-row"),
 		).toHaveCount(100, { timeout: 15_000 });
 		await expect(pageOfHistory).toContainText("reopened the task");
+		await expect(
+			pageOfHistory.getByRole("button", { name: "Next" }),
+		).toBeEnabled();
 		await page.context().setOffline(true);
 		await expect(
 			pageOfHistory.getByTestId("completion-history-row"),
 		).toHaveCount(100);
-		await pageOfHistory.getByRole("button", { name: "Next" }).click();
+		await expect(
+			pageOfHistory.getByRole("button", { name: "Next" }),
+		).toBeDisabled();
 		await expect(pageOfHistory).toContainText("not fully available offline");
 		await page.context().setOffline(false);
+		await expect(
+			pageOfHistory.getByRole("button", { name: "Next" }),
+		).toBeEnabled();
+		await pageOfHistory.getByRole("button", { name: "Next" }).click();
 		await expect(
 			pageOfHistory.getByTestId("completion-history-row"),
 		).toHaveCount(3, { timeout: 20_000 });

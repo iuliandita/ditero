@@ -93,6 +93,7 @@ import {
 	publicApiRoutes,
 } from "./public-api/routes.ts";
 import { publicConfig } from "./public-config.ts";
+import { taskHistoryRoutes } from "./task-history.ts";
 import { nativeZeroPayload } from "./zero-auth.ts";
 
 const PORT = Number(process.env.API_PORT ?? 3000);
@@ -222,6 +223,7 @@ const routes = new Elysia()
 			rateLimit: nativeRateLimit,
 		}),
 	)
+	.use(taskHistoryRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	.use(portabilityRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	.use(importPlanRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	// Public capability ack, mounted AHEAD of the global CORS plugin: the button

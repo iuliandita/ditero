@@ -59,12 +59,22 @@ past recurring completions from a task's current state.
 Open a task and expand **Completion history** to see recorded completions, reopenings,
 skipped occurrences, and habit status changes. Recording starts when this feature is
 installed; earlier actions are not reconstructed. History follows current task access
-and is removed when the task is deleted. Names reflect current account information,
-including account anonymization, rather than a snapshot of the name at the time.
+and is removed when the task is deleted. Native names reflect current account
+information, including account anonymization. Imported records label the person and
+origin as source-reported claims; those claims do not identify a local account or
+grant permissions. Imported template details likewise label the source-reported
+creator without granting local permissions.
 
-History loads in pages of 100 records. Offline or incomplete results are marked as
-incomplete; an empty cached page does not establish that no history exists. Reconnect
-to load missing records.
+History loads native and imported records together in pages of 100 records, including
+records with the same timestamp. Offline or incomplete results are marked as incomplete;
+an empty cached page does not establish that no history exists. Reconnect to load
+missing records. Advancing waits for a complete page.
+
+Authenticated clients can request `GET /api/tasks/history` with `taskId` and
+`workspaceId`, then pass the returned `nextCursor` as JSON in the `cursor` query
+parameter. Each request checks current membership and task scope. Responses contain
+display attribution, not source principal or installation identifiers. A missing,
+moved, or inaccessible task returns the same HTTP 404 response.
 
 An action through a reminder link identifies the link's intended recipient. It does
 not prove who clicked the link. Native history is retained in database backups but
