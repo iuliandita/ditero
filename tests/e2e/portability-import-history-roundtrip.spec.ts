@@ -36,10 +36,31 @@ async function ledgerCount(pool: Pool, workspace: string) {
 		)
 	).rows[0].n;
 }
-async function effects(pool: Pool) {
+async function effects(
+	pool: Pool,
+	scope: {
+		readonly userIds: readonly string[];
+		readonly workspaceIds: readonly string[];
+		readonly sourceTaskId: string;
+	},
+) {
 	return (
 		await pool.query(
-			`select (select count(*) from task_completion_event)::int as native, (select count(*) from karma_event)::int as karma_events, (select count(*) from karma)::int as karma, (select count(*) from notification_outbox)::int as notifications, (select count(*) from reminder_state)::int as reminders`,
+			`with scoped_lists as (
+  select id from list where workspace_id=any($2::text[])
+), scoped_tasks as (
+  select id from task where list_id in (select id from scoped_lists)
+  union select $3::text
+), scoped_reminders as (
+  select id from reminder_state where recipient_user_id=any($1::text[]) or task_id in (select id from scoped_tasks)
+)
+select
+  (select count(*) from task_completion_event where actor_user_id=any($1::text[]) or task_id in (select id from scoped_tasks))::int as native,
+  (select count(*) from karma_event where user_id=any($1::text[]))::int as karma_events,
+  (select count(*) from karma where user_id=any($1::text[]))::int as karma,
+  (select count(*) from notification_outbox where recipient_user_id=any($1::text[]) or payload->>'actorUserId'=any($1::text[]) or payload->>'taskId' in (select id from scoped_tasks) or payload->>'listId' in (select id from scoped_lists) or reminder_state_id in (select id from scoped_reminders))::int as notifications,
+  (select count(*) from scoped_reminders)::int as reminders`,
+			[scope.userIds, scope.workspaceIds, scope.sourceTaskId],
 		)
 	).rows[0];
 }
@@ -77,6 +98,11 @@ test("Settings v2 history roundtrip survives a lost batch response and preserves
 			)
 		).rows[0]?.id;
 		if (!workspace) throw new Error("Missing personal workspace");
+		const effectScope = {
+			userIds: [actor, authorId],
+			workspaceIds: [workspace, targetWorkspace],
+			sourceTaskId: taskId,
+		} as const;
 		await pool.query(
 			"insert into workspace(id,name,owner_id,kind) values($1,$2,$3,'shared')",
 			[targetWorkspace, targetWorkspaceName, actor],
@@ -214,7 +240,7 @@ test("Settings v2 history roundtrip survives a lost batch response and preserves
 				.getByRole("button", { name: sourceTitle, exact: true })
 				.last(),
 		).toBeVisible();
-		const before = await effects(pool);
+		const before = await effects(pool, effectScope);
 		await goToSettings(page);
 		const downloadEvent = page.waitForEvent("download");
 		await page
@@ -259,7 +285,7 @@ test("Settings v2 history roundtrip survives a lost batch response and preserves
 			plannerVersion: 5,
 			applySupported: true,
 		});
-		expect(await effects(pool)).toEqual(before);
+		expect(await effects(pool, effectScope)).toEqual(before);
 		expect(await ledgerCount(pool, targetWorkspace)).toBe(0);
 		await expect(panel).toContainText("These claims do not prove identity");
 		expect(
@@ -301,7 +327,7 @@ test("Settings v2 history roundtrip survives a lost batch response and preserves
 			"Import completed.",
 			{ timeout: 20_000 },
 		);
-		expect(await effects(pool)).toEqual(before);
+		expect(await effects(pool, effectScope)).toEqual(before);
 		const ledger = await ledgerCount(pool, targetWorkspace);
 		expect(ledger).toBe(225);
 		const replay = await page.request.post(
@@ -396,7 +422,7 @@ test("Settings v2 history roundtrip survives a lost batch response and preserves
 				archive.data.completionEvents.map((row) => row.sourceRef),
 			),
 		);
-		expect(await effects(pool)).toEqual(before);
+		expect(await effects(pool, effectScope)).toEqual(before);
 		await pool.query(
 			"insert into user_pref(id,locale,theme) values($1,'ar','dark') on conflict(id) do update set locale='ar',theme='dark'",
 			[actor],

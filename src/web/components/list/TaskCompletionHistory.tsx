@@ -14,6 +14,7 @@ import type { schema } from "../../../zero/schema.gen.ts";
 import { formatDayKey } from "../../lib/intl-format.ts";
 import {
 	loadTaskHistory,
+	TaskHistoryTransportError,
 	TaskHistoryUnavailableError,
 } from "../../lib/task-history.ts";
 
@@ -102,7 +103,12 @@ function HistoryPage({
 	const key = JSON.stringify(cursor);
 	const [request, setRequest] = useState<{
 		key: string;
-		status: "loading" | "complete" | "error" | "unavailable";
+		status:
+			| "loading"
+			| "complete"
+			| "error"
+			| "transport-error"
+			| "unavailable";
 		data: HistoryPageData | null;
 	}>({ key, status: "loading", data: null });
 	const [revision, retry] = useState(0);
@@ -141,14 +147,19 @@ function HistoryPage({
 				if (!controller.signal.aborted) {
 					if (error instanceof TaskHistoryUnavailableError)
 						onAuthorization(false);
-					setRequest({
+					setRequest((current) => ({
 						key,
 						status:
 							error instanceof TaskHistoryUnavailableError
 								? "unavailable"
-								: "error",
-						data: null,
-					});
+								: error instanceof TaskHistoryTransportError
+									? "transport-error"
+									: "error",
+						data:
+							error instanceof TaskHistoryTransportError && current.key === key
+								? current.data
+								: null,
+					}));
 				}
 			},
 		);
@@ -302,7 +313,7 @@ function HistoryPage({
 						{m.completion_history_retry()}
 					</Button>
 				</div>
-			) : details.type === "error" ? (
+			) : details.type === "error" || details.type === "transport-error" ? (
 				<div role="alert" className="space-y-2 text-sm text-destructive">
 					<p>{m.completion_history_error()}</p>
 					<Button
