@@ -172,7 +172,7 @@ test("changed pairs make the prior review stale; missing expected links remain m
 
 test("owning run is projected under its owner without granting the current writer ledger access", async () => {
 	await admin.query(
-		"insert into import_source (id,owner_user_id,label,format,schema_version,source_user_id) values ('source','owner','Source','ditero-json',1,'owner')",
+		"insert into import_source (id,owner_user_id,label,format,schema_version,source_user_id) values ('source','owner','Source','ditero',1,'owner')",
 	);
 	await admin.query(
 		`insert into import_job
@@ -228,7 +228,7 @@ test("a deleted original importer does not block a current writer's recovery", a
 
 test("a former importer with no membership still has a truthful unfinished-run indicator", async () => {
 	await admin.query(
-		"insert into import_source (id,owner_user_id,label,format,schema_version,source_user_id) values ('source','owner','Source','ditero-json',1,'owner')",
+		"insert into import_source (id,owner_user_id,label,format,schema_version,source_user_id) values ('source','owner','Source','ditero',1,'owner')",
 	);
 	await admin.query(
 		`insert into import_job
