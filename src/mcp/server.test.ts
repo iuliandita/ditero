@@ -45,7 +45,7 @@ async function protocol(
 	return client;
 }
 
-test("lists exactly eight fixed read tools with strict bounded schemas and honest annotations", async () => {
+test("lists eight read tools and two fixed workflow tools with strict bounded schemas and honest annotations", async () => {
 	const client = await protocol();
 	const { tools } = await client.listTools();
 	expect(tools.map((tool) => tool.name)).toEqual([
@@ -57,12 +57,14 @@ test("lists exactly eight fixed read tools with strict bounded schemas and hones
 		"list_labels",
 		"list_views",
 		"list_dashboards",
+		"plan_task",
+		"create_task",
 	]);
 	for (const tool of tools) {
 		expect(tool.description).toBeTruthy();
 		expect(tool.inputSchema.additionalProperties).toBe(false);
 		expect(tool.annotations).toMatchObject({
-			readOnlyHint: true,
+			readOnlyHint: tool.name !== "create_task",
 			idempotentHint: true,
 			destructiveHint: false,
 			openWorldHint: true,
@@ -81,7 +83,9 @@ test("returns matching JSON text and structured API envelopes for all read tools
 			nextCursor: null,
 		});
 	});
-	for (const tool of (await client.listTools()).tools) {
+	for (const tool of (await client.listTools()).tools.filter(
+		(tool) => tool.name === "get_profile" || tool.name.startsWith("list_"),
+	)) {
 		const result = await client.callTool({ name: tool.name, arguments: {} });
 		expect(result.isError).not.toBe(true);
 		expect(result.structuredContent).toEqual({
@@ -281,7 +285,7 @@ test("real Bun stdio speaks SDK protocol, rejects API redirects, and prints no p
 	client.onerror = (error) => errors.push(error);
 	await client.connect(transport);
 	cleanup.push(() => client.close());
-	expect((await client.listTools()).tools).toHaveLength(8);
+	expect((await client.listTools()).tools).toHaveLength(10);
 	expect(
 		(await client.callTool({ name: "get_profile", arguments: {} }))
 			.structuredContent,
