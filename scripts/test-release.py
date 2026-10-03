@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import shutil
+import tarfile
 import unittest
 from unittest.mock import patch
 
@@ -99,6 +101,41 @@ class ReleaseTests(unittest.TestCase):
                         release.publish(output)
                     published = any("--draft=false" in call.args[0] for call in run.call_args_list)
                     self.assertEqual(published, not corrupted)
+
+    def test_deployment_requires_matching_kustomize_images(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(release, "ROOT", Path(directory)), patch.object(release, "metadata", return_value={"version": "0.0.1-alpha.1"}), patch.object(release.subprocess, "run") as run:
+            root = Path(directory)
+            chart = root / "deploy/helm/ditero"
+            chart.mkdir(parents=True)
+            (chart / "Chart.yaml").write_text("version: 0.0.1-alpha.1\nappVersion: 0.0.1-alpha.1\n")
+            (chart / "values.yaml").write_text("  tag: 0.0.1-alpha.1\n  tag: 0.0.1-alpha.1-zero\n")
+            base = root / "deploy/kustomize/base"
+            base.mkdir(parents=True)
+            (base / "ditero-app-deployment.yaml").write_text("  image: ghcr.io/iuliandita/ditero:0.0.1-alpha.1\n")
+            (base / "ditero-zero-deployment.yaml").write_text("  image: ghcr.io/iuliandita/ditero:nightly-zero\n")
+            with self.assertRaisesRegex(ValueError, "Kustomize image tags"):
+                release.deployment(root / "output")
+            run.assert_not_called()
+
+    def test_kustomize_archive_excludes_operator_files(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(release.subprocess, "run"):
+            root = Path(directory)
+            shutil.copytree(release.ROOT / "deploy", root / "deploy")
+            for name in ("RELEASING.md", "LICENSE", "docs/runbooks/database-roles.md"):
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(release.ROOT / name, target)
+            local = root / "deploy/kustomize/overlay"
+            local.mkdir()
+            (local / "private.env").write_text("PRIVATE=must-not-ship")
+            (root / "deploy/kustomize/base/private.env").write_text("PRIVATE=must-not-ship")
+            with patch.object(release, "ROOT", root), patch.object(release, "metadata", return_value={"version": "0.0.1-alpha.1"}):
+                release.deployment(root / "output")
+            with tarfile.open(root / "output/ditero-0.0.1-alpha.1-kustomize.tar.gz") as archive:
+                names = archive.getnames()
+                self.assertFalse(any("private.env" in name or "/overlay/" in name for name in names))
+                self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/base/name-reference.yaml", names)
+                self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/README.md", names)
 
     def test_metadata_rejects_unsafe_version_and_code(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(release, "ROOT", Path(directory)):

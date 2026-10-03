@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ditero-zero
+  namespace: ditero
+  labels:
+    app.kubernetes.io/name: ditero
+    app.kubernetes.io/instance: ditero
+    app.kubernetes.io/version: 0.0.1-alpha.1
+    app.kubernetes.io/part-of: ditero
+    app.kubernetes.io/component: zero
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: ditero
+      app.kubernetes.io/name: ditero
+      app.kubernetes.io/component: zero
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ditero
+        app.kubernetes.io/instance: ditero
+        app.kubernetes.io/version: 0.0.1-alpha.1
+        app.kubernetes.io/part-of: ditero
+        app.kubernetes.io/component: zero
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: zero
+        image: ghcr.io/iuliandita/ditero:0.0.1-alpha.1-zero
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - name: http
+          containerPort: 4848
+          protocol: TCP
+        env:
+        - name: DITERO_APP_SERVICE
+          value: ditero-app
+        - name: HOME
+          value: /tmp
+        - name: ZERO_PORT
+          value: '4848'
+        - name: ZERO_NUM_SYNC_WORKERS
+          value: '1'
+        - name: ZERO_REPLICA_FILE
+          value: /data/replica.db
+        - name: ZERO_QUERY_URL
+          value: http://$(DITERO_APP_SERVICE):3000/api/zero/query
+        - name: ZERO_MUTATE_URL
+          value: http://$(DITERO_APP_SERVICE):3000/api/zero/mutate
+        - name: ZERO_ENABLE_CRUD_MUTATIONS
+          value: 'false'
+        - name: ZERO_UPSTREAM_DB_FILE
+          value: /run/secrets/ditero/ZERO_UPSTREAM_DB
+        - name: ZERO_ADMIN_PASSWORD_FILE
+          value: /run/secrets/ditero/ZERO_ADMIN_PASSWORD
+        startupProbe:
+          httpGet:
+            path: /keepalive
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 120
+        readinessProbe:
+          httpGet:
+            path: /keepalive
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /keepalive
+            port: http
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          limits:
+            cpu: '2'
+            memory: 2Gi
+            ephemeral-storage: 512Mi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+            ephemeral-storage: 64Mi
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: secrets
+          mountPath: /run/secrets/ditero
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: ditero-zero
+      - name: secrets
+        secret:
+          secretName: ditero-secrets
+          defaultMode: 288
+          items:
+          - key: ZERO_UPSTREAM_DB
+            path: ZERO_UPSTREAM_DB
+          - key: ZERO_ADMIN_PASSWORD
+            path: ZERO_ADMIN_PASSWORD
+      - name: tmp
+        emptyDir:
+          sizeLimit: 256Mi

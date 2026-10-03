@@ -30,15 +30,25 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.2
+      - name: Install pinned kubectl for local rendering
+        run: |
+          mkdir -p "$RUNNER_TEMP/kubectl"
+          curl --fail --silent --show-error --location https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl -o "$RUNNER_TEMP/kubectl/kubectl"
+          curl --fail --silent --show-error --location https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl.sha256 -o "$RUNNER_TEMP/kubectl/kubectl.sha256"
+          cd "$RUNNER_TEMP/kubectl"
+          echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+          chmod 0755 kubectl
+          echo "$RUNNER_TEMP/kubectl" >> "$GITHUB_PATH"
       - name: Validate release helpers
         run: |
           python3 scripts/test-release.py
           python3 scripts/release.py check
-      - name: Validate Helm and deployment archives
+      - name: Validate Helm, Kustomize and deployment archives
         run: |
           helm lint deploy/helm/ditero --strict
           helm template ditero deploy/helm/ditero > "$RUNNER_TEMP/ditero-default.yaml"
           bun run tests/helm/render.ts
+          bun run tests/kustomize/render.ts
           python3 scripts/release.py deployment --output "$RUNNER_TEMP/deployment"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

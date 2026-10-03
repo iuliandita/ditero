@@ -75,6 +75,11 @@ def deployment(output: Path) -> None:
     for tag in (version, f"{version}-zero"):
         if not re.search(rf'(?m)^\s+tag:\s*"?{re.escape(tag)}"?\s*$', values):
             raise ValueError("Helm image tags do not match release.json")
+    kustomize = ROOT / "deploy/kustomize"
+    for component, suffix in (("app", ""), ("zero", "-zero")):
+        manifest = (kustomize / "base" / f"ditero-{component}-deployment.yaml").read_text()
+        if not re.search(rf"(?m)^\s+image: ghcr\.io/iuliandita/ditero:{re.escape(version + suffix)}\s*$", manifest):
+            raise ValueError("Kustomize image tags do not match release.json")
     output.mkdir(parents=True, exist_ok=True)
     subprocess.run(["helm", "package", "deploy/helm/ditero", "--version", version, "--app-version", version, "--destination", str(output)], cwd=ROOT, check=True)
     files = ("docker-compose.yml", "postgres-init.sh", "secret-file.sh")
@@ -84,13 +89,26 @@ def deployment(output: Path) -> None:
         for name in ("RELEASING.md", "LICENSE"):
             archive.add(ROOT / name, arcname=f"ditero-{version}/{name}")
 
+    with tarfile.open(output / f"ditero-{version}-kustomize.tar.gz", "w:gz") as archive:
+        files = (
+            "README.md", "base/kustomization.yaml", "base/name-reference.yaml", "base/app.env",
+            "base/namespace.yaml", "base/ditero-app-deployment.yaml",
+            "base/ditero-app-service.yaml", "base/ditero-app-persistentvolumeclaim.yaml",
+            "base/ditero-zero-deployment.yaml", "base/ditero-zero-service.yaml",
+            "base/ditero-zero-persistentvolumeclaim.yaml",
+        )
+        for name in files:
+            archive.add(kustomize / name, arcname=f"ditero-{version}/deploy/kustomize/{name}", recursive=False)
+        for name in ("RELEASING.md", "LICENSE", "docs/runbooks/database-roles.md"):
+            archive.add(ROOT / name, arcname=f"ditero-{version}/{name}")
+
 
 def expected_assets(version: str) -> set[str]:
     suffixes = (
         "linux-x64-unsigned.deb", "linux-x64-unsigned.AppImage",
         "windows-x64-unsigned.exe", "macos-arm64-adhoc.dmg",
         "android-independent-universal-signed.apk", "android-independent-universal-signed.aab",
-        "compose.tar.gz", "sbom-alpine.spdx.json", "sbom-debian.spdx.json", "sbom-zero.spdx.json",
+        "compose.tar.gz", "kustomize.tar.gz", "sbom-alpine.spdx.json", "sbom-debian.spdx.json", "sbom-zero.spdx.json",
         "image-alpine.txt", "image-debian.txt", "image-zero.txt",
     )
     return {f"ditero-{version}-{suffix}" for suffix in suffixes} | {f"ditero-{version}.tgz"}
@@ -131,7 +149,7 @@ def publish(output: Path) -> None:
 
 Server: multi-architecture amd64/arm64 Alpine app, Debian app, and Zero images at `ghcr.io/{repo}:{version}`, `:{version}-debian`, and `:{version}-zero`. See the image digest files and SPDX SBOMs. Images are signed with keyless cosign; verify the release workflow identity before deployment.
 
-Deployment: the Helm chart uses external PostgreSQL with logical replication and an existing Secret; see the README inside the chart. The Compose archive includes the bundled database initialization files. Set `DITERO_IMAGE_TAG={version}` when running Compose.
+Deployment: the Helm chart uses external PostgreSQL with logical replication and an existing Secret; see the README inside the chart. The Kustomize archive provides app and Zero manifests for external PostgreSQL; its guide describes local rendering and the remaining cluster qualification. The Compose archive includes the bundled database initialization files. Set `DITERO_IMAGE_TAG={version}` when running Compose.
 
 Desktop: Linux x86_64 DEB/AppImage, unsigned Windows x86_64 installer, and ad-hoc signed macOS Apple Silicon DMG. Windows and macOS downloads have no trusted publisher signature or notarization. Native qualification, general deep links and automatic updates remain incomplete.
 
