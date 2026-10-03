@@ -122,6 +122,17 @@ test("theme editor previews without saving, cancels, then saves paired palettes"
 	await page.getByTestId("theme-switcher").click();
 	await page.getByRole("option", { name: "Light", exact: true }).click();
 	await page.getByTestId("named-theme-select").selectOption("paper");
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				Object.entries(localStorage).some(
+					([key, raw]) =>
+						key.startsWith("ditero.themes.") &&
+						JSON.parse(raw).selected === "paper",
+				),
+			),
+		)
+		.toBe(true);
 	const stored = await page.evaluate(
 		() =>
 			Object.entries(localStorage).find(([key]) =>
