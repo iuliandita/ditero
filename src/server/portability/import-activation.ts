@@ -5,6 +5,7 @@ import {
 	type ImportRelationshipEvidence,
 	type ImportTaskActivationProof,
 } from "../../domain/portability/import-apply-plan.ts";
+import { isHistoricalItem } from "./import-history-apply.ts";
 import {
 	digestImportTarget,
 	IMPORT_TARGETS,
@@ -214,6 +215,15 @@ export async function discoverV4ApplyAuthority(
 		if (membershipId) membershipIds.add(membershipId);
 	};
 	for (const item of [...items, ...ready]) {
+		if (isHistoricalItem(item)) {
+			const parent = item.dependencyProof?.parent;
+			if (!parent || item.disposition !== "ensure") continue;
+			workspaceIds.add(parent.workspaceId);
+			membershipIds.add(parent.membershipId);
+			if (parent.listId) listIds.add(parent.listId);
+			if (parent.kind === "task") taskIds.add(parent.id);
+			continue;
+		}
 		const proof = item.dependencyProof;
 		if (!proof) continue;
 		workspaceIds.add(proof.workspace.targetId);

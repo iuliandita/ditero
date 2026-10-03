@@ -470,6 +470,13 @@
       "when": 1791047185530,
       "tag": "0066_import_history_preview_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1791047511336,
+      "tag": "0067_import_history_apply_proof",
+      "breakpoints": true
     }
   ]
 }

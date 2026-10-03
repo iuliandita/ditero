@@ -308,7 +308,9 @@ test("FORCE RLS reads follow current parent and live membership; writes stay clo
 			"select cmd from pg_policies where tablename = $1",
 			[table],
 		);
-		expect(policies.rows.map((row) => row.cmd)).toEqual(["SELECT"]);
+		expect(policies.rows.map((row) => row.cmd).sort()).toEqual(
+			table === "import_history_ledger" ? ["INSERT", "SELECT"] : ["SELECT"],
+		);
 		const field = table === "import_history_ledger" ? "id" : "ledger_id";
 		const count = async (userId: string) =>
 			(

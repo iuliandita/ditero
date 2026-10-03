@@ -160,7 +160,10 @@ test("migrations expose only display claims to Zero and force event RLS", async 
 	const policies = await admin.query<{ cmd: string }>(
 		"select cmd from pg_policies where tablename = 'imported_completion_event'",
 	);
-	expect(policies.rows.map((row) => row.cmd)).toEqual(["SELECT"]);
+	expect(policies.rows.map((row) => row.cmd).sort()).toEqual([
+		"INSERT",
+		"SELECT",
+	]);
 	const indexes = await admin.query<{ indexdef: string }>(
 		"select indexdef from pg_indexes where indexname = 'imported_completion_event_page_idx'",
 	);

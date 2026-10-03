@@ -3,6 +3,7 @@ import type {
 	FrozenImportItem,
 	ImportApplyReport,
 } from "../../domain/portability/import-apply-plan.ts";
+import type { HistoryPreviewItem } from "../../domain/portability/import-apply-plan-v2.ts";
 import { hashImportValue } from "../../domain/portability/import-digest.ts";
 import type { PortableJson } from "../../domain/portability/v1.ts";
 import { type Role, WRITE_ROLES } from "../../domain/role.ts";
@@ -16,6 +17,11 @@ import {
 	type V4ApplyAuthority,
 	V4ApplyConflict,
 } from "./import-activation.ts";
+import {
+	applyHistoricalItems,
+	HistoricalApplyConflict,
+	isHistoricalItem,
+} from "./import-history-apply.ts";
 import {
 	ImportPlanStoreError,
 	importTransaction,
@@ -142,25 +148,28 @@ export async function applyImportBatch(
 			const job = (
 				await client.query<{
 					source_id: string;
+					source_schema_version: number;
 					planner_version: number;
 					apply_supported: boolean;
 					plan_digest: string;
 					report: ImportApplyReport;
 				}>(
-					`select j.source_id, j.planner_version, j.apply_supported, j.plan_digest, j.report from import_source s join import_job j on j.source_id = s.id where j.id = $1 and j.owner_user_id = $2 and s.owner_user_id = $2`,
+					`select j.source_id, s.schema_version as source_schema_version, j.planner_version, j.apply_supported, j.plan_digest, j.report from import_source s join import_job j on j.source_id = s.id where j.id = $1 and j.owner_user_id = $2 and s.owner_user_id = $2`,
 					[jobId, ownerId],
 				)
 			).rows[0];
 			if (!job) fail("plan-not-found", 404);
 			if (
-				![2, 3, 4].includes(job.planner_version) ||
+				![2, 3, 4, 5].includes(job.planner_version) ||
 				job.planner_version !== discoveredVersion ||
-				(job.planner_version === 4 && !authority) ||
+				(job.planner_version >= 4 && !authority) ||
 				!job.apply_supported ||
+				job.report.applySupported !== true ||
+				(job.planner_version === 5 && job.source_schema_version !== 2) ||
 				job.report.plannerVersion !== job.planner_version
 			)
 				fail("import-apply-unsupported");
-			const v4 = job.planner_version === 4;
+			const v4 = job.planner_version >= 4;
 			if (
 				confirmation?.planDigest !== job.plan_digest ||
 				!confirmation.counts ||
@@ -183,20 +192,26 @@ export async function applyImportBatch(
 				64 * 1024 * 1024
 			)
 				fail("import-batch-too-large", 413);
-			const items = (
-				await client.query<FrozenImportItem>(
+			const storedItems = (
+				await client.query<FrozenImportItem | HistoryPreviewItem>(
 					`select ${itemColumns} from import_item where job_id = $1 and ordinal >= $2 order by ordinal limit 100`,
 					[jobId, start],
 				)
 			).rows;
+			const historical = storedItems.filter(isHistoricalItem);
+			if (historical.length && job.planner_version !== 5)
+				fail("invalid-plan-evidence");
+			const items = storedItems.filter(
+				(item): item is FrozenImportItem => !isHistoricalItem(item),
+			);
 			if (
 				v4 &&
 				(!authority ||
 					authority.start !== start ||
-					authority.next !== start + items.length)
+					authority.next !== start + storedItems.length)
 			)
 				fail("import-concurrent-retry");
-			for (const [index, item] of items.entries()) {
+			for (const [index, item] of storedItems.entries()) {
 				const { itemDigest, ...evidence } = item;
 				if (
 					item.ordinal !== start + index ||
@@ -227,7 +242,7 @@ export async function applyImportBatch(
 					const { itemDigest, ...evidence } = item;
 					if (
 						(await hashImportValue(
-							"ditero-import-item-v4",
+							`ditero-import-item-v${job.planner_version}`,
 							evidence as unknown as PortableJson,
 							checkpoint,
 						)) !== itemDigest
@@ -243,7 +258,7 @@ export async function applyImportBatch(
 				const assignee = item.dependencyProof?.assignee;
 				const payload = payloadOf(item);
 				if (
-					![3, 4].includes(job.planner_version) ||
+					![3, 4, 5].includes(job.planner_version) ||
 					!assignee ||
 					typeof assignee.sourceUserId !== "string" ||
 					![
@@ -818,6 +833,14 @@ export async function applyImportBatch(
 						`insert into import_workspace_map (source_id, source_workspace_id, owner_user_id, target_workspace_id) values ($1,$2,$3,$4) on conflict (source_id, source_workspace_id) do nothing`,
 						[job.source_id, source, ownerId, target],
 					);
+				const historyResult = await applyHistoricalItems(
+					client,
+					ownerId,
+					jobId,
+					job.source_id,
+					historical,
+					checkpoint,
+				);
 				const quota = (
 					await client.query<{ maps: number; pins: number; bytes: string }>(
 						`select (select count(*)::int from import_source_map where owner_user_id = $1) as maps, (select count(*)::int from import_workspace_map where owner_user_id = $1) as pins, ((select coalesce(sum(octet_length(m::text)),0) from import_source_map m where owner_user_id = $1) + (select coalesce(sum(octet_length(w::text)),0) from import_workspace_map w where owner_user_id = $1))::text as bytes`,
@@ -831,7 +854,7 @@ export async function applyImportBatch(
 					Number(quota.bytes) > 64 * 1024 * 1024
 				)
 					throw new BatchConflict("import-map-quota-exceeded", currentOrdinal);
-				const next = start + items.length;
+				const next = start + storedItems.length;
 				if (v4 && authority && v4Seats && v4State)
 					await publishV4Ready(
 						client,
@@ -852,8 +875,9 @@ export async function applyImportBatch(
 					[
 						remaining ? "running" : "completed",
 						next,
-						prepared.filter((entry) => !entry.noop).length,
-						prepared.filter((entry) => entry.noop).length,
+						prepared.filter((entry) => !entry.noop).length +
+							historyResult.applied,
+						prepared.filter((entry) => entry.noop).length + historyResult.noop,
 						jobId,
 						ownerId,
 					],
@@ -868,6 +892,7 @@ export async function applyImportBatch(
 				if (
 					!(error instanceof BatchConflict) &&
 					!(error instanceof V4ApplyConflict) &&
+					!(error instanceof HistoricalApplyConflict) &&
 					!race
 				)
 					throw error;
@@ -875,10 +900,14 @@ export async function applyImportBatch(
 				await client.query(
 					`update import_run set state = 'conflict', conflict_code = $1, conflict_ordinal = $2, updated_at = now() where job_id = $3 and owner_user_id = $4`,
 					[
-						error instanceof BatchConflict || error instanceof V4ApplyConflict
+						error instanceof BatchConflict ||
+						error instanceof V4ApplyConflict ||
+						error instanceof HistoricalApplyConflict
 							? error.code
 							: "target-write-conflict",
-						error instanceof BatchConflict || error instanceof V4ApplyConflict
+						error instanceof BatchConflict ||
+						error instanceof V4ApplyConflict ||
+						error instanceof HistoricalApplyConflict
 							? error.ordinal
 							: currentOrdinal,
 						jobId,
@@ -901,7 +930,7 @@ export async function applyImportBatch(
 					[jobId, ownerId],
 				)
 			).rows[0]?.planner_version;
-			if (discoveredVersion !== 4) return [];
+			if (discoveredVersion !== 4 && discoveredVersion !== 5) return [];
 			authority = await discoverV4ApplyAuthority(client, ownerId, jobId);
 			return [...authority.userIds];
 		},
