@@ -5,13 +5,14 @@ contains the workspace content you can currently access, your personal views and
 dashboards, preferences, focus sessions, and Karma history. Shared workspace data
 is included only while you remain a member. Other members' personal data is excluded.
 
-The version 1 file uses `format: "ditero"`, `schemaVersion: 1`, stable source IDs,
+Settings downloads version 2 with recorded history and source attribution. The legacy
+version 1 API file uses `format: "ditero"`, `schemaVersion: 1`, stable source IDs,
 camelCase fields, ISO timestamps, and ordered entity arrays under `data`. It records
 the export time, source user, and explicit exclusions in `boundaries`.
 
 This is a data export, not a restorable backup. Settings supports reviewed,
 resumable import of a subset of native content; see [Native data format](native-format.md)
-for supported records and exclusions. Version 4 import can preserve task dates,
+for supported records and exclusions. Planner versions 4 and 5 preserve ordinary task dates,
 recurrence, reminders, repeat policy, urgency, and a mapped fallback recipient.
 Assignments and fallback recipients require explicit mappings to current destination
 members. Import never creates permissions or sends assignment notices. Keep normal
@@ -19,7 +20,7 @@ database and attachment-storage backups for disaster recovery.
 
 ## Imported task notifications
 
-A version 4 task can show **Pending** while its assignments are still being applied,
+A task imported with planner version 4 or 5 can show **Pending** while its assignments are still being applied,
 or **Blocked** after a conflict or security change. Its content and notification-related
 controls stay paused until the task is activated. Resume an interrupted, still-valid
 import plan to finish its remaining work. If the plan cannot resume, a current member
@@ -88,12 +89,19 @@ attribution for comments, templates, and completion events. It includes only con
 you can currently access. It does not reconstruct earlier events or include attachment
 files or keys.
 
-This archive cannot yet be imported. The authenticated plan endpoint supports an
-immutable version 5 preview with historical source claims and destination checks;
-its report explicitly disables apply. Settings still rejects version 2 uploads.
-Settings **Download JSON** and the endpoint
-without a version selector still produce version 1 for the existing import workflow.
-An explicit `?version=1` produces the same file. Unsupported or repeated version
+Settings accepts this archive and saves an immutable version 5 dry run. Review its
+counts and source attribution, then confirm Apply import. Supported comments, task and
+list templates, and recorded completion events retain their original times and explicit
+source claims. These claims grant no identity, authorship, or destination access.
+Historical records do not change current task state, award Karma, or produce reminders
+or notifications.
+Application rechecks current write access and proceeds in atomic batches of at most
+100 items; interrupted runs resume from their committed cursor. Deleted historical
+targets remain tombstones. Older preview-only plans cannot be applied; upload the
+original archive again and save a new dry run.
+
+Settings **Download JSON** produces version 2. The endpoint without a version selector
+and explicit `?version=1` still produce version 1 for existing API clients. Unsupported or repeated version
 selectors return HTTP 400. Both formats share the limits below.
 
 If retained source authorship on comments or templates cannot be represented in

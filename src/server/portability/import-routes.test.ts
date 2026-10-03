@@ -147,7 +147,7 @@ describe("native import plan transport", () => {
 			report: { plannerVersion: 4, applySupported: true },
 		});
 	});
-	test("dispatches validated history archives to saved preview without enabling apply", async () => {
+	test("qualifies validated history archives without accepting client authority flags", async () => {
 		const source = document();
 		const archive = {
 			...source,
@@ -160,8 +160,7 @@ describe("native import plan transport", () => {
 			id: "saved-v5",
 			report: {
 				plannerVersion: 5,
-				applySupported: false,
-				applyBlockedReason: "history-apply-unsupported",
+				applySupported: true,
 			},
 		});
 		const result = await app().handle(
@@ -174,8 +173,7 @@ describe("native import plan transport", () => {
 		expect(await result.json()).toMatchObject({
 			report: {
 				plannerVersion: 5,
-				applySupported: false,
-				applyBlockedReason: "history-apply-unsupported",
+				applySupported: true,
 			},
 		});
 		expect(store.save).toHaveBeenCalledWith(
@@ -184,9 +182,17 @@ describe("native import plan transport", () => {
 			expect.anything(),
 			archive,
 			expect.anything(),
-			expect.objectContaining({ plannerVersion: 4 }),
+			expect.objectContaining({ plannerVersion: 4, historyApply: true }),
 		);
 		store.save.mockClear();
+		expect(
+			(
+				await app().handle(
+					request(JSON.stringify({ ...payload(), historyApply: true })),
+				)
+			).status,
+		).toBe(400);
+		expect(store.save).not.toHaveBeenCalled();
 		const malformed = await app().handle(
 			request(JSON.stringify({ ...payload(), document: '{"schemaVersion":2' })),
 		);

@@ -6,7 +6,7 @@ import {
 	test,
 	type WebSocketRoute,
 } from "@playwright/test";
-import type { PortableExportV1 } from "../../src/domain/portability/v1.ts";
+import type { PortableExportV2 } from "../../src/domain/portability/v2.ts";
 import {
 	goToSettings,
 	sidebarLists,
@@ -32,13 +32,13 @@ test("downloads a versioned account export with explicit limits", async ({
 	const downloadPromise = page.waitForEvent("download");
 	await panel.getByRole("button", { name: "Download JSON" }).click();
 	const download = await downloadPromise;
-	expect(download.suggestedFilename()).toBe("ditero-export-v1.json");
+	expect(download.suggestedFilename()).toBe("ditero-history-v2.json");
 	const stream = await download.createReadStream();
 	const chunks: Buffer[] = [];
 	for await (const chunk of stream) chunks.push(Buffer.from(chunk));
 	const exported = JSON.parse(Buffer.concat(chunks).toString("utf8"));
 	expect(exported.format).toBe("ditero");
-	expect(exported.schemaVersion).toBe(1);
+	expect(exported.schemaVersion).toBe(2);
 	expect(exported.boundaries.attachmentContent).toBe("excluded");
 	expect(exported.boundaries.restoreSupported).toBe(false);
 	expect(exported.data.workspaces).toHaveLength(1);
@@ -56,7 +56,7 @@ test("shows a size refusal and allows retry", async ({ page }) => {
 	await signUp(page, uniqueEmail("export-limit"));
 	await waitWorkspaceReady(page);
 	await goToSettings(page);
-	await page.route("**/api/portability/export", (route) =>
+	await page.route("**/api/portability/export?version=2", (route) =>
 		route.fulfill({ status: 413 }),
 	);
 	const button = page.getByRole("button", { name: "Download JSON" });
@@ -65,7 +65,7 @@ test("shows a size refusal and allows retry", async ({ page }) => {
 		"This export exceeds the download limit. No partial file was created.",
 	);
 	await expect(button).toBeEnabled();
-	await page.unroute("**/api/portability/export");
+	await page.unroute("**/api/portability/export?version=2");
 	const download = page.waitForEvent("download");
 	await button.click();
 	await download;
@@ -120,9 +120,9 @@ async function savedList(page: Page, name: string) {
 		{ timeout: 15000 },
 	);
 	// Read the real saved snapshot before holding any push, proving setup persisted.
-	const response = await page.request.get("/api/portability/export");
+	const response = await page.request.get("/api/portability/export?version=2");
 	expect(response.ok()).toBe(true);
-	const saved: PortableExportV1 = await response.json();
+	const saved: PortableExportV2 = await response.json();
 	expect(saved.data.lists.some((list) => list.title === name)).toBe(true);
 }
 
@@ -150,16 +150,16 @@ function exportEvents(page: Page) {
 	return { requests, downloads };
 }
 
-async function downloadedExport(download: Download): Promise<PortableExportV1> {
-	expect(download.suggestedFilename()).toBe("ditero-export-v1.json");
+async function downloadedExport(download: Download): Promise<PortableExportV2> {
+	expect(download.suggestedFilename()).toBe("ditero-history-v2.json");
 	const stream = await download.createReadStream();
 	const chunks: Buffer[] = [];
 	for await (const chunk of stream) chunks.push(Buffer.from(chunk));
-	const exported: PortableExportV1 = JSON.parse(
+	const exported: PortableExportV2 = JSON.parse(
 		Buffer.concat(chunks).toString("utf8"),
 	);
 	expect(exported.format).toBe("ditero");
-	expect(exported.schemaVersion).toBe(1);
+	expect(exported.schemaVersion).toBe(2);
 	expect(exported.boundaries.attachmentContent).toBe("excluded");
 	expect(exported.boundaries.restoreSupported).toBe(false);
 	return exported;

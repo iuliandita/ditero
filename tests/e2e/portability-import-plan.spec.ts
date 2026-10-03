@@ -158,7 +158,7 @@ test("rejects malformed files locally without saving a plan", async ({
 	).toBeDisabled();
 });
 
-test("explains unsupported history archives locally and accepts a replacement v1 file", async ({
+test("rejects an invalid historical graph locally and accepts a replacement v1 file", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 375, height: 812 });
@@ -167,13 +167,21 @@ test("explains unsupported history archives locally and accepts a replacement v1
 	const exported = await (
 		await page.request.get("/api/portability/export")
 	).json();
-	const archive = {
-		...exported,
-		schemaVersion: 2,
-		sourceNamespace: "11111111-1111-4111-8111-111111111111",
-		boundaries: { ...exported.boundaries, taskHistory: "recorded-events-only" },
-		data: { ...exported.data, completionEvents: [] },
-	};
+	const archive = await (
+		await page.request.get("/api/portability/export?version=2")
+	).json();
+	archive.data.comments.push({
+		id: "invalid-parent",
+		taskId: "missing-task",
+		body: "Unreachable",
+		createdAt: archive.exportedAt,
+		sourceRef: {
+			namespace: archive.sourceNamespace,
+			collection: "comments",
+			id: "invalid-parent",
+		},
+		author: { kind: "unknown" },
+	});
 	let saveRequests = 0;
 	page.on("request", (request) => {
 		if (
@@ -190,7 +198,7 @@ test("explains unsupported history archives locally and accepts a replacement v1
 		buffer: Buffer.from(JSON.stringify(archive)),
 	});
 	await expect(panel.getByRole("alert")).toHaveText(
-		"History archives cannot be imported yet.",
+		"This file is not a valid native export, or its references are inconsistent.",
 	);
 	await expect(
 		panel.getByRole("button", { name: "Save dry run" }),
@@ -200,7 +208,7 @@ test("explains unsupported history archives locally and accepts a replacement v1
 			.violations,
 	).toEqual([]);
 	await panel.screenshot({
-		path: test.info().outputPath("history-archive-unsupported.png"),
+		path: test.info().outputPath("history-archive-invalid-graph.png"),
 	});
 	await panel.getByLabel("Native JSON export").setInputFiles({
 		name: "ditero-export-v1.json",
