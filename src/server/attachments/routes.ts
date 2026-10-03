@@ -14,7 +14,11 @@ import {
 	hasAttachmentWriteRole,
 	validateAttachmentWrite,
 } from "./quota.ts";
-import { type AttachmentState, assertAttachmentTransition } from "./state.ts";
+import {
+	ATTACHMENT_PARENT_PRESENT_SQL,
+	type AttachmentState,
+	assertAttachmentTransition,
+} from "./state.ts";
 
 export type AttachmentPrincipal = { user: { id: string } };
 
@@ -398,10 +402,12 @@ async function downloadResponse(
 			state: AttachmentState;
 			deleted_at: Date | null;
 			is_member: boolean;
+			has_parent: boolean;
 			observed_bytes: string | null;
 		}>(
 			`select ${storageColumn} as storage_key, ${bytesColumn} as observed_bytes,
 			 a.state, a.deleted_at,
+			 ${ATTACHMENT_PARENT_PRESENT_SQL} as has_parent,
 			 exists(select 1 from membership m
 			        where m.workspace_id = a.workspace_id
 			          and m.user_id = $2) as is_member
@@ -414,6 +420,7 @@ async function downloadResponse(
 	if (!row.is_member) return new Response("Forbidden", { status: 403 });
 	if (
 		row.state !== "committed" ||
+		!row.has_parent ||
 		row.deleted_at !== null ||
 		row.storage_key === null ||
 		row.observed_bytes === null

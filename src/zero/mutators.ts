@@ -80,6 +80,33 @@ import { appendZeroCompletionEvent } from "./task-completion-history.ts";
 const DENIED = "access denied: need member+";
 const denied = () => new MutatorError("denied", DENIED);
 
+async function retireParentAttachments(
+	tx: Transaction<Schema>,
+	workspaceId: string,
+	kind: "task" | "list" | "comment",
+	id: string,
+): Promise<void> {
+	if (tx.location !== "server") return;
+	const tasks =
+		kind === "task"
+			? "select id from task where id = $1 or parent_id = $1"
+			: "select id from task where list_id = $1";
+	const parents =
+		kind === "comment"
+			? "a.parent_kind = 'comment' and a.parent_id = $1"
+			: `(a.parent_kind = 'task' and a.parent_id in (${tasks}))
+		 or (a.parent_kind = 'comment' and a.parent_id in
+		   (select id from comment where task_id in (${tasks})))
+		 ${kind === "list" ? "or (a.parent_kind = 'list' and a.parent_id = $1)" : ""}`;
+	// Unfinalized transfers lock their attachment before the parent. Only retire
+	// committed rows here; parent loss already aborts those transfers.
+	await tx.dbTransaction.query(
+		`update attachment a set state = 'deleting', deleted_at = now()
+		 where a.workspace_id = $2 and a.state = 'committed' and (${parents})`,
+		[id, workspaceId],
+	);
+}
+
 async function roleInWorkspace(
 	tx: Transaction<Schema>,
 	userId: string,
@@ -898,6 +925,7 @@ export const mutators = defineMutators({
 				const list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
 				await lockZeroTaskDeletion(tx, ctx.id, args.id);
+				await retireParentAttachments(tx, list.workspaceId, "task", args.id);
 				// parent_id FK is `no action`: delete children explicitly first.
 				if (tx.location === "server") await deleteZeroTaskChildren(tx, args.id);
 				else {
@@ -1363,6 +1391,7 @@ export const mutators = defineMutators({
 					allowPending: true,
 					deleteTasks: true,
 				});
+				await retireParentAttachments(tx, list.workspaceId, "list", args.id);
 				// list_id FK is `no action`: delete tasks first (children before
 				// parents), task_label cascades on task delete.
 				if (tx.location === "server") await deleteZeroListTasks(tx, args.id);
@@ -1832,6 +1861,38 @@ export const mutators = defineMutators({
 					c.importedAt == null ? c.authorId : null,
 					"comment author",
 				);
+				await lockZeroTaskWrite(tx, ctx.id, {
+					taskIds: [c.taskId],
+					allowPending: true,
+				});
+				if (tx.location === "server") {
+					const rows = await tx.dbTransaction.query(
+						`select c.id from comment c join task t on t.id=c.task_id
+						 join list l on l.id=t.list_id
+						 where c.id=$1 and c.task_id=$2
+						 and c.author_id is not distinct from $3::text
+						 and c.imported_at is not distinct from $4::timestamptz
+						 and l.id=$5 and l.workspace_id=$6 for update of c`,
+						[
+							args.id,
+							c.taskId,
+							c.authorId ?? null,
+							c.importedAt == null ? null : new Date(c.importedAt),
+							list.id,
+							list.workspaceId,
+						],
+					);
+					if (Array.from(rows).length !== 1)
+						throw new Error("comment deletion target changed");
+					await requireCreatorOrAdminDelete(
+						tx,
+						ctx.id,
+						list.workspaceId,
+						c.importedAt == null ? c.authorId : null,
+						"comment author",
+					);
+				}
+				await retireParentAttachments(tx, list.workspaceId, "comment", args.id);
 				await tx.mutate.comment.delete({ id: args.id });
 			},
 		),
