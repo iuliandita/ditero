@@ -2295,5 +2295,20 @@
 	"appearance_saving": "Guardando tema...",
 	"appearance_waiting": "Los cambios del tema están en cola. Esperando la confirmación del servidor.",
 	"appearance_save_failed": "No se pudieron guardar estos cambios del tema en tu cuenta. Tus cambios siguen disponibles; inténtalo de nuevo.",
-	"appearance_cache_failed": "Tu tema está guardado en tu cuenta, pero no se pudo actualizar su caché local de inicio."
+	"appearance_cache_failed": "Tu tema está guardado en tu cuenta, pero no se pudo actualizar su caché local de inicio.",
+	"tui_footer": "q salir | ? ayuda | Enter abrir | Esc volver | p siguiente | r actualizar | n añadir | c completar",
+	"tui_footer_review": "q salir | y confirmar/reintentar | Esc cancelar antes de enviar",
+	"tui_footer_form": "Esc cancelar | Enter continuar",
+	"tui_due_prompt": "Día de vencimiento: today, tomorrow, YYYY-MM-DD o déjalo vacío",
+	"tui_review_create": "Revisar la creación de la tarea",
+	"tui_review_complete": "Revisar la finalización de la tarea",
+	"tui_review_recurring": "Al completar esta tarea recurrente, pasa a su siguiente fecha.",
+	"tui_uncertain": "El resultado no está confirmado. Reintenta la misma solicitud; no crees otra.",
+	"tui_error": "La solicitud falló ({code}). Comprueba el acceso y la conexión antes de reintentar.",
+	"tui_people": "Personas",
+	"tui_ready": "Listo",
+	"tui_help_navigation": "Usa las flechas y Enter para explorar. Esc vuelve. p carga la siguiente página; r empieza de nuevo.",
+	"tui_help_writes": "n añade a la lista o al dashboard seleccionado. c completa una tarea. Revísala y pulsa y para enviar.",
+	"tui_help_exit": "q sale. Ctrl-C siempre sale. El texto pegado nunca confirma una acción.",
+	"tui_terminal_required": "Usa un terminal interactivo con un TERM compatible."
 }

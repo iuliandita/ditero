@@ -67,6 +67,7 @@ export async function taskWorkflow(
 	options: CliOptions,
 	fetcher: Fetcher = fetch,
 	reader: StdinReader = readStdin,
+	callerSignal?: AbortSignal,
 ): Promise<unknown> {
 	const raw = await input(reader);
 	if (options.command === "create-task") {
@@ -77,6 +78,8 @@ export async function taskWorkflow(
 			new URL("/api/v1/tasks", options.server),
 			fetcher,
 			{ body: JSON.stringify(parsed.data), requestId: options.requestId },
+			undefined,
+			callerSignal,
 		);
 		const validated = z
 			.object({
@@ -107,7 +110,12 @@ export async function taskWorkflow(
 		done: undefined,
 	};
 	const profile = (
-		await discover({ ...base, command: "profile" }, fetcher, budget)
+		await discover(
+			{ ...base, command: "profile" },
+			fetcher,
+			budget,
+			callerSignal,
+		)
 	).data;
 	const snapshot: Record<string, unknown> = { profile };
 	for (const command of [
@@ -119,7 +127,7 @@ export async function taskWorkflow(
 		"dashboards",
 	] as const) {
 		snapshot[command] = (
-			await discover({ ...base, command }, fetcher, budget)
+			await discover({ ...base, command }, fetcher, budget, callerSignal)
 		).data;
 	}
 	try {

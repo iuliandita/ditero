@@ -2295,5 +2295,20 @@
 	"appearance_saving": "Se salvează tema...",
 	"appearance_waiting": "Modificările temei sunt în așteptare. Așteptăm confirmarea serverului.",
 	"appearance_save_failed": "Nu am putut salva aceste modificări ale temei în contul tău. Modificările sunt încă disponibile; încearcă din nou.",
-	"appearance_cache_failed": "Tema este salvată în contul tău, dar memoria cache locală pentru pornire nu a putut fi actualizată."
+	"appearance_cache_failed": "Tema este salvată în contul tău, dar memoria cache locală pentru pornire nu a putut fi actualizată.",
+	"tui_footer": "q ieșire | ? ajutor | Enter deschide | Esc înapoi | p următoarea | r reîncarcă | n adaugă | c finalizează",
+	"tui_footer_review": "q ieșire | y confirmă/reîncearcă | Esc anulează înainte de trimitere",
+	"tui_footer_form": "Esc anulează | Enter continuă",
+	"tui_due_prompt": "Ziua scadentă: today, tomorrow, YYYY-MM-DD sau lasă gol",
+	"tui_review_create": "Verifică adăugarea sarcinii",
+	"tui_review_complete": "Verifică finalizarea sarcinii",
+	"tui_review_recurring": "Finalizarea mută această sarcină recurentă la următoarea scadență.",
+	"tui_uncertain": "Rezultatul nu este confirmat. Reîncearcă aceeași cerere; nu crea una nouă.",
+	"tui_error": "Cererea a eșuat ({code}). Verifică accesul și conexiunea înainte de a reîncerca.",
+	"tui_people": "Persoane",
+	"tui_ready": "Pregătit",
+	"tui_help_navigation": "Folosește săgețile și Enter pentru navigare. Esc revine. p încarcă pagina următoare; r începe din nou.",
+	"tui_help_writes": "n adaugă în lista sau dashboard-ul selectat. c finalizează o sarcină. Verifică și apasă y pentru trimitere.",
+	"tui_help_exit": "q închide. Ctrl-C închide întotdeauna. Textul lipit nu confirmă nicio acțiune.",
+	"tui_terminal_required": "Folosește un terminal interactiv cu un TERM acceptat."
 }
