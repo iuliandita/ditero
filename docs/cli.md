@@ -1,8 +1,27 @@
 # Ditero CLI
 
 The CLI uses the version 1 public API to discover member-visible content, plan a
-task, create it, and complete an observed task with an explicit retry key. Packaged CLI releases are not
-available yet.
+task, create it, and complete an observed task with an explicit retry key.
+A local Linux x64 glibc standalone candidate can be built for all three terminal
+clients. Public binary distribution is blocked while embedded runtime license and
+copyright notices remain incomplete in [#575](https://github.com/iuliandita/ditero/issues/575).
+Neither release assets nor public Actions uploads include these executables.
+
+```sh
+bun install --frozen-lockfile
+bun run build:clients
+./out/clients/ditero-VERSION-clients-linux-x64/bin/ditero --version
+```
+
+`BUILDINFO.json` records the release version, base source commit, official Bun
+runtime revision and checksum, target, and `runtimeNoticesComplete: false`.
+Modified local source is marked separately. Runtime qualification passes on Linux
+x64 glibc in Ubuntu 24.04 without Bun or a checkout; this does not qualify binary
+redistribution. SSE4.2 is required. ARM, musl, Windows and macOS remain unqualified.
+Automatic `.env`, `bunfig.toml`, `package.json` and `tsconfig.json` loading is disabled.
+Supply credentials explicitly through the process environment. Caller-controlled
+Bun runtime flags are trusted configuration; the executable is not a sandbox.
+Bundled relink inputs and partial notices are retained in the local candidate.
 
 The [terminal interface](tui.md) provides interactive browsing, reviewed creation
 and completion through the same public API.

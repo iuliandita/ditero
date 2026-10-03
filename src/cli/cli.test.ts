@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import release from "../../release.json";
 import { CliError, canonicalServer, parseArguments } from "./arguments.ts";
 import { discover, MAX_PAGES, MAX_RESPONSE_BYTES } from "./client.ts";
 import { runCli } from "./index.ts";
@@ -268,4 +269,20 @@ describe("CLI reads", () => {
 		).toBe(2);
 		expect(stderr.mock.calls[0][0]).not.toContain(env.DITERO_TOKEN);
 	});
+});
+
+it("prints release identity without credentials or a network request", async () => {
+	const stdout = vi.fn();
+	const stderr = vi.fn();
+	const fetcher = vi.fn();
+	expect(await runCli(["--version"], {}, { stdout, stderr }, fetcher)).toBe(0);
+	expect(stdout).toHaveBeenCalledWith(
+		`ditero ${release.version} (development+modified; source)\n`,
+	);
+	expect(stderr).not.toHaveBeenCalled();
+	expect(fetcher).not.toHaveBeenCalled();
+	expect(
+		await runCli(["profile", "--version"], env, { stdout, stderr }, fetcher),
+	).toBe(2);
+	expect(fetcher).not.toHaveBeenCalled();
 });

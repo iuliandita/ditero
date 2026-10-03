@@ -7,6 +7,7 @@ import { taskIntentSchema } from "../agent/task-plan.ts";
 import { CliError, type CliOptions, parseArguments } from "../cli/arguments.ts";
 import { discover, type Fetcher } from "../cli/client.ts";
 import { taskWorkflow } from "../cli/task-workflow.ts";
+import { clientBuild } from "../clients/build-info.ts";
 import { PUBLIC_API_ID, PUBLIC_API_PAGE_SIZE } from "../domain/public-api.ts";
 import { apiTaskCompleteSchema } from "../domain/public-api-completion.ts";
 import {
@@ -106,7 +107,7 @@ export function createDiteroMcp(
 ): McpServer {
 	const fixed = Object.freeze({ ...configuration });
 	const server = new McpServer(
-		{ name: "ditero", version: "1.0.0" },
+		{ name: "ditero", version: clientBuild.version },
 		{ capabilities: { tools: {} }, maxToolInputElements: 256 },
 	);
 	let active = 0;

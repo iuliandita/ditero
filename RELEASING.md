@@ -8,7 +8,10 @@ from `main`. Every change lands through a PR.
 
 Every push and PR builds Android development APKs and unsigned or ad-hoc desktop
 installers. These test artifacts expire after seven days. Release packaging checks
-also retain Helm, Kustomize and Compose packages for 30 days.
+also retain Helm, Kustomize and Compose packages for 30 days. Linux x64 standalone
+CLI, MCP and TUI candidates are built and exercised internally without Bun.
+Their embedded runtime notices remain incomplete in [#575](https://github.com/iuliandita/ditero/issues/575);
+compiled clients are excluded from release assets and public Actions uploads.
 
 Tagged releases include:
 

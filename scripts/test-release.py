@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import io
 import importlib.util
 import hashlib
 import json
@@ -101,6 +102,59 @@ class ReleaseTests(unittest.TestCase):
                         release.publish(output)
                     published = any("--draft=false" in call.args[0] for call in run.call_args_list)
                     self.assertEqual(published, not corrupted)
+
+    def client_archive(self, path, source_sha, **changes):
+        version = "0.0.1-alpha.1"
+        prefix = f"ditero-{version}-clients-linux-x64"
+        info = {"version": version, "sourceSha": source_sha, "sourceDirty": False,
+                "target": "bun-linux-x64", "apiVersion": 1,
+                "clients": ["ditero", "ditero-mcp", "ditero-tui"],
+                "bunVersion": "1.4.2", "bunRevision": "744846f844374847c902b5e7fd59b4342a51ef99",
+                "runtimeArchiveSha256": "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
+                "dependencies": ["zod@4.4.3"], "runtimeNoticesComplete": False}
+        info.update(changes)
+        files = {"BUILDINFO.json": json.dumps(info).encode(), "LICENSE": b"license", "REBUILD.md": b"instructions", "notices/Bun-LICENSE.md": b"runtime notice", "notices/zod@4.4.3/LICENSE": b"license"}
+        for name in info["clients"]:
+            files[f"bin/{name}"] = b"\x7fELF\x02\x01" + bytes(12) + b"\x3e\x00"
+            files[f"relink/{name}.js"] = b"console.log('fixture')"
+        with tarfile.open(path, "w:gz") as archive:
+            for name, content in files.items():
+                member = tarfile.TarInfo(f"{prefix}/{name}")
+                member.size = len(content)
+                member.mode = 0o755 if name.startswith("bin/") else 0o644
+                archive.addfile(member, io.BytesIO(content))
+
+    def test_candidate_requires_exact_source_runtime_and_incomplete_notice_marker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "clients.tar.gz"
+            sha = "a" * 40
+            self.client_archive(path, sha)
+            release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+            self.client_archive(path, sha, sourceDirty=True)
+            release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+            for changes in ({"runtimeNoticesComplete": True}, {"sourceDirty": 0}, {"sourceSha": "b" * 40}, {"bunRevision": "b" * 40}, {"runtimeArchiveSha256": "b" * 64}, {"target": "bun-linux-arm64"}, {"apiVersion": True}, {"dependencies": ["private.env"]}):
+                with self.subTest(changes=changes):
+                    self.client_archive(path, sha, **changes)
+                    with self.assertRaises(ValueError):
+                        release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+
+    def test_client_archive_rejects_unexpected_paths_and_links(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "clients.tar"
+            source = Path(directory) / "source.tar.gz"
+            sha = "a" * 40
+            self.client_archive(source, sha)
+            for name, kind in (("private.env", tarfile.REGTYPE), ("bin/other", tarfile.REGTYPE), ("notices/zod@4.4.3/private.env", tarfile.REGTYPE), ("bin/link", tarfile.SYMTYPE), ("../escape", tarfile.REGTYPE)):
+                with self.subTest(name=name), tarfile.open(source) as original, tarfile.open(path, "w") as archive:
+                    for member in original.getmembers():
+                        archive.addfile(member, original.extractfile(member))
+                    member = tarfile.TarInfo(f"ditero-0.0.1-alpha.1-clients-linux-x64/{name}")
+                    member.type = kind
+                    member.linkname = "outside"
+                    member.size = 1 if kind == tarfile.REGTYPE else 0
+                    archive.addfile(member, io.BytesIO(b"x") if member.size else None)
+                with self.assertRaises(ValueError):
+                    release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
 
     def test_deployment_requires_matching_kustomize_images(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(release, "ROOT", Path(directory)), patch.object(release, "metadata", return_value={"version": "0.0.1-alpha.1"}), patch.object(release.subprocess, "run") as run:

@@ -4,6 +4,7 @@
 	"private": true,
 	"scripts": {
 		"mcp": "bun run src/mcp/index.ts",
+		"build:clients": "bun run i18n:compile && bun run scripts/build-clients.ts",
 		"cli": "bun run src/cli/index.ts",
 		"tui": "bun run src/tui/index.ts",
 		"db:generate": "drizzle-kit generate",

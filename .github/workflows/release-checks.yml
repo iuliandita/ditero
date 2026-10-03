@@ -57,3 +57,42 @@ jobs:
           path: ${{ runner.temp }}/deployment/*
           if-no-files-found: error
           retention-days: 30
+
+  clients:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18@sha256:4aabea78cf39b90e834caf3af7d602a18565f6fe2508705c8d01aa63245c2e20
+        env:
+          POSTGRES_DB: ditero_clients
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: pass
+        ports: [5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ditero_clients"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: integration-only-better-auth-secret
+      BETTER_AUTH_URL: http://localhost:3000
+      DITERO_ENCRYPTION_KEY: BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run build:clients
+      - name: Validate the local candidate identity and exact contents
+        run: python3 scripts/release.py clients --output out/clients
+      - name: Qualify extracted clients without Bun or a checkout
+        env:
+          DATABASE_URL: postgres://postgres:pass@localhost:${{ job.services.postgres.ports['5432'] }}/ditero_clients
+        run: |
+          bun run db:migrate
+          STANDALONE_CLIENT_ARCHIVE="$(find out/clients -maxdepth 1 -name '*-clients-linux-x64.tar.gz' -print)"
+          export STANDALONE_CLIENT_ARCHIVE
+          bunx vitest run tests/integration/standalone-clients.test.ts

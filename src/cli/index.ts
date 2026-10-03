@@ -1,3 +1,4 @@
+import { clientVersion } from "../clients/build-info.ts";
 import { CliError, parseArguments } from "./arguments.ts";
 import { discover, type Fetcher } from "./client.ts";
 import { type StdinReader, taskWorkflow } from "./task-workflow.ts";
@@ -21,6 +22,7 @@ Options:
   --done <true|false>     Filter tasks by completion
   --task <id>            Required only for complete-task; use the observed task ID
   --request-id <UUID>     Required for writes; preserve for exact retries
+  --version               Show build identity without accessing the server
   --help                  Show this help without accessing the server
 
 Set DITERO_TOKEN through the environment. Credentials are never accepted as flags.
@@ -39,6 +41,10 @@ export async function runCli(
 	fetcher?: Fetcher,
 	stdinReader?: StdinReader,
 ): Promise<number> {
+	if (argv.length === 1 && argv[0] === "--version") {
+		output.stdout(clientVersion("ditero"));
+		return 0;
+	}
 	const json = argv.includes("--json");
 	try {
 		const options = parseArguments(argv, env);

@@ -128,6 +128,62 @@ def verify_downloads(output: Path, version: str) -> set[str]:
     return expected
 
 
+def verify_clients_candidate(path: Path, version: str, source_sha: str) -> None:
+    prefix = f"ditero-{version}-clients-linux-x64"
+    clients = ("ditero", "ditero-mcp", "ditero-tui")
+    required = {"BUILDINFO.json", "LICENSE", "REBUILD.md", "notices/Bun-LICENSE.md"}
+    required |= {f"bin/{name}" for name in clients} | {f"relink/{name}.js" for name in clients}
+    with tarfile.open(path) as archive:
+        members = archive.getmembers()
+        if len(members) > 512 or sum(member.size for member in members) > 512 * 1024 * 1024:
+            raise ValueError("Client archive exceeds unpacked size bound")
+        files = {}
+        for member in members:
+            parts = member.name.split("/")
+            if parts[0] != prefix or any(part in (".", "..") or part.startswith(".") for part in parts):
+                raise ValueError("Unexpected client archive path")
+            if not (member.isfile() or member.isdir()):
+                raise ValueError("Client archive contains a link or special file")
+            relative = "/".join(parts[1:])
+            if member.isfile():
+                if relative in files or member.size == 0:
+                    raise ValueError("Client archive contains duplicate or empty files")
+                files[relative] = member
+        if not required <= files.keys():
+            raise ValueError("Client archive is missing required files")
+        if files["BUILDINFO.json"].size > 65536:
+            raise ValueError("Client build identity exceeds size bound")
+        info = json.load(archive.extractfile(files["BUILDINFO.json"]))
+        if not isinstance(info, dict) or type(info.get("sourceDirty")) is not bool or type(info.get("apiVersion")) is not int:
+            raise ValueError("Invalid client build identity")
+        if (info.get("version"), info.get("sourceSha"), info.get("target"), info.get("apiVersion"), info.get("clients")) != (version, source_sha, "bun-linux-x64", 1, list(clients)):
+            raise ValueError("Client archive source identity mismatch")
+        if info.get("runtimeNoticesComplete") is not False:
+            raise ValueError("Candidate must declare incomplete runtime notice qualification")
+        if info.get("bunVersion") != "1.4.2" or info.get("bunRevision") != "744846f844374847c902b5e7fd59b4342a51ef99" or info.get("runtimeArchiveSha256") != "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913":
+            raise ValueError("Client archive runtime identity mismatch")
+        dependencies = info.get("dependencies")
+        if not isinstance(dependencies, list) or not dependencies or len(dependencies) > 100 or any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9@_+.-]{1,200}", name) or ".." in name for name in dependencies) or len(set(dependencies)) != len(dependencies):
+            raise ValueError("Invalid client dependency notice inventory")
+        allowed_directories = {prefix, f"{prefix}/bin", f"{prefix}/relink", f"{prefix}/notices"} | {f"{prefix}/notices/{dependency}" for dependency in dependencies}
+        if any(member.isdir() and member.name.rstrip("/") not in allowed_directories for member in members):
+            raise ValueError("Unexpected client archive directory")
+        for name, member in files.items():
+            if name in required:
+                continue
+            parts = name.split("/")
+            if len(parts) != 3 or parts[0] != "notices" or parts[1] not in dependencies or not re.fullmatch(r"(?i)(?:licen[sc]e|copying|notice)(?:[.-].*)?", parts[2]):
+                raise ValueError("Unexpected client archive file")
+        for dependency in dependencies:
+            if not any(name.startswith(f"notices/{dependency}/") for name in files):
+                raise ValueError("Missing client dependency notices")
+        for client in clients:
+            member = files[f"bin/{client}"]
+            header = archive.extractfile(member).read(20)
+            if not member.mode & 0o111 or header[:6] != b"\x7fELF\x02\x01" or header[18:20] != b"\x3e\x00":
+                raise ValueError("Client binary is not executable Linux x64 ELF")
+
+
 def publish(output: Path) -> None:
     version = metadata()["version"]
     names = verify_downloads(output, version)
@@ -193,11 +249,14 @@ Verify downloads with `sha256sum -c SHA256SUMS.txt`. Checksums verify downloaded
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["prepare", "deployment", "publish", "check"])
+    parser.add_argument("command", choices=["prepare", "deployment", "publish", "check", "clients"])
     parser.add_argument("--output", type=Path, default=Path("release-downloads"))
     args = parser.parse_args()
     if args.command == "check":
         print(metadata()["version"])
+    elif args.command == "clients":
+        version = metadata()["version"]
+        verify_clients_candidate(args.output / f"ditero-{version}-clients-linux-x64.tar.gz", version, command("git", "rev-parse", "HEAD"))
     elif args.command == "prepare":
         prepare()
     elif args.command == "deployment":

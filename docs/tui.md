@@ -1,10 +1,17 @@
 # Ditero terminal interface
 
+The [local Linux x64 standalone candidate](cli.md) includes `bin/ditero-tui`. Run
+`bin/ditero-tui --version` to inspect its build identity, then launch it in an
+interactive POSIX terminal. Bun and a source checkout are not required. The same
+commands below work with `bin/ditero-tui` in place of `bun run tui`. Automatic
+local config loading is disabled; set the process environment explicitly.
+Binary publication remains blocked by incomplete runtime notices. Other platforms
+and architectures remain unqualified.
+
 Run `bun install --frozen-lockfile`, then `bun run tui --help`. Set `DITERO_URL`
 to the server HTTPS origin and `DITERO_TOKEN` through your secret manager or
 environment. Tokens are never command-line arguments or stored by this client.
-This source interface requires Bun and an interactive POSIX terminal; packaged
-terminal binaries and other platform qualification remain unfinished.
+This source interface requires Bun and an interactive POSIX terminal.
 
 ```sh
 bun run tui
