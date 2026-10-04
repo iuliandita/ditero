@@ -12,7 +12,7 @@ const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(20);
+	expect(Object.keys(document.paths)).toHaveLength(21);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
@@ -183,7 +183,7 @@ test("OpenAPI distinguishes immutable list creation acknowledgements from curren
 		expect(JSON.stringify(list.post.responses[status])).toContain('"snapshot"');
 	}
 	expect(JSON.stringify(list.get)).not.toContain("list-create-ack");
-	expect(Object.keys(paths)).toHaveLength(20);
+	expect(Object.keys(paths)).toHaveLength(21);
 });
 
 test("OpenAPI exposes observed list metadata updates and immutable acknowledgements", () => {
@@ -196,4 +196,20 @@ test("OpenAPI exposes observed list metadata updates and immutable acknowledgeme
 	expect(encoded).toContain('"additionalProperties":false');
 	expect(JSON.stringify(list.get)).not.toContain("stateToken");
 	expect(paths).toHaveProperty("/api/v1/lists/{id}/observation");
+});
+
+test("OpenAPI describes strict observed list deletion and immutable acknowledgements", () => {
+	const paths = publicApiOpenApi().paths;
+	const encoded = JSON.stringify(
+		(paths["/api/v1/lists/{id}"] as { delete: unknown }).delete,
+	);
+	for (const field of [
+		'"operationId":"delete_list"',
+		'"expectedTasksState"',
+		'"cascadeTasks"',
+		'"const":"list-delete-ack"',
+		'"additionalProperties":false',
+	])
+		expect(encoded).toContain(field);
+	expect(paths).toHaveProperty("/api/v1/lists/{id}/deletion-observation");
 });

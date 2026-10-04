@@ -5,6 +5,11 @@ import {
 	apiListCreationAckSchema,
 } from "../../domain/public-api-list-create.ts";
 import {
+	apiListDeleteAckSchema,
+	apiListDeleteSchema,
+	apiListDeletionObservationSchema,
+} from "../../domain/public-api-list-deletion.ts";
+import {
 	apiListObservationSchema,
 	apiListUpdateAckSchema,
 	apiListUpdateSchema,
@@ -230,6 +235,61 @@ export function publicApiOpenApi() {
 		},
 		responses: {
 			"200": response(z.toJSONSchema(apiListUpdateAckSchema)),
+			...errors,
+		},
+	};
+
+	paths["/api/v1/lists/{id}/deletion-observation"] = {
+		get: {
+			operationId: "observe_list_deletion",
+			tags: ["lists"],
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Read the strict ApiList scalar snapshot/stateToken plus a version-1 count/token covering every persisted task column, including children and timestamp microseconds, from one cursor snapshot ordered by ID. No row limit; 256-row pages and a five-second cumulative scan deadline return 503 on incomplete scans. Read tokens and Viewers may observe. Comments, assignments, labels, history and attachments follow native dependent deletion rules; they are not independently fingerprinted. This state token is not a monotonic revision or durable incarnation identity; identical recreation may match.",
+			parameters: [
+				{
+					name: "id",
+					in: "path",
+					required: true,
+					schema: { type: "string", minLength: 1, maxLength: 256 },
+				},
+			],
+			responses: {
+				"200": response(z.toJSONSchema(apiListDeletionObservationSchema)),
+				...errors,
+			},
+		},
+	};
+	(paths["/api/v1/lists/{id}"] as Record<string, unknown>).delete = {
+		operationId: "delete_list",
+		tags: ["lists"],
+		security: [{ personalAccessToken: [] }],
+		description:
+			"Delete an observed list with a write token and current creator Member, Admin or Owner authority. Supply original workspaceId, expectedState, expectedTasksState and explicit cascadeTasks. False requires zero tasks; true acknowledges all observed tasks and native dependent cascades. JSON is limited to 4 KiB; no query parameters. Changed scalar/task state returns 409 before effects. Native deletion and receipt commit atomically; pending import activation does not block deletion. Shared account UUID/body identity conflicts with every other list/task write. Same-key replay returns the immutable original list-delete-ack snapshot/deletedTasks count without touching a replacement or asserting current absence; replay requires current original-workspace creator/Admin/Owner authority against the captured original owner. No automatic observation, retry or replan.",
+		parameters: [
+			{
+				name: "id",
+				in: "path",
+				required: true,
+				schema: { type: "string", minLength: 1, maxLength: 256 },
+			},
+			{
+				name: "Idempotency-Key",
+				in: "header",
+				required: true,
+				schema: { type: "string", format: "uuid" },
+			},
+		],
+		requestBody: {
+			required: true,
+			content: {
+				"application/json": {
+					schema: z.toJSONSchema(apiListDeleteSchema, { io: "input" }),
+				},
+			},
+		},
+		responses: {
+			"200": response(z.toJSONSchema(apiListDeleteAckSchema)),
 			...errors,
 		},
 	};
