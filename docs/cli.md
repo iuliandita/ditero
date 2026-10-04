@@ -53,7 +53,8 @@ Discovery and write success print `{ "version": 1, "data": ..., "nextCursor": ..
 `--json` produces one compact JSON line; otherwise JSON is indented. Collections
 default to 50 items, with `--limit` from 1 to 100. Pass the opaque `nextCursor` as
 `--cursor` with the same filters to continue. A null cursor ends the collection.
-`--workspace` works on every collection; `--list` and `--done` apply only to tasks.
+`--workspace` works on discovery collections; task comment pages accept only task,
+limit and cursor. `--list` and `--done` apply only to tasks.
 Profile takes no collection options.
 
 `--all` collects up to 100 pages and 20 MiB before printing. Each response is
@@ -88,7 +89,7 @@ are not retried automatically.
 natural language into explicit intent first: "tag Alex" is ambiguous, so choose
 whether Alex is an assignee or a label. Assignees and labels are separate arrays
 of `{ "id": "..." }` or `{ "name": "..." }` selectors. Mentions, invitations,
-access grants, and arbitrary natural-language input are not implemented.
+access grants, and arbitrary natural-language input are not implemented by task planning.
 
 For example, "buy coffee tomorrow in my private Inbox and assign Alex" becomes:
 
@@ -179,7 +180,7 @@ with a new due date. A stale observation returns 409. After an uncertain result,
 retry with the identical task ID, completion body, and UUID. Never read a newer
 due date or generate another key for that retry. A deleted original task returns
 410. Completion requires current write authority. `--task` is accepted only by
-task observations, `complete-task`, `update-task`, and `delete-task`; discovery filters are rejected on these commands.
+task workflows and comment commands; discovery filters are rejected on these commands.
 
 ## Update an observed task
 
@@ -386,3 +387,49 @@ snapshot and movedChildren count, rather than claiming current state. Replay
 never moves a recreated task. After an uncertain outcome, manually retry the
 identical task ID, full body and UUID; do not substitute fresh observations or a
 new key. UUIDs share the account-wide task/list write namespace.
+
+## Task comments
+
+`list-task-comments --task TASK_ID` reads one page, default 50 and maximum 100.
+Use `--limit` and the returned task-bound `--cursor` explicitly; `--all`, workspace
+filters and list filters are refused. The complete response is bounded to 256 KiB
+without truncation. Read tokens and current members, including Viewers, may read.
+
+```sh
+bun run cli list-task-comments --task TASK_ID --limit 50 --json
+bun run cli observe-task --task TASK_ID --json
+bun run cli add-comment --task TASK_ID --request-id 00000000-0000-4000-8000-000000000010 --json <<'JSON'
+{ "workspaceId": "ORIGINAL_WORKSPACE_ID", "listId": "ORIGINAL_LIST_ID", "expectedTaskState": "TASK_STATE_TOKEN", "body": "  Reviewed comment\n" }
+JSON
+bun run cli observe-comment --task TASK_ID --comment COMMENT_ID --json
+bun run cli edit-comment --task TASK_ID --comment COMMENT_ID --request-id 00000000-0000-4000-8000-000000000011 --json <<'JSON'
+{ "workspaceId": "ORIGINAL_WORKSPACE_ID", "listId": "ORIGINAL_LIST_ID", "expectedState": "COMMENT_STATE_TOKEN", "body": "  Updated comment\n" }
+JSON
+bun run cli delete-comment --task TASK_ID --comment COMMENT_ID --request-id 00000000-0000-4000-8000-000000000012 --json <<'JSON'
+{ "workspaceId": "ORIGINAL_WORKSPACE_ID", "listId": "ORIGINAL_LIST_ID", "expectedState": "COMMENT_STATE_TOKEN", "deleteScope": "comment-and-attachments" }
+JSON
+```
+
+Replace IDs, observation tokens and UUIDs with reviewed values. Both reads make
+one GET without stdin or UUID. Comment observation contains compact body evidence
+`{ "sha256": "...", "utf8Bytes": 0 }`; its semantic token covers all stored fields,
+hidden provenance and precise timestamps. It is neither a lock nor durable
+incarnation identity. Oversized native comments can still be observed and deleted.
+
+Writes preserve exact whitespace, including empty bodies. Creation follows the
+native 10,000-character limit; editing has no character cap. Both JSON envelopes
+are bounded to 64 KiB with fatal UTF-8 validation. Deletion is bounded to 4 KiB
+and requires explicit comment-and-attachments scope; committed files retire for
+garbage collection. Only the native author with current write membership may edit.
+Deletion permits that author or Admin/Owner; imported/null-author comments require
+Admin/Owner. Creation-only lexical mentions notify current members after commit
+on a best-effort basis without invitations or access grants. Editing emits no
+mention event. Acknowledgments do not promise delivery.
+
+Each write sends one POST, PATCH or DELETE without hidden observations or retries.
+Success returns the immutable original acknowledgment, even after deletion or ID
+recreation, and replay never changes a replacement. Current original-workspace
+authority remains required. UUIDs share the account namespace with all API writes.
+After uncertain transport or cancellation, manually retry identical task/comment
+IDs, body and UUID; never replace the observation or generate a new key. A 409
+remains actionable. Inspect a separate observation for current state.

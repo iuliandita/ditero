@@ -7,6 +7,10 @@ import { taskIntentSchema } from "../agent/task-plan.ts";
 import { CliError, type CliOptions, parseArguments } from "../cli/arguments.ts";
 import { discover, type Fetcher } from "../cli/client.ts";
 import {
+	commentWorkflow,
+	encodeCommentInput,
+} from "../cli/comment-workflow.ts";
+import {
 	encodeListDeletionInput,
 	encodeListInput,
 	listWorkflow,
@@ -25,6 +29,16 @@ import {
 import { taskWorkflow } from "../cli/task-workflow.ts";
 import { clientBuild } from "../clients/build-info.ts";
 import { PUBLIC_API_ID, PUBLIC_API_PAGE_SIZE } from "../domain/public-api.ts";
+import {
+	type ApiCommentOperation,
+	apiCommentAckSchema,
+	apiCommentCreateSchema,
+	apiCommentDeleteSchema,
+	apiCommentIdSchema,
+	apiCommentObservationSchema,
+	apiCommentSnapshotSchema,
+	apiCommentUpdateSchema,
+} from "../domain/public-api-comments.ts";
 import { apiTaskCompleteSchema } from "../domain/public-api-completion.ts";
 import {
 	apiListCreateSchema,
@@ -194,6 +208,38 @@ function guardedPlacementInput<S extends z.ZodType>(
 					if (
 						new TextEncoder().encode(JSON.stringify(result.value)).byteLength >
 						65_536
+					)
+						return invalid;
+					return result;
+				} catch {
+					return invalid;
+				}
+			},
+		},
+	};
+}
+
+function guardedCommentInput<S extends z.ZodType>(
+	schema: S,
+	fields: readonly string[],
+	operation?: ApiCommentOperation,
+): StandardSchemaWithJSON<z.input<S>, z.output<S>> {
+	const standard = schema["~standard"];
+	return {
+		"~standard": {
+			...standard,
+			validate: async (value) => {
+				const invalid = {
+					issues: [{ message: "Invalid or oversized comment arguments." }],
+				};
+				try {
+					if (!safeRelationshipObject(value, fields)) return invalid;
+					if (operation) encodeCommentInput(operation, value.comment);
+					const result = await standard.validate(value);
+					if (result.issues) return invalid;
+					if (
+						new TextEncoder().encode(JSON.stringify(result.value)).length >
+						65536
 					)
 						return invalid;
 					return result;
@@ -866,6 +912,200 @@ export function createDiteroMcp(
 				taskId,
 				placement,
 				requestId.toLowerCase(),
+				ctx.mcpReq.signal,
+			),
+	);
+
+	function commentOperation(
+		command: CliOptions["command"],
+		args: {
+			taskId: string;
+			commentId?: string;
+			requestId?: string;
+			limit?: number;
+			cursor?: string;
+		},
+		payload: unknown,
+		operation: ApiCommentOperation | undefined,
+		signal: AbortSignal,
+	) {
+		return execute(() =>
+			commentWorkflow(
+				{
+					...fixed,
+					...args,
+					command,
+					limit: args.limit ?? PUBLIC_API_PAGE_SIZE,
+				},
+				fetcher,
+				async () =>
+					operation ? encodeCommentInput(operation, payload) : new Uint8Array(),
+				signal,
+			),
+		);
+	}
+	const commentPageOutput = z
+		.object({
+			version: z.literal(1),
+			data: z.array(apiCommentSnapshotSchema).max(100),
+			nextCursor,
+		})
+		.strict();
+	const commentObservationOutput = z
+		.object({
+			version: z.literal(1),
+			data: apiCommentObservationSchema,
+			nextCursor: z.null(),
+		})
+		.strict();
+	const commentAckOutput = z
+		.object({
+			version: z.literal(1),
+			data: apiCommentAckSchema,
+			nextCursor: z.null(),
+		})
+		.strict();
+	server.registerTool(
+		"list_task_comments",
+		{
+			description:
+				"Read one bounded task-scoped page of full comment bodies. Explicit taskId, limit 1-100 and task-bound cursor only. Read PAT and current members including Viewers may read. At most 256 KiB, no truncation or automatic pagination; private provenance is never exposed.",
+			inputSchema: guardedCommentInput(
+				z
+					.object({
+						taskId: apiCommentIdSchema,
+						limit: pageFields.limit,
+						cursor: pageFields.cursor,
+					})
+					.strict(),
+				["taskId", "limit", "cursor"],
+			),
+			outputSchema: commentPageOutput,
+			annotations,
+		},
+		(args, ctx) =>
+			commentOperation(
+				"list-task-comments",
+				args,
+				undefined,
+				undefined,
+				ctx.mcpReq.signal,
+			),
+	);
+	server.registerTool(
+		"get_comment_observation",
+		{
+			description:
+				"Observe an explicitly selected task/comment in one GET. Compact body SHA256/UTF8 byte count and semantic token cover stored fields, hidden provenance and precise timestamps. No lock or incarnation guarantee; read PAT and current members may observe.",
+			inputSchema: guardedCommentInput(
+				z
+					.object({ taskId: apiCommentIdSchema, commentId: apiCommentIdSchema })
+					.strict(),
+				["taskId", "commentId"],
+			),
+			outputSchema: commentObservationOutput,
+			annotations,
+		},
+		(args, ctx) =>
+			commentOperation(
+				"observe-comment",
+				args,
+				undefined,
+				undefined,
+				ctx.mcpReq.signal,
+			),
+	);
+	server.registerTool(
+		"create_task_comment",
+		{
+			description:
+				"Create one comment with original workspace/list and observed expectedTaskState, exact untrimmed body and caller UUID. Native 10000-character bound and 64 KiB JSON. Creation-only lexical mentions notify current members after commit without invitation or access grants. One POST; immutable original acknowledgment. No hidden reads or retries. Current write PAT/Member+ required including replay; manually retry identical body/key after uncertainty.",
+			inputSchema: guardedCommentInput(
+				z
+					.object({
+						taskId: apiCommentIdSchema,
+						requestId: z.uuid(),
+						comment: apiCommentCreateSchema,
+					})
+					.strict(),
+				["taskId", "requestId", "comment"],
+				"create",
+			),
+			outputSchema: commentAckOutput,
+			annotations: { ...annotations, readOnlyHint: false },
+		},
+		({ comment, ...args }, ctx) =>
+			commentOperation(
+				"add-comment",
+				args,
+				comment,
+				"create",
+				ctx.mcpReq.signal,
+			),
+	);
+	server.registerTool(
+		"update_task_comment",
+		{
+			description:
+				"Edit the observed native author's comment with original workspace/list, expectedState, exact untrimmed body and caller UUID. One PATCH within 64 KiB, no character cap, mention event, hidden reads or retries. Current original-workspace author/write authority required including replay. Imported comments cannot be edited. Immutable acknowledgment survives deletion/recreation; retry identical IDs/body/key after uncertainty.",
+			inputSchema: guardedCommentInput(
+				z
+					.object({
+						taskId: apiCommentIdSchema,
+						commentId: apiCommentIdSchema,
+						requestId: z.uuid(),
+						comment: apiCommentUpdateSchema,
+					})
+					.strict(),
+				["taskId", "commentId", "requestId", "comment"],
+				"update",
+			),
+			outputSchema: commentAckOutput,
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		({ comment, ...args }, ctx) =>
+			commentOperation(
+				"edit-comment",
+				args,
+				comment,
+				"update",
+				ctx.mcpReq.signal,
+			),
+	);
+	server.registerTool(
+		"delete_task_comment",
+		{
+			description:
+				"Delete an observed comment with original workspace/list, expectedState, explicit comment-and-attachments scope and caller UUID. One DELETE within 4 KiB; committed attachments retire for GC. Current native author with write membership or Admin/Owner required; imported/null-author comments require Admin/Owner. Immutable compact acknowledgment never deletes a recreated row. No hidden reads or retries; retry identical IDs/body/key after uncertainty.",
+			inputSchema: guardedCommentInput(
+				z
+					.object({
+						taskId: apiCommentIdSchema,
+						commentId: apiCommentIdSchema,
+						requestId: z.uuid(),
+						comment: apiCommentDeleteSchema,
+					})
+					.strict(),
+				["taskId", "commentId", "requestId", "comment"],
+				"delete",
+			),
+			outputSchema: commentAckOutput,
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		({ comment, ...args }, ctx) =>
+			commentOperation(
+				"delete-comment",
+				args,
+				comment,
+				"delete",
 				ctx.mcpReq.signal,
 			),
 	);

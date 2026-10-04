@@ -52,11 +52,12 @@ async function readBody(
 	response: Response,
 	signal: AbortSignal,
 	abortFailure: () => never,
+	maximumBytes: number,
 ): Promise<Uint8Array> {
 	const declared = response.headers.get("content-length");
 	if (
 		declared &&
-		(/^\d+$/.test(declared) ? Number(declared) > MAX_RESPONSE_BYTES : true)
+		(/^\d+$/.test(declared) ? Number(declared) > maximumBytes : true)
 	) {
 		await response.body?.cancel();
 		invalidResponse();
@@ -77,7 +78,7 @@ async function readBody(
 			if (signal.aborted) abortFailure();
 			if (chunk.done) break;
 			length += chunk.value.byteLength;
-			if (length > MAX_RESPONSE_BYTES) {
+			if (length > maximumBytes) {
 				await reader.cancel();
 				invalidResponse();
 			}
@@ -142,6 +143,7 @@ export async function requestJson(
 	},
 	budget: ResponseBudget = { bytes: 0 },
 	callerSignal?: AbortSignal,
+	maximumResponseBytes = MAX_RESPONSE_BYTES,
 ): Promise<unknown> {
 	if (callerSignal?.aborted) cancelled();
 	const signal = AbortSignal.any([
@@ -197,14 +199,19 @@ export async function requestJson(
 	}
 	let bytes: Uint8Array;
 	try {
-		bytes = await readBody(response, signal, () => {
-			if (callerSignal?.aborted) cancelled();
-			throw new CliError(
-				"network_error",
-				"The server response could not be read.",
-				7,
-			);
-		});
+		bytes = await readBody(
+			response,
+			signal,
+			() => {
+				if (callerSignal?.aborted) cancelled();
+				throw new CliError(
+					"network_error",
+					"The server response could not be read.",
+					7,
+				);
+			},
+			maximumResponseBytes,
+		);
 	} catch (error) {
 		if (error instanceof CliError) throw error;
 		throw new CliError(
@@ -232,6 +239,11 @@ export async function discover(
 	callerSignal?: AbortSignal,
 ): Promise<CliResult> {
 	if (
+		options.command === "list-task-comments" ||
+		options.command === "observe-comment" ||
+		options.command === "add-comment" ||
+		options.command === "edit-comment" ||
+		options.command === "delete-comment" ||
 		options.command === "create-list" ||
 		options.command === "observe-list" ||
 		options.command === "observe-list-deletion" ||

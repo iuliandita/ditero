@@ -75,6 +75,11 @@ test("lists nine read tools and fixed workflow tools with strict bounded schemas
 		"update_task_relationships",
 		"get_task_placement_observation",
 		"place_task",
+		"list_task_comments",
+		"get_comment_observation",
+		"create_task_comment",
+		"update_task_comment",
+		"delete_task_comment",
 	]);
 	for (const tool of tools) {
 		expect(tool.description).toBeTruthy();
@@ -90,6 +95,9 @@ test("lists nine read tools and fixed workflow tools with strict bounded schemas
 				"delete_list",
 				"update_task_relationships",
 				"place_task",
+				"create_task_comment",
+				"update_task_comment",
+				"delete_task_comment",
 			].includes(tool.name),
 			idempotentHint: true,
 			destructiveHint: [
@@ -100,6 +108,8 @@ test("lists nine read tools and fixed workflow tools with strict bounded schemas
 				"delete_list",
 				"update_task_relationships",
 				"place_task",
+				"update_task_comment",
+				"delete_task_comment",
 			].includes(tool.name),
 			openWorldHint: true,
 		});
@@ -120,7 +130,10 @@ test("returns matching JSON text and structured API envelopes for all read tools
 	for (const tool of (await client.listTools()).tools.filter(
 		(tool) => tool.name === "get_profile" || tool.name.startsWith("list_"),
 	)) {
-		const result = await client.callTool({ name: tool.name, arguments: {} });
+		const result = await client.callTool({
+			name: tool.name,
+			arguments: tool.name === "list_task_comments" ? { taskId: "task" } : {},
+		});
 		expect(result.isError).not.toBe(true);
 		expect(result.structuredContent).toEqual({
 			version: 1,
@@ -131,7 +144,7 @@ test("returns matching JSON text and structured API envelopes for all read tools
 			{ type: "text", text: JSON.stringify(result.structuredContent) },
 		]);
 	}
-	expect(urls.map((url) => url.origin)).toEqual(Array(9).fill(env.DITERO_URL));
+	expect(urls.map((url) => url.origin)).toEqual(Array(10).fill(env.DITERO_URL));
 });
 
 test("passes task filters and opaque cursors without permitting authority changes", async () => {
@@ -319,7 +332,7 @@ test("real Bun stdio speaks SDK protocol, rejects API redirects, and prints no p
 	client.onerror = (error) => errors.push(error);
 	await client.connect(transport);
 	cleanup.push(() => client.close());
-	expect((await client.listTools()).tools).toHaveLength(25);
+	expect((await client.listTools()).tools).toHaveLength(30);
 	expect(
 		(await client.callTool({ name: "get_profile", arguments: {} }))
 			.structuredContent,
