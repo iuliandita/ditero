@@ -146,6 +146,166 @@ test("task detail shows native changes and preserves cached rows while merged pa
 	}
 });
 
+test("merged history cache survives a rejected online refresh before offline and clears on authoritative refusal", async ({
+	page,
+}) => {
+	const databaseURL = process.env.E2E_DATABASE_URL;
+	if (!databaseURL) throw new Error("E2E_DATABASE_URL is required");
+	const pool = new Pool({ connectionString: databaseURL });
+	const listId = randomUUID(),
+		taskId = randomUUID();
+	const title = `Cached merged history ${taskId.slice(0, 8)}`;
+	const routePattern = "**/api/tasks/history?**";
+	try {
+		const actor = await signUp(page, uniqueEmail("history-cache"));
+		await waitWorkspaceReady(page);
+		const workspace = (
+			await pool.query<{ id: string }>(
+				"select id from workspace where owner_id=$1 and kind='personal'",
+				[actor],
+			)
+		).rows[0]?.id;
+		if (!workspace) throw new Error("History cache workspace is missing");
+		await pool.query(
+			"insert into list(id,workspace_id,owner_id,title,sort_key) values($1,$2,$3,$4,'a0')",
+			[listId, workspace, actor, title],
+		);
+		await pool.query(
+			"insert into task(id,list_id,title,sort_key) values($1,$2,'Cached merged task','a0')",
+			[taskId, listId],
+		);
+		for (let index = 0; index < 101; index++)
+			await pool.query(
+				"insert into task_completion_event(id,task_id,actor_user_id,recorded_at,origin,action,before_due_all_day,before_done,after_done) values($1,$2,$3,'2020-01-01T12:00:00.123Z','member_mutation','complete',false,false,true)",
+				[randomUUID(), taskId, actor],
+			);
+		const namespace = randomUUID();
+		await pool.query(
+			"insert into imported_completion_event(id,task_id,source_namespace,source_row_id,occurred_at,actor_kind,actor_namespace,actor_principal_id,actor_name,origin_kind,origin_label,action,before_due_all_day,before_done,after_done) values($1,$2,$3,'cached-source-event','2025-01-01T12:00:00Z','source_claim',$3,'historical-person','Cached imported author','source_claim','Cached source','complete',false,false,true)",
+			[randomUUID(), taskId, namespace],
+		);
+		await sidebarLists(page)
+			.getByRole("button", { name: title, exact: true })
+			.last()
+			.click();
+		await page
+			.getByTestId("list")
+			.getByText("Cached merged task", { exact: true })
+			.click();
+		const detail = page.getByTestId("task-detail");
+		const history = detail.getByTestId("completion-history-page");
+		const historyRequest = (url: string) => {
+			const parsed = new URL(url);
+			return (
+				parsed.pathname === "/api/tasks/history" &&
+				parsed.searchParams.get("taskId") === taskId
+			);
+		};
+		const loaded = page.waitForResponse(
+			(response) => historyRequest(response.url()) && response.status() === 200,
+		);
+		await detail.getByRole("button", { name: "Completion history" }).click();
+		const initial = await (await loaded).json();
+		expect(initial.nextCursor).not.toBeNull();
+		expect(
+			initial.rows.some(
+				(row: { sourceKind: string }) => row.sourceKind === "imported",
+			),
+		).toBe(true);
+		await expect(history.getByTestId("completion-history-row")).toHaveCount(
+			100,
+		);
+		await expect(
+			history.getByTestId("history-imported-attribution"),
+		).toHaveCount(1);
+		await expect(history).toContainText("Cached imported author");
+		await expect(history.getByRole("button", { name: "Next" })).toBeEnabled();
+		let mode: "pass" | "transport" | "refuse" = "transport";
+		await page.route(routePattern, async (route) => {
+			if (!historyRequest(route.request().url()) || mode === "pass")
+				await route.continue();
+			else if (mode === "transport") await route.abort("internetdisconnected");
+			else
+				await route.fulfill({
+					status: 403,
+					contentType: "application/json",
+					body: "{}",
+				});
+		});
+		expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+		const rejected = page.waitForEvent(
+			"requestfailed",
+			(request) =>
+				historyRequest(request.url()) &&
+				request.failure()?.errorText.includes("ERR_INTERNET_DISCONNECTED") ===
+					true,
+		);
+		await pool.query('update "user" set name=$1 where id=$2', [
+			"Cache refresh actor",
+			actor,
+		]);
+		const failed = await rejected;
+		expect(failed.failure()?.errorText).toContain("ERR_INTERNET_DISCONNECTED");
+		await expect(history.getByRole("alert")).toContainText(
+			"could not be loaded",
+		);
+		expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+		await expect(history.getByTestId("completion-history-row")).toHaveCount(
+			100,
+		);
+		await expect(
+			history.getByTestId("history-imported-attribution"),
+		).toHaveCount(1);
+		await expect(history).toContainText("Cached imported author");
+		await expect(history.getByRole("button", { name: "Next" })).toBeDisabled();
+		await page.context().setOffline(true);
+		expect(await page.evaluate(() => navigator.onLine)).toBe(false);
+		await expect(history).toContainText("not fully available offline");
+		await expect(history.getByTestId("completion-history-row")).toHaveCount(
+			100,
+		);
+		await expect(
+			history.getByTestId("history-imported-attribution"),
+		).toHaveCount(1);
+		await expect(history.getByRole("button", { name: "Next" })).toBeDisabled();
+		mode = "pass";
+		await page.context().setOffline(false);
+		await expect(history.getByRole("button", { name: "Next" })).toBeEnabled();
+		await history.getByRole("button", { name: "Next" }).click();
+		await expect(history.getByTestId("completion-history-row")).toHaveCount(2);
+		await history.getByRole("button", { name: "Previous" }).click();
+		await expect(
+			history.getByTestId("history-imported-attribution"),
+		).toHaveCount(1);
+		await expect(history.getByRole("button", { name: "Next" })).toBeEnabled();
+		mode = "refuse";
+		await pool.query('update "user" set name=$1 where id=$2', [
+			"Refused cache actor",
+			actor,
+		]);
+		await expect(history).toContainText("unavailable");
+		await expect(history.getByTestId("completion-history-row")).toHaveCount(0);
+		await expect(
+			history.getByTestId("history-imported-attribution"),
+		).toHaveCount(0);
+		await expect(history.getByRole("button", { name: "Next" })).toHaveCount(0);
+		await page.context().setOffline(true);
+		await expect(history.getByTestId("completion-history-row")).toHaveCount(0);
+		mode = "pass";
+		await page.context().setOffline(false);
+		await expect(
+			history.getByTestId("history-imported-attribution"),
+		).toHaveCount(1);
+		await expect(history.getByRole("button", { name: "Next" })).toBeEnabled();
+	} finally {
+		await page.unroute(routePattern);
+		await page.context().setOffline(false);
+		await pool.query("delete from task where id=$1", [taskId]);
+		await pool.query("delete from list where id=$1", [listId]);
+		await pool.end();
+	}
+});
+
 test("restricted mobile reader sees Arabic history and loses it after membership revocation", async ({
 	browser,
 	page,

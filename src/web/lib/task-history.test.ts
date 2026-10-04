@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 import {
 	loadTaskHistory,
+	TaskHistoryTransportError,
 	TaskHistoryUnavailableError,
 } from "./task-history.ts";
 
@@ -53,4 +54,48 @@ test("failed and incomplete pages cannot be accepted as complete history", async
 	await expect(
 		loadTaskHistory("task", "space", null, new AbortController().signal),
 	).rejects.toThrow();
+});
+test("a fetch network rejection is distinct from authoritative and invalid data failures", async () => {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn().mockRejectedValue(new TypeError("Failed to fetch")),
+	);
+	await expect(
+		loadTaskHistory("task", "space", null, new AbortController().signal),
+	).rejects.toBeInstanceOf(TaskHistoryTransportError);
+});
+test("an aborted fetch rejection cannot retain transport cache", async () => {
+	const error = new TypeError("Failed to fetch"),
+		controller = new AbortController();
+	controller.abort();
+	vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
+	await expect(
+		loadTaskHistory("task", "space", null, controller.signal),
+	).rejects.toBe(error);
+});
+test("AbortError and unexpected fetch exceptions remain fail-loud", async () => {
+	const errors = [
+		new DOMException("Aborted", "AbortError"),
+		new Error("Unexpected fetch failure"),
+	];
+	for (const error of errors) {
+		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
+		await expect(
+			loadTaskHistory("task", "space", null, new AbortController().signal),
+		).rejects.toBe(error);
+	}
+});
+test("a response-body TypeError is not treated as a fetch transport rejection", async () => {
+	const error = new TypeError("Invalid response body");
+	vi.stubGlobal(
+		"fetch",
+		vi.fn().mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: vi.fn().mockRejectedValue(error),
+		}),
+	);
+	await expect(
+		loadTaskHistory("task", "space", null, new AbortController().signal),
+	).rejects.toBe(error);
 });
