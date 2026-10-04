@@ -12,7 +12,7 @@ const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(22);
+	expect(Object.keys(document.paths)).toHaveLength(25);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
@@ -183,7 +183,7 @@ test("OpenAPI distinguishes immutable list creation acknowledgements from curren
 		expect(JSON.stringify(list.post.responses[status])).toContain('"snapshot"');
 	}
 	expect(JSON.stringify(list.get)).not.toContain("list-create-ack");
-	expect(Object.keys(paths)).toHaveLength(22);
+	expect(Object.keys(paths)).toHaveLength(25);
 });
 
 test("OpenAPI exposes observed list metadata updates and immutable acknowledgements", () => {
@@ -223,4 +223,24 @@ test("OpenAPI distinguishes observed full relationship replacement from scalar e
 	expect(encoded).toContain('"maxItems":50');
 	expect(encoded).toContain('"const":"task-relationships-update-ack"');
 	expect(encoded).toContain('"additionalProperties":false');
+});
+
+test("OpenAPI exposes folder discovery, observation and strict immutable write acknowledgements", () => {
+	const paths = publicApiOpenApi().paths;
+	expect(paths).toHaveProperty("/api/v1/folders/{id}/observation");
+	const create = JSON.stringify(
+		(paths["/api/v1/folders"] as { post: unknown }).post,
+	);
+	expect(create).toContain('"const":"folder-create-ack"');
+	expect(create).toContain('"additionalProperties":false');
+	const detail = paths["/api/v1/folders/{id}"] as {
+		get: unknown;
+		patch: unknown;
+		delete: unknown;
+	};
+	expect(JSON.stringify(detail.patch)).toContain('"const":"folder-update-ack"');
+	expect(JSON.stringify(detail.delete)).toContain(
+		'"const":"folder-delete-ack"',
+	);
+	expect(JSON.stringify(detail.get)).not.toContain("stateToken");
 });

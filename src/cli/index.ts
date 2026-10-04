@@ -7,7 +7,7 @@ import { type StdinReader, taskWorkflow } from "./task-workflow.ts";
 export const HELP = `Ditero CLI
 
 Usage: ditero <command> [options]
-Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards,
+Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards, folders,
           create-list, update-list, delete-list (list JSON stdin),
           observe-list, observe-list-deletion (live state JSON),
           plan-task (task intent JSON stdin), create-task (API task JSON stdin),

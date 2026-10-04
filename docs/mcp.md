@@ -47,7 +47,7 @@ listener, OAuth endpoint, or hosted inference is provided. Read tools work with 
 read token; task planning, creation, completion, update, and deletion require a write token.
 
 The read tools are `get_profile`, `list_workspaces`, `list_lists`, `list_tasks`,
-`list_people`, `list_labels`, `list_views`, and `list_dashboards`. Collection tools
+`list_people`, `list_labels`, `list_views`, `list_dashboards`, and `list_folders`. Collection tools
 accept `limit` (1-100, default 50), `cursor`, and `workspaceId`. Tasks also accept
 `listId` and boolean `done`. Profile takes an empty object. All input objects reject
 unknown fields. IDs are opaque; resolve names through discovery before selecting

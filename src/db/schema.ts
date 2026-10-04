@@ -79,12 +79,14 @@ export const publicApiRequest = pgTable(
 		requestHash: text("request_hash").notNull(),
 		// Retain original receipts after resource deletion.
 		resourceKind: text("resource_kind")
-			.$type<"task" | "list">()
+			.$type<"task" | "list" | "folder">()
 			.notNull()
 			.default("task"),
 		taskId: text("task_id"),
 		listId: text("list_id"),
 		listSnapshot: jsonb("list_snapshot"),
+		folderId: text("folder_id"),
+		folderSnapshot: jsonb("folder_snapshot"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
@@ -94,6 +96,7 @@ export const publicApiRequest = pgTable(
 		check(
 			"public_api_request_resource",
 			sql`
+			(
 			(${t.resourceKind} = 'task' and ${t.taskId} is not null
 			 and ${t.listId} is null and ${t.listSnapshot} is null)
 			or (${t.resourceKind} = 'list' and ${t.taskId} is null
@@ -101,6 +104,13 @@ export const publicApiRequest = pgTable(
 			 and coalesce(jsonb_typeof(${t.listSnapshot}) = 'object'
 			 and jsonb_typeof(${t.listSnapshot}->'id') = 'string'
 			 and ${t.listSnapshot}->>'id' = ${t.listId}, false))
+			) and ${t.folderId} is null and ${t.folderSnapshot} is null
+			or (${t.resourceKind} = 'folder' and ${t.taskId} is null
+			 and ${t.listId} is null and ${t.listSnapshot} is null
+			 and ${t.folderId} is not null and ${t.folderSnapshot} is not null
+			 and coalesce(jsonb_typeof(${t.folderSnapshot}) = 'object'
+			 and jsonb_typeof(${t.folderSnapshot}->'id') = 'string'
+			 and ${t.folderSnapshot}->>'id' = ${t.folderId}, false))
 		`,
 		),
 		pgPolicy("public_api_request_read", {

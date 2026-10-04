@@ -22,6 +22,14 @@ type ResourceQuery = {
 	workspace: string;
 };
 const RESOURCES: Record<PublicApiResource, ResourceQuery> = {
+	folders: {
+		from: "folder r",
+		fields:
+			'r.id,r.workspace_id as "workspaceId",r.name,r.sort_key as "sortKey"',
+		access:
+			"exists (select 1 from membership m where m.workspace_id=r.workspace_id and m.user_id=$1)",
+		workspace: "r.workspace_id",
+	},
 	workspaces: {
 		from: "workspace r",
 		fields:

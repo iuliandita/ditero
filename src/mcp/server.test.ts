@@ -46,7 +46,7 @@ async function protocol(
 	return client;
 }
 
-test("lists eight read tools and three fixed workflow tools with strict bounded schemas and honest annotations", async () => {
+test("lists nine read tools and fixed workflow tools with strict bounded schemas and honest annotations", async () => {
 	const client = await protocol();
 	const { tools } = await client.listTools();
 	expect(tools.map((tool) => tool.name)).toEqual([
@@ -58,6 +58,7 @@ test("lists eight read tools and three fixed workflow tools with strict bounded 
 		"list_labels",
 		"list_views",
 		"list_dashboards",
+		"list_folders",
 		"plan_task",
 		"create_task",
 		"complete_task",
@@ -122,7 +123,7 @@ test("returns matching JSON text and structured API envelopes for all read tools
 			{ type: "text", text: JSON.stringify(result.structuredContent) },
 		]);
 	}
-	expect(urls.map((url) => url.origin)).toEqual(Array(8).fill(env.DITERO_URL));
+	expect(urls.map((url) => url.origin)).toEqual(Array(9).fill(env.DITERO_URL));
 });
 
 test("passes task filters and opaque cursors without permitting authority changes", async () => {
@@ -310,7 +311,7 @@ test("real Bun stdio speaks SDK protocol, rejects API redirects, and prints no p
 	client.onerror = (error) => errors.push(error);
 	await client.connect(transport);
 	cleanup.push(() => client.close());
-	expect((await client.listTools()).tools).toHaveLength(20);
+	expect((await client.listTools()).tools).toHaveLength(21);
 	expect(
 		(await client.callTool({ name: "get_profile", arguments: {} }))
 			.structuredContent,

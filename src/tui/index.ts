@@ -64,6 +64,8 @@ function resourceLabel(resource: PublicApiResource, locale: Locale): string {
 	switch (resource) {
 		case "workspaces":
 			return m.workspace_switcher_title({}, options);
+		case "folders":
+			return m.field_folder({}, options);
 		case "lists":
 			return m.sidebar_lists_nav_label({}, options);
 		case "tasks":

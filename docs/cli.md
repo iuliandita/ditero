@@ -30,7 +30,8 @@ Install the repository dependencies with `bun install --frozen-lockfile`, then r
 `bun run cli --help`. This source CLI requires Bun. Configure `DITERO_URL` with an
 HTTPS server origin and provide a personal access token through `DITERO_TOKEN`
 from your secret manager or shell environment. The CLI does not store credentials
-or accept a token argument. Use a read-only token for discovery.
+or accept a token argument. Use a read-only token for discovery. The `folders` command reads member-visible
+folder records with the same pagination and workspace filters as other collections.
 
 ```sh
 bun run cli profile --json

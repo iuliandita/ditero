@@ -215,7 +215,7 @@ test("saved surfaces preserve personal scope and shared membership without leaki
 	}
 	const schema = await request("/api/v1/openapi.json", null);
 	const paths = (await schema.json()).paths;
-	expect(Object.keys(paths)).toHaveLength(22);
+	expect(Object.keys(paths)).toHaveLength(25);
 	expect(
 		paths["/api/v1/lists/{id}/observation"].get.responses["200"],
 	).toBeDefined();
@@ -236,6 +236,10 @@ test("saved surfaces preserve personal scope and shared membership without leaki
 		paths["/api/v1/lists/{id}/deletion-observation"].get.responses["200"],
 	).toBeDefined();
 	expect(paths["/api/v1/lists/{id}"].delete.responses["200"]).toBeDefined();
+	expect(
+		paths["/api/v1/folders/{id}/observation"].get.responses["200"],
+	).toBeDefined();
+	expect(paths["/api/v1/folders/{id}"].delete.requestBody.required).toBe(true);
 });
 
 test("unknown, revoked, expired and deleted-account credentials all fail uniformly", async () => {
