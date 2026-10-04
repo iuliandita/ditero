@@ -359,3 +359,30 @@ UUIDs share the account-wide task/list write namespace. Cancellation or a lost
 response can leave a committed result uncertain; manually retry the identical task
 ID, original scope, full body and UUID, without fetching replacement evidence or
 minting a new UUID for that retry.
+
+## Observed task ordering and relocation
+
+`observe-task-placement --task TASK_ID` reads one complete placement observation.
+`place-task --task TASK_ID --request-id UUID` accepts strict JSON on stdin:
+
+```json
+{ "workspaceId": "ORIGINAL_WORKSPACE_ID", "listId": "ORIGINAL_LIST_ID", "expectedState": "TASK_PLACEMENT_TOKEN", "targetListId": "TARGET_LIST_ID", "expectedTargetState": "TARGET_LIST_TOKEN", "sortKey": "a1", "cascadeChildren": false, "expectedChildrenState": null }
+```
+
+Supply the target token from a separate explicit list observation. Ordering in the
+current list requires false/null. Relocating a root to another same-workspace,
+same-kind list requires true and the complete observed children object
+`{ "version": 1, "count": 0, "token": "CHILDREN_TOKEN" }`, including when empty.
+Children move with the root and retain their ordering keys. Subtasks can only be
+ordered in their current list; reparenting, workspace moves and kind conversion
+are excluded. Sort keys are opaque validated fractional keys, never repaired or
+regenerated. Sibling ordering is not guarded.
+
+Each operation sends one request; the write is bounded to 4 KiB before sending.
+There are no hidden reads or retries. Write PAT and current original-workspace
+write authority remain required, including replay. Changed observations return
+409. Success returns immutable `task-place-ack` with original scope, resulting
+snapshot and movedChildren count, rather than claiming current state. Replay
+never moves a recreated task. After an uncertain outcome, manually retry the
+identical task ID, full body and UUID; do not substitute fresh observations or a
+new key. UUIDs share the account-wide task/list write namespace.

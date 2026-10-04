@@ -327,3 +327,38 @@ it("reads strict folder pages through shared discovery", async () => {
 	expect(seen[0]).toContain("/api/v1/folders");
 	expect(seen[0]).toContain("workspaceId=workspace");
 });
+
+it("placement commands require explicit task/key and refuse collection filters", () => {
+	expect(options(["observe-task-placement", "--task", "task"]).command).toBe(
+		"observe-task-placement",
+	);
+	expect(
+		options([
+			"place-task",
+			"--task",
+			"task",
+			"--request-id",
+			"00000000-0000-4000-8000-000000000001",
+		]).command,
+	).toBe("place-task");
+	for (const args of [
+		["place-task", "--task", "task"],
+		[
+			"observe-task-placement",
+			"--task",
+			"task",
+			"--request-id",
+			"00000000-0000-4000-8000-000000000001",
+		],
+		[
+			"place-task",
+			"--task",
+			"task",
+			"--request-id",
+			"00000000-0000-4000-8000-000000000001",
+			"--list",
+			"list",
+		],
+	])
+		expect(() => options(args)).toThrow();
+});
