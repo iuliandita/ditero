@@ -63,7 +63,7 @@ export function AssigneeChips({
 			<span
 				className={cn(
 					"inline-flex items-center",
-					dashboard ? "shrink-0 -space-x-1" : "-space-x-2",
+					dashboard ? "shrink-0 gap-x-1" : "-space-x-2",
 				)}
 				aria-hidden
 			>
