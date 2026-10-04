@@ -503,7 +503,7 @@ test("strict 4 KiB transport and schema bounds leave no effects", async () => {
 		{ ...body, patch: {} },
 		{ ...body, patch: { title: "bad\0value" } },
 		{ ...body, patch: { completedDisplay: "invalid" } },
-		{ ...body, patch: { folderId: null } },
+		{ ...body, patch: { folderId: "" } },
 		{ ...body, expectedState: "bad" },
 	])
 		expect((await request(invalid)).status).toBe(400);
