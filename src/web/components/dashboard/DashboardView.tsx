@@ -450,6 +450,7 @@ export function DashboardView({
 					<Button
 						variant={editing ? "default" : "outline"}
 						size="sm"
+						className="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
 						data-testid="dashboard-edit"
 						aria-pressed={editing}
 						onClick={() => setEditRequested(!editing)}
@@ -465,6 +466,7 @@ export function DashboardView({
 							variant="ghost"
 							size="icon-sm"
 							aria-label={m.dashboard_actions()}
+							className="size-11 md:size-7"
 							data-testid="dashboard-actions"
 						>
 							<MoreHorizontal />

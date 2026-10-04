@@ -215,10 +215,12 @@ function PriorityFlag({
 	id,
 	priority,
 	className,
+	dashboard = false,
 }: {
 	id: string;
 	priority: number | null | undefined;
 	className?: string;
+	dashboard?: boolean;
 }) {
 	const meta = priorityMeta(priority);
 	if (!meta) return null;
@@ -232,12 +234,16 @@ function PriorityFlag({
 			data-priority={meta.value}
 			className={cn("inline-flex shrink-0 items-center gap-1", className)}
 		>
-			{/* The word appears where a pointer can hover or the keyboard is in
-			    the row; touch keeps the flag alone, per the one-cue row. */}
+			{/* Dashboard phones keep the word in metadata so focus does not reflow. */}
 			<span
 				aria-hidden
 				data-testid="task-priority-text"
-				className="hidden text-xs text-muted-foreground group-hover:inline group-has-[:focus-visible]:inline"
+				className={cn(
+					"hidden text-xs text-muted-foreground",
+					dashboard
+						? "md:group-hover:inline md:group-has-[:focus-visible]:inline"
+						: "group-hover:inline group-has-[:focus-visible]:inline",
+				)}
 			>
 				{label}
 			</span>
@@ -563,6 +569,15 @@ export function TaskRow({
 								)}
 							>
 								<AssigneeChips taskId={task.id} density={density} />
+								{dashboard && hasPriority && (
+									<span
+										aria-hidden
+										data-testid="task-priority-metadata"
+										className="text-xs text-muted-foreground md:hidden"
+									>
+										{priorityLabel(task.priority)}
+									</span>
+								)}
 								{occurrence ? (
 									<span
 										className="inline-flex items-center gap-1 text-xs text-muted-foreground"
@@ -641,6 +656,7 @@ export function TaskRow({
 					{!bare && (
 						<PriorityFlag
 							id={priorityId}
+							dashboard={dashboard}
 							priority={task.priority}
 							className={card ? "mt-2.5" : undefined}
 						/>
@@ -673,7 +689,11 @@ export function TaskRow({
 							placement="trail"
 						/>
 					)}
-					<RowActions actions={actions} label={actionsLabel} hideOnTouch />
+					<RowActions
+						actions={actions}
+						label={actionsLabel}
+						hideOnTouch={!dashboard}
+					/>
 					{/* The keyboard's delete target. It cannot be the menu item: Radix
 					    portals the menu content out of this row, and the item exists
 					    only while the menu is open, so actOnFocused could never find
