@@ -43,6 +43,8 @@ spec:
       passwordSecret:
         name: ditero-db-zero
   postgresql:
+    pg_hba:
+    - hostnossl all all all reject
     parameters:
       wal_level: logical
       max_replication_slots: "20"
