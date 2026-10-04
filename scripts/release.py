@@ -101,7 +101,7 @@ def deployment(output: Path) -> None:
         )
         for name in files:
             archive.add(kustomize / name, arcname=f"ditero-{version}/deploy/kustomize/{name}", recursive=False)
-        for name in ("RELEASING.md", "LICENSE", "docs/runbooks/database-roles.md"):
+        for name in ("RELEASING.md", "LICENSE", "docs/runbooks/database-roles.md", "docs/runbooks/database-tls.md"):
             archive.add(ROOT / name, arcname=f"ditero-{version}/{name}")
 
 

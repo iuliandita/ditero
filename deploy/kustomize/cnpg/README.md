@@ -36,7 +36,9 @@ Also provision the base's existing `ditero-secrets` Secret. Use the matching
 passwords above for its runtime, migration and Zero DSNs. Connect directly to
 the cluster's read/write Service, `ditero-db-rw.ditero.svc`, port 5432, database
 `ditero`. Enable verified TLS using the operator's server CA and your client
-configuration. Neither transaction pooling nor a read-only Service is suitable
+configuration. For private CAs, follow the
+[database TLS guide](https://github.com/iuliandita/ditero/blob/develop/docs/runbooks/database-tls.md).
+Neither transaction pooling nor a read-only Service is suitable
 for the upstream replication connection. Retain authentication and encryption
 secrets when restoring data.
 

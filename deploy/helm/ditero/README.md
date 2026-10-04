@@ -32,6 +32,8 @@ Only each component's required keys are mounted in its container. The entrypoint
 read the files through their supported `*_FILE` variables. Zero defaults its CVR
 and change databases to `ZERO_UPSTREAM_DB`; they share the upstream database in
 this initial chart. Enable database TLS in each DSN according to your provider.
+Follow the [database TLS guide](https://github.com/iuliandita/ditero/blob/develop/docs/runbooks/database-tls.md) for private
+CA mounts and Zero's distinct trust configuration.
 
 The runtime role must not own application tables, inherit the migration owner,
 be a superuser, or have `BYPASSRLS`. Production startup verifies that restriction.

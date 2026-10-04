@@ -46,7 +46,8 @@ and never includes credential values in configuration. Supply all six keys:
 
 Only the app's four keys and Zero's two keys are projected into their respective
 containers, read through `*_FILE` variables. Enable database TLS in the DSNs
-according to your database provider. Zero's CVR and change databases default to
+according to your database provider. Follow the [database TLS guide](../../docs/runbooks/database-tls.md)
+for private CA mounts and Zero's distinct trust configuration. Zero's CVR and change databases default to
 its upstream database. Entry points load secrets at startup; restart both
 Deployments after changing Secret values. Preserve authentication and encryption
 keys when upgrading or recovering existing data.
