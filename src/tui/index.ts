@@ -1,5 +1,6 @@
 import { CliError, parseArguments } from "../cli/arguments.ts";
 import { discover } from "../cli/client.ts";
+import { clientVersion } from "../clients/build-info.ts";
 import { isSupportedLocale, type Locale } from "../domain/locale.ts";
 import {
 	PUBLIC_API_RESOURCES,
@@ -15,7 +16,7 @@ import { createTerminalSession } from "./terminal.ts";
 
 export const HELP = `Ditero terminal client
 
-Usage: bun run tui [--server HTTPS_ORIGIN] [--locale en|de|es|fr|ro|ar]
+Usage: ditero-tui [--server HTTPS_ORIGIN] [--locale en|de|es|fr|ro|ar]
                   [--allow-loopback-http]
 
 Set DITERO_URL and DITERO_TOKEN in the environment. Tokens never go on the command line.
@@ -82,6 +83,10 @@ export async function runTerminal(
 	argv: string[],
 	env: Record<string, string | undefined>,
 ): Promise<number> {
+	if (argv.length === 1 && argv[0] === "--version") {
+		process.stdout.write(clientVersion("ditero-tui"));
+		return 0;
+	}
 	let locale: Locale = "en";
 	try {
 		const parsed = parseTerminalArguments(argv, env);

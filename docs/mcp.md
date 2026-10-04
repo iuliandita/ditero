@@ -5,6 +5,20 @@ It uses the same bounded, validated public API client as the CLI. It does not ho
 an LLM or send data to an LLM provider; the MCP client controls where tool results
 go. Only connect clients you trust to read the account's visible content.
 
+The [local Linux x64 standalone candidate](cli.md) includes `bin/ditero-mcp`. Configure
+the MCP client with the absolute executable path and no source arguments:
+
+```json
+{ "command": "/path/to/bin/ditero-mcp", "args": [] }
+```
+
+Binary publication remains blocked by incomplete runtime notices. At runtime
+the local candidate requires neither Bun nor a source checkout. `--version` prints the build
+identity and exits without credentials; the normal stdio launch prints only
+protocol messages to stdout. The SDK handshake reports the application release
+version; public API envelopes remain version 1. Automatic local config loading
+is disabled, so provide credentials in the client process environment.
+
 Install source dependencies with `bun install --frozen-lockfile`. Set `DITERO_URL`
 to the trusted HTTPS server origin and supply a personal access token
 through `DITERO_TOKEN` from your secret manager or protected client environment.
@@ -27,7 +41,7 @@ PAT expiry, revocation, and workspace memberships remain authoritative on every
 API request; the server cannot grant access or create another token.
 
 `--allow-loopback-http` permits development HTTP for exactly `localhost`,
-`127.0.0.1`, or `[::1]`. Other startup flags are rejected. Tool inputs cannot change
+`127.0.0.1`, or `[::1]`. `--version` is accepted alone; other startup flags are rejected. Tool inputs cannot change
 the server, account, credentials, transport, filesystem, or shell. No MCP HTTP
 listener, OAuth endpoint, or hosted inference is provided. Read tools work with a
 read token; task planning, creation, and completion require a write token.

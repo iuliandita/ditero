@@ -174,14 +174,16 @@ try {
 		TERM: "xterm-256color",
 		COLORFGBG: mode === "arabic" ? "15;0" : "0;15",
 	});
-	const command = [
-		process.execPath,
-		"run",
-		"src/tui/index.ts",
-		"--allow-loopback-http",
-	];
+	const command = process.env.TUI_TEST_COMMAND
+		? (JSON.parse(process.env.TUI_TEST_COMMAND) as string[])
+		: [process.execPath, "run", "src/tui/index.ts", "--allow-loopback-http"];
 	if (mode === "notty") {
-		const piped = Bun.spawn(command, { env, stdout: "pipe", stderr: "pipe" });
+		const piped = Bun.spawn(command, {
+			env,
+			cwd: process.env.TUI_TEST_CWD,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
 		child = piped;
 		assert.equal(await piped.exited, 2);
 		assert.equal(calls, 0);
@@ -203,7 +205,11 @@ try {
 			terminal.localFlags,
 			terminal.controlFlags,
 		];
-		child = Bun.spawn(command, { env, terminal });
+		child = Bun.spawn(command, {
+			env,
+			terminal,
+			cwd: process.env.TUI_TEST_CWD,
+		});
 		await waitFor(
 			() => text(mode === "arabic" ? "Ditero" : "Ready") && !!serverTime,
 			"Terminal startup did not finish",
@@ -364,6 +370,8 @@ try {
 			flags,
 		);
 		assert.equal(output.includes(pat.token), false);
+		if (process.env.TUI_TEST_COMMAND)
+			assert.equal(output.includes("INNER_TERMINAL_RESTORED"), true);
 	}
 	process.stdout.write(
 		JSON.stringify({

@@ -4,6 +4,7 @@ import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { afterEach, expect, test, vi } from "vitest";
+import release from "../../release.json";
 import type { Fetcher } from "../cli/client.ts";
 import { createDiteroMcp, mcpConfiguration } from "./server.ts";
 
@@ -307,3 +308,11 @@ test("real Bun stdio speaks SDK protocol, rejects API redirects, and prints no p
 	expect(errors).toEqual([]);
 	expect(stderr).toBe("");
 }, 15_000);
+
+test("advertises the application release version in the real SDK handshake", async () => {
+	const client = await protocol();
+	expect(client.getServerVersion()).toMatchObject({
+		name: "ditero",
+		version: release.version,
+	});
+});

@@ -3,6 +3,7 @@ import {
 	serveStdio,
 } from "@modelcontextprotocol/server/stdio";
 import { CliError } from "../cli/arguments.ts";
+import { clientVersion } from "../clients/build-info.ts";
 import { createDiteroMcp, mcpConfiguration } from "./server.ts";
 
 export function startMcp(
@@ -18,7 +19,13 @@ export function startMcp(
 	});
 }
 
-if (import.meta.main) {
+if (
+	import.meta.main &&
+	process.argv.length === 3 &&
+	process.argv[2] === "--version"
+) {
+	process.stdout.write(clientVersion("ditero-mcp"));
+} else if (import.meta.main) {
 	try {
 		const handle = startMcp(process.env, process.argv.slice(2));
 		let closing = false;
