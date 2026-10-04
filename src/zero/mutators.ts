@@ -1542,12 +1542,21 @@ export const mutators = defineMutators({
 		set: defineMutator(
 			z.object({ taskId: z.string(), labelIds: z.array(z.string()) }),
 			async ({ tx, ctx, args }) => {
-				const task = await tx.run(
+				let task = await tx.run(
 					zql.task.where("id", args.taskId).related("list").one(),
 				);
 				if (!task) throw new Error("task not found");
-				const list = task.list as List;
+				let list = task.list as List;
 				await requireWrite(tx, ctx.id, list.workspaceId);
+				await lockZeroTaskWrite(tx, ctx.id, {
+					taskIds: [args.taskId],
+					allowPending: true,
+				});
+				task = await tx.run(
+					zql.task.where("id", args.taskId).related("list").one(),
+				);
+				if (!task) throw new Error("task not found");
+				list = task.list as List;
 				const desired = new Set(args.labelIds);
 				// Labels are workspace-scoped; reject attaching another workspace's
 				// label (it would otherwise sync via taskLabels.mine).

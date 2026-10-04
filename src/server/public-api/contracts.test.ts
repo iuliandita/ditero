@@ -12,7 +12,7 @@ const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(21);
+	expect(Object.keys(document.paths)).toHaveLength(22);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
@@ -183,7 +183,7 @@ test("OpenAPI distinguishes immutable list creation acknowledgements from curren
 		expect(JSON.stringify(list.post.responses[status])).toContain('"snapshot"');
 	}
 	expect(JSON.stringify(list.get)).not.toContain("list-create-ack");
-	expect(Object.keys(paths)).toHaveLength(21);
+	expect(Object.keys(paths)).toHaveLength(22);
 });
 
 test("OpenAPI exposes observed list metadata updates and immutable acknowledgements", () => {
@@ -212,4 +212,15 @@ test("OpenAPI describes strict observed list deletion and immutable acknowledgem
 	])
 		expect(encoded).toContain(field);
 	expect(paths).toHaveProperty("/api/v1/lists/{id}/deletion-observation");
+});
+
+test("OpenAPI distinguishes observed full relationship replacement from scalar edits", () => {
+	const path = publicApiOpenApi().paths["/api/v1/tasks/{id}/relationships"];
+	const encoded = JSON.stringify(path);
+	expect(encoded).toContain('"operationId":"observe_task_relationships"');
+	expect(encoded).toContain('"operationId":"update_task_relationships"');
+	expect(encoded).toContain('"maxItems":20');
+	expect(encoded).toContain('"maxItems":50');
+	expect(encoded).toContain('"const":"task-relationships-update-ack"');
+	expect(encoded).toContain('"additionalProperties":false');
 });

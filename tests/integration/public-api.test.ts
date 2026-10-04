@@ -215,11 +215,14 @@ test("saved surfaces preserve personal scope and shared membership without leaki
 	}
 	const schema = await request("/api/v1/openapi.json", null);
 	const paths = (await schema.json()).paths;
-	expect(Object.keys(paths)).toHaveLength(21);
+	expect(Object.keys(paths)).toHaveLength(22);
 	expect(
 		paths["/api/v1/lists/{id}/observation"].get.responses["200"],
 	).toBeDefined();
 	expect(paths["/api/v1/lists/{id}"].patch.requestBody.required).toBe(true);
+	expect(
+		paths["/api/v1/tasks/{id}/relationships"].patch.requestBody.required,
+	).toBe(true);
 	expect(
 		paths["/api/v1/tasks/{id}/observation"].get.responses["200"],
 	).toBeDefined();
