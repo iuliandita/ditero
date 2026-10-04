@@ -197,11 +197,22 @@ export function updateApiList(
 			const current = await visibleListSnapshot(client, userId, listId);
 			if (!current || current.snapshot.workspaceId !== input.workspaceId)
 				return;
+			if (input.patch.folderId != null) {
+				const target = await client.query(
+					"select id from folder where id=$1 and workspace_id=$2",
+					[input.patch.folderId, input.workspaceId],
+				);
+				if (!target.rowCount) {
+					authorityProblem = notFound();
+					return;
+				}
+			}
 			try {
 				await borrowedDatabase(client).transaction((tx) =>
 					withZeroUserContext(tx, userId, () =>
 						lockZeroContainerWrite(tx, userId, {
 							listId,
+							targetFolderId: input.patch.folderId,
 							listPatch: input.patch,
 						}),
 					),
