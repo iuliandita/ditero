@@ -24,6 +24,11 @@ import {
 	apiTaskDeletionObservationSchema,
 } from "../../domain/public-api-task-deletion.ts";
 import {
+	apiTaskRelationshipObservationSchema,
+	apiTaskRelationshipsAckSchema,
+	apiTaskRelationshipsSchema,
+} from "../../domain/public-api-task-relationships.ts";
+import {
 	apiTaskObservationSchema,
 	apiTaskUpdateSchema,
 } from "../../domain/public-api-task-update.ts";
@@ -381,6 +386,61 @@ export function publicApiOpenApi() {
 			},
 		},
 	};
+	paths["/api/v1/tasks/{id}/relationships"] = {
+		get: {
+			operationId: "observe_task_relationships",
+			tags: ["tasks"],
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Read complete task scope, assignment IDs and label IDs with a SHA256 state token. Scalar fields and other dependent resources are not covered. Read tokens and Viewer members may observe. Evidence limits fail explicitly without truncation.",
+			parameters: [
+				{
+					name: "id",
+					in: "path",
+					required: true,
+					schema: { type: "string", minLength: 1, maxLength: 256 },
+				},
+			],
+			responses: {
+				"200": response(z.toJSONSchema(apiTaskRelationshipObservationSchema)),
+				...errors,
+			},
+		},
+		patch: {
+			operationId: "update_task_relationships",
+			tags: ["tasks"],
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Replace both complete desired sets: up to 20 unique active workspace assignees and 50 unique same-workspace labels. Empty arrays clear relationships. Requires the observed scope/token and a write token with current Member+ authority. Query-free JSON body is bounded to 64 KiB. Retry identical body/key after an uncertain result; replay acknowledges original desired sets without touching a recreated task. UUID keys share the account mutation namespace.",
+			parameters: [
+				{
+					name: "id",
+					in: "path",
+					required: true,
+					schema: { type: "string", minLength: 1, maxLength: 256 },
+				},
+				{
+					name: "Idempotency-Key",
+					in: "header",
+					required: true,
+					schema: { type: "string", format: "uuid" },
+				},
+			],
+			requestBody: {
+				required: true,
+				content: {
+					"application/json": {
+						schema: z.toJSONSchema(apiTaskRelationshipsSchema, { io: "input" }),
+					},
+				},
+			},
+			responses: {
+				"200": response(z.toJSONSchema(apiTaskRelationshipsAckSchema)),
+				...errors,
+			},
+		},
+	};
+
 	(paths["/api/v1/tasks/{id}"] as Record<string, unknown>).patch = {
 		operationId: "update_task",
 		tags: ["tasks"],

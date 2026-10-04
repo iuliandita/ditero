@@ -383,3 +383,32 @@ of combined title/notes UTF-8 text per task. Overflow returns
 A five-second export deadline returns 503. No failure returns a partial calendar.
 Use a narrower filter for a large snapshot. An authorized empty selection produces
 a valid calendar with no VTODO components.
+
+## Observed task relationship edits
+
+`GET /api/v1/tasks/:id/relationships` returns `snapshot` with version 1, task,
+list and workspace IDs, complete `assigneeIds` and `labelIds`, plus `stateToken`.
+Read tokens and current Viewer members may observe. The token covers this scope
+and these logical sets only; it does not cover scalar fields, label names,
+comments, files or other dependent rows. Observation never truncates sets. A
+five-second scan deadline, 50,000 evidence rows or 2 MiB evidence bound returns
+an explicit refusal.
+
+`PATCH /api/v1/tasks/:id/relationships` requires a write PAT and current Member+
+authority. Send query-free JSON within 64 KiB, a UUID `Idempotency-Key`, and
+`workspaceId`, `listId`, `expectedState`, `assigneeIds`, and `labelIds`. Both full
+desired sets are required; empty arrays clear them. At most 20 unique active
+workspace members and 50 unique same-workspace labels are supported. ID ordering
+canonicalizes; duplicates, extra fields, stale observations, and cross-workspace
+references are rejected. Pending import activation refuses assignment editing.
+Native assignment/removal updates notification recipients; notices are collected
+and enqueued after commit. Relationships and receipt commit atomically.
+
+Success returns `task-relationships-update-ack` with the immutable original target
+scope and sets. It does not claim that those sets remain current. After an uncertain
+outcome, retry the identical body and key without replacing the token. A matching
+receipt requires current original-workspace write authority and a valid write PAT;
+it never edits a recreated task, reassigns a removed member, or sends another notice.
+Keys share the account namespace with every other API write. Identical semantic
+recreation can match a fresh request's state token. No invitations or label resource
+creation, rename, recolor or deletion are provided by this endpoint.
