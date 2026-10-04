@@ -63,7 +63,11 @@ const waitFor = async (predicate: () => boolean, message: string) => {
 	}
 };
 const text = (value: string) => output.includes(value);
-const latestFrame = () => output.split("\x1b[H\x1b[2J").at(-1) ?? "";
+const latestFrame = () =>
+	(output.split("\x1b[H\x1b[2J").at(-1) ?? "").replace(
+		new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g"),
+		"",
+	);
 const send = async (value: string, expected?: string) => {
 	terminal?.write(value);
 	if (expected)
@@ -220,7 +224,15 @@ try {
 			await send("n", "Task title");
 			await send("Coffee fixture\rtomorrow\r");
 			{
-				await waitFor(() => text("requestId"), "Creation review was absent");
+				await waitFor(
+					() => latestFrame().includes("NOT SENT"),
+					"Creation review was absent",
+				);
+				await send("v");
+				await waitFor(
+					() => latestFrame().includes("requestId"),
+					"Exact creation payload was absent",
+				);
 				assert.equal(writes.length, 0);
 				assert.equal((await counts()).tasks, 0);
 				await send("\x1b[200~y\n\x1b[201~");
@@ -272,7 +284,12 @@ try {
 		} else {
 			await send("\r", protectedTitle);
 			if (mode === "read") {
-				await send("c", "requestId");
+				await send("c", "NOT SENT");
+				await send("v");
+				await waitFor(
+					() => latestFrame().includes("requestId"),
+					"Exact completion payload was absent",
+				);
 				await send("y");
 				await waitFor(
 					() => latestFrame().includes("forbidden"),
@@ -297,16 +314,43 @@ try {
 				assert.equal(latestFrame().includes(protectedTitle), false);
 				await send("q");
 			} else if (mode === "arabic") {
+				const beforeArabic = output.split("\x1b[H\x1b[2J").length;
+				terminal.resize(40, 20);
+				child.kill("SIGWINCH");
+				await waitFor(
+					() =>
+						output.split("\x1b[H\x1b[2J").length > beforeArabic &&
+						/[\u0600-\u06ff]/.test(latestFrame()),
+					"Arabic supported-size frame was absent",
+				);
+				const beforeTiny = output.split("\x1b[H\x1b[2J").length;
 				terminal.resize(19, 8);
 				child.kill("SIGWINCH");
-				await Bun.sleep(30);
-				assert.equal(/[\u0600-\u06ff]/.test(latestFrame()), true);
+				await waitFor(
+					() =>
+						output.split("\x1b[H\x1b[2J").length > beforeTiny &&
+						/\bq\b/.test(latestFrame()) &&
+						/\bEsc\b/.test(latestFrame()),
+					"Narrow terminal safety keys were absent",
+				);
+				assert.ok(latestFrame().split(/\r?\n/).length <= 8);
+				assert.ok(
+					latestFrame()
+						.split(/\r?\n/)
+						.every((line) => line.length <= 18),
+				);
 				await send("\x03");
 			} else {
-				await send("c", "requestId");
+				await send("c", "NOT SENT");
+				await send("v");
+				await waitFor(
+					() => latestFrame().includes("requestId"),
+					"Exact completion payload was absent",
+				);
 				await send("y");
 				await waitFor(
-					() => latestFrame().includes("invalid_response"),
+					() =>
+						writeStatuses.length === 1 && latestFrame().includes("UNCONFIRMED"),
 					"Lost committed response was not observed",
 				);
 				assert.deepEqual(await counts(), {
@@ -324,12 +368,14 @@ try {
 					observedDue,
 				);
 				if (mode === "retry") {
-					await send("y");
+					await send("r");
 					await waitFor(
 						() =>
 							writes.length === 2 &&
 							latestFrame().includes(protectedTitle) &&
-							!latestFrame().includes("requestId"),
+							!latestFrame().includes("NOT SENT") &&
+							!latestFrame().includes("UNCONFIRMED") &&
+							writeStatuses.length === 2,
 						"Completion replay did not refresh",
 					);
 					assert.deepEqual(writes[1], writes[0]);
