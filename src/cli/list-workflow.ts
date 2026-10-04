@@ -5,6 +5,11 @@ import {
 	parseApiListCreate,
 } from "../domain/public-api-list-create.ts";
 import {
+	apiListDeleteAckSchema,
+	apiListDeletionObservationSchema,
+	parseApiListDelete,
+} from "../domain/public-api-list-deletion.ts";
+import {
 	apiListObservationSchema,
 	apiListUpdateAckSchema,
 	parseApiListUpdate,
@@ -55,15 +60,33 @@ export function encodeListInput(value: unknown): Uint8Array {
 	if (!bytes.length || bytes.length > MAX_LIST_INPUT_BYTES) invalidInput();
 	return bytes;
 }
+export function encodeListDeletionInput(value: unknown): Uint8Array {
+	if (!safeListInput(value)) invalidInput();
+	try {
+		return encodeListInput(parseApiListDelete(value));
+	} catch {
+		invalidInput();
+	}
+}
 export async function listWorkflow(
 	options: CliOptions,
 	fetcher: Fetcher = fetch,
 	reader: StdinReader = readStdin,
 	signal?: AbortSignal,
 ): Promise<unknown> {
-	if (!["create-list", "observe-list", "update-list"].includes(options.command))
+	if (
+		![
+			"create-list",
+			"observe-list",
+			"update-list",
+			"observe-list-deletion",
+			"delete-list",
+		].includes(options.command)
+	)
 		invalidInput();
-	const observing = options.command === "observe-list";
+	const deleting = options.command === "delete-list";
+	const deletionObservation = options.command === "observe-list-deletion";
+	const observing = options.command === "observe-list" || deletionObservation;
 	const creating = options.command === "create-list";
 	if (
 		!creating &&
@@ -75,6 +98,7 @@ export async function listWorkflow(
 	let body:
 		| ReturnType<typeof parseApiListCreate>
 		| ReturnType<typeof parseApiListUpdate>
+		| ReturnType<typeof parseApiListDelete>
 		| undefined;
 	let requestId: string | undefined;
 	if (!observing) {
@@ -85,14 +109,18 @@ export async function listWorkflow(
 			raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 			if (!safeListInput(raw)) invalidInput();
 			requestId = parseApiIdempotencyKey(options.requestId ?? null);
-			body = creating ? parseApiListCreate(raw) : parseApiListUpdate(raw);
+			body = creating
+				? parseApiListCreate(raw)
+				: deleting
+					? parseApiListDelete(raw)
+					: parseApiListUpdate(raw);
 		} catch {
 			invalidInput();
 		}
 	}
 	const path = creating
 		? "/api/v1/lists"
-		: `/api/v1/lists/${encodeURIComponent(options.listId ?? "")}${observing ? "/observation" : ""}`;
+		: `/api/v1/lists/${encodeURIComponent(options.listId ?? "")}${deletionObservation ? "/deletion-observation" : observing ? "/observation" : ""}`;
 	let result: unknown;
 	try {
 		result = await requestJson(
@@ -103,7 +131,7 @@ export async function listWorkflow(
 				? {
 						body: new TextDecoder().decode(encodeListInput(body)),
 						requestId,
-						method: creating ? "POST" : "PATCH",
+						method: creating ? "POST" : deleting ? "DELETE" : "PATCH",
 						allowCreated: creating,
 					}
 				: undefined,
@@ -124,10 +152,14 @@ export async function listWorkflow(
 		.object({
 			version: z.literal(1),
 			data: observing
-				? apiListObservationSchema
+				? deletionObservation
+					? apiListDeletionObservationSchema
+					: apiListObservationSchema
 				: creating
 					? apiListCreationAckSchema
-					: apiListUpdateAckSchema,
+					: deleting
+						? apiListDeleteAckSchema
+						: apiListUpdateAckSchema,
 			nextCursor: z.null(),
 		})
 		.strict()
@@ -146,6 +178,18 @@ export async function listWorkflow(
 		throw new CliError(
 			"invalid_response",
 			"The server returned a mismatched list response.",
+			8,
+		);
+	if (
+		deleting &&
+		body &&
+		"expectedTasksState" in body &&
+		(!("deletedTasks" in parsed.data.data) ||
+			parsed.data.data.deletedTasks !== body.expectedTasksState.count)
+	)
+		throw new CliError(
+			"invalid_response",
+			"The server returned a mismatched deletion count.",
 			8,
 		);
 	return parsed.data;

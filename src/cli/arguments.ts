@@ -27,6 +27,8 @@ export interface CliOptions {
 		| PublicApiResource
 		| "create-list"
 		| "observe-list"
+		| "observe-list-deletion"
+		| "delete-list"
 		| "update-list"
 		| "plan-task"
 		| "create-task"
@@ -130,6 +132,8 @@ export function parseArguments(
 				"profile",
 				"create-list",
 				"observe-list",
+				"observe-list-deletion",
+				"delete-list",
 				"update-list",
 				"plan-task",
 				"create-task",
@@ -148,6 +152,7 @@ export function parseArguments(
 	const writing = [
 		"create-list",
 		"update-list",
+		"delete-list",
 		"create-task",
 		"complete-task",
 		"update-task",
@@ -160,7 +165,12 @@ export function parseArguments(
 		"update-task",
 		"delete-task",
 	].includes(command);
-	const listCommand = command === "observe-list" || command === "update-list";
+	const listCommand = [
+		"observe-list",
+		"update-list",
+		"observe-list-deletion",
+		"delete-list",
+	].includes(command);
 	const workflow =
 		command === "plan-task" || writing || taskCommand || listCommand;
 	if (

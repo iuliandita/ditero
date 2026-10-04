@@ -7,6 +7,7 @@ import { taskIntentSchema } from "../agent/task-plan.ts";
 import { CliError, type CliOptions, parseArguments } from "../cli/arguments.ts";
 import { discover, type Fetcher } from "../cli/client.ts";
 import {
+	encodeListDeletionInput,
 	encodeListInput,
 	listWorkflow,
 	safeListInput,
@@ -19,6 +20,11 @@ import {
 	apiListCreateSchema,
 	apiListCreationAckSchema,
 } from "../domain/public-api-list-create.ts";
+import {
+	apiListDeleteAckSchema,
+	apiListDeleteSchema,
+	apiListDeletionObservationSchema,
+} from "../domain/public-api-list-deletion.ts";
 import {
 	apiListObservationSchema,
 	apiListUpdateAckSchema,
@@ -53,7 +59,7 @@ function safeInput(value: unknown, depth = 0): boolean {
 
 function guardedInput<S extends z.ZodType>(
 	schema: S,
-	listPayload?: "list" | "update" | "observation",
+	listPayload?: "list" | "update" | "observation" | "deletion",
 ): StandardSchemaWithJSON<z.input<S>, z.output<S>> {
 	const standard = schema["~standard"];
 	return {
@@ -65,9 +71,16 @@ function guardedInput<S extends z.ZodType>(
 				};
 				if (listPayload) {
 					if (!safeListInput(value)) return invalid;
+					if (listPayload === "deletion") {
+						const parsed = await standard.validate(value);
+						if (parsed.issues) return invalid;
+					}
 					try {
-						if (listPayload !== "observation")
-							encodeListInput((value as Record<string, unknown>)[listPayload]);
+						if (listPayload !== "observation") {
+							const payload = (value as Record<string, unknown>)[listPayload];
+							if (listPayload === "deletion") encodeListDeletionInput(payload);
+							else encodeListInput(payload);
+						}
 					} catch {
 						return invalid;
 					}
@@ -424,7 +437,10 @@ export function createDiteroMcp(
 			listWorkflow(
 				{ ...fixed, command, requestId, listId },
 				fetcher,
-				async () => encodeListInput(payload),
+				async () =>
+					command === "delete-list"
+						? encodeListDeletionInput(payload)
+						: encodeListInput(payload),
 				signal,
 			),
 		);
@@ -515,6 +531,71 @@ export function createDiteroMcp(
 			listOperation(
 				"update-list",
 				update,
+				requestId.toLowerCase(),
+				listId,
+				ctx.mcpReq.signal,
+			),
+	);
+
+	server.registerTool(
+		"get_list_deletion_observation",
+		{
+			description:
+				"Read the complete authorized list deletion observation, including scalar state and count/token evidence for all persisted tasks. Read tokens and Viewers may observe. Inspect the explicit cascade scope; this is a live observation, not a lock or incarnation identity.",
+			inputSchema: guardedInput(
+				z.object({ listId: PUBLIC_API_ID }).strict(),
+				"observation",
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiListDeletionObservationSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations,
+		},
+		({ listId }, ctx) =>
+			listOperation(
+				"observe-list-deletion",
+				undefined,
+				undefined,
+				listId,
+				ctx.mcpReq.signal,
+			),
+	);
+	server.registerTool(
+		"delete_list",
+		{
+			description:
+				"Delete one inspected list using original workspaceId, expectedState, complete expectedTasksState and explicit cascadeTasks plus caller-owned UUID requestId. False requires no tasks; true accepts the observed task cascade and native dependent cleanup. Send one DELETE within 4 KiB without hidden reads or retries. Exact replay returns the immutable original acknowledgement and deletedTasks count without deleting a recreated list. Current original-workspace creator/Admin/Owner authority remains required. After uncertain cancellation or transport failure, manually retry the identical list ID, body and UUID without replacing state.",
+			inputSchema: guardedInput(
+				z
+					.object({
+						listId: PUBLIC_API_ID,
+						requestId: z.uuid(),
+						deletion: apiListDeleteSchema,
+					})
+					.strict(),
+				"deletion",
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiListDeleteAckSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		({ listId, requestId, deletion }, ctx) =>
+			listOperation(
+				"delete-list",
+				deletion,
 				requestId.toLowerCase(),
 				listId,
 				ctx.mcpReq.signal,
