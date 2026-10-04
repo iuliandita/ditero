@@ -10,6 +10,7 @@ import {
 } from "../../domain/public-api.ts";
 import { parseCalendarQuery } from "../../domain/public-api-calendar.ts";
 import { parseApiTaskComplete } from "../../domain/public-api-completion.ts";
+import { parseApiListCreate } from "../../domain/public-api-list-create.ts";
 import { parseApiTaskDelete } from "../../domain/public-api-task-deletion.ts";
 import { parseApiTaskUpdate } from "../../domain/public-api-task-update.ts";
 import {
@@ -26,6 +27,7 @@ import {
 } from "./contracts.ts";
 import { deleteApiTask } from "./delete.ts";
 import { readApiTaskDeletionObservation } from "./deletion-observation.ts";
+import { writeApiList } from "./list-write.ts";
 import { publicApiOpenApi } from "./openapi.ts";
 import { readApiProfile, readApiResource } from "./read.ts";
 import { readApiTaskObservation } from "./task-observation.ts";
@@ -293,6 +295,43 @@ export function publicApiRoutes(
 						pool,
 						bearerToken(request.headers),
 						params.id,
+						input,
+						requestId,
+					);
+				}),
+			{ parse: "none" },
+		)
+		.post(
+			"/api/v1/lists",
+			({ request, server }) =>
+				apiRequest(async () => {
+					if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+						throw new PublicApiError(429, "rate-limited", "Too many requests");
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					if (
+						request.headers
+							.get("content-type")
+							?.split(";")[0]
+							.trim()
+							.toLowerCase() !== "application/json"
+					)
+						throw new PublicApiError(
+							415,
+							"unsupported-media-type",
+							"A JSON request body is required",
+						);
+					const requestId = parseApiIdempotencyKey(
+						request.headers.get("idempotency-key"),
+					);
+					const input = parseApiListCreate(await boundedJson(request));
+					return writeApiList(
+						pool,
+						bearerToken(request.headers),
 						input,
 						requestId,
 					);

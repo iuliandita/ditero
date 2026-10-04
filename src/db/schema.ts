@@ -77,14 +77,32 @@ export const publicApiRequest = pgTable(
 			.references(() => user.id, { onDelete: "cascade" }),
 		requestId: uuid("request_id").notNull(),
 		requestHash: text("request_hash").notNull(),
-		// Keep the receipt after task deletion so a retry cannot recreate it.
-		taskId: text("task_id").notNull(),
+		// Retain original receipts after resource deletion.
+		resourceKind: text("resource_kind")
+			.$type<"task" | "list">()
+			.notNull()
+			.default("task"),
+		taskId: text("task_id"),
+		listId: text("list_id"),
+		listSnapshot: jsonb("list_snapshot"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
 	},
 	(t) => [
 		primaryKey({ columns: [t.userId, t.requestId] }),
+		check(
+			"public_api_request_resource",
+			sql`
+			(${t.resourceKind} = 'task' and ${t.taskId} is not null
+			 and ${t.listId} is null and ${t.listSnapshot} is null)
+			or (${t.resourceKind} = 'list' and ${t.taskId} is null
+			 and ${t.listId} is not null and ${t.listSnapshot} is not null
+			 and coalesce(jsonb_typeof(${t.listSnapshot}) = 'object'
+			 and jsonb_typeof(${t.listSnapshot}->'id') = 'string'
+			 and ${t.listSnapshot}->>'id' = ${t.listId}, false))
+		`,
+		),
 		pgPolicy("public_api_request_read", {
 			for: "select",
 			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,

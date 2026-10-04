@@ -46,12 +46,20 @@ async function completeTask(
 	await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
 		JSON.stringify(["public-api-task-create", actor.userId, requestId]),
 	]);
-	const receipt = await client.query<{ request_hash: string; task_id: string }>(
-		"select request_hash,task_id from public_api_request where user_id=$1 and request_id=$2",
+	const receipt = await client.query<{
+		request_hash: string;
+		resource_kind: string;
+		task_id: string | null;
+	}>(
+		"select request_hash,resource_kind,task_id from public_api_request where user_id=$1 and request_id=$2",
 		[actor.userId, requestId],
 	);
 	if (receipt.rowCount) {
-		if (receipt.rows[0].request_hash !== hash)
+		if (
+			receipt.rows[0].resource_kind !== "task" ||
+			receipt.rows[0].task_id === null ||
+			receipt.rows[0].request_hash !== hash
+		)
 			throw new PublicApiError(
 				409,
 				"idempotency-conflict",

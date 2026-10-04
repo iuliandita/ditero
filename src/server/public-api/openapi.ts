@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { apiTaskCompleteSchema } from "../../domain/public-api-completion.ts";
 import {
+	apiListCreateSchema,
+	apiListCreationAckSchema,
+} from "../../domain/public-api-list-create.ts";
+import {
 	PUBLIC_API_RESOURCES,
 	publicApiResourceSchemas,
 } from "../../domain/public-api-resources.ts";
@@ -132,6 +136,44 @@ export function publicApiOpenApi() {
 			},
 		};
 	}
+	(paths["/api/v1/lists"] as Record<string, unknown>).post = {
+		operationId: "create_list",
+		tags: ["lists"],
+		security: [{ personalAccessToken: [] }],
+		description:
+			"Create a root list using a write token and current Member, Admin, or Owner membership. JSON is limited to 4 KiB; no query parameters, invitations or access grants. The server assigns ID, owner, append position and defaults. Preserve the same key and body after uncertain transport outcomes. Replay requires current original-workspace write authority and returns the immutable original creation snapshot, even after deletion or ID recreation; it does not assert current existence or incarnation. Use a separate authorized GET for current state.",
+		parameters: [
+			{
+				name: "Idempotency-Key",
+				in: "header",
+				required: true,
+				schema: { type: "string", format: "uuid" },
+				description:
+					"Account-scoped request identity shared with every task write. A different operation or canonical body returns 409.",
+			},
+		],
+		requestBody: {
+			required: true,
+			content: {
+				"application/json": {
+					schema: z.toJSONSchema(apiListCreateSchema, { io: "input" }),
+				},
+			},
+		},
+		responses: {
+			"201": {
+				...response(z.toJSONSchema(apiListCreationAckSchema)),
+				description: "List created; original creation acknowledgement",
+			},
+			"200": {
+				...response(z.toJSONSchema(apiListCreationAckSchema)),
+				description:
+					"Idempotent replay of the original creation acknowledgement",
+			},
+			...errors,
+		},
+	};
+
 	(paths["/api/v1/tasks"] as Record<string, unknown>).post = {
 		operationId: "create_task",
 		tags: ["tasks"],
@@ -224,7 +266,7 @@ export function publicApiOpenApi() {
 		tags: ["tasks"],
 		security: [{ personalAccessToken: [] }],
 		description:
-			"Update title, notes, dueAt, dueAllDay or priority with a write token and current writable membership. Supply listId and stateToken from the observation as expectedState. Stale scalar state returns 409 before effects. Recurring tasks and habits accept title/notes/priority only; any due field is refused. The JSON body is bounded to 64 KiB. Same-key replay returns the current authorized task without applying the patch again; current write authority is required. Keys share the create/complete namespace.",
+			"Update title, notes, dueAt, dueAllDay or priority with a write token and current writable membership. Supply listId and stateToken from the observation as expectedState. Stale scalar state returns 409 before effects. Recurring tasks and habits accept title/notes/priority only; any due field is refused. The JSON body is bounded to 64 KiB. Same-key replay returns the current authorized task without applying the patch again; current write authority is required. Keys share the account namespace with list creation and all task writes.",
 		parameters: [
 			{
 				name: "id",
@@ -278,7 +320,7 @@ export function publicApiOpenApi() {
 		tags: ["tasks"],
 		security: [{ personalAccessToken: [] }],
 		description:
-			"Delete an observed task using a write token and current writable origin-list membership. Supply parent state, child count/token, and explicit cascadeChildren. False requires no children. True deletes the exact observed children and dependent content through the native path. Stale parent or child state returns 409. JSON is limited to 4 KiB. Same-key replay acknowledges the original deletion without touching a recreated ID, and still requires current origin-list write authority. Keys share the account create/complete/update namespace.",
+			"Delete an observed task using a write token and current writable origin-list membership. Supply parent state, child count/token, and explicit cascadeChildren. False requires no children. True deletes the exact observed children and dependent content through the native path. Stale parent or child state returns 409. JSON is limited to 4 KiB. Same-key replay acknowledges the original deletion without touching a recreated ID, and still requires current origin-list write authority. Keys share the account namespace with list creation and all task writes.",
 		parameters: [
 			{
 				name: "id",
@@ -369,7 +411,7 @@ export function publicApiOpenApi() {
 			title: "Ditero public API",
 			version: "1",
 			description:
-				"Membership-scoped discovery and idempotent task creation for scripts and agents. Results use stable IDs; dashboard tasks are stored in authorized backing lists. Collection pages are ordered by ID and are live reads, not frozen snapshots.",
+				"Membership-scoped discovery and idempotent list/task writes for scripts and agents. Results use stable IDs; dashboard tasks are stored in authorized backing lists. Collection pages are ordered by ID and are live reads, not frozen snapshots.",
 		},
 		paths,
 		components: {
