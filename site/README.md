@@ -13,7 +13,7 @@ in the six `site/locales/` dictionaries; markup belongs in the shared template.
 The builder rejects missing or extra dictionary keys. All locale values are escaped
 as text, including attribute values. Relative paths support the `/ditero/` Pages base.
 
-Content describes published `v0.0.1-alpha.1`. A prepared release or a merged develop
+Content describes published `v0.0.1-alpha.2`. A prepared release or a merged develop
 feature does not change that claim. Update all six dictionaries and pinned guide links
 only after checking the next published release and its client limitations.
 

@@ -66,6 +66,45 @@ describe("static project site", () => {
 				);
 				expect(html.match(/aria-current="page"/g)).toHaveLength(1);
 				expect(html.match(/hreflang=/g)).toHaveLength(12);
+				expect(html).toContain("<bdi>v0.0.1-alpha.2</bdi>");
+				expect(html).not.toContain("v0.0.1-alpha.1");
+				expect(html).not.toContain("@@releaseVersion@@");
+				expect(
+					html.match(
+						/href="https:\/\/github.com\/iuliandita\/ditero\/releases\/tag\/v0\.0\.1-alpha\.2"/g,
+					),
+				).toHaveLength(2);
+				const dictionary = parseDictionary(
+					JSON.parse(
+						await readFile(join(root, `site/locales/${locale}.json`), "utf8"),
+					),
+				);
+				expect(dictionary.alpha).toContain("v0.0.1-alpha.2");
+				for (const target of [
+					"README.md#run-it-docker-compose",
+					"apps/android/README.md",
+					"apps/desktop/README.md",
+					"docs/runbooks/backup-restore.md",
+					"docs/security.md",
+					"LICENSE",
+				]) {
+					expect(html).toContain(
+						`href="https://github.com/iuliandita/ditero/blob/v0.0.1-alpha.2/${target}"`,
+					);
+				}
+				const githubLinks = [
+					...html.matchAll(
+						/href="(https:\/\/github.com\/iuliandita\/ditero[^"]*)"/g,
+					),
+				].map((match) => match[1]);
+				expect(githubLinks).toHaveLength(10);
+				expect(
+					githubLinks.every(
+						(url) =>
+							url === "https://github.com/iuliandita/ditero" ||
+							url?.includes("/v0.0.1-alpha.2"),
+					),
+				).toBe(true);
 				for (const match of html.matchAll(/(?:href|src|srcset)="([^"#]+)"/g)) {
 					const target = match[1];
 					if (!target || target.startsWith("https://")) continue;

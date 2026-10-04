@@ -1,6 +1,6 @@
 {
 	"title": "Ditero | Self-hosted tasks for small groups",
-	"description": "A free, self-hosted task app for households and small groups. First alpha available.",
+	"description": "A free, self-hosted task app for households and small groups. Current alpha available.",
 	"skip": "Skip to content",
 	"languages": "Language",
 	"eyebrow": "Your server. Your shared days.",
@@ -20,7 +20,7 @@
 	"clientsTitle": "A browser first. Clients too.",
 	"clients": "Signed Android downloads and experimental Linux x64, Windows x64 and macOS ARM64 installers connect to your Ditero server. Native clients require trusted HTTPS. There is no iOS release.",
 	"alphaTitle": "Start with the alpha",
-	"alpha": "The published release is v0.0.1-alpha.1. Breaking changes are expected. Windows builds are unsigned; macOS uses ad-hoc signatures. Native platform coverage, notifications and updates have remaining limits. Back up the database and attachments together.",
+	"alpha": "The published release is v0.0.1-alpha.2. Breaking changes are expected. Windows builds are unsigned; macOS uses ad-hoc signatures. Native platform coverage, notifications and updates have remaining limits. Back up the database and attachments together.",
 	"docsTitle": "Read before you install",
 	"android": "Android status",
 	"desktop": "Desktop status",

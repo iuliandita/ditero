@@ -46,7 +46,8 @@ const names: Record<Locale, string> = {
 };
 export const siteUrl = "https://iuliandita.github.io/ditero/";
 const sourceUrl = "https://github.com/iuliandita/ditero";
-const docsUrl = `${sourceUrl}/blob/v0.0.1-alpha.1`;
+export const publishedRelease = "v0.0.1-alpha.2";
+const docsUrl = `${sourceUrl}/blob/${publishedRelease}`;
 const assets = [
 	"ditero-symbol-teal.png",
 	"ditero-wordmark-light.png",
@@ -118,7 +119,8 @@ export function renderPage(
 		canonical: `${siteUrl}${path(locale)}`,
 		languageLinks,
 		alternates,
-		releaseUrl: `${sourceUrl}/releases/tag/v0.0.1-alpha.1`,
+		releaseVersion: escapeHtml(publishedRelease),
+		releaseUrl: `${sourceUrl}/releases/tag/${publishedRelease}`,
 		setupUrl: `${docsUrl}/README.md#run-it-docker-compose`,
 		sourceUrl,
 		androidUrl: `${docsUrl}/apps/android/README.md`,
