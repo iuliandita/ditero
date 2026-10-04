@@ -234,14 +234,14 @@ function PriorityFlag({
 			data-priority={meta.value}
 			className={cn("inline-flex shrink-0 items-center gap-1", className)}
 		>
-			{/* Dashboard phones keep the word in metadata so focus does not reflow. */}
+			{/* Reserve dashboard desktop space; phones keep the word in metadata. */}
 			<span
 				aria-hidden
 				data-testid="task-priority-text"
 				className={cn(
 					"hidden text-xs text-muted-foreground",
 					dashboard
-						? "md:group-hover:inline md:group-has-[:focus-visible]:inline"
+						? "md:inline md:invisible md:group-hover:visible md:group-has-[:focus-visible]:visible"
 						: "group-hover:inline group-has-[:focus-visible]:inline",
 				)}
 			>
