@@ -119,9 +119,15 @@ test("requested mixed history uses complete total pages and source attribution a
 		await expect(attribution).toContainText("Source-reported creator:");
 		await expect(attribution).not.toContainText(source);
 		await pool.query(
-			"insert into user_pref(id,locale,theme) values ($1,'ar','dark') on conflict(id) do update set locale='ar',theme='dark'",
+			"insert into user_pref(id,theme) values ($1,'dark') on conflict(id) do update set theme='dark'",
 			[actor],
 		);
+		await page.getByTestId("language-switcher").click();
+		const localeLoaded = page.waitForEvent("load", { timeout: 30_000 });
+		await page.getByRole("option", { name: "العربية", exact: true }).click();
+		await localeLoaded;
+		await expect(page.locator("html")).toHaveAttribute("lang", "ar");
+		await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.reload();
 		await waitWorkspaceReady(page);
