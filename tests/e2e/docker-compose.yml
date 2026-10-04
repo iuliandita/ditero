@@ -33,7 +33,7 @@ services:
       POSTGRES_PASSWORD: pass
     command: postgres -c wal_level=logical
     ports:
-      - "55432:5432"
+      - "127.0.0.1:${DITERO_E2E_DB_PORT:-55432}:5432"
     healthcheck:
       # A real query over TCP, not pg_isready: initdb runs a temporary server on
       # a unix socket, so pg_isready reports ready from inside the container

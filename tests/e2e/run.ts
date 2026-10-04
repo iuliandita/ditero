@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { e2eDatabaseURL } from "../../scripts/e2e-database-port.ts";
 
 const compose = [
 	"compose",
@@ -169,6 +170,20 @@ try {
 	// only thing generating it.
 	await run("bun", ["run", "i18n:compile"]);
 	await run("docker", [...compose, "up", "--detach", "--wait", "upstream-db"]);
+	const binding = spawnSync(
+		"docker",
+		[...compose, "port", "upstream-db", "5432"],
+		{
+			env,
+			encoding: "utf8",
+			timeout: 15_000,
+		},
+	);
+	if (binding.status !== 0 || binding.error)
+		throw new Error("Cannot discover the owned E2E database port");
+	const actualDatabaseURL = e2eDatabaseURL(binding.stdout);
+	env.DATABASE_URL = actualDatabaseURL;
+	env.E2E_DATABASE_URL = actualDatabaseURL;
 	await run("bun", ["run", "db:migrate"]);
 	await run("docker", [
 		...compose,
