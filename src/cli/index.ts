@@ -8,7 +8,9 @@ export const HELP = `Ditero CLI
 Usage: ditero <command> [options]
 Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards,
           plan-task (task intent JSON stdin), create-task (API task JSON stdin),
-          complete-task (observed completion JSON stdin)
+          complete-task (observed completion JSON stdin),
+          observe-task, observe-task-deletion (live state JSON),
+          update-task, delete-task (observed mutation JSON stdin)
 
 Options:
   --json                  Compact JSON output (default: formatted JSON)
@@ -20,7 +22,7 @@ Options:
   --workspace <id>        Filter a collection by workspace
   --list <id>             Filter tasks by list
   --done <true|false>     Filter tasks by completion
-  --task <id>            Required only for complete-task; use the observed task ID
+  --task <id>            Required for task observation, completion, update, and deletion
   --request-id <UUID>     Required for writes; preserve for exact retries
   --version               Show build identity without accessing the server
   --help                  Show this help without accessing the server
@@ -29,9 +31,10 @@ Set DITERO_TOKEN through the environment. Credentials are never accepted as flag
 Exit codes: 0 success, 2 usage/request, 3 authentication, 4 permission,
 5 missing resource, 6 rate limit, 7 network, 8 invalid/bounded response, 9 server,
 10 request ID conflict, 11 original task deleted.
-Planning never writes; create-task and complete-task make one POST without retries.
+Planning never writes; writes make one POST, PATCH, or DELETE without retries.
 Completion requires the inspected listId and expectedDueAt; recurring tasks advance.
-Workflow stdin is at most 64 KiB. No files, invitations, or mentions are supported.
+Updates require an observed state token; deletion also requires child state and explicit cascade.
+Workflow stdin is at most 64 KiB; deletion is at most 4 KiB. No files, invitations, or mentions are supported.
 `;
 
 export async function runCli(
@@ -52,9 +55,15 @@ export async function runCli(
 			output.stdout(HELP);
 			return 0;
 		}
-		const result = ["plan-task", "create-task", "complete-task"].includes(
-			options.command,
-		)
+		const result = [
+			"plan-task",
+			"create-task",
+			"complete-task",
+			"observe-task",
+			"observe-task-deletion",
+			"update-task",
+			"delete-task",
+		].includes(options.command)
 			? await taskWorkflow(options, fetcher, stdinReader)
 			: await discover(options, fetcher);
 		output.stdout(

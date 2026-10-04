@@ -134,7 +134,12 @@ export async function requestJson(
 	options: CliOptions,
 	url: URL,
 	fetcher: Fetcher = fetch,
-	write?: { body: string; requestId: string },
+	write?: {
+		body: string;
+		requestId: string;
+		method?: "POST" | "PATCH" | "DELETE";
+		allowCreated?: boolean;
+	},
 	budget: ResponseBudget = { bytes: 0 },
 	callerSignal?: AbortSignal,
 ): Promise<unknown> {
@@ -146,7 +151,7 @@ export async function requestJson(
 	let response: Response;
 	try {
 		response = await fetcher(url, {
-			method: write ? "POST" : "GET",
+			method: write ? (write.method ?? "POST") : "GET",
 			redirect: "error",
 			credentials: "omit",
 			headers: {
@@ -170,7 +175,15 @@ export async function requestJson(
 			7,
 		);
 	}
-	if (response.status !== 200 && !(write && response.status === 201)) {
+	if (
+		response.status !== 200 &&
+		!(
+			write &&
+			(write.method ?? "POST") === "POST" &&
+			write.allowCreated !== false &&
+			response.status === 201
+		)
+	) {
 		await response.body?.cancel();
 		throw httpError(response.status);
 	}
@@ -221,7 +234,11 @@ export async function discover(
 	if (
 		options.command === "plan-task" ||
 		options.command === "create-task" ||
-		options.command === "complete-task"
+		options.command === "complete-task" ||
+		options.command === "observe-task" ||
+		options.command === "observe-task-deletion" ||
+		options.command === "update-task" ||
+		options.command === "delete-task"
 	)
 		throw new CliError(
 			"invalid_arguments",

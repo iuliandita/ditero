@@ -44,7 +44,7 @@ API request; the server cannot grant access or create another token.
 `127.0.0.1`, or `[::1]`. `--version` is accepted alone; other startup flags are rejected. Tool inputs cannot change
 the server, account, credentials, transport, filesystem, or shell. No MCP HTTP
 listener, OAuth endpoint, or hosted inference is provided. Read tools work with a
-read token; task planning, creation, and completion require a write token.
+read token; task planning, creation, completion, update, and deletion require a write token.
 
 The read tools are `get_profile`, `list_workspaces`, `list_lists`, `list_tasks`,
 `list_people`, `list_labels`, `list_views`, and `list_dashboards`. Collection tools
@@ -105,3 +105,34 @@ bounded to 64 KiB. Planning permits at most 100 pages per collection and 20 MiB
 across discovery, with a 2 MiB limit on each response. API redirects are
 rejected and TLS verification remains enabled. No tool can change startup
 authority or invoke another tool, a file, or a shell.
+
+## Observed task update and deletion
+
+`get_task_observation` and `get_task_deletion_observation` each accept exactly
+`{ "taskId": "TASK_ID" }`. They return the complete API envelope containing a
+scalar snapshot and opaque state token; deletion observation also returns child
+count/token state. These read tools work with read tokens and viewer membership.
+An observation is a live read, not a lock.
+
+`update_task` accepts exactly `{ "taskId": "TASK_ID", "requestId": "<UUID>",
+"update": { "listId": "LIST_ID", "expectedState": "OBSERVED_STATE_TOKEN",
+"patch": { "notes": null, "priority": 2 } } }`. Inspect the observation before
+supplying its list and state. Allowed fields are title, notes, dueAt, dueAllDay,
+and priority; omission preserves a field, null clears notes/dueAt. Recurring
+tasks and habits reject due-field patches. One PATCH returns the current task;
+same-key replay returns current authorized state or 410 after deletion.
+
+`delete_task` accepts exactly `{ "taskId": "TASK_ID", "requestId": "<UUID>",
+"deletion": { "listId": "LIST_ID", "expectedState": "OBSERVED_STATE_TOKEN",
+"expectedChildrenState": { "version": 1, "count": 0, "token": "OBSERVED_CHILDREN_TOKEN" },
+"cascadeChildren": false } }`. The deletion body is bounded to 4 KiB. False
+requires no children; true deletes the observed children and dependent comments,
+files, and assignments. Inspect that scope explicitly. Changed parent or child
+state returns 409. The original deletion acknowledgment is replayed even if the
+task ID is recreated; replay leaves the recreated task intact.
+
+Both mutations are advertised as destructive and idempotent with the required
+UUID. They send one request without hidden observation reads, key generation, or
+retries. After an uncertain outcome, explicitly retry the identical body and key;
+do not replace the observed tokens. Keys share the account-wide namespace with
+create and completion. Current write authority is rechecked for every attempt.
