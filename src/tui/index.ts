@@ -9,15 +9,34 @@ import {
 } from "../domain/public-api-resources.ts";
 import * as m from "../paraglide/messages.js";
 import { terminalApi } from "./api.ts";
-import { TerminalController } from "./controller.ts";
+import { TerminalController, type TerminalState } from "./controller.ts";
+import {
+	entryDetails,
+	exactPayloadParts,
+	helpDetails,
+	loadedTaskCounts,
+	reviewDetails,
+	reviewParts,
+	reviewPayload,
+	taskRow,
+} from "./presentation.ts";
 import { serializeRetryRecord } from "./recovery.ts";
-import { renderFrame, safeText, wrapLines } from "./render.ts";
+import {
+	fitLine,
+	renderFrame,
+	safeText,
+	type TextPart,
+	visibleCells,
+	wrapLines,
+	wrapParts,
+	wrapWords,
+} from "./render.ts";
 import { createTerminalSession } from "./terminal.ts";
 
 export const HELP = `Ditero terminal client
 
 Usage: ditero-tui [--server HTTPS_ORIGIN] [--locale en|de|es|fr|ro|ar]
-                  [--allow-loopback-http]
+                  [--allow-loopback-http] [--no-color] [--ascii]
 
 Set DITERO_URL and DITERO_TOKEN in the environment. Tokens never go on the command line.
 Use an interactive terminal. Use arrows, Enter and Escape to browse.
@@ -32,6 +51,8 @@ export function parseTerminalArguments(
 	if (argv.length === 1 && ["--help", "-h"].includes(argv[0])) return null;
 	const cli: string[] = ["profile"];
 	let locale: Locale | undefined;
+	let noColor = env.NO_COLOR !== undefined;
+	let ascii = false;
 	for (let index = 0; index < argv.length; index++) {
 		const argument = argv[index];
 		if (argument === "--locale") {
@@ -43,6 +64,10 @@ export function parseTerminalArguments(
 					2,
 				);
 			locale = value;
+		} else if (argument === "--ascii") {
+			ascii = true;
+		} else if (argument === "--no-color") {
+			noColor = true;
 		} else if (argument === "--server") {
 			cli.push(argument, argv[++index] ?? "");
 		} else if (argument === "--allow-loopback-http") cli.push(argument);
@@ -56,7 +81,117 @@ export function parseTerminalArguments(
 	const options = parseArguments(cli, env);
 	if (!options)
 		throw new CliError("invalid_arguments", "Invalid terminal arguments.", 2);
-	return { options, locale };
+	return { options, locale, color: !noColor, ascii };
+}
+
+export function footerHints(
+	footer: string,
+	locale: Locale,
+	toggle: boolean,
+	exact: boolean,
+	uncertain: boolean,
+): string[] {
+	const hints = footer.split(" | ");
+	const quit = hints.find((hint) => hint.startsWith("q "));
+	const help = m
+		.tui_footer({}, { locale })
+		.split(" | ")
+		.find((hint) => hint.startsWith("? "));
+	const confirmation = hints.find(
+		(hint) => hint.startsWith("y ") || (uncertain && hint.startsWith("r ")),
+	);
+	const cancel = uncertain
+		? undefined
+		: hints.find((hint) => hint.startsWith("Esc "));
+	const open = hints.find((hint) => hint.startsWith("Enter "));
+	const contextual = hints.filter(
+		(hint) =>
+			![quit, confirmation, cancel, help, open].includes(hint) &&
+			!hint.startsWith("Esc "),
+	);
+	contextual.sort((a, b) => {
+		const order = ["c", "n", "e", "d", "Enter", "p", "r"];
+		return order.indexOf(a.split(" ")[0]) - order.indexOf(b.split(" ")[0]);
+	});
+	return [
+		confirmation,
+		cancel,
+		quit,
+		open,
+		toggle
+			? exact
+				? m.tui_summary_hint({}, { locale })
+				: m.tui_payload_hint({}, { locale })
+			: undefined,
+		...contextual,
+		help,
+	].filter((hint): hint is string => hint !== undefined);
+}
+
+export function helpFooter(locale: Locale): string {
+	return [
+		m.tui_back_hint({}, { locale }),
+		...m
+			.tui_footer({}, { locale })
+			.split(" | ")
+			.filter((hint) => hint.startsWith("q ") || hint.startsWith("? ")),
+	].join(" | ");
+}
+
+export function detailScrollHints(
+	state: TerminalState | undefined,
+	locale: Locale,
+): string[] | undefined {
+	if (
+		!(
+			state?.detail ||
+			state?.review ||
+			state?.help ||
+			state?.deletion ||
+			state?.form?.kind === "update"
+		)
+	)
+		return undefined;
+	return [m.tui_scroll_hint({}, { locale }), "Up/Down | Home/End"];
+}
+
+export function listHeader(
+	name: string | undefined,
+	id: string,
+	columns: number,
+): string {
+	const identity = fitLine(id, columns);
+	const room = columns - visibleCells(identity) - 3;
+	return name && room > 0 ? `${fitLine(name, room)} | ${identity}` : identity;
+}
+
+export function terminalStatusLine(
+	state: TerminalState | undefined,
+	fallback: string,
+	locale: Locale,
+	columns: number,
+	count: ReturnType<typeof loadedTaskCounts>,
+): string {
+	const options = { locale };
+	if (state?.review?.uncertain) return m.tui_status_uncertain({}, options);
+	if (state?.error) {
+		if (state.error === "no_changes") return m.tui_edit_no_changes({}, options);
+		if (state.error === "invalid_input")
+			return state.form?.kind === "update" &&
+				state.form.dirty.priority &&
+				!/^[0-3]$/.test(state.form.priority)
+				? m.tui_invalid_priority({}, options)
+				: m.tui_invalid_value({}, options);
+		return m.tui_error({ code: state.error }, options);
+	}
+	if (state?.review) return m.tui_status_not_sent({}, options);
+	if (state?.location && ["ready", "empty"].includes(state.status)) {
+		const number = new Intl.NumberFormat(locale);
+		return columns >= 80 && state.location.resource === "tasks"
+			? `${m.tui_page({ page: number.format(state.page) }, options)} | ${m.tui_counts({ loaded: number.format(count.loaded), open: number.format(count.open), done: number.format(count.done), overdue: number.format(count.overdue) }, options)}`
+			: `${m.tui_loaded({ count: number.format(state.entries.length) }, options)}${columns >= 60 ? ` | ${m.tui_page({ page: number.format(state.page) }, options)}` : ""}`;
+	}
+	return fallback;
 }
 
 function resourceLabel(resource: PublicApiResource, locale: Locale): string {
@@ -90,6 +225,9 @@ export async function runTerminal(
 		return 0;
 	}
 	let locale: Locale = "en";
+	let timezone = "UTC";
+	let account = "";
+	let access: "read" | "write" | undefined;
 	try {
 		const parsed = parseTerminalArguments(argv, env);
 		if (!parsed) {
@@ -115,10 +253,18 @@ export async function runTerminal(
 			const options = { locale };
 			const state = controller?.state;
 			const { columns, rows } = session.size();
+			const context = {
+				locale,
+				timezone,
+				now: Date.now(),
+				ascii: parsed.ascii,
+				columns,
+			};
 			let title = "Ditero";
-			let status = m.app_loading({}, options);
-			let footer = m.tui_footer({}, options);
+			let status: string = m.app_loading({}, options);
+			let footer: string = m.tui_footer({}, options);
 			let detail: string[] | undefined;
+			let detailParts: TextPart[][] | undefined;
 			if (state) {
 				title = state.location
 					? `Ditero / ${resourceLabel(state.location.resource, locale)}`
@@ -128,15 +274,24 @@ export async function runTerminal(
 						? m.app_loading({}, options)
 						: state.status === "empty"
 							? m.list_empty({}, options)
-							: m.tui_ready({}, options);
+							: state.review
+								? state.review.uncertain
+									? m.tui_uncertain({}, options)
+									: m.tui_not_sent({}, options)
+								: state.location
+									? `${m.tui_loaded({ count: new Intl.NumberFormat(locale).format(state.entries.length) }, options)} | ${state.nextCursor ? m.tui_more({}, options) : m.tui_end({}, options)}`
+									: m.tui_ready({}, options);
 				if (state.error)
 					status =
 						state.error === "no_changes"
 							? m.tui_edit_no_changes({}, options)
 							: m.tui_error({ code: state.error }, options);
-				if (state.detail)
-					detail = JSON.stringify(state.detail.data, null, 2).split("\n");
+				if (state.detail) {
+					if (state.payload) detailParts = exactPayloadParts(state.detail.data);
+					else detail = entryDetails(state.detail, context);
+				}
 				if (state.form) {
+					detailParts = undefined;
 					footer = m.tui_footer_form({}, options);
 					const form = state.form;
 					if (form.kind === "create")
@@ -169,6 +324,7 @@ export async function runTerminal(
 					}
 				}
 				if (state.deletion) {
+					detailParts = undefined;
 					const deletion = state.deletion;
 					title = m.tui_review_delete({}, options);
 					footer = m.tui_footer_form({}, options);
@@ -197,48 +353,108 @@ export async function runTerminal(
 								: review.kind === "update"
 									? m.tui_review_update({}, options)
 									: m.tui_review_delete({}, options);
-					footer = m.tui_footer_review({}, options);
-					detail = [
-						...(review.uncertain ? [m.tui_uncertain({}, options)] : []),
-						...(review.kind === "delete"
-							? [m.tui_delete_scope({}, options)]
-							: []),
-						...(review.kind === "complete" && review.recurring
-							? [m.tui_review_recurring({}, options)]
-							: []),
-						...JSON.stringify(
-							review.kind === "create"
-								? {
-										task: review.task,
-										timezone: review.timezone,
-										requestId: review.requestId,
-									}
-								: review.kind === "complete"
-									? {
-											title: review.title,
-											task: review.task,
-											requestId: review.requestId,
-										}
-									: {
-											title: review.title,
-											taskId: review.taskId,
-											body: review.body,
-											requestId: review.requestId,
-										},
-							null,
-							2,
-						).split("\n"),
-					];
+					footer = [
+						m.tui_footer({}, options).split(" | ")[0],
+						review.uncertain
+							? m.tui_retry_hint({}, options)
+							: m.tui_confirm_hint({}, options),
+						...(review.uncertain ? [] : [m.tui_cancel_hint({}, options)]),
+					].join(" | ");
+					detail = reviewDetails(review, context, state.payload);
+					detailParts = reviewParts(review, context, state.payload);
 				}
-				if (state.help)
-					detail = [
-						m.tui_help_navigation({}, options),
-						m.tui_help_writes({}, options),
-						m.tui_help_exit({}, options),
-					];
+				if (state.help) {
+					detailParts = undefined;
+					footer = helpFooter(locale);
+					detail = helpDetails(context);
+				}
 			}
-			if (detail) {
-				detail = wrapLines(detail, Math.max(2, columns - 1));
+			const presented =
+				state?.entries.map((entry) => taskRow(entry, context)) ?? [];
+			const count = loadedTaskCounts(state?.entries ?? [], context);
+			const reportedAccess =
+				state?.authorityRefused || !access
+					? ""
+					: access === "write"
+						? m.tui_api_write({}, options)
+						: m.tui_api_read({}, options);
+			const breadcrumb = state?.authorityRefused
+				? ""
+				: state?.breadcrumb.join(parsed.ascii ? " / " : " › ") ||
+					state?.location?.listId ||
+					state?.location?.workspaceId ||
+					"";
+			const identity = state?.authorityRefused ? "" : account;
+			let scope =
+				columns >= 80
+					? [
+							identity,
+							new URL(parsed.options.server).hostname,
+							breadcrumb,
+							state?.location || columns < 100 || rows < 30
+								? reportedAccess
+								: "",
+						]
+							.filter(Boolean)
+							.join(" | ")
+					: breadcrumb || new URL(parsed.options.server).hostname;
+			if (
+				state?.location?.resource === "tasks" &&
+				state.location.listId &&
+				!state.authorityRefused
+			)
+				scope = listHeader(
+					state.breadcrumb.at(-1),
+					state.location.listId,
+					columns - 1,
+				);
+			const statusLine = terminalStatusLine(
+				state,
+				status,
+				locale,
+				columns,
+				count,
+			);
+			if (!detail && !detailParts && state?.status === "empty")
+				detail = [m.list_empty({}, options), m.tui_empty_help({}, options)];
+			if (!state?.review && !state?.form && !state?.deletion && !state?.help) {
+				footer = [
+					m.tui_footer({}, options).split(" | ")[0],
+					m.tui_open_hint({}, options),
+					...(state?.location || state?.detail
+						? [m.tui_back_hint({}, options)]
+						: []),
+					...m
+						.tui_footer({}, options)
+						.split(" | ")
+						.filter((hint) => {
+							const key = hint.split(" ")[0];
+							return (
+								key === "?" ||
+								(key === "r" && Boolean(state?.location)) ||
+								(key === "p" && Boolean(state?.nextCursor)) ||
+								(key === "n" &&
+									["tasks", "lists", "dashboards"].includes(
+										state?.location?.resource ?? "",
+									)) ||
+								(["c", "e", "d"].includes(key) &&
+									state?.location?.resource === "tasks")
+							);
+						}),
+				].join(" | ");
+			}
+			if (detailParts) {
+				detailParts = wrapParts(
+					detailParts,
+					Math.max(2, columns - (columns >= 80 ? 5 : 1)),
+				);
+				controller?.setDetailLines(detailParts.length);
+				detailParts = detailParts.slice(state?.detailOffset ?? 0);
+			} else if (detail) {
+				detail = (state?.help ? wrapWords : wrapLines)(
+					detail,
+					Math.max(2, columns - (columns >= 80 ? 5 : 1)),
+				);
 				controller?.setDetailLines(detail.length);
 				detail = detail.slice(state?.detailOffset ?? 0);
 			} else controller?.setDetailLines(0);
@@ -249,12 +465,55 @@ export async function runTerminal(
 						status,
 						footer,
 						rows: state?.location
-							? state.entries.map((entry) => entry.label)
+							? presented.map((entry) => entry.text)
 							: PUBLIC_API_RESOURCES.map((resource) =>
 									resourceLabel(resource, locale),
 								),
 						selected: state?.selected ?? 0,
+						color: parsed.color,
+						framed: true,
+						ascii: parsed.ascii,
+						context: scope,
+						statusLine,
+						viewportTitle: "",
+						start: !state?.location,
+						startInfo: [
+							clientVersion("ditero-tui").trim(),
+							reportedAccess,
+							m.tui_locale_info({ locale }, options),
+							m.tui_glyph_info(
+								{ glyphs: parsed.ascii ? "ASCII" : "Unicode" },
+								options,
+							),
+							parsed.color
+								? m.tui_color_on({}, options)
+								: m.tui_color_off({}, options),
+						],
+						rowMetadata:
+							state?.location?.resource === "tasks"
+								? presented.map((entry) => entry.metadata)
+								: undefined,
+						rowTones: presented.map((entry) => entry.tone),
+						rowParts: presented.map((entry) => entry.parts),
+						rowMetadataParts: presented.map((entry) => entry.metadataParts),
+						statusTone: state?.error
+							? "danger"
+							: state?.review?.uncertain
+								? "danger"
+								: state?.review
+									? "warning"
+									: "plain",
+						footerHints: footerHints(
+							footer,
+							locale,
+							!state?.help && Boolean(state?.detail || state?.review),
+							state?.payload ?? false,
+							!state?.help && (state?.review?.uncertain ?? false),
+						),
 						detail,
+						detailParts,
+						detailOffset: state?.detailOffset,
+						detailScrollHint: detailScrollHints(state, locale),
 					},
 					columns,
 					rows,
@@ -280,31 +539,7 @@ export async function runTerminal(
 				const review = controller?.state.review;
 				if (review?.uncertain) {
 					// Keep the exact retry payload without secrets or terminal commands.
-					const record =
-						review.kind === "update" || review.kind === "delete"
-							? {
-									requestId: review.requestId,
-									endpoint: `/api/v1/tasks/${encodeURIComponent(review.taskId)}`,
-									method:
-										review.kind === "update"
-											? ("PATCH" as const)
-											: ("DELETE" as const),
-									body: review.body,
-								}
-							: {
-									requestId: review.requestId,
-									endpoint:
-										review.kind === "create"
-											? "/api/v1/tasks"
-											: `/api/v1/tasks/${encodeURIComponent(review.task.id)}/complete`,
-									body:
-										review.kind === "create"
-											? review.task
-											: {
-													listId: review.task.listId,
-													expectedDueAt: review.task.dueAt,
-												},
-								};
+					const record = reviewPayload(review);
 					const json = serializeRetryRecord(record);
 					process.stderr.write(`${json}\n`);
 				}
@@ -329,6 +564,9 @@ export async function runTerminal(
 			);
 			if (!stopped) {
 				const profile = publicApiProfileSchema.parse(result.data);
+				timezone = profile.timezone;
+				account = profile.name;
+				access = profile.tokenAccess;
 				if (!parsed.locale && isSupportedLocale(profile.locale))
 					locale = profile.locale;
 				controller = new TerminalController(

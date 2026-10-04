@@ -96,6 +96,47 @@ describe("terminal controller", () => {
 			expect(f.controller.state.review?.kind).toBe("complete");
 		if (command === "?") expect(f.controller.state.help).toBe(true);
 	});
+	it("captures loaded breadcrumb names, page positions and authority retirement without extra reads", async () => {
+		const f = fixture();
+		vi.mocked(f.api.read)
+			.mockResolvedValueOnce({
+				entries: [{ id: "workspace", label: "Household", data: {} }],
+				nextCursor: null,
+			})
+			.mockResolvedValueOnce({
+				entries: [{ id: "list", label: "Groceries", data: {} }],
+				nextCursor: null,
+			})
+			.mockResolvedValueOnce({ ...page, nextCursor: "page-2" })
+			.mockResolvedValueOnce({ ...page, nextCursor: null });
+		await f.controller.open({ resource: "workspaces" });
+		await f.key("enter");
+		expect(f.controller.state.breadcrumb).toEqual(["Household"]);
+		await f.key("enter");
+		expect(f.controller.state.breadcrumb).toEqual(["Household", "Groceries"]);
+		expect(f.controller.state.page).toBe(1);
+		await f.text("c");
+		expect(f.controller.state.review?.list).toEqual({
+			id: "list",
+			name: "Groceries",
+		});
+		expect(Object.isFrozen(f.controller.state.review?.list)).toBe(true);
+		await f.key("escape");
+		await f.text("p");
+		expect(f.controller.state.page).toBe(2);
+		expect(f.api.read).toHaveBeenCalledTimes(4);
+		await f.text("?");
+		await f.key("escape");
+		expect(f.api.read).toHaveBeenCalledTimes(4);
+		vi.mocked(f.api.read).mockRejectedValueOnce(
+			new CliError("forbidden", "Refused", 4, 403),
+		);
+		await f.text("r");
+		expect(f.controller.state.authorityRefused).toBe(true);
+		expect(f.controller.state.breadcrumb).toEqual([]);
+		expect(f.controller.state.page).toBe(0);
+		expect(f.controller.state.entries).toEqual([]);
+	});
 	it("discards cancelled and late scope responses", async () => {
 		const f = fixture();
 		let resolve!: (page: Page) => void;
@@ -144,6 +185,8 @@ describe("terminal controller", () => {
 			expect.any(AbortSignal),
 		);
 		expect(f.api.create).not.toHaveBeenCalled();
+		await f.text("r");
+		expect(f.api.create).not.toHaveBeenCalled();
 		await f.controller.input({ type: "paste", text: "y\n" });
 		expect(f.api.create).not.toHaveBeenCalled();
 		vi.mocked(f.api.create).mockRejectedValueOnce(
@@ -155,6 +198,8 @@ describe("terminal controller", () => {
 		await f.key("escape");
 		expect(f.controller.state.review).not.toBeNull();
 		await f.text("y");
+		expect(f.api.create).toHaveBeenCalledTimes(1);
+		await f.text("r");
 		const second = vi.mocked(f.api.create).mock.calls[1];
 		expect(second.slice(0, 2)).toEqual(first.slice(0, 2));
 		expect(f.api.plan).toHaveBeenCalledTimes(1);
@@ -228,6 +273,80 @@ describe("terminal controller", () => {
 });
 
 describe("observed terminal task mutations", () => {
+	it("captures and freezes the planner body before readable and exact review", async () => {
+		const f = fixture();
+		const proposal = {
+			version: 1 as const,
+			task: structuredClone(task),
+			target: { kind: "list" as const, id: "list" },
+			timezone: "Europe/Berlin",
+			resolvedAt: "2026-10-03T12:00:00Z",
+		};
+		vi.mocked(f.api.plan).mockResolvedValue(proposal);
+		await f.controller.open({ resource: "tasks", listId: "list" });
+		await f.text("n");
+		await f.text("Milk");
+		await f.key("enter");
+		await f.key("enter");
+		const review = f.controller.state.review;
+		if (review?.kind !== "create") throw new Error("Expected create review");
+		proposal.task.title = "Changed elsewhere";
+		expect(review.task.title).toBe("Milk");
+		expect(Object.isFrozen(review.task)).toBe(true);
+		expect(Object.isFrozen(review.task.assigneeIds)).toBe(true);
+		await f.text("v");
+		await f.text("y");
+		expect(f.api.create).toHaveBeenCalledWith(
+			review.task,
+			review.requestId,
+			expect.any(AbortSignal),
+		);
+	});
+	it("toggles presentation without changing the captured review or confirming from help", async () => {
+		const f = fixture();
+		await f.controller.open({ resource: "tasks", listId: "list" });
+		await f.text("c");
+		const review = f.controller.state.review;
+		await f.controller.input({ type: "paste", text: "v?y" });
+		expect(f.controller.state.payload).toBe(false);
+		await f.text("v");
+		expect(f.controller.state.payload).toBe(true);
+		expect(f.controller.state.review).toBe(review);
+		await f.text("?");
+		await f.text("y");
+		expect(f.api.complete).not.toHaveBeenCalled();
+		await f.key("escape");
+		expect(f.controller.state.review).toBe(review);
+		await f.text("y");
+		expect(f.api.complete).toHaveBeenCalledTimes(1);
+		await f.text("r");
+		expect(f.api.complete).toHaveBeenCalledWith(
+			review?.kind === "complete" ? review.task : null,
+			review?.requestId,
+			expect.any(AbortSignal),
+		);
+	});
+	it("keeps the exact uncertain request across payload toggles and clears presentation on auth refusal", async () => {
+		const f = fixture();
+		await f.controller.open({ resource: "tasks", listId: "list" });
+		await f.text("c");
+		vi.mocked(f.api.complete)
+			.mockRejectedValueOnce(new CliError("network_error", "Lost", 7))
+			.mockRejectedValueOnce(new CliError("forbidden", "Refused", 4, 403));
+		await f.text("y");
+		const review = f.controller.state.review;
+		await f.text("v");
+		await f.key("escape");
+		expect(f.controller.state.review).toBe(review);
+		await f.text("y");
+		expect(f.api.complete).toHaveBeenCalledTimes(1);
+		await f.text("r");
+		expect(vi.mocked(f.api.complete).mock.calls[1].slice(0, 2)).toEqual(
+			vi.mocked(f.api.complete).mock.calls[0].slice(0, 2),
+		);
+		expect(f.controller.state.review).toBeNull();
+		expect(f.controller.state.entries).toEqual([]);
+	});
 	const open = async () => {
 		const f = fixture();
 		await f.controller.open({ resource: "tasks", listId: "list" });
@@ -344,6 +463,8 @@ describe("observed terminal task mutations", () => {
 		await f.key("escape");
 		await f.text("e");
 		await f.text("y");
+		expect(f.api.update).toHaveBeenCalledTimes(1);
+		await f.text("r");
 		const calls = vi.mocked(f.api.update).mock.calls;
 		expect(calls[1].slice(0, 3)).toEqual(calls[0].slice(0, 3));
 		expect(f.api.observe).toHaveBeenCalledTimes(1);
@@ -387,6 +508,8 @@ describe("observed terminal task mutations", () => {
 		);
 		await f.text("y");
 		await f.text("y");
+		expect(f.api.delete).toHaveBeenCalledTimes(1);
+		await f.text("r");
 		expect(vi.mocked(f.api.delete).mock.calls[1].slice(0, 3)).toEqual(
 			vi.mocked(f.api.delete).mock.calls[0].slice(0, 3),
 		);

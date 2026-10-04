@@ -60,6 +60,8 @@ const actor = randomUUID(),
 	list = randomUUID();
 const [childTask, task] = [randomUUID(), randomUUID()].sort();
 const title = "Protected terminal task";
+const notSent = mode === "arabic" ? "لم يُرسل" : "NOT SENT";
+const unconfirmed = mode === "arabic" ? "غير مؤكد" : "UNCONFIRMED";
 let roleCreated = false;
 let server: ReturnType<typeof Bun.serve> | undefined;
 let terminal: Bun.Terminal | undefined;
@@ -74,7 +76,11 @@ const wires: {
 }[] = [];
 const deadline = Date.now() + 13000;
 const timeout = setTimeout(() => child?.kill("SIGKILL"), 14000);
-const frame = () => output.split("\x1b[H\x1b[2J").at(-1) ?? "";
+const frame = () =>
+	(output.split("\x1b[H\x1b[2J").at(-1) ?? "").replace(
+		new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g"),
+		"",
+	);
 const frames = () => output.split("\x1b[H\x1b[2J").length;
 const writes = () =>
 	wires.filter((wire) => ["PATCH", "DELETE"].includes(wire.method));
@@ -236,7 +242,15 @@ try {
 	const parentSelected = () =>
 		frame()
 			.split("\n")
-			.some((line) => line.trim() === `> [ ] ${title}`);
+			.some((line) => {
+				const row = line.replace(/^[\s│|]+|[\s│|]+$/g, "");
+				return (
+					/^>\s+(?:○|\( \)|\[ \])\s+/.test(row) &&
+					new RegExp(`^${title}(?:\\s{2,}|$)`).test(
+						row.replace(/^>\s+(?:○|\( \)|\[ \])\s+/, ""),
+					)
+				);
+			});
 	if (mode === "delete-cascade") {
 		assert.ok(childTask < task);
 		await send("\x1b[B", parentSelected);
@@ -262,17 +276,18 @@ try {
 			assert.ok(frame().includes('{"version":1,"count":1,'));
 			await send("1");
 			await send("\r");
-			assert.equal(frame().includes("requestId"), false);
+			assert.equal(frame().includes(notSent), false);
 		}
 		await send(mode === "delete-cascade" ? "2\r" : "1\r", () =>
-			frame().includes("requestId"),
+			frame().includes(notSent),
 		);
 	} else {
 		await send(
 			"!\r\x1b[200~\nthird\x1b[201~\r2026-10-05T09:30:00.000Z\r1\r\x7f2\r",
-			() => frame().includes("requestId"),
+			() => frame().includes(notSent),
 		);
 	}
+	await send("v", () => frame().includes("requestId"));
 	assert.equal(writes().length, 0);
 	assert.equal(await receipts(), 0);
 	await send("\x1b[200~y\n\x1b[201~");
@@ -288,11 +303,18 @@ try {
 		() =>
 			writes().length === 1 &&
 			wires.at(-1)?.status !== 0 &&
-			(frame().includes("invalid_response") ||
-				frame().includes("request_conflict") ||
-				frame().includes("unauthorized") ||
-				frame().includes("forbidden") ||
-				!frame().includes("requestId")),
+			(["conflict", "revoked", "read"].includes(mode)
+				? frame().includes(
+						mode === "conflict"
+							? "request_conflict"
+							: mode === "revoked"
+								? "unauthorized"
+								: "forbidden",
+					) &&
+					!frame().includes(notSent) &&
+					!frame().includes(unconfirmed)
+				: frame().includes(unconfirmed) ||
+					(!frame().includes(notSent) && !frame().includes(unconfirmed))),
 	);
 	const first = writes()[0];
 	assert.equal(first.method, deleting ? "DELETE" : "PATCH");
@@ -319,7 +341,8 @@ try {
 			(await rows())[0].title,
 			mode === "conflict" ? "Concurrent edit" : title,
 		);
-		assert.equal(frame().includes("requestId"), false);
+		assert.equal(frame().includes(notSent), false);
+		assert.equal(frame().includes(unconfirmed), false);
 		if (mode !== "conflict") assert.equal(frame().includes(title), false);
 	} else {
 		assert.equal(first.status, 200);
@@ -355,8 +378,12 @@ try {
 			);
 		if (["update-retry", "delete-retry"].includes(mode)) {
 			await send(
-				"y",
-				() => writes().length === 2 && !frame().includes("requestId"),
+				"r",
+				() =>
+					writes().length === 2 &&
+					writes()[1].status !== 0 &&
+					!frame().includes(notSent) &&
+					!frame().includes(unconfirmed),
 			);
 			assert.deepEqual(writes()[1], first);
 			assert.equal(await receipts(), 1);
@@ -373,11 +400,28 @@ try {
 		}
 	}
 	if (mode === "arabic") {
-		terminal.resize(23, 9);
+		const beforeArabic = frames();
+		terminal.resize(40, 20);
 		child.kill("SIGWINCH");
 		await wait(
-			() => /[\u0600-\u06ff]/.test(frame()),
+			() => frames() > beforeArabic && /[\u0600-\u06ff]/.test(frame()),
 			"Arabic frame was absent",
+		);
+		const beforeTiny = frames();
+		terminal.resize(19, 8);
+		child.kill("SIGWINCH");
+		await wait(
+			() =>
+				frames() > beforeTiny &&
+				/\bq\b/.test(frame()) &&
+				/\bEsc\b/.test(frame()),
+			"Narrow terminal safety keys were absent",
+		);
+		assert.ok(frame().split(/\r?\n/).length <= 8);
+		assert.ok(
+			frame()
+				.split(/\r?\n/)
+				.every((line) => line.length <= 18),
 		);
 	}
 	await send(
