@@ -48,6 +48,36 @@ describe("static project site", () => {
 		expect(html).not.toContain("<script>");
 		expect(() => renderPage("@@unknown@@", "en", english)).toThrow();
 	});
+	it.each(
+		locales,
+	)("renders the %s product preview and native disclosures", async (locale) => {
+		const dictionary = parseDictionary(
+			JSON.parse(
+				await readFile(join(root, `site/locales/${locale}.json`), "utf8"),
+			),
+		);
+		const html = renderPage(
+			await readFile(join(root, "site/template.html"), "utf8"),
+			locale,
+			dictionary,
+		);
+		const prefix = locale === "en" ? "./" : "../";
+		expect(html).toContain(`<img src="${prefix}assets/app-preview-light.png"`);
+		expect(html).toContain(`srcset="${prefix}assets/app-preview-dark.png"`);
+		expect(html).toContain(`alt="${dictionary.previewAlt}"`);
+		expect(html).toContain(
+			`<figcaption>${dictionary.previewCaption}</figcaption>`,
+		);
+		expect(html.match(/<details/g)).toHaveLength(2);
+		expect(html.match(/<summary>/g)).toHaveLength(2);
+		expect(html.match(/class="button primary"/g)).toHaveLength(1);
+		expect(html).toContain('class="text-action"');
+		expect(html.indexOf('class="product-preview"')).toBeGreaterThan(
+			html.indexOf('class="actions"'),
+		);
+		expect(html.match(/hreflang=/g)).toHaveLength(12);
+		expect(html).not.toContain("@@");
+	});
 	it("builds six real pages with valid relative navigation/assets and RTL", async () => {
 		const output = await mkdtemp(join(tmpdir(), "ditero-site-test-"));
 		try {
@@ -66,6 +96,11 @@ describe("static project site", () => {
 				);
 				expect(html.match(/aria-current="page"/g)).toHaveLength(1);
 				expect(html.match(/hreflang=/g)).toHaveLength(12);
+				for (const asset of ["app-preview-light.png", "app-preview-dark.png"]) {
+					expect(await readFile(join(output, "assets", asset))).toEqual(
+						await readFile(join(root, "site/assets", asset)),
+					);
+				}
 				expect(html).toContain("<bdi>v0.0.1-alpha.2</bdi>");
 				expect(html).not.toContain("v0.0.1-alpha.1");
 				expect(html).not.toContain("@@releaseVersion@@");
