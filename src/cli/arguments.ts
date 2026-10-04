@@ -25,6 +25,9 @@ export interface CliOptions {
 	command:
 		| "profile"
 		| PublicApiResource
+		| "create-list"
+		| "observe-list"
+		| "update-list"
 		| "plan-task"
 		| "create-task"
 		| "complete-task"
@@ -125,6 +128,9 @@ export function parseArguments(
 			!command &&
 			([
 				"profile",
+				"create-list",
+				"observe-list",
+				"update-list",
 				"plan-task",
 				"create-task",
 				"complete-task",
@@ -140,6 +146,8 @@ export function parseArguments(
 	}
 	if (!command) usageError();
 	const writing = [
+		"create-list",
+		"update-list",
 		"create-task",
 		"complete-task",
 		"update-task",
@@ -152,7 +160,9 @@ export function parseArguments(
 		"update-task",
 		"delete-task",
 	].includes(command);
-	const workflow = command === "plan-task" || writing || taskCommand;
+	const listCommand = command === "observe-list" || command === "update-list";
+	const workflow =
+		command === "plan-task" || writing || taskCommand || listCommand;
 	if (
 		workflow &&
 		(flags.has("--all") ||
@@ -162,6 +172,7 @@ export function parseArguments(
 						"--server",
 						...(writing ? ["--request-id"] : []),
 						...(taskCommand ? ["--task"] : []),
+						...(listCommand ? ["--list"] : []),
 					].includes(key),
 			))
 	)
@@ -184,7 +195,10 @@ export function parseArguments(
 		(flags.has("--all") || [...values.keys()].some((key) => key !== "--server"))
 	)
 		usageError();
-	if (command !== "tasks" && (values.has("--list") || values.has("--done")))
+	if (
+		(command !== "tasks" && !listCommand && values.has("--list")) ||
+		(command !== "tasks" && values.has("--done"))
+	)
 		usageError();
 	const rawLimit = values.get("--limit");
 	if (
@@ -197,6 +211,7 @@ export function parseArguments(
 	if (cursor && !/^[A-Za-z0-9_-]{1,2048}$/.test(cursor)) usageError();
 	const workspaceId = values.get("--workspace");
 	const listId = values.get("--list");
+	if (listCommand && !PUBLIC_API_ID.safeParse(listId).success) usageError();
 	for (const id of [workspaceId, listId])
 		if (id !== undefined && !PUBLIC_API_ID.safeParse(id).success) usageError();
 	const done = values.get("--done");

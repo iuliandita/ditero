@@ -286,3 +286,24 @@ it("prints release identity without credentials or a network request", async () 
 	).toBe(2);
 	expect(fetcher).not.toHaveBeenCalled();
 });
+
+it("list workflow flags require explicit list/UUID and reject discovery/authority options", () => {
+	const key = "00000000-0000-4000-8000-000000000001";
+	expect(options(["create-list", "--request-id", key]).command).toBe(
+		"create-list",
+	);
+	expect(options(["observe-list", "--list", "list"]).listId).toBe("list");
+	expect(
+		options(["update-list", "--list", "list", "--request-id", key]).requestId,
+	).toBe(key);
+	for (const argv of [
+		["create-list"],
+		["create-list", "--list", "list", "--request-id", key],
+		["observe-list"],
+		["observe-list", "--list", "list", "--request-id", key],
+		["update-list", "--request-id", key],
+		["update-list", "--list", "list", "--request-id", key, "--all"],
+		["observe-list", "--list", "list", "--workspace", "workspace"],
+	])
+		expect(() => options(argv)).toThrow(CliError);
+});

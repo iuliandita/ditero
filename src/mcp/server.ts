@@ -6,10 +6,24 @@ import { z } from "zod";
 import { taskIntentSchema } from "../agent/task-plan.ts";
 import { CliError, type CliOptions, parseArguments } from "../cli/arguments.ts";
 import { discover, type Fetcher } from "../cli/client.ts";
+import {
+	encodeListInput,
+	listWorkflow,
+	safeListInput,
+} from "../cli/list-workflow.ts";
 import { taskWorkflow } from "../cli/task-workflow.ts";
 import { clientBuild } from "../clients/build-info.ts";
 import { PUBLIC_API_ID, PUBLIC_API_PAGE_SIZE } from "../domain/public-api.ts";
 import { apiTaskCompleteSchema } from "../domain/public-api-completion.ts";
+import {
+	apiListCreateSchema,
+	apiListCreationAckSchema,
+} from "../domain/public-api-list-create.ts";
+import {
+	apiListObservationSchema,
+	apiListUpdateAckSchema,
+	apiListUpdateSchema,
+} from "../domain/public-api-list-update.ts";
 import {
 	PUBLIC_API_RESOURCES,
 	publicApiProfileSchema,
@@ -39,6 +53,7 @@ function safeInput(value: unknown, depth = 0): boolean {
 
 function guardedInput<S extends z.ZodType>(
 	schema: S,
+	listPayload?: "list" | "update" | "observation",
 ): StandardSchemaWithJSON<z.input<S>, z.output<S>> {
 	const standard = schema["~standard"];
 	return {
@@ -48,6 +63,15 @@ function guardedInput<S extends z.ZodType>(
 				const invalid = {
 					issues: [{ message: "Invalid or oversized tool arguments." }],
 				};
+				if (listPayload) {
+					if (!safeListInput(value)) return invalid;
+					try {
+						if (listPayload !== "observation")
+							encodeListInput((value as Record<string, unknown>)[listPayload]);
+					} catch {
+						return invalid;
+					}
+				}
 				if (!safeInput(value)) return invalid;
 				try {
 					if (
@@ -389,5 +413,113 @@ export function createDiteroMcp(
 		({ taskId, requestId, deletion }) =>
 			workflow("delete-task", deletion, requestId.toLowerCase(), taskId),
 	);
+	function listOperation(
+		command: CliOptions["command"],
+		payload: unknown,
+		requestId: string | undefined,
+		listId: string | undefined,
+		signal: AbortSignal,
+	) {
+		return execute(() =>
+			listWorkflow(
+				{ ...fixed, command, requestId, listId },
+				fetcher,
+				async () => encodeListInput(payload),
+				signal,
+			),
+		);
+	}
+	server.registerTool(
+		"create_list",
+		{
+			description:
+				"Create one root list from explicit workspaceId, title, kind and optional icon plus caller-owned UUID requestId. Send one POST. Retry uncertain outcomes with the exact UUID/body; replay returns the immutable original creation acknowledgement, not current state. No invitations or access grants.",
+			inputSchema: guardedInput(
+				z.object({ requestId: z.uuid(), list: apiListCreateSchema }).strict(),
+				"list",
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiListCreationAckSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: { ...annotations, readOnlyHint: false },
+		},
+		({ requestId, list }, ctx) =>
+			listOperation(
+				"create-list",
+				list,
+				requestId.toLowerCase(),
+				undefined,
+				ctx.mcpReq.signal,
+			),
+	);
+	server.registerTool(
+		"get_list_observation",
+		{
+			description:
+				"Read the current strict ApiList scalar snapshot and semantic state token for listId. Read tokens and viewers may observe. Covers all list scalar fields, not relationships; it is not a lock, monotonic revision or incarnation identity. Identical state including identical recreation may match again.",
+			inputSchema: guardedInput(
+				z.object({ listId: PUBLIC_API_ID }).strict(),
+				"observation",
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiListObservationSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations,
+		},
+		({ listId }, ctx) =>
+			listOperation(
+				"observe-list",
+				undefined,
+				undefined,
+				listId,
+				ctx.mcpReq.signal,
+			),
+	);
+	server.registerTool(
+		"update_list",
+		{
+			description:
+				"Update only title, icon and completedDisplay using previously observed workspaceId/stateToken as expectedState and caller-owned UUID requestId. Send one PATCH within 4 KiB without hidden reads, retry or rebase. Stale state returns 409. Exact replay returns the immutable original post-update acknowledgement even after deletion/recreation; current original-workspace write authority is required.",
+			inputSchema: guardedInput(
+				z
+					.object({
+						listId: PUBLIC_API_ID,
+						requestId: z.uuid(),
+						update: apiListUpdateSchema,
+					})
+					.strict(),
+				"update",
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiListUpdateAckSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		({ listId, requestId, update }, ctx) =>
+			listOperation(
+				"update-list",
+				update,
+				requestId.toLowerCase(),
+				listId,
+				ctx.mcpReq.signal,
+			),
+	);
+
 	return server;
 }

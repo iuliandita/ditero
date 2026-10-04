@@ -136,3 +136,42 @@ UUID. They send one request without hidden observation reads, key generation, or
 retries. After an uncertain outcome, explicitly retry the identical body and key;
 do not replace the observed tokens. Keys share the account-wide namespace with
 create and completion. Current write authority is rechecked for every attempt.
+
+
+## List creation and observed metadata updates
+
+`create_list` accepts exactly `{ "requestId": "<UUID>", "list": { "workspaceId":
+"WORKSPACE_ID", "title": "Groceries", "kind": "shopping", "icon": null } }`.
+Choose workspace and kind explicitly. The API assigns ID, owner, root order and
+defaults, without creating tasks, invitations or grants. One POST returns the
+immutable `list-create-ack` snapshot for new creation or exact replay.
+
+`get_list_observation` accepts only `{ "listId": "LIST_ID" }`, performs one GET,
+and needs no UUID. Read tokens and Viewers may observe. Its strict ApiList snapshot
+covers all scalar fields (ID, workspace, owner, title, kind, icon, folder, sort order
+and completed-display policy). The semantic token is not a lock, relationship
+revision, monotonic revision or durable incarnation identity. Identical state,
+including identical recreation, may match again.
+
+`update_list` accepts exactly `{ "listId": "LIST_ID", "requestId": "<UUID>",
+"update": { "workspaceId": "ORIGINAL_WORKSPACE_ID", "expectedState":
+"OBSERVED_STATE_TOKEN", "patch": { "title": "Reviewed title", "icon": null,
+"completedDisplay": "hide" } } }`. Inspect the observation first. A nonempty patch
+accepts only title, icon and completedDisplay. Title is trimmed, 1-500 characters;
+icon is null or at most 128 characters; completedDisplay is sink, keep or hide.
+ID, workspace, owner, kind, folder and order remain immutable through this tool.
+
+Each list write payload is capped at 4 KiB independently of the 64 KiB protocol
+message limit, before sending. Strict API schemas reject unknown fields, NUL and
+malformed Unicode; object guards reject prototype keys and accessors before
+serializing tool payloads. The tools cannot change server/account/PAT authority.
+
+Update is destructive and idempotent with the required UUID. It sends one PATCH,
+without hidden observation, retries or rebase; 409 remains an explicit conflict.
+Success/replay return the immutable original `list-update-ack` snapshot, even after
+later edit/deletion/recreation, without touching a replacement. Read a separate
+observation for current state. Current write PAT and writable original-workspace
+membership remain required for creation/update replay. Cancellation aborts the
+request and may leave a committed outcome uncertain. Preserve the exact UUID,
+list ID and canonical payload for a manual retry; never replace an observation
+or mint a new key for that retry. Keys share the account-wide list/task namespace.

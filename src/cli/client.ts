@@ -232,6 +232,9 @@ export async function discover(
 	callerSignal?: AbortSignal,
 ): Promise<CliResult> {
 	if (
+		options.command === "create-list" ||
+		options.command === "observe-list" ||
+		options.command === "update-list" ||
 		options.command === "plan-task" ||
 		options.command === "create-task" ||
 		options.command === "complete-task" ||
