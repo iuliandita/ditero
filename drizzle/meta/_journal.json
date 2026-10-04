@@ -533,6 +533,13 @@
       "when": 1791113557416,
       "tag": "0075_calendar_feed_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1791129222569,
+      "tag": "0076_public_api_task_placement_receipts",
+      "breakpoints": true
     }
   ]
 }

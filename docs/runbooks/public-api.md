@@ -490,3 +490,33 @@ expiry and revocation, including empty lists. Revocation is immediate for later
 requests. Snapshots use the existing iCalendar limits, date handling and escaping;
 recurrence does not generate future instances. The feed includes task titles and
 notes, so sharing its URL grants access to that list's exported task content.
+
+## Observed task placement
+
+Read `GET /api/v1/tasks/{id}/placement-observation` for the original scalar task,
+parent ID, ordering key, list snapshot and complete child-state token/count. Read
+the existing target-list observation explicitly; its token is `expectedTargetState`.
+For ordering within the original list, use the embedded list snapshot to derive
+the same canonical list observation token, or read that list observation explicitly.
+
+`PATCH /api/v1/tasks/{id}/placement` requires a write PAT, Idempotency-Key and
+strict JSON bounded to 4 KiB: `workspaceId`, original `listId`, `expectedState`,
+`targetListId`, `expectedTargetState`, `sortKey`, `cascadeChildren`, and
+`expectedChildrenState`. Ordering requires false/null; root relocation requires
+true and the exact observed child token/count, including an empty child set.
+Keys are valid opaque fractional keys, 2-256 ASCII characters; callers choose the
+key, and no sibling ordering or neighbor revision is implied.
+
+Only same-workspace, same-kind lists are supported. Subtasks can reorder within
+their list; moving a root relocates its existing children without changing their
+keys. Changing parents, converting list kinds or moving between workspaces is
+excluded. Recurrence, completion history and attachment/key identities are
+preserved; native notification recipient reconciliation still applies.
+Changed task/list/child observations refuse before effects. Pending import
+activation refuses. No hidden observations, retries or new request IDs occur.
+
+The immutable `task-place-ack` includes original scope, moved-child count and actual
+resulting task/list/workspace, ordering key and parent ID. Exact replay acknowledges
+that original result without mutating a recreated task or revalidating a current
+target. Current original-workspace write authority and a live valid write PAT are
+required. Legacy scalar task update and its live replay contract remain unchanged.

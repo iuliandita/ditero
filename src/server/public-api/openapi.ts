@@ -38,6 +38,11 @@ import {
 	apiTaskDeletionObservationSchema,
 } from "../../domain/public-api-task-deletion.ts";
 import {
+	apiTaskPlacementAckSchema,
+	apiTaskPlacementObservationSchema,
+	apiTaskPlacementSchema,
+} from "../../domain/public-api-task-placement.ts";
+import {
 	apiTaskRelationshipObservationSchema,
 	apiTaskRelationshipsAckSchema,
 	apiTaskRelationshipsSchema,
@@ -312,6 +317,64 @@ export function publicApiOpenApi() {
 			...errors,
 		},
 	};
+
+	for (const [suffix, method, operation, input, output] of [
+		[
+			"placement-observation",
+			"get",
+			"observe_task_placement",
+			null,
+			apiTaskPlacementObservationSchema,
+		],
+		[
+			"placement",
+			"patch",
+			"place_task",
+			apiTaskPlacementSchema,
+			apiTaskPlacementAckSchema,
+		],
+	] as const) {
+		paths[`/api/v1/tasks/{id}/${suffix}`] = {
+			[method]: {
+				operationId: operation,
+				tags: ["tasks"],
+				security: [{ personalAccessToken: [] }],
+				description:
+					"Observed task ordering or same-workspace, same-kind root relocation. No parent changes or cross-workspace conversion. Write JSON is limited to4 KiB. Supply target list observation and explicit exact child cascade acknowledgment for relocation; ordering uses false/null. Shared account request UUID, original immutable placement acknowledgment on replay, current original-workspace write authority. No automatic retry, observation or replan.",
+				parameters: [
+					{
+						name: "id",
+						in: "path",
+						required: true,
+						schema: { type: "string" },
+					},
+					...(input
+						? [
+								{
+									name: "Idempotency-Key",
+									in: "header",
+									required: true,
+									schema: { type: "string", format: "uuid" },
+								},
+							]
+						: []),
+				],
+				...(input
+					? {
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: z.toJSONSchema(input, { io: "input" }),
+									},
+								},
+							},
+						}
+					: {}),
+				responses: { "200": response(z.toJSONSchema(output)), ...errors },
+			},
+		};
+	}
 
 	(paths["/api/v1/tasks"] as Record<string, unknown>).post = {
 		operationId: "create_task",
