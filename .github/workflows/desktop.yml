@@ -80,8 +80,42 @@ jobs:
           cargo fmt --check
           cargo test --locked
       - name: Build development installer
+        id: package
         working-directory: apps/desktop
-        run: bun run ${{ matrix.package }}
+        env:
+          DESKTOP_PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          (
+            umask 077
+            mkdir -p "$RUNNER_TEMP/desktop-packaging"
+            : > "$RUNNER_TEMP/desktop-packaging/packaging.log"
+          )
+          case "$DESKTOP_PACKAGE" in
+            package:linux) BUNDLES=deb ;;
+            package:windows) BUNDLES=nsis ;;
+            package:macos) BUNDLES=app,dmg ;;
+            *) echo "Unknown desktop package" >&2; exit 1 ;;
+          esac
+          set +e
+          bun run tauri build --verbose --debug --bundles "$BUNDLES" -- --locked 2>&1 |
+            tee "$RUNNER_TEMP/desktop-packaging/packaging.log"
+          statuses=("${PIPESTATUS[@]}")
+          set -e
+          if [ "${statuses[0]}" -ne 0 ]; then
+            exit "${statuses[0]}"
+          fi
+          exit "${statuses[1]}"
+      - name: Upload failed packaging diagnostics
+        if: ${{ always() && steps.package.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-${{ matrix.platform }}-diagnostics-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/desktop-packaging/packaging.log
+            apps/desktop/src-tauri/target/debug/bundle/dmg/bundle_dmg.sh
+          if-no-files-found: warn
+          retention-days: 7
       - name: Upload development installer
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
