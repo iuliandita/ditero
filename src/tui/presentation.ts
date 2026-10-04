@@ -13,6 +13,21 @@ export interface PresentationContext {
 	columns?: number;
 }
 
+export function helpDetails(context: PresentationContext): string[] {
+	const options = { locale: context.locale };
+	return [
+		m.tui_help_navigation({}, options),
+		m.tui_help_writes({}, options),
+		m.tui_help_exit({}, options),
+		m.tui_footer({}, options),
+		m.tui_help_presentation({}, options),
+		m.tui_symbols_help(
+			{ open: context.ascii ? "( )" : "○", done: context.ascii ? "(x)" : "●" },
+			options,
+		),
+	].flatMap((topic, index) => (index ? ["", topic] : [topic]));
+}
+
 export function exactPayloadLines(value: unknown): string[] {
 	const json = JSON.stringify(value, null, 2);
 	if (json === undefined) throw new TypeError("Unsupported payload");

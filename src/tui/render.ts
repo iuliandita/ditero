@@ -94,6 +94,8 @@ export interface Frame {
 	selected: number;
 	detail?: readonly string[];
 	detailParts?: readonly (readonly TextPart[])[];
+	detailScrollHint?: readonly string[];
+	detailOffset?: number;
 	color?: boolean;
 	rowTones?: readonly Tone[];
 	rowMetadata?: readonly string[];
@@ -245,12 +247,29 @@ function styledParts(
 function taskLines(frame: Frame, width: number, height: number): string[] {
 	const enabled = frame.color === true;
 	const ascii = frame.ascii === true;
-	if (frame.detailParts)
-		return frame.detailParts
-			.slice(0, height)
-			.map((parts) => styledParts(parts, width, enabled, false, ascii));
-	if (frame.detail)
-		return frame.detail.slice(0, height).map((line) => padLine(line, width));
+	if (frame.detailParts || frame.detail) {
+		const length = frame.detailParts?.length ?? frame.detail?.length ?? 0;
+		const scroll =
+			frame.detailScrollHint &&
+			(length > height || (frame.detailOffset ?? 0) > 0);
+		const available = Math.max(0, height - (scroll ? 1 : 0));
+		const result = frame.detailParts
+			? frame.detailParts
+					.slice(0, available)
+					.map((parts) => styledParts(parts, width, enabled, false, ascii))
+			: (frame.detail ?? [])
+					.slice(0, available)
+					.map((line) => padLine(line, width));
+		if (scroll) {
+			while (result.length < available) result.push(" ".repeat(width));
+			const hint =
+				frame.detailScrollHint?.find(
+					(text) => fitLine(text, width) === safeText(text),
+				) ?? "";
+			result.push(decorate(padLine(hint, width), "info", false, enabled));
+		}
+		return result;
+	}
 	const selected = Math.max(0, Math.min(frame.rows.length - 1, frame.selected));
 	const artTones: readonly Tone[] = [
 		"brand",
@@ -534,6 +553,31 @@ export function wrapLines(
 			}
 			line += segment;
 			used += cells;
+		}
+		result.push(line);
+	}
+	return result;
+}
+
+export function wrapWords(
+	values: readonly string[],
+	columns: number,
+): string[] {
+	const width = Number.isFinite(columns)
+		? Math.max(2, Math.min(1000, Math.floor(columns)))
+		: 2;
+	const result: string[] = [];
+	for (const value of values) {
+		let line = "";
+		for (const word of safeText(value).trim().split(" ")) {
+			const candidate = line ? `${line} ${word}` : word;
+			if (visibleCells(candidate) <= width) line = candidate;
+			else {
+				if (line) result.push(line);
+				const chunks = wrapLines([word], width);
+				result.push(...chunks.slice(0, -1));
+				line = chunks.at(-1) ?? "";
+			}
 		}
 		result.push(line);
 	}

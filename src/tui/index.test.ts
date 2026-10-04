@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { TerminalState } from "./controller.ts";
 import {
+	detailScrollHints,
 	footerHints,
+	helpFooter,
 	listHeader,
 	parseTerminalArguments,
 	terminalStatusLine,
 } from "./index.ts";
-import { fitHints, renderFrame } from "./render.ts";
+import { fitHints, renderFrame, wrapLines } from "./render.ts";
 
 const env = {
 	DITERO_URL: "https://example.com",
@@ -108,7 +110,7 @@ describe("terminal rendered status", () => {
 	] as const)("keeps validation errors ahead of counts in %s", (status) => {
 		for (const [error, expected] of [
 			["no_changes", "No fields changed. Edit a value or press Esc to cancel."],
-			["invalid_input", "invalid_input"],
+			["invalid_input", "Invalid value. Edit and press Enter."],
 		]) {
 			const statusLine = terminalStatusLine(
 				{ ...state, status, error },
@@ -134,6 +136,188 @@ describe("terminal rendered status", () => {
 			expect(output).not.toContain("Loaded:");
 		}
 	});
+	it("gives invalid priority a local correction while retaining transport failure advice", () => {
+		const form: NonNullable<TerminalState["form"]> = {
+			kind: "update",
+			field: "priority",
+			title: "Milk",
+			notes: "",
+			due: "",
+			allDay: false,
+			priority: "9",
+			dirty: { priority: true },
+			observation: {
+				stateToken: "a".repeat(64),
+				snapshot: {
+					version: 1,
+					taskId: "task",
+					listId: "list",
+					workspaceId: "workspace",
+					title: "Milk",
+					notes: null,
+					dueAt: null,
+					dueAllDay: false,
+					priority: 0,
+					createdAt: "2026-10-04T12:00:00Z",
+					done: false,
+					completedAt: null,
+					listKind: "tasks",
+					rrule: null,
+					recurrenceRelative: false,
+					recurrenceAnchorAt: null,
+					recurrenceConsumed: null,
+				},
+			},
+		};
+		const statusLine = terminalStatusLine(
+			{ ...state, error: "invalid_input", form },
+			"Ready",
+			"en",
+			40,
+			count,
+		);
+		expect(statusLine).toBe("Priority: use 0, 1, 2 or 3.");
+		const output = renderFrame(
+			{
+				title: "Priority",
+				status: "Ready",
+				statusLine,
+				footer: "",
+				rows: [],
+				selected: 0,
+				framed: true,
+			},
+			40,
+			12,
+		);
+		expect(output).toContain("Priority: use 0, 1, 2 or 3.");
+		expect(output).not.toContain("connection");
+		const invalidDue = {
+			...form,
+			due: "invalid date",
+			priority: "0",
+			dirty: { due: true as const },
+		};
+		expect(
+			terminalStatusLine(
+				{ ...state, error: "invalid_input", form: invalidDue },
+				"Ready",
+				"en",
+				40,
+				count,
+			),
+		).toBe("Invalid value. Edit and press Enter.");
+		const invalidAllDay = {
+			...form,
+			due: "",
+			allDay: true,
+			priority: "0",
+			dirty: { allDay: true as const },
+		};
+		expect(
+			terminalStatusLine(
+				{ ...state, error: "invalid_input", form: invalidAllDay },
+				"Ready",
+				"en",
+				40,
+				count,
+			),
+		).toBe("Invalid value. Edit and press Enter.");
+		expect(
+			terminalStatusLine(
+				{ ...state, error: "request_failed", form },
+				"Ready",
+				"en",
+				100,
+				count,
+			),
+		).toBe(
+			"Request failed (request_failed). Check access and connection before retrying.",
+		);
+	});
+	it("keeps Esc back in localized help footers, including help over an uncertain review", () => {
+		for (const locale of ["en", "de", "es", "fr", "ro", "ar"] as const) {
+			const hints = footerHints(
+				helpFooter(locale),
+				locale,
+				false,
+				false,
+				false,
+			);
+			expect(fitHints(hints, 39)).toContain("Esc");
+			expect(fitHints(hints, 39)).toContain("q");
+			expect(fitHints(hints, 39)).toContain("?");
+			expect(hints.some((hint) => hint.startsWith("y "))).toBe(false);
+			expect(hints.some((hint) => hint.startsWith("r "))).toBe(false);
+		}
+	});
+
+	it("does not advertise scrolling for a long create form while retaining clipped review guidance", () => {
+		const title = Array.from({ length: 70 }, (_, index) => `word${index}`).join(
+			" ",
+		);
+		const create: TerminalState = {
+			...state,
+			form: {
+				kind: "create",
+				target: { kind: "list", selector: { id: "list" }, personal: false },
+				title,
+				due: "",
+				field: "title",
+			},
+		};
+		const detail = wrapLines(["Task title", title, "Due day", ""], 39);
+		const frame = {
+			title: "Create",
+			status: "Ready",
+			footer: "",
+			rows: [],
+			selected: 0,
+			framed: true,
+			detail,
+		};
+		const creating = renderFrame(
+			{ ...frame, detailScrollHint: detailScrollHints(create, "en") },
+			40,
+			13,
+		);
+		expect(creating).not.toContain("Up/Down");
+		expect(creating).not.toContain("Home/End");
+		expect(creating).toContain(detail[8]?.trim());
+		const review: TerminalState = {
+			...state,
+			status: "review",
+			review: {
+				kind: "complete",
+				task: { id: "task", listId: "list", dueAt: null },
+				title,
+				recurring: false,
+				requestId: "request",
+				uncertain: false,
+			},
+		};
+		const reviewing = renderFrame(
+			{
+				...frame,
+				statusLine: "NOT SENT",
+				detailScrollHint: detailScrollHints(review, "en"),
+			},
+			40,
+			13,
+		);
+		expect(reviewing).toContain("Up/Down scroll | Home/End jump");
+		expect(reviewing).toContain("NOT SENT");
+		expect(reviewing).not.toContain(detail[8]?.trim());
+		expect(detailScrollHints({ ...state, help: true }, "en")).toBeDefined();
+		expect(
+			detailScrollHints(
+				{ ...state, detail: { id: "task", label: "Milk", data: {} } },
+				"en",
+			),
+		).toBeDefined();
+		expect(detailScrollHints(state, "en")).toBeUndefined();
+	});
+
 	it("retains UNCONFIRMED with a transport error and otherwise shows NOT SENT", () => {
 		const review = {
 			kind: "complete" as const,

@@ -7,6 +7,7 @@ import {
 	safeText,
 	visibleCells,
 	wrapParts,
+	wrapWords,
 } from "./render.ts";
 
 describe("terminal frames", () => {
@@ -370,6 +371,98 @@ describe("terminal frames", () => {
 				"",
 			),
 		).toBe(renderFrame(frame, 40, 15));
+	});
+
+	it.each([
+		40, 60, 100,
+	])("reserves a scroll cue for clipped detail and every scrolled offset at %s columns", (columns) => {
+		const detail = Array.from(
+			{ length: 25 },
+			(_, index) => `Payload line ${index}`,
+		);
+		const frame: Frame = {
+			title: "Review",
+			status: "NOT SENT",
+			statusLine: "NOT SENT",
+			footer: "",
+			rows: [],
+			selected: 0,
+			framed: true,
+			detail,
+			detailScrollHint: [
+				"Up/Down scroll through the payload | Home/End jump to its ends",
+				"Up/Down | Home/End",
+			],
+		};
+		const top = renderFrame(frame, columns, 13);
+		expect(top).toContain("Up/Down");
+		expect(top).toContain("Home/End");
+		expect(top).toContain("Payload line 0");
+		expect(top).not.toContain("Payload line 24");
+		expect(top).toContain("NOT SENT");
+		const end = renderFrame(
+			{
+				...frame,
+				detail: detail.slice(-1),
+				detailOffset: 24,
+				statusLine: "UNCONFIRMED",
+			},
+			columns,
+			13,
+		);
+		expect(end).toContain("Payload line 24");
+		expect(end).toContain("Up/Down");
+		expect(end).toContain("UNCONFIRMED");
+		expect(
+			renderFrame({ ...frame, detail: ["Fits"] }, columns, 13),
+		).not.toContain("Up/Down");
+		expect(top.split("\n")).toHaveLength(13);
+		for (const line of top.split("\n"))
+			expect(visibleCells(line)).toBeLessThan(columns);
+	});
+	it("keeps styled payload parts unchanged and the cue separate from payload bytes", () => {
+		const detailParts = Array.from({ length: 20 }, (_, index) => [
+			{ text: `"key${index}": "value"`, tone: "brand" as const },
+		]);
+		const before = JSON.stringify(detailParts);
+		const frame: Frame = {
+			title: "JSON",
+			status: "Error",
+			statusLine: "Priority: use 0, 1, 2 or 3.",
+			footer: "",
+			rows: [],
+			selected: 0,
+			framed: true,
+			detailParts,
+			detailScrollHint: [
+				"Up/Down scroll | Home/End jump",
+				"Up/Down | Home/End",
+			],
+		};
+		const plain = renderFrame(frame, 40, 12);
+		const colored = renderFrame({ ...frame, color: true }, 40, 12);
+		expect(
+			colored.replace(
+				new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "gu"),
+				"",
+			),
+		).toBe(plain);
+		expect(plain).toContain("Up/Down scroll | Home/End jump");
+		expect(plain).toContain("Priority: use 0, 1, 2 or 3.");
+		expect(JSON.stringify(detailParts)).toBe(before);
+	});
+	it("wraps help at word boundaries with blank topics and bounded overlong Unicode words", () => {
+		expect(
+			wrapWords(["Use arrows and Enter to browse.", "", "Esc returns."], 16),
+		).toEqual(["Use arrows and", "Enter to browse.", "", "Esc returns."]);
+		const word = "猫🙂e\u0301".repeat(12);
+		const wrapped = wrapWords([word], 7);
+		expect(wrapped.join("")).toBe(word);
+		for (const line of wrapped)
+			expect(visibleCells(line)).toBeLessThanOrEqual(7);
+		expect(wrapWords(["Hostile\u001b[2J text"], 20).join(" ")).not.toContain(
+			String.fromCharCode(27),
+		);
 	});
 
 	it("remains bounded on tiny and malformed viewport sizes", () => {

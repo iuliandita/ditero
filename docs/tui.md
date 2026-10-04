@@ -47,7 +47,9 @@ token scope; server authorization still governs every request.
 Use arrows and Enter to browse workspaces, lists, tasks, people, labels, views,
 dashboards and folders. Escape returns to the previous surface. Press `p` for the next page
 and `r` to restart the current collection. Task and configuration details scroll
-with Up, Down, Home and End. Back, quit and open take priority in narrow footers;
+with Up, Down, Home and End. A scroll cue appears inside clipped details or help
+and remains visible after scrolling. Help wraps at word boundaries and Esc returns.
+Back, quit and open take priority in narrow footers;
 `?` includes the global navigation, exit and symbol hints. Press `?` for help and
 `q` to quit. Ctrl-C always
 restores the terminal and exits, including during requests.

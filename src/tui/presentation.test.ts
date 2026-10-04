@@ -6,6 +6,7 @@ import {
 	entryDetails,
 	exactPayloadLines,
 	exactPayloadParts,
+	helpDetails,
 	loadedTaskCounts,
 	priorityLabel,
 	reviewDetails,
@@ -13,7 +14,13 @@ import {
 	reviewPayload,
 	taskRow,
 } from "./presentation.ts";
-import { renderFrame, visibleCells, wrapLines, wrapParts } from "./render.ts";
+import {
+	renderFrame,
+	visibleCells,
+	wrapLines,
+	wrapParts,
+	wrapWords,
+} from "./render.ts";
 
 const context = {
 	locale: "en" as Locale,
@@ -125,6 +132,22 @@ describe("terminal task presentation", () => {
 		for (const code of [36, 32, 33, 35])
 			expect(colored).toContain(`${String.fromCharCode(27)}[${code}m`);
 		expect(colored).toContain(`${String.fromCharCode(27)}[34;2mnull`);
+	});
+
+	it("separates help topics and keeps narrow English words intact in all available help", () => {
+		for (const locale of ["en", "de", "es", "fr", "ro", "ar"] as Locale[]) {
+			const topics = helpDetails({ ...context, locale });
+			expect(topics.filter((line) => line === "")).toHaveLength(5);
+			expect(topics.join(" ")).not.toContain("undefined");
+			const wrapped = wrapWords(topics, 39);
+			expect(wrapped.filter((line) => line === "")).toHaveLength(5);
+			for (const line of wrapped)
+				expect(visibleCells(line)).toBeLessThanOrEqual(39);
+		}
+		const source = helpDetails(context)[0] ?? "";
+		const words = new Set(source.split(" "));
+		for (const line of wrapWords([source], 39))
+			for (const word of line.split(" ")) expect(words.has(word)).toBe(true);
 	});
 
 	it("uses the account day boundary for dates and overdue all-day tasks", () => {

@@ -13,6 +13,7 @@ import { TerminalController, type TerminalState } from "./controller.ts";
 import {
 	entryDetails,
 	exactPayloadParts,
+	helpDetails,
 	loadedTaskCounts,
 	reviewDetails,
 	reviewParts,
@@ -28,6 +29,7 @@ import {
 	visibleCells,
 	wrapLines,
 	wrapParts,
+	wrapWords,
 } from "./render.ts";
 import { createTerminalSession } from "./terminal.ts";
 
@@ -126,6 +128,33 @@ export function footerHints(
 	].filter((hint): hint is string => hint !== undefined);
 }
 
+export function helpFooter(locale: Locale): string {
+	return [
+		m.tui_back_hint({}, { locale }),
+		...m
+			.tui_footer({}, { locale })
+			.split(" | ")
+			.filter((hint) => hint.startsWith("q ") || hint.startsWith("? ")),
+	].join(" | ");
+}
+
+export function detailScrollHints(
+	state: TerminalState | undefined,
+	locale: Locale,
+): string[] | undefined {
+	if (
+		!(
+			state?.detail ||
+			state?.review ||
+			state?.help ||
+			state?.deletion ||
+			state?.form?.kind === "update"
+		)
+	)
+		return undefined;
+	return [m.tui_scroll_hint({}, { locale }), "Up/Down | Home/End"];
+}
+
 export function listHeader(
 	name: string | undefined,
 	id: string,
@@ -145,10 +174,16 @@ export function terminalStatusLine(
 ): string {
 	const options = { locale };
 	if (state?.review?.uncertain) return m.tui_status_uncertain({}, options);
-	if (state?.error)
-		return state.error === "no_changes"
-			? m.tui_edit_no_changes({}, options)
-			: m.tui_error({ code: state.error }, options);
+	if (state?.error) {
+		if (state.error === "no_changes") return m.tui_edit_no_changes({}, options);
+		if (state.error === "invalid_input")
+			return state.form?.kind === "update" &&
+				state.form.dirty.priority &&
+				!/^[0-3]$/.test(state.form.priority)
+				? m.tui_invalid_priority({}, options)
+				: m.tui_invalid_value({}, options);
+		return m.tui_error({ code: state.error }, options);
+	}
 	if (state?.review) return m.tui_status_not_sent({}, options);
 	if (state?.location && ["ready", "empty"].includes(state.status)) {
 		const number = new Intl.NumberFormat(locale);
@@ -330,25 +365,8 @@ export async function runTerminal(
 				}
 				if (state.help) {
 					detailParts = undefined;
-					footer = m
-						.tui_footer({}, options)
-						.split(" | ")
-						.filter((hint) => hint.startsWith("q ") || hint.startsWith("? "))
-						.join(" | ");
-					detail = [
-						m.tui_help_navigation({}, options),
-						m.tui_help_writes({}, options),
-						m.tui_help_exit({}, options),
-						m.tui_footer({}, options),
-						m.tui_help_presentation({}, options),
-						m.tui_symbols_help(
-							{
-								open: parsed.ascii ? "( )" : "○",
-								done: parsed.ascii ? "(x)" : "●",
-							},
-							options,
-						),
-					];
+					footer = helpFooter(locale);
+					detail = helpDetails(context);
 				}
 			}
 			const presented =
@@ -433,7 +451,7 @@ export async function runTerminal(
 				controller?.setDetailLines(detailParts.length);
 				detailParts = detailParts.slice(state?.detailOffset ?? 0);
 			} else if (detail) {
-				detail = wrapLines(
+				detail = (state?.help ? wrapWords : wrapLines)(
 					detail,
 					Math.max(2, columns - (columns >= 80 ? 5 : 1)),
 				);
@@ -490,10 +508,12 @@ export async function runTerminal(
 							locale,
 							!state?.help && Boolean(state?.detail || state?.review),
 							state?.payload ?? false,
-							state?.review?.uncertain ?? false,
+							!state?.help && (state?.review?.uncertain ?? false),
 						),
 						detail,
 						detailParts,
+						detailOffset: state?.detailOffset,
+						detailScrollHint: detailScrollHints(state, locale),
 					},
 					columns,
 					rows,
