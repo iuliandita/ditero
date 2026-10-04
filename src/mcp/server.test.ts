@@ -68,6 +68,8 @@ test("lists eight read tools and three fixed workflow tools with strict bounded 
 		"create_list",
 		"get_list_observation",
 		"update_list",
+		"get_list_deletion_observation",
+		"delete_list",
 	]);
 	for (const tool of tools) {
 		expect(tool.description).toBeTruthy();
@@ -80,6 +82,7 @@ test("lists eight read tools and three fixed workflow tools with strict bounded 
 				"delete_task",
 				"create_list",
 				"update_list",
+				"delete_list",
 			].includes(tool.name),
 			idempotentHint: true,
 			destructiveHint: [
@@ -87,6 +90,7 @@ test("lists eight read tools and three fixed workflow tools with strict bounded 
 				"update_task",
 				"delete_task",
 				"update_list",
+				"delete_list",
 			].includes(tool.name),
 			openWorldHint: true,
 		});
@@ -306,7 +310,7 @@ test("real Bun stdio speaks SDK protocol, rejects API redirects, and prints no p
 	client.onerror = (error) => errors.push(error);
 	await client.connect(transport);
 	cleanup.push(() => client.close());
-	expect((await client.listTools()).tools).toHaveLength(18);
+	expect((await client.listTools()).tools).toHaveLength(20);
 	expect(
 		(await client.callTool({ name: "get_profile", arguments: {} }))
 			.structuredContent,

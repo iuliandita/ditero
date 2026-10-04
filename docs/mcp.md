@@ -175,3 +175,35 @@ membership remain required for creation/update replay. Cancellation aborts the
 request and may leave a committed outcome uncertain. Preserve the exact UUID,
 list ID and canonical payload for a manual retry; never replace an observation
 or mint a new key for that retry. Keys share the account-wide list/task namespace.
+
+
+## Observed list deletion
+
+`get_list_deletion_observation` accepts only `{ "listId": "LIST_ID" }` and sends
+one GET without a UUID. Read tokens and Viewers may observe. Its strict response
+contains the ApiList snapshot, scalar stateToken and complete tasksState evidence
+covering every persisted task column, including children. Inspect this scope before
+choosing whether to cascade. Semantic tokens are not locks or incarnation identities;
+identical state or recreation can match a fresh request again.
+
+`delete_list` accepts exactly `{ "listId": "LIST_ID", "requestId": "<UUID>",
+"deletion": { "workspaceId": "ORIGINAL_WORKSPACE_ID", "expectedState":
+"OBSERVED_STATE_TOKEN", "expectedTasksState": { "version": 1, "count": 0,
+"token": "OBSERVED_TASKS_TOKEN" }, "cascadeTasks": false } }`. False requires
+zero tasks; true accepts all observed tasks and native dependent cleanup of
+comments, assignees, labels, history and committed attachment retirement. Dependents
+are not independently fingerprinted; pending transfers retain native behavior.
+The tool performs no blob I/O or key deletion. Descriptor-safe strict bounds reject
+unknown fields and accessors before serialization; deletion is capped at 4 KiB.
+IDs are encoded and dot segments refused before HTTP.
+
+The tool is destructive and idempotent with an explicit caller UUID. It sends one
+DELETE without hidden reads, retries or replacement state. Changed scalar or task
+state returns 409. Current write PAT and original-workspace list creator, Admin or
+Owner authority are required on every attempt, including replay. The immutable
+`list-delete-ack` contains the original snapshot and exact deletedTasks count;
+it makes no current-absence claim and replay never deletes a recreated list.
+Cancellation propagates to HTTP and can leave a committed result uncertain. Manually
+retry the identical list ID, body and UUID after uncertainty; never fetch replacement
+tokens or mint a new UUID for that retry. Keys share the account-wide list/task
+write namespace.

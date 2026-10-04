@@ -8,7 +8,8 @@ export const HELP = `Ditero CLI
 
 Usage: ditero <command> [options]
 Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards,
-          create-list, update-list (list JSON stdin), observe-list (live state JSON),
+          create-list, update-list, delete-list (list JSON stdin),
+          observe-list, observe-list-deletion (live state JSON),
           plan-task (task intent JSON stdin), create-task (API task JSON stdin),
           complete-task (observed completion JSON stdin),
           observe-task, observe-task-deletion (live state JSON),
@@ -22,7 +23,7 @@ Options:
   --cursor <cursor>       Continue a collection with its opaque nextCursor
   --all                   Read up to 100 pages and 20 MiB before printing
   --workspace <id>        Filter a collection by workspace
-  --list <id>             Filter tasks; required for list observation/update
+  --list <id>             Filter tasks; required for list observation/update/deletion
   --done <true|false>     Filter tasks by completion
   --task <id>            Required for task observation, completion, update, and deletion
   --request-id <UUID>     Required for writes; preserve for exact retries
@@ -57,9 +58,13 @@ export async function runCli(
 			output.stdout(HELP);
 			return 0;
 		}
-		const result = ["create-list", "observe-list", "update-list"].includes(
-			options.command,
-		)
+		const result = [
+			"create-list",
+			"observe-list",
+			"update-list",
+			"observe-list-deletion",
+			"delete-list",
+		].includes(options.command)
 			? await listWorkflow(options, fetcher, stdinReader)
 			: [
 						"plan-task",

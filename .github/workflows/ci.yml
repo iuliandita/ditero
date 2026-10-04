@@ -58,6 +58,7 @@ jobs:
     env:
       E2E_SHARD: ${{ matrix.shard }}
       E2E_BROWSER_CONTAINER: "1"
+      DITERO_E2E_DB_PORT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2

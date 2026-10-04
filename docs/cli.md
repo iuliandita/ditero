@@ -274,3 +274,38 @@ Preserve the exact UUID, list ID and canonical body after an uncertain response,
 then manually retry those values. An intentional changed request needs a new UUID.
 Keys share the account namespace with all list/task writes. Collection flags,
 credentials as flags and file paths are refused on these commands.
+
+
+## Observed list deletion
+
+Inspect the complete deletion observation, then choose the task cascade explicitly:
+
+```sh
+bun run cli observe-list-deletion --list LIST_ID --json
+bun run cli delete-list --list LIST_ID --request-id 00000000-0000-4000-8000-000000000007 --json <<'JSON'
+{ "workspaceId": "ORIGINAL_WORKSPACE_ID", "expectedState": "OBSERVED_STATE_TOKEN", "expectedTasksState": { "version": 1, "count": 0, "token": "OBSERVED_TASKS_TOKEN" }, "cascadeTasks": false }
+JSON
+```
+
+Replace the IDs, tokens, count and UUID with reviewed values. Observation sends
+one GET without stdin or a request UUID. Read tokens and Viewers may observe.
+The strict response contains the original ApiList snapshot, scalar stateToken,
+and tasksState covering every persisted task column, including children. Tokens
+are semantic evidence, not locks or incarnation identities; identical recreation
+may match a fresh request again.
+
+Deletion accepts one strict UTF-8 JSON body within 4 KiB and sends one DELETE.
+False requires zero tasks. True accepts deletion of all observed tasks and native
+dependent cleanup of comments, assignees, labels, history and committed attachment
+retirement. These dependents are not independently fingerprinted. Pending transfers
+retain native behavior; the command performs no blob I/O or key deletion. Current
+write PAT and original-workspace list creator, Admin or Owner authority are required,
+including replay. Changed scalar or task state returns 409 without a hidden read,
+retry, replacement token or automatic rebase.
+
+Success returns immutable `list-delete-ack` with the original snapshot and exact
+`deletedTasks` count. It does not claim current absence. Matching replay returns
+that acknowledgement without deleting a recreated list. Request UUIDs share the
+account-wide list/task write namespace. After cancellation or an uncertain response,
+manually retry the identical list ID, original workspace, body and UUID; never
+substitute fresh state or a new key for that retry.
