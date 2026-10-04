@@ -10,6 +10,11 @@ import {
 } from "../../domain/public-api.ts";
 import { parseCalendarQuery } from "../../domain/public-api-calendar.ts";
 import { parseApiTaskComplete } from "../../domain/public-api-completion.ts";
+import {
+	parseApiFolderCreate,
+	parseApiFolderDelete,
+	parseApiFolderUpdate,
+} from "../../domain/public-api-folder.ts";
 import { parseApiListCreate } from "../../domain/public-api-list-create.ts";
 import { parseApiListDelete } from "../../domain/public-api-list-deletion.ts";
 import { parseApiListUpdate } from "../../domain/public-api-list-update.ts";
@@ -30,6 +35,10 @@ import {
 } from "./contracts.ts";
 import { deleteApiTask } from "./delete.ts";
 import { readApiTaskDeletionObservation } from "./deletion-observation.ts";
+import { deleteApiFolder } from "./folder-delete.ts";
+import { readApiFolderObservation } from "./folder-observation.ts";
+import { updateApiFolder } from "./folder-update.ts";
+import { writeApiFolder } from "./folder-write.ts";
 import { deleteApiList } from "./list-delete.ts";
 import { readApiListDeletionObservation } from "./list-deletion-observation.ts";
 import { readApiListObservation } from "./list-observation.ts";
@@ -605,6 +614,143 @@ export function publicApiRoutes(
 					requestId,
 				);
 			}),
+		)
+		.get("/api/v1/folders/:id/observation", ({ request, server, params }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				if (!PUBLIC_API_ID.safeParse(params.id).success)
+					throw new PublicApiError(400, "invalid-id", "Invalid folder ID");
+				return withPersonalAccessToken(
+					pool,
+					bearerToken(request.headers),
+					"read",
+					(client, actor) => readApiFolderObservation(client, actor, params.id),
+				);
+			}),
+		)
+		.post(
+			"/api/v1/folders",
+			({ request, server }) =>
+				apiRequest(async () => {
+					if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+						throw new PublicApiError(429, "rate-limited", "Too many requests");
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					if (
+						request.headers
+							.get("content-type")
+							?.split(";")[0]
+							.trim()
+							.toLowerCase() !== "application/json"
+					)
+						throw new PublicApiError(
+							415,
+							"unsupported-media-type",
+							"A JSON request body is required",
+						);
+					const requestId = parseApiIdempotencyKey(
+						request.headers.get("idempotency-key"),
+					);
+					const input = parseApiFolderCreate(await boundedJson(request));
+					return writeApiFolder(
+						pool,
+						bearerToken(request.headers),
+						input,
+						requestId,
+					);
+				}),
+			{ parse: "none" },
+		)
+		.patch(
+			"/api/v1/folders/:id",
+			({ request, server, params }) =>
+				apiRequest(async () => {
+					if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+						throw new PublicApiError(429, "rate-limited", "Too many requests");
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					if (
+						request.headers
+							.get("content-type")
+							?.split(";")[0]
+							.trim()
+							.toLowerCase() !== "application/json"
+					)
+						throw new PublicApiError(
+							415,
+							"unsupported-media-type",
+							"A JSON request body is required",
+						);
+					const requestId = parseApiIdempotencyKey(
+						request.headers.get("idempotency-key"),
+					);
+					if (!PUBLIC_API_ID.safeParse(params.id).success)
+						throw new PublicApiError(400, "invalid-id", "Invalid folder ID");
+					const input = parseApiFolderUpdate(await boundedJson(request));
+					return updateApiFolder(
+						pool,
+						bearerToken(request.headers),
+						params.id,
+						input,
+						requestId,
+					);
+				}),
+			{ parse: "none" },
+		)
+		.delete(
+			"/api/v1/folders/:id",
+			({ request, server, params }) =>
+				apiRequest(async () => {
+					if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+						throw new PublicApiError(429, "rate-limited", "Too many requests");
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					if (
+						request.headers
+							.get("content-type")
+							?.split(";")[0]
+							.trim()
+							.toLowerCase() !== "application/json"
+					)
+						throw new PublicApiError(
+							415,
+							"unsupported-media-type",
+							"A JSON request body is required",
+						);
+					const requestId = parseApiIdempotencyKey(
+						request.headers.get("idempotency-key"),
+					);
+					if (!PUBLIC_API_ID.safeParse(params.id).success)
+						throw new PublicApiError(400, "invalid-id", "Invalid folder ID");
+					const input = parseApiFolderDelete(await boundedJson(request));
+					return deleteApiFolder(
+						pool,
+						bearerToken(request.headers),
+						params.id,
+						input,
+						requestId,
+					);
+				}),
+			{ parse: "none" },
 		)
 		.get("/api/v1/openapi.json", () =>
 			Response.json(publicApiOpenApi(), {

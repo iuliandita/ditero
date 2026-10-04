@@ -307,3 +307,23 @@ it("list workflow flags require explicit list/UUID and reject discovery/authorit
 	])
 		expect(() => options(argv)).toThrow(CliError);
 });
+
+it("reads strict folder pages through shared discovery", async () => {
+	const seen: string[] = [];
+	const folder = {
+		id: "folder",
+		workspaceId: "workspace",
+		name: "Projects",
+		sortKey: "a0",
+	};
+	const result = await discover(
+		options(["folders", "--workspace", "workspace"]),
+		async (url) => {
+			seen.push(String(url));
+			return page([folder]);
+		},
+	);
+	expect(result.data).toEqual([folder]);
+	expect(seen[0]).toContain("/api/v1/folders");
+	expect(seen[0]).toContain("workspaceId=workspace");
+});

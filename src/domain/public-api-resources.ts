@@ -11,6 +11,7 @@ export const PUBLIC_API_RESOURCES = [
 	"labels",
 	"views",
 	"dashboards",
+	"folders",
 ] as const;
 export type PublicApiResource = (typeof PUBLIC_API_RESOURCES)[number];
 const nullableText = z.string().nullable();
@@ -109,6 +110,14 @@ export const publicApiResourceSchemas = {
 		})
 		.strict(),
 	dashboards: z.object({ ...savedSurface, panels: panelsSchema }).strict(),
+	folders: z
+		.object({
+			id: PUBLIC_API_ID,
+			workspaceId: PUBLIC_API_ID,
+			name: z.string(),
+			sortKey: z.string(),
+		})
+		.strict(),
 };
 
 export type ApiWorkspace = z.infer<typeof publicApiResourceSchemas.workspaces>;
@@ -117,3 +126,5 @@ export type ApiTask = z.infer<typeof publicApiResourceSchemas.tasks>;
 export type ApiPerson = z.infer<typeof publicApiResourceSchemas.people>;
 export type ApiView = z.infer<typeof publicApiResourceSchemas.views>;
 export type ApiDashboard = z.infer<typeof publicApiResourceSchemas.dashboards>;
+
+export type ApiFolder = z.infer<typeof publicApiResourceSchemas.folders>;

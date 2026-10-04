@@ -183,6 +183,54 @@ body after an uncertain outcome. There is no automatic observation, retry or
 replanning. Tokens describe semantic state, not monotonic revisions or durable
 incarnations: an intentional fresh request can match identical recreation or ABA.
 
+## Folders
+
+`GET /api/v1/folders` and `GET /api/v1/folders/{id}` return strict folder records
+with `id`, `workspaceId`, `name` and `sortKey`. Collection pagination and workspace
+filters follow discovery rules. Read tokens and Viewers may read visible folders.
+Folders grant no access; membership remains authoritative.
+
+`POST /api/v1/folders` requires `{ "workspaceId": "WORKSPACE_ID", "name": "Projects" }`.
+The server trims the name, requires 1-500 characters, rejects NUL/malformed Unicode,
+and assigns a UUID and append order. No lists or access grants are created.
+
+Read `GET /api/v1/folders/{id}/observation` before changing a folder. Its
+`data.snapshot` is the existing strict folder record; `data.stateToken` is SHA256
+of all four scalar fields in a version-1 canonical snapshot. This live read is not
+a lock, monotonic revision or durable incarnation identity. Identical recreation
+or semantic ABA may match an old token. Folder contents are outside this token.
+
+`PATCH /api/v1/folders/{id}` accepts only:
+
+```json
+{
+  "workspaceId": "ORIGINAL_WORKSPACE_ID",
+  "expectedState": "COPY_OBSERVATION_STATE_TOKEN",
+  "patch": { "name": "Projects" }
+}
+```
+
+Rename follows native activation restrictions: a changed name with pending or
+blocked import activation returns `409 activation-pending`; unchanged names may
+succeed. IDs, workspace and order cannot be changed through this endpoint.
+
+`DELETE /api/v1/folders/{id}` accepts `{ "workspaceId": "ORIGINAL_WORKSPACE_ID",
+"expectedState": "COPY_OBSERVATION_STATE_TOKEN" }`. Only empty folders can be
+deleted. Any list returns `409 folder-not-empty`; no cascade, reparenting, task
+removal or orphaning occurs. Changed scalar state returns `409 folder-state-changed`.
+
+All folder writes require JSON within 4 KiB, no query parameters, a write PAT,
+current Member/Admin/Owner membership and a UUID `Idempotency-Key`. Authorization
+and token validity are checked after native locks. Native mutation and receipt
+commit atomically. Creation returns 201; updates, deletion and matching replay
+return 200. Acknowledgements contain `kind` (`folder-create-ack`,
+`folder-update-ack` or `folder-delete-ack`) and the immutable original `snapshot`.
+They do not assert current existence or absence. Replay requires current authority
+in the original workspace, never affects replacement IDs and shares the account
+UUID namespace with all task/list writes. Different operations or canonical bodies
+return `409 idempotency-conflict`. Preserve the same key/body after uncertain
+outcomes; no automatic observation, retry or replanning occurs.
+
 ## Task creation
 
 `POST /api/v1/tasks` requires a write token, `Content-Type: application/json`,

@@ -24,8 +24,8 @@ The account locale is used unless `--locale en|de|es|fr|ro|ar` overrides it.
 Text uses the terminal's existing foreground and background, including light or
 dark themes. Arabic text needs a terminal with suitable font and shaping support.
 
-Use arrows and Enter to browse workspaces, lists, tasks, people, labels, views and
-dashboards. Escape returns to the previous surface. Press `p` for the next page
+Use arrows and Enter to browse workspaces, lists, tasks, people, labels, views,
+dashboards and folders. Escape returns to the previous surface. Press `p` for the next page
 and `r` to restart the current collection. Task and configuration details scroll
 with Up, Down, Home and End. Press `?` for help and `q` to quit. Ctrl-C always
 restores the terminal and exits, including during requests.

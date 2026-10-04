@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { apiTaskCompleteSchema } from "../../domain/public-api-completion.ts";
 import {
+	apiFolderCreateAckSchema,
+	apiFolderCreateSchema,
+	apiFolderDeleteAckSchema,
+	apiFolderDeleteSchema,
+	apiFolderObservationSchema,
+	apiFolderUpdateAckSchema,
+	apiFolderUpdateSchema,
+} from "../../domain/public-api-folder.ts";
+import {
 	apiListCreateSchema,
 	apiListCreationAckSchema,
 } from "../../domain/public-api-list-create.ts";
@@ -555,6 +564,87 @@ export function publicApiOpenApi() {
 			},
 		},
 	};
+
+	const folderIdParameter = {
+		name: "id",
+		in: "path",
+		required: true,
+		schema: { type: "string", minLength: 1, maxLength: 256 },
+	};
+	const folderKeyParameter = {
+		name: "Idempotency-Key",
+		in: "header",
+		required: true,
+		schema: { type: "string", format: "uuid" },
+	};
+	paths["/api/v1/folders/{id}/observation"] = {
+		get: {
+			operationId: "observe_folder",
+			tags: ["folders"],
+			security: [{ personalAccessToken: [] }],
+			parameters: [folderIdParameter],
+			description:
+				"Read strict ApiFolder scalar snapshot and version-1 SHA256 state token covering id, workspaceId, name and sortKey. Read tokens and Viewers may observe. Live state is not a lock, monotonic revision or durable incarnation identity; identical recreation may match.",
+			responses: {
+				"200": response(z.toJSONSchema(apiFolderObservationSchema)),
+				...errors,
+			},
+		},
+	};
+	(paths["/api/v1/folders"] as Record<string, unknown>).post = {
+		operationId: "create_folder",
+		tags: ["folders"],
+		security: [{ personalAccessToken: [] }],
+		parameters: [folderKeyParameter],
+		description:
+			"Create a folder using a write token and current Member/Admin/Owner membership. Strict JSON is limited to 4 KiB; no query parameters. Name is trimmed and limited to 1-500 characters. Server assigns UUID and append position. Account UUID namespace is shared with all task/list/folder writes. Same-key replay returns immutable original folder-create-ack under current original-workspace authority without recreating or changing replacements.",
+		requestBody: {
+			required: true,
+			content: {
+				"application/json": {
+					schema: z.toJSONSchema(apiFolderCreateSchema, { io: "input" }),
+				},
+			},
+		},
+		responses: {
+			"201": response(z.toJSONSchema(apiFolderCreateAckSchema)),
+			"200": response(z.toJSONSchema(apiFolderCreateAckSchema)),
+			...errors,
+		},
+	};
+	for (const [method, operation, input, ack, description] of [
+		[
+			"patch",
+			"update_folder",
+			apiFolderUpdateSchema,
+			apiFolderUpdateAckSchema,
+			"Rename only name after native folder locks using workspaceId and expectedState from observation. Changed state returns 409. Changed names with pending import activation return 409; unchanged names may succeed.",
+		],
+		[
+			"delete",
+			"delete_folder",
+			apiFolderDeleteSchema,
+			apiFolderDeleteAckSchema,
+			"Delete only an empty observed folder after native locks. Changed state returns 409; any list returns 409 folder-not-empty. No cascade, reparenting, list/task deletion or orphaning.",
+		],
+	] as const) {
+		(paths["/api/v1/folders/{id}"] as Record<string, unknown>)[method] = {
+			operationId: operation,
+			tags: ["folders"],
+			security: [{ personalAccessToken: [] }],
+			parameters: [folderIdParameter, folderKeyParameter],
+			description: `${description} Strict JSON is limited to 4 KiB; no query parameters. Requires valid write PAT, live actor and current original-workspace Member/Admin/Owner membership. Native mutation and immutable folder acknowledgement commit atomically. Matching account-scoped UUID/body replay requires current original-workspace authority, never affects replacement IDs and makes no current existence or absence claim. No automatic observation, retry or replanning.`,
+			requestBody: {
+				required: true,
+				content: {
+					"application/json": {
+						schema: z.toJSONSchema(input, { io: "input" }),
+					},
+				},
+			},
+			responses: { "200": response(z.toJSONSchema(ack)), ...errors },
+		};
+	}
 	paths["/api/v1/me"] = {
 		get: {
 			operationId: "get_profile",

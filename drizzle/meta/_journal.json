@@ -512,6 +512,13 @@
       "when": 1791097910917,
       "tag": "0072_task_label_reference_index",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791101854407,
+      "tag": "0073_public_api_folder_receipts",
+      "breakpoints": true
     }
   ]
 }
