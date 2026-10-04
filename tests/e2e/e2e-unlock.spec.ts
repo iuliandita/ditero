@@ -1,7 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { m } from "../../src/paraglide/messages.js";
-import { goToSettings, signUp, uniqueEmail } from "./helpers.ts";
+import {
+	goToSettings,
+	signUp,
+	uniqueEmail,
+	waitWorkspaceReady,
+} from "./helpers.ts";
 
 // M-E2E Task 11, shell flow 2. Unlock is demand-driven by design, and in Gate B
 // the only demand that exists is the Settings panel: the attachment surfaces
@@ -177,7 +182,7 @@ test("sign-out clears the remembered key and requires unlocking after sign-in", 
 	await page.getByTestId("email").fill(email);
 	await page.getByTestId("password").fill("pw-123456");
 	await page.getByTestId("signin").click();
-	await expect(page.getByTestId("workspace")).toBeVisible();
+	await waitWorkspaceReady(page);
 	await goToSettings(page);
 	await expect(status(page)).toHaveText(m.e2e_status_locked(), {
 		timeout: DERIVE_TIMEOUT,
