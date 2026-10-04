@@ -15,6 +15,7 @@ import {
 import { TaskDetail } from "../components/list/TaskDetail.tsx";
 import { MembersPanel } from "../components/people/MembersPanel.tsx";
 import { QuickAddSheet } from "../components/quickadd/QuickAddSheet.tsx";
+import { CreateWorkspaceDialog } from "../components/shell/CreateWorkspaceDialog.tsx";
 import { MobileSearch } from "../components/shell/MobileSearch.tsx";
 import { NameDialog } from "../components/shell/NameDialog.tsx";
 import {
@@ -63,6 +64,9 @@ export function WorkspaceOverlays({
 	shareable,
 	members,
 	labelIdsByTask,
+	createWorkspaceOpen,
+	onCreateWorkspaceClose,
+	onWorkspaceCreated,
 	membersOpen,
 	onMembersOpenChange,
 	quickAddOpen,
@@ -106,6 +110,9 @@ export function WorkspaceOverlays({
 	shareable: Workspace[];
 	members: { id: string; name: string }[];
 	labelIdsByTask: Map<string, string[]>;
+	createWorkspaceOpen: boolean;
+	onCreateWorkspaceClose: () => void;
+	onWorkspaceCreated: (id: string) => void;
 	membersOpen: boolean;
 	onMembersOpenChange: (open: boolean) => void;
 	quickAddOpen: boolean;
@@ -137,6 +144,12 @@ export function WorkspaceOverlays({
 }) {
 	return (
 		<>
+			{createWorkspaceOpen && (
+				<CreateWorkspaceDialog
+					onClose={onCreateWorkspaceClose}
+					onCreated={onWorkspaceCreated}
+				/>
+			)}
 			{activeId && (
 				<MembersPanel
 					workspaceId={activeId}

@@ -178,6 +178,7 @@ function NormalWorkspace({
 	const [collapsed, setCollapsed] = useState(false);
 	const [quickAddOpen, setQuickAddOpen] = useState(false);
 	const [membersOpen, setMembersOpen] = useState(false);
+	const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
 	const navSections = useNavSections(storageScope);
 	const [cheatOpen, setCheatOpen] = useState(false);
 	// One-shot: a "dashboard:<id>" home ref lands on that dashboard after sync.
@@ -977,6 +978,7 @@ function NormalWorkspace({
 								activeId={activeId}
 								onSelectWorkspace={selectWorkspace}
 								onManageMembers={() => setMembersOpen(true)}
+								onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
 								canManageMembers={canManageMembers}
 								groups={groups}
 								progressByList={progressByList}
@@ -1036,6 +1038,7 @@ function NormalWorkspace({
 								activeId={activeId}
 								onSelect={selectWorkspace}
 								onManageMembers={() => setMembersOpen(true)}
+								onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
 								canManageMembers={canManageMembers}
 								onOpenSettings={openSettings}
 								onOpenAppearance={openAppearance}
@@ -1071,6 +1074,12 @@ function NormalWorkspace({
 					shareable={shareable}
 					members={members}
 					labelIdsByTask={labelIdsByTask}
+					createWorkspaceOpen={createWorkspaceOpen}
+					onCreateWorkspaceClose={() => setCreateWorkspaceOpen(false)}
+					onWorkspaceCreated={(id) => {
+						setCreateWorkspaceOpen(false);
+						selectWorkspace(id);
+					}}
 					membersOpen={membersOpen}
 					onMembersOpenChange={setMembersOpen}
 					quickAddOpen={quickAddOpen}
