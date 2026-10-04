@@ -2,6 +2,7 @@ import { clientVersion } from "../clients/build-info.ts";
 import { CliError, parseArguments } from "./arguments.ts";
 import { discover, type Fetcher } from "./client.ts";
 import { listWorkflow } from "./list-workflow.ts";
+import { taskRelationshipsWorkflow } from "./task-relationships-workflow.ts";
 import { type StdinReader, taskWorkflow } from "./task-workflow.ts";
 
 export const HELP = `Ditero CLI
@@ -13,7 +14,9 @@ Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards, 
           plan-task (task intent JSON stdin), create-task (API task JSON stdin),
           complete-task (observed completion JSON stdin),
           observe-task, observe-task-deletion (live state JSON),
-          update-task, delete-task (observed mutation JSON stdin)
+          update-task, delete-task (observed mutation JSON stdin),
+          observe-task-relationships (live scope and relationship sets),
+          update-task-relationships (complete desired relationship JSON stdin)
 
 Options:
   --json                  Compact JSON output (default: formatted JSON)
@@ -59,24 +62,29 @@ export async function runCli(
 			return 0;
 		}
 		const result = [
-			"create-list",
-			"observe-list",
-			"update-list",
-			"observe-list-deletion",
-			"delete-list",
+			"observe-task-relationships",
+			"update-task-relationships",
 		].includes(options.command)
-			? await listWorkflow(options, fetcher, stdinReader)
+			? await taskRelationshipsWorkflow(options, fetcher, stdinReader)
 			: [
-						"plan-task",
-						"create-task",
-						"complete-task",
-						"observe-task",
-						"observe-task-deletion",
-						"update-task",
-						"delete-task",
+						"create-list",
+						"observe-list",
+						"update-list",
+						"observe-list-deletion",
+						"delete-list",
 					].includes(options.command)
-				? await taskWorkflow(options, fetcher, stdinReader)
-				: await discover(options, fetcher);
+				? await listWorkflow(options, fetcher, stdinReader)
+				: [
+							"plan-task",
+							"create-task",
+							"complete-task",
+							"observe-task",
+							"observe-task-deletion",
+							"update-task",
+							"delete-task",
+						].includes(options.command)
+					? await taskWorkflow(options, fetcher, stdinReader)
+					: await discover(options, fetcher);
 		output.stdout(
 			`${JSON.stringify(result, null, options.json ? undefined : 2)}\n`,
 		);
