@@ -1,6 +1,6 @@
 {
 	"title": "Ditero | Sarcini găzduite de tine pentru grupuri mici",
-	"description": "O aplicație gratuită de sarcini, găzduită de tine, pentru familii și grupuri mici. Prima versiune alfa este disponibilă.",
+	"description": "O aplicație gratuită de sarcini, găzduită de tine, pentru familii și grupuri mici. Versiunea alfa actuală este disponibilă.",
 	"skip": "Sari la conținut",
 	"languages": "Limbă",
 	"eyebrow": "Serverul tău. Zilele voastre împreună.",
@@ -20,7 +20,7 @@
 	"clientsTitle": "Mai întâi browserul. Și clienți nativi.",
 	"clients": "Descărcările Android semnate și instalatoarele experimentale Linux x64, Windows x64 și macOS ARM64 se conectează la serverul tău Ditero. Clienții nativi necesită HTTPS de încredere. Nu există versiune iOS.",
 	"alphaTitle": "Începe cu versiunea alfa",
-	"alpha": "Versiunea publicată este v0.0.1-alpha.1. Sunt de așteptat schimbări incompatibile. Versiunile Windows nu sunt semnate; macOS folosește semnături ad hoc. Acoperirea platformelor, notificările și actualizările au încă limite. Salvează baza de date și atașamentele împreună.",
+	"alpha": "Versiunea publicată este v0.0.1-alpha.2. Sunt de așteptat schimbări incompatibile. Versiunile Windows nu sunt semnate; macOS folosește semnături ad hoc. Acoperirea platformelor, notificările și actualizările au încă limite. Salvează baza de date și atașamentele împreună.",
 	"docsTitle": "Citește înainte de instalare",
 	"android": "Starea Android",
 	"desktop": "Starea clienților desktop",

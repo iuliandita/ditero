@@ -1,6 +1,6 @@
 {
 	"title": "Ditero | Tâches auto-hébergées pour petits groupes",
-	"description": "Une application de tâches gratuite et auto-hébergée pour les foyers et petits groupes. Première alpha disponible.",
+	"description": "Une application de tâches gratuite et auto-hébergée pour les foyers et petits groupes. Version alpha actuelle disponible.",
 	"skip": "Aller au contenu",
 	"languages": "Langue",
 	"eyebrow": "Votre serveur. Votre quotidien partagé.",
@@ -20,7 +20,7 @@
 	"clientsTitle": "Le navigateur d’abord. Des clients aussi.",
 	"clients": "Les téléchargements Android signés et les installateurs expérimentaux Linux x64, Windows x64 et macOS ARM64 se connectent à votre serveur Ditero. Les clients natifs exigent un HTTPS de confiance. Aucune version iOS n’est disponible.",
 	"alphaTitle": "Commencez avec l’alpha",
-	"alpha": "La version publiée est v0.0.1-alpha.1. Des changements incompatibles sont attendus. Windows n’est pas signé ; macOS utilise des signatures ad hoc. La couverture des plateformes, les notifications et les mises à jour restent limitées. Sauvegardez ensemble la base de données et les pièces jointes.",
+	"alpha": "La version publiée est v0.0.1-alpha.2. Des changements incompatibles sont attendus. Windows n’est pas signé ; macOS utilise des signatures ad hoc. La couverture des plateformes, les notifications et les mises à jour restent limitées. Sauvegardez ensemble la base de données et les pièces jointes.",
 	"docsTitle": "À lire avant l’installation",
 	"android": "État d’Android",
 	"desktop": "État des clients de bureau",

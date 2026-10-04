@@ -1,6 +1,6 @@
 {
 	"title": "Ditero | Tareas autoalojadas para grupos pequeños",
-	"description": "Una aplicación gratuita y autoalojada de tareas para hogares y grupos pequeños. Primera alfa disponible.",
+	"description": "Una aplicación gratuita y autoalojada de tareas para hogares y grupos pequeños. Alfa actual disponible.",
 	"skip": "Ir al contenido",
 	"languages": "Idioma",
 	"eyebrow": "Tu servidor. Vuestro día a día.",
@@ -20,7 +20,7 @@
 	"clientsTitle": "Primero el navegador. También clientes.",
 	"clients": "Las descargas firmadas de Android y los instaladores experimentales de Linux x64, Windows x64 y macOS ARM64 se conectan a tu servidor Ditero. Los clientes nativos requieren HTTPS de confianza. No hay versión para iOS.",
 	"alphaTitle": "Empieza con la alfa",
-	"alpha": "La versión publicada es v0.0.1-alpha.1. Se esperan cambios incompatibles. Windows no está firmado; macOS usa firmas ad hoc. La cobertura de plataformas, las notificaciones y las actualizaciones aún tienen límites. Haz copias conjuntas de la base de datos y los adjuntos.",
+	"alpha": "La versión publicada es v0.0.1-alpha.2. Se esperan cambios incompatibles. Windows no está firmado; macOS usa firmas ad hoc. La cobertura de plataformas, las notificaciones y las actualizaciones aún tienen límites. Haz copias conjuntas de la base de datos y los adjuntos.",
 	"docsTitle": "Lee antes de instalar",
 	"android": "Estado de Android",
 	"desktop": "Estado de escritorio",
