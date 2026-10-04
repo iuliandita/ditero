@@ -12,7 +12,7 @@ const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(28);
+	expect(Object.keys(document.paths)).toHaveLength(30);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
@@ -183,7 +183,7 @@ test("OpenAPI distinguishes immutable list creation acknowledgements from curren
 		expect(JSON.stringify(list.post.responses[status])).toContain('"snapshot"');
 	}
 	expect(JSON.stringify(list.get)).not.toContain("list-create-ack");
-	expect(Object.keys(paths)).toHaveLength(28);
+	expect(Object.keys(paths)).toHaveLength(30);
 });
 
 test("OpenAPI exposes observed list metadata updates and immutable acknowledgements", () => {
@@ -269,5 +269,23 @@ test("list update schema describes bounded placement without new routes", () => 
 		"initially missing/foreign targets return 404",
 	])
 		expect(encoded).toContain(field);
-	expect(Object.keys(document.paths)).toHaveLength(28);
+	expect(Object.keys(document.paths)).toHaveLength(30);
+});
+
+test("placement has separate strict observations and immutable acknowledgment", () => {
+	const paths = publicApiOpenApi().paths;
+	expect(paths).toHaveProperty("/api/v1/tasks/{id}/placement-observation");
+	const encoded = JSON.stringify(paths["/api/v1/tasks/{id}/placement"]);
+	for (const field of [
+		"expectedTargetState",
+		"expectedChildrenState",
+		"cascadeChildren",
+		"task-place-ack",
+		"sortKey",
+		"parentId",
+	])
+		expect(encoded).toContain(field);
+	expect(JSON.stringify(paths["/api/v1/tasks/{id}"])).not.toContain(
+		"task-place-ack",
+	);
 });

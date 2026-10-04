@@ -127,6 +127,7 @@ export const publicApiRequest = pgTable(
 			.notNull()
 			.default("task"),
 		taskId: text("task_id"),
+		taskSnapshot: jsonb("task_snapshot"),
 		listId: text("list_id"),
 		listSnapshot: jsonb("list_snapshot"),
 		folderId: text("folder_id"),
@@ -144,18 +145,42 @@ export const publicApiRequest = pgTable(
 			(${t.resourceKind} = 'task' and ${t.taskId} is not null
 			 and ${t.listId} is null and ${t.listSnapshot} is null)
 			or (${t.resourceKind} = 'list' and ${t.taskId} is null
-			 and ${t.listId} is not null and ${t.listSnapshot} is not null
+			 and ${t.taskSnapshot} is null and ${t.listId} is not null and ${t.listSnapshot} is not null
 			 and coalesce(jsonb_typeof(${t.listSnapshot}) = 'object'
 			 and jsonb_typeof(${t.listSnapshot}->'id') = 'string'
 			 and ${t.listSnapshot}->>'id' = ${t.listId}, false))
 			) and ${t.folderId} is null and ${t.folderSnapshot} is null
-			or (${t.resourceKind} = 'folder' and ${t.taskId} is null
+			or (${t.resourceKind} = 'folder' and ${t.taskId} is null and ${t.taskSnapshot} is null
 			 and ${t.listId} is null and ${t.listSnapshot} is null
 			 and ${t.folderId} is not null and ${t.folderSnapshot} is not null
 			 and coalesce(jsonb_typeof(${t.folderSnapshot}) = 'object'
 			 and jsonb_typeof(${t.folderSnapshot}->'id') = 'string'
 			 and ${t.folderSnapshot}->>'id' = ${t.folderId}, false))
 		`,
+		),
+		check(
+			"public_api_request_task_snapshot",
+			sql`${t.taskSnapshot} is null or coalesce(
+ ${t.resourceKind} = 'task' and octet_length(${t.taskSnapshot}::text) <= 262144
+ and jsonb_typeof(${t.taskSnapshot}) = 'object'
+ and ${t.taskSnapshot}->>'kind' = 'task-place-ack'
+ and jsonb_typeof(${t.taskSnapshot}->'originalWorkspaceId') = 'string'
+ and jsonb_typeof(${t.taskSnapshot}->'originalListId') = 'string'
+ and jsonb_typeof(${t.taskSnapshot}->'movedChildren') = 'number'
+ and case when jsonb_typeof(${t.taskSnapshot}->'movedChildren') = 'number' then (${t.taskSnapshot}->>'movedChildren')::numeric between 0 and 9007199254740991 and (${t.taskSnapshot}->>'movedChildren')::numeric = trunc((${t.taskSnapshot}->>'movedChildren')::numeric) else false end
+ and jsonb_typeof(${t.taskSnapshot}->'snapshot') = 'object'
+ and jsonb_typeof(${t.taskSnapshot}#>'{snapshot,task}') = 'object'
+ and jsonb_typeof(${t.taskSnapshot}#>'{snapshot,list}') = 'object'
+ and jsonb_typeof(${t.taskSnapshot}#>'{snapshot,version}') = 'number'
+ and ${t.taskSnapshot}#>>'{snapshot,version}' = '1'
+ and jsonb_typeof(${t.taskSnapshot}#>'{snapshot,task,taskId}') = 'string'
+ and ${t.taskSnapshot}#>>'{snapshot,task,taskId}' = ${t.taskId}
+ and jsonb_typeof(${t.taskSnapshot}#>'{snapshot,sortKey}') = 'string'
+ and length(${t.taskSnapshot}#>>'{snapshot,sortKey}') between 2 and 256
+ and jsonb_typeof(${t.taskSnapshot}#>'{snapshot,parentId}') in ('string','null')
+ and ${t.taskSnapshot}#>>'{snapshot,task,listId}' = ${t.taskSnapshot}#>>'{snapshot,list,id}'
+ and ${t.taskSnapshot}#>>'{snapshot,task,workspaceId}' = ${t.taskSnapshot}->>'originalWorkspaceId'
+ and ${t.taskSnapshot}#>>'{snapshot,list,workspaceId}' = ${t.taskSnapshot}->>'originalWorkspaceId', false)`,
 		),
 		pgPolicy("public_api_request_read", {
 			for: "select",
