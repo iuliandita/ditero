@@ -112,13 +112,24 @@ parameters are accepted. The complete UTF-8 body is limited to 4 KiB:
 
 Supply the original observed workspace and token. The nonempty patch accepts only
 `title` (trimmed, 1-500 characters), `icon` (null or at most 128 characters, using
-creation semantics), and `completedDisplay` (`sink`, `keep`, `hide`). Omitted fields
-preserve values. ID, workspace, owner, kind, folder and order are immutable through
-this endpoint. Unknown fields, NUL, malformed Unicode and invalid enums are refused.
+creation semantics), `completedDisplay` (`sink`, `keep`, `hide`), nullable
+`folderId`, and `sortKey`. Omitted fields preserve values. ID, workspace, owner and
+kind are immutable through this endpoint. Unknown fields, NUL, malformed Unicode and invalid enums are refused.
 After native authority/container locks, a different captured scalar state returns
-`409 list-state-changed` without mutation. Changed metadata on lists with pending or
+`409 list-state-changed` without mutation. Changed metadata or placement on lists with pending or
 blocked import activation returns `409 activation-pending`; an unchanged patch can
 succeed. Authority refusals take precedence over stale state.
+
+Placement uses `patch: { "folderId": "FOLDER_ID", "sortKey": "a1xyz" }`.
+The folder must belong to the original workspace; null detaches, and omission
+preserves it. Initially missing or foreign targets return 404 after current PAT
+validation; a target deleted during canonical locking may return 503. A sort key
+must be a valid opaque base-62 fractional key of 2-256 ASCII characters. Existing
+jitter is preserved; keys are never trimmed or regenerated. Only the observed
+list is guarded, not sibling ordering. Pending/blocked import activation prevents
+changed placement. Replay returns the original acknowledgment even if its target
+folder is gone; it does not move a replacement list. Preserve the exact key/body
+after uncertain transport, and explicitly observe again for a new intent.
 
 The canonical native mutation and receipt commit atomically. Success and matching
 replay return 200 with `data: { "kind": "list-update-ack", "snapshot": { ... } }`.

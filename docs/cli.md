@@ -260,15 +260,25 @@ are outside the token.
 List writes accept at most 4 KiB of fatal UTF-8 JSON before any network request,
 with prototype/unknown-field rejection. Title is trimmed, 1-500 characters; icon
 is null or at most 128 characters; completedDisplay is sink, keep or hide. Kind is
-required on creation. Update accepts a nonempty patch of only title, icon and
-completedDisplay; omission preserves values. It cannot change ID, workspace,
-owner, kind, folder or order. Supply the original workspace and observed token.
+required on creation. Update accepts a nonempty patch of title, icon, completedDisplay, folderId and
+sortKey; omission preserves values. It cannot change ID, workspace, owner or kind. Supply the original workspace and observed token.
 
 Creation sends one POST and returns `list-create-ack`; update sends one PATCH and
 returns `list-update-ack`, each containing the immutable original snapshot. Matching
 replay retains that snapshot after later edits/deletion/recreation and never mutates
 a replacement. Use a separate observation for current state. Both writes require
 current write PAT and writable original-workspace membership, including replay.
+
+Placement uses `patch: { "folderId": "FOLDER_ID", "sortKey": "a1xyz" }`.
+The folder must belong to the original workspace; null detaches, and omission
+preserves it. Initially missing or foreign targets return 404 after current PAT
+validation; a target deleted during canonical locking may return 503. A sort key
+must be a valid opaque base-62 fractional key of 2-256 ASCII characters. Existing
+jitter is preserved; keys are never trimmed or regenerated. Only the observed
+list is guarded, not sibling ordering. Pending/blocked import activation prevents
+changed placement. Replay returns the original acknowledgment even if its target
+folder is gone; it does not move a replacement list. Preserve the exact key/body
+after uncertain transport, and explicitly observe again for a new intent.
 
 A 409 is an explicit conflict, with no hidden read, new observation, retry or rebase.
 Preserve the exact UUID, list ID and canonical body after an uncertain response,

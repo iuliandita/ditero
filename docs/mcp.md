@@ -157,9 +157,20 @@ including identical recreation, may match again.
 "update": { "workspaceId": "ORIGINAL_WORKSPACE_ID", "expectedState":
 "OBSERVED_STATE_TOKEN", "patch": { "title": "Reviewed title", "icon": null,
 "completedDisplay": "hide" } } }`. Inspect the observation first. A nonempty patch
-accepts only title, icon and completedDisplay. Title is trimmed, 1-500 characters;
+accepts title, icon, completedDisplay, folderId and sortKey. Title is trimmed, 1-500 characters;
 icon is null or at most 128 characters; completedDisplay is sink, keep or hide.
-ID, workspace, owner, kind, folder and order remain immutable through this tool.
+ID, workspace, owner and kind remain immutable through this tool.
+
+Placement uses `patch: { "folderId": "FOLDER_ID", "sortKey": "a1xyz" }`.
+The folder must belong to the original workspace; null detaches, and omission
+preserves it. Initially missing or foreign targets return 404 after current PAT
+validation; a target deleted during canonical locking may return 503. A sort key
+must be a valid opaque base-62 fractional key of 2-256 ASCII characters. Existing
+jitter is preserved; keys are never trimmed or regenerated. Only the observed
+list is guarded, not sibling ordering. Pending/blocked import activation prevents
+changed placement. Replay returns the original acknowledgment even if its target
+folder is gone; it does not move a replacement list. Preserve the exact key/body
+after uncertain transport, and explicitly observe again for a new intent.
 
 Each list write payload is capped at 4 KiB independently of the 64 KiB protocol
 message limit, before sending. Strict API schemas reject unknown fields, NUL and

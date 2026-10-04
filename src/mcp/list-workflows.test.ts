@@ -286,3 +286,66 @@ test.each([
 	});
 	expect(fetcher).not.toHaveBeenCalled();
 });
+
+test("placement crosses the real strict MCP schema in one exact PATCH", async () => {
+	const body = { ...update, patch: { folderId: null, sortKey: "a1xyz" } };
+	const fetcher = vi.fn(async (_url: URL, init: RequestInit) => {
+		expect(init.method).toBe("PATCH");
+		expect(JSON.parse(String(init.body))).toEqual(body);
+		expect((init.headers as Record<string, string>)["idempotency-key"]).toBe(
+			key,
+		);
+		return Response.json({
+			version: 1,
+			data: {
+				kind: "list-update-ack",
+				snapshot: { ...list, sortKey: "a1xyz" },
+			},
+			nextCursor: null,
+		});
+	});
+	const client = await protocol(fetcher);
+	const tools = (await client.listTools()).tools;
+	const schema = JSON.stringify(
+		tools.find((t) => t.name === "update_list")?.inputSchema,
+	);
+	expect(schema).toContain('"folderId"');
+	expect(schema).toContain('"sortKey"');
+	expect(schema).toContain('"maxLength":256');
+	expect(
+		(
+			await client.callTool({
+				name: "update_list",
+				arguments: { listId: "list", requestId: key, update: body },
+			})
+		).isError,
+	).not.toBe(true);
+	expect(fetcher).toHaveBeenCalledTimes(1);
+});
+test.each([
+	{ folderId: "" },
+	{ sortKey: "a00" },
+	{ sortKey: "a0!" },
+	{ sortKey: `a0${"1".repeat(255)}` },
+])("invalid MCP placement never fetches %j", async (patch) => {
+	const fetcher = vi.fn();
+	const client = await protocol(fetcher);
+	let refused = false;
+	try {
+		refused =
+			(
+				await client.callTool({
+					name: "update_list",
+					arguments: {
+						listId: "list",
+						requestId: key,
+						update: { ...update, patch },
+					},
+				})
+			).isError === true;
+	} catch {
+		refused = true;
+	}
+	expect(refused).toBe(true);
+	expect(fetcher).not.toHaveBeenCalled();
+});

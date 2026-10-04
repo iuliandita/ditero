@@ -255,3 +255,19 @@ test("calendar feeds distinguish guarded account management from fixed public ca
 	expect(feed).not.toContain('"in":"query"');
 	expect(feed).not.toContain("personalAccessToken");
 });
+
+test("list update schema describes bounded placement without new routes", () => {
+	const document = publicApiOpenApi();
+	const encoded = JSON.stringify(
+		(document.paths["/api/v1/lists/{id}"] as { patch: unknown }).patch,
+	);
+	for (const field of [
+		'"folderId"',
+		'"sortKey"',
+		'"maxLength":256',
+		"2-256 ASCII",
+		"initially missing/foreign targets return 404",
+	])
+		expect(encoded).toContain(field);
+	expect(Object.keys(document.paths)).toHaveLength(28);
+});

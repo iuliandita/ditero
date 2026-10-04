@@ -77,9 +77,9 @@ test.each([
 		{ icon: "i".repeat(129) },
 		{ icon: 1 },
 		{ completedDisplay: "unknown" },
-		{ folderId: null },
+		{ folderId: "" },
 		{ kind: "tasks" },
-		{ sortKey: "a0" },
+		{ sortKey: "a00" },
 		{ ownerId: "owner" },
 		{ title: undefined },
 	].map((patch) => ({ ...input, patch })),
@@ -158,4 +158,58 @@ test("versioned state covers every ApiList scalar and permits same-state ABA", (
 		snapshot,
 	])
 		expect(apiListUpdateAckSchema.safeParse(bad).success).toBe(false);
+});
+
+test("placement preserves opaque valid keys and old request bytes", () => {
+	expect(canonicalApiListUpdate("list", input)).toBe(
+		`{"operation":"list.update.v1","listId":"list","workspaceId":"workspace","expectedState":"${"a".repeat(64)}","patch":{"title":"List"}}`,
+	);
+	for (const sortKey of [
+		"a0",
+		"a1",
+		"Zz",
+		"a0abc123",
+		`a0${"1".repeat(254)}`,
+	]) {
+		expect(
+			parseApiListUpdate({ ...input, patch: { folderId: "folder", sortKey } })
+				.patch,
+		).toEqual({ folderId: "folder", sortKey });
+	}
+	expect(
+		parseApiListUpdate({ ...input, patch: { folderId: null } }).patch,
+	).toEqual({ folderId: null });
+	expect(
+		canonicalApiListUpdate("list", { ...input, patch: { folderId: null } }),
+	).not.toBe(canonicalApiListUpdate("list", input));
+	expect(
+		canonicalApiListUpdate("list", {
+			...input,
+			patch: { sortKey: "a1", folderId: null },
+		}),
+	).toBe(
+		canonicalApiListUpdate("list", {
+			...input,
+			patch: { folderId: null, sortKey: "a1" },
+		}),
+	);
+});
+test.each([
+	"",
+	"a",
+	"0a",
+	"b0",
+	"a00",
+	"a0 ",
+	" a0",
+	"a0!",
+	"a0\n",
+	"a0é",
+	"a0\0",
+	`a0${"1".repeat(255)}`,
+	`A${"0".repeat(26)}`,
+])("invalid placement key %j fails closed", (sortKey) => {
+	expect(() => parseApiListUpdate({ ...input, patch: { sortKey } })).toThrow(
+		PublicApiError,
+	);
 });

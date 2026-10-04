@@ -1,3 +1,4 @@
+import { generateKeyBetween } from "fractional-indexing";
 import { z } from "zod";
 import { PUBLIC_API_ID, PublicApiError } from "./public-api.ts";
 import {
@@ -7,6 +8,20 @@ import {
 
 const validText = (value: string) =>
 	!value.includes("\0") && !/[\uD800-\uDFFF]/u.test(value);
+const validSortKey = (value: string) => {
+	if (
+		value.length < 2 ||
+		value.length > 256 ||
+		!/^[A-Za-z][A-Za-z0-9]+$/.test(value)
+	)
+		return false;
+	try {
+		generateKeyBetween(value, null);
+		return true;
+	} catch {
+		return false;
+	}
+};
 const stateToken = z.string().regex(/^[a-f0-9]{64}$/);
 export const apiListObservationSchema = z
 	.object({
@@ -29,11 +44,19 @@ export const apiListUpdateSchema = z
 				title: z.string().trim().min(1).max(500).refine(validText).optional(),
 				icon: z.string().max(128).refine(validText).nullable().optional(),
 				completedDisplay: z.enum(["sink", "keep", "hide"]).optional(),
+				folderId: PUBLIC_API_ID.refine(validText).nullable().optional(),
+				sortKey: z
+					.string()
+					.min(2)
+					.max(256)
+					.regex(/^[A-Za-z][A-Za-z0-9]+$/)
+					.refine(validSortKey)
+					.optional(),
 			})
 			.strict()
 			.refine(
 				(value) => Object.values(value).some((field) => field !== undefined),
-				"A metadata patch is required",
+				"A list patch is required",
 			),
 	})
 	.strict();
@@ -63,7 +86,13 @@ function ownFields(
 export function parseApiListUpdate(value: unknown): ApiListUpdate {
 	if (
 		!ownFields(value, ["workspaceId", "expectedState", "patch"]) ||
-		!ownFields(value.patch, ["title", "icon", "completedDisplay"])
+		!ownFields(value.patch, [
+			"title",
+			"icon",
+			"completedDisplay",
+			"folderId",
+			"sortKey",
+		])
 	)
 		throw new PublicApiError(400, "invalid-list", "Invalid list update fields");
 	const parsed = apiListUpdateSchema.safeParse(value);

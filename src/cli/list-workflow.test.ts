@@ -364,3 +364,40 @@ test.each([
 	await listWorkflow({ ...options("observe-list"), listId }, fetcher, vi.fn());
 	expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+test.each([
+	"folder",
+	null,
+])("placement uses one PATCH and the exact original key: %j", async (folderId) => {
+	const body = { ...update, patch: { folderId, sortKey: "a0abc123" } };
+	const fetcher = vi.fn(async (url: URL, init: RequestInit) => {
+		expect(url.pathname).toBe("/api/v1/lists/list");
+		expect(init.method).toBe("PATCH");
+		expect((init.headers as Record<string, string>)["idempotency-key"]).toBe(
+			key,
+		);
+		expect(JSON.parse(String(init.body))).toEqual(body);
+		return envelope({
+			kind: "list-update-ack",
+			snapshot: { ...list, folderId, sortKey: "a0abc123" },
+		});
+	});
+	await listWorkflow(options("update-list"), fetcher, async () =>
+		encodeListInput(body),
+	);
+	expect(fetcher).toHaveBeenCalledTimes(1);
+});
+test.each([
+	{ folderId: "" },
+	{ sortKey: "a00" },
+	{ sortKey: "a0!" },
+	{ sortKey: `a0${"1".repeat(255)}` },
+])("invalid placement produces no CLI request %j", async (patch) => {
+	const fetcher = vi.fn();
+	await expect(
+		listWorkflow(options("update-list"), fetcher, async () =>
+			encodeListInput({ ...update, patch }),
+		),
+	).rejects.toMatchObject({ code: "invalid_input" });
+	expect(fetcher).not.toHaveBeenCalled();
+});

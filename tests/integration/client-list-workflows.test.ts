@@ -217,6 +217,10 @@ afterAll(async () => {
 			[[workspace, hidden]],
 		],
 		[
+			"delete from folder where workspace_id=any($1::text[])",
+			[[workspace, hidden]],
+		],
+		[
 			"delete from membership where workspace_id=any($1::text[])",
 			[[workspace, hidden]],
 		],
@@ -328,6 +332,11 @@ async function receiptCount() {
 }
 
 test("actual CLI/MCP protocol qualifies observed native member writes, immutable replay and current authority", async () => {
+	const placementFolder = `${prefix}_placement_folder`;
+	await admin.query(
+		"insert into folder(id,workspace_id,name,sort_key) values($1,$2,'Placement','a0')",
+		[placementFolder, workspace],
+	);
 	const member = await mcp(bobToken);
 	const observed = await member.client.callTool({
 		name: "get_list_observation",
@@ -340,7 +349,13 @@ test("actual CLI/MCP protocol qualifies observed native member writes, immutable
 	const body = {
 		workspaceId: workspace,
 		expectedState: observation.stateToken,
-		patch: { title: "Edited", icon: "star", completedDisplay: "hide" },
+		patch: {
+			title: "Edited",
+			icon: "star",
+			completedDisplay: "hide",
+			folderId: placementFolder,
+			sortKey: "a1xyz",
+		},
 	};
 	const key = randomUUID();
 	let before = requests.length;
@@ -361,6 +376,8 @@ test("actual CLI/MCP protocol qualifies observed native member writes, immutable
 		title: "Edited",
 		icon: "star",
 		completedDisplay: "hide",
+		folderId: placementFolder,
+		sortKey: "a1xyz",
 	});
 	expect(await receiptCount()).toBe(1);
 	before = requests.length;

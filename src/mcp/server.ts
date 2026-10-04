@@ -557,7 +557,7 @@ export function createDiteroMcp(
 		"update_list",
 		{
 			description:
-				"Update only title, icon and completedDisplay using previously observed workspaceId/stateToken as expectedState and caller-owned UUID requestId. Send one PATCH within 4 KiB without hidden reads, retry or rebase. Stale state returns 409. Exact replay returns the immutable original post-update acknowledgement even after deletion/recreation; current original-workspace write authority is required.",
+				"Update title, icon, completedDisplay, same-workspace folderId and fractional sortKey using previously observed workspaceId/stateToken as expectedState and caller-owned UUID requestId. folderId may be null to detach; sortKey must be a valid opaque base-62 fractional key of 2-256 ASCII characters. Sibling order is not observed. Send one PATCH within 4 KiB without hidden reads, retry or rebase. Stale state returns 409. Exact replay returns the immutable original post-update acknowledgement even after deletion/recreation; current original-workspace write authority is required.",
 			inputSchema: guardedInput(
 				z
 					.object({
