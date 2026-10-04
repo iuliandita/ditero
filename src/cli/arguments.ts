@@ -35,6 +35,8 @@ export interface CliOptions {
 		| "complete-task"
 		| "observe-task"
 		| "observe-task-deletion"
+		| "observe-task-relationships"
+		| "update-task-relationships"
 		| "update-task"
 		| "delete-task";
 	server: string;
@@ -140,6 +142,8 @@ export function parseArguments(
 				"complete-task",
 				"observe-task",
 				"observe-task-deletion",
+				"observe-task-relationships",
+				"update-task-relationships",
 				"update-task",
 				"delete-task",
 			].includes(argument) ||
@@ -150,6 +154,7 @@ export function parseArguments(
 	}
 	if (!command) usageError();
 	const writing = [
+		"update-task-relationships",
 		"create-list",
 		"update-list",
 		"delete-list",
@@ -159,6 +164,8 @@ export function parseArguments(
 		"delete-task",
 	].includes(command);
 	const taskCommand = [
+		"observe-task-relationships",
+		"update-task-relationships",
 		"complete-task",
 		"observe-task",
 		"observe-task-deletion",

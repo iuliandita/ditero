@@ -242,6 +242,8 @@ export async function discover(
 		options.command === "complete-task" ||
 		options.command === "observe-task" ||
 		options.command === "observe-task-deletion" ||
+		options.command === "observe-task-relationships" ||
+		options.command === "update-task-relationships" ||
 		options.command === "update-task" ||
 		options.command === "delete-task"
 	)

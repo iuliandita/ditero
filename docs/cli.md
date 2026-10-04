@@ -310,3 +310,42 @@ that acknowledgement without deleting a recreated list. Request UUIDs share the
 account-wide list/task write namespace. After cancellation or an uncertain response,
 manually retry the identical list ID, original workspace, body and UUID; never
 substitute fresh state or a new key for that retry.
+
+
+## Observed task assignments and labels
+
+Inspect the current relationship observation, then provide both complete desired ID sets:
+
+```sh
+bun run cli observe-task-relationships --task TASK_ID --json
+bun run cli update-task-relationships --task TASK_ID --request-id 00000000-0000-4000-8000-000000000008 --json <<'JSON'
+{ "workspaceId": "ORIGINAL_WORKSPACE_ID", "listId": "ORIGINAL_LIST_ID", "expectedState": "OBSERVED_STATE_TOKEN", "assigneeIds": ["MEMBER_ID"], "labelIds": ["LABEL_ID"] }
+JSON
+```
+
+Replace IDs, token and UUID with reviewed values. Observation sends one GET without
+stdin or a request UUID. Read tokens and Viewers may observe. The strict response
+contains versioned task/list/workspace scope, complete assigneeIds and labelIds,
+and a semantic stateToken. Complete observations can exceed the write limits;
+they are never silently truncated. The token covers scope and relationship sets,
+not scalar task fields, label names, comments or attachments. Identical state,
+including recreation, may match a fresh request again.
+
+Replacement sends one PATCH with strict fatal UTF-8 JSON within 64 KiB. Both arrays
+are required; [] explicitly clears a set. Up to 20 unique assignees and 50 unique
+labels are accepted, duplicates refused and desired sets sorted canonically.
+Assignees must be current original-workspace members and labels must belong to
+that workspace. Use people/label discovery to select IDs explicitly; the command
+does not resolve names, invite members or create, rename, recolor or delete labels.
+Pending notification activation can refuse assignment editing. Current write PAT
+and original-workspace Member, Admin or Owner authority are required, including
+replay. Collection flags and credential overrides are refused.
+
+Success returns immutable `task-relationships-update-ack` with the original scope
+and exact canonical desired sets. It does not claim current relationships. Matching
+replay never edits a recreated task or duplicates assignment notices. A 409 remains
+an explicit conflict without hidden reads, merging, retries or replacement tokens.
+UUIDs share the account-wide task/list write namespace. Cancellation or a lost
+response can leave a committed result uncertain; manually retry the identical task
+ID, original scope, full body and UUID, without fetching replacement evidence or
+minting a new UUID for that retry.

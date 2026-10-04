@@ -207,3 +207,39 @@ Cancellation propagates to HTTP and can leave a committed result uncertain. Manu
 retry the identical list ID, body and UUID after uncertainty; never fetch replacement
 tokens or mint a new UUID for that retry. Keys share the account-wide list/task
 write namespace.
+
+
+## Observed task assignments and labels
+
+`get_task_relationship_observation` accepts only `{ "taskId": "TASK_ID" }` and
+sends one GET without a UUID. Read tokens and Viewers may observe. Its strict
+versioned snapshot contains task/list/workspace scope and complete assigneeIds and
+labelIds, plus a semantic stateToken. Observations may exceed desired-set limits
+and are never truncated. Tokens cover scope and sets, not scalar task fields,
+label names, comments or attachments; identical state or recreation may match a
+fresh request again.
+
+`update_task_relationships` accepts exactly `{ "taskId": "TASK_ID", "requestId":
+"<UUID>", "relationships": { "workspaceId": "ORIGINAL_WORKSPACE_ID", "listId":
+"ORIGINAL_LIST_ID", "expectedState": "OBSERVED_STATE_TOKEN", "assigneeIds":
+["MEMBER_ID"], "labelIds": ["LABEL_ID"] } }`. Both arrays are complete desired
+sets and required; [] explicitly clears one. Up to 20 unique assignees and 50
+unique labels are accepted, duplicates refused and desired sets sorted canonically.
+Choose IDs explicitly through people/label discovery. Members and labels must
+belong to the original workspace; this tool does not invite people or create,
+rename, recolor or delete labels. Pending notification activation can refuse
+assignment editing. Current write PAT and original-workspace Member, Admin or
+Owner authority are required on every attempt, including replay.
+
+The tool is destructive and idempotent with an explicit caller UUID. Descriptor
+and array guards refuse accessors, unknown fields, sparse arrays and known-field
+bound violations before payload serialization. The strict body and tool arguments
+are bounded to 64 KiB. IDs are encoded and dot segments refused before HTTP. One
+PATCH performs no hidden reads, merging, retries or state replacement. A 409 stays
+an explicit conflict. Success/replay return immutable
+`task-relationships-update-ack` with original scope and exact canonical desired
+sets, without claiming current state, editing a recreated task or duplicating
+assignment notices. Cancellation reaches HTTP and can leave a committed outcome
+uncertain. Manually retry the identical task ID, original scope, full payload and
+UUID after uncertainty; never mint a new key or fetch replacement evidence for
+that retry. Keys share the account-wide task/list write namespace.

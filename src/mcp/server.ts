@@ -12,6 +12,12 @@ import {
 	listWorkflow,
 	safeListInput,
 } from "../cli/list-workflow.ts";
+import {
+	encodeTaskRelationshipsInput,
+	safeRelationshipObject,
+	safeTaskRelationshipsInput,
+	taskRelationshipsWorkflow,
+} from "../cli/task-relationships-workflow.ts";
 import { taskWorkflow } from "../cli/task-workflow.ts";
 import { clientBuild } from "../clients/build-info.ts";
 import { PUBLIC_API_ID, PUBLIC_API_PAGE_SIZE } from "../domain/public-api.ts";
@@ -40,6 +46,12 @@ import {
 	apiTaskDeleteSchema,
 	apiTaskDeletionObservationSchema,
 } from "../domain/public-api-task-deletion.ts";
+import {
+	apiTaskRelationshipObservationSchema,
+	apiTaskRelationshipSnapshotSchema,
+	apiTaskRelationshipsAckSchema,
+	apiTaskRelationshipsSchema,
+} from "../domain/public-api-task-relationships.ts";
 import {
 	apiTaskObservationSchema,
 	apiTaskUpdateSchema,
@@ -93,6 +105,48 @@ function guardedInput<S extends z.ZodType>(
 						return invalid;
 					const result = await standard.validate(value);
 					return result.issues ? invalid : result;
+				} catch {
+					return invalid;
+				}
+			},
+		},
+	};
+}
+
+function guardedRelationshipsInput<S extends z.ZodType>(
+	schema: S,
+	writing: boolean,
+): StandardSchemaWithJSON<z.input<S>, z.output<S>> {
+	const standard = schema["~standard"];
+	return {
+		"~standard": {
+			...standard,
+			validate: async (value) => {
+				const invalid = {
+					issues: [{ message: "Invalid or oversized relationship arguments." }],
+				};
+				try {
+					if (
+						!safeRelationshipObject(
+							value,
+							writing ? ["taskId", "requestId", "relationships"] : ["taskId"],
+						)
+					)
+						return invalid;
+					if (writing && !safeTaskRelationshipsInput(value.relationships))
+						return invalid;
+					const result = await standard.validate(value);
+					if (result.issues) return invalid;
+					if (writing)
+						encodeTaskRelationshipsInput(
+							(result.value as Record<string, unknown>).relationships,
+						);
+					if (
+						new TextEncoder().encode(JSON.stringify(result.value)).byteLength >
+						65_536
+					)
+						return invalid;
+					return result;
 				} catch {
 					return invalid;
 				}
@@ -598,6 +652,89 @@ export function createDiteroMcp(
 				deletion,
 				requestId.toLowerCase(),
 				listId,
+				ctx.mcpReq.signal,
+			),
+	);
+
+	function relationshipsOperation(
+		command: CliOptions["command"],
+		taskId: string,
+		payload: unknown,
+		requestId: string | undefined,
+		signal: AbortSignal,
+	) {
+		return execute(() =>
+			taskRelationshipsWorkflow(
+				{ ...fixed, command, taskId, requestId },
+				fetcher,
+				async () => encodeTaskRelationshipsInput(payload),
+				signal,
+			),
+		);
+	}
+	server.registerTool(
+		"get_task_relationship_observation",
+		{
+			description:
+				"Read the complete current task/list/workspace scope and assignee/label ID sets with a semantic state token. Read tokens and Viewers may observe. This does not lock the task or fingerprint scalar fields, label names or other dependent content.",
+			inputSchema: guardedRelationshipsInput(
+				z
+					.object({ taskId: apiTaskRelationshipSnapshotSchema.shape.taskId })
+					.strict(),
+				false,
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiTaskRelationshipObservationSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations,
+		},
+		({ taskId }, ctx) =>
+			relationshipsOperation(
+				"observe-task-relationships",
+				taskId,
+				undefined,
+				undefined,
+				ctx.mcpReq.signal,
+			),
+	);
+	server.registerTool(
+		"update_task_relationships",
+		{
+			description:
+				"Replace an inspected task's complete assigneeIds and labelIds using explicit original workspaceId/listId, expectedState and caller UUID requestId. Both arrays are required; empty arrays explicitly clear them. Up to 20 unique active original-workspace members and 50 unique same-workspace labels; no invitations or label resource edits. Send one strict 64 KiB PATCH without hidden reads, merging, retries or replacement state. Current Member+ and write PAT authority remain required, including replay. Success returns immutable original scope/sets, not current state; exact replay never edits a recreated task or duplicates notices. After uncertain cancellation or transport failure, manually retry the identical task ID, body and UUID.",
+			inputSchema: guardedRelationshipsInput(
+				z
+					.object({
+						taskId: apiTaskRelationshipSnapshotSchema.shape.taskId,
+						requestId: z.uuid(),
+						relationships: apiTaskRelationshipsSchema,
+					})
+					.strict(),
+				true,
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiTaskRelationshipsAckSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		({ taskId, requestId, relationships }, ctx) =>
+			relationshipsOperation(
+				"update-task-relationships",
+				taskId,
+				relationships,
+				requestId.toLowerCase(),
 				ctx.mcpReq.signal,
 			),
 	);
