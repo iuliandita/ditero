@@ -38,6 +38,7 @@ those behaviors. See the [Android](apps/android/README.md) and
 | --- | --- |
 | `nightly`, `nightly-<sha>` | Every merge to `develop`; experimental |
 | `0.0.1-alpha.1` | Immutable first alpha version |
+| `0.0.1-alpha.2` | Second alpha version |
 | `X.Y.Z`, `X.Y`, `X`, `latest` | Stable releases, starting at `1.0.0` |
 | `stable` | Stable release explicitly promoted after a week |
 
@@ -45,7 +46,7 @@ Version tags omit the Git tag's `v` prefix. Debian app tags have a `-debian` suf
 Zero tags have a `-zero` suffix. Nightly Zero tags are `nightly-zero` and
 `nightly-zero-<sha>`. Prereleases never move `latest`, major/minor or `stable` tags.
 
-For the alpha Compose package, set `DITERO_IMAGE_TAG=0.0.1-alpha.1` and follow the
+For the alpha Compose package, set `DITERO_IMAGE_TAG=0.0.1-alpha.2` and follow the
 [Compose setup](README.md#run-it-docker-compose). Extract the whole archive: bundled
 PostgreSQL needs the adjacent initialization scripts. Helm instructions and required
 Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
@@ -62,8 +63,8 @@ Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
 3. Create an annotated tag on the checked commit and push it separately:
 
    ```sh
-   git tag -a v0.0.1-alpha.1 <checked-commit> -m 'Ditero 0.0.1 alpha 1'
-   git push origin v0.0.1-alpha.1
+   git tag -a v0.0.1-alpha.2 <checked-commit> -m 'Ditero 0.0.1 alpha 2'
+   git push origin v0.0.1-alpha.2
    ```
 
 4. The Release workflow resolves the tag once, verifies branch ancestry and checks,
@@ -74,8 +75,8 @@ Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
    Android signing identity securely so subsequent APKs upgrade existing installs.
 
 A failed workflow may be resumed using its existing tag through manual dispatch
-at that tag ref, for example `gh workflow run release.yml --ref v0.0.1-alpha.1
--f tag=v0.0.1-alpha.1`. A dispatch from a different commit is rejected so build
+at that tag ref, for example `gh workflow run release.yml --ref v0.0.1-alpha.2
+-f tag=v0.0.1-alpha.2`. A dispatch from a different commit is rejected so build
 provenance agrees with the released source.
 An interrupted draft may be completed; published downloads are never replaced. If a
 public release needs changes, increase the version and Android code and cut a new tag.

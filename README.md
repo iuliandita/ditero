@@ -29,8 +29,8 @@ are included, with no subscriptions or paid feature unlocks.
 > before `v1.0.0`. See [release instructions](RELEASING.md) and
 > [published downloads](https://github.com/iuliandita/ditero/releases).
 
-The capabilities below describe `develop`; additions since the first alpha are
-available from source or nightly images until the next release.
+The capabilities below describe `develop`; unreleased additions are available
+from source or nightly images.
 
 ## Made for shared days
 

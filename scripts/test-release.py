@@ -38,10 +38,11 @@ class ReleaseTests(unittest.TestCase):
                 release.verify_downloads(output, "0.0.1-alpha.1")
 
     def test_prepare_requires_latest_same_commit_success(self):
+        version = release.metadata()["version"]
         sha = "a" * 40
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "outputs"
-            env = {"TAG": "v0.0.1-alpha.1", "REPO": "owner/repo", "WORKFLOW_SHA": sha, "DOCKERHUB_ENABLED": "false", "GITHUB_OUTPUT": str(output)}
+            env = {"TAG": f"v{version}", "REPO": "owner/repo", "WORKFLOW_SHA": sha, "DOCKERHUB_ENABLED": "false", "GITHUB_OUTPUT": str(output)}
             runs = [{"id": 1, "event": "push", "head_branch": "develop", "conclusion": "success"}]
             def command(*args):
                 if args[0] == "gh":
@@ -61,39 +62,42 @@ class ReleaseTests(unittest.TestCase):
                     release.prepare()
 
     def test_public_release_rejected_before_any_build(self):
+        version = release.metadata()["version"]
         sha = "a" * 40
         def command(*args):
             if args[0] == "gh":
-                return json.dumps([[{"tag_name": "v0.0.1-alpha.1", "draft": False}]])
+                return json.dumps([[{"tag_name": f"v{version}", "draft": False}]])
             return "tag" if args[1] == "cat-file" else sha
-        with patch.dict(os.environ, {"TAG": "v0.0.1-alpha.1", "REPO": "owner/repo", "WORKFLOW_SHA": sha}), patch.object(release, "command", side_effect=command), patch.object(release.subprocess, "run"):
+        with patch.dict(os.environ, {"TAG": f"v{version}", "REPO": "owner/repo", "WORKFLOW_SHA": sha}), patch.object(release, "command", side_effect=command), patch.object(release.subprocess, "run"):
             with self.assertRaisesRegex(ValueError, "already public"):
                 release.prepare()
 
     def test_dispatch_provenance_must_match_source(self):
+        version = release.metadata()["version"]
         def command(*args):
             return "tag" if args[1] == "cat-file" else "a" * 40
-        with patch.dict(os.environ, {"TAG": "v0.0.1-alpha.1", "WORKFLOW_SHA": "b" * 40}), patch.object(release, "command", side_effect=command):
+        with patch.dict(os.environ, {"TAG": f"v{version}", "WORKFLOW_SHA": "b" * 40}), patch.object(release, "command", side_effect=command):
             with self.assertRaisesRegex(ValueError, "provenance"):
                 release.prepare()
 
     def test_publish_requires_matching_uploaded_bytes(self):
+        version = release.metadata()["version"]
         sha = "a" * 40
         for corrupted in (True, False):
             with self.subTest(corrupted=corrupted), tempfile.TemporaryDirectory() as directory:
                 output = Path(directory)
-                for name in release.expected_assets("0.0.1-alpha.1"):
+                for name in release.expected_assets(version):
                     (output / name).write_bytes(b"artifact")
                 def command(*args):
                     if args[0] == "git":
-                        return f"{sha}\trefs/tags/v0.0.1-alpha.1^{{}}" if args[1] == "ls-remote" else sha
+                        return f"{sha}\trefs/tags/v{version}^{{}}" if args[1] == "ls-remote" else sha
                     if args[1] == "api":
                         return "[[]]"
                     assets = [{"name": path.name, "size": path.stat().st_size, "digest": f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"} for path in output.iterdir()]
                     if corrupted:
                         assets[0]["digest"] = "sha256:" + "0" * 64
                     return json.dumps({"assets": assets})
-                env = {"TAG": "v0.0.1-alpha.1", "REPO": "owner/repo", "RELEASE_SHA": sha}
+                env = {"TAG": f"v{version}", "REPO": "owner/repo", "RELEASE_SHA": sha}
                 with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release.subprocess, "run") as run:
                     if corrupted:
                         with self.assertRaisesRegex(ValueError, "upload digests"):
@@ -172,6 +176,7 @@ class ReleaseTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_kustomize_archive_excludes_operator_files(self):
+        version = release.metadata()["version"]
         with tempfile.TemporaryDirectory() as directory, patch.object(release.subprocess, "run"):
             root = Path(directory)
             shutil.copytree(release.ROOT / "deploy", root / "deploy")
@@ -184,21 +189,21 @@ class ReleaseTests(unittest.TestCase):
             (local / "private.env").write_text("PRIVATE=must-not-ship")
             (root / "deploy/kustomize/base/private.env").write_text("PRIVATE=must-not-ship")
             (root / "deploy/kustomize/cnpg/private.env").write_text("PRIVATE=must-not-ship")
-            with patch.object(release, "ROOT", root), patch.object(release, "metadata", return_value={"version": "0.0.1-alpha.1"}):
+            with patch.object(release, "ROOT", root), patch.object(release, "metadata", return_value={"version": version}):
                 release.deployment(root / "output")
-            with tarfile.open(root / "output/ditero-0.0.1-alpha.1-kustomize.tar.gz") as archive:
+            with tarfile.open(root / f"output/ditero-{version}-kustomize.tar.gz") as archive:
                 names = archive.getnames()
                 self.assertFalse(any("private.env" in name or "/overlay/" in name for name in names))
-                self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/base/name-reference.yaml", names)
-                self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/README.md", names)
-                self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/cnpg/roles.sql", names)
-                self.assertIn("ditero-0.0.1-alpha.1/deploy/kustomize/cnpg/cluster.yaml", names)
-                self.assertIn("ditero-0.0.1-alpha.1/docs/runbooks/database-tls.md", names)
-                guide = archive.extractfile("ditero-0.0.1-alpha.1/docs/runbooks/database-tls.md").read().decode()
+                self.assertIn(f"ditero-{version}/deploy/kustomize/base/name-reference.yaml", names)
+                self.assertIn(f"ditero-{version}/deploy/kustomize/README.md", names)
+                self.assertIn(f"ditero-{version}/deploy/kustomize/cnpg/roles.sql", names)
+                self.assertIn(f"ditero-{version}/deploy/kustomize/cnpg/cluster.yaml", names)
+                self.assertIn(f"ditero-{version}/docs/runbooks/database-tls.md", names)
+                guide = archive.extractfile(f"ditero-{version}/docs/runbooks/database-tls.md").read().decode()
                 self.assertIn("NODE_EXTRA_CA_CERTS", guide)
-                roles = archive.extractfile("ditero-0.0.1-alpha.1/docs/runbooks/database-roles.md").read().decode()
+                roles = archive.extractfile(f"ditero-{version}/docs/runbooks/database-roles.md").read().decode()
                 self.assertIn("(database-tls.md)", roles)
-                readme = archive.extractfile("ditero-0.0.1-alpha.1/deploy/kustomize/cnpg/README.md").read().decode()
+                readme = archive.extractfile(f"ditero-{version}/deploy/kustomize/cnpg/README.md").read().decode()
                 self.assertIn("https://github.com/iuliandita/ditero/blob/develop/docs/runbooks/backup-restore.md", readme)
 
     def test_metadata_rejects_unsafe_version_and_code(self):
