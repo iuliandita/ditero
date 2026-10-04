@@ -86,8 +86,11 @@ jobs:
           DESKTOP_PACKAGE: ${{ matrix.package }}
         run: |
           set -euo pipefail
-          umask 077
-          mkdir -p "$RUNNER_TEMP/desktop-packaging"
+          (
+            umask 077
+            mkdir -p "$RUNNER_TEMP/desktop-packaging"
+            : > "$RUNNER_TEMP/desktop-packaging/packaging.log"
+          )
           case "$DESKTOP_PACKAGE" in
             package:linux) BUNDLES=deb ;;
             package:windows) BUNDLES=nsis ;;
