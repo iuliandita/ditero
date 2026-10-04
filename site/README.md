@@ -25,3 +25,16 @@ this workflow. No custom domain, DNS change or credential provisioning is includ
 
 Before publication, inspect all six pages in light/dark themes, Arabic RTL, keyboard
 navigation and a narrow viewport. Build tests alone do not prove rendered usability.
+
+Product previews live in `site/assets/app-preview-light.png` and
+`app-preview-dark.png`. They must be actual 1440x1000 app captures with synthetic
+household data, reviewed for privacy before inclusion. The localized caption
+identifies them as development previews; release links remain pinned independently.
+The build reads both captures before writing output and fails if either is absent.
+Keep capture source revision and hashes in the review evidence. Do not replace them
+with mock UI or historical screenshots.
+
+The native language and PostgreSQL disclosures work without JavaScript. Confirm
+keyboard operation, 44px targets, light/dark image selection and no overflow in
+all six locales before publication. Retain desktop and phone screenshots for the
+independent confirmation review.

@@ -9,7 +9,6 @@ export const fields = [
 	"description",
 	"skip",
 	"languages",
-	"eyebrow",
 	"heading",
 	"intro",
 	"download",
@@ -33,6 +32,11 @@ export const fields = [
 	"backup",
 	"security",
 	"license",
+	"downloadContext",
+	"requirementsAdvancedTitle",
+	"requirementsAdvanced",
+	"previewAlt",
+	"previewCaption",
 	"releaseLabel",
 ] as const;
 export type Dictionary = Record<(typeof fields)[number], string>;
@@ -48,6 +52,7 @@ export const siteUrl = "https://iuliandita.github.io/ditero/";
 const sourceUrl = "https://github.com/iuliandita/ditero";
 export const publishedRelease = "v0.0.1-alpha.2";
 const docsUrl = `${sourceUrl}/blob/${publishedRelease}`;
+const previewAssets = ["app-preview-light.png", "app-preview-dark.png"];
 const assets = [
 	"ditero-symbol-teal.png",
 	"ditero-wordmark-light.png",
@@ -114,6 +119,7 @@ export function renderPage(
 				escapeHtml(value),
 			]),
 		),
+		currentLanguage: escapeHtml(names[locale]),
 		prefix,
 		home: `${prefix}${path(locale)}`,
 		canonical: `${siteUrl}${path(locale)}`,
@@ -142,6 +148,12 @@ export function renderPage(
 }
 
 export async function buildSite(root: string, output: string): Promise<void> {
+	const previews = await Promise.all(
+		previewAssets.map(async (name) => ({
+			name,
+			bytes: await readFile(join(root, "site/assets", name)),
+		})),
+	);
 	const template = await readFile(join(root, "site/template.html"), "utf8");
 	const pages = await Promise.all(
 		locales.map(async (locale) => ({
@@ -172,6 +184,8 @@ export async function buildSite(root: string, output: string): Promise<void> {
 			join(root, "assets/brand", asset),
 			join(output, "assets", asset),
 		);
+	for (const preview of previews)
+		await writeFile(join(output, "assets", preview.name), preview.bytes);
 	await writeFile(join(output, ".nojekyll"), "");
 }
 

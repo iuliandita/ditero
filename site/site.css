@@ -27,7 +27,8 @@ a {
 a:hover {
 	text-decoration-thickness: 0.15em;
 }
-a:focus-visible {
+a:focus-visible,
+summary:focus-visible {
 	outline: 3px solid var(--accent);
 	outline-offset: 5px;
 }
@@ -39,8 +40,8 @@ a:focus-visible {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 2rem;
-	padding-block: 1.7rem;
+	gap: 1rem;
+	padding-block: 1rem;
 	border-bottom: 1px solid var(--line);
 }
 .brand {
@@ -54,16 +55,41 @@ a:focus-visible {
 	width: 12rem;
 	height: auto;
 }
+summary {
+	cursor: pointer;
+	min-height: 44px;
+	padding-block: 0.5rem;
+}
+.language-menu {
+	position: relative;
+	flex-shrink: 0;
+}
+.language-menu summary {
+	padding-inline: 0.5rem;
+}
+.language-menu summary span {
+	color: var(--muted);
+	margin-inline-end: 0.4rem;
+}
 .languages {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.2rem 0.5rem;
+	position: absolute;
+	inset-inline-end: 0;
+	z-index: 2;
+	width: min(20rem, calc(100vw - 2rem));
+	padding: 0.75rem;
+	background: var(--bg);
+	border: 1px solid var(--line);
+	border-radius: 0.4rem;
 }
 .languages a {
 	display: inline-flex;
 	align-items: center;
 	min-height: 44px;
 	padding-inline: 0.4rem;
+	min-width: 44px;
 	font-size: 0.9rem;
 }
 .languages a[aria-current] {
@@ -72,16 +98,48 @@ a:focus-visible {
 	text-decoration-thickness: 2px;
 }
 .hero {
-	padding-block: clamp(3rem, 8vw, 6rem);
-	max-width: 58rem;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 2rem;
+	align-items: center;
+	padding-block: clamp(2rem, 5vw, 4rem);
 }
-.eyebrow {
+.hero-copy {
+	min-width: 0;
+}
+.product-preview {
+	min-width: 0;
+	margin: 0;
+}
+.product-preview img {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--line);
+	border-radius: 0.6rem;
+}
+.product-preview figcaption {
+	color: var(--muted);
+	font-size: 0.9rem;
+	margin-block-start: 0.75rem;
+}
+
+.text-action {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	font-weight: 600;
+}
+.operator-details {
+	margin-block: 1rem;
+}
+.operator-details summary {
 	color: var(--accent);
-	font-weight: 700;
-	margin: 0 0 1rem;
+	font-weight: 600;
 }
+
 h1 {
-	font-size: clamp(2.6rem, 6vw, 4.7rem);
+	font-size: clamp(2.4rem, 4.5vw, 4rem);
 	line-height: 1.08;
 	letter-spacing: -0.035em;
 	max-width: 16ch;
@@ -99,7 +157,8 @@ html[dir="rtl"] h1 {
 .actions {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.8rem;
+	align-items: center;
+	gap: 0.8rem 1.5rem;
 	margin-block: 2rem 1rem;
 }
 .button {
@@ -149,8 +208,12 @@ p {
 .installation {
 	align-self: start;
 	background: var(--panel);
-	border-inline-start: 4px solid var(--accent);
 	padding: 1.8rem;
+}
+.installation > a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
 }
 .status {
 	display: grid;
@@ -190,9 +253,18 @@ footer p {
 	margin-inline-end: auto;
 }
 footer a {
+	min-inline-size: 44px;
 	min-height: 44px;
 	display: inline-flex;
 	align-items: center;
+}
+.client-action p {
+	font-size: 0.9rem;
+	color: var(--muted);
+	margin: 0;
+}
+.operator-details p {
+	margin-block-start: 0.5rem;
 }
 .skip {
 	position: absolute;
@@ -206,10 +278,11 @@ footer a {
 	top: 1rem;
 }
 @media (max-width: 48rem) {
-	.masthead {
-		align-items: start;
-		flex-direction: column;
-		gap: 0.7rem;
+	.brand img {
+		width: clamp(7.5rem, 30vw, 10rem);
+	}
+	.language-menu summary span {
+		display: none;
 	}
 	.content-grid,
 	.status {
@@ -221,6 +294,12 @@ footer a {
 	}
 	.installation {
 		padding: 1.3rem;
+	}
+}
+@media (min-width: 64rem) {
+	.hero {
+		grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+		gap: 3rem;
 	}
 }
 @media (prefers-color-scheme: dark) {
