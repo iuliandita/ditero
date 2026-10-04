@@ -1,7 +1,7 @@
 # Ditero CLI
 
 The CLI uses the version 1 public API to discover member-visible content, plan a
-task, create it, and complete an observed task with an explicit retry key.
+task, create it, and complete, update, or delete an observed task with an explicit retry key.
 A local Linux x64 glibc standalone candidate can be built for all three terminal
 clients. Public binary distribution is blocked while embedded runtime license and
 copyright notices remain incomplete in [#575](https://github.com/iuliandita/ditero/issues/575).
@@ -155,7 +155,7 @@ proposal; do not resolve "tomorrow" again or generate a new UUID for that retry.
 A 409 means that UUID belongs to another payload; a 410 means its original task
 was deleted and will not be recreated. Neither failure retries automatically.
 
-All task workflow commands accept JSON stdin up to 64 KiB with strict UTF-8, bounded nesting,
+Task workflow commands accept JSON stdin up to 64 KiB (deletion: 4 KiB) with strict UTF-8, bounded nesting,
 prototype-key rejection, and unknown-field rejection. They do not accept file
 paths, collection filters, credentials as flags, or automatic retry options.
 Planning ambiguity errors include `choices` in the JSON error envelope.
@@ -178,4 +178,55 @@ with a new due date. A stale observation returns 409. After an uncertain result,
 retry with the identical task ID, completion body, and UUID. Never read a newer
 due date or generate another key for that retry. A deleted original task returns
 410. Completion requires current write authority. `--task` is accepted only by
-`complete-task`; discovery filters are rejected on writes.
+task observations, `complete-task`, `update-task`, and `delete-task`; discovery filters are rejected on these commands.
+
+## Update an observed task
+
+`observe-task --task TASK_ID` reads the live scalar snapshot and opaque `stateToken`.
+Inspect it, then pass the observed list ID and token in a strict scalar patch:
+
+```sh
+bun run cli observe-task --task TASK_ID --json
+bun run cli update-task --task TASK_ID --request-id 00000000-0000-4000-8000-000000000003 --json <<'JSON'
+{ "listId": "LIST_ID", "expectedState": "OBSERVED_STATE_TOKEN", "patch": { "title": "Reviewed title", "notes": null } }
+JSON
+```
+
+Replace the placeholders with the actual observation and a caller-chosen UUID.
+Allowed patch fields are `title`, `notes`, `dueAt`, `dueAllDay`, and `priority`.
+Omitted fields remain unchanged; explicit null clears notes or dueAt. Dates are
+normalized to UTC. Recurring tasks and habits accept title, notes, and priority
+only; due-field changes require a separate recurrence workflow. The observation
+is a live read of scalar state, not a lock or relationship revision.
+
+Update sends one PATCH. A stale state returns 409 before effects. Same-key replay
+returns the current authorized task, so it can include a later edit; it never
+reapplies the patch. If the original task was deleted, replay returns 410.
+
+## Delete an observed task
+
+`observe-task-deletion --task TASK_ID` additionally returns `childrenState`:
+version, count, and a token covering every persisted child task field. Inspect
+both the parent and children, then explicitly choose the cascade scope:
+
+```sh
+bun run cli observe-task-deletion --task TASK_ID --json
+bun run cli delete-task --task TASK_ID --request-id 00000000-0000-4000-8000-000000000004 --json <<'JSON'
+{ "listId": "LIST_ID", "expectedState": "OBSERVED_STATE_TOKEN", "expectedChildrenState": { "version": 1, "count": 0, "token": "OBSERVED_CHILDREN_TOKEN" }, "cascadeChildren": false }
+JSON
+```
+
+False requires no children. True deletes the exact observed children and their
+dependent content, including comments, files, and assignments. Related content
+is covered by this explicit scope rather than the child token. Parent or child
+changes return 409. The DELETE body is limited to 4 KiB. Success returns the
+original deletion acknowledgment with `taskId`, `listId`, `deleted`, and
+`deletedChildren`; replay returns that acknowledgment even if the ID is recreated
+and does not delete the recreated task.
+
+Observation commands need a read token and accept no stdin or collection flags.
+Update and deletion need current write authority. Each write requires an explicit
+request UUID, shared account-wide with create and completion. Neither command
+performs a hidden observation or retries. After an uncertain result, preserve and
+explicitly retry the identical task ID, body, and key. Do not fetch replacement
+tokens or mint a new key for that retry.

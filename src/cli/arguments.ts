@@ -27,7 +27,11 @@ export interface CliOptions {
 		| PublicApiResource
 		| "plan-task"
 		| "create-task"
-		| "complete-task";
+		| "complete-task"
+		| "observe-task"
+		| "observe-task-deletion"
+		| "update-task"
+		| "delete-task";
 	server: string;
 	token: string;
 	json: boolean;
@@ -119,18 +123,36 @@ export function parseArguments(
 			values.set(argument, value);
 		} else if (
 			!command &&
-			(["profile", "plan-task", "create-task", "complete-task"].includes(
-				argument,
-			) ||
+			([
+				"profile",
+				"plan-task",
+				"create-task",
+				"complete-task",
+				"observe-task",
+				"observe-task-deletion",
+				"update-task",
+				"delete-task",
+			].includes(argument) ||
 				PUBLIC_API_RESOURCES.some((resource) => resource === argument))
 		) {
 			command = argument as CliOptions["command"];
 		} else usageError();
 	}
 	if (!command) usageError();
-	const workflow = ["plan-task", "create-task", "complete-task"].includes(
-		command,
-	);
+	const writing = [
+		"create-task",
+		"complete-task",
+		"update-task",
+		"delete-task",
+	].includes(command);
+	const taskCommand = [
+		"complete-task",
+		"observe-task",
+		"observe-task-deletion",
+		"update-task",
+		"delete-task",
+	].includes(command);
+	const workflow = command === "plan-task" || writing || taskCommand;
 	if (
 		workflow &&
 		(flags.has("--all") ||
@@ -138,23 +160,18 @@ export function parseArguments(
 				(key) =>
 					![
 						"--server",
-						"--request-id",
-						...(command === "complete-task" ? ["--task"] : []),
+						...(writing ? ["--request-id"] : []),
+						...(taskCommand ? ["--task"] : []),
 					].includes(key),
 			))
 	)
 		usageError();
-	if (
-		!["create-task", "complete-task"].includes(command) &&
-		values.has("--request-id")
-	)
-		usageError();
-	if (command !== "complete-task" && values.has("--task")) usageError();
+	if (!writing && values.has("--request-id")) usageError();
+	if (!taskCommand && values.has("--task")) usageError();
 	const taskId = values.get("--task");
-	if (command === "complete-task" && !PUBLIC_API_ID.safeParse(taskId).success)
-		usageError();
+	if (taskCommand && !PUBLIC_API_ID.safeParse(taskId).success) usageError();
 	let requestId: string | undefined;
-	if (command === "create-task" || command === "complete-task") {
+	if (writing) {
 		try {
 			requestId = parseApiIdempotencyKey(values.get("--request-id") ?? null);
 		} catch {
