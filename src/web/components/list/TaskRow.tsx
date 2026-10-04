@@ -273,6 +273,7 @@ export function TaskRow({
 	selection,
 	variant = "row",
 	surface,
+	density,
 	list,
 	sourceContext,
 	occurrence,
@@ -288,12 +289,14 @@ export function TaskRow({
 	// The fill the row sits on, so its swipe layer never reads as an inner box.
 	// A board card and a dashboard panel are card; a dialog is popover.
 	surface?: "card" | "popover";
+	density?: "dashboard";
 	// Shown when the surface mixes lists, so a row says where it lives.
 	list?: { title: string; icon: string | null } | null;
 	sourceContext?: string;
 	occurrence?: HabitOccurrence;
 }) {
 	const card = variant === "card";
+	const dashboard = density === "dashboard";
 	const [expanded, setExpanded] = useState(false);
 	const [editError, setEditError] = useState<string | null>(null);
 	const zero = useZero<typeof schema>();
@@ -513,7 +516,7 @@ export function TaskRow({
 							if (selection && event.shiftKey) event.preventDefault();
 						}}
 						onClick={onOpenClick}
-						title={card ? task.title : undefined}
+						title={card || dashboard ? task.title : undefined}
 						className={cn(
 							"min-w-0 flex-1 text-start",
 							card ? "min-h-8 py-1.5" : "min-h-11 content-center",
@@ -523,7 +526,11 @@ export function TaskRow({
 							data-reading-title
 							className={cn(
 								"block text-sm",
-								card ? "line-clamp-2 break-words" : "truncate",
+								card
+									? "line-clamp-2 break-words"
+									: dashboard
+										? "line-clamp-2 break-words md:line-clamp-none md:truncate"
+										: "truncate",
 								displayedDone && "text-muted-foreground",
 							)}
 						>
@@ -550,9 +557,12 @@ export function TaskRow({
 							<div
 								id={metaId}
 								data-reading-metadata
-								className="mt-0.5 flex flex-wrap items-center gap-2"
+								className={cn(
+									"mt-0.5 flex flex-wrap items-center",
+									dashboard ? "gap-x-2 gap-y-1" : "gap-2",
+								)}
 							>
-								<AssigneeChips taskId={task.id} />
+								<AssigneeChips taskId={task.id} density={density} />
 								{occurrence ? (
 									<span
 										className="inline-flex items-center gap-1 text-xs text-muted-foreground"
@@ -571,7 +581,13 @@ export function TaskRow({
 									!bare && <DueChip task={task} />
 								)}
 								{list && (
-									<span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+									<span
+										className={cn(
+											"inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground",
+											dashboard && "max-w-full",
+										)}
+										title={dashboard ? list.title : undefined}
+									>
 										<ListIcon
 											icon={list.icon}
 											kind={kind}
@@ -583,7 +599,11 @@ export function TaskRow({
 								)}
 								{sourceContext && (
 									<span
-										className="min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground"
+										className={cn(
+											"min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground",
+											dashboard && "line-clamp-2",
+										)}
+										title={dashboard ? sourceContext : undefined}
 										data-testid="task-source-context"
 									>
 										{sourceContext}
