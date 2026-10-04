@@ -2,7 +2,7 @@
 
 The versioned API provides discovery, idempotent list and task creation, scalar
 updates, observed task completion and deletion, and authenticated iCalendar
-snapshots. Public calendar subscriptions and webhooks remain under development.
+snapshots and fixed-list calendar subscriptions. Webhooks remain under development.
 Write tokens do not grant workspace access.
 
 ## Tokens
@@ -460,3 +460,22 @@ it never edits a recreated task, reassigns a removed member, or sends another no
 Keys share the account namespace with every other API write. Identical semantic
 recreation can match a fresh request's state token. No invitations or label resource
 creation, rename, recolor or deletion are provided by this endpoint.
+
+## Calendar subscriptions
+
+Account sessions manage calendar subscriptions through `GET /api/calendar-feeds`,
+`POST /api/calendar-feeds` and `DELETE /api/calendar-feeds/:id`. Creation accepts
+only `name`, `listId` and `expiresInDays` (1–365, default 90). There can be at most
+20 active feeds per account. Viewer membership is sufficient. The server returns
+a secret and relative `/api/v1/calendar-feeds/:secret/calendar.ics` path once.
+Combine that path with your trusted configured server origin; it is a read-only
+capability independent of personal access tokens. Treat the URL as a secret.
+Metadata responses retain only its hint and never recover the URL. Listings return
+up to 100 records, placing all active feeds before the newest expired/revoked history.
+
+A feed stays bound to its original account, workspace and list. Downloads reject
+query filters and validate the live account, current membership, list scope,
+expiry and revocation, including empty lists. Revocation is immediate for later
+requests. Snapshots use the existing iCalendar limits, date handling and escaping;
+recurrence does not generate future instances. The feed includes task titles and
+notes, so sharing its URL grants access to that list's exported task content.

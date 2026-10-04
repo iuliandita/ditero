@@ -12,7 +12,7 @@ const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(25);
+	expect(Object.keys(document.paths)).toHaveLength(28);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
@@ -183,7 +183,7 @@ test("OpenAPI distinguishes immutable list creation acknowledgements from curren
 		expect(JSON.stringify(list.post.responses[status])).toContain('"snapshot"');
 	}
 	expect(JSON.stringify(list.get)).not.toContain("list-create-ack");
-	expect(Object.keys(paths)).toHaveLength(25);
+	expect(Object.keys(paths)).toHaveLength(28);
 });
 
 test("OpenAPI exposes observed list metadata updates and immutable acknowledgements", () => {
@@ -243,4 +243,15 @@ test("OpenAPI exposes folder discovery, observation and strict immutable write a
 		'"const":"folder-delete-ack"',
 	);
 	expect(JSON.stringify(detail.get)).not.toContain("stateToken");
+});
+
+test("calendar feeds distinguish guarded account management from fixed public capabilities", () => {
+	const document = publicApiOpenApi();
+	expect(document.paths).toHaveProperty("/api/calendar-feeds");
+	const feed = JSON.stringify(
+		document.paths["/api/v1/calendar-feeds/{secret}/calendar.ics"],
+	);
+	expect(feed).toContain('"security":[]');
+	expect(feed).not.toContain('"in":"query"');
+	expect(feed).not.toContain("personalAccessToken");
 });
