@@ -9,6 +9,13 @@ import {
 	publicApiProblem,
 } from "../../domain/public-api.ts";
 import { parseCalendarQuery } from "../../domain/public-api-calendar.ts";
+import {
+	apiCommentIdSchema,
+	parseApiCommentCreate,
+	parseApiCommentDelete,
+	parseApiCommentUpdate,
+	parseCommentPageQuery,
+} from "../../domain/public-api-comments.ts";
 import { parseApiTaskComplete } from "../../domain/public-api-completion.ts";
 import {
 	parseApiFolderCreate,
@@ -34,6 +41,9 @@ import {
 	listCalendarFeeds,
 	revokeCalendarFeed,
 } from "./calendar-feeds.ts";
+import { readApiCommentObservation } from "./comment-observation.ts";
+import { readApiComments } from "./comment-read.ts";
+import { writeApiComment } from "./comment-write.ts";
 import { completeApiTask } from "./complete.ts";
 import {
 	bearerToken,
@@ -952,6 +962,194 @@ export function publicApiRoutes(
 				);
 			}),
 		);
+	app.get("/api/v1/tasks/:id/comments", ({ request, server, params }) =>
+		apiRequest(async () => {
+			if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+				throw new PublicApiError(429, "rate-limited", "Too many requests");
+			if (!apiCommentIdSchema.safeParse(params.id).success)
+				throw new PublicApiError(400, "invalid-id", "Invalid task ID");
+			const query = parseCommentPageQuery(new URL(request.url), params.id);
+			return withPersonalAccessToken(
+				pool,
+				bearerToken(request.headers),
+				"read",
+				(client, actor) => readApiComments(client, actor, params.id, query),
+			);
+		}),
+	);
+	app.get(
+		"/api/v1/tasks/:id/comments/:commentId/observation",
+		({ request, server, params }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				if (
+					!apiCommentIdSchema.safeParse(params.id).success ||
+					!apiCommentIdSchema.safeParse(params.commentId).success
+				)
+					throw new PublicApiError(
+						400,
+						"invalid-id",
+						"Invalid comment or task ID",
+					);
+				return withPersonalAccessToken(
+					pool,
+					bearerToken(request.headers),
+					"read",
+					(client, actor) =>
+						readApiCommentObservation(
+							client,
+							actor,
+							params.id,
+							params.commentId,
+						),
+				);
+			}),
+	);
+	app.post(
+		"/api/v1/tasks/:id/comments",
+		({ request, server, params }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				if (
+					request.headers
+						.get("content-type")
+						?.split(";")[0]
+						.trim()
+						.toLowerCase() !== "application/json"
+				)
+					throw new PublicApiError(
+						415,
+						"unsupported-media-type",
+						"A JSON request body is required",
+					);
+				if (!apiCommentIdSchema.safeParse(params.id).success)
+					throw new PublicApiError(400, "invalid-id", "Invalid task ID");
+				const requestId = parseApiIdempotencyKey(
+					request.headers.get("idempotency-key"),
+				);
+				return writeApiComment(
+					pool,
+					bearerToken(request.headers),
+					"create",
+					params.id,
+					null,
+					parseApiCommentCreate(await boundedJson(request, 65536)),
+					requestId,
+					flushEvents,
+				);
+			}),
+		{ parse: "none" },
+	);
+	app.patch(
+		"/api/v1/tasks/:id/comments/:commentId",
+		({ request, server, params }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				if (
+					request.headers
+						.get("content-type")
+						?.split(";")[0]
+						.trim()
+						.toLowerCase() !== "application/json"
+				)
+					throw new PublicApiError(
+						415,
+						"unsupported-media-type",
+						"A JSON request body is required",
+					);
+				if (
+					!apiCommentIdSchema.safeParse(params.id).success ||
+					!apiCommentIdSchema.safeParse(params.commentId).success
+				)
+					throw new PublicApiError(
+						400,
+						"invalid-id",
+						"Invalid comment or task ID",
+					);
+				const requestId = parseApiIdempotencyKey(
+					request.headers.get("idempotency-key"),
+				);
+				return writeApiComment(
+					pool,
+					bearerToken(request.headers),
+					"update",
+					params.id,
+					params.commentId,
+					parseApiCommentUpdate(await boundedJson(request, 65536)),
+					requestId,
+				);
+			}),
+		{ parse: "none" },
+	);
+	app.delete(
+		"/api/v1/tasks/:id/comments/:commentId",
+		({ request, server, params }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				if (
+					request.headers
+						.get("content-type")
+						?.split(";")[0]
+						.trim()
+						.toLowerCase() !== "application/json"
+				)
+					throw new PublicApiError(
+						415,
+						"unsupported-media-type",
+						"A JSON request body is required",
+					);
+				if (
+					!apiCommentIdSchema.safeParse(params.id).success ||
+					!apiCommentIdSchema.safeParse(params.commentId).success
+				)
+					throw new PublicApiError(
+						400,
+						"invalid-id",
+						"Invalid comment or task ID",
+					);
+				const requestId = parseApiIdempotencyKey(
+					request.headers.get("idempotency-key"),
+				);
+				return writeApiComment(
+					pool,
+					bearerToken(request.headers),
+					"delete",
+					params.id,
+					params.commentId,
+					parseApiCommentDelete(await boundedJson(request)),
+					requestId,
+				);
+			}),
+		{ parse: "none" },
+	);
 	for (const resource of PUBLIC_API_RESOURCES) {
 		app.get(`/api/v1/${resource}`, ({ request, server }) =>
 			apiRequest(async () => {

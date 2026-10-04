@@ -12,7 +12,7 @@ const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(30);
+	expect(Object.keys(document.paths)).toHaveLength(33);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
@@ -183,7 +183,7 @@ test("OpenAPI distinguishes immutable list creation acknowledgements from curren
 		expect(JSON.stringify(list.post.responses[status])).toContain('"snapshot"');
 	}
 	expect(JSON.stringify(list.get)).not.toContain("list-create-ack");
-	expect(Object.keys(paths)).toHaveLength(30);
+	expect(Object.keys(paths)).toHaveLength(33);
 });
 
 test("OpenAPI exposes observed list metadata updates and immutable acknowledgements", () => {
@@ -269,7 +269,7 @@ test("list update schema describes bounded placement without new routes", () => 
 		"initially missing/foreign targets return 404",
 	])
 		expect(encoded).toContain(field);
-	expect(Object.keys(document.paths)).toHaveLength(30);
+	expect(Object.keys(document.paths)).toHaveLength(33);
 });
 
 test("placement has separate strict observations and immutable acknowledgment", () => {
@@ -288,4 +288,138 @@ test("placement has separate strict observations and immutable acknowledgment", 
 	expect(JSON.stringify(paths["/api/v1/tasks/{id}"])).not.toContain(
 		"task-place-ack",
 	);
+});
+
+test("comments declare five strict operations, compact observations and exact transport/replay limits", () => {
+	const paths = publicApiOpenApi().paths;
+	type Schema = {
+		type?: string;
+		required?: string[];
+		additionalProperties?: boolean;
+		properties?: Record<string, Schema>;
+		maxLength?: number;
+		items?: Schema;
+	};
+	type Operation = {
+		operationId: string;
+		description: string;
+		security: unknown;
+		parameters: { name: string; in: string; required?: boolean }[];
+		requestBody?: {
+			required: boolean;
+			content: { "application/json": { schema: Schema } };
+		};
+		responses: Record<
+			string,
+			{ content: { "application/json": { schema: Schema } } }
+		>;
+	};
+	const collection = paths["/api/v1/tasks/{id}/comments"] as {
+		get: Operation;
+		post: Operation;
+	};
+	const item = paths["/api/v1/tasks/{id}/comments/{commentId}"] as {
+		patch: Operation;
+		delete: Operation;
+	};
+	const observe = (
+		paths["/api/v1/tasks/{id}/comments/{commentId}/observation"] as {
+			get: Operation;
+		}
+	).get;
+	expect([
+		collection.get.operationId,
+		collection.post.operationId,
+		item.patch.operationId,
+		item.delete.operationId,
+		observe.operationId,
+	]).toEqual([
+		"list_task_comments",
+		"create_task_comment",
+		"patch_task_comment",
+		"delete_task_comment",
+		"observe_task_comment",
+	]);
+	for (const operation of [
+		collection.get,
+		collection.post,
+		item.patch,
+		item.delete,
+		observe,
+	])
+		expect(operation.security).toEqual([{ personalAccessToken: [] }]);
+	expect(collection.get.parameters.map((p) => p.name)).toEqual([
+		"id",
+		"limit",
+		"cursor",
+	]);
+	expect(observe.parameters.map((p) => p.name)).toEqual(["id", "commentId"]);
+	const dto =
+		collection.get.responses["200"].content["application/json"].schema
+			.properties?.data.items;
+	expect(dto?.additionalProperties).toBe(false);
+	expect(dto?.properties?.body).toMatchObject({ type: "string" });
+	const snapshot =
+		observe.responses["200"].content["application/json"].schema.properties?.data
+			.properties?.snapshot;
+	expect(snapshot?.properties?.body).toMatchObject({
+		type: "object",
+		additionalProperties: false,
+		required: ["sha256", "utf8Bytes"],
+		properties: { sha256: { type: "string" }, utf8Bytes: { type: "integer" } },
+	});
+	for (const [operation, required] of [
+		[collection.post, ["workspaceId", "listId", "expectedTaskState", "body"]],
+		[item.patch, ["workspaceId", "listId", "expectedState", "body"]],
+		[item.delete, ["workspaceId", "listId", "expectedState", "deleteScope"]],
+	] as const) {
+		const input = operation.requestBody?.content["application/json"].schema;
+		expect(input?.additionalProperties).toBe(false);
+		expect(input?.required).toEqual(required);
+		expect(operation.parameters).toContainEqual({
+			name: "Idempotency-Key",
+			in: "header",
+			required: true,
+			schema: { type: "string", format: "uuid" },
+		});
+		const encoded = JSON.stringify(operation.responses["200"]);
+		for (const acknowledgment of [
+			"comment-create-ack",
+			"comment-update-ack",
+			"comment-delete-ack",
+		])
+			expect(encoded).toContain(acknowledgment);
+	}
+	expect(
+		collection.post.requestBody?.content["application/json"].schema.properties
+			?.body.maxLength,
+	).toBe(10000);
+	expect(
+		item.patch.requestBody?.content["application/json"].schema.properties?.body
+			.maxLength,
+	).toBeUndefined();
+	expect(
+		item.delete.requestBody?.content["application/json"].schema.properties
+			?.deleteScope,
+	).toMatchObject({ const: "comment-and-attachments" });
+	expect(collection.get.description).toContain("256 KiB");
+	expect(collection.get.description).toContain("without truncation");
+	expect(collection.post.description).toContain("64 KiB");
+	expect(collection.post.description).toContain("after commit");
+	expect(collection.post.description).toContain("no automatic retry");
+	expect(item.patch.description).toContain("64 KiB");
+	expect(item.patch.description).toContain(
+		"Imported comments cannot be edited",
+	);
+	expect(item.delete.description).toContain("4 KiB");
+	expect(item.delete.description).toContain("no blob I/O");
+	expect(observe.description).toContain("timestamp microseconds");
+	const encoded = JSON.stringify([collection, item, observe]);
+	for (const hidden of [
+		"sourceNamespace",
+		"sourceRowId",
+		"historicalAuthorNamespace",
+		"historicalAuthorPrincipalId",
+	])
+		expect(encoded).not.toContain(hidden);
 });
