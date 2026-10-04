@@ -20,6 +20,32 @@ instances from overwriting each other's state. Local UI and sync persistence ret
 server/account scopes. Closing waits for durable local sync retirement before
 native sockets are drained and the window is destroyed; a failure keeps it open.
 
+## Linux task links
+
+Linux packages declare the `ditero` URL scheme. A task link has this form:
+
+```text
+ditero://task?origin=https%3A%2F%2Ftodo.example.test&taskId=TASK_ID
+```
+
+The origin is the canonical HTTPS server address, percent-encoded as one query
+value. The task ID uses the existing native identifier format. Only these two
+parameters are accepted; a link contains no credentials and grants no access.
+Opening a link navigates to a task already visible to the current account after
+sync queries finish. It never changes a task, switches servers, or starts sign-in.
+
+A cold launch can restore only the account already selected in the OS credential
+store. Sign in normally and reopen the link if that account or server is wrong.
+A warm launch forwards the link to the existing process through session D-Bus.
+Pending navigation stays in memory and is discarded when account or page ownership
+changes. A second intent is refused while the first is pending. If acknowledgement
+fails, use Retry before reopening the second link; the first task is not opened
+again. The application retains its credential-store process lock and does not
+register or replace URL associations at startup.
+
+Linux scheme association and cold/warm navigation require packaged runtime
+qualification. Windows, macOS, and Android link handling remain unsupported.
+
 ## System notifications
 
 Linux system notifications require a notification service with action support.

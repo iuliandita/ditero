@@ -11,6 +11,7 @@ import {
 	connectBridge,
 	createNativeNotificationNavigation,
 	createNativePush,
+	createNativeTaskLinkNavigation,
 	type Hello,
 	NativeWebSocket,
 	readBridgeState,
@@ -500,4 +501,155 @@ test("native hello rejects an unknown push provider", async () => {
 	await expect(connectBridge()).rejects.toMatchObject({
 		code: "invalid-reply",
 	});
+});
+
+test("bridge snapshots preserve optional task-link capability and refusal flags", async () => {
+	for (const enabled of [true, false]) {
+		snapshot.taskLinks = enabled;
+		snapshot.linkRefused = enabled;
+		await connectBridge();
+		expect(bridgeState()).toMatchObject({
+			taskLinks: enabled,
+			linkRefused: enabled,
+		});
+	}
+	delete snapshot.taskLinks;
+	delete snapshot.linkRefused;
+	await connectBridge();
+	expect(Object.hasOwn(bridgeState(), "taskLinks")).toBe(false);
+	expect(Object.hasOwn(bridgeState(), "linkRefused")).toBe(false);
+});
+
+test("Linux link capability is explicit and unavailable on other native hosts", async () => {
+	snapshot.session = session;
+	await connectBridge();
+	const navigation = createNativeTaskLinkNavigation(1, session.authHandle);
+	const before = sent.length;
+	await expect(navigation.read()).rejects.toMatchObject({
+		code: "stale-generation",
+	});
+	expect(sent).toHaveLength(before);
+});
+test("Linux link reads validate task-only identity and exact opaque dismissal", async () => {
+	snapshot.session = session;
+	snapshot.taskLinks = true;
+	await connectBridge();
+	const navigation = createNativeTaskLinkNavigation(1, session.authHandle);
+	for (const open of [
+		null,
+		{ token: "link", taskId: "task" },
+		{ token: "refused", taskId: null },
+	]) {
+		const result = navigation.read();
+		const command = sent.at(-1);
+		if (!command) throw Error("missing command");
+		expect(command).toMatchObject({
+			op: "link.read",
+			id: session.authHandle,
+			gen: 1,
+		});
+		reply(command, { open });
+		expect(await result).toEqual(open);
+	}
+	const dismiss = navigation.dismiss("link");
+	const command = sent.at(-1);
+	if (!command) throw Error("missing command");
+	expect(command).toMatchObject({
+		op: "link.dismiss",
+		id: session.authHandle,
+		body: { token: "link" },
+	});
+	reply(command, {});
+	await dismiss;
+	const before = sent.length;
+	await expect(navigation.dismiss("../file")).rejects.toMatchObject({
+		code: "invalid-message",
+	});
+	expect(sent).toHaveLength(before);
+});
+test("Linux link reply cannot grant URL, workspace, or mutation authority", async () => {
+	snapshot.session = session;
+	snapshot.taskLinks = true;
+	await connectBridge();
+	const navigation = createNativeTaskLinkNavigation(1, session.authHandle);
+	for (const open of [
+		{ token: "link", taskId: ".." },
+		{ token: "link", taskId: "task", url: "https://evil.test" },
+		{ token: "link", taskId: "task", workspaceId: "w" },
+		{ token: "link", taskId: 7 },
+		{ token: "link", taskId: "a".repeat(129) },
+		{ token: "link/evil", taskId: "task" },
+	]) {
+		const result = navigation.read();
+		const refused = expect(result).rejects.toMatchObject({
+			code: "invalid-reply",
+		});
+		const command = sent.at(-1);
+		if (!command) throw Error("missing command");
+		reply(command, { open });
+		await refused;
+	}
+});
+test("Linux link events and asynchronous reads cannot cross accounts", async () => {
+	snapshot.session = session;
+	snapshot.taskLinks = true;
+	await connectBridge();
+	const navigation = createNativeTaskLinkNavigation(1, session.authHandle);
+	const listener = vi.fn();
+	const unsubscribe = navigation.subscribe(listener);
+	const emit = (gen: number) =>
+		native.onmessage?.(
+			new MessageEvent("message", {
+				data: JSON.stringify({ t: "link.open", gen }),
+			}),
+		);
+	emit(0);
+	emit(1);
+	expect(listener).toHaveBeenCalledTimes(1);
+	const result = navigation.read();
+	const refused = expect(result).rejects.toMatchObject({
+		code: "stale-generation",
+	});
+	const command = sent.at(-1);
+	if (!command) throw Error("missing command");
+	snapshot = {
+		...snapshot,
+		gen: 2,
+		session: { ...session, authHandle: "other" },
+	};
+	await readBridgeState();
+	reply(command, { open: { token: "link", taskId: "task" } });
+	await refused;
+	emit(2);
+	expect(listener).toHaveBeenCalledTimes(1);
+	const before = sent.length;
+	await expect(navigation.dismiss("link")).rejects.toMatchObject({
+		code: "stale-generation",
+	});
+	expect(sent).toHaveLength(before);
+	unsubscribe();
+});
+
+test("Linux link retirement waits for a captured-account acknowledgement and fails explicitly", async () => {
+	snapshot.session = session;
+	snapshot.taskLinks = true;
+	await connectBridge();
+	const navigation = createNativeTaskLinkNavigation(1, session.authHandle);
+	const first = navigation.retire();
+	const command = sent.at(-1);
+	if (!command) throw Error("missing command");
+	expect(command).toMatchObject({
+		op: "link.retire",
+		id: session.authHandle,
+		gen: 1,
+	});
+	expect(command).not.toHaveProperty("body");
+	reply(command, { ok: false, code: "busy" });
+	await expect(first).rejects.toMatchObject({ code: "busy" });
+	const retry = navigation.retire();
+	const next = sent.at(-1);
+	if (!next) throw Error("missing command");
+	reply(next, {});
+	await retry;
+	expect(bridgeState().session).toEqual(session);
 });

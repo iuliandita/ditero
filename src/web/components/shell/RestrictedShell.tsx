@@ -11,6 +11,7 @@ import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { useNativeNotificationNavigation } from "../../hooks/useNativeNotificationNavigation.ts";
+import { useNativeTaskLinks } from "../../hooks/useNativeTaskLinks.ts";
 import {
 	useTaskImportActivation,
 	useTaskImportActivationMap,
@@ -143,6 +144,18 @@ export function RestrictedShell({
 	const detailList = detailTask
 		? (lists.find((l) => l.id === detailTask.listId) ?? null)
 		: null;
+	useNativeTaskLinks(
+		notificationReady &&
+			assigneesDetails.type === "complete" &&
+			tasksDetails.type === "complete" &&
+			listsDetails.type === "complete",
+		(taskId) => {
+			const task = myTasks.find((row) => row.id === taskId);
+			if (!task || !lists.some((row) => row.id === task.listId)) return false;
+			setDetailTaskId(task.id);
+			return true;
+		},
+	);
 	useNativeNotificationNavigation(
 		notificationReady &&
 			assigneesDetails.type === "complete" &&

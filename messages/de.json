@@ -2199,6 +2199,8 @@
 	"native_push_disable": "Ausschalten",
 	"native_push_refresh": "Status aktualisieren",
 	"native_push_action_failed": "Handy-Benachrichtigungen konnten nicht geändert werden. Aktualisiere den Status, bevor du es erneut versuchst.",
+	"native_link_unavailable": "Dieser Link ist nicht verfügbar. Prüfe den ausgewählten Server und das Konto und öffne ihn dann erneut.",
+	"native_link_retry": "Die Bestätigung des Aufgabenlinks ist fehlgeschlagen. Versuche es erneut, bevor du einen weiteren Link öffnest.",
 	"native_notification_unavailable": "Diese Benachrichtigung ist nicht mehr verfügbar.",
 	"desktop_push_heading": "Auf diesem Computer",
 	"desktop_push_help": "Erhalte Erinnerungen, solange Ditero geöffnet oder minimiert ist. Beim Schließen der App enden die Benachrichtigungen.",

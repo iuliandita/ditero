@@ -1,5 +1,6 @@
 use crate::{
     attachments::{self, Transfers},
+    deep_links::{self, TaskLink},
     notifications::{self, Event as NotificationEvent},
     protocol::{self, Result, MAX_BODY, MAX_SEND},
     vault::{self, DesktopRegistration, Registry, Session, SystemVault, Vault},
@@ -36,6 +37,8 @@ pub struct Host {
     clock: Arc<AtomicU64>,
     page: Arc<AtomicU64>,
     files: Transfers,
+    link_epoch: Arc<AtomicU64>,
+    links_verified: Arc<AtomicBool>,
 }
 enum Work {
     Attach(Channel<String>, u64, oneshot::Sender<Result<u64>>),
@@ -45,6 +48,21 @@ enum Work {
     FileReply(attachments::Context, u64, Result<Value>),
     Notification(NotificationEvent),
     NotificationCleaned(DesktopRegistration),
+    TaskLink(Option<TaskLink>, u64, u64, u64),
+}
+struct ColdLink {
+    link: TaskLink,
+    session: Session,
+    page: u64,
+    awaiting_hello: bool,
+}
+struct TaskLinkOpen {
+    session: Session,
+    gen: u64,
+    page: u64,
+    handle: String,
+    token: String,
+    task_id: Option<String>,
 }
 struct NotificationTap {
     owner: notifications::Owner,
@@ -86,6 +104,13 @@ struct Actor {
     push_state: &'static str,
     verified: bool,
     tap: Option<NotificationTap>,
+    startup_link: Option<TaskLink>,
+    cold_link: Option<ColdLink>,
+    task_link: Option<TaskLinkOpen>,
+    link_refused: bool,
+    attached: bool,
+    link_epoch: Arc<AtomicU64>,
+    links_verified: Arc<AtomicBool>,
     app: Option<tauri::AppHandle>,
     #[cfg(test)]
     responses: std::collections::VecDeque<(u16, String, bool)>,
@@ -93,6 +118,15 @@ struct Actor {
     requests: std::sync::Mutex<Vec<(String, String, Option<String>)>>,
     #[cfg(test)]
     push_supported: bool,
+}
+fn capture_link_ingress(epoch: &AtomicU64, verified: &AtomicBool) -> Option<u64> {
+    let captured = epoch.load(Ordering::SeqCst);
+    verified.load(Ordering::SeqCst).then_some(captured)
+}
+fn retire_link_ingress(epoch: &AtomicU64, verified: &AtomicBool, between: impl FnOnce()) {
+    verified.store(false, Ordering::SeqCst);
+    between();
+    epoch.fetch_add(1, Ordering::SeqCst);
 }
 fn random(n: usize) -> String {
     let mut bytes = vec![0; n];
@@ -196,6 +230,13 @@ pub fn run() {
         .expect("native streaming HTTPS client");
     let clock = Arc::new(AtomicU64::new(0));
     let page = Arc::new(AtomicU64::new(0));
+    let link_epoch = Arc::new(AtomicU64::new(0));
+    let links_verified = Arc::new(AtomicBool::new(false));
+    #[cfg(target_os = "linux")]
+    let startup = deep_links::arguments(std::env::args());
+    #[cfg(not(target_os = "linux"))]
+    let startup: Result<Option<TaskLink>> = Ok(None);
+    let link_refused = startup.is_err();
     let mut actor = Actor {
         tx: tx.clone(),
         channel: None,
@@ -222,6 +263,13 @@ pub fn run() {
         push_state: "disabled",
         verified: false,
         tap: None,
+        startup_link: startup.ok().flatten(),
+        cold_link: None,
+        task_link: None,
+        link_refused,
+        attached: false,
+        link_epoch: link_epoch.clone(),
+        links_verified: links_verified.clone(),
         app: None,
         #[cfg(test)]
         responses: Default::default(),
@@ -231,12 +279,36 @@ pub fn run() {
         push_supported: true,
     };
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "linux")]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        let request = match deep_links::arguments(args) {
+            Ok(None) => return,
+            Ok(Some(link)) => Some(link),
+            Err(_) => None,
+        };
+        let host = app.state::<Host>();
+        let Some(epoch) = capture_link_ingress(&host.link_epoch, &host.links_verified) else {
+            return;
+        };
+        let gen = host.clock.load(Ordering::SeqCst);
+        let page = host.page.load(Ordering::SeqCst);
+        if host
+            .tx
+            .try_send(Work::TaskLink(request, gen, page, epoch))
+            .is_err()
+        {
+            eprintln!("Desktop link refused: busy");
+        }
+    }));
+    builder
         .manage(Host {
             tx,
             clock,
             page,
             files: actor.files.clone(),
+            link_epoch,
+            links_verified,
         })
         .invoke_handler(tauri::generate_handler![
             native_attach,
@@ -272,17 +344,31 @@ pub fn run() {
         .expect("desktop runtime");
 }
 impl Actor {
+    fn attach(&mut self, channel: Channel<String>, page: u64) -> Result<u64> {
+        let startup = if !self.attached {
+            self.startup_link.take()
+        } else {
+            None
+        };
+        let refused = !self.attached && self.link_refused;
+        self.attached = true;
+        self.drain();
+        self.page = page;
+        self.channel = Some(channel);
+        self.vault.load().map(|r| {
+            self.registry = r;
+            self.link_refused = refused;
+            if let Some(link) = startup {
+                self.capture_cold_link(link);
+            }
+            page
+        })
+    }
     async fn run(mut self, mut rx: mpsc::Receiver<Work>) {
         while let Some(work) = rx.recv().await {
             match work {
                 Work::Attach(channel, page, ack) => {
-                    self.drain();
-                    self.page = page;
-                    self.channel = Some(channel);
-                    let result = self.vault.load().map(|r| {
-                        self.registry = r;
-                        page
-                    });
+                    let result = self.attach(channel, page);
                     let _ = ack.send(result);
                 }
                 Work::Drain(ack) => {
@@ -296,6 +382,9 @@ impl Actor {
                         eprintln!("notification withdrawal unconfirmed");
                     }
                     let _ = ack.send(());
+                }
+                Work::TaskLink(link, gen, page, epoch) => {
+                    self.receive_task_link(link, gen, page, epoch)
                 }
                 Work::Notification(event) => self.notification_event(event),
                 Work::NotificationCleaned(registration) => self.notification_cleaned(&registration),
@@ -358,6 +447,7 @@ impl Actor {
         self.gen = self.clock.fetch_add(1, Ordering::SeqCst) + 1;
     }
     fn drain(&mut self) {
+        self.clear_task_links();
         self.stop_notifications();
         self.verified = false;
         self.advance();
@@ -374,6 +464,7 @@ impl Actor {
         self.zero = None;
     }
     fn drop_memory(&mut self) {
+        self.clear_task_links();
         self.stop_notifications();
         self.verified = false;
         self.files.cancel_all();
@@ -389,7 +480,7 @@ impl Actor {
         self.jwt_exp = 0;
     }
     fn snapshot(&self) -> Value {
-        json!({"ok":true,"gen":self.gen,"server":self.origin.as_ref().map(|o|json!({"origin":o,"queryUrl":format!("{o}/api/zero/query"),"mutateUrl":format!("{o}/api/zero/mutate")})),"session":self.meta(),"exchanging":false,"revoking":false,"grantPending":self.pending.is_some()})
+        json!({"ok":true,"gen":self.gen,"server":self.origin.as_ref().map(|o|json!({"origin":o,"queryUrl":format!("{o}/api/zero/query"),"mutateUrl":format!("{o}/api/zero/mutate")})),"session":self.meta(),"exchanging":false,"revoking":false,"grantPending":self.pending.is_some(),"taskLinks":cfg!(target_os = "linux"),"linkRefused":self.link_refused})
     }
     fn meta(&self) -> Value {
         self.session.as_ref().map(|s|json!({"scope":s.scope(),"userId":s.user_id,"deviceId":s.device_id,"authHandle":self.handle,"expiresAt":s.expires_at,"tokenReady":!self.jwt.is_empty(),"jwtExp":self.jwt_exp})).unwrap_or(Value::Null)
@@ -414,6 +505,169 @@ impl Actor {
             self.push_tasks.push(receiver.task);
         }
         self.tap = None;
+    }
+    fn clear_task_links(&mut self) {
+        retire_link_ingress(&self.link_epoch, &self.links_verified, || {});
+        self.startup_link = None;
+        self.cold_link = None;
+        self.task_link = None;
+        self.link_refused = false;
+    }
+    fn capture_cold_link(&mut self, link: TaskLink) {
+        let session = self
+            .registry
+            .selected
+            .as_ref()
+            .and_then(|origin| self.registry.sessions.get(origin))
+            .filter(|session| session.origin == link.origin)
+            .cloned();
+        if let Some(session) = session {
+            self.cold_link = Some(ColdLink {
+                link,
+                session,
+                page: self.page,
+                awaiting_hello: true,
+            });
+        } else {
+            self.link_refused = true;
+        }
+    }
+    fn bind_cold_link(&mut self) {
+        let Some(cold) = self.cold_link.take() else {
+            return;
+        };
+        if self.verified
+            && cold.page == self.page
+            && self
+                .session
+                .as_ref()
+                .is_some_and(|session| vault::same_session(session, &cold.session))
+        {
+            self.receive_task_link(
+                Some(cold.link),
+                self.gen,
+                self.page,
+                self.link_epoch.load(Ordering::SeqCst),
+            );
+        } else {
+            self.link_refused = true;
+        }
+    }
+    fn task_link_current(&self, link: &TaskLinkOpen) -> bool {
+        self.verified
+            && self.ready
+            && self.gen == link.gen
+            && self.page == link.page
+            && self.current().is_ok()
+            && self.pages.load(Ordering::SeqCst) == link.page
+            && self.handle == link.handle
+            && self
+                .session
+                .as_ref()
+                .is_some_and(|session| vault::same_session(session, &link.session))
+            && self.origin.as_ref() == Some(&link.session.origin)
+            && self.registry.selected.as_ref() == Some(&link.session.origin)
+    }
+    fn receive_task_link(&mut self, link: Option<TaskLink>, gen: u64, page: u64, epoch: u64) {
+        if epoch != self.link_epoch.load(Ordering::SeqCst)
+            || gen != self.gen
+            || page != self.page
+            || !self.links_verified.load(Ordering::SeqCst)
+            || !self.verified
+            || !self.ready
+            || self.current().is_err()
+            || self.pages.load(Ordering::SeqCst) != page
+        {
+            return;
+        }
+        let Some(session) = self.session.clone() else {
+            return;
+        };
+        if self
+            .task_link
+            .as_ref()
+            .is_some_and(|pending| self.task_link_current(pending))
+        {
+            self.emit(json!({"t":"link.open","gen":self.gen}));
+            eprintln!("Desktop link refused: busy");
+            return;
+        }
+        let task_id = link
+            .filter(|link| link.origin == session.origin)
+            .map(|link| link.task_id);
+        let pending = TaskLinkOpen {
+            session,
+            gen,
+            page,
+            handle: self.handle.clone(),
+            token: random(24),
+            task_id,
+        };
+        if !self.task_link_current(&pending) {
+            return;
+        }
+        self.task_link = Some(pending);
+        self.emit(json!({"t":"link.open","gen":self.gen}));
+        if let Some(window) = self
+            .task_link
+            .as_ref()
+            .filter(|link| link.task_id.is_some())
+            .and(self.app.as_ref())
+            .as_ref()
+            .and_then(|app| app.get_webview_window("main"))
+        {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    }
+    fn link_post(&mut self, v: &Value) -> Result<Value> {
+        let op = protocol::string(v, "op")?;
+        let fields: &[&str] = if op == "link.dismiss" {
+            &["op", "rid", "gen", "id", "body"]
+        } else {
+            &["op", "rid", "gen", "id"]
+        };
+        if !notifications::exact(v, fields) {
+            return Err("invalid-message");
+        }
+        if !self.verified || self.session.is_none() {
+            return Err("no-session");
+        }
+        if protocol::string(v, "id")? != self.handle {
+            return Err("invalid-message");
+        }
+        if self.current().is_err() || self.pages.load(Ordering::SeqCst) != self.page {
+            return Err("cancelled");
+        }
+        if self
+            .task_link
+            .as_ref()
+            .is_some_and(|link| !self.task_link_current(link))
+        {
+            self.task_link = None;
+        }
+        if op == "link.read" {
+            return Ok(
+                json!({"ok":true,"open":self.task_link.as_ref().map(|link| json!({"token":link.token,"taskId":link.task_id}))}),
+            );
+        }
+        if op == "link.retire" {
+            self.clear_task_links();
+            return Ok(json!({"ok":true}));
+        }
+        if !notifications::exact(&v["body"], &["token"]) {
+            return Err("invalid-message");
+        }
+        let token = protocol::string(&v["body"], "token")?;
+        if self
+            .task_link
+            .as_ref()
+            .is_some_and(|link| link.token == token)
+        {
+            self.task_link = None;
+        }
+        Ok(json!({"ok":true}))
     }
     fn notification_current(&self, owner: &notifications::Owner) -> bool {
         self.verified
@@ -1095,6 +1349,12 @@ impl Actor {
             return Err("invalid-message");
         }
         if op == "hello" {
+            // Only the first hello may carry a cold intent through initial restoration.
+            let cold = self
+                .cold_link
+                .take()
+                .filter(|cold| cold.awaiting_hello && cold.page == self.page);
+            let refused = self.link_refused;
             self.drain();
             self.origin = self.registry.selected.clone();
             self.install(
@@ -1103,6 +1363,11 @@ impl Actor {
                     .and_then(|o| self.registry.sessions.get(o))
                     .cloned(),
             );
+            self.cold_link = cold.map(|mut cold| {
+                cold.awaiting_hello = false;
+                cold
+            });
+            self.link_refused = refused;
             self.ready = true;
             return Ok(self.snapshot());
         }
@@ -1113,8 +1378,12 @@ impl Actor {
         }
         match op {
             op if op.starts_with("push.") => self.push_post(v).await,
+            "link.read" | "link.dismiss" | "link.retire" if cfg!(target_os = "linux") => {
+                self.link_post(v)
+            }
             "state.read" => Ok(self.snapshot()),
             "server.select" => {
+                self.clear_task_links();
                 if !self.sockets.is_empty() {
                     return Err("busy");
                 }
@@ -1129,6 +1398,7 @@ impl Actor {
                     self.zero = None;
                     self.install(self.registry.sessions.get(&origin).cloned());
                 }
+                self.links_verified.store(self.verified, Ordering::SeqCst);
                 Ok(self.snapshot())
             }
             "config.read" => {
@@ -1189,6 +1459,8 @@ impl Actor {
                 }
                 let reply = json!({"ok":true,"scope":s.scope(),"userId":s.user_id,"deviceId":s.device_id,"expiresAt":expiry});
                 self.verified = true;
+                self.links_verified.store(true, Ordering::SeqCst);
+                self.bind_cold_link();
                 self.start_notifications();
                 self.cleanup_notifications();
                 Ok(reply)
@@ -1428,11 +1700,13 @@ impl Actor {
         self.registry = next;
         self.install(Some(s));
         self.verified = true;
+        self.links_verified.store(true, Ordering::SeqCst);
         self.start_notifications();
         self.cleanup_notifications();
         Ok(json!({"ok":true,"state":"signed-in","session":self.meta()}))
     }
     async fn revoke(&mut self) -> Result<Value> {
+        self.clear_task_links();
         self.stop_notifications();
         self.files.cancel_all();
         let s = self.session.clone().ok_or("no-session")?;
@@ -1672,6 +1946,13 @@ mod tests {
             push_state: "disabled",
             verified: false,
             tap: None,
+            startup_link: None,
+            cold_link: None,
+            task_link: None,
+            link_refused: false,
+            attached: true,
+            link_epoch: Arc::new(AtomicU64::new(0)),
+            links_verified: Arc::new(AtomicBool::new(false)),
             app: None,
             #[cfg(test)]
             responses: Default::default(),
@@ -1680,6 +1961,243 @@ mod tests {
             #[cfg(test)]
             push_supported: true,
         }
+    }
+    fn link() -> TaskLink {
+        deep_links::parse("ditero://task?origin=https%3A%2F%2Fa.example&taskId=task").unwrap()
+    }
+    fn link_owner(host: &mut Actor) {
+        let session = session();
+        host.registry.selected = Some(session.origin.clone());
+        host.registry
+            .sessions
+            .insert(session.origin.clone(), session.clone());
+        host.origin = Some(session.origin.clone());
+        host.install(Some(session));
+        host.verified = true;
+        host.links_verified.store(true, Ordering::SeqCst);
+    }
+    fn accept_link(host: &mut Actor, link: Option<TaskLink>) {
+        host.receive_task_link(
+            link,
+            host.gen,
+            host.page,
+            host.link_epoch.load(Ordering::SeqCst),
+        );
+    }
+    #[test]
+    fn task_link_is_memory_only_and_exact_dismissal_preserves_other_requests() {
+        let mut host = actor(false);
+        link_owner(&mut host);
+        accept_link(&mut host, Some(link()));
+        let token = host.task_link.as_ref().unwrap().token.clone();
+        let read = json!({"op":"link.read","rid":1,"gen":host.gen,"id":host.handle});
+        assert_eq!(
+            host.link_post(&read).unwrap()["open"],
+            json!({"token":token,"taskId":"task"})
+        );
+        accept_link(
+            &mut host,
+            Some(TaskLink {
+                task_id: "other".into(),
+                ..link()
+            }),
+        );
+        assert_eq!(host.task_link.as_ref().unwrap().token, token);
+        host.link_post(&json!({"op":"link.dismiss","rid":2,"gen":host.gen,"id":host.handle,"body":{"token":"other"}})).unwrap();
+        assert!(host.task_link.is_some());
+        host.link_post(&json!({"op":"link.dismiss","rid":2,"gen":host.gen,"id":host.handle,"body":{"token":token}})).unwrap();
+        assert_eq!(host.link_post(&read).unwrap()["open"], Value::Null);
+        assert!(host.requests.lock().unwrap().is_empty());
+        assert!(host.vault.load().unwrap().sessions.is_empty());
+    }
+    #[test]
+    fn link_retirement_disables_ingress_before_advancing_ownership_epoch() {
+        let epoch = AtomicU64::new(7);
+        let verified = AtomicBool::new(true);
+        assert_eq!(capture_link_ingress(&epoch, &verified), Some(7));
+        let mut during = Some(0);
+        retire_link_ingress(&epoch, &verified, || {
+            during = capture_link_ingress(&epoch, &verified);
+        });
+        assert_eq!(
+            during, None,
+            "a callback between retirement writes must not capture the retired owner"
+        );
+        assert_eq!(epoch.load(Ordering::SeqCst), 8);
+        assert!(!verified.load(Ordering::SeqCst));
+        verified.store(true, Ordering::SeqCst);
+        assert_eq!(capture_link_ingress(&epoch, &verified), Some(8));
+    }
+    #[test]
+    fn explicit_link_retirement_fences_ingress_without_changing_credentials() {
+        let mut host = actor(false);
+        link_owner(&mut host);
+        accept_link(&mut host, Some(link()));
+        let (gen, page, epoch) = (host.gen, host.page, host.link_epoch.load(Ordering::SeqCst));
+        let session = host.session.clone().unwrap();
+        let handle = host.handle.clone();
+        host.link_post(&json!({"op":"link.retire","rid":1,"gen":gen,"id":handle}))
+            .unwrap();
+        assert!(host.task_link.is_none());
+        assert!(host.cold_link.is_none());
+        assert!(!host.links_verified.load(Ordering::SeqCst));
+        assert!(vault::same_session(
+            host.session.as_ref().unwrap(),
+            &session
+        ));
+        assert_eq!(host.handle, handle);
+        host.receive_task_link(Some(link()), gen, page, epoch);
+        assert!(host.task_link.is_none());
+        accept_link(&mut host, Some(link()));
+        assert!(
+            host.task_link.is_none(),
+            "current epoch alone cannot reopen retired ingress"
+        );
+        assert!(host.requests.lock().unwrap().is_empty());
+    }
+    #[test]
+    fn foreign_and_malformed_links_have_only_a_refusal_without_origin_or_action() {
+        for request in [
+            None,
+            Some(TaskLink {
+                origin: "https://other.example".into(),
+                ..link()
+            }),
+        ] {
+            let mut host = actor(false);
+            link_owner(&mut host);
+            accept_link(&mut host, request);
+            let read = json!({"op":"link.read","rid":1,"gen":host.gen,"id":host.handle});
+            let value = host.link_post(&read).unwrap();
+            assert_eq!(value["open"]["taskId"], Value::Null);
+            assert_eq!(value["open"].as_object().unwrap().len(), 2);
+            assert_eq!(host.origin.as_deref(), Some("https://a.example"));
+            assert!(host.requests.lock().unwrap().is_empty());
+        }
+    }
+    #[test]
+    fn queued_link_cannot_follow_session_replacement_with_unchanged_generation() {
+        let mut host = actor(false);
+        link_owner(&mut host);
+        let (gen, page, epoch) = (host.gen, host.page, host.link_epoch.load(Ordering::SeqCst));
+        let mut replacement = session();
+        replacement.user_id = "other".into();
+        replacement.session_id = "new-session".into();
+        host.install(Some(replacement));
+        host.verified = true;
+        host.links_verified.store(true, Ordering::SeqCst);
+        assert_eq!(host.gen, gen);
+        assert_eq!(host.page, page);
+        host.receive_task_link(Some(link()), gen, page, epoch);
+        assert!(host.task_link.is_none());
+        accept_link(&mut host, Some(link()));
+        assert_eq!(host.task_link.as_ref().unwrap().session.user_id, "other");
+    }
+    #[test]
+    fn page_retirement_and_unverified_state_refuse_delivery_and_stale_reads() {
+        let mut host = actor(false);
+        link_owner(&mut host);
+        host.verified = false;
+        accept_link(&mut host, Some(link()));
+        assert!(host.task_link.is_none());
+        host.verified = true;
+        accept_link(&mut host, Some(link()));
+        host.pages.fetch_add(1, Ordering::SeqCst);
+        let read = json!({"op":"link.read","rid":1,"gen":host.gen,"id":host.handle});
+        assert_eq!(host.link_post(&read), Err("cancelled"));
+        host.drain();
+        assert!(host.task_link.is_none());
+        assert!(!host.links_verified.load(Ordering::SeqCst));
+    }
+    #[test]
+    fn task_link_protocol_refuses_extra_fields_and_wrong_authentication_handle() {
+        let mut host = actor(false);
+        link_owner(&mut host);
+        accept_link(&mut host, Some(link()));
+        for value in [
+            json!({"op":"link.read","rid":1,"gen":host.gen,"id":"other"}),
+            json!({"op":"link.read","rid":1,"gen":host.gen,"id":host.handle,"url":"https://evil.example"}),
+            json!({"op":"link.dismiss","rid":1,"gen":host.gen,"id":host.handle,"body":{"token":"link","taskId":"other"}}),
+        ] {
+            assert_eq!(host.link_post(&value), Err("invalid-message"));
+        }
+        assert!(host.task_link.is_some());
+    }
+    #[tokio::test]
+    async fn cold_link_restores_only_selected_session_and_waits_for_verification() {
+        let mut host = actor(false);
+        let stored = session();
+        let mut registry = Registry::default();
+        registry.selected = Some(stored.origin.clone());
+        registry
+            .sessions
+            .insert(stored.origin.clone(), stored.clone());
+        host.vault.save(&registry).unwrap();
+        host.attached = false;
+        host.startup_link = Some(link());
+        host.attach(Channel::new(|_| Ok(())), 1).unwrap();
+        assert!(host.cold_link.is_some());
+        assert!(host.task_link.is_none());
+        host.post(&json!({"op":"hello","rid":1}), 40).await.unwrap();
+        assert_eq!(host.registry.selected, Some(stored.origin.clone()));
+        assert!(host.cold_link.is_some());
+        assert!(host.task_link.is_none());
+        assert!(!host.verified);
+        host.responses.push_back((200, json!({"userId":stored.user_id,"sessionId":stored.session_id,"deviceId":stored.device_id,"expiresAt":stored.expires_at}).to_string(), false));
+        host.post(&json!({"op":"session.read","rid":2,"gen":host.gen}), 100)
+            .await
+            .unwrap();
+        assert!(host.cold_link.is_none());
+        assert_eq!(
+            host.task_link.as_ref().unwrap().task_id.as_deref(),
+            Some("task")
+        );
+        assert_eq!(host.requests.lock().unwrap().len(), 1);
+        host.post(&json!({"op":"hello","rid":3}), 40).await.unwrap();
+        assert!(host.cold_link.is_none());
+        assert!(host.task_link.is_none());
+    }
+    #[test]
+    fn cold_link_never_selects_an_account_and_cannot_survive_a_second_page() {
+        let mut host = actor(false);
+        host.attached = false;
+        host.startup_link = Some(link());
+        host.attach(Channel::new(|_| Ok(())), 1).unwrap();
+        assert!(host.link_refused);
+        assert!(host.registry.selected.is_none());
+        assert!(host.cold_link.is_none());
+        let stored = session();
+        let mut registry = Registry::default();
+        registry.selected = Some(stored.origin.clone());
+        registry.sessions.insert(stored.origin.clone(), stored);
+        host.vault.save(&registry).unwrap();
+        host.attached = false;
+        host.startup_link = Some(link());
+        host.attach(Channel::new(|_| Ok(())), 1).unwrap();
+        assert!(host.cold_link.is_some());
+        host.attach(Channel::new(|_| Ok(())), 2).unwrap();
+        assert!(host.cold_link.is_none());
+        assert!(host.task_link.is_none());
+    }
+    #[tokio::test]
+    async fn explicit_selection_and_failed_revocation_retire_links_before_network_work() {
+        let mut host = actor(false);
+        link_owner(&mut host);
+        accept_link(&mut host, Some(link()));
+        host.post(
+            &json!({"op":"server.select","rid":1,"gen":host.gen,"origin":"https://a.example"}),
+            150,
+        )
+        .await
+        .unwrap();
+        assert!(host.task_link.is_none());
+        assert!(host.links_verified.load(Ordering::SeqCst));
+        accept_link(&mut host, Some(link()));
+        host.responses.push_back((503, "{}".into(), false));
+        assert_eq!(host.revoke().await, Err("revoke-refused"));
+        assert!(host.task_link.is_none());
+        assert!(host.cold_link.is_none());
+        assert!(!host.links_verified.load(Ordering::SeqCst));
     }
     #[tokio::test]
     async fn stalled_socket_writes_and_close_flushes_terminate_within_the_budget() {
