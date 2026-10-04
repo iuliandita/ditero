@@ -1,4 +1,11 @@
-import { ChevronsUpDown, Settings, Type, User, Users } from "lucide-react";
+import {
+	ChevronsUpDown,
+	Plus,
+	Settings,
+	Type,
+	User,
+	Users,
+} from "lucide-react";
 import { useRef, useState } from "react";
 import {
 	DropdownMenu,
@@ -25,6 +32,7 @@ type Props = {
 	activeId: string | null;
 	onSelect: (id: string) => void;
 	onManageMembers: () => void;
+	onCreateWorkspace: () => void;
 	// Membership admin only where it can do something: any shared workspace,
 	// and a personal one only while it still holds legacy members to remove.
 	// Otherwise a personal workspace has no one to manage and no invite path,
@@ -79,8 +87,7 @@ function TriggerFace({
 	);
 }
 
-// "Shared workspaces appear here once someone invites you" is only true while
-// none is listed yet.
+// Explain collaboration while only personal workspaces are visible.
 export function privateNoteVisible(
 	workspaces: Pick<Workspace, "kind">[],
 	canManageMembers: boolean,
@@ -93,6 +100,7 @@ export function WorkspaceSwitcherMenu({
 	activeId,
 	onSelect,
 	onManageMembers,
+	onCreateWorkspace,
 	canManageMembers,
 	onOpenSettings,
 	onOpenAppearance,
@@ -161,6 +169,16 @@ export function WorkspaceSwitcherMenu({
 					))}
 				</DropdownMenuRadioGroup>
 				<DropdownMenuSeparator />
+				<DropdownMenuItem
+					data-testid="create-workspace"
+					className="min-h-11"
+					onSelect={() => {
+						pendingAction.current = onCreateWorkspace;
+					}}
+				>
+					<Plus />
+					{m.workspace_create_action()}
+				</DropdownMenuItem>
 				{canManageMembers && (
 					<DropdownMenuItem
 						data-testid="manage-members"
@@ -213,6 +231,7 @@ export function WorkspaceSwitcherSheet({
 	activeId,
 	onSelect,
 	onManageMembers,
+	onCreateWorkspace,
 	canManageMembers,
 	onOpenSettings,
 	onOpenAppearance,
@@ -282,6 +301,15 @@ export function WorkspaceSwitcherSheet({
 							</button>
 						))}
 						<div className="my-1 h-px bg-border" />
+						<button
+							type="button"
+							data-testid="create-workspace"
+							onClick={() => closeThen(onCreateWorkspace)}
+							className={row}
+						>
+							<Plus aria-hidden className="size-4 shrink-0" />
+							{m.workspace_create_action()}
+						</button>
 						{canManageMembers && (
 							<button
 								type="button"

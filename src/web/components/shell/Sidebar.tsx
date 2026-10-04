@@ -256,6 +256,7 @@ export function Sidebar({
 	activeId,
 	onSelectWorkspace,
 	onManageMembers,
+	onCreateWorkspace,
 	canManageMembers,
 	groups,
 	progressByList,
@@ -293,6 +294,7 @@ export function Sidebar({
 	activeId: string | null;
 	onSelectWorkspace: (id: string) => void;
 	onManageMembers: () => void;
+	onCreateWorkspace: () => void;
 	canManageMembers: boolean;
 	groups: ListGroup[];
 	progressByList: Map<string, { done: number; total: number }>;
@@ -370,6 +372,7 @@ export function Sidebar({
 					activeId={activeId}
 					onSelect={onSelectWorkspace}
 					onManageMembers={onManageMembers}
+					onCreateWorkspace={onCreateWorkspace}
 					canManageMembers={canManageMembers}
 					onOpenSettings={onOpenSettings}
 					onOpenAppearance={onOpenAppearance}

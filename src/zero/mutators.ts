@@ -50,6 +50,7 @@ import {
 	templateContentSchema,
 } from "../domain/template.ts";
 import { filterGroupSchema, viewDisplaySchema } from "../domain/view-filter.ts";
+import { workspaceCreateSchema } from "../domain/workspace-create.ts";
 import { collectEvent } from "./event-sink.ts";
 import {
 	lockMembershipRoleChange,
@@ -76,6 +77,7 @@ import {
 	reconcileZeroActiveRecipients,
 } from "./task-activation.ts";
 import { appendZeroCompletionEvent } from "./task-completion-history.ts";
+import { createSharedWorkspace } from "./workspace-create.ts";
 
 const DENIED = "access denied: need member+";
 const denied = () => new MutatorError("denied", DENIED);
@@ -660,6 +662,11 @@ const quantityArg = z
 const unitArg = z.string().trim().refine(isValidUnit, "unit is too long");
 
 export const mutators = defineMutators({
+	workspace: {
+		create: defineMutator(workspaceCreateSchema, async ({ tx, ctx, args }) => {
+			await createSharedWorkspace(tx, ctx.id, args);
+		}),
+	},
 	task: {
 		create: defineMutator(
 			z.object({
