@@ -12,7 +12,7 @@ const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(19);
+	expect(Object.keys(document.paths)).toHaveLength(20);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
@@ -183,5 +183,17 @@ test("OpenAPI distinguishes immutable list creation acknowledgements from curren
 		expect(JSON.stringify(list.post.responses[status])).toContain('"snapshot"');
 	}
 	expect(JSON.stringify(list.get)).not.toContain("list-create-ack");
-	expect(Object.keys(paths)).toHaveLength(19);
+	expect(Object.keys(paths)).toHaveLength(20);
+});
+
+test("OpenAPI exposes observed list metadata updates and immutable acknowledgements", () => {
+	const paths = publicApiOpenApi().paths;
+	const list = paths["/api/v1/lists/{id}"] as { get: unknown; patch: unknown };
+	const encoded = JSON.stringify(list.patch);
+	expect(encoded).toContain('"operationId":"update_list"');
+	expect(encoded).toContain('"expectedState"');
+	expect(encoded).toContain('"const":"list-update-ack"');
+	expect(encoded).toContain('"additionalProperties":false');
+	expect(JSON.stringify(list.get)).not.toContain("stateToken");
+	expect(paths).toHaveProperty("/api/v1/lists/{id}/observation");
 });

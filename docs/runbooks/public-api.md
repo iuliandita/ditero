@@ -87,6 +87,56 @@ replacement list has different authority. Missing membership/workspace returns 4
 Viewer/read-token access returns 403, and revoked or expired credentials return 401.
 Account deletion removes receipts.
 
+## Observed list metadata updates
+
+Read `GET /api/v1/lists/{id}/observation` before editing. Read tokens and Viewers
+may observe visible lists. Its envelope contains `data.snapshot`, the strict
+existing ApiList DTO, and `data.stateToken`, SHA256 of a version-1 canonical scalar
+snapshot. All ApiList fields are covered: ID, workspace, owner, title, kind, icon,
+folder, order (`sortKey`) and completed-display policy. Tasks, memberships, folder
+contents and other relationships are outside this token. The read takes no lock.
+The token is not monotonic or a durable incarnation identity: returning to identical
+state, including deleting and identically recreating an ID, may match again.
+
+`PATCH /api/v1/lists/{id}` requires a write token, current Member/Admin/Owner
+membership, JSON content and a caller-owned UUID `Idempotency-Key`. No query
+parameters are accepted. The complete UTF-8 body is limited to 4 KiB:
+
+```json
+{
+  "workspaceId": "ORIGINAL_WORKSPACE_ID",
+  "expectedState": "COPY_OBSERVATION_STATE_TOKEN",
+  "patch": { "title": "Groceries", "icon": null, "completedDisplay": "hide" }
+}
+```
+
+Supply the original observed workspace and token. The nonempty patch accepts only
+`title` (trimmed, 1-500 characters), `icon` (null or at most 128 characters, using
+creation semantics), and `completedDisplay` (`sink`, `keep`, `hide`). Omitted fields
+preserve values. ID, workspace, owner, kind, folder and order are immutable through
+this endpoint. Unknown fields, NUL, malformed Unicode and invalid enums are refused.
+After native authority/container locks, a different captured scalar state returns
+`409 list-state-changed` without mutation. Changed metadata on lists with pending or
+blocked import activation returns `409 activation-pending`; an unchanged patch can
+succeed. Authority refusals take precedence over stale state.
+
+The canonical native mutation and receipt commit atomically. Success and matching
+replay return 200 with `data: { "kind": "list-update-ack", "snapshot": { ... } }`.
+This immutable original post-update snapshot survives later edits, deletion and ID
+recreation. Replay never mutates a current list or asserts its incarnation/existence.
+Use a separate authorized GET for current state. Replay requires a live actor, valid
+write PAT and current writable membership in the original workspace, even when the
+original list is absent or a replacement belongs elsewhere. Missing original
+workspace/membership returns 404, Viewer/read tokens 403, invalid/expired/revoked
+credentials or deleted accounts 401. Account deletion removes receipts.
+
+Keys share the account namespace with list creation and all four task write
+operations. Another operation or normalized canonical body returns
+`409 idempotency-conflict`. Title trimming and patch field order normalize; omitted
+fields differ from explicit null or unchanged values. Preserve the exact UUID and
+body after uncertain transport outcomes. The API performs no hidden observation,
+retry, rebase or replanning; an intentional changed request needs a new key.
+
 ## Task creation
 
 `POST /api/v1/tasks` requires a write token, `Content-Type: application/json`,

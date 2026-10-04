@@ -11,6 +11,7 @@ import {
 import { parseCalendarQuery } from "../../domain/public-api-calendar.ts";
 import { parseApiTaskComplete } from "../../domain/public-api-completion.ts";
 import { parseApiListCreate } from "../../domain/public-api-list-create.ts";
+import { parseApiListUpdate } from "../../domain/public-api-list-update.ts";
 import { parseApiTaskDelete } from "../../domain/public-api-task-deletion.ts";
 import { parseApiTaskUpdate } from "../../domain/public-api-task-update.ts";
 import {
@@ -27,6 +28,8 @@ import {
 } from "./contracts.ts";
 import { deleteApiTask } from "./delete.ts";
 import { readApiTaskDeletionObservation } from "./deletion-observation.ts";
+import { readApiListObservation } from "./list-observation.ts";
+import { updateApiList } from "./list-update.ts";
 import { writeApiList } from "./list-write.ts";
 import { publicApiOpenApi } from "./openapi.ts";
 import { readApiProfile, readApiResource } from "./read.ts";
@@ -292,6 +295,66 @@ export function publicApiRoutes(
 						throw new PublicApiError(400, "invalid-id", "Invalid task ID");
 					const input = parseApiTaskUpdate(await boundedJson(request, 65_536));
 					return updateApiTask(
+						pool,
+						bearerToken(request.headers),
+						params.id,
+						input,
+						requestId,
+					);
+				}),
+			{ parse: "none" },
+		)
+		.get("/api/v1/lists/:id/observation", ({ request, server, params }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				if (!PUBLIC_API_ID.safeParse(params.id).success)
+					throw new PublicApiError(400, "invalid-id", "Invalid list ID");
+				return withPersonalAccessToken(
+					pool,
+					bearerToken(request.headers),
+					"read",
+					(client, actor) => readApiListObservation(client, actor, params.id),
+				);
+			}),
+		)
+		.patch(
+			"/api/v1/lists/:id",
+			({ request, server, params }) =>
+				apiRequest(async () => {
+					if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+						throw new PublicApiError(429, "rate-limited", "Too many requests");
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					if (
+						request.headers
+							.get("content-type")
+							?.split(";")[0]
+							.trim()
+							.toLowerCase() !== "application/json"
+					)
+						throw new PublicApiError(
+							415,
+							"unsupported-media-type",
+							"A JSON request body is required",
+						);
+					const requestId = parseApiIdempotencyKey(
+						request.headers.get("idempotency-key"),
+					);
+					if (!PUBLIC_API_ID.safeParse(params.id).success)
+						throw new PublicApiError(400, "invalid-id", "Invalid list ID");
+					const input = parseApiListUpdate(await boundedJson(request));
+					return updateApiList(
 						pool,
 						bearerToken(request.headers),
 						params.id,
