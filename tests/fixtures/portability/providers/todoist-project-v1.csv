@@ -1,0 +1,9 @@
+TYPE,CONTENT,DESCRIPTION,PRIORITY,INDENT,AUTHOR,RESPONSIBLE,DATE,DATE_LANG,TIMEZONE,DURATION,DURATION_UNIT,DEADLINE,DEADLINE_LANG
+meta,view_style=list,,,,,,,,,,,,
+task,=literal @label,"Description, with quotes ""and"" Unicode العربية",1,1,Synthetic author,,every day,,,,,,
+note,Excluded synthetic comment,,,,,,,,,,,,
+task,Child,,2,2,,,,,,,,,
+section,Same section,,,,,,,,,,,,
+task,Another task,,4,1,,,,,,,,tomorrow,
+section,Same section,,,,,,,,,,,,
+section,Empty section,,,,,,,,,,,,

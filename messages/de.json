@@ -2295,5 +2295,17 @@
 	"tui_delete_cascade": "Aufgabe und alle beobachteten Unteraufgaben löschen",
 	"tui_delete_children_blocked": "Option 1 ist nicht verfügbar, da Unteraufgaben vorhanden sind.",
 	"tui_delete_scope": "Das Löschen umfasst zugehörige Kommentare, Zuweisungen und Dateien und lässt sich nicht rückgängig machen.",
-	"tui_edit_no_changes": "Keine Felder geändert. Einen Wert bearbeiten oder mit Esc abbrechen."
+	"tui_edit_no_changes": "Keine Felder geändert. Einen Wert bearbeiten oder mit Esc abbrechen.",
+	"import_todoist_format": "Todoist-Projekt als CSV-Snapshot",
+	"import_todoist_project": "Name des Projektordners",
+	"import_todoist_unsectioned": "Listenname für Aufgaben ohne Abschnitt",
+	"import_todoist_names_help": "Gib beide Namen ausdrücklich ein. Jeder Abschnitt wird eine eigene Liste mit seinem ursprünglichen Namen, auch doppelte und leere Abschnitte.",
+	"import_todoist_file": "Todoist-Projektdatei im CSV-Format",
+	"import_todoist_snapshot": "SHA-256 des exakten Datei-Snapshots: {digest}",
+	"import_todoist_mapping": "Projektordner: {project}. Liste ohne Abschnitt: {unsectioned}.",
+	"import_todoist_policy": "Importiert werden nur wörtliche Aufgabentitel, Beschreibungen, Priorität, Reihenfolge und eine Unteraufgabenebene. Ausgeschlossen sind Daten, Wiederholungen, Fristen, Dauer, Autoren, zugewiesene Personen, Notiz-/Kommentarzeilen, Labels, Vorlagen, Anhänge, Verlauf, Erledigungsstatus, Erinnerungen, persönliche Daten, Projekt-/Abschnittsbeschreibungen, Ansichtseinstellungen, Einkaufsfelder, Erstellungszeiten und Dringlichkeit. Jede Aufgabe ist eine offene Kopie.",
+	"import_todoist_acknowledge": "Ich akzeptiere diese Ausschlüsse und offenen Kopien ohne ursprüngliche Urheberschaft oder Erledigungshistorie.",
+	"import_todoist_binding_conflict": "Diese Quelle ist an andere Dateibytes oder Zuordnungsnamen gebunden. Wähle ausdrücklich Neue Quelle, um eine separate Kopie zu importieren; geänderte Dateien können diesen Snapshot nicht aktualisieren.",
+	"import_todoist_invalid": "Diese Datei ist kein unterstützter Todoist-Projekt-CSV-Snapshot oder die ausdrücklichen Zuordnungsnamen fehlen.",
+	"import_todoist_secure_context": "Für den Hash des Todoist-Snapshots ist HTTPS oder localhost erforderlich. Öffne diese Installation über eine sichere Verbindung, bevor du importierst."
 }

@@ -34,6 +34,43 @@ The migration owner establishes operational mapping only, not historical authors
 It creates no account, membership or source claim. Other providers' CSV formats are
 not accepted by this adapter.
 
+## Todoist project CSV snapshots
+
+Choose **Todoist project CSV snapshot** for a UTF-8 project export using Todoist's
+`TYPE,CONTENT,DESCRIPTION,PRIORITY,INDENT,AUTHOR,RESPONSIBLE,DATE,DATE_LANG,TIMEZONE,DURATION,DURATION_UNIT,DEADLINE,DEADLINE_LANG`
+header. The documented optional final `IS_COLLAPSED` column is accepted as an
+excluded view setting. Enter a project folder name and a list name for unsectioned
+tasks explicitly: the file has no project identity. Every section becomes a
+separate list with its literal name, including duplicate and empty sections.
+
+Version 1 imports literal task titles, task descriptions as notes, priority,
+file ordering and one level of subtasks. Todoist priorities 1 through 4 map to
+Ditero priorities 3 through 0; an empty priority uses Todoist's default of 1.
+Unknown headers, record types, orphan children and deeper indentation are refused.
+Text resembling labels, Markdown or spreadsheet formulas stays literal.
+
+All dates are excluded, including explicit dates, natural-language dates and
+recurrence. Deadlines, durations, authors, assignees, note/comment rows, structured
+labels, templates, attachments, history, completion state, reminders, personal state,
+project/section descriptions, view settings, shopping fields, creation times and
+urgency are also excluded. Every imported task is an open copy. The migration
+owner supplies operational mapping only, never source authorship. Accept these
+boundaries explicitly before previewing or applying, including a saved plan.
+Changing the file or configuration resets that acceptance.
+
+Snapshot hashing in the browser requires HTTPS or localhost. A plain HTTP LAN
+installation shows a secure-connection requirement instead of starting conversion.
+
+Each source is an immutable snapshot of the exact original bytes: the full SHA-256,
+a deterministically derived UUID namespace, both mapping names and the ordered
+exclusion policy are bound together. Identical bytes and metadata replay that
+source. Any byte change, including a BOM, line ending, excluded field or new row,
+is a different snapshot. Reusing the source returns HTTP 409 with
+`source-binding-conflict`. Choose **New source** explicitly to import a separate
+copy. Record numbers identify rows only inside one snapshot; this adapter does
+not offer incremental updates or claim Todoist account completeness. The checked-in
+fixture is synthetic and follows the documented format.
+
 ## Imported task notifications
 
 A task imported with planner version 4 or 5 can show **Pending** while its assignments are still being applied,

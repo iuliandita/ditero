@@ -2341,5 +2341,17 @@
 	"tui_delete_cascade": "Supprimer la tâche et toutes les sous-tâches observées",
 	"tui_delete_children_blocked": "Le choix 1 est indisponible car il existe des sous-tâches.",
 	"tui_delete_scope": "La suppression inclut les commentaires, les attributions et les fichiers liés. Elle est irréversible.",
-	"tui_edit_no_changes": "Aucun champ modifié. Modifie une valeur ou appuie sur Échap pour annuler."
+	"tui_edit_no_changes": "Aucun champ modifié. Modifie une valeur ou appuie sur Échap pour annuler.",
+	"import_todoist_format": "Instantané CSV de projet Todoist",
+	"import_todoist_project": "Nom du dossier du projet",
+	"import_todoist_unsectioned": "Nom de la liste des tâches sans section",
+	"import_todoist_names_help": "Saisis explicitement les deux noms. Chaque section devient une liste séparée avec son nom d’origine, y compris les sections identiques et vides.",
+	"import_todoist_file": "Fichier CSV de projet Todoist",
+	"import_todoist_snapshot": "SHA-256 de l’instantané exact du fichier : {digest}",
+	"import_todoist_mapping": "Dossier du projet : {project}. Liste sans section : {unsectioned}.",
+	"import_todoist_policy": "Seuls les titres littéraux, descriptions, priorités, ordre et un niveau de sous-tâches sont importés. Les dates, récurrences, échéances, durées, auteurs, responsables, lignes de notes/commentaires, étiquettes, modèles, pièces jointes, historique, état d’achèvement, rappels, état personnel, descriptions du projet/sections, paramètres de vue, champs d’achats, dates de création et urgence sont exclus. Chaque tâche est une copie ouverte.",
+	"import_todoist_acknowledge": "J’accepte ces exclusions et les copies ouvertes sans attribution d’origine ni historique d’achèvement.",
+	"import_todoist_binding_conflict": "Cette source est liée à d’autres octets du fichier ou noms de correspondance. Choisis explicitement Nouvelle source pour importer une copie distincte ; les fichiers modifiés ne peuvent pas mettre à jour cet instantané.",
+	"import_todoist_invalid": "Ce fichier n’est pas un instantané CSV de projet Todoist pris en charge, ou les noms de correspondance explicites manquent.",
+	"import_todoist_secure_context": "Le calcul de l’empreinte de l’instantané Todoist nécessite HTTPS ou localhost. Ouvre cette installation via une connexion sécurisée avant d’importer."
 }

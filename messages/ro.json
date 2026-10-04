@@ -2341,5 +2341,17 @@
 	"tui_delete_cascade": "Șterge sarcina și toate subsarcinile observate",
 	"tui_delete_children_blocked": "Opțiunea 1 nu este disponibilă deoarece există subsarcini.",
 	"tui_delete_scope": "Ștergerea include comentariile, atribuirile și fișierele asociate. Nu poate fi anulată.",
-	"tui_edit_no_changes": "Niciun câmp modificat. Editează o valoare sau apasă Esc pentru anulare."
+	"tui_edit_no_changes": "Niciun câmp modificat. Editează o valoare sau apasă Esc pentru anulare.",
+	"import_todoist_format": "Instantaneu CSV de proiect Todoist",
+	"import_todoist_project": "Numele dosarului proiectului",
+	"import_todoist_unsectioned": "Numele listei pentru sarcini fără secțiune",
+	"import_todoist_names_help": "Introdu explicit ambele nume. Fiecare secțiune devine o listă separată cu numele original, inclusiv secțiunile duplicate și goale.",
+	"import_todoist_file": "Fișier CSV de proiect Todoist",
+	"import_todoist_snapshot": "SHA-256 al instantaneului exact al fișierului: {digest}",
+	"import_todoist_mapping": "Dosarul proiectului: {project}. Lista fără secțiune: {unsectioned}.",
+	"import_todoist_policy": "Se importă doar titlurile literale, descrierile, prioritatea, ordinea și un nivel de subsarcini. Sunt excluse datele, recurența, termenele, duratele, autorii, persoanele asignate, rândurile de note/comentarii, etichetele, șabloanele, atașamentele, istoricul, starea de finalizare, mementourile, starea personală, descrierile proiectului/secțiunilor, setările de vizualizare, câmpurile de cumpărături, orele de creare și urgența. Fiecare sarcină este o copie deschisă.",
+	"import_todoist_acknowledge": "Accept aceste excluderi și copii deschise fără autorul original sau istoricul finalizării.",
+	"import_todoist_binding_conflict": "Această sursă este legată de alți octeți ai fișierului sau alte nume de mapare. Alege explicit Sursă nouă pentru a importa o copie separată; fișierele modificate nu pot actualiza acest instantaneu.",
+	"import_todoist_invalid": "Acest fișier nu este un instantaneu CSV de proiect Todoist acceptat sau lipsesc numele explicite de mapare.",
+	"import_todoist_secure_context": "Calcularea amprentei instantaneului Todoist necesită HTTPS sau localhost. Deschide această instalare printr-o conexiune sigură înainte de import."
 }
