@@ -8,6 +8,14 @@ import {
 	type PublicApiResource,
 	publicApiResourceSchemas,
 } from "../domain/public-api-resources.ts";
+import {
+	type ApiTaskDelete,
+	apiTaskDeletionObservationSchema,
+} from "../domain/public-api-task-deletion.ts";
+import {
+	type ApiTaskUpdate,
+	apiTaskObservationSchema,
+} from "../domain/public-api-task-update.ts";
 import type { ApiTaskCreate } from "../domain/public-api-writes.ts";
 
 export interface Location {
@@ -32,7 +40,29 @@ export interface Proposal {
 	timezone: string;
 	resolvedAt: string;
 }
+export type TaskObservation = z.infer<typeof apiTaskObservationSchema>;
+export type DeletionObservation = z.infer<
+	typeof apiTaskDeletionObservationSchema
+>;
+
 export interface TerminalApi {
+	observe(taskId: string, signal: AbortSignal): Promise<TaskObservation>;
+	observeDeletion(
+		taskId: string,
+		signal: AbortSignal,
+	): Promise<DeletionObservation>;
+	update(
+		taskId: string,
+		body: ApiTaskUpdate,
+		requestId: string,
+		signal: AbortSignal,
+	): Promise<void>;
+	delete(
+		taskId: string,
+		body: ApiTaskDelete,
+		requestId: string,
+		signal: AbortSignal,
+	): Promise<void>;
 	read(location: Location, signal: AbortSignal): Promise<Page>;
 	plan(intent: TaskIntent, signal: AbortSignal): Promise<Proposal>;
 	create(
@@ -54,6 +84,58 @@ export function terminalApi(
 	const encode = (value: unknown) => async () =>
 		new TextEncoder().encode(JSON.stringify(value));
 	return {
+		async observe(taskId, signal) {
+			const result = await taskWorkflow(
+				{ ...options, command: "observe-task", taskId },
+				fetcher,
+				undefined,
+				signal,
+			);
+			const observation = z
+				.object({ data: apiTaskObservationSchema })
+				.parse(result).data;
+			if (observation.snapshot.taskId !== taskId)
+				throw new CliError(
+					"invalid_response",
+					"The server returned an observation for another task.",
+					8,
+				);
+			return observation;
+		},
+		async observeDeletion(taskId, signal) {
+			const result = await taskWorkflow(
+				{ ...options, command: "observe-task-deletion", taskId },
+				fetcher,
+				undefined,
+				signal,
+			);
+			const observation = z
+				.object({ data: apiTaskDeletionObservationSchema })
+				.parse(result).data;
+			if (observation.snapshot.taskId !== taskId)
+				throw new CliError(
+					"invalid_response",
+					"The server returned an observation for another task.",
+					8,
+				);
+			return observation;
+		},
+		async update(taskId, body, requestId, signal) {
+			await taskWorkflow(
+				{ ...options, command: "update-task", taskId, requestId },
+				fetcher,
+				encode(body),
+				signal,
+			);
+		},
+		async delete(taskId, body, requestId, signal) {
+			await taskWorkflow(
+				{ ...options, command: "delete-task", taskId, requestId },
+				fetcher,
+				encode(body),
+				signal,
+			);
+		},
 		async read(location, signal) {
 			const result = await discover(
 				{

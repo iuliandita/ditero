@@ -1,0 +1,454 @@
+import { strict as assert } from "node:assert";
+import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { Pool } from "pg";
+import { publicApiRoutes } from "../../src/server/public-api/routes.ts";
+import {
+	createPersonalAccessToken,
+	revokePersonalAccessToken,
+} from "../../src/server/public-api/tokens.ts";
+
+const modes = [
+	"update",
+	"update-retry",
+	"update-uncertain",
+	"delete-cascade",
+	"delete-retry",
+	"conflict",
+	"revoked",
+	"read",
+	"arabic",
+];
+const mode = process.argv[2] ?? "";
+assert.ok(modes.includes(mode), "Unknown terminal fixture case");
+if (process.env.TUI_MUTATIONS_ENV_FILE) {
+	for (const line of readFileSync(
+		process.env.TUI_MUTATIONS_ENV_FILE,
+		"utf8",
+	).split("\n")) {
+		const match = /^([A-Z_]+)=(.*)$/.exec(line);
+		if (match) process.env[match[1]] = match[2];
+	}
+}
+const databaseURL = process.env.DATABASE_URL;
+assert.ok(databaseURL, "A designated fixture database is required");
+const env = (extra: Record<string, string> = {}) => ({
+	PATH: process.env.PATH ?? "",
+	HOME: process.env.HOME ?? "",
+	NODE_ENV: "test",
+	...extra,
+});
+const admin = new Pool({
+	connectionString: databaseURL,
+	connectionTimeoutMillis: 1000,
+	statement_timeout: 5000,
+});
+const suffix = randomUUID().replaceAll("-", "");
+const role = `tui_mutations_${suffix}`;
+const password = randomUUID();
+const runtimeURL = new URL(databaseURL);
+runtimeURL.username = role;
+runtimeURL.password = password;
+const runtime = new Pool({
+	connectionString: runtimeURL.toString(),
+	application_name: role,
+	connectionTimeoutMillis: 1000,
+	statement_timeout: 5000,
+});
+const actor = randomUUID(),
+	workspace = randomUUID(),
+	list = randomUUID(),
+	task = randomUUID(),
+	childTask = randomUUID();
+const title = "Protected terminal task";
+let roleCreated = false;
+let server: ReturnType<typeof Bun.serve> | undefined;
+let terminal: Bun.Terminal | undefined;
+let child: ReturnType<typeof Bun.spawn> | undefined;
+let output = "";
+const wires: {
+	method: string;
+	path: string;
+	key: string | null;
+	body: string;
+	status: number;
+}[] = [];
+const deadline = Date.now() + 13000;
+const timeout = setTimeout(() => child?.kill("SIGKILL"), 14000);
+const frame = () => output.split("\x1b[H\x1b[2J").at(-1) ?? "";
+const frames = () => output.split("\x1b[H\x1b[2J").length;
+const writes = () =>
+	wires.filter((wire) => ["PATCH", "DELETE"].includes(wire.method));
+const wait = async (predicate: () => boolean, message: string) => {
+	while (!predicate()) {
+		if (Date.now() > deadline) throw new Error(message);
+		await Bun.sleep(5);
+	}
+};
+const send = async (keys: string, predicate?: () => boolean) => {
+	const previous = frames();
+	terminal?.write(keys);
+	await wait(
+		predicate ?? (() => frames() > previous),
+		"Expected terminal transition was absent",
+	);
+};
+const rows = async () =>
+	(
+		await admin.query(
+			"select title,notes,due_at,due_all_day,priority from task where id=$1",
+			[task],
+		)
+	).rows;
+const receipts = async () =>
+	(
+		await admin.query(
+			"select count(*)::int count from public_api_request where user_id=$1",
+			[actor],
+		)
+	).rows[0].count;
+let passed = false;
+try {
+	await admin.query(
+		`create role "${role}" login password '${password}' nosuperuser nocreatedb nocreaterole noinherit nobypassrls`,
+	);
+	roleCreated = true;
+	await admin.query(`grant usage on schema public to "${role}"`);
+	await admin.query(
+		`grant select,insert,update,delete on all tables in schema public to "${role}"`,
+	);
+	assert.deepEqual(
+		(
+			await runtime.query(
+				"select current_user=session_user as direct_login,rolsuper,rolbypassrls,rolinherit,rolcanlogin,exists(select 1 from pg_auth_members where member=(select oid from pg_roles where rolname=current_user)) as member from pg_roles where rolname=current_user",
+			)
+		).rows[0],
+		{
+			direct_login: true,
+			rolsuper: false,
+			rolbypassrls: false,
+			rolinherit: false,
+			rolcanlogin: true,
+			member: false,
+		},
+	);
+	await admin.query(
+		`insert into "user"(id,name,email,email_verified) values($1,'Terminal actor',$2,true)`,
+		[actor, `${suffix}@terminal.test`],
+	);
+	await admin.query(
+		"insert into workspace(id,name,owner_id,kind) values($1,'Terminal workspace',$2,'shared')",
+		[workspace, actor],
+	);
+	await admin.query(
+		"insert into membership(id,user_id,workspace_id,role) values($1,$2,$3,'owner')",
+		[randomUUID(), actor, workspace],
+	);
+	await admin.query(
+		"insert into list(id,workspace_id,owner_id,title,sort_key) values($1,$2,$3,'Terminal list','a0')",
+		[list, workspace, actor],
+	);
+	await admin.query(
+		"insert into user_pref(id,timezone,timezone_chosen,locale) values($1,'Europe/Berlin',true,$2)",
+		[actor, mode === "arabic" ? "ar" : "en"],
+	);
+	await admin.query(
+		"insert into task(id,list_id,title,notes,sort_key) values($1,$2,$3,$4,'a0')",
+		[task, list, title, "first\nsecond"],
+	);
+	if (mode === "delete-cascade") {
+		await admin.query(
+			"insert into task(id,list_id,title,parent_id,sort_key) values($1,$2,'Child',$3,'a1')",
+			[childTask, list, task],
+		);
+		await admin.query(
+			"insert into comment(id,task_id,author_id,body) values($1,$2,$3,'Synthetic dependent comment')",
+			[randomUUID(), childTask, actor],
+		);
+	}
+	const pat = await createPersonalAccessToken(runtime, actor, {
+		name: "Terminal mutation fixture",
+		access: mode === "read" ? "read" : "write",
+	});
+	const app = publicApiRoutes(runtime, async () => true);
+	server = Bun.serve({
+		hostname: "127.0.0.1",
+		port: 0,
+		async fetch(request) {
+			const wire = {
+				method: request.method,
+				path: new URL(request.url).pathname,
+				key: request.headers.get("idempotency-key"),
+				body: await request.clone().text(),
+				status: 0,
+			};
+			wires.push(wire);
+			const response = await app.handle(request);
+			wire.status = response.status;
+			if (
+				["update-retry", "update-uncertain", "delete-retry"].includes(mode) &&
+				writes().length === 1 &&
+				["PATCH", "DELETE"].includes(request.method) &&
+				response.ok
+			) {
+				await response.arrayBuffer();
+				return new Response("{", {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				});
+			}
+			return response;
+		},
+	});
+	const decoder = new TextDecoder();
+	terminal = new Bun.Terminal({
+		cols: 120,
+		rows: 55,
+		data(_terminal, bytes) {
+			output += decoder.decode(bytes, { stream: true });
+		},
+	});
+	const flags = [
+		terminal.inputFlags,
+		terminal.outputFlags,
+		terminal.localFlags,
+		terminal.controlFlags,
+	];
+	child = Bun.spawn(
+		[process.execPath, "run", "src/tui/index.ts", "--allow-loopback-http"],
+		{
+			terminal,
+			env: env({
+				DITERO_URL: `http://127.0.0.1:${server.port}`,
+				DITERO_TOKEN: pat.token,
+				TERM: "xterm-256color",
+				COLORFGBG: mode === "arabic" ? "15;0" : "0;15",
+			}),
+		},
+	);
+	await wait(
+		() =>
+			wires.some((wire) => wire.path === "/api/v1/me" && wire.status === 200) &&
+			frames() > 1,
+		"Startup did not finish",
+	);
+	await send("\x1b[B\r", () => frame().includes("Terminal list"));
+	await send("\r", () => frame().includes(title));
+	const deleting = mode.startsWith("delete");
+	await send(
+		deleting ? "d" : "e",
+		() =>
+			frame().includes(deleting ? "childrenState" : `"${title}"`) ||
+			(deleting && frame().includes('"count"')),
+	);
+	if (deleting) {
+		if (mode === "delete-cascade") {
+			await send("1");
+			await send("\r");
+			assert.equal(frame().includes("requestId"), false);
+		}
+		await send(mode === "delete-cascade" ? "2\r" : "1\r", () =>
+			frame().includes("requestId"),
+		);
+	} else {
+		await send(
+			"!\r\x1b[200~\nthird\x1b[201~\r2026-10-05T09:30:00.000Z\r1\r\x7f2\r",
+			() => frame().includes("requestId"),
+		);
+	}
+	assert.equal(writes().length, 0);
+	assert.equal(await receipts(), 0);
+	await send("\x1b[200~y\n\x1b[201~");
+	assert.equal(writes().length, 0);
+	if (mode === "conflict")
+		await admin.query("update task set title='Concurrent edit' where id=$1", [
+			task,
+		]);
+	if (mode === "revoked")
+		await revokePersonalAccessToken(runtime, actor, pat.id);
+	await send(
+		"y",
+		() =>
+			writes().length === 1 &&
+			wires.at(-1)?.status !== 0 &&
+			(frame().includes("invalid_response") ||
+				frame().includes("request_conflict") ||
+				frame().includes("unauthorized") ||
+				frame().includes("forbidden") ||
+				!frame().includes("requestId")),
+	);
+	const first = writes()[0];
+	assert.equal(first.method, deleting ? "DELETE" : "PATCH");
+	assert.ok(first.key && /^[0-9a-f-]{36}$/.test(first.key));
+	const body = JSON.parse(first.body);
+	assert.equal(body.listId, list);
+	assert.match(body.expectedState, /^[0-9a-f]{64}$/);
+	if (deleting) assert.equal(body.cascadeChildren, mode === "delete-cascade");
+	else
+		assert.deepEqual(body.patch, {
+			title: `${title}!`,
+			notes: "first\nsecond\nthird",
+			dueAt: "2026-10-05T09:30:00.000Z",
+			dueAllDay: true,
+			priority: 2,
+		});
+	if (["conflict", "revoked", "read"].includes(mode)) {
+		assert.equal(
+			first.status,
+			mode === "conflict" ? 409 : mode === "revoked" ? 401 : 403,
+		);
+		assert.equal(await receipts(), 0);
+		assert.equal(
+			(await rows())[0].title,
+			mode === "conflict" ? "Concurrent edit" : title,
+		);
+		assert.equal(frame().includes("requestId"), false);
+		if (mode !== "conflict") assert.equal(frame().includes(title), false);
+	} else {
+		assert.equal(first.status, 200);
+		assert.equal(await receipts(), 1);
+		if (deleting) {
+			assert.equal((await rows()).length, 0);
+			assert.equal(
+				(
+					await admin.query(
+						"select count(*)::int count from comment where task_id=$1",
+						[childTask],
+					)
+				).rows[0].count,
+				0,
+			);
+		} else {
+			const row = (await rows())[0];
+			assert.deepEqual(
+				{ ...row, due_at: row.due_at.toISOString() },
+				{
+					title: `${title}!`,
+					notes: "first\nsecond\nthird",
+					due_at: "2026-10-05T09:30:00.000Z",
+					due_all_day: true,
+					priority: 2,
+				},
+			);
+		}
+		if (mode === "delete-retry")
+			await admin.query(
+				"insert into task(id,list_id,title,sort_key) values($1,$2,'Recreated task','a0')",
+				[task, list],
+			);
+		if (["update-retry", "delete-retry"].includes(mode)) {
+			await send(
+				"y",
+				() => writes().length === 2 && !frame().includes("requestId"),
+			);
+			assert.deepEqual(writes()[1], first);
+			assert.equal(await receipts(), 1);
+			assert.equal(
+				wires.filter(
+					(wire) =>
+						wire.path.endsWith("/observation") ||
+						wire.path.endsWith("/deletion-observation"),
+				).length,
+				1,
+			);
+			if (mode === "delete-retry")
+				assert.equal((await rows())[0].title, "Recreated task");
+		}
+	}
+	if (mode === "arabic") {
+		terminal.resize(23, 9);
+		child.kill("SIGWINCH");
+		await wait(
+			() => /[\u0600-\u06ff]/.test(frame()),
+			"Arabic frame was absent",
+		);
+	}
+	await send(
+		mode === "update-uncertain" ? "\x03" : "q",
+		() => child?.exitCode !== null,
+	);
+	assert.equal(await child.exited, mode === "update-uncertain" ? 130 : 0);
+	assert.deepEqual(
+		[
+			terminal.inputFlags,
+			terminal.outputFlags,
+			terminal.localFlags,
+			terminal.controlFlags,
+		],
+		flags,
+	);
+	assert.equal(output.includes(pat.token), false);
+	if (mode === "update-uncertain") {
+		const line = output
+			.split(/[\r\n]+/)
+			.find((line) => line.includes('{"requestId":'));
+		assert.ok(line, "Exact retry record was absent");
+		const record = JSON.parse(line.slice(line.indexOf('{"requestId":')));
+		assert.deepEqual(record, {
+			requestId: first.key,
+			endpoint: first.path,
+			method: "PATCH",
+			body,
+		});
+	}
+	passed = true;
+} finally {
+	clearTimeout(timeout);
+	if (child && child.exitCode === null) {
+		child.kill("SIGKILL");
+		await child.exited;
+	}
+	terminal?.close();
+	await server?.stop(true);
+	await runtime.end();
+	await admin.query("delete from task where list_id=$1", [list]);
+	await admin.query("delete from list where id=$1", [list]);
+	await admin.query("delete from membership where workspace_id=$1", [
+		workspace,
+	]);
+	await admin.query("delete from workspace where id=$1", [workspace]);
+	await admin.query('delete from "user" where id=$1', [actor]);
+	if (roleCreated) {
+		await admin.query(`drop owned by "${role}"`);
+		await admin.query(`drop role "${role}"`);
+	}
+	assert.equal(
+		(
+			await admin.query(
+				"select count(*)::int count from pg_roles where rolname=$1",
+				[role],
+			)
+		).rows[0].count,
+		0,
+	);
+	assert.equal(
+		(
+			await admin.query(
+				"select count(*)::int count from pg_stat_activity where usename=$1",
+				[role],
+			)
+		).rows[0].count,
+		0,
+	);
+	assert.equal(
+		(
+			await admin.query(
+				"select count(*)::int count from public_api_request where user_id=$1",
+				[actor],
+			)
+		).rows[0].count,
+		0,
+	);
+	await admin.end();
+}
+assert.ok(passed);
+process.stdout.write(
+	JSON.stringify({
+		mode,
+		passed,
+		requests: wires.length,
+		writes: writes().length,
+		cleanup: true,
+		directLogin: true,
+	}),
+);
