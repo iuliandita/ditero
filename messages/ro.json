@@ -2312,5 +2312,13 @@
 	"tui_help_navigation": "Folosește săgețile și Enter pentru navigare. Esc revine. p încarcă pagina următoare; r începe din nou.",
 	"tui_help_writes": "n adaugă în lista sau dashboard-ul selectat. c finalizează o sarcină. Verifică și apasă y pentru trimitere.",
 	"tui_help_exit": "q închide. Ctrl-C închide întotdeauna. Textul lipit nu confirmă nicio acțiune.",
-	"tui_terminal_required": "Folosește un terminal interactiv cu un TERM acceptat."
+	"tui_terminal_required": "Folosește un terminal interactiv cu un TERM acceptat.",
+	"import_provider_format": "Format de import",
+	"import_provider_native": "JSON nativ Ditero",
+	"import_provider_csv": "Ditero CSV v1",
+	"import_provider_namespace": "Spațiul de nume al sursei CSV: {namespace}",
+	"import_provider_policy": "CSV importă doar liste, sarcini și un nivel de subsarcini cu identificatori stabili. Exclude atribuirile, etichetele, comentariile, șabloanele, istoricul, atașamentele, recurența, mementourile, starea personală, folderele, personalizarea listelor, câmpurile de cumpărături, datele creării și urgența. Proprietarul migrării nu indică autorul. Păstrează același spațiu de nume și aceiași identificatori la reimport.",
+	"import_provider_acknowledge": "Accept aceste excluderi și identitatea stabilă a sursei.",
+	"import_provider_file": "Fișier CSV Ditero",
+	"import_provider_invalid": "Acest fișier nu este un CSV v1 Ditero valid sau referințele sale sunt inconsistente."
 }

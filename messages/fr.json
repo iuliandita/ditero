@@ -2312,5 +2312,13 @@
 	"tui_help_navigation": "Utilise les flèches et Enter pour parcourir. Esc revient. p charge la page suivante ; r recommence.",
 	"tui_help_writes": "n ajoute à la liste ou au dashboard sélectionné. c termine une tâche. Vérifie puis appuie sur y pour envoyer.",
 	"tui_help_exit": "q quitte. Ctrl-C quitte toujours. Le texte collé ne confirme jamais une action.",
-	"tui_terminal_required": "Utilise un terminal interactif avec un TERM pris en charge."
+	"tui_terminal_required": "Utilise un terminal interactif avec un TERM pris en charge.",
+	"import_provider_format": "Format d’importation",
+	"import_provider_native": "JSON natif Ditero",
+	"import_provider_csv": "Ditero CSV v1",
+	"import_provider_namespace": "Espace de noms de la source CSV : {namespace}",
+	"import_provider_policy": "CSV importe uniquement les listes, les tâches et un niveau de sous-tâches avec des identifiants stables. Sont exclus les attributions, étiquettes, commentaires, modèles, historique, pièces jointes, récurrence, rappels, état personnel, dossiers, personnalisation des listes, champs d’achats, dates de création et urgence. Le propriétaire de la migration ne désigne pas l’auteur. Conserve le même espace de noms et les mêmes identifiants lors d’une nouvelle importation.",
+	"import_provider_acknowledge": "J’accepte ces exclusions et l’identité stable de la source.",
+	"import_provider_file": "Fichier CSV Ditero",
+	"import_provider_invalid": "Ce fichier n’est pas un CSV v1 Ditero valide ou ses références sont incohérentes."
 }

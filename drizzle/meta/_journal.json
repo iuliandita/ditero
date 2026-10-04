@@ -484,6 +484,13 @@
       "when": 1791052396769,
       "tag": "0068_motionless_champions",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791056953365,
+      "tag": "0069_import_provider_binding",
+      "breakpoints": true
     }
   ]
 }

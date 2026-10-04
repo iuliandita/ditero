@@ -10,6 +10,12 @@ import {
 	type ImportMappings,
 	ImportPlanError,
 } from "../../domain/portability/import-plan.ts";
+import { ProviderImportError } from "../../domain/portability/providers/common.ts";
+import {
+	PROVIDER_REQUEST_MAX_BYTES,
+	ProviderInputError,
+	prepareProviderImport,
+} from "../../domain/portability/providers/input.ts";
 import { PortableExportValidationError } from "../../domain/portability/validate.ts";
 import type { Guards } from "../guards.ts";
 import { V4ApplyConflict } from "./import-activation.ts";
@@ -108,7 +114,7 @@ async function readRequest(
 	request: Request,
 	maxBytes = MAX_REQUEST_BYTES,
 	timeoutMs = BODY_TIMEOUT_MS,
-): Promise<string> {
+): Promise<{ text: string; bytes: number }> {
 	const declared = request.headers.get("content-length");
 	if (
 		declared !== null &&
@@ -173,7 +179,7 @@ async function readRequest(
 			decoder.decode(current.subarray(0, used), { stream: true }),
 			decoder.decode(),
 		);
-		return parts.join("");
+		return { text: parts.join(""), bytes: total };
 	} finally {
 		clearTimeout(timer);
 		request.signal.removeEventListener("abort", abort);
@@ -204,6 +210,20 @@ async function handled(run: () => Promise<Response>): Promise<Response> {
 			return response(
 				{ code: error.code },
 				error.code.endsWith("-limit") ? 413 : 400,
+			);
+		if (
+			error instanceof ProviderInputError ||
+			error instanceof ProviderImportError
+		)
+			return response(
+				{ code: error.code },
+				error.code.endsWith("-limit")
+					? 413
+					: error.code === "cancelled"
+						? 408
+						: error.code === "timeout"
+							? 503
+							: 400,
 			);
 		if (error instanceof ImportPlanError)
 			return response({ code: error.code }, 400);
@@ -258,7 +278,7 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 							throw new ImportRequestError("invalid-request", 415);
 						let raw: unknown;
 						try {
-							raw = JSON.parse(await readRequest(request, 4096, 5000));
+							raw = JSON.parse((await readRequest(request, 4096, 5000)).text);
 						} catch (error) {
 							if (error instanceof ImportRequestError) throw error;
 							throw new ImportRequestError("invalid-request", 400);
@@ -310,8 +330,11 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 						)
 							throw new ImportRequestError("invalid-request", 415);
 						let raw: unknown;
+						let receivedBytes = 0;
 						try {
-							raw = JSON.parse(await readRequest(request));
+							const received = await readRequest(request);
+							receivedBytes = received.bytes;
+							raw = JSON.parse(received.text);
 						} catch (error) {
 							if (error instanceof ImportRequestError) throw error;
 							throw new ImportRequestError("invalid-request", 400);
@@ -319,12 +342,17 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 						if (
 							!object(raw) ||
 							Object.keys(raw).length !== 3 ||
-							typeof raw.document !== "string" ||
+							Object.hasOwn(raw, "input") === Object.hasOwn(raw, "document") ||
+							(Object.hasOwn(raw, "document") &&
+								typeof raw.document !== "string") ||
 							!Object.hasOwn(raw, "source") ||
 							!Object.hasOwn(raw, "mappings")
 						)
 							throw new ImportRequestError("invalid-request", 400);
-						if (Buffer.byteLength(raw.document) > MAX_DOCUMENT_BYTES)
+						if (
+							typeof raw.document === "string" &&
+							Buffer.byteLength(raw.document) > MAX_DOCUMENT_BYTES
+						)
 							throw new ImportRequestError("byte-limit", 413);
 						const source = sourceSchema.safeParse(raw.source);
 						if (
@@ -335,9 +363,23 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 						)
 							throw new ImportRequestError("invalid-source", 400);
 						const mapping = mappings(raw.mappings);
-						const document = parseImportDocument(raw.document, {
-							historyPreview: true,
-						});
+						if (
+							Object.hasOwn(raw, "input") &&
+							receivedBytes > PROVIDER_REQUEST_MAX_BYTES
+						)
+							throw new ImportRequestError("request-limit", 413);
+						const provider = Object.hasOwn(raw, "input")
+							? prepareProviderImport(raw.input, {
+									exportedAt: new Date().toISOString(),
+									signal: request.signal,
+									deadline,
+								})
+							: null;
+						const document =
+							provider?.conversion.document ??
+							parseImportDocument(raw.document as string, {
+								historyPreview: true,
+							});
 						if (request.signal.aborted)
 							throw new ImportRequestError("request-cancelled", 408);
 						return response(
@@ -351,6 +393,7 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 									signal: request.signal,
 									deadline,
 									plannerVersion: 4,
+									...(provider ? { inputBinding: provider.binding } : {}),
 									...(document.schemaVersion === 2
 										? { historyApply: true }
 										: {}),

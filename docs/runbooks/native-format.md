@@ -173,6 +173,44 @@ and `mappings.workspaces`/`mappings.principals` keyed by source IDs. Unmapped
 principals use explicit `null`. All routes require a session, and writes require
 a same-origin request. The settings download remains an export, not a restorable backup.
 
+## CSV provider input
+
+Ditero CSV v1 is a separate migration format, not a native backup or an adapter
+for another application's CSV. Its exact ordered header is:
+
+```csv
+csv_version,text_encoding,source_namespace,list_id,list_title,task_id,parent_task_id,title,notes,done,completed_at,due_at,due_all_day,priority,sort_index
+```
+
+Every row declares version `1`, one consistent UUID namespace and `plain` or
+`apostrophe-v1` text encoding. Stable, unique task IDs and stable list IDs are
+required; row numbers and titles never substitute for identity. Parent tasks must
+exist in the same list, with at most one subtask level. Boolean fields use exactly
+`true` or `false`; priority is `0` through `3`; sort indexes are nonnegative integers.
+Dates are explicit ISO timestamps with offsets, not natural language. Invalid UTF-8,
+unknown columns, inconsistent metadata or graph references fail the entire file.
+`plain` preserves literal text, including leading apostrophes. `apostrophe-v1`
+requires a leading apostrophe on nonempty free-text/ID cells and removes exactly
+that declared escape; safe CSV export uses this encoding to avoid spreadsheet formulas.
+
+The plan endpoint accepts exactly `source`, `input` and `mappings` for this provider.
+The strict `input` object contains `kind: "provider"`, `version: 1`,
+`adapter: "ditero-csv"`, `adapterVersion: 1`, a lowercase `sourceNamespace` UUID,
+`identityMode: "stable-ids"`, canonical `originalCsvBase64`, and `exclusions` in
+this exact order: `assignments`, `labels`, `comments`, `templates`, `history`,
+`attachments`, `recurrence`, `reminders`, `personal-state`, `folders`,
+`list-customization`, `shopping-fields`, `task-creation-times`, `urgency`.
+A provider request cannot also contain a native `document` or converted content.
+Decoded CSV is limited to 23 MiB and the complete request to 32 MiB.
+
+The server reparses the original bytes, validates their namespace and graph, and
+creates an ordinary planner 4 plan. Source and job retain the immutable policy
+binding, never the original file. Its document digest wraps the native semantic
+digest with the binding; CSV quoting, row order and export time do not create a
+new identity when content and IDs are unchanged. Native version 1 and 2 requests
+retain their existing contract and NULL provider binding. A source cannot switch
+between native/provider formats or change its namespace or exclusions.
+
 ## Applying a saved plan
 
 Review the eligible, ignored, and blocked counts, then confirm application.

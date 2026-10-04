@@ -435,7 +435,7 @@ test("templates resolve workspace membership and retained rows survive content, 
 	).toBe(0);
 	await admin.query("delete from template where id = 'ihl-template'");
 	await admin.query(
-		"insert into import_source (id,owner_user_id,label,format,schema_version,source_user_id) values ('ihl-source','ihl-importer','Source','native_json',2,'source-user')",
+		"insert into import_source (id,owner_user_id,label,format,schema_version,source_user_id) values ('ihl-source','ihl-importer','Source','ditero',2,'source-user')",
 	);
 	await admin.query("delete from import_source where id = 'ihl-source'");
 	await admin.query("delete from \"user\" where id = 'ihl-importer'");

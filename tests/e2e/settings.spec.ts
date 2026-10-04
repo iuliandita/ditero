@@ -363,9 +363,10 @@ test("the import file picker is on-system and keyboard reachable", async ({
 	// The native control is visually hidden, not removed.
 	await expect(input).toHaveClass(/sr-only/);
 
-	// Keyboard: the next tab stop after Download JSON is the file input, and
-	// Space opens the chooser from it.
+	// Keyboard reaches the format selector before the native file control.
 	await page.getByRole("button", { name: "Download JSON" }).focus();
+	await page.keyboard.press("Tab");
+	await expect(panel.getByTestId("import-format")).toBeFocused();
 	await page.keyboard.press("Tab");
 	await expect(input).toBeFocused();
 	const chooser = page.waitForEvent("filechooser");
