@@ -55,9 +55,7 @@ export function AssigneeChips({
 			role="img"
 			className={cn(
 				"inline-flex min-w-0 max-w-full items-center gap-x-1.5",
-				dashboard
-					? "w-full flex-col items-start gap-y-1 md:w-auto md:flex-row md:items-center"
-					: "flex-wrap",
+				!dashboard && "flex-wrap",
 			)}
 			title={m.assignee_chips_aria({ names: formatList(names) })}
 			aria-label={m.assignee_chips_aria({ names: formatList(names) })}
@@ -89,15 +87,14 @@ export function AssigneeChips({
 					</span>
 				)}
 			</span>
-			<span
-				aria-hidden
-				className={cn(
-					"min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground",
-					dashboard && "w-full md:w-auto",
-				)}
-			>
-				{formatList(names)}
-			</span>
+			{!dashboard && (
+				<span
+					aria-hidden
+					className="min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground"
+				>
+					{formatList(names)}
+				</span>
+			)}
 		</div>
 	);
 }
