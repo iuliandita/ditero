@@ -21,7 +21,7 @@ Usage: ditero-tui [--server HTTPS_ORIGIN] [--locale en|de|es|fr|ro|ar]
 
 Set DITERO_URL and DITERO_TOKEN in the environment. Tokens never go on the command line.
 Use an interactive terminal. Use arrows, Enter and Escape to browse.
-n adds a task; c completes one. Review, then press y to send. ? shows help; q quits.
+n adds a task; c completes one; e edits; d reviews deletion. Review, then press y to send. ? shows help; q quits.
 The client is online. A failed write keeps its exact request ID and body for explicit retry.
 `;
 
@@ -127,16 +127,62 @@ export async function runTerminal(
 						: state.status === "empty"
 							? m.list_empty({}, options)
 							: m.tui_ready({}, options);
-				if (state.error) status = m.tui_error({ code: state.error }, options);
+				if (state.error)
+					status =
+						state.error === "no_changes"
+							? m.tui_edit_no_changes({}, options)
+							: m.tui_error({ code: state.error }, options);
 				if (state.detail)
 					detail = JSON.stringify(state.detail.data, null, 2).split("\n");
 				if (state.form) {
 					footer = m.tui_footer_form({}, options);
+					const form = state.form;
+					if (form.kind === "create")
+						detail = [
+							m.task_detail_title_field({}, options),
+							form.title,
+							m.tui_due_prompt({}, options),
+							form.due,
+						];
+					else {
+						const labels = {
+							title: m.task_detail_title_field({}, options),
+							notes: m.task_field_notes({}, options),
+							due: m.tui_due_instant_prompt({}, options),
+							allDay: m.tui_all_day_prompt({}, options),
+							priority: m.task_field_priority({}, options),
+						};
+						detail = [
+							...(form.observation.snapshot.rrule !== null ||
+							form.observation.snapshot.listKind === "habits"
+								? [m.tui_due_edit_unavailable({}, options)]
+								: []),
+							labels[form.field],
+							form.field === "allDay"
+								? form.allDay
+									? "1"
+									: "0"
+								: JSON.stringify(form[form.field]),
+						];
+					}
+				}
+				if (state.deletion) {
+					const deletion = state.deletion;
+					title = m.tui_review_delete({}, options);
+					footer = m.tui_footer_form({}, options);
 					detail = [
-						m.task_detail_title_field({}, options),
-						state.form.title,
-						m.tui_due_prompt({}, options),
-						state.form.due,
+						m.task_delete_confirm(
+							{ title: deletion.observation.snapshot.title },
+							options,
+						),
+						m.tui_delete_scope({}, options),
+						m.tui_delete_choice({}, options),
+						`${deletion.cascade === false ? ">" : " "} 1 ${m.tui_delete_no_children({}, options)}`,
+						`${deletion.cascade === true ? ">" : " "} 2 ${m.tui_delete_cascade({}, options)}`,
+						...(deletion.observation.childrenState.count
+							? [m.tui_delete_children_blocked({}, options)]
+							: []),
+						JSON.stringify(deletion.observation.childrenState),
 					];
 				}
 				if (state.review) {
@@ -144,10 +190,17 @@ export async function runTerminal(
 					title =
 						review.kind === "create"
 							? m.tui_review_create({}, options)
-							: m.tui_review_complete({}, options);
+							: review.kind === "complete"
+								? m.tui_review_complete({}, options)
+								: review.kind === "update"
+									? m.tui_review_update({}, options)
+									: m.tui_review_delete({}, options);
 					footer = m.tui_footer_review({}, options);
 					detail = [
 						...(review.uncertain ? [m.tui_uncertain({}, options)] : []),
+						...(review.kind === "delete"
+							? [m.tui_delete_scope({}, options)]
+							: []),
 						...(review.kind === "complete" && review.recurring
 							? [m.tui_review_recurring({}, options)]
 							: []),
@@ -158,11 +211,18 @@ export async function runTerminal(
 										timezone: review.timezone,
 										requestId: review.requestId,
 									}
-								: {
-										title: review.title,
-										task: review.task,
-										requestId: review.requestId,
-									},
+								: review.kind === "complete"
+									? {
+											title: review.title,
+											task: review.task,
+											requestId: review.requestId,
+										}
+									: {
+											title: review.title,
+											taskId: review.taskId,
+											body: review.body,
+											requestId: review.requestId,
+										},
 							null,
 							2,
 						).split("\n"),
@@ -218,20 +278,31 @@ export async function runTerminal(
 				const review = controller?.state.review;
 				if (review?.uncertain) {
 					// Keep the exact retry payload without secrets or terminal commands.
-					const record = {
-						requestId: review.requestId,
-						endpoint:
-							review.kind === "create"
-								? "/api/v1/tasks"
-								: `/api/v1/tasks/${encodeURIComponent(review.task.id)}/complete`,
-						body:
-							review.kind === "create"
-								? review.task
-								: {
-										listId: review.task.listId,
-										expectedDueAt: review.task.dueAt,
-									},
-					};
+					const record =
+						review.kind === "update" || review.kind === "delete"
+							? {
+									requestId: review.requestId,
+									endpoint: `/api/v1/tasks/${encodeURIComponent(review.taskId)}`,
+									method:
+										review.kind === "update"
+											? ("PATCH" as const)
+											: ("DELETE" as const),
+									body: review.body,
+								}
+							: {
+									requestId: review.requestId,
+									endpoint:
+										review.kind === "create"
+											? "/api/v1/tasks"
+											: `/api/v1/tasks/${encodeURIComponent(review.task.id)}/complete`,
+									body:
+										review.kind === "create"
+											? review.task
+											: {
+													listId: review.task.listId,
+													expectedDueAt: review.task.dueAt,
+												},
+								};
 					const json = serializeRetryRecord(record);
 					process.stderr.write(`${json}\n`);
 				}

@@ -32,3 +32,23 @@ describe("terminal retry records", () => {
 		expect(serialized.split("\n")).toHaveLength(1);
 	});
 });
+
+it.each([
+	"PATCH",
+	"DELETE",
+] as const)("retains the %s method and exact guarded body without terminal controls", (method) => {
+	const record = {
+		method,
+		endpoint: "/api/v1/tasks/task",
+		requestId: "00000000-0000-4000-8000-000000000001",
+		body: {
+			listId: "list",
+			expectedState: "a".repeat(64),
+			patch: { notes: "first\nsecond\u009b" },
+		},
+	};
+	const text = serializeRetryRecord(record);
+	expect(JSON.parse(text)).toEqual(record);
+	expect(text).not.toContain("\u009b");
+	expect(text.split("\n")).toHaveLength(1);
+});

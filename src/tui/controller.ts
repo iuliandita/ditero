@@ -1,15 +1,32 @@
 import type { TaskIntent } from "../agent/task-plan.ts";
 import { CliError } from "../cli/arguments.ts";
 import { MAX_PAGES, MAX_TOTAL_BYTES } from "../cli/client.ts";
+import { MAX_INPUT_BYTES } from "../cli/task-workflow.ts";
 import { PUBLIC_API_RESOURCES } from "../domain/public-api-resources.ts";
+import {
+	type ApiTaskDelete,
+	parseApiTaskDelete,
+} from "../domain/public-api-task-deletion.ts";
+import {
+	type ApiTaskUpdate,
+	parseApiTaskUpdate,
+} from "../domain/public-api-task-update.ts";
 import type { ApiTaskCreate } from "../domain/public-api-writes.ts";
-import type { Entry, Location, TerminalApi } from "./api.ts";
+import type {
+	DeletionObservation,
+	Entry,
+	Location,
+	TaskObservation,
+	TerminalApi,
+} from "./api.ts";
 import type { TerminalInput } from "./terminal.ts";
 
 export type Review = {
-	requestId: string;
+	readonly requestId: string;
 	uncertain: boolean;
 } & (
+	| { kind: "update"; taskId: string; title: string; body: ApiTaskUpdate }
+	| { kind: "delete"; taskId: string; title: string; body: ApiTaskDelete }
 	| { kind: "create"; task: ApiTaskCreate; timezone: string }
 	| {
 			kind: "complete";
@@ -28,11 +45,32 @@ export interface TerminalState {
 	detail: Entry | null;
 	detailOffset: number;
 	help: boolean;
-	form: {
-		target: TaskIntent["target"];
-		title: string;
-		due: string;
-		field: "title" | "due";
+	form:
+		| {
+				kind: "create";
+				target: TaskIntent["target"];
+				title: string;
+				due: string;
+				field: "title" | "due";
+		  }
+		| {
+				kind: "update";
+				observation: TaskObservation;
+				title: string;
+				notes: string;
+				due: string;
+				allDay: boolean;
+				priority: string;
+				field: "title" | "notes" | "due" | "allDay" | "priority";
+				dirty: Partial<
+					Record<"title" | "notes" | "due" | "allDay" | "priority", true>
+				>;
+		  }
+		| null;
+	deletion: {
+		taskId: string;
+		observation: DeletionObservation;
+		cascade: boolean | null;
 	} | null;
 	review: Review | null;
 }
@@ -49,6 +87,7 @@ export class TerminalController {
 		detailOffset: 0,
 		help: false,
 		form: null,
+		deletion: null,
 		review: null,
 	};
 	private epoch = 0;
@@ -97,6 +136,7 @@ export class TerminalController {
 			this.state.entries = [];
 			this.state.detail = null;
 			this.state.form = null;
+			this.state.deletion = null;
 			this.state.review = null;
 		}
 		if (error instanceof CliError && error.status === 409)
@@ -116,6 +156,7 @@ export class TerminalController {
 		this.state.detailOffset = 0;
 		this.state.help = false;
 		this.state.form = null;
+		this.state.deletion = null;
 		this.state.review = null;
 		this.state.selected = 0;
 		this.state.error = null;
@@ -179,12 +220,18 @@ export class TerminalController {
 		else return;
 		this.state.detail = null;
 		this.state.detailOffset = 0;
-		this.state.form = { target, title: "", due: "", field: "title" };
+		this.state.form = {
+			kind: "create",
+			target,
+			title: "",
+			due: "",
+			field: "title",
+		};
 		this.state.error = null;
 	}
 	private async plan(): Promise<void> {
 		const form = this.state.form;
-		if (!form?.title.trim()) return;
+		if (form?.kind !== "create" || !form.title.trim()) return;
 		const epoch = this.begin();
 		this.state.status = "loading";
 		this.changed();
@@ -239,6 +286,197 @@ export class TerminalController {
 		this.state.status = "review";
 		this.state.error = null;
 	}
+	private async observeMutation(kind: "update" | "delete"): Promise<void> {
+		const selected = this.state.entries[this.state.selected];
+		if (this.state.location?.resource !== "tasks" || !selected) return;
+		const taskId = selected.id;
+		const epoch = this.begin();
+		this.state.detail = null;
+		this.state.detailOffset = 0;
+		this.state.error = null;
+		this.state.status = "loading";
+		this.changed();
+		try {
+			if (kind === "update") {
+				const observation = await this.api.observe(taskId, this.request.signal);
+				if (!this.active(epoch)) return;
+				const snapshot = observation.snapshot;
+				this.state.form = {
+					kind,
+					observation: structuredClone(observation),
+					title: snapshot.title,
+					notes: snapshot.notes ?? "",
+					due: snapshot.dueAt ?? "",
+					allDay: snapshot.dueAllDay,
+					priority: String(snapshot.priority),
+					field: "title",
+					dirty: {},
+				};
+			} else {
+				const observation = await this.api.observeDeletion(
+					taskId,
+					this.request.signal,
+				);
+				if (!this.active(epoch)) return;
+				this.state.deletion = {
+					taskId,
+					observation: structuredClone(observation),
+					cascade: null,
+				};
+			}
+			this.state.status = "ready";
+		} catch (error) {
+			if (this.active(epoch)) this.failed(error);
+		}
+		if (this.active(epoch)) this.changed();
+	}
+	private reviewUpdate(): void {
+		const form = this.state.form;
+		if (form?.kind !== "update") return;
+		const old = form.observation.snapshot;
+		const patch: ApiTaskUpdate["patch"] = {};
+		if (form.dirty.priority && !/^[0-3]$/.test(form.priority)) {
+			this.state.error = "invalid_input";
+			return;
+		}
+		if (form.dirty.title && form.title.trim() !== old.title)
+			patch.title = form.title;
+		if (form.dirty.notes && (form.notes || null) !== old.notes)
+			patch.notes = form.notes || null;
+		if (form.dirty.due && form.due !== (old.dueAt ?? "")) {
+			patch.dueAt = form.due || null;
+			if (!form.due) patch.dueAllDay = false;
+		}
+		if (form.dirty.allDay && form.allDay !== old.dueAllDay)
+			patch.dueAllDay = form.allDay;
+		if (form.dirty.priority && Number(form.priority) !== old.priority)
+			patch.priority = Number(form.priority);
+		if (!Object.keys(patch).length) {
+			this.state.error = "no_changes";
+			return;
+		}
+		try {
+			const body = parseApiTaskUpdate({
+				listId: old.listId,
+				expectedState: form.observation.stateToken,
+				patch,
+			});
+			if (
+				(body.patch.dueAllDay ?? old.dueAllDay) &&
+				(body.patch.dueAt === null ||
+					(body.patch.dueAt === undefined && old.dueAt === null))
+			)
+				throw new Error("A due instant is required");
+			if (
+				new TextEncoder().encode(JSON.stringify(body)).length > MAX_INPUT_BYTES
+			)
+				throw new Error("Input limit");
+			Object.freeze(body.patch);
+			this.state.review = {
+				kind: "update",
+				taskId: old.taskId,
+				title: old.title,
+				body: Object.freeze(body),
+				requestId: this.uuid(),
+				uncertain: false,
+			};
+			this.state.form = null;
+			this.state.detailOffset = 0;
+			this.state.status = "review";
+			this.state.error = null;
+		} catch {
+			this.state.error = "invalid_input";
+		}
+	}
+	private editInput(input: TerminalInput): void {
+		const form = this.state.form;
+		if (form?.kind !== "update") return;
+		if (input.type === "key" && input.key === "escape") {
+			this.begin();
+			this.state.form = null;
+			this.state.status = "ready";
+			return;
+		}
+		this.state.error = null;
+		if (input.type === "key" && input.key === "enter") {
+			const fields: readonly (typeof form.field)[] =
+				form.observation.snapshot.rrule !== null ||
+				form.observation.snapshot.listKind === "habits"
+					? (["title", "notes", "priority"] as const)
+					: (["title", "notes", "due", "allDay", "priority"] as const);
+			const index = fields.indexOf(form.field);
+			if (index === fields.length - 1) this.reviewUpdate();
+			else {
+				form.field = fields[index + 1];
+				this.state.detailOffset = 0;
+			}
+		} else if (form.field === "allDay") {
+			if (input.type === "text" && ["0", "1"].includes(input.text)) {
+				form.allDay = input.text === "1";
+				form.dirty.allDay = true;
+			}
+		} else if (input.type === "key" && input.key === "backspace") {
+			form[form.field] = Array.from(form[form.field]).slice(0, -1).join("");
+			form.dirty[form.field] = true;
+		} else if (input.type === "text" || input.type === "paste") {
+			const value =
+				form.field === "notes"
+					? input.text.replace(/\r\n?/g, "\n")
+					: input.text.replace(/[\r\n\t]/g, " ");
+			const maximum = { title: 500, notes: 32768, due: 64, priority: 1 }[
+				form.field
+			];
+			if (form[form.field].length + value.length <= maximum) {
+				form[form.field] += value;
+				form.dirty[form.field] = true;
+			}
+		}
+	}
+	private deletionInput(input: TerminalInput): void {
+		const deletion = this.state.deletion;
+		if (!deletion) return;
+		if (input.type === "text" && input.text === "q") {
+			this.close();
+			this.quit();
+			return;
+		}
+		if (input.type === "key" && input.key === "escape") {
+			this.state.deletion = null;
+			return;
+		}
+		if (
+			input.type === "text" &&
+			input.text === "1" &&
+			deletion.observation.childrenState.count === 0
+		)
+			deletion.cascade = false;
+		if (input.type === "text" && input.text === "2") deletion.cascade = true;
+		if (
+			input.type === "key" &&
+			input.key === "enter" &&
+			deletion.cascade !== null
+		) {
+			const body = parseApiTaskDelete({
+				listId: deletion.observation.snapshot.listId,
+				expectedState: deletion.observation.stateToken,
+				expectedChildrenState: deletion.observation.childrenState,
+				cascadeChildren: deletion.cascade,
+			});
+			Object.freeze(body.expectedChildrenState);
+			this.state.review = {
+				kind: "delete",
+				taskId: deletion.taskId,
+				title: deletion.observation.snapshot.title,
+				body: Object.freeze(body),
+				requestId: this.uuid(),
+				uncertain: false,
+			};
+			this.state.deletion = null;
+			this.state.detailOffset = 0;
+			this.state.status = "review";
+		}
+	}
+
 	private async write(): Promise<void> {
 		const review = this.state.review;
 		if (!review || this.state.status === "writing") return;
@@ -251,6 +489,20 @@ export class TerminalController {
 			if (review.kind === "create")
 				await this.api.create(
 					review.task,
+					review.requestId,
+					this.request.signal,
+				);
+			else if (review.kind === "update")
+				await this.api.update(
+					review.taskId,
+					review.body,
+					review.requestId,
+					this.request.signal,
+				);
+			else if (review.kind === "delete")
+				await this.api.delete(
+					review.taskId,
+					review.body,
 					review.requestId,
 					this.request.signal,
 				);
@@ -284,7 +536,11 @@ export class TerminalController {
 			return;
 		}
 		if (
-			(this.state.detail || this.state.review || this.state.help) &&
+			(this.state.detail ||
+				this.state.review ||
+				this.state.help ||
+				this.state.deletion ||
+				this.state.form?.kind === "update") &&
 			input.type === "key" &&
 			["up", "down", "home", "end"].includes(input.key)
 		) {
@@ -306,7 +562,17 @@ export class TerminalController {
 			this.changed();
 			return;
 		}
+		if (this.state.deletion) {
+			this.deletionInput(input);
+			this.changed();
+			return;
+		}
 		const form = this.state.form;
+		if (form?.kind === "update") {
+			this.editInput(input);
+			this.changed();
+			return;
+		}
 		if (form) {
 			if (
 				this.state.status === "loading" &&
@@ -386,6 +652,8 @@ export class TerminalController {
 				!["loading", "error"].includes(this.state.status)
 			)
 				this.newTask();
+			else if (["e", "d"].includes(input.text) && this.state.status === "ready")
+				await this.observeMutation(input.text === "e" ? "update" : "delete");
 			else if (input.text === "c" && this.state.status === "ready")
 				this.completion();
 		} else if (input.type === "key") {

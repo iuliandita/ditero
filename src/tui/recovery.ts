@@ -1,6 +1,7 @@
 export interface RetryRecord {
 	requestId: string;
 	endpoint: string;
+	method?: "PATCH" | "DELETE";
 	body: unknown;
 }
 

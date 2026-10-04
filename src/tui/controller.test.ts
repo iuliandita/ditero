@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { CliError } from "../cli/arguments.ts";
 import type { ApiTaskCreate } from "../domain/public-api-writes.ts";
-import type { Page, TerminalApi } from "./api.ts";
+import type { Page, TaskObservation, TerminalApi } from "./api.ts";
 import { TerminalController } from "./controller.ts";
 
 const task: ApiTaskCreate = {
@@ -20,8 +20,38 @@ const page: Page = {
 	],
 	nextCursor: null,
 };
+const observation: TaskObservation = {
+	snapshot: {
+		version: 1,
+		taskId: "task",
+		listId: "list",
+		workspaceId: "workspace",
+		title: "Milk",
+		notes: "first\nsecond",
+		dueAt: null,
+		dueAllDay: false,
+		priority: 0,
+		createdAt: "2026-10-03T12:00:00.000Z",
+		done: false,
+		completedAt: null,
+		listKind: "tasks",
+		rrule: null,
+		recurrenceRelative: false,
+		recurrenceAnchorAt: null,
+		recurrenceConsumed: null,
+	},
+	stateToken: "a".repeat(64),
+};
+
 function fixture() {
 	const api: TerminalApi = {
+		observe: vi.fn(async () => structuredClone(observation)),
+		observeDeletion: vi.fn(async () => ({
+			...structuredClone(observation),
+			childrenState: { version: 1 as const, count: 0, token: "b".repeat(64) },
+		})),
+		update: vi.fn(async () => {}),
+		delete: vi.fn(async () => {}),
 		read: vi.fn(async () => structuredClone(page)),
 		plan: vi.fn(async () => ({
 			version: 1 as const,
@@ -194,5 +224,223 @@ describe("terminal controller", () => {
 		resolve(page);
 		await loading;
 		expect(f.controller.state.entries).toEqual([]);
+	});
+});
+
+describe("observed terminal task mutations", () => {
+	const open = async () => {
+		const f = fixture();
+		await f.controller.open({ resource: "tasks", listId: "list" });
+		return f;
+	};
+	const finishEdit = async (f: ReturnType<typeof fixture>, fields = 5) => {
+		for (let i = 0; i < fields; i++) await f.key("enter");
+	};
+	it("observes explicitly, preserves multiline notes, and reviews only the changed title", async () => {
+		const f = await open();
+		await f.text("e");
+		expect(f.api.observe).toHaveBeenCalledWith("task", expect.any(AbortSignal));
+		expect(f.controller.state.form).toMatchObject({
+			kind: "update",
+			notes: "first\nsecond",
+		});
+		await f.text("!");
+		await finishEdit(f);
+		expect(f.controller.state.review).toMatchObject({
+			kind: "update",
+			body: {
+				listId: "list",
+				expectedState: "a".repeat(64),
+				patch: { title: "Milk!" },
+			},
+		});
+		expect(
+			Object.keys(
+				f.controller.state.review?.kind === "update"
+					? f.controller.state.review.body.patch
+					: {},
+			),
+		).toEqual(["title"]);
+		await f.controller.input({ type: "paste", text: "y" });
+		expect(f.api.update).not.toHaveBeenCalled();
+		await f.text("y");
+		expect(f.api.update).toHaveBeenCalledTimes(1);
+		expect(f.api.observe).toHaveBeenCalledTimes(1);
+	});
+	it("an unchanged edit creates no UUID or proposal", async () => {
+		const f = await open();
+		await f.text("e");
+		await finishEdit(f);
+		expect(f.controller.state.error).toBe("no_changes");
+		expect(f.controller.state.review).toBeNull();
+		expect(f.uuid).not.toHaveBeenCalled();
+	});
+	it("normalizes multiline pasted notes while keeping pasted keys literal", async () => {
+		const f = await open();
+		await f.text("e");
+		await f.key("enter");
+		await f.controller.input({ type: "paste", text: "\r\ny\nnext" });
+		await finishEdit(f, 4);
+		expect(f.controller.state.review).toMatchObject({
+			body: { patch: { notes: "first\nsecond\ny\nnext" } },
+		});
+		expect(f.api.update).not.toHaveBeenCalled();
+	});
+	it("clears an observed due instant and its all-day flag together", async () => {
+		const f = await open();
+		vi.mocked(f.api.observe).mockResolvedValue({
+			...observation,
+			snapshot: {
+				...observation.snapshot,
+				dueAt: "2026-10-04T10:00:00.000Z",
+				dueAllDay: true,
+			},
+		});
+		await f.text("e");
+		await finishEdit(f, 2);
+		for (let i = 0; i < 24; i++)
+			await f.controller.input({ type: "key", key: "backspace" });
+		await finishEdit(f, 3);
+		expect(f.controller.state.review).toMatchObject({
+			body: { patch: { dueAt: null, dueAllDay: false } },
+		});
+	});
+	it.each([
+		"recurring",
+		"habit",
+	])("skips unavailable due fields for a %s task", async (kind) => {
+		const f = await open();
+		vi.mocked(f.api.observe).mockResolvedValue({
+			...observation,
+			snapshot: {
+				...observation.snapshot,
+				rrule: kind === "recurring" ? "FREQ=DAILY" : null,
+				listKind: kind === "habit" ? "habits" : "tasks",
+			},
+		});
+		await f.text("e");
+		await finishEdit(f, 2);
+		expect(f.controller.state.form?.field).toBe("priority");
+		await f.controller.input({ type: "key", key: "backspace" });
+		await f.text("2");
+		await f.key("enter");
+		expect(f.controller.state.review).toMatchObject({
+			body: { patch: { priority: 2 } },
+		});
+	});
+	it("keeps an immutable exact patch and UUID on uncertainty without observing again", async () => {
+		const f = await open();
+		await f.text("e");
+		await f.text("!");
+		await finishEdit(f);
+		const review = f.controller.state.review;
+		if (review?.kind !== "update") throw new Error("Expected update review");
+		expect(Object.isFrozen(review.body)).toBe(true);
+		expect(Object.isFrozen(review.body.patch)).toBe(true);
+		vi.mocked(f.api.update).mockRejectedValueOnce(
+			new CliError("network_error", "Lost", 7),
+		);
+		await f.text("y");
+		await f.key("escape");
+		await f.text("e");
+		await f.text("y");
+		const calls = vi.mocked(f.api.update).mock.calls;
+		expect(calls[1].slice(0, 3)).toEqual(calls[0].slice(0, 3));
+		expect(f.api.observe).toHaveBeenCalledTimes(1);
+		expect(f.uuid).toHaveBeenCalledTimes(1);
+	});
+	it("requires a typed cascade choice and separate review before deletion", async () => {
+		const f = await open();
+		vi.mocked(f.api.observeDeletion).mockResolvedValue({
+			...observation,
+			childrenState: { version: 1, count: 2, token: "b".repeat(64) },
+		});
+		await f.text("d");
+		await f.controller.input({ type: "paste", text: "2\ny" });
+		await f.key("enter");
+		expect(f.controller.state.review).toBeNull();
+		await f.text("1");
+		await f.key("enter");
+		expect(f.controller.state.review).toBeNull();
+		await f.text("2");
+		await f.key("enter");
+		expect(f.controller.state.review).toMatchObject({
+			kind: "delete",
+			body: { cascadeChildren: true, expectedChildrenState: { count: 2 } },
+		});
+		await f.controller.input({ type: "paste", text: "y" });
+		expect(f.api.delete).not.toHaveBeenCalled();
+		await f.text("y");
+		expect(f.api.delete).toHaveBeenCalledTimes(1);
+	});
+	it("supports explicit no-cascade deletion and preserves the exact retry guards", async () => {
+		const f = await open();
+		await f.text("d");
+		await f.text("1");
+		await f.key("enter");
+		const review = f.controller.state.review;
+		if (review?.kind !== "delete") throw new Error("Expected deletion review");
+		expect(review.body.cascadeChildren).toBe(false);
+		expect(Object.isFrozen(review.body.expectedChildrenState)).toBe(true);
+		vi.mocked(f.api.delete).mockRejectedValueOnce(
+			new CliError("network_error", "Lost", 7),
+		);
+		await f.text("y");
+		await f.text("y");
+		expect(vi.mocked(f.api.delete).mock.calls[1].slice(0, 3)).toEqual(
+			vi.mocked(f.api.delete).mock.calls[0].slice(0, 3),
+		);
+		expect(f.api.observeDeletion).toHaveBeenCalledTimes(1);
+	});
+	it.each([
+		"update",
+		"delete",
+	] as const)("invalidates a %s proposal after conflict and clears it after authorization refusal", async (kind) => {
+		const f = await open();
+		const review = async () => {
+			await f.text(kind === "update" ? "e" : "d");
+			if (kind === "update") {
+				await f.text("!");
+				await finishEdit(f);
+			} else {
+				await f.text("1");
+				await f.key("enter");
+			}
+		};
+		await review();
+		vi.mocked(f.api[kind]).mockRejectedValueOnce(
+			new CliError("request_conflict", "Changed", 10, 409),
+		);
+		await f.text("y");
+		expect(f.controller.state.review).toBeNull();
+		await f.text("y");
+		expect(f.api[kind]).toHaveBeenCalledTimes(1);
+		await f.text("r");
+		await review();
+		vi.mocked(f.api[kind]).mockRejectedValueOnce(
+			new CliError("forbidden", "Revoked", 4, 403),
+		);
+		await f.text("y");
+		expect(f.controller.state.entries).toEqual([]);
+		expect(f.controller.state.form).toBeNull();
+		expect(f.controller.state.deletion).toBeNull();
+	});
+	it("cancelled observations cannot populate a different scope", async () => {
+		const f = await open();
+		let resolve!: (value: TaskObservation) => void;
+		let signal!: AbortSignal;
+		vi.mocked(f.api.observe).mockImplementationOnce((_id, current) => {
+			signal = current;
+			return new Promise((done) => {
+				resolve = done;
+			});
+		});
+		const pending = f.text("e");
+		await f.controller.open({ resource: "tasks", listId: "other" });
+		resolve(observation);
+		await pending;
+		expect(signal.aborted).toBe(true);
+		expect(f.controller.state.form).toBeNull();
+		expect(f.uuid).not.toHaveBeenCalled();
 	});
 });
