@@ -13,6 +13,10 @@ import {
 	safeListInput,
 } from "../cli/list-workflow.ts";
 import {
+	encodeTaskPlacementInput,
+	taskPlacementWorkflow,
+} from "../cli/task-placement-workflow.ts";
+import {
 	encodeTaskRelationshipsInput,
 	safeRelationshipObject,
 	safeTaskRelationshipsInput,
@@ -46,6 +50,11 @@ import {
 	apiTaskDeleteSchema,
 	apiTaskDeletionObservationSchema,
 } from "../domain/public-api-task-deletion.ts";
+import {
+	apiTaskPlacementAckSchema,
+	apiTaskPlacementObservationSchema,
+	apiTaskPlacementSchema,
+} from "../domain/public-api-task-placement.ts";
 import {
 	apiTaskRelationshipObservationSchema,
 	apiTaskRelationshipSnapshotSchema,
@@ -140,6 +149,47 @@ function guardedRelationshipsInput<S extends z.ZodType>(
 					if (writing)
 						encodeTaskRelationshipsInput(
 							(result.value as Record<string, unknown>).relationships,
+						);
+					if (
+						new TextEncoder().encode(JSON.stringify(result.value)).byteLength >
+						65_536
+					)
+						return invalid;
+					return result;
+				} catch {
+					return invalid;
+				}
+			},
+		},
+	};
+}
+
+function guardedPlacementInput<S extends z.ZodType>(
+	schema: S,
+	writing: boolean,
+): StandardSchemaWithJSON<z.input<S>, z.output<S>> {
+	const standard = schema["~standard"];
+	return {
+		"~standard": {
+			...standard,
+			validate: async (value) => {
+				const invalid = {
+					issues: [{ message: "Invalid or oversized placement arguments." }],
+				};
+				try {
+					if (
+						!safeRelationshipObject(
+							value,
+							writing ? ["taskId", "requestId", "placement"] : ["taskId"],
+						)
+					)
+						return invalid;
+					if (writing) encodeTaskPlacementInput(value.placement);
+					const result = await standard.validate(value);
+					if (result.issues) return invalid;
+					if (writing)
+						encodeTaskPlacementInput(
+							(result.value as Record<string, unknown>).placement,
 						);
 					if (
 						new TextEncoder().encode(JSON.stringify(result.value)).byteLength >
@@ -734,6 +784,87 @@ export function createDiteroMcp(
 				"update-task-relationships",
 				taskId,
 				relationships,
+				requestId.toLowerCase(),
+				ctx.mcpReq.signal,
+			),
+	);
+
+	function placementOperation(
+		command: CliOptions["command"],
+		taskId: string,
+		payload: unknown,
+		requestId: string | undefined,
+		signal: AbortSignal,
+	) {
+		return execute(() =>
+			taskPlacementWorkflow(
+				{ ...fixed, command, taskId, requestId },
+				fetcher,
+				async () => encodeTaskPlacementInput(payload),
+				signal,
+			),
+		);
+	}
+	server.registerTool(
+		"get_task_placement_observation",
+		{
+			description:
+				"Read current task placement, original list/workspace and complete children state. Supply a separate explicit list observation token for the chosen target; this read does not lock rows.",
+			inputSchema: guardedPlacementInput(
+				z.object({ taskId: PUBLIC_API_ID }).strict(),
+				false,
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiTaskPlacementObservationSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations,
+		},
+		({ taskId }, ctx) =>
+			placementOperation(
+				"observe-task-placement",
+				taskId,
+				undefined,
+				undefined,
+				ctx.mcpReq.signal,
+			),
+	);
+	server.registerTool(
+		"place_task",
+		{
+			description:
+				"Order a task in its list or relocate a root and its explicitly observed children to a same-workspace, same-kind list. Supply exact observations, sortKey, cascade policy and caller UUID. One 4 KiB PATCH; no hidden reads or retries. Replay acknowledges the original effect; manually retry identical body/key after uncertainty.",
+			inputSchema: guardedPlacementInput(
+				z
+					.object({
+						taskId: PUBLIC_API_ID,
+						requestId: z.uuid(),
+						placement: apiTaskPlacementSchema,
+					})
+					.strict(),
+				true,
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiTaskPlacementAckSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		({ taskId, requestId, placement }, ctx) =>
+			placementOperation(
+				"place-task",
+				taskId,
+				placement,
 				requestId.toLowerCase(),
 				ctx.mcpReq.signal,
 			),
