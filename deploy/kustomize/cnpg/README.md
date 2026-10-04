@@ -40,6 +40,10 @@ configuration. Neither transaction pooling nor a read-only Service is suitable
 for the upstream replication connection. Retain authentication and encryption
 secrets when restoring data.
 
+The database rejects TCP connections without TLS. CloudNativePG's fixed local
+Unix socket and certificate-authenticated replication rules remain unchanged.
+Clients still need verified TLS with the operator's server CA.
+
 ## Configure and render
 
 Render without contacting a cluster:

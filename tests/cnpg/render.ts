@@ -9,6 +9,7 @@ type ObjectRow = {
 	spec?: {
 		instances: number;
 		enableSuperuserAccess: boolean;
+		postgresql: { pg_hba: string[] };
 		bootstrap: {
 			initdb: {
 				secret: { name: string };
@@ -53,6 +54,9 @@ function bindings(rows: ObjectRow[], namespace: string, prefix: string) {
 	assert.ok(cluster?.spec);
 	assert.equal(cluster.spec.instances, 1);
 	assert.equal(cluster.spec.enableSuperuserAccess, false);
+	assert.deepEqual(cluster.spec.postgresql.pg_hba, [
+		"hostnossl all all all reject",
+	]);
 	const init = cluster.spec.bootstrap.initdb;
 	assert.equal(init.secret.name, "ditero-db-migrator");
 	const refs = init.postInitApplicationSQLRefs.configMapRefs;
