@@ -78,7 +78,7 @@ are not retried automatically.
 | 7 | Network, timeout, or response stream failure |
 | 8 | Invalid response, size bound, or pagination bound |
 | 9 | Other HTTP or internal failure |
-| 10 | Request conflict or stale observed task |
+| 10 | Request conflict or stale observed state |
 | 11 | Original task deleted; retry cannot recreate it |
 
 ## Plan and create a task
@@ -230,3 +230,47 @@ request UUID, shared account-wide with create and completion. Neither command
 performs a hidden observation or retries. After an uncertain result, preserve and
 explicitly retry the identical task ID, body, and key. Do not fetch replacement
 tokens or mint a new key for that retry.
+
+
+## Create and update lists
+
+`create-list` reads the strict API list object from stdin and requires an explicit
+UUID. The API assigns ID, owner, root append position and defaults; it creates no
+invitations, access grants or tasks. Choose workspace and kind explicitly:
+
+```sh
+bun run cli create-list --request-id 00000000-0000-4000-8000-000000000005 --json <<'JSON'
+{ "workspaceId": "WORKSPACE_ID", "title": "Groceries", "kind": "shopping", "icon": null }
+JSON
+bun run cli observe-list --list LIST_ID --json
+bun run cli update-list --list LIST_ID --request-id 00000000-0000-4000-8000-000000000006 --json <<'JSON'
+{ "workspaceId": "ORIGINAL_WORKSPACE_ID", "expectedState": "OBSERVED_STATE_TOKEN", "patch": { "title": "Reviewed title", "icon": null, "completedDisplay": "hide" } }
+JSON
+```
+
+Replace IDs, token and UUIDs with explicit reviewed values. `observe-list` performs
+one GET without reading stdin or accepting a request UUID. Read tokens and Viewers
+may observe. Its strict snapshot covers every ApiList scalar field: ID, workspace,
+owner, title, kind, icon, folder, sort order and completed-display policy. The
+semantic token is not a lock, monotonic revision or durable incarnation identity;
+identical state, including identical recreation, may match again. Relationships
+are outside the token.
+
+List writes accept at most 4 KiB of fatal UTF-8 JSON before any network request,
+with prototype/unknown-field rejection. Title is trimmed, 1-500 characters; icon
+is null or at most 128 characters; completedDisplay is sink, keep or hide. Kind is
+required on creation. Update accepts a nonempty patch of only title, icon and
+completedDisplay; omission preserves values. It cannot change ID, workspace,
+owner, kind, folder or order. Supply the original workspace and observed token.
+
+Creation sends one POST and returns `list-create-ack`; update sends one PATCH and
+returns `list-update-ack`, each containing the immutable original snapshot. Matching
+replay retains that snapshot after later edits/deletion/recreation and never mutates
+a replacement. Use a separate observation for current state. Both writes require
+current write PAT and writable original-workspace membership, including replay.
+
+A 409 is an explicit conflict, with no hidden read, new observation, retry or rebase.
+Preserve the exact UUID, list ID and canonical body after an uncertain response,
+then manually retry those values. An intentional changed request needs a new UUID.
+Keys share the account namespace with all list/task writes. Collection flags,
+credentials as flags and file paths are refused on these commands.

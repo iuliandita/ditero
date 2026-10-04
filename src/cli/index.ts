@@ -1,12 +1,14 @@
 import { clientVersion } from "../clients/build-info.ts";
 import { CliError, parseArguments } from "./arguments.ts";
 import { discover, type Fetcher } from "./client.ts";
+import { listWorkflow } from "./list-workflow.ts";
 import { type StdinReader, taskWorkflow } from "./task-workflow.ts";
 
 export const HELP = `Ditero CLI
 
 Usage: ditero <command> [options]
 Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards,
+          create-list, update-list (list JSON stdin), observe-list (live state JSON),
           plan-task (task intent JSON stdin), create-task (API task JSON stdin),
           complete-task (observed completion JSON stdin),
           observe-task, observe-task-deletion (live state JSON),
@@ -20,7 +22,7 @@ Options:
   --cursor <cursor>       Continue a collection with its opaque nextCursor
   --all                   Read up to 100 pages and 20 MiB before printing
   --workspace <id>        Filter a collection by workspace
-  --list <id>             Filter tasks by list
+  --list <id>             Filter tasks; required for list observation/update
   --done <true|false>     Filter tasks by completion
   --task <id>            Required for task observation, completion, update, and deletion
   --request-id <UUID>     Required for writes; preserve for exact retries
@@ -34,7 +36,7 @@ Exit codes: 0 success, 2 usage/request, 3 authentication, 4 permission,
 Planning never writes; writes make one POST, PATCH, or DELETE without retries.
 Completion requires the inspected listId and expectedDueAt; recurring tasks advance.
 Updates require an observed state token; deletion also requires child state and explicit cascade.
-Workflow stdin is at most 64 KiB; deletion is at most 4 KiB. No files, invitations, or mentions are supported.
+Workflow stdin is at most 64 KiB; deletion and list writes are at most 4 KiB. No files, invitations, or mentions are supported.
 `;
 
 export async function runCli(
@@ -55,17 +57,21 @@ export async function runCli(
 			output.stdout(HELP);
 			return 0;
 		}
-		const result = [
-			"plan-task",
-			"create-task",
-			"complete-task",
-			"observe-task",
-			"observe-task-deletion",
-			"update-task",
-			"delete-task",
-		].includes(options.command)
-			? await taskWorkflow(options, fetcher, stdinReader)
-			: await discover(options, fetcher);
+		const result = ["create-list", "observe-list", "update-list"].includes(
+			options.command,
+		)
+			? await listWorkflow(options, fetcher, stdinReader)
+			: [
+						"plan-task",
+						"create-task",
+						"complete-task",
+						"observe-task",
+						"observe-task-deletion",
+						"update-task",
+						"delete-task",
+					].includes(options.command)
+				? await taskWorkflow(options, fetcher, stdinReader)
+				: await discover(options, fetcher);
 		output.stdout(
 			`${JSON.stringify(result, null, options.json ? undefined : 2)}\n`,
 		);
