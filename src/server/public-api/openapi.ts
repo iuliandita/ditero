@@ -5,6 +5,11 @@ import {
 	apiListCreationAckSchema,
 } from "../../domain/public-api-list-create.ts";
 import {
+	apiListObservationSchema,
+	apiListUpdateAckSchema,
+	apiListUpdateSchema,
+} from "../../domain/public-api-list-update.ts";
+import {
 	PUBLIC_API_RESOURCES,
 	publicApiResourceSchemas,
 } from "../../domain/public-api-resources.ts";
@@ -170,6 +175,61 @@ export function publicApiOpenApi() {
 				description:
 					"Idempotent replay of the original creation acknowledgement",
 			},
+			...errors,
+		},
+	};
+
+	paths["/api/v1/lists/{id}/observation"] = {
+		get: {
+			operationId: "observe_list",
+			tags: ["lists"],
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Read a strict ApiList snapshot and SHA256 token of its versioned canonical scalar state. Covers id, workspaceId, ownerId, title, kind, icon, folderId, sortKey and completedDisplay. Read tokens and viewers may observe. This live read is not a lock, monotonic revision, relationship revision or durable incarnation identity; identical state, including identical recreation, may produce the same token.",
+			parameters: [
+				{
+					name: "id",
+					in: "path",
+					required: true,
+					schema: { type: "string", minLength: 1, maxLength: 256 },
+				},
+			],
+			responses: {
+				"200": response(z.toJSONSchema(apiListObservationSchema)),
+				...errors,
+			},
+		},
+	};
+	(paths["/api/v1/lists/{id}"] as Record<string, unknown>).patch = {
+		operationId: "update_list",
+		tags: ["lists"],
+		security: [{ personalAccessToken: [] }],
+		description:
+			"Update only title, icon and completedDisplay using a write token and current Member/Admin/Owner membership. JSON is limited to 4 KiB; no query parameters. Supply original workspaceId and observation stateToken as expectedState. Stale scalar state returns 409. Changed metadata on pending import containers returns 409; unchanged metadata may be acknowledged. Caller owns the exact UUID/body, with no automatic observe, retry or rebase. Keys share the account namespace with list creation and all task writes; different operation/body returns 409. Replay returns the immutable original list-update-ack snapshot without mutation, even after deletion/recreation, and requires live actor/write PAT/current original-workspace write membership. It makes no current-incarnation assertion.",
+		parameters: [
+			{
+				name: "id",
+				in: "path",
+				required: true,
+				schema: { type: "string", minLength: 1, maxLength: 256 },
+			},
+			{
+				name: "Idempotency-Key",
+				in: "header",
+				required: true,
+				schema: { type: "string", format: "uuid" },
+			},
+		],
+		requestBody: {
+			required: true,
+			content: {
+				"application/json": {
+					schema: z.toJSONSchema(apiListUpdateSchema, { io: "input" }),
+				},
+			},
+		},
+		responses: {
+			"200": response(z.toJSONSchema(apiListUpdateAckSchema)),
 			...errors,
 		},
 	};
