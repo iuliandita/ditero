@@ -519,6 +519,20 @@
       "when": 1791101854407,
       "tag": "0073_public_api_folder_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1791113546616,
+      "tag": "0074_calendar_feeds",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1791113557416,
+      "tag": "0075_calendar_feed_guards",
+      "breakpoints": true
     }
   ]
 }

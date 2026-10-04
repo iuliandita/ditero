@@ -27,6 +27,12 @@ import {
 } from "../../domain/public-api-writes.ts";
 import type { Guards } from "../guards.ts";
 import { downloadApiCalendar } from "./calendar.ts";
+import {
+	createCalendarFeed,
+	downloadCalendarFeed,
+	listCalendarFeeds,
+	revokeCalendarFeed,
+} from "./calendar-feeds.ts";
 import { completeApiTask } from "./complete.ts";
 import {
 	bearerToken,
@@ -180,12 +186,114 @@ export function personalAccessTokenRoutes(
 		);
 }
 
+export function calendarFeedRoutes(
+	pool: Pool,
+	guards: Guards,
+	rateLimit: RateLimit,
+) {
+	return new Elysia()
+		.get(
+			"/api/calendar-feeds",
+			guards.guardedGet(async (request, session) =>
+				apiRequest(async () => {
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					return apiResult(await listCalendarFeeds(pool, session.user.id));
+				}),
+			),
+		)
+		.post(
+			"/api/calendar-feeds",
+			({ request, server }) =>
+				guards.guardedPost(async (_request, session) =>
+					apiRequest(async () => {
+						if (
+							!(await rateLimit(request, server?.requestIP(request)?.address))
+						)
+							throw new PublicApiError(
+								429,
+								"rate-limited",
+								"Too many requests",
+							);
+						if (new URL(request.url).search)
+							throw new PublicApiError(
+								400,
+								"invalid-query",
+								"This endpoint has no query parameters",
+							);
+						if (
+							request.headers
+								.get("content-type")
+								?.split(";")[0]
+								?.trim()
+								.toLowerCase() !== "application/json"
+						)
+							throw new PublicApiError(
+								415,
+								"unsupported-media-type",
+								"A JSON request body is required",
+							);
+						return apiResult(
+							await createCalendarFeed(
+								pool,
+								session.user.id,
+								await boundedJson(request),
+							),
+							null,
+							201,
+						);
+					}),
+				)({ request }),
+			{ parse: "none" },
+		)
+		.delete("/api/calendar-feeds/:id", ({ request, params }) =>
+			guards.guardedPost(async (_request, session) =>
+				apiRequest(async () => {
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					if (!z.uuid().safeParse(params.id).success)
+						throw new PublicApiError(
+							400,
+							"invalid-id",
+							"Invalid calendar feed ID",
+						);
+					return apiResult(
+						await revokeCalendarFeed(pool, session.user.id, params.id),
+					);
+				}),
+			)({ request }),
+		);
+}
+
 export function publicApiRoutes(
 	pool: Pool,
 	rateLimit: RateLimit,
 	flushEvents?: FlushApiEvents,
 ) {
 	const app = new Elysia()
+		.get(
+			"/api/v1/calendar-feeds/:secret/calendar.ics",
+			({ request, server, params }) =>
+				apiRequest(async () => {
+					if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+						throw new PublicApiError(429, "rate-limited", "Too many requests");
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"Calendar feed scope is fixed",
+						);
+					return downloadCalendarFeed(pool, params.secret);
+				}),
+		)
 		.get("/api/v1/calendar.ics", ({ request, server }) =>
 			apiRequest(async () => {
 				if (!(await rateLimit(request, server?.requestIP(request)?.address)))

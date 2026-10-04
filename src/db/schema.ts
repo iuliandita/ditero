@@ -69,6 +69,50 @@ export const personalAccessToken = pgTable(
 	],
 ).enableRLS();
 
+export const calendarFeed = pgTable(
+	"calendar_feed",
+	{
+		id: uuid("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		listId: text("list_id")
+			.notNull()
+			.references(() => list.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => workspace.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		secretHash: text("secret_hash").notNull().unique(),
+		hint: text("hint").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+		revokedAt: timestamp("revoked_at", { withTimezone: true }),
+	},
+	(t) => [
+		index("calendar_feed_user_idx").on(t.userId),
+		index("calendar_feed_list_idx").on(t.listId),
+		index("calendar_feed_workspace_idx").on(t.workspaceId),
+		check("calendar_feed_name", sql`char_length(${t.name}) between 1 and 80`),
+		check("calendar_feed_hash", sql`${t.secretHash} ~ '^[0-9a-f]{64}$'`),
+		check(
+			"calendar_feed_expiry",
+			sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '365 days'`,
+		),
+		pgPolicy("calendar_feed_owner", {
+			for: "all",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("calendar_feed_authenticate", {
+			for: "select",
+			using: sql`${t.secretHash} = current_setting('ditero.calendar_feed_hash', true)`,
+		}),
+	],
+).enableRLS();
+
 export const publicApiRequest = pgTable(
 	"public_api_request",
 	{

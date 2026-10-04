@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+	calendarFeedCreatedSchema,
+	calendarFeedCreateSchema,
+	calendarFeedMetadataSchema,
+} from "../../domain/public-api-calendar-feed.ts";
 import { apiTaskCompleteSchema } from "../../domain/public-api-completion.ts";
 import {
 	apiFolderCreateAckSchema,
@@ -675,6 +680,76 @@ export function publicApiOpenApi() {
 			},
 		},
 	};
+	paths["/api/v1/calendar-feeds/{secret}/calendar.ics"] = {
+		get: {
+			operationId: "download_calendar_feed",
+			security: [],
+			parameters: [
+				{
+					name: "secret",
+					in: "path",
+					required: true,
+					schema: {
+						type: "string",
+						pattern: "^ditero_feed_[A-Za-z0-9_-]{43}$",
+					},
+				},
+			],
+			description:
+				"Read-only fixed-list capability. No query parameters. Every request requires the original live account, current membership, list scope and unexpired nonrevoked feed. Recurrence exports persisted tasks only.",
+			responses: {
+				"200": {
+					description: "Current calendar snapshot",
+					content: { "text/calendar": { schema: { type: "string" } } },
+				},
+				"422": problem,
+				...errors,
+			},
+		},
+	};
+	paths["/api/calendar-feeds"] = {
+		get: {
+			operationId: "list_calendar_feeds",
+			security: [{ accountSession: [] }],
+			responses: {
+				"200": response(z.toJSONSchema(z.array(calendarFeedMetadataSchema))),
+				...errors,
+			},
+		},
+		post: {
+			operationId: "create_calendar_feed",
+			security: [{ accountSession: [] }],
+			description:
+				"Cookie-authenticated, origin-guarded creation. Secret and relative path are returned once; metadata lists never return the capability.",
+			requestBody: {
+				required: true,
+				content: {
+					"application/json": {
+						schema: z.toJSONSchema(calendarFeedCreateSchema),
+					},
+				},
+			},
+			responses: {
+				"201": response(z.toJSONSchema(calendarFeedCreatedSchema)),
+				...errors,
+			},
+		},
+	};
+	paths["/api/calendar-feeds/{id}"] = {
+		delete: {
+			operationId: "revoke_calendar_feed",
+			security: [{ accountSession: [] }],
+			parameters: [
+				{
+					name: "id",
+					in: "path",
+					required: true,
+					schema: { type: "string", format: "uuid" },
+				},
+			],
+			responses: { "200": response({ type: "object" }), ...errors },
+		},
+	};
 	return {
 		openapi: "3.1.0",
 		info: {
@@ -686,6 +761,13 @@ export function publicApiOpenApi() {
 		paths,
 		components: {
 			securitySchemes: {
+				accountSession: {
+					type: "apiKey",
+					in: "cookie",
+					name: "better-auth.session_token",
+					description:
+						"Authenticated account session; mutations also require the existing origin guard.",
+				},
 				personalAccessToken: {
 					type: "http",
 					scheme: "bearer",

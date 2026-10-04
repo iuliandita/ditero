@@ -89,6 +89,7 @@ import { startWorker } from "./notifications/worker.ts";
 import { importPlanRoutes } from "./portability/import-routes.ts";
 import { portabilityRoutes } from "./portability/routes.ts";
 import {
+	calendarFeedRoutes,
 	personalAccessTokenRoutes,
 	publicApiRoutes,
 } from "./public-api/routes.ts";
@@ -168,6 +169,13 @@ async function channelWrite(
 }
 
 const routes = new Elysia()
+	.use(
+		calendarFeedRoutes(
+			pool,
+			{ guardedPost, guardedGet, foreignOrigin },
+			nativeRateLimit,
+		),
+	)
 	.use(
 		personalAccessTokenRoutes(
 			pool,
