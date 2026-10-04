@@ -15,6 +15,15 @@ import {
 	publicApiProfileSchema,
 	publicApiResourceSchemas,
 } from "../domain/public-api-resources.ts";
+import {
+	apiTaskDeletedSchema,
+	apiTaskDeleteSchema,
+	apiTaskDeletionObservationSchema,
+} from "../domain/public-api-task-deletion.ts";
+import {
+	apiTaskObservationSchema,
+	apiTaskUpdateSchema,
+} from "../domain/public-api-task-update.ts";
 import { apiTaskCreateSchema } from "../domain/public-api-writes.ts";
 
 function safeInput(value: unknown, depth = 0): boolean {
@@ -184,7 +193,7 @@ export function createDiteroMcp(
 		);
 	}
 	function workflow(
-		command: "plan-task" | "create-task" | "complete-task",
+		command: CliOptions["command"],
 		input: unknown,
 		requestId?: string,
 		taskId?: string,
@@ -291,6 +300,94 @@ export function createDiteroMcp(
 		},
 		({ taskId, requestId, completion }) =>
 			workflow("complete-task", completion, requestId.toLowerCase(), taskId),
+	);
+	for (const deletion of [false, true]) {
+		server.registerTool(
+			deletion ? "get_task_deletion_observation" : "get_task_observation",
+			{
+				description: deletion
+					? "Read the current task scalar snapshot and observed persisted child count/token. Inspect both states before deletion; related comments, files and assignments are part of the explicit deletion scope."
+					: "Read the current task scalar snapshot and opaque state token. Inspect this live observation before updating; it does not lock the task or describe relationships.",
+				inputSchema: guardedInput(z.object({ taskId: PUBLIC_API_ID }).strict()),
+				outputSchema: z
+					.object({
+						version: z.literal(1),
+						data: deletion
+							? apiTaskDeletionObservationSchema
+							: apiTaskObservationSchema,
+						nextCursor: z.null(),
+					})
+					.strict(),
+				annotations,
+			},
+			({ taskId }) =>
+				workflow(
+					deletion ? "observe-task-deletion" : "observe-task",
+					undefined,
+					undefined,
+					taskId,
+				),
+		);
+	}
+	server.registerTool(
+		"update_task",
+		{
+			description:
+				"Update an inspected task's title, notes, dueAt, dueAllDay or priority using its previously observed listId and stateToken as expectedState, plus an explicit UUID requestId. Omitted fields stay unchanged; null clears notes/dueAt. Recurring tasks and habits reject due-field patches. Send one PATCH; after an uncertain outcome retry the identical body and key without reading a replacement token. Replay returns the current authorized task or 410 if deleted. Keys share the account mutation namespace.",
+			inputSchema: guardedInput(
+				z
+					.object({
+						taskId: PUBLIC_API_ID,
+						requestId: z.uuid(),
+						update: apiTaskUpdateSchema,
+					})
+					.strict(),
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: publicApiResourceSchemas.tasks,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		({ taskId, requestId, update }) =>
+			workflow("update-task", update, requestId.toLowerCase(), taskId),
+	);
+	server.registerTool(
+		"delete_task",
+		{
+			description:
+				"Delete an inspected task using its observed listId, parent stateToken as expectedState, childrenState as expectedChildrenState, explicit cascadeChildren, and UUID requestId. False requires no children; true deletes the exact observed children and dependent comments/files/assignments. Send one DELETE with a body bounded to 4 KiB. After an uncertain result retry the identical body and key without replacing observations. Replay acknowledges the original deletion even if the task ID is recreated; current origin-list write authority is required. Keys share the account mutation namespace.",
+			inputSchema: guardedInput(
+				z
+					.object({
+						taskId: PUBLIC_API_ID,
+						requestId: z.uuid(),
+						deletion: apiTaskDeleteSchema,
+					})
+					.strict(),
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiTaskDeletedSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		({ taskId, requestId, deletion }) =>
+			workflow("delete-task", deletion, requestId.toLowerCase(), taskId),
 	);
 	return server;
 }
