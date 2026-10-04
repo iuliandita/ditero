@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Elysia } from "elysia";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, expect, test, vi } from "vitest";
+import journal from "../../drizzle/meta/_journal.json";
 import { e2eEnabled } from "../../src/config/e2e.ts";
 import {
 	apiListDeleteAckSchema,
@@ -18,10 +19,12 @@ import { createPersonalAccessToken } from "../../src/server/public-api/tokens.ts
 import { FsBlobStore } from "../../src/server/storage/fs-store.ts";
 
 const databaseURL = process.env.DATABASE_URL;
+const expectedDatabase =
+	process.env.DITERO_LIST_DELETE_TEST_DATABASE ?? "ditero_e2e";
 if (
 	!databaseURL ||
 	process.env.NODE_ENV !== "test" ||
-	new URL(databaseURL).pathname !== "/ditero_list_deletion616"
+	new URL(databaseURL).pathname !== `/${expectedDatabase}`
 )
 	throw new Error(
 		"Dedicated list deletion test database and NODE_ENV=test required",
@@ -121,14 +124,14 @@ async function cleanupData() {
 beforeAll(async () => {
 	expect(
 		(await admin.query("select current_database() as name")).rows[0].name,
-	).toBe("ditero_list_deletion616");
+	).toBe(expectedDatabase);
 	expect(
 		(
 			await admin.query(
 				"select count(*)::int as count from drizzle.__drizzle_migrations",
 			)
 		).rows[0].count,
-	).toBe(71);
+	).toBe(journal.entries.length);
 	vi.stubEnv("DITERO_E2E_ENABLED", "true");
 	const statement = await admin.query<{ statement: string }>(
 		"select format('create role %I login password %L nosuperuser nocreatedb nocreaterole noinherit nobypassrls', $1::text, $2::text) as statement",
