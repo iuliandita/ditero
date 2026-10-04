@@ -123,7 +123,7 @@ export const publicApiRequest = pgTable(
 		requestHash: text("request_hash").notNull(),
 		// Retain original receipts after resource deletion.
 		resourceKind: text("resource_kind")
-			.$type<"task" | "list" | "folder">()
+			.$type<"task" | "list" | "folder" | "comment">()
 			.notNull()
 			.default("task"),
 		taskId: text("task_id"),
@@ -132,6 +132,8 @@ export const publicApiRequest = pgTable(
 		listSnapshot: jsonb("list_snapshot"),
 		folderId: text("folder_id"),
 		folderSnapshot: jsonb("folder_snapshot"),
+		commentId: text("comment_id"),
+		commentSnapshot: jsonb("comment_snapshot"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
@@ -140,7 +142,7 @@ export const publicApiRequest = pgTable(
 		primaryKey({ columns: [t.userId, t.requestId] }),
 		check(
 			"public_api_request_resource",
-			sql`
+			sql`(
 			(
 			(${t.resourceKind} = 'task' and ${t.taskId} is not null
 			 and ${t.listId} is null and ${t.listSnapshot} is null)
@@ -156,6 +158,10 @@ export const publicApiRequest = pgTable(
 			 and coalesce(jsonb_typeof(${t.folderSnapshot}) = 'object'
 			 and jsonb_typeof(${t.folderSnapshot}->'id') = 'string'
 			 and ${t.folderSnapshot}->>'id' = ${t.folderId}, false))
+) and ${t.commentId} is null and ${t.commentSnapshot} is null
+or (${t.resourceKind} = 'comment' and ${t.commentId} is not null and ${t.commentSnapshot} is not null
+ and ${t.taskId} is null and ${t.taskSnapshot} is null and ${t.listId} is null and ${t.listSnapshot} is null
+ and ${t.folderId} is null and ${t.folderSnapshot} is null)
 		`,
 		),
 		check(
@@ -181,6 +187,48 @@ export const publicApiRequest = pgTable(
  and ${t.taskSnapshot}#>>'{snapshot,task,listId}' = ${t.taskSnapshot}#>>'{snapshot,list,id}'
  and ${t.taskSnapshot}#>>'{snapshot,task,workspaceId}' = ${t.taskSnapshot}->>'originalWorkspaceId'
  and ${t.taskSnapshot}#>>'{snapshot,list,workspaceId}' = ${t.taskSnapshot}->>'originalWorkspaceId', false)`,
+		),
+		check(
+			"public_api_request_comment_snapshot",
+			sql`${t.commentSnapshot} is null or coalesce(
+ ${t.resourceKind} = 'comment' and octet_length(${t.commentSnapshot}::text) <= 262144
+ and jsonb_typeof(${t.commentSnapshot}) = 'object'
+ and ${t.commentSnapshot}->>'kind' in ('comment-create-ack','comment-update-ack','comment-delete-ack')
+ and jsonb_typeof(${t.commentSnapshot}->'originalWorkspaceId') = 'string'
+ and jsonb_typeof(${t.commentSnapshot}->'originalListId') = 'string'
+ and jsonb_typeof(${t.commentSnapshot}->'originalTaskId') = 'string'
+ and length(${t.commentSnapshot}->>'originalWorkspaceId') between 1 and 256
+ and length(${t.commentSnapshot}->>'originalListId') between 1 and 256
+ and length(${t.commentSnapshot}->>'originalTaskId') between 1 and 256
+ and jsonb_typeof(${t.commentSnapshot}->'snapshot') = 'object'
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,version}') = 'number'
+ and ${t.commentSnapshot}#>>'{snapshot,version}' = '1'
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,commentId}') = 'string'
+ and ${t.commentSnapshot}#>>'{snapshot,commentId}' = ${t.commentId}
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,workspaceId}') = 'string'
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,listId}') = 'string'
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,taskId}') = 'string'
+ and ${t.commentSnapshot}#>>'{snapshot,workspaceId}' = ${t.commentSnapshot}->>'originalWorkspaceId'
+ and ${t.commentSnapshot}#>>'{snapshot,listId}' = ${t.commentSnapshot}->>'originalListId'
+ and ${t.commentSnapshot}#>>'{snapshot,taskId}' = ${t.commentSnapshot}->>'originalTaskId'
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,authorId}') in ('string','null')
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,createdAt}') = 'string'
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,editedAt}') in ('string','null')
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,importedAt}') in ('string','null')
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,provenanceRedactedAt}') in ('string','null')
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,historicalAuthorKind}') in ('string','null')
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,historicalAuthorName}') in ('string','null')
+ and ((${t.commentSnapshot}->>'kind' in ('comment-create-ack','comment-update-ack')
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,body}') = 'string' and not (${t.commentSnapshot} ? 'deleted'))
+ or (${t.commentSnapshot}->>'kind' = 'comment-delete-ack'
+ and ${t.commentSnapshot}->'deleted' = 'true'::jsonb
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,body}') = 'object'
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,body,sha256}') = 'string'
+ and ${t.commentSnapshot}#>>'{snapshot,body,sha256}' ~ '^[a-f0-9]{64}$'
+ and jsonb_typeof(${t.commentSnapshot}#>'{snapshot,body,utf8Bytes}') = 'number'
+ and case when jsonb_typeof(${t.commentSnapshot}#>'{snapshot,body,utf8Bytes}') = 'number'
+ then (${t.commentSnapshot}#>>'{snapshot,body,utf8Bytes}')::numeric between 0 and 9007199254740991
+ and (${t.commentSnapshot}#>>'{snapshot,body,utf8Bytes}')::numeric = trunc((${t.commentSnapshot}#>>'{snapshot,body,utf8Bytes}')::numeric) else false end)), false)`,
 		),
 		pgPolicy("public_api_request_read", {
 			for: "select",

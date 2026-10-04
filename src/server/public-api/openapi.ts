@@ -4,6 +4,14 @@ import {
 	calendarFeedCreateSchema,
 	calendarFeedMetadataSchema,
 } from "../../domain/public-api-calendar-feed.ts";
+import {
+	apiCommentAckSchema,
+	apiCommentCreateSchema,
+	apiCommentDeleteSchema,
+	apiCommentObservationSchema,
+	apiCommentSnapshotSchema,
+	apiCommentUpdateSchema,
+} from "../../domain/public-api-comments.ts";
 import { apiTaskCompleteSchema } from "../../domain/public-api-completion.ts";
 import {
 	apiFolderCreateAckSchema,
@@ -603,6 +611,125 @@ export function publicApiOpenApi() {
 			...errors,
 		},
 	};
+	const commentTaskParameter = {
+		name: "id",
+		in: "path",
+		required: true,
+		schema: { type: "string", minLength: 1, maxLength: 256 },
+	};
+	const commentParameter = { ...commentTaskParameter, name: "commentId" };
+	const commentKeyParameter = {
+		name: "Idempotency-Key",
+		in: "header",
+		required: true,
+		schema: { type: "string", format: "uuid" },
+	};
+	const commentSecurity = [{ personalAccessToken: [] }];
+	paths["/api/v1/tasks/{id}/comments"] = {
+		get: {
+			operationId: "list_task_comments",
+			tags: ["comments"],
+			security: commentSecurity,
+			description:
+				"Current members including Viewers may read full comment bodies. ID keyset pagination, task-bound cursors, no filters. The complete envelope is bounded to 256 KiB; oversized pages fail without truncation. Private import source identities are never exposed.",
+			parameters: [
+				commentTaskParameter,
+				{
+					name: "limit",
+					in: "query",
+					schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+				},
+				{
+					name: "cursor",
+					in: "query",
+					schema: { type: "string", maxLength: 2048 },
+				},
+			],
+			responses: {
+				"200": response(
+					{
+						type: "array",
+						maxItems: 100,
+						items: z.toJSONSchema(apiCommentSnapshotSchema),
+					},
+					true,
+				),
+				...errors,
+			},
+		},
+		post: {
+			operationId: "create_task_comment",
+			tags: ["comments"],
+			security: commentSecurity,
+			description:
+				"Write PAT and current Member+ authority. Supply original workspace/list and expectedTaskState from task observation. Query-free fatal UTF-8 JSON is bounded to 64 KiB; exact untrimmed body may be empty and has the native 10000-character limit. Native lexical mentions notify current members after commit on a best-effort basis, without invites or access grants. Immutable acknowledgment and receipt commit together. Matching replay needs original-workspace write authority and emits no new event. Preserve identical body/key after uncertain transport; no automatic retry.",
+			parameters: [commentTaskParameter, commentKeyParameter],
+			requestBody: {
+				required: true,
+				content: {
+					"application/json": {
+						schema: z.toJSONSchema(apiCommentCreateSchema, { io: "input" }),
+					},
+				},
+			},
+			responses: {
+				"200": response(z.toJSONSchema(apiCommentAckSchema)),
+				...errors,
+			},
+		},
+	};
+	paths["/api/v1/tasks/{id}/comments/{commentId}/observation"] = {
+		get: {
+			operationId: "observe_task_comment",
+			tags: ["comments"],
+			security: commentSecurity,
+			description:
+				"Current members including Viewers may observe. Body evidence contains SHA256 and UTF-8 byte count. The state token covers every stored comment field including hidden provenance and timestamp microseconds, and task/list/workspace scope. It is semantic state, not a monotonic revision or durable incarnation. No query parameters.",
+			parameters: [commentTaskParameter, commentParameter],
+			responses: {
+				"200": response(z.toJSONSchema(apiCommentObservationSchema)),
+				...errors,
+			},
+		},
+	};
+	paths["/api/v1/tasks/{id}/comments/{commentId}"] = {};
+	for (const [method, input, description] of [
+		[
+			"patch",
+			apiCommentUpdateSchema,
+			"Edit requires current write membership and the original native author. Imported comments cannot be edited. Supply original workspace/list and expectedState from comment observation. Exact untrimmed body is bounded by the 64 KiB transport envelope; native edit has no character cap. No mention event is emitted.",
+		],
+		[
+			"delete",
+			apiCommentDeleteSchema,
+			"Delete requires native author with write membership or Admin/Owner; imported/null-author comments require Admin/Owner. Supply original scope/token and deleteScope comment-and-attachments in query-free JSON bounded to 4 KiB. Committed attachments retire for garbage collection; no blob I/O occurs. Delete acknowledgment retains compact original body evidence and deleted true.",
+		],
+	] as const) {
+		(
+			paths["/api/v1/tasks/{id}/comments/{commentId}"] as Record<
+				string,
+				unknown
+			>
+		)[method] = {
+			operationId: `${method}_task_comment`,
+			tags: ["comments"],
+			security: commentSecurity,
+			description: `${description} Receipt replay acknowledges the original immutable result after deletion or ID recreation without touching a replacement. A live valid write PAT and current original-workspace authority against the captured author/import status remain required. UUID keys share the account namespace across all API writes; changed body/operation conflicts. Retry only the identical body/key after an uncertain result.`,
+			parameters: [commentTaskParameter, commentParameter, commentKeyParameter],
+			requestBody: {
+				required: true,
+				content: {
+					"application/json": {
+						schema: z.toJSONSchema(input, { io: "input" }),
+					},
+				},
+			},
+			responses: {
+				"200": response(z.toJSONSchema(apiCommentAckSchema)),
+				...errors,
+			},
+		};
+	}
 	paths["/api/v1/calendar.ics"] = {
 		get: {
 			operationId: "download_calendar_snapshot",

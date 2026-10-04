@@ -520,3 +520,67 @@ resulting task/list/workspace, ordering key and parent ID. Exact replay acknowle
 that original result without mutating a recreated task or revalidating a current
 target. Current original-workspace write authority and a live valid write PAT are
 required. Legacy scalar task update and its live replay contract remain unchanged.
+
+## Task comments
+
+`GET /api/v1/tasks/{id}/comments` lists full comment snapshots in ID order.
+Current members, including Viewers, may read. `limit` defaults to 50 and is at
+most 100; `cursor` is bound to this task. Unknown or repeated queries are refused.
+Snapshots expose author, body, scope, timestamps and historical author display
+metadata. Import source namespaces, row IDs and principal IDs stay private.
+A complete page envelope above 256 KiB is refused without truncation; reduce the
+page size or observe an oversized comment individually.
+
+`GET /api/v1/tasks/{id}/comments/{commentId}/observation` returns `snapshot` and
+`stateToken`. The compact body contains `sha256` and `utf8Bytes`. The token binds
+every stored comment field, including private provenance and timestamp
+microseconds, to its task/list/workspace. Tokens describe semantic state, not
+monotonic revisions or durable incarnations; identical recreation can match a
+fresh request. The observation takes no query parameters and makes no mutation.
+
+All writes require a live write PAT, JSON content, no query parameters and a
+caller-owned UUID `Idempotency-Key`. Supply the original `workspaceId` and
+`listId`. Creation uses `POST /api/v1/tasks/{id}/comments` with
+`expectedTaskState` copied from the existing task observation and `body`.
+Creation preserves exact whitespace, permits an empty string and follows the
+native 10,000-character limit. The complete fatal UTF-8 transport envelope is
+bounded to 64 KiB. The server assigns the comment UUID on the first committed
+attempt. Current Member/Admin/Owner membership is required.
+
+Editing uses `PATCH /api/v1/tasks/{id}/comments/{commentId}` with `expectedState`
+from the comment observation and `body`. Only its native author with current
+write membership may edit. Imported comments cannot be edited. Native edit has
+no character cap; the complete transport envelope remains bounded to 64 KiB.
+Body whitespace is preserved. Author, task and provenance cannot be changed.
+Pending import activation does not block these native comment operations.
+
+Deletion uses `DELETE /api/v1/tasks/{id}/comments/{commentId}` with `expectedState`
+and `deleteScope: "comment-and-attachments"` in a body bounded to 4 KiB. The native
+author with write membership or a current Admin/Owner may delete. Imported or
+null-author comments require Admin/Owner. Committed comment attachments retire
+for garbage collection; no blobs are erased in this transaction. Current related
+attachments follow native rules and are not covered by the comment state token.
+
+Authority and captured scope/state are checked under native locks before effects.
+Stale state returns `409 comment-state-changed`. Mutation and immutable receipt
+commit together. Success returns `comment-create-ack`, `comment-update-ack`, or
+`comment-delete-ack`, with original workspace/list/task scope and the original
+snapshot. Create/update retain the complete bounded body; delete retains compact
+body evidence and `deleted: true`. Replay still requires live credentials and
+current original-workspace authority against its captured original author/import
+status, even if the task/list/comment is gone or recreated. Replay does not read
+or mutate replacements or assert current existence/absence. Missing original
+membership returns 404, insufficient authority/read PAT 403, invalid PAT 401.
+Account deletion removes receipts.
+
+Creation reuses native lexical mention parsing and current-member name matching,
+including all name collisions and excluding the author. Mentions grant no access
+and create no invitation. Creation events enqueue after commit on the existing
+best-effort path; a crash in that gap may lose a notice. Edits, deletes, matching
+replays and rolled-back mutations emit no mention event. Acknowledgments do not
+claim notification delivery.
+
+UUID keys share the account namespace with every other API write. Different
+operations or exact canonical bodies return `409 idempotency-conflict`. Preserve
+the identical key, body and observation after uncertain transport. No hidden
+observation, invitation, retry, rebase or replanning occurs.
