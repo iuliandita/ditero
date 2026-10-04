@@ -1,3 +1,5 @@
+import { fitStyledLine } from "./render.ts";
+
 export type TerminalKey =
 	| "up"
 	| "down"
@@ -284,7 +286,7 @@ export function createTerminalSession(options: {
 				const { rows, columns } = size();
 				const visible = text
 					.split("\n", rows)
-					.map((line) => Array.from(line).slice(0, columns).join(""))
+					.map((line) => fitStyledLine(line, columns))
 					.join("\r\n");
 				output.write(`\x1b[H\x1b[2J${visible}`);
 			});

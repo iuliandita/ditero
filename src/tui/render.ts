@@ -1,6 +1,6 @@
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-export function safeText(value: string): string {
+function safeCharacters(value: string): string {
 	return Array.from(value, (character) => {
 		const code = character.codePointAt(0) ?? 0;
 		return code < 32 ||
@@ -12,9 +12,11 @@ export function safeText(value: string): string {
 			(code >= 0x2066 && code <= 0x2069)
 			? " "
 			: character;
-	})
-		.join("")
-		.replace(/\s+/gu, " ");
+	}).join("");
+}
+
+export function safeText(value: string): string {
+	return safeCharacters(value).replace(/\s+/gu, " ");
 }
 
 function cellWidth(value: string): number {
@@ -53,6 +55,37 @@ export function fitLine(value: string, columns: number): string {
 	return result;
 }
 
+export function fitStyledLine(value: string, columns: number): string {
+	const limit = Number.isFinite(columns)
+		? Math.max(0, Math.min(1000, Math.floor(columns)))
+		: 0;
+	const escapeCharacter = String.fromCharCode(27);
+	const sgr = new RegExp(`(${escapeCharacter}\\[[0-9;]*m)`, "u");
+	const trusted = new RegExp(
+		`^${escapeCharacter}\\[(?:0|[127]|3[0-7](?:;7)?(?:;[12])?)m$`,
+		"u",
+	);
+	let result = "";
+	let used = 0;
+	let styled = false;
+	outer: for (const part of value.split(sgr)) {
+		if (part.startsWith(`${escapeCharacter}[`) && part.endsWith("m")) {
+			if (trusted.test(part)) {
+				result += part;
+				styled = part !== `${escapeCharacter}[0m`;
+			}
+			continue;
+		}
+		for (const { segment } of segmenter.segment(safeCharacters(part))) {
+			const width = cellWidth(segment);
+			if (used + width > limit) break outer;
+			result += segment;
+			used += width;
+		}
+	}
+	return result + (styled ? `${escapeCharacter}[0m` : "");
+}
+
 export interface Frame {
 	title: string;
 	status: string;
@@ -60,6 +93,425 @@ export interface Frame {
 	rows: readonly string[];
 	selected: number;
 	detail?: readonly string[];
+	detailParts?: readonly (readonly TextPart[])[];
+	color?: boolean;
+	rowTones?: readonly Tone[];
+	rowMetadata?: readonly string[];
+	statusTone?: Tone;
+	footerHints?: readonly string[];
+	framed?: boolean;
+	ascii?: boolean;
+	context?: string;
+	statusLine?: string;
+	viewportTitle?: string;
+	start?: boolean;
+	startInfo?: readonly string[];
+	rowParts?: readonly (readonly TextPart[])[];
+	rowMetadataParts?: readonly (readonly TextPart[])[];
+}
+
+export interface TextPart {
+	text: string;
+	tone: Tone;
+	fieldWidth?: number;
+	bold?: boolean;
+	dim?: boolean;
+}
+
+export type Tone =
+	| "plain"
+	| "brand"
+	| "danger"
+	| "warning"
+	| "info"
+	| "success"
+	| "recurring";
+const SGR: Record<Tone, string> = {
+	plain: "",
+	brand: "36",
+	danger: "31",
+	warning: "33",
+	info: "34",
+	success: "32",
+	recurring: "35",
+};
+
+function decorate(
+	value: string,
+	tone: Tone,
+	selected: boolean,
+	enabled: boolean,
+	weight?: "bold" | "dim",
+): string {
+	if (!enabled || !value) return value;
+	const codes = [
+		SGR[tone],
+		selected ? "7" : "",
+		weight === "bold" ? "1" : weight === "dim" ? "2" : "",
+	]
+		.filter(Boolean)
+		.join(";");
+	return codes ? `\x1b[${codes}m${value}\x1b[0m` : value;
+}
+
+function padLine(value: string, width: number, staticArt = false): string {
+	const fitted = staticArt
+		? fitStyledLine(value, width)
+		: fitLine(value, width);
+	const used = Array.from(segmenter.segment(fitted), ({ segment }) =>
+		cellWidth(segment),
+	).reduce((total, cells) => total + cells, 0);
+	return fitted + " ".repeat(Math.max(0, width - used));
+}
+
+const ASCII_WORDMARK = [
+	"     _ _ _                 ",
+	"  __| (_) |_ ___ _ __ ___  ",
+	" / _` | | __/ _ \\ '__/ _ \\ ",
+	"| (_| | | ||  __/ | | (_) |",
+	" \\__,_|_|\\__\\___|_|  \\___/ ",
+];
+
+function cells(value: string): number {
+	return Array.from(segmenter.segment(safeText(value)), ({ segment }) =>
+		cellWidth(segment),
+	).reduce((total, width) => total + width, 0);
+}
+
+export function visibleCells(value: string): number {
+	return Array.from(segmenter.segment(safeCharacters(value)), ({ segment }) =>
+		cellWidth(segment),
+	).reduce((total, width) => total + width, 0);
+}
+
+function clipped(value: string, width: number, ascii: boolean): string {
+	const text = safeText(value);
+	return fitLine(text, width) === text
+		? text
+		: width < 2
+			? fitLine(text, width)
+			: fitLine(text, width - 1) + (ascii ? "~" : "…");
+}
+
+function styledParts(
+	parts: readonly TextPart[],
+	width: number,
+	enabled: boolean,
+	selected: boolean,
+	ascii: boolean,
+	whole = false,
+): string {
+	const fitted: TextPart[] = [];
+	let used = 0;
+	for (const part of parts) {
+		let text = safeText(part.text);
+		if (part.fieldWidth !== undefined) {
+			const fieldWidth = Math.max(0, Math.min(width - used, part.fieldWidth));
+			text = padLine(text, fieldWidth);
+		}
+		if (
+			whole &&
+			fitted.some((part) => part.text.trim().length > 0) &&
+			used + visibleCells(text) > width
+		)
+			break;
+		if (used + visibleCells(text) > width)
+			text = clipped(text, width - used, ascii);
+		fitted.push({ ...part, text });
+		used += visibleCells(text);
+		if (used >= width) break;
+	}
+	const padding = " ".repeat(Math.max(0, width - used));
+	return (
+		fitted
+			.map((part) =>
+				decorate(
+					part.text,
+					selected ? "brand" : part.tone,
+					selected,
+					enabled,
+					part.bold || (selected && part.tone !== "plain")
+						? "bold"
+						: !selected && part.dim
+							? "dim"
+							: undefined,
+				),
+			)
+			.join("") +
+		decorate(padding, selected ? "brand" : "plain", selected, enabled)
+	);
+}
+
+function taskLines(frame: Frame, width: number, height: number): string[] {
+	const enabled = frame.color === true;
+	const ascii = frame.ascii === true;
+	if (frame.detailParts)
+		return frame.detailParts
+			.slice(0, height)
+			.map((parts) => styledParts(parts, width, enabled, false, ascii));
+	if (frame.detail)
+		return frame.detail.slice(0, height).map((line) => padLine(line, width));
+	const selected = Math.max(0, Math.min(frame.rows.length - 1, frame.selected));
+	const artTones: readonly Tone[] = [
+		"brand",
+		"info",
+		"recurring",
+		"warning",
+		"success",
+	];
+	const prefix =
+		frame.start && width >= 95 && height >= 24
+			? Array.from(
+					{
+						length: Math.max(
+							ASCII_WORDMARK.length,
+							frame.startInfo?.length ?? 0,
+						),
+					},
+					(_, index) => {
+						const art = padLine(ASCII_WORDMARK[index] ?? "", 31, true);
+						const info = safeText(frame.startInfo?.[index] ?? "");
+						const split =
+							info.indexOf(":") >= 0
+								? info.indexOf(":") + 1
+								: info.indexOf(" ");
+						const parts: TextPart[] =
+							split > 0
+								? [
+										{ text: info.slice(0, split), tone: "brand", bold: true },
+										{ text: info.slice(split), tone: "plain" },
+									]
+								: [{ text: info, tone: "plain" }];
+						return (
+							decorate(
+								art,
+								artTones[index % artTones.length],
+								false,
+								enabled,
+								"bold",
+							) +
+							"  " +
+							styledParts(parts, width - 33, enabled, false, ascii)
+						);
+					},
+				)
+			: [];
+	const result: { text: string; row: number }[] = [
+		...prefix,
+		...(prefix.length ? [" ".repeat(width)] : []),
+	].map((text) => ({ text, row: -1 }));
+
+	for (let row = 0; row < frame.rows.length; row++) {
+		const active = row === selected;
+		const parts = [
+			{ text: `${active ? ">" : " "} `, tone: "plain" as const, fieldWidth: 2 },
+			...(frame.rowParts?.[row] ?? [
+				{ text: frame.rows[row], tone: "plain" as const },
+			]),
+		];
+		const metadata =
+			frame.rowMetadataParts?.[row] ??
+			(frame.rowMetadata
+				? [{ text: frame.rowMetadata[row] ?? "", tone: "plain" as const }]
+				: []);
+		const joined = metadata.map((part, index) => ({
+			text: (index ? (ascii ? " | " : " · ") : "") + part.text,
+			tone: part.tone,
+		}));
+		if (width >= 95 && metadata.length) {
+			const titleWidth = Math.floor(width * 0.42);
+			result.push({
+				row,
+				text:
+					styledParts(parts, titleWidth, enabled, active, ascii) +
+					styledParts(
+						joined.map((part, index) => ({
+							...part,
+							text: (index ? "" : " ") + part.text,
+						})),
+						width - titleWidth,
+						enabled,
+						active,
+						ascii,
+						true,
+					),
+			});
+		} else {
+			result.push({
+				row,
+				text: styledParts(parts, width, enabled, active, ascii),
+			});
+			if (metadata.length && (width >= 58 || active))
+				result.push({
+					row,
+					text: styledParts(
+						[
+							{
+								text: "",
+								tone: "plain",
+								fieldWidth: parts
+									.slice(0, -1)
+									.reduce(
+										(total, part) =>
+											total + (part.fieldWidth ?? cells(part.text)),
+										0,
+									),
+							},
+							...joined.map((part) => ({
+								...part,
+								dim: part.tone !== "danger",
+							})),
+						],
+						width,
+						enabled,
+						active,
+						ascii,
+						true,
+					),
+				});
+		}
+	}
+	const selectedEnd = result.findLastIndex((line) => line.row === selected);
+	const start = Math.max(0, selectedEnd - height + 1);
+	return result.slice(start, start + height).map((line) => line.text);
+}
+
+function framedFrame(frame: Frame, width: number, height: number): string {
+	if (width < 24 || height < 9)
+		return fitHints(frame.footerHints ?? [frame.footer], width);
+	const enabled = frame.color === true;
+	const framed = width >= 79;
+	const contentHeight = height - (framed ? 6 : 4);
+	const contentWidth = width - (framed ? 4 : 0);
+	const content = taskLines(frame, contentWidth, contentHeight);
+	while (content.length < contentHeight) content.push(" ".repeat(contentWidth));
+	const h = frame.ascii ? "-" : "─";
+	const v = frame.ascii ? "|" : "│";
+	const top = frame.ascii ? ["+", "+"] : ["┌", "┐"];
+	const bottom = frame.ascii ? ["+", "+"] : ["└", "┘"];
+	const label = clipped(
+		frame.viewportTitle ?? frame.title,
+		Math.max(0, width - 6),
+		frame.ascii === true,
+	);
+	const border = label
+		? `${top[0]}${h} ${label} ${h.repeat(Math.max(0, width - cells(label) - 5))}${top[1]}`
+		: top[0] + h.repeat(width - 2) + top[1];
+	return [
+		decorate(padLine(frame.title, width), "plain", false, enabled, "bold"),
+		fitLine(frame.context ?? "", width),
+		...(framed ? [decorate(border, "brand", false, enabled)] : []),
+		...content.map((line) =>
+			framed
+				? decorate(`${v} `, "brand", false, enabled) +
+					line +
+					decorate(` ${v}`, "brand", false, enabled)
+				: line,
+		),
+		...(framed
+			? [
+					decorate(
+						bottom[0] + h.repeat(width - 2) + bottom[1],
+						"brand",
+						false,
+						enabled,
+					),
+				]
+			: []),
+		decorate(
+			padLine(frame.statusLine ?? frame.status, width),
+			frame.statusTone ?? "plain",
+			false,
+			enabled,
+			frame.statusTone === "warning" || frame.statusTone === "danger"
+				? "bold"
+				: "dim",
+		),
+		fitHints(frame.footerHints ?? [frame.footer], width)
+			.split(" | ")
+			.map((hint) => {
+				const split = hint.indexOf(" ");
+				return (
+					decorate(
+						split < 0 ? hint : hint.slice(0, split),
+						"brand",
+						false,
+						enabled,
+						"bold",
+					) +
+					(split < 0
+						? ""
+						: decorate(hint.slice(split), "plain", false, enabled, "dim"))
+				);
+			})
+			.join(decorate(" | ", "plain", false, enabled, "dim")),
+	].join("\n");
+}
+
+export function fitHints(hints: readonly string[], columns: number): string {
+	const help = hints.find((hint) => hint.startsWith("? "));
+	const review =
+		hints.some((hint) => hint.startsWith("y ")) ||
+		(hints[0]?.startsWith("r ") && hints.some((hint) => hint.startsWith("v ")));
+	const safety = review
+		? hints.filter((hint) => /^(q |y |r |Esc )/u.test(hint))
+		: hints.filter((hint) => /^(Esc |q |Enter )/u.test(hint));
+	if (!safety.length && hints[0]) safety.push(hints[0]);
+	const required = [...safety, ...(help ? [help] : [])].join(" | ");
+	if (fitLine(required, columns) !== required) {
+		let result = "";
+		for (const hint of [...safety, ...(help ? [help] : [])]) {
+			const key = hint.split(" ")[0];
+			const candidate = result ? `${result} | ${key}` : key;
+			if (fitLine(candidate, columns) === candidate) result = candidate;
+		}
+		return result;
+	}
+	const accepted = new Set([...safety, ...(help ? [help] : [])]);
+	for (const hint of hints) {
+		if (accepted.has(hint)) continue;
+		const candidate = hints
+			.filter((value) => accepted.has(value) || value === hint)
+			.map(safeText)
+			.join(" | ");
+		if (fitLine(candidate, columns) === candidate) accepted.add(hint);
+	}
+	return hints
+		.filter((hint) => accepted.has(hint))
+		.map(safeText)
+		.join(" | ");
+}
+
+export function wrapParts(
+	lines: readonly (readonly TextPart[])[],
+	columns: number,
+): TextPart[][] {
+	const width = Number.isFinite(columns)
+		? Math.max(2, Math.min(1000, Math.floor(columns)))
+		: 2;
+	const result: TextPart[][] = [];
+	for (const parts of lines) {
+		let line: TextPart[] = [];
+		let used = 0;
+		for (const part of parts) {
+			let text = "";
+			for (const { segment } of segmenter.segment(safeText(part.text))) {
+				const count = cellWidth(segment);
+				if (used + count > width) {
+					if (text) line.push({ ...part, text });
+					result.push(line);
+					line = [];
+					used = 0;
+					text = "";
+				}
+				text += segment;
+				used += count;
+			}
+			if (text) line.push({ ...part, text });
+		}
+		result.push(line);
+	}
+	return result;
 }
 
 export function wrapLines(
@@ -99,21 +551,57 @@ export function renderFrame(
 	const width = Number.isFinite(columns)
 		? Math.max(0, Math.min(1000, Math.floor(columns) - 1))
 		: 0;
+	if (frame.framed) return framedFrame(frame, width, height);
 	if (height < 5 || width < 20)
-		return fitLine(frame.status || frame.title, width);
+		return frame.footerHints
+			? fitHints(frame.footerHints, width)
+			: fitLine(frame.status || frame.title, width);
 	const contentHeight = height - 4;
+	const rowHeight = frame.rowMetadata ? 2 : 1;
+	const visibleRows = Math.max(1, Math.floor(contentHeight / rowHeight));
 	const selected = Math.max(0, Math.min(frame.rows.length - 1, frame.selected));
-	const start = Math.max(0, selected - contentHeight + 1);
+	const start = Math.max(0, selected - visibleRows + 1);
 	const content = frame.detail
 		? frame.detail.slice(0, contentHeight)
 		: frame.rows
-				.slice(start, start + contentHeight)
-				.map(
-					(value, index) =>
-						`${start + index === selected ? ">" : " "} ${value}`,
-				);
+				.slice(start, start + visibleRows)
+				.flatMap((value, index) => [
+					`${start + index === selected ? ">" : " "} ${value}`,
+					...(frame.rowMetadata
+						? [`  ${frame.rowMetadata[start + index] ?? ""}`]
+						: []),
+				])
+				.slice(0, contentHeight);
 	while (content.length < contentHeight) content.push("");
-	return [frame.title, frame.status, "", ...content, frame.footer]
-		.map((line) => fitLine(line, width))
-		.join("\n");
+	const enabled = frame.color === true;
+	const lines = [
+		decorate(fitLine(frame.title, width), "brand", false, enabled),
+		decorate(
+			fitLine(frame.status, width),
+			frame.statusTone ?? "info",
+			false,
+			enabled,
+		),
+		"",
+		...content.map((line, index) =>
+			decorate(
+				fitLine(line, width),
+				frame.detail
+					? "plain"
+					: (frame.rowTones?.[start + Math.floor(index / rowHeight)] ??
+							"plain"),
+				!frame.detail && start + Math.floor(index / rowHeight) === selected,
+				enabled,
+			),
+		),
+		decorate(
+			frame.footerHints
+				? fitHints(frame.footerHints, width)
+				: fitLine(frame.footer, width),
+			"brand",
+			false,
+			enabled,
+		),
+	];
+	return lines.join("\n");
 }

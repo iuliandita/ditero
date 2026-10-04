@@ -23,6 +23,7 @@ import type { TerminalInput } from "./terminal.ts";
 
 export type Review = {
 	readonly requestId: string;
+	readonly list?: Readonly<{ id: string; name: string }>;
 	uncertain: boolean;
 } & (
 	| { kind: "update"; taskId: string; title: string; body: ApiTaskUpdate }
@@ -45,6 +46,10 @@ export interface TerminalState {
 	detail: Entry | null;
 	detailOffset: number;
 	help: boolean;
+	payload: boolean;
+	page: number;
+	breadcrumb: string[];
+	authorityRefused: boolean;
 	form:
 		| {
 				kind: "create";
@@ -86,13 +91,17 @@ export class TerminalController {
 		detail: null,
 		detailOffset: 0,
 		help: false,
+		payload: false,
+		page: 0,
+		breadcrumb: [],
+		authorityRefused: false,
 		form: null,
 		deletion: null,
 		review: null,
 	};
 	private epoch = 0;
 	private request = new AbortController();
-	private stack: Location[] = [];
+	private stack: { location: Location; breadcrumb: string[] }[] = [];
 	private cursors = new Set<string>();
 	private pages = 0;
 	private bytes = 0;
@@ -134,6 +143,11 @@ export class TerminalController {
 			[401, 403, 404, 410].includes(error.status ?? 0)
 		) {
 			this.state.entries = [];
+			this.state.breadcrumb = [];
+			this.state.page = 0;
+			this.state.authorityRefused = true;
+			this.state.payload = false;
+			this.state.help = false;
 			this.state.detail = null;
 			this.state.form = null;
 			this.state.deletion = null;
@@ -142,9 +156,21 @@ export class TerminalController {
 		if (error instanceof CliError && error.status === 409)
 			this.state.review = null;
 	}
-	async open(location: Location | null, nextPage = false): Promise<void> {
+	async open(
+		location: Location | null,
+		nextPage = false,
+		breadcrumb?: readonly string[],
+	): Promise<void> {
 		if (this.closed || this.state.status === "writing") return;
 		const epoch = this.begin();
+		if (breadcrumb) this.state.breadcrumb = [...breadcrumb];
+		else if (
+			!location ||
+			location.resource !== this.state.location?.resource ||
+			location.listId !== this.state.location?.listId ||
+			location.workspaceId !== this.state.location?.workspaceId
+		)
+			this.state.breadcrumb = [];
 		if (!nextPage) {
 			this.cursors.clear();
 			this.pages = 0;
@@ -152,9 +178,11 @@ export class TerminalController {
 		}
 		this.state.location = location;
 		this.state.entries = [];
+		this.state.page = 0;
 		this.state.detail = null;
 		this.state.detailOffset = 0;
 		this.state.help = false;
+		this.state.payload = false;
 		this.state.form = null;
 		this.state.deletion = null;
 		this.state.review = null;
@@ -192,6 +220,8 @@ export class TerminalController {
 					8,
 				);
 			this.state.entries = page.entries;
+			this.state.page = this.pages;
+			this.state.authorityRefused = false;
 			this.state.nextCursor = page.nextCursor;
 			this.state.status = page.entries.length ? "ready" : "empty";
 		} catch (error) {
@@ -199,6 +229,19 @@ export class TerminalController {
 		}
 		if (this.active(epoch)) this.changed();
 	}
+	private capturedList(
+		id: string,
+	): Readonly<{ id: string; name: string }> | undefined {
+		const location = this.state.location;
+		const name =
+			location?.resource === "tasks" && location.listId === id
+				? this.state.breadcrumb.at(-1)
+				: location?.resource === "lists"
+					? this.state.entries.find((entry) => entry.id === id)?.label
+					: undefined;
+		return name === undefined ? undefined : Object.freeze({ id, name });
+	}
+
 	private newTask(): void {
 		const location = this.state.location;
 		const selected = this.state.entries[this.state.selected];
@@ -250,9 +293,16 @@ export class TerminalController {
 			);
 			if (!this.active(epoch)) return;
 			this.state.detailOffset = 0;
+			this.state.payload = false;
+			this.state.help = false;
+			const capturedTask = structuredClone(proposal.task);
+			Object.freeze(capturedTask.assigneeIds);
+			Object.freeze(capturedTask.labelIds);
+			Object.freeze(capturedTask);
 			this.state.review = {
 				kind: "create",
-				task: proposal.task,
+				list: this.capturedList(capturedTask.listId),
+				task: capturedTask,
 				timezone: proposal.timezone,
 				requestId: this.uuid(),
 				uncertain: false,
@@ -275,11 +325,18 @@ export class TerminalController {
 			return;
 		this.state.detail = null;
 		this.state.detailOffset = 0;
+		this.state.payload = false;
+		this.state.help = false;
 		this.state.review = {
 			kind: "complete",
+			list: this.capturedList(task.listId),
 			requestId: this.uuid(),
 			uncertain: false,
-			task: { id: selected.id, listId: task.listId, dueAt: task.dueAt },
+			task: Object.freeze({
+				id: selected.id,
+				listId: task.listId,
+				dueAt: task.dueAt,
+			}),
 			title: selected.label,
 			recurring: typeof task.rrule === "string",
 		};
@@ -372,8 +429,11 @@ export class TerminalController {
 			)
 				throw new Error("Input limit");
 			Object.freeze(body.patch);
+			this.state.payload = false;
+			this.state.help = false;
 			this.state.review = {
 				kind: "update",
+				list: this.capturedList(body.listId),
 				taskId: old.taskId,
 				title: old.title,
 				body: Object.freeze(body),
@@ -463,8 +523,11 @@ export class TerminalController {
 				cascadeChildren: deletion.cascade,
 			});
 			Object.freeze(body.expectedChildrenState);
+			this.state.payload = false;
+			this.state.help = false;
 			this.state.review = {
 				kind: "delete",
+				list: this.capturedList(body.listId),
 				taskId: deletion.taskId,
 				title: deletion.observation.snapshot.title,
 				body: Object.freeze(body),
@@ -599,13 +662,34 @@ export class TerminalController {
 			return;
 		}
 		if (this.state.review) {
-			if (input.type === "text" && input.text === "y") await this.write();
+			if (input.type === "text" && input.text === "?") {
+				this.state.help = !this.state.help;
+				this.state.detailOffset = 0;
+			} else if (
+				this.state.help &&
+				input.type === "key" &&
+				input.key === "escape"
+			) {
+				this.state.help = false;
+			} else if (input.type === "text" && input.text === "v") {
+				this.state.help = false;
+				this.state.payload = !this.state.payload;
+				this.state.detailOffset = 0;
+			} else if (
+				!this.state.help &&
+				input.type === "text" &&
+				((input.text === "y" && !this.state.review.uncertain) ||
+					(input.text === "r" && this.state.review.uncertain))
+			)
+				await this.write();
 			else if (
 				input.type === "key" &&
 				input.key === "escape" &&
-				!this.state.review.uncertain
+				!this.state.review.uncertain &&
+				!this.state.help
 			) {
 				this.state.review = null;
+				this.state.payload = false;
 				this.state.status = "ready";
 			} else if (input.type === "text" && input.text === "q") {
 				this.close();
@@ -615,6 +699,12 @@ export class TerminalController {
 			return;
 		}
 		if (input.type === "paste") return;
+		if (this.state.detail && input.type === "text" && input.text === "v") {
+			this.state.payload = !this.state.payload;
+			this.state.detailOffset = 0;
+			this.changed();
+			return;
+		}
 		if (input.type === "text" && input.text === "?") {
 			this.state.help = !this.state.help;
 			if (this.state.help) this.state.detailOffset = 0;
@@ -671,8 +761,13 @@ export class TerminalController {
 			else if (input.key === "end")
 				this.state.selected = Math.max(0, count - 1);
 			else if (input.key === "escape" || input.key === "left") {
-				if (this.state.detail) this.state.detail = null;
-				else await this.open(this.stack.pop() ?? null);
+				if (this.state.detail) {
+					this.state.detail = null;
+					this.state.payload = false;
+				} else {
+					const prior = this.stack.pop();
+					await this.open(prior?.location ?? null, false, prior?.breadcrumb);
+				}
 			} else if (input.key === "enter" || input.key === "right") {
 				if (!this.state.location)
 					await this.open({
@@ -685,11 +780,16 @@ export class TerminalController {
 						this.state.location.resource === "workspaces" ||
 						this.state.location.resource === "lists"
 					) {
-						this.stack.push(this.state.location);
+						this.stack.push({
+							location: this.state.location,
+							breadcrumb: [...this.state.breadcrumb],
+						});
 						await this.open(
 							this.state.location.resource === "workspaces"
 								? { resource: "lists", workspaceId: selected.id }
 								: { resource: "tasks", listId: selected.id },
+							false,
+							[...this.state.breadcrumb, selected.label],
 						);
 					} else {
 						this.state.detail = selected;
