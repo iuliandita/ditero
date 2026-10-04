@@ -1,0 +1,236 @@
+:root {
+	color-scheme: light dark;
+	--bg: #f7f9f8;
+	--fg: #142c28;
+	--muted: #485f59;
+	--line: #cbd9d4;
+	--accent: #09685b;
+	--panel: #e6f0ec;
+	--button-text: #fff;
+	font-family:
+		system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* {
+	box-sizing: border-box;
+}
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--fg);
+	font-size: 1.0625rem;
+	line-height: 1.65;
+}
+a {
+	color: var(--accent);
+	text-underline-offset: 0.2em;
+}
+a:hover {
+	text-decoration-thickness: 0.15em;
+}
+a:focus-visible {
+	outline: 3px solid var(--accent);
+	outline-offset: 5px;
+}
+.shell {
+	width: min(100% - 3rem, 72rem);
+	margin-inline: auto;
+}
+.masthead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 2rem;
+	padding-block: 1.7rem;
+	border-bottom: 1px solid var(--line);
+}
+.brand {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	min-height: 44px;
+}
+.brand img {
+	display: block;
+	width: 12rem;
+	height: auto;
+}
+.languages {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.2rem 0.5rem;
+}
+.languages a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	padding-inline: 0.4rem;
+	font-size: 0.9rem;
+}
+.languages a[aria-current] {
+	color: var(--fg);
+	font-weight: 700;
+	text-decoration-thickness: 2px;
+}
+.hero {
+	padding-block: clamp(3rem, 8vw, 6rem);
+	max-width: 58rem;
+}
+.eyebrow {
+	color: var(--accent);
+	font-weight: 700;
+	margin: 0 0 1rem;
+}
+h1 {
+	font-size: clamp(2.6rem, 6vw, 4.7rem);
+	line-height: 1.08;
+	letter-spacing: -0.035em;
+	max-width: 16ch;
+	margin: 0 0 1.5rem;
+	overflow-wrap: anywhere;
+}
+html[dir="rtl"] h1 {
+	letter-spacing: normal;
+}
+.intro {
+	font-size: clamp(1.2rem, 2vw, 1.45rem);
+	max-width: 52ch;
+	color: var(--muted);
+}
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.8rem;
+	margin-block: 2rem 1rem;
+}
+.button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 48px;
+	padding: 0.7rem 1.15rem;
+	border: 1px solid var(--accent);
+	border-radius: 0.4rem;
+	text-decoration: none;
+	font-weight: 650;
+}
+.primary {
+	background: var(--accent);
+	color: var(--button-text);
+}
+.release {
+	font-size: 0.9rem;
+	color: var(--muted);
+}
+.release a {
+	margin-inline-start: 0.4rem;
+}
+.content-grid {
+	display: grid;
+	grid-template-columns: 1.4fr 1fr;
+	gap: clamp(2rem, 5vw, 5rem);
+	border-block: 1px solid var(--line);
+	padding-block: 3rem;
+}
+h2 {
+	font-size: 1.35rem;
+	line-height: 1.3;
+	margin-block: 0 1rem;
+}
+p {
+	margin-block: 0 1rem;
+}
+.features section + section {
+	margin-block-start: 2rem;
+}
+.features p {
+	max-width: 60ch;
+	color: var(--muted);
+}
+.installation {
+	align-self: start;
+	background: var(--panel);
+	border-inline-start: 4px solid var(--accent);
+	padding: 1.8rem;
+}
+.status {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 3rem;
+	padding-block: 3rem;
+}
+.status p {
+	color: var(--muted);
+}
+.docs {
+	padding-block-end: 3rem;
+}
+.docs ul {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 1.5rem;
+	padding: 0;
+	list-style: none;
+}
+.docs a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+}
+footer {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.6rem 1.5rem;
+	border-top: 1px solid var(--line);
+	padding-block: 1.5rem 2rem;
+	font-size: 0.9rem;
+}
+footer p {
+	margin: 0;
+	margin-inline-end: auto;
+}
+footer a {
+	min-height: 44px;
+	display: inline-flex;
+	align-items: center;
+}
+.skip {
+	position: absolute;
+	inset-inline-start: 1rem;
+	top: -8rem;
+	padding: 0.7rem;
+	background: var(--bg);
+	z-index: 1;
+}
+.skip:focus {
+	top: 1rem;
+}
+@media (max-width: 48rem) {
+	.masthead {
+		align-items: start;
+		flex-direction: column;
+		gap: 0.7rem;
+	}
+	.content-grid,
+	.status {
+		grid-template-columns: 1fr;
+		gap: 2rem;
+	}
+	.shell {
+		width: min(100% - 2rem, 72rem);
+	}
+	.installation {
+		padding: 1.3rem;
+	}
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #12231f;
+		--fg: #eaf3ee;
+		--muted: #b5cbc2;
+		--line: #39534a;
+		--accent: #71d7be;
+		--panel: #1a332b;
+		--button-text: #10251e;
+	}
+}
