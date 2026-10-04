@@ -102,7 +102,7 @@ export function TasksPanel({
 							? onOpenView(source.viewId)
 							: setExpanded(true)
 					}
-					className="mt-1 rounded px-1 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+					className="mt-1 inline-flex min-h-11 min-w-11 items-center rounded px-1 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground md:min-h-0 md:min-w-0"
 				>
 					{m.panel_show_all({ count: entries.length })}
 				</button>

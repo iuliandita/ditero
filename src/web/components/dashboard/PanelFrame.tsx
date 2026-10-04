@@ -107,12 +107,12 @@ export function PanelFrame({
 						{...handle.listeners}
 					>
 						<GripVertical className="size-3.5 shrink-0 text-muted-foreground/60" />
-						<span className="truncate text-xs font-medium text-muted-foreground">
+						<span className="truncate text-base font-semibold text-foreground">
 							{label}
 						</span>
 					</button>
 				) : (
-					<span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
+					<span className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">
 						{label}
 					</span>
 				)}

@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { m } from "../../../paraglide/messages.js";
 import { queries } from "../../../zero/queries.ts";
 import { formatList } from "../../lib/intl-format.ts";
+import { cn } from "../../lib/utils.ts";
 import { MemberAvatar } from "./avatar.tsx";
 
 const MAX_SHOWN = 3;
@@ -11,7 +12,14 @@ const MAX_SHOWN = 3;
 // avatars with a trailing "+N" overflow. Self-queries assignees + memberships
 // (Zero dedupes the shared views across every row), joining each assignee
 // userId to the member's name/image. Renders nothing when unassigned.
-export function AssigneeChips({ taskId }: { taskId: string }) {
+export function AssigneeChips({
+	taskId,
+	density,
+}: {
+	taskId: string;
+	density?: "dashboard";
+}) {
+	const dashboard = density === "dashboard";
 	const [assignees] = useQuery(queries.assignees.mine());
 	const [memberships] = useQuery(queries.memberships.mine());
 
@@ -45,11 +53,20 @@ export function AssigneeChips({ taskId }: { taskId: string }) {
 		<div
 			data-testid="assignee-chips"
 			role="img"
-			className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5"
+			className={cn(
+				"inline-flex min-w-0 max-w-full items-center gap-x-1.5",
+				!dashboard && "flex-wrap",
+			)}
 			title={m.assignee_chips_aria({ names: formatList(names) })}
 			aria-label={m.assignee_chips_aria({ names: formatList(names) })}
 		>
-			<span className="inline-flex items-center -space-x-2" aria-hidden>
+			<span
+				className={cn(
+					"inline-flex items-center",
+					dashboard ? "shrink-0 gap-x-1" : "-space-x-2",
+				)}
+				aria-hidden
+			>
 				{shown.map((a) => {
 					const u = users.get(a.userId);
 					return (
@@ -70,12 +87,14 @@ export function AssigneeChips({ taskId }: { taskId: string }) {
 					</span>
 				)}
 			</span>
-			<span
-				aria-hidden
-				className="min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground"
-			>
-				{formatList(names)}
-			</span>
+			{!dashboard && (
+				<span
+					aria-hidden
+					className="min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground"
+				>
+					{formatList(names)}
+				</span>
+			)}
 		</div>
 	);
 }

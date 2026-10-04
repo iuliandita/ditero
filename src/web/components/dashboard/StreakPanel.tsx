@@ -89,7 +89,7 @@ function StreakRow({
 			data-testid="streak-row"
 			aria-label={label}
 			onClick={() => onOpenTask(task)}
-			className="flex w-full items-center gap-2 rounded px-1 py-1.5 text-start hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+			className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded px-1 py-1.5 text-start hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 		>
 			<span className="min-w-0 flex-1 truncate text-sm">{task.title}</span>
 			{streak && streak.projectionStatus !== "complete" ? (
@@ -102,11 +102,11 @@ function StreakRow({
 				<>
 					<span className="inline-flex items-center gap-1 text-sm font-medium tabular-nums">
 						<Flame aria-hidden className="size-3.5 text-success" />
-						{streak.current}
+						{m.habit_streak_days({ count: streak.current })}
 					</span>
 					{streak.adherencePct != null && (
 						<span className="text-xs text-muted-foreground tabular-nums">
-							{streak.adherencePct}%
+							{m.habit_adherence({ pct: streak.adherencePct })}
 						</span>
 					)}
 				</>

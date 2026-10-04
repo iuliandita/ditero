@@ -215,10 +215,12 @@ function PriorityFlag({
 	id,
 	priority,
 	className,
+	dashboard = false,
 }: {
 	id: string;
 	priority: number | null | undefined;
 	className?: string;
+	dashboard?: boolean;
 }) {
 	const meta = priorityMeta(priority);
 	if (!meta) return null;
@@ -232,12 +234,16 @@ function PriorityFlag({
 			data-priority={meta.value}
 			className={cn("inline-flex shrink-0 items-center gap-1", className)}
 		>
-			{/* The word appears where a pointer can hover or the keyboard is in
-			    the row; touch keeps the flag alone, per the one-cue row. */}
+			{/* Reserve dashboard desktop space; phones keep the word in metadata. */}
 			<span
 				aria-hidden
 				data-testid="task-priority-text"
-				className="hidden text-xs text-muted-foreground group-hover:inline group-has-[:focus-visible]:inline"
+				className={cn(
+					"hidden text-xs text-muted-foreground",
+					dashboard
+						? "md:inline md:invisible md:group-hover:visible md:group-has-[:focus-visible]:visible"
+						: "group-hover:inline group-has-[:focus-visible]:inline",
+				)}
 			>
 				{label}
 			</span>
@@ -273,6 +279,7 @@ export function TaskRow({
 	selection,
 	variant = "row",
 	surface,
+	density,
 	list,
 	sourceContext,
 	occurrence,
@@ -288,12 +295,14 @@ export function TaskRow({
 	// The fill the row sits on, so its swipe layer never reads as an inner box.
 	// A board card and a dashboard panel are card; a dialog is popover.
 	surface?: "card" | "popover";
+	density?: "dashboard";
 	// Shown when the surface mixes lists, so a row says where it lives.
 	list?: { title: string; icon: string | null } | null;
 	sourceContext?: string;
 	occurrence?: HabitOccurrence;
 }) {
 	const card = variant === "card";
+	const dashboard = density === "dashboard";
 	const [expanded, setExpanded] = useState(false);
 	const [editError, setEditError] = useState<string | null>(null);
 	const zero = useZero<typeof schema>();
@@ -513,7 +522,7 @@ export function TaskRow({
 							if (selection && event.shiftKey) event.preventDefault();
 						}}
 						onClick={onOpenClick}
-						title={card ? task.title : undefined}
+						title={card || dashboard ? task.title : undefined}
 						className={cn(
 							"min-w-0 flex-1 text-start",
 							card ? "min-h-8 py-1.5" : "min-h-11 content-center",
@@ -523,7 +532,11 @@ export function TaskRow({
 							data-reading-title
 							className={cn(
 								"block text-sm",
-								card ? "line-clamp-2 break-words" : "truncate",
+								card
+									? "line-clamp-2 break-words"
+									: dashboard
+										? "line-clamp-2 break-words md:line-clamp-none md:truncate"
+										: "truncate",
 								displayedDone && "text-muted-foreground",
 							)}
 						>
@@ -550,9 +563,21 @@ export function TaskRow({
 							<div
 								id={metaId}
 								data-reading-metadata
-								className="mt-0.5 flex flex-wrap items-center gap-2"
+								className={cn(
+									"mt-0.5 flex flex-wrap items-center",
+									dashboard ? "gap-x-2 gap-y-1" : "gap-2",
+								)}
 							>
-								<AssigneeChips taskId={task.id} />
+								<AssigneeChips taskId={task.id} density={density} />
+								{dashboard && hasPriority && (
+									<span
+										aria-hidden
+										data-testid="task-priority-metadata"
+										className="text-xs text-muted-foreground md:hidden"
+									>
+										{priorityLabel(task.priority)}
+									</span>
+								)}
 								{occurrence ? (
 									<span
 										className="inline-flex items-center gap-1 text-xs text-muted-foreground"
@@ -571,7 +596,13 @@ export function TaskRow({
 									!bare && <DueChip task={task} />
 								)}
 								{list && (
-									<span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+									<span
+										className={cn(
+											"inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground",
+											dashboard && "max-w-full",
+										)}
+										title={dashboard ? list.title : undefined}
+									>
 										<ListIcon
 											icon={list.icon}
 											kind={kind}
@@ -583,7 +614,11 @@ export function TaskRow({
 								)}
 								{sourceContext && (
 									<span
-										className="min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground"
+										className={cn(
+											"min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground",
+											dashboard && "line-clamp-2",
+										)}
+										title={dashboard ? sourceContext : undefined}
 										data-testid="task-source-context"
 									>
 										{sourceContext}
@@ -621,6 +656,7 @@ export function TaskRow({
 					{!bare && (
 						<PriorityFlag
 							id={priorityId}
+							dashboard={dashboard}
 							priority={task.priority}
 							className={card ? "mt-2.5" : undefined}
 						/>
@@ -653,7 +689,11 @@ export function TaskRow({
 							placement="trail"
 						/>
 					)}
-					<RowActions actions={actions} label={actionsLabel} hideOnTouch />
+					<RowActions
+						actions={actions}
+						label={actionsLabel}
+						hideOnTouch={!dashboard}
+					/>
 					{/* The keyboard's delete target. It cannot be the menu item: Radix
 					    portals the menu content out of this row, and the item exists
 					    only while the menu is open, so actOnFocused could never find

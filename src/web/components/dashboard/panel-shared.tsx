@@ -215,6 +215,7 @@ function PanelRows({
 						labels={e.labels}
 						handlers={handlers}
 						surface={surface}
+						density={surface === "card" ? "dashboard" : undefined}
 						list={listOf ? listOf(e.task.listId) : null}
 					/>
 				</li>
