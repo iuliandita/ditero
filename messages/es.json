@@ -2341,5 +2341,17 @@
 	"tui_delete_cascade": "Eliminar la tarea y todas las subtareas observadas",
 	"tui_delete_children_blocked": "La opción 1 no está disponible porque hay subtareas.",
 	"tui_delete_scope": "Se eliminan también los comentarios, las asignaciones y los archivos relacionados. No se puede deshacer.",
-	"tui_edit_no_changes": "No has cambiado ningún campo. Edita un valor o pulsa Esc para cancelar."
+	"tui_edit_no_changes": "No has cambiado ningún campo. Edita un valor o pulsa Esc para cancelar.",
+	"import_todoist_format": "Instantánea CSV de proyecto de Todoist",
+	"import_todoist_project": "Nombre de la carpeta del proyecto",
+	"import_todoist_unsectioned": "Nombre de la lista para tareas sin sección",
+	"import_todoist_names_help": "Introduce ambos nombres explícitamente. Cada sección se convierte en una lista separada con su nombre original, incluidas las secciones duplicadas y vacías.",
+	"import_todoist_file": "Archivo CSV de proyecto de Todoist",
+	"import_todoist_snapshot": "SHA-256 de la instantánea exacta del archivo: {digest}",
+	"import_todoist_mapping": "Carpeta del proyecto: {project}. Lista sin sección: {unsectioned}.",
+	"import_todoist_policy": "Solo se importan los títulos literales, las descripciones, la prioridad, el orden y un nivel de subtareas. Se excluyen fechas, recurrencia, plazos, duraciones, autores, responsables, filas de notas/comentarios, etiquetas, plantillas, adjuntos, historial, estado de finalización, recordatorios, estado personal, descripciones del proyecto/secciones, ajustes de vista, campos de compras, fechas de creación y urgencia. Cada tarea es una copia abierta.",
+	"import_todoist_acknowledge": "Acepto estas exclusiones y copias abiertas sin autoría original ni historial de finalización.",
+	"import_todoist_binding_conflict": "Esta fuente está vinculada a otros bytes del archivo o nombres de asignación. Elige Nueva fuente explícitamente para importar una copia separada; los archivos modificados no pueden actualizar esta instantánea.",
+	"import_todoist_invalid": "Este archivo no es una instantánea CSV de proyecto de Todoist compatible o faltan los nombres de asignación explícitos.",
+	"import_todoist_secure_context": "El cálculo del hash de la instantánea de Todoist requiere HTTPS o localhost. Abre esta instalación mediante una conexión segura antes de importar."
 }

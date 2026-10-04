@@ -14,7 +14,7 @@ import { ProviderImportError } from "../../domain/portability/providers/common.t
 import {
 	PROVIDER_REQUEST_MAX_BYTES,
 	ProviderInputError,
-	prepareProviderImport,
+	prepareProviderImportRequest,
 } from "../../domain/portability/providers/input.ts";
 import { PortableExportValidationError } from "../../domain/portability/validate.ts";
 import type { Guards } from "../guards.ts";
@@ -369,7 +369,7 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 						)
 							throw new ImportRequestError("request-limit", 413);
 						const provider = Object.hasOwn(raw, "input")
-							? prepareProviderImport(raw.input, {
+							? await prepareProviderImportRequest(raw.input, {
 									exportedAt: new Date().toISOString(),
 									signal: request.signal,
 									deadline,

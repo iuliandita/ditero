@@ -12,6 +12,39 @@ export const PROVIDER_MAX_FIELD_BYTES = 32 * 1024;
 export const CSV_ADAPTER = "ditero-csv";
 export const CSV_ADAPTER_VERSION = 1;
 
+export const TODOIST_ADAPTER = "todoist-project-csv";
+export const TODOIST_ADAPTER_VERSION = 1;
+export const TODOIST_V1_EXCLUSIONS = Object.freeze([
+	"dates",
+	"recurrence",
+	"deadlines",
+	"durations",
+	"authors",
+	"assignments",
+	"comments",
+	"labels",
+	"templates",
+	"attachments",
+	"history",
+	"completion-state",
+	"reminders",
+	"personal-state",
+	"section-project-descriptions",
+	"view-settings",
+	"shopping-fields",
+	"task-creation-times",
+	"urgency",
+] as const);
+export function snapshotNamespace(sha256: string): string {
+	if (!/^[0-9a-f]{64}$/.test(sha256))
+		throw new ProviderImportError("invalid-metadata");
+	const hex = `${sha256.slice(0, 12)}8${sha256.slice(13, 16)}${((Number.parseInt(sha256[16] ?? "", 16) & 3) | 8).toString(16)}${sha256.slice(17, 32)}`;
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+export function todoistSourceUserId(namespace: string): string {
+	return `migration:todoist-project-csv:1:${namespace}:owner`;
+}
+
 export type ProviderImportCode =
 	| "byte-limit"
 	| "row-limit"
@@ -24,6 +57,7 @@ export type ProviderImportCode =
 	| "invalid-graph"
 	| "invalid-result"
 	| "unsupported-content"
+	| "secure-context-required"
 	| "cancelled"
 	| "timeout";
 
@@ -70,7 +104,7 @@ export function csvSourceUserId(namespace: string): string {
 	return `migration:ditero-csv:1:${namespace}:owner`;
 }
 
-export interface ProviderConversionResult {
+export interface CsvConversionResult {
 	adapter: typeof CSV_ADAPTER;
 	adapterVersion: typeof CSV_ADAPTER_VERSION;
 	sourceNamespace: string;
@@ -79,7 +113,19 @@ export interface ProviderConversionResult {
 	findings: { code: "untrusted-migration-owner"; path: "sourceUserId" }[];
 }
 
-const resultSchema = z.strictObject({
+export interface TodoistConversionResult
+	extends Omit<CsvConversionResult, "adapter" | "identityMode"> {
+	adapter: typeof TODOIST_ADAPTER;
+	identityMode: "snapshot-rows";
+	snapshotSha256: string;
+	projectFolderName: string;
+	unsectionedListName: string;
+}
+export type ProviderConversionResult =
+	| CsvConversionResult
+	| TodoistConversionResult;
+
+const csvResultSchema = z.strictObject({
 	adapter: z.literal(CSV_ADAPTER),
 	adapterVersion: z.literal(CSV_ADAPTER_VERSION),
 	sourceNamespace: z.uuid(),
@@ -95,7 +141,27 @@ const resultSchema = z.strictObject({
 		.length(1),
 });
 
-function boundedDocumentJson(input: unknown, checkpoint: () => void): string {
+const todoistResultSchema = z.strictObject({
+	adapter: z.literal(TODOIST_ADAPTER),
+	adapterVersion: z.literal(1),
+	sourceNamespace: z.uuid(),
+	identityMode: z.literal("snapshot-rows"),
+	snapshotSha256: z.string().regex(/^[0-9a-f]{64}$/),
+	projectFolderName: z.string().min(1),
+	unsectionedListName: z.string().min(1),
+	document: z.unknown(),
+	findings: csvResultSchema.shape.findings,
+});
+const resultSchema = z.discriminatedUnion("adapter", [
+	csvResultSchema,
+	todoistResultSchema,
+]);
+
+function boundedDocumentJson(
+	input: unknown,
+	checkpoint: () => void,
+	countBytes = true,
+): string {
 	const pending: { iterator: Iterator<unknown>; depth: number }[] = [
 		{ iterator: [input][Symbol.iterator](), depth: 0 },
 	];
@@ -103,7 +169,8 @@ function boundedDocumentJson(input: unknown, checkpoint: () => void): string {
 	let visited = 0;
 	const add = (count: number) => {
 		bytes += count;
-		if (bytes > PROVIDER_MAX_BYTES) throw new ProviderImportError("byte-limit");
+		if (countBytes && bytes > PROVIDER_MAX_BYTES)
+			throw new ProviderImportError("byte-limit");
 	};
 	while (pending.length) {
 		checkpoint();
@@ -129,8 +196,20 @@ function boundedDocumentJson(input: unknown, checkpoint: () => void): string {
 		} else if (Array.isArray(value)) {
 			if (value.length > PROVIDER_MAX_ROWS)
 				throw new ProviderImportError("row-limit");
+			if (
+				Object.getPrototypeOf(value) !== Array.prototype ||
+				Reflect.ownKeys(value).length !== value.length + 1
+			)
+				throw new ProviderImportError("invalid-result");
 			add(2 + Math.max(0, value.length - 1));
-			pending.push({ iterator: value.values(), depth: frame.depth + 1 });
+			const elements: unknown[] = [];
+			for (let index = 0; index < value.length; index++) {
+				const property = Object.getOwnPropertyDescriptor(value, String(index));
+				if (!property || !("value" in property) || !property.enumerable)
+					throw new ProviderImportError("invalid-result");
+				elements.push(property.value);
+			}
+			pending.push({ iterator: elements.values(), depth: frame.depth + 1 });
 		} else if (
 			value &&
 			typeof value === "object" &&
@@ -138,13 +217,15 @@ function boundedDocumentJson(input: unknown, checkpoint: () => void): string {
 				Object.getPrototypeOf(value) === null)
 		) {
 			const keys = Object.keys(value);
+			if (Reflect.ownKeys(value).length !== keys.length)
+				throw new ProviderImportError("invalid-result");
 			if (keys.length > 64) throw new ProviderImportError("invalid-result");
 			add(2 + Math.max(0, keys.length - 1));
 			function* children() {
 				for (const key of keys) {
 					checkProviderText(key, 512);
 					const property = Object.getOwnPropertyDescriptor(value, key);
-					if (!property || !("value" in property))
+					if (!property || !("value" in property) || !property.enumerable)
 						throw new ProviderImportError("invalid-result");
 					add(new TextEncoder().encode(JSON.stringify(key)).byteLength + 1);
 					yield property.value;
@@ -153,7 +234,7 @@ function boundedDocumentJson(input: unknown, checkpoint: () => void): string {
 			pending.push({ iterator: children(), depth: frame.depth + 1 });
 		} else throw new ProviderImportError("invalid-result");
 	}
-	return JSON.stringify(input);
+	return countBytes ? JSON.stringify(input) : "";
 }
 
 export function validateProviderConversion(
@@ -162,6 +243,7 @@ export function validateProviderConversion(
 ): ProviderConversionResult {
 	const checkpoint = providerCheckpoint(options);
 	checkpoint();
+	boundedDocumentJson(input, checkpoint, false);
 	const parsed = resultSchema.safeParse(input);
 	if (!parsed.success) throw new ProviderImportError("invalid-result");
 	let document: PortableExportV1;
@@ -181,13 +263,38 @@ export function validateProviderConversion(
 	checkpoint();
 	if (
 		parsed.data.sourceNamespace !== parsed.data.sourceNamespace.toLowerCase() ||
-		document.sourceUserId !== csvSourceUserId(parsed.data.sourceNamespace)
+		document.sourceUserId !==
+			(parsed.data.adapter === CSV_ADAPTER
+				? csvSourceUserId(parsed.data.sourceNamespace)
+				: todoistSourceUserId(parsed.data.sourceNamespace))
 	)
 		throw new ProviderImportError("invalid-result");
 	const { data } = document;
 	const owner = document.sourceUserId;
 	const namespace = parsed.data.sourceNamespace;
-	const workspace = `csv:1:${namespace}:workspace`;
+	const todoist = parsed.data.adapter === TODOIST_ADAPTER;
+	const prefix = `${todoist ? "todoist" : "csv"}:1:${namespace}`;
+	const workspace = `${prefix}:workspace`;
+	const project = `${prefix}:folder:project`;
+	if (parsed.data.adapter === TODOIST_ADAPTER) {
+		if (snapshotNamespace(parsed.data.snapshotSha256) !== namespace)
+			throw new ProviderImportError("invalid-result");
+		for (const name of [
+			parsed.data.projectFolderName,
+			parsed.data.unsectionedListName,
+		]) {
+			checkProviderText(name, 500);
+			if (!name.trim()) throw new ProviderImportError("invalid-result");
+		}
+		if (
+			data.lists[0]?.id !== `${prefix}:list:unsectioned` ||
+			data.folders.length !== 1 ||
+			data.folders[0]?.id !== project ||
+			data.folders[0]?.workspaceId !== workspace ||
+			data.folders[0]?.name !== parsed.data.projectFolderName
+		)
+			throw new ProviderImportError("unsupported-content");
+	}
 	if (
 		data.principals.length !== 1 ||
 		data.principals[0]?.id !== owner ||
@@ -197,7 +304,7 @@ export function validateProviderConversion(
 		data.workspaces[0]?.ownerId !== owner ||
 		data.workspaces[0]?.kind !== "personal" ||
 		data.memberships.length !== 1 ||
-		data.memberships[0]?.id !== `csv:1:${namespace}:membership` ||
+		data.memberships[0]?.id !== `${prefix}:membership` ||
 		data.memberships[0]?.workspaceId !== workspace ||
 		data.memberships[0]?.userId !== owner ||
 		data.memberships[0]?.role !== "owner"
@@ -210,6 +317,7 @@ export function validateProviderConversion(
 		"lists",
 		"tasks",
 	]);
+	if (todoist) allowed.add("folders");
 	if (
 		Object.entries(data).some(([key, rows]) => !allowed.has(key) && rows.length)
 	)
@@ -219,11 +327,23 @@ export function validateProviderConversion(
 		if (
 			list.workspaceId !== workspace ||
 			list.ownerId !== owner ||
-			!list.id.startsWith(`csv:1:${namespace}:list:`) ||
+			!list.id.startsWith(`${prefix}:list:`) ||
 			list.kind !== "tasks" ||
 			list.icon !== null ||
-			list.folderId !== null ||
+			list.folderId !== (todoist ? project : null) ||
 			list.completedDisplay !== "sink"
+		)
+			throw new ProviderImportError("unsupported-content");
+		if (
+			todoist &&
+			list.id !== `${prefix}:list:unsectioned` &&
+			!new RegExp(`^${prefix}:list:record:[1-9][0-9]*$`).test(list.id)
+		)
+			throw new ProviderImportError("unsupported-content");
+		if (
+			parsed.data.adapter === TODOIST_ADAPTER &&
+			list.id === `${prefix}:list:unsectioned` &&
+			list.title !== parsed.data.unsectionedListName
 		)
 			throw new ProviderImportError("unsupported-content");
 		checkProviderText(list.title, 500);
@@ -231,7 +351,7 @@ export function validateProviderConversion(
 	for (const task of data.tasks) {
 		checkpoint();
 		if (
-			!task.id.startsWith(`csv:1:${namespace}:task:`) ||
+			!task.id.startsWith(`${prefix}:task:`) ||
 			task.priority < 0 ||
 			task.priority > 3 ||
 			task.rrule !== null ||
@@ -247,6 +367,15 @@ export function validateProviderConversion(
 			task.maxRepeats !== null ||
 			task.fallbackUserId !== null ||
 			task.urgent
+		)
+			throw new ProviderImportError("unsupported-content");
+		if (
+			todoist &&
+			(!new RegExp(`^${prefix}:task:record:[1-9][0-9]*$`).test(task.id) ||
+				task.done ||
+				task.completedAt !== null ||
+				task.dueAt !== null ||
+				task.dueAllDay)
 		)
 			throw new ProviderImportError("unsupported-content");
 		checkProviderText(task.title, 500);

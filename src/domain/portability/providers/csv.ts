@@ -15,6 +15,7 @@ import {
 	providerCheckpoint,
 	validateProviderConversion,
 } from "./common.ts";
+import { parseProviderCsvCells } from "./csv-cells.ts";
 
 export const CSV_HEADER = [
 	"csv_version",
@@ -58,59 +59,6 @@ function fail(
 	row?: number,
 ): never {
 	throw new ProviderImportError(code, row);
-}
-
-function parseCells(text: string, checkpoint: () => void): string[][] {
-	const rows: string[][] = [];
-	let row: string[] = [];
-	let field = "";
-	let state: "start" | "plain" | "quoted" | "closed" = "start";
-	let ended = true;
-	const cell = () => {
-		checkProviderText(field, PROVIDER_MAX_FIELD_BYTES, rows.length + 1);
-		row.push(field);
-		if (row.length > CSV_HEADER.length) fail("invalid-csv", rows.length + 1);
-		field = "";
-		state = "start";
-	};
-	const record = () => {
-		cell();
-		rows.push(row);
-		if (rows.length > PROVIDER_MAX_ROWS + 1) fail("row-limit");
-		row = [];
-		ended = true;
-	};
-	for (let i = 0; i < text.length; i++) {
-		if (i % 512 === 0) checkpoint();
-		const character = text[i];
-		ended = false;
-		if (state === "quoted") {
-			if (character === '"') {
-				if (text[i + 1] === '"') {
-					field += '"';
-					i++;
-				} else state = "closed";
-			} else field += character;
-		} else if (character === ",") cell();
-		else if (character === "\n" || character === "\r") {
-			if (character === "\r" && text[i + 1] !== "\n")
-				fail("invalid-csv", rows.length + 1);
-			if (character === "\r") i++;
-			record();
-		} else if (character === '"' && state === "start") state = "quoted";
-		else if (state === "closed" || character === '"')
-			fail("invalid-csv", rows.length + 1);
-		else {
-			state = "plain";
-			field += character;
-		}
-		if (field.length > PROVIDER_MAX_FIELD_BYTES)
-			fail("field-limit", rows.length + 1);
-	}
-	if (state === "quoted") fail("invalid-csv", rows.length + 1);
-	if (!ended) record();
-	checkpoint();
-	return rows;
 }
 
 function date(value: string, row: number): string | null {
@@ -171,7 +119,7 @@ export function parseTaskCsv(
 	} catch {
 		fail("invalid-encoding");
 	}
-	const cells = parseCells(text, checkpoint);
+	const cells = parseProviderCsvCells(text, checkpoint, CSV_HEADER.length);
 	if (
 		cells[0]?.length !== CSV_HEADER.length ||
 		CSV_HEADER.some((header, index) => cells[0]?.[index] !== header) ||

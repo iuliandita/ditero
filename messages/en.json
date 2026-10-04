@@ -2295,5 +2295,17 @@
 	"tui_delete_cascade": "Delete the task and all observed children",
 	"tui_delete_children_blocked": "Choice 1 is unavailable because children exist.",
 	"tui_delete_scope": "Deletion includes dependent comments, assignments and files. It cannot be undone.",
-	"tui_edit_no_changes": "No fields changed. Edit a value or press Esc to cancel."
+	"tui_edit_no_changes": "No fields changed. Edit a value or press Esc to cancel.",
+	"import_todoist_format": "Todoist project CSV snapshot",
+	"import_todoist_project": "Project folder name",
+	"import_todoist_unsectioned": "List name for tasks without a section",
+	"import_todoist_names_help": "Enter both names explicitly. Each section becomes a separate list with its original name, including duplicate and empty sections.",
+	"import_todoist_file": "Todoist project CSV file",
+	"import_todoist_snapshot": "Exact file snapshot SHA-256: {digest}",
+	"import_todoist_mapping": "Project folder: {project}. Unsectioned list: {unsectioned}.",
+	"import_todoist_policy": "Only literal task titles, descriptions, priority, order and one level of subtasks are imported. Dates, recurrence, deadlines, durations, authors, assignees, note/comment rows, labels, templates, attachments, history, completion state, reminders, personal state, project/section descriptions, view settings, shopping fields, creation times and urgency are excluded. Every task is an open copy.",
+	"import_todoist_acknowledge": "I accept these exclusions and open copies without source authorship or completion history.",
+	"import_todoist_binding_conflict": "This source is bound to different file bytes or mapping names. Choose New source explicitly to import a separate copy; changed files cannot update this snapshot.",
+	"import_todoist_invalid": "This file is not a supported Todoist project CSV snapshot, or its explicit mapping names are missing.",
+	"import_todoist_secure_context": "Todoist snapshot hashing requires HTTPS or localhost. Open this installation over a secure connection before importing."
 }

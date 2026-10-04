@@ -5,8 +5,14 @@ import {
 	CSV_ADAPTER_VERSION,
 	type ProviderImportOptions,
 	providerCheckpoint,
+	snapshotNamespace,
+	TODOIST_ADAPTER,
+	TODOIST_V1_EXCLUSIONS,
 } from "./common.ts";
 import { parseTaskCsv } from "./csv.ts";
+import { parseTodoistProjectCsv } from "./todoist.ts";
+
+export { TODOIST_V1_EXCLUSIONS } from "./common.ts";
 
 export const PROVIDER_INPUT_MAX_BYTES = 23 * 1024 * 1024;
 export const PROVIDER_REQUEST_MAX_BYTES = 32 * 1024 * 1024;
@@ -55,19 +61,64 @@ const bindingShape = {
 			values.every((value, index) => value === CSV_V1_EXCLUSIONS[index]),
 		),
 };
-const bindingSchema = z.strictObject(bindingShape);
-const inputSchema = z.strictObject({
+const csvBindingSchema = z.strictObject(bindingShape);
+const csvInputSchema = z.strictObject({
 	...bindingShape,
 	originalCsvBase64: z.string(),
 });
-export type ProviderInputBinding = z.infer<typeof bindingSchema>;
-export type ProviderImportInput = z.infer<typeof inputSchema>;
+const boundedName = z
+	.string()
+	.min(1)
+	.refine(
+		(value) =>
+			value.trim().length > 0 &&
+			!value.includes("\u0000") &&
+			value.isWellFormed() &&
+			new TextEncoder().encode(value).byteLength <= 500,
+	);
+const todoistBindingShape = {
+	kind: z.literal("provider"),
+	version: z.literal(1),
+	adapter: z.literal(TODOIST_ADAPTER),
+	adapterVersion: z.literal(1),
+	sourceNamespace: bindingShape.sourceNamespace,
+	identityMode: z.literal("snapshot-rows"),
+	snapshotSha256: z.string().regex(/^[0-9a-f]{64}$/),
+	projectFolderName: boundedName,
+	unsectionedListName: boundedName,
+	exclusions: z
+		.array(z.string())
+		.length(TODOIST_V1_EXCLUSIONS.length)
+		.refine((values) =>
+			values.every((value, index) => value === TODOIST_V1_EXCLUSIONS[index]),
+		),
+};
+const todoistBindingSchema = z
+	.strictObject(todoistBindingShape)
+	.refine(
+		(value) =>
+			snapshotNamespace(value.snapshotSha256) === value.sourceNamespace,
+	);
+const todoistInputSchema = z
+	.strictObject({ ...todoistBindingShape, originalCsvBase64: z.string() })
+	.refine(
+		(value) =>
+			snapshotNamespace(value.snapshotSha256) === value.sourceNamespace,
+	);
+export type CsvProviderImportInput = z.infer<typeof csvInputSchema>;
+export type ProviderInputBinding =
+	| z.infer<typeof csvBindingSchema>
+	| z.infer<typeof todoistBindingSchema>;
+export type ProviderImportInput =
+	| CsvProviderImportInput
+	| z.infer<typeof todoistInputSchema>;
 const bindingKeys = Object.keys(bindingShape);
 
 function rawObject(
 	value: unknown,
 	keys: string[],
 	code: InputCode,
+	policy: readonly string[] = CSV_V1_EXCLUSIONS,
 ): Record<string, unknown> {
 	if (
 		!value ||
@@ -94,22 +145,18 @@ function rawObject(
 	if (
 		!Array.isArray(exclusions) ||
 		Object.getPrototypeOf(exclusions) !== Array.prototype ||
-		exclusions.length !== CSV_V1_EXCLUSIONS.length ||
+		exclusions.length !== policy.length ||
 		Reflect.ownKeys(exclusions).length !== exclusions.length + 1
 	)
 		throw new ProviderInputError(code);
-	const policy: string[] = [];
-	for (let index = 0; index < CSV_V1_EXCLUSIONS.length; index++) {
+	const safePolicy: string[] = [];
+	for (let index = 0; index < policy.length; index++) {
 		const property = Object.getOwnPropertyDescriptor(exclusions, String(index));
-		if (
-			!property ||
-			!("value" in property) ||
-			property.value !== CSV_V1_EXCLUSIONS[index]
-		)
+		if (!property || !("value" in property) || property.value !== policy[index])
 			throw new ProviderInputError(code);
-		policy.push(property.value);
+		safePolicy.push(property.value);
 	}
-	result.exclusions = policy;
+	result.exclusions = safePolicy;
 	return result;
 }
 
@@ -119,9 +166,23 @@ export function parseProviderBinding(
 ): ProviderInputBinding {
 	const checkpoint = providerCheckpoint(options);
 	checkpoint();
-	const parsed = bindingSchema.safeParse(
-		rawObject(value, bindingKeys, "invalid-binding"),
-	);
+	const todoist =
+		typeof value === "object" &&
+		value !== null &&
+		Object.getOwnPropertyDescriptor(value, "adapter")?.value ===
+			TODOIST_ADAPTER;
+	const parsed = todoist
+		? todoistBindingSchema.safeParse(
+				rawObject(
+					value,
+					Object.keys(todoistBindingShape),
+					"invalid-binding",
+					TODOIST_V1_EXCLUSIONS,
+				),
+			)
+		: csvBindingSchema.safeParse(
+				rawObject(value, bindingKeys, "invalid-binding"),
+			);
 	if (!parsed.success) throw new ProviderInputError("invalid-binding");
 	checkpoint();
 	return parsed.data;
@@ -170,15 +231,26 @@ export function parseProviderInput(
 ): ProviderImportInput {
 	const checkpoint = providerCheckpoint(options);
 	checkpoint();
+	const todoist =
+		typeof value === "object" &&
+		value !== null &&
+		Object.getOwnPropertyDescriptor(value, "adapter")?.value ===
+			TODOIST_ADAPTER;
 	const raw = rawObject(
 		value,
-		[...bindingKeys, "originalCsvBase64"],
+		[
+			...(todoist ? Object.keys(todoistBindingShape) : bindingKeys),
+			"originalCsvBase64",
+		],
 		"invalid-input",
+		todoist ? TODOIST_V1_EXCLUSIONS : CSV_V1_EXCLUSIONS,
 	);
 	if (typeof raw.originalCsvBase64 !== "string")
 		throw new ProviderInputError("invalid-input");
 	base64ByteLength(raw.originalCsvBase64);
-	const parsed = inputSchema.safeParse(raw);
+	const parsed = todoist
+		? todoistInputSchema.safeParse(raw)
+		: csvInputSchema.safeParse(raw);
 	if (!parsed.success) throw new ProviderInputError("invalid-input");
 	// Source and mappings must also fit this request bound at the HTTP boundary.
 	if (
@@ -205,6 +277,8 @@ export function prepareProviderImport(
 	};
 	const checkpoint = providerCheckpoint(boundedOptions);
 	const input = parseProviderInput(value, boundedOptions);
+	if (input.adapter !== CSV_ADAPTER)
+		throw new ProviderInputError("invalid-input");
 	const bytes = decodeBase64(input.originalCsvBase64, checkpoint);
 	const conversion = parseTaskCsv(bytes, boundedOptions);
 	if (
@@ -221,6 +295,44 @@ export function prepareProviderImport(
 		binding,
 		conversion,
 		sourceFormat: CSV_ADAPTER,
+		sourceSchemaVersion: 1 as const,
+		originalBytes: bytes.byteLength,
+	};
+}
+
+export async function prepareProviderImportRequest(
+	value: unknown,
+	options: ProviderImportOptions & { exportedAt: string },
+) {
+	const boundedOptions = {
+		...options,
+		deadline: Math.min(
+			options.deadline ?? Infinity,
+			performance.now() + 15_000,
+		),
+	};
+	const checkpoint = providerCheckpoint(boundedOptions);
+	const input = parseProviderInput(value, boundedOptions);
+	if (input.adapter === CSV_ADAPTER)
+		return prepareProviderImport(input, boundedOptions);
+	const bytes = decodeBase64(input.originalCsvBase64, checkpoint);
+	const conversion = await parseTodoistProjectCsv(bytes, {
+		...boundedOptions,
+		projectFolderName: input.projectFolderName,
+		unsectionedListName: input.unsectionedListName,
+	});
+	if (
+		conversion.snapshotSha256 !== input.snapshotSha256 ||
+		conversion.sourceNamespace !== input.sourceNamespace
+	)
+		throw new ProviderInputError("metadata-mismatch");
+	const { originalCsvBase64: _originalCsvBase64, ...metadata } = input;
+	const binding = parseProviderBinding(metadata, boundedOptions);
+	checkpoint();
+	return {
+		binding,
+		conversion,
+		sourceFormat: TODOIST_ADAPTER,
 		sourceSchemaVersion: 1 as const,
 		originalBytes: bytes.byteLength,
 	};

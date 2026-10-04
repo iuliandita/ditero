@@ -87,7 +87,10 @@ export function ImportPlanPanel() {
 	const [newId, setNewId] = useState(() => randomId());
 	const [label, setLabel] = useState("");
 	const [loaded, setLoaded] = useState<Loaded | null>(null);
-	const [format, setFormat] = useState<"native" | "csv">("native");
+	const [format, setFormat] = useState<"native" | "csv" | "todoist">("native");
+	const fileRef = useRef<File | undefined>(undefined);
+	const [projectFolderName, setProjectFolderName] = useState("");
+	const [unsectionedListName, setUnsectionedListName] = useState("");
 	const [policyAccepted, setPolicyAccepted] = useState(false);
 	const [fileName, setFileName] = useState<string | null>(null);
 	const limitsId = useId();
@@ -108,6 +111,8 @@ export function ImportPlanPanel() {
 		| "limit"
 		| "quota"
 		| "retained"
+		| "secure"
+		| "binding"
 		| "incomplete"
 		| null
 	>(null);
@@ -155,10 +160,18 @@ export function ImportPlanPanel() {
 		};
 	}, [refresh]);
 	function changed() {
+		if (
+			(loaded?.input ?? report?.inputBinding)?.adapter === "todoist-project-csv"
+		)
+			setPolicyAccepted(false);
 		setReport(null);
 		setError(null);
 	}
-	function selectFile(file: File | undefined) {
+	function selectFile(
+		file: File | undefined,
+		names = { projectFolderName, unsectionedListName },
+	) {
+		fileRef.current = file;
 		worker.current?.terminate();
 		worker.current = null;
 		changed();
@@ -181,7 +194,7 @@ export function ImportPlanPanel() {
 		worker.current = parser;
 		parser.onmessage = (
 			event: MessageEvent<
-				Loaded | { error: "invalid" | "limit" | "unsupported" }
+				Loaded | { error: "invalid" | "limit" | "unsupported" | "secure" }
 			>,
 		) => {
 			if (worker.current !== parser) return;
@@ -213,10 +226,11 @@ export function ImportPlanPanel() {
 				worker.current = null;
 			}
 		};
-		parser.postMessage({ file, format });
+		parser.postMessage({ file, format, ...names });
 	}
 	async function request(path: string, body?: unknown) {
 		if (active.current || applying) return;
+		const requestInput = loaded?.input;
 		const controller = new AbortController();
 		active.current = controller;
 		setBusy(true);
@@ -237,17 +251,21 @@ export function ImportPlanPanel() {
 						: null;
 				if (!controller.signal.aborted)
 					setError(
-						code === "unsupported-import-version"
-							? "unsupported"
-							: code === "import-source-retained"
-								? "retained"
-								: code === "import-run-incomplete"
-									? "incomplete"
-									: code === "import-quota-exceeded"
-										? "quota"
-										: response.status === 413
-											? "limit"
-											: "failed",
+						code === "source-binding-conflict" &&
+							requestInput?.kind === "provider" &&
+							requestInput.adapter === "todoist-project-csv"
+							? "binding"
+							: code === "unsupported-import-version"
+								? "unsupported"
+								: code === "import-source-retained"
+									? "retained"
+									: code === "import-run-incomplete"
+										? "incomplete"
+										: code === "import-quota-exceeded"
+											? "quota"
+											: response.status === 413
+												? "limit"
+												: "failed",
 					);
 				return;
 			}
@@ -286,6 +304,11 @@ export function ImportPlanPanel() {
 			setNewId(randomId());
 		}
 	}
+	const displayedBinding = report?.inputBinding ?? loaded?.input;
+	const todoistBinding =
+		displayedBinding?.adapter === "todoist-project-csv"
+			? displayedBinding
+			: null;
 	const ready =
 		loaded?.document.data.workspaces.every((w) =>
 			writable.some((target) => target.id === workspaceMap[w.id]),
@@ -314,7 +337,24 @@ export function ImportPlanPanel() {
 								(report?.inputBinding ?? loaded?.input)?.sourceNamespace ?? "",
 						})}
 					</p>
-					<p>{m.import_provider_policy()}</p>
+					{todoistBinding ? (
+						<>
+							<p className="break-all">
+								{m.import_todoist_snapshot({
+									digest: todoistBinding.snapshotSha256,
+								})}
+							</p>
+							<p>
+								{m.import_todoist_mapping({
+									project: todoistBinding.projectFolderName,
+									unsectioned: todoistBinding.unsectionedListName,
+								})}
+							</p>
+							<p>{m.import_todoist_policy()}</p>
+						</>
+					) : (
+						<p>{m.import_provider_policy()}</p>
+					)}
 					<label className="flex items-start gap-2">
 						<input
 							type="checkbox"
@@ -325,17 +365,20 @@ export function ImportPlanPanel() {
 								setPolicyAccepted(event.target.checked);
 							}}
 						/>
-						{m.import_provider_acknowledge()}
+						{todoistBinding
+							? m.import_todoist_acknowledge()
+							: m.import_provider_acknowledge()}
 					</label>
 				</div>
 			)}
-			<fieldset disabled={locked} className="mt-3 space-y-3">
+			<fieldset disabled={locked} className="mt-3 min-w-0 space-y-3">
 				<Field label={m.import_provider_format()}>
 					{(labelId) => (
 						<Select
 							value={format}
 							onValueChange={(next) => {
-								if (next !== "native" && next !== "csv") return;
+								if (next !== "native" && next !== "csv" && next !== "todoist")
+									return;
 								setFormat(next);
 								selectFile(undefined);
 							}}
@@ -352,20 +395,74 @@ export function ImportPlanPanel() {
 									{m.import_provider_native()}
 								</SelectItem>
 								<SelectItem value="csv">{m.import_provider_csv()}</SelectItem>
+								<SelectItem value="todoist">
+									{m.import_todoist_format()}
+								</SelectItem>
 							</SelectContent>
 						</Select>
 					)}
 				</Field>
+				{format === "todoist" && (
+					<>
+						<Field label={m.import_todoist_project()}>
+							{(labelId) => (
+								<Input
+									aria-labelledby={labelId}
+									data-testid="import-todoist-project"
+									className={trigger}
+									maxLength={500}
+									value={projectFolderName}
+									onChange={(event) => {
+										const value = event.target.value;
+										setProjectFolderName(value);
+										selectFile(fileRef.current, {
+											projectFolderName: value,
+											unsectionedListName,
+										});
+									}}
+								/>
+							)}
+						</Field>
+						<Field label={m.import_todoist_unsectioned()}>
+							{(labelId) => (
+								<Input
+									aria-labelledby={labelId}
+									data-testid="import-todoist-unsectioned"
+									className={trigger}
+									maxLength={500}
+									value={unsectionedListName}
+									onChange={(event) => {
+										const value = event.target.value;
+										setUnsectionedListName(value);
+										selectFile(fileRef.current, {
+											projectFolderName,
+											unsectionedListName: value,
+										});
+									}}
+								/>
+							)}
+						</Field>
+						<p className="text-xs text-muted-foreground">
+							{m.import_todoist_names_help()}
+						</p>
+					</>
+				)}
 				<FilePicker
 					label={
-						format === "csv" ? m.import_provider_file() : m.import_plan_file()
+						format === "todoist"
+							? m.import_todoist_file()
+							: format === "csv"
+								? m.import_provider_file()
+								: m.import_plan_file()
 					}
-					accept={format === "csv" ? "text/csv,.csv" : "application/json,.json"}
+					accept={
+						format !== "native" ? "text/csv,.csv" : "application/json,.json"
+					}
 					fileName={fileName}
 					disabled={locked}
 					describedBy={limitsId}
 					data-testid="import-file"
-					onFile={selectFile}
+					onFile={(file) => selectFile(file)}
 				/>
 				<p id={limitsId} className="text-xs text-muted-foreground">
 					{m.import_plan_limits()}
@@ -541,21 +638,27 @@ export function ImportPlanPanel() {
 			</fieldset>
 			{error && (
 				<p role="alert" className="mt-2 text-sm text-destructive">
-					{error === "unsupported"
-						? m.import_plan_history_unsupported()
-						: error === "retained"
-							? m.import_apply_source_retained()
-							: error === "incomplete"
-								? m.import_apply_run_active()
-								: error === "quota"
-									? m.import_plan_quota()
-									: error === "limit"
-										? m.import_plan_limits()
-										: error === "invalid"
-											? format === "csv"
-												? m.import_provider_invalid()
-												: m.import_plan_invalid()
-											: m.import_plan_failed()}
+					{error === "secure"
+						? m.import_todoist_secure_context()
+						: error === "binding"
+							? m.import_todoist_binding_conflict()
+							: error === "unsupported"
+								? m.import_plan_history_unsupported()
+								: error === "retained"
+									? m.import_apply_source_retained()
+									: error === "incomplete"
+										? m.import_apply_run_active()
+										: error === "quota"
+											? m.import_plan_quota()
+											: error === "limit"
+												? m.import_plan_limits()
+												: error === "invalid"
+													? format === "todoist"
+														? m.import_todoist_invalid()
+														: format === "csv"
+															? m.import_provider_invalid()
+															: m.import_plan_invalid()
+													: m.import_plan_failed()}
 				</p>
 			)}
 			{report && (
@@ -649,6 +752,12 @@ export function ImportPlanPanel() {
 								variant="outline"
 								disabled={locked}
 								onClick={() => {
+									worker.current?.terminate();
+									worker.current = null;
+									fileRef.current = undefined;
+									setLoaded(null);
+									setFileName(null);
+									setParsing(false);
 									setReport(job);
 									setPolicyAccepted(false);
 									setError(null);

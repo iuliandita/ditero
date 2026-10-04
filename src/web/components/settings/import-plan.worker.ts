@@ -11,24 +11,45 @@ import {
 	PROVIDER_INPUT_MAX_BYTES,
 	ProviderInputError,
 	parseProviderInput,
+	TODOIST_V1_EXCLUSIONS,
 } from "../../../domain/portability/providers/input.ts";
+import { parseTodoistProjectCsv } from "../../../domain/portability/providers/todoist.ts";
 import { PortableExportValidationError } from "../../../domain/portability/validate.ts";
 
 self.onmessage = async (
-	event: MessageEvent<File | { file: File; format: "native" | "csv" }>,
+	event: MessageEvent<
+		| File
+		| {
+				file: File;
+				format: "native" | "csv" | "todoist";
+				projectFolderName?: string;
+				unsectionedListName?: string;
+		  }
+	>,
 ) => {
 	try {
 		const file = event.data instanceof File ? event.data : event.data.file;
 		const format = event.data instanceof File ? "native" : event.data.format;
-		if (format === "csv") {
+		if (format === "csv" || format === "todoist") {
 			if (file.size > PROVIDER_INPUT_MAX_BYTES)
 				throw new ProviderInputError("byte-limit");
-			const bytes = new Uint8Array(await file.arrayBuffer());
 			const deadline = performance.now() + 15_000;
-			const conversion = parseTaskCsv(bytes, {
-				exportedAt: new Date().toISOString(),
-				deadline,
-			});
+			const bytes = new Uint8Array(await file.arrayBuffer());
+			const options = { exportedAt: new Date().toISOString(), deadline };
+			const conversion =
+				format === "csv"
+					? parseTaskCsv(bytes, options)
+					: await parseTodoistProjectCsv(bytes, {
+							...options,
+							projectFolderName:
+								event.data instanceof File
+									? ""
+									: (event.data.projectFolderName ?? ""),
+							unsectionedListName:
+								event.data instanceof File
+									? ""
+									: (event.data.unsectionedListName ?? ""),
+						});
 			const chunks: string[] = [];
 			for (let offset = 0; offset < bytes.length; offset += 24_576) {
 				if (performance.now() >= deadline)
@@ -45,7 +66,14 @@ self.onmessage = async (
 					adapterVersion: conversion.adapterVersion,
 					sourceNamespace: conversion.sourceNamespace,
 					identityMode: conversion.identityMode,
-					exclusions: [...CSV_V1_EXCLUSIONS],
+					...(conversion.adapter === "todoist-project-csv"
+						? {
+								snapshotSha256: conversion.snapshotSha256,
+								projectFolderName: conversion.projectFolderName,
+								unsectionedListName: conversion.unsectionedListName,
+								exclusions: [...TODOIST_V1_EXCLUSIONS],
+							}
+						: { exclusions: [...CSV_V1_EXCLUSIONS] }),
 					originalCsvBase64: chunks.join(""),
 				},
 				{ deadline },
@@ -75,12 +103,15 @@ self.onmessage = async (
 			error:
 				error instanceof UnsupportedImportVersionError
 					? "unsupported"
-					: (error instanceof PortableExportValidationError ||
-								error instanceof ProviderImportError ||
-								error instanceof ProviderInputError) &&
-							error.code.endsWith("-limit")
-						? "limit"
-						: "invalid",
+					: error instanceof ProviderImportError &&
+							error.code === "secure-context-required"
+						? "secure"
+						: (error instanceof PortableExportValidationError ||
+									error instanceof ProviderImportError ||
+									error instanceof ProviderInputError) &&
+								error.code.endsWith("-limit")
+							? "limit"
+							: "invalid",
 		});
 	}
 };

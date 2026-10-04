@@ -366,6 +366,13 @@ export async function saveImportPlan(
 				identityMode: binding.identityMode,
 				document: input,
 				findings: [{ code: "untrusted-migration-owner", path: "sourceUserId" }],
+				...(binding.adapter === "todoist-project-csv"
+					? {
+							snapshotSha256: binding.snapshotSha256,
+							projectFolderName: binding.projectFolderName,
+							unsectionedListName: binding.unsectionedListName,
+						}
+					: {}),
 			},
 			options,
 		);
