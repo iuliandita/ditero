@@ -157,3 +157,31 @@ test("OpenAPI declares a Bearer-only calendar download with JSON errors and stri
 	);
 	expect(operation.security).toEqual([{ personalAccessToken: [] }]);
 });
+
+test("OpenAPI distinguishes immutable list creation acknowledgements from current list reads", () => {
+	const paths = publicApiOpenApi().paths;
+	const list = paths["/api/v1/lists"] as {
+		get: unknown;
+		post: {
+			requestBody: {
+				content: {
+					"application/json": {
+						schema: { required: string[]; additionalProperties: boolean };
+					};
+				};
+			};
+			responses: Record<string, unknown>;
+		};
+	};
+	const input = list.post.requestBody.content["application/json"].schema;
+	expect(input.required).toEqual(["workspaceId", "title", "kind"]);
+	expect(input.additionalProperties).toBe(false);
+	for (const status of ["200", "201"]) {
+		expect(JSON.stringify(list.post.responses[status])).toContain(
+			'"const":"list-create-ack"',
+		);
+		expect(JSON.stringify(list.post.responses[status])).toContain('"snapshot"');
+	}
+	expect(JSON.stringify(list.get)).not.toContain("list-create-ack");
+	expect(Object.keys(paths)).toHaveLength(19);
+});

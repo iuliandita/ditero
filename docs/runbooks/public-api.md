@@ -1,8 +1,8 @@
 # Public API
 
-The versioned API provides discovery, idempotent task creation, scalar updates and
-observed task completion and deletion, and authenticated iCalendar snapshots. Public
-calendar subscriptions and webhooks remain under development.
+The versioned API provides discovery, idempotent list and task creation, scalar
+updates, observed task completion and deletion, and authenticated iCalendar
+snapshots. Public calendar subscriptions and webhooks remain under development.
 Write tokens do not grant workspace access.
 
 ## Tokens
@@ -50,6 +50,42 @@ name is not an account ID, and a label is not an assignment. Ambiguous names,
 multiple possible lists and invitations require an explicit choice; discovery
 never grants access. Resolve relative dates using the account's timezone, and
 ask for a timezone when `timezoneChosen` is false.
+
+## List creation
+
+`POST /api/v1/lists` requires a write token, current Member/Admin/Owner membership
+in the workspace, JSON content and a caller-supplied UUID `Idempotency-Key`.
+No query parameters are accepted. The complete UTF-8 JSON body is limited to 4 KiB.
+
+```json
+{ "workspaceId": "WORKSPACE_ID", "title": "Groceries", "kind": "shopping", "icon": null }
+```
+
+Workspace, title and kind are required. Title is trimmed and limited to 500
+characters. Kind is exactly `tasks`, `shopping`, `checklist`, `project` or `habits`.
+Icon may be a named icon or emoji of at most 128 characters; omitted and null mean
+the per-kind default. Unknown fields, NUL and malformed Unicode are rejected.
+The server assigns a new UUID, the caller as owner, a root append position,
+no folder and `completedDisplay: "sink"`. No tasks, invitations or access grants
+are created.
+
+Fresh success returns 201 with
+`data: { "kind": "list-create-ack", "snapshot": { ... } }` in the standard version-1
+envelope. The snapshot has the existing list DTO fields. List and receipt commit
+atomically. Keep the key and body after an uncertain transport outcome. Matching
+canonical replay returns 200 with the immutable original creation snapshot; title
+trimming and omitted/null icon normalize identically. Keys are account-scoped and
+shared with all task writes; a different operation or canonical body returns
+`409 idempotency-conflict`.
+
+The acknowledgement does not assert current existence or identify the current
+incarnation of its list ID. Editing, deleting or recreating that ID does not change
+the original snapshot, and replay never recreates or modifies a list. Use a separate
+authorized `GET /api/v1/lists/{id}` for current state. Replay still requires current
+write-token and write-membership authority in the original workspace, even if a
+replacement list has different authority. Missing membership/workspace returns 404,
+Viewer/read-token access returns 403, and revoked or expired credentials return 401.
+Account deletion removes receipts.
 
 ## Task creation
 
@@ -120,7 +156,7 @@ pending or blocked activation return `409 activation-pending` without effects.
 
 The completion and account-scoped receipt commit together. Replaying the same
 key and canonical body returns the current authorized task without advancing
-another occurrence or awarding Karma again. Keys are shared with task creation;
+another occurrence or awarding Karma again. Keys are shared with list creation and every task write;
 reuse for another operation or body returns 409. A deleted task returns 410 while
 its original list remains visible, or 404 when inaccessible. Read the task again
 before intentionally completing its next occurrence with a new key.
@@ -167,7 +203,7 @@ new update. Scope and membership refusals take precedence over stale-state error
 The native mutation and receipt commit atomically. Same-key canonical replay
 returns the current authorized task without applying the patch again, even after a
 later edit. Current write access and writable membership are required for replay.
-Keys share the account namespace with creation and completion; a different body or
+Keys share the account namespace with list creation and every task write; a different body or
 operation returns `409 idempotency-conflict`. A deleted task returns 410 while its
 original list remains writable and visible, or 404 when inaccessible. Revoked or
 expired credentials return 401. Preserve the same key and body after an uncertain
@@ -215,7 +251,7 @@ The deletion and receipt commit atomically. Matching replay returns the original
 result without deleting a recreated task ID. Current write-token and origin-list
 write authority are required even for replay. The origin list is identified by ID;
 a recreated list with that ID follows current membership authority. Keys share the
-account namespace with create, complete and update; another operation or body
+account namespace with list creation and every task write; another operation or body
 returns `409 idempotency-conflict`. Preserve the key and body after an uncertain
 outcome. Missing/inaccessible origin lists return 404, viewers/read tokens 403,
 and invalid, expired or revoked credentials and deleted accounts 401.

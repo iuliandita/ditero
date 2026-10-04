@@ -91,8 +91,12 @@ export async function deleteApiTask(
 ): Promise<Response> {
 	let authorityHeld = false;
 	const receiptQuery = (client: PoolClient, userId: string) =>
-		client.query<{ request_hash: string; task_id: string }>(
-			"select request_hash,task_id from public_api_request where user_id=$1 and request_id=$2",
+		client.query<{
+			request_hash: string;
+			resource_kind: string;
+			task_id: string | null;
+		}>(
+			"select request_hash,resource_kind,task_id from public_api_request where user_id=$1 and request_id=$2",
 			[userId, requestId],
 		);
 	return withPersonalAccessToken(
@@ -116,7 +120,11 @@ export async function deleteApiTask(
 			);
 			const receipt = await receiptQuery(client, actor.userId);
 			if (receipt.rowCount) {
-				if (receipt.rows[0].request_hash !== hash)
+				if (
+					receipt.rows[0].resource_kind !== "task" ||
+					receipt.rows[0].task_id === null ||
+					receipt.rows[0].request_hash !== hash
+				)
 					throw new PublicApiError(
 						409,
 						"idempotency-conflict",
