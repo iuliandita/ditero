@@ -321,11 +321,16 @@ test("every exact-byte or mapping change refuses existing-source reuse and requi
 	const bom = Buffer.concat([Buffer.from([239, 187, 191]), fixture]);
 	const changed = [
 		bom,
-		Buffer.from(fixture.toString().replaceAll("\r\n", "\n")),
+		Buffer.from(
+			fixture.toString().includes("\r\n")
+				? fixture.toString().replaceAll("\r\n", "\n")
+				: fixture.toString().replaceAll("\n", "\r\n"),
+		),
 		Buffer.from(fixture.toString().replace("every day", "tomorrow")),
 		Buffer.from(fixture.toString().replace("Another task", "Edited task")),
 	];
 	for (const bytes of changed) {
+		expect(bytes.equals(fixture)).toBe(false);
 		const next = await body(bytes, value.source.id);
 		const response = await request("plans", {
 			...next,
