@@ -674,7 +674,10 @@ export const taskLabel = pgTable(
 			.notNull()
 			.references(() => label.id, { onDelete: "cascade" }),
 	},
-	(t) => [unique("task_label_pair").on(t.taskId, t.labelId)],
+	(t) => [
+		unique("task_label_pair").on(t.taskId, t.labelId),
+		index("task_label_label_id_idx").on(t.labelId),
+	],
 );
 
 export const template = pgTable(

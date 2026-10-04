@@ -505,6 +505,13 @@
       "when": 1791086035048,
       "tag": "0071_todoist_provider_binding",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1791097910917,
+      "tag": "0072_task_label_reference_index",
+      "breakpoints": true
     }
   ]
 }
