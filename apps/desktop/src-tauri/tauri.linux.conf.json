@@ -1,0 +1,16 @@
+{
+	"plugins": {
+		"deep-link": {
+			"desktop": {
+				"schemes": ["ditero"]
+			}
+		}
+	},
+	"bundle": {
+		"linux": {
+			"deb": {
+				"desktopTemplate": "linux.desktop"
+			}
+		}
+	}
+}

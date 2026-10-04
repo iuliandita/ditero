@@ -5,6 +5,7 @@ import {
 	type NativeNotificationTarget,
 	type NativePush,
 	type NativePushState,
+	type NativeTaskLinkNavigation,
 } from "../../../src/web/lib/native-account.tsx";
 
 // Page side of the NativeDitero message-listener bridge (NativeZeroTransport.java) and an
@@ -33,6 +34,8 @@ export type SessionMeta = {
 };
 
 export type Hello = {
+	taskLinks?: boolean;
+	linkRefused?: boolean;
 	pushProvider?: NativePushState["provider"];
 	gen: number;
 	server: ServerMeta | null;
@@ -103,8 +106,12 @@ type Command =
 	| { op: "server.select"; origin: string }
 	| { op: SimpleOp }
 	| { op: PushOp; id: string; locale?: "en" | "de" | "es" | "fr" | "ro" | "ar" }
-	| { op: "push.open"; id: string }
-	| { op: "push.dismissOpen"; id: string; body: { token: string } }
+	| { op: "push.open" | "link.read" | "link.retire"; id: string }
+	| {
+			op: "push.dismissOpen" | "link.dismiss";
+			id: string;
+			body: { token: string };
+	  }
 	| { op: E2eOp; id?: string; body?: Record<string, unknown> }
 	| { op: AttachmentOp; body: Record<string, unknown> };
 
@@ -244,7 +251,16 @@ function parseHello(reply: Reply): Hello {
 		provider !== "desktop"
 	)
 		throw new NativeError("invalid-reply");
+	if (
+		(reply.taskLinks !== undefined && typeof reply.taskLinks !== "boolean") ||
+		(reply.linkRefused !== undefined && typeof reply.linkRefused !== "boolean")
+	)
+		throw new NativeError("invalid-reply");
 	return {
+		...(reply.taskLinks === undefined ? {} : { taskLinks: reply.taskLinks }),
+		...(reply.linkRefused === undefined
+			? {}
+			: { linkRefused: reply.linkRefused }),
 		...(provider === undefined ? {} : { pushProvider: provider }),
 		gen: count(reply, "gen"),
 		server,
@@ -303,6 +319,7 @@ function sessionRefused(gen: unknown, authHandle: unknown): void {
 }
 
 const notificationListeners = new Set<() => void>();
+const taskLinkListeners = new Set<() => void>();
 
 function onNative(event: MessageEvent): void {
 	let message: unknown;
@@ -314,6 +331,14 @@ function onNative(event: MessageEvent): void {
 	if (!isRecord(message)) return;
 	if (message.t === "push.open" && state && message.gen === state.gen) {
 		for (const listener of notificationListeners) listener();
+		return;
+	}
+	if (
+		message.t === "link.open" &&
+		state?.taskLinks &&
+		message.gen === state.gen
+	) {
+		for (const listener of taskLinkListeners) listener();
 		return;
 	}
 	if (message.t === "session-refused") {
@@ -420,9 +445,12 @@ export async function connectBridge(): Promise<Hello> {
 
 /** Credential-free metadata snapshot of the current generation. */
 export function bridgeState(): Hello {
-	const { gen, server, session, pushProvider } = requireState();
+	const { gen, server, session, pushProvider, taskLinks, linkRefused } =
+		requireState();
 	return {
 		...(pushProvider === undefined ? {} : { pushProvider }),
+		...(taskLinks === undefined ? {} : { taskLinks }),
+		...(linkRefused === undefined ? {} : { linkRefused }),
 		gen,
 		server: server && { ...server },
 		session: session && { ...session },
@@ -1092,6 +1120,78 @@ export function createNativeNotificationNavigation(
 			notificationListeners.add(guarded);
 			return () => {
 				notificationListeners.delete(guarded);
+			};
+		},
+	};
+}
+
+/** Linux link identities never authorize a server switch or a task mutation. */
+export function createNativeTaskLinkNavigation(
+	gen: number,
+	authHandle: string,
+): NativeTaskLinkNavigation {
+	const assertCurrent = () => {
+		const current = requireState();
+		if (
+			!current.taskLinks ||
+			current.gen !== gen ||
+			current.session?.authHandle !== authHandle
+		)
+			throw new NativeError("stale-generation");
+	};
+	const validId = (value: unknown): value is string =>
+		typeof value === "string" &&
+		/^[A-Za-z0-9_.:-]{1,128}$/.test(value) &&
+		value !== "." &&
+		value !== "..";
+	return {
+		identity: JSON.stringify([gen, authHandle]),
+		async retire() {
+			assertCurrent();
+			await request({ op: "link.retire", id: authHandle }, (reply) => {
+				assertCurrent();
+				ok(reply);
+			});
+		},
+		async read() {
+			assertCurrent();
+			return request({ op: "link.read", id: authHandle }, (reply) => {
+				assertCurrent();
+				ok(reply);
+				if (reply.open === null) return null;
+				if (
+					!isRecord(reply.open) ||
+					Object.keys(reply.open).length !== 2 ||
+					!validId(reply.open.token) ||
+					(reply.open.taskId !== null && !validId(reply.open.taskId))
+				)
+					throw new NativeError("invalid-reply");
+				return { token: reply.open.token, taskId: reply.open.taskId };
+			});
+		},
+		async dismiss(token) {
+			assertCurrent();
+			if (!validId(token)) throw new NativeError("invalid-message");
+			await request(
+				{ op: "link.dismiss", id: authHandle, body: { token } },
+				(reply) => {
+					assertCurrent();
+					ok(reply);
+				},
+			);
+		},
+		subscribe(listener) {
+			const guarded = () => {
+				try {
+					assertCurrent();
+				} catch {
+					return;
+				}
+				listener();
+			};
+			taskLinkListeners.add(guarded);
+			return () => {
+				taskLinkListeners.delete(guarded);
 			};
 		},
 	};

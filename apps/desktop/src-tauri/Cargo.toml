@@ -2,7 +2,7 @@
 name = "ditero-desktop"
 version = "0.0.1"
 edition = "2021"
-rust-version = "1.89"
+rust-version = "1.90"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
@@ -25,6 +25,7 @@ url = "2"
 regex = "1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+tauri-plugin-single-instance = { version = "=2.5.2", default-features = false }
 zbus = "=5.19.0"
 zbus-secret-service-keyring-store = { version = "=1.0.1", features = ["crypto-rust"] }
 [target.'cfg(target_os = "macos")'.dependencies]

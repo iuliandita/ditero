@@ -56,6 +56,7 @@ import { FocusProvider } from "../focus/useFocusTimer.tsx";
 import { useDashboards } from "../hooks/useDashboards.ts";
 import { useHints } from "../hooks/useHints.ts";
 import { useNativeNotificationNavigation } from "../hooks/useNativeNotificationNavigation.ts";
+import { useNativeTaskLinks } from "../hooks/useNativeTaskLinks.ts";
 import { useSyncedTheme } from "../hooks/useSyncedTheme.ts";
 import { useTaskImportActivationMap } from "../hooks/useTaskImportActivation.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
@@ -386,6 +387,19 @@ function NormalWorkspace({
 		},
 		[openList],
 	);
+	useNativeTaskLinks(notificationReady && notificationRowsReady, (taskId) => {
+		const task = tasks.find((row) => row.id === taskId);
+		const list = task && lists.find((row) => row.id === task.listId);
+		if (
+			!task ||
+			!list ||
+			!workspaces.some((row) => row.id === list.workspaceId)
+		)
+			return false;
+		setActiveId(list.workspaceId);
+		openTask(task.id, list.id);
+		return true;
+	});
 	useNativeNotificationNavigation(
 		notificationReady && notificationRowsReady,
 		(target) => {

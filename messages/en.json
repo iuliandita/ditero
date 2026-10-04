@@ -2199,6 +2199,8 @@
 	"native_push_disable": "Turn off",
 	"native_push_refresh": "Refresh status",
 	"native_push_action_failed": "Could not change phone notifications. Refresh the status before trying again.",
+	"native_link_unavailable": "This link is unavailable. Check the selected server and account, then open it again.",
+	"native_link_retry": "The task link acknowledgement failed. Retry before opening another link.",
 	"native_notification_unavailable": "This notification is no longer available.",
 	"desktop_push_heading": "On this computer",
 	"desktop_push_help": "Receive reminders while Ditero is open or minimized. Closing the app stops notifications.",

@@ -1,4 +1,5 @@
 mod attachments;
+mod deep_links;
 mod host;
 mod notifications;
 mod protocol;

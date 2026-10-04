@@ -2245,6 +2245,8 @@
 	"native_push_disable": "Oprește",
 	"native_push_refresh": "Actualizează starea",
 	"native_push_action_failed": "Nu s-au putut modifica notificările. Actualizează starea înainte de a încerca din nou.",
+	"native_link_unavailable": "Acest link nu este disponibil. Verifică serverul și contul selectate, apoi deschide-l din nou.",
+	"native_link_retry": "Confirmarea linkului sarcinii a eșuat. Reîncearcă înainte de a deschide alt link.",
 	"native_notification_unavailable": "Această notificare nu mai este disponibilă.",
 	"desktop_push_heading": "Pe acest computer",
 	"desktop_push_help": "Primește mementouri cât timp Ditero este deschis sau minimizat. Închiderea aplicației oprește notificările.",

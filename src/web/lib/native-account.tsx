@@ -43,12 +43,22 @@ export type NativeNotificationNavigation = {
 	subscribe(listener: () => void): () => void;
 };
 
+export type NativeTaskLinkOpen = { token: string; taskId: string | null };
+export type NativeTaskLinkNavigation = {
+	readonly identity: string;
+	retire(): Promise<void>;
+	read(): Promise<NativeTaskLinkOpen | null>;
+	dismiss(token: string): Promise<void>;
+	subscribe(listener: () => void): () => void;
+};
+
 export type NativeAccount = {
 	profile: { id: string; name: string; email: string };
 	origin: string;
 	storageScope: string;
 	push?: NativePush;
 	notifications?: NativeNotificationNavigation;
+	taskLinks?: NativeTaskLinkNavigation;
 	changeServer(): Promise<void>;
 };
 export const NativeAccountContext = createContext<NativeAccount | null>(null);

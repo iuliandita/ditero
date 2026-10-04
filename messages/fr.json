@@ -2245,6 +2245,8 @@
 	"native_push_disable": "Désactiver",
 	"native_push_refresh": "Actualiser l’état",
 	"native_push_action_failed": "Impossible de modifier les notifications. Actualise leur état avant de réessayer.",
+	"native_link_unavailable": "Ce lien est indisponible. Vérifie le serveur et le compte sélectionnés, puis ouvre-le à nouveau.",
+	"native_link_retry": "La confirmation du lien de la tâche a échoué. Réessaie avant d’ouvrir un autre lien.",
 	"native_notification_unavailable": "Cette notification n’est plus disponible.",
 	"desktop_push_heading": "Sur cet ordinateur",
 	"desktop_push_help": "Reçois des rappels tant que Ditero est ouvert ou réduit. Fermer l’app arrête les notifications.",

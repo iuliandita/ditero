@@ -20,6 +20,7 @@ import {
 	type NativeNotificationNavigation,
 	type NativePush,
 	type NativePushState,
+	type NativeTaskLinkNavigation,
 } from "../../../src/web/lib/native-account.tsx";
 import { AppZeroProvider } from "../../../src/web/lib/zero.tsx";
 import { retireZeroClients } from "../../../src/web/lib/zero-lifecycle.ts";
@@ -30,6 +31,7 @@ import {
 	connectBridge,
 	createNativeNotificationNavigation,
 	createNativePush,
+	createNativeTaskLinkNavigation,
 	installNativeWebSocket,
 	NativeError,
 	type NativeProfile,
@@ -52,6 +54,7 @@ type Active = {
 	origin: string;
 	push: NativePush;
 	notifications: NativeNotificationNavigation;
+	taskLinks?: NativeTaskLinkNavigation;
 };
 
 function NativeWorkspace({ active }: { active: Active }) {
@@ -162,6 +165,14 @@ function NativeAppRoutes({
 			runtime,
 			profile,
 			origin: context.origin,
+			...(current.taskLinks
+				? {
+						taskLinks: createNativeTaskLinkNavigation(
+							context.gen,
+							context.authHandle,
+						),
+					}
+				: {}),
 			push: createNativePush(
 				context.gen,
 				context.authHandle,
@@ -180,6 +191,7 @@ function NativeAppRoutes({
 		void (async () => {
 			const hello = await connectBridge();
 			if (owner !== epoch.current) return;
+			if (hello.linkRefused) show({ message: m.native_link_unavailable() });
 			restoreSocket = installNativeWebSocket();
 			setOrigin(hello.server?.origin ?? "");
 			if (hello.session) await activate(owner);
@@ -237,7 +249,17 @@ function NativeAppRoutes({
 	}
 
 	async function changeServer() {
-		await retireZeroClients();
+		const owner = epoch.current;
+		const links = active?.taskLinks;
+		try {
+			await retireZeroClients();
+			if (owner !== epoch.current) return;
+			await links?.retire();
+			if (owner !== epoch.current) return;
+		} catch (error) {
+			if (owner === epoch.current) show({ message: m.native_connect_failed() });
+			throw error;
+		}
 		epoch.current++;
 		setActive(null);
 		setApproval(false);
@@ -257,6 +279,7 @@ function NativeAppRoutes({
 						storageScope: active.runtime.scope,
 						push: active.push,
 						notifications: active.notifications,
+						taskLinks: active.taskLinks,
 						changeServer,
 					}}
 				>

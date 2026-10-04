@@ -2383,6 +2383,8 @@
 	"native_push_disable": "إيقاف",
 	"native_push_refresh": "تحديث الحالة",
 	"native_push_action_failed": "تعذر تغيير إشعارات الهاتف. حدّث الحالة قبل المحاولة مجددًا.",
+	"native_link_unavailable": "هذا الرابط غير متاح. تحقق من الخادم والحساب المحددين، ثم افتحه مجددًا.",
+	"native_link_retry": "فشل تأكيد رابط المهمة. أعد المحاولة قبل فتح رابط آخر.",
 	"native_notification_unavailable": "لم يعد هذا الإشعار متاحًا.",
 	"desktop_push_heading": "على هذا الكمبيوتر",
 	"desktop_push_help": "تلقَّ التذكيرات ما دام Ditero مفتوحًا أو مصغّرًا. إغلاق التطبيق يوقف الإشعارات.",
