@@ -57,9 +57,8 @@ const runtime = new Pool({
 });
 const actor = randomUUID(),
 	workspace = randomUUID(),
-	list = randomUUID(),
-	task = randomUUID(),
-	childTask = randomUUID();
+	list = randomUUID();
+const [childTask, task] = [randomUUID(), randomUUID()].sort();
 const title = "Protected terminal task";
 let roleCreated = false;
 let server: ReturnType<typeof Bun.serve> | undefined;
@@ -234,6 +233,15 @@ try {
 	);
 	await send("\x1b[B\r", () => frame().includes("Terminal list"));
 	await send("\r", () => frame().includes(title));
+	const parentSelected = () =>
+		frame()
+			.split("\n")
+			.some((line) => line.trim() === `> [ ] ${title}`);
+	if (mode === "delete-cascade") {
+		assert.ok(childTask < task);
+		await send("\x1b[B", parentSelected);
+	}
+	assert.ok(parentSelected(), "The parent task must be selected");
 	const deleting = mode.startsWith("delete");
 	await send(
 		deleting ? "d" : "e",
@@ -242,7 +250,16 @@ try {
 			(deleting && frame().includes('"count"')),
 	);
 	if (deleting) {
+		assert.ok(
+			wires.some(
+				(wire) =>
+					wire.path === `/api/v1/tasks/${task}/deletion-observation` &&
+					wire.status === 200,
+			),
+			"The selected parent deletion observation must succeed",
+		);
 		if (mode === "delete-cascade") {
+			assert.ok(frame().includes('{"version":1,"count":1,'));
 			await send("1");
 			await send("\r");
 			assert.equal(frame().includes("requestId"), false);
