@@ -215,7 +215,30 @@ test("saved surfaces preserve personal scope and shared membership without leaki
 	}
 	const schema = await request("/api/v1/openapi.json", null);
 	const paths = (await schema.json()).paths;
-	expect(Object.keys(paths)).toHaveLength(30);
+	expect(Object.keys(paths)).toHaveLength(33);
+	const comments = paths["/api/v1/tasks/{id}/comments"];
+	const comment = paths["/api/v1/tasks/{id}/comments/{commentId}"];
+	const commentObservation =
+		paths["/api/v1/tasks/{id}/comments/{commentId}/observation"].get;
+	expect([
+		comments.get.operationId,
+		comments.post.operationId,
+		comment.patch.operationId,
+		comment.delete.operationId,
+		commentObservation.operationId,
+	]).toEqual([
+		"list_task_comments",
+		"create_task_comment",
+		"patch_task_comment",
+		"delete_task_comment",
+		"observe_task_comment",
+	]);
+	expect(comments.get.responses["200"]).toBeDefined();
+	expect(commentObservation.responses["200"]).toBeDefined();
+	for (const operation of [comments.post, comment.patch, comment.delete]) {
+		expect(operation.requestBody.required).toBe(true);
+		expect(operation.responses["200"]).toBeDefined();
+	}
 	expect(
 		paths["/api/v1/lists/{id}/observation"].get.responses["200"],
 	).toBeDefined();

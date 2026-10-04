@@ -2,11 +2,14 @@ import { strict as assert } from "node:assert";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
+import * as m from "../../src/paraglide/messages.js";
 import { publicApiRoutes } from "../../src/server/public-api/routes.ts";
 import {
 	createPersonalAccessToken,
 	revokePersonalAccessToken,
 } from "../../src/server/public-api/tokens.ts";
+import { footerHints } from "../../src/tui/index.ts";
+import { fitHints } from "../../src/tui/render.ts";
 
 const mode = process.argv[2];
 const privateFile = process.env.TUI_TEST_ENV_FILE;
@@ -324,21 +327,47 @@ try {
 					"Arabic supported-size frame was absent",
 				);
 				const beforeTiny = output.split("\x1b[H\x1b[2J").length;
+				const tinySignature = fitHints(
+					footerHints(
+						m.tui_footer({}, { locale: "ar" }),
+						"ar",
+						false,
+						false,
+						false,
+					),
+					18,
+				);
 				terminal.resize(19, 8);
 				child.kill("SIGWINCH");
-				await waitFor(
-					() =>
-						output.split("\x1b[H\x1b[2J").length > beforeTiny &&
-						/\bq\b/.test(latestFrame()) &&
-						/\bEsc\b/.test(latestFrame()),
-					"Narrow terminal safety keys were absent",
-				);
-				assert.ok(latestFrame().split(/\r?\n/).length <= 8);
-				assert.ok(
-					latestFrame()
-						.split(/\r?\n/)
-						.every((line) => line.length <= 18),
-				);
+				try {
+					await waitFor(
+						() =>
+							output.split("\x1b[H\x1b[2J").length > beforeTiny &&
+							latestFrame().split(/\r?\n/)[0] === tinySignature &&
+							/\bq\b/.test(latestFrame()) &&
+							/\bEsc\b/.test(latestFrame()),
+						"Narrow terminal safety keys were absent",
+					);
+					assert.ok(latestFrame().split(/\r?\n/).length <= 8);
+					assert.ok(
+						latestFrame()
+							.split(/\r?\n/)
+							.every((line) => line.length <= 18),
+					);
+				} catch (error) {
+					const lines = latestFrame().split(/\r?\n/);
+					process.stderr.write(
+						`${JSON.stringify({
+							kind: "tiny-frame-diagnostics",
+							lineCount: lines.length,
+							widths: lines.slice(0, 32).map((line) => line.length),
+							widthsTruncated: lines.length > 32,
+							firstLineMatchesTinySignature: lines[0] === tinySignature,
+							expectedSafetyKeys: tinySignature.split(" | "),
+						})}\n`,
+					);
+					throw error;
+				}
 				await send("\x03");
 			} else {
 				await send("c", "NOT SENT");
