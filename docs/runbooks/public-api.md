@@ -137,6 +137,52 @@ fields differ from explicit null or unchanged values. Preserve the exact UUID an
 body after uncertain transport outcomes. The API performs no hidden observation,
 retry, rebase or replanning; an intentional changed request needs a new key.
 
+## Observed list deletion
+
+Read `GET /api/v1/lists/{id}/deletion-observation`. Read tokens and Viewers may
+observe. The envelope contains the strict existing ApiList `snapshot`, its scalar
+`stateToken`, and `tasksState: { version: 1, count, token }`. The task SHA256 token
+covers every persisted task column, including children and timestamp microseconds,
+in ID order from one cursor snapshot. Scans use 256-row pages without a row limit;
+a five-second cumulative scan deadline returns 503 instead of partial state.
+
+`DELETE /api/v1/lists/{id}` requires a write token, current creator Member, Admin
+or Owner authority, JSON content and a caller-owned UUID `Idempotency-Key`.
+No query parameters are accepted; the complete UTF-8 body is limited to 4 KiB:
+
+```json
+{
+  "workspaceId": "ORIGINAL_WORKSPACE_ID",
+  "expectedState": "COPY_LIST_STATE_TOKEN",
+  "expectedTasksState": { "version": 1, "count": 0, "token": "COPY_TASKS_TOKEN" },
+  "cascadeTasks": false
+}
+```
+
+False requires no tasks. True acknowledges deletion of all observed tasks and
+their native dependent cascades. Changes to captured list scalars or task-table
+state return `409 list-state-changed` before effects. Comments, assignees, labels,
+history and attachments are not independently fingerprinted. Their current
+contents follow native deletion rules: child tasks precede parents, committed
+attachments are retired for garbage collection, pending transfers retain their
+rows after parent removal, and retained import-history ledgers remain intact.
+Pending import activation does not block authorized deletion. Workspace, folder,
+keys and unrelated data are preserved. No blob I/O occurs in this transaction.
+
+Native deletion and receipt commit atomically. Success and matching replay return
+200 with `data: { kind: "list-delete-ack", snapshot: { ... }, deletedTasks: N }`.
+The immutable original snapshot/count acknowledges that deletion and does not
+assert current absence. Matching replay never deletes a replacement list. Replay
+requires a live actor, valid write PAT and current authority in the original
+workspace against its captured original owner. Missing original membership returns
+404, insufficient roles/read tokens 403, and invalid or revoked credentials 401.
+
+Keys share the account namespace with every list/task write; different operations
+or canonical bodies return `409 idempotency-conflict`. Preserve the exact key and
+body after an uncertain outcome. There is no automatic observation, retry or
+replanning. Tokens describe semantic state, not monotonic revisions or durable
+incarnations: an intentional fresh request can match identical recreation or ABA.
+
 ## Task creation
 
 `POST /api/v1/tasks` requires a write token, `Content-Type: application/json`,
