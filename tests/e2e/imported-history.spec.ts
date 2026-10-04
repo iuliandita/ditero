@@ -167,27 +167,17 @@ test("imported authors stay distinct from local people and cannot claim comment 
 			for await (const chunk of stream) chunks.push(Buffer.from(chunk));
 			const downloaded = JSON.parse(Buffer.concat(chunks).toString("utf8"));
 			expect(downloaded.schemaVersion).toBe(2);
-			expect(
-				downloaded.data.comments.filter(
-					(row: { author: { kind: string } }) =>
-						row.author.kind === "source_claim",
-				),
-			).toHaveLength(2);
+			const imported = downloaded.data.comments.filter(
+				(row: { author: { kind: string } }) =>
+					row.author.kind === "source_claim",
+			);
+			expect(imported).toHaveLength(2);
+			expect(imported[0].author.sourceNamespace).toBe(sourceNamespace);
 			expect(exportStatuses).toEqual([200]);
 			await expect(exportAlert).toHaveCount(0);
 		} finally {
 			memberPage.off("response", observeExport);
 		}
-		const archive = await memberPage.request.get(
-			"/api/portability/export?version=2",
-		);
-		expect(archive.ok()).toBe(true);
-		const document = await archive.json();
-		const imported = document.data.comments.filter(
-			(row: { author: { kind: string } }) => row.author.kind === "source_claim",
-		);
-		expect(imported).toHaveLength(2);
-		expect(imported[0].author.sourceNamespace).toBe(sourceNamespace);
 
 		await page.reload();
 		await waitWorkspaceReady(page);
