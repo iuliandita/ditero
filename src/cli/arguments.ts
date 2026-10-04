@@ -3,6 +3,7 @@ import {
 	PUBLIC_API_MAX_PAGE_SIZE,
 	PUBLIC_API_PAGE_SIZE,
 } from "../domain/public-api.ts";
+import { apiCommentIdSchema } from "../domain/public-api-comments.ts";
 import {
 	PUBLIC_API_RESOURCES,
 	type PublicApiResource,
@@ -23,6 +24,11 @@ export class CliError extends Error {
 
 export interface CliOptions {
 	command:
+		| "list-task-comments"
+		| "observe-comment"
+		| "add-comment"
+		| "edit-comment"
+		| "delete-comment"
 		| "profile"
 		| PublicApiResource
 		| "create-list"
@@ -52,6 +58,7 @@ export interface CliOptions {
 	done?: string;
 	requestId?: string;
 	taskId?: string;
+	commentId?: string;
 }
 
 export function usageError(): never {
@@ -119,6 +126,7 @@ export function parseArguments(
 		"--done",
 		"--request-id",
 		"--task",
+		"--comment",
 	];
 	for (let index = 0; index < argv.length; index++) {
 		const argument = argv[index];
@@ -133,6 +141,11 @@ export function parseArguments(
 		} else if (
 			!command &&
 			([
+				"list-task-comments",
+				"observe-comment",
+				"add-comment",
+				"edit-comment",
+				"delete-comment",
 				"profile",
 				"create-list",
 				"observe-list",
@@ -157,7 +170,22 @@ export function parseArguments(
 		} else usageError();
 	}
 	if (!command) usageError();
+	const commentCommand = [
+		"list-task-comments",
+		"observe-comment",
+		"add-comment",
+		"edit-comment",
+		"delete-comment",
+	].includes(command);
+	const commentItem = [
+		"observe-comment",
+		"edit-comment",
+		"delete-comment",
+	].includes(command);
 	const writing = [
+		"add-comment",
+		"edit-comment",
+		"delete-comment",
 		"place-task",
 		"update-task-relationships",
 		"create-list",
@@ -168,17 +196,19 @@ export function parseArguments(
 		"update-task",
 		"delete-task",
 	].includes(command);
-	const taskCommand = [
-		"observe-task-placement",
-		"place-task",
-		"observe-task-relationships",
-		"update-task-relationships",
-		"complete-task",
-		"observe-task",
-		"observe-task-deletion",
-		"update-task",
-		"delete-task",
-	].includes(command);
+	const taskCommand =
+		commentCommand ||
+		[
+			"observe-task-placement",
+			"place-task",
+			"observe-task-relationships",
+			"update-task-relationships",
+			"complete-task",
+			"observe-task",
+			"observe-task-deletion",
+			"update-task",
+			"delete-task",
+		].includes(command);
 	const listCommand = [
 		"observe-list",
 		"update-list",
@@ -196,6 +226,10 @@ export function parseArguments(
 						"--server",
 						...(writing ? ["--request-id"] : []),
 						...(taskCommand ? ["--task"] : []),
+						...(commentItem ? ["--comment"] : []),
+						...(command === "list-task-comments"
+							? ["--limit", "--cursor"]
+							: []),
 						...(listCommand ? ["--list"] : []),
 					].includes(key),
 			))
@@ -205,6 +239,12 @@ export function parseArguments(
 	if (!taskCommand && values.has("--task")) usageError();
 	const taskId = values.get("--task");
 	if (taskCommand && !PUBLIC_API_ID.safeParse(taskId).success) usageError();
+	const commentId = values.get("--comment");
+	if (!commentItem && commentId !== undefined) usageError();
+	if (commentCommand && !apiCommentIdSchema.safeParse(taskId).success)
+		usageError();
+	if (commentItem && !apiCommentIdSchema.safeParse(commentId).success)
+		usageError();
 	let requestId: string | undefined;
 	if (writing) {
 		try {
@@ -264,5 +304,6 @@ export function parseArguments(
 		done,
 		requestId,
 		taskId,
+		commentId,
 	};
 }

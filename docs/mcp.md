@@ -98,7 +98,7 @@ Server response bodies and transport exception details are excluded from API
 errors. Stdout carries protocol messages only; startup and transport diagnostics
 use stderr without credentials or server response text.
 
-The server limits each API response to 2 MiB, requests to 15 seconds, inbound
+The server limits comment responses to 256 KiB and other API responses to 2 MiB, requests to 15 seconds, inbound
 protocol messages to 64 KiB including the JSON-RPC envelope, tool input structure
 to 256 elements, and concurrent tool calls to four. Workflow JSON is independently
 bounded to 64 KiB. Planning permits at most 100 pages per collection and 20 MiB
@@ -282,3 +282,38 @@ snapshot and movedChildren count, rather than claiming current state. Replay
 never moves a recreated task. After an uncertain outcome, manually retry the
 identical task ID, full body and UUID; do not substitute fresh observations or a
 new key. UUIDs share the account-wide task/list write namespace.
+
+## Task comments
+
+Five tools extend the fixed set to 30:
+
+- `list_task_comments`: `{ "taskId": "TASK_ID", "limit": 50, "cursor": "TASK_BOUND_CURSOR" }`; limit/cursor are optional. One page only, no all/filter options.
+- `get_comment_observation`: `{ "taskId": "TASK_ID", "commentId": "COMMENT_ID" }`.
+- `create_task_comment`: `{ "taskId": "TASK_ID", "requestId": "UUID", "comment": { "workspaceId": "ORIGINAL_WORKSPACE_ID", "listId": "ORIGINAL_LIST_ID", "expectedTaskState": "TASK_STATE_TOKEN", "body": "Exact body" } }`.
+- `update_task_comment`: `{ "taskId": "TASK_ID", "commentId": "COMMENT_ID", "requestId": "UUID", "comment": { "workspaceId": "ORIGINAL_WORKSPACE_ID", "listId": "ORIGINAL_LIST_ID", "expectedState": "COMMENT_STATE_TOKEN", "body": "Exact body" } }`.
+- `delete_task_comment`: `{ "taskId": "TASK_ID", "commentId": "COMMENT_ID", "requestId": "UUID", "comment": { "workspaceId": "ORIGINAL_WORKSPACE_ID", "listId": "ORIGINAL_LIST_ID", "expectedState": "COMMENT_STATE_TOKEN", "deleteScope": "comment-and-attachments" } }`.
+
+Read tokens and Viewers may read member-visible comments. Pages default to 50,
+maximum 100, with a 256 KiB response bound and task-bound canonical cursors.
+Observation body evidence contains SHA256 and UTF-8 byte count; the token covers
+full stored fields and precise timestamps, including hidden provenance, without
+exposing source namespaces or principals. Tokens are semantic evidence, not locks
+or durable incarnation identities.
+
+Strict descriptor guards reject unknown fields, accessors and malformed Unicode
+before serialization. Create/update payloads are bounded to 64 KiB, deletion to
+4 KiB and protocol arguments to 64 KiB. Bodies are never trimmed. Creation has the
+native 10,000-character limit; edit has no character cap. Creation-only lexical
+mentions notify current members after commit without invitations or grants.
+Native author/write authority governs editing; author or Admin/Owner governs
+deletion, with Admin/Owner required for imported/null-author comments. Committed
+attachments retire for garbage collection under the explicit deletion scope.
+
+Mutations require caller UUIDs and send one request without hidden reads or
+automatic retries. Update/delete are destructive; all five tools are idempotent
+with their required key where applicable. Immutable acknowledgments retain the
+original result after deletion/recreation without modifying replacements. Current
+original-workspace authority remains required, including replay. Cancellation
+reaches HTTP and may leave a committed result uncertain. Retry only identical
+IDs, full payload and UUID manually; never substitute fresh observations or a
+new key. UUIDs share the account-wide write namespace.

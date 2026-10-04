@@ -1,6 +1,7 @@
 import { clientVersion } from "../clients/build-info.ts";
 import { CliError, parseArguments } from "./arguments.ts";
 import { discover, type Fetcher } from "./client.ts";
+import { COMMENT_COMMANDS, commentWorkflow } from "./comment-workflow.ts";
 import { listWorkflow } from "./list-workflow.ts";
 import { taskPlacementWorkflow } from "./task-placement-workflow.ts";
 import { taskRelationshipsWorkflow } from "./task-relationships-workflow.ts";
@@ -19,7 +20,9 @@ Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards, 
           observe-task-relationships (live scope and relationship sets),
           update-task-relationships (complete desired relationship JSON stdin),
           observe-task-placement (live placement and children state),
-          place-task (observed placement JSON stdin)
+          place-task (observed placement JSON stdin),
+          list-task-comments, observe-comment (explicit task/comment IDs),
+          add-comment, edit-comment, delete-comment (observed JSON stdin)
 
 Options:
   --json                  Compact JSON output (default: formatted JSON)
@@ -32,6 +35,7 @@ Options:
   --list <id>             Filter tasks; required for list observation/update/deletion
   --done <true|false>     Filter tasks by completion
   --task <id>            Required for task observation, completion, update, and deletion
+  --comment <id>         Required for comment observation, editing and deletion
   --request-id <UUID>     Required for writes; preserve for exact retries
   --version               Show build identity without accessing the server
   --help                  Show this help without accessing the server
@@ -43,7 +47,8 @@ Exit codes: 0 success, 2 usage/request, 3 authentication, 4 permission,
 Planning never writes; writes make one POST, PATCH, or DELETE without retries.
 Completion requires the inspected listId and expectedDueAt; recurring tasks advance.
 Updates require an observed state token; deletion also requires child state and explicit cascade.
-Workflow stdin is at most 64 KiB; deletion, placement and list writes are at most 4 KiB. No files, invitations, or mentions are supported.
+Workflow stdin is at most 64 KiB; deletion, placement and list writes are at most 4 KiB. Comment writes preserve exact bodies; creation-only mentions notify current members without invitations.
+Comment pages require --task and do not support --all; deletion requires comment-and-attachments.
 `;
 
 export async function runCli(
@@ -64,33 +69,35 @@ export async function runCli(
 			output.stdout(HELP);
 			return 0;
 		}
-		const result = ["observe-task-placement", "place-task"].includes(
-			options.command,
+		const result = COMMENT_COMMANDS.some(
+			(command) => command === options.command,
 		)
-			? await taskPlacementWorkflow(options, fetcher, stdinReader)
-			: ["observe-task-relationships", "update-task-relationships"].includes(
-						options.command,
-					)
-				? await taskRelationshipsWorkflow(options, fetcher, stdinReader)
-				: [
-							"create-list",
-							"observe-list",
-							"update-list",
-							"observe-list-deletion",
-							"delete-list",
-						].includes(options.command)
-					? await listWorkflow(options, fetcher, stdinReader)
+			? await commentWorkflow(options, fetcher, stdinReader)
+			: ["observe-task-placement", "place-task"].includes(options.command)
+				? await taskPlacementWorkflow(options, fetcher, stdinReader)
+				: ["observe-task-relationships", "update-task-relationships"].includes(
+							options.command,
+						)
+					? await taskRelationshipsWorkflow(options, fetcher, stdinReader)
 					: [
-								"plan-task",
-								"create-task",
-								"complete-task",
-								"observe-task",
-								"observe-task-deletion",
-								"update-task",
-								"delete-task",
+								"create-list",
+								"observe-list",
+								"update-list",
+								"observe-list-deletion",
+								"delete-list",
 							].includes(options.command)
-						? await taskWorkflow(options, fetcher, stdinReader)
-						: await discover(options, fetcher);
+						? await listWorkflow(options, fetcher, stdinReader)
+						: [
+									"plan-task",
+									"create-task",
+									"complete-task",
+									"observe-task",
+									"observe-task-deletion",
+									"update-task",
+									"delete-task",
+								].includes(options.command)
+							? await taskWorkflow(options, fetcher, stdinReader)
+							: await discover(options, fetcher);
 		output.stdout(
 			`${JSON.stringify(result, null, options.json ? undefined : 2)}\n`,
 		);

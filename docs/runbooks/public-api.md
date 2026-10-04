@@ -584,3 +584,14 @@ UUID keys share the account namespace with every other API write. Different
 operations or exact canonical bodies return `409 idempotency-conflict`. Preserve
 the identical key, body and observation after uncertain transport. No hidden
 observation, invitation, retry, rebase or replanning occurs.
+
+The source CLI exposes `list-task-comments`, `observe-comment`, `add-comment`,
+`edit-comment` and `delete-comment`; all require explicit `--task`, and item
+operations also require `--comment`. Writes take the strict JSON bodies above
+on stdin and require `--request-id`. Comment pages support only explicit
+limit/cursor and never `--all`. The matching MCP tools are `list_task_comments`,
+`get_comment_observation`, `create_task_comment`, `update_task_comment` and
+`delete_task_comment`. Mutation inputs use a strict `comment` object and explicit
+`requestId`, task and comment IDs. Both clients validate typed scope/body/kind
+acknowledgments and bounded task-bound pages without hidden reads or retries.
+See [CLI](../cli.md#task-comments) and [MCP](../mcp.md#task-comments) for examples.
