@@ -1,6 +1,7 @@
 import { expect, test, vi } from "vitest";
 import { parseArguments } from "../cli/arguments.ts";
 import type { Fetcher } from "../cli/client.ts";
+import { encodeCommentCursor } from "../domain/public-api-comments.ts";
 import { terminalApi } from "./api.ts";
 
 const options = parseArguments(["profile"], {
@@ -75,6 +76,114 @@ test.each([
 		`/api/v1/tasks/task/${deletion ? "deletion-observation" : "observation"}`,
 	);
 	expect(fetcher.mock.calls[0][1].method).toBe("GET");
+});
+
+const comment = (commentId: string, taskId = "task") => ({
+	version: 1,
+	commentId,
+	taskId,
+	workspaceId: "workspace",
+	listId: "list",
+	authorId: null,
+	createdAt: "2026-10-03T12:00:00.000Z",
+	editedAt: null,
+	historicalAuthorKind: "source_claim",
+	historicalAuthorName: "Imported Name",
+	importedAt: "2026-10-04T12:00:00.000Z",
+	provenanceRedactedAt: null,
+	body: "line one\nline two",
+});
+
+test("comments use one bounded GET page bound to the task and cursor", async () => {
+	const fetcher = vi.fn<Fetcher>(async () =>
+		Response.json({
+			version: 1,
+			data: [comment("a"), comment("b")],
+			nextCursor: encodeCommentCursor("task", "b"),
+		}),
+	);
+	const page = await terminalApi(options, fetcher).comments(
+		"task",
+		encodeCommentCursor("task", "0"),
+		new AbortController().signal,
+	);
+	expect(page.comments.map((item) => item.commentId)).toEqual(["a", "b"]);
+	expect(page.nextCursor).toBe(encodeCommentCursor("task", "b"));
+	expect(fetcher).toHaveBeenCalledTimes(1);
+	const [url, init] = fetcher.mock.calls[0];
+	expect(url.pathname).toBe("/api/v1/tasks/task/comments");
+	expect(url.searchParams.get("limit")).toBe("50");
+	expect(url.searchParams.get("cursor")).toBe(encodeCommentCursor("task", "0"));
+	expect(url.searchParams.has("all")).toBe(false);
+	expect(init.method ?? "GET").toBe("GET");
+	expect(init.body).toBeUndefined();
+});
+
+test("comments reject another task's rows and unordered pages", async () => {
+	for (const data of [[comment("a", "other")], [comment("b"), comment("a")]]) {
+		const fetcher = vi.fn<Fetcher>(async () =>
+			Response.json({ version: 1, data, nextCursor: null }),
+		);
+		await expect(
+			terminalApi(options, fetcher).comments(
+				"task",
+				undefined,
+				new AbortController().signal,
+			),
+		).rejects.toMatchObject({ code: "invalid_response" });
+	}
+});
+
+test("comments reject provenance the database cannot store before any display", async () => {
+	const redacted = "2026-10-05T12:00:00.000Z";
+	for (const extra of [
+		{ historicalAuthorKind: "unknown", historicalAuthorName: "Hidden" },
+		{
+			historicalAuthorKind: "unknown",
+			historicalAuthorName: "Hidden",
+			provenanceRedactedAt: redacted,
+		},
+		{ provenanceRedactedAt: redacted },
+		{
+			historicalAuthorKind: null,
+			historicalAuthorName: null,
+			provenanceRedactedAt: redacted,
+		},
+	]) {
+		const fetcher = vi.fn<Fetcher>(async () =>
+			Response.json({
+				version: 1,
+				data: [{ ...comment("a"), ...extra }],
+				nextCursor: null,
+			}),
+		);
+		await expect(
+			terminalApi(options, fetcher).comments(
+				"task",
+				undefined,
+				new AbortController().signal,
+			),
+		).rejects.toMatchObject({ code: "invalid_response" });
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	}
+});
+
+test("comments keep valid unknown and redacted provenance as received", async () => {
+	const redacted = {
+		...comment("a"),
+		historicalAuthorKind: "unknown",
+		historicalAuthorName: null,
+		provenanceRedactedAt: "2026-10-05T12:00:00.000Z",
+	};
+	const fetcher = vi.fn<Fetcher>(async () =>
+		Response.json({ version: 1, data: [redacted], nextCursor: null }),
+	);
+	const page = await terminalApi(options, fetcher).comments(
+		"task",
+		undefined,
+		new AbortController().signal,
+	);
+	expect(page.comments).toEqual([redacted]);
 });
 
 test("PATCH carries the exact observed token and normalized body without a hidden read", async () => {

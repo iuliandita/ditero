@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TerminalState } from "./controller.ts";
 import {
+	browseFooter,
 	detailScrollHints,
 	footerHints,
 	helpFooter,
@@ -102,6 +103,7 @@ describe("terminal rendered status", () => {
 		form: null,
 		deletion: null,
 		review: null,
+		comments: null,
 	};
 	const count = { loaded: 0, open: 0, done: 0, overdue: 0 };
 	it.each([
@@ -234,6 +236,51 @@ describe("terminal rendered status", () => {
 		).toBe(
 			"Request failed (request_failed). Check access and connection before retrying.",
 		);
+	});
+	it.each([
+		{ list: "list-next", comments: null, shown: false },
+		{ list: null, comments: "comments-next", shown: true },
+	])("offers p for the open comments cursor, not the list cursor ($list/$comments)", ({
+		list,
+		comments,
+		shown,
+	}) => {
+		const open: TerminalState = {
+			...state,
+			nextCursor: list,
+			comments: {
+				taskId: "task",
+				title: "Milk",
+				breadcrumb: [],
+				listCursor: null,
+				items: [],
+				cursor: null,
+				nextCursor: comments,
+				page: 1,
+			},
+		};
+		const output = renderFrame(
+			{
+				title: "Comments",
+				status: "Ready",
+				footer: "",
+				footerHints: footerHints(
+					browseFooter(open, "en"),
+					"en",
+					true,
+					false,
+					false,
+				),
+				rows: [],
+				selected: 0,
+				framed: true,
+			},
+			100,
+			15,
+		);
+		expect(output.includes("p next")).toBe(shown);
+		const listFooter = browseFooter({ ...open, comments: null }, "en");
+		expect(listFooter.includes("p next")).toBe(Boolean(list));
 	});
 	it("keeps Esc back in localized help footers, including help over an uncertain review", () => {
 		for (const locale of ["en", "de", "es", "fr", "ro", "ar"] as const) {

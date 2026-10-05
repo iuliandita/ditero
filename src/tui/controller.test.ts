@@ -53,6 +53,7 @@ function fixture() {
 		update: vi.fn(async () => {}),
 		delete: vi.fn(async () => {}),
 		read: vi.fn(async () => structuredClone(page)),
+		comments: vi.fn(async () => ({ comments: [], nextCursor: null })),
 		plan: vi.fn(async () => ({
 			version: 1 as const,
 			task: structuredClone(task),
