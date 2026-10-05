@@ -8,6 +8,7 @@ import ts from "typescript";
 import { defineConfig } from "vite";
 import { paraglideOptions } from "./paraglide.options.ts";
 import { configureSignupTransport } from "./scripts/e2e-signup-transport.ts";
+import { apiProxyTarget } from "./scripts/e2e-stack.ts";
 import { vendorLicenses } from "./scripts/vendor-licenses.ts";
 export default defineConfig({
 	plugins: [
@@ -87,7 +88,7 @@ export default defineConfig({
 	server: {
 		proxy: {
 			"/api": {
-				target: "http://localhost:3000",
+				target: apiProxyTarget(process.env),
 				changeOrigin: true,
 				configure:
 					process.env.NODE_ENV === "test" &&

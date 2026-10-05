@@ -50,11 +50,76 @@ runner on the critical path. They preserve all 79 serial cases without splitting
 file ordering or running serial suites concurrently.
 
 Run the second phase even if the first fails. Each invocation creates and removes
-a fresh test stack. Do not run phases, shards, or integration tests concurrently
-on the same host: the Compose project and published ports are fixed. CI shards
-run on separate hosted runners. The separate output directories and JSON reports
-preserve evidence from both phases; CI uploads `test-results/` for each shard with
-a seven-day retention period.
+a fresh test stack. CI shards run on separate hosted runners. The separate output
+directories and JSON reports preserve evidence from both phases; CI uploads
+`test-results/` for each shard with a seven-day retention period.
+
+## Per-run isolation and cleanup
+
+Every runner invocation generates a UUID and uses the Compose project
+`ditero-e2e-<uuid without dashes>`. The label `io.ditero.e2e.run=<uuid>` is on
+every Compose service, all three named volumes, and the default network. Compose
+files default the label to `unmanaged`, which is what the integration runner
+(`ditero-integration`, unchanged) gets. The runner forces Docker-assigned
+loopback ports for the database, Zero, and browser; it reads the exact
+`127.0.0.1:<port>` bindings from Compose and refuses anything else. The API,
+mail API, web, SMTP, SMTP-HTTP, and ntfy ports are reserved together on ephemeral
+sockets (ntfy on the private interface, the rest on loopback), released
+afterwards, and must differ from each other and from the Docker ports. Web
+runs with `--strictPort` and Playwright never reuses a server, so losing a
+reservation race fails the run. `TRUSTED_ORIGINS` follows the web origin. The Vite
+`/api` proxy follows `E2E_API_URL` only when `NODE_ENV=test` and the value is a
+plain loopback `http:` origin; otherwise it stays `http://localhost:3000`.
+Outside the runner, `bunx playwright test` keeps the old fixed ports. The
+isolated browser endpoint is set only after the owned browser's actual port is
+discovered. Compose defaults stay fixed for the integration runner (database
+55432, Zero 4849, browser 53000, API 3000).
+
+Cleanup never runs `docker compose down`, `--remove-orphans`, `--force`, or a
+project-wide delete. Before the first `up` the runner checks that nothing carries
+its project or marker. After each `up`, including a failed or interrupted one, it
+records the full ID, creation time, and labels of what Docker created. At cleanup
+it queries every container, volume, and network that has this project label or
+this marker, and validates all of them before any write:
+
+- containers: full 64-hex ID, exact project and marker, service `upstream-db` or
+  `zero-cache` (`browser` only with `E2E_BROWSER_CONTAINER=1`);
+- volumes: exactly `<project>_postgres-data`, `<project>_zero-data`, or
+  `<project>_minio-data`, with the
+  Compose volume label, project, and marker;
+- network: full ID, exactly `<project>_default`, Compose network label `default`,
+  project, and marker.
+
+Any other related resource -- the same project with a missing or different marker,
+the marker under a different project, a wrong service, a mismatched name or label,
+or an identity that changed since it was recorded -- makes the runner **refuse**.
+It then removes nothing, prints the offending short IDs (never environment
+values), and exits nonzero. If no `up` was ever started, any related resource is
+likewise refused. An empty inventory is a safe no-op.
+
+When the inventory is valid, each resource is inspected again immediately before
+its write and must still match. Writes are exact and non-forced, bounded by
+timeouts: `docker stop --time 10 <full ID>`, `docker rm <full ID>` (no `-f`, no
+`-v`), `docker volume rm <name>`, `docker network rm <full ID>`, in that order.
+The first failed recheck or command stops all later writes; nothing is retried.
+The first test, setup, or signal error is kept as the exit status; diagnostics and
+cleanup errors are printed separately, and a cleanup failure turns an otherwise
+successful run nonzero.
+
+A refused or partial cleanup leaves the stack in place. Inspect it by marker
+(the runner prints the run ID), and remove it by hand only after confirming the
+resources are yours:
+
+```sh
+docker ps -a --filter label=io.ditero.e2e.run=<uuid>
+docker volume ls --filter label=io.ditero.e2e.run=<uuid>
+docker network ls --filter label=io.ditero.e2e.run=<uuid>
+docker ps -a --filter label=io.ditero.e2e.run   # any run, e.g. a killed runner
+```
+
+A runner killed with `SIGKILL` leaks its stack; the next run does not reap it.
+Postgres data uses the marked named `postgres-data` volume mounted at
+`/var/lib/postgresql`; cleanup validates and removes that exact owned volume.
 
 Before cleanup after a failed test or setup step, the runner saves bounded,
 timestamped Compose logs without color, container status/state, and one resource snapshot
@@ -144,15 +209,17 @@ The browser uses its own network namespace. The test runner, application servers
 and fixtures still run on the host. Playwright forwards only loopback destinations
 through the host runner, preserving localhost origins and authentication settings.
 No host networking, privileged container, Docker socket, or writable repository
-mount is needed. The browser endpoint binds only to `127.0.0.1:53000`; anyone with
-access to it can control test browsers, so do not expose it beyond the local host.
+mount is needed. The browser endpoint binds only to a Docker-assigned port on
+`127.0.0.1`; anyone with access to it can control test browsers, so do not expose
+it beyond the local host.
 
 The pinned browser image version must match both the installed `playwright-core`
 package and `bun.lock`; the runner checks this before starting services. Update the
 image version and digest in `docker-compose.yml` when upgrading Playwright. The
 container mounts only `node_modules/playwright-core` read-only and installs no
 packages at startup. This mode requires a local Docker daemon with access to the
-checkout's files. Compose removes the browser with the rest of the test stack.
+checkout's files. The runner removes the browser with the rest of its validated
+stack.
 
 An independently managed server can instead use Playwright's
 `PW_TEST_CONNECT_WS_ENDPOINT` and `PW_TEST_CONNECT_EXPOSE_NETWORK` environment
