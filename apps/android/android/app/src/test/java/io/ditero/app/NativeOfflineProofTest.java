@@ -91,6 +91,9 @@ public class NativeOfflineProofTest {
         Field verification = NativeZeroTransport.class.getDeclaredField("verification");
         verification.setAccessible(true);
         verification.set(transport, new HashMap<>());
+        Field pendingLink = NativeZeroTransport.class.getDeclaredField("pendingLink");
+        pendingLink.setAccessible(true);
+        pendingLink.set(transport, new NativeTaskLink.Slot<>());
         Map<String, Object> durable = new HashMap<>();
         final boolean[] failCommit = {false};
         SharedPreferences.Editor editor = (SharedPreferences.Editor) Proxy.newProxyInstance(
