@@ -93,12 +93,12 @@ export default defineConfig({
 	projects: [
 		{
 			name: "chromium",
-			use: { ...devices["Desktop Chrome"] },
+			use: { ...devices["Desktop Chrome"], channel: "chromium" },
 			testIgnore: SERIAL_SPECS,
 		},
 		{
 			name: "chromium-serial",
-			use: { ...devices["Desktop Chrome"] },
+			use: { ...devices["Desktop Chrome"], channel: "chromium" },
 			testMatch: SERIAL_SPECS,
 			workers: 1,
 		},

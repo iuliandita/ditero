@@ -59,7 +59,8 @@ describe("securityHeaders", () => {
 			"x-content-type-options": "nosniff",
 			"x-frame-options": "DENY",
 			"referrer-policy": "strict-origin-when-cross-origin",
-			"permissions-policy": "camera=(), microphone=(), geolocation=()",
+			"permissions-policy":
+				"camera=(), microphone=(self), geolocation=(), on-device-speech-recognition=(self)",
 		});
 		expect(headers["content-security-policy"]).toContain(
 			"connect-src 'self' https://sync.example.test wss://sync.example.test",

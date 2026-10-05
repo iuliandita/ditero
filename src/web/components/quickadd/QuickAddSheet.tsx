@@ -29,10 +29,13 @@ import { useHints } from "../../hooks/useHints.ts";
 import { syntaxHintVisible } from "../../lib/hints.ts";
 import { addCopyFor } from "../../lib/kind-copy.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
+import { useNativeAccount } from "../../lib/native-account.tsx";
 import { useIsDesktop } from "../../lib/use-media-query.ts";
 import { cn } from "../../lib/utils.ts";
 import { SyntaxHint } from "./SyntaxHint.tsx";
 import { TokenChips } from "./TokenChips.tsx";
+import { useVoiceCapture } from "./useVoiceCapture.ts";
+import { VoiceCapture } from "./VoiceCapture.tsx";
 
 // Case-insensitive prefix match against visible lists. Ambiguous prefixes stay
 // unresolved unless one is an exact-name hit; unresolved names are not guessed
@@ -104,6 +107,65 @@ export function QuickAddSheet({
 		lists[0] ??
 		null;
 	const targetWs = targetList?.workspaceId ?? workspaceId;
+
+	// Native shells (Android and desktop) provide the account context; the
+	// controller refuses them. Any identity change cancels the session.
+	const nativeAccount = useNativeAccount();
+	const voice = useVoiceCapture({
+		open,
+		accountId: zero.userID ?? "",
+		native: nativeAccount !== null,
+		currentListId,
+		targetListId: targetList?.id ?? null,
+		workspaceId: targetWs,
+		locale,
+	});
+
+	// Everything a voice result or a recovery announcement is only valid for.
+	const voiceScope = JSON.stringify([
+		open,
+		zero.userID,
+		nativeAccount !== null,
+		currentListId,
+		targetList?.id ?? null,
+		targetWs,
+		locale,
+	]);
+
+	// A refused Enter is announced through the always-mounted live region. The
+	// sequence never repeats, so a repeated refusal remounts the child and is
+	// read again; the notice only counts while voice still blocks in this scope.
+	const blockedSeq = useRef(0);
+	const [blockedNotice, setBlockedNotice] = useState<{
+		scope: string;
+		seq: number;
+	} | null>(null);
+	useEffect(() => {
+		if (!voice.blocking) setBlockedNotice(null);
+	}, [voice.blocking]);
+	useEffect(() => {
+		setBlockedNotice((n) => (n && n.scope !== voiceScope ? null : n));
+	}, [voiceScope]);
+	const blockedAnnouncement =
+		blockedNotice && blockedNotice.scope === voiceScope && voice.blocking
+			? blockedNotice.seq
+			: null;
+
+	function acceptVoiceText(index: number) {
+		const next = voice.accept(raw, index);
+		if (next === null) return;
+		setRaw(next);
+		inputRef.current?.focus();
+	}
+
+	// Escape ends an active voice session first; the next Escape closes. The
+	// typed field gets focus back because the voice control that held it is gone.
+	function onEscapeKeyDown(e: KeyboardEvent) {
+		if (voice.cancelIfActive()) {
+			e.preventDefault();
+			inputRef.current?.focus();
+		}
+	}
 	const wsLabels = labels.filter((l) => l.workspaceId === targetWs);
 	const unknownLabels = new Set(
 		parse.labels
@@ -128,6 +190,12 @@ export function QuickAddSheet({
 	async function submit() {
 		const t = title.trim();
 		if (busy || !targetList || !t) return;
+		// Read fresh at event time: this still fences every write.
+		if (voice.blockedNow()) {
+			blockedSeq.current += 1;
+			setBlockedNotice({ scope: voiceScope, seq: blockedSeq.current });
+			return;
+		}
 		setBusy(true);
 		setError(null);
 		try {
@@ -214,6 +282,12 @@ export function QuickAddSheet({
 					if (e.key === "Enter") void submit();
 				}}
 			/>
+			<VoiceCapture
+				key={voiceScope}
+				voice={voice}
+				onUse={acceptVoiceText}
+				onFocusInput={() => inputRef.current?.focus()}
+			/>
 			<TokenChips
 				tokens={chips}
 				unknownLabels={unknownLabels}
@@ -232,6 +306,25 @@ export function QuickAddSheet({
 					{error}
 				</p>
 			)}
+			{voice.blocking && (
+				<p
+					id="quickadd-voice-blocked"
+					className="text-xs text-muted-foreground"
+				>
+					{m.quickadd_voice_blocked()}
+				</p>
+			)}
+			<div
+				role="status"
+				aria-live="polite"
+				aria-atomic="true"
+				data-testid="quickadd-voice-blocked-announcement"
+				className="sr-only"
+			>
+				{blockedAnnouncement !== null && (
+					<span key={blockedAnnouncement}>{m.quickadd_voice_blocked()}</span>
+				)}
+			</div>
 			<div className="flex items-center justify-between gap-2">
 				<span className="truncate text-xs text-muted-foreground">
 					{targetList
@@ -242,7 +335,10 @@ export function QuickAddSheet({
 					data-testid="quickadd-submit"
 					type="button"
 					onClick={() => void submit()}
-					disabled={busy || !targetList || !title.trim()}
+					disabled={busy || !targetList || !title.trim() || voice.blocking}
+					aria-describedby={
+						voice.blocking ? "quickadd-voice-blocked" : undefined
+					}
 				>
 					{addCopyFor(targetList?.kind as ListKind | null | undefined).action()}
 				</Button>
@@ -256,7 +352,11 @@ export function QuickAddSheet({
 	if (isDesktop)
 		return (
 			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent data-testid="quickadd-dialog" className="sm:max-w-lg">
+				<DialogContent
+					data-testid="quickadd-dialog"
+					className="sm:max-w-lg"
+					onEscapeKeyDown={onEscapeKeyDown}
+				>
 					<DialogHeader>
 						<DialogTitle>{m.quickadd_sheet_title()}</DialogTitle>
 					</DialogHeader>
@@ -266,7 +366,11 @@ export function QuickAddSheet({
 		);
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent side="bottom" data-testid="quickadd-sheet">
+			<SheetContent
+				side="bottom"
+				data-testid="quickadd-sheet"
+				onEscapeKeyDown={onEscapeKeyDown}
+			>
 				<SheetHeader>
 					<SheetTitle>{m.quickadd_sheet_title()}</SheetTitle>
 				</SheetHeader>
