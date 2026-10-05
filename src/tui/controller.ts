@@ -2,6 +2,7 @@ import type { TaskIntent } from "../agent/task-plan.ts";
 import { CliError } from "../cli/arguments.ts";
 import { MAX_PAGES, MAX_TOTAL_BYTES } from "../cli/client.ts";
 import { MAX_INPUT_BYTES } from "../cli/task-workflow.ts";
+import type { ApiCommentSnapshot } from "../domain/public-api-comments.ts";
 import { PUBLIC_API_RESOURCES } from "../domain/public-api-resources.ts";
 import {
 	type ApiTaskDelete,
@@ -78,6 +79,18 @@ export interface TerminalState {
 		cascade: boolean | null;
 	} | null;
 	review: Review | null;
+	comments: CommentsView | null;
+}
+// Read-only page of one task's comments; scope is captured when it opens.
+export interface CommentsView {
+	readonly taskId: string;
+	readonly title: string;
+	readonly breadcrumb: readonly string[];
+	readonly listCursor: string | null;
+	items: ApiCommentSnapshot[];
+	cursor: string | null;
+	nextCursor: string | null;
+	page: number;
 }
 
 export class TerminalController {
@@ -98,6 +111,7 @@ export class TerminalController {
 		form: null,
 		deletion: null,
 		review: null,
+		comments: null,
 	};
 	private epoch = 0;
 	private request = new AbortController();
@@ -105,6 +119,9 @@ export class TerminalController {
 	private cursors = new Set<string>();
 	private pages = 0;
 	private bytes = 0;
+	private commentCursors = new Set<string>();
+	private commentPages = 0;
+	private commentBytes = 0;
 	private closed = false;
 	private detailLines = 0;
 	constructor(
@@ -152,6 +169,7 @@ export class TerminalController {
 			this.state.form = null;
 			this.state.deletion = null;
 			this.state.review = null;
+			this.state.comments = null;
 		}
 		if (error instanceof CliError && error.status === 409)
 			this.state.review = null;
@@ -186,6 +204,7 @@ export class TerminalController {
 		this.state.form = null;
 		this.state.deletion = null;
 		this.state.review = null;
+		this.state.comments = null;
 		this.state.selected = 0;
 		this.state.error = null;
 		this.state.nextCursor = null;
@@ -228,6 +247,113 @@ export class TerminalController {
 			if (this.active(epoch)) this.failed(error);
 		}
 		if (this.active(epoch)) this.changed();
+	}
+	private async openComments(): Promise<void> {
+		const location = this.state.location;
+		const selected = this.state.entries[this.state.selected];
+		if (location?.resource !== "tasks" || !selected) return;
+		this.state.comments = {
+			taskId: selected.id,
+			title:
+				typeof selected.data.title === "string"
+					? selected.data.title
+					: selected.label,
+			breadcrumb: Object.freeze([...this.state.breadcrumb]),
+			listCursor: location.cursor ?? null,
+			items: [],
+			cursor: null,
+			nextCursor: null,
+			page: 0,
+		};
+		this.state.payload = false;
+		await this.loadComments(undefined, false);
+	}
+	private async loadComments(
+		cursor: string | undefined,
+		nextPage: boolean,
+	): Promise<void> {
+		const comments = this.state.comments;
+		if (!comments) return;
+		const epoch = this.begin();
+		if (!nextPage) {
+			this.commentCursors.clear();
+			this.commentPages = 0;
+			this.commentBytes = 0;
+		}
+		comments.items = [];
+		comments.cursor = cursor ?? null;
+		comments.nextCursor = null;
+		comments.page = 0;
+		this.state.detailOffset = 0;
+		this.state.error = null;
+		this.state.status = "loading";
+		this.changed();
+		try {
+			if (
+				++this.commentPages > MAX_PAGES ||
+				(cursor && this.commentCursors.has(cursor))
+			)
+				throw new CliError(
+					"pagination_limit",
+					"Refresh to start a new bounded collection.",
+					8,
+				);
+			if (cursor) this.commentCursors.add(cursor);
+			const page = await this.api.comments(
+				comments.taskId,
+				cursor,
+				this.request.signal,
+			);
+			if (!this.active(epoch) || this.state.comments !== comments) return;
+			this.commentBytes += new TextEncoder().encode(
+				JSON.stringify(page),
+			).length;
+			if (
+				this.commentBytes > MAX_TOTAL_BYTES ||
+				(page.nextCursor && this.commentCursors.has(page.nextCursor))
+			)
+				throw new CliError(
+					"pagination_limit",
+					"Refresh to start a new bounded collection.",
+					8,
+				);
+			comments.items = page.comments;
+			comments.nextCursor = page.nextCursor;
+			comments.page = this.commentPages;
+			this.state.authorityRefused = false;
+			this.state.status = page.comments.length ? "ready" : "empty";
+		} catch (error) {
+			if (this.active(epoch)) this.failed(error);
+		}
+		if (this.active(epoch)) this.changed();
+	}
+	private closeComments(): void {
+		this.begin();
+		this.state.comments = null;
+		this.state.payload = false;
+		this.state.detailOffset = 0;
+		this.state.error = null;
+		this.state.status = this.state.entries.length ? "ready" : "empty";
+	}
+	private async commentsInput(input: TerminalInput): Promise<void> {
+		const comments = this.state.comments;
+		if (!comments) return;
+		if (input.type === "text") {
+			if (input.text === "q") {
+				this.close();
+				this.quit();
+			} else if (input.text === "r") await this.loadComments(undefined, false);
+			else if (
+				input.text === "p" &&
+				comments.nextCursor &&
+				this.state.status !== "loading"
+			)
+				await this.loadComments(comments.nextCursor, true);
+		} else if (
+			input.type === "key" &&
+			(input.key === "escape" || input.key === "left")
+		)
+			this.closeComments();
 	}
 	private capturedList(
 		id: string,
@@ -600,6 +726,7 @@ export class TerminalController {
 		}
 		if (
 			(this.state.detail ||
+				this.state.comments ||
 				this.state.review ||
 				this.state.help ||
 				this.state.deletion ||
@@ -699,7 +826,11 @@ export class TerminalController {
 			return;
 		}
 		if (input.type === "paste") return;
-		if (this.state.detail && input.type === "text" && input.text === "v") {
+		if (
+			(this.state.detail || this.state.comments) &&
+			input.type === "text" &&
+			input.text === "v"
+		) {
 			this.state.payload = !this.state.payload;
 			this.state.detailOffset = 0;
 			this.changed();
@@ -718,11 +849,18 @@ export class TerminalController {
 		}
 		if (this.state.help && !(input.type === "text" && input.text === "q"))
 			return;
+		if (this.state.comments) {
+			await this.commentsInput(input);
+			if (!this.closed) this.changed();
+			return;
+		}
 		if (input.type === "text") {
 			if (input.text === "q") {
 				this.close();
 				this.quit();
-			} else if (input.text === "r")
+			} else if (input.text === "m" && this.state.status === "ready")
+				await this.openComments();
+			else if (input.text === "r")
 				await this.open(
 					this.state.location
 						? { ...this.state.location, cursor: undefined }

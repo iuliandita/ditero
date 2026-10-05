@@ -3,7 +3,12 @@ import type { TaskIntent } from "../agent/task-plan.ts";
 import type { CliOptions } from "../cli/arguments.ts";
 import { CliError } from "../cli/arguments.ts";
 import { discover, type Fetcher, requestJson } from "../cli/client.ts";
+import { commentWorkflow } from "../cli/comment-workflow.ts";
 import { taskWorkflow } from "../cli/task-workflow.ts";
+import {
+	type ApiCommentSnapshot,
+	apiCommentSnapshotSchema,
+} from "../domain/public-api-comments.ts";
 import {
 	type PublicApiResource,
 	publicApiResourceSchemas,
@@ -31,6 +36,11 @@ export interface Entry {
 }
 export interface Page {
 	entries: Entry[];
+	nextCursor: string | null;
+}
+export const COMMENT_PAGE_SIZE = 50;
+export interface CommentPage {
+	comments: ApiCommentSnapshot[];
 	nextCursor: string | null;
 }
 export interface Proposal {
@@ -64,6 +74,11 @@ export interface TerminalApi {
 		signal: AbortSignal,
 	): Promise<void>;
 	read(location: Location, signal: AbortSignal): Promise<Page>;
+	comments(
+		taskId: string,
+		cursor: string | undefined,
+		signal: AbortSignal,
+	): Promise<CommentPage>;
 	plan(intent: TaskIntent, signal: AbortSignal): Promise<Proposal>;
 	create(
 		task: ApiTaskCreate,
@@ -161,6 +176,56 @@ export function terminalApi(
 				})),
 				nextCursor: result.nextCursor,
 			};
+		},
+		async comments(taskId, cursor, signal) {
+			const result = await commentWorkflow(
+				{
+					...options,
+					command: "list-task-comments",
+					taskId,
+					cursor,
+					all: false,
+					limit: COMMENT_PAGE_SIZE,
+					workspaceId: undefined,
+					listId: undefined,
+					commentId: undefined,
+					requestId: undefined,
+					done: undefined,
+				},
+				fetcher,
+				undefined,
+				signal,
+			);
+			const page = z
+				.object({
+					data: z.array(apiCommentSnapshotSchema).max(COMMENT_PAGE_SIZE),
+					nextCursor: z.string().nullable(),
+				})
+				.parse(result);
+			if (page.data.some((comment) => comment.taskId !== taskId))
+				throw new CliError(
+					"invalid_response",
+					"The server returned a comment for another task.",
+					8,
+				);
+			// The database forbids these provenance combinations; fail closed
+			// before any view, including exact JSON, can display them.
+			if (
+				page.data.some(
+					(comment) =>
+						(comment.historicalAuthorKind === "unknown" &&
+							comment.historicalAuthorName !== null) ||
+						(comment.provenanceRedactedAt !== null &&
+							(comment.historicalAuthorKind !== "unknown" ||
+								comment.historicalAuthorName !== null)),
+				)
+			)
+				throw new CliError(
+					"invalid_response",
+					"The server returned inconsistent comment provenance.",
+					8,
+				);
+			return { comments: page.data, nextCursor: page.nextCursor };
 		},
 		async plan(intent, signal) {
 			return (await taskWorkflow(

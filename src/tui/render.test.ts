@@ -373,6 +373,34 @@ describe("terminal frames", () => {
 		).toBe(renderFrame(frame, 40, 15));
 	});
 
+	it("keeps spacing only for parts that opt in and still strips controls", () => {
+		const text = "  a\u001b[2J‮\t b";
+		const [exact] = wrapParts(
+			[[{ text, tone: "plain", preserveWhitespace: true }]],
+			40,
+		);
+		const [ordinary] = wrapParts([[{ text, tone: "plain" }]], 40);
+		expect(exact.map((part) => part.text).join("")).toBe("  a [2J   b");
+		expect(ordinary.map((part) => part.text).join("")).toBe(" a [2J b");
+		const [indented] = wrapParts(
+			[[{ text: "      x", tone: "plain", preserveWhitespace: true }]],
+			40,
+		);
+		const frame: Frame = {
+			title: "Exact",
+			status: "Ready",
+			footer: "",
+			rows: [],
+			selected: 0,
+			detailParts: [indented, [{ text: "  a  b", tone: "plain" }]],
+			framed: true,
+		};
+		// Below 80 columns the frame has no border: title, context, then detail.
+		const lines = renderFrame(frame, 60, 12).split("\n");
+		expect(lines[2].trimEnd()).toBe("      x");
+		expect(lines[3].trimEnd()).toBe(" a b");
+	});
+
 	it.each([
 		40, 60, 100,
 	])("reserves a scroll cue for clipped detail and every scrolled offset at %s columns", (columns) => {

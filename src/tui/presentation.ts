@@ -1,9 +1,9 @@
 import type { Locale } from "../domain/locale.ts";
 import * as m from "../paraglide/messages.js";
 import type { Entry } from "./api.ts";
-import type { Review } from "./controller.ts";
+import type { CommentsView, Review, TerminalState } from "./controller.ts";
 import type { RetryRecord } from "./recovery.ts";
-import { type TextPart, type Tone, visibleCells } from "./render.ts";
+import { safeText, type TextPart, type Tone, visibleCells } from "./render.ts";
 
 export interface PresentationContext {
 	locale: Locale;
@@ -21,6 +21,7 @@ export function helpDetails(context: PresentationContext): string[] {
 		m.tui_help_exit({}, options),
 		m.tui_footer({}, options),
 		m.tui_help_presentation({}, options),
+		m.tui_help_comments({}, options),
 		m.tui_symbols_help(
 			{ open: context.ascii ? "( )" : "○", done: context.ascii ? "(x)" : "●" },
 			options,
@@ -67,7 +68,11 @@ export function exactPayloadParts(value: unknown): TextPart[][] {
 		for (const match of line.matchAll(tokens)) {
 			const start = match.index;
 			if (start > offset)
-				parts.push({ text: line.slice(offset, start), tone: "plain" });
+				parts.push({
+					text: line.slice(offset, start),
+					tone: "plain",
+					preserveWhitespace: true,
+				});
 			const text = match[0];
 			const end = start + text.length;
 			const tone: Tone = text.startsWith('"')
@@ -83,7 +88,11 @@ export function exactPayloadParts(value: unknown): TextPart[][] {
 			offset = end;
 		}
 		if (offset < line.length)
-			parts.push({ text: line.slice(offset), tone: "plain" });
+			parts.push({
+				text: line.slice(offset),
+				tone: "plain",
+				preserveWhitespace: true,
+			});
 		return parts;
 	});
 }
@@ -378,6 +387,151 @@ export function entryDetails(
 	return Object.entries(entry.data).map(
 		([key, value]) =>
 			`${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`,
+	);
+}
+
+function instantText(value: string, context: PresentationContext): string {
+	const instant = new Date(value);
+	if (!Number.isFinite(instant.getTime())) return safeText(value);
+	return new Intl.DateTimeFormat(context.locale, {
+		timeZone: context.timezone,
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(instant);
+}
+
+// Read-only comment page. Author text is shown only when the server supplied it.
+export type CommentsPane = Pick<
+	CommentsView,
+	"taskId" | "title" | "items" | "nextCursor"
+> & { status: TerminalState["status"]; error: string | null };
+
+export function commentParts(
+	view: CommentsPane,
+	context: PresentationContext,
+	exact = false,
+): TextPart[][] {
+	const options = { locale: context.locale };
+	const line = (text: string, part: Partial<TextPart> = {}): TextPart[] => [
+		{ text, tone: "plain", ...part },
+	];
+	// An empty list is only "no comments" after a successful empty read.
+	if (!view.items.length && view.status === "loading")
+		return [line(m.app_loading({}, options), { dim: true })];
+	if (!view.items.length && view.status === "error")
+		return [
+			line(
+				m.tui_error(
+					{ code: safeText(view.error ?? "request_failed") },
+					options,
+				),
+				{
+					tone: "danger",
+				},
+			),
+		];
+	if (exact)
+		return exactPayloadParts({
+			comments: view.items,
+			nextCursor: view.nextCursor,
+		});
+	const lines: TextPart[][] = [
+		line(m.tui_comments_task({ title: safeText(view.title) }, options), {
+			bold: true,
+		}),
+		line(`${m.tui_task_id({}, options)}: ${safeText(view.taskId)}`, {
+			tone: "info",
+			dim: true,
+		}),
+	];
+	if (!view.items.length)
+		return view.status === "empty"
+			? [...lines, [], line(m.tui_comments_empty({}, options))]
+			: lines;
+	for (const comment of view.items) {
+		const imported = comment.historicalAuthorKind;
+		lines.push(
+			[],
+			line(
+				m.tui_comment_created(
+					{ time: instantText(comment.createdAt, context) },
+					options,
+				),
+				{ tone: "brand", bold: true },
+			),
+		);
+		if (comment.editedAt)
+			lines.push(
+				line(
+					m.tui_comment_edited(
+						{ time: instantText(comment.editedAt, context) },
+						options,
+					),
+					{ tone: "info" },
+				),
+			);
+		if (comment.authorId !== null)
+			lines.push(
+				line(m.tui_comment_author({ id: safeText(comment.authorId) }, options)),
+			);
+		if (imported !== null)
+			lines.push(
+				line(
+					imported === "source_claim" &&
+						comment.historicalAuthorName &&
+						!comment.provenanceRedactedAt
+						? m.tui_comment_imported_author(
+								{ name: safeText(comment.historicalAuthorName) },
+								options,
+							)
+						: m.tui_comment_imported_unknown({}, options),
+					{ tone: "warning" },
+				),
+			);
+		if (comment.authorId === null && imported === null)
+			lines.push(line(m.tui_comment_no_author({}, options), { dim: true }));
+		if (comment.importedAt)
+			lines.push(
+				line(
+					m.tui_comment_imported_at(
+						{ time: instantText(comment.importedAt, context) },
+						options,
+					),
+					{ tone: "warning", dim: true },
+				),
+			);
+		if (comment.provenanceRedactedAt)
+			lines.push(
+				line(
+					m.tui_comment_redacted(
+						{ time: instantText(comment.provenanceRedactedAt, context) },
+						options,
+					),
+					{ tone: "warning", dim: true },
+				),
+			);
+		lines.push(
+			line(
+				`${m.tui_comment_id({ id: safeText(comment.commentId) }, options)}`,
+				{
+					tone: "info",
+					dim: true,
+				},
+			),
+		);
+		for (const body of comment.body.split(/\r\n|\r|\n/u))
+			lines.push(line(`  ${safeText(body)}`));
+	}
+	return lines;
+}
+
+export function commentDetails(
+	view: CommentsPane,
+	context: PresentationContext,
+	exact = false,
+): string[] {
+	return commentParts(view, context, exact).map((parts) =>
+		parts.map((part) => part.text).join(""),
 	);
 }
 

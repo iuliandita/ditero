@@ -19,6 +19,16 @@ export function safeText(value: string): string {
 	return safeCharacters(value).replace(/\s+/gu, " ");
 }
 
+// Exact views opt in to keep structural spacing. Each other whitespace
+// character becomes one space, so widths stay predictable and nothing collapses.
+function exactText(value: string): string {
+	return safeCharacters(value).replace(/[^\S ]/gu, " ");
+}
+
+function partText(part: TextPart): string {
+	return part.preserveWhitespace ? exactText(part.text) : safeText(part.text);
+}
+
 function cellWidth(value: string): number {
 	if (/^\p{Mark}+$/u.test(value)) return 0;
 	if (/\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20e3/u.test(value))
@@ -40,13 +50,19 @@ function cellWidth(value: string): number {
 		: 1;
 }
 
-export function fitLine(value: string, columns: number): string {
+export function fitLine(
+	value: string,
+	columns: number,
+	preserveWhitespace = false,
+): string {
 	const limit = Number.isFinite(columns)
 		? Math.max(0, Math.min(1000, Math.floor(columns)))
 		: 0;
 	let result = "";
 	let used = 0;
-	for (const { segment } of segmenter.segment(safeText(value))) {
+	for (const { segment } of segmenter.segment(
+		preserveWhitespace ? exactText(value) : safeText(value),
+	)) {
 		const width = cellWidth(segment);
 		if (used + width > limit) break;
 		result += segment;
@@ -118,6 +134,8 @@ export interface TextPart {
 	fieldWidth?: number;
 	bold?: boolean;
 	dim?: boolean;
+	// Keep runs of spaces. Only trusted exact payload structure sets this.
+	preserveWhitespace?: boolean;
 }
 
 export type Tone =
@@ -186,13 +204,18 @@ export function visibleCells(value: string): number {
 	).reduce((total, width) => total + width, 0);
 }
 
-function clipped(value: string, width: number, ascii: boolean): string {
-	const text = safeText(value);
-	return fitLine(text, width) === text
+function clipped(
+	value: string,
+	width: number,
+	ascii: boolean,
+	preserve = false,
+): string {
+	const text = preserve ? exactText(value) : safeText(value);
+	return fitLine(text, width, preserve) === text
 		? text
 		: width < 2
-			? fitLine(text, width)
-			: fitLine(text, width - 1) + (ascii ? "~" : "…");
+			? fitLine(text, width, preserve)
+			: fitLine(text, width - 1, preserve) + (ascii ? "~" : "…");
 }
 
 function styledParts(
@@ -206,7 +229,7 @@ function styledParts(
 	const fitted: TextPart[] = [];
 	let used = 0;
 	for (const part of parts) {
-		let text = safeText(part.text);
+		let text = partText(part);
 		if (part.fieldWidth !== undefined) {
 			const fieldWidth = Math.max(0, Math.min(width - used, part.fieldWidth));
 			text = padLine(text, fieldWidth);
@@ -218,7 +241,7 @@ function styledParts(
 		)
 			break;
 		if (used + visibleCells(text) > width)
-			text = clipped(text, width - used, ascii);
+			text = clipped(text, width - used, ascii, part.preserveWhitespace);
 		fitted.push({ ...part, text });
 		used += visibleCells(text);
 		if (used >= width) break;
@@ -514,7 +537,7 @@ export function wrapParts(
 		let used = 0;
 		for (const part of parts) {
 			let text = "";
-			for (const { segment } of segmenter.segment(safeText(part.text))) {
+			for (const { segment } of segmenter.segment(partText(part))) {
 				const count = cellWidth(segment);
 				if (used + count > width) {
 					if (text) line.push({ ...part, text });

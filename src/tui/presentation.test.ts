@@ -92,6 +92,56 @@ describe("terminal task presentation", () => {
 		expect(lines.join("\n")).not.toContain(String.fromCharCode(27));
 	});
 	it.each([
+		{ columns: 40, color: false },
+		{ columns: 60, color: false },
+		{ columns: 100, color: false },
+		{ columns: 100, color: true },
+	])("keeps nested exact JSON indentation and structure at $columns columns (color $color)", ({
+		columns,
+		color,
+	}) => {
+		const payload = {
+			a: { b: ["x  y‮ ", { c: null }], d: 1 },
+			k: "p q",
+		};
+		const expected = exactPayloadLines(payload);
+		expect(expected).toContain('      "x\\u0020\\u0020y\\u202e\\u00a0",');
+		const wrapped = wrapParts(exactPayloadParts(payload), columns - 5);
+		expect(wrapped).toHaveLength(expected.length);
+		expect(
+			wrapped.map((line) => line.map((part) => part.text).join("")),
+		).toEqual(expected);
+		const output = renderFrame(
+			{
+				title: "JSON",
+				status: "Ready",
+				footer: "",
+				rows: [],
+				selected: 0,
+				detailParts: wrapped,
+				framed: true,
+				color,
+			},
+			columns,
+			40,
+		);
+		const sgr = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "gu");
+		const text = output.replace(sgr, "");
+		const unsafe =
+			// biome-ignore lint/suspicious/noControlCharactersInRegex: asserts no terminal controls survive
+			/[\u0000-\u0009\u000b-\u001f\u007f-\u009f؜‎‏‪-‮⁦-⁩]/u;
+		expect(text).not.toMatch(unsafe);
+		if (!color) expect(output).not.toContain(String.fromCharCode(27));
+		// Framed output (80+ columns) has a border row and "│ " / " │" sides.
+		const framed = columns >= 80;
+		const rendered = text
+			.split("\n")
+			.slice(framed ? 3 : 2, (framed ? 3 : 2) + expected.length)
+			.map((line) => (framed ? line.slice(2, -2) : line).trimEnd());
+		expect(rendered).toEqual(expected.map((line) => line.trimEnd()));
+		expect(JSON.parse(rendered.join("\n"))).toEqual(payload);
+	});
+	it.each([
 		40, 60, 100,
 	])("preserves exact JSON and no-color layout through wrapping at %s columns", (columns) => {
 		const payload = {
@@ -106,7 +156,7 @@ describe("terminal task presentation", () => {
 				.flat()
 				.map((part) => part.text)
 				.join(""),
-		).toBe(wrapLines(exactPayloadLines(payload), columns - 5).join(""));
+		).toBe(exactPayloadLines(payload).join(""));
 		for (const line of wrapped)
 			expect(
 				visibleCells(line.map((part) => part.text).join("")),
@@ -137,10 +187,10 @@ describe("terminal task presentation", () => {
 	it("separates help topics and keeps narrow English words intact in all available help", () => {
 		for (const locale of ["en", "de", "es", "fr", "ro", "ar"] as Locale[]) {
 			const topics = helpDetails({ ...context, locale });
-			expect(topics.filter((line) => line === "")).toHaveLength(5);
+			expect(topics.filter((line) => line === "")).toHaveLength(6);
 			expect(topics.join(" ")).not.toContain("undefined");
 			const wrapped = wrapWords(topics, 39);
-			expect(wrapped.filter((line) => line === "")).toHaveLength(5);
+			expect(wrapped.filter((line) => line === "")).toHaveLength(6);
 			for (const line of wrapped)
 				expect(visibleCells(line)).toBeLessThanOrEqual(39);
 		}

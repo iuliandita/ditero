@@ -54,6 +54,18 @@ Back, quit and open take priority in narrow footers;
 `q` to quit. Ctrl-C always
 restores the terminal and exits, including during requests.
 
+Press `m` on a selected task to read its comments. The comments surface is
+read-only: it sends one `GET` for a single page of at most 50 comments, never uses
+`--all`, and offers no write keys. The task, breadcrumb and list page are captured
+when it opens. `p` loads the next page, replacing the current one, `r` restarts from
+the first page and `v` toggles highlighted JSON. Up, Down, Home and End scroll. Esc
+returns to the original task list and selection without another request or any
+inferred authority. Each comment shows its body, creation and edit times, the native
+author ID, and imported attribution labelled as a source claim; names are shown only
+when the server supplied them. A 401, 403, 404 or 410 cancels pending replies and
+clears all comment and task content. Pages, cursors and bytes use the same bounds as
+other collections.
+
 Press `n` on a selected list or dashboard, or inside a list's tasks, to add a task.
 Enter its title, press Enter, then enter `today`, `tomorrow`, `YYYY-MM-DD`, or leave
 the due day empty. Dates use the chosen account timezone and server time; date-only
@@ -70,7 +82,11 @@ is made. Human fields come first; request metadata and unset values are dim.
 NOT SENT uses a warning cue; an unconfirmed result uses a danger cue. Press `v`
 to switch between the summary and exact request payload, including omitted fields
 and explicit null values. `v` also switches task details to their exact returned
-data. Scroll to inspect the whole proposal and press `y` to send. The screen
+data. The exact view keeps JSON indentation and nesting. Inside strings, every
+whitespace character, C1 control and direction control appears as a reversible
+`\uXXXX` escape, so the visible text parses back to the same value and no raw
+control reaches the terminal. The summary view still collapses whitespace.
+Scroll to inspect the whole proposal and press `y` to send. The screen
 distinguishes a request not yet sent from an unconfirmed result. `?` opens help;
 `y` cannot submit while help is open. Pasting `y` never confirms an action. Press
 `c` on a task to review completion. Recurring completion advances the observed

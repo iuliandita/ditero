@@ -11,6 +11,7 @@ import * as m from "../paraglide/messages.js";
 import { terminalApi } from "./api.ts";
 import { TerminalController, type TerminalState } from "./controller.ts";
 import {
+	commentParts,
 	entryDetails,
 	exactPayloadParts,
 	helpDetails,
@@ -40,7 +41,7 @@ Usage: ditero-tui [--server HTTPS_ORIGIN] [--locale en|de|es|fr|ro|ar]
 
 Set DITERO_URL and DITERO_TOKEN in the environment. Tokens never go on the command line.
 Use an interactive terminal. Use arrows, Enter and Escape to browse.
-n adds a task; c completes one; e edits; d reviews deletion. Review, then press y to send. ? shows help; q quits.
+n adds a task; c completes one; e edits; d reviews deletion; m reads comments. Review, then press y to send. ? shows help; q quits.
 The client is online. A failed write keeps its exact request ID and body for explicit retry.
 `;
 
@@ -110,7 +111,7 @@ export function footerHints(
 			!hint.startsWith("Esc "),
 	);
 	contextual.sort((a, b) => {
-		const order = ["c", "n", "e", "d", "Enter", "p", "r"];
+		const order = ["c", "n", "e", "d", "m", "Enter", "p", "r"];
 		return order.indexOf(a.split(" ")[0]) - order.indexOf(b.split(" ")[0]);
 	});
 	return [
@@ -138,6 +139,44 @@ export function helpFooter(locale: Locale): string {
 	].join(" | ");
 }
 
+export function browseFooter(
+	state: TerminalState | undefined,
+	locale: Locale,
+): string {
+	const options = { locale };
+	// Open comments page on their own cursor, not the task list's.
+	const more = Boolean(
+		state?.comments ? state.comments.nextCursor : state?.nextCursor,
+	);
+	return [
+		m.tui_footer({}, options).split(" | ")[0],
+		...(state?.comments ? [] : [m.tui_open_hint({}, options)]),
+		...(state?.location || state?.detail ? [m.tui_back_hint({}, options)] : []),
+		...(state?.location?.resource === "tasks" && !state.comments
+			? [m.tui_comments_hint({}, options)]
+			: []),
+		...m
+			.tui_footer({}, options)
+			.split(" | ")
+			.filter((hint) => {
+				const key = hint.split(" ")[0];
+				return (
+					key === "?" ||
+					(key === "r" && Boolean(state?.location)) ||
+					(key === "p" && more) ||
+					(!state?.comments &&
+						key === "n" &&
+						["tasks", "lists", "dashboards"].includes(
+							state?.location?.resource ?? "",
+						)) ||
+					(!state?.comments &&
+						["c", "e", "d"].includes(key) &&
+						state?.location?.resource === "tasks")
+				);
+			}),
+	].join(" | ");
+}
+
 export function detailScrollHints(
 	state: TerminalState | undefined,
 	locale: Locale,
@@ -145,6 +184,7 @@ export function detailScrollHints(
 	if (
 		!(
 			state?.detail ||
+			state?.comments ||
 			state?.review ||
 			state?.help ||
 			state?.deletion ||
@@ -185,6 +225,21 @@ export function terminalStatusLine(
 		return m.tui_error({ code: state.error }, options);
 	}
 	if (state?.review) return m.tui_status_not_sent({}, options);
+	if (state?.comments && ["ready", "empty"].includes(state.status)) {
+		const number = new Intl.NumberFormat(locale);
+		return [
+			m.tui_loaded(
+				{ count: number.format(state.comments.items.length) },
+				options,
+			),
+			...(columns >= 60
+				? [m.tui_page({ page: number.format(state.comments.page) }, options)]
+				: []),
+			state.comments.nextCursor
+				? m.tui_more({}, options)
+				: m.tui_end({}, options),
+		].join(" | ");
+	}
 	if (state?.location && ["ready", "empty"].includes(state.status)) {
 		const number = new Intl.NumberFormat(locale);
 		return columns >= 80 && state.location.resource === "tasks"
@@ -289,6 +344,15 @@ export async function runTerminal(
 				if (state.detail) {
 					if (state.payload) detailParts = exactPayloadParts(state.detail.data);
 					else detail = entryDetails(state.detail, context);
+				}
+				if (state.comments) {
+					title = `Ditero / ${m.tui_comments_title({}, options)}`;
+					detail = undefined;
+					detailParts = commentParts(
+						{ ...state.comments, status: state.status, error: state.error },
+						context,
+						state.payload,
+					);
 				}
 				if (state.form) {
 					detailParts = undefined;
@@ -417,32 +481,8 @@ export async function runTerminal(
 			);
 			if (!detail && !detailParts && state?.status === "empty")
 				detail = [m.list_empty({}, options), m.tui_empty_help({}, options)];
-			if (!state?.review && !state?.form && !state?.deletion && !state?.help) {
-				footer = [
-					m.tui_footer({}, options).split(" | ")[0],
-					m.tui_open_hint({}, options),
-					...(state?.location || state?.detail
-						? [m.tui_back_hint({}, options)]
-						: []),
-					...m
-						.tui_footer({}, options)
-						.split(" | ")
-						.filter((hint) => {
-							const key = hint.split(" ")[0];
-							return (
-								key === "?" ||
-								(key === "r" && Boolean(state?.location)) ||
-								(key === "p" && Boolean(state?.nextCursor)) ||
-								(key === "n" &&
-									["tasks", "lists", "dashboards"].includes(
-										state?.location?.resource ?? "",
-									)) ||
-								(["c", "e", "d"].includes(key) &&
-									state?.location?.resource === "tasks")
-							);
-						}),
-				].join(" | ");
-			}
+			if (!state?.review && !state?.form && !state?.deletion && !state?.help)
+				footer = browseFooter(state, locale);
 			if (detailParts) {
 				detailParts = wrapParts(
 					detailParts,
@@ -506,7 +546,8 @@ export async function runTerminal(
 						footerHints: footerHints(
 							footer,
 							locale,
-							!state?.help && Boolean(state?.detail || state?.review),
+							!state?.help &&
+								Boolean(state?.detail || state?.comments || state?.review),
 							state?.payload ?? false,
 							!state?.help && (state?.review?.uncertain ?? false),
 						),
