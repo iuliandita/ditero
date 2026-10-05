@@ -190,6 +190,13 @@ const routes = new Elysia()
 				forwardedFor: request.headers.get("x-forwarded-for"),
 				trustedProxies: nativeTrustedProxies,
 			});
+			// Webhook deliveries get their own bucket so they cannot starve the PAT API.
+			if (
+				/^\/api\/v1\/webhooks\/[^/]+\/deliveries$/.test(
+					new URL(request.url).pathname,
+				)
+			)
+				return takeRateToken(db, `public-api:webhook:${key}`, 30, 1);
 			return takeRateToken(db, `public-api:${key}`, 120, 2);
 		}),
 	)

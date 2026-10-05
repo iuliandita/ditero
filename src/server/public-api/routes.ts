@@ -30,6 +30,11 @@ import { parseApiTaskPlacement } from "../../domain/public-api-task-placement.ts
 import { parseApiTaskRelationships } from "../../domain/public-api-task-relationships.ts";
 import { parseApiTaskUpdate } from "../../domain/public-api-task-update.ts";
 import {
+	parseWebhookDelivery,
+	WEBHOOK_DELIVERY_MAX_BYTES,
+	webhookBearer,
+} from "../../domain/public-api-webhook.ts";
+import {
 	parseApiIdempotencyKey,
 	parseApiTaskCreate,
 } from "../../domain/public-api-writes.ts";
@@ -75,6 +80,12 @@ import {
 	withPersonalAccessToken,
 } from "./tokens.ts";
 import { updateApiTask } from "./update.ts";
+import {
+	createWebhook,
+	deliverWebhook,
+	listWebhooks,
+	revokeWebhook,
+} from "./webhooks.ts";
 import { type FlushApiEvents, writeApiTask } from "./write.ts";
 
 type RateLimit = (request: Request, peerAddress?: string) => Promise<boolean>;
@@ -109,6 +120,18 @@ async function apiRequest(run: () => Promise<unknown>): Promise<unknown> {
 			),
 		);
 	}
+}
+
+function requireJson(request: Request) {
+	if (
+		request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !==
+		"application/json"
+	)
+		throw new PublicApiError(
+			415,
+			"unsupported-media-type",
+			"A JSON request body is required",
+		);
 }
 
 async function boundedJson(
@@ -933,6 +956,84 @@ export function publicApiRoutes(
 						input,
 						requestId,
 					);
+				}),
+			{ parse: "none" },
+		)
+		.get("/api/v1/webhooks", ({ request, server }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				return listWebhooks(pool, bearerToken(request.headers));
+			}),
+		)
+		.post(
+			"/api/v1/webhooks",
+			({ request, server }) =>
+				apiRequest(async () => {
+					if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+						throw new PublicApiError(429, "rate-limited", "Too many requests");
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					requireJson(request);
+					return createWebhook(
+						pool,
+						bearerToken(request.headers),
+						await boundedJson(request),
+					);
+				}),
+			{ parse: "none" },
+		)
+		.delete("/api/v1/webhooks/:id", ({ request, server, params }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				if (!z.uuid().safeParse(params.id).success)
+					throw new PublicApiError(400, "invalid-id", "Invalid webhook ID");
+				return revokeWebhook(pool, bearerToken(request.headers), params.id);
+			}),
+		)
+		.post(
+			"/api/v1/webhooks/:id/deliveries",
+			({ request, server, params }) =>
+				apiRequest(async () => {
+					if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+						throw new PublicApiError(429, "rate-limited", "Too many requests");
+					const secret = webhookBearer(request.headers);
+					if (!secret)
+						throw new PublicApiError(
+							401,
+							"unauthorized",
+							"A valid webhook credential is required",
+						);
+					if (new URL(request.url).search)
+						throw new PublicApiError(
+							400,
+							"invalid-query",
+							"This endpoint has no query parameters",
+						);
+					requireJson(request);
+					if (!z.uuid().safeParse(params.id).success)
+						throw new PublicApiError(400, "invalid-id", "Invalid webhook ID");
+					const delivery = parseWebhookDelivery(
+						await boundedJson(request, WEBHOOK_DELIVERY_MAX_BYTES),
+					);
+					return deliverWebhook(pool, secret, params.id, delivery, flushEvents);
 				}),
 			{ parse: "none" },
 		)

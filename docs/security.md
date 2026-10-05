@@ -29,6 +29,8 @@ Removing a member still requires key rotation before new encrypted uploads.
 
 TOTP seeds, backup codes, OAuth tokens, JWT private keys, and backend integration credentials use AES-256-GCM envelopes. A key fingerprint identifies rotation state without storing key material. PATs are high-entropy bearer tokens and are stored only as SHA-256 hashes.
 
+Inbound webhook secrets are separate high-entropy bearer capabilities (`ditero_whk_` prefix), stored only as SHA-256 hashes and shown once. They are accepted only in the `Authorization` header, never in URLs, and cannot authenticate as personal access tokens. A webhook can only create tasks in its fixed list, with no assignees, labels, parents or reads. Each delivery revalidates the hook, live account, membership and list under row locks, so revocation, expiry, demotion, list moves and account deletion take effect for later requests, replays included. Authentication lookup is limited by row-level security to the presented hash; failures return fixed responses that do not reveal which check failed.
+
 Set secrets directly or with the corresponding `_FILE` variable. When `_FILE` is used, the direct variable must be empty. Container secret files must be mounted into each service that reads them.
 
 ## Operator-Blind Attachments

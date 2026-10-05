@@ -113,6 +113,50 @@ export const calendarFeed = pgTable(
 	],
 ).enableRLS();
 
+export const inboundWebhook = pgTable(
+	"inbound_webhook",
+	{
+		id: uuid("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		listId: text("list_id")
+			.notNull()
+			.references(() => list.id, { onDelete: "cascade" }),
+		workspaceId: text("workspace_id")
+			.notNull()
+			.references(() => workspace.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		secretHash: text("secret_hash").notNull().unique(),
+		hint: text("hint").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+		revokedAt: timestamp("revoked_at", { withTimezone: true }),
+	},
+	(t) => [
+		index("inbound_webhook_user_idx").on(t.userId),
+		index("inbound_webhook_list_idx").on(t.listId),
+		index("inbound_webhook_workspace_idx").on(t.workspaceId),
+		check("inbound_webhook_name", sql`char_length(${t.name}) between 1 and 80`),
+		check("inbound_webhook_hash", sql`${t.secretHash} ~ '^[0-9a-f]{64}$'`),
+		check(
+			"inbound_webhook_expiry",
+			sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '365 days'`,
+		),
+		pgPolicy("inbound_webhook_owner", {
+			for: "all",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("inbound_webhook_authenticate", {
+			for: "select",
+			using: sql`${t.secretHash} = current_setting('ditero.webhook_hash', true)`,
+		}),
+	],
+).enableRLS();
+
 export const publicApiRequest = pgTable(
 	"public_api_request",
 	{

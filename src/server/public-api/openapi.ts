@@ -59,6 +59,13 @@ import {
 	apiTaskObservationSchema,
 	apiTaskUpdateSchema,
 } from "../../domain/public-api-task-update.ts";
+import {
+	webhookCreatedSchema,
+	webhookCreateSchema,
+	webhookDeliveryAckSchema,
+	webhookDeliverySchema,
+	webhookMetadataSchema,
+} from "../../domain/public-api-webhook.ts";
 import { apiTaskCreateSchema } from "../../domain/public-api-writes.ts";
 
 const problem = {
@@ -940,6 +947,70 @@ export function publicApiOpenApi() {
 			responses: { "200": response({ type: "object" }), ...errors },
 		},
 	};
+	const webhookIdParameter = {
+		name: "id",
+		in: "path",
+		required: true,
+		schema: { type: "string", format: "uuid" },
+	};
+	paths["/api/v1/webhooks"] = {
+		get: {
+			operationId: "list_webhooks",
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Requires a write personal access token. Returns bounded capability metadata only, never secrets or task data.",
+			responses: {
+				"200": response(z.toJSONSchema(z.array(webhookMetadataSchema))),
+				...errors,
+			},
+		},
+		post: {
+			operationId: "create_webhook",
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Requires a write personal access token and a non-viewer role. Creates a task-create-only capability bound to one list. The secret is returned once; each retry creates a new webhook.",
+			requestBody: {
+				required: true,
+				content: {
+					"application/json": { schema: z.toJSONSchema(webhookCreateSchema) },
+				},
+			},
+			responses: {
+				"201": response(z.toJSONSchema(webhookCreatedSchema)),
+				...errors,
+			},
+		},
+	};
+	paths["/api/v1/webhooks/{id}"] = {
+		delete: {
+			operationId: "revoke_webhook",
+			security: [{ personalAccessToken: [] }],
+			description:
+				"Requires a write personal access token. Revocation is idempotent and permanent.",
+			parameters: [webhookIdParameter],
+			responses: { "200": response({ type: "object" }), ...errors },
+		},
+	};
+	paths["/api/v1/webhooks/{id}/deliveries"] = {
+		post: {
+			operationId: "deliver_webhook",
+			security: [{ webhookCredential: [] }],
+			description:
+				"Creates one task in the bound list from a strict JSON body of at most 4096 bytes. deliveryId is unique per account; repeating it with the same body replays the original result. Every request revalidates the hook, account, membership and list.",
+			parameters: [webhookIdParameter],
+			requestBody: {
+				required: true,
+				content: {
+					"application/json": { schema: z.toJSONSchema(webhookDeliverySchema) },
+				},
+			},
+			responses: {
+				"200": response(z.toJSONSchema(webhookDeliveryAckSchema)),
+				"201": response(z.toJSONSchema(webhookDeliveryAckSchema)),
+				...errors,
+			},
+		},
+	};
 	return {
 		openapi: "3.1.0",
 		info: {
@@ -957,6 +1028,13 @@ export function publicApiOpenApi() {
 					name: "better-auth.session_token",
 					description:
 						"Authenticated account session; mutations also require the existing origin guard.",
+				},
+				webhookCredential: {
+					type: "http",
+					scheme: "bearer",
+					bearerFormat: "Webhook secret",
+					description:
+						"List-bound task-create capability sent only in the Authorization header. It is not a personal access token.",
 				},
 				personalAccessToken: {
 					type: "http",
