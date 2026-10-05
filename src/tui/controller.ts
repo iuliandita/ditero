@@ -8,6 +8,7 @@ import {
 	type ApiTaskDelete,
 	parseApiTaskDelete,
 } from "../domain/public-api-task-deletion.ts";
+import type { ApiTaskPlacement } from "../domain/public-api-task-placement.ts";
 import {
 	type ApiTaskUpdate,
 	parseApiTaskUpdate,
@@ -20,6 +21,14 @@ import type {
 	TaskObservation,
 	TerminalApi,
 } from "./api.ts";
+import {
+	type OrderingPlan,
+	type OrderReview,
+	parsePosition,
+	planOrdering,
+	proposeOrdering,
+	typePosition,
+} from "./ordering.ts";
 import type { TerminalInput } from "./terminal.ts";
 
 export type Review = {
@@ -29,6 +38,13 @@ export type Review = {
 } & (
 	| { kind: "update"; taskId: string; title: string; body: ApiTaskUpdate }
 	| { kind: "delete"; taskId: string; title: string; body: ApiTaskDelete }
+	| {
+			kind: "place";
+			taskId: string;
+			title: string;
+			body: ApiTaskPlacement;
+			order: OrderReview;
+	  }
 	| { kind: "create"; task: ApiTaskCreate; timezone: string }
 	| {
 			kind: "complete";
@@ -80,6 +96,10 @@ export interface TerminalState {
 	} | null;
 	review: Review | null;
 	comments: CommentsView | null;
+	// plan is null while the bounded read is in flight.
+	ordering: { plan: OrderingPlan | null; position: string } | null;
+	// Acknowledges the captured order request; clears on any navigation.
+	ordered: { to: number; total: number } | null;
 }
 // Read-only page of one task's comments; scope is captured when it opens.
 export interface CommentsView {
@@ -112,6 +132,8 @@ export class TerminalController {
 		deletion: null,
 		review: null,
 		comments: null,
+		ordering: null,
+		ordered: null,
 	};
 	private epoch = 0;
 	private request = new AbortController();
@@ -170,9 +192,16 @@ export class TerminalController {
 			this.state.deletion = null;
 			this.state.review = null;
 			this.state.comments = null;
+			this.state.ordering = null;
+			this.state.ordered = null;
 		}
-		if (error instanceof CliError && error.status === 409)
+		if (error instanceof CliError && error.status === 409) {
 			this.state.review = null;
+			this.state.ordering = null;
+		}
+		// A refused read never leaves a half-built ordering behind.
+		if (this.state.ordering && !this.state.ordering.plan)
+			this.state.ordering = null;
 	}
 	async open(
 		location: Location | null,
@@ -205,6 +234,8 @@ export class TerminalController {
 		this.state.deletion = null;
 		this.state.review = null;
 		this.state.comments = null;
+		this.state.ordering = null;
+		this.state.ordered = null;
 		this.state.selected = 0;
 		this.state.error = null;
 		this.state.nextCursor = null;
@@ -469,6 +500,101 @@ export class TerminalController {
 		this.state.status = "review";
 		this.state.error = null;
 	}
+	private async openOrdering(): Promise<void> {
+		const location = this.state.location;
+		const selected = this.state.entries[this.state.selected];
+		if (location?.resource !== "tasks" || !location.listId || !selected) return;
+		const { listId } = location;
+		const taskId = selected.id;
+		const epoch = this.begin();
+		this.state.detail = null;
+		this.state.detailOffset = 0;
+		this.state.payload = false;
+		this.state.error = null;
+		this.state.ordered = null;
+		this.state.ordering = { plan: null, position: "" };
+		this.state.status = "loading";
+		this.changed();
+		const signal = this.request.signal;
+		try {
+			const rows = await this.api.orderRows(listId, signal);
+			if (!this.active(epoch)) return;
+			const placement = await this.api.observePlacement(taskId, signal);
+			if (!this.active(epoch)) return;
+			const list = await this.api.observeList(listId, signal);
+			if (!this.active(epoch)) return;
+			this.state.ordering = {
+				plan: planOrdering({ rows, taskId, listId, placement, list }),
+				position: "",
+			};
+			this.state.status = "ready";
+		} catch (error) {
+			if (this.active(epoch)) this.failed(error);
+		}
+		if (this.active(epoch)) this.changed();
+	}
+	private reviewOrdering(): void {
+		const ordering = this.state.ordering;
+		const plan = ordering?.plan;
+		if (!ordering || !plan) return;
+		const position = parsePosition(ordering.position, plan.siblings.length);
+		if (position === null) {
+			this.state.error = "invalid_input";
+			return;
+		}
+		try {
+			const proposal = proposeOrdering(plan, position);
+			this.state.payload = false;
+			this.state.help = false;
+			this.state.review = {
+				kind: "place",
+				list: this.capturedList(plan.listId),
+				taskId: plan.taskId,
+				title: plan.title,
+				body: proposal.body,
+				order: proposal.order,
+				requestId: this.uuid(),
+				uncertain: false,
+			};
+			this.state.ordering = null;
+			this.state.detailOffset = 0;
+			this.state.status = "review";
+			this.state.error = null;
+		} catch (error) {
+			this.state.error =
+				error instanceof CliError ? error.code : "invalid_input";
+		}
+	}
+	private orderingInput(input: TerminalInput): void {
+		const ordering = this.state.ordering;
+		if (!ordering) return;
+		if (input.type === "text" && input.text === "q") {
+			this.close();
+			this.quit();
+			return;
+		}
+		if (input.type === "key" && input.key === "escape") {
+			this.begin();
+			this.state.ordering = null;
+			this.state.error = null;
+			this.state.detailOffset = 0;
+			this.state.status = this.state.entries.length ? "ready" : "empty";
+			return;
+		}
+		const plan = ordering.plan;
+		if (!plan || this.state.status !== "ready") return;
+		this.state.error = null;
+		if (input.type === "text")
+			ordering.position = typePosition(
+				ordering.position,
+				input.text,
+				plan.siblings.length,
+			);
+		else if (input.type === "key" && input.key === "backspace")
+			ordering.position = ordering.position.slice(0, -1);
+		else if (input.type === "key" && input.key === "enter")
+			this.reviewOrdering();
+	}
 	private async observeMutation(kind: "update" | "delete"): Promise<void> {
 		const selected = this.state.entries[this.state.selected];
 		if (this.state.location?.resource !== "tasks" || !selected) return;
@@ -695,6 +821,13 @@ export class TerminalController {
 					review.requestId,
 					this.request.signal,
 				);
+			else if (review.kind === "place")
+				await this.api.place(
+					review.taskId,
+					review.body,
+					review.requestId,
+					this.request.signal,
+				);
 			else
 				await this.api.complete(
 					review.task,
@@ -704,7 +837,19 @@ export class TerminalController {
 			if (!this.active(epoch)) return;
 			this.state.review = null;
 			this.state.status = "ready";
+			// open() starts exactly one new epoch; any later input supersedes it.
+			const refresh = this.epoch + 1;
 			await this.open(this.state.location);
+			if (
+				review.kind === "place" &&
+				this.epoch === refresh &&
+				!this.closed &&
+				!this.state.error &&
+				["ready", "empty"].includes(this.state.status)
+			) {
+				this.state.ordered = { to: review.order.to, total: review.order.total };
+				this.changed();
+			}
 		} catch (error) {
 			if (this.active(epoch)) this.failed(error);
 		}
@@ -724,12 +869,14 @@ export class TerminalController {
 			}
 			return;
 		}
+		this.state.ordered = null;
 		if (
 			(this.state.detail ||
 				this.state.comments ||
 				this.state.review ||
 				this.state.help ||
 				this.state.deletion ||
+				this.state.ordering?.plan ||
 				this.state.form?.kind === "update") &&
 			input.type === "key" &&
 			["up", "down", "home", "end"].includes(input.key)
@@ -849,6 +996,11 @@ export class TerminalController {
 		}
 		if (this.state.help && !(input.type === "text" && input.text === "q"))
 			return;
+		if (this.state.ordering) {
+			this.orderingInput(input);
+			if (!this.closed) this.changed();
+			return;
+		}
 		if (this.state.comments) {
 			await this.commentsInput(input);
 			if (!this.closed) this.changed();
@@ -884,6 +1036,8 @@ export class TerminalController {
 				await this.observeMutation(input.text === "e" ? "update" : "delete");
 			else if (input.text === "c" && this.state.status === "ready")
 				this.completion();
+			else if (input.text === "o" && this.state.status === "ready")
+				await this.openOrdering();
 		} else if (input.type === "key") {
 			const count = this.state.location
 				? this.state.entries.length

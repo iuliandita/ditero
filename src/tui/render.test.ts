@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import * as m from "../paraglide/messages.js";
+import type { TerminalState } from "./controller.ts";
+import { browseFooter, footerHints } from "./index.ts";
 import {
 	type Frame,
 	fitHints,
@@ -491,6 +494,113 @@ describe("terminal frames", () => {
 		expect(wrapWords(["Hostile\u001b[2J text"], 20).join(" ")).not.toContain(
 			String.fromCharCode(27),
 		);
+	});
+
+	describe("task order footer hint", () => {
+		const state = (overrides: Partial<TerminalState>): TerminalState => ({
+			location: { resource: "tasks", listId: "list" },
+			entries: [],
+			selected: 0,
+			status: "ready",
+			error: null,
+			nextCursor: null,
+			detail: null,
+			detailOffset: 0,
+			help: false,
+			payload: false,
+			page: 1,
+			breadcrumb: [],
+			authorityRefused: false,
+			form: null,
+			deletion: null,
+			review: null,
+			comments: null,
+			ordering: null,
+			ordered: null,
+			...overrides,
+		});
+		const hasOrder = (footer: string) =>
+			footer.split(" | ").some((hint) => hint.startsWith("o "));
+		it.each([
+			"en",
+			"de",
+			"es",
+			"fr",
+			"ro",
+			"ar",
+		] as const)("offers the order hint only on a task list in %s", (locale) => {
+			const hint = m.tui_order_hint({}, { locale });
+			expect(browseFooter(state({}), locale).split(" | ")).toContain(hint);
+			const globalTasks = browseFooter(
+				state({ location: { resource: "tasks" } }),
+				locale,
+			).split(" | ");
+			expect(globalTasks).not.toContain(hint);
+			expect(globalTasks).toContain(m.tui_comments_hint({}, { locale }));
+			expect(
+				browseFooter(
+					state({ location: { resource: "lists", workspaceId: "w" } }),
+					locale,
+				)
+					.split(" | ")
+					.includes(hint),
+			).toBe(false);
+			expect(browseFooter(state({ location: null }), locale)).not.toContain(
+				hint,
+			);
+			expect(
+				browseFooter(
+					state({
+						comments: {
+							taskId: "task",
+							title: "Milk",
+							breadcrumb: [],
+							listCursor: null,
+							items: [],
+							cursor: null,
+							nextCursor: null,
+							page: 1,
+						},
+					}),
+					locale,
+				).split(" | "),
+			).not.toContain(hint);
+		});
+		it("starts the English hint with the o key", () => {
+			expect(m.tui_order_hint({}, { locale: "en" }).startsWith("o ")).toBe(
+				true,
+			);
+			expect(hasOrder(browseFooter(state({}), "en"))).toBe(true);
+			expect(
+				hasOrder(
+					browseFooter(state({ location: { resource: "workspaces" } }), "en"),
+				),
+			).toBe(false);
+		});
+		it("sorts the order hint after comments and drops it before safety keys", () => {
+			const tasks = footerHints(
+				"q quit | Enter open | Esc back | ? help | r refresh | p next page | n add | c complete | e edit | d delete | m comments | o reorder",
+				"en",
+				false,
+				false,
+				false,
+			);
+			expect(tasks.indexOf("o reorder")).toBeGreaterThan(
+				tasks.indexOf("m comments"),
+			);
+			expect(tasks.indexOf("o reorder")).toBeGreaterThan(
+				tasks.indexOf("d delete"),
+			);
+			expect(tasks.indexOf("o reorder")).toBeLessThan(
+				tasks.indexOf("p next page"),
+			);
+			expect(fitHints(tasks, 200)).toContain("o reorder");
+			expect(fitHints(tasks, 39)).toBe(
+				"Esc back | q quit | Enter open | ? help",
+			);
+			expect(fitHints(tasks, 39)).not.toContain("o reorder");
+			expect(fitHints(tasks, 12)).toContain("q");
+		});
 	});
 
 	it("remains bounded on tiny and malformed viewport sizes", () => {
