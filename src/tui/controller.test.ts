@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { CliError } from "../cli/arguments.ts";
+import type { ApiTask } from "../domain/public-api-resources.ts";
 import type { ApiTaskCreate } from "../domain/public-api-writes.ts";
 import type { Page, TaskObservation, TerminalApi } from "./api.ts";
 import { TerminalController } from "./controller.ts";
+import { orderingErrorDetails } from "./index.ts";
+import type { ListObservation, PlacementObservation } from "./ordering.ts";
+import { orderDetails } from "./presentation.ts";
+import { renderFrame, wrapLines } from "./render.ts";
 
 const task: ApiTaskCreate = {
 	listId: "list",
@@ -42,6 +47,66 @@ const observation: TaskObservation = {
 	},
 	stateToken: "a".repeat(64),
 };
+const row = (id: string, sortKey: string, extra: Partial<ApiTask> = {}) => ({
+	id,
+	listId: "list",
+	workspaceId: "workspace",
+	title: `Task ${id}`,
+	done: false,
+	notes: null,
+	dueAt: null,
+	dueAllDay: false,
+	priority: 0,
+	completedAt: null,
+	createdAt: null,
+	sortKey,
+	parentId: null,
+	quantity: null,
+	unit: null,
+	category: null,
+	rrule: null,
+	recurrenceRelative: false,
+	reminderTime: null,
+	assigneeIds: [],
+	labelIds: [],
+	...extra,
+});
+// Manual order: b, task, c (done). ID order would differ.
+const orderRows: ApiTask[] = [
+	row("task", "a1", {
+		title: observation.snapshot.title,
+		notes: observation.snapshot.notes,
+		createdAt: observation.snapshot.createdAt,
+	}),
+	row("c", "a2", { done: true }),
+	row("b", "a0"),
+];
+const listRow = {
+	id: "list",
+	workspaceId: "workspace",
+	ownerId: "owner",
+	title: "Groceries",
+	kind: "tasks" as const,
+	icon: null,
+	folderId: null,
+	sortKey: "a0",
+	completedDisplay: "sink" as const,
+};
+const placement: PlacementObservation = {
+	snapshot: {
+		version: 1,
+		task: observation.snapshot,
+		sortKey: "a1",
+		parentId: null,
+		list: listRow,
+	},
+	stateToken: "c".repeat(64),
+	childrenState: { version: 1, count: 0, token: "b".repeat(64) },
+};
+const listObservation: ListObservation = {
+	snapshot: listRow,
+	stateToken: "d".repeat(64),
+};
 
 function fixture() {
 	const api: TerminalApi = {
@@ -53,6 +118,10 @@ function fixture() {
 		update: vi.fn(async () => {}),
 		delete: vi.fn(async () => {}),
 		read: vi.fn(async () => structuredClone(page)),
+		orderRows: vi.fn(async () => structuredClone(orderRows)),
+		observePlacement: vi.fn(async () => structuredClone(placement)),
+		observeList: vi.fn(async () => structuredClone(listObservation)),
+		place: vi.fn(async () => {}),
 		comments: vi.fn(async () => ({ comments: [], nextCursor: null })),
 		plan: vi.fn(async () => ({
 			version: 1 as const,
@@ -566,5 +635,225 @@ describe("observed terminal task mutations", () => {
 		expect(signal.aborted).toBe(true);
 		expect(f.controller.state.form).toBeNull();
 		expect(f.uuid).not.toHaveBeenCalled();
+	});
+});
+
+describe("same-list ordering", () => {
+	async function ordering() {
+		const f = fixture();
+		await f.controller.open({ resource: "tasks", listId: "list" });
+		await f.text("o");
+		return f;
+	}
+	const type = async (
+		f: Awaited<ReturnType<typeof ordering>>,
+		text: string,
+	) => {
+		for (const digit of text) await f.text(digit);
+	};
+
+	it("shows the manual sibling order, not the ID order, and sends nothing to open", async () => {
+		const f = await ordering();
+		const plan = f.controller.state.ordering?.plan;
+		expect(plan?.siblings.map((row) => row.id)).toEqual(["b", "task", "c"]);
+		expect(plan?.index).toBe(1);
+		expect(f.api.orderRows).toHaveBeenCalledTimes(1);
+		expect(f.api.observePlacement).toHaveBeenCalledTimes(1);
+		expect(f.api.observeList).toHaveBeenCalledTimes(1);
+		expect(f.api.place).not.toHaveBeenCalled();
+	});
+	it("accepts bounded typed digits only and ignores paste", async () => {
+		const f = await ordering();
+		await f.controller.input({ type: "paste", text: "1\ny" });
+		await type(f, "0");
+		await type(f, "9");
+		await type(f, "x");
+		expect(f.controller.state.ordering?.position).toBe("");
+		await type(f, "3");
+		await f.controller.input({ type: "key", key: "backspace" });
+		expect(f.controller.state.ordering?.position).toBe("");
+		await f.key("enter");
+		expect(f.controller.state.review).toBeNull();
+		expect(f.controller.state.error).toBe("invalid_input");
+		expect(f.api.place).not.toHaveBeenCalled();
+	});
+	it("refuses an unchanged position without a request or review", async () => {
+		const f = await ordering();
+		await type(f, "2");
+		await f.key("enter");
+		expect(f.controller.state.error).toBe("ordering_unchanged");
+		expect(f.controller.state.review).toBeNull();
+		const currentOrdering = f.controller.state.ordering;
+		if (!currentOrdering?.plan) throw new Error("Expected active order prompt");
+		const details = [
+			...orderingErrorDetails(f.controller.state, "en", 40),
+			...wrapLines(
+				orderDetails(currentOrdering.plan, currentOrdering.position, {
+					locale: "en",
+					timezone: "UTC",
+					now: 0,
+					ascii: true,
+				}),
+				39,
+			),
+		];
+		const frame = renderFrame(
+			{
+				title: "Order",
+				status: "Error",
+				footer: "Enter continue",
+				rows: [],
+				selected: 0,
+				framed: true,
+				detail: details,
+			},
+			40,
+			20,
+		);
+		expect(frame.replace(/\s+/g, " ")).toContain(
+			"Nothing was sent. Choose another position.",
+		);
+		expect(frame).toContain("> 2");
+		expect(frame).not.toContain("Press o");
+		expect(f.api.place).not.toHaveBeenCalled();
+	});
+	it("freezes the key and body in a review and sends one PATCH on typed y", async () => {
+		const f = await ordering();
+		await type(f, "1");
+		await f.key("enter");
+		const review = f.controller.state.review;
+		if (review?.kind !== "place") throw new Error("Expected order review");
+		expect(f.controller.state.ordering).toBeNull();
+		expect(review.order).toMatchObject({
+			from: 2,
+			to: 1,
+			total: 3,
+			after: null,
+		});
+		expect(review.order.before?.id).toBe("b");
+		expect(review.body).toMatchObject({
+			listId: "list",
+			targetListId: "list",
+			expectedState: "c".repeat(64),
+			expectedTargetState: "d".repeat(64),
+			cascadeChildren: false,
+			expectedChildrenState: null,
+			sortKey: review.order.key,
+		});
+		expect(review.order.key < "a0").toBe(true);
+		expect(Object.isFrozen(review.body)).toBe(true);
+		await f.controller.input({ type: "paste", text: "y" });
+		await f.text("?");
+		await f.text("y");
+		expect(f.api.place).not.toHaveBeenCalled();
+		await f.text("?");
+		await f.text("y");
+		expect(f.api.place).toHaveBeenCalledTimes(1);
+		expect(vi.mocked(f.api.place).mock.calls[0].slice(0, 3)).toEqual([
+			"task",
+			review.body,
+			"00000000-0000-4000-8000-000000000001",
+		]);
+		expect(f.controller.state.review).toBeNull();
+		expect(f.controller.state.ordered).toEqual({ to: 1, total: 3 });
+		await f.controller.input({ type: "key", key: "down" });
+		expect(f.controller.state.ordered).toBeNull();
+	});
+	it("keeps the exact body and UUID for a manual retry after an uncertain result", async () => {
+		const f = await ordering();
+		await type(f, "3");
+		await f.key("enter");
+		vi.mocked(f.api.place).mockRejectedValueOnce(
+			new CliError("network_error", "Lost", 7),
+		);
+		await f.text("y");
+		await f.text("y");
+		await f.key("escape");
+		expect(f.api.place).toHaveBeenCalledTimes(1);
+		expect(f.controller.state.review?.uncertain).toBe(true);
+		await f.text("r");
+		expect(f.api.place).toHaveBeenCalledTimes(2);
+		expect(vi.mocked(f.api.place).mock.calls[1].slice(0, 3)).toEqual(
+			vi.mocked(f.api.place).mock.calls[0].slice(0, 3),
+		);
+		expect(f.api.orderRows).toHaveBeenCalledTimes(1);
+	});
+	it("clears the review on 409 and everything on authorization refusal", async () => {
+		const f = await ordering();
+		await type(f, "1");
+		await f.key("enter");
+		vi.mocked(f.api.place).mockRejectedValueOnce(
+			new CliError("request_conflict", "Changed", 10, 409),
+		);
+		await f.text("y");
+		expect(f.controller.state.review).toBeNull();
+		expect(f.controller.state.ordering).toBeNull();
+		await f.text("r");
+		await f.text("o");
+		await type(f, "1");
+		await f.key("enter");
+		vi.mocked(f.api.place).mockRejectedValueOnce(
+			new CliError("forbidden", "Revoked", 4, 403),
+		);
+		await f.text("y");
+		expect(f.controller.state.entries).toEqual([]);
+		expect(f.controller.state.review).toBeNull();
+		expect(f.controller.state.ordering).toBeNull();
+		expect(f.controller.state.ordered).toBeNull();
+	});
+	it("cancels a pending read and ignores late replies", async () => {
+		const f = fixture();
+		await f.controller.open({ resource: "tasks", listId: "list" });
+		let resolve!: (rows: ApiTask[]) => void;
+		let signal!: AbortSignal;
+		vi.mocked(f.api.orderRows).mockImplementationOnce((_id, current) => {
+			signal = current;
+			return new Promise((done) => {
+				resolve = done;
+			});
+		});
+		const pending = f.text("o");
+		await f.key("escape");
+		resolve(structuredClone(orderRows));
+		await pending;
+		expect(signal.aborted).toBe(true);
+		expect(f.controller.state.ordering).toBeNull();
+		expect(f.api.observePlacement).not.toHaveBeenCalled();
+		expect(f.controller.state.location?.listId).toBe("list");
+	});
+	it("refuses tied keys before any review", async () => {
+		const f = fixture();
+		vi.mocked(f.api.orderRows).mockResolvedValueOnce([
+			structuredClone(orderRows[0]),
+			row("b", "a1"),
+		]);
+		await f.controller.open({ resource: "tasks", listId: "list" });
+		await f.text("o");
+		expect(f.controller.state.error).toBe("ordering_tied");
+		expect(f.controller.state.ordering).toBeNull();
+		expect(f.api.place).not.toHaveBeenCalled();
+		const frame = renderFrame(
+			{
+				title: "Order",
+				status: "Error",
+				footer: "o reorder",
+				rows: [],
+				selected: 0,
+				framed: true,
+				detail: orderingErrorDetails(f.controller.state, "en", 40),
+			},
+			40,
+			20,
+		);
+		const visible = frame.replace(/\s+/g, " ");
+		expect(visible).toContain("Nothing was sent.");
+		expect(visible).toContain("Press r to reload, then o to read the order.");
+		expect(visible).not.toContain("Esc");
+		await f.text("o");
+		expect(f.api.orderRows).toHaveBeenCalledTimes(1);
+		await f.text("r");
+		expect(f.controller.state.status).toBe("ready");
+		await f.text("o");
+		expect(f.api.orderRows).toHaveBeenCalledTimes(2);
 	});
 });

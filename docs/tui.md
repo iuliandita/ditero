@@ -112,14 +112,40 @@ review; pasted choices or confirmations never submit. A changed scalar or child
 state returns a conflict. Refresh and explicitly observe again before preparing a
 new request; the client never rebases a patch or cascade choice automatically.
 
+Press `o` on a task to reorder it among its siblings in the same list. The client
+first reads every task in the list within the collection bounds, including
+completed tasks, then fresh task-placement and list observations. It refuses, and
+sends nothing, if the read is unfinished, loops, repeats an ID, includes another
+list or workspace, loses or moves the selected task, or finds a malformed or tied
+sort key in the group. The group is the exact same parent: top-level tasks together,
+or the subtasks of one parent. Subtasks of a moved task stay attached; only
+its own sort key changes. The order view lists the real manual sibling order around
+the task with a `>` marker. Type the desired position from 1 to the group size
+(digits and Backspace only; pasted text is ignored), then Enter. An unchanged
+position sends nothing. The review shows the group, the neighbors before and after
+the new slot, the generated key and the exact PATCH; `v` shows the exact body, and
+typed `y` sends one request. An uncertain result freezes the same key, body and
+UUID for manual `r` retry. Viewing never sends a write; the server decides whether
+the token may write, and a 401, 403, 404 or 410 clears protected content.
+
+The generated key is fixed before review and never regenerated for a retry. The
+server checks the selected task's own state and the list's scalar state, not its
+neighbors. If a sibling is added, removed or moved after the read, including a
+move that later reverts, the request still succeeds and the final position can
+differ from the one reviewed. A 409 clears the review; refresh and press `o`
+again for a new observation. Success only acknowledges the captured request. The
+browse list is paged in ID order, not manual order, so a move is not visible there
+and the client does not claim a globally sorted list. Use the order view to inspect
+the manual order.
+
 Writes are never retried automatically. An uncertain write keeps its exact UUID
 and body for an explicit `r` retry. `y` sends only a request that has not been sent;
 it is ignored after an uncertain result. Escape cannot discard an uncertain
 request. The client does not replan relative dates or
 generate a new UUID for that retry. If you quit before the result is confirmed,
 stderr prints a JSON retry record with `requestId`, `endpoint` and `body`, after
-restoring the terminal. Update and deletion records also include `method` (`PATCH`
-or `DELETE`); existing creation/completion records use POST. This record contains
+restoring the terminal. Update, ordering and deletion records also include `method`
+(`PATCH` or `DELETE`); existing creation/completion records use POST. This record contains
 task content; keep it private. Submit
 it to the same server with an authorized token for the same account through the
 documented public API.
@@ -129,6 +155,6 @@ The interface is an online API client. Authorization refusal clears protected
 rows and proposals; it never falls back to cached private content. Requests and
 responses use the CLI's time and size limits. A collection has at most 100 pages
 and 20 MiB; refresh starts a fresh bounded collection. Pages reflect current
-server rows rather than an atomic snapshot. Reordering and other metadata workflows remain separate API/client work.
+server rows rather than an atomic snapshot. Cross-list moves and other metadata workflows remain separate API/client work.
 After a successful write the collection refreshes. A deletion replay acknowledges
 the original deletion and does not prove that a recreated ID is currently absent.

@@ -7,9 +7,10 @@ import {
 	helpFooter,
 	listHeader,
 	parseTerminalArguments,
+	terminalErrorText,
 	terminalStatusLine,
 } from "./index.ts";
-import { fitHints, renderFrame, wrapLines } from "./render.ts";
+import { fitHints, renderFrame, visibleCells, wrapLines } from "./render.ts";
 
 const env = {
 	DITERO_URL: "https://example.com",
@@ -104,6 +105,8 @@ describe("terminal rendered status", () => {
 		deletion: null,
 		review: null,
 		comments: null,
+		ordering: null,
+		ordered: null,
 	};
 	const count = { loaded: 0, open: 0, done: 0, overdue: 0 };
 	it.each([
@@ -236,6 +239,129 @@ describe("terminal rendered status", () => {
 		).toBe(
 			"Request failed (request_failed). Check access and connection before retrying.",
 		);
+	});
+	it.each([
+		["ordering_unchanged", "That is already this task's position."],
+		["ordering_stale", "The order changed since it was read."],
+		["ordering_tied", "Tasks share an order key"],
+		["ordering_bounds", "This list is too large to order here"],
+	])("explains %s locally instead of advising a connection check", (code, reason) => {
+		const statusLine = terminalStatusLine(
+			{ ...state, error: code },
+			"Ready",
+			"en",
+			200,
+			count,
+		);
+		expect(statusLine).toContain(reason);
+		expect(statusLine).toContain("Nothing was sent.");
+		expect(statusLine).not.toContain("connection");
+		expect(statusLine).not.toContain(code);
+		expect(terminalErrorText(code, "en")).toBe(statusLine);
+	});
+	it("explains a loading page bound without reclassifying network failures", () => {
+		const loading = {
+			...state,
+			error: "ordering_pagination",
+			ordering: null,
+		};
+		expect(terminalStatusLine(loading, "Ready", "en", 200, count)).toBe(
+			"The complete list exceeds the client page limit. Nothing was sent. Press r to reload, then o to read the order.",
+		);
+
+		expect(terminalErrorText("pagination_limit", "en")).toContain(
+			"Request failed",
+		);
+		expect(
+			terminalStatusLine(
+				{ ...loading, error: "network_error" },
+				"Ready",
+				"en",
+				200,
+				count,
+			),
+		).toBe(
+			"Request failed (network_error). Check access and connection before retrying.",
+		);
+	});
+	it("names the exact remedy for each local ordering refusal", () => {
+		const remedies: [string, string][] = [
+			["ordering_unchanged", "Choose another position."],
+			["ordering_stale", "Press r to reload, then o to read the order."],
+			["ordering_tied", "Press r to reload, then o to read the order."],
+			["ordering_scope", "Press r to reload, then o to read the order."],
+			["ordering_duplicate", "Press r to reload, then o to read the order."],
+			["ordering_malformed", "Press r to reload, then o to read the order."],
+			["ordering_key", "Choose another position."],
+			["ordering_single", "Browsing is unchanged."],
+		];
+		for (const [code, remedy] of remedies)
+			expect(terminalErrorText(code, "en")).toMatch(
+				new RegExp(`Nothing was sent\\. ${remedy.replaceAll(".", "\\.")}$`),
+			);
+		expect(terminalErrorText("ordering_bounds", "en")).toMatch(
+			/over [\d,]+ tasks\)\. Nothing was sent\. Retrying will not help; browsing still works\.$/,
+		);
+	});
+	it.each([
+		["en", "Nothing was sent"],
+		["de", "Nichts wurde gesendet"],
+		["es", "No se envió nada"],
+		["fr", "Rien n'a été envoyé"],
+		["ro", "Nu s-a trimis nimic"],
+		["ar", "لم يُرسل شيء"],
+	] as const)("localizes every ordering refusal in %s with no generic connection advice", (locale, sent) => {
+		const generic = terminalErrorText("request_failed", locale);
+		const seen = new Set<string>();
+		for (const code of [
+			"ordering_unchanged",
+			"ordering_stale",
+			"ordering_tied",
+			"ordering_bounds",
+			"ordering_scope",
+			"ordering_duplicate",
+			"ordering_malformed",
+			"ordering_key",
+			"ordering_single",
+		]) {
+			const text = terminalErrorText(code, locale);
+			expect(text).not.toBe(generic);
+			expect(text).not.toContain(code);
+			expect(text).not.toContain("undefined");
+			expect(text).not.toMatch(/\{[A-Za-z]+\}/u);
+			expect(text).toContain(sent);
+			seen.add(text);
+		}
+		expect(seen.size).toBe(9);
+		expect(generic).toContain("request_failed");
+	});
+	it("keeps the full acknowledgement when it fits and a compact caveat when it does not", () => {
+		const ordered = { ...state, ordered: { to: 1, total: 105 } };
+		expect(terminalStatusLine(ordered, "Ready", "en", 200, count)).toBe(
+			"Order request for position 1 of 105 accepted. Final position is not guaranteed; browse stays in ID order.",
+		);
+		expect(terminalStatusLine(ordered, "Ready", "en", 40, count)).toBe(
+			"Accepted; rank not guaranteed.",
+		);
+		expect(terminalStatusLine(ordered, "Ready", "de", 40, count)).toBe(
+			"Angenommen; Rang nicht garantiert.",
+		);
+		const compact = {
+			en: "Accepted; rank not guaranteed.",
+			de: "Angenommen; Rang nicht garantiert.",
+			es: "Aceptado; posición no garantizada.",
+			fr: "Accepté ; rang non garanti.",
+			ro: "Acceptat; poziție negarantată.",
+			ar: "قُبل؛ الموضع غير مضمون.",
+		} as const;
+		for (const [locale, expected] of Object.entries(compact) as [
+			keyof typeof compact,
+			string,
+		][]) {
+			const line = terminalStatusLine(ordered, "Ready", locale, 40, count);
+			expect(line).toBe(expected);
+			expect(visibleCells(line)).toBeLessThanOrEqual(40);
+		}
 	});
 	it.each([
 		{ list: "list-next", comments: null, shown: false },

@@ -10,12 +10,14 @@ import {
 import * as m from "../paraglide/messages.js";
 import { terminalApi } from "./api.ts";
 import { TerminalController, type TerminalState } from "./controller.ts";
+import { MAX_ORDER_ROWS } from "./ordering.ts";
 import {
 	commentParts,
 	entryDetails,
 	exactPayloadParts,
 	helpDetails,
 	loadedTaskCounts,
+	orderDetails,
 	reviewDetails,
 	reviewParts,
 	reviewPayload,
@@ -41,7 +43,7 @@ Usage: ditero-tui [--server HTTPS_ORIGIN] [--locale en|de|es|fr|ro|ar]
 
 Set DITERO_URL and DITERO_TOKEN in the environment. Tokens never go on the command line.
 Use an interactive terminal. Use arrows, Enter and Escape to browse.
-n adds a task; c completes one; e edits; d reviews deletion; m reads comments. Review, then press y to send. ? shows help; q quits.
+n adds a task; c completes one; e edits; d reviews deletion; m reads comments; o reorders among siblings. Review, then press y to send. ? shows help; q quits.
 The client is online. A failed write keeps its exact request ID and body for explicit retry.
 `;
 
@@ -111,7 +113,7 @@ export function footerHints(
 			!hint.startsWith("Esc "),
 	);
 	contextual.sort((a, b) => {
-		const order = ["c", "n", "e", "d", "m", "Enter", "p", "r"];
+		const order = ["c", "n", "e", "d", "m", "o", "Enter", "p", "r"];
 		return order.indexOf(a.split(" ")[0]) - order.indexOf(b.split(" ")[0]);
 	});
 	return [
@@ -153,7 +155,10 @@ export function browseFooter(
 		...(state?.comments ? [] : [m.tui_open_hint({}, options)]),
 		...(state?.location || state?.detail ? [m.tui_back_hint({}, options)] : []),
 		...(state?.location?.resource === "tasks" && !state.comments
-			? [m.tui_comments_hint({}, options)]
+			? [
+					m.tui_comments_hint({}, options),
+					...(state.location.listId ? [m.tui_order_hint({}, options)] : []),
+				]
 			: []),
 		...m
 			.tui_footer({}, options)
@@ -188,6 +193,7 @@ export function detailScrollHints(
 			state?.review ||
 			state?.help ||
 			state?.deletion ||
+			state?.ordering?.plan ||
 			state?.form?.kind === "update"
 		)
 	)
@@ -203,6 +209,55 @@ export function listHeader(
 	const identity = fitLine(id, columns);
 	const room = columns - visibleCells(identity) - 3;
 	return name && room > 0 ? `${fitLine(name, room)} | ${identity}` : identity;
+}
+
+// Local ordering refusals send nothing; each says so and names its remedy.
+// Every other code keeps the generic request-failure text.
+export function terminalErrorText(code: string, locale: Locale): string {
+	const options = { locale };
+	switch (code) {
+		case "ordering_pagination":
+			return m.tui_order_error_pagination({}, options);
+		case "ordering_unchanged":
+			return m.tui_order_error_unchanged({}, options);
+		case "ordering_stale":
+			return m.tui_order_error_stale({}, options);
+		case "ordering_tied":
+			return m.tui_order_error_tied({}, options);
+		case "ordering_bounds":
+			return m.tui_order_error_bounds(
+				{ limit: new Intl.NumberFormat(locale).format(MAX_ORDER_ROWS) },
+				options,
+			);
+		case "ordering_scope":
+			return m.tui_order_error_scope({}, options);
+		case "ordering_duplicate":
+			return m.tui_order_error_duplicate({}, options);
+		case "ordering_malformed":
+			return m.tui_order_error_malformed({}, options);
+		case "ordering_key":
+			return m.tui_order_error_key({}, options);
+		case "ordering_single":
+			return m.tui_order_error_single({}, options);
+		default:
+			return m.tui_error({ code }, options);
+	}
+}
+
+export function orderingErrorDetails(
+	state: TerminalState | undefined,
+	locale: Locale,
+	columns: number,
+): string[] {
+	const code = state?.error;
+	if (!code?.startsWith("ordering_")) return [];
+	return [
+		...wrapWords(
+			[terminalErrorText(code, locale)],
+			Math.max(2, columns - (columns >= 80 ? 5 : 1)),
+		),
+		"",
+	];
 }
 
 export function terminalStatusLine(
@@ -222,9 +277,24 @@ export function terminalStatusLine(
 				!/^[0-3]$/.test(state.form.priority)
 				? m.tui_invalid_priority({}, options)
 				: m.tui_invalid_value({}, options);
-		return m.tui_error({ code: state.error }, options);
+		return terminalErrorText(state.error, locale);
 	}
 	if (state?.review) return m.tui_status_not_sent({}, options);
+	if (state?.ordered && ["ready", "empty"].includes(state.status)) {
+		const number = new Intl.NumberFormat(locale);
+		const full = m.tui_order_acknowledged(
+			{
+				position: number.format(state.ordered.to),
+				total: number.format(state.ordered.total),
+			},
+			options,
+		);
+		// The frame is one cell narrower than the terminal. A clipped full
+		// sentence would lose the rank caveat, so narrow terminals get a short one.
+		return visibleCells(full) <= columns - 1
+			? full
+			: m.tui_order_acknowledged_short({}, options);
+	}
 	if (state?.comments && ["ready", "empty"].includes(state.status)) {
 		const number = new Intl.NumberFormat(locale);
 		return [
@@ -340,7 +410,7 @@ export async function runTerminal(
 					status =
 						state.error === "no_changes"
 							? m.tui_edit_no_changes({}, options)
-							: m.tui_error({ code: state.error }, options);
+							: terminalErrorText(state.error, locale);
 				if (state.detail) {
 					if (state.payload) detailParts = exactPayloadParts(state.detail.data);
 					else detail = entryDetails(state.detail, context);
@@ -407,6 +477,16 @@ export async function runTerminal(
 						JSON.stringify(deletion.observation.childrenState),
 					];
 				}
+				if (state.ordering?.plan) {
+					detailParts = undefined;
+					title = m.tui_review_order({}, options);
+					footer = m.tui_footer_form({}, options);
+					detail = orderDetails(
+						state.ordering.plan,
+						state.ordering.position,
+						context,
+					);
+				}
 				if (state.review) {
 					const review = state.review;
 					title =
@@ -416,7 +496,9 @@ export async function runTerminal(
 								? m.tui_review_complete({}, options)
 								: review.kind === "update"
 									? m.tui_review_update({}, options)
-									: m.tui_review_delete({}, options);
+									: review.kind === "place"
+										? m.tui_review_order({}, options)
+										: m.tui_review_delete({}, options);
 					footer = [
 						m.tui_footer({}, options).split(" | ")[0],
 						review.uncertain
@@ -481,8 +563,25 @@ export async function runTerminal(
 			);
 			if (!detail && !detailParts && state?.status === "empty")
 				detail = [m.list_empty({}, options), m.tui_empty_help({}, options)];
-			if (!state?.review && !state?.form && !state?.deletion && !state?.help)
+			if (
+				!state?.review &&
+				!state?.form &&
+				!state?.deletion &&
+				!state?.ordering?.plan &&
+				!state?.help
+			)
 				footer = browseFooter(state, locale);
+			const localError = orderingErrorDetails(state, locale, columns);
+			if (localError.length && !state?.help) {
+				detail = [
+					...localError,
+					...(detail ??
+						presented.map(
+							(entry, index) =>
+								`${index === state?.selected ? ">" : " "} ${entry.text}`,
+						)),
+				];
+			}
 			if (detailParts) {
 				detailParts = wrapParts(
 					detailParts,

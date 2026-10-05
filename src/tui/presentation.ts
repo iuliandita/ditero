@@ -2,6 +2,11 @@ import type { Locale } from "../domain/locale.ts";
 import * as m from "../paraglide/messages.js";
 import type { Entry } from "./api.ts";
 import type { CommentsView, Review, TerminalState } from "./controller.ts";
+import {
+	type OrderAnchor,
+	type OrderingPlan,
+	orderWindow,
+} from "./ordering.ts";
 import type { RetryRecord } from "./recovery.ts";
 import { safeText, type TextPart, type Tone, visibleCells } from "./render.ts";
 
@@ -22,6 +27,7 @@ export function helpDetails(context: PresentationContext): string[] {
 		m.tui_footer({}, options),
 		m.tui_help_presentation({}, options),
 		m.tui_help_comments({}, options),
+		m.tui_help_order({}, options),
 		m.tui_symbols_help(
 			{ open: context.ascii ? "( )" : "○", done: context.ascii ? "(x)" : "●" },
 			options,
@@ -98,6 +104,13 @@ export function exactPayloadParts(value: unknown): TextPart[][] {
 }
 
 export function reviewPayload(review: Review): RetryRecord {
+	if (review.kind === "place")
+		return {
+			requestId: review.requestId,
+			endpoint: `/api/v1/tasks/${encodeURIComponent(review.taskId)}/placement`,
+			method: "PATCH",
+			body: review.body,
+		};
 	if (review.kind === "update" || review.kind === "delete")
 		return {
 			requestId: review.requestId,
@@ -535,6 +548,98 @@ export function commentDetails(
 	);
 }
 
+function groupLine(
+	parentId: string | null,
+	parentTitle: string | null,
+	options: { locale: Locale },
+): string {
+	return parentId === null
+		? m.tui_order_group_root({}, options)
+		: m.tui_order_group_subtasks(
+				{ parent: safeText(parentTitle ?? parentId) },
+				options,
+			);
+}
+
+// Manual sibling order around the task; browse pages stay ID ordered.
+export function orderDetails(
+	plan: OrderingPlan,
+	position: string,
+	context: PresentationContext,
+): string[] {
+	const options = { locale: context.locale };
+	const number = new Intl.NumberFormat(context.locale);
+	const total = plan.siblings.length;
+	const { start, items } = orderWindow(plan);
+	// The prompt and typed echo lead so the first narrow frame shows the field;
+	// typing never scrolls, and every sibling and note stays below.
+	return [
+		m.tui_order_position_prompt({ total: number.format(total) }, options),
+		`> ${position}`,
+		"",
+		m.tui_order_title({ title: safeText(plan.title) }, options),
+		groupLine(plan.parentId, plan.parentTitle, options),
+		...(plan.childCount > 0
+			? [m.tui_order_children_stay({ count: plan.childCount }, options)]
+			: []),
+		m.tui_order_current(
+			{
+				position: number.format(plan.index + 1),
+				total: number.format(total),
+			},
+			options,
+		),
+		"",
+		...items.map((sibling, offset) => {
+			const glyph = context.ascii
+				? sibling.done
+					? "(x)"
+					: "( )"
+				: sibling.done
+					? "●"
+					: "○";
+			return `${start + offset === plan.index ? ">" : " "} ${number.format(start + offset + 1)}. ${glyph} ${safeText(sibling.title)}`;
+		}),
+		"",
+		m.tui_order_browse_note({}, options),
+		m.tui_order_readonly({}, options),
+	];
+}
+
+function placeLines(
+	review: Extract<Review, { kind: "place" }>,
+	context: PresentationContext,
+): string[] {
+	const options = { locale: context.locale };
+	const number = new Intl.NumberFormat(context.locale);
+	const order = review.order;
+	const anchor = (value: OrderAnchor) =>
+		`${safeText(value.title)} (${safeText(value.id)})`;
+	return [
+		`${m.tui_task_id({}, options)}: ${review.taskId}`,
+		groupLine(order.parentId, order.parentTitle, options),
+		m.tui_order_move(
+			{
+				from: number.format(order.from),
+				to: number.format(order.to),
+				total: number.format(order.total),
+			},
+			options,
+		),
+		order.after
+			? m.tui_order_after({ task: anchor(order.after) }, options)
+			: m.tui_order_start({}, options),
+		order.before
+			? m.tui_order_before({ task: anchor(order.before) }, options)
+			: m.tui_order_end({}, options),
+		m.tui_order_key({ key: order.key }, options),
+		...(order.childCount > 0
+			? [m.tui_order_children_stay({ count: order.childCount }, options)]
+			: []),
+		m.tui_order_not_atomic({}, options),
+	];
+}
+
 export function reviewDetails(
 	review: Review,
 	context: PresentationContext,
@@ -577,19 +682,21 @@ export function reviewDetails(
 			? exactPayloadLines(payload)
 			: [
 					...(review.kind !== "create" ? [review.title] : []),
-					...taskDetails(
-						review.kind === "update"
-							? {
-									...(body.patch as Record<string, unknown>),
-									listId: body.listId,
-									expectedState: body.expectedState,
-								}
-							: body,
-						review.kind === "create"
-							? { ...context, timezone: review.timezone }
-							: context,
-						false,
-					),
+					...(review.kind === "place"
+						? placeLines(review, context)
+						: taskDetails(
+								review.kind === "update"
+									? {
+											...(body.patch as Record<string, unknown>),
+											listId: body.listId,
+											expectedState: body.expectedState,
+										}
+									: body,
+								review.kind === "create"
+									? { ...context, timezone: review.timezone }
+									: context,
+								false,
+							)),
 				]),
 		...(!exact
 			? [
@@ -623,6 +730,7 @@ export function reviewParts(
 	const body = payload.body as Record<string, unknown>;
 	const displayed =
 		review.kind === "update" ? (body.patch as Record<string, unknown>) : body;
+	const caveat = m.tui_order_not_atomic({}, options);
 	const primary = [
 		m.task_detail_title_field({}, options),
 		m.task_field_due({}, options),
@@ -656,7 +764,8 @@ export function reviewParts(
 			return [
 				{
 					text: line,
-					tone: "plain",
+					tone:
+						review.kind === "place" && line === caveat ? "warning" : "plain",
 					bold: review.kind !== "create" && line === review.title,
 				},
 			];

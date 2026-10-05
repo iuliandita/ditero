@@ -33,6 +33,31 @@ describe("terminal retry records", () => {
 	});
 });
 
+it("retains the exact placement PATCH, UUID, endpoint and guarded body for one explicit retry", () => {
+	const record = {
+		method: "PATCH" as const,
+		endpoint: "/api/v1/tasks/task%2Fid/placement",
+		requestId: "00000000-0000-4000-8000-000000000001",
+		body: {
+			workspaceId: "workspace",
+			listId: "list",
+			expectedState: "a".repeat(64),
+			targetListId: "list",
+			expectedTargetState: "b".repeat(64),
+			sortKey: "a5",
+			cascadeChildren: false,
+			expectedChildrenState: null,
+		},
+	};
+	const text = serializeRetryRecord(record);
+	expect(JSON.parse(text)).toEqual(record);
+	expect(Object.keys(JSON.parse(text))).toEqual(Object.keys(record));
+	expect(text.split("\n")).toHaveLength(1);
+	// Serializing never changes the record, so a retry reuses identical bytes.
+	expect(serializeRetryRecord(record)).toBe(text);
+	expect(JSON.parse(text).body.sortKey).toBe("a5");
+});
+
 it.each([
 	"PATCH",
 	"DELETE",

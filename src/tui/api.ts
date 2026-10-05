@@ -4,12 +4,16 @@ import type { CliOptions } from "../cli/arguments.ts";
 import { CliError } from "../cli/arguments.ts";
 import { discover, type Fetcher, requestJson } from "../cli/client.ts";
 import { commentWorkflow } from "../cli/comment-workflow.ts";
+import { listWorkflow } from "../cli/list-workflow.ts";
+import { taskPlacementWorkflow } from "../cli/task-placement-workflow.ts";
 import { taskWorkflow } from "../cli/task-workflow.ts";
 import {
 	type ApiCommentSnapshot,
 	apiCommentSnapshotSchema,
 } from "../domain/public-api-comments.ts";
+import { apiListObservationSchema } from "../domain/public-api-list-update.ts";
 import {
+	type ApiTask,
 	type PublicApiResource,
 	publicApiResourceSchemas,
 } from "../domain/public-api-resources.ts";
@@ -18,10 +22,19 @@ import {
 	apiTaskDeletionObservationSchema,
 } from "../domain/public-api-task-deletion.ts";
 import {
+	type ApiTaskPlacement,
+	apiTaskPlacementObservationSchema,
+} from "../domain/public-api-task-placement.ts";
+import {
 	type ApiTaskUpdate,
 	apiTaskObservationSchema,
 } from "../domain/public-api-task-update.ts";
 import type { ApiTaskCreate } from "../domain/public-api-writes.ts";
+import {
+	type ListObservation,
+	ORDER_PAGE_LIMIT,
+	type PlacementObservation,
+} from "./ordering.ts";
 
 export interface Location {
 	resource: PublicApiResource;
@@ -74,6 +87,21 @@ export interface TerminalApi {
 		signal: AbortSignal,
 	): Promise<void>;
 	read(location: Location, signal: AbortSignal): Promise<Page>;
+	// Every task in the list, done included, within the client page and byte
+	// bounds. Pages are ID ordered; callers sort by key themselves.
+	orderRows(listId: string, signal: AbortSignal): Promise<ApiTask[]>;
+	observePlacement(
+		taskId: string,
+		signal: AbortSignal,
+	): Promise<PlacementObservation>;
+	observeList(listId: string, signal: AbortSignal): Promise<ListObservation>;
+	// One PATCH, never retried here.
+	place(
+		taskId: string,
+		body: ApiTaskPlacement,
+		requestId: string,
+		signal: AbortSignal,
+	): Promise<void>;
 	comments(
 		taskId: string,
 		cursor: string | undefined,
@@ -176,6 +204,71 @@ export function terminalApi(
 				})),
 				nextCursor: result.nextCursor,
 			};
+		},
+		async orderRows(listId, signal) {
+			try {
+				const result = await discover(
+					{
+						...options,
+						command: "tasks",
+						workspaceId: undefined,
+						listId,
+						cursor: undefined,
+						all: true,
+						limit: ORDER_PAGE_LIMIT,
+						done: undefined,
+					},
+					fetcher,
+					undefined,
+					signal,
+				);
+				return z.array(publicApiResourceSchemas.tasks).parse(result.data);
+			} catch (error) {
+				if (error instanceof CliError && error.code === "pagination_limit")
+					throw new CliError(
+						"ordering_pagination",
+						error.message,
+						error.exitCode,
+						error.status,
+						error.choices,
+					);
+				throw error;
+			}
+		},
+		async observePlacement(taskId, signal) {
+			const result = await taskPlacementWorkflow(
+				{ ...options, command: "observe-task-placement", taskId },
+				fetcher,
+				undefined,
+				signal,
+			);
+			const observation = z
+				.object({ data: apiTaskPlacementObservationSchema })
+				.parse(result).data;
+			if (observation.snapshot.task.taskId !== taskId)
+				throw new CliError(
+					"invalid_response",
+					"The server returned an observation for another task.",
+					8,
+				);
+			return observation;
+		},
+		async observeList(listId, signal) {
+			const result = await listWorkflow(
+				{ ...options, command: "observe-list", listId },
+				fetcher,
+				undefined,
+				signal,
+			);
+			return z.object({ data: apiListObservationSchema }).parse(result).data;
+		},
+		async place(taskId, body, requestId, signal) {
+			await taskPlacementWorkflow(
+				{ ...options, command: "place-task", taskId, requestId },
+				fetcher,
+				encode(body),
+				signal,
+			);
 		},
 		async comments(taskId, cursor, signal) {
 			const result = await commentWorkflow(

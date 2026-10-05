@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { Locale } from "../domain/locale.ts";
+import * as m from "../paraglide/messages.js";
 import type { Entry } from "./api.ts";
 import type { Review } from "./controller.ts";
+import { type OrderingPlan, proposeOrdering } from "./ordering.ts";
 import {
 	entryDetails,
 	exactPayloadLines,
 	exactPayloadParts,
 	helpDetails,
 	loadedTaskCounts,
+	orderDetails,
 	priorityLabel,
 	reviewDetails,
 	reviewParts,
@@ -16,6 +19,7 @@ import {
 } from "./presentation.ts";
 import {
 	renderFrame,
+	safeText,
 	visibleCells,
 	wrapLines,
 	wrapParts,
@@ -187,10 +191,11 @@ describe("terminal task presentation", () => {
 	it("separates help topics and keeps narrow English words intact in all available help", () => {
 		for (const locale of ["en", "de", "es", "fr", "ro", "ar"] as Locale[]) {
 			const topics = helpDetails({ ...context, locale });
-			expect(topics.filter((line) => line === "")).toHaveLength(6);
+			expect(topics.filter((line) => line === "")).toHaveLength(7);
+			expect(topics).toContain(m.tui_help_order({}, { locale }));
 			expect(topics.join(" ")).not.toContain("undefined");
 			const wrapped = wrapWords(topics, 39);
-			expect(wrapped.filter((line) => line === "")).toHaveLength(6);
+			expect(wrapped.filter((line) => line === "")).toHaveLength(7);
 			for (const line of wrapped)
 				expect(visibleCells(line)).toBeLessThanOrEqual(39);
 		}
@@ -462,5 +467,257 @@ describe("terminal task presentation", () => {
 		expect(
 			JSON.parse(reviewDetails(review, context, true).slice(3).join("\n")).body,
 		).toEqual(body);
+	});
+});
+
+// Manual order: ID order and key order deliberately disagree.
+const siblings = [
+	{ id: "id-9", title: "Zulu", sortKey: "a0", done: false },
+	{ id: "id-1", title: "Alpha", sortKey: "a1", done: true },
+	{ id: "id-5", title: "Mike", sortKey: "a2", done: false },
+] as const;
+const orderPlan: OrderingPlan = {
+	taskId: "id-5",
+	title: "Mike",
+	workspaceId: "workspace",
+	listId: "list",
+	parentId: null,
+	parentTitle: null,
+	siblings,
+	index: 2,
+	childCount: 0,
+	placementToken: "c".repeat(64),
+	listToken: "d".repeat(64),
+};
+const controls = new RegExp(
+	`[${String.fromCharCode(27, 155, 8238, 8294)}]`,
+	"u",
+);
+
+describe("terminal task ordering presentation", () => {
+	it("lists siblings by manual key, not ID, with done rows and the selected marker", () => {
+		const lines = orderDetails(orderPlan, "", context);
+		const rows = lines.filter((line) => /^[> ] \d+\. /u.test(line));
+		expect(rows).toEqual(["  1. ○ Zulu", "  2. ● Alpha", "> 3. ○ Mike"]);
+		expect(lines.slice(0, 3)).toEqual([
+			"Type a position from 1 to 3, then press Enter.",
+			"> ",
+			"",
+		]);
+		expect(lines[3]).toBe(
+			m.tui_order_title({ title: "Mike" }, { locale: "en" }),
+		);
+		expect(lines).toContain(m.tui_order_group_root({}, { locale: "en" }));
+		expect(lines).toContain(
+			m.tui_order_current({ position: "3", total: "3" }, { locale: "en" }),
+		);
+		expect(lines).toContain(m.tui_order_browse_note({}, { locale: "en" }));
+		expect(lines).toContain(m.tui_order_readonly({}, { locale: "en" }));
+		expect(lines).toContain(
+			m.tui_order_position_prompt({ total: "3" }, { locale: "en" }),
+		);
+		expect(lines[1]).toBe("> ");
+		expect(orderDetails(orderPlan, "12", context)[1]).toBe("> 12");
+		expect(
+			orderDetails(orderPlan, "", { ...context, ascii: true }).filter((line) =>
+				/^[> ] \d+\. /u.test(line),
+			),
+		).toEqual(["  1. ( ) Zulu", "  2. (x) Alpha", "> 3. ( ) Mike"]);
+	});
+	it.each([
+		["", "> "],
+		["12", "> 12"],
+	])("shows the position prompt and %j echo in the first 40x20 frame with 105 siblings", (typed, echo) => {
+		const many = Array.from({ length: 105 }, (_, index) => ({
+			id: `id-${index + 1}`,
+			title: `Task ${index + 1}`,
+			sortKey: `a${String(index).padStart(3, "0")}`,
+			done: false,
+		}));
+		const plan: OrderingPlan = { ...orderPlan, siblings: many, index: 99 };
+		const details = orderDetails(plan, typed, context);
+		expect(details).toContain("Group: top-level tasks");
+		expect(details).toContain(
+			"Now at position 100 of 105. Completed tasks count.",
+		);
+		expect(details).toContain(
+			"Rows are in manual order. Browse lists stay in ID order.",
+		);
+		const frame = renderFrame(
+			{
+				title: "Order",
+				status: "Ready",
+				footer: "",
+				rows: [],
+				selected: 0,
+				framed: true,
+				detail: wrapLines(details, 39),
+				detailScrollHint: ["Scroll", "Up/Down"],
+				detailOffset: 0,
+			},
+			40,
+			20,
+		).split("\n");
+		const prompt = frame.findIndex((line) =>
+			line.includes("Type a position from 1 to 105"),
+		);
+		const field = frame.findIndex((line) => line.trimEnd() === echo.trimEnd());
+		expect(prompt).toBeGreaterThanOrEqual(0);
+		expect(field).toBeGreaterThan(prompt);
+		// Title, context, then the first detail rows: the field is in the top 6.
+		expect(field).toBeLessThan(6);
+	});
+	it("names the subtask parent group and the untouched children, only when they exist", () => {
+		const root = orderDetails(orderPlan, "", context).join("\n");
+		expect(root).not.toContain(
+			m.tui_order_children_stay({ count: 0 }, { locale: "en" }),
+		);
+		const nested: OrderingPlan = {
+			...orderPlan,
+			parentId: "parent-id",
+			parentTitle: "Weekly\u001b[2J plan‮",
+			childCount: 2,
+		};
+		const lines = orderDetails(nested, "", context);
+		expect(lines).toContain(
+			m.tui_order_group_subtasks(
+				{ parent: safeText("Weekly\u001b[2J plan‮") },
+				{ locale: "en" },
+			),
+		);
+		expect(lines).toContain(
+			m.tui_order_children_stay({ count: 2 }, { locale: "en" }),
+		);
+		expect(lines.join("\n")).not.toMatch(controls);
+		expect(
+			orderDetails({ ...nested, parentTitle: null }, "", context),
+		).toContain(
+			m.tui_order_group_subtasks({ parent: "parent-id" }, { locale: "en" }),
+		);
+	});
+	it("renders hostile titles and IDs without terminal controls", () => {
+		const hostile: OrderingPlan = {
+			...orderPlan,
+			title: "Mike\u001b[2J‮",
+			siblings: [
+				{
+					id: "id\u009b9",
+					title: "Zu\u001b[31mlu⁦",
+					sortKey: "a0",
+					done: false,
+				},
+				{ id: "id-5", title: "Mike\u001b[2J‮", sortKey: "a2", done: false },
+			],
+			index: 1,
+		};
+		expect(orderDetails(hostile, "", context).join("\n")).not.toMatch(controls);
+		const proposal = proposeOrdering(hostile, 1);
+		const review: Review = {
+			kind: "place",
+			taskId: "id-5",
+			title: "Mike",
+			body: proposal.body,
+			order: proposal.order,
+			requestId: "request",
+			uncertain: false,
+		};
+		const summary = reviewDetails(review, context, false);
+		expect(summary.join("\n")).not.toMatch(controls);
+		expect(summary).toContain(
+			m.tui_order_before(
+				{ task: `${safeText("Zu\u001b[31mlu⁦")} (${safeText("id\u009b9")})` },
+				{ locale: "en" },
+			),
+		);
+	});
+	const proposal = proposeOrdering(orderPlan, 1);
+	const placeReview = (
+		extra: Partial<Extract<Review, { kind: "place" }>> = {},
+	): Review => ({
+		kind: "place",
+		taskId: "id-5",
+		title: "Mike",
+		body: proposal.body,
+		order: proposal.order,
+		requestId: "request",
+		uncertain: false,
+		...extra,
+	});
+	it("summarizes the frozen move, neighbors, key and non-atomic caveat", () => {
+		const lines = reviewDetails(placeReview(), context, false);
+		const en = { locale: "en" as const };
+		expect(lines).toContain(
+			m.tui_order_move({ from: "3", to: "1", total: "3" }, en),
+		);
+		expect(lines).toContain(m.tui_order_start({}, en));
+		expect(lines).toContain(m.tui_order_before({ task: "Zulu (id-9)" }, en));
+		expect(lines).toContain(m.tui_order_key({ key: proposal.order.key }, en));
+		expect(lines).toContain(m.tui_order_not_atomic({}, en));
+		expect(lines).not.toContain(m.tui_order_children_stay({ count: 0 }, en));
+		expect(lines).toContain("PATCH /api/v1/tasks/id-5/placement");
+		const middle = proposeOrdering(orderPlan, 2);
+		const end = proposeOrdering({ ...orderPlan, index: 0 }, 3);
+		const children = {
+			...placeReview({ order: { ...proposal.order, childCount: 2 } }),
+		};
+		expect(reviewDetails(children, context, false)).toContain(
+			m.tui_order_children_stay({ count: 2 }, en),
+		);
+		expect(
+			reviewDetails(placeReview({ order: middle.order }), context, false),
+		).toContain(m.tui_order_after({ task: "Zulu (id-9)" }, en));
+		expect(
+			reviewDetails(placeReview({ order: end.order }), context, false),
+		).toContain(m.tui_order_end({}, en));
+		const caveat = reviewParts(placeReview(), context)
+			.flat()
+			.find((part) => part.text === m.tui_order_not_atomic({}, en));
+		expect(caveat?.tone).toBe("warning");
+	});
+	it("sends and shows exactly one placement PATCH payload with the encoded task ID", () => {
+		const review = placeReview({ taskId: "id/5 x" });
+		const payload = reviewPayload(review);
+		expect(payload).toEqual({
+			requestId: "request",
+			endpoint: "/api/v1/tasks/id%2F5%20x/placement",
+			method: "PATCH",
+			body: proposal.body,
+		});
+		expect(payload.body).toBe(proposal.body);
+		expect(proposal.body).toEqual({
+			workspaceId: "workspace",
+			listId: "list",
+			expectedState: "c".repeat(64),
+			targetListId: "list",
+			expectedTargetState: "d".repeat(64),
+			sortKey: proposal.order.key,
+			cascadeChildren: false,
+			expectedChildrenState: null,
+		});
+		const exact = reviewDetails(review, context, true);
+		expect(exact[1]).toBe("PATCH /api/v1/tasks/id%2F5%20x/placement");
+		expect(JSON.parse(exact.slice(2).join("\n"))).toEqual(payload);
+		expect(
+			reviewParts(review, context, true).map((line) =>
+				line.map((part) => part.text).join(""),
+			),
+		).toEqual(exact);
+	});
+	it.each([
+		"en",
+		"de",
+		"es",
+		"fr",
+		"ro",
+		"ar",
+	] as Locale[])("has no missing order text or unfilled parameters in %s", (locale) => {
+		const current = { ...context, locale };
+		const text = [
+			...orderDetails({ ...orderPlan, childCount: 2 }, "2", current),
+			...reviewDetails(placeReview(), current, false),
+		].join("\n");
+		expect(text).not.toContain("undefined");
+		expect(text).not.toMatch(/\{[A-Za-z]+\}/u);
+		expect(text).toContain(m.tui_order_not_atomic({}, { locale }));
 	});
 });
