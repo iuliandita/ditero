@@ -317,3 +317,28 @@ original-workspace authority remains required, including replay. Cancellation
 reaches HTTP and may leave a committed result uncertain. Retry only identical
 IDs, full payload and UUID manually; never substitute fresh observations or a
 new key. UUIDs share the account-wide write namespace.
+
+## Webhooks
+
+Three tools extend the fixed set to 33. They need a write token and make one
+request without request IDs, paging, filters, idempotency headers or retries.
+
+- `list_webhooks`: `{}`. Read-only metadata for up to 100 webhooks, never a secret.
+- `create_webhook`: `{ "revealSecret": true, "webhook": { "name": "Inbox", "listId": "LIST_ID", "expiresInDays": 90 } }`; `expiresInDays` is optional.
+- `revoke_webhook`: `{ "webhookId": "WEBHOOK_UUID" }`. Destructive and idempotent.
+
+`create_webhook` requires the literal `revealSecret: true`. The one-time webhook
+secret is returned in the tool result, so it enters the MCP client's context and
+conversation and cannot be fetched again; use the CLI to keep it out of a model
+transcript. It is not idempotent: each call creates another webhook, up to 20
+active. Once sent, the outcome is uncertain after a timeout or network failure
+(`network_error`), cancellation (`cancelled`), a 5xx server error (`temporarily_unavailable` for
+503, otherwise `http_error`),
+and a response that cannot be read, is oversized, redirected, not JSON, invalid
+(`invalid_response`) or does not match the request: the webhook may exist but the
+secret is discarded. Call `list_webhooks` and revoke any unexpected webhook before
+repeating. The request is never retried. Errors never echo server bodies; a full
+account returns `webhook_limit`, and 400, 401, 403, 404 and 429 keep their own
+definite codes without this advice. `revoke_webhook` accepts only an acknowledgement
+matching the requested UUID, and `list_webhooks` validates only the response schema
+and its 100-row cap.

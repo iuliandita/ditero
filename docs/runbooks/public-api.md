@@ -531,6 +531,19 @@ deliveries). This is a temporary error, not a failure of the request: the server
 never retries automatically. Retry a delivery with the **same** `deliveryId` so it
 stays idempotent; a new `deliveryId` can create a second task.
 
+The CLI (`list-webhooks`, `create-webhook --reveal-secret`, `revoke-webhook
+--webhook UUID`) and the MCP tools `list_webhooks`, `create_webhook` and
+`revoke_webhook` call these management endpoints with the configured write token.
+They send no idempotency header or query string and never retry. Create and revoke
+validate the response against the request; listing validates only the response
+schema and its 100-row cap. `create_webhook` returns the one-time secret into the MCP
+client's context, so prefer the CLI where that is not acceptable. Revocation can be
+retried after a `503`. A creation is uncertain after a timeout, network failure,
+cancellation, a 5xx server error, or an unreadable, oversized, redirected, non-JSON, invalid or
+mismatched response: the webhook may exist while its secret is lost, so list webhooks
+and revoke any unexpected one before creating again. Definite 400, 401, 403, 404, 409
+and 429 errors keep their own codes without that advice.
+
 ## Observed task placement
 
 Read `GET /api/v1/tasks/{id}/placement-observation` for the original scalar task,

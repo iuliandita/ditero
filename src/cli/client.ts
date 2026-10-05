@@ -131,6 +131,14 @@ export interface ResponseBudget {
 	bytes: number;
 }
 
+interface Exchange {
+	method: "GET" | "POST" | "PATCH" | "DELETE";
+	headers: Record<string, string>;
+	body?: string;
+	created: boolean;
+	failure: (status: number) => CliError;
+}
+
 export async function requestJson(
 	options: CliOptions,
 	url: URL,
@@ -145,6 +153,123 @@ export async function requestJson(
 	callerSignal?: AbortSignal,
 	maximumResponseBytes = MAX_RESPONSE_BYTES,
 ): Promise<unknown> {
+	const method = write ? (write.method ?? "POST") : "GET";
+	return exchange(
+		options,
+		url,
+		fetcher,
+		{
+			method,
+			headers: write
+				? {
+						"content-type": "application/json",
+						"idempotency-key": write.requestId,
+					}
+				: {},
+			body: write?.body,
+			created: !!write && method === "POST" && write.allowCreated !== false,
+			failure: httpError,
+		},
+		budget,
+		callerSignal,
+		maximumResponseBytes,
+	);
+}
+
+function webhookFailure(command: CliOptions["command"], status: number) {
+	if (status === 409 && command === "create-webhook")
+		return new CliError(
+			"webhook_limit",
+			"The webhook limit was reached. Revoke an unused webhook first.",
+			10,
+			status,
+		);
+	if (status === 503)
+		return new CliError(
+			"temporarily_unavailable",
+			command === "create-webhook"
+				? "The server is temporarily unavailable. List webhooks before retrying creation."
+				: "The server is temporarily unavailable. Try again later.",
+			9,
+			status,
+		);
+	return status === 409 || status === 410
+		? new CliError(
+				"http_error",
+				"The server could not complete the request.",
+				9,
+				status,
+			)
+		: httpError(status);
+}
+
+// Once a create POST is sent it may have committed with its one-time secret
+// lost. Definite HTTP status errors keep their own mapping; every other
+// post-send failure carries the same fixed recovery advice.
+const CREATE_UNCERTAIN_CODES = new Set([
+	"network_error",
+	"cancelled",
+	"invalid_response",
+]);
+const CREATE_UNCERTAIN_ADVICE =
+	"The webhook may have been created and its secret was not received. List webhooks and revoke any unexpected one before retrying.";
+
+// Webhook management carries no request ID: creation is never replayed and
+// revocation is naturally idempotent, so no idempotency header is sent.
+export async function requestWebhookJson(
+	options: CliOptions,
+	url: URL,
+	fetcher: Fetcher = fetch,
+	request: { method: "GET" | "POST" | "DELETE"; body?: string },
+	callerSignal?: AbortSignal,
+): Promise<unknown> {
+	// Nothing is sent when cancelled up front, so there is no uncertainty.
+	if (callerSignal?.aborted) cancelled();
+	try {
+		return await exchange(
+			options,
+			url,
+			fetcher,
+			{
+				method: request.method,
+				headers:
+					request.body === undefined
+						? {}
+						: { "content-type": "application/json" },
+				body: request.body,
+				created: request.method === "POST",
+				failure: (status) => webhookFailure(options.command, status),
+			},
+			{ bytes: 0 },
+			callerSignal,
+			MAX_RESPONSE_BYTES,
+		);
+	} catch (error) {
+		if (
+			options.command === "create-webhook" &&
+			error instanceof CliError &&
+			(CREATE_UNCERTAIN_CODES.has(error.code) ||
+				(error.status !== null && error.status >= 500))
+		)
+			throw new CliError(
+				error.code,
+				`${error.message} ${CREATE_UNCERTAIN_ADVICE}`,
+				error.exitCode,
+				error.status,
+			);
+		throw error;
+	}
+}
+
+async function exchange(
+	options: CliOptions,
+	url: URL,
+	fetcher: Fetcher,
+	request: Exchange,
+	budget: ResponseBudget,
+	callerSignal: AbortSignal | undefined,
+	maximumResponseBytes: number,
+): Promise<unknown> {
 	if (callerSignal?.aborted) cancelled();
 	const signal = AbortSignal.any([
 		AbortSignal.timeout(15_000),
@@ -153,21 +278,16 @@ export async function requestJson(
 	let response: Response;
 	try {
 		response = await fetcher(url, {
-			method: write ? (write.method ?? "POST") : "GET",
+			method: request.method,
 			redirect: "error",
 			credentials: "omit",
 			headers: {
 				authorization: `Bearer ${options.token}`,
 				accept: "application/json",
-				...(write
-					? {
-							"content-type": "application/json",
-							"idempotency-key": write.requestId,
-						}
-					: {}),
+				...request.headers,
 			},
 			signal,
-			...(write ? { body: write.body } : {}),
+			...(request.body === undefined ? {} : { body: request.body }),
 		});
 	} catch {
 		if (callerSignal?.aborted) cancelled();
@@ -179,15 +299,10 @@ export async function requestJson(
 	}
 	if (
 		response.status !== 200 &&
-		!(
-			write &&
-			(write.method ?? "POST") === "POST" &&
-			write.allowCreated !== false &&
-			response.status === 201
-		)
+		!(request.created && response.status === 201)
 	) {
 		await response.body?.cancel();
-		throw httpError(response.status);
+		throw request.failure(response.status);
 	}
 	if (
 		response.redirected ||
@@ -259,7 +374,10 @@ export async function discover(
 		options.command === "observe-task-relationships" ||
 		options.command === "update-task-relationships" ||
 		options.command === "update-task" ||
-		options.command === "delete-task"
+		options.command === "delete-task" ||
+		options.command === "list-webhooks" ||
+		options.command === "create-webhook" ||
+		options.command === "revoke-webhook"
 	)
 		throw new CliError(
 			"invalid_arguments",

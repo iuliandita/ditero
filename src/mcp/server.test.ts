@@ -80,6 +80,9 @@ test("lists nine read tools and fixed workflow tools with strict bounded schemas
 		"create_task_comment",
 		"update_task_comment",
 		"delete_task_comment",
+		"list_webhooks",
+		"create_webhook",
+		"revoke_webhook",
 	]);
 	for (const tool of tools) {
 		expect(tool.description).toBeTruthy();
@@ -98,8 +101,10 @@ test("lists nine read tools and fixed workflow tools with strict bounded schemas
 				"create_task_comment",
 				"update_task_comment",
 				"delete_task_comment",
+				"create_webhook",
+				"revoke_webhook",
 			].includes(tool.name),
-			idempotentHint: true,
+			idempotentHint: tool.name !== "create_webhook",
 			destructiveHint: [
 				"complete_task",
 				"update_task",
@@ -110,6 +115,7 @@ test("lists nine read tools and fixed workflow tools with strict bounded schemas
 				"place_task",
 				"update_task_comment",
 				"delete_task_comment",
+				"revoke_webhook",
 			].includes(tool.name),
 			openWorldHint: true,
 		});
@@ -144,7 +150,7 @@ test("returns matching JSON text and structured API envelopes for all read tools
 			{ type: "text", text: JSON.stringify(result.structuredContent) },
 		]);
 	}
-	expect(urls.map((url) => url.origin)).toEqual(Array(10).fill(env.DITERO_URL));
+	expect(urls.map((url) => url.origin)).toEqual(Array(11).fill(env.DITERO_URL));
 });
 
 test("passes task filters and opaque cursors without permitting authority changes", async () => {
@@ -332,7 +338,7 @@ test("real Bun stdio speaks SDK protocol, rejects API redirects, and prints no p
 	client.onerror = (error) => errors.push(error);
 	await client.connect(transport);
 	cleanup.push(() => client.close());
-	expect((await client.listTools()).tools).toHaveLength(30);
+	expect((await client.listTools()).tools).toHaveLength(33);
 	expect(
 		(await client.callTool({ name: "get_profile", arguments: {} }))
 			.structuredContent,

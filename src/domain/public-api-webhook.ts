@@ -126,6 +126,10 @@ export const webhookCreatedSchema = webhookMetadataSchema
 	.extend({ secret: z.string().regex(SECRET) })
 	.strict();
 
+export const webhookRevokedSchema = z
+	.object({ id: z.uuid(), revoked: z.literal(true) })
+	.strict();
+
 export const webhookDeliveryAckSchema = z
 	.object({ id: PUBLIC_API_ID, listId: PUBLIC_API_ID, replayed: z.boolean() })
 	.strict();
