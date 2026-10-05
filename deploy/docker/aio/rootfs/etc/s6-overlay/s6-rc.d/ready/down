@@ -1,0 +1,1 @@
+/usr/bin/env -i PATH=/command:/usr/bin:/bin /usr/local/lib/ditero-aio/step.sh unready

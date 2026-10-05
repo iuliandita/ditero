@@ -1,0 +1,1 @@
+/usr/bin/env -i PATH=/command:/usr/local/bin:/usr/bin:/bin /usr/local/lib/ditero-aio/step.sh migrate

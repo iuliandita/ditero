@@ -1,0 +1,2 @@
+#!/bin/sh
+exec env -i PATH=/command:/usr/bin:/bin /usr/local/lib/ditero-aio/finish.sh "$@"

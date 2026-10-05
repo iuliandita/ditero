@@ -1,0 +1,76 @@
+# syntax=docker/dockerfile:1
+# Optional self-contained variant. Build context is repository root.
+# Supply the qualified Ditero Zero Alpine image by immutable multiarch digest.
+ARG ZERO_RUNTIME_IMAGE
+ARG BUN_IMAGE=oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0
+FROM ${BUN_IMAGE} AS build
+WORKDIR /app
+COPY package.json bun.lock ./
+COPY patches ./patches
+RUN bun install --frozen-lockfile
+COPY . .
+RUN bunx vite build
+FROM ${BUN_IMAGE} AS prod-deps
+WORKDIR /app
+COPY package.json bun.lock ./
+COPY patches ./patches
+RUN bun install --frozen-lockfile --production --omit=optional --omit=peer
+FROM ${ZERO_RUNTIME_IMAGE} AS all-in-one
+ARG ZERO_RUNTIME_IMAGE
+ARG TARGETARCH
+USER 0
+# Root PID1/bootstrap is specific to this optional target; service UIDs are separate.
+RUN printf '%s' "$ZERO_RUNTIME_IMAGE" | grep -Eq '@sha256:[0-9a-f]{64}$' \
+ && ! awk -F: '$3==1000||$3==1001||$3==1002{found=1}END{exit !found}' /etc/passwd \
+ && ! awk -F: '$3==1000||$3==1001||$3==1002{found=1}END{exit !found}' /etc/group \
+ && ! grep -Eq '^(app|postgres|zero):' /etc/passwd \
+ && ! grep -Eq '^(app|postgres|zero):' /etc/group \
+ && addgroup -g 1000 app && adduser -D -H -u 1000 -G app app \
+ && addgroup -g 1001 postgres && adduser -D -H -u 1001 -G postgres postgres \
+ && addgroup -g 1002 zero && adduser -D -H -u 1002 -G zero zero
+COPY deploy/docker/aio/packages.lock.json deploy/docker/aio/fetch-artifacts.mjs deploy/docker/aio/assert-base.mjs /tmp/aio-artifacts/
+RUN node /tmp/aio-artifacts/assert-base.mjs "$TARGETARCH" \
+ && node /tmp/aio-artifacts/fetch-artifacts.mjs "$TARGETARCH" /tmp/aio-pinned \
+ && apk add --no-network --no-cache --keys-dir /tmp/aio-pinned/keys --repositories-file /dev/null /tmp/aio-pinned/apks/*.apk \
+ && tar -Jxpf /tmp/aio-pinned/s6-noarch.tar.xz -C / \
+ && case "$TARGETARCH" in amd64) s6arch=x86_64;; arm64) s6arch=aarch64;; *) exit 1;; esac \
+ && tar -Jxpf "/tmp/aio-pinned/s6-$s6arch.tar.xz" -C / \
+ && for name in postgres initdb psql; do test -x "/usr/libexec/postgresql18/$name" && test ! -e "/usr/local/bin/$name" && test ! -L "/usr/local/bin/$name" && ln -s "/usr/libexec/postgresql18/$name" "/usr/local/bin/$name" || exit 1; done \
+ && for name in s6-setuidgid s6-envdir; do test -x "/command/$name" && test ! -e "/usr/local/bin/$name" && test ! -L "/usr/local/bin/$name" && ln -s "/command/$name" "/usr/local/bin/$name" || exit 1; done \
+ && rm -rf /tmp/aio-pinned /tmp/aio-artifacts
+COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=prod-deps /app/node_modules /app/node_modules
+COPY --from=build /app/dist /app/dist
+COPY --from=build /app/src /app/src
+COPY --from=build /app/drizzle /app/drizzle
+COPY --from=build /app/package.json /app/bun.lock /app/
+COPY --from=build /app/apps/push-relay/src/contracts.ts /app/apps/push-relay/src/proof.ts /app/apps/push-relay/src/
+COPY deploy/docker/aio/rootfs/ /
+RUN test "$(id -u app)" = 1000 && test "$(id -u postgres)" = 1001 && test "$(id -u zero)" = 1002 \
+ && mkdir -p /var/lib/ditero/pg18 /var/lib/ditero/zero /var/lib/ditero/attachments \
+ && command -v bun && command -v node && command -v postgres && command -v initdb && command -v psql \
+ && command -v curl && command -v timeout && test -x /init \
+ && bun --version && node --version && postgres --version \
+ && test -x /opt/app/node_modules/.bin/zero-cache && test -x /usr/local/bin/litestream && test -x /usr/local/bin/litestream-v5 \
+ && test -x /usr/local/lib/ditero-aio/healthcheck.sh \
+ && cd /opt/app && node verify.mjs
+WORKDIR /app
+ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2 S6_READ_ONLY_ROOT=1 S6_KEEP_ENV=0 \
+ NODE_ENV=production API_PORT=3000 SERVE_STATIC_DIR=/app/dist \
+ ZERO_IN_CONTAINER="" ZERO_LITESTREAM_CONFIG_PATH="" ZERO_LITESTREAM_EXECUTABLE="" \
+ ZERO_LITESTREAM_EXECUTABLE_V5="" ZERO_LOG_FORMAT="" ZERO_SERVER_VERSION=""
+VOLUME ["/var/lib/ditero/pg18", "/var/lib/ditero/zero", "/var/lib/ditero/attachments"]
+EXPOSE 3000 4848
+HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=3 \
+ CMD ["/usr/local/lib/ditero-aio/healthcheck.sh"]
+ENTRYPOINT ["/init"]
+CMD []
+ARG DITERO_GIT_SHA=""
+ARG DITERO_CHANNEL=""
+LABEL org.opencontainers.image.title="Ditero all-in-one" \
+ org.opencontainers.image.source="https://github.com/iuliandita/ditero" \
+ org.opencontainers.image.url="https://github.com/iuliandita/ditero" \
+ org.opencontainers.image.description="Optional self-contained Ditero with PostgreSQL and Zero" \
+ org.opencontainers.image.licenses="MIT" ditero.channel="${DITERO_CHANNEL}" \
+ org.opencontainers.image.revision="${DITERO_GIT_SHA}" \
+ org.opencontainers.image.version="${DITERO_CHANNEL}"

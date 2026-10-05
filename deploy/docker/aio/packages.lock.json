@@ -1,0 +1,385 @@
+{
+	"schemaVersion": 1,
+	"baseImage": {
+		"name": "alpine:3.24.2",
+		"digest": "sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
+	},
+	"keys": [
+		{
+			"key": "alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
+			"url": "https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
+			"sha256": "207e4696d3c05f7cb05966aee557307151f1f00217af4143c1bcaf33b8df733f"
+		},
+		{
+			"key": "alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub",
+			"url": "https://alpinelinux.org/keys/alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub",
+			"sha256": "d11f6b21c61b4274e182eb888883a8ba8acdbf820dcc7a6d82a7d9fc2fd2836d"
+		}
+	],
+	"packages": [
+		{
+			"architecture": "x86_64",
+			"name": "libssl3",
+			"version": "3.5.9-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.9-r0.apk",
+			"sha256": "05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "libcrypto3",
+			"version": "3.5.9-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk",
+			"sha256": "6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "musl",
+			"version": "1.2.6-r2",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/musl-1.2.6-r2.apk",
+			"sha256": "573712e2f49c15bfc20a2699f204acdfc74c772722b15e7353d768057fae0e71"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "postgresql18-client",
+			"version": "18.6-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/postgresql18-client-18.6-r0.apk",
+			"sha256": "7c1926e910c680312135e0ffe37f624ae9f00ba95c1c1a34bfadce0d9bea3e2d"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "zstd-libs",
+			"version": "1.5.7-r2",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/zstd-libs-1.5.7-r2.apk",
+			"sha256": "23c6065b0049b2406441564bcf0032515a43f78e80d76fcb85535a3803ef5d4e"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "zlib",
+			"version": "1.3.2-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/zlib-1.3.2-r0.apk",
+			"sha256": "b636306cbf8a0c15493b38de608ba11605fd8f11ade631f5ece6f7fdf5a1e09e"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "readline",
+			"version": "8.3.3-r1",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/readline-8.3.3-r1.apk",
+			"sha256": "766911ecb986a6c5cf0841a6b556cd1e9dbbf22b3559726de32416486cd15c81"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "libncursesw",
+			"version": "6.6_p20260516-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libncursesw-6.6_p20260516-r0.apk",
+			"sha256": "cf8caa8a88bc4ce9d9e395567fefaf9ef7fbd55c50ae6155b35c1b58f3755023"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "ncurses-terminfo-base",
+			"version": "6.6_p20260516-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ncurses-terminfo-base-6.6_p20260516-r0.apk",
+			"sha256": "ce83be6d0bd10584a53c3a5868cc1595ce5f0f8e0b621f8f7f70b6144e521fc9"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "libpq",
+			"version": "18.6-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libpq-18.6-r0.apk",
+			"sha256": "a48a15bc7f09bb7a6eeea86f326eec007ea02e626fefdd098034096b6e70489b"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "lz4-libs",
+			"version": "1.10.0-r1",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/lz4-libs-1.10.0-r1.apk",
+			"sha256": "3ad4912ab8ecf5f6236fdb751f88243006b3a8f152684e455b781e16284dd298"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "postgresql-common",
+			"version": "1.3-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/postgresql-common-1.3-r0.apk",
+			"sha256": "749d8a88b56c84b415372655435600c749345113e21ce8fe9964f7e22345cbff"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "busybox-binsh",
+			"version": "1.37.0-r31",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/busybox-binsh-1.37.0-r31.apk",
+			"sha256": "93f803ae5db6b729c0f66f4afba6e907ccc17d7d5f8b8c3d25bdb4636de2c48a"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "busybox",
+			"version": "1.37.0-r31",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/busybox-1.37.0-r31.apk",
+			"sha256": "0e626fa97cf937fda7bba4ed4dde8e2f2dbb5083ac34e02180cec0c4eba9351b"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "postgresql18",
+			"version": "18.6-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/postgresql18-18.6-r0.apk",
+			"sha256": "22ffa368af12ba23d18e8f20c1c0c3fe95571585c790dc75f9be3c86b3c7312c"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "libxml2",
+			"version": "2.13.9-r2",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libxml2-2.13.9-r2.apk",
+			"sha256": "4b2f986159c659f014b942fe8a5d70c67af475153ca826c3dd53389eea46a300"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "xz-libs",
+			"version": "5.8.4-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/xz-libs-5.8.4-r0.apk",
+			"sha256": "ab362dd515ead04c31a6c302163248da7aa4813e283c971e6dd3f789b453a1d9"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "liburing",
+			"version": "2.14-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/liburing-2.14-r0.apk",
+			"sha256": "77b170b74dd0d2da3eef4a60cf75121baf6de3b308f8b3db8808d4e697602772"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "libldap",
+			"version": "2.6.15-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libldap-2.6.15-r0.apk",
+			"sha256": "e6bcaad784d2b3c8585b1d5ac2a5f69ed414c5328231e2b7e4b69b25de6cb948"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "libsasl",
+			"version": "2.1.28-r9",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libsasl-2.1.28-r9.apk",
+			"sha256": "ae838d4be2c0eba0d8cdc4fe5029fcc2cb187ec5814366b9bb954e41b8dcd1d6"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "gdbm",
+			"version": "1.26-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/gdbm-1.26-r0.apk",
+			"sha256": "3278ccba30b241168ca4ab93c919be805411b918fdc062f06d3684d12dc33ae3"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "icu-libs",
+			"version": "78.1-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/icu-libs-78.1-r0.apk",
+			"sha256": "ef9a3035f23886cf0da5869902c736a775cf3db151ae1ab7f1406e2a0f84bd64"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "libstdc++",
+			"version": "15.2.0-r5",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libstdc++-15.2.0-r5.apk",
+			"sha256": "14c987b556f5385a5db18376e788c75f37d85321b8dc1920d926ea7daac1d6f6"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "libgcc",
+			"version": "15.2.0-r5",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libgcc-15.2.0-r5.apk",
+			"sha256": "393dcd32629f06d7d85409c272d142d0c082772d10b87ef55ee82f47de3be637"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "icu-data-full",
+			"version": "78.1-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/icu-data-full-78.1-r0.apk",
+			"sha256": "10d50d0bc39e4d702ad54c5b52e4721fda07cd7e9702938ee64d126aefcf42b5"
+		},
+		{
+			"architecture": "x86_64",
+			"name": "tzdata",
+			"version": "2026d-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/tzdata-2026d-r0.apk",
+			"sha256": "e13f0f891c5e231bfb89727556bc05e9a44fce6389c6c1505f2772369da5a262"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "libssl3",
+			"version": "3.5.9-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.9-r0.apk",
+			"sha256": "20ac252b276d73f2c69c1d25f84537c7fba81caefc026c6be1094b394af2082e"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "libcrypto3",
+			"version": "3.5.9-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.9-r0.apk",
+			"sha256": "2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "musl",
+			"version": "1.2.6-r2",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/musl-1.2.6-r2.apk",
+			"sha256": "5e9674b7f41152fe2119093b5cb4c13eaaadb19c2d5422b2d7267913e663ee6e"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "postgresql18-client",
+			"version": "18.6-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/postgresql18-client-18.6-r0.apk",
+			"sha256": "8a2b694ac3615150725c98adffa3b539641eda33a11cefd015cb595dfa7481aa"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "zstd-libs",
+			"version": "1.5.7-r2",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/zstd-libs-1.5.7-r2.apk",
+			"sha256": "2bb5136c89f5b0bbe1554c8915a3b520d5aa63ae2a51d4d821eb81698db5a818"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "zlib",
+			"version": "1.3.2-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/zlib-1.3.2-r0.apk",
+			"sha256": "a535991af7c9e8369ebbf33c1e388c1bc63c87ead5142eddaee71f65836c33e3"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "readline",
+			"version": "8.3.3-r1",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/readline-8.3.3-r1.apk",
+			"sha256": "9f0ae0923c02b0d6aba62e9173542b65396ba3f0efefcbf087ea32f1120e7b34"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "libncursesw",
+			"version": "6.6_p20260516-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libncursesw-6.6_p20260516-r0.apk",
+			"sha256": "51a7aa4b3ec40b144d0801c0544e0a9f62e2a41d04b6067bb5e95786040741c6"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "ncurses-terminfo-base",
+			"version": "6.6_p20260516-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/ncurses-terminfo-base-6.6_p20260516-r0.apk",
+			"sha256": "e0c546b9461bdce206a90bc720cb69aa4628b5a5b8d908c3e5084e00f28f6a9d"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "libpq",
+			"version": "18.6-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libpq-18.6-r0.apk",
+			"sha256": "b70f46c6095d498ad4b1eb8dc7c439a287f6e9bc2954ac1d925acc11bb34a13f"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "lz4-libs",
+			"version": "1.10.0-r1",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/lz4-libs-1.10.0-r1.apk",
+			"sha256": "af6cbe553adda941e04ac40cf0123455b714d65392472389113e7d6dcebbd8d8"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "postgresql-common",
+			"version": "1.3-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/postgresql-common-1.3-r0.apk",
+			"sha256": "ecddbd6272f5034f30d78ff59634c07f862a13a2ad3d29078c0e7985b827fc73"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "busybox-binsh",
+			"version": "1.37.0-r31",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/busybox-binsh-1.37.0-r31.apk",
+			"sha256": "f3a1b2257cfa114ff20de05c665f380695385d589908bfc9af5768f39fef9ef5"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "busybox",
+			"version": "1.37.0-r31",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/busybox-1.37.0-r31.apk",
+			"sha256": "18e3490a6f024004b2b13dd4b54bd50ccd82894938023b2d4eab389a4edcba70"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "postgresql18",
+			"version": "18.6-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/postgresql18-18.6-r0.apk",
+			"sha256": "889f8b4595140af7bb74e2d968d5eac42c3591f409abdc418ba2738bc60451d1"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "libxml2",
+			"version": "2.13.9-r2",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libxml2-2.13.9-r2.apk",
+			"sha256": "0a860a26ebdfea491498386fe682130f4c5565e46ee8e0a2281256db2ef1be27"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "xz-libs",
+			"version": "5.8.4-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/xz-libs-5.8.4-r0.apk",
+			"sha256": "9be375832e747afe14f98e400e8b55d8f6fde25e41663090c81600628daab093"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "liburing",
+			"version": "2.14-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/liburing-2.14-r0.apk",
+			"sha256": "388e70b040b6ec26bd8d171e514ac68626b00a1871a0134c53de22ed059c2627"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "libldap",
+			"version": "2.6.15-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libldap-2.6.15-r0.apk",
+			"sha256": "2cb81082866cc8571a89fd9c29c8d3cf0bde83d604275492a24bb9563c9466bf"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "libsasl",
+			"version": "2.1.28-r9",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libsasl-2.1.28-r9.apk",
+			"sha256": "0be9020fdb51705c6f393bad6e533bbcd70f68c148ab0b88d35ef39a4ce8959f"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "gdbm",
+			"version": "1.26-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/gdbm-1.26-r0.apk",
+			"sha256": "bad50eb26533e2f58e014fbcd3c1744f2fdb79954af6e3c188ccd059251c7790"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "icu-libs",
+			"version": "78.1-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/icu-libs-78.1-r0.apk",
+			"sha256": "2393882dcf1e3f5be98696665c3468dd0d2a85cd568d50abd232729863df9738"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "libstdc++",
+			"version": "15.2.0-r5",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libstdc++-15.2.0-r5.apk",
+			"sha256": "2302e766d4e4926038ec166ecb85837ee884576115236ddb565e3a5fca4a11d7"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "libgcc",
+			"version": "15.2.0-r5",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libgcc-15.2.0-r5.apk",
+			"sha256": "369aaa6e9d099a737bad6dd3e6c2fe7bb1547ca26d22b94ee0411228f709b403"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "icu-data-full",
+			"version": "78.1-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/icu-data-full-78.1-r0.apk",
+			"sha256": "e5034d8b51ad6f4b2a934afb39bde070dcaafaafa8251b56948e9d480978d092"
+		},
+		{
+			"architecture": "aarch64",
+			"name": "tzdata",
+			"version": "2026d-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/tzdata-2026d-r0.apk",
+			"sha256": "361f751cc2100ff7c979372e9ac0a93bd932ac58580bb723df2ecbea36b96baf"
+		}
+	]
+}

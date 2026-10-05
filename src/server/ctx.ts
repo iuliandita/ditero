@@ -2,16 +2,13 @@
 // only proves who minted the token; the database decides whether the session
 // behind it is still live, so a revoked session or device stops working at once.
 // createRemoteJWKSet fetches + caches the signing keys from the auth server.
-import {
-	createRemoteJWKSet,
-	type JWTPayload,
-	type JWTVerifyGetKey,
-	jwtVerify,
-} from "jose";
+import { type JWTPayload, type JWTVerifyGetKey, jwtVerify } from "jose";
 import type { Pool } from "pg";
+import { auth } from "../auth/auth.ts";
 import { pool } from "../db/client.ts";
 import { withUserContext } from "../db/user-context.ts";
 import { ZERO_TOKEN_TTL_SECONDS, zeroAuthConfig } from "./zero-auth.ts";
+import { createFirstPartyJWKSet } from "./zero-jwks.ts";
 
 const BEARER_JWT =
 	/^Bearer ([A-Za-z0-9_-]{1,2048}\.[A-Za-z0-9_-]{1,2048}\.[A-Za-z0-9_-]{1,2048})$/i;
@@ -111,7 +108,7 @@ const zero = zeroAuthConfig();
 
 export const ctxFromAuthHeader = createZeroVerifier({
 	pool,
-	keys: createRemoteJWKSet(new URL(zero.jwksUrl)),
+	keys: createFirstPartyJWKSet(new URL(zero.jwksUrl), auth.handler),
 	issuer: zero.issuer,
 	audience: zero.audience,
 });
