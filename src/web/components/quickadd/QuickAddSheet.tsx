@@ -121,6 +121,36 @@ export function QuickAddSheet({
 		locale,
 	});
 
+	// Everything a voice result or a recovery announcement is only valid for.
+	const voiceScope = JSON.stringify([
+		open,
+		zero.userID,
+		nativeAccount !== null,
+		currentListId,
+		targetList?.id ?? null,
+		targetWs,
+		locale,
+	]);
+
+	// A refused Enter is announced through the always-mounted live region. The
+	// sequence never repeats, so a repeated refusal remounts the child and is
+	// read again; the notice only counts while voice still blocks in this scope.
+	const blockedSeq = useRef(0);
+	const [blockedNotice, setBlockedNotice] = useState<{
+		scope: string;
+		seq: number;
+	} | null>(null);
+	useEffect(() => {
+		if (!voice.blocking) setBlockedNotice(null);
+	}, [voice.blocking]);
+	useEffect(() => {
+		setBlockedNotice((n) => (n && n.scope !== voiceScope ? null : n));
+	}, [voiceScope]);
+	const blockedAnnouncement =
+		blockedNotice && blockedNotice.scope === voiceScope && voice.blocking
+			? blockedNotice.seq
+			: null;
+
 	function acceptVoiceText(index: number) {
 		const next = voice.accept(raw, index);
 		if (next === null) return;
@@ -159,7 +189,13 @@ export function QuickAddSheet({
 
 	async function submit() {
 		const t = title.trim();
-		if (busy || !targetList || !t || voice.blockedNow()) return;
+		if (busy || !targetList || !t) return;
+		// Read fresh at event time: this still fences every write.
+		if (voice.blockedNow()) {
+			blockedSeq.current += 1;
+			setBlockedNotice({ scope: voiceScope, seq: blockedSeq.current });
+			return;
+		}
 		setBusy(true);
 		setError(null);
 		try {
@@ -247,15 +283,7 @@ export function QuickAddSheet({
 				}}
 			/>
 			<VoiceCapture
-				key={JSON.stringify([
-					open,
-					zero.userID,
-					nativeAccount !== null,
-					currentListId,
-					targetList?.id ?? null,
-					targetWs,
-					locale,
-				])}
+				key={voiceScope}
 				voice={voice}
 				onUse={acceptVoiceText}
 				onFocusInput={() => inputRef.current?.focus()}
@@ -286,6 +314,17 @@ export function QuickAddSheet({
 					{m.quickadd_voice_blocked()}
 				</p>
 			)}
+			<div
+				role="status"
+				aria-live="polite"
+				aria-atomic="true"
+				data-testid="quickadd-voice-blocked-announcement"
+				className="sr-only"
+			>
+				{blockedAnnouncement !== null && (
+					<span key={blockedAnnouncement}>{m.quickadd_voice_blocked()}</span>
+				)}
+			</div>
 			<div className="flex items-center justify-between gap-2">
 				<span className="truncate text-xs text-muted-foreground">
 					{targetList

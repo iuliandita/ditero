@@ -2514,10 +2514,10 @@
 	"quickadd_voice_unsupported_pack": "Le pack vocal de cette langue n'est pas installé sur l'appareil, la saisie vocale reste donc désactivée. Continue à écrire.",
 	"quickadd_voice_pack_pending": "Le pack vocal de l’appareil n’est pas prêt. Continue à écrire ou réessaie plus tard.",
 	"quickadd_voice_insecure": "La saisie vocale nécessite une connexion sécurisée (HTTPS). Continue à écrire.",
-	"quickadd_voice_permission": "L'accès au micro est bloqué. Autorise le micro pour ce site dans les réglages du navigateur, puis réessaie.",
-	"quickadd_voice_no_speech": "Rien n'a été entendu. Ton texte est inchangé. Réessaie.",
-	"quickadd_voice_audio_capture": "Aucun micro détecté. Vérifie ton micro, puis réessaie.",
-	"quickadd_voice_too_long": "C'était trop long pour être utilisé. Dis une tâche plus courte.",
-	"quickadd_voice_failed": "La saisie vocale s'est arrêtée. Ton texte est inchangé. Réessaie.",
+	"quickadd_voice_permission": "L'accès au micro est bloqué. Autorise le micro pour ce site dans les réglages du navigateur, puis choisis « Vérifier à nouveau » et ensuite « Dicter ».",
+	"quickadd_voice_no_speech": "Rien n'a été entendu. Ton texte est inchangé. Choisis « Vérifier à nouveau », puis « Dicter ».",
+	"quickadd_voice_audio_capture": "Aucun micro détecté. Vérifie ton micro, puis choisis « Vérifier à nouveau » et ensuite « Dicter ».",
+	"quickadd_voice_too_long": "C'était trop long pour être utilisé. Choisis « Vérifier à nouveau », puis « Dicter », et dis une tâche plus courte.",
+	"quickadd_voice_failed": "La saisie vocale s'est arrêtée. Ton texte est inchangé. Choisis « Vérifier à nouveau », puis « Dicter ».",
 	"quickadd_voice_blocked": "Termine ou annule la saisie vocale pour ajouter la tâche."
 }

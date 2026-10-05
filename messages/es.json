@@ -2514,10 +2514,10 @@
 	"quickadd_voice_unsupported_pack": "El paquete de voz de este idioma no está instalado en el dispositivo, así que la entrada de voz sigue desactivada. Sigue escribiendo.",
 	"quickadd_voice_pack_pending": "El paquete de voz del dispositivo aún no está listo. Sigue escribiendo o inténtalo más tarde.",
 	"quickadd_voice_insecure": "La entrada de voz necesita una conexión segura (HTTPS). Sigue escribiendo.",
-	"quickadd_voice_permission": "El acceso al micrófono está bloqueado. Permite el micrófono para este sitio en los ajustes del navegador y vuelve a intentarlo.",
-	"quickadd_voice_no_speech": "No se oyó nada. Tu texto no ha cambiado. Inténtalo de nuevo.",
-	"quickadd_voice_audio_capture": "No se encontró ningún micrófono. Revisa el micrófono e inténtalo de nuevo.",
-	"quickadd_voice_too_long": "Fue demasiado largo para usarlo. Di una tarea más corta.",
-	"quickadd_voice_failed": "La entrada de voz se detuvo. Tu texto no ha cambiado. Inténtalo de nuevo.",
+	"quickadd_voice_permission": "El acceso al micrófono está bloqueado. Permite el micrófono para este sitio en los ajustes del navegador y pulsa después «Comprobar de nuevo» y luego «Dictar».",
+	"quickadd_voice_no_speech": "No se oyó nada. Tu texto no ha cambiado. Pulsa «Comprobar de nuevo» y luego «Dictar».",
+	"quickadd_voice_audio_capture": "No se encontró ningún micrófono. Revisa el micrófono y pulsa «Comprobar de nuevo» y luego «Dictar».",
+	"quickadd_voice_too_long": "Fue demasiado largo para usarlo. Pulsa «Comprobar de nuevo», luego «Dictar» y di una tarea más corta.",
+	"quickadd_voice_failed": "La entrada de voz se detuvo. Tu texto no ha cambiado. Pulsa «Comprobar de nuevo» y luego «Dictar».",
 	"quickadd_voice_blocked": "Termina o cancela la entrada de voz para añadir la tarea."
 }

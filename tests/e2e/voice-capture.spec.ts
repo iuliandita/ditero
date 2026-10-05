@@ -18,6 +18,8 @@ import {
 
 type Fake = {
 	started: number;
+	checks: number;
+	lastCheck: { langs: string[]; processLocally: boolean } | null;
 	instances: number;
 	holdAvailability: boolean;
 	releaseAvailability(): void;
@@ -50,6 +52,9 @@ async function installFake(page: Page) {
 		});
 		const fake = {
 			started: 0,
+			// Capability checks; a check never starts a recognition.
+			checks: 0,
+			lastCheck: null as { langs: string[]; processLocally: boolean } | null,
 			get instances() {
 				return instances.length;
 			},
@@ -74,7 +79,12 @@ async function installFake(page: Page) {
 			onnomatch: ((e: unknown) => void) | null = null;
 			onend: ((e: unknown) => void) | null = null;
 			saved: Handlers["onresult"] = null;
-			static available() {
+			static available(options: { langs: string[]; processLocally: boolean }) {
+				fake.lastCheck = {
+					langs: [...options.langs],
+					processLocally: options.processLocally,
+				};
+				fake.checks += 1;
 				if (!fake.holdAvailability) return Promise.resolve("available");
 				return new Promise<string>((resolve) => {
 					release = () => resolve("available");
@@ -227,24 +237,99 @@ test("multiple alternatives are radios and the chosen one is used", async ({
 	await expect(input).toHaveValue("Call Anne");
 });
 
-test("Enter cannot save while recording or in review", async ({ page }) => {
+test("Enter cannot save while recording or in review, and the refusal is announced", async ({
+	page,
+}) => {
+	const blockedText = "Finish or cancel voice input to add the task.";
 	const input = await openQuickAdd(page, "voice3");
+	const live = page.getByTestId("quickadd-voice-blocked-announcement");
+	const announced = live.locator("span");
+	// The text of the announced child, or "" once a fresh child replaced the
+	// marked one. The mark lives on the DOM node, so only a new node loses it.
+	const markOf = () =>
+		announced.evaluate((el) => (el as HTMLElement).dataset.mark ?? "");
 	await input.fill("Water plants");
+
+	// The live region is mounted up front, polite and atomic, and stays empty
+	// until Enter is actually refused.
+	await expect(live).toHaveAttribute("role", "status");
+	await expect(live).toHaveAttribute("aria-live", "polite");
+	await expect(live).toHaveAttribute("aria-atomic", "true");
+	await expect(live).toBeEmpty();
 	await dictate(page);
 	await expect(page.getByTestId("quickadd-submit")).toBeDisabled();
-	await input.press("Enter");
+	await expect(live).toBeEmpty();
+
+	await input.focus();
+	await page.keyboard.press("Enter");
+	await expect(live).toHaveText(blockedText);
+	await expect(announced).toHaveCount(1);
 	await expect(input).toHaveValue("Water plants");
+	await expect(input).toBeFocused();
+	await expect(page.getByTestId("quickadd-voice-stop")).toBeVisible();
+	await expect(taskList(page)).not.toContainText("Water plants");
+	expect(await startedCount(page)).toBe(1);
+
+	// A repeated refusal is a fresh DOM update, not the same node re-read.
+	await announced.evaluate((el) => {
+		(el as HTMLElement).dataset.mark = "first";
+	});
+	expect(await markOf()).toBe("first");
+	await page.keyboard.press("Enter");
+	await expect.poll(markOf).toBe("");
+	await expect(live).toHaveText(blockedText);
+	await expect(announced).toHaveCount(1);
+	await expect(input).toHaveValue("Water plants");
+	await expect(input).toBeFocused();
+	await expect(page.getByTestId("quickadd-voice-stop")).toBeVisible();
+	expect(await startedCount(page)).toBe(1);
+
+	// A stopped recording still blocks while the engine has not ended.
+	await page.getByTestId("quickadd-voice-stop").click();
+	await expect(page.getByTestId("quickadd-voice-status")).toHaveText(
+		"Finishing...",
+	);
+	await announced.evaluate((el) => {
+		(el as HTMLElement).dataset.mark = "stopping";
+	});
+	await input.focus();
+	await page.keyboard.press("Enter");
+	await expect.poll(markOf).toBe("");
+	await expect(live).toHaveText(blockedText);
+	await expect(input).toHaveValue("Water plants");
+	await expect(input).toBeFocused();
+	await expect(taskList(page)).not.toContainText("Water plants");
 
 	await page.evaluate(() => window.__voiceFake.final(["today"]));
 	await expect(review(page)).toBeVisible();
-	await input.press("Enter");
+	// Still blocked in review: the same refusal is announced again.
+	await expect(announced).toHaveCount(1);
+	await announced.evaluate((el) => {
+		(el as HTMLElement).dataset.mark = "review";
+	});
+	await input.focus();
+	await page.keyboard.press("Enter");
+	await expect.poll(markOf).toBe("");
+	await expect(live).toHaveText(blockedText);
+	await expect(announced).toHaveCount(1);
 	await expect(input).toHaveValue("Water plants");
+	await expect(input).toBeFocused();
+	await expect(review(page)).toBeVisible();
 	await expect(taskList(page)).not.toContainText("Water plants");
+	expect(await startedCount(page)).toBe(1);
 
-	// Positive control: leaving review unblocks the same Enter.
+	// Positive control: leaving review clears the announcement and unblocks the
+	// same Enter, which creates exactly one task.
 	await page.getByTestId("quickadd-voice-cancel").click();
-	await input.press("Enter");
+	await expect(live).toBeEmpty();
+	await expect(input).toBeFocused();
+	await page.keyboard.press("Enter");
 	await expect(input).toHaveValue("");
+	await expect(live).toBeEmpty();
+	await page.keyboard.press("Escape");
+	await expect(
+		taskList(page).getByRole("checkbox", { name: "Water plants", exact: true }),
+	).toHaveCount(1);
 });
 
 test("permission, engine, oversize errors and cancel leave the draft alone", async ({
@@ -256,18 +341,53 @@ test("permission, engine, oversize errors and cancel leave the draft alone", asy
 	await dictate(page);
 	await page.evaluate(() => window.__voiceFake.error("not-allowed"));
 	const alert = page.getByRole("alert");
-	await expect(alert).toContainText("Microphone access is blocked");
+	await expect(alert).toHaveText(
+		"Microphone access is blocked. Allow the microphone for this site in your browser settings, then choose “Check again”, then “Dictate”.",
+	);
 	await shot(page, "voice-error.png");
 	await expect(input).toHaveValue("Draft kept");
 
-	// Error retry is a user action that probes; the mic click then starts.
-	await page.getByTestId("quickadd-voice-retry").click();
+	// The guidance names the real controls: only Check again is offered while
+	// the error shows, and it probes without listening.
+	const checkAgain = page.getByTestId("quickadd-voice-retry");
+	await expect(checkAgain).toHaveText("Check again");
+	await expect(start(page)).toHaveCount(0);
+	const listened = await startedCount(page);
+	expect(listened).toBe(1);
+	const checked = await page.evaluate(() => window.__voiceFake.checks);
+	await checkAgain.click();
+	await expect
+		.poll(() => page.evaluate(() => window.__voiceFake.checks))
+		.toBeGreaterThan(checked);
+	expect(await page.evaluate(() => window.__voiceFake.lastCheck)).toEqual({
+		langs: ["en-US"],
+		processLocally: true,
+	});
+	await expect(start(page)).toBeEnabled();
+	await expect(start(page)).toHaveText("Dictate");
+	expect(await startedCount(page)).toBe(listened);
+
+	// Only the separate Dictate click starts a recognition.
 	await dictate(page);
+	expect(await startedCount(page)).toBe(listened + 1);
 	await page.evaluate(() => window.__voiceFake.final(["x".repeat(501)]));
-	await expect(alert).toContainText("too long");
+	await expect(alert).toHaveText(
+		"That was too long to use. Choose “Check again”, then “Dictate” and say a shorter task.",
+	);
 	await expect(input).toHaveValue("Draft kept");
 
-	await page.getByTestId("quickadd-voice-retry").click();
+	// Check again after the second error, then Dictate delivers a result.
+	await checkAgain.click();
+	await expect(start(page)).toBeEnabled();
+	expect(await startedCount(page)).toBe(listened + 1);
+	await dictate(page);
+	expect(await startedCount(page)).toBe(listened + 2);
+	await page.evaluate(() => window.__voiceFake.final(["fresh"]));
+	await expect(review(page)).toContainText("fresh");
+	await expect(input).toHaveValue("Draft kept");
+	await page.getByTestId("quickadd-voice-cancel").click();
+	await expect(start(page)).toBeEnabled();
+
 	await dictate(page);
 	await page.getByTestId("quickadd-voice-cancel").click();
 	await expect(start(page)).toBeEnabled();
@@ -403,9 +523,30 @@ test("a cancelled probe offers Retry; a user check blocks submit until it resolv
 	await expect(submit(page)).toBeDisabled();
 	await input.press("Enter");
 	await expect(input).toHaveValue("Draft stays");
+	await expect(
+		page.getByTestId("quickadd-voice-blocked-announcement"),
+	).toHaveText("Finish or cancel voice input to add the task.");
+	const live = page.getByTestId("quickadd-voice-blocked-announcement");
+	const announced = live.locator("span");
+	await announced.evaluate((el) => {
+		(el as HTMLElement).dataset.mark = "checking";
+	});
+	await input.press("Enter");
+	await expect
+		.poll(() =>
+			announced.evaluate((el) => (el as HTMLElement).dataset.mark ?? ""),
+		)
+		.toBe("");
+	await expect(live).toHaveText(
+		"Finish or cancel voice input to add the task.",
+	);
+	await expect(input).toHaveValue("Draft stays");
+	await expect(input).toBeFocused();
+	await expect(taskList(page)).not.toContainText("Draft stays");
 
 	// Cancelling the user check returns to Retry, and typed submit is usable.
 	await page.getByTestId("quickadd-voice-cancel").click();
+	await expect(live).toBeEmpty();
 	await expect(retry(page)).toBeVisible();
 	await expect(start(page)).toBeDisabled();
 	await expect(submit(page)).toBeEnabled();
