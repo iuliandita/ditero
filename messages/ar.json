@@ -2503,7 +2503,7 @@
 	"import_provider_format": "تنسيق الاستيراد",
 	"import_provider_native": "JSON أصلي من Ditero",
 	"import_provider_csv": "Ditero CSV v1",
-	"import_provider_namespace": "نطاق أسماء مصدر CSV: {namespace}",
+	"import_provider_namespace": "مصدر الاستيراد: {namespace}",
 	"import_provider_policy": "يستورد CSV القوائم والمهام ومستوى واحدًا من المهام الفرعية فقط، بمعرّفات ثابتة. يستثني التعيينات والتسميات والتعليقات والقوالب والسجل والمرفقات والتكرار والتذكيرات والحالة الشخصية والمجلدات وتخصيص القوائم وحقول التسوق وأوقات إنشاء المهام والاستعجال. مالك الترحيل لا يدل على المؤلف. احتفظ بنطاق الأسماء والمعرّفات نفسها عند إعادة الاستيراد.",
 	"import_provider_acknowledge": "أوافق على هذه الاستثناءات وهوية المصدر الثابتة.",
 	"import_provider_file": "ملف CSV من Ditero",

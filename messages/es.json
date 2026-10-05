@@ -2365,7 +2365,7 @@
 	"import_provider_format": "Formato de importación",
 	"import_provider_native": "JSON nativo de Ditero",
 	"import_provider_csv": "Ditero CSV v1",
-	"import_provider_namespace": "Espacio de nombres de origen CSV: {namespace}",
+	"import_provider_namespace": "Origen de importación: {namespace}",
 	"import_provider_policy": "CSV solo importa listas, tareas y un nivel de subtareas con identificadores estables. Excluye asignaciones, etiquetas, comentarios, plantillas, historial, adjuntos, recurrencia, recordatorios, estado personal, carpetas, personalización de listas, campos de compras, fechas de creación y urgencia. El propietario de la migración no indica autoría. Conserva el mismo espacio de nombres y los mismos identificadores al volver a importar.",
 	"import_provider_acknowledge": "Acepto estas exclusiones y la identidad estable del origen.",
 	"import_provider_file": "Archivo CSV de Ditero",

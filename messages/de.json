@@ -2319,7 +2319,7 @@
 	"import_provider_format": "Importformat",
 	"import_provider_native": "Natives Ditero-JSON",
 	"import_provider_csv": "Ditero CSV v1",
-	"import_provider_namespace": "CSV-Quellnamensraum: {namespace}",
+	"import_provider_namespace": "Importquelle: {namespace}",
 	"import_provider_policy": "CSV importiert nur Listen, Aufgaben und eine Unteraufgabenebene mit stabilen IDs. Ausgeschlossen sind Zuweisungen, Labels, Kommentare, Vorlagen, Verlauf, Anhänge, Wiederholungen, Erinnerungen, persönlicher Zustand, Ordner, Listenanpassungen, Einkaufsfelder, Erstellungszeiten und Dringlichkeit. Der Migrationseigentümer ist keine Aussage zur Urheberschaft. Behalte beim erneuten Import denselben Namensraum und dieselben IDs.",
 	"import_provider_acknowledge": "Ich akzeptiere diese Ausschlüsse und die stabile Quellidentität.",
 	"import_provider_file": "Ditero-CSV-Datei",

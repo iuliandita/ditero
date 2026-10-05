@@ -119,7 +119,7 @@ test("saves and deduplicates a dry run without changing tasks, then discards it"
 	);
 	await expect(
 		panel.getByRole("button", { name: "Resume import" }),
-	).toBeDisabled();
+	).toHaveCount(0);
 	const after = await page.request.get("/api/portability/export");
 	expect((await after.json()).data.tasks).toEqual(exported.data.tasks);
 	await panel

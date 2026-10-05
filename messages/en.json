@@ -2319,7 +2319,7 @@
 	"import_provider_format": "Import format",
 	"import_provider_native": "Native Ditero JSON",
 	"import_provider_csv": "Ditero CSV v1",
-	"import_provider_namespace": "CSV source namespace: {namespace}",
+	"import_provider_namespace": "Import source: {namespace}",
 	"import_provider_policy": "CSV imports only lists, tasks and one subtask level with stable IDs. It excludes assignments, labels, comments, templates, history, attachments, recurrence, reminders, personal state, folders, list customization, shopping fields, task creation times and urgency. This migration owner is not an authorship claim. Keep the same namespace and IDs when reimporting.",
 	"import_provider_acknowledge": "I accept these exclusions and the stable source identity.",
 	"import_provider_file": "Ditero CSV file",

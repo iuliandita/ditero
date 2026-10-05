@@ -39,6 +39,8 @@ test("Trello JSON requires exclusion approval and imports plain open cards throu
 		buffer: fixture,
 	});
 	await panel.getByLabel("Source label").fill("Trello source");
+	await expect(panel).toContainText("Import source:");
+	await expect(panel).not.toContainText("CSV source namespace");
 	await expect(panel.getByTestId("import-workspace")).toHaveCount(1);
 	await chooseOption(
 		page,
@@ -95,6 +97,10 @@ test("Trello JSON requires exclusion approval and imports plain open cards throu
 	await expect(panel.getByTestId("import-apply-status")).toContainText(
 		"completed",
 	);
+	await expect(
+		panel.getByRole("button", { name: "Resume import", exact: true }),
+	).toHaveCount(0);
+	await expect(apply).toHaveCount(0);
 	const imported = await (
 		await page.request.get("/api/portability/export")
 	).json();
