@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, test, vi } from "vitest";
 import { hashImportValue } from "../import-digest.ts";
 import { buildImportPlan } from "../import-plan.ts";
+import { ProviderImportError, snapshotNamespace } from "./common.ts";
 import {
 	CSV_V1_EXCLUSIONS,
 	PROVIDER_INPUT_MAX_BYTES,
@@ -9,7 +11,9 @@ import {
 	parseProviderBinding,
 	parseProviderInput,
 	prepareProviderImport,
+	prepareProviderImportRequest,
 	providerDocumentDigest,
+	TRELLO_V1_EXCLUSIONS,
 } from "./input.ts";
 
 const namespace = "fcb28f31-12ae-4c9d-82f2-1289d9fcb411";
@@ -142,6 +146,7 @@ describe("provider original-input contract", () => {
 		const exact = parseProviderInput(
 			input(new Uint8Array(PROVIDER_INPUT_MAX_BYTES)),
 		);
+		if (!("originalCsvBase64" in exact)) throw new Error("Expected CSV input");
 		expect(exact.originalCsvBase64.length).toBe(
 			4 * Math.ceil(PROVIDER_INPUT_MAX_BYTES / 3),
 		);
@@ -305,5 +310,449 @@ describe("provider semantic document digest", () => {
 		expect(await digest(fixture, exportedAt)).toBe(
 			await digest(reordered, "2026-02-01T00:00:00.000Z"),
 		);
+	});
+});
+
+const TRELLO_BOARD = "64a1b2c3d4e5f60718293a4b";
+const sha256 = (value: string | Uint8Array) =>
+	createHash("sha256").update(value).digest("hex");
+const trelloFixture = readFileSync(
+	new URL(
+		"../../../../tests/fixtures/portability/providers/trello-board-v1.json",
+		import.meta.url,
+	),
+);
+function trelloBoardSha(boardId: string) {
+	return sha256(`ditero-trello-board-v1\n${boardId}`);
+}
+function trelloInput(
+	bytes: Uint8Array = trelloFixture,
+	boardId = TRELLO_BOARD,
+) {
+	const boardIdSha256 = trelloBoardSha(boardId);
+	return {
+		kind: "provider",
+		version: 1,
+		adapter: "trello-board-json",
+		adapterVersion: 1,
+		sourceNamespace: snapshotNamespace(boardIdSha256),
+		identityMode: "stable-ids",
+		boardIdSha256,
+		snapshotSha256: sha256(bytes),
+		exclusions: [...TRELLO_V1_EXCLUSIONS],
+		originalJsonBase64: Buffer.from(bytes).toString("base64"),
+	};
+}
+type TrelloTestBoard = {
+	id: string;
+	cards: [Record<string, unknown>, ...Record<string, unknown>[]];
+	lists: [Record<string, unknown>, ...Record<string, unknown>[]];
+};
+function trelloBytes(change: (board: TrelloTestBoard) => void) {
+	const board = JSON.parse(trelloFixture.toString("utf8")) as TrelloTestBoard;
+	change(board);
+	return new TextEncoder().encode(JSON.stringify(board));
+}
+async function prepareRefusal(value: unknown, code: string, at = exportedAt) {
+	const error: unknown = await prepareProviderImportRequest(value, {
+		exportedAt: at,
+	}).then(
+		() => null,
+		(caught: unknown) => caught,
+	);
+	expect(error).toMatchObject({ code });
+	return error;
+}
+
+describe("Trello provider original-input contract", () => {
+	test("derives conversion and binding only from the original board JSON", async () => {
+		const prepared = await prepareProviderImportRequest(trelloInput(), {
+			exportedAt,
+		});
+		const namespace = snapshotNamespace(trelloBoardSha(TRELLO_BOARD));
+		expect(prepared.binding).toEqual({
+			kind: "provider",
+			version: 1,
+			adapter: "trello-board-json",
+			adapterVersion: 1,
+			sourceNamespace: namespace,
+			identityMode: "stable-ids",
+			boardIdSha256: trelloBoardSha(TRELLO_BOARD),
+			snapshotSha256: sha256(trelloFixture),
+			exclusions: TRELLO_V1_EXCLUSIONS,
+		});
+		expect(prepared.sourceFormat).toBe("trello-board-json");
+		expect(prepared.sourceSchemaVersion).toBe(1);
+		expect(prepared.originalBytes).toBe(trelloFixture.length);
+		expect(prepared.conversion.adapter).toBe("trello-board-json");
+		expect(prepared.conversion.document.exportedAt).toBe(exportedAt);
+		expect(prepared.conversion.document.sourceUserId).toBe(
+			`migration:trello-board-json:1:${namespace}:owner`,
+		);
+		expect(prepared.conversion.findings).toEqual([
+			{ code: "untrusted-migration-owner", path: "sourceUserId" },
+		]);
+	});
+
+	test("ignored source metadata never becomes dates, completion, parents or grants", async () => {
+		// The fixture carries due dates, members, labels and checklists.
+		const { conversion } = await prepareProviderImportRequest(trelloInput(), {
+			exportedAt,
+		});
+		const { data } = conversion.document;
+		expect(data.tasks).toHaveLength(4);
+		for (const task of data.tasks) {
+			expect(task).toMatchObject({
+				done: false,
+				completedAt: null,
+				dueAt: null,
+				dueAllDay: false,
+				parentId: null,
+				rrule: null,
+				fallbackUserId: null,
+			});
+		}
+		expect(data.assignments).toEqual([]);
+		expect(data.labels).toEqual([]);
+		expect(data.comments).toEqual([]);
+		expect(data.attachments).toEqual([]);
+		expect(data.principals).toHaveLength(1);
+	});
+
+	test.each([
+		{ version: 2 },
+		{ adapter: "todoist-project-csv" },
+		{ adapter: "ditero-csv" },
+		{ adapterVersion: 2 },
+		{ identityMode: "snapshot-rows" },
+		{
+			sourceNamespace: snapshotNamespace(
+				trelloBoardSha(TRELLO_BOARD),
+			).toUpperCase(),
+		},
+		{
+			sourceNamespace: snapshotNamespace(
+				trelloBoardSha("64a1b2c3d4e5f60718293a4c"),
+			),
+		},
+		{ sourceNamespace: snapshotNamespace(sha256(trelloFixture)) },
+		{ boardIdSha256: trelloBoardSha(TRELLO_BOARD).toUpperCase() },
+		{ boardIdSha256: "abc" },
+		{ snapshotSha256: sha256(trelloFixture).toUpperCase() },
+		{ snapshotSha256: "abc" },
+		{ exclusions: [] },
+		{ exclusions: [...TRELLO_V1_EXCLUSIONS].reverse() },
+		{ exclusions: [...TRELLO_V1_EXCLUSIONS, "extra"] },
+		{ exclusions: TRELLO_V1_EXCLUSIONS.slice(0, -1) },
+		{ document: "{}" },
+		{ conversion: {} },
+		{ sourceUserId: "authenticated-user" },
+		{ projectFolderName: "Board" },
+		{ originalCsvBase64: "Zg==" },
+	])("refuses unknown or changed Trello contract metadata %j", (change) =>
+		refusal({ ...trelloInput(), ...change }));
+
+	test("keeps the CSV and Trello payload fields exclusive", () => {
+		const { originalJsonBase64, ...withoutPayload } = trelloInput();
+		refusal(withoutPayload);
+		refusal({ ...withoutPayload, originalCsvBase64: originalJsonBase64 });
+		const { originalCsvBase64, ...csv } = input();
+		refusal({ ...csv, originalJsonBase64: originalCsvBase64 });
+		expect(parseProviderInput(input())).toMatchObject({
+			adapter: "ditero-csv",
+		});
+	});
+
+	test("refuses prototype keys, accessors, inherited and symbol keys", () => {
+		refusal(
+			JSON.parse(
+				JSON.stringify(trelloInput()).replace(
+					'"kind":',
+					'"__proto__":{},"kind":',
+				),
+			),
+		);
+		refusal(Object.assign(Object.create({ inherited: true }), trelloInput()));
+		const accessor = trelloInput();
+		Object.defineProperty(accessor, "boardIdSha256", {
+			get: () => {
+				throw new Error("must not run");
+			},
+		});
+		refusal(accessor);
+		refusal({ ...trelloInput(), [Symbol("extra")]: true });
+		const exclusions = trelloInput();
+		Object.defineProperty(exclusions.exclusions, "0", {
+			get: () => "dates",
+			enumerable: true,
+		});
+		refusal(exclusions);
+	});
+
+	test.each([
+		"Zg",
+		"Zh==",
+		"Zg===",
+		"Zg==\n",
+		"_w==",
+		"Zg==Zg==",
+		"",
+		"====",
+	])("refuses noncanonical base64 %j", (value) =>
+		refusal({ ...trelloInput(), originalJsonBase64: value }, "invalid-base64"));
+
+	test("bounds raw bytes at 23 MiB and the encoded request below 32 MiB", () => {
+		const exact = parseProviderInput(
+			trelloInput(new Uint8Array(PROVIDER_INPUT_MAX_BYTES)),
+		);
+		expect(
+			"originalJsonBase64" in exact && exact.originalJsonBase64.length,
+		).toBe(4 * Math.ceil(PROVIDER_INPUT_MAX_BYTES / 3));
+		expect(4 * Math.ceil(PROVIDER_INPUT_MAX_BYTES / 3)).toBeLessThanOrEqual(
+			32 * 1024 * 1024,
+		);
+		refusal(
+			trelloInput(new Uint8Array(PROVIDER_INPUT_MAX_BYTES + 1)),
+			"byte-limit",
+		);
+		refusal(
+			{
+				...trelloInput(),
+				originalJsonBase64: "A".repeat(
+					4 * Math.ceil((PROVIDER_INPUT_MAX_BYTES + 3) / 3),
+				),
+			},
+			"byte-limit",
+		);
+	});
+
+	test("does not trust a claimed snapshot, board or namespace", async () => {
+		await prepareRefusal(
+			{ ...trelloInput(), snapshotSha256: "a".repeat(64) },
+			"metadata-mismatch",
+		);
+		// An internally consistent binding for another board still disagrees with the bytes.
+		const other = trelloInput(trelloFixture, "64a1b2c3d4e5f60718293a4c");
+		await prepareRefusal(other, "metadata-mismatch");
+		await prepareRefusal(
+			{ ...trelloInput(), boardIdSha256: "b".repeat(64) },
+			"invalid-input",
+		);
+	});
+
+	test("a re-export with the same ids keeps identity but changes the snapshot", async () => {
+		const edited = trelloBytes((board) => {
+			board.cards[0].name = "Write the revised plan";
+		});
+		const first = await prepareProviderImportRequest(trelloInput(), {
+			exportedAt,
+		});
+		const second = await prepareProviderImportRequest(trelloInput(edited), {
+			exportedAt,
+		});
+		expect(second.binding.sourceNamespace).toBe(first.binding.sourceNamespace);
+		expect(second.conversion.document.sourceUserId).toBe(
+			first.conversion.document.sourceUserId,
+		);
+		expect(
+			second.conversion.document.data.tasks.map((task) => task.id),
+		).toEqual(first.conversion.document.data.tasks.map((task) => task.id));
+		expect(second.binding).not.toEqual(first.binding);
+		expect(
+			"snapshotSha256" in second.binding && second.binding.snapshotSha256,
+		).toBe(sha256(edited));
+		// The old claimed fingerprint cannot be attached to the changed bytes.
+		await prepareRefusal(
+			{ ...trelloInput(edited), snapshotSha256: sha256(trelloFixture) },
+			"metadata-mismatch",
+		);
+		expect(
+			await providerDocumentDigest(first.binding, "a".repeat(64)),
+		).not.toBe(await providerDocumentDigest(second.binding, "a".repeat(64)));
+	});
+
+	test.each([
+		[
+			"archived card",
+			(board: TrelloTestBoard) => (board.cards[0].closed = true),
+			"unsupported-content",
+		],
+		[
+			"archived list",
+			(board: TrelloTestBoard) => (board.lists[0].closed = true),
+			"unsupported-content",
+		],
+		[
+			"completed due date",
+			(board: TrelloTestBoard) => (board.cards[0].dueComplete = true),
+			"unsupported-content",
+		],
+		[
+			"template card",
+			(board: TrelloTestBoard) => (board.cards[0].isTemplate = true),
+			"unsupported-content",
+		],
+		[
+			"card role",
+			(board: TrelloTestBoard) => (board.cards[0].cardRole = "mirror"),
+			"unsupported-content",
+		],
+		[
+			"card on a foreign board",
+			(board: TrelloTestBoard) =>
+				(board.cards[0].idBoard = "64a1b2c3d4e5f60718293aff"),
+			"invalid-graph",
+		],
+		[
+			"card on an unknown list",
+			(board: TrelloTestBoard) =>
+				(board.cards[0].idList = "64a1b2c3d4e5f60718293aff"),
+			"invalid-graph",
+		],
+		[
+			"parent reference",
+			(board: TrelloTestBoard) =>
+				(board.cards[0].idParent = "64a1b2c3d4e5f60718293b02"),
+			null,
+		],
+	])("converts or refuses unsafe board content: %s", async (_name, change, code) => {
+		const bytes = trelloBytes(change);
+		if (code === null) {
+			// Unknown card fields are ignored metadata and never create a parent.
+			const { conversion } = await prepareProviderImportRequest(
+				trelloInput(bytes),
+				{
+					exportedAt,
+				},
+			);
+			expect(
+				conversion.document.data.tasks.every((task) => task.parentId === null),
+			).toBe(true);
+			return;
+		}
+		await prepareRefusal(trelloInput(bytes), code);
+	});
+
+	test("refuses invalid encodings and JSON without leaking content", async () => {
+		await prepareRefusal(
+			trelloInput(new Uint8Array([0xff])),
+			"invalid-encoding",
+		);
+		await prepareRefusal(
+			trelloInput(new Uint8Array([0xef, 0xbb, 0xbf, ...trelloFixture])),
+			"invalid-json",
+		);
+		const secret = "private-provider-cell";
+		const error = await prepareRefusal(
+			trelloInput(new TextEncoder().encode(`{"id":"${secret}"`)),
+			"invalid-json",
+		);
+		expect(String(error)).not.toContain(secret);
+		const wrongId = await prepareRefusal(
+			trelloInput(trelloBytes((board) => (board.id = secret))),
+			"invalid-row",
+		);
+		expect(String(wrongId)).not.toContain(secret);
+	});
+
+	test("validates the supplied export time instead of accepting loose dates", async () => {
+		for (const at of [
+			"2026-01-15",
+			"2026-01-15T12:00:00+02:00",
+			"yesterday",
+			"",
+		])
+			await prepareRefusal(trelloInput(), "invalid-result", at);
+	});
+
+	test("preserves cancellation and the absolute deadline", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		await expect(
+			prepareProviderImportRequest(trelloInput(), {
+				exportedAt,
+				signal: controller.signal,
+			}),
+		).rejects.toThrowError("cancelled");
+		await expect(
+			prepareProviderImportRequest(trelloInput(), {
+				exportedAt,
+				deadline: performance.now() - 1,
+			}),
+		).rejects.toThrowError("timeout");
+	});
+
+	test("reports provider conversion failures as provider errors", async () => {
+		const error: unknown = await prepareProviderImportRequest(
+			trelloInput(trelloBytes((board) => (board.cards[0].closed = true))),
+			{ exportedAt },
+		).catch((caught: unknown) => caught);
+		expect(error).toBeInstanceOf(ProviderImportError);
+	});
+
+	test("validates stored Trello bindings independently and rejects envelope fields", async () => {
+		const { binding } = await prepareProviderImportRequest(trelloInput(), {
+			exportedAt,
+		});
+		expect(parseProviderBinding(binding)).toEqual(binding);
+		for (const forged of [
+			{ ...binding, originalJsonBase64: "Zg==" },
+			{ ...binding, exclusions: [] },
+			{ ...binding, sourceNamespace: otherNamespace },
+			{ ...binding, boardIdSha256: "b".repeat(64) },
+			{ ...binding, boardIdSha256: "ABC" },
+			{ ...binding, boardIdSha256: trelloBoardSha(TRELLO_BOARD).toUpperCase() },
+			{ ...binding, snapshotSha256: undefined },
+			{ ...binding, projectFolderName: "Board" },
+			{ ...binding, identityMode: "snapshot-rows" },
+		])
+			expect(() => parseProviderBinding(forged)).toThrow(ProviderInputError);
+	});
+
+	test("commits the board identity and snapshot into the provider digest", async () => {
+		const { binding } = await prepareProviderImportRequest(trelloInput(), {
+			exportedAt,
+		});
+		const digest = await providerDocumentDigest(binding, "a".repeat(64));
+		expect(digest).toBe(
+			await hashImportValue(
+				"ditero-import-provider-document-v1",
+				{ binding, ordinaryDocumentDigest: "a".repeat(64) },
+				() => {},
+			),
+		);
+		for (const change of [
+			{ snapshotSha256: "c".repeat(64) },
+			{ boardIdSha256: trelloBoardSha("64a1b2c3d4e5f60718293a4c") },
+		]) {
+			const changed = { ...binding, ...change };
+			if (change.boardIdSha256 !== undefined)
+				changed.sourceNamespace = snapshotNamespace(change.boardIdSha256);
+			expect(await providerDocumentDigest(changed, "a".repeat(64))).not.toBe(
+				digest,
+			);
+		}
+		await expect(
+			providerDocumentDigest(
+				{ ...binding, boardIdSha256: "x" },
+				"a".repeat(64),
+			),
+		).rejects.toThrow(ProviderInputError);
+	});
+
+	test("leaves the CSV request path unchanged", async () => {
+		const prepared = await prepareProviderImportRequest(input(), {
+			exportedAt,
+		});
+		expect(prepared.sourceFormat).toBe("ditero-csv");
+		expect(prepared.binding).toEqual({
+			kind: "provider",
+			version: 1,
+			adapter: "ditero-csv",
+			adapterVersion: 1,
+			sourceNamespace: namespace,
+			identityMode: "stable-ids",
+			exclusions: CSV_V1_EXCLUSIONS,
+		});
 	});
 });

@@ -87,7 +87,9 @@ export function ImportPlanPanel() {
 	const [newId, setNewId] = useState(() => randomId());
 	const [label, setLabel] = useState("");
 	const [loaded, setLoaded] = useState<Loaded | null>(null);
-	const [format, setFormat] = useState<"native" | "csv" | "todoist">("native");
+	const [format, setFormat] = useState<"native" | "csv" | "todoist" | "trello">(
+		"native",
+	);
 	const fileRef = useRef<File | undefined>(undefined);
 	const [projectFolderName, setProjectFolderName] = useState("");
 	const [unsectionedListName, setUnsectionedListName] = useState("");
@@ -161,7 +163,9 @@ export function ImportPlanPanel() {
 	}, [refresh]);
 	function changed() {
 		if (
-			(loaded?.input ?? report?.inputBinding)?.adapter === "todoist-project-csv"
+			["todoist-project-csv", "trello-board-json"].includes(
+				(loaded?.input ?? report?.inputBinding)?.adapter ?? "",
+			)
 		)
 			setPolicyAccepted(false);
 		setReport(null);
@@ -253,7 +257,9 @@ export function ImportPlanPanel() {
 					setError(
 						code === "source-binding-conflict" &&
 							requestInput?.kind === "provider" &&
-							requestInput.adapter === "todoist-project-csv"
+							["todoist-project-csv", "trello-board-json"].includes(
+								requestInput.adapter,
+							)
 							? "binding"
 							: code === "unsupported-import-version"
 								? "unsupported"
@@ -309,6 +315,8 @@ export function ImportPlanPanel() {
 		displayedBinding?.adapter === "todoist-project-csv"
 			? displayedBinding
 			: null;
+	const trelloBinding =
+		displayedBinding?.adapter === "trello-board-json" ? displayedBinding : null;
 	const ready =
 		loaded?.document.data.workspaces.every((w) =>
 			writable.some((target) => target.id === workspaceMap[w.id]),
@@ -352,6 +360,16 @@ export function ImportPlanPanel() {
 							</p>
 							<p>{m.import_todoist_policy()}</p>
 						</>
+					) : trelloBinding ? (
+						<>
+							<p className="break-all">
+								{m.import_trello_snapshot({
+									digest: trelloBinding.snapshotSha256,
+								})}
+							</p>
+							<p>{m.import_trello_identity()}</p>
+							<p>{m.import_trello_policy()}</p>
+						</>
 					) : (
 						<p>{m.import_provider_policy()}</p>
 					)}
@@ -367,7 +385,9 @@ export function ImportPlanPanel() {
 						/>
 						{todoistBinding
 							? m.import_todoist_acknowledge()
-							: m.import_provider_acknowledge()}
+							: trelloBinding
+								? m.import_trello_acknowledge()
+								: m.import_provider_acknowledge()}
 					</label>
 				</div>
 			)}
@@ -377,7 +397,12 @@ export function ImportPlanPanel() {
 						<Select
 							value={format}
 							onValueChange={(next) => {
-								if (next !== "native" && next !== "csv" && next !== "todoist")
+								if (
+									next !== "native" &&
+									next !== "csv" &&
+									next !== "todoist" &&
+									next !== "trello"
+								)
 									return;
 								setFormat(next);
 								selectFile(undefined);
@@ -397,6 +422,9 @@ export function ImportPlanPanel() {
 								<SelectItem value="csv">{m.import_provider_csv()}</SelectItem>
 								<SelectItem value="todoist">
 									{m.import_todoist_format()}
+								</SelectItem>
+								<SelectItem value="trello">
+									{m.import_trello_format()}
 								</SelectItem>
 							</SelectContent>
 						</Select>
@@ -449,14 +477,18 @@ export function ImportPlanPanel() {
 				)}
 				<FilePicker
 					label={
-						format === "todoist"
-							? m.import_todoist_file()
-							: format === "csv"
-								? m.import_provider_file()
-								: m.import_plan_file()
+						format === "trello"
+							? m.import_trello_file()
+							: format === "todoist"
+								? m.import_todoist_file()
+								: format === "csv"
+									? m.import_provider_file()
+									: m.import_plan_file()
 					}
 					accept={
-						format !== "native" ? "text/csv,.csv" : "application/json,.json"
+						format === "csv" || format === "todoist"
+							? "text/csv,.csv"
+							: "application/json,.json"
 					}
 					fileName={fileName}
 					disabled={locked}
@@ -639,9 +671,13 @@ export function ImportPlanPanel() {
 			{error && (
 				<p role="alert" className="mt-2 text-sm text-destructive">
 					{error === "secure"
-						? m.import_todoist_secure_context()
+						? format === "trello"
+							? m.import_trello_secure_context()
+							: m.import_todoist_secure_context()
 						: error === "binding"
-							? m.import_todoist_binding_conflict()
+							? format === "trello"
+								? m.import_trello_binding_conflict()
+								: m.import_todoist_binding_conflict()
 							: error === "unsupported"
 								? m.import_plan_history_unsupported()
 								: error === "retained"
@@ -653,11 +689,13 @@ export function ImportPlanPanel() {
 											: error === "limit"
 												? m.import_plan_limits()
 												: error === "invalid"
-													? format === "todoist"
-														? m.import_todoist_invalid()
-														: format === "csv"
-															? m.import_provider_invalid()
-															: m.import_plan_invalid()
+													? format === "trello"
+														? m.import_trello_invalid()
+														: format === "todoist"
+															? m.import_todoist_invalid()
+															: format === "csv"
+																? m.import_provider_invalid()
+																: m.import_plan_invalid()
 													: m.import_plan_failed()}
 				</p>
 			)}

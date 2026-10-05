@@ -2410,5 +2410,14 @@
 	"import_todoist_acknowledge": "Accept aceste excluderi și copii deschise fără autorul original sau istoricul finalizării.",
 	"import_todoist_binding_conflict": "Această sursă este legată de alți octeți ai fișierului sau alte nume de mapare. Alege explicit Sursă nouă pentru a importa o copie separată; fișierele modificate nu pot actualiza acest instantaneu.",
 	"import_todoist_invalid": "Acest fișier nu este un instantaneu CSV de proiect Todoist acceptat sau lipsesc numele explicite de mapare.",
-	"import_todoist_secure_context": "Calcularea amprentei instantaneului Todoist necesită HTTPS sau localhost. Deschide această instalare printr-o conexiune sigură înainte de import."
+	"import_todoist_secure_context": "Calcularea amprentei instantaneului Todoist necesită HTTPS sau localhost. Deschide această instalare printr-o conexiune sigură înainte de import.",
+	"import_trello_format": "Panou Trello în JSON (v1)",
+	"import_trello_file": "Fișier JSON de panou Trello",
+	"import_trello_snapshot": "SHA-256 al instantaneului exact al fișierului: {digest}",
+	"import_trello_identity": "Panoul devine un dosar, listele sale devin liste de sarcini, iar cardurile devin sarcini deschise în ordinea originală. ID-urile panoului și elementelor sunt deterministe, dar fiecare sursă este legată de octeții exacți ai fișierului. Alege explicit Sursă nouă pentru un export modificat.",
+	"import_trello_policy": "Se importă doar numele, descrierile cardurilor și ordinea. Sunt excluse datele, starea de finalizare, recurența, autorii, asignările, comentariile, etichetele, listele de verificare, atașamentele, istoricul, mementourile, starea personală, câmpurile personalizate, coperțile, stickerele, setările de vizualizare, datele extensiilor, orele de creare, câmpurile de cumpărături, urgența și descrierile panoului. Panourile, listele sau cardurile arhivate, cardurile finalizate, șabloanele și rolurile speciale de card sunt respinse.",
+	"import_trello_acknowledge": "Accept aceste excluderi și copii deschise fără autorul original sau istoricul finalizării.",
+	"import_trello_invalid": "Acest fișier nu este un export JSON de panou Trello acceptat sau conține elemente arhivate, finalizate, șabloane ori roluri speciale neacceptate.",
+	"import_trello_secure_context": "Calcularea amprentei fișierului Trello necesită HTTPS sau localhost. Deschide această instalare printr-o conexiune sigură înainte de import.",
+	"import_trello_binding_conflict": "Această sursă este legată de alți octeți ai fișierului. Alege explicit Sursă nouă pentru a importa o copie separată; exporturile modificate nu pot actualiza această sursă."
 }

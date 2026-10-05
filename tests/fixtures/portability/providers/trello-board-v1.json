@@ -1,0 +1,81 @@
+{
+	"x-fixture-note": "Synthetic test-only fixture written from the public board field documentation. It is not a real export and carries no real data.",
+	"id": "64a1b2c3d4e5f60718293a4b",
+	"name": "Launch board",
+	"desc": "Board description that is disclosed as ignored.",
+	"closed": false,
+	"lists": [
+		{
+			"id": "64a1b2c3d4e5f60718293a01",
+			"idBoard": "64a1b2c3d4e5f60718293a4b",
+			"name": "To do",
+			"closed": false,
+			"pos": 65536
+		},
+		{
+			"id": "64A1B2C3D4E5F60718293A03",
+			"idBoard": "64a1b2c3d4e5f60718293a4b",
+			"name": "Done",
+			"closed": false,
+			"pos": 131072.5
+		},
+		{
+			"id": "64a1b2c3d4e5f60718293a02",
+			"idBoard": "64A1B2C3D4E5F60718293A4B",
+			"name": "Doing ünïcode ✓",
+			"closed": false,
+			"pos": 16384
+		}
+	],
+	"cards": [
+		{
+			"id": "64a1b2c3d4e5f60718293b01",
+			"idBoard": "64a1b2c3d4e5f60718293a4b",
+			"idList": "64a1b2c3d4e5f60718293a01",
+			"name": "Write plan",
+			"desc": "Line one\nLine two",
+			"closed": false,
+			"pos": 16384,
+			"cardRole": null,
+			"isTemplate": false,
+			"due": "2026-02-01T10:00:00.000Z",
+			"dueComplete": false,
+			"idLabels": ["64a1b2c3d4e5f60718293c01"],
+			"idMembers": ["64a1b2c3d4e5f60718293d01"],
+			"idChecklists": ["64a1b2c3d4e5f60718293e01"]
+		},
+		{
+			"id": "64A1B2C3D4E5F60718293B04",
+			"idBoard": "64a1b2c3d4e5f60718293a4b",
+			"idList": "64A1B2C3D4E5F60718293A03",
+			"name": "Ship it",
+			"desc": "",
+			"closed": false,
+			"pos": 1
+		},
+		{
+			"id": "64a1b2c3d4e5f60718293b03",
+			"idBoard": "64a1b2c3d4e5f60718293a4b",
+			"idList": "64a1b2c3d4e5f60718293a02",
+			"name": "Draft 📝",
+			"desc": "Markup such as <b>bold</b> stays literal text.",
+			"closed": false,
+			"pos": 1
+		},
+		{
+			"id": "64a1b2c3d4e5f60718293b02",
+			"idBoard": "64a1b2c3d4e5f60718293a4b",
+			"idList": "64a1b2c3d4e5f60718293a01",
+			"name": "Review",
+			"closed": false,
+			"pos": 8192
+		}
+	],
+	"actions": [
+		{ "type": "commentCard", "data": { "text": "Disclosed as ignored." } }
+	],
+	"labels": [{ "id": "64a1b2c3d4e5f60718293c01", "name": "Urgent" }],
+	"members": [
+		{ "id": "64a1b2c3d4e5f60718293d01", "fullName": "Example Person" }
+	]
+}

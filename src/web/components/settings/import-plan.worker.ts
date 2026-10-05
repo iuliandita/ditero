@@ -12,8 +12,10 @@ import {
 	ProviderInputError,
 	parseProviderInput,
 	TODOIST_V1_EXCLUSIONS,
+	TRELLO_V1_EXCLUSIONS,
 } from "../../../domain/portability/providers/input.ts";
 import { parseTodoistProjectCsv } from "../../../domain/portability/providers/todoist.ts";
+import { parseTrelloBoardJson } from "../../../domain/portability/providers/trello.ts";
 import { PortableExportValidationError } from "../../../domain/portability/validate.ts";
 
 self.onmessage = async (
@@ -21,7 +23,7 @@ self.onmessage = async (
 		| File
 		| {
 				file: File;
-				format: "native" | "csv" | "todoist";
+				format: "native" | "csv" | "todoist" | "trello";
 				projectFolderName?: string;
 				unsectionedListName?: string;
 		  }
@@ -30,7 +32,7 @@ self.onmessage = async (
 	try {
 		const file = event.data instanceof File ? event.data : event.data.file;
 		const format = event.data instanceof File ? "native" : event.data.format;
-		if (format === "csv" || format === "todoist") {
+		if (format === "csv" || format === "todoist" || format === "trello") {
 			if (file.size > PROVIDER_INPUT_MAX_BYTES)
 				throw new ProviderInputError("byte-limit");
 			const deadline = performance.now() + 15_000;
@@ -39,17 +41,19 @@ self.onmessage = async (
 			const conversion =
 				format === "csv"
 					? parseTaskCsv(bytes, options)
-					: await parseTodoistProjectCsv(bytes, {
-							...options,
-							projectFolderName:
-								event.data instanceof File
-									? ""
-									: (event.data.projectFolderName ?? ""),
-							unsectionedListName:
-								event.data instanceof File
-									? ""
-									: (event.data.unsectionedListName ?? ""),
-						});
+					: format === "trello"
+						? await parseTrelloBoardJson(bytes, options)
+						: await parseTodoistProjectCsv(bytes, {
+								...options,
+								projectFolderName:
+									event.data instanceof File
+										? ""
+										: (event.data.projectFolderName ?? ""),
+								unsectionedListName:
+									event.data instanceof File
+										? ""
+										: (event.data.unsectionedListName ?? ""),
+							});
 			const chunks: string[] = [];
 			for (let offset = 0; offset < bytes.length; offset += 24_576) {
 				if (performance.now() >= deadline)
@@ -73,8 +77,16 @@ self.onmessage = async (
 								unsectionedListName: conversion.unsectionedListName,
 								exclusions: [...TODOIST_V1_EXCLUSIONS],
 							}
-						: { exclusions: [...CSV_V1_EXCLUSIONS] }),
-					originalCsvBase64: chunks.join(""),
+						: conversion.adapter === "trello-board-json"
+							? {
+									boardIdSha256: conversion.boardIdSha256,
+									snapshotSha256: conversion.snapshotSha256,
+									exclusions: [...TRELLO_V1_EXCLUSIONS],
+								}
+							: { exclusions: [...CSV_V1_EXCLUSIONS] }),
+					...(conversion.adapter === "trello-board-json"
+						? { originalJsonBase64: chunks.join("") }
+						: { originalCsvBase64: chunks.join("") }),
 				},
 				{ deadline },
 			);
