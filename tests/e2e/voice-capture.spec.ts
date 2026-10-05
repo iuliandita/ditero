@@ -16,8 +16,11 @@ import {
 // with processLocally and an "available" installed pack stands in for the
 // engine; real engine/locale/microphone behavior is NOT exercised here.
 
+type Availability = "available" | "downloadable" | "downloading";
+
 type Fake = {
 	started: number;
+	availability: Availability;
 	checks: number;
 	lastCheck: { langs: string[]; processLocally: boolean } | null;
 	instances: number;
@@ -52,6 +55,8 @@ async function installFake(page: Page) {
 		});
 		const fake = {
 			started: 0,
+			// What available() reports; "available" unless a case configures it.
+			availability: "available" as Availability,
 			// Capability checks; a check never starts a recognition.
 			checks: 0,
 			lastCheck: null as { langs: string[]; processLocally: boolean } | null,
@@ -85,9 +90,9 @@ async function installFake(page: Page) {
 					processLocally: options.processLocally,
 				};
 				fake.checks += 1;
-				if (!fake.holdAvailability) return Promise.resolve("available");
+				if (!fake.holdAvailability) return Promise.resolve(fake.availability);
 				return new Promise<string>((resolve) => {
-					release = () => resolve("available");
+					release = () => resolve(fake.availability);
 				});
 			}
 			start() {
@@ -124,12 +129,22 @@ async function phone(browser: Browser, width = 390) {
 
 // Sign up, create a first list, and open quick add. On a phone creating the
 // list may already open quick add over it.
-async function openQuickAdd(page: Page, prefix: string, hold = false) {
+async function openQuickAdd(
+	page: Page,
+	prefix: string,
+	hold = false,
+	availability: Availability = "available",
+) {
 	await installFake(page);
 	if (hold) {
 		await page.addInitScript(() => {
 			window.__voiceFake.holdAvailability = true;
 		});
+	}
+	if (availability !== "available") {
+		await page.addInitScript((value) => {
+			window.__voiceFake.availability = value;
+		}, availability);
 	}
 	await signUp(page, uniqueEmail(prefix));
 	await waitWorkspaceReady(page);
@@ -682,6 +697,91 @@ test("keyboard only: focus follows each voice phase and nothing saves before Add
 	).toHaveCount(1);
 });
 
+// A language pack that is downloadable or downloading is a wait, not a failure:
+// a quiet polite status instead of an alert, the same explicit two-step recovery.
+for (const availability of ["downloadable", "downloading"] as const) {
+	test(`${availability} pack is a quiet status; Check again rechecks and only Dictate starts`, async ({
+		page,
+	}) => {
+		const packText =
+			"The on-device speech pack is not ready. Keep typing, or try again later.";
+		const draft = `Pack ${availability}`;
+		const input = await openQuickAdd(
+			page,
+			`voice-pack-${availability}`,
+			true,
+			availability,
+		);
+		const status = page.getByTestId("quickadd-voice-status");
+		await input.fill(draft);
+		await expect(input).toBeFocused();
+		await expect(start(page)).toBeDisabled();
+
+		// The passive probe resolves while the user is typing: no focus change.
+		await page.evaluate(() => {
+			window.__voiceFake.holdAvailability = false;
+			window.__voiceFake.releaseAvailability();
+		});
+		await expect(status).toHaveText(packText);
+		await expect(status).toHaveAttribute("role", "status");
+		await expect(status).toHaveAttribute("aria-live", "polite");
+		await expect(page.getByRole("alert")).toHaveCount(0);
+		await expect(page.getByTestId("quickadd-voice-error")).toHaveCount(0);
+		await expect(start(page)).toHaveCount(0);
+		await expect(retry(page)).toHaveText("Check again");
+		await expect(input).toBeFocused();
+		await expect(input).toHaveValue(draft);
+		await expect(submit(page)).toBeEnabled();
+		expect(await startedCount(page)).toBe(0);
+		await shot(page, `voice-pack-${availability}.png`);
+
+		// Explicit Check again while the pack is still not ready: rechecks, stays
+		// quiet, keeps the draft, and takes focus back on the control that matters.
+		const checked = await page.evaluate(() => window.__voiceFake.checks);
+		await retry(page).click();
+		await expect
+			.poll(() => page.evaluate(() => window.__voiceFake.checks))
+			.toBeGreaterThan(checked);
+		await expect(status).toHaveText(packText);
+		await expect(page.getByRole("alert")).toHaveCount(0);
+		await expect(retry(page)).toBeFocused();
+		await expect(input).toHaveValue(draft);
+		expect(await startedCount(page)).toBe(0);
+
+		// The pack becomes available: Check again rechecks but never starts.
+		await page.evaluate(() => {
+			window.__voiceFake.availability = "available";
+		});
+		const rechecked = await page.evaluate(() => window.__voiceFake.checks);
+		await retry(page).click();
+		await expect(start(page)).toBeEnabled();
+		await expect(start(page)).toBeFocused();
+		await expect(retry(page)).toHaveCount(0);
+		expect(
+			await page.evaluate(() => window.__voiceFake.checks),
+		).toBeGreaterThan(rechecked);
+		expect(await startedCount(page)).toBe(0);
+		await expect(input).toHaveValue(draft);
+
+		// Only the separate Dictate click starts, exactly once.
+		await dictate(page);
+		expect(await startedCount(page)).toBe(1);
+		await page.getByTestId("quickadd-voice-cancel").click();
+		await expect(start(page)).toBeEnabled();
+		await expect(input).toHaveValue(draft);
+
+		// Typed Add stays usable and creates exactly one task.
+		await expect(submit(page)).toBeEnabled();
+		await submit(page).click();
+		await expect(input).toHaveValue("");
+		expect(await startedCount(page)).toBe(1);
+		await page.keyboard.press("Escape");
+		await expect(
+			taskList(page).getByRole("checkbox", { name: draft, exact: true }),
+		).toHaveCount(1);
+	});
+}
+
 test("touch controls are at least 44px in both directions", async ({
 	browser,
 }) => {
@@ -706,8 +806,15 @@ test("touch controls are at least 44px in both directions", async ({
 	const mic = await box("quickadd-voice-start");
 	expect(mic.height).toBeGreaterThanOrEqual(44);
 	expect(mic.width).toBeGreaterThanOrEqual(44);
+	const typed = await box("quickadd-input");
+	expect(typed.height).toBeGreaterThanOrEqual(44);
+	const add = await box("quickadd-submit");
+	expect(add.height).toBeGreaterThanOrEqual(44);
+	expect(add.width).toBeGreaterThanOrEqual(44);
 
 	await start(page).click();
+	await expect(page.getByTestId("quickadd-voice-stop")).toBeVisible();
+	await shot(page, "voice-phone-dark-listening.png");
 	await page.evaluate(() =>
 		window.__voiceFake.final(["Call Ann", "Call Anne"]),
 	);

@@ -207,18 +207,34 @@ export function VoiceCapture({
 	}
 
 	if (state.phase === "error") {
+		// A language pack that is still downloadable or downloading is a wait,
+		// not a failure: quiet status, same two-step Check again recovery.
+		const packWait =
+			state.reason === "language-pack-downloadable" ||
+			state.reason === "language-pack-downloading";
 		return (
 			<div
 				data-testid="quickadd-voice"
 				className="flex flex-wrap items-center gap-2"
 			>
-				<p
-					role="alert"
-					data-testid="quickadd-voice-error"
-					className="min-w-0 flex-1 basis-48 text-sm text-destructive"
-				>
-					{reasonMessage(state.reason)}
-				</p>
+				{packWait ? (
+					<p
+						role="status"
+						aria-live="polite"
+						data-testid="quickadd-voice-status"
+						className="min-w-0 flex-1 basis-48 text-xs text-muted-foreground"
+					>
+						{reasonMessage(state.reason)}
+					</p>
+				) : (
+					<p
+						role="alert"
+						data-testid="quickadd-voice-error"
+						className="min-w-0 flex-1 basis-48 text-sm text-destructive"
+					>
+						{reasonMessage(state.reason)}
+					</p>
+				)}
 				<Button
 					ref={checkRef}
 					type="button"
