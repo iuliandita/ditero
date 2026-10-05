@@ -765,6 +765,7 @@ export function ImportPlanPanel() {
 					key={report.id}
 					plan={report}
 					onBusy={setApplying}
+					needsAcknowledgement={!!report.inputBinding && !policyAccepted}
 					disabled={busy || (!!report.inputBinding && !policyAccepted)}
 				/>
 			)}
