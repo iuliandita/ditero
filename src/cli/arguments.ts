@@ -32,6 +32,10 @@ export interface CliOptions {
 		| "delete-comment"
 		| "profile"
 		| PublicApiResource
+		| "observe-folder"
+		| "create-folder"
+		| "update-folder"
+		| "delete-folder"
 		| "create-list"
 		| "observe-list"
 		| "observe-list-deletion"
@@ -64,6 +68,7 @@ export interface CliOptions {
 	taskId?: string;
 	commentId?: string;
 	webhookId?: string;
+	folderId?: string;
 	revealSecret?: boolean;
 }
 
@@ -139,6 +144,7 @@ export function parseArguments(
 		"--task",
 		"--comment",
 		"--webhook",
+		"--folder",
 	];
 	for (let index = 0; index < argv.length; index++) {
 		const argument = argv[index];
@@ -159,6 +165,10 @@ export function parseArguments(
 				"edit-comment",
 				"delete-comment",
 				"profile",
+				"observe-folder",
+				"create-folder",
+				"update-folder",
+				"delete-folder",
 				"create-list",
 				"observe-list",
 				"observe-list-deletion",
@@ -220,7 +230,28 @@ export function parseArguments(
 		"edit-comment",
 		"delete-comment",
 	].includes(command);
+	const folderCommand = [
+		"observe-folder",
+		"create-folder",
+		"update-folder",
+		"delete-folder",
+	].includes(command);
+	const folderItem = folderCommand && command !== "create-folder";
+	const folderId = values.get("--folder");
+	if (
+		(!folderItem && folderId !== undefined) ||
+		(folderItem &&
+			(!PUBLIC_API_ID.safeParse(folderId).success ||
+				folderId === "." ||
+				folderId === ".." ||
+				/[\uD800-\uDFFF]/u.test(folderId ?? "") ||
+				(folderId ?? "").includes("\0")))
+	)
+		usageError();
 	const writing = [
+		"create-folder",
+		"update-folder",
+		"delete-folder",
 		"add-comment",
 		"edit-comment",
 		"delete-comment",
@@ -254,7 +285,11 @@ export function parseArguments(
 		"delete-list",
 	].includes(command);
 	const workflow =
-		command === "plan-task" || writing || taskCommand || listCommand;
+		command === "plan-task" ||
+		writing ||
+		taskCommand ||
+		listCommand ||
+		folderCommand;
 	if (
 		workflow &&
 		(flags.has("--all") ||
@@ -269,6 +304,7 @@ export function parseArguments(
 							? ["--limit", "--cursor"]
 							: []),
 						...(listCommand ? ["--list"] : []),
+						...(folderItem ? ["--folder"] : []),
 					].includes(key),
 			))
 	)
@@ -344,6 +380,7 @@ export function parseArguments(
 		taskId,
 		commentId,
 		webhookId,
+		folderId,
 		revealSecret: flags.has("--reveal-secret"),
 	};
 }

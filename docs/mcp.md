@@ -342,3 +342,31 @@ account returns `webhook_limit`, and 400, 401, 403, 404 and 429 keep their own
 definite codes without this advice. `revoke_webhook` accepts only an acknowledgement
 matching the requested UUID, and `list_webhooks` validates only the response schema
 and its 100-row cap.
+
+## Observed folder workflows
+
+Four tools extend the fixed set to 37:
+
+- `get_folder_observation`: `{ "folderId": "FOLDER_ID" }`.
+- `create_folder`: `{ "requestId": "UUID", "folder": { "workspaceId": "WORKSPACE_ID", "name": "Projects" } }`.
+- `update_folder`: `{ "folderId": "FOLDER_ID", "requestId": "UUID", "folder": { "workspaceId": "ORIGINAL_WORKSPACE_ID", "expectedState": "OBSERVED_STATE_TOKEN", "patch": { "name": "Renamed" } } }`.
+- `delete_folder`: `{ "folderId": "FOLDER_ID", "requestId": "UUID", "folder": { "workspaceId": "ORIGINAL_WORKSPACE_ID", "expectedState": "OBSERVED_STATE_TOKEN" } }`.
+
+Observation returns one live snapshot and semantic stateToken. Read tokens and
+Viewers may observe member-visible folders; tokens are not locks or incarnation
+identities. Names are trimmed to 1-500 characters. Creation assigns an ID and append
+position; updates rename only. Pending import activation can refuse changed names.
+Deletion requires an empty folder, without cascade, reparenting or list/task deletion.
+
+Strict guards reject accessors, inherited fields, unknown fields, malformed Unicode
+and unsafe path IDs before HTTP. Write bodies are bounded to 4 KiB and protocol
+arguments to 64 KiB. The tools send one request without hidden reads, retries or
+rebase. Stale state and nonempty deletion return explicit conflicts. Update/delete
+are destructive; all four tools are idempotent with the required UUID where applicable.
+
+Immutable acknowledgments retain original snapshots after deletion/recreation;
+replay does not affect replacements or claim current existence/absence. Every write
+requires current original-workspace Member/Admin/Owner authority and a valid write
+PAT, including replay. Cancellation reaches HTTP and can leave a committed outcome
+uncertain. Manually retry identical folder ID, full body and UUID without replacing
+observed evidence or minting a new key. UUIDs share the account-wide write namespace.

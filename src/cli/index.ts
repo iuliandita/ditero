@@ -2,6 +2,7 @@ import { clientVersion } from "../clients/build-info.ts";
 import { CliError, parseArguments } from "./arguments.ts";
 import { discover, type Fetcher } from "./client.ts";
 import { COMMENT_COMMANDS, commentWorkflow } from "./comment-workflow.ts";
+import { FOLDER_COMMANDS, folderWorkflow } from "./folder-workflow.ts";
 import { listWorkflow } from "./list-workflow.ts";
 import { taskPlacementWorkflow } from "./task-placement-workflow.ts";
 import { taskRelationshipsWorkflow } from "./task-relationships-workflow.ts";
@@ -12,6 +13,8 @@ export const HELP = `Ditero CLI
 
 Usage: ditero <command> [options]
 Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards, folders,
+          observe-folder (live folder state),
+          create-folder, update-folder, delete-folder (4 KiB JSON stdin),
           create-list, update-list, delete-list (list JSON stdin),
           observe-list, observe-list-deletion (live state JSON),
           plan-task (task intent JSON stdin), create-task (API task JSON stdin),
@@ -38,6 +41,7 @@ Options:
   --list <id>             Filter tasks; required for list observation/update/deletion
   --done <true|false>     Filter tasks by completion
   --task <id>            Required for task observation, completion, update, and deletion
+  --folder <id>          Required for folder observation, update and deletion
   --comment <id>         Required for comment observation, editing and deletion
   --request-id <UUID>     Required for writes; preserve for exact retries
   --webhook <UUID>        Required for webhook revocation
@@ -75,36 +79,40 @@ export async function runCli(
 			output.stdout(HELP);
 			return 0;
 		}
-		const result = WEBHOOK_COMMANDS.includes(options.command)
-			? await webhookWorkflow(options, fetcher, stdinReader)
-			: COMMENT_COMMANDS.some((command) => command === options.command)
-				? await commentWorkflow(options, fetcher, stdinReader)
-				: ["observe-task-placement", "place-task"].includes(options.command)
-					? await taskPlacementWorkflow(options, fetcher, stdinReader)
-					: [
-								"observe-task-relationships",
-								"update-task-relationships",
-							].includes(options.command)
-						? await taskRelationshipsWorkflow(options, fetcher, stdinReader)
+		const result = FOLDER_COMMANDS.some(
+			(command) => command === options.command,
+		)
+			? await folderWorkflow(options, fetcher, stdinReader)
+			: WEBHOOK_COMMANDS.includes(options.command)
+				? await webhookWorkflow(options, fetcher, stdinReader)
+				: COMMENT_COMMANDS.some((command) => command === options.command)
+					? await commentWorkflow(options, fetcher, stdinReader)
+					: ["observe-task-placement", "place-task"].includes(options.command)
+						? await taskPlacementWorkflow(options, fetcher, stdinReader)
 						: [
-									"create-list",
-									"observe-list",
-									"update-list",
-									"observe-list-deletion",
-									"delete-list",
+									"observe-task-relationships",
+									"update-task-relationships",
 								].includes(options.command)
-							? await listWorkflow(options, fetcher, stdinReader)
+							? await taskRelationshipsWorkflow(options, fetcher, stdinReader)
 							: [
-										"plan-task",
-										"create-task",
-										"complete-task",
-										"observe-task",
-										"observe-task-deletion",
-										"update-task",
-										"delete-task",
+										"create-list",
+										"observe-list",
+										"update-list",
+										"observe-list-deletion",
+										"delete-list",
 									].includes(options.command)
-								? await taskWorkflow(options, fetcher, stdinReader)
-								: await discover(options, fetcher);
+								? await listWorkflow(options, fetcher, stdinReader)
+								: [
+											"plan-task",
+											"create-task",
+											"complete-task",
+											"observe-task",
+											"observe-task-deletion",
+											"update-task",
+											"delete-task",
+										].includes(options.command)
+									? await taskWorkflow(options, fetcher, stdinReader)
+									: await discover(options, fetcher);
 		output.stdout(
 			`${JSON.stringify(result, null, options.json ? undefined : 2)}\n`,
 		);

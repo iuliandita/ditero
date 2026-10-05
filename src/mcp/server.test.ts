@@ -83,6 +83,10 @@ test("lists nine read tools and fixed workflow tools with strict bounded schemas
 		"list_webhooks",
 		"create_webhook",
 		"revoke_webhook",
+		"get_folder_observation",
+		"create_folder",
+		"update_folder",
+		"delete_folder",
 	]);
 	for (const tool of tools) {
 		expect(tool.description).toBeTruthy();
@@ -101,6 +105,9 @@ test("lists nine read tools and fixed workflow tools with strict bounded schemas
 				"create_task_comment",
 				"update_task_comment",
 				"delete_task_comment",
+				"create_folder",
+				"update_folder",
+				"delete_folder",
 				"create_webhook",
 				"revoke_webhook",
 			].includes(tool.name),
@@ -109,6 +116,8 @@ test("lists nine read tools and fixed workflow tools with strict bounded schemas
 				"complete_task",
 				"update_task",
 				"delete_task",
+				"update_folder",
+				"delete_folder",
 				"update_list",
 				"delete_list",
 				"update_task_relationships",
@@ -338,7 +347,7 @@ test("real Bun stdio speaks SDK protocol, rejects API redirects, and prints no p
 	client.onerror = (error) => errors.push(error);
 	await client.connect(transport);
 	cleanup.push(() => client.close());
-	expect((await client.listTools()).tools).toHaveLength(33);
+	expect((await client.listTools()).tools).toHaveLength(37);
 	expect(
 		(await client.callTool({ name: "get_profile", arguments: {} }))
 			.structuredContent,
