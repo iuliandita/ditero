@@ -96,18 +96,18 @@ async function prelockCreateAuthority(
 	return true;
 }
 
-async function createTask(
+// Transaction-level create core shared by PAT and list-bound webhook callers.
+// The caller owns authentication, the surrounding transaction and its commit.
+export async function createApiTaskTx(
 	client: PoolClient,
-	actor: ApiActor,
+	userId: string,
 	input: ApiTaskCreate,
 	requestId: string,
+	requestHash: string,
 	creationLocksHeld: boolean,
-): Promise<Response> {
-	const requestHash = createHash("sha256")
-		.update(canonicalApiTaskCreate(input))
-		.digest("hex");
+): Promise<{ taskId: string; replayed: boolean }> {
 	await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
-		JSON.stringify(["public-api-task-create", actor.userId, requestId]),
+		JSON.stringify(["public-api-task-create", userId, requestId]),
 	]);
 	const receipt = await client.query<{
 		request_hash: string;
@@ -115,7 +115,7 @@ async function createTask(
 		task_id: string | null;
 	}>(
 		"select request_hash, resource_kind, task_id from public_api_request where user_id=$1 and request_id=$2",
-		[actor.userId, requestId],
+		[userId, requestId],
 	);
 	if (receipt.rowCount) {
 		const existing = receipt.rows[0];
@@ -129,39 +129,13 @@ async function createTask(
 				"idempotency-conflict",
 				"This Idempotency-Key was used for a different request",
 			);
-		try {
-			return await readApiResource(
-				client,
-				actor,
-				"tasks",
-				TASK_QUERY,
-				existing.task_id,
-			);
-		} catch (error) {
-			if (!(error instanceof PublicApiError) || error.status !== 404)
-				throw error;
-			// A retained receipt cannot distinguish deletion from inaccessible content.
-			const visible = await client.query(
-				"select l.id from list l join membership m on m.workspace_id=l.workspace_id where l.id=$1 and m.user_id=$2",
-				[input.listId, actor.userId],
-			);
-			if (!visible.rowCount) throw error;
-			const exists = await client.query("select id from task where id=$1", [
-				existing.task_id,
-			]);
-			if (exists.rowCount) throw error;
-			throw new PublicApiError(
-				410,
-				"task-deleted",
-				"The task created by this request has been deleted",
-			);
-		}
+		return { taskId: existing.task_id, replayed: true };
 	}
 	if (!creationLocksHeld)
 		throw new PublicApiError(404, "not-found", "Resource not found");
 	const visible = await client.query<{ role: string }>(
 		"select m.role from list l join membership m on m.workspace_id=l.workspace_id where l.id=$1 and m.user_id=$2",
-		[input.listId, actor.userId],
+		[input.listId, userId],
 	);
 	if (!visible.rowCount)
 		throw new PublicApiError(404, "not-found", "Resource not found");
@@ -182,8 +156,8 @@ async function createTask(
 	);
 	try {
 		await database.transaction((tx) =>
-			withZeroUserContext(tx, actor.userId, async () => {
-				await lockZeroTaskWrite(tx, actor.userId, {
+			withZeroUserContext(tx, userId, async () => {
+				await lockZeroTaskWrite(tx, userId, {
 					taskIds: [],
 					targetListIds: [input.listId],
 					extraUserIds: input.assigneeIds,
@@ -197,7 +171,7 @@ async function createTask(
 				);
 				await mutators.task.create.fn({
 					tx,
-					ctx: { id: actor.userId },
+					ctx: { id: userId },
 					args: {
 						id: taskId,
 						listId: input.listId,
@@ -209,20 +183,20 @@ async function createTask(
 						priority: input.priority,
 					},
 				});
-				for (const userId of input.assigneeIds)
+				for (const assigneeId of input.assigneeIds)
 					await mutators.task.assign.fn({
 						tx,
-						ctx: { id: actor.userId },
-						args: { taskId, userId },
+						ctx: { id: userId },
+						args: { taskId, userId: assigneeId },
 					});
 				await mutators.taskLabel.set.fn({
 					tx,
-					ctx: { id: actor.userId },
+					ctx: { id: userId },
 					args: { taskId, labelIds: input.labelIds },
 				});
 				await client.query(
 					"insert into public_api_request (user_id,request_id,request_hash,task_id,created_at) values ($1,$2,$3,$4,statement_timestamp())",
-					[actor.userId, requestId, requestHash, taskId],
+					[userId, requestId, requestHash, taskId],
 				);
 			}),
 		);
@@ -248,14 +222,72 @@ async function createTask(
 			);
 		throw error;
 	}
-	const result = await readApiResource(
+	return { taskId, replayed: false };
+}
+
+async function createTask(
+	client: PoolClient,
+	actor: ApiActor,
+	input: ApiTaskCreate,
+	requestId: string,
+	creationLocksHeld: boolean,
+): Promise<Response> {
+	const requestHash = createHash("sha256")
+		.update(canonicalApiTaskCreate(input))
+		.digest("hex");
+	const { taskId, replayed } = await createApiTaskTx(
 		client,
-		actor,
-		"tasks",
-		TASK_QUERY,
-		taskId,
+		actor.userId,
+		input,
+		requestId,
+		requestHash,
+		creationLocksHeld,
 	);
-	return new Response(result.body, { status: 201, headers: result.headers });
+	if (!replayed) {
+		const result = await readApiResource(
+			client,
+			actor,
+			"tasks",
+			TASK_QUERY,
+			taskId,
+		);
+		return new Response(result.body, { status: 201, headers: result.headers });
+	}
+	try {
+		return await readApiResource(client, actor, "tasks", TASK_QUERY, taskId);
+	} catch (error) {
+		if (!(error instanceof PublicApiError) || error.status !== 404) throw error;
+		// A retained receipt cannot distinguish deletion from inaccessible content.
+		const visible = await client.query(
+			"select l.id from list l join membership m on m.workspace_id=l.workspace_id where l.id=$1 and m.user_id=$2",
+			[input.listId, actor.userId],
+		);
+		if (!visible.rowCount) throw error;
+		const exists = await client.query("select id from task where id=$1", [
+			taskId,
+		]);
+		if (exists.rowCount) throw error;
+		throw new PublicApiError(
+			410,
+			"task-deleted",
+			"The task created by this request has been deleted",
+		);
+	}
+}
+
+export async function flushApiEvents(
+	pool: Pool,
+	events: CollectedEvent[],
+	flush?: FlushApiEvents,
+): Promise<void> {
+	if (!events.length) return;
+	if (flush) {
+		try {
+			await flush(events);
+		} catch {
+			console.error("public API notification enqueue after commit failed");
+		}
+	} else await enqueueEventsSafely(drizzle(pool, { schema: tables }), events);
 }
 
 export async function writeApiTask(
@@ -284,14 +316,6 @@ export async function writeApiTask(
 			);
 		},
 	);
-	if (events.length) {
-		if (flush) {
-			try {
-				await flush(events);
-			} catch {
-				console.error("public API notification enqueue after commit failed");
-			}
-		} else await enqueueEventsSafely(drizzle(pool, { schema: tables }), events);
-	}
+	await flushApiEvents(pool, events, flush);
 	return response;
 }

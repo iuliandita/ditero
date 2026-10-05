@@ -2,7 +2,7 @@
 
 The versioned API provides discovery, idempotent list and task creation, scalar
 updates, observed task completion and deletion, and authenticated iCalendar
-snapshots and fixed-list calendar subscriptions. Webhooks remain under development.
+snapshots, fixed-list calendar subscriptions and list-bound task webhooks.
 Write tokens do not grant workspace access.
 
 ## Tokens
@@ -490,6 +490,46 @@ expiry and revocation, including empty lists. Revocation is immediate for later
 requests. Snapshots use the existing iCalendar limits, date handling and escaping;
 recurrence does not generate future instances. The feed includes task titles and
 notes, so sharing its URL grants access to that list's exported task content.
+
+## List-bound task webhooks
+
+A write personal access token manages webhooks through `GET /api/v1/webhooks`,
+`POST /api/v1/webhooks` and `DELETE /api/v1/webhooks/:id`. Cookie sessions are not
+accepted. Creation accepts only `name`, `listId` and `expiresInDays` (1–365, default
+90) and requires a non-viewer role in the list's workspace. An account can have at
+most 20 active webhooks. The response returns the secret once and is never cached;
+a retried create makes a new webhook. Listings return up to 100 metadata records
+(hint, list, lifetime, revocation) and never the secret or any task data.
+Revocation is idempotent and permanent.
+
+A webhook can only create tasks in its original list. Send
+`POST /api/v1/webhooks/:id/deliveries` with the secret in an
+`Authorization: Bearer` header (never in a URL) and an `application/json` body of at
+most 4 KiB: `deliveryId` (UUID), `title`, and optional `notes`, `dueAt`, `dueAllDay`
+and `priority`, with the same limits and defaults as `POST /api/v1/tasks`. Unknown
+fields, including assignees, labels, parents and list IDs, are rejected. Created
+tasks have no assignees, labels or parent. The webhook secret is not a personal
+access token and a personal access token is not a webhook secret.
+
+`deliveryId` is unique per account. Repeating it with the same webhook and body
+returns `200` with the original task ID and `replayed: true`; a new task returns
+`201`. Reusing it with a different body, another webhook, or the task-create
+endpoint returns `409`. If the task was deleted or moved out of the webhook's
+list, a replay returns `410` with a fixed message that never names a new location.
+The response contains only `id`, `listId` (the bound list) and `replayed`.
+
+Every request, replays included, revalidates the webhook, the live account, the
+membership and the list. Invalid, expired, revoked or mismatched credentials return
+a uniform `401`; a demoted read-only role returns `403`; a missing list or membership
+returns `404`. The route ID is matched case-insensitively; the secret decides.
+Deliveries use their own rate limit bucket. Deleting an account removes its
+webhooks.
+
+A delivery or a webhook revoke can return `503 temporarily-unavailable` when it
+waits more than one second for the account's row lock (for example during a burst of
+deliveries). This is a temporary error, not a failure of the request: the server
+never retries automatically. Retry a delivery with the **same** `deliveryId` so it
+stays idempotent; a new `deliveryId` can create a second task.
 
 ## Observed task placement
 

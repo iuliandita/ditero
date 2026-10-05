@@ -341,6 +341,7 @@ async function removeAccount(
 	);
 	for (const [table, column] of [
 		["public_api_request", "user_id"],
+		["inbound_webhook", "user_id"],
 		["personal_access_token", "user_id"],
 		["import_source", "owner_user_id"],
 		["notification_channel", "user_id"],

@@ -214,8 +214,9 @@ test("saved surfaces preserve personal scope and shared membership without leaki
 		expect(body).not.toContain("api-outside");
 	}
 	const schema = await request("/api/v1/openapi.json", null);
-	const paths = (await schema.json()).paths;
-	expect(Object.keys(paths)).toHaveLength(33);
+	const document = await schema.json();
+	const paths = document.paths;
+	expect(Object.keys(paths)).toHaveLength(36);
 	const comments = paths["/api/v1/tasks/{id}/comments"];
 	const comment = paths["/api/v1/tasks/{id}/comments/{commentId}"];
 	const commentObservation =
@@ -263,6 +264,53 @@ test("saved surfaces preserve personal scope and shared membership without leaki
 		paths["/api/v1/folders/{id}/observation"].get.responses["200"],
 	).toBeDefined();
 	expect(paths["/api/v1/folders/{id}"].delete.requestBody.required).toBe(true);
+	const webhooks = paths["/api/v1/webhooks"];
+	const webhook = paths["/api/v1/webhooks/{id}"];
+	const delivery = paths["/api/v1/webhooks/{id}/deliveries"].post;
+	expect([
+		webhooks.get.operationId,
+		webhooks.post.operationId,
+		webhook.delete.operationId,
+		delivery.operationId,
+	]).toEqual([
+		"list_webhooks",
+		"create_webhook",
+		"revoke_webhook",
+		"deliver_webhook",
+	]);
+	for (const operation of [webhooks.get, webhooks.post, webhook.delete])
+		expect(operation.security).toEqual([{ personalAccessToken: [] }]);
+	expect(delivery.security).toEqual([{ webhookCredential: [] }]);
+	for (const name of ["personalAccessToken", "webhookCredential"])
+		expect(document.components.securitySchemes[name]).toMatchObject({
+			type: "http",
+			scheme: "bearer",
+		});
+	expect(webhooks.get.responses["200"]).toBeDefined();
+	expect(webhooks.post.requestBody.required).toBe(true);
+	expect(webhooks.post.responses["201"]).toBeDefined();
+	expect(webhook.delete.responses["200"]).toBeDefined();
+	expect(webhook.delete.parameters).toMatchObject([
+		{ name: "id", in: "path", required: true },
+	]);
+	expect(delivery.requestBody.required).toBe(true);
+	const deliveryBody = delivery.requestBody.content["application/json"].schema;
+	expect(deliveryBody.additionalProperties).toBe(false);
+	expect(deliveryBody.required).toContain("deliveryId");
+	expect(deliveryBody.required).toContain("title");
+	expect(delivery.responses["200"]).toBeDefined();
+	expect(delivery.responses["201"]).toBeDefined();
+	for (const status of ["200", "201"]) {
+		const ack =
+			delivery.responses[status].content["application/json"].schema.properties
+				.data;
+		expect(ack.additionalProperties).toBe(false);
+		expect(Object.keys(ack.properties).sort()).toEqual([
+			"id",
+			"listId",
+			"replayed",
+		]);
+	}
 });
 
 test("unknown, revoked, expired and deleted-account credentials all fail uniformly", async () => {
