@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { parsePort, portOf } from "./scripts/e2e-stack.ts";
 import { validateOrigin } from "./tests/e2e/helpers.ts";
 import { privateHost } from "./tests/support/private-host.ts";
 
@@ -13,6 +14,11 @@ const WEB_ORIGIN = origin("E2E_WEB_URL", "http://localhost:5173");
 const API_ORIGIN = origin("E2E_API_URL", "http://localhost:3000");
 const MAIL_ORIGIN = origin("E2E_MAIL_API_URL", "http://localhost:3001");
 const ZERO_ORIGIN = origin("E2E_PUBLIC_ZERO_URL", "http://localhost:4849");
+// tests/e2e/run.ts reserves distinct ports per run and passes them as origins;
+// every listener below follows its origin. Direct runs keep the fixed defaults.
+const WEB_PORT = portOf(WEB_ORIGIN, "E2E_WEB_URL");
+const API_PORT = portOf(API_ORIGIN, "E2E_API_URL");
+const MAIL_PORT = portOf(MAIL_ORIGIN, "E2E_MAIL_API_URL");
 
 // The ntfy stub cannot live on loopback: safe-http refuses 127.0.0.0/8
 // unconditionally and no allowlist may re-enable it (that is the point of the
@@ -21,7 +27,8 @@ const ZERO_ORIGIN = origin("E2E_PUBLIC_ZERO_URL", "http://localhost:4849");
 // one address for the API process only.
 const NTFY_HOST = privateHost();
 // Read by tests/e2e/notifications.spec.ts (workers inherit this process env).
-origin("E2E_NTFY_URL", `http://${NTFY_HOST}:4599`);
+const NTFY_ORIGIN = origin("E2E_NTFY_URL", `http://${NTFY_HOST}:4599`);
+const NTFY_PORT = portOf(NTFY_ORIGIN, "E2E_NTFY_URL");
 
 const databaseURL =
 	process.env.E2E_DATABASE_URL ??
@@ -34,9 +41,12 @@ const databaseURL =
 // runs with SMTP pointed at the loopback sink. Both share the one Postgres, so
 // an email row saved through the SMTP server renders (masked, unavailable, still
 // removable) on the SMTP-less one -- exactly the "SMTP later disappeared" case.
-const SMTP_PORT = 4600;
-const SMTP_HTTP_PORT = 4601;
-origin("E2E_SMTP_HTTP_URL", `http://127.0.0.1:${SMTP_HTTP_PORT}`);
+const SMTP_PORT = parsePort(
+	process.env.E2E_SMTP_PORT ?? "4600",
+	"E2E_SMTP_PORT",
+);
+const SMTP_HTTP_ORIGIN = origin("E2E_SMTP_HTTP_URL", "http://127.0.0.1:4601");
+const SMTP_HTTP_PORT = portOf(SMTP_HTTP_ORIGIN, "E2E_SMTP_HTTP_URL");
 
 // Env shared by both app servers; each overrides API_PORT + BETTER_AUTH_URL and
 // the SMTP server adds DITERO_SMTP_*.
@@ -52,6 +62,9 @@ const appEnv = {
 	BETTER_AUTH_SECRET: "e2e-only-better-auth-secret-32-bytes",
 	DITERO_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString("base64"),
 	DITERO_PASSKEY_ORIGIN: WEB_ORIGIN,
+	// Without this the API trusts only http://localhost:5173 (src/auth/origins.ts,
+	// src/server/http-policy.ts) and a moved web port fails CORS and origin checks.
+	TRUSTED_ORIGINS: WEB_ORIGIN,
 	DITERO_REGISTRATION_MODE: "open",
 	// Served to the web client from /api/config. tests/e2e/docker-compose.yml
 	// publishes zero-cache on 4849, not the 4848 default, and the browser reaches
@@ -126,12 +139,12 @@ export default defineConfig({
 			// tree rewrite; that cause is gone since the output structure is pinned
 			// in paraglide.options.ts, but the orphaning stands on its own.)
 			command: "bun run src/server/index.ts",
-			port: 3000,
+			port: API_PORT,
 			reuseExistingServer: false,
 			timeout: 60_000,
 			env: {
 				...appEnv,
-				API_PORT: "3000",
+				API_PORT: String(API_PORT),
 				BETTER_AUTH_URL: API_ORIGIN,
 			},
 		},
@@ -141,12 +154,12 @@ export default defineConfig({
 			// sink, and the SMTP-less UI states render on the default web app against
 			// the shared DB.
 			command: "bun run src/server/index.ts",
-			port: 3001,
+			port: MAIL_PORT,
 			reuseExistingServer: false,
 			timeout: 60_000,
 			env: {
 				...appEnv,
-				API_PORT: "3001",
+				API_PORT: String(MAIL_PORT),
 				BETTER_AUTH_URL: MAIL_ORIGIN,
 				DITERO_SMTP_HOST: "127.0.0.1",
 				DITERO_SMTP_PORT: String(SMTP_PORT),
@@ -161,13 +174,14 @@ export default defineConfig({
 		},
 		{
 			command: "bun run tests/e2e/ntfy-stub.ts",
-			url: `http://${NTFY_HOST}:4599/health`,
+			url: `${NTFY_ORIGIN}/health`,
 			reuseExistingServer: false,
 			timeout: 30_000,
+			env: { NTFY_STUB_PORT: String(NTFY_PORT) },
 		},
 		{
 			command: "bun run tests/e2e/smtp-sink-server.ts",
-			url: `http://127.0.0.1:${SMTP_HTTP_PORT}/health`,
+			url: `${SMTP_HTTP_ORIGIN}/health`,
 			reuseExistingServer: false,
 			timeout: 30_000,
 			env: {
@@ -176,8 +190,9 @@ export default defineConfig({
 			},
 		},
 		{
-			command: "bun run dev:web",
-			port: 5173,
+			// strictPort: Vite must not slide to another port if this one was taken.
+			command: `bun run dev:web --port ${WEB_PORT} --strictPort`,
+			port: WEB_PORT,
 			reuseExistingServer: false,
 			timeout: 60_000,
 			env: { NODE_ENV: "test", DITERO_E2E_SIGNUP_TRANSPORT: "1" },

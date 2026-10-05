@@ -2,16 +2,46 @@ import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { e2eDatabaseURL } from "../../scripts/e2e-database-port.ts";
+import {
+	allocatePorts,
+	assertDistinctPorts,
+	assertEmptyInventory,
+	bindEphemeral,
+	type CleanupStep,
+	cleanupSteps,
+	confirmIdentity,
+	emptyInventory,
+	FULL_ID,
+	hostEnvironment,
+	type Inventory,
+	inspectArgv,
+	listArgv,
+	loopbackPort,
+	mergeOwned,
+	newRun,
+	originFor,
+	ownedInventory,
+	PROJECT_LABEL,
+	parseIds,
+	parseRecords,
+	planCleanup,
+	RUN_LABEL,
+	VOLUME_NAME,
+} from "../../scripts/e2e-stack.ts";
+import { privateHost } from "../support/private-host.ts";
 
+// Each run owns a unique project and marker (io.ditero.e2e.run on every Compose
+// resource), so cleanup can prove what it removes instead of trusting a name.
+const stackRun = newRun();
 const compose = [
 	"compose",
 	"--project-name",
-	"ditero-e2e",
+	stackRun.project,
 	"--file",
 	"tests/e2e/docker-compose.yml",
 ];
 const databaseURL = "postgres://postgres:pass@localhost:55432/ditero_e2e";
-const env = {
+const env: NodeJS.ProcessEnv = {
 	...process.env,
 	E2E_DIAGNOSTIC_COMPOSE_ARGV: JSON.stringify(compose),
 	DATABASE_URL: databaseURL,
@@ -19,6 +49,11 @@ const env = {
 	NODE_ENV: "test",
 	DITERO_E2E_SIGNUP_TRANSPORT:
 		process.env.DITERO_E2E_SIGNUP_TRANSPORT ?? (process.env.CI ? "1" : "0"),
+	DITERO_E2E_RUN_ID: stackRun.runId,
+	// Docker picks these; the runner discovers the exact loopback bindings.
+	DITERO_E2E_DB_PORT: "0",
+	DITERO_E2E_BROWSER_PORT: "0",
+	DITERO_E2E_ZERO_PORT: "0",
 };
 
 const isolatedBrowser = process.env.E2E_BROWSER_CONTAINER === "1";
@@ -55,10 +90,6 @@ function configureBrowser() {
 		throw new Error(
 			"Browser image, installed playwright-core, and bun.lock must use the same exact version",
 		);
-	Object.assign(env, {
-		PW_TEST_CONNECT_WS_ENDPOINT: "ws://127.0.0.1:53000/",
-		PW_TEST_CONNECT_EXPOSE_NETWORK: "<loopback>",
-	});
 }
 
 let activeChild: ChildProcess | undefined;
@@ -88,6 +119,157 @@ async function run(command: string, args: string[], allowFailure = false) {
 	if (!allowFailure && result !== 0)
 		throw new Error(`${command} exited with status ${result}`);
 	return result;
+}
+
+// Bounded, synchronous Docker access for ownership reads and cleanup writes.
+function docker(what: string, args: string[], timeout = 15_000): string {
+	const result = spawnSync("docker", args, {
+		env,
+		encoding: "utf8",
+		timeout,
+		killSignal: "SIGKILL",
+		maxBuffer: 8 * 1024 * 1024,
+	});
+	if (result.error || result.status !== 0)
+		throw new Error(
+			`docker ${what} failed: ${result.error?.message ?? `exit ${result.status}`}${
+				result.stderr ? `: ${result.stderr.trim().slice(0, 500)}` : ""
+			}`,
+		);
+	return result.stdout;
+}
+
+function publishedPort(
+	service: string,
+	containerPort: string,
+	profile = false,
+) {
+	try {
+		return loopbackPort(
+			docker(`port ${service}`, [
+				...compose,
+				...(profile ? ["--profile", "browser"] : []),
+				"port",
+				service,
+				containerPort,
+			]),
+		);
+	} catch (error) {
+		throw new Error(`Cannot discover the owned E2E ${service} port`, {
+			cause: error,
+		});
+	}
+}
+
+// Everything related to this run by project label OR run marker, by exact
+// current state -- never by what the runner believes it created.
+function readInventory(): Inventory {
+	const filters = [
+		`${PROJECT_LABEL}=${stackRun.project}`,
+		`${RUN_LABEL}=${stackRun.runId}`,
+	];
+	const pattern = {
+		containers: FULL_ID,
+		volumes: VOLUME_NAME,
+		networks: FULL_ID,
+	};
+	const inventory = emptyInventory();
+	for (const kind of ["containers", "volumes", "networks"] as const) {
+		const keys = new Set<string>();
+		for (const filter of filters)
+			for (const key of parseIds(
+				docker(`${kind} list`, listArgv(kind, filter)),
+				pattern[kind],
+			))
+				keys.add(key);
+		if (keys.size)
+			Object.assign(inventory, {
+				[kind]: parseRecords(
+					kind,
+					docker(`${kind} inspect`, inspectArgv(kind, [...keys])),
+				),
+			});
+	}
+	return inventory;
+}
+
+let upAttempted = false;
+let tracked = emptyInventory();
+
+// Capture identity from what Docker actually created, including after a failed
+// or interrupted `up`.
+function snapshot() {
+	tracked = mergeOwned(
+		tracked,
+		ownedInventory(readInventory(), stackRun, isolatedBrowser),
+	);
+}
+
+async function up(args: string[]) {
+	upAttempted = true;
+	let failed = false;
+	let failure: unknown;
+	try {
+		await run("docker", [...compose, ...args]);
+	} catch (error) {
+		failed = true;
+		failure = error;
+	}
+	try {
+		snapshot();
+	} catch (error) {
+		if (!failed) throw error;
+		console.error("E2E ownership snapshot failed:", error);
+	}
+	if (failed) throw failure;
+}
+
+function recheck(step: CleanupStep) {
+	const [actual] = parseRecords(
+		step.kind,
+		docker(`${step.label} recheck`, inspectArgv(step.kind, [step.key])),
+	);
+	confirmIdentity(step.kind, step.record, actual, stackRun, isolatedBrowser);
+}
+
+// Removes only validated, rechecked resources by exact ID/name. Never `down`,
+// force, `-v`, or orphan removal. Any refusal or failure stops further writes
+// and leaves the stack for manual inspection; there is no retry.
+function cleanupStack(): number {
+	let steps: CleanupStep[];
+	try {
+		steps = cleanupSteps(
+			planCleanup({
+				run: stackRun,
+				isolatedBrowser,
+				upAttempted,
+				tracked,
+				current: readInventory(),
+			}),
+		);
+	} catch (error) {
+		console.error("E2E cleanup refused; nothing was removed:", error);
+		console.error(
+			`Inspect: docker ps -a --filter label=${RUN_LABEL}=${stackRun.runId}`,
+		);
+		return 1;
+	}
+	for (const [index, step] of steps.entries()) {
+		try {
+			recheck(step);
+			docker(step.label, step.argv, step.timeoutMs);
+		} catch (error) {
+			console.error(
+				`E2E cleanup stopped at "${step.label}"; ${steps.length - index} step(s) were not completed:`,
+				error,
+			);
+			console.error(
+				`Inspect: docker ps -a --filter label=${RUN_LABEL}=${stackRun.runId}`,
+			);
+			return 1;
+		}
+	}
+	return 0;
 }
 
 function preserveDiagnostics() {
@@ -169,40 +351,56 @@ try {
 	// they start before vite -- whose paraglide plugin would otherwise be the
 	// only thing generating it.
 	await run("bun", ["run", "i18n:compile"]);
-	await run("docker", [...compose, "up", "--detach", "--wait", "upstream-db"]);
-	const binding = spawnSync(
-		"docker",
-		[...compose, "port", "upstream-db", "5432"],
-		{
-			env,
-			encoding: "utf8",
-			timeout: 15_000,
-		},
-	);
-	if (binding.status !== 0 || binding.error)
-		throw new Error("Cannot discover the owned E2E database port");
-	const actualDatabaseURL = e2eDatabaseURL(binding.stdout);
+	// A fresh UUID cannot pre-exist; anything carrying it is not ours to adopt.
+	assertEmptyInventory(readInventory(), stackRun);
+	await up(["up", "--detach", "--wait", "upstream-db"]);
+	const binding = docker("port upstream-db", [
+		...compose,
+		"port",
+		"upstream-db",
+		"5432",
+	]);
+	const databasePort = loopbackPort(binding);
+	const actualDatabaseURL = e2eDatabaseURL(binding);
 	env.DATABASE_URL = actualDatabaseURL;
 	env.E2E_DATABASE_URL = actualDatabaseURL;
 	await run("bun", ["run", "db:migrate"]);
-	await run("docker", [
-		...compose,
-		"up",
-		"--build",
-		"--detach",
-		"--wait",
-		"zero-cache",
-	]);
+	// Reserved while all are held, then released for the servers that bind them.
+	// A race with another process fails loudly: reuseExistingServer is false and
+	// Vite runs with --strictPort.
+	const ntfyHost = privateHost();
+	const hostPorts = await allocatePorts(
+		[
+			{ name: "api", host: "127.0.0.1" },
+			{ name: "web", host: "127.0.0.1" },
+			{ name: "mail", host: "127.0.0.1" },
+			{ name: "smtp", host: "127.0.0.1" },
+			{ name: "smtpHttp", host: "127.0.0.1" },
+			{ name: "ntfy", host: ntfyHost },
+		],
+		bindEphemeral,
+		[databasePort],
+	);
+	Object.assign(env, hostEnvironment(hostPorts, ntfyHost));
+	await up(["up", "--build", "--detach", "--wait", "zero-cache"]);
+	const zeroPort = publishedPort("zero-cache", "4848");
+	env.E2E_PUBLIC_ZERO_URL = originFor(zeroPort);
+	const dockerPorts: Record<string, number> = {
+		database: databasePort,
+		zero: zeroPort,
+	};
+	if (isolatedBrowser) {
+		await up(["--profile", "browser", "up", "--detach", "--wait", "browser"]);
+		dockerPorts.browser = publishedPort("browser", "3000", true);
+	}
+	// Docker's ephemeral ports were chosen after the host ports were released.
+	assertDistinctPorts({ ...hostPorts, ...dockerPorts });
+	// Only an endpoint on the owned browser's actual port is ever used.
 	if (isolatedBrowser)
-		await run("docker", [
-			...compose,
-			"--profile",
-			"browser",
-			"up",
-			"--detach",
-			"--wait",
-			"browser",
-		]);
+		Object.assign(env, {
+			PW_TEST_CONNECT_WS_ENDPOINT: `ws://127.0.0.1:${dockerPorts.browser}/`,
+			PW_TEST_CONNECT_EXPOSE_NETWORK: "<loopback>",
+		});
 	// Forwards filters and flags: `bun run test:e2e crypto-vectors --project=webkit`.
 	status = await run(
 		"bunx",
@@ -220,21 +418,7 @@ try {
 		} catch (error) {
 			console.error("E2E diagnostics failed:", error);
 		}
-	const cleanup = await run(
-		"docker",
-		[
-			...compose,
-			"--profile",
-			"browser",
-			"down",
-			"--volumes",
-			"--remove-orphans",
-		],
-		true,
-	).catch((error) => {
-		console.error(error);
-		return 1;
-	});
+	const cleanup = cleanupStack();
 	if (status === 0) status = cleanup;
 }
 
