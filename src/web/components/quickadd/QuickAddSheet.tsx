@@ -256,7 +256,7 @@ export function QuickAddSheet({
 				ref={inputRef}
 				data-testid="quickadd-input"
 				aria-label={m.quickadd_input_label()}
-				className="h-10 w-full rounded-lg border bg-transparent px-3 text-base md:text-sm"
+				className="h-10 w-full rounded-lg border bg-transparent px-3 text-base md:text-sm [@media(pointer:coarse)]:min-h-11"
 				// The `#`/`~`/`pN` sigils are literal parser grammar and stay
 				// untranslated. The date example is not grammar: it has to be
 				// a word the ACTIVE chrono parser accepts, and on locales with
@@ -334,6 +334,7 @@ export function QuickAddSheet({
 				<Button
 					data-testid="quickadd-submit"
 					type="button"
+					className="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
 					onClick={() => void submit()}
 					disabled={busy || !targetList || !title.trim() || voice.blocking}
 					aria-describedby={
