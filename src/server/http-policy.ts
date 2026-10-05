@@ -65,6 +65,8 @@ export function securityHeaders(env: HttpEnvironment): Record<string, string> {
 		"x-content-type-options": "nosniff",
 		"x-frame-options": "DENY",
 		"referrer-policy": "strict-origin-when-cross-origin",
-		"permissions-policy": "camera=(), microphone=(), geolocation=()",
+		// Same-origin microphone and on-device recognition only (#830).
+		"permissions-policy":
+			"camera=(), microphone=(self), geolocation=(), on-device-speech-recognition=(self)",
 	};
 }
