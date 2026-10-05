@@ -19,7 +19,13 @@ import { db } from "../db/client.ts";
 import type { Locale } from "../domain/locale.ts";
 import { mailableAddress } from "../domain/mail-address.ts";
 import { encodeHeaderValue, headerSafe } from "../domain/mime-header.ts";
-import { m } from "../paraglide/messages.js";
+import { auth_mail_greeting_anon } from "../paraglide/messages/auth_mail_greeting_anon.js";
+import { auth_mail_greeting_named } from "../paraglide/messages/auth_mail_greeting_named.js";
+import { auth_mail_not_configured } from "../paraglide/messages/auth_mail_not_configured.js";
+import { auth_mail_reset_body } from "../paraglide/messages/auth_mail_reset_body.js";
+import { auth_mail_reset_subject } from "../paraglide/messages/auth_mail_reset_subject.js";
+import { auth_mail_verify_body } from "../paraglide/messages/auth_mail_verify_body.js";
+import { auth_mail_verify_subject } from "../paraglide/messages/auth_mail_verify_subject.js";
 import { type Mailer, mailerFromEnv } from "../server/mail/transport.ts";
 import { ackBaseUrl } from "../server/notifications/capability.ts";
 import { resolveRecipientLocale } from "../server/recipient-locale.ts";
@@ -63,12 +69,12 @@ function compose(
 ): { subject: string; text: string } {
 	return kind === "verify"
 		? {
-				subject: m.auth_mail_verify_subject({}, { locale }),
-				text: m.auth_mail_verify_body(params, { locale }),
+				subject: auth_mail_verify_subject({}, { locale }),
+				text: auth_mail_verify_body(params, { locale }),
 			}
 		: {
-				subject: m.auth_mail_reset_subject({}, { locale }),
-				text: m.auth_mail_reset_body(params, { locale }),
+				subject: auth_mail_reset_subject({}, { locale }),
+				text: auth_mail_reset_body(params, { locale }),
 			};
 }
 
@@ -129,11 +135,11 @@ export function sendAuthMail(
 			// Translated, so it can be non-ASCII even though no user input reaches it.
 			const { subject, text } = compose(kind, locale, {
 				greeting: name
-					? m.auth_mail_greeting_named(
+					? auth_mail_greeting_named(
 							{ name: headerSafe(name, NAME_MAX) },
 							{ locale },
 						)
-					: m.auth_mail_greeting_anon({}, { locale }),
+					: auth_mail_greeting_anon({}, { locale }),
 				url: publicAuthLink(rawUrl, env),
 			});
 			const result = await activeMailer.send({
@@ -192,7 +198,7 @@ export function mailUnavailableResponse(
 	return new Response(
 		JSON.stringify({
 			code: "MAIL_NOT_CONFIGURED",
-			message: m.auth_mail_not_configured({}, { locale: "en" }),
+			message: auth_mail_not_configured({}, { locale: "en" }),
 		}),
 		{ status: 503, headers: { "content-type": "application/json" } },
 	);

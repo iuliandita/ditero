@@ -5,7 +5,7 @@ import {
 	redactUrlsIn,
 } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
-import { m } from "../../../paraglide/messages.js";
+import { notify_ack_label } from "../../../paraglide/messages/notify_ack_label.js";
 import { OutboundPolicyError, safeFetch } from "../../../security/safe-http.ts";
 import { retryAfterSeconds } from "./retry-after.ts";
 import type {
@@ -46,7 +46,7 @@ function buildHeaders(
 	if (payload.urgent) headers.set("Priority", "urgent");
 	if (token) headers.set("Authorization", `Bearer ${token}`);
 	if (payload.ackUrl) {
-		const label = m.notify_ack_label({}, { locale: payload.locale });
+		const label = notify_ack_label({}, { locale: payload.locale });
 		// An HTTP header value serializes as latin-1, so an Arabic label would
 		// throw out of `new Headers()` -- caught below and misreported as a
 		// permanent config error, silently killing delivery. ntfy decodes RFC 2047

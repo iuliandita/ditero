@@ -10,7 +10,12 @@ import { z } from "zod";
 import * as tables from "../../db/schema.ts";
 import type { Locale } from "../../domain/locale.ts";
 import type { ChannelKind } from "../../domain/notification-channel.ts";
-import { m } from "../../paraglide/messages.js";
+import { notify_assign_body } from "../../paraglide/messages/notify_assign_body.js";
+import { notify_key_grant_body } from "../../paraglide/messages/notify_key_grant_body.js";
+import { notify_mention_body } from "../../paraglide/messages/notify_mention_body.js";
+import { notify_overdue_body } from "../../paraglide/messages/notify_overdue_body.js";
+import { notify_overdue_body_due } from "../../paraglide/messages/notify_overdue_body_due.js";
+import { notify_reminder_body } from "../../paraglide/messages/notify_reminder_body.js";
 import {
 	channelKeyRing,
 	decryptChannelConfig,
@@ -91,11 +96,11 @@ function eventBody(
 	dueAt: string | undefined,
 	locale: Locale,
 ): string {
-	if (kind === "assign") return m.notify_assign_body({}, { locale });
-	if (kind === "mention") return m.notify_mention_body({}, { locale });
+	if (kind === "assign") return notify_assign_body({}, { locale });
+	if (kind === "mention") return notify_mention_body({}, { locale });
 	return dueAt
-		? m.notify_overdue_body_due({ due: dueAt }, { locale })
-		: m.notify_overdue_body({}, { locale });
+		? notify_overdue_body_due({ due: dueAt }, { locale })
+		: notify_overdue_body({}, { locale });
 }
 
 export type DispatchDeps = {
@@ -129,7 +134,7 @@ export function renderPayload(
 		const locale = localeFromPref(reminder.data.locale);
 		return {
 			title: reminder.data.taskTitle,
-			body: m.notify_reminder_body(
+			body: notify_reminder_body(
 				{ when: reminder.data.occurrenceAt },
 				{ locale },
 			),
@@ -142,7 +147,7 @@ export function renderPayload(
 		const locale = localeFromPref(keyGrant.data.locale);
 		return {
 			title: keyGrant.data.workspaceName,
-			body: m.notify_key_grant_body({}, { locale }),
+			body: notify_key_grant_body({}, { locale }),
 			urgent: false,
 			locale,
 		};

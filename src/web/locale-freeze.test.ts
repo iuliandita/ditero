@@ -231,6 +231,24 @@ describe("module-level translated constants are not locale-frozen", () => {
 // be evaluated at module scope. Anything inside a function, arrow or getter is
 // fine -- that is the whole point of the accessor pattern.
 function eagerModuleScopeCalls(file: ts.SourceFile): string[] {
+	const directMessages = new Set<string>();
+	for (const statement of file.statements) {
+		if (
+			!ts.isImportDeclaration(statement) ||
+			!ts.isStringLiteral(statement.moduleSpecifier) ||
+			!/(?:^|\/)paraglide\/messages\/[^/]+\.js$/.test(
+				statement.moduleSpecifier.text,
+			) ||
+			statement.importClause?.isTypeOnly
+		)
+			continue;
+		const bindings = statement.importClause?.namedBindings;
+		if (bindings && ts.isNamedImports(bindings)) {
+			for (const binding of bindings.elements) {
+				if (!binding.isTypeOnly) directMessages.add(binding.name.text);
+			}
+		}
+	}
 	const found: string[] = [];
 	const visit = (node: ts.Node): void => {
 		if (
@@ -239,16 +257,22 @@ function eagerModuleScopeCalls(file: ts.SourceFile): string[] {
 			ts.isClassExpression(node)
 		)
 			return;
-		if (
-			ts.isCallExpression(node) &&
-			ts.isPropertyAccessExpression(node.expression) &&
-			ts.isIdentifier(node.expression.expression) &&
-			node.expression.expression.text === "m"
-		) {
-			const { line } = file.getLineAndCharacterOfPosition(node.getStart(file));
-			found.push(
-				`${file.fileName}:${line + 1} m.${node.expression.name.text}()`,
-			);
+		if (ts.isCallExpression(node)) {
+			const expression = node.expression;
+			const message =
+				ts.isPropertyAccessExpression(expression) &&
+				ts.isIdentifier(expression.expression) &&
+				expression.expression.text === "m"
+					? `m.${expression.name.text}`
+					: ts.isIdentifier(expression) && directMessages.has(expression.text)
+						? expression.text
+						: null;
+			if (message) {
+				const { line } = file.getLineAndCharacterOfPosition(
+					node.getStart(file),
+				);
+				found.push(`${file.fileName}:${line + 1} ${message}()`);
+			}
 		}
 		ts.forEachChild(node, visit);
 	};
@@ -259,6 +283,47 @@ function eagerModuleScopeCalls(file: ts.SourceFile): string[] {
 }
 
 describe("no module-scope eager message resolution", () => {
+	it.each([
+		[
+			"eager barrel",
+			'import { m } from "../paraglide/messages.js"; const label = m.notify_ack_label();',
+			1,
+		],
+		[
+			"eager direct",
+			'import { notify_ack_label } from "../paraglide/messages/notify_ack_label.js"; const label = notify_ack_label();',
+			1,
+		],
+		[
+			"eager alias",
+			'import { notify_ack_label as done } from "../paraglide/messages/notify_ack_label.js"; const label = done();',
+			1,
+		],
+		[
+			"deferred barrel",
+			'import { m } from "../paraglide/messages.js"; const label = () => m.notify_ack_label();',
+			0,
+		],
+		[
+			"deferred direct",
+			'import { notify_ack_label } from "../paraglide/messages/notify_ack_label.js"; const label = () => notify_ack_label();',
+			0,
+		],
+		[
+			"deferred alias getter",
+			'import { notify_ack_label as done } from "../paraglide/messages/notify_ack_label.js"; const labels = { get done() { return done(); } };',
+			0,
+		],
+	] as const)("guards %s message resolution", (_name, source, expected) => {
+		const file = ts.createSourceFile(
+			"fixture.ts",
+			source,
+			ts.ScriptTarget.ESNext,
+			true,
+		);
+		expect(eagerModuleScopeCalls(file)).toHaveLength(expected);
+	});
+
 	it("every m.*() call in src/ sits behind a function, arrow or getter", () => {
 		const root = fileURLToPath(new URL("..", import.meta.url));
 		const offenders: string[] = [];
@@ -272,7 +337,11 @@ describe("no module-scope eager message resolution", () => {
 			const path = join(entry.parentPath, entry.name);
 			if (path.includes(`${sep}paraglide${sep}`)) continue;
 			const source = readFileSync(path, "utf8");
-			if (!source.includes("paraglide/messages.js")) continue;
+			if (
+				!source.includes("paraglide/messages.js") &&
+				!source.includes("paraglide/messages/")
+			)
+				continue;
 			offenders.push(
 				...eagerModuleScopeCalls(
 					ts.createSourceFile(

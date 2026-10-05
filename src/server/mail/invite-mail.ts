@@ -17,7 +17,8 @@ import type { InviteMailStatus } from "../../domain/invite.ts";
 import type { Locale } from "../../domain/locale.ts";
 import { mailableAddress } from "../../domain/mail-address.ts";
 import { encodeHeaderValue, headerSafe } from "../../domain/mime-header.ts";
-import { m } from "../../paraglide/messages.js";
+import { invite_mail_body } from "../../paraglide/messages/invite_mail_body.js";
+import { invite_mail_subject } from "../../paraglide/messages/invite_mail_subject.js";
 import { ackBaseUrl } from "../notifications/capability.ts";
 import type { Mailer } from "./transport.ts";
 import { mailerFromEnv } from "./transport.ts";
@@ -98,7 +99,7 @@ export async function sendInviteMail(
 	// the subject becomes a header, and RFC 2047 carries the non-ASCII case.
 	const subject = encodeHeaderValue(
 		headerSafe(
-			m.invite_mail_subject(
+			invite_mail_subject(
 				{ inviter: inviterName, workspace: workspaceName },
 				{ locale },
 			),
@@ -109,7 +110,7 @@ export async function sendInviteMail(
 		{
 			to,
 			subject,
-			text: m.invite_mail_body(
+			text: invite_mail_body(
 				{ inviter: inviterName, workspace: workspaceName, link },
 				{ locale },
 			),

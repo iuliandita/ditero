@@ -16,7 +16,8 @@ import {
 	maskChannelConfig,
 	restoreChannelConfig,
 } from "../../domain/notification-channel.ts";
-import { m } from "../../paraglide/messages.js";
+import { notify_test_body } from "../../paraglide/messages/notify_test_body.js";
+import { notify_test_title } from "../../paraglide/messages/notify_test_title.js";
 import {
 	channelKeyRing,
 	decryptChannelConfig,
@@ -509,8 +510,8 @@ export async function testChannel(
 		result = await adapter.send(
 			config,
 			{
-				title: m.notify_test_title({}, { locale }),
-				body: m.notify_test_body({}, { locale }),
+				title: notify_test_title({}, { locale }),
+				body: notify_test_body({}, { locale }),
 				urgent: false,
 				ackUrl,
 				locale,
