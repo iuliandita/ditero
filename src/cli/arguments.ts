@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
 	PUBLIC_API_ID,
 	PUBLIC_API_MAX_PAGE_SIZE,
@@ -46,7 +47,10 @@ export interface CliOptions {
 		| "observe-task-relationships"
 		| "update-task-relationships"
 		| "update-task"
-		| "delete-task";
+		| "delete-task"
+		| "list-webhooks"
+		| "create-webhook"
+		| "revoke-webhook";
 	server: string;
 	token: string;
 	json: boolean;
@@ -59,6 +63,8 @@ export interface CliOptions {
 	requestId?: string;
 	taskId?: string;
 	commentId?: string;
+	webhookId?: string;
+	revealSecret?: boolean;
 }
 
 export function usageError(): never {
@@ -116,7 +122,12 @@ export function parseArguments(
 	let command: CliOptions["command"] | undefined;
 	const flags = new Set<string>();
 	const values = new Map<string, string>();
-	const booleans = ["--json", "--all", "--allow-loopback-http"];
+	const booleans = [
+		"--json",
+		"--all",
+		"--allow-loopback-http",
+		"--reveal-secret",
+	];
 	const valued = [
 		"--server",
 		"--limit",
@@ -127,6 +138,7 @@ export function parseArguments(
 		"--request-id",
 		"--task",
 		"--comment",
+		"--webhook",
 	];
 	for (let index = 0; index < argv.length; index++) {
 		const argument = argv[index];
@@ -163,6 +175,9 @@ export function parseArguments(
 				"update-task-relationships",
 				"update-task",
 				"delete-task",
+				"list-webhooks",
+				"create-webhook",
+				"revoke-webhook",
 			].includes(argument) ||
 				PUBLIC_API_RESOURCES.some((resource) => resource === argument))
 		) {
@@ -170,6 +185,29 @@ export function parseArguments(
 		} else usageError();
 	}
 	if (!command) usageError();
+	const webhookCommand = [
+		"list-webhooks",
+		"create-webhook",
+		"revoke-webhook",
+	].includes(command);
+	const rawWebhook = values.get("--webhook");
+	const parsedWebhook = z.uuid().safeParse(rawWebhook);
+	if (
+		(webhookCommand &&
+			(flags.has("--all") ||
+				[...values.keys()].some(
+					(key) =>
+						key !== "--server" &&
+						!(command === "revoke-webhook" && key === "--webhook"),
+				) ||
+				(command === "revoke-webhook") !== parsedWebhook.success)) ||
+		(!webhookCommand && rawWebhook !== undefined) ||
+		(flags.has("--reveal-secret") && command !== "create-webhook")
+	)
+		usageError();
+	const webhookId = parsedWebhook.success
+		? parsedWebhook.data.toLowerCase()
+		: undefined;
 	const commentCommand = [
 		"list-task-comments",
 		"observe-comment",
@@ -305,5 +343,7 @@ export function parseArguments(
 		requestId,
 		taskId,
 		commentId,
+		webhookId,
+		revealSecret: flags.has("--reveal-secret"),
 	};
 }

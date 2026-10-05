@@ -433,3 +433,42 @@ authority remains required. UUIDs share the account namespace with all API write
 After uncertain transport or cancellation, manually retry identical task/comment
 IDs, body and UUID; never replace the observation or generate a new key. A 409
 remains actionable. Inspect a separate observation for current state.
+
+## Webhooks
+
+`list-webhooks`, `create-webhook` and `revoke-webhook` manage list-bound task
+webhooks with a write token from `DITERO_TOKEN`. They take no request ID, paging,
+filters or retries, and send no idempotency header.
+
+```sh
+bun run cli list-webhooks --json
+bun run cli create-webhook --reveal-secret --json <<'JSON' > webhook.json
+{ "name": "Inbox", "listId": "LIST_ID", "expiresInDays": 90 }
+JSON
+bun run cli revoke-webhook --webhook WEBHOOK_UUID --json
+```
+
+Listing sends one GET without query parameters and returns up to 100 metadata
+records, active first, never a secret. Creation reads one strict JSON object of at
+most 4 KiB (`name` 1–80 characters, `listId`, optional `expiresInDays` 1–365,
+default 90). The secret is shown once and cannot be fetched again, so
+`--reveal-secret` is required: without it the command exits 2 before reading input
+or contacting the server. The secret is printed only on stdout, in the single JSON
+result; redirect it to a protected file or secret manager, and never to a shared
+log. Errors on stderr never contain it. Creation sends one POST and never retries.
+Once it is sent, the outcome is uncertain after a timeout or network failure
+(`network_error`, exit 7), cancellation (`cancelled`, exit 7), a 5xx server error
+(`temporarily_unavailable` for 503, otherwise `http_error`, exit 9), and a response that cannot be read, is
+oversized, redirected, not JSON, invalid (`invalid_response`, exit 8) or does not
+match the request: the webhook may exist but the secret is discarded. List webhooks
+and revoke any unexpected one before creating again. Each creation makes another
+webhook, up to 20 active. Definite errors keep their own codes and exit codes and
+carry no such advice: 400 `request_rejected`, 401 `unauthorized`, 403 `forbidden`,
+404 `not_found`, 429 `rate_limited`, and a 20-webhook limit as `webhook_limit`
+(exit 10).
+
+Revocation sends one DELETE for the lowercase-normalized UUID, without a body, and
+accepts only an acknowledgement whose ID matches the request. It is idempotent and
+permanent, so an uncertain outcome or a temporary 503 (`temporarily_unavailable`,
+exit 9) can be retried safely. Listing validates only the response schema and its
+100-row cap.

@@ -27,6 +27,7 @@ import {
 	taskRelationshipsWorkflow,
 } from "../cli/task-relationships-workflow.ts";
 import { taskWorkflow } from "../cli/task-workflow.ts";
+import { webhookWorkflow } from "../cli/webhook-workflow.ts";
 import { clientBuild } from "../clients/build-info.ts";
 import { PUBLIC_API_ID, PUBLIC_API_PAGE_SIZE } from "../domain/public-api.ts";
 import {
@@ -79,6 +80,12 @@ import {
 	apiTaskObservationSchema,
 	apiTaskUpdateSchema,
 } from "../domain/public-api-task-update.ts";
+import {
+	webhookCreatedSchema,
+	webhookCreateSchema,
+	webhookMetadataSchema,
+	webhookRevokedSchema,
+} from "../domain/public-api-webhook.ts";
 import { apiTaskCreateSchema } from "../domain/public-api-writes.ts";
 
 function safeInput(value: unknown, depth = 0): boolean {
@@ -1106,6 +1113,106 @@ export function createDiteroMcp(
 				args,
 				comment,
 				"delete",
+				ctx.mcpReq.signal,
+			),
+	);
+
+	function webhookOperation(
+		command: CliOptions["command"],
+		payload: unknown,
+		webhookId: string | undefined,
+		signal: AbortSignal,
+	) {
+		return execute(() =>
+			webhookWorkflow(
+				{
+					...fixed,
+					command,
+					webhookId,
+					revealSecret: command === "create-webhook",
+				},
+				fetcher,
+				async () => new TextEncoder().encode(JSON.stringify(payload)),
+				signal,
+			),
+		);
+	}
+	server.registerTool(
+		"list_webhooks",
+		{
+			description:
+				"Read webhook metadata (name, hint, list, workspace, expiry, revocation) for your webhooks, at most 100, active first. Secrets are never returned. One GET without paging or filters.",
+			inputSchema: guardedInput(z.object({}).strict()),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: z.array(webhookMetadataSchema).max(100),
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations,
+		},
+		(_, ctx) =>
+			webhookOperation(
+				"list-webhooks",
+				undefined,
+				undefined,
+				ctx.mcpReq.signal,
+			),
+	);
+	server.registerTool(
+		"create_webhook",
+		{
+			description:
+				"Create one webhook for a list with name (1-80 characters), listId and optional expiresInDays (1-365, default 90). Requires revealSecret: true because the one-time webhook secret is returned in this result, so it enters the client's context and cannot be fetched again. Each call creates another webhook (20 active maximum) and is never retried or replayed; list webhooks before repeating after an uncertain outcome. Requires a write token.",
+			inputSchema: guardedInput(
+				z
+					.object({
+						revealSecret: z.literal(true),
+						webhook: webhookCreateSchema,
+					})
+					.strict(),
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: webhookCreatedSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				idempotentHint: false,
+			},
+		},
+		({ webhook }, ctx) =>
+			webhookOperation("create-webhook", webhook, undefined, ctx.mcpReq.signal),
+	);
+	server.registerTool(
+		"revoke_webhook",
+		{
+			description:
+				"Revoke one webhook by its UUID. One DELETE; revoking an already revoked webhook succeeds, so an uncertain outcome can be retried safely. Requires a write token.",
+			inputSchema: guardedInput(z.object({ webhookId: z.uuid() }).strict()),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: webhookRevokedSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		({ webhookId }, ctx) =>
+			webhookOperation(
+				"revoke-webhook",
+				undefined,
+				webhookId.toLowerCase(),
 				ctx.mcpReq.signal,
 			),
 	);

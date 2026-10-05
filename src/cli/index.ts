@@ -6,6 +6,7 @@ import { listWorkflow } from "./list-workflow.ts";
 import { taskPlacementWorkflow } from "./task-placement-workflow.ts";
 import { taskRelationshipsWorkflow } from "./task-relationships-workflow.ts";
 import { type StdinReader, taskWorkflow } from "./task-workflow.ts";
+import { WEBHOOK_COMMANDS, webhookWorkflow } from "./webhook-workflow.ts";
 
 export const HELP = `Ditero CLI
 
@@ -22,7 +23,9 @@ Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards, 
           observe-task-placement (live placement and children state),
           place-task (observed placement JSON stdin),
           list-task-comments, observe-comment (explicit task/comment IDs),
-          add-comment, edit-comment, delete-comment (observed JSON stdin)
+          add-comment, edit-comment, delete-comment (observed JSON stdin),
+          list-webhooks (metadata only), create-webhook (JSON stdin, shows the secret once),
+          revoke-webhook (idempotent)
 
 Options:
   --json                  Compact JSON output (default: formatted JSON)
@@ -37,18 +40,21 @@ Options:
   --task <id>            Required for task observation, completion, update, and deletion
   --comment <id>         Required for comment observation, editing and deletion
   --request-id <UUID>     Required for writes; preserve for exact retries
+  --webhook <UUID>        Required for webhook revocation
+  --reveal-secret         Required for create-webhook; prints the one-time secret on stdout
   --version               Show build identity without accessing the server
   --help                  Show this help without accessing the server
 
 Set DITERO_TOKEN through the environment. Credentials are never accepted as flags.
 Exit codes: 0 success, 2 usage/request, 3 authentication, 4 permission,
 5 missing resource, 6 rate limit, 7 network, 8 invalid/bounded response, 9 server,
-10 request ID conflict, 11 original task deleted.
+10 request ID conflict or webhook limit, 11 original task deleted.
 Planning never writes; writes make one POST, PATCH, or DELETE without retries.
 Completion requires the inspected listId and expectedDueAt; recurring tasks advance.
 Updates require an observed state token; deletion also requires child state and explicit cascade.
 Workflow stdin is at most 64 KiB; deletion, placement and list writes are at most 4 KiB. Comment writes preserve exact bodies; creation-only mentions notify current members without invitations.
 Comment pages require --task and do not support --all; deletion requires comment-and-attachments.
+Webhook commands take no request ID or paging, never retry, and send one request; creation JSON is at most 4 KiB.
 `;
 
 export async function runCli(
@@ -69,35 +75,36 @@ export async function runCli(
 			output.stdout(HELP);
 			return 0;
 		}
-		const result = COMMENT_COMMANDS.some(
-			(command) => command === options.command,
-		)
-			? await commentWorkflow(options, fetcher, stdinReader)
-			: ["observe-task-placement", "place-task"].includes(options.command)
-				? await taskPlacementWorkflow(options, fetcher, stdinReader)
-				: ["observe-task-relationships", "update-task-relationships"].includes(
-							options.command,
-						)
-					? await taskRelationshipsWorkflow(options, fetcher, stdinReader)
+		const result = WEBHOOK_COMMANDS.includes(options.command)
+			? await webhookWorkflow(options, fetcher, stdinReader)
+			: COMMENT_COMMANDS.some((command) => command === options.command)
+				? await commentWorkflow(options, fetcher, stdinReader)
+				: ["observe-task-placement", "place-task"].includes(options.command)
+					? await taskPlacementWorkflow(options, fetcher, stdinReader)
 					: [
-								"create-list",
-								"observe-list",
-								"update-list",
-								"observe-list-deletion",
-								"delete-list",
+								"observe-task-relationships",
+								"update-task-relationships",
 							].includes(options.command)
-						? await listWorkflow(options, fetcher, stdinReader)
+						? await taskRelationshipsWorkflow(options, fetcher, stdinReader)
 						: [
-									"plan-task",
-									"create-task",
-									"complete-task",
-									"observe-task",
-									"observe-task-deletion",
-									"update-task",
-									"delete-task",
+									"create-list",
+									"observe-list",
+									"update-list",
+									"observe-list-deletion",
+									"delete-list",
 								].includes(options.command)
-							? await taskWorkflow(options, fetcher, stdinReader)
-							: await discover(options, fetcher);
+							? await listWorkflow(options, fetcher, stdinReader)
+							: [
+										"plan-task",
+										"create-task",
+										"complete-task",
+										"observe-task",
+										"observe-task-deletion",
+										"update-task",
+										"delete-task",
+									].includes(options.command)
+								? await taskWorkflow(options, fetcher, stdinReader)
+								: await discover(options, fetcher);
 		output.stdout(
 			`${JSON.stringify(result, null, options.json ? undefined : 2)}\n`,
 		);

@@ -7,6 +7,7 @@ import {
 	parseWebhookDelivery,
 	validWebhookSecret,
 	webhookBearer,
+	webhookRevokedSchema,
 } from "./public-api-webhook.ts";
 import { canonicalApiTaskCreate } from "./public-api-writes.ts";
 
@@ -42,6 +43,21 @@ describe("webhook management input", () => {
 			{ name: "x", listId: "l1", workspaceId: "w" },
 		])
 			expect(() => parseWebhookCreate(input)).toThrow(PublicApiError);
+	});
+});
+
+describe("webhook revocation response", () => {
+	test("is strict and only acknowledges revoked: true", () => {
+		expect(
+			webhookRevokedSchema.safeParse({ id: deliveryId, revoked: true }).success,
+		).toBe(true);
+		for (const value of [
+			{ id: deliveryId, revoked: false },
+			{ id: deliveryId },
+			{ id: "hook", revoked: true },
+			{ id: deliveryId, revoked: true, secret },
+		])
+			expect(webhookRevokedSchema.safeParse(value).success).toBe(false);
 	});
 });
 
