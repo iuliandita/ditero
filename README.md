@@ -22,7 +22,9 @@ are included, with no subscriptions or paid feature unlocks.
 
 [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Brand assets](assets/brand/README.md)
 
-> **Alpha.** The first release is `v0.0.1-alpha.1`. Its pipeline packages server
+> **Alpha.** The first release was `v0.0.1-alpha.1`; the current published alpha is
+> [`v0.0.1-alpha.2`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.2).
+> The release pipeline packages server
 > containers, Helm/Compose deployment files, desktop installers and signed Android
 > downloads. Native platform qualification remains in progress; Windows builds are
 > unsigned and macOS builds use ad-hoc signatures. Breaking changes are expected
@@ -30,7 +32,7 @@ are included, with no subscriptions or paid feature unlocks.
 > [published downloads](https://github.com/iuliandita/ditero/releases).
 
 The capabilities below describe `develop`; unreleased additions are available
-from source or nightly images.
+from source or nightly images, and published alphas contain a subset.
 
 ## Made for shared days
 
@@ -61,18 +63,25 @@ size and high contrast stay on each device.
 - Saved views, dashboards, calendar/board/table layouts, keyboard shortcuts, and a focus timer
 - Encrypted attachments with filesystem or S3-compatible server storage
 - JSON export and reviewed, resumable native import, including version 2 history
-  and attribution; see
+  and attribution, plus Ditero CSV, Todoist project CSV snapshots and plain Trello
+  board JSON imports; see
   [data portability](docs/runbooks/data-portability.md) for exclusions
 - Browser installation plus Android and desktop development apps; see
   [native app status](#browser-installation-and-native-development-apps)
 - Membership-scoped public API with expiring personal access tokens, OpenAPI,
-  and idempotent task creation, completion, updates and deletion; see
-  [API access](docs/runbooks/public-api.md)
+  list, task and folder CRUD, observed relationships and placement, task comments,
+  personal-access-token iCalendar export, list calendar subscription feeds and
+  list-bound inbound webhooks; see [API access](docs/runbooks/public-api.md)
 - [CLI](docs/cli.md) and [local MCP tools](docs/mcp.md) for discovery, task planning,
-  creation and completion, plus an interactive [terminal UI](docs/tui.md)
+  and task, list, folder, comment, relationship, placement and webhook workflows,
+  plus an interactive
+  [terminal UI](docs/tui.md) for task creation, completion, scalar updates, deletion
+  and reordering, with read-only comments
 
-iOS, third-party importers, voice capture, feeds, webhooks and further API coverage
-remain planned.
+iOS, TickTick and Microsoft To Do import, encrypted attachment migration, and wider
+terminal, native and deployment qualification remain pending. Voice capture is
+pending final qualification. Calendar subscriptions can be created and revoked
+in web settings; a new subscription URL is shown only once.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
 
 ## Tech stack

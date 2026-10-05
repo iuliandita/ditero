@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-10-04 | Status: pre-v1, building on `develop`
+> Updated: 2026-10-05 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -21,7 +21,10 @@ Native JSON export, validated saved import previews, resumable apply, assignment
 mapping, and explicit notification activation have landed. Task history and portable
 history archives preserve transitions and attribution. Settings accepts version 2
 archives through reviewed, resumable history import, with explicit source claims
-and retained replay identity. Provider imports and voice capture remain unfinished.
+and retained replay identity. Ditero CSV, Todoist project CSV snapshots and plain
+Trello board JSON imports are available; TickTick and Microsoft To Do import and
+encrypted attachment migration
+remain unfinished. Voice capture is pending final qualification.
 
 The web app is installable as a PWA. Android and Tauri desktop application cores,
 scoped native authentication, encrypted file handling, and development artifact
@@ -32,23 +35,29 @@ builds, with full runtime qualification still pending. See the
 [Android](../apps/android/README.md) and [desktop](../apps/desktop/README.md)
 qualification notes. Native delivery remains open in issue #346.
 
-Development happens on `develop`. The published `0.0.1-alpha.1` release packages containers,
-Helm/Compose deployment files and experimental native downloads; Windows downloads
-are unsigned and macOS downloads use ad-hoc signatures. Native qualification remains
-open. `1.0.0` requires the complete v1 contract below.
+Development happens on `develop`. The first published release was `0.0.1-alpha.1`;
+the current published alpha is
+[`0.0.1-alpha.2`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.2).
+Published alphas package containers, Helm/Compose deployment files and experimental
+native downloads; Windows downloads are unsigned and macOS downloads use ad-hoc
+signatures. Native qualification remains open. `1.0.0` requires the complete v1
+contract below.
 
 The versioned public API provides membership-scoped discovery, expiring personal
-access tokens, OpenAPI, and idempotent task creation, completion, updates and
-deletion. CLI and stdio MCP tools support discovery, planning, creation and
-completion; the terminal UI supports browsing, creation and completion. Further
-API coverage, feeds and webhooks remain in progress. See
+access tokens, OpenAPI, list, task and folder CRUD, observed relationships and
+placement, task comments, personal-access-token iCalendar export, list calendar
+subscription feeds and list-bound inbound webhooks. CLI and stdio MCP tools expose
+task, list, folder, comment, relationship, placement and webhook workflows; the
+terminal UI supports task browsing, creation, completion, scalar updates, deletion
+and reordering, with read-only comments. Web settings can create and revoke
+calendar subscriptions and show each new URL only once. See
 [API access](runbooks/public-api.md), [CLI use](cli.md), [MCP tools](mcp.md) and
 [terminal UI](tui.md).
 
 Helm and Kustomize packages target externally managed PostgreSQL, with an optional
 CloudNativePG overlay. Complete cluster install, upgrade and restore qualification
 remains in progress. These additions describe `develop`, not the complete feature
-set of the first published alpha.
+set of the published alphas.
 
 ## What v1 Delivers
 
