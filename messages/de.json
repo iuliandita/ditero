@@ -2319,7 +2319,7 @@
 	"import_provider_format": "Importformat",
 	"import_provider_native": "Natives Ditero-JSON",
 	"import_provider_csv": "Ditero CSV v1",
-	"import_provider_namespace": "CSV-Quellnamensraum: {namespace}",
+	"import_provider_namespace": "Importquelle: {namespace}",
 	"import_provider_policy": "CSV importiert nur Listen, Aufgaben und eine Unteraufgabenebene mit stabilen IDs. Ausgeschlossen sind Zuweisungen, Labels, Kommentare, Vorlagen, Verlauf, Anhänge, Wiederholungen, Erinnerungen, persönlicher Zustand, Ordner, Listenanpassungen, Einkaufsfelder, Erstellungszeiten und Dringlichkeit. Der Migrationseigentümer ist keine Aussage zur Urheberschaft. Behalte beim erneuten Import denselben Namensraum und dieselben IDs.",
 	"import_provider_acknowledge": "Ich akzeptiere diese Ausschlüsse und die stabile Quellidentität.",
 	"import_provider_file": "Ditero-CSV-Datei",
@@ -2364,5 +2364,14 @@
 	"import_todoist_acknowledge": "Ich akzeptiere diese Ausschlüsse und offenen Kopien ohne ursprüngliche Urheberschaft oder Erledigungshistorie.",
 	"import_todoist_binding_conflict": "Diese Quelle ist an andere Dateibytes oder Zuordnungsnamen gebunden. Wähle ausdrücklich Neue Quelle, um eine separate Kopie zu importieren; geänderte Dateien können diesen Snapshot nicht aktualisieren.",
 	"import_todoist_invalid": "Diese Datei ist kein unterstützter Todoist-Projekt-CSV-Snapshot oder die ausdrücklichen Zuordnungsnamen fehlen.",
-	"import_todoist_secure_context": "Für den Hash des Todoist-Snapshots ist HTTPS oder localhost erforderlich. Öffne diese Installation über eine sichere Verbindung, bevor du importierst."
+	"import_todoist_secure_context": "Für den Hash des Todoist-Snapshots ist HTTPS oder localhost erforderlich. Öffne diese Installation über eine sichere Verbindung, bevor du importierst.",
+	"import_trello_format": "Trello-Board als JSON (v1)",
+	"import_trello_file": "Trello-Boarddatei im JSON-Format",
+	"import_trello_snapshot": "SHA-256 des exakten Datei-Snapshots: {digest}",
+	"import_trello_identity": "Das Board wird ein Ordner, seine Listen werden Aufgabenlisten und seine Karten offene Aufgaben in ihrer ursprünglichen Reihenfolge. Board- und Element-IDs sind deterministisch, aber jede Quelle ist an die exakten Dateibytes gebunden. Wähle für einen geänderten Export ausdrücklich Neue Quelle.",
+	"import_trello_policy": "Importiert werden nur Namen, Kartenbeschreibungen und Reihenfolge. Ausgeschlossen sind Daten, Erledigungsstatus, Wiederholungen, Autoren, Zuweisungen, Kommentare, Labels, Checklisten, Anhänge, Verlauf, Erinnerungen, persönliche Daten, benutzerdefinierte Felder, Cover, Sticker, Ansichtseinstellungen, Plugin-Daten, Erstellungszeiten, Einkaufsfelder, Dringlichkeit und Boardbeschreibungen. Archivierte Boards, Listen oder Karten, erledigte Karten, Vorlagen und besondere Kartenrollen werden abgelehnt.",
+	"import_trello_acknowledge": "Ich akzeptiere diese Ausschlüsse und offenen Kopien ohne ursprüngliche Urheberschaft oder Erledigungshistorie.",
+	"import_trello_invalid": "Diese Datei ist kein unterstützter Trello-Board-JSON-Export oder enthält nicht unterstützte archivierte, erledigte, Vorlagen- oder besondere Karteninhalte.",
+	"import_trello_secure_context": "Für den Hash der Trello-Datei ist HTTPS oder localhost erforderlich. Öffne diese Installation über eine sichere Verbindung, bevor du importierst.",
+	"import_trello_binding_conflict": "Diese Quelle ist an andere Dateibytes gebunden. Wähle ausdrücklich Neue Quelle, um eine separate Kopie zu importieren; geänderte Exporte können diese Quelle nicht aktualisieren."
 }

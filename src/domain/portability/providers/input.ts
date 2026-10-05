@@ -8,11 +8,15 @@ import {
 	snapshotNamespace,
 	TODOIST_ADAPTER,
 	TODOIST_V1_EXCLUSIONS,
+	TRELLO_ADAPTER,
+	TRELLO_ADAPTER_VERSION,
+	TRELLO_V1_EXCLUSIONS,
 } from "./common.ts";
 import { parseTaskCsv } from "./csv.ts";
 import { parseTodoistProjectCsv } from "./todoist.ts";
+import { parseTrelloBoardJson } from "./trello.ts";
 
-export { TODOIST_V1_EXCLUSIONS } from "./common.ts";
+export { TODOIST_V1_EXCLUSIONS, TRELLO_V1_EXCLUSIONS } from "./common.ts";
 
 export const PROVIDER_INPUT_MAX_BYTES = 23 * 1024 * 1024;
 export const PROVIDER_REQUEST_MAX_BYTES = 32 * 1024 * 1024;
@@ -93,6 +97,11 @@ const todoistBindingShape = {
 			values.every((value, index) => value === TODOIST_V1_EXCLUSIONS[index]),
 		),
 };
+function matchesSnapshotNamespace(sha256: string, namespace: string): boolean {
+	return (
+		/^[0-9a-f]{64}$/.test(sha256) && snapshotNamespace(sha256) === namespace
+	);
+}
 const todoistBindingSchema = z
 	.strictObject(todoistBindingShape)
 	.refine(
@@ -105,14 +114,49 @@ const todoistInputSchema = z
 		(value) =>
 			snapshotNamespace(value.snapshotSha256) === value.sourceNamespace,
 	);
+const sha256Hex = z.string().regex(/^[0-9a-f]{64}$/);
+const trelloBindingShape = {
+	kind: z.literal("provider"),
+	version: z.literal(1),
+	adapter: z.literal(TRELLO_ADAPTER),
+	adapterVersion: z.literal(TRELLO_ADAPTER_VERSION),
+	sourceNamespace: bindingShape.sourceNamespace,
+	identityMode: z.literal("stable-ids"),
+	boardIdSha256: sha256Hex,
+	snapshotSha256: sha256Hex,
+	exclusions: z
+		.array(z.string())
+		.length(TRELLO_V1_EXCLUSIONS.length)
+		.refine((values) =>
+			values.every((value, index) => value === TRELLO_V1_EXCLUSIONS[index]),
+		),
+};
+const trelloBindingSchema = z
+	.strictObject(trelloBindingShape)
+	.refine((value) =>
+		matchesSnapshotNamespace(value.boardIdSha256, value.sourceNamespace),
+	);
+const trelloInputSchema = z
+	.strictObject({ ...trelloBindingShape, originalJsonBase64: z.string() })
+	.refine((value) =>
+		matchesSnapshotNamespace(value.boardIdSha256, value.sourceNamespace),
+	);
 export type CsvProviderImportInput = z.infer<typeof csvInputSchema>;
 export type ProviderInputBinding =
 	| z.infer<typeof csvBindingSchema>
-	| z.infer<typeof todoistBindingSchema>;
+	| z.infer<typeof todoistBindingSchema>
+	| z.infer<typeof trelloBindingSchema>;
 export type ProviderImportInput =
 	| CsvProviderImportInput
-	| z.infer<typeof todoistInputSchema>;
+	| z.infer<typeof todoistInputSchema>
+	| z.infer<typeof trelloInputSchema>;
 const bindingKeys = Object.keys(bindingShape);
+
+function declaredAdapter(value: unknown): unknown {
+	return typeof value === "object" && value !== null
+		? Object.getOwnPropertyDescriptor(value, "adapter")?.value
+		: undefined;
+}
 
 function rawObject(
 	value: unknown,
@@ -166,23 +210,29 @@ export function parseProviderBinding(
 ): ProviderInputBinding {
 	const checkpoint = providerCheckpoint(options);
 	checkpoint();
-	const todoist =
-		typeof value === "object" &&
-		value !== null &&
-		Object.getOwnPropertyDescriptor(value, "adapter")?.value ===
-			TODOIST_ADAPTER;
-	const parsed = todoist
-		? todoistBindingSchema.safeParse(
-				rawObject(
-					value,
-					Object.keys(todoistBindingShape),
-					"invalid-binding",
-					TODOIST_V1_EXCLUSIONS,
-				),
-			)
-		: csvBindingSchema.safeParse(
-				rawObject(value, bindingKeys, "invalid-binding"),
-			);
+	const adapter = declaredAdapter(value);
+	const parsed =
+		adapter === TRELLO_ADAPTER
+			? trelloBindingSchema.safeParse(
+					rawObject(
+						value,
+						Object.keys(trelloBindingShape),
+						"invalid-binding",
+						TRELLO_V1_EXCLUSIONS,
+					),
+				)
+			: adapter === TODOIST_ADAPTER
+				? todoistBindingSchema.safeParse(
+						rawObject(
+							value,
+							Object.keys(todoistBindingShape),
+							"invalid-binding",
+							TODOIST_V1_EXCLUSIONS,
+						),
+					)
+				: csvBindingSchema.safeParse(
+						rawObject(value, bindingKeys, "invalid-binding"),
+					);
 	if (!parsed.success) throw new ProviderInputError("invalid-binding");
 	checkpoint();
 	return parsed.data;
@@ -231,26 +281,36 @@ export function parseProviderInput(
 ): ProviderImportInput {
 	const checkpoint = providerCheckpoint(options);
 	checkpoint();
-	const todoist =
-		typeof value === "object" &&
-		value !== null &&
-		Object.getOwnPropertyDescriptor(value, "adapter")?.value ===
-			TODOIST_ADAPTER;
+	const adapter = declaredAdapter(value);
+	const trello = adapter === TRELLO_ADAPTER;
+	const todoist = adapter === TODOIST_ADAPTER;
+	const payloadKey = trello ? "originalJsonBase64" : "originalCsvBase64";
 	const raw = rawObject(
 		value,
 		[
-			...(todoist ? Object.keys(todoistBindingShape) : bindingKeys),
-			"originalCsvBase64",
+			...(trello
+				? Object.keys(trelloBindingShape)
+				: todoist
+					? Object.keys(todoistBindingShape)
+					: bindingKeys),
+			payloadKey,
 		],
 		"invalid-input",
-		todoist ? TODOIST_V1_EXCLUSIONS : CSV_V1_EXCLUSIONS,
+		trello
+			? TRELLO_V1_EXCLUSIONS
+			: todoist
+				? TODOIST_V1_EXCLUSIONS
+				: CSV_V1_EXCLUSIONS,
 	);
-	if (typeof raw.originalCsvBase64 !== "string")
+	const encoded = raw[payloadKey];
+	if (typeof encoded !== "string")
 		throw new ProviderInputError("invalid-input");
-	base64ByteLength(raw.originalCsvBase64);
-	const parsed = todoist
-		? todoistInputSchema.safeParse(raw)
-		: csvInputSchema.safeParse(raw);
+	base64ByteLength(encoded);
+	const parsed = trello
+		? trelloInputSchema.safeParse(raw)
+		: todoist
+			? todoistInputSchema.safeParse(raw)
+			: csvInputSchema.safeParse(raw);
 	if (!parsed.success) throw new ProviderInputError("invalid-input");
 	// Source and mappings must also fit this request bound at the HTTP boundary.
 	if (
@@ -259,7 +319,7 @@ export function parseProviderInput(
 	)
 		throw new ProviderInputError("byte-limit");
 	// Check unused padding bits without allocating the whole decoded file.
-	decodeBase64(parsed.data.originalCsvBase64.slice(-4), checkpoint);
+	decodeBase64(encoded.slice(-4), checkpoint);
 	checkpoint();
 	return parsed.data;
 }
@@ -315,6 +375,30 @@ export async function prepareProviderImportRequest(
 	const input = parseProviderInput(value, boundedOptions);
 	if (input.adapter === CSV_ADAPTER)
 		return prepareProviderImport(input, boundedOptions);
+	if (input.adapter === TRELLO_ADAPTER) {
+		// Everything below comes from the reparsed bytes; claimed metadata only has to agree.
+		const bytes = decodeBase64(input.originalJsonBase64, checkpoint);
+		const conversion = await parseTrelloBoardJson(bytes, boundedOptions);
+		if (
+			conversion.adapter !== input.adapter ||
+			conversion.adapterVersion !== input.adapterVersion ||
+			conversion.identityMode !== input.identityMode ||
+			conversion.sourceNamespace !== input.sourceNamespace ||
+			conversion.boardIdSha256 !== input.boardIdSha256 ||
+			conversion.snapshotSha256 !== input.snapshotSha256
+		)
+			throw new ProviderInputError("metadata-mismatch");
+		const { originalJsonBase64: _originalJsonBase64, ...metadata } = input;
+		const binding = parseProviderBinding(metadata, boundedOptions);
+		checkpoint();
+		return {
+			binding,
+			conversion,
+			sourceFormat: TRELLO_ADAPTER,
+			sourceSchemaVersion: 1 as const,
+			originalBytes: bytes.byteLength,
+		};
+	}
 	const bytes = decodeBase64(input.originalCsvBase64, checkpoint);
 	const conversion = await parseTodoistProjectCsv(bytes, {
 		...boundedOptions,

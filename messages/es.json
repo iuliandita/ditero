@@ -2365,7 +2365,7 @@
 	"import_provider_format": "Formato de importación",
 	"import_provider_native": "JSON nativo de Ditero",
 	"import_provider_csv": "Ditero CSV v1",
-	"import_provider_namespace": "Espacio de nombres de origen CSV: {namespace}",
+	"import_provider_namespace": "Origen de importación: {namespace}",
 	"import_provider_policy": "CSV solo importa listas, tareas y un nivel de subtareas con identificadores estables. Excluye asignaciones, etiquetas, comentarios, plantillas, historial, adjuntos, recurrencia, recordatorios, estado personal, carpetas, personalización de listas, campos de compras, fechas de creación y urgencia. El propietario de la migración no indica autoría. Conserva el mismo espacio de nombres y los mismos identificadores al volver a importar.",
 	"import_provider_acknowledge": "Acepto estas exclusiones y la identidad estable del origen.",
 	"import_provider_file": "Archivo CSV de Ditero",
@@ -2410,5 +2410,14 @@
 	"import_todoist_acknowledge": "Acepto estas exclusiones y copias abiertas sin autoría original ni historial de finalización.",
 	"import_todoist_binding_conflict": "Esta fuente está vinculada a otros bytes del archivo o nombres de asignación. Elige Nueva fuente explícitamente para importar una copia separada; los archivos modificados no pueden actualizar esta instantánea.",
 	"import_todoist_invalid": "Este archivo no es una instantánea CSV de proyecto de Todoist compatible o faltan los nombres de asignación explícitos.",
-	"import_todoist_secure_context": "El cálculo del hash de la instantánea de Todoist requiere HTTPS o localhost. Abre esta instalación mediante una conexión segura antes de importar."
+	"import_todoist_secure_context": "El cálculo del hash de la instantánea de Todoist requiere HTTPS o localhost. Abre esta instalación mediante una conexión segura antes de importar.",
+	"import_trello_format": "Tablero de Trello en JSON (v1)",
+	"import_trello_file": "Archivo JSON de tablero de Trello",
+	"import_trello_snapshot": "SHA-256 de la instantánea exacta del archivo: {digest}",
+	"import_trello_identity": "El tablero se convierte en una carpeta, sus listas en listas de tareas y sus tarjetas en tareas abiertas en su orden original. Los ID del tablero y los elementos son deterministas, pero cada fuente está vinculada a los bytes exactos del archivo. Elige Nueva fuente explícitamente para una exportación modificada.",
+	"import_trello_policy": "Solo se importan nombres, descripciones de tarjetas y orden. Se excluyen fechas, estado de finalización, recurrencia, autores, asignaciones, comentarios, etiquetas, listas de comprobación, adjuntos, historial, recordatorios, estado personal, campos personalizados, portadas, pegatinas, ajustes de vista, datos de complementos, fechas de creación, campos de compras, urgencia y descripciones del tablero. Se rechazan tableros, listas o tarjetas archivados, tarjetas completadas, plantillas y roles especiales de tarjetas.",
+	"import_trello_acknowledge": "Acepto estas exclusiones y copias abiertas sin autoría original ni historial de finalización.",
+	"import_trello_invalid": "Este archivo no es una exportación JSON de tablero de Trello compatible o contiene contenido archivado, completado, de plantilla o de rol especial no admitido.",
+	"import_trello_secure_context": "El cálculo del hash del archivo de Trello requiere HTTPS o localhost. Abre esta instalación mediante una conexión segura antes de importar.",
+	"import_trello_binding_conflict": "Esta fuente está vinculada a otros bytes del archivo. Elige Nueva fuente explícitamente para importar una copia separada; las exportaciones modificadas no pueden actualizar esta fuente."
 }

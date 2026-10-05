@@ -372,7 +372,12 @@ export async function saveImportPlan(
 							projectFolderName: binding.projectFolderName,
 							unsectionedListName: binding.unsectionedListName,
 						}
-					: {}),
+					: binding.adapter === "trello-board-json"
+						? {
+								snapshotSha256: binding.snapshotSha256,
+								boardIdSha256: binding.boardIdSha256,
+							}
+						: {}),
 			},
 			options,
 		);

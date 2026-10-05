@@ -35,6 +35,34 @@ export const TODOIST_V1_EXCLUSIONS = Object.freeze([
 	"task-creation-times",
 	"urgency",
 ] as const);
+
+export const TRELLO_ADAPTER = "trello-board-json";
+export const TRELLO_ADAPTER_VERSION = 1;
+// Binding constant: the fixed order is part of the contract.
+export const TRELLO_V1_EXCLUSIONS = Object.freeze([
+	"dates",
+	"completion-state",
+	"recurrence",
+	"authors",
+	"assignments",
+	"comments",
+	"labels",
+	"checklists",
+	"attachments",
+	"history",
+	"reminders",
+	"personal-state",
+	"custom-fields",
+	"covers",
+	"stickers",
+	"view-settings",
+	"plugin-data",
+	"task-creation-times",
+	"shopping-fields",
+	"urgency",
+	"board-descriptions",
+] as const);
+export const TRELLO_NAMESPACE_DOMAIN = "ditero-trello-board-v1\n";
 export function snapshotNamespace(sha256: string): string {
 	if (!/^[0-9a-f]{64}$/.test(sha256))
 		throw new ProviderImportError("invalid-metadata");
@@ -44,6 +72,9 @@ export function snapshotNamespace(sha256: string): string {
 export function todoistSourceUserId(namespace: string): string {
 	return `migration:todoist-project-csv:1:${namespace}:owner`;
 }
+export function trelloSourceUserId(namespace: string): string {
+	return `migration:trello-board-json:1:${namespace}:owner`;
+}
 
 export type ProviderImportCode =
 	| "byte-limit"
@@ -51,6 +82,7 @@ export type ProviderImportCode =
 	| "field-limit"
 	| "invalid-encoding"
 	| "invalid-csv"
+	| "invalid-json"
 	| "invalid-metadata"
 	| "invalid-row"
 	| "invalid-date"
@@ -121,9 +153,17 @@ export interface TodoistConversionResult
 	projectFolderName: string;
 	unsectionedListName: string;
 }
+export interface TrelloConversionResult
+	extends Omit<CsvConversionResult, "adapter"> {
+	adapter: typeof TRELLO_ADAPTER;
+	snapshotSha256: string;
+	// SHA-256 of the domain-separated canonical board id; the namespace derives from it.
+	boardIdSha256: string;
+}
 export type ProviderConversionResult =
 	| CsvConversionResult
-	| TodoistConversionResult;
+	| TodoistConversionResult
+	| TrelloConversionResult;
 
 const csvResultSchema = z.strictObject({
 	adapter: z.literal(CSV_ADAPTER),
@@ -152,9 +192,20 @@ const todoistResultSchema = z.strictObject({
 	document: z.unknown(),
 	findings: csvResultSchema.shape.findings,
 });
+const trelloResultSchema = z.strictObject({
+	adapter: z.literal(TRELLO_ADAPTER),
+	adapterVersion: z.literal(TRELLO_ADAPTER_VERSION),
+	sourceNamespace: z.uuid(),
+	identityMode: z.literal("stable-ids"),
+	snapshotSha256: z.string().regex(/^[0-9a-f]{64}$/),
+	boardIdSha256: z.string().regex(/^[0-9a-f]{64}$/),
+	document: z.unknown(),
+	findings: csvResultSchema.shape.findings,
+});
 const resultSchema = z.discriminatedUnion("adapter", [
 	csvResultSchema,
 	todoistResultSchema,
+	trelloResultSchema,
 ]);
 
 function boundedDocumentJson(
@@ -266,16 +317,34 @@ export function validateProviderConversion(
 		document.sourceUserId !==
 			(parsed.data.adapter === CSV_ADAPTER
 				? csvSourceUserId(parsed.data.sourceNamespace)
-				: todoistSourceUserId(parsed.data.sourceNamespace))
+				: parsed.data.adapter === TRELLO_ADAPTER
+					? trelloSourceUserId(parsed.data.sourceNamespace)
+					: todoistSourceUserId(parsed.data.sourceNamespace))
 	)
 		throw new ProviderImportError("invalid-result");
 	const { data } = document;
 	const owner = document.sourceUserId;
 	const namespace = parsed.data.sourceNamespace;
 	const todoist = parsed.data.adapter === TODOIST_ADAPTER;
-	const prefix = `${todoist ? "todoist" : "csv"}:1:${namespace}`;
+	const trello = parsed.data.adapter === TRELLO_ADAPTER;
+	const prefix = `${todoist ? "todoist" : trello ? "trello" : "csv"}:1:${namespace}`;
 	const workspace = `${prefix}:workspace`;
-	const project = `${prefix}:folder:project`;
+	const project = `${prefix}:folder:${trello ? "board" : "project"}`;
+	const trelloId = "[0-9a-f]{24}";
+	if (parsed.data.adapter === TRELLO_ADAPTER) {
+		if (snapshotNamespace(parsed.data.boardIdSha256) !== namespace)
+			throw new ProviderImportError("invalid-result");
+		const folder = data.folders[0];
+		if (
+			!folder ||
+			data.folders.length !== 1 ||
+			folder.id !== project ||
+			folder.workspaceId !== workspace
+		)
+			throw new ProviderImportError("unsupported-content");
+		checkProviderText(folder.name, 500);
+		if (!folder.name.trim()) throw new ProviderImportError("invalid-result");
+	}
 	if (parsed.data.adapter === TODOIST_ADAPTER) {
 		if (snapshotNamespace(parsed.data.snapshotSha256) !== namespace)
 			throw new ProviderImportError("invalid-result");
@@ -317,7 +386,7 @@ export function validateProviderConversion(
 		"lists",
 		"tasks",
 	]);
-	if (todoist) allowed.add("folders");
+	if (todoist || trello) allowed.add("folders");
 	if (
 		Object.entries(data).some(([key, rows]) => !allowed.has(key) && rows.length)
 	)
@@ -330,9 +399,11 @@ export function validateProviderConversion(
 			!list.id.startsWith(`${prefix}:list:`) ||
 			list.kind !== "tasks" ||
 			list.icon !== null ||
-			list.folderId !== (todoist ? project : null) ||
+			list.folderId !== (todoist || trello ? project : null) ||
 			list.completedDisplay !== "sink"
 		)
+			throw new ProviderImportError("unsupported-content");
+		if (trello && !new RegExp(`^${prefix}:list:${trelloId}$`).test(list.id))
 			throw new ProviderImportError("unsupported-content");
 		if (
 			todoist &&
@@ -372,6 +443,17 @@ export function validateProviderConversion(
 		if (
 			todoist &&
 			(!new RegExp(`^${prefix}:task:record:[1-9][0-9]*$`).test(task.id) ||
+				task.done ||
+				task.completedAt !== null ||
+				task.dueAt !== null ||
+				task.dueAllDay)
+		)
+			throw new ProviderImportError("unsupported-content");
+		if (
+			trello &&
+			(!new RegExp(`^${prefix}:task:${trelloId}$`).test(task.id) ||
+				task.parentId !== null ||
+				task.priority !== 0 ||
 				task.done ||
 				task.completedAt !== null ||
 				task.dueAt !== null ||

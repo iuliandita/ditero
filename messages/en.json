@@ -2319,7 +2319,7 @@
 	"import_provider_format": "Import format",
 	"import_provider_native": "Native Ditero JSON",
 	"import_provider_csv": "Ditero CSV v1",
-	"import_provider_namespace": "CSV source namespace: {namespace}",
+	"import_provider_namespace": "Import source: {namespace}",
 	"import_provider_policy": "CSV imports only lists, tasks and one subtask level with stable IDs. It excludes assignments, labels, comments, templates, history, attachments, recurrence, reminders, personal state, folders, list customization, shopping fields, task creation times and urgency. This migration owner is not an authorship claim. Keep the same namespace and IDs when reimporting.",
 	"import_provider_acknowledge": "I accept these exclusions and the stable source identity.",
 	"import_provider_file": "Ditero CSV file",
@@ -2364,5 +2364,14 @@
 	"import_todoist_acknowledge": "I accept these exclusions and open copies without source authorship or completion history.",
 	"import_todoist_binding_conflict": "This source is bound to different file bytes or mapping names. Choose New source explicitly to import a separate copy; changed files cannot update this snapshot.",
 	"import_todoist_invalid": "This file is not a supported Todoist project CSV snapshot, or its explicit mapping names are missing.",
-	"import_todoist_secure_context": "Todoist snapshot hashing requires HTTPS or localhost. Open this installation over a secure connection before importing."
+	"import_todoist_secure_context": "Todoist snapshot hashing requires HTTPS or localhost. Open this installation over a secure connection before importing.",
+	"import_trello_format": "Trello board JSON (v1)",
+	"import_trello_file": "Trello board JSON file",
+	"import_trello_snapshot": "Exact file snapshot SHA-256: {digest}",
+	"import_trello_identity": "The board becomes a folder, its lists become task lists, and its cards become open tasks in their original order. Board and item IDs are deterministic, but each source is bound to the exact file bytes. Choose New source explicitly for a changed export.",
+	"import_trello_policy": "Only names, card descriptions and order are imported. Dates, completion state, recurrence, authors, assignments, comments, labels, checklists, attachments, history, reminders, personal state, custom fields, covers, stickers, view settings, plugin data, creation times, shopping fields, urgency and board descriptions are excluded. Archived boards, lists or cards, completed cards, templates and special card roles are rejected.",
+	"import_trello_acknowledge": "I accept these exclusions and open copies without source authorship or completion history.",
+	"import_trello_invalid": "This file is not a supported Trello board JSON export, or it contains unsupported archived, completed, template or special-role content.",
+	"import_trello_secure_context": "Trello file hashing requires HTTPS or localhost. Open this installation over a secure connection before importing.",
+	"import_trello_binding_conflict": "This source is bound to different file bytes. Choose New source explicitly to import a separate copy; changed exports cannot update this source."
 }

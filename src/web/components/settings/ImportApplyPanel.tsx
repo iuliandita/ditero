@@ -214,11 +214,9 @@ export function ImportApplyPanel({
 				>
 					{m.import_apply_pause()}
 				</Button>
-			) : (
+			) : terminal ? null : (
 				<Button
-					disabled={
-						!supported || disabled || loading || terminal || counts.ensure === 0
-					}
+					disabled={!supported || disabled || loading || counts.ensure === 0}
 					onClick={() => void apply()}
 				>
 					{run || approved.current
