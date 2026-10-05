@@ -472,3 +472,32 @@ accepts only an acknowledgement whose ID matches the request. It is idempotent a
 permanent, so an uncertain outcome or a temporary 503 (`temporarily_unavailable`,
 exit 9) can be retried safely. Listing validates only the response schema and its
 100-row cap.
+
+## Observed folder workflows
+
+`observe-folder --folder FOLDER_ID` reads one live folder snapshot and stateToken,
+without stdin or a request UUID. Read tokens and Viewers may observe member-visible
+folders. Semantic tokens are not locks or incarnation identities.
+
+Write commands require a write token, `--request-id UUID`, and one strict JSON
+object on stdin within 4 KiB:
+
+- `create-folder`: `{ "workspaceId": "WORKSPACE_ID", "name": "Projects" }`.
+- `update-folder --folder FOLDER_ID`: `{ "workspaceId": "ORIGINAL_WORKSPACE_ID", "expectedState": "OBSERVED_STATE_TOKEN", "patch": { "name": "Renamed" } }`.
+- `delete-folder --folder FOLDER_ID`: `{ "workspaceId": "ORIGINAL_WORKSPACE_ID", "expectedState": "OBSERVED_STATE_TOKEN" }`.
+
+Names are trimmed and must contain 1-500 characters. Creation assigns the ID and
+append position on the server. Updating changes only the name; pending import
+activation can refuse changed names. Deletion requires an empty folder and never
+cascades, reparents, or deletes lists/tasks. Stale state and nonempty deletion return
+409 (exit 10). Discover explicit IDs through `folders`; workflows do not resolve names.
+
+Each operation sends one request without hidden observation, automatic retry or
+rebase. Writes return immutable `folder-create-ack`, `folder-update-ack` or
+`folder-delete-ack` snapshots. Replay retains the original result after deletion or
+recreation and does not touch replacements or claim current existence/absence.
+Current original-workspace Member/Admin/Owner authority and a valid write PAT are
+required on every write, including replay. Cancellation or lost transport may leave
+a committed result uncertain. Manually retry only the identical folder ID, full
+canonical body and UUID; never substitute fresh observations or a new key. UUIDs
+share the account-wide task/list/comment/folder write namespace.

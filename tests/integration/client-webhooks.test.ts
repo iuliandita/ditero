@@ -1080,10 +1080,10 @@ test("actual CLI list accepts 21 rows with an expired unrevoked webhook that doe
 	expect(relisted[0].id).toBe(created.id);
 }, 120_000);
 
-test("actual stdio MCP serves 33 tools and strict, structured webhook create, list and revoke", async () => {
+test("actual stdio MCP serves 37 tools and strict, structured webhook create, list and revoke", async () => {
 	const client = await mcp();
 	const { tools } = await client.listTools();
-	expect(tools).toHaveLength(33);
+	expect(tools).toHaveLength(37);
 	expect(
 		tools
 			.map((tool) => tool.name)

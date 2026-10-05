@@ -11,6 +11,10 @@ import {
 	encodeCommentInput,
 } from "../cli/comment-workflow.ts";
 import {
+	encodeFolderWorkflowInput,
+	folderWorkflow,
+} from "../cli/folder-workflow.ts";
+import {
 	encodeListDeletionInput,
 	encodeListInput,
 	listWorkflow,
@@ -41,6 +45,15 @@ import {
 	apiCommentUpdateSchema,
 } from "../domain/public-api-comments.ts";
 import { apiTaskCompleteSchema } from "../domain/public-api-completion.ts";
+import {
+	apiFolderCreateAckSchema,
+	apiFolderCreateSchema,
+	apiFolderDeleteAckSchema,
+	apiFolderDeleteSchema,
+	apiFolderObservationSchema,
+	apiFolderUpdateAckSchema,
+	apiFolderUpdateSchema,
+} from "../domain/public-api-folder.ts";
 import {
 	apiListCreateSchema,
 	apiListCreationAckSchema,
@@ -143,6 +156,38 @@ function guardedInput<S extends z.ZodType>(
 	};
 }
 
+function guardedFolderInput<S extends z.ZodType>(
+	schema: S,
+	command: CliOptions["command"],
+): StandardSchemaWithJSON<z.input<S>, z.output<S>> {
+	const standard = schema["~standard"];
+	return {
+		"~standard": {
+			...standard,
+			validate: async (value) => {
+				const invalid = {
+					issues: [{ message: "Invalid or oversized folder arguments." }],
+				};
+				try {
+					if (!safeListInput(value)) return invalid;
+					if (command !== "observe-folder")
+						encodeFolderWorkflowInput(
+							command,
+							(value as Record<string, unknown>).folder,
+						);
+					if (
+						new TextEncoder().encode(JSON.stringify(value)).byteLength > 65536
+					)
+						return invalid;
+					const result = await standard.validate(value);
+					return result.issues ? invalid : result;
+				} catch {
+					return invalid;
+				}
+			},
+		},
+	};
+}
 function guardedRelationshipsInput<S extends z.ZodType>(
 	schema: S,
 	writing: boolean,
@@ -1214,6 +1259,176 @@ export function createDiteroMcp(
 				undefined,
 				webhookId.toLowerCase(),
 				ctx.mcpReq.signal,
+			),
+	);
+
+	const folderIdSchema = PUBLIC_API_ID.refine(
+		(value) =>
+			value !== "." &&
+			value !== ".." &&
+			!value.includes("\0") &&
+			!/[\uD800-\uDFFF]/u.test(value),
+	);
+	server.registerTool(
+		"get_folder_observation",
+		{
+			description:
+				"Read one member-visible folder snapshot and semantic stateToken. Read tokens and Viewers may observe. Tokens are not locks or incarnation identities. One request within 4 KiB without hidden reads, retries or rebase. Writes return immutable original acknowledgments, including replay after deletion/recreation, under current original-workspace write authority. Preserve identical ID/body/UUID for an uncertain manual retry.",
+			inputSchema: guardedFolderInput(
+				z.object({ folderId: folderIdSchema }).strict(),
+				"observe-folder",
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiFolderObservationSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: true,
+				destructiveHint: false,
+			},
+		},
+		(args, ctx) =>
+			execute(() =>
+				folderWorkflow(
+					{
+						...fixed,
+						command: "observe-folder",
+						folderId: args.folderId,
+						requestId: undefined,
+					},
+					fetcher,
+					async () => encodeFolderWorkflowInput("observe-folder", undefined),
+					ctx.mcpReq.signal,
+				),
+			),
+	);
+	server.registerTool(
+		"create_folder",
+		{
+			description:
+				"Create a folder with explicit workspaceId/name and caller UUID. Server assigns ID and append position. One request within 4 KiB without hidden reads, retries or rebase. Writes return immutable original acknowledgments, including replay after deletion/recreation, under current original-workspace write authority. Preserve identical ID/body/UUID for an uncertain manual retry.",
+			inputSchema: guardedFolderInput(
+				z
+					.object({ requestId: z.uuid(), folder: apiFolderCreateSchema })
+					.strict(),
+				"create-folder",
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiFolderCreateAckSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: false,
+			},
+		},
+		(args, ctx) =>
+			execute(() =>
+				folderWorkflow(
+					{
+						...fixed,
+						command: "create-folder",
+						folderId: undefined,
+						requestId: args.requestId.toLowerCase(),
+					},
+					fetcher,
+					async () => encodeFolderWorkflowInput("create-folder", args.folder),
+					ctx.mcpReq.signal,
+				),
+			),
+	);
+	server.registerTool(
+		"update_folder",
+		{
+			description:
+				"Rename only name using observed workspaceId and stateToken as expectedState with caller UUID. One request within 4 KiB without hidden reads, retries or rebase. Writes return immutable original acknowledgments, including replay after deletion/recreation, under current original-workspace write authority. Preserve identical ID/body/UUID for an uncertain manual retry.",
+			inputSchema: guardedFolderInput(
+				z
+					.object({
+						folderId: folderIdSchema,
+						requestId: z.uuid(),
+						folder: apiFolderUpdateSchema,
+					})
+					.strict(),
+				"update-folder",
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiFolderUpdateAckSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		(args, ctx) =>
+			execute(() =>
+				folderWorkflow(
+					{
+						...fixed,
+						command: "update-folder",
+						folderId: args.folderId,
+						requestId: args.requestId.toLowerCase(),
+					},
+					fetcher,
+					async () => encodeFolderWorkflowInput("update-folder", args.folder),
+					ctx.mcpReq.signal,
+				),
+			),
+	);
+	server.registerTool(
+		"delete_folder",
+		{
+			description:
+				"Delete only an empty observed folder using workspaceId/expectedState and caller UUID. No cascade, reparenting or list/task deletion. One request within 4 KiB without hidden reads, retries or rebase. Writes return immutable original acknowledgments, including replay after deletion/recreation, under current original-workspace write authority. Preserve identical ID/body/UUID for an uncertain manual retry.",
+			inputSchema: guardedFolderInput(
+				z
+					.object({
+						folderId: folderIdSchema,
+						requestId: z.uuid(),
+						folder: apiFolderDeleteSchema,
+					})
+					.strict(),
+				"delete-folder",
+			),
+			outputSchema: z
+				.object({
+					version: z.literal(1),
+					data: apiFolderDeleteAckSchema,
+					nextCursor: z.null(),
+				})
+				.strict(),
+			annotations: {
+				...annotations,
+				readOnlyHint: false,
+				destructiveHint: true,
+			},
+		},
+		(args, ctx) =>
+			execute(() =>
+				folderWorkflow(
+					{
+						...fixed,
+						command: "delete-folder",
+						folderId: args.folderId,
+						requestId: args.requestId.toLowerCase(),
+					},
+					fetcher,
+					async () => encodeFolderWorkflowInput("delete-folder", args.folder),
+					ctx.mcpReq.signal,
+				),
 			),
 	);
 

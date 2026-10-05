@@ -359,6 +359,10 @@ export async function discover(
 		options.command === "add-comment" ||
 		options.command === "edit-comment" ||
 		options.command === "delete-comment" ||
+		options.command === "observe-folder" ||
+		options.command === "create-folder" ||
+		options.command === "update-folder" ||
+		options.command === "delete-folder" ||
 		options.command === "create-list" ||
 		options.command === "observe-list" ||
 		options.command === "observe-list-deletion" ||
