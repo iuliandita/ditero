@@ -9,7 +9,7 @@ import type {
 	ChannelErrorCode,
 	ProviderResult,
 } from "../../../domain/notification-retry.ts";
-import { m } from "../../../paraglide/messages.js";
+import { notify_ack_email_prefix } from "../../../paraglide/messages/notify_ack_email_prefix.js";
 import { mailerFromEnv } from "../../mail/transport.ts";
 import type {
 	AdapterContext,
@@ -43,7 +43,7 @@ const PERMANENT_STATUS: Record<ChannelErrorCode, number> = {
 function body(payload: ChannelPayload): string {
 	const lines = [payload.title, "", payload.body];
 	if (payload.ackUrl) {
-		const prefix = m.notify_ack_email_prefix({}, { locale: payload.locale });
+		const prefix = notify_ack_email_prefix({}, { locale: payload.locale });
 		lines.push("", `${prefix} ${payload.ackUrl}`);
 	}
 	return lines.join("\n").slice(0, BODY_MAX);

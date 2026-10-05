@@ -4,7 +4,7 @@ import {
 	redactUrlsIn,
 } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
-import { m } from "../../../paraglide/messages.js";
+import { notify_ack_label } from "../../../paraglide/messages/notify_ack_label.js";
 import { OutboundPolicyError, safeFetch } from "../../../security/safe-http.ts";
 import { retryAfterSeconds } from "./retry-after.ts";
 import type {
@@ -100,7 +100,7 @@ function ackButton(ackUrl: string | null, locale: Locale): LinkButton | null {
 	}
 	return {
 		type: "button",
-		text: { type: "plain_text", text: m.notify_ack_label({}, { locale }) },
+		text: { type: "plain_text", text: notify_ack_label({}, { locale }) },
 		url: ackUrl,
 	};
 }
@@ -197,7 +197,7 @@ export function appBlocks(payload: ChannelPayload): readonly AppBlock[] {
 								type: "button" as const,
 								text: {
 									type: "plain_text" as const,
-									text: m.notify_ack_label({}, { locale: payload.locale }),
+									text: notify_ack_label({}, { locale: payload.locale }),
 								},
 								action_id: ACK_ACTION_ID,
 								value,

@@ -4,7 +4,7 @@ import {
 	redactUrlsIn,
 } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
-import { m } from "../../../paraglide/messages.js";
+import { notify_ack_label } from "../../../paraglide/messages/notify_ack_label.js";
 import { OutboundPolicyError, safeFetch } from "../../../security/safe-http.ts";
 import { retryAfterSeconds } from "./retry-after.ts";
 import type {
@@ -142,7 +142,7 @@ export const telegramAdapter: ChannelAdapter = {
 							inline_keyboard: [
 								[
 									{
-										text: m.notify_ack_label({}, { locale: payload.locale }),
+										text: notify_ack_label({}, { locale: payload.locale }),
 										callback_data: callbackData,
 									},
 								],

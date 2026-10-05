@@ -5,7 +5,7 @@ import {
 	redactUrlsIn,
 } from "../../../domain/notification-channel.ts";
 import type { ProviderResult } from "../../../domain/notification-retry.ts";
-import { m } from "../../../paraglide/messages.js";
+import { notify_ack_label } from "../../../paraglide/messages/notify_ack_label.js";
 import { OutboundPolicyError, safeFetch } from "../../../security/safe-http.ts";
 import { retryAfterSeconds } from "./retry-after.ts";
 import type {
@@ -124,7 +124,7 @@ export function ackLinkRow(
 				{
 					type: 2,
 					style: 5,
-					label: m.notify_ack_label({}, { locale }),
+					label: notify_ack_label({}, { locale }),
 					url: ackUrl,
 				},
 			],
@@ -194,7 +194,7 @@ export function ackButtonRow(
 				{
 					type: 2,
 					style: 3,
-					label: m.notify_ack_label({}, { locale }),
+					label: notify_ack_label({}, { locale }),
 					custom_id: customId,
 				},
 			],

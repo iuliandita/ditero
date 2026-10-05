@@ -3,15 +3,12 @@
 // process-global, so a server that read it would hand one request's language to
 // another's notification.
 //
-// Only en.json exists today, so every locale still resolves to the same English
-// string: asserting on rendered text would pass even if the locale were dropped.
-// The messages module is stubbed instead, and what is asserted is the locale
-// argument that was actually threaded through.
+// Translated copy alone does not prove explicit locale forwarding. Stub the
+// message functions and assert the locale argument each actually receives.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const seen: (string | undefined)[] = [];
-
-vi.mock("../../paraglide/messages.js", () => {
+const { seen, record } = vi.hoisted(() => {
+	const seen: (string | undefined)[] = [];
 	const record = (
 		tag: string,
 		options: { locale?: string } | undefined,
@@ -20,25 +17,33 @@ vi.mock("../../paraglide/messages.js", () => {
 		seen.push(options?.locale);
 		return `${tag}:${options?.locale}${suffix}`;
 	};
-	return {
-		m: {
-			notify_reminder_body: (
-				inputs: { when: string },
-				options?: { locale?: string },
-			) => record("reminder", options, `:${inputs.when}`),
-			notify_assign_body: (_i: unknown, options?: { locale?: string }) =>
-				record("assign", options),
-			notify_mention_body: (_i: unknown, options?: { locale?: string }) =>
-				record("mention", options),
-			notify_overdue_body: (_i: unknown, options?: { locale?: string }) =>
-				record("overdue", options),
-			notify_overdue_body_due: (
-				inputs: { due: string },
-				options?: { locale?: string },
-			) => record("overdue_due", options, `:${inputs.due}`),
-		},
-	};
+	return { seen, record };
 });
+
+vi.mock("../../paraglide/messages/notify_reminder_body.js", () => ({
+	notify_reminder_body: (
+		inputs: { when: string },
+		options?: { locale?: string },
+	) => record("reminder", options, `:${inputs.when}`),
+}));
+vi.mock("../../paraglide/messages/notify_assign_body.js", () => ({
+	notify_assign_body: (_i: unknown, options?: { locale?: string }) =>
+		record("assign", options),
+}));
+vi.mock("../../paraglide/messages/notify_mention_body.js", () => ({
+	notify_mention_body: (_i: unknown, options?: { locale?: string }) =>
+		record("mention", options),
+}));
+vi.mock("../../paraglide/messages/notify_overdue_body.js", () => ({
+	notify_overdue_body: (_i: unknown, options?: { locale?: string }) =>
+		record("overdue", options),
+}));
+vi.mock("../../paraglide/messages/notify_overdue_body_due.js", () => ({
+	notify_overdue_body_due: (
+		inputs: { due: string },
+		options?: { locale?: string },
+	) => record("overdue_due", options, `:${inputs.due}`),
+}));
 
 const { renderPayload } = await import("./dispatch.ts");
 

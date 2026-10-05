@@ -97,9 +97,9 @@ describe("static project site", () => {
 				expect(html.match(/aria-current="page"/g)).toHaveLength(1);
 				expect(html.match(/hreflang=/g)).toHaveLength(12);
 				for (const asset of ["app-preview-light.png", "app-preview-dark.png"]) {
-					expect(await readFile(join(output, "assets", asset))).toEqual(
-						await readFile(join(root, "site/assets", asset)),
-					);
+					const built = await readFile(join(output, "assets", asset));
+					const source = await readFile(join(root, "site/assets", asset));
+					expect(built.equals(source)).toBe(true);
 				}
 				expect(html).toContain("<bdi>v0.0.1-alpha.2</bdi>");
 				expect(html).not.toContain("v0.0.1-alpha.1");
