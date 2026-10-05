@@ -33,6 +33,9 @@ test("downloads a versioned account export with explicit limits", async ({
 	await panel.getByRole("button", { name: "Download JSON" }).click();
 	const download = await downloadPromise;
 	expect(download.suggestedFilename()).toBe("ditero-history-v2.json");
+	await expect(panel.getByRole("status")).toHaveText(
+		"Download requested. Check your browser downloads.",
+	);
 	const stream = await download.createReadStream();
 	const chunks: Buffer[] = [];
 	for await (const chunk of stream) chunks.push(Buffer.from(chunk));
@@ -196,49 +199,131 @@ test("waits for a held real mutation before downloading its saved task", async (
 	).toBeDisabled();
 	expect(events.requests).toHaveLength(0);
 	expect(events.downloads).toHaveLength(0);
+	const status = panel.getByRole("status");
+	await expect(status).toHaveAttribute("aria-live", "polite");
+	await expect(status).toHaveText("Waiting for edits to be saved");
+	await panel.screenshot({
+		path: test.info().outputPath("export-waiting-desktop.png"),
+	});
+	let releaseResponse = () => {};
+	const heldResponse = new Promise<void>((resolve) => {
+		releaseResponse = resolve;
+	});
+	await page.route(
+		"**/api/portability/export?version=2",
+		async (route) => {
+			const response = await route.fetch();
+			expect(response.ok()).toBe(true);
+			await heldResponse;
+			await route.fulfill({ response });
+		},
+		{ times: 1 },
+	);
 	const file = page.waitForEvent("download");
 	pushes.release();
+	try {
+		await expect(status).toHaveText("Preparing export…");
+		await expect(
+			panel.getByRole("button", { name: "Preparing export…" }),
+		).toBeDisabled();
+		await panel.screenshot({
+			path: test.info().outputPath("export-preparing-desktop.png"),
+		});
+	} finally {
+		releaseResponse();
+	}
 	const exported = await downloadedExport(await file);
+	await expect(status).toHaveText(
+		"Download requested. Check your browser downloads.",
+	);
+	await panel.screenshot({
+		path: test.info().outputPath("export-requested-desktop.png"),
+	});
 	expect(exported.data.tasks.some((task) => task.title === title)).toBe(true);
 	expect(events.requests).toHaveLength(1);
 	expect(events.downloads).toHaveLength(1);
 });
 
-test("times out without a file and offers an explicit saved-only snapshot", async ({
-	page,
-}) => {
-	test.setTimeout(60000);
-	const pushes = await installPushHold(page);
-	await savedList(page, "Alex's household chores");
-	const events = exportEvents(page);
-	pushes.hold();
-	const title = "Alex: replace the kitchen smoke alarm battery";
-	await optimisticTask(page, title);
-	await expect.poll(() => pushes.count).toBeGreaterThan(0);
-	await goToSettings(page);
-	const panel = page.getByRole("region", { name: "Export your data" });
-	const started = performance.now();
-	await panel.getByRole("button", { name: "Download JSON" }).click();
-	await expect(panel.getByRole("alert")).toHaveText(pendingMessage, {
-		timeout: 15000,
+test.describe(() => {
+	test.use({ hasTouch: true });
+	test("times out without a file and offers an explicit saved-only snapshot", async ({
+		page,
+	}) => {
+		test.setTimeout(60000);
+		const pushes = await installPushHold(page);
+		await savedList(page, "Alex's household chores");
+		const events = exportEvents(page);
+		pushes.hold();
+		const title = "Alex: replace the kitchen smoke alarm battery";
+		await optimisticTask(page, title);
+		await expect.poll(() => pushes.count).toBeGreaterThan(0);
+		await goToSettings(page);
+		const panel = page.getByRole("region", { name: "Export your data" });
+		const started = performance.now();
+		await panel.getByRole("button", { name: "Download JSON" }).click();
+		await expect(panel.getByRole("alert")).toHaveText(pendingMessage, {
+			timeout: 15000,
+		});
+		expect(performance.now() - started).toBeGreaterThanOrEqual(9000);
+		expect(events.requests).toHaveLength(0);
+		expect(events.downloads).toHaveLength(0);
+		const before = await dirtyMarkers(page);
+		expect(before.length).toBeGreaterThan(0);
+		await page.setViewportSize({ width: 320, height: 844 });
+		const fallback = panel.getByRole("button", { name: fallbackName });
+		expect(
+			await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
+		).toBe(true);
+		for (const control of [
+			fallback,
+			panel.getByRole("button", { name: "Download JSON", exact: true }),
+		]) {
+			const bounds = await control.boundingBox();
+			expect(bounds).not.toBeNull();
+			expect(bounds?.height).toBeGreaterThanOrEqual(44);
+			expect(bounds?.x).toBeGreaterThanOrEqual(0);
+			expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(320);
+			expect(
+				await control.evaluate(
+					(element) => element.scrollWidth <= element.clientWidth,
+				),
+			).toBe(true);
+			expect(
+				await control.evaluate(
+					(element) => getComputedStyle(element).whiteSpace,
+				),
+			).toBe("normal");
+		}
+		await panel.screenshot({
+			path: test.info().outputPath("export-fallback-mobile.png"),
+		});
+		const savedOnly = page.waitForEvent("download");
+		await fallback.focus();
+		await expect(fallback).toBeFocused();
+		await fallback.press("Enter");
+		const excluded = await downloadedExport(await savedOnly);
+		await expect(fallback).toHaveCount(0);
+		await expect(
+			panel.getByRole("button", { name: "Download JSON", exact: true }),
+		).toBeFocused();
+		await expect(panel.getByRole("status")).toHaveText(
+			"Download requested. Check your browser downloads.",
+		);
+		await panel.screenshot({
+			path: test.info().outputPath("export-requested-mobile.png"),
+		});
+		expect(excluded.data.tasks.some((task) => task.title === title)).toBe(
+			false,
+		);
+		expect(await dirtyMarkers(page)).toEqual(before);
+		const complete = page.waitForEvent("download");
+		pushes.release();
+		await panel.getByRole("button", { name: "Download JSON" }).click();
+		const included = await downloadedExport(await complete);
+		expect(included.data.tasks.some((task) => task.title === title)).toBe(true);
+		expect(events.requests).toHaveLength(2);
+		expect(events.downloads).toHaveLength(2);
 	});
-	expect(performance.now() - started).toBeGreaterThanOrEqual(9000);
-	expect(events.requests).toHaveLength(0);
-	expect(events.downloads).toHaveLength(0);
-	const before = await dirtyMarkers(page);
-	expect(before.length).toBeGreaterThan(0);
-	const savedOnly = page.waitForEvent("download");
-	await panel.getByRole("button", { name: fallbackName }).click();
-	const excluded = await downloadedExport(await savedOnly);
-	expect(excluded.data.tasks.some((task) => task.title === title)).toBe(false);
-	expect(await dirtyMarkers(page)).toEqual(before);
-	const complete = page.waitForEvent("download");
-	pushes.release();
-	await panel.getByRole("button", { name: "Download JSON" }).click();
-	const included = await downloadedExport(await complete);
-	expect(included.data.tasks.some((task) => task.title === title)).toBe(true);
-	expect(events.requests).toHaveLength(2);
-	expect(events.downloads).toHaveLength(2);
 });
 
 test("refuses offline edits and keeps their pending marker unknown after reload", async ({

@@ -6,18 +6,35 @@ import { Button } from "../ui/button.tsx";
 export function DataPortabilityPanel() {
 	const boundary = useExportBoundary();
 	const active = useRef<AbortController | null>(null);
+	const downloadButton = useRef<HTMLButtonElement | null>(null);
+	const fallbackButton = useRef<HTMLButtonElement | null>(null);
+	const restoreFocus = useRef(false);
 	const [busy, setBusy] = useState(false);
 	const [waiting, setWaiting] = useState(false);
+	const [requested, setRequested] = useState(false);
+	const [savedSnapshotBusy, setSavedSnapshotBusy] = useState(false);
 	const [error, setError] = useState<
 		"failed" | "limit" | "pending" | "history" | null
 	>(null);
 	useEffect(() => () => active.current?.abort(), []);
 
+	useEffect(() => {
+		if (!busy && restoreFocus.current) {
+			restoreFocus.current = false;
+			if (document.activeElement === document.body)
+				downloadButton.current?.focus();
+		}
+	}, [busy]);
+
 	async function download(savedSnapshotOnly = false) {
 		if (active.current) return;
 		const controller = new AbortController();
 		active.current = controller;
+		restoreFocus.current =
+			savedSnapshotOnly && document.activeElement === fallbackButton.current;
 		setBusy(true);
+		setSavedSnapshotBusy(savedSnapshotOnly);
+		setRequested(false);
 		setError(null);
 		try {
 			if (!savedSnapshotOnly) {
@@ -69,6 +86,7 @@ export function DataPortabilityPanel() {
 			link.href = url;
 			link.download = "ditero-history-v2.json";
 			link.click();
+			setRequested(true);
 			// Allow the browser to begin consuming the download before releasing it.
 			setTimeout(() => URL.revokeObjectURL(url), 1000);
 		} catch {
@@ -77,7 +95,10 @@ export function DataPortabilityPanel() {
 			if (active.current === controller) {
 				active.current = null;
 				setWaiting(false);
-				if (!controller.signal.aborted) setBusy(false);
+				if (!controller.signal.aborted) {
+					setBusy(false);
+					setSavedSnapshotBusy(false);
+				}
 			}
 		}
 	}
@@ -97,7 +118,8 @@ export function DataPortabilityPanel() {
 				{m.portability_saved_boundary()}
 			</p>
 			<Button
-				className="mt-3"
+				ref={downloadButton}
+				className="mt-3 h-auto min-h-8 max-w-full whitespace-normal py-1.5 pointer-coarse:min-h-11"
 				variant="outline"
 				disabled={busy}
 				onClick={() => void download()}
@@ -108,6 +130,19 @@ export function DataPortabilityPanel() {
 						? m.portability_exporting()
 						: m.portability_download()}
 			</Button>
+			<p
+				role="status"
+				aria-live="polite"
+				className="mt-2 text-xs text-muted-foreground"
+			>
+				{waiting
+					? m.portability_waiting()
+					: busy
+						? m.portability_exporting()
+						: requested
+							? m.portability_download_requested()
+							: null}
+			</p>
 			{error && (
 				<p role="alert" className="mt-2 text-sm text-destructive">
 					{error === "pending"
@@ -119,9 +154,10 @@ export function DataPortabilityPanel() {
 								: m.portability_failed()}
 				</p>
 			)}
-			{error === "pending" && (
+			{(error === "pending" || savedSnapshotBusy) && (
 				<Button
-					className="mt-2"
+					ref={fallbackButton}
+					className="mt-2 h-auto min-h-8 max-w-full whitespace-normal py-1.5 pointer-coarse:min-h-11"
 					variant="outline"
 					disabled={busy}
 					onClick={() => void download(true)}

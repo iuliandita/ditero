@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { Button } from "../ui/button.tsx";
@@ -28,12 +28,18 @@ export function ImportApplyPanel({
 	plan,
 	onBusy,
 	disabled,
+	needsAcknowledgement = false,
 }: {
 	plan: Plan;
 	onBusy: (busy: boolean) => void;
 	disabled: boolean;
+	needsAcknowledgement?: boolean;
 }) {
 	const confirm = useConfirm();
+	const blockedId = useId();
+	const status = useRef<HTMLDivElement | null>(null);
+	const action = useRef<HTMLButtonElement | null>(null);
+	const focusTerminal = useRef(false);
 	const active = useRef<AbortController | null>(null);
 	const approved = useRef(false);
 	const alive = useRef(true);
@@ -72,7 +78,11 @@ export function ImportApplyPanel({
 				});
 				if (!response.ok) throw new Error("Import status unavailable");
 				const body = (await response.json()) as { run: Run | null };
-				if (!controller.signal.aborted) setRun(body.run);
+				if (!controller.signal.aborted) {
+					if (body.run?.state === "completed" || body.run?.state === "conflict")
+						focusTerminal.current ||= document.activeElement === action.current;
+					setRun(body.run);
+				}
 			} catch {
 				if (!controller.signal.aborted) setError("status");
 			} finally {
@@ -104,14 +114,15 @@ export function ImportApplyPanel({
 		onBusy(true);
 		try {
 			if (!approved.current) {
+				const label = run ? m.import_apply_resume() : m.import_apply_action();
 				const ok = await confirm({
-					title: m.import_apply_action(),
+					title: label,
 					body: m.import_apply_confirm({
 						eligible: number(counts.ensure),
 						ignored: number(counts.ignored),
 						blocked: number(counts.blocked),
 					}),
-					confirmLabel: m.import_apply_action(),
+					confirmLabel: label,
 				});
 				if (!ok || controller.signal.aborted || !alive.current) return;
 				approved.current = true;
@@ -130,12 +141,15 @@ export function ImportApplyPanel({
 				});
 				if (controller.signal.aborted || !alive.current) return;
 				if (response.status === 409) {
+					focusTerminal.current = document.activeElement === action.current;
 					setError("conflict");
 					return;
 				}
 				if (!response.ok) throw new Error("Import batch failed");
 				const next = (await response.json()) as Run;
 				if (controller.signal.aborted) return;
+				if (next.state === "completed" || next.state === "conflict")
+					focusTerminal.current = document.activeElement === action.current;
 				setRun(next);
 				if (next.state !== "running") return;
 				if (next.nextOrdinal <= previous)
@@ -158,9 +172,22 @@ export function ImportApplyPanel({
 		run?.state === "completed" ||
 		run?.state === "conflict" ||
 		error === "conflict";
+	useEffect(() => {
+		if (terminal && !applying && focusTerminal.current) {
+			focusTerminal.current = false;
+			if (document.activeElement === document.body) status.current?.focus();
+		}
+	}, [terminal, applying]);
+	const blockedReason = needsAcknowledgement
+		? m.import_apply_needs_acknowledgement()
+		: counts.ensure === 0 && error !== "status"
+			? m.import_apply_nothing_eligible()
+			: null;
 	return (
 		<div className="mt-3 space-y-2 border-t pt-3">
 			<div
+				ref={status}
+				tabIndex={-1}
 				role="status"
 				aria-live="polite"
 				data-testid="import-apply-status"
@@ -193,19 +220,29 @@ export function ImportApplyPanel({
 							: m.import_apply_failed()}
 				</p>
 			)}
-			<p className="text-xs text-muted-foreground">
-				{m.import_apply_retention()}
-			</p>
+			{blockedReason && !terminal && !applying && (
+				<p id={blockedId} className="text-xs text-muted-foreground">
+					{blockedReason}
+				</p>
+			)}
 			{error === "status" ? (
 				<Button
+					ref={action}
+					className="h-auto min-h-8 max-w-full whitespace-normal py-1.5 pointer-coarse:min-h-11"
 					variant="outline"
+					aria-describedby={blockedReason ? blockedId : undefined}
 					disabled={disabled}
-					onClick={() => setReload((value) => value + 1)}
+					onClick={() => {
+						focusTerminal.current = document.activeElement === action.current;
+						setReload((value) => value + 1);
+					}}
 				>
 					{m.import_apply_retry_status()}
 				</Button>
 			) : applying ? (
 				<Button
+					ref={action}
+					className="h-auto min-h-8 max-w-full whitespace-normal py-1.5 pointer-coarse:min-h-11"
 					variant="outline"
 					onClick={() => {
 						active.current?.abort();
@@ -216,6 +253,9 @@ export function ImportApplyPanel({
 				</Button>
 			) : terminal ? null : (
 				<Button
+					ref={action}
+					className="h-auto min-h-8 max-w-full whitespace-normal py-1.5 pointer-coarse:min-h-11"
+					aria-describedby={blockedReason ? blockedId : undefined}
 					disabled={!supported || disabled || loading || counts.ensure === 0}
 					onClick={() => void apply()}
 				>
