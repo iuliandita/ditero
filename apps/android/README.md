@@ -206,6 +206,77 @@ Source compilation and fixtures do not qualify real registration, App Check/Play
 Integrity enrollment, Play signing, public relay delivery, or background/Doze behavior.
 Those checks need an operator-configured project, a public relay and real devices.
 
+## Task links
+
+Implemented foundation with source, bridge and JVM unit coverage:
+`ditero://task?origin=<canonical HTTPS origin>&taskId=<id>` opens an existing task in the signed-in app.
+
+- The link carries no credential. It cannot sign in, start a connection, select a server, switch
+  accounts or navigate to a login. The origin must be the selected server and its account must hold
+  a verified, unexpired stored session, or the link is refused.
+- `NativeTaskLink` accepts exactly one ASCII-graphic link of at most 2048 characters: the
+  `ditero://task?` prefix, one `origin` that is already canonical (lower-case, no path, no default port),
+  and one `taskId` that passes the push-open id rules. Both values are percent-encoded UTF-8, decoded once.
+  Unknown or repeated fields, user info, fragments, backslashes, `+`, bad or double percent-encoding and
+  invalid UTF-8 are refused. Intent extras are ignored, never read, and grant nothing; only the action
+  and data URI count. An intent selector, clip data or MIME type is refused.
+- The link waits in memory only, as one token bound to the captured account, and is never persisted.
+  Native `link.read`, `link.dismiss(token)` and `link.retire` serve the existing JavaScript delivery;
+  each read rechecks the page, account, session and trust. A cold start parks the link unbound and the
+  next `hello` binds that one link to the new page generation. A link already bound to an earlier page is
+  dropped on a reload, never handed to the new page. Sign-out, forget, revoke, a refused session, a
+  server change, a new sign-in, and activity shutdown all clear it. The page opens the task only if it is
+  already in its synced rows; otherwise it shows the existing unavailable message.
+- Dismiss is idempotent: a well-formed body with an empty or unknown token succeeds and changes nothing,
+  and an old token cannot clear a newer entry. A changed owner or page is still answered `cancelled`.
+- `link.retire` and every `server.select` (same origin included) clear the slot and fence ingress, as on
+  desktop. Links are refused silently until the page says a fresh `hello`; link reads never lift the
+  fence. After a successful `server.select` the app therefore performs a new `hello` handshake, which
+  rebinds the page generation and account handle, before it activates the session or requests a grant.
+  A superseded attempt does nothing after `select`, and `connectBridge` rejects older in-flight requests
+  and aborts sockets. A `linkRefused` flag in that `hello` is shown like one on a cold start.
+- Refusals with a live, signed-in page reuse the desktop path: a pending entry with a null `taskId` and a
+  `link.open` wake, which the page reads once and shows as unavailable. They are bound to the page
+  generation, so nothing is replayed after a reload. A refusal before any page exists (cold start) is
+  reported once by the next `hello` as `linkRefused` and is not repeated by state reads. A link that
+  arrives while another is pending never overwrites the first token: the first is re-announced and the
+  newcomer is refused visibly once the first is dismissed. A pending entry whose owner is stale is
+  revalidated and cleared first, so it cannot block a new link; one that is only mid-verification stays.
+  A link arriving while the page is signed out is dropped: the sign-in screen has no authenticated read
+  and nothing is queued for a later sign-in.
+- Verification: the stored account is never relaxed. While a check is in flight the vault reads as
+  untrusted, so a warm link waits as an ownerless deferred entry, only when the in-memory session was
+  already verified and the origin matches. It is never readable meanwhile. When the check ends, the link
+  is promoted and announced if the vault then reads the same verified owner, otherwise it becomes a visible
+  refusal. A failed check with none in flight refuses at once. Delivery otherwise rests on the in-memory
+  session's `verified` flag, which a restored cached proof also sets, so a cold link can be delivered
+  from restored proof before any live check; this is cached proof, not live proof, and there is no
+  offline-link guarantee beyond it.
+- `MainActivity` ignores a `VIEW` intent flagged `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`, so Recents does
+  not replay an old link.
+- `ACTION_VIEW` intents with the `ditero` scheme are consumed from the launch intent and from
+  `onNewIntent`, and the activity intent is replaced afterwards so it does not replay.
+
+A custom scheme has no ownership verification on Android: any installed app or web page can send one,
+so the design relies on the link holding no credential and being unable to change state. Verified HTTPS
+App Links would need a server `assetlinks.json` and are not part of this change.
+
+An emulator check exercised cold and warm unauthenticated launches and confirmed that links do not
+sign in or select a server. Authenticated task opening remains unqualified: fixture sync connectivity
+blocked that runtime journey. The chooser and browser hand-off, rotation or process-death recreation,
+Recents relaunch, verification-deferral timing, and physical devices still need qualification. A browser
+hand-off with a selector or clip data is refused and remains unverified. The bridge and delivery hook
+tests cover the JavaScript side; `NativeTaskLinkTest` covers the parser and `Slot` policy, not the full
+`NativeZeroTransport` or `MainActivity` runtime. Task-link work remains open under #796 and #799; broader
+device qualification stays open under #346.
+Checks that need no device:
+
+```sh
+bunx vitest run apps/android/src/bridge.test.ts src/web/hooks/useNativeTaskLinks.test.ts
+cd apps/android/android
+./gradlew --no-daemon testIndependentDebugUnitTest --tests 'io.ditero.app.NativeTaskLinkTest'
+```
+
 ## Remaining work
 
 - Broader encrypted-file qualification on physical devices and document providers.
@@ -213,7 +284,7 @@ Those checks need an operator-configured project, a public relay and real device
 - Broader device qualification of native notification permission and UnifiedPush background delivery.
 - Operator Firebase/relay setup and real Google delivery qualification.
 - Store distribution and broader release installation/upgrade qualification.
-- Native deep links, update delivery, and complete application qualification.
+- Emulator and device qualification of task links (see above), update delivery, and complete application qualification.
 
 Some shared browser-only account settings and integrations still need explicit
 native support. Keep unsupported operations unavailable until their native

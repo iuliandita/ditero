@@ -1,5 +1,6 @@
 package io.ditero.app;
 
+import android.net.Uri;
 import android.os.Bundle;
 import android.content.Intent;
 
@@ -25,6 +26,27 @@ public class MainActivity extends BridgeActivity {
         // Dedicated message listener only; null means registration failed closed.
         zeroTransport = NativeShellPolicy.install(this) ? NativeZeroTransport.attach(this) : null;
         consumePushIntent(getIntent());
+        // A recreated Activity is handed its original launch intent again; only a fresh launch is a link.
+        if(savedInstanceState==null) consumeTaskLinkIntent(getIntent());
+    }
+
+    /** Relaunching from Recents can redeliver the VIEW intent that started the task: that is not a new link. */
+    private static boolean fromHistory(Intent intent) {
+        return (intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0;
+    }
+
+    /** Only ditero:// VIEW intents reach the transport, which refuses anything but one exact credential-free link. */
+    private void consumeTaskLinkIntent(Intent intent) {
+        if(intent==null || !Intent.ACTION_VIEW.equals(intent.getAction())) return;
+        if(fromHistory(intent)) {
+            setIntent(new Intent(this,MainActivity.class));
+            return;
+        }
+        Uri data=intent.getData();
+        if(data==null || !NativeTaskLink.SCHEME.equalsIgnoreCase(data.getScheme())) return;
+        if(zeroTransport!=null) zeroTransport.taskLinkIntent(intent);
+        // The link must not replay when the Activity is recreated.
+        setIntent(new Intent(this,MainActivity.class));
     }
 
     private void consumePushIntent(Intent intent) {
@@ -38,6 +60,7 @@ public class MainActivity extends BridgeActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         consumePushIntent(intent);
+        consumeTaskLinkIntent(intent);
     }
 
     @Override

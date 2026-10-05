@@ -274,6 +274,13 @@ final class NativeZeroTransport {
 
     private final NativePushCoordinator push;
     private NativeSessionVault.CapturedOwner pushPermissionOwner;
+    // Memory-only: at most one task link, owned by the captured account and never persisted.
+    private final NativeTaskLink.Slot<NativeSessionVault.CapturedOwner> pendingLink = new NativeTaskLink.Slot<>();
+    // A link refused before any page could hear it (cold start) is reported once, by the next hello. A refusal
+    // with a live page is a pending entry with a null task id instead, read and dismissed like a link.
+    private boolean linkRefused;
+    // Set by link.retire and by every server.select: no link is accepted until a fresh hello (link.read never lifts it).
+    private boolean linksFenced;
     private PushOpen pendingPushOpen;
     private static final class PushOpen {
         final NativePushOpen tap;
@@ -337,6 +344,7 @@ final class NativeZeroTransport {
     void drain() {
         if (closed) return;
         closed = true;
+        clearLinks();
         pendingPushOpen=null;
         pushPermissionOwner=null;
         ready = false;
@@ -459,6 +467,12 @@ final class NativeZeroTransport {
                 case "push.dismissOpen":
                     requireReady(m);
                     pushOpenOperation(proxy,rid,op,m);
+                    return;
+                case "link.read":
+                case "link.dismiss":
+                case "link.retire":
+                    requireReady(m);
+                    linkOperation(proxy,rid,op,m);
                     return;
                 case "push.state":
                 case "push.enable":
@@ -584,6 +598,152 @@ final class NativeZeroTransport {
 
     private boolean retirePush() {pendingPushOpen=null; pushPermissionOwner=null; return push.invalidate();}
 
+    private void clearLinks() {pendingLink.clear(); linkRefused=false;}
+
+    /**
+     * Captures a custom-scheme task link for the selected, verified account, or refuses it. Nothing here
+     * signs in, selects a server, switches accounts or reaches the network: the link only waits in memory
+     * until the owning page reads it, and the page opens it only if the task is already in its synced rows.
+     */
+    void taskLinkIntent(Intent intent) {
+        if(closed || linksFenced) return; // the user is changing server: nothing is accepted until a fresh hello
+        boolean live=ready && page!=null;
+        NativeTaskLink link;
+        // Extras are ignored: Chrome and the system add navigation extras that are never read, and the link's
+        // authority is only its data URI. A selector, clip data or MIME type would be a second payload: refused.
+        try {link=NativeTaskLink.parse(intent.getAction(),intent.getDataString(),
+                intent.getSelector()!=null || intent.getClipData()!=null || intent.getType()!=null);}
+        catch(RuntimeException e) {link=null;}
+        // A held entry is revalidated first: a stale one must not block a new link, but one that is only
+        // mid-verification stays, and the newcomer is refused visibly behind it rather than overwriting its token.
+        if(pendingLink.settle(generation,this::linkStanding,this::coldLinkStanding)) {
+            pendingLink.noteBusy();
+            if(live) sendToPage(page,obj("t","link.open","gen",generation));
+            return;
+        }
+        if(link==null) {refuseLink(live); return;}
+        NativeSessionVault.CapturedOwner owner=new NativeSessionVault(activity).capture();
+        if(owner!=null && !owner.scope.equals(ServerContext.parse(link.origin).scope(owner.userId))) {refuseLink(live); return;}
+        // Cold start: no page has said hello yet, so the link waits unbound and hello binds it.
+        if(!live) {
+            if(owner==null) linkRefused=true;
+            else pendingLink.offer(link,owner,b64url(randomBytes(32)),NativeTaskLink.UNBOUND);
+            return;
+        }
+        if(session==null || handle==null) return; // signed out: no authenticated channel, and nothing is queued for a later sign-in
+        if(owner==null) {
+            // The stored record reads as untrusted while a verification is in flight. The in-memory session was
+            // verified before it started, so the link waits without an owner and is delivered only once that
+            // verification succeeds live. It is never readable meanwhile.
+            if(deferrable(link)) pendingLink.defer(link,b64url(randomBytes(32)),generation);
+            else refuseLink(true);
+            return;
+        }
+        if(linkStanding(owner)!=NativeTaskLink.Standing.OWNED) {refuseLink(true); return;}
+        pendingLink.offer(link,owner,b64url(randomBytes(32)),generation);
+        wakeLink();
+    }
+
+    private void wakeLink() {
+        if(page!=null) sendToPage(page,obj("t","link.open","gen",generation));
+    }
+
+    /** One visible, one-use "unavailable" for the page that can hear it; otherwise the next hello says so once. */
+    private void refuseLink(boolean live) {
+        if(!live) {linkRefused=true; return;}
+        if(session==null || handle==null) return;
+        if(pendingLink.offerRefusal(b64url(randomBytes(32)),generation)) wakeLink();
+    }
+
+    private boolean verificationInFlight(Session s) {
+        Verification state=verification.get(checkKey(s));
+        return state!=null && state.pending>0 && !state.refused && !state.invalid;
+    }
+
+    private boolean deferrable(NativeTaskLink link) {
+        return session!=null && handle!=null && context!=null && session.context==context && revoking==null
+                && session.verified && !session.refused && unexpired(session.expiresAt) && verificationInFlight(session)
+                && link.origin.equals(context.origin);
+    }
+
+    /** A verification just ended: promote the deferred link if the account is live-verified, else refuse it visibly. */
+    private void settleDeferredLink(Session s) {
+        if(closed || !pendingLink.deferred()) return;
+        pendingLink.current(generation,this::ownsLink); // another page generation drops it
+        if(!pendingLink.deferred() || s!=session || verificationInFlight(s)) return;
+        NativeSessionVault.CapturedOwner owner=new NativeSessionVault(activity).capture();
+        if(owner!=null && s.verified && linkStanding(owner)==NativeTaskLink.Standing.OWNED && pendingLink.promote(owner)) wakeLink();
+        else if(pendingLink.refuseDeferred()) wakeLink();
+    }
+
+    /**
+     * How the captured owner stands against this page's session: STALE when it is another account, expired,
+     * refused or the context moved; UNVERIFIED while the session is not currently verified (a failed or
+     * pending check); OWNED otherwise. The stored record is compared only when it is currently trusted: while
+     * a verification is in flight it reads as untrusted even though the in-memory session is not.
+     */
+    private NativeTaskLink.Standing linkStanding(NativeSessionVault.CapturedOwner owner) {
+        if(closed || context==null || session==null || handle==null || session.context!=context || revoking!=null)
+            return NativeTaskLink.Standing.STALE;
+        if(!session.scope().equals(owner.scope) || !session.sessionId.equals(owner.sessionId)
+                || !session.deviceId.equals(owner.deviceId)) return NativeTaskLink.Standing.STALE;
+        if(session.refused || !unexpired(session.expiresAt) || !unexpired(owner.expiresAt)) return NativeTaskLink.Standing.STALE;
+        if(!session.verified) return NativeTaskLink.Standing.UNVERIFIED;
+        NativeSessionVault.CapturedOwner stored=new NativeSessionVault(activity).capture();
+        return stored==null || NativeSessionVault.sameOwner(owner,stored)
+                ? NativeTaskLink.Standing.OWNED : NativeTaskLink.Standing.STALE;
+    }
+
+    /**
+     * A cold link waits before any hello, so there is no page session or context to compare with: the held owner
+     * stands only if the current stored record is trusted and is exactly that owner, unexpired. A missing or
+     * untrusted record, another account or an expired owner is STALE (fail closed).
+     */
+    private NativeTaskLink.Standing coldLinkStanding(NativeSessionVault.CapturedOwner owner) {
+        if(closed || !unexpired(owner.expiresAt)) return NativeTaskLink.Standing.STALE;
+        NativeSessionVault.CapturedOwner stored=new NativeSessionVault(activity).capture();
+        // An unavailable vault cannot prove a mismatch. Keep the cold slot unreadable until hello revalidates it.
+        if(stored==null) return NativeTaskLink.Standing.UNVERIFIED;
+        return NativeSessionVault.sameOwner(owner,stored)
+                ? NativeTaskLink.Standing.OWNED : NativeTaskLink.Standing.STALE;
+    }
+
+    private boolean ownsLink(NativeSessionVault.CapturedOwner owner) {
+        return linkStanding(owner)==NativeTaskLink.Standing.OWNED;
+    }
+
+    private void linkOperation(JavaScriptReplyProxy proxy,int rid,String op,Map<String,Object> m) throws Reject {
+        if(page!=proxy || session==null || handle==null || !handle.equals(str(m.get("id")))) throw new Reject("no-session");
+        Set<String> fields=new HashSet<>(Arrays.asList("op","rid","gen","id"));
+        if(op.equals("link.dismiss")) fields.add("body");
+        if(!fields.containsAll(m.keySet())) throw new Reject("invalid-message");
+        if(op.equals("link.retire")) {
+            // Clears the slot and fences ingress. Only a fresh hello lifts the fence: a queued link.read is not a rearm.
+            clearLinks();
+            linksFenced=true;
+            sendToPage(proxy,obj("t","reply","rid",rid,"ok",true));
+            return;
+        }
+        // A deferred link is neither held for delivery nor readable: it waits for a live verification.
+        boolean held=pendingLink.occupied() && !pendingLink.deferred();
+        NativeTaskLink.Pending<NativeSessionVault.CapturedOwner> open=pendingLink.current(generation,this::ownsLink);
+        // The link was held but its owner, page or trust changed: it is gone, and a read says so.
+        if(held && open==null) throw new Reject(op.equals("link.read")?"link-unavailable":"cancelled");
+        if(op.equals("link.dismiss")) {
+            if(!(m.get("body") instanceof Map)) throw new Reject("invalid-message");
+            Map<String,Object> body=asMap(m.get("body"));
+            if(body.size()!=1 || !(body.get("token") instanceof String)) throw new Reject("invalid-message");
+            // Idempotent: an empty or unknown token succeeds and changes nothing, so an old token never clears a new entry.
+            pendingLink.dismiss((String)body.get("token"));
+            sendToPage(proxy,obj("t","reply","rid",rid,"ok",true));
+            // A link that arrived behind this one was refused; say so now that the slot is free.
+            if(pendingLink.takeOwedRefusal() && pendingLink.offerRefusal(b64url(randomBytes(32)),generation)) wakeLink();
+            return;
+        }
+        sendToPage(proxy,obj("t","reply","rid",rid,"ok",true,
+                "open",open==null?null:obj("token",open.token,"taskId",open.taskId())));
+    }
+
     void pushPermissionResult(int requestCode) {
         NativeSessionVault.CapturedOwner captured=pushPermissionOwner;
         pushPermissionOwner=null;
@@ -637,8 +797,16 @@ final class NativeZeroTransport {
         handle = session == null ? null : newHandle();
         ready = true;
         if(pendingPushOpen!=null && !ownsPushOpen(pendingPushOpen,false)) pendingPushOpen=null;
+        // Only a link captured before any page existed (cold start) binds to this generation, and only if the
+        // restored session still owns it. Anything already bound to the previous page is dropped, not reopened.
+        linksFenced=false;
+        boolean cold=pendingLink.unbound();
+        if(pendingLink.occupied() && !pendingLink.rebind(generation,this::ownsLink) && cold) linkRefused=true;
         JSONObject reply = obj("t", "reply", "rid", rid, "ok", true, "gen", generation,
                 "bridge", "native-zero-2", "authReserve", HANDLE_CHARS, "maxSockets", MAX_SOCKETS);
+        put(reply,"taskLinks",true);
+        put(reply,"linkRefused",linkRefused);
+        linkRefused=false;
         put(reply,"pushProvider",push.providerId());
         put(reply, "server", serverMeta());
         put(reply, "session", sessionMeta());
@@ -650,6 +818,7 @@ final class NativeZeroTransport {
         JSONObject reply = obj("t", "reply", "rid", rid, "ok", true, "gen", generation,
                 "exchanging", exchange != null, "revoking", revoking != null,
                 "grantPending", pending != null && pending.context == context);
+        put(reply,"taskLinks",true);
         put(reply,"pushProvider",push.providerId());
         put(reply, "server", serverMeta());
         put(reply, "session", sessionMeta());
@@ -685,6 +854,9 @@ final class NativeZeroTransport {
             fail(proxy, rid, "invalid-origin");
             return;
         }
+        // Like desktop, every select clears the link slot and fences ingress, even for the same origin.
+        clearLinks();
+        linksFenced=true;
         if (context == null || !context.origin.equals(next.origin)) {
             if (!retirePush()) {fail(proxy,rid,"storage-failed"); return;}
             if (!prefs.edit().putString(PREF_SELECTED, next.origin).commit()) {
@@ -692,6 +864,7 @@ final class NativeZeroTransport {
                 return;
             }
             attachments.cancelAll();
+            clearLinks();
         generation++;
             context = next;
             zero = null;
@@ -1071,6 +1244,7 @@ final class NativeZeroTransport {
                         }
                         for (Sock s : new ArrayList<>(socks.values())) s.detach(true);
                         socks.clear();
+                        clearLinks();
                         session = next;
                         handle = newHandle();
                         jwt = null;
@@ -1274,6 +1448,7 @@ final class NativeZeroTransport {
             return;
         }
         if (!retirePush()) {fail(proxy,rid,"storage-failed"); return;}
+        clearLinks();
         if (!beginCheck(s)) {
             fail(proxy, rid, "storage-failed");
             return;
@@ -1366,6 +1541,7 @@ final class NativeZeroTransport {
     }
 
     private void dropMemory() {
+        clearLinks();
         attachments.cancelAll();
         for (Sock s : new ArrayList<>(socks.values())) s.detach(true);
         socks.clear();
@@ -1911,6 +2087,12 @@ final class NativeZeroTransport {
     }
 
     private boolean finishCheck(Session s, boolean usable) {
+        boolean result = finishCheckState(s, usable);
+        settleDeferredLink(s);
+        return result;
+    }
+
+    private boolean finishCheckState(Session s, boolean usable) {
         String key = checkKey(s);
         Verification state = verification.get(key);
         if (state == null) return usable && !s.refused;

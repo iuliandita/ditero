@@ -17,6 +17,7 @@ import {
 	readBridgeState,
 	readConfig,
 	revokeSession,
+	selectServer,
 	setNativeSessionRefusalHandler,
 } from "./bridge.ts";
 
@@ -628,6 +629,90 @@ test("Linux link events and asynchronous reads cannot cross accounts", async () 
 	});
 	expect(sent).toHaveLength(before);
 	unsubscribe();
+});
+
+test("a fresh hello after server.select rebinds the page and old navigation cannot consume the new link", async () => {
+	// Fake native protocol: select clears the slot and fences, reads never lift the fence, and only
+	// a hello binds the parked link to a new generation and account handle.
+	const first = { ...session, authHandle: "opaque-select" };
+	const second = { ...session, authHandle: "opaque-hello" };
+	let fenced = false;
+	let hold = false;
+	let hellos = 0;
+	let pending: { token: string; taskId: string } | null = {
+		token: "old",
+		taskId: "old-task",
+	};
+	const dismissed: string[] = [];
+	native.postMessage = (raw) => {
+		const command = JSON.parse(raw) as Record<string, unknown>;
+		sent.push(command);
+		if (command.op === "server.select") {
+			fenced = true;
+			pending = null;
+			snapshot = { ...snapshot, gen: 2, session: first, taskLinks: true };
+			reply(command, { ...snapshot });
+		} else if (command.op === "hello") {
+			if (++hellos > 1) {
+				fenced = false;
+				pending = { token: "new", taskId: "new-task" };
+				snapshot = { ...snapshot, gen: 3, session: second, taskLinks: true };
+			}
+			reply(command, { ...snapshot });
+		} else if (command.op === "link.read") {
+			if (!hold) reply(command, { open: fenced ? null : pending });
+		} else if (command.op === "link.dismiss") {
+			const body = command.body as { token: string };
+			if (pending?.token === body.token) {
+				dismissed.push(body.token);
+				pending = null;
+			}
+			reply(command, {});
+		}
+	};
+	snapshot.session = session;
+	snapshot.taskLinks = true;
+	await connectBridge();
+	const stale = createNativeTaskLinkNavigation(1, session.authHandle);
+	expect(await stale.read()).toEqual(pending);
+
+	await selectServer(origin);
+	expect(bridgeState()).toMatchObject({ gen: 2 });
+	const selected = createNativeTaskLinkNavigation(2, first.authHandle);
+	expect(await selected.read()).toBeNull();
+	expect(fenced).toBe(true);
+	hold = true;
+	const inflight = selected.read();
+	const dropped = expect(inflight).rejects.toMatchObject({
+		code: "stale-generation",
+	});
+
+	await connectBridge();
+	await dropped;
+	hold = false;
+	expect(fenced).toBe(false);
+	expect(bridgeState()).toMatchObject({
+		gen: 3,
+		session: { authHandle: second.authHandle },
+	});
+
+	const before = sent.length;
+	for (const navigation of [stale, selected]) {
+		await expect(navigation.read()).rejects.toMatchObject({
+			code: "stale-generation",
+		});
+		await expect(navigation.dismiss("new")).rejects.toMatchObject({
+			code: "stale-generation",
+		});
+	}
+	expect(sent).toHaveLength(before);
+	expect(pending).toEqual({ token: "new", taskId: "new-task" });
+	expect(dismissed).toEqual([]);
+
+	const current = createNativeTaskLinkNavigation(3, second.authHandle);
+	expect(await current.read()).toEqual({ token: "new", taskId: "new-task" });
+	await current.dismiss("new");
+	expect(dismissed).toEqual(["new"]);
 });
 
 test("Linux link retirement waits for a captured-account acknowledgement and fails explicitly", async () => {
