@@ -331,7 +331,7 @@ function FeedAccountPanel() {
 				{m.calendar_feed_description()}
 			</p>
 			<Button
-				className="mt-3"
+				className="mt-3 pointer-coarse:h-11"
 				disabled={
 					busy || loading || limitReached || !ready || visibleLists.length === 0
 				}
@@ -380,6 +380,7 @@ function FeedAccountPanel() {
 					</p>
 					<Button
 						variant="outline"
+						className="pointer-coarse:h-11"
 						disabled={busy || loading}
 						onClick={() => {
 							setError(null);
@@ -394,7 +395,12 @@ function FeedAccountPanel() {
 				{m.calendar_feed_history()}
 			</p>
 			<Dialog open={open} onOpenChange={changeDialog}>
-				<DialogContent data-testid="calendar-feed-dialog">
+				<DialogContent
+					data-testid="calendar-feed-dialog"
+					onInteractOutside={(event) => {
+						if (secret) event.preventDefault();
+					}}
+				>
 					<DialogHeader>
 						<DialogTitle>
 							{secret
@@ -419,14 +425,23 @@ function FeedAccountPanel() {
 								dir="ltr"
 								className="font-mono"
 							/>
-							<Button onClick={() => void copy()}>{m.channel_copy()}</Button>
+							<Button
+								className="pointer-coarse:h-11"
+								onClick={() => void copy()}
+							>
+								{m.channel_copy()}
+							</Button>
 							{copyStatus && (
 								<p role="status" className="text-sm">
 									{copyStatus}
 								</p>
 							)}
 							<DialogFooter>
-								<Button onClick={() => changeDialog(false)}>
+								<Button
+									variant="outline"
+									className="pointer-coarse:h-11"
+									onClick={() => changeDialog(false)}
+								>
 									{m.calendar_feed_done()}
 								</Button>
 							</DialogFooter>
@@ -449,6 +464,7 @@ function FeedAccountPanel() {
 									maxLength={80}
 									autoComplete="off"
 									disabled={busy}
+									className="pointer-coarse:h-11"
 								/>
 							</div>
 							<div className="space-y-1.5">
@@ -458,7 +474,7 @@ function FeedAccountPanel() {
 									value={listId}
 									onChange={(event) => setListId(event.target.value)}
 									disabled={busy || !ready}
-									className="min-h-11 w-full rounded-md border bg-background px-3 text-sm"
+									className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-base md:text-sm dark:bg-input/30 pointer-coarse:h-11"
 									required
 								>
 									<option value="">{m.calendar_feed_choose_list()}</option>
@@ -498,6 +514,7 @@ function FeedAccountPanel() {
 									value={expiry}
 									onChange={(event) => setExpiry(event.target.value)}
 									disabled={busy}
+									className="pointer-coarse:h-11"
 								/>
 							</div>
 							{error && (
@@ -508,6 +525,7 @@ function FeedAccountPanel() {
 							<DialogFooter>
 								<Button
 									type="submit"
+									className="pointer-coarse:h-11"
 									disabled={
 										busy ||
 										loading ||
@@ -590,10 +608,10 @@ export function CalendarFeedRows({
 						{!feed.revokedAt && (
 							<Button
 								variant="outline"
-								className="min-h-11"
+								className="pointer-coarse:min-h-11"
 								disabled={busy}
 								onClick={() => onRevoke(feed)}
-								aria-label={m.calendar_feed_revoke_title({ name: feed.name })}
+								aria-label={`${m.calendar_feed_revoke()} ${feed.name}`}
 							>
 								{m.calendar_feed_revoke()}
 							</Button>
