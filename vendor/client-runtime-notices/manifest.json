@@ -1,0 +1,215 @@
+{
+	"schema": 1,
+	"identity": {
+		"bunVersion": "1.4.2",
+		"bunRevision": "744846f844374847c902b5e7fd59b4342a51ef99",
+		"target": "bun-linux-x64",
+		"runtimeArchiveSha256": "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
+		"webkitCommit": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+	},
+	"incomplete": true,
+	"texts": [
+		{
+			"path": "notices/runtime/lolhtml/LICENSE",
+			"sha256": "e4ddaa9d7391bb9536fcb8c59b570a8b85a0bf6da54df5b3b26f098f6f99c9cc",
+			"origin": {
+				"url": "https://codeload.github.com/oven-sh/lol-html/tar.gz/725ce499aa9b71e38b7a2d0a9fbb6d7294a4079e",
+				"revision": "725ce499aa9b71e38b7a2d0a9fbb6d7294a4079e"
+			},
+			"license": "BSD-3-Clause",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/libdeflate/COPYING",
+			"sha256": "4ad69099cb4374836fd27583d9991e2838cd86b6e4666ab26b2d32582c91e73a",
+			"origin": {
+				"url": "https://codeload.github.com/ebiggers/libdeflate/tar.gz/c8c56a20f8f621e6a966b716b31f1dedab6a41e3",
+				"revision": "c8c56a20f8f621e6a966b716b31f1dedab6a41e3"
+			},
+			"license": "MIT",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/JavaScriptCore/COPYING.LIB",
+			"sha256": "5094ecb9c9dcd0eadc34f3c11511d9b5535063032bc150164ecd1a5d5a445547",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/JavaScriptCore/COPYING.LIB",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-JavaScriptCore-COPYING-LIB",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/JavaScriptCore/disassembler/ARM64/LICENSE-binja.txt",
+			"sha256": "94c095293b051622c4279153e94f8f69e6e9fd41c2d6eef07ad9ea02c30fb4c0",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/JavaScriptCore/disassembler/ARM64/LICENSE-binja.txt",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-JavaScriptCore-disassembler-ARM64-LICENSE-binja-txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/JavaScriptCore/disassembler/zydis/LICENSE-zycore.txt",
+			"sha256": "bad974d260b4697edfdf3a126c33d451a512947b5265f6014fb66173f42ccab3",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/JavaScriptCore/disassembler/zydis/LICENSE-zycore.txt",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-JavaScriptCore-disassembler-zydis-LICENSE-zycore-txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/JavaScriptCore/disassembler/zydis/LICENSE-zydis.txt",
+			"sha256": "1218751ea297d1559d768da22dfb95248d6b7c6fdcf3aedecd53a818694b6bf9",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/JavaScriptCore/disassembler/zydis/LICENSE-zydis.txt",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-JavaScriptCore-disassembler-zydis-LICENSE-zydis-txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/JavaScriptCore/runtime/temporal/core/LICENSE-icu4x.txt",
+			"sha256": "f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/JavaScriptCore/runtime/temporal/core/LICENSE-icu4x.txt",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-JavaScriptCore-runtime-temporal-core-LICENSE-icu4x-txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/JavaScriptCore/runtime/temporal/core/LICENSE-temporal_rs.txt",
+			"sha256": "073d3574ac6389e263360572b331e045dda7ac5cdba239ce5bdb02f299ef47bb",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/JavaScriptCore/runtime/temporal/core/LICENSE-temporal_rs.txt",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-JavaScriptCore-runtime-temporal-core-LICENSE-temporal-rs-txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/WTF/LICENSE-LLVM.txt",
+			"sha256": "f72b120d1385408e9e380acc020756eb6ba1b461d66c328ea67327ba08d7dcfd",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/WTF/LICENSE-LLVM.txt",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-WTF-LICENSE-LLVM-txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/WTF/LICENSE-dragonbox.txt",
+			"sha256": "9bb1036ef8dcb42c59e2a23c9e465f43e75003e06898faf0edd18de662f3ecb8",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/WTF/LICENSE-dragonbox.txt",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-WTF-LICENSE-dragonbox-txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/WTF/LICENSE-libc++.txt",
+			"sha256": "c1938c0e9e90639d1e8f5a7f6bebaab83a3642e0ee44295a4c69934686d0bda8",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/WTF/LICENSE-libc++.txt",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-WTF-LICENSE-libc++-txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/WTF/LICENSE-simde.txt",
+			"sha256": "75ce0a8c5a7bff42fbd6f8f3b469b518132132c4f4948fb8d02b1ccb5d0df9d8",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/WTF/LICENSE-simde.txt",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-WTF-LICENSE-simde-txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/WTF/icu/LICENSE",
+			"sha256": "de596f6e3482bab99d2425af16add38f959ebc17a5883c6302970355853b6539",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/WTF/icu/LICENSE",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-WTF-icu-LICENSE",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/WTF/wtf/dtoa/COPYING",
+			"sha256": "4af93c12062c58058378de2397dc1c92bbff9ddfb1d583a01c84127557ce97ca",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/WTF/wtf/dtoa/COPYING",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-WTF-wtf-dtoa-COPYING",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/WTF/wtf/dtoa/LICENSE",
+			"sha256": "4af93c12062c58058378de2397dc1c92bbff9ddfb1d583a01c84127557ce97ca",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/WTF/wtf/dtoa/LICENSE",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-WTF-wtf-dtoa-LICENSE",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/WTF/wtf/fast_float/LICENSE",
+			"sha256": "097a889aa954d04e088b790b10a4014d6189561d0a6013935a73ce3d4ddaaf06",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/WTF/wtf/fast_float/LICENSE",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-WTF-wtf-fast-float-LICENSE",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/WTF/wtf/simdutf/LICENSE-simdutf.txt",
+			"sha256": "fc8dbc04e03ad4efc08a647ffe7f995b811a95bc04c0e85a56d5277c6593fa5f",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/WTF/wtf/simdutf/LICENSE-simdutf.txt",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-WTF-wtf-simdutf-LICENSE-simdutf-txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/webkit/Source/bmalloc/mimalloc/mimalloc/LICENSE",
+			"sha256": "82ade5d7d9b029044b5fbbc326207fc47c2d44ee4dd71e8a559c36d728217de9",
+			"origin": {
+				"url": "https://github.com/oven-sh/WebKit/blob/2e2aa2290fac856d6f451ceacb58f7f5b44dd057/Source/bmalloc/mimalloc/mimalloc/LICENSE",
+				"revision": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"
+			},
+			"license": "LicenseRef-WebKit-Source-bmalloc-mimalloc-mimalloc-LICENSE",
+			"selection": "conservative-extra"
+		}
+	],
+	"unresolved": [
+		{
+			"component": "Bun",
+			"reason": "Authoritative own full copyright/grant provenance unresolved"
+		},
+		{
+			"component": "whole-runtime",
+			"reason": "Artifact-bound native Rust rebuilt std GCC and sysroot coverage unresolved; this initial package is only18 retained candidate texts"
+		},
+		{
+			"component": "WebKit",
+			"reason": "Selected source copyright/transitive coverage unresolved; ARM and other candidate extras do not assert linkage"
+		},
+		{
+			"component": "source-relink",
+			"reason": "Corresponding source and actual modified-runtime relink qualification unresolved"
+		}
+	],
+	"sourceRelink": {
+		"source": null,
+		"relink": null
+	}
+}
