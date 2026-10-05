@@ -413,6 +413,9 @@ try {
 		await wait(
 			() =>
 				frames() > beforeTiny &&
+				// The preceding 40-column frame also has these keys in its footer.
+				// Only the tiny viewport starts with the compact safety-key row.
+				frame().startsWith("Esc | q") &&
 				/\bq\b/.test(frame()) &&
 				/\bEsc\b/.test(frame()),
 			"Narrow terminal safety keys were absent",
