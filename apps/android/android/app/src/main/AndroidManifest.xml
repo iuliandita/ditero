@@ -23,6 +23,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Credential-free task links. A custom scheme has no ownership verification: any app or page can send one. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ditero" android:host="task" />
+            </intent-filter>
+
         </activity>
 
         <service android:name=".NativeUnifiedPushService" android:exported="false">

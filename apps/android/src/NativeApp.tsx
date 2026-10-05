@@ -216,7 +216,12 @@ function NativeAppRoutes({
 		setPending(false);
 		try {
 			await retireZeroClients();
-			const next = await selectServer(origin.trim());
+			await selectServer(origin.trim());
+			if (owner !== epoch.current) return;
+			// server.select fences link ingress; only a fresh hello lifts it and rebinds the page.
+			const next = await connectBridge();
+			if (owner !== epoch.current) return;
+			if (next.linkRefused) show({ message: m.native_link_unavailable() });
 			setOrigin(next.server?.origin ?? origin);
 			if (next.session) await activate(owner);
 			else {
