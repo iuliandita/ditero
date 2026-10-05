@@ -71,6 +71,34 @@ copy. Record numbers identify rows only inside one snapshot; this adapter does
 not offer incremental updates or claim Todoist account completeness. The checked-in
 fixture is synthetic and follows the documented format.
 
+## Trello board JSON (v1)
+
+Settings accepts one UTF-8 JSON file for a single Trello board. The board name
+becomes a folder, its lists become task lists, and plain open cards become top-level
+tasks. Card names become titles and card descriptions become literal notes. Lists
+and cards follow their `pos` order, with the canonical ID as the tie-breaker. Tasks
+are open copies with priority 0, no dates and no subtasks.
+
+An archived board, list or card is refused, as is a card with `dueComplete` true,
+a template card, or a card with a non-null special `cardRole`. Duplicate IDs, lists
+or cards from another board, and cards on a list missing from the file are also
+refused.
+
+These are excluded: dates, completion state, recurrence, authors, assignments,
+comments, labels, checklists, attachments, history, reminders, personal state,
+custom fields, covers, stickers, view settings, plugin data, task creation times,
+shopping fields, urgency and board descriptions. Accept this policy explicitly
+before previewing or applying. Changing the file resets that acceptance.
+
+Snapshot hashing in the browser requires HTTPS or localhost. The source namespace
+is derived from a hash of the board ID, not from the file. The source is bound to
+the SHA-256 of the exact original bytes, including excluded fields and whitespace,
+and to the ordered exclusion policy. Reusing the source with changed bytes returns
+HTTP 409 with `source-binding-conflict`. Choose **New source** explicitly to import
+a separate copy. This adapter is not an incremental update, a sync or a full-fidelity
+board copy. The migration owner supplies operational mapping only, with no local
+grants or source authors.
+
 ## Imported task notifications
 
 A task imported with planner version 4 or 5 can show **Pending** while its assignments are still being applied,

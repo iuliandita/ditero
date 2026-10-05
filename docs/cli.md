@@ -2,6 +2,7 @@
 
 The CLI uses the version 1 public API to discover member-visible content, plan a
 task, create it, and complete, update, or delete an observed task with an explicit retry key.
+Later sections cover list, folder, comment, relationship, placement and webhook workflows.
 A local Linux x64 glibc standalone candidate can be built for all three terminal
 clients. Public binary distribution is blocked while embedded runtime license and
 copyright notices remain incomplete in [#575](https://github.com/iuliandita/ditero/issues/575).
@@ -23,8 +24,9 @@ Supply credentials explicitly through the process environment. Caller-controlled
 Bun runtime flags are trusted configuration; the executable is not a sandbox.
 Bundled relink inputs and partial notices are retained in the local candidate.
 
-The [terminal interface](tui.md) provides interactive browsing, reviewed creation
-and completion through the same public API.
+The [terminal interface](tui.md) provides interactive browsing and reviewed task
+creation, completion, scalar updates, deletion and reordering, plus read-only
+comments, through the same public API.
 
 Install the repository dependencies with `bun install --frozen-lockfile`, then run
 `bun run cli --help`. This source CLI requires Bun. Configure `DITERO_URL` with an
