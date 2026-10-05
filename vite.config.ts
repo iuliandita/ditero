@@ -85,7 +85,9 @@ export default defineConfig({
 	resolve: {
 		alias: { "@": fileURLToPath(new URL("./src/web", import.meta.url)) },
 	},
+	optimizeDeps: { entries: ["index.html"] },
 	server: {
+		watch: { ignored: ["**/docs/local/**"] },
 		proxy: {
 			"/api": {
 				target: apiProxyTarget(process.env),

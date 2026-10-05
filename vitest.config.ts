@@ -16,6 +16,6 @@ export default defineConfig({
 	},
 	test: {
 		fileParallelism: false,
-		exclude: [...configDefaults.exclude, "**/.*/**"],
+		exclude: [...configDefaults.exclude, "**/.*/**", "**/docs/local/**"],
 	},
 });

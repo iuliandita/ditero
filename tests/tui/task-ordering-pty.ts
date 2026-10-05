@@ -395,6 +395,14 @@ const send = async (keys: string, predicate?: () => boolean) => {
 	);
 };
 const rowText = (line: string) => line.replace(/^[\s│|]+|[\s│|]+$/g, "");
+const homeSelected = (text: string, label: string) =>
+	text.split("\n").some((line) => rowText(line) === `> ${label}`);
+const startupReady = (text: string) =>
+	text.includes("Terminal actor |") &&
+	text
+		.split("\n")
+		.some((line) => rowText(line) === (arabic ? "جاهز" : "Ready")) &&
+	homeSelected(text, arabic ? "مساحات العمل" : "Workspaces");
 const escapePattern = (value: string) =>
 	value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const browseGlyph = /^>\s+(?:○|●|\( \)|\(x\)|\[ \]|\[x\])\s+/;
@@ -676,13 +684,24 @@ try {
 			}),
 		},
 	);
-	await wait(
+	await awaitFrame(
+		120,
+		55,
 		() =>
 			wires.some((wire) => wire.path === "/api/v1/me" && wire.status === 200) &&
-			frames() > 1,
+			startupReady(frame()),
 		"Startup did not finish",
 	);
-	await send("\x1b[B\r", () => frame().includes("Terminal list"));
+	await send("\x1b[B", () =>
+		homeSelected(frame(), arabic ? "القوائم" : "Lists"),
+	);
+	await awaitFrame(
+		120,
+		55,
+		() => homeSelected(frame(), arabic ? "القوائم" : "Lists"),
+		"Lists selection did not finish",
+	);
+	await send("\r", () => frame().includes("Terminal list"));
 	await send("\r", () => selectedTitle() !== null);
 	await selectTitle(target.title);
 	assert.ok(taskReads().length >= 1);
