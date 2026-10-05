@@ -7,6 +7,7 @@ export type SettingsSectionId =
 	| "notifications"
 	| "security"
 	| "access-tokens"
+	| "calendar-feeds"
 	| "lists"
 	| "focus"
 	| "keyboard"

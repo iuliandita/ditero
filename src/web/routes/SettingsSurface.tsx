@@ -5,6 +5,7 @@ import { EncryptedFilesPanel } from "../components/e2e/EncryptedFilesPanel.tsx";
 import { KarmaPanel } from "../components/karma/KarmaPanel.tsx";
 import { AccountDeletionPanel } from "../components/settings/AccountDeletionPanel.tsx";
 import { AccountPanel } from "../components/settings/AccountPanel.tsx";
+import { CalendarFeedsPanel } from "../components/settings/CalendarFeedsPanel.tsx";
 import { DataPortabilityPanel } from "../components/settings/DataPortabilityPanel.tsx";
 import { DisplaySettings } from "../components/settings/DisplaySettings.tsx";
 import { FocusSettings } from "../components/settings/FocusSettings.tsx";
@@ -78,6 +79,7 @@ export function SettingsSurface({
 			{ id: "notifications", label: m.notifications_heading() },
 			{ id: "security", label: m.security_heading() },
 			{ id: "access-tokens", label: m.pat_heading() },
+			{ id: "calendar-feeds", label: m.calendar_feed_heading() },
 		];
 		if (activeId)
 			items.push({ id: "lists", label: m.settings_section_lists() });
@@ -151,6 +153,12 @@ export function SettingsSurface({
 						{native ? <NativeBrowserSettings /> : <PersonalAccessTokensPanel />}
 					</SettingsSection>
 
+					<SettingsSection
+						id="calendar-feeds"
+						title={m.calendar_feed_heading()}
+					>
+						{native ? <NativeBrowserSettings /> : <CalendarFeedsPanel />}
+					</SettingsSection>
 					{activeId && (
 						<SettingsSection id="lists" title={m.settings_section_lists()}>
 							<LabelManager workspaceId={activeId} role={activeRole} />
