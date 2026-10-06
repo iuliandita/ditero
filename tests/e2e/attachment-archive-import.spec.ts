@@ -342,7 +342,7 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	if ("error" in browserResult) throw browserResult.error;
 	expect(browserResult.actual.ok()).toBe(true);
 	const reservation = captureResult.body;
-	expect(reservation).toBeTypeOf("object");
+	expect(typeof reservation).toBe("object");
 	if (
 		!reservation ||
 		typeof reservation !== "object" ||
