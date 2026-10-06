@@ -364,8 +364,16 @@ test("the import file picker is on-system and keyboard reachable", async ({
 	// The native control is visually hidden, not removed.
 	await expect(input).toHaveClass(/sr-only/);
 
-	// Keyboard reaches the format selector before the native file control.
+	// A fresh account has no completed plan, so its import archive action is absent.
+	await expect(
+		page.getByRole("button", { name: "Import selected files", exact: true }),
+	).toHaveCount(0);
+	// Keyboard reaches export, format, and the native file control in order.
 	await page.getByRole("button", { name: "Download JSON" }).focus();
+	await page.keyboard.press("Tab");
+	await expect(
+		page.getByRole("button", { name: "Export selected files", exact: true }),
+	).toBeFocused();
 	await page.keyboard.press("Tab");
 	await expect(panel.getByTestId("import-format")).toBeFocused();
 	await page.keyboard.press("Tab");

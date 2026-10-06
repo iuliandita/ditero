@@ -290,13 +290,45 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 		},
 		{ times: 1 },
 	);
-	const reserved = page.waitForResponse(
-		(response) =>
-			response.request().method() === "POST" &&
-			new URL(response.url()).pathname ===
-				`/api/portability/import/plans/${job.id}/attachment-reservations` &&
-			response.ok(),
+	const reservationURL = new URL(
+		`/api/portability/import/plans/${job.id}/attachment-reservations`,
+		page.url(),
+	).href;
+	let finishReservation!: (
+		result: { body: unknown } | { error: unknown },
+	) => void;
+	const capturedReservation = new Promise<
+		{ body: unknown } | { error: unknown }
+	>((resolve) => {
+		finishReservation = resolve;
+	});
+	await page.route(
+		reservationURL,
+		async (route: Route) => {
+			try {
+				expect(route.request().method()).toBe("POST");
+				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				expect(actual.status()).toBe(200);
+				const body: unknown = await actual.json();
+				await route.fulfill({ response: actual });
+				finishReservation({ body });
+			} catch (error) {
+				await route.abort().catch(() => {});
+				finishReservation({ error });
+			}
+		},
+		{ times: 1 },
 	);
+	const reserved = page
+		.waitForResponse(
+			(response) =>
+				response.request().method() === "POST" &&
+				response.url() === reservationURL,
+		)
+		.then(
+			(actual) => ({ actual }),
+			(error: unknown) => ({ error }),
+		);
 	const transferred = page.waitForResponse(
 		(response) =>
 			/\/api\/attachments\/migration_[^/]+\/upload$/.test(
@@ -304,7 +336,20 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 			) && response.ok(),
 	);
 	await transfer.click();
-	const reservation = await (await reserved).json();
+	const captureResult = await capturedReservation;
+	if ("error" in captureResult) throw captureResult.error;
+	const browserResult = await reserved;
+	if ("error" in browserResult) throw browserResult.error;
+	expect(browserResult.actual.ok()).toBe(true);
+	const reservation = captureResult.body;
+	expect(reservation).toBeTypeOf("object");
+	if (
+		!reservation ||
+		typeof reservation !== "object" ||
+		!("targetAttachmentId" in reservation)
+	) {
+		throw new Error("Missing actual reservation attachment identity");
+	}
 	expect(reservation).toMatchObject({ revision: 1, committed: false });
 	expect(reservation.targetAttachmentId).toMatch(/^migration_/);
 	expect((await transferred).ok()).toBe(true);

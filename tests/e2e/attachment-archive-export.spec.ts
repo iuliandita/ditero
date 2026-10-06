@@ -5,6 +5,7 @@ import {
 	expect,
 	type Locator,
 	type Page,
+	type Route,
 	test,
 	type WebSocketRoute,
 } from "@playwright/test";
@@ -462,7 +463,35 @@ test("archive export: locked desktop keys and two authenticated explicit downloa
 	expect(downloads).toBe(0);
 	await a11y(page);
 	await capture(page, "archive-locked-desktop-light");
-	const response = page.waitForResponse("**/api/portability/export?version=2");
+	const exportURL = new URL("/api/portability/export?version=2", page.url())
+		.href;
+	let finishCapture!: (result: { body: string } | { error: unknown }) => void;
+	const captured = new Promise<{ body: string } | { error: unknown }>(
+		(resolve) => {
+			finishCapture = resolve;
+		},
+	);
+	await page.route(
+		exportURL,
+		async (route: Route) => {
+			try {
+				expect(route.request().method()).toBe("GET");
+				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				expect(actual.status()).toBe(200);
+				const body = await actual.text();
+				await route.fulfill({ response: actual });
+				finishCapture({ body });
+			} catch (error) {
+				await route.abort().catch(() => {});
+				finishCapture({ error });
+			}
+		},
+		{ times: 1 },
+	);
+	const response = page.waitForResponse(exportURL).then(
+		(actual) => ({ actual }),
+		(error: unknown) => ({ error }),
+	);
 	await dialog(page)
 		.getByRole("button", { name: m.e2e_unlock_submit(), exact: true })
 		.click();
@@ -471,9 +500,12 @@ test("archive export: locked desktop keys and two authenticated explicit downloa
 	await expect(page.getByTestId("e2e-unlock-dialog")).toHaveCount(0, {
 		timeout: deriveTimeout,
 	});
-	const actual = await response;
-	expect(actual.ok()).toBe(true);
-	const exact = await actual.text();
+	const captureResult = await captured;
+	if ("error" in captureResult) throw captureResult.error;
+	const browserResult = await response;
+	if ("error" in browserResult) throw browserResult.error;
+	expect(browserResult.actual.ok()).toBe(true);
+	const exact = captureResult.body;
 	await expect(
 		dialog(page).getByText("list-image.png", { exact: true }),
 	).toBeVisible({ timeout: deriveTimeout });
