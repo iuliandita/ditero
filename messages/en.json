@@ -1992,6 +1992,8 @@
 	"import_plan_report_help": "Blocked entries cannot be applied. Ignored entries are outside this plan. Review details before changing mappings; no data has been imported.",
 	"import_plan_details": "Technical details",
 	"import_plan_saved": "Saved sources and dry runs",
+	"import_plan_sources_failed": "Saved sources and dry runs could not be refreshed. Confirmed changes remain saved.",
+	"import_plan_sources_retry": "Retry loading saved sources",
 	"import_plan_discard": "Discard dry run",
 	"import_plan_discard_source": "Discard source",
 	"import_plan_discard_body": "Discard the saved plan, or this source and all its saved plans? Existing application data is unaffected.",

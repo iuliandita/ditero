@@ -2038,6 +2038,8 @@
 	"import_plan_report_help": "Intrările blocate nu pot fi aplicate. Cele ignorate nu fac parte din plan. Verifică detaliile înainte de a modifica asocierile; nu s-au importat date.",
 	"import_plan_details": "Detalii tehnice",
 	"import_plan_saved": "Surse și simulări salvate",
+	"import_plan_sources_failed": "Sursele și simulările salvate nu au putut fi reîncărcate. Modificările confirmate rămân salvate.",
+	"import_plan_sources_retry": "Reîncarcă sursele salvate",
 	"import_plan_discard": "Elimină simularea",
 	"import_plan_discard_source": "Elimină sursa",
 	"import_plan_discard_body": "Elimini planul salvat sau această sursă și toate planurile sale? Datele existente nu sunt afectate.",
