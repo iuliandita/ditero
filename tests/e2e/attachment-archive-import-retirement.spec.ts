@@ -85,6 +85,30 @@ async function capture(page: Page, name: string) {
 	await test.info().attach(name, { path, contentType: "image/png" });
 }
 
+async function captureRecoveryVariants(page: Page, name: string) {
+	await page.mouse.move(8, 8);
+	await capture(page, name);
+	await page.emulateMedia({ colorScheme: "dark" });
+	await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+	await capture(page, `${name}-desktop-dark`);
+	await page.setViewportSize({ width: 390, height: 844 });
+	const dialog = page.getByTestId("attachment-archive-import-dialog");
+	const bounds = await dialog.boundingBox();
+	expect(bounds).not.toBeNull();
+	if (!bounds) throw new Error("Recovery dialog has no measured bounds");
+	expect(bounds.x).toBeGreaterThanOrEqual(8);
+	expect(bounds.width).toBeLessThanOrEqual(374);
+	expect(bounds.height).toBeLessThanOrEqual(812);
+	expect(
+		await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth),
+	).toBe(true);
+	await capture(page, `${name}-phone-dark`);
+	await page.emulateMedia({ colorScheme: "light" });
+	await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+	await capture(page, `${name}-phone-light`);
+	await page.setViewportSize({ width: 1440, height: 1000 });
+}
+
 test("archive import retires prepared file metadata after real keyring expiry", async ({
 	page,
 }) => {
@@ -129,8 +153,10 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	await detail.getByRole("button", { name: m.modal_close_label() }).click();
 	await expect(detail).toHaveCount(0);
 	await goToSettings(page);
+	await page.emulateMedia({ colorScheme: "light" });
 	await page.getByTestId("theme-switcher").click();
-	await page.getByRole("option", { name: "Light", exact: true }).click();
+	await page.getByRole("option", { name: "Match system", exact: true }).click();
+	await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
 	const contentResponse = await captureResponseBody(
 		page,
 		"/api/portability/export?version=2",
@@ -524,8 +550,14 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 		})
 		.check({ timeout: DERIVE_TIMEOUT });
 	await expect(recovered.getByRole("status")).toHaveText(
-		m.archive_import_recovery(),
+		"Status checked: the previous transfer is unfinished.",
 	);
+	await expect(
+		recovered.getByRole("group", {
+			name: "Choose one file and its applied destination",
+			exact: true,
+		}),
+	).toBeVisible();
 	const recoveryWrites: string[] = [];
 	const repeatedContentApplies: string[] = [];
 	page.on("request", (request) => {
@@ -544,7 +576,27 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 		}),
 	).toBeVisible();
 	expect(recoveryWrites).toEqual([]);
-	await capture(page, "archive-reopened-live-replacement-confirmation");
+	const confirmation = recovered.getByRole("button", {
+		name: "Confirm replacement",
+		exact: true,
+	});
+	await expect(confirmation).toBeFocused();
+	await expect(confirmation).toHaveAccessibleDescription(
+		"This abandons the current file transfer, including any upload still in progress. A fresh encrypted transfer will use the same applied destination. Continue?",
+	);
+	await expect(
+		recovered.getByRole("button", { name: "Cancel", exact: true }),
+	).toBeEnabled();
+	await expect(
+		recovered.getByText(
+			"This attempt needs explicit recovery. Open the original archive and check its retained transfer before choosing a replacement.",
+			{ exact: true },
+		),
+	).toHaveCount(0);
+	await captureRecoveryVariants(
+		page,
+		"archive-reopened-live-replacement-confirmation",
+	);
 	await recovered
 		.getByRole("button", {
 			name: m.archive_import_replace_confirm(),
@@ -595,7 +647,14 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 			(row) => row.id === parent.destinationParent.id,
 		),
 	).toHaveLength(1);
-	await capture(page, "archive-reopened-replacement-completed");
+	await expect(recovered.getByRole("radio").first()).toBeChecked();
+	await expect(
+		recovered.getByText(
+			"Stopping or closing only cancels local work. A server operation may already have completed. Check its status before retrying; no replacement is created automatically.",
+			{ exact: true },
+		),
+	).toHaveCount(0);
+	await captureRecoveryVariants(page, "archive-reopened-replacement-completed");
 	await recovered
 		.getByRole("button", { name: "Close", exact: true })
 		.and(recovered.locator('[data-slot="button"]'))
