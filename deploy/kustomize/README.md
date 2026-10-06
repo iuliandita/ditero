@@ -67,7 +67,7 @@ namePrefix: home-
 images:
 - name: ghcr.io/iuliandita/ditero
   newName: docker.io/iuliandita/ditero
-  newTag: 0.0.1-alpha.3
+  newTag: 0.0.1-alpha.4
 configMapGenerator:
 - name: ditero-app-config
   behavior: merge
@@ -82,7 +82,7 @@ patches:
   patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/image
-      value: docker.io/iuliandita/ditero:0.0.1-alpha.3-zero
+      value: docker.io/iuliandita/ditero:0.0.1-alpha.4-zero
 ```
 
 Always upgrade the app/Zero image pair together. Pin both images to verified

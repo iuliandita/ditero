@@ -140,7 +140,7 @@ for (const component of ["app", "zero"]) {
 	const suffix = component === "zero" ? "-zero" : "";
 	assert.equal(
 		container.image,
-		`ghcr.io/iuliandita/ditero:0.0.1-alpha.3${suffix}`,
+		`ghcr.io/iuliandita/ditero:0.0.1-alpha.4${suffix}`,
 	);
 	const endpoint = component === "app" ? "/health" : "/keepalive";
 	for (const probe of [
