@@ -36,6 +36,7 @@ All notable changes to this project are documented here. The format is based on
 ### Fixed
 
 - Existing encrypted attachments remain downloadable while workspace key rotation is required.
+- Saved import plans remain actionable when the saved-source listing is slow or unavailable.
 
 ## [0.0.1-alpha.4] - 2026-10-06
 

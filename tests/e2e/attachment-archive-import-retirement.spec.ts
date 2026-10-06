@@ -206,6 +206,42 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	);
 	for (const trigger of await panel.getByTestId("import-workspace").all())
 		await chooseOption(page, trigger, workspace.name);
+	const sourcesURL = new URL("/api/portability/import/sources", page.url())
+		.href;
+	let releaseSources!: () => void;
+	const heldSources = new Promise<void>((resolve) => {
+		releaseSources = resolve;
+	});
+	let observeSources!: () => void;
+	const sourcesReached = new Promise<void>((resolve) => {
+		observeSources = resolve;
+	});
+	let finishSources!: (result: { ok: true } | { error: unknown }) => void;
+	const sourcesDelivered = new Promise<{ ok: true } | { error: unknown }>(
+		(resolve) => {
+			finishSources = resolve;
+		},
+	);
+	let sourcesFulfilled = false;
+	await page.route(
+		sourcesURL,
+		async (route) => {
+			try {
+				expect(route.request().method()).toBe("GET");
+				observeSources();
+				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				expect(actual.status()).toBe(200);
+				await heldSources;
+				await route.fulfill({ response: actual });
+				sourcesFulfilled = true;
+				finishSources({ ok: true });
+			} catch (error) {
+				await route.abort().catch(() => {});
+				finishSources({ error });
+			}
+		},
+		{ times: 1 },
+	);
 	const saved = await captureResponseBody(
 		page,
 		"/api/portability/import/plans",
@@ -218,6 +254,24 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	expect(job.report).toMatchObject({ plannerVersion: 5, applySupported: true });
 	expect(job.documentDigest).toMatch(/^[0-9a-f]{64}$/);
 	expect(job.mappingDigest).toMatch(/^[0-9a-f]{64}$/);
+	try {
+		await sourcesReached;
+		await expect(
+			panel.getByRole("heading", { name: "Saved import plan", exact: true }),
+		).toBeVisible();
+		await expect(
+			panel.getByRole("button", { name: "Apply import", exact: true }),
+		).toBeEnabled();
+		await expect(
+			panel.getByRole("button", { name: "Save dry run", exact: true }),
+		).toBeEnabled();
+		expect(sourcesFulfilled).toBe(false);
+		await capture(page, "import-plan-ready-with-stalled-sources");
+	} finally {
+		releaseSources();
+	}
+	const deliveredSources = await sourcesDelivered;
+	if ("error" in deliveredSources) throw deliveredSources.error;
 	await panel
 		.getByRole("button", { name: "Apply import", exact: true })
 		.click();

@@ -1992,6 +1992,8 @@
 	"import_plan_report_help": "Blockierte Einträge können nicht angewendet werden. Ignorierte Einträge liegen außerhalb dieses Plans. Prüfe die Details vor Änderungen; es wurden keine Daten importiert.",
 	"import_plan_details": "Technische Details",
 	"import_plan_saved": "Gespeicherte Quellen und Probeläufe",
+	"import_plan_sources_failed": "Gespeicherte Quellen und Probeläufe konnten nicht aktualisiert werden. Bestätigte Änderungen bleiben gespeichert.",
+	"import_plan_sources_retry": "Gespeicherte Quellen erneut laden",
 	"import_plan_discard": "Probelauf verwerfen",
 	"import_plan_discard_source": "Quelle verwerfen",
 	"import_plan_discard_body": "Den gespeicherten Plan oder diese Quelle mit allen ihren Plänen verwerfen? Bestehende Anwendungsdaten bleiben erhalten.",

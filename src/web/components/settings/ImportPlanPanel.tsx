@@ -19,6 +19,7 @@ import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
+import { isZeroClientOwnerActive } from "../../lib/zero-lifecycle.ts";
 import { Button } from "../ui/button.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
 import { FilePicker } from "../ui/file-picker.tsx";
@@ -82,9 +83,14 @@ export function ImportPlanPanel() {
 	const [memberships] = useQuery(queries.memberships.mine());
 	const confirm = useConfirm();
 	const active = useRef<AbortController | null>(null);
+	const listing = useRef<AbortController | null>(null);
+	const currentZero = useRef(zero);
+	currentZero.current = zero;
 	const worker = useRef<Worker | null>(null);
 	const mounted = useRef(true);
 	const [sources, setSources] = useState<Source[]>([]);
+	const [sourcesError, setSourcesError] = useState(false);
+	const [refreshing, setRefreshing] = useState(false);
 	const [source, setSource] = useState("");
 	const [newId, setNewId] = useState(() => randomId());
 	const [label, setLabel] = useState("");
@@ -140,25 +146,53 @@ export function ImportPlanPanel() {
 		).values(),
 	];
 
-	const refresh = useCallback(async (signal: AbortSignal) => {
-		const response = await fetch("/api/portability/import/sources", {
-			signal,
-			credentials: "same-origin",
-			cache: "no-store",
-		});
-		if (!response.ok) throw new Error("Sources unavailable");
-		const body = (await response.json()) as { sources: Source[] };
-		if (!signal.aborted) setSources(body.sources);
-	}, []);
+	const refresh = useCallback(async () => {
+		listing.current?.abort();
+		const controller = new AbortController();
+		listing.current = controller;
+		const owns = () =>
+			mounted.current &&
+			listing.current === controller &&
+			currentZero.current === zero &&
+			isZeroClientOwnerActive(zero);
+		if (!owns()) {
+			listing.current = null;
+			return;
+		}
+		setRefreshing(true);
+		setSourcesError(false);
+		let timedOut = false;
+		const timer = setTimeout(() => {
+			timedOut = true;
+			controller.abort();
+		}, 15_000);
+		try {
+			const response = await fetch("/api/portability/import/sources", {
+				signal: controller.signal,
+				credentials: "same-origin",
+				cache: "no-store",
+			});
+			if (!response.ok) throw new Error("Sources unavailable");
+			const body = (await response.json()) as { sources: Source[] };
+			if (owns() && !controller.signal.aborted) setSources(body.sources);
+		} catch {
+			if (owns() && (timedOut || !controller.signal.aborted))
+				setSourcesError(true);
+		} finally {
+			clearTimeout(timer);
+			if (owns()) {
+				listing.current = null;
+				setRefreshing(false);
+			}
+		}
+	}, [zero]);
 	useEffect(() => {
 		mounted.current = true;
-		const controller = new AbortController();
-		void refresh(controller.signal).catch(() => {
-			if (!controller.signal.aborted) setError("failed");
-		});
+		void refresh();
 		return () => {
 			mounted.current = false;
-			controller.abort();
+			listing.current?.abort();
+			listing.current = null;
 			active.current?.abort();
 			worker.current?.terminate();
 		};
@@ -234,9 +268,18 @@ export function ImportPlanPanel() {
 		};
 		parser.postMessage({ file, format, ...names });
 	}
-	async function request(path: string, body?: unknown) {
+	async function request(
+		path: string,
+		body?: unknown,
+		discarded?: { kind: "sources" | "plans"; id: string },
+	) {
 		if (active.current || applying) return;
 		const requestInput = loaded?.input;
+		const owns = () =>
+			mounted.current &&
+			currentZero.current === zero &&
+			isZeroClientOwnerActive(zero);
+		if (!owns()) return;
 		const controller = new AbortController();
 		active.current = controller;
 		setBusy(true);
@@ -255,7 +298,7 @@ export function ImportPlanPanel() {
 					failure && typeof failure === "object" && "code" in failure
 						? failure.code
 						: null;
-				if (!controller.signal.aborted)
+				if (owns() && !controller.signal.aborted)
 					setError(
 						code === "source-binding-conflict" &&
 							requestInput?.kind === "provider" &&
@@ -277,22 +320,56 @@ export function ImportPlanPanel() {
 					);
 				return;
 			}
+			if (!owns() || controller.signal.aborted) return;
 			if (path === "plans") {
 				const result = (await response.json()) as Status;
-				if (!controller.signal.aborted) {
-					setReport(result);
-					setSource(result.sourceId);
-					setNewId(randomId());
+				if (!owns() || controller.signal.aborted) return;
+				listing.current?.abort();
+				listing.current = null;
+				setReport(result);
+				setSource(result.sourceId);
+				setNewId(randomId());
+				setSources((current) => {
+					const existing = current.find((item) => item.id === result.sourceId);
+					const updated = {
+						id: result.sourceId,
+						label: result.sourceLabel,
+						jobs: [
+							...(existing?.jobs.filter((job) => job.id !== result.id) ?? []),
+							result,
+						],
+					};
+					return existing
+						? current.map((item) => (item.id === updated.id ? updated : item))
+						: [...current, updated];
+				});
+			} else {
+				listing.current?.abort();
+				listing.current = null;
+				setReport(null);
+				if (discarded) {
+					setSources((current) =>
+						discarded.kind === "sources"
+							? current.filter((item) => item.id !== discarded.id)
+							: current.map((item) => ({
+									...item,
+									jobs: item.jobs.filter((job) => job.id !== discarded.id),
+								})),
+					);
+					if (discarded.kind === "sources" && source === discarded.id) {
+						setSource("");
+						setNewId(randomId());
+					}
 				}
-			} else if (!controller.signal.aborted) setReport(null);
-			await refresh(controller.signal);
+			}
+			void refresh();
 			return true;
 		} catch {
-			if (!controller.signal.aborted) setError("failed");
+			if (owns() && !controller.signal.aborted) setError("failed");
 		} finally {
 			if (active.current === controller) {
 				active.current = null;
-				if (mounted.current) setBusy(false);
+				if (owns()) setBusy(false);
 			}
 		}
 	}
@@ -304,13 +381,10 @@ export function ImportPlanPanel() {
 			destructive: true,
 		});
 		if (!ok || !mounted.current) return;
-		const discarded = await request(
-			`${kind}/${encodeURIComponent(id)}/discard`,
-		);
-		if (discarded && kind === "sources" && source === id) {
-			setSource("");
-			setNewId(randomId());
-		}
+		await request(`${kind}/${encodeURIComponent(id)}/discard`, undefined, {
+			kind,
+			id,
+		});
 	}
 	const displayedBinding = report?.inputBinding ?? loaded?.input;
 	const todoistBinding =
@@ -774,6 +848,21 @@ export function ImportPlanPanel() {
 				/>
 			)}
 			<h4 className="mt-5 text-sm font-medium">{m.import_plan_saved()}</h4>
+			{sourcesError && (
+				<div className="mt-2 space-y-2">
+					<p role="status" className="text-sm text-muted-foreground">
+						{m.import_plan_sources_failed()}
+					</p>
+					<Button
+						variant="outline"
+						className="h-auto min-h-8 max-w-full whitespace-normal py-1.5 pointer-coarse:min-h-11"
+						disabled={locked || refreshing}
+						onClick={() => void refresh()}
+					>
+						{m.import_plan_sources_retry()}
+					</Button>
+				</div>
+			)}
 			{sources.map((s) => (
 				<div key={s.id} className="mt-2 rounded-md border p-3">
 					<div className="flex flex-wrap items-center justify-between gap-2">

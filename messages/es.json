@@ -2038,6 +2038,8 @@
 	"import_plan_report_help": "Las entradas bloqueadas no se pueden aplicar. Las ignoradas quedan fuera del plan. Revisa los detalles antes de cambiar los vínculos; no se ha importado ningún dato.",
 	"import_plan_details": "Detalles técnicos",
 	"import_plan_saved": "Orígenes y simulaciones guardados",
+	"import_plan_sources_failed": "No se han podido actualizar los orígenes y las simulaciones guardados. Los cambios confirmados siguen guardados.",
+	"import_plan_sources_retry": "Volver a cargar los orígenes guardados",
 	"import_plan_discard": "Descartar simulación",
 	"import_plan_discard_source": "Descartar origen",
 	"import_plan_discard_body": "¿Descartar el plan guardado o este origen con todos sus planes? Los datos existentes no cambian.",

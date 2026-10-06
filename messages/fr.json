@@ -2038,6 +2038,8 @@
 	"import_plan_report_help": "Les entrées bloquées ne peuvent pas être appliquées. Les entrées ignorées sont hors du plan. Vérifie les détails avant de modifier les associations ; aucune donnée n’a été importée.",
 	"import_plan_details": "Détails techniques",
 	"import_plan_saved": "Sources et simulations enregistrées",
+	"import_plan_sources_failed": "Les sources et simulations enregistrées n’ont pas pu être actualisées. Les modifications confirmées restent enregistrées.",
+	"import_plan_sources_retry": "Réessayer de charger les sources enregistrées",
 	"import_plan_discard": "Supprimer la simulation",
 	"import_plan_discard_source": "Supprimer la source",
 	"import_plan_discard_body": "Supprimer le plan enregistré ou cette source et tous ses plans ? Les données existantes restent intactes.",

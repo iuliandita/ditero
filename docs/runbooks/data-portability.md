@@ -194,6 +194,63 @@ The archive includes a stable installation namespace retained by database backup
 It identifies the source but does not authenticate its claims or grant destination
 access. See [Native data format](native-format.md) for the version 2 contract.
 
+## Encrypted attachment archives
+
+Use the browser for attachment archive export and import; these operations are
+currently unavailable in the Android and desktop apps. Sign in to the relevant
+server and unlock **Encrypted files** first. Source files need their available
+keys; importing also requires current write permission and an available encryption
+key for the applied destination. Import creates no memberships or permissions.
+
+### Export a matching pair
+
+1. In Settings, select **Export selected files**. Wait for saved changes and
+   available files, then choose the committed list, task or comment attachments
+   to include. Files without an available key or matching saved metadata cannot
+   be selected.
+2. Enter **Archive passphrase** and **Confirm archive passphrase**, using a separate
+   passphrase from your account passphrase. Select **Prepare archive**.
+3. Select both **Download content** and **Download files** and keep those two files
+   together. The content JSON is readable; the files archive is protected by the
+   archive passphrase. Keep that passphrase: it is required to open the archive.
+
+Use the exact content JSON downloaded with that files archive. A separate
+**Download JSON** export, an edited file or a reserialized copy is not a substitute,
+even if its content looks identical. Each JSON file is limited to 32 MiB; the
+archive supports up to 64 files, 16 MiB of encrypted file data and 32 KiB of protected
+metadata. A selection may reach a limit before reaching 64 files.
+
+### Import the files after their content
+
+1. On the destination server, use the paired content JSON as **Native JSON export**
+   under **Plan an import**. Review workspace and people mappings, select
+   **Save dry run**, then review and confirm **Apply import**. If this content was
+   already imported, reopen its existing saved plan instead of creating another
+   source or applying a separate copy just to retry files.
+2. Once that plan is completed, select **Import selected files**. When reopening a
+   saved plan, choose its original **Exact paired content JSON** again; the same
+   document remains available when continuing directly from the loaded import.
+   Choose **Encrypted files archive**, enter its **Archive passphrase**, and select
+   **Open archive**. The destination account may differ from the exporting account.
+3. Choose one file and review its **Applied destination:**. Blocked files show a
+   reason. Select **Prepare file**, then **Transfer prepared file**. Preparation
+   alone does not transfer anything; files are re-encrypted for the destination.
+   **File committed and confirmed by the server.** confirms this file's completion.
+
+### Uncertain outcomes and recovery
+
+If the server outcome is uncertain, keep the dialog open and select **Check server
+status** before deciding whether to use **Retry this attempt**. Retry uses the same
+prepared attempt. Stopping or closing cancels local work and does not confirm a
+server undo; **Cancel server reservation** also requires server confirmation.
+
+Prepared retry data is retained only while this operation remains open. Closing,
+reloading or losing the key session does not guarantee that a transfer can resume.
+If the dialog says **This attempt needs explicit recovery.**, keep the original
+pair and saved plan. Recovery for expired or lost preparation is not available
+through this workflow; closing and preparing again does not replace the retained
+attempt. Do not blindly reapply the content import to work around a file failure.
+
 ## Other export exclusions
 
 Committed attachments appear as references with parent IDs, size and integrity metadata.
