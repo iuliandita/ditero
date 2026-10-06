@@ -2554,6 +2554,7 @@
 	"setup_continue": "Weiter",
 	"setup_back": "Zurück",
 	"setup_apply": "Startinhalte hinzufügen",
+	"setup_start_empty": "Leer starten",
 	"setup_skip": "Vorerst überspringen",
 	"setup_loading": "Deine Einrichtung wird geladen",
 	"setup_applying": "Startinhalte werden hinzugefügt",

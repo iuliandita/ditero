@@ -27,6 +27,8 @@ export type AccountSetupWizardLabels = {
 	continue: string;
 	back: string;
 	apply: string;
+	startEmpty: string;
+	countersHint: string;
 	skip: string;
 	loading: string;
 	applying: string;
@@ -196,7 +198,7 @@ export function AccountSetupWizard({
 									<legend
 										ref={choicesHeading}
 										tabIndex={-1}
-										className="mb-3 font-medium"
+										className="mb-3 scroll-mt-20 font-medium"
 									>
 										{labels.choices}
 									</legend>
@@ -283,7 +285,7 @@ export function AccountSetupWizard({
 									ref={reviewHeading}
 									tabIndex={-1}
 									id={`${id}-preview`}
-									className="font-medium"
+									className="scroll-mt-20 font-medium"
 								>
 									{labels.preview}
 								</h4>
@@ -325,6 +327,9 @@ export function AccountSetupWizard({
 										<p className="text-sm text-muted-foreground">
 											{catalog.dashboard.overdueTitle}
 										</p>
+										<p className="text-sm text-muted-foreground">
+											{labels.countersHint}
+										</p>
 									</div>
 								)}
 							</section>
@@ -349,7 +354,9 @@ export function AccountSetupWizard({
 											disabled={!editable || !valid}
 											onClick={() => submit()}
 										>
-											{labels.apply}
+											{packs.length === 0 && !hasDashboard
+												? labels.startEmpty
+												: labels.apply}
 										</Button>
 									</>
 								) : (

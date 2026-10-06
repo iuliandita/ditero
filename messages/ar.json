@@ -2742,6 +2742,7 @@
 	"setup_continue": "متابعة",
 	"setup_back": "رجوع",
 	"setup_apply": "إضافة محتوى البداية",
+	"setup_start_empty": "ابدأ بدون محتوى",
 	"setup_skip": "تخطي الآن",
 	"setup_loading": "جارٍ تحميل إعدادك",
 	"setup_applying": "جارٍ إضافة محتوى البداية",

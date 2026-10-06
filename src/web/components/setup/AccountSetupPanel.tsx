@@ -50,6 +50,8 @@ export function AccountSetupPanel({
 		continue: m.setup_continue(),
 		back: m.setup_back(),
 		apply: m.setup_apply(),
+		startEmpty: m.setup_start_empty(),
+		countersHint: m.setup_counters_hint(),
 		skip: m.setup_skip(),
 		loading: m.setup_loading(),
 		applying: m.setup_applying(),
@@ -78,7 +80,7 @@ export function AccountSetupPanel({
 			ref={container}
 			tabIndex={-1}
 			aria-label={m.setup_title()}
-			className="rounded-lg border"
+			className="scroll-mt-20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
 		>
 			<AccountSetupWizard
 				key={`${setup.requestId}:${setup.locale}`}
@@ -100,7 +102,6 @@ export function AccountSetupPanel({
 			/>
 			<div className="space-y-3 px-4 pb-4 text-sm text-muted-foreground sm:px-6 sm:pb-6">
 				<p>{m.setup_personal_hint()}</p>
-				<p>{m.setup_counters_hint()}</p>
 				{(setup.state === "completed" || setup.state === "conflict") &&
 					(setup.outcome === "custom" || setup.outcome === "skipped") &&
 					(!setup.request ||
@@ -108,6 +109,7 @@ export function AccountSetupPanel({
 						<div className="space-y-2">
 							<Button
 								variant="outline"
+								className="min-h-11"
 								disabled={!setup.authoritative || !setup.online}
 								onClick={() => {
 									container.current?.focus();
@@ -121,7 +123,7 @@ export function AccountSetupPanel({
 						</div>
 					)}
 				{setup.state !== "completed" && (
-					<Button variant="ghost" onClick={onLeave}>
+					<Button variant="ghost" className="min-h-11" onClick={onLeave}>
 						{m.setup_leave()}
 					</Button>
 				)}

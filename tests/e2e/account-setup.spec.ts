@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import type { AccountSetupRequest } from "../../src/domain/account-setup.ts";
 import type * as Probe from "./account-setup-browser.tsx";
@@ -45,18 +45,63 @@ async function openSetup(page: Page) {
 		panel(page).getByRole("button", { name: "Continue", exact: true }),
 	).toBeEnabled();
 }
-async function applyReview(page: Page) {
+async function applyReview(page: Page, applyLabel = "Add starter content") {
 	await panel(page)
 		.getByRole("button", { name: "Continue", exact: true })
 		.click();
 	await panel(page)
-		.getByRole("button", { name: "Add starter content", exact: true })
+		.getByRole("button", { name: applyLabel, exact: true })
 		.click();
 	await expect(
 		panel(page).getByText("Your space is ready", { exact: true }),
 	).toBeVisible();
 }
-async function capture(page: Page, name: string) {
+async function assertFocusVisible(page: Page, target: Locator) {
+	await expect(target).toBeFocused();
+	const box = await target.boundingBox();
+	if (!box) throw new Error("Focused setup heading has no bounds");
+	const viewport = page.viewportSize();
+	if (!viewport) throw new Error("Focus check requires an explicit viewport");
+	expect(box.y).toBeGreaterThanOrEqual(0);
+	expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+	const nav = (await page.getByTestId("settings-nav").count())
+		? await page.getByTestId("settings-nav").boundingBox()
+		: null;
+	if (nav && box.x < nav.x + nav.width && box.x + box.width > nav.x)
+		expect(box.y).toBeGreaterThanOrEqual(nav.y + nav.height);
+}
+async function capture(
+	page: Page,
+	name: string,
+	target = panel(page).getByRole("heading", {
+		name: "Set up your space",
+		exact: true,
+	}),
+) {
+	await expect(target).toBeVisible();
+	await target.evaluate((element) => {
+		const box = element.getBoundingClientRect();
+		const nav = document
+			.querySelector('[data-testid="settings-nav"]')
+			?.getBoundingClientRect();
+		const overlaps = nav && box.x < nav.right && box.right > nav.x;
+		window.scrollTo({
+			top: window.scrollY + box.top - (overlaps ? nav.height + 16 : 16),
+			behavior: "instant",
+		});
+	});
+	const targetBox = await target.boundingBox();
+	if (!targetBox) throw new Error("Capture target has no bounds");
+	expect(targetBox.y).toBeGreaterThanOrEqual(0);
+	const navBox = (await page.getByTestId("settings-nav").count())
+		? await page.getByTestId("settings-nav").boundingBox()
+		: null;
+	if (
+		navBox &&
+		targetBox.x < navBox.x + navBox.width &&
+		targetBox.x + targetBox.width > navBox.x
+	)
+		expect(targetBox.y).toBeGreaterThanOrEqual(navBox.y + navBox.height);
 	await page.evaluate(() => document.fonts.ready);
 	const violations = (
 		await new AxeBuilder({ page })
@@ -68,7 +113,10 @@ async function capture(page: Page, name: string) {
 			(item) => item.impact === "serious" || item.impact === "critical",
 		),
 	).toEqual([]);
-	const bounds = await panel(page).boundingBox();
+	const bounds = await ((await panel(page).count())
+		? panel(page)
+		: target
+	).boundingBox();
 	if (!bounds) throw new Error("Setup panel has no bounds");
 	const width = page.viewportSize()?.width;
 	if (!width) throw new Error("Screenshot requires an explicit viewport");
@@ -78,14 +126,22 @@ async function capture(page: Page, name: string) {
 		await page.evaluate(() => document.documentElement.scrollWidth),
 	).toBeLessThanOrEqual(width + 1);
 	const path = test.info().outputPath(`${name}.png`);
-	await page.screenshot({ path, fullPage: true });
+	for (const button of await panel(page).getByRole("button").all()) {
+		const box = await button.boundingBox();
+		if (box) expect(box.height).toBeGreaterThanOrEqual(44);
+	}
+	await page.screenshot({ path, fullPage: false });
 	await test.info().attach(name, { path, contentType: "image/png" });
 }
 async function mountProbe(page: Page, userID: string, email: string) {
+	// Preserve the real app's loaded styles in this test-only component fixture.
+	const styles = await page
+		.locator('style, link[rel="stylesheet"]')
+		.evaluateAll((nodes) => nodes.map((node) => node.outerHTML).join(""));
 	await page.route("**/__account-setup-probe", (route) =>
 		route.fulfill({
 			contentType: "text/html",
-			body: '<!doctype html><html lang="en"><head><title>Setup probe</title></head><body></body></html>',
+			body: `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Setup probe</title>${styles}</head><body></body></html>`,
 		}),
 	);
 	await page.goto(`${webOrigin()}/__account-setup-probe`);
@@ -170,7 +226,19 @@ test("desktop Basic previews, commits once, and reopens read-only", async ({
 	await panel(page)
 		.getByRole("button", { name: "Continue", exact: true })
 		.click();
+	await assertFocusVisible(
+		page,
+		panel(page).getByRole("heading", {
+			name: "Review your starting content",
+			exact: true,
+		}),
+	);
 	await capture(page, "setup-desktop-review");
+	await capture(
+		page,
+		"setup-desktop-review-footer",
+		panel(page).locator("footer"),
+	);
 	await panel(page)
 		.getByRole("button", { name: "Add starter content", exact: true })
 		.click();
@@ -202,6 +270,10 @@ test("mobile Guided rejects an empty selection and adds only Packing", async ({
 	await page.setViewportSize({ width: 390, height: 844 });
 	const userID = await signUp(page, uniqueEmail("setup-guided"));
 	await openSetup(page);
+	await expect(
+		panel(page).getByRole("radio", { name: /^Basic/ }),
+	).toBeChecked();
+	await capture(page, "setup-mobile-basic-choices");
 	await panel(page)
 		.getByRole("radio", { name: /^Guided/ })
 		.check();
@@ -220,11 +292,44 @@ test("mobile Guided rejects an empty selection and adds only Packing", async ({
 	await panel(page)
 		.getByRole("checkbox", { name: /^Packing/ })
 		.check();
+	await expect(
+		panel(page).getByText(
+			"Dashboard counters start at zero. They only show tasks you can access.",
+			{ exact: true },
+		),
+	).toHaveCount(0);
 	await capture(page, "setup-mobile-choices");
+	await page.setViewportSize({ width: 1280, height: 1000 });
+	await expect(
+		panel(page).getByRole("checkbox", { name: /^Packing/ }),
+	).toBeChecked();
+	await capture(page, "setup-guided-desktop-choices");
+	await page.setViewportSize({ width: 390, height: 844 });
 	await panel(page)
 		.getByRole("button", { name: "Continue", exact: true })
 		.click();
-	await capture(page, "setup-mobile-review");
+	const reviewHeading = panel(page).getByRole("heading", {
+		name: "Review your starting content",
+		exact: true,
+	});
+	await assertFocusVisible(page, reviewHeading);
+	await capture(page, "setup-mobile-review", reviewHeading);
+	await capture(
+		page,
+		"setup-mobile-review-footer",
+		panel(page).locator("footer"),
+	);
+	await panel(page).getByRole("button", { name: "Back", exact: true }).click();
+	await assertFocusVisible(
+		page,
+		panel(page)
+			.locator("legend")
+			.filter({ hasText: "Choose a starting point" }),
+	);
+	await panel(page)
+		.getByRole("button", { name: "Continue", exact: true })
+		.click();
+	await assertFocusVisible(page, reviewHeading);
 	await panel(page)
 		.getByRole("button", { name: "Add starter content", exact: true })
 		.click();
@@ -241,6 +346,12 @@ test("mobile Guided rejects an empty selection and adds only Packing", async ({
 		starterKeys: ["packing"],
 		dashboard: false,
 	});
+	await expect(
+		panel(page).getByText(
+			"Dashboard counters start at zero. They only show tasks you can access.",
+			{ exact: true },
+		),
+	).toHaveCount(0);
 	await capture(page, "setup-mobile-completed");
 });
 for (const mode of ["custom", "skip"] as const)
@@ -253,7 +364,30 @@ for (const mode of ["custom", "skip"] as const)
 			await panel(page)
 				.getByRole("radio", { name: /^Custom/ })
 				.check();
-			await applyReview(page);
+			await panel(page)
+				.getByRole("button", { name: "Continue", exact: true })
+				.click();
+			await expect(
+				panel(page).getByText("No lists or tasks will be added.", {
+					exact: true,
+				}),
+			).toBeVisible();
+			await expect(
+				panel(page).getByRole("button", { name: "Start empty", exact: true }),
+			).toBeEnabled();
+			await expect(
+				panel(page).getByRole("button", {
+					name: "Add starter content",
+					exact: true,
+				}),
+			).toHaveCount(0);
+			await capture(page, "setup-custom-empty-review");
+			await panel(page)
+				.getByRole("button", { name: "Start empty", exact: true })
+				.click();
+			await expect(
+				panel(page).getByText("Your space is ready", { exact: true }),
+			).toBeVisible();
 		} else {
 			await panel(page)
 				.getByRole("button", { name: "Skip for now", exact: true })
@@ -267,6 +401,13 @@ for (const mode of ["custom", "skip"] as const)
 			tasks: 0,
 			dashboards: 0,
 		});
+		await expect(
+			panel(page).getByText(
+				"Dashboard counters start at zero. They only show tasks you can access.",
+				{ exact: true },
+			),
+		).toHaveCount(0);
+		await capture(page, `setup-${mode}-completed`);
 		await panel(page)
 			.getByRole("button", { name: "Open Ditero", exact: true })
 			.click();
@@ -292,6 +433,7 @@ for (const mode of ["custom", "skip"] as const)
 				{ exact: true },
 			),
 		).toBeVisible();
+		await capture(page, `setup-${mode}-disabled-reopen`);
 		await applyReview(page);
 		expect(Number((await serverState(userID)).row.revision)).toBe(2);
 	});
@@ -314,6 +456,10 @@ test("offline controls never dispatch or enqueue a setup request", async ({
 		expect((await readProbe(page)).requestId).toBe(requestId);
 		expect((await readProbe(page)).request).toBeNull();
 		expect(await serverState(userID)).toEqual(before);
+		await expect(panel(page).getByRole("alert")).toHaveText(
+			"Starter setup needs a connection. Reconnect before adding content.",
+		);
+		await capture(page, "setup-fixture-real-offline-error");
 	} finally {
 		await context.setOffline(false);
 	}
@@ -336,6 +482,22 @@ for (const recovery of ["resume", "retry"] as const)
 		await expect
 			.poll(async () => (await readProbe(page)).state)
 			.toBe("uncertain");
+		await expect(
+			panel(page).getByRole("button", {
+				name: "Check server status",
+				exact: true,
+			}),
+		).toBeEnabled();
+		await expect(
+			panel(page).getByRole("button", {
+				name: "Retry this attempt",
+				exact: true,
+			}),
+		).toBeEnabled();
+		await expect(panel(page).getByRole("alert")).toHaveText(
+			"Setup could not be confirmed. Check the status before trying again.",
+		);
+		await capture(page, `setup-fixture-injected-ack-${recovery}-uncertain`);
 		const uncertain = await readProbe(page);
 		expect(uncertain.acknowledgements).toEqual([
 			{ requestId: uncertain.requestId, committed: true, injected: true },
@@ -349,6 +511,7 @@ for (const recovery of ["resume", "retry"] as const)
 		await expect
 			.poll(async () => (await readProbe(page)).state)
 			.toBe("completed");
+		await capture(page, `setup-fixture-injected-ack-${recovery}-completed`);
 		const recovered = await readProbe(page);
 		expect(recovered.writes).toHaveLength(recovery === "resume" ? 1 : 2);
 		expect(
@@ -384,6 +547,12 @@ test("competing Basic and Custom attempts never merge choices or silently regene
 				[(await readProbe(page)).state, (await readProbe(other)).state].sort(),
 			)
 			.toEqual(["completed", "conflict"]);
+		const conflicted =
+			(await readProbe(page)).state === "conflict" ? page : other;
+		await expect(panel(conflicted).getByRole("alert")).toHaveText(
+			"Your setup changed in another session. Check its current status before continuing.",
+		);
+		await capture(conflicted, "setup-fixture-real-competing-conflict");
 		const committed = await serverState(userID);
 		expect([firstId, secondId]).toContain(
 			committed.row.receipt.request.requestId,
@@ -428,6 +597,16 @@ test("legacy remains eligible while any own managed marker denies and guardian r
 		await expect
 			.poll(async () => (await readProbe(alicePage)).managed)
 			.toBe(true);
+		const managedMessage = alicePage.getByText(
+			"A managed account cannot add starter content. Ask your guardian to organize your shared lists.",
+			{ exact: true },
+		);
+		await expect(managedMessage).toBeVisible();
+		await capture(
+			alicePage,
+			"setup-fixture-own-managed-marker",
+			managedMessage,
+		);
 		await chooseProbe(alicePage, "basic");
 		expect((await readProbe(alicePage)).writes).toEqual([]);
 		await expect
@@ -461,6 +640,14 @@ test("reserved managed email denies setup before a managed marker exists", async
 			{ exact: true },
 		),
 	).toBeVisible();
+	await capture(
+		page,
+		"setup-reserved-managed-email",
+		page.getByText(
+			"A managed account cannot add starter content. Ask your guardian to organize your shared lists.",
+			{ exact: true },
+		),
+	);
 	await expect(
 		page.getByRole("button", { name: "Add starter content", exact: true }),
 	).toHaveCount(0);

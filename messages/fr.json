@@ -2601,6 +2601,7 @@
 	"setup_continue": "Continuer",
 	"setup_back": "Retour",
 	"setup_apply": "Ajouter le contenu de départ",
+	"setup_start_empty": "Commencer sans contenu",
 	"setup_skip": "Passer pour l'instant",
 	"setup_loading": "Chargement de ta configuration",
 	"setup_applying": "Ajout du contenu de départ",

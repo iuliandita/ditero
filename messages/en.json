@@ -2554,6 +2554,7 @@
 	"setup_continue": "Continue",
 	"setup_back": "Back",
 	"setup_apply": "Add starter content",
+	"setup_start_empty": "Start empty",
 	"setup_skip": "Skip for now",
 	"setup_loading": "Loading your setup",
 	"setup_applying": "Adding starter content",

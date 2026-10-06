@@ -2601,6 +2601,7 @@
 	"setup_continue": "Continuă",
 	"setup_back": "Înapoi",
 	"setup_apply": "Adaugă conținut de pornire",
+	"setup_start_empty": "Începe fără conținut",
 	"setup_skip": "Sari peste deocamdată",
 	"setup_loading": "Se încarcă configurarea ta",
 	"setup_applying": "Se adaugă conținutul de pornire",
