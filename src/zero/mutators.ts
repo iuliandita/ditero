@@ -16,6 +16,12 @@ import {
 } from "@rocicorp/zero";
 import { z } from "zod";
 import {
+	accountSetupRequestSchema,
+	planAccountSetupTransition,
+} from "../domain/account-setup.ts";
+import { expandAccountSetupContent } from "../domain/account-setup-content.ts";
+import type { AccountSetupGeneratedIds } from "../domain/account-setup-storage.ts";
+import {
 	ACK_TERMINAL_STATUSES,
 	type AckStore,
 	ackedPatch,
@@ -51,6 +57,12 @@ import {
 } from "../domain/template.ts";
 import { filterGroupSchema, viewDisplaySchema } from "../domain/view-filter.ts";
 import { workspaceCreateSchema } from "../domain/workspace-create.ts";
+import {
+	commitAccountSetupState,
+	ensureAccountSetupWorkspace,
+	insertAccountSetupContent,
+	lockAccountSetupState,
+} from "./account-setup-store.ts";
 import { collectEvent } from "./event-sink.ts";
 import {
 	lockMembershipRoleChange,
@@ -662,6 +674,40 @@ const quantityArg = z
 const unitArg = z.string().trim().refine(isValidUnit, "unit is too long");
 
 export const mutators = defineMutators({
+	accountSetup: {
+		apply: defineMutator(
+			accountSetupRequestSchema,
+			async ({ tx, ctx, args }) => {
+				// IDs and the receipt are authoritative; do not invent optimistic content.
+				if (tx.location !== "server") return;
+				const previous = await lockAccountSetupState(tx, ctx.id);
+				const transition = planAccountSetupTransition(previous, args);
+				if (transition.kind === "replay") return;
+				let generated: AccountSetupGeneratedIds | null = null;
+				if (transition.state.outcome === "completed") {
+					const workspaceId = await ensureAccountSetupWorkspace(tx, ctx.id);
+					const content = expandAccountSetupContent(
+						args,
+						workspaceId,
+						randomId,
+					);
+					await insertAccountSetupContent(tx, ctx.id, workspaceId, content);
+					generated = {
+						version: 1 as const,
+						workspaceId,
+						...content.generatedIds,
+					};
+				}
+				await commitAccountSetupState(
+					tx,
+					ctx.id,
+					previous.revision,
+					transition.state,
+					generated,
+				);
+			},
+		),
+	},
 	workspace: {
 		create: defineMutator(workspaceCreateSchema, async ({ tx, ctx, args }) => {
 			await createSharedWorkspace(tx, ctx.id, args);

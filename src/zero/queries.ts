@@ -292,6 +292,9 @@ export const queries = defineQueries({
 			},
 		),
 	},
+	accountSetup: {
+		mine: defineQuery(({ ctx }) => zql.accountSetup.where("id", ctx.id)),
+	},
 	// One pref row per user (id === userId); the caller reads only their own.
 	userPrefs: {
 		mine: defineQuery(({ ctx }) => zql.userPref.where("id", ctx.id)),

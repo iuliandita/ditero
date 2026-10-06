@@ -575,6 +575,20 @@
       "when": 1791235883689,
       "tag": "0081_attachment_migration_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1791261444306,
+      "tag": "0082_account_setup",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1791261464726,
+      "tag": "0083_account_setup_guards",
+      "breakpoints": true
     }
   ]
 }

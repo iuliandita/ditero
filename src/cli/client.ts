@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+	type AccountSetupStatus,
+	accountSetupStatusResponseSchema,
+} from "../domain/account-setup-status.ts";
 import { PUBLIC_API_VERSION } from "../domain/public-api.ts";
 import {
 	publicApiProfileSchema,
@@ -353,6 +357,10 @@ export async function discover(
 	budget: ResponseBudget = { bytes: 0 },
 	callerSignal?: AbortSignal,
 ): Promise<CliResult> {
+	if (options.command === "setup-status") {
+		const status = await readSetupStatus(options, fetcher, callerSignal);
+		return { version: 1, data: status, nextCursor: null };
+	}
 	if (
 		options.command === "list-task-comments" ||
 		options.command === "observe-comment" ||
@@ -445,4 +453,40 @@ export async function discover(
 		"The page limit was reached. Use explicit cursors for larger collections.",
 		8,
 	);
+}
+
+// A missing endpoint is an absent optional capability, not pending setup.
+export async function readSetupStatus(
+	options: CliOptions,
+	fetcher: Fetcher = fetch,
+	signal?: AbortSignal,
+): Promise<AccountSetupStatus | null> {
+	const bounded = signal
+		? AbortSignal.any([signal, AbortSignal.timeout(1500)])
+		: AbortSignal.timeout(1500);
+	try {
+		const raw = await requestJson(
+			options,
+			new URL("/api/v1/setup-status", options.server),
+			fetcher,
+			undefined,
+			{ bytes: 0 },
+			bounded,
+			16 * 1024,
+		);
+		const parsed = accountSetupStatusResponseSchema.safeParse(raw);
+		if (!parsed.success) return invalidResponse();
+		return parsed.data.data;
+	} catch (error) {
+		if (error instanceof CliError && error.status === 404) return null;
+		throw error;
+	}
+}
+export function setupNoticeURL(
+	status: AccountSetupStatus | null,
+	server: string,
+): string | null {
+	return status?.outcome === "pending" && status.eligibility === "available"
+		? new URL("/setup", server).href
+		: null;
 }

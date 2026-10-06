@@ -1,6 +1,14 @@
 import { clientVersion } from "../clients/build-info.ts";
+import { isSupportedLocale } from "../domain/locale.ts";
+import { publicApiProfileSchema } from "../domain/public-api-resources.ts";
+import { m } from "../paraglide/messages.js";
 import { CliError, parseArguments } from "./arguments.ts";
-import { discover, type Fetcher } from "./client.ts";
+import {
+	discover,
+	type Fetcher,
+	readSetupStatus,
+	setupNoticeURL,
+} from "./client.ts";
 import { COMMENT_COMMANDS, commentWorkflow } from "./comment-workflow.ts";
 import { FOLDER_COMMANDS, folderWorkflow } from "./folder-workflow.ts";
 import { listWorkflow } from "./list-workflow.ts";
@@ -12,7 +20,7 @@ import { WEBHOOK_COMMANDS, webhookWorkflow } from "./webhook-workflow.ts";
 export const HELP = `Ditero CLI
 
 Usage: ditero <command> [options]
-Commands: profile, workspaces, lists, tasks, people, labels, views, dashboards, folders,
+Commands: setup-status, profile, workspaces, lists, tasks, people, labels, views, dashboards, folders,
           observe-folder (live folder state),
           create-folder, update-folder, delete-folder (4 KiB JSON stdin),
           create-list, update-list, delete-list (list JSON stdin),
@@ -116,6 +124,26 @@ export async function runCli(
 		output.stdout(
 			`${JSON.stringify(result, null, options.json ? undefined : 2)}\n`,
 		);
+		if (options.command === "profile") {
+			// Optional discovery cannot turn a successful profile read into a failure.
+			try {
+				const url = setupNoticeURL(
+					await readSetupStatus(options, fetcher),
+					options.server,
+				);
+				if (url) {
+					const profile = publicApiProfileSchema.parse(
+						(result as { data: unknown }).data,
+					);
+					const locale = isSupportedLocale(profile.locale)
+						? profile.locale
+						: "en";
+					output.stderr(`${m.setup_pending({}, { locale })} ${url}\n`);
+				}
+			} catch {
+				/* The explicit setup-status command reports discovery errors. */
+			}
+		}
 		return 0;
 	} catch (error) {
 		const failure =

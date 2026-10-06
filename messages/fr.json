@@ -2583,5 +2583,53 @@
 	"archive_export_selection_limit": "Les fichiers sélectionnés dépassent les limites de l’archive. Sélectionne moins de fichiers, puis réessaie.",
 	"archive_export_pending": "Certaines modifications sont encore en attente, ont été refusées ou n’ont pas pu être confirmées. Enregistre-les ou résous-les, puis ferme cette boîte de dialogue et rouvre-la.",
 	"comment_attachment_checking": "Vérification des fichiers sélectionnés...",
-	"comment_sending": "Envoi du commentaire..."
+	"comment_sending": "Envoi du commentaire...",
+	"setup_title": "Configure ton espace personnel",
+	"setup_description": "Commence avec quelques listes utiles, choisis les tiennes ou démarre avec un espace vide. Tu peux passer cette étape et utiliser Ditero tout de suite.",
+	"setup_choices": "Choisis un point de départ",
+	"setup_recommended": "Recommandé",
+	"setup_basic": "Basique",
+	"setup_basic_description": "Courses, ménage et un tableau de bord personnel.",
+	"setup_guided": "Guidé",
+	"setup_guided_description": "Choisis les listes de départ et le tableau de bord que tu veux.",
+	"setup_custom": "Personnalisé",
+	"setup_custom_description": "Démarre avec un espace vide.",
+	"setup_preview": "Vérifie ton contenu de départ",
+	"setup_dashboard": "Tableau de bord personnel",
+	"setup_empty_preview": "Aucune liste ni tâche ne sera ajoutée.",
+	"setup_choose_content": "Choisis au moins une liste ou le tableau de bord, ou passe par Personnalisé.",
+	"setup_continue": "Continuer",
+	"setup_back": "Retour",
+	"setup_apply": "Ajouter le contenu de départ",
+	"setup_skip": "Passer pour l'instant",
+	"setup_loading": "Chargement de ta configuration",
+	"setup_applying": "Ajout du contenu de départ",
+	"setup_failed": "La configuration n'a pas pu être confirmée. Vérifie l'état avant de réessayer.",
+	"setup_retry": "Réessayer cette tentative",
+	"setup_resume": "Vérifier l'état du serveur",
+	"setup_completed": "Ton espace est prêt",
+	"setup_leave": "Ouvrir Ditero",
+	"setup_open": "Choisir le contenu de départ",
+	"setup_pending": "Envie d'un point de départ ? Ajoute quelques listes utiles ou garde ton espace tel quel.",
+	"setup_conflict": "Ta configuration a changé dans une autre session. Vérifie son état actuel avant de continuer.",
+	"setup_managed": "Un compte géré ne peut pas ajouter de contenu de départ. Demande à ton tuteur ou ta tutrice d'organiser tes listes partagées.",
+	"setup_task_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tâche",
+				"countPlural=many": "{countNum} de tâches",
+				"countPlural=other": "{countNum} tâches"
+			}
+		}
+	],
+	"setup_offline": "La configuration de départ nécessite une connexion. Reconnecte-toi avant d'ajouter du contenu.",
+	"setup_empty_already": "Tu as déjà choisi de démarrer à vide. Tu peux maintenant ajouter le contenu de départ.",
+	"setup_counters_hint": "Les compteurs du tableau de bord démarrent à zéro. Ils n'affichent que les tâches auxquelles tu as accès.",
+	"setup_personal_hint": "Le contenu de départ est ajouté à ton espace personnel. Cela n'invite personne et ne modifie pas tes listes existantes."
 }

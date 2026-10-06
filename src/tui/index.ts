@@ -1,5 +1,5 @@
 import { CliError, parseArguments } from "../cli/arguments.ts";
-import { discover } from "../cli/client.ts";
+import { discover, readSetupStatus, setupNoticeURL } from "../cli/client.ts";
 import { clientVersion } from "../clients/build-info.ts";
 import { isSupportedLocale, type Locale } from "../domain/locale.ts";
 import {
@@ -373,6 +373,8 @@ export async function runTerminal(
 		const exited = new Promise<number>((resolve) => {
 			finish = resolve;
 		});
+		let setupNotice: string | null = null;
+		let setupNoticeDismissed = false;
 		const paint = () => {
 			if (!session || stopped) return;
 			const options = { locale };
@@ -571,6 +573,27 @@ export async function runTerminal(
 				!state?.help
 			)
 				footer = browseFooter(state, locale);
+			if (
+				setupNotice &&
+				!state?.help &&
+				!state?.review &&
+				!state?.form &&
+				!state?.ordering
+			) {
+				detail = [
+					setupNotice,
+					...(detail ??
+						(state?.location
+							? presented.map((entry) => entry.text)
+							: PUBLIC_API_RESOURCES.map((resource) =>
+									resourceLabel(resource, locale),
+								)
+						).map(
+							(value, index) =>
+								`${index === state?.selected ? ">" : " "} ${value}`,
+						)),
+				];
+			}
 			const localError = orderingErrorDetails(state, locale, columns);
 			if (localError.length && !state?.help) {
 				detail = [
@@ -662,6 +685,8 @@ export async function runTerminal(
 		};
 		session = createTerminalSession({
 			onKey(input) {
+				setupNotice = null;
+				setupNoticeDismissed = true;
 				if (!controller && input.type === "text" && input.text === "q") {
 					session?.close();
 					return;
@@ -715,6 +740,18 @@ export async function runTerminal(
 					() => session?.close(),
 				);
 				paint();
+				void readSetupStatus(parsed.options, fetch, startup.signal)
+					.then((value) => {
+						if (stopped || setupNoticeDismissed) return;
+						const url = setupNoticeURL(value, parsed.options.server);
+						setupNotice = url
+							? `${m.setup_pending({}, { locale })} ${url}`
+							: null;
+						paint();
+					})
+					.catch(() => {
+						/* Optional capability never blocks terminal operations. */
+					});
 			}
 		} catch (error) {
 			if (!stopped) {

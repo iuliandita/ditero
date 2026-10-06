@@ -39,6 +39,7 @@ import {
 	parseApiTaskCreate,
 } from "../../domain/public-api-writes.ts";
 import type { Guards } from "../guards.ts";
+import { readApiAccountSetupStatus } from "./account-setup.ts";
 import { downloadApiCalendar } from "./calendar.ts";
 import {
 	createCalendarFeed,
@@ -1043,6 +1044,24 @@ export function publicApiRoutes(
 					"cache-control": "public, max-age=3600",
 					"x-content-type-options": "nosniff",
 				},
+			}),
+		)
+		.get("/api/v1/setup-status", ({ request, server }) =>
+			apiRequest(async () => {
+				if (!(await rateLimit(request, server?.requestIP(request)?.address)))
+					throw new PublicApiError(429, "rate-limited", "Too many requests");
+				if (new URL(request.url).search)
+					throw new PublicApiError(
+						400,
+						"invalid-query",
+						"This endpoint has no query parameters",
+					);
+				return withPersonalAccessToken(
+					pool,
+					bearerToken(request.headers),
+					"read",
+					readApiAccountSetupStatus,
+				);
 			}),
 		)
 		.get("/api/v1/me", ({ request, server }) =>

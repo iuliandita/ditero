@@ -9,10 +9,29 @@ import { publicApiOpenApi } from "./openapi.ts";
 
 const url = (query = "") => new URL(`http://localhost/api/v1/tasks${query}`);
 
+test("OpenAPI exposes setup status as a bounded read-only capability", () => {
+	const route = publicApiOpenApi().paths["/api/v1/setup-status"] as {
+		get: {
+			operationId: string;
+			security: unknown;
+			responses: Record<string, unknown>;
+		};
+	};
+	expect(Object.keys(route)).toEqual(["get"]);
+	expect(route.get.operationId).toBe("get_setup_status");
+	expect(route.get.security).toEqual([{ personalAccessToken: [] }]);
+	const encoded = JSON.stringify(route.get.responses["200"]);
+	expect(encoded).toContain('"const":"/setup"');
+	expect(encoded).toContain('"additionalProperties":false');
+	expect(encoded).toContain('"nextCursor":{"type":"null"}');
+	for (const privateField of ["latest_receipt", "generated_ids", "requestId"])
+		expect(encoded).not.toContain(privateField);
+});
+
 test("OpenAPI derives all implemented collection DTOs from shared schemas", () => {
 	const document = publicApiOpenApi();
 	expect(document.openapi).toBe("3.1.0");
-	expect(Object.keys(document.paths)).toHaveLength(36);
+	expect(Object.keys(document.paths)).toHaveLength(37);
 	expect(document.paths).toHaveProperty("/api/v1/dashboards/{id}");
 	expect(document.paths).toHaveProperty("/api/v1/tasks");
 	expect(JSON.stringify(document)).not.toContain("token_hash");
@@ -183,7 +202,7 @@ test("OpenAPI distinguishes immutable list creation acknowledgements from curren
 		expect(JSON.stringify(list.post.responses[status])).toContain('"snapshot"');
 	}
 	expect(JSON.stringify(list.get)).not.toContain("list-create-ack");
-	expect(Object.keys(paths)).toHaveLength(36);
+	expect(Object.keys(paths)).toHaveLength(37);
 });
 
 test("OpenAPI exposes observed list metadata updates and immutable acknowledgements", () => {
@@ -269,7 +288,7 @@ test("list update schema describes bounded placement without new routes", () => 
 		"initially missing/foreign targets return 404",
 	])
 		expect(encoded).toContain(field);
-	expect(Object.keys(document.paths)).toHaveLength(36);
+	expect(Object.keys(document.paths)).toHaveLength(37);
 });
 
 test("webhook delivery uses its own bearer scheme and a strict bounded body", () => {

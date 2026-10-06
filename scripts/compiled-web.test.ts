@@ -16,6 +16,7 @@ const root = "/fixture";
 const output = "/tmp/ditero-e2e-web-ABC123";
 const uid = 1000;
 const roots = [
+	"tests/e2e/account-setup-browser.tsx",
 	"src",
 	"messages",
 	"public",
@@ -361,6 +362,7 @@ function actualViteConfig(mode: string) {
 	return exports.default({ mode });
 }
 const expectedRawEntries = [
+	["/tests/e2e/account-setup-browser.tsx", "e2e-account-setup-browser"],
 	["/src/web/lib/e2e/download.ts", "e2e-download"],
 	["/src/web/lib/e2e/ciphertext-staging.ts", "e2e-ciphertext-staging"],
 	["/src/web/lib/zero-lifecycle.ts", "e2e-zero-lifecycle"],

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { accountSetupStatusSchema } from "../../domain/account-setup-status.ts";
 import {
 	calendarFeedCreatedSchema,
 	calendarFeedCreateSchema,
@@ -847,6 +848,18 @@ export function publicApiOpenApi() {
 			responses: { "200": response(z.toJSONSchema(ack)), ...errors },
 		};
 	}
+	paths["/api/v1/setup-status"] = {
+		get: {
+			operationId: "get_setup_status",
+			description:
+				"Read caller setup status. Starter content is optional and configured in the web app.",
+			security: [{ personalAccessToken: [] }],
+			responses: {
+				"200": response(z.toJSONSchema(accountSetupStatusSchema)),
+				...errors,
+			},
+		},
+	};
 	paths["/api/v1/me"] = {
 		get: {
 			operationId: "get_profile",

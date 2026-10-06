@@ -2583,5 +2583,53 @@
 	"archive_export_selection_limit": "Fișierele selectate depășesc limitele arhivei. Selectează mai puține fișiere, apoi încearcă din nou.",
 	"archive_export_pending": "Unele modificări sunt încă în așteptare, au fost refuzate sau nu au putut fi confirmate. Salvează-le sau rezolvă-le, apoi închide și redeschide acest dialog.",
 	"comment_attachment_checking": "Se verifică fișierele selectate...",
-	"comment_sending": "Se trimite comentariul..."
+	"comment_sending": "Se trimite comentariul...",
+	"setup_title": "Configurează-ți spațiul personal",
+	"setup_description": "Începe cu câteva liste utile, alege-le pe ale tale sau pornește cu un spațiu gol. Poți sări peste acest pas și folosi Ditero imediat.",
+	"setup_choices": "Alege un punct de plecare",
+	"setup_recommended": "Recomandat",
+	"setup_basic": "De bază",
+	"setup_basic_description": "Cumpărături, curățenie și un panou personal.",
+	"setup_guided": "Ghidat",
+	"setup_guided_description": "Alege listele de pornire și panoul pe care le vrei.",
+	"setup_custom": "Personalizat",
+	"setup_custom_description": "Începe cu un spațiu gol.",
+	"setup_preview": "Verifică conținutul de pornire",
+	"setup_dashboard": "Panou personal",
+	"setup_empty_preview": "Nu va fi adăugată nicio listă sau sarcină.",
+	"setup_choose_content": "Alege cel puțin o listă sau panoul ori folosește Personalizat.",
+	"setup_continue": "Continuă",
+	"setup_back": "Înapoi",
+	"setup_apply": "Adaugă conținut de pornire",
+	"setup_skip": "Sari peste deocamdată",
+	"setup_loading": "Se încarcă configurarea ta",
+	"setup_applying": "Se adaugă conținutul de pornire",
+	"setup_failed": "Configurarea nu a putut fi confirmată. Verifică starea înainte de a încerca din nou.",
+	"setup_retry": "Reîncearcă această încercare",
+	"setup_resume": "Verifică starea serverului",
+	"setup_completed": "Spațiul tău este gata",
+	"setup_leave": "Deschide Ditero",
+	"setup_open": "Alege conținut de pornire",
+	"setup_pending": "Vrei un punct de plecare? Adaugă câteva liste utile sau lasă-ți spațiul așa cum este.",
+	"setup_conflict": "Configurarea ta s-a schimbat în altă sesiune. Verifică starea curentă înainte de a continua.",
+	"setup_managed": "Un cont gestionat nu poate adăuga conținut de pornire. Cere tutorelui sau tutoarei tale să organizeze listele tale partajate.",
+	"setup_task_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} sarcină",
+				"countPlural=few": "{countNum} sarcini",
+				"countPlural=other": "{countNum} de sarcini"
+			}
+		}
+	],
+	"setup_offline": "Configurarea inițială are nevoie de conexiune. Reconectează-te înainte de a adăuga conținut.",
+	"setup_empty_already": "Ai ales deja un start gol. Acum poți adăuga conținut inițial.",
+	"setup_counters_hint": "Contoarele din panoul de control încep de la zero. Afișează doar sarcinile la care ai acces.",
+	"setup_personal_hint": "Conținutul inițial este adăugat în spațiul tău personal. Asta nu invită pe nimeni și nu modifică listele tale existente."
 }

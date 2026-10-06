@@ -12,6 +12,7 @@ import { apiProxyTarget } from "./scripts/e2e-stack.ts";
 import { vendorLicenses } from "./scripts/vendor-licenses.ts";
 
 const testEntries = {
+	"e2e-account-setup-browser": "./tests/e2e/account-setup-browser.tsx",
 	"e2e-download": "./src/web/lib/e2e/download.ts",
 	"e2e-ciphertext-staging": "./src/web/lib/e2e/ciphertext-staging.ts",
 	"e2e-zero-lifecycle": "./src/web/lib/zero-lifecycle.ts",
