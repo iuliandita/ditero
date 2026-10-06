@@ -116,8 +116,22 @@ class ReleaseTests(unittest.TestCase):
                 "bunVersion": "1.4.2", "bunRevision": "744846f844374847c902b5e7fd59b4342a51ef99",
                 "runtimeArchiveSha256": "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
                 "dependencies": ["zod@4.4.3"], "runtimeNoticesComplete": False}
+        notice = b"Copyright (c) 2026 Fixture authors\nPermission is hereby granted under this fixture license.\n"
+        manifest = {"schema": 1, "identity": {
+            "bunVersion": info["bunVersion"], "bunRevision": info["bunRevision"],
+            "target": info["target"], "runtimeArchiveSha256": info["runtimeArchiveSha256"],
+            "webkitCommit": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"},
+            "incomplete": True, "texts": [{"path": "notices/runtime/fixture/LICENSE",
+                "sha256": hashlib.sha256(notice).hexdigest(), "license": "MIT", "selection": "conservative-extra",
+                "origin": {"url": "https://example.org/source/" + "a" * 40 + "/LICENSE", "revision": "a" * 40}}],
+            "unresolved": [{"component": "fixture", "reason": "Not production notice coverage"}],
+            "sourceRelink": {"source": None, "relink": None}}
+        manifest_raw = json.dumps(manifest).encode()
+        info["runtimeNoticesManifestSha256"] = hashlib.sha256(manifest_raw).hexdigest()
         info.update(changes)
         files = {"BUILDINFO.json": json.dumps(info).encode(), "LICENSE": b"license", "REBUILD.md": b"instructions", "notices/Bun-LICENSE.md": b"runtime notice", "notices/zod@4.4.3/LICENSE": b"license"}
+        files["notices/runtime/manifest.json"] = manifest_raw
+        files["notices/runtime/fixture/LICENSE"] = notice
         for name in info["clients"]:
             files[f"bin/{name}"] = b"\x7fELF\x02\x01" + bytes(12) + b"\x3e\x00"
             files[f"relink/{name}.js"] = b"console.log('fixture')"
@@ -148,7 +162,7 @@ class ReleaseTests(unittest.TestCase):
             source = Path(directory) / "source.tar.gz"
             sha = "a" * 40
             self.client_archive(source, sha)
-            for name, kind in (("private.env", tarfile.REGTYPE), ("bin/other", tarfile.REGTYPE), ("notices/zod@4.4.3/private.env", tarfile.REGTYPE), ("bin/link", tarfile.SYMTYPE), ("../escape", tarfile.REGTYPE)):
+            for name, kind in (("private.env", tarfile.REGTYPE), ("bin/other", tarfile.REGTYPE), ("notices/zod@4.4.3/private.env", tarfile.REGTYPE), ("bin/link", tarfile.SYMTYPE), ("notices/runtime/fixture/link", tarfile.SYMTYPE), ("notices/runtime/fixture/EXTRA", tarfile.REGTYPE), ("../escape", tarfile.REGTYPE)):
                 with self.subTest(name=name), tarfile.open(source) as original, tarfile.open(path, "w") as archive:
                     for member in original.getmembers():
                         archive.addfile(member, original.extractfile(member))
@@ -159,6 +173,80 @@ class ReleaseTests(unittest.TestCase):
                     archive.addfile(member, io.BytesIO(b"x") if member.size else None)
                 with self.assertRaises(ValueError):
                     release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+
+    def mutate_runtime_archive(self, source, destination, mutation):
+        prefix = "ditero-0.0.1-alpha.1-clients-linux-x64/"
+        with tarfile.open(source) as archive:
+            files = {member.name.removeprefix(prefix): archive.extractfile(member).read() for member in archive.getmembers()}
+        mutation(files)
+        with tarfile.open(destination, "w:gz") as archive:
+            for name, content in files.items():
+                member = tarfile.TarInfo(prefix + name)
+                member.size = len(content)
+                member.mode = 0o755 if name.startswith("bin/") else 0o644
+                archive.addfile(member, io.BytesIO(content))
+
+    def test_runtime_manifest_mutations_rejected_even_when_buildinfo_rehashed(self):
+        def change(files, mutation):
+            manifest = json.loads(files["notices/runtime/manifest.json"])
+            mutation(manifest)
+            raw = json.dumps(manifest).encode()
+            files["notices/runtime/manifest.json"] = raw
+            info = json.loads(files["BUILDINFO.json"])
+            info["runtimeNoticesManifestSha256"] = hashlib.sha256(raw).hexdigest()
+            files["BUILDINFO.json"] = json.dumps(info).encode()
+        mutations = [
+            lambda m: m.update(incomplete=False),
+            lambda m: m.update(schema=True),
+            lambda m: m.update(unknown=1),
+            lambda m: m.pop("unresolved"),
+            lambda m: m["identity"].update(target="bun-linux-arm64"),
+            lambda m: m["identity"].update(extra="unknown"),
+            lambda m: m["texts"].append(m["texts"][0].copy()),
+            lambda m: m["texts"][0].update(sha256="b" * 64),
+            lambda m: m["texts"][0].update(path="notices/runtime/../LICENSE"),
+            lambda m: m["texts"][0].update(selection="guessed"),
+            lambda m: m["texts"][0].update(license=""),
+            lambda m: m["texts"][0]["origin"].update(url="https://example.org/main/LICENSE"),
+            lambda m: m["texts"][0]["origin"].update(url="https://@h/" + "a" * 40 + "/LICENSE"),
+            lambda m: m["texts"][0]["origin"].update(url="https://h/" + "a" * 40 + "/a{b"),
+            lambda m: m["texts"][0]["origin"].update(url="https://0x7f.1/" + "a" * 40 + "/LICENSE"),
+            lambda m: m["sourceRelink"].update(source={"path": "notices/runtime/source.json", "sha256": "a" * 64,
+                "origin": m["texts"][0]["origin"]}),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            source, changed = Path(directory) / "source.tar.gz", Path(directory) / "changed.tar.gz"
+            self.client_archive(source, "a" * 40)
+            for index, mutation in enumerate(mutations):
+                with self.subTest(index=index):
+                    self.mutate_runtime_archive(source, changed, lambda files: change(files, mutation))
+                    with self.assertRaises(ValueError):
+                        release.verify_clients_candidate(changed, "0.0.1-alpha.1", "a" * 40)
+
+    def test_runtime_archive_partition_and_duplicate_json_refusals(self):
+        def duplicate(files, name):
+            raw = files[name]
+            files[name] = raw[:-1] + b',"incomplete":true,"incomplete":true}'
+            if name.endswith("manifest.json"):
+                info = json.loads(files["BUILDINFO.json"])
+                info["runtimeNoticesManifestSha256"] = hashlib.sha256(files[name]).hexdigest()
+                files["BUILDINFO.json"] = json.dumps(info).encode()
+        mutations = [
+            lambda f: f.pop("notices/runtime/fixture/LICENSE"),
+            lambda f: f.update({"notices/runtime/fixture/EXTRA": b"extra"}),
+            lambda f: f.update({"notices/runtime/fixture/LICENSE": b"changed"}),
+            lambda f: f.update({"notices/runtime/manifest.json": b"{}"}),
+            lambda f: duplicate(f, "notices/runtime/manifest.json"),
+            lambda f: duplicate(f, "BUILDINFO.json"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            source, changed = Path(directory) / "source.tar.gz", Path(directory) / "changed.tar.gz"
+            self.client_archive(source, "a" * 40)
+            for index, mutation in enumerate(mutations):
+                with self.subTest(index=index):
+                    self.mutate_runtime_archive(source, changed, mutation)
+                    with self.assertRaises(ValueError):
+                        release.verify_clients_candidate(changed, "0.0.1-alpha.1", "a" * 40)
 
     def test_deployment_requires_matching_kustomize_images(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(release, "ROOT", Path(directory)), patch.object(release, "metadata", return_value={"version": "0.0.1-alpha.1"}), patch.object(release.subprocess, "run") as run:

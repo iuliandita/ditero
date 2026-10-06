@@ -9,6 +9,8 @@ import re
 import subprocess
 import tarfile
 import tempfile
+import ipaddress
+from urllib.parse import urlsplit, urlunsplit, unquote
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -128,17 +130,103 @@ def verify_downloads(output: Path, version: str) -> set[str]:
     return expected
 
 
+def strict_json(raw: bytes):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("Duplicate JSON key")
+            result[key] = value
+        return result
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=unique,
+                      parse_constant=lambda value: (_ for _ in ()).throw(ValueError("Invalid JSON constant")))
+
+
+def runtime_notice_records(manifest):
+    def fields(value, expected):
+        if not isinstance(value, dict) or set(value) != set(expected):
+            raise ValueError("Invalid runtime notice fields")
+    def string(value, pattern, limit):
+        if not isinstance(value, str) or len(value) > limit or not re.fullmatch(pattern, value):
+            raise ValueError("Invalid runtime notice value")
+    fields(manifest, ("schema", "identity", "incomplete", "texts", "unresolved", "sourceRelink"))
+    if type(manifest["schema"]) is not int or manifest["schema"] != 1 or manifest["incomplete"] is not True:
+        raise ValueError("Runtime notice qualification must remain incomplete")
+    identity = {"bunVersion": "1.4.2", "bunRevision": "744846f844374847c902b5e7fd59b4342a51ef99",
+                "target": "bun-linux-x64", "runtimeArchiveSha256": "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
+                "webkitCommit": "2e2aa2290fac856d6f451ceacb58f7f5b44dd057"}
+    if manifest["identity"] != identity:
+        raise ValueError("Runtime notice identity mismatch")
+    texts = manifest["texts"]
+    if not isinstance(texts, list) or not 1 <= len(texts) <= 512:
+        raise ValueError("Invalid runtime notice text inventory")
+    unresolved = manifest["unresolved"]
+    if not isinstance(unresolved, list) or len(unresolved) > 128:
+        raise ValueError("Invalid runtime notice unresolved inventory")
+    for item in unresolved:
+        fields(item, ("component", "reason"))
+        for key, limit in (("component", 200), ("reason", 2048)):
+            if not isinstance(item[key], str) or not 1 <= len(item[key]) <= limit:
+                raise ValueError("Invalid unresolved notice")
+    fields(manifest["sourceRelink"], ("source", "relink"))
+    records = []
+    for item in texts + [item for item in manifest["sourceRelink"].values() if item is not None]:
+        is_text = len(records) < len(texts)
+        fields(item, ("path", "sha256", "origin", "license", "selection") if is_text else ("path", "sha256", "origin"))
+        string(item["path"], r"notices/runtime/(?:[A-Za-z0-9_+-][A-Za-z0-9_.+-]*/)*[A-Za-z0-9_+-][A-Za-z0-9_.+-]*", 240)
+        if any(part in (".", "..") for part in item["path"].split("/")) or item["path"] == "notices/runtime/manifest.json":
+            raise ValueError("Invalid runtime notice path")
+        string(item["sha256"], r"[a-f0-9]{64}", 64)
+        origin = item["origin"]
+        fields(origin, ("url", "revision"))
+        string(origin["revision"], r"(?:[a-f0-9]{40}|[a-f0-9]{64}|[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?)", 2048)
+        url = origin["url"]
+        if not isinstance(url, str) or len(url) > 2048 or re.search(r"[\x00-\x20\x7f\\{}]", url):
+            raise ValueError("Invalid runtime notice origin")
+        parsed = urlsplit(url)
+        # WHATWG treats numeric final host labels as IPv4, including legacy spellings.
+        host = parsed.hostname or ""
+        final_label = host.rstrip(".").split(".")[-1]
+        if re.fullmatch(r"(?:[0-9]+|0[xX][0-9a-fA-F]+)", final_label):
+            try:
+                address = ipaddress.IPv4Address(host)
+            except ipaddress.AddressValueError as error:
+                raise ValueError("Noncanonical runtime notice IPv4 origin") from error
+            if str(address) != host:
+                raise ValueError("Noncanonical runtime notice IPv4 origin")
+        parts = unquote(parsed.path).split("/")
+        if (parsed.scheme != "https" or not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment
+                or parsed.hostname != parsed.hostname.lower() or parsed.netloc != parsed.netloc.lower()
+                or parsed.port == 443 or urlunsplit(parsed) != url or any(part in (".", "..") for part in parts)
+                or any(part.lower() in ("main", "master", "head", "latest", "nightly") for part in parts)
+                or not any(part in (origin["revision"], "v" + origin["revision"]) for part in parsed.path.split("/"))):
+            raise ValueError("Runtime notice origin must be immutable")
+        if is_text:
+            string(item["license"], r"[A-Za-z0-9().+ -]+", 120)
+            if item["selection"] not in ("target", "build-host", "conservative-extra"):
+                raise ValueError("Invalid runtime notice selection")
+        records.append(item)
+    if len(records) > 512 or len({item["path"] for item in records}) != len(records):
+        raise ValueError("Duplicate runtime notice path")
+    return records
+
+
 def verify_clients_candidate(path: Path, version: str, source_sha: str) -> None:
     prefix = f"ditero-{version}-clients-linux-x64"
     clients = ("ditero", "ditero-mcp", "ditero-tui")
-    required = {"BUILDINFO.json", "LICENSE", "REBUILD.md", "notices/Bun-LICENSE.md"}
+    required = {"BUILDINFO.json", "LICENSE", "REBUILD.md", "notices/Bun-LICENSE.md", "notices/runtime/manifest.json"}
     required |= {f"bin/{name}" for name in clients} | {f"relink/{name}.js" for name in clients}
     with tarfile.open(path) as archive:
         members = archive.getmembers()
         if len(members) > 512 or sum(member.size for member in members) > 512 * 1024 * 1024:
             raise ValueError("Client archive exceeds unpacked size bound")
         files = {}
+        seen_members = set()
         for member in members:
+            identity = member.name.rstrip("/")
+            if identity in seen_members:
+                raise ValueError("Duplicate client archive member")
+            seen_members.add(identity)
             parts = member.name.split("/")
             if parts[0] != prefix or any(part in (".", "..") or part.startswith(".") for part in parts):
                 raise ValueError("Unexpected client archive path")
@@ -153,7 +241,7 @@ def verify_clients_candidate(path: Path, version: str, source_sha: str) -> None:
             raise ValueError("Client archive is missing required files")
         if files["BUILDINFO.json"].size > 65536:
             raise ValueError("Client build identity exceeds size bound")
-        info = json.load(archive.extractfile(files["BUILDINFO.json"]))
+        info = strict_json(archive.extractfile(files["BUILDINFO.json"]).read())
         if not isinstance(info, dict) or type(info.get("sourceDirty")) is not bool or type(info.get("apiVersion")) is not int:
             raise ValueError("Invalid client build identity")
         if (info.get("version"), info.get("sourceSha"), info.get("target"), info.get("apiVersion"), info.get("clients")) != (version, source_sha, "bun-linux-x64", 1, list(clients)):
@@ -162,14 +250,49 @@ def verify_clients_candidate(path: Path, version: str, source_sha: str) -> None:
             raise ValueError("Candidate must declare incomplete runtime notice qualification")
         if info.get("bunVersion") != "1.4.2" or info.get("bunRevision") != "744846f844374847c902b5e7fd59b4342a51ef99" or info.get("runtimeArchiveSha256") != "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913":
             raise ValueError("Client archive runtime identity mismatch")
+        manifest_member = files["notices/runtime/manifest.json"]
+        if manifest_member.size > 65536:
+            raise ValueError("Runtime notice manifest size limit")
+        manifest_raw = archive.extractfile(manifest_member).read()
+        if info.get("runtimeNoticesManifestSha256") != hashlib.sha256(manifest_raw).hexdigest():
+            raise ValueError("Runtime notice manifest hash mismatch")
+        manifest = strict_json(manifest_raw)
+        records = runtime_notice_records(manifest)
+        expected_runtime = {item["path"] for item in records} | {"notices/runtime/manifest.json"}
+        actual_runtime = {name for name in files if name.startswith("notices/runtime/")}
+        if actual_runtime != expected_runtime:
+            raise ValueError("Runtime notice file inventory mismatch")
+        runtime_total = 0
+        for item in records:
+            member = files[item["path"]]
+            runtime_total += member.size
+            if member.size > 8 * 1024 * 1024 or runtime_total > 512 * 1024 * 1024:
+                raise ValueError("Runtime notice size limit")
+            raw = archive.extractfile(member).read()
+            if hashlib.sha256(raw).hexdigest() != item["sha256"]:
+                raise ValueError("Runtime notice text hash mismatch")
+            content = raw.decode("utf-8")
+            if "\0" in content:
+                raise ValueError("Invalid runtime notice text")
+            if item in manifest["texts"]:
+                if re.search(r"(?:\[(?:year|copyright holder|name of author|insert[^\]]*)\]|<copyright[^>]*>|^\s*(?:TODO|TBD|PLACEHOLDER)\s*$)", content, re.I | re.M):
+                    raise ValueError("Placeholder runtime notice")
+                if not re.search(r"(?:^\s*(?:\*\s*)?copyright\s*(?:\(c\)|©)?\s*(?:[0-9]{4}|[A-Z])|public domain)", content, re.I | re.M) or not re.search(r"permission|redistribution|license|licence|SPDX", content, re.I):
+                    raise ValueError("Missing runtime notice header or grant")
         dependencies = info.get("dependencies")
         if not isinstance(dependencies, list) or not dependencies or len(dependencies) > 100 or any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9@_+.-]{1,200}", name) or ".." in name for name in dependencies) or len(set(dependencies)) != len(dependencies):
             raise ValueError("Invalid client dependency notice inventory")
         allowed_directories = {prefix, f"{prefix}/bin", f"{prefix}/relink", f"{prefix}/notices"} | {f"{prefix}/notices/{dependency}" for dependency in dependencies}
+        for name in expected_runtime:
+            parent = Path(prefix) / name
+            for ancestor in parent.parents:
+                if str(ancestor) == ".":
+                    break
+                allowed_directories.add(str(ancestor))
         if any(member.isdir() and member.name.rstrip("/") not in allowed_directories for member in members):
             raise ValueError("Unexpected client archive directory")
         for name, member in files.items():
-            if name in required:
+            if name in required or name in expected_runtime:
                 continue
             parts = name.split("/")
             if len(parts) != 3 or parts[0] != "notices" or parts[1] not in dependencies or not re.fullmatch(r"(?i)(?:licen[sc]e|copying|notice)(?:[.-].*)?", parts[2]):

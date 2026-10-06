@@ -11,6 +11,11 @@ import {
 } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import release from "../release.json";
+import {
+	CLIENT_RUNTIME_IDENTITY,
+	type RuntimeNoticeFile,
+	validateClientRuntimeNotices,
+} from "./client-runtime-notices.ts";
 
 const root = resolve(import.meta.dir, "..");
 const target = "bun-linux-x64";
@@ -129,11 +134,75 @@ async function packageNotices(
 	throw new Error("Cannot identify bundled dependency");
 }
 
+export function parseRuntimeNoticeManifest(raw: Uint8Array): unknown {
+	const text = new TextDecoder("utf-8", { fatal: true }).decode(raw);
+	const parsed: unknown = JSON.parse(text);
+	if (text !== `${JSON.stringify(parsed, null, "\t")}\n`)
+		throw new Error("Runtime notice manifest must use canonical JSON");
+	return parsed;
+}
+
+async function runtimeNotices() {
+	const source = join(root, "vendor/client-runtime-notices");
+	if (
+		!(await lstat(source)).isDirectory() ||
+		(await lstat(source)).isSymbolicLink()
+	)
+		throw new Error("Invalid runtime notice source directory");
+	const manifestFile = join(source, "manifest.json");
+	if (
+		!(await lstat(manifestFile)).isFile() ||
+		(await lstat(manifestFile)).isSymbolicLink()
+	)
+		throw new Error("Invalid runtime notice manifest file");
+	const raw = await readFile(manifestFile);
+	if (raw.byteLength > 65536)
+		throw new Error("Runtime notice manifest size limit");
+	const files: RuntimeNoticeFile[] = [];
+	let totalBytes = 0;
+	async function walk(directory: string, relative = "") {
+		for (const name of await readdir(directory)) {
+			const path = relative ? `${relative}/${name}` : name;
+			const full = join(directory, name);
+			const info = await lstat(full);
+			if (info.isSymbolicLink()) throw new Error("Runtime notice symlink");
+			if (info.isDirectory()) await walk(full, path);
+			else if (!info.isFile()) throw new Error("Runtime notice special file");
+			else if (path !== "manifest.json") {
+				totalBytes += info.size;
+				if (
+					files.length >= 512 ||
+					info.size > 8 * 1024 * 1024 ||
+					totalBytes > 512 * 1024 * 1024
+				)
+					throw new Error("Runtime notice file limit");
+				files.push({
+					path: `notices/runtime/${path}`,
+					kind: "file",
+					bytes: await readFile(full),
+				});
+			}
+		}
+	}
+	await walk(source);
+	const manifest = validateClientRuntimeNotices(
+		parseRuntimeNoticeManifest(raw),
+		files,
+	);
+	return {
+		manifest,
+		raw,
+		files,
+		sha256: createHash("sha256").update(raw).digest("hex"),
+	};
+}
+
 export async function buildClients(
 	output = resolve(root, "out/clients"),
 ): Promise<string> {
 	if (process.platform !== "linux" || process.arch !== "x64")
 		throw new Error("Client packaging currently requires Linux x64");
+	const notices = await runtimeNotices();
 	const runtime = await officialRuntime(join(output, "toolchain"));
 	const sourceDirty =
 		(await command(
@@ -159,6 +228,18 @@ export async function buildClients(
 		),
 		target,
 	};
+	for (const key of [
+		"bunVersion",
+		"bunRevision",
+		"target",
+		"runtimeArchiveSha256",
+	] as const) {
+		if (
+			build[key] !== CLIENT_RUNTIME_IDENTITY[key] ||
+			build[key] !== notices.manifest.identity[key]
+		)
+			throw new Error("Runtime notice build identity mismatch");
+	}
 	const directory = join(output, `ditero-${release.version}-clients-linux-x64`);
 	if (await Bun.file(join(directory, "BUILDINFO.json")).exists())
 		throw new Error("Use a fresh client output directory");
@@ -166,6 +247,15 @@ export async function buildClients(
 	await mkdir(join(directory, "bin"));
 	await mkdir(join(directory, "relink"), { recursive: true });
 	await mkdir(join(directory, "notices"), { recursive: true });
+	for (const file of notices.files) {
+		const destination = join(directory, file.path);
+		await mkdir(dirname(destination), { recursive: true });
+		await writeFile(destination, file.bytes);
+	}
+	await writeFile(
+		join(directory, "notices/runtime/manifest.json"),
+		notices.raw,
+	);
 	const cpus = buildCpus(await readFile("/proc/self/status", "utf8")).join(",");
 	const packages = new Set<string>();
 	for (const [name, entry] of Object.entries(clients)) {
@@ -225,7 +315,7 @@ export async function buildClients(
 	);
 	await writeFile(
 		join(directory, "BUILDINFO.json"),
-		`${JSON.stringify({ ...build, runtimeNoticesComplete: false, apiVersion: 1, clients: Object.keys(clients), dependencies: [...packages].sort() }, null, 2)}\n`,
+		`${JSON.stringify({ ...build, runtimeNoticesComplete: false, runtimeNoticesManifestSha256: notices.sha256, apiVersion: 1, clients: Object.keys(clients), dependencies: [...packages].sort() }, null, 2)}\n`,
 	);
 	const archive = join(
 		output,
