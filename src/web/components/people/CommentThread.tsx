@@ -164,13 +164,21 @@ export function CommentThread({
 		composerReturn.current = null;
 		if (canReturnComposer(intent)) intent.composer.focus();
 	});
-	useLayoutEffect(
-		() => () => {
-			composerReturn.current = null;
+	useLayoutEffect(() => {
+		const taskId = task.id;
+		return () => {
+			const intent = composerReturn.current;
+			if (
+				intent?.zero === zero &&
+				intent.userId === me &&
+				intent.taskId === taskId &&
+				intent.workspaceId === workspaceId
+			) {
+				composerReturn.current = null;
+			}
 			rotationDialog.current = null;
-		},
-		[zero, me, task.id, workspaceId],
-	);
+		};
+	}, [zero, me, task.id, workspaceId]);
 
 	function setBody(value: string) {
 		bodyRef.current = value;
