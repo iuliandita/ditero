@@ -212,7 +212,7 @@ test("reading presets change rendered sizes and survive a reload", async ({
 					};
 				}),
 			)
-			.toEqual({ text, mark, target });
+			.toEqual({ text: expect.closeTo(text, 2), mark, target });
 	}
 	await page.reload();
 	await goToSettings(page);

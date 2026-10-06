@@ -25,7 +25,7 @@ function PwaUpdate() {
 	const [busy, setBusy] = useState(false);
 	const [failed, setFailed] = useState(false);
 	useEffect(() => {
-		if (!import.meta.env.PROD) return;
+		if (!import.meta.env.PROD || import.meta.env.MODE === "test") return;
 		let mounted = true;
 		void registerPwa((worker) => {
 			if (mounted) setWaiting(worker);

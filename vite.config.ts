@@ -10,12 +10,80 @@ import { paraglideOptions } from "./paraglide.options.ts";
 import { configureSignupTransport } from "./scripts/e2e-signup-transport.ts";
 import { apiProxyTarget } from "./scripts/e2e-stack.ts";
 import { vendorLicenses } from "./scripts/vendor-licenses.ts";
-export default defineConfig({
+
+const testEntries = {
+	"e2e-download": "./src/web/lib/e2e/download.ts",
+	"e2e-ciphertext-staging": "./src/web/lib/e2e/ciphertext-staging.ts",
+	"e2e-zero-lifecycle": "./src/web/lib/zero-lifecycle.ts",
+	"e2e-zero-close-browser": "./tests/e2e/zero-close-browser.ts",
+	"e2e-csp-gate": "./src/web/dev/csp-gate.ts",
+	"e2e-stream": "./src/domain/e2e/stream.ts",
+	"e2e-envelope": "./src/domain/e2e/envelope.ts",
+	"e2e-wire": "./src/domain/e2e/wire.ts",
+};
+const testRoutes = new Set(
+	Object.values(testEntries).map((path) => path.slice(1)),
+);
+export default defineConfig(({ mode }) => ({
+	build:
+		mode === "test"
+			? {
+					rolldownOptions: {
+						input: {
+							index: fileURLToPath(new URL("./index.html", import.meta.url)),
+							...Object.fromEntries(
+								Object.entries(testEntries).map(([name, path]) => [
+									name,
+									fileURLToPath(new URL(path, import.meta.url)),
+								]),
+							),
+						},
+						preserveEntrySignatures: "strict",
+						output: {
+							entryFileNames: (chunk) =>
+								Object.hasOwn(testEntries, chunk.name)
+									? testEntries[chunk.name as keyof typeof testEntries].slice(2)
+									: "assets/[name]-[hash].js",
+						},
+					},
+				}
+			: undefined,
 	plugins: [
+		{
+			name: "e2e-compiled-module-entries",
+			apply: "serve",
+			configurePreviewServer(server) {
+				if (mode !== "test") return;
+				server.middlewares.use((request, _response, next) => {
+					if (
+						(request.method === "GET" || request.method === "HEAD") &&
+						testRoutes.has(request.url ?? "")
+					)
+						_response.setHeader(
+							"Content-Type",
+							"text/javascript; charset=utf-8",
+						);
+					next();
+				});
+			},
+		},
 		vendorLicenses(),
 		{
 			name: "e2e-fresh-http-connections",
 			apply: "serve",
+			configurePreviewServer(server) {
+				if (
+					process.env.NODE_ENV !== "test" ||
+					process.env.DITERO_E2E_SIGNUP_TRANSPORT !== "1"
+				)
+					return;
+				server.middlewares.use((request, response, next) => {
+					const path = request.url?.split("?", 1)[0];
+					if (path === "/api" || path?.startsWith("/api/"))
+						response.setHeader("Connection", "close");
+					next();
+				});
+			},
 			configureServer(server) {
 				if (
 					process.env.NODE_ENV !== "test" ||
@@ -100,4 +168,4 @@ export default defineConfig({
 			},
 		},
 	},
-});
+}));

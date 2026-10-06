@@ -117,7 +117,9 @@
 		"postcss": "^8.5.26",
 		"undici": "7.29.1",
 		"ip-address": "^10.7.2",
-		"@hpke/common": "1.10.1"
+		"@hpke/common": "1.10.1",
+		"source-map-js": "1.2.2",
+		"tinypool": "2.1.2"
 	},
 	"patchedDependencies": {
 		"@rocicorp/zero@1.9.0": "patches/@rocicorp%2Fzero@1.9.0.patch",

@@ -58,6 +58,7 @@ jobs:
     env:
       E2E_SHARD: ${{ matrix.shard }}
       E2E_BROWSER_CONTAINER: "1"
+      E2E_BROWSER_MODE: "compiled"
       DITERO_E2E_DB_PORT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -68,6 +69,8 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      - name: Build compiled browser fixture once
+        run: bun run tests/e2e/compiled-web.ts build
       # Firefox and WebKit retain the cross-engine crypto gate.
       - name: Browser image
         id: browser-image
@@ -105,6 +108,10 @@ jobs:
           path: test-results/
           retention-days: 7
           if-no-files-found: warn
+
+      - name: Remove only owned compiled browser output
+        if: ${{ always() && env.E2E_COMPILED_WEB_DIR != '' }}
+        run: bun run tests/e2e/compiled-web.ts cleanup
 
   containers:
     runs-on: ubuntu-24.04
