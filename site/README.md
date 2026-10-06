@@ -1,40 +1,23 @@
-# Project website
+# Website forwarding pages
 
-Static HTML at https://iuliandita.github.io/ditero/. This is the configured target;
-it is not a claim that deployment has completed.
+The canonical Ditero website is https://ditero.app/, maintained in the separate
+[website repository](https://github.com/iuliandita/ditero-web).
+
+GitHub Pages at https://iuliandita.github.io/ditero/ forwards existing links to
+that website. English forwards to its root; de, es, fr, ro and ar forward to the
+matching locale paths. Each HTML page has a canonical URL, an immediate refresh
+and a visible localized fallback link. No JavaScript, images, fonts or trackers
+are needed. These pages make no release or product-feature claims.
 
 Run `bun install --frozen-lockfile`, then `bun run scripts/build-site.ts`.
-The generated `site/dist/` contains English at the root, five translated pages,
-CSS and copied public brand assets. No JavaScript, remote fonts or trackers are used.
-
+The generated `site/dist/` contains six forwarding pages and `.nojekyll`.
 Run `bunx vitest run scripts/build-site.test.ts --exclude 'docs/local/**'` to check
-strict locale completeness, escaping, generated paths and RTL output. Text belongs
-in the six `site/locales/` dictionaries; markup belongs in the shared template.
-The builder rejects missing or extra dictionary keys. All locale values are escaped
-as text, including attribute values. Relative paths support the `/ditero/` Pages base.
+locale targets, canonical URLs, fallback links, escaping, output paths and RTL.
+Forwarding text belongs in `scripts/build-site.ts`; markup belongs in the template.
+The old locale dictionaries and source assets are retained but are not published
+by this builder.
 
-Content describes published `v0.0.1-alpha.2`. A prepared release or a merged develop
-feature does not change that claim. Update all six dictionaries and pinned guide links
-only after checking the next published release and its client limitations.
-
-The workflow builds pull requests with read-only repository permissions. Only develop
-pushes and manual runs on develop deploy, through the `github-pages` environment.
-Configure Pages to use GitHub Actions and preserve environment protection rules;
-restrict the deployment branch to develop. Repository configuration is separate from
-this workflow. No custom domain, DNS change or credential provisioning is included.
-
-Before publication, inspect all six pages in light/dark themes, Arabic RTL, keyboard
-navigation and a narrow viewport. Build tests alone do not prove rendered usability.
-
-Product previews live in `site/assets/app-preview-light.png` and
-`app-preview-dark.png`. They must be actual 1440x1000 app captures with synthetic
-household data, reviewed for privacy before inclusion. The localized caption
-identifies them as development previews; release links remain pinned independently.
-The build reads both captures before writing output and fails if either is absent.
-Keep capture source revision and hashes in the review evidence. Do not replace them
-with mock UI or historical screenshots.
-
-The native language and PostgreSQL disclosures work without JavaScript. Confirm
-keyboard operation, 44px targets, light/dark image selection and no overflow in
-all six locales before publication. Retain desktop and phone screenshots for the
-independent confirmation review.
+The existing Pages workflow still builds pull requests with read-only repository
+permissions. Only develop pushes and manual runs on develop deploy through the
+`github-pages` environment. Preserve its environment protection and deployment
+branch rules. Website hosting and deployment remain in the website repository.

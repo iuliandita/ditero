@@ -158,3 +158,7 @@ and 20 MiB; refresh starts a fresh bounded collection. Pages reflect current
 server rows rather than an atomic snapshot. Cross-list moves and other metadata workflows remain separate API/client work.
 After a successful write the collection refreshes. A deletion replay acknowledges
 the original deletion and does not prove that a recreated ID is currently absent.
+
+### Optional starter setup
+
+At startup, the terminal may show a localized starter suggestion for a pending, eligible account. It uses the configured server origin and `/setup`, disappears on input, and never opens a browser. The optional read is bounded to 1.5 seconds and 16 KiB; 404 means an older server lacks the capability. Setup discovery does not block browsing or writes. Use `ditero setup-status --json` for an explicit status read.

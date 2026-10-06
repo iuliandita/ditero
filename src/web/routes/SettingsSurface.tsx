@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import type { Role } from "../../domain/role.ts";
 import { m } from "../../paraglide/messages.js";
 import { EncryptedFilesPanel } from "../components/e2e/EncryptedFilesPanel.tsx";
@@ -44,6 +44,7 @@ export function SettingsSurface({
 	onOpenList,
 	autoFocusBack,
 	initialSection,
+	setupPanel,
 }: {
 	activeId: string | null;
 	activeRole: Role | null;
@@ -55,6 +56,7 @@ export function SettingsSurface({
 	// deliberate target focus would fall to the document body.
 	autoFocusBack?: boolean;
 	initialSection?: "account" | "appearance";
+	setupPanel?: ReactNode;
 }) {
 	const native = useNativeAccount();
 	const backRef = useRef<HTMLButtonElement>(null);
@@ -113,6 +115,7 @@ export function SettingsSurface({
 				<div className="min-w-0 max-w-2xl [&_[data-section]]:scroll-mt-20 xl:[&_[data-section]]:scroll-mt-4">
 					<SettingsSection id="account" title={m.settings_section_account()}>
 						<AccountPanel />
+						{setupPanel && <div className="mt-5">{setupPanel}</div>}
 					</SettingsSection>
 
 					<SettingsSection

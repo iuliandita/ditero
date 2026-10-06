@@ -2583,5 +2583,54 @@
 	"archive_export_selection_limit": "Los archivos seleccionados superan los límites del archivo. Selecciona menos archivos e inténtalo de nuevo.",
 	"archive_export_pending": "Algunos cambios siguen pendientes, se rechazaron o no se pudieron confirmar. Guárdalos o resuélvelos, luego cierra este diálogo y vuelve a abrirlo.",
 	"comment_attachment_checking": "Comprobando los archivos seleccionados...",
-	"comment_sending": "Enviando comentario..."
+	"comment_sending": "Enviando comentario...",
+	"setup_title": "Configura tu espacio personal",
+	"setup_description": "Empieza con unas cuantas listas útiles, elige las tuyas o comienza con un espacio vacío. Puedes saltarte este paso y usar Ditero ahora mismo.",
+	"setup_choices": "Elige un punto de partida",
+	"setup_recommended": "Recomendado",
+	"setup_basic": "Básico",
+	"setup_basic_description": "Compras, limpieza y un panel personal.",
+	"setup_guided": "Guiado",
+	"setup_guided_description": "Elige las listas iniciales y el panel que quieras.",
+	"setup_custom": "Personalizado",
+	"setup_custom_description": "Empieza con un espacio vacío.",
+	"setup_preview": "Revisa tu contenido inicial",
+	"setup_dashboard": "Panel personal",
+	"setup_empty_preview": "No se añadirá ninguna lista ni tarea.",
+	"setup_choose_content": "Elige al menos una lista o el panel, o usa Personalizado.",
+	"setup_continue": "Continuar",
+	"setup_back": "Atrás",
+	"setup_apply": "Añadir contenido inicial",
+	"setup_start_empty": "Empezar sin contenido",
+	"setup_skip": "Omitir por ahora",
+	"setup_loading": "Cargando tu configuración",
+	"setup_applying": "Añadiendo contenido inicial",
+	"setup_failed": "No se pudo confirmar la configuración. Comprueba el estado antes de volver a intentarlo.",
+	"setup_retry": "Repetir este intento",
+	"setup_resume": "Comprobar el estado del servidor",
+	"setup_completed": "Tu espacio está listo",
+	"setup_leave": "Abrir Ditero",
+	"setup_open": "Elegir contenido inicial",
+	"setup_pending": "¿Quieres un punto de partida? Añade unas cuantas listas útiles o deja tu espacio como está.",
+	"setup_conflict": "Tu configuración cambió en otra sesión. Comprueba su estado actual antes de continuar.",
+	"setup_managed": "Una cuenta gestionada no puede añadir contenido inicial. Pide a tu tutor o tutora que organice tus listas compartidas.",
+	"setup_task_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} tarea",
+				"countPlural=many": "{countNum} de tareas",
+				"countPlural=other": "{countNum} tareas"
+			}
+		}
+	],
+	"setup_offline": "La configuración inicial necesita conexión. Vuelve a conectarte antes de añadir contenido.",
+	"setup_empty_already": "Ya elegiste empezar sin nada. Ahora puedes añadir contenido inicial.",
+	"setup_counters_hint": "Los valores del panel reflejan las tareas a las que tienes acceso.",
+	"setup_personal_hint": "El contenido inicial se añade a tu espacio personal. Esto no invita a nadie ni cambia tus listas existentes."
 }

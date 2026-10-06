@@ -17,6 +17,7 @@ import { join, resolve } from "node:path";
 
 const ROOT = process.cwd();
 const roots = [
+	"tests/e2e/account-setup-browser.tsx",
 	"src",
 	"messages",
 	"public",

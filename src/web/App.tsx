@@ -58,14 +58,24 @@ function SessionRoutes({
 			<NativeAuthorize session={session} isPending={isPending} />,
 		);
 	if (isPending) return standalone(<BootSkeleton />);
-	if (!session) return standalone(<Login />);
+	if (!session)
+		return standalone(
+			<Login
+				callbackURL={
+					window.location.pathname === "/setup" ? "/setup" : undefined
+				}
+			/>,
+		);
 	return (
 		<AppZeroProvider key={session.user.id} userID={session.user.id}>
 			<SyncedDisplayPreferencesProvider
 				key={session.user.id}
 				userId={session.user.id}
 			>
-				<KeyringGate userId={session.user.id} />
+				<KeyringGate
+					userId={session.user.id}
+					profileEmail={session.user.email}
+				/>
 			</SyncedDisplayPreferencesProvider>
 		</AppZeroProvider>
 	);
@@ -74,11 +84,20 @@ function SessionRoutes({
 // Inside AppZeroProvider because the auto-lock preference is a synced row, and
 // above Workspace because the keyring outlives any one surface: a key unlocked
 // for an attachment must still be unlocked when the user navigates away.
-function KeyringGate({ userId }: { userId: string }) {
+function KeyringGate({
+	userId,
+	profileEmail,
+}: {
+	userId: string;
+	profileEmail: string;
+}) {
 	const { pref } = useUserPref();
 	return (
 		<KeyringProvider userId={userId} autoLockMinutes={pref.e2eAutoLockMinutes}>
-			<Workspace />
+			<Workspace
+				initialSetup={window.location.pathname === "/setup"}
+				profileEmail={profileEmail}
+			/>
 		</KeyringProvider>
 	);
 }

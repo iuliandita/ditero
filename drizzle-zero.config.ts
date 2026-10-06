@@ -156,6 +156,17 @@ export default drizzleZeroConfig(schema, {
 			createdAt: true,
 			updatedAt: true,
 		},
+		accountSetup: {
+			id: true,
+			outcome: true,
+			revision: true,
+			catalogVersion: true,
+			locale: true,
+			latestReceipt: true,
+			generatedIds: true,
+			createdAt: true,
+			updatedAt: true,
+		},
 		userPref: {
 			id: true,
 			keymap: true,

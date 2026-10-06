@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import type { PortableExportV2 } from "../../src/domain/portability/v2.ts";
 import { m } from "../../src/paraglide/messages.js";
+import { installCommentFocusDiagnostics } from "./comment-focus-diagnostics.ts";
 import {
 	openDetails,
 	openMoreOptions,
@@ -241,6 +242,8 @@ test("comment rotation resume never sends a removed deferred file or its capture
 		connectionTimeoutMillis: 5000,
 		query_timeout: 5000,
 	});
+	let failed = false;
+	let cleanupFailed = false;
 	let primary: unknown;
 	let cleanupFailure: unknown;
 	try {
@@ -374,6 +377,8 @@ test("comment rotation resume never sends a removed deferred file or its capture
 				response.request().method() === "POST",
 		);
 		const committed = page.waitForResponse("**/api/attachments/finalize");
+		// Arm only after the second rotation dialog is positively visible.
+		await page.evaluate(installCommentFocusDiagnostics);
 		await rotation
 			.getByRole("button", {
 				name: m.e2e_rotation_confirm_submit(),
@@ -411,15 +416,49 @@ test("comment rotation resume never sends a removed deferred file or its capture
 		await expect(composer).toHaveValue("");
 		await expect(composer).toBeFocused();
 	} catch (error) {
+		failed = true;
 		primary = error;
+		try {
+			const metadata = await page.evaluate(() =>
+				window.__diteroCommentFocus?.stop(),
+			);
+			if (!metadata) throw new Error("comment focus metadata absent");
+			await test.info().attach("focus-diagnostics", {
+				body: JSON.stringify(metadata),
+				contentType: "application/json",
+			});
+		} catch (diagnostic) {
+			cleanupFailed = true;
+			cleanupFailure = diagnostic;
+			try {
+				await test.info().attach("focus-diagnostic-failure", {
+					body: JSON.stringify({
+						failed: true,
+						errorType:
+							diagnostic instanceof Error ? diagnostic.name : "unknown",
+					}),
+					contentType: "application/json",
+				});
+			} catch (attachmentFailure) {
+				cleanupFailed = true;
+				cleanupFailure = attachmentFailure;
+			}
+		}
 	} finally {
+		try {
+			await page.evaluate(() => window.__diteroCommentFocus?.stop());
+		} catch (error) {
+			cleanupFailed = true;
+			cleanupFailure = error;
+		}
 		page.off("request", observeTransfer);
 		try {
 			await pool.end();
 		} catch (error) {
+			cleanupFailed = true;
 			cleanupFailure = error;
 		}
 	}
-	if (primary) throw primary;
-	if (cleanupFailure) throw cleanupFailure;
+	if (failed) throw primary;
+	if (cleanupFailed) throw cleanupFailure;
 });

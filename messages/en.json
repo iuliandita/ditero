@@ -2536,5 +2536,53 @@
 	"archive_export_selection_limit": "The selected files exceed the archive limits. Select fewer files, then try again.",
 	"archive_export_pending": "Some edits are still pending, were refused, or could not be confirmed. Save or resolve them, then close and reopen this dialog.",
 	"comment_attachment_checking": "Checking selected files...",
-	"comment_sending": "Sending comment..."
+	"comment_sending": "Sending comment...",
+	"setup_title": "Set up your space",
+	"setup_description": "Start with a few useful lists, choose your own, or begin with an empty space. You can skip this and use Ditero right away.",
+	"setup_choices": "Choose a starting point",
+	"setup_recommended": "Recommended",
+	"setup_basic": "Basic",
+	"setup_basic_description": "Shopping, cleaning, and a personal dashboard.",
+	"setup_guided": "Guided",
+	"setup_guided_description": "Choose the starter lists and dashboard you want.",
+	"setup_custom": "Custom",
+	"setup_custom_description": "Begin with an empty space.",
+	"setup_preview": "Review your starting content",
+	"setup_dashboard": "Personal dashboard",
+	"setup_empty_preview": "No lists or tasks will be added.",
+	"setup_choose_content": "Choose at least one list or the dashboard, or use Custom.",
+	"setup_continue": "Continue",
+	"setup_back": "Back",
+	"setup_apply": "Add starter content",
+	"setup_start_empty": "Start empty",
+	"setup_skip": "Skip for now",
+	"setup_loading": "Loading your setup",
+	"setup_applying": "Adding starter content",
+	"setup_failed": "Setup could not be confirmed. Check the status before trying again.",
+	"setup_retry": "Retry this attempt",
+	"setup_resume": "Check server status",
+	"setup_completed": "Your space is ready",
+	"setup_leave": "Open Ditero",
+	"setup_open": "Choose starter content",
+	"setup_pending": "Want a starting point? Add a few useful lists, or keep your space as it is.",
+	"setup_conflict": "Your setup changed in another session. Check its current status before continuing.",
+	"setup_managed": "A managed account cannot add starter content. Ask your guardian to organize your shared lists.",
+	"setup_task_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} task",
+				"countPlural=other": "{countNum} tasks"
+			}
+		}
+	],
+	"setup_offline": "Starter setup needs a connection. Reconnect before adding content.",
+	"setup_empty_already": "You already chose an empty start. You can add starter content now.",
+	"setup_counters_hint": "Dashboard values reflect the tasks you can access.",
+	"setup_personal_hint": "Starter content is added to your personal workspace. This does not invite anyone or change your existing lists."
 }

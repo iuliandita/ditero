@@ -20,6 +20,12 @@ import {
 	uniqueIndex,
 	uuid,
 } from "drizzle-orm/pg-core";
+import type {
+	AccountSetupOutcome,
+	AccountSetupReceipt,
+} from "../domain/account-setup.ts";
+import type { AccountSetupGeneratedIds } from "../domain/account-setup-storage.ts";
+import type { Locale } from "../domain/locale.ts";
 import { CHANNEL_ERROR_CODES } from "../domain/notification-retry.ts";
 import { session, user } from "./auth-schema.ts";
 
@@ -1027,6 +1033,79 @@ export const view = pgTable("view", {
 		.defaultNow()
 		.notNull(),
 });
+
+export const accountSetup = pgTable(
+	"account_setup",
+	{
+		id: text("id")
+			.primaryKey()
+			.references(() => user.id, { onDelete: "cascade" }),
+		outcome: text("outcome")
+			.$type<AccountSetupOutcome>()
+			.notNull()
+			.default("pending"),
+		revision: bigint("revision", { mode: "number" }).notNull().default(0),
+		catalogVersion: integer("catalog_version"),
+		locale: text("locale").$type<Locale>(),
+		latestReceipt: jsonb("latest_receipt").$type<AccountSetupReceipt>(),
+		generatedIds: jsonb("generated_ids").$type<AccountSetupGeneratedIds>(),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		check(
+			"account_setup_revision",
+			sql`${t.revision} between 0 and 9007199254740991`,
+		),
+		check(
+			"account_setup_state",
+			sql`coalesce(
+ (${t.outcome} in ('pending','legacy') and ${t.revision}=0 and ${t.catalogVersion} is null and ${t.locale} is null and ${t.latestReceipt} is null and ${t.generatedIds} is null)
+ or (${t.outcome} in ('completed','custom','skipped') and ${t.revision}>0 and ${t.catalogVersion}=1 and ${t.locale} in ('en','de','es','fr','ro','ar')
+ and jsonb_typeof(${t.latestReceipt})='object' and octet_length(${t.latestReceipt}::text)<=4096
+ and ${t.latestReceipt}->'outcome'=to_jsonb(${t.outcome})
+ and ${t.latestReceipt}->'revision'=to_jsonb(${t.revision})
+ and jsonb_typeof(${t.latestReceipt}->'request')='object'
+ and ${t.latestReceipt}#>'{request,catalogVersion}'=to_jsonb(${t.catalogVersion})
+ and ${t.latestReceipt}#>'{request,locale}'=to_jsonb(${t.locale})
+ and ${t.latestReceipt}#>'{request,expectedRevision}'=to_jsonb(${t.revision}-1)
+ and jsonb_typeof(${t.latestReceipt}#>'{request,requestId}')='string'
+ and ${t.latestReceipt}#>>'{request,requestId}' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+ and ((${t.outcome}='completed' and ${t.latestReceipt}#>>'{request,mode}' in ('basic','guided') and ${t.generatedIds} is not null)
+ or (${t.outcome}='custom' and ${t.latestReceipt}#>>'{request,mode}'='custom' and ${t.generatedIds} is null)
+ or (${t.outcome}='skipped' and ${t.latestReceipt}#>>'{request,mode}'='skip' and ${t.generatedIds} is null))),false)`,
+		),
+		check(
+			"account_setup_generated_ids",
+			sql`${t.generatedIds} is null or coalesce(
+ jsonb_typeof(${t.generatedIds})='object' and octet_length(${t.generatedIds}::text)<=4096
+ and ${t.generatedIds}->'version'='1'::jsonb
+ and jsonb_typeof(${t.generatedIds}->'workspaceId')='string'
+ and ${t.generatedIds}->>'workspaceId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+ and case when jsonb_typeof(${t.generatedIds}->'listIds')='array' then jsonb_array_length(${t.generatedIds}->'listIds')<=3 else false end
+ and case when jsonb_typeof(${t.generatedIds}->'taskIds')='array' then jsonb_array_length(${t.generatedIds}->'taskIds')<=24 else false end
+ and case when jsonb_typeof(${t.generatedIds}->'panelIds')='array' then jsonb_array_length(${t.generatedIds}->'panelIds')<=2 else false end
+ and (jsonb_typeof(${t.generatedIds}->'dashboardId')='null' or (jsonb_typeof(${t.generatedIds}->'dashboardId')='string' and ${t.generatedIds}->>'dashboardId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')),false)`,
+		),
+		pgPolicy("account_setup_owner_select", {
+			for: "select",
+			using: sql`${t.id}=current_setting('ditero.user_id',true)`,
+		}),
+		pgPolicy("account_setup_owner_insert", {
+			for: "insert",
+			withCheck: sql`${t.id}=current_setting('ditero.user_id',true)`,
+		}),
+		pgPolicy("account_setup_owner_update", {
+			for: "update",
+			using: sql`${t.id}=current_setting('ditero.user_id',true)`,
+			withCheck: sql`${t.id}=current_setting('ditero.user_id',true)`,
+		}),
+	],
+).enableRLS();
 
 export const userPref = pgTable("user_pref", {
 	// id === userId (one row per user)

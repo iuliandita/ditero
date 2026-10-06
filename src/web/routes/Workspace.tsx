@@ -19,12 +19,14 @@ import {
 import { randomId } from "../../domain/random-id.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import { m } from "../../paraglide/messages.js";
+import { getLocale } from "../../paraglide/runtime.js";
 import { mutators } from "../../zero/mutators.ts";
 import { queries } from "../../zero/queries.ts";
 import type { Folder, List, schema } from "../../zero/schema.gen.ts";
 import { DashboardView } from "../components/dashboard/DashboardView.tsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.tsx";
 import { FocusTimer } from "../components/focus/FocusTimer.tsx";
+import { AccountSetupPanel } from "../components/setup/AccountSetupPanel.tsx";
 import { AppShell } from "../components/shell/AppShell.tsx";
 import {
 	BottomNav,
@@ -53,6 +55,7 @@ import {
 } from "../components/ui/dropdown-menu.tsx";
 import { ViewRenderer } from "../components/views/ViewRenderer.tsx";
 import { FocusProvider } from "../focus/useFocusTimer.tsx";
+import { useAccountSetup } from "../hooks/useAccountSetup.ts";
 import { useDashboards } from "../hooks/useDashboards.ts";
 import { useHints } from "../hooks/useHints.ts";
 import { useNativeNotificationNavigation } from "../hooks/useNativeNotificationNavigation.ts";
@@ -81,7 +84,10 @@ import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
 import { canCreateFolder, canCreateList } from "../lib/create-gates.ts";
 import { shortcutHintVisible } from "../lib/hints.ts";
 import type { Locale } from "../lib/locale.ts";
-import { useAccountStorageScope } from "../lib/native-account.tsx";
+import {
+	useAccountStorageScope,
+	useNativeAccount,
+} from "../lib/native-account.tsx";
 import { viewIcon } from "../lib/nav-icon.tsx";
 import { useNavSections } from "../lib/nav-sections.ts";
 import { recordRecent } from "../lib/recents.ts";
@@ -99,7 +105,13 @@ import { workspaceContentReducer } from "./workspace-content.ts";
 // the kid's own managedAccounts row (userId === me && restricted). A normal user
 // has no such row, so this is false on the first render regardless of sync state
 // and their shell mounts unchanged.
-export function Workspace() {
+export function Workspace({
+	initialSetup = false,
+	profileEmail,
+}: {
+	initialSetup?: boolean;
+	profileEmail?: string;
+} = {}) {
 	const zero = useZero<typeof schema>();
 	// Above the restricted/normal split so both shells get the synced theme.
 	useSyncedTheme();
@@ -112,16 +124,31 @@ export function Workspace() {
 			<RestrictedShell notificationReady={managedDetails.type === "complete"} />
 		);
 	return (
-		<NormalWorkspace notificationReady={managedDetails.type === "complete"} />
+		<NormalWorkspace
+			notificationReady={managedDetails.type === "complete"}
+			initialSetup={initialSetup}
+			profileEmail={profileEmail}
+		/>
 	);
 }
 
 function NormalWorkspace({
 	notificationReady,
+	initialSetup,
+	profileEmail,
 }: {
 	notificationReady: boolean;
+	initialSetup: boolean;
+	profileEmail?: string;
 }) {
 	const storageScope = useAccountStorageScope();
+	const nativeAccount = useNativeAccount();
+	const setup = useAccountSetup({
+		currentLocale: getLocale(),
+		profileEmail: nativeAccount?.profile.email ?? profileEmail,
+	});
+	const [setupExpanded, setSetupExpanded] = useState(initialSetup);
+	const [setupDismissed, setSetupDismissed] = useState(false);
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
@@ -159,9 +186,21 @@ function NormalWorkspace({
 	const [settingsSection, setSettingsSection] = useState<
 		"account" | "appearance"
 	>("account");
-	const [contentState, dispatchContent] = useReducer(workspaceContentReducer, {
-		kind: "home",
-	});
+	const [contentState, dispatchContent] = useReducer(
+		workspaceContentReducer,
+		initialSetup ? { kind: "settings" } : { kind: "home" },
+	);
+	useEffect(() => {
+		if (
+			contentState.kind !== "settings" &&
+			window.location.pathname === "/setup"
+		)
+			window.history.replaceState(
+				window.history.state,
+				"",
+				`/${window.location.search}${window.location.hash}`,
+			);
+	}, [contentState.kind]);
 	const openListId = contentState.kind === "list" ? contentState.id : null;
 	const openDashboardId =
 		contentState.kind === "dashboard" ? contentState.id : null;
@@ -459,6 +498,10 @@ function NormalWorkspace({
 		openSettings();
 		setSettingsSection("appearance");
 	}, [openSettings]);
+	const openSetup = () => {
+		setSetupExpanded(true);
+		openSettings();
+	};
 	// Flat drag-reorder within a folder group / ungrouped bucket writes only the
 	// dragged list's sortKey (design 2.8). Cross-folder + folder ordering are out
 	// of M1a scope: each group is its own DndContext, so a list can't leave it.
@@ -717,6 +760,17 @@ function NormalWorkspace({
 		content = (
 			<SettingsSurface
 				initialSection={settingsSection}
+				setupPanel={
+					<AccountSetupPanel
+						setup={setup}
+						expanded={setupExpanded}
+						onOpen={() => setSetupExpanded(true)}
+						onLeave={() => {
+							setSetupExpanded(false);
+							dispatchContent({ kind: settingsReturn.current });
+						}}
+					/>
+				}
 				activeId={activeId}
 				activeRole={activeRole}
 				isDesktop={isDesktop}
@@ -1056,6 +1110,36 @@ function NormalWorkspace({
 							{workspaceActionError}
 						</p>
 					)}
+					{showsHome &&
+						!detailTaskId &&
+						!searchOpen &&
+						!newListFolder &&
+						!createWorkspaceOpen &&
+						!setupDismissed &&
+						setup.authoritative &&
+						!setup.managed &&
+						setup.outcome === "pending" && (
+							<aside
+								aria-label={m.setup_title()}
+								className="mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-lg border p-4 text-sm"
+							>
+								<p className="min-w-0 flex-1">{m.setup_pending()}</p>
+								<Button
+									variant="outline"
+									className="min-h-11"
+									onClick={openSetup}
+								>
+									{m.setup_open()}
+								</Button>
+								<Button
+									variant="ghost"
+									className="min-h-11"
+									onClick={() => setSetupDismissed(true)}
+								>
+									{m.sync_rejected_dismiss()}
+								</Button>
+							</aside>
+						)}
 					{content}
 				</AppShell>
 

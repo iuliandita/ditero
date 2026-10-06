@@ -2724,5 +2724,57 @@
 	"archive_export_selection_limit": "تتجاوز الملفات المحددة حدود الأرشيف. حدّد ملفات أقل، ثم حاول مرة أخرى.",
 	"archive_export_pending": "بعض التعديلات لا تزال معلّقة أو رُفضت أو تعذّر تأكيدها. احفظها أو عالجها، ثم أغلق مربع الحوار هذا وافتحه مجددًا.",
 	"comment_attachment_checking": "جارٍ التحقق من الملفات المحددة...",
-	"comment_sending": "جارٍ إرسال التعليق..."
+	"comment_sending": "جارٍ إرسال التعليق...",
+	"setup_title": "جهّز مساحتك الشخصية",
+	"setup_description": "ابدأ ببعض القوائم المفيدة، أو اختر قوائمك بنفسك، أو ابدأ بمساحة فارغة. يمكنك تخطي هذه الخطوة واستخدام Ditero فورًا.",
+	"setup_choices": "اختر نقطة البداية",
+	"setup_recommended": "موصى به",
+	"setup_basic": "أساسي",
+	"setup_basic_description": "التسوق والتنظيف ولوحة شخصية.",
+	"setup_guided": "موجَّه",
+	"setup_guided_description": "اختر قوائم البداية واللوحة التي تريدها.",
+	"setup_custom": "مخصّص",
+	"setup_custom_description": "ابدأ بمساحة فارغة.",
+	"setup_preview": "راجع محتوى البداية",
+	"setup_dashboard": "لوحة شخصية",
+	"setup_empty_preview": "لن تتم إضافة أي قوائم أو مهام.",
+	"setup_choose_content": "اختر قائمة واحدة على الأقل أو اللوحة، أو استخدم «مخصّص».",
+	"setup_continue": "متابعة",
+	"setup_back": "رجوع",
+	"setup_apply": "إضافة محتوى البداية",
+	"setup_start_empty": "ابدأ بدون محتوى",
+	"setup_skip": "تخطي الآن",
+	"setup_loading": "جارٍ تحميل إعدادك",
+	"setup_applying": "جارٍ إضافة محتوى البداية",
+	"setup_failed": "تعذّر تأكيد الإعداد. تحقق من الحالة قبل المحاولة مرة أخرى.",
+	"setup_retry": "أعد هذه المحاولة",
+	"setup_resume": "تحقق من حالة الخادم",
+	"setup_completed": "مساحتك جاهزة",
+	"setup_leave": "افتح Ditero",
+	"setup_open": "اختيار محتوى البداية",
+	"setup_pending": "تريد نقطة بداية؟ أضف بعض القوائم المفيدة، أو اترك مساحتك كما هي.",
+	"setup_conflict": "تغيّر إعدادك في جلسة أخرى. تحقق من حالته الحالية قبل المتابعة.",
+	"setup_managed": "لا يمكن للحساب المُدار إضافة محتوى البداية. اطلب من ولي أمرك تنظيم قوائمك المشتركة.",
+	"setup_task_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "{countNum} مهمة",
+				"countPlural=one": "{countNum} مهمة",
+				"countPlural=two": "{countNum} مهمتان",
+				"countPlural=few": "{countNum} مهام",
+				"countPlural=many": "{countNum} مهمة",
+				"countPlural=other": "{countNum} مهمة"
+			}
+		}
+	],
+	"setup_offline": "الإعداد الأولي يحتاج إلى اتصال. أعد الاتصال قبل إضافة المحتوى.",
+	"setup_empty_already": "اخترت بالفعل بداية فارغة. يمكنك الآن إضافة المحتوى الأولي.",
+	"setup_counters_hint": "تعكس قيم لوحة المعلومات المهام التي يمكنك الوصول إليها.",
+	"setup_personal_hint": "تتم إضافة المحتوى الأولي إلى مساحتك الشخصية. هذا لا يدعو أي شخص ولا يغيّر قوائمك الحالية."
 }

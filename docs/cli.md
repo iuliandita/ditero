@@ -503,3 +503,9 @@ required on every write, including replay. Cancellation or lost transport may le
 a committed result uncertain. Manually retry only the identical folder ID, full
 canonical body and UUID; never substitute fresh observations or a new key. UUIDs
 share the account-wide task/list/comment/folder write namespace.
+
+### Optional starter setup
+
+`ditero setup-status --json` reads the versioned setup status without changing content. An older server returning 404 produces `data: null`, meaning the capability is unavailable. Other errors retain their normal error codes. Discovery is bounded to 1.5 seconds and 16 KiB.
+
+`profile` may print a localized starter suggestion on stderr for a pending, eligible account. JSON stdout stays unchanged. The link always uses the configured server origin and `/setup`. No browser opens, and discovery failure does not block normal operations.

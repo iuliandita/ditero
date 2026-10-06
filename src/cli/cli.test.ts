@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import release from "../../release.json";
 import { CliError, canonicalServer, parseArguments } from "./arguments.ts";
-import { discover, MAX_PAGES, MAX_RESPONSE_BYTES } from "./client.ts";
+import {
+	discover,
+	MAX_PAGES,
+	MAX_RESPONSE_BYTES,
+	readSetupStatus,
+	setupNoticeURL,
+} from "./client.ts";
 import { runCli } from "./index.ts";
 
 const env = {
@@ -361,4 +367,145 @@ it("placement commands require explicit task/key and refuse collection filters",
 		],
 	])
 		expect(() => options(args)).toThrow();
+});
+
+describe("optional setup capability", () => {
+	const status = {
+		outcome: "pending",
+		revision: 0,
+		eligibility: "available",
+		catalogVersion: 1,
+		setupPath: "/setup",
+	};
+	it("prints strict dedicated setup status without chatter", async () => {
+		const stdout = vi.fn();
+		const stderr = vi.fn();
+		const fetcher = vi.fn(async (url: URL) => {
+			expect(url.pathname).toBe("/api/v1/setup-status");
+			expect(url.search).toBe("");
+			return page(status);
+		});
+		expect(
+			await runCli(
+				["setup-status", "--json"],
+				env,
+				{ stdout, stderr },
+				fetcher,
+			),
+		).toBe(0);
+		expect(JSON.parse(stdout.mock.calls[0][0])).toEqual({
+			version: 1,
+			data: status,
+			nextCursor: null,
+		});
+		expect(stderr).not.toHaveBeenCalled();
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+	it("treats only 404 as unavailable rather than pending", async () => {
+		expect(
+			await readSetupStatus(
+				options(["setup-status"]),
+				async () => new Response(null, { status: 404 }),
+			),
+		).toBeNull();
+		await expect(
+			readSetupStatus(
+				options(["setup-status"]),
+				async () => new Response(null, { status: 403 }),
+			),
+		).rejects.toMatchObject({ status: 403 });
+		expect(setupNoticeURL(null, env.DITERO_URL)).toBeNull();
+	});
+	it.each([
+		{ ...status, setupPath: "https://evil.invalid" },
+		{ ...status, userId: "other" },
+		{ ...status, revision: 1 },
+	])("refuses hostile status %j", async (data) => {
+		await expect(
+			readSetupStatus(options(["setup-status"]), async () => page(data)),
+		).rejects.toMatchObject({ exitCode: 8 });
+	});
+	it("only offers the configured origin to pending eligible accounts", () => {
+		expect(
+			setupNoticeURL(
+				status as Parameters<typeof setupNoticeURL>[0],
+				env.DITERO_URL,
+			),
+		).toBe(`${env.DITERO_URL}/setup`);
+		expect(
+			setupNoticeURL(
+				{ ...status, eligibility: "managed" } as Parameters<
+					typeof setupNoticeURL
+				>[0],
+				env.DITERO_URL,
+			),
+		).toBeNull();
+		expect(
+			setupNoticeURL(
+				{ ...status, outcome: "legacy" } as Parameters<
+					typeof setupNoticeURL
+				>[0],
+				env.DITERO_URL,
+			),
+		).toBeNull();
+	});
+	it.each([
+		"--all",
+		"--workspace",
+		"--limit",
+	])("rejects collection options for setup status %s", (flag) => {
+		expect(() =>
+			options(["setup-status", flag, ...(flag === "--all" ? [] : ["1"])]),
+		).toThrow(CliError);
+	});
+});
+
+describe("profile setup notice", () => {
+	const profile = {
+		id: "user",
+		name: "Name",
+		timezone: "UTC",
+		timezoneChosen: true,
+		serverTime: "2026-10-03T12:00:00Z",
+		locale: "en",
+		tokenAccess: "read",
+	};
+	it("keeps JSON stdout unchanged and localizes only stderr", async () => {
+		const stdout = vi.fn(),
+			stderr = vi.fn();
+		const fetcher = vi.fn(async (url: URL) =>
+			url.pathname === "/api/v1/me"
+				? page(profile)
+				: page({
+						outcome: "pending",
+						revision: 0,
+						eligibility: "available",
+						catalogVersion: 1,
+						setupPath: "/setup",
+					}),
+		);
+		expect(
+			await runCli(["profile", "--json"], env, { stdout, stderr }, fetcher),
+		).toBe(0);
+		expect(JSON.parse(stdout.mock.calls[0][0])).toEqual({
+			version: 1,
+			data: profile,
+			nextCursor: null,
+		});
+		expect(stderr.mock.calls[0][0]).toContain(`${env.DITERO_URL}/setup`);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+	});
+	it("does not fail profile when optional discovery is unavailable", async () => {
+		const stdout = vi.fn(),
+			stderr = vi.fn();
+		expect(
+			await runCli(["profile"], env, { stdout, stderr }, async (url: URL) =>
+				url.pathname === "/api/v1/me"
+					? page(profile)
+					: new Response(null, { status: 500 }),
+			),
+		).toBe(0);
+		expect(stderr).not.toHaveBeenCalled();
+		expect(stdout).toHaveBeenCalledTimes(1);
+	});
 });

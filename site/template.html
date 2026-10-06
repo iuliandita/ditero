@@ -5,35 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>@@title@@</title>
-<meta name="description" content="@@description@@">
 <link rel="canonical" href="@@canonical@@">
+<meta http-equiv="refresh" content="0;url=@@canonical@@">
 @@alternates@@
-<link rel="icon" href="@@prefix@@assets/ditero-symbol-teal.png">
-<link rel="stylesheet" href="@@prefix@@site.css">
 </head>
 <body>
-<a class="skip" href="#content">@@skip@@</a>
-<header class="shell masthead">
-<a class="brand" href="@@home@@" aria-label="Ditero"><picture><source media="(prefers-color-scheme: dark)" srcset="@@prefix@@assets/ditero-wordmark-dark.png"><img src="@@prefix@@assets/ditero-wordmark-light.png" alt="Ditero" width="240" height="80"></picture></a>
-<details class="language-menu"><summary><span>@@languages@@</span> <bdi>@@currentLanguage@@</bdi></summary><nav aria-label="@@languages@@" class="languages">@@languageLinks@@</nav></details>
-</header>
-<main id="content" class="shell">
-<section class="hero">
-<div class="hero-copy">
-<h1>@@heading@@</h1>
-<p class="intro">@@intro@@</p>
-<div class="actions"><a class="button primary" href="@@setupUrl@@">@@setup@@</a><div class="client-action"><p>@@downloadContext@@</p><a class="text-action" href="@@releaseUrl@@">@@download@@</a></div></div>
-<p class="release">@@releaseLabel@@ <a href="@@releaseUrl@@"><bdi>@@releaseVersion@@</bdi></a></p>
-</div>
-<figure class="product-preview"><picture><source media="(prefers-color-scheme: dark)" srcset="@@prefix@@assets/app-preview-dark.png"><img src="@@prefix@@assets/app-preview-light.png" alt="@@previewAlt@@" width="1440" height="1000" fetchpriority="high"></picture><figcaption>@@previewCaption@@</figcaption></figure>
-</section>
-<div class="content-grid">
-<div class="features"><section><h2>@@everydayTitle@@</h2><p>@@everyday@@</p></section><section><h2>@@localTitle@@</h2><p>@@local@@</p></section><section><h2>@@filesTitle@@</h2><p>@@files@@</p></section></div>
-<aside class="installation"><h2>@@requirementsTitle@@</h2><p>@@requirements@@</p><details class="operator-details"><summary>@@requirementsAdvancedTitle@@</summary><p>@@requirementsAdvanced@@</p></details><a href="@@setupUrl@@">@@setup@@</a></aside>
-</div>
-<section class="status"><div><h2>@@clientsTitle@@</h2><p>@@clients@@</p></div><div><h2>@@alphaTitle@@</h2><p>@@alpha@@</p></div></section>
-<section class="docs"><h2>@@docsTitle@@</h2><ul><li><a href="@@androidUrl@@">@@android@@</a></li><li><a href="@@desktopUrl@@">@@desktop@@</a></li><li><a href="@@backupUrl@@">@@backup@@</a></li><li><a href="@@securityUrl@@">@@security@@</a></li></ul></section>
+<main>
+<h1>@@title@@</h1>
+<p>@@message@@</p>
+<p><a href="@@canonical@@">@@link@@</a></p>
 </main>
-<footer class="shell"><p>@@license@@</p><a href="@@sourceUrl@@">@@source@@</a><a href="@@licenseUrl@@">MIT</a></footer>
 </body>
 </html>

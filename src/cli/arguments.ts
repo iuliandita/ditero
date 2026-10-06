@@ -31,6 +31,7 @@ export interface CliOptions {
 		| "edit-comment"
 		| "delete-comment"
 		| "profile"
+		| "setup-status"
 		| PublicApiResource
 		| "observe-folder"
 		| "create-folder"
@@ -165,6 +166,7 @@ export function parseArguments(
 				"edit-comment",
 				"delete-comment",
 				"profile",
+				"setup-status",
 				"observe-folder",
 				"create-folder",
 				"update-folder",
@@ -329,7 +331,7 @@ export function parseArguments(
 	}
 
 	if (
-		command === "profile" &&
+		(command === "profile" || command === "setup-status") &&
 		(flags.has("--all") || [...values.keys()].some((key) => key !== "--server"))
 	)
 		usageError();

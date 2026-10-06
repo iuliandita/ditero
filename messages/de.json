@@ -2536,5 +2536,53 @@
 	"archive_export_selection_limit": "Die ausgewählten Dateien überschreiten die Archivgrenzen. Wähle weniger Dateien aus und versuche es erneut.",
 	"archive_export_pending": "Einige Änderungen stehen noch aus, wurden abgelehnt oder konnten nicht bestätigt werden. Speichere oder kläre sie, dann schließe diesen Dialog und öffne ihn erneut.",
 	"comment_attachment_checking": "Ausgewählte Dateien werden geprüft...",
-	"comment_sending": "Kommentar wird gesendet..."
+	"comment_sending": "Kommentar wird gesendet...",
+	"setup_title": "Richte deinen persönlichen Bereich ein",
+	"setup_description": "Starte mit ein paar nützlichen Listen, wähle selbst aus oder beginne mit einem leeren Bereich. Du kannst das überspringen und Ditero sofort nutzen.",
+	"setup_choices": "Wähle einen Startpunkt",
+	"setup_recommended": "Empfohlen",
+	"setup_basic": "Basis",
+	"setup_basic_description": "Einkaufen, Putzen und ein persönliches Dashboard.",
+	"setup_guided": "Geführt",
+	"setup_guided_description": "Wähle die Startlisten und das Dashboard, die du möchtest.",
+	"setup_custom": "Individuell",
+	"setup_custom_description": "Beginne mit einem leeren Bereich.",
+	"setup_preview": "Sieh dir deine Startinhalte an",
+	"setup_dashboard": "Persönliches Dashboard",
+	"setup_empty_preview": "Es werden keine Listen oder Aufgaben hinzugefügt.",
+	"setup_choose_content": "Wähle mindestens eine Liste oder das Dashboard aus, oder nimm Individuell.",
+	"setup_continue": "Weiter",
+	"setup_back": "Zurück",
+	"setup_apply": "Startinhalte hinzufügen",
+	"setup_start_empty": "Leer starten",
+	"setup_skip": "Vorerst überspringen",
+	"setup_loading": "Deine Einrichtung wird geladen",
+	"setup_applying": "Startinhalte werden hinzugefügt",
+	"setup_failed": "Die Einrichtung konnte nicht bestätigt werden. Prüfe den Status, bevor du es erneut versuchst.",
+	"setup_retry": "Diesen Versuch wiederholen",
+	"setup_resume": "Serverstatus prüfen",
+	"setup_completed": "Dein Bereich ist bereit",
+	"setup_leave": "Ditero öffnen",
+	"setup_open": "Startinhalte auswählen",
+	"setup_pending": "Du möchtest einen Startpunkt? Füge ein paar nützliche Listen hinzu oder lass deinen Bereich, wie er ist.",
+	"setup_conflict": "Deine Einrichtung wurde in einer anderen Sitzung geändert. Prüfe den aktuellen Status, bevor du weitermachst.",
+	"setup_managed": "Ein verwaltetes Konto kann keine Startinhalte hinzufügen. Bitte deine Erziehungsberechtigten, eure gemeinsamen Listen zu organisieren.",
+	"setup_task_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Aufgabe",
+				"countPlural=other": "{countNum} Aufgaben"
+			}
+		}
+	],
+	"setup_offline": "Für die Starteinrichtung brauchst du eine Verbindung. Verbinde dich wieder, bevor du Inhalte hinzufügst.",
+	"setup_empty_already": "Du hast dich schon für einen leeren Start entschieden. Du kannst jetzt Starterinhalte hinzufügen.",
+	"setup_counters_hint": "Die Werte im Dashboard spiegeln die Aufgaben wider, auf die du Zugriff hast.",
+	"setup_personal_hint": "Starterinhalte werden zu deinem persönlichen Bereich hinzugefügt. Dadurch wird niemand eingeladen und deine bestehenden Listen bleiben unverändert."
 }
