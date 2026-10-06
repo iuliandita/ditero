@@ -503,7 +503,12 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		await outsider.goto(
 			`/accept?token=${encodeURIComponent(pendingLink.searchParams.get("token") as string)}`,
 		);
+		const rootNavigation = outsider.waitForURL(
+			new URL("/", outsider.url()).href,
+			{ waitUntil: "domcontentloaded" },
+		);
 		await outsider.getByTestId("accept-join").click();
+		await rootNavigation;
 		await expect(outsider.getByTestId("workspace")).toBeVisible();
 		await switchWorkspace(outsider, workspaceName);
 		await openTask(outsider, listName, taskName);

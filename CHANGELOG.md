@@ -31,6 +31,26 @@ All notable changes to this project are documented here. The format is based on
   content/ledger evidence. Public version 2 uploads remain disabled pending the
   complete history interface and browser qualification.
 
+## [0.0.1-alpha.3] - 2026-10-06
+
+### Added
+
+- First-account setup with Basic, Guided and Custom modes and a preview before applying starter content.
+- Calendar subscriptions and subscription settings.
+- Expanded API/CLI/MCP task, list and folder workflows, comments, ordering and webhooks.
+- Terminal folder workflows, task presentation and reviewed task ordering.
+- Todoist project CSV and plain Trello board imports.
+- Voice quick-add controls with local recognition support. Physical microphone qualification remains open.
+- Android task-link foundations; authenticated and broader device journeys remain open.
+- Authenticated encrypted attachment archives and resumable attachment migration with reviewed parent mapping and durable replay.
+
+### Fixed
+
+- First-party signing-key retrieval without public network access, dashboard readability and keyboard dragging.
+- Saved views retain parent task context and avoid repeated workspace labels; assignee chips preserve accessible full names with less visual crowding.
+- Browser fixture isolation, invitation navigation readiness and Arabic history-import locale restoration.
+- Failed terminal mutation transitions include bounded diagnostics without changing assertions or deadlines.
+
 ## [0.0.1-alpha.1] - 2026-10-03
 
 ### Added
