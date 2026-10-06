@@ -300,7 +300,12 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 		destinationParent: { kind: "task", workspaceId: workspace.id },
 	});
 	expect(parent.destinationParent.id).not.toBe(sourceTask.id);
-	const choice = importer.getByRole("radio", {
+	const fileChoices = importer.getByRole("group", {
+		name: "Choose one file and its applied destination",
+		exact: true,
+	});
+	await expect(fileChoices).toBeVisible();
+	const choice = fileChoices.getByRole("radio", {
 		name: `${FILE_NAME} Applied destination: ${taskTitle} Source file: ${source.id}`,
 		exact: true,
 	});
@@ -319,9 +324,7 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	await expect(transfer).toBeEnabled({ timeout: DERIVE_TIMEOUT });
 	await expect(choice).toBeChecked();
 	await expect(choice).toBeDisabled();
-	await expect(
-		importer.getByText(m.archive_import_choose(), { exact: true }),
-	).toHaveCount(0);
+	await expect(fileChoices).toBeVisible();
 	let committedId = "";
 	let finalizeCalls = 0;
 	let reserveCalls = 0;
@@ -431,9 +434,7 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	expect(finalizeCalls).toBe(1);
 	await expect(choice).toBeChecked();
 	await expect(choice).toBeDisabled();
-	await expect(
-		importer.getByText(m.archive_import_choose(), { exact: true }),
-	).toHaveCount(0);
+	await expect(fileChoices).toBeVisible();
 	const reconcile = importer.getByRole("button", {
 		name: "Check server status",
 		exact: true,
@@ -623,9 +624,7 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	).toEqual([]);
 	await expect(choice).toBeChecked();
 	await expect(choice).toBeDisabled();
-	await expect(
-		importer.getByText(m.archive_import_choose(), { exact: true }),
-	).toHaveCount(0);
+	await expect(fileChoices).toBeVisible();
 	await capture(page, "archive-import-completed-desktop-light");
 	await importer
 		.getByRole("button", { name: "Close", exact: true })
