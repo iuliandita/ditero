@@ -143,6 +143,8 @@ export function CommentThread({
 			active === document.body ||
 			active === intent.composer ||
 			active === intent.initiator ||
+			active ===
+				intent.composer.closest('[data-testid="task-detail"][role="dialog"]') ||
 			!!(active && intent.rotation?.contains(active))
 		);
 	}
