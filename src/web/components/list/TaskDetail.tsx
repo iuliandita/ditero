@@ -287,7 +287,17 @@ export function TaskDetail({
 		(l) => l.date === today && l.status === "done",
 	);
 	const subtasks = useMemo(
-		() => (task ? allTasks.filter((t) => t.parentId === task.id) : []),
+		() =>
+			task
+				? allTasks
+						.filter((t) => t.parentId === task.id)
+						.sort((a, b) => {
+							if (a.sortKey !== b.sortKey) {
+								return a.sortKey < b.sortKey ? -1 : 1;
+							}
+							return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+						})
+				: [],
 		[allTasks, task],
 	);
 	const canMove =
