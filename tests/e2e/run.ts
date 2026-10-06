@@ -350,7 +350,9 @@ try {
 	// The api servers import src/paraglide (generated, gitignored) at boot, and
 	// they start before vite -- whose paraglide plugin would otherwise be the
 	// only thing generating it.
-	await run("bun", ["run", "i18n:compile"]);
+	if (env.E2E_BROWSER_MODE === "compiled")
+		await run("bun", ["run", "tests/e2e/compiled-web.ts", "validate"]);
+	else await run("bun", ["run", "i18n:compile"]);
 	// A fresh UUID cannot pre-exist; anything carrying it is not ours to adopt.
 	assertEmptyInventory(readInventory(), stackRun);
 	await up(["up", "--detach", "--wait", "upstream-db"]);

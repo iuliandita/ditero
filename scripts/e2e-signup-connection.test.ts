@@ -104,7 +104,8 @@ async function fixture(nodeEnv = "test", enabled = true) {
 	vi.stubEnv("DITERO_E2E_SIGNUP_TRANSPORT", enabled ? "1" : "0");
 	vi.spyOn(console, "warn").mockImplementation(() => {});
 	vi.resetModules();
-	const { default: config } = await import("../vite.config.ts");
+	const { default: configure } = await import("../vite.config.ts");
+	const config = configure({ command: "serve", mode: "development" });
 	const directory = await mkdtemp(join(tmpdir(), "signup-connection-"));
 	const accepted: string[] = [];
 	let interrupt = false;

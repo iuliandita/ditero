@@ -58,11 +58,11 @@ const FocusContext = createContext<FocusTimerApi | null>(null);
 
 const CUE_MS = 5000;
 
-// e2e time seam (dev builds only): a short interval length so the timer completes
+// e2e time seam (development and explicit test builds): a short interval length so the timer completes
 // in seconds instead of minutes without faking the whole page clock (which Zero's
 // sync loop rides on). Production builds tree-shake this branch out.
 function testOverrideSec(): number | null {
-	if (!import.meta.env.DEV) return null;
+	if (!import.meta.env.DEV && import.meta.env.MODE !== "test") return null;
 	const v = (globalThis as { __diteroFocusTestSec?: unknown })
 		.__diteroFocusTestSec;
 	return typeof v === "number" && v > 0 ? v : null;

@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import { parsePort, portOf } from "./scripts/e2e-stack.ts";
+import { validateCompiledWeb } from "./tests/e2e/compiled-web.ts";
 import { validateOrigin } from "./tests/e2e/helpers.ts";
 import { privateHost } from "./tests/support/private-host.ts";
 
@@ -17,6 +18,10 @@ const ZERO_ORIGIN = origin("E2E_PUBLIC_ZERO_URL", "http://localhost:4849");
 // tests/e2e/run.ts reserves distinct ports per run and passes them as origins;
 // every listener below follows its origin. Direct runs keep the fixed defaults.
 const WEB_PORT = portOf(WEB_ORIGIN, "E2E_WEB_URL");
+const compiledDist =
+	process.env.E2E_BROWSER_MODE === "compiled" ? validateCompiledWeb() : null;
+if (compiledDist && !/^[/A-Za-z0-9_.-]+$/.test(compiledDist))
+	throw new Error("Unsupported compiled output path");
 const API_PORT = portOf(API_ORIGIN, "E2E_API_URL");
 const MAIL_PORT = portOf(MAIL_ORIGIN, "E2E_MAIL_API_URL");
 
@@ -191,7 +196,9 @@ export default defineConfig({
 		},
 		{
 			// strictPort: Vite must not slide to another port if this one was taken.
-			command: `bun run dev:web --port ${WEB_PORT} --strictPort`,
+			command: compiledDist
+				? `bun x vite preview --mode test --outDir ${compiledDist} --port ${WEB_PORT} --strictPort`
+				: `bun run dev:web --port ${WEB_PORT} --strictPort`,
 			port: WEB_PORT,
 			reuseExistingServer: false,
 			timeout: 60_000,
