@@ -22,6 +22,49 @@ async function readDownload(download: Download) {
 		parts.push(Buffer.from(part));
 	return Buffer.concat(parts);
 }
+async function captureResponseBody(page: Page, path: string, method: string) {
+	const url = new URL(path, page.url()).href;
+	let finish!: (result: { body: string } | { error: unknown }) => void;
+	const captured = new Promise<{ body: string } | { error: unknown }>(
+		(resolve) => {
+			finish = resolve;
+		},
+	);
+	await page.route(
+		url,
+		async (route) => {
+			try {
+				expect(route.request().method()).toBe(method);
+				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				expect(actual.status()).toBe(200);
+				const body = await actual.text();
+				await route.fulfill({ response: actual });
+				finish({ body });
+			} catch (error) {
+				await route.abort().catch(() => {});
+				finish({ error });
+			}
+		},
+		{ times: 1 },
+	);
+	const observed = page
+		.waitForResponse(
+			(response) =>
+				response.url() === url && response.request().method() === method,
+		)
+		.then(
+			(actual) => ({ actual }),
+			(error: unknown) => ({ error }),
+		);
+	return async () => {
+		const capture = await captured;
+		if ("error" in capture) throw capture.error;
+		const browser = await observed;
+		if ("error" in browser) throw browser.error;
+		expect(browser.actual.ok()).toBe(true);
+		return capture.body;
+	};
+}
 async function enroll(page: Page) {
 	await expect(page.getByTestId("e2e-enroll-dialog")).toBeVisible();
 	await page.getByTestId("e2e-passphrase").fill(ACCOUNT_SECRET);
@@ -88,12 +131,11 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	await goToSettings(page);
 	await page.getByTestId("theme-switcher").click();
 	await page.getByRole("option", { name: "Light", exact: true }).click();
-	const contentResponse = page
-		.waitForResponse("**/api/portability/export?version=2")
-		.then(async (response) => {
-			expect(response.ok()).toBe(true);
-			return await response.text();
-		});
+	const contentResponse = await captureResponseBody(
+		page,
+		"/api/portability/export?version=2",
+		"GET",
+	);
 	await page
 		.getByRole("button", { name: "Export selected files", exact: true })
 		.click();
@@ -101,7 +143,7 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	await exporter
 		.getByRole("checkbox", { name: FILE_NAME, exact: true })
 		.check({ timeout: DERIVE_TIMEOUT });
-	const exactExportedContent = await contentResponse;
+	const exactExportedContent = await contentResponse();
 	const fields = exporter.locator('input[type="password"]');
 	await fields.nth(0).fill(ARCHIVE_SECRET);
 	await fields.nth(1).fill(ARCHIVE_SECRET);
@@ -164,15 +206,15 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	);
 	for (const trigger of await panel.getByTestId("import-workspace").all())
 		await chooseOption(page, trigger, workspace.name);
-	const saved = page.waitForResponse(
-		(response) =>
-			new URL(response.url()).pathname === "/api/portability/import/plans" &&
-			response.ok(),
+	const saved = await captureResponseBody(
+		page,
+		"/api/portability/import/plans",
+		"POST",
 	);
 	await panel
 		.getByRole("button", { name: "Save dry run", exact: true })
 		.click();
-	const job = await (await saved).json();
+	const job = JSON.parse(await saved());
 	expect(job.report).toMatchObject({ plannerVersion: 5, applySupported: true });
 	expect(job.documentDigest).toMatch(/^[0-9a-f]{64}$/);
 	expect(job.mappingDigest).toMatch(/^[0-9a-f]{64}$/);
@@ -190,11 +232,10 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	expect(run.ok()).toBe(true);
 	expect((await run.json()).run.state).toBe("completed");
 
-	const parentsResponse = page.waitForResponse(
-		(response) =>
-			new URL(response.url()).pathname ===
-				`/api/portability/import/plans/${job.id}/attachment-parents` &&
-			response.ok(),
+	const parentsResponse = await captureResponseBody(
+		page,
+		`/api/portability/import/plans/${job.id}/attachment-parents`,
+		"GET",
 	);
 	await panel
 		.getByRole("button", { name: "Import selected files", exact: true })
@@ -213,7 +254,7 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	await importer
 		.getByRole("button", { name: "Open archive", exact: true })
 		.click();
-	const parents = await (await parentsResponse).json();
+	const parents = JSON.parse(await parentsResponse());
 	const parent = parents.items.find(
 		(item: { sourceAttachmentId: string }) =>
 			item.sourceAttachmentId === source.id,
