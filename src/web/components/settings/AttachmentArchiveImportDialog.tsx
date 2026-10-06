@@ -136,14 +136,22 @@ export function AttachmentArchiveImportDialog({
 		ordinal: null,
 		code: null,
 		reservation: null,
+		inspection: null,
 	});
 	const [parents, setParents] = useState<MigrationParentPage["items"]>([]);
 	const [next, setNext] = useState<number | null>(-1);
 	const [prepared, setPrepared] = useState(false);
+	const [confirmRecovery, setConfirmRecovery] = useState(false);
 	const [chosenOrdinal, setChosenOrdinal] = useState<number | null>(null);
 	const status = useRef<HTMLParagraphElement | null>(null);
 	const actionFocused = useRef(false);
 	const id = useId();
+	const selectedParent = parents.find(
+		(parent) => parent.ordinal === chosenOrdinal,
+	);
+	const replacementBlocked =
+		!!selectedParent?.blockedReason ||
+		state.inspection?.attachmentState === "deleting";
 	const browserOnly =
 		keys.runtime === browserE2eRuntime && !keys.runtime.attachments;
 	const unlocked = keys.ready && keys.state === "ready";
@@ -163,6 +171,7 @@ export function AttachmentArchiveImportDialog({
 				ordinal: null,
 				code: "retired",
 				reservation: null,
+				inspection: null,
 			});
 		}
 		return () => {
@@ -182,6 +191,9 @@ export function AttachmentArchiveImportDialog({
 		flight.current = null;
 		setBusy(false);
 		setPassphrase("");
+		setArchive("");
+		setContent("");
+		setConfirmRecovery(false);
 		setSourceNames(new Map());
 		setParents([]);
 		setPrepared(false);
@@ -192,6 +204,7 @@ export function AttachmentArchiveImportDialog({
 			ordinal: null,
 			code: "locked",
 			reservation: null,
+			inspection: null,
 		});
 	}, [unlocked]);
 	function checkpoint() {
@@ -251,7 +264,12 @@ export function AttachmentArchiveImportDialog({
 				signal: scope.current.signal,
 				onState: (value) => {
 					if (alive.current && !scope.current.signal.aborted) {
-						if (value.stage === "retired") setChosenOrdinal(null);
+						if (value.stage === "retired") {
+							setChosenOrdinal(null);
+							setConfirmRecovery(false);
+							setPrepared(false);
+						}
+						setPrepared(controller.current?.hasPrepared ?? false);
 						setState(value);
 					}
 				},
@@ -457,7 +475,6 @@ export function AttachmentArchiveImportDialog({
 														disabled={
 															busy ||
 															prepared ||
-															!!parent.blockedReason ||
 															!parent.destinationParent ||
 															!controller.current?.archiveSourceIds.includes(
 																parent.sourceAttachmentId,
@@ -467,6 +484,8 @@ export function AttachmentArchiveImportDialog({
 															try {
 																if (!controller.current) return;
 																controller.current.select(parent.ordinal);
+																void run((value) => value.inspect());
+																setConfirmRecovery(false);
 																setChosenOrdinal(parent.ordinal);
 																setFailed(false);
 															} catch {
@@ -514,17 +533,67 @@ export function AttachmentArchiveImportDialog({
 							{state.stage === "selected" && (
 								<Button
 									className={controlClass}
-									disabled={busy}
+									disabled={busy || !!selectedParent?.blockedReason}
 									onClick={() =>
 										void run(async (value) => {
-											await value.prepare();
+											const result = await value.prepare();
 											checkpoint();
-											setPrepared(true);
+											setPrepared(result !== null);
 										})
 									}
 								>
 									{m.archive_import_prepare()}
 								</Button>
+							)}
+							{state.stage === "recovery-required" && !state.inspection && (
+								<Button
+									className={controlClass}
+									disabled={busy}
+									onClick={() => void run((value) => value.inspect())}
+								>
+									{m.archive_import_reconcile()}
+								</Button>
+							)}
+							{state.stage === "recovery-required" && state.inspection && (
+								<div className="space-y-2">
+									<p className="text-sm">{m.archive_import_recovery_note()}</p>
+									{!confirmRecovery ? (
+										<Button
+											className={controlClass}
+											disabled={busy || replacementBlocked}
+											onClick={() => setConfirmRecovery(true)}
+										>
+											{m.archive_import_replace()}
+										</Button>
+									) : (
+										<>
+											<p className="text-sm">
+												{m.archive_import_replace_confirmation()}
+											</p>
+											<Button
+												className={controlClass}
+												disabled={busy || replacementBlocked}
+												onClick={() =>
+													void run(async (value) => {
+														setConfirmRecovery(false);
+														await value.recover({ retireLive: true });
+														setPrepared(value.hasPrepared);
+													})
+												}
+											>
+												{m.archive_import_replace_confirm()}
+											</Button>
+											<Button
+												className={controlClass}
+												variant="outline"
+												disabled={busy || replacementBlocked}
+												onClick={() => setConfirmRecovery(false)}
+											>
+												{m.confirm_cancel()}
+											</Button>
+										</>
+									)}
+								</div>
 							)}
 							{state.stage === "prepared" && (
 								<Button
@@ -535,7 +604,7 @@ export function AttachmentArchiveImportDialog({
 									{m.archive_import_transfer()}
 								</Button>
 							)}
-							{prepared &&
+							{state.ordinal !== null &&
 								["uncertain", "error", "cancelled"].includes(state.stage) && (
 									<div className="flex flex-wrap gap-2">
 										<Button
@@ -545,14 +614,16 @@ export function AttachmentArchiveImportDialog({
 										>
 											{m.archive_import_reconcile()}
 										</Button>
-										<Button
-											className={controlClass}
-											variant="outline"
-											disabled={busy}
-											onClick={() => void run((value) => value.retry())}
-										>
-											{m.archive_import_retry()}
-										</Button>
+										{prepared && (
+											<Button
+												className={controlClass}
+												variant="outline"
+												disabled={busy}
+												onClick={() => void run((value) => value.retry())}
+											>
+												{m.archive_import_retry()}
+											</Button>
+										)}
 									</div>
 								)}
 							{prepared &&

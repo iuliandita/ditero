@@ -118,7 +118,8 @@ export async function attachmentQuotaWouldExceed(
 		   filter (where state = 'committed'), 0)::text
 		   as committed,
 		 coalesce(sum(declared_bytes + coalesce(thumbnail_declared_bytes, 0)) filter
-		   (where state = any($2::attachment_state[])), 0)::text as reserved
+		   (where state = any($2::attachment_state[])
+         or (state = 'aborted' and left(id, 10) = 'migration_')), 0)::text as reserved
 		 from attachment where workspace_id = $1`,
 		[workspaceId, ["reserved", "uploading"]],
 	);

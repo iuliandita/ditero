@@ -702,7 +702,12 @@ describe("attachment parent discovery transport", () => {
 		expect(reply.headers.get("x-content-type-options")).toBe("nosniff");
 	});
 });
-const reservations = vi.hoisted(() => ({ reserve: vi.fn(), status: vi.fn() }));
+const reservations = vi.hoisted(() => ({
+	reserve: vi.fn(),
+	status: vi.fn(),
+	inspect: vi.fn(),
+	recover: vi.fn(),
+}));
 vi.mock("./attachment-migration-store.ts", async (original) => {
 	const module =
 		await original<typeof import("./attachment-migration-store.ts")>();
@@ -710,6 +715,8 @@ vi.mock("./attachment-migration-store.ts", async (original) => {
 		...module,
 		reserveAttachmentMigration: reservations.reserve,
 		getAttachmentMigrationStatus: reservations.status,
+		inspectAttachmentMigration: reservations.inspect,
+		recoverAttachmentMigration: reservations.recover,
 	};
 });
 const job = "a".repeat(64);
@@ -1003,4 +1010,146 @@ test("reservation enforces unchanged five-second body deadline", async () => {
 	} finally {
 		vi.useRealTimers();
 	}
+});
+
+describe("attachment recovery transport", () => {
+	const url = reservationURL.replace(
+		"attachment-reservations",
+		"attachment-recoveries",
+	);
+	const inspectionURL = reservationURL.replace(
+		"attachment-reservations",
+		"attachment-migrations",
+	);
+	function body() {
+		const { expectedRevision: _revision, ...request } = preparedRequest();
+		return {
+			...request,
+			previous: {
+				associationId: "22222222-2222-4222-8222-222222222222",
+				attemptId: "33333333-3333-4333-8333-333333333333",
+				targetAttachmentId: "migration_44444444-4444-4444-8444-444444444444",
+				revision: 1,
+			},
+			retireLive: false,
+		};
+	}
+	beforeEach(() => {
+		reservations.reserve.mockResolvedValue({ revision: 1 });
+		reservations.recover.mockResolvedValue({
+			outcome: "reserved",
+			status: { revision: 2 },
+		});
+		reservations.inspect.mockResolvedValue({ revision: 1, recoverable: true });
+	});
+	test("inspection forwards captured owner, exact ordinal and cancellation privately", async () => {
+		const request = new Request(`${inspectionURL}?ordinal=7`, {
+			headers: { "x-user": "caller" },
+		});
+		const reply = await app().handle(request);
+		expect(reply.status).toBe(200);
+		expect(await reply.json()).toEqual({ revision: 1, recoverable: true });
+		expect(reply.headers.get("cache-control")).toBe("no-store");
+		expect(reservations.inspect).toHaveBeenCalledExactlyOnceWith(
+			expect.anything(),
+			"caller",
+			job,
+			7,
+			{ signal: request.signal },
+		);
+	});
+	test.each([
+		"",
+		"?ordinal=01",
+		"?ordinal=1&ownerId=other",
+		"?ordinal=1&ordinal=2",
+	])("rejects invalid inspection selector %s", async (query) => {
+		expect(
+			(
+				await app().handle(
+					new Request(`${inspectionURL}${query}`, {
+						headers: { "x-user": "caller" },
+					}),
+				)
+			).status,
+		).toBe(400);
+		expect(reservations.inspect).not.toHaveBeenCalled();
+	});
+	test("recovery passes only validated witness and captured authority", async () => {
+		const request = reserveRequest(JSON.stringify(body()), {}, url);
+		const reply = await app().handle(request);
+		expect(reply.status).toBe(200);
+		expect(reply.headers.get("cache-control")).toBe("no-store");
+		expect(reservations.recover).toHaveBeenCalledExactlyOnceWith(
+			expect.anything(),
+			{
+				...body(),
+				prepared: {
+					...body().prepared,
+					thumbnailDeclaredBytes: null,
+					thumbnailCiphertextSha256: null,
+				},
+				ownerId: "caller",
+				jobId: job,
+			},
+			{ signal: request.signal },
+		);
+	});
+	test.each([
+		{ ownerId: "foreign" },
+		{ jobId: job },
+		{ expectedRevision: 1 },
+		{ retireLive: undefined },
+		{ retireLive: "true" },
+		{ previous: { ...body().previous, revision: 0 } },
+		{ previous: { ...body().previous, attemptId: null } },
+		{ previous: { ...body().previous, extra: true } },
+		{ prepared: { ...body().prepared, extra: true } },
+	])("rejects untrusted recovery fields %j", async (change) => {
+		const reply = await app().handle(
+			reserveRequest(JSON.stringify({ ...body(), ...change }), {}, url),
+		);
+		expect(reply.status).toBe(400);
+		expect(await reply.json()).toEqual({ code: "invalid-migration-recovery" });
+		expect(reservations.recover).not.toHaveBeenCalled();
+	});
+	test.each<Record<string, string>>([
+		{ origin: "https://foreign.example" },
+		{ origin: "" },
+		{ "x-user": "" },
+	])("guards recovery before reading %j", async (headers) => {
+		expect([401, 403]).toContain(
+			(await app().handle(reserveRequest("{", headers, url))).status,
+		);
+		expect(reservations.recover).not.toHaveBeenCalled();
+	});
+	test("recovery retains shared admission until the operation settles", async () => {
+		const pending = Promise.withResolvers<unknown>();
+		reservations.recover.mockReturnValueOnce(pending.promise);
+		const api = app();
+		const recovery = api.handle(
+			reserveRequest(JSON.stringify(body()), {}, url),
+		);
+		try {
+			await vi.waitFor(() =>
+				expect(reservations.recover).toHaveBeenCalledTimes(1),
+			);
+			expect((await api.handle(reserveRequest())).status).toBe(429);
+		} finally {
+			pending.resolve({ outcome: "reserved", status: { revision: 2 } });
+			await recovery;
+		}
+		expect((await recovery).status).toBe(200);
+		expect((await api.handle(reserveRequest())).status).toBe(200);
+	});
+	test("propagates recovery conflict without exposing storage details", async () => {
+		reservations.recover.mockRejectedValueOnce(
+			new ImportPlanStoreError("migration-revision-conflict", 409),
+		);
+		const reply = await app().handle(
+			reserveRequest(JSON.stringify(body()), {}, url),
+		);
+		expect(reply.status).toBe(409);
+		expect(await reply.json()).toEqual({ code: "migration-revision-conflict" });
+	});
 });

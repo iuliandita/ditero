@@ -232,10 +232,12 @@ metadata. A selection may reach a limit before reaching 64 files.
    document remains available when continuing directly from the loaded import.
    Choose **Encrypted files archive**, enter its **Archive passphrase**, and select
    **Open archive**. The destination account may differ from the exporting account.
-3. Choose one file and review its **Applied destination:**. Blocked files show a
-   reason. Select **Prepare file**, then **Transfer prepared file**. Preparation
-   alone does not transfer anything; files are re-encrypted for the destination.
-   **File committed and confirmed by the server.** confirms this file's completion.
+3. Choose one file and review its **Applied destination:**. The browser checks its
+   retained server status first. **File committed and confirmed by the server.**
+   confirms prior completion without importing another copy. For a new transfer,
+   select **Prepare file**, then **Transfer prepared file**. Preparation alone does
+   not transfer anything; files are re-encrypted for the destination. Blocked files
+   show a reason.
 
 ### Uncertain outcomes and recovery
 
@@ -244,12 +246,24 @@ status** before deciding whether to use **Retry this attempt**. Retry uses the s
 prepared attempt. Stopping or closing cancels local work and does not confirm a
 server undo; **Cancel server reservation** also requires server confirmation.
 
-Prepared retry data is retained only while this operation remains open. Closing,
-reloading or losing the key session does not guarantee that a transfer can resume.
-If the dialog says **This attempt needs explicit recovery.**, keep the original
-pair and saved plan. Recovery for expired or lost preparation is not available
-through this workflow; closing and preparing again does not replace the retained
-attempt. Do not blindly reapply the content import to work around a file failure.
+Prepared retry data stays in memory only while this operation remains open.
+Closing, reloading, changing accounts or losing the key session discards it.
+Reopen the same completed saved plan with the original paired content JSON, files
+archive and archive passphrase, then choose the file to inspect its retained
+server status. Confirmed completion remains recorded even if the destination file
+was later deleted.
+
+When replacement is permitted, select **Replace file transfer**, review the
+warning, then select **Confirm replacement**. This explicitly abandons the retained
+attempt, including any upload still in progress, and starts a fresh encrypted
+transfer to the same applied destination. An uncertain replacement response must
+be checked before retrying; retry retains the same prepared replacement attempt.
+Recovery does not reapply the content import or create permissions.
+
+Retired attempts continue to count toward attachment quota until garbage
+collection removes their stored files and reservation rows. A replacement can
+therefore be refused for insufficient quota while cleanup is pending. This
+recovery flow is browser-only; it remains unavailable in Android and desktop apps.
 
 ## Other export exclusions
 

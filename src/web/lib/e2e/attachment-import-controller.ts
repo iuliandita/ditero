@@ -10,7 +10,9 @@ import { openAttachmentArchive } from "./attachment-archive.ts";
 import {
 	createAttachmentMigrationApi,
 	type MigrationBinding,
+	type MigrationInspection,
 	type MigrationParentPage,
+	type MigrationRecoveryRequest,
 	type MigrationReservation,
 	type MigrationReservationRequest,
 	MigrationTransportError,
@@ -42,6 +44,7 @@ export type AttachmentImportState = Readonly<{
 	ordinal: number | null;
 	code: string | null;
 	reservation: Readonly<MigrationReservation> | null;
+	inspection: Readonly<MigrationInspection> | null;
 }>;
 export class AttachmentImportError extends Error {
 	constructor(readonly code: string) {
@@ -71,6 +74,7 @@ export function createAttachmentImportController(options: {
 		ordinal: null,
 		code: null,
 		reservation: null,
+		inspection: null,
 	});
 	let opened: Opened | undefined;
 	let document:
@@ -81,7 +85,15 @@ export function createAttachmentImportController(options: {
 	let frozen: Frozen | undefined;
 	let request: MigrationReservationRequest | undefined;
 	let reservation: MigrationReservation | undefined;
-	let mutation: "reserve" | "upload" | "thumbnail" | "finalize" | null = null;
+	let inspected: MigrationInspection | undefined;
+	let recoveryRequest: MigrationRecoveryRequest | undefined;
+	let mutation:
+		| "recover"
+		| "reserve"
+		| "upload"
+		| "thumbnail"
+		| "finalize"
+		| null = null;
 	const parents = new Map<number, Parent>();
 	function parseHistoryDocument(text: string) {
 		return parseImportDocument(text, { historyPreview: true });
@@ -92,6 +104,14 @@ export function createAttachmentImportController(options: {
 			ordinal: selected?.ordinal ?? null,
 			code,
 			reservation: reservation ? Object.freeze({ ...reservation }) : null,
+			inspection: inspected
+				? Object.freeze({
+						...inspected,
+						destinationParent: Object.freeze({
+							...inspected.destinationParent,
+						}),
+					})
+				: null,
 		});
 		options.onState?.(state);
 	}
@@ -159,7 +179,7 @@ export function createAttachmentImportController(options: {
 				code === "locked" ||
 				code === "native-unavailable"
 			)
-				publish("retired", code);
+				retire(code);
 			else if (
 				code === "migration-explicit-recovery-required" ||
 				code === "recovery-required" ||
@@ -204,10 +224,12 @@ export function createAttachmentImportController(options: {
 		if (
 			result.targetAttachmentId !== current.frozen.prepared.id ||
 			!result.attemptId ||
-			result.revision !== 1 ||
+			result.revision !==
+				(recoveryRequest ? recoveryRequest.previous.revision + 1 : 1) ||
 			(reservation &&
 				(result.associationId !== reservation.associationId ||
-					result.attemptId !== reservation.attemptId))
+					result.attemptId !== reservation.attemptId ||
+					result.revision !== reservation.revision))
 		)
 			throw new AttachmentImportError("reservation-identity-mismatch");
 		reservation = Object.freeze({ ...result });
@@ -224,6 +246,99 @@ export function createAttachmentImportController(options: {
 		)
 			throw new AttachmentImportError("recovery-required");
 		return false;
+	}
+	function retire(code: string) {
+		retired = true;
+		abort.abort();
+		opened = undefined;
+		document = undefined;
+		frozen = undefined;
+		request = undefined;
+		recoveryRequest = undefined;
+		inspected = undefined;
+		reservation = undefined;
+		selected = undefined;
+		parents.clear();
+		publish("retired", code);
+	}
+	function expectedInspection() {
+		if (!selected?.destinationParent)
+			throw new AttachmentImportError("parent-unavailable");
+		return {
+			sourceFingerprint: selected.sourceAttachmentFingerprint,
+			destinationParent: selected.destinationParent,
+		};
+	}
+	async function inspect() {
+		if (!selected || !opened) throw new AttachmentImportError("invalid-stage");
+		await fingerprint(selected);
+		try {
+			const result = await wait(
+				api.inspect(selected.ordinal, expectedInspection(), abort.signal),
+			);
+			inspected = Object.freeze({ ...result });
+			if (result.committed) {
+				reservation = Object.freeze({ ...result });
+				publish("complete");
+			} else
+				publish(
+					"recovery-required",
+					result.recoverable ? "recovery-required" : "active-reservation",
+				);
+			return result;
+		} catch (error) {
+			if (error instanceof MigrationTransportError && error.status === 404) {
+				inspected = undefined;
+				publish(frozen ? "prepared" : "selected");
+				return null;
+			}
+			throw error;
+		}
+	}
+	function previousMatches(value: MigrationInspection) {
+		const previous = recoveryRequest?.previous;
+		return (
+			previous &&
+			value.associationId === previous.associationId &&
+			value.attemptId === previous.attemptId &&
+			value.targetAttachmentId === previous.targetAttachmentId &&
+			value.revision === previous.revision
+		);
+	}
+	async function replayRecovery() {
+		if (!recoveryRequest)
+			throw new AttachmentImportError("preparation-required");
+		const value = await inspect();
+		if (value?.committed) return;
+		if (!value) throw new AttachmentImportError("recovery-required");
+		if (
+			value.targetAttachmentId === recoveryRequest.prepared.id &&
+			value.revision === recoveryRequest.previous.revision + 1 &&
+			value.associationId === recoveryRequest.previous.associationId
+		) {
+			reservation = undefined;
+			if (accept(value)) return;
+			await finish(value);
+			return;
+		}
+		if (!previousMatches(value))
+			throw new AttachmentImportError("reservation-identity-mismatch");
+		mutation = "recover";
+		const result = await wait(
+			api.recover(recoveryRequest, expectedInspection(), abort.signal),
+		);
+		inspected = result.status;
+		reservation = undefined;
+		if (result.outcome === "committed") {
+			reservation = result.status;
+			publish("complete");
+			return;
+		}
+		if (result.outcome === "recovery-required") {
+			reservation = Object.freeze({ ...result.status });
+			throw new AttachmentImportError("recovery-required");
+		}
+		if (!accept(result.status)) await finish(result.status);
 	}
 	async function status() {
 		const current = requirePrepared();
@@ -292,9 +407,58 @@ export function createAttachmentImportController(options: {
 				true,
 			);
 	}
+	async function prepare() {
+		if (
+			!opened ||
+			!selected?.destinationParent ||
+			selected.blockedReason ||
+			frozen
+		)
+			throw new AttachmentImportError("invalid-stage");
+		publish("preparing");
+		await fingerprint(selected);
+		const entry = opened.manifest.entries.find(
+			(v) => v.source.id === selected?.sourceAttachmentId,
+		);
+		if (!entry) throw new AttachmentImportError("archive-entry-missing");
+		const parent = selected.destinationParent;
+		const key = await wait(ownership().workspaceKey(parent.workspaceId));
+		if (!key || key.workspaceId !== parent.workspaceId || key.wdk.length !== 32)
+			throw new AttachmentImportError("locked");
+		const wdk = key.wdk.slice();
+		try {
+			frozen = await wait(
+				prepareAttachmentMigration(
+					opened,
+					entry.entryId,
+					{
+						workspaceId: parent.workspaceId,
+						parentKind: parent.kind,
+						parentId: parent.id,
+						keyVersion: key.keyVersion,
+						wdk,
+					},
+					{ signal: abort.signal, checkpoint: check },
+				),
+			);
+		} finally {
+			wdk.fill(0);
+		}
+		request = Object.freeze({
+			ordinal: selected.ordinal,
+			sourceFingerprint: selected.sourceAttachmentFingerprint,
+			expectedRevision: 0,
+			prepared: Object.freeze({ ...frozen.prepared }),
+		});
+		publish("prepared");
+		return request.prepared;
+	}
 	return {
 		get state() {
 			return state;
+		},
+		get hasPrepared() {
+			return frozen !== undefined && request !== undefined;
 		},
 		describeArchiveSources(): Promise<
 			readonly { sourceId: string; filename: string }[]
@@ -393,7 +557,7 @@ export function createAttachmentImportController(options: {
 			check();
 			if (busy || request) throw new AttachmentImportError("invalid-stage");
 			const parent = parents.get(value);
-			if (!parent?.destinationParent || parent.blockedReason)
+			if (!parent?.destinationParent)
 				throw new AttachmentImportError("parent-unavailable");
 			if (
 				!opened?.manifest.entries.some(
@@ -404,52 +568,74 @@ export function createAttachmentImportController(options: {
 			selected = parent;
 			publish("selected");
 		},
+		inspect() {
+			return run(inspect, true);
+		},
 		prepare() {
 			return run(async () => {
-				if (!opened || !selected?.destinationParent || frozen)
-					throw new AttachmentImportError("invalid-stage");
-				publish("preparing");
-				await fingerprint(selected);
-				const entry = opened.manifest.entries.find(
-					(v) => v.source.id === selected?.sourceAttachmentId,
-				);
-				if (!entry) throw new AttachmentImportError("archive-entry-missing");
-				const parent = selected.destinationParent;
-				const key = await wait(ownership().workspaceKey(parent.workspaceId));
-				if (
-					!key ||
-					key.workspaceId !== parent.workspaceId ||
-					key.wdk.length !== 32
-				)
-					throw new AttachmentImportError("locked");
-				const wdk = key.wdk.slice();
-				try {
-					frozen = await wait(
-						prepareAttachmentMigration(
-							opened,
-							entry.entryId,
-							{
-								workspaceId: parent.workspaceId,
-								parentKind: parent.kind,
-								parentId: parent.id,
-								keyVersion: key.keyVersion,
-								wdk,
-							},
-							{ signal: abort.signal, checkpoint: check },
-						),
-					);
-				} finally {
-					wdk.fill(0);
-				}
-				request = Object.freeze({
-					ordinal: selected.ordinal,
-					sourceFingerprint: selected.sourceAttachmentFingerprint,
-					expectedRevision: 0,
-					prepared: Object.freeze({ ...frozen.prepared }),
-				});
-				publish("prepared");
-				return request.prepared;
+				if (await inspect()) return null;
+				return prepare();
 			});
+		},
+		recover(confirmation: { retireLive: boolean }) {
+			return run(async () => {
+				const approved = inspected;
+				if (!approved) throw new AttachmentImportError("inspection-required");
+				const previous = await inspect();
+				if (previous?.committed) return;
+				if (
+					previous &&
+					(previous.associationId !== approved.associationId ||
+						previous.attemptId !== approved.attemptId ||
+						previous.targetAttachmentId !== approved.targetAttachmentId ||
+						previous.revision !== approved.revision)
+				)
+					throw new AttachmentImportError("reservation-identity-mismatch");
+				if (
+					!previous ||
+					!previous.attemptId ||
+					!previous.targetAttachmentId ||
+					previous.attachmentState === "deleting" ||
+					!selected?.destinationParent ||
+					selected.blockedReason
+				)
+					throw new AttachmentImportError("recovery-required");
+				if (recoveryRequest) {
+					if (
+						!previous.recoverable ||
+						previous.associationId !== recoveryRequest.previous.associationId ||
+						previous.targetAttachmentId !== recoveryRequest.prepared.id ||
+						previous.revision !== recoveryRequest.previous.revision + 1 ||
+						!reservation ||
+						previous.associationId !== reservation.associationId ||
+						previous.attemptId !== reservation.attemptId ||
+						previous.targetAttachmentId !== reservation.targetAttachmentId ||
+						previous.revision !== reservation.revision
+					)
+						throw new AttachmentImportError("retry-required");
+					recoveryRequest = undefined;
+				}
+				if (!previous.recoverable && !confirmation.retireLive)
+					throw new AttachmentImportError("live-abandon-confirmation-required");
+				frozen = undefined;
+				request = undefined;
+				await prepare();
+				const current = requirePrepared();
+				recoveryRequest = Object.freeze({
+					ordinal: current.request.ordinal,
+					sourceFingerprint: current.request.sourceFingerprint,
+					previous: Object.freeze({
+						associationId: previous.associationId,
+						attemptId: previous.attemptId,
+						targetAttachmentId: previous.targetAttachmentId,
+						revision: previous.revision,
+					}),
+					prepared: current.request.prepared,
+					retireLive: confirmation.retireLive,
+				});
+				reservation = undefined;
+				await replayRecovery();
+			}, true);
 		},
 		transfer() {
 			return run(async () => {
@@ -460,9 +646,9 @@ export function createAttachmentImportController(options: {
 		},
 		reconcile() {
 			return run(async () => {
-				requirePrepared();
+				if (!frozen || !request) return inspect();
 				if (abort.signal.aborted) abort = new AbortController();
-				const value = await status();
+				const value = recoveryRequest ? await inspect() : await status();
 				if (!value) publish("uncertain", "reservation-not-found");
 				else if (!value.committed) {
 					mutation = null;
@@ -477,6 +663,10 @@ export function createAttachmentImportController(options: {
 				if (state.stage === "complete" || state.stage === "recovery-required")
 					throw new AttachmentImportError("invalid-stage");
 				if (abort.signal.aborted) abort = new AbortController();
+				if (recoveryRequest) {
+					await replayRecovery();
+					return;
+				}
 				const value = await status();
 				if (value?.committed) return;
 				await finish(value);
@@ -522,7 +712,7 @@ export function createAttachmentImportController(options: {
 			}, true);
 		},
 		cancel() {
-			if (state.stage === "complete") return;
+			if (retired || state.stage === "complete") return;
 			abort.abort(
 				new DOMException("Attachment import cancelled", "AbortError"),
 			);
@@ -532,15 +722,8 @@ export function createAttachmentImportController(options: {
 			);
 		},
 		dispose() {
-			retired = true;
-			abort.abort();
 			options.signal?.removeEventListener("abort", forwardAbort);
-			opened = undefined;
-			document = undefined;
-			frozen = undefined;
-			request = undefined;
-			parents.clear();
-			publish("retired", "retired");
+			retire("retired");
 		},
 	};
 }

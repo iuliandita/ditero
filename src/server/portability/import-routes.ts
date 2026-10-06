@@ -20,8 +20,11 @@ import { PortableExportValidationError } from "../../domain/portability/validate
 import type { Guards } from "../guards.ts";
 import { getAttachmentMigrationParents } from "./attachment-migration-parents.ts";
 import {
+	attachmentMigrationRecoveryBodySchema,
 	attachmentMigrationReservationBodySchema,
 	getAttachmentMigrationStatus,
+	inspectAttachmentMigration,
+	recoverAttachmentMigration,
 	reserveAttachmentMigration,
 } from "./attachment-migration-store.ts";
 import { V4ApplyConflict } from "./import-activation.ts";
@@ -296,6 +299,22 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 	return new Elysia()
 		.use(importActivationRoutes(pool, guards))
 		.get(
+			"/api/portability/import/plans/:id/attachment-migrations",
+			guards.guardedGet((request, session) =>
+				handled(async () =>
+					response(
+						await inspectAttachmentMigration(
+							pool,
+							session.user.id,
+							reservationJobId(request),
+							reservationOrdinal(request),
+							{ signal: request.signal },
+						),
+					),
+				),
+			),
+		)
+		.get(
 			"/api/portability/import/plans/:id/attachment-reservations",
 			guards.guardedGet((request, session) =>
 				handled(async () => {
@@ -350,6 +369,56 @@ export function importPlanRoutes(pool: Pool, guards: Guards) {
 							throw new ImportRequestError("request-cancelled", 408);
 						return response(
 							await reserveAttachmentMigration(
+								pool,
+								{
+									...parsed.data,
+									ownerId: session.user.id,
+									jobId: reservationJobId(request),
+								},
+								{ signal: request.signal },
+							),
+						);
+					} finally {
+						activeUsers.delete(session.user.id);
+					}
+				}),
+			),
+			{ parse: "none" },
+		)
+		.post(
+			"/api/portability/import/plans/:id/attachment-recoveries",
+			guards.guardedPost((request, session) =>
+				handled(async () => {
+					if (activeUsers.size >= 2 || activeUsers.has(session.user.id))
+						return Response.json(
+							{ code: "import-busy" },
+							{ status: 429, headers: { ...headers, "retry-after": "5" } },
+						);
+					activeUsers.add(session.user.id);
+					try {
+						if (
+							(request.headers.get("content-type") ?? "")
+								.split(";")[0]
+								?.trim()
+								.toLowerCase() !== "application/json"
+						)
+							throw new ImportRequestError("invalid-request", 415);
+						let raw: unknown;
+						try {
+							raw = JSON.parse(
+								(await readRequest(request, 256 * 1024, 5000)).text,
+							);
+						} catch (error) {
+							if (error instanceof ImportRequestError) throw error;
+							throw new ImportRequestError("invalid-request", 400);
+						}
+						const parsed = attachmentMigrationRecoveryBodySchema.safeParse(raw);
+						if (!parsed.success)
+							throw new ImportRequestError("invalid-migration-recovery", 400);
+						if (request.signal.aborted)
+							throw new ImportRequestError("request-cancelled", 408);
+						return response(
+							await recoverAttachmentMigration(
 								pool,
 								{
 									...parsed.data,

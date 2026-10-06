@@ -79,6 +79,25 @@ export const attachmentMigrationReservationBodySchema = requestSchema.omit({
 	ownerId: true,
 	jobId: true,
 });
+const previousSchema = z.strictObject({
+	associationId: z.uuid(),
+	attemptId: z.uuid(),
+	targetAttachmentId: z
+		.string()
+		.regex(
+			/^migration_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+		),
+	revision: z.number().int().min(1).max(2147483647),
+});
+const recoverySchema = requestSchema.omit({ expectedRevision: true }).extend({
+	previous: previousSchema,
+	retireLive: z.boolean(),
+});
+export const attachmentMigrationRecoveryBodySchema = recoverySchema.omit({
+	ownerId: true,
+	jobId: true,
+});
+export type AttachmentMigrationRecovery = z.input<typeof recoverySchema>;
 export type AttachmentMigrationReservation = z.input<typeof requestSchema>;
 type Prepared = z.output<typeof preparedSchema>;
 type Association = {
@@ -86,6 +105,12 @@ type Association = {
 	owner_user_id: string;
 	origin_job_id: string;
 	origin_item_ordinal: number;
+	import_source_id: string;
+	source_attachment_id: string;
+	source_metadata: unknown;
+	document_digest: string;
+	mapping_digest: string;
+	plan_digest: string;
 	source_fingerprint: string;
 	target_workspace_id: string;
 	target_parent_kind: "list" | "task" | "comment";
@@ -602,4 +627,422 @@ export async function getAttachmentMigrationStatus(
 		},
 		options.signal,
 	);
+}
+
+type Retained = NonNullable<Awaited<ReturnType<typeof retained>>>;
+type Evidence = Awaited<
+	ReturnType<typeof readAttachmentMigrationParentOnClient>
+>;
+function destination(p: Association) {
+	return {
+		kind: p.target_parent_kind,
+		id: p.target_parent_id,
+		workspaceId: p.target_workspace_id,
+	};
+}
+function checkReceipt({ p, a }: Retained) {
+	if (
+		!a ||
+		a.association_id !== p.id ||
+		a.owner_user_id !== p.owner_user_id ||
+		a.id !== p.current_attempt_id ||
+		a.revision !== p.revision ||
+		a.job_id !== p.origin_job_id ||
+		(p.committed_attempt_id === null) !== (p.committed_at === null) ||
+		(p.committed_attempt_id !== null && p.committed_attempt_id !== a.id)
+	)
+		fail("migration-attempt-unavailable");
+	return a;
+}
+function checkProvenance(p: Association, evidence: Evidence) {
+	if (
+		p.import_source_id !== evidence.sourceId ||
+		p.document_digest !== evidence.documentDigest ||
+		p.mapping_digest !== evidence.mappingDigest ||
+		p.plan_digest !== evidence.planDigest ||
+		p.source_attachment_id !== evidence.sourceAttachment.id ||
+		p.source_fingerprint !== evidence.parent.sourceAttachmentFingerprint ||
+		!isDeepStrictEqual(p.source_metadata, evidence.sourceAttachment)
+	)
+		fail("migration-source-changed");
+}
+function checkDestination(p: Association, evidence: Evidence) {
+	if (!evidence.parent.destinationParent || evidence.parent.blockedReason)
+		fail(evidence.parent.blockedReason ?? "parent-unavailable");
+	if (!isDeepStrictEqual(destination(p), evidence.parent.destinationParent))
+		fail("migration-parent-changed");
+}
+function active(value: Retained, now: Date) {
+	return (
+		value.f !== null &&
+		["reserved", "uploading"].includes(value.f.state) &&
+		value.f.reservation_expires_at !== null &&
+		value.f.reservation_expires_at > now
+	);
+}
+function inspection(value: Retained, recoverable: boolean) {
+	checkReceipt(value);
+	const p = value.p;
+	return {
+		...result(p, value.a, value.f),
+		ownerId: p.owner_user_id,
+		jobId: p.origin_job_id,
+		sourceId: p.import_source_id,
+		documentDigest: p.document_digest,
+		mappingDigest: p.mapping_digest,
+		planDigest: p.plan_digest,
+		sourceFingerprint: p.source_fingerprint,
+		destinationParent: destination(p),
+		reservationExpiresAt: value.f?.reservation_expires_at ?? null,
+		recoverable,
+	};
+}
+async function inspectRetained(
+	client: PoolClient,
+	value: Retained,
+	checkpoint: () => void,
+) {
+	checkReceipt(value);
+	if (value.p.committed_attempt_id !== null) return inspection(value, false);
+	const evidence = await readAttachmentMigrationParentOnClient(
+		client,
+		value.p.owner_user_id,
+		value.p.origin_job_id,
+		value.p.origin_item_ordinal,
+		checkpoint,
+	);
+	checkProvenance(value.p, evidence);
+	const sameParent =
+		evidence.parent.blockedReason === null &&
+		isDeepStrictEqual(destination(value.p), evidence.parent.destinationParent);
+	const keys = await client.query<{ version: number }>(
+		"select wk.version from workspace_key wk join membership_key mk on mk.workspace_id=wk.workspace_id and mk.key_version=wk.version join membership m on m.id=mk.membership_id and m.user_id=mk.user_id join workspace w on w.id=wk.workspace_id where wk.workspace_id=$1 and wk.active and mk.user_id=$2 and not w.rotation_required",
+		[value.p.target_workspace_id, value.p.owner_user_id],
+	);
+	return inspection(
+		value,
+		sameParent &&
+			!active(value, new Date()) &&
+			keys.rows.length === 1 &&
+			(value.f === null ||
+				["reserved", "uploading", "aborted"].includes(value.f.state)),
+	);
+}
+function migrationCheckpoint(
+	signal: AbortSignal | undefined,
+	deadline: number,
+) {
+	return () => {
+		if (signal?.aborted) fail("import-cancelled", 408);
+		if (performance.now() >= deadline) fail("import-timeout", 503);
+	};
+}
+export async function inspectAttachmentMigration(
+	pool: Pool,
+	ownerId: string,
+	jobId: string,
+	ordinal: number,
+	options: { signal?: AbortSignal } = {},
+) {
+	if (
+		!identifier.safeParse(ownerId).success ||
+		!hash.safeParse(jobId).success ||
+		!z.number().int().min(0).max(50000).safeParse(ordinal).success
+	)
+		fail("invalid-migration-status", 400);
+	const deadline = performance.now() + 15000;
+	const checkpoint = migrationCheckpoint(options.signal, deadline);
+	return importTransaction(
+		pool,
+		ownerId,
+		async (client) => {
+			const value = await retained(client, ownerId, jobId, ordinal);
+			if (!value) fail("migration-not-found", 404);
+			return inspectRetained(client, value, checkpoint);
+		},
+		options.signal,
+		deadline,
+	);
+}
+
+async function lockRecoveryContext(
+	client: PoolClient,
+	p: Association,
+	keyVersion: number,
+	checkpoint: () => void,
+) {
+	const before = await readAttachmentMigrationParentOnClient(
+		client,
+		p.owner_user_id,
+		p.origin_job_id,
+		p.origin_item_ordinal,
+		checkpoint,
+	);
+	checkProvenance(p, before);
+	checkDestination(p, before);
+	const parent = destination(p);
+	try {
+		if (
+			(
+				await client.query(
+					"select id from workspace where id=$1 for update nowait",
+					[parent.workspaceId],
+				)
+			).rowCount !== 1
+		)
+			fail("not-permitted", 403);
+	} catch (error) {
+		if (
+			error &&
+			typeof error === "object" &&
+			"code" in error &&
+			error.code === "55P03"
+		)
+			fail("migration-workspace-busy");
+		throw error;
+	}
+	const access = await validateAttachmentWrite(
+		client,
+		p.owner_user_id,
+		{
+			workspaceId: parent.workspaceId,
+			parentKind: parent.kind,
+			parentId: parent.id,
+			keyVersion: keyVersion,
+		},
+		{ lockWorkspace: true, lockContext: true },
+	);
+	if (access) fail(access, 403);
+	await lockParent(
+		client,
+		parent,
+		p.owner_user_id,
+		before.sourceId,
+		p.origin_job_id,
+	);
+	const after = await readAttachmentMigrationParentOnClient(
+		client,
+		p.owner_user_id,
+		p.origin_job_id,
+		p.origin_item_ordinal,
+		checkpoint,
+	);
+	if (!isDeepStrictEqual(before, after)) fail("migration-parent-changed");
+
+	return parent;
+}
+
+export async function recoverAttachmentMigration(
+	pool: Pool,
+	input: AttachmentMigrationRecovery,
+	options: {
+		quotaBytes?: number;
+		reservationTtlMs?: number;
+		now?: () => Date;
+		signal?: AbortSignal;
+	} = {},
+) {
+	const parsed = recoverySchema.safeParse(input);
+	if (!parsed.success) fail("invalid-migration-recovery", 400);
+	const request = parsed.data;
+	const quota = options.quotaBytes ?? 10 * 1024 * 1024 * 1024;
+	const ttl = options.reservationTtlMs ?? 60 * 60_000;
+	const now = (options.now ?? (() => new Date()))();
+	if (
+		!Number.isSafeInteger(quota) ||
+		quota <= 0 ||
+		!Number.isSafeInteger(ttl) ||
+		ttl <= 0 ||
+		!Number.isFinite(now.getTime()) ||
+		!Number.isFinite(now.getTime() + ttl)
+	)
+		throw new Error("Invalid migration quota, TTL or clock");
+	const deadline = performance.now() + 15000;
+	const checkpoint = migrationCheckpoint(options.signal, deadline);
+	try {
+		return await importTransaction(
+			pool,
+			request.ownerId,
+			async (client) => {
+				const value = await retained(
+					client,
+					request.ownerId,
+					request.jobId,
+					request.ordinal,
+				);
+				if (!value) fail("migration-not-found", 404);
+				const { p, f } = value;
+				const a = checkReceipt(value);
+				if (p.source_fingerprint !== request.sourceFingerprint)
+					fail("migration-source-changed");
+				if (p.committed_attempt_id !== null)
+					return {
+						outcome: "committed" as const,
+						status: inspection(value, false),
+					};
+				const previous = request.previous;
+				if (p.id !== previous.associationId)
+					fail("migration-revision-conflict");
+				const witness = await client.query<Attempt>(
+					"select * from attachment_migration_attempt where id=$1 and association_id=$2 and owner_user_id=$3 and revision=$4 and target_attachment_id=$5",
+					[
+						previous.attemptId,
+						p.id,
+						request.ownerId,
+						previous.revision,
+						previous.targetAttachmentId,
+					],
+				);
+				if (witness.rows.length !== 1) fail("migration-revision-conflict");
+				if (
+					p.revision === previous.revision + 1 &&
+					isDeepStrictEqual(preparedFrom(a), request.prepared)
+				) {
+					if (active(value, now) && f) {
+						validateActiveBinding(p, a, f);
+						await lockRecoveryContext(client, p, a.key_version, checkpoint);
+						return {
+							outcome: "reserved" as const,
+							status: inspection(value, false),
+						};
+					}
+					return {
+						outcome: "recovery-required" as const,
+						status: await inspectRetained(client, value, checkpoint),
+					};
+				}
+				if (
+					p.revision !== previous.revision ||
+					a.id !== previous.attemptId ||
+					a.target_attachment_id !== previous.targetAttachmentId
+				)
+					fail("migration-revision-conflict");
+				if (p.revision === 2147483647) fail("migration-revision-conflict");
+				if (request.prepared.id === a.target_attachment_id)
+					fail("migration-preparation-conflict");
+				if (f) {
+					if (!["reserved", "uploading", "aborted"].includes(f.state))
+						fail("migration-attachment-binding-changed");
+					if (
+						f.uploaded_by !== p.owner_user_id ||
+						f.workspace_id !== p.target_workspace_id ||
+						f.parent_kind !== p.target_parent_kind ||
+						f.parent_id !== p.target_parent_id ||
+						f.key_version !== a.key_version ||
+						f.filename_ciphertext !== a.filename_ciphertext ||
+						f.content_type_ciphertext !== a.content_type_ciphertext ||
+						f.dek_wrapped !== a.dek_wrapped ||
+						Number(f.declared_bytes) !== Number(a.declared_bytes) ||
+						f.thumbnail_declared_bytes !== a.thumbnail_declared_bytes ||
+						f.deleted_at !== null ||
+						f.committed_at !== null
+					)
+						fail("migration-attachment-binding-changed");
+					if (["reserved", "uploading"].includes(f.state)) {
+						if (!f.reservation_expires_at)
+							fail("migration-attachment-binding-changed");
+						validateActiveBinding(p, a, f);
+					}
+					if (active(value, now) && !request.retireLive)
+						fail("migration-live-retirement-required");
+				}
+				const parent = await lockRecoveryContext(
+					client,
+					p,
+					request.prepared.keyVersion,
+					checkpoint,
+				);
+				const v = request.prepared;
+				if (
+					await attachmentQuotaWouldExceed(
+						client,
+						parent.workspaceId,
+						v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0),
+						quota,
+					)
+				)
+					fail("quota-exceeded");
+				if (f && ["reserved", "uploading", "aborted"].includes(f.state))
+					await client.query(
+						"update attachment set state='aborted',reservation_expires_at=$2 where id=$1",
+						[a.target_attachment_id, now],
+					);
+				const attemptId = randomUUID();
+				await client.query(
+					`insert into attachment_migration_attempt(id,association_id,owner_user_id,revision,target_attachment_id,job_id,key_version,filename_ciphertext,content_type_ciphertext,dek_wrapped,declared_bytes,ciphertext_sha256,thumbnail_declared_bytes,thumbnail_ciphertext_sha256) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+					[
+						attemptId,
+						p.id,
+						request.ownerId,
+						p.revision + 1,
+						v.id,
+						request.jobId,
+						v.keyVersion,
+						v.filenameCiphertext,
+						v.contentTypeCiphertext,
+						v.dekWrapped,
+						v.declaredBytes,
+						v.ciphertextSha256,
+						v.thumbnailDeclaredBytes,
+						v.thumbnailCiphertextSha256,
+					],
+				);
+				await client.query(
+					`insert into attachment(id,workspace_id,parent_kind,parent_id,key_version,state,filename_ciphertext,content_type_ciphertext,dek_wrapped,declared_bytes,thumbnail_declared_bytes,storage_key,thumbnail_storage_key,uploaded_by,reservation_expires_at) values($1,$2,$3,$4,$5,'reserved',$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+					[
+						v.id,
+						parent.workspaceId,
+						parent.kind,
+						parent.id,
+						v.keyVersion,
+						v.filenameCiphertext,
+						v.contentTypeCiphertext,
+						v.dekWrapped,
+						v.declaredBytes,
+						v.thumbnailDeclaredBytes,
+						storageKeyFor(parent.workspaceId, v.id),
+						v.thumbnailDeclaredBytes === null
+							? null
+							: storageKeyFor(parent.workspaceId, v.id, "thumbnail"),
+						request.ownerId,
+						new Date(now.getTime() + ttl),
+					],
+				);
+				const updated = await client.query<Association>(
+					"update attachment_migration set revision=revision+1,current_attempt_id=$2 where id=$1 and owner_user_id=$3 and revision=$4 and current_attempt_id=$5 and committed_attempt_id is null returning *",
+					[p.id, attemptId, request.ownerId, p.revision, a.id],
+				);
+				if (updated.rows.length !== 1) fail("migration-revision-conflict");
+				const attempt = (
+					await client.query<Attempt>(
+						"select * from attachment_migration_attempt where id=$1",
+						[attemptId],
+					)
+				).rows[0];
+				const file = (
+					await client.query<Ordinary>("select * from attachment where id=$1", [
+						v.id,
+					])
+				).rows[0];
+				return {
+					outcome: "reserved" as const,
+					status: inspection(
+						{ p: updated.rows[0], a: attempt, f: file },
+						false,
+					),
+				};
+			},
+			options.signal,
+			deadline,
+		);
+	} catch (error) {
+		if (
+			error &&
+			typeof error === "object" &&
+			"code" in error &&
+			error.code === "23505"
+		)
+			fail("migration-target-conflict");
+		throw error;
+	}
 }

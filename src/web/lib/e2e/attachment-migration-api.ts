@@ -95,12 +95,63 @@ const reservationSchema = z.strictObject({
 		.enum(["reserved", "uploading", "committed", "aborted", "deleting"])
 		.nullable(),
 });
+const destinationSchema = z.strictObject({
+	kind: z.enum(["list", "task", "comment"]),
+	id,
+	workspaceId: id,
+});
+const inspectionSchema = reservationSchema
+	.extend({
+		...bindingSchema.shape,
+		sourceFingerprint: hash,
+		destinationParent: destinationSchema,
+		reservationExpiresAt: z.iso.datetime({ offset: true }).nullable(),
+		recoverable: z.boolean(),
+	})
+	.refine(
+		(value) =>
+			value.revision >= 1 &&
+			value.attemptId !== null &&
+			value.targetAttachmentId !== null &&
+			value.committed === (value.committedAt !== null) &&
+			(!value.committed ||
+				(!value.recoverable &&
+					(value.attachmentState === "committed" ||
+						value.attachmentState === "deleting" ||
+						value.attachmentState === null))) &&
+			(value.committed || value.attachmentState !== "committed"),
+	);
+const recoveryRequestSchema = z
+	.strictObject({
+		ordinal,
+		sourceFingerprint: hash,
+		previous: z.strictObject({
+			associationId: z.string().uuid(),
+			attemptId: z.string().uuid(),
+			targetAttachmentId: targetId,
+			revision: revision.min(1),
+		}),
+		prepared: preparedSchema,
+		retireLive: z.boolean(),
+	})
+	.refine((value) => value.prepared.id !== value.previous.targetAttachmentId);
+const recoverySchema = z.strictObject({
+	outcome: z.enum(["committed", "reserved", "recovery-required"]),
+	status: inspectionSchema,
+});
 const receiptSchema = z.strictObject({
 	id: targetId,
 	state: z.enum(["uploading", "committed"]),
 	bytes: z.number().int().positive(),
 	sha256: hash,
 });
+export type MigrationInspection = z.infer<typeof inspectionSchema>;
+export type MigrationRecoveryRequest = z.infer<typeof recoveryRequestSchema>;
+export type MigrationRecovery = z.infer<typeof recoverySchema>;
+export type MigrationInspectionExpected = {
+	sourceFingerprint: string;
+	destinationParent: MigrationInspection["destinationParent"];
+};
 export type PreparedMigration = z.infer<typeof preparedSchema>;
 export type MigrationReservationRequest = z.infer<typeof requestSchema>;
 export type MigrationReservation = z.infer<typeof reservationSchema>;
@@ -263,6 +314,32 @@ export function createAttachmentMigrationApi(options: {
 			);
 		return result;
 	}
+	function inspection(
+		result: MigrationInspection,
+		expected: MigrationInspectionExpected,
+		uncertain = false,
+	) {
+		for (const key of Object.keys(binding) as (keyof MigrationBinding)[])
+			if (result[key] !== binding[key])
+				throw new MigrationTransportError(
+					"migration-binding-mismatch",
+					200,
+					uncertain,
+				);
+		if (
+			result.sourceFingerprint !== expected.sourceFingerprint ||
+			result.destinationParent.kind !== expected.destinationParent.kind ||
+			result.destinationParent.id !== expected.destinationParent.id ||
+			result.destinationParent.workspaceId !==
+				expected.destinationParent.workspaceId
+		)
+			throw new MigrationTransportError(
+				"migration-binding-mismatch",
+				200,
+				uncertain,
+			);
+		return result;
+	}
 	let next = -1;
 	const seen = new Set<string>();
 	return {
@@ -319,6 +396,56 @@ export function createAttachmentMigrationApi(options: {
 			for (const value of additions) seen.add(value);
 			next = page.nextAfterOrdinal ?? 50001;
 			return page;
+		},
+		async inspect(
+			value: number,
+			expected: MigrationInspectionExpected,
+			signal?: AbortSignal,
+		) {
+			ordinal.parse(value);
+			return inspection(
+				await call(
+					`${base}/attachment-migrations?ordinal=${value}`,
+					inspectionSchema,
+					{},
+					signal,
+				),
+				expected,
+			);
+		},
+		async recover(
+			input: MigrationRecoveryRequest,
+			expected: MigrationInspectionExpected,
+			signal?: AbortSignal,
+		) {
+			const request = recoveryRequestSchema.parse(input);
+			const result = await call(
+				`${base}/attachment-recoveries`,
+				recoverySchema,
+				json(request),
+				signal,
+			);
+			const value = inspection(result.status, expected, true);
+			const valid =
+				result.outcome === "committed"
+					? value.committed &&
+						value.associationId === request.previous.associationId
+					: !value.committed &&
+						value.associationId === request.previous.associationId &&
+						value.targetAttachmentId === request.prepared.id &&
+						value.revision === request.previous.revision + 1 &&
+						(result.outcome === "reserved"
+							? !value.recoverable &&
+								(value.attachmentState === "reserved" ||
+									value.attachmentState === "uploading")
+							: value.recoverable);
+			if (!valid)
+				throw new MigrationTransportError(
+					"reservation-identity-mismatch",
+					200,
+					true,
+				);
+			return result;
 		},
 		async reserve(input: MigrationReservationRequest, signal?: AbortSignal) {
 			const request = requestSchema.parse(input);

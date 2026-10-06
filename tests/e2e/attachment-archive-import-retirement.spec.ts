@@ -458,4 +458,181 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	expect(await absentReopened.json()).toMatchObject({
 		code: "migration-not-found",
 	});
+	await renewedChoice.check();
+	await reopened
+		.getByRole("button", { name: m.archive_import_prepare(), exact: true })
+		.click();
+	await expect(
+		reopened.getByRole("button", {
+			name: m.archive_import_transfer(),
+			exact: true,
+		}),
+	).toBeEnabled({ timeout: DERIVE_TIMEOUT });
+	let interruptedTarget = "";
+	await page.route(
+		"**/api/attachments/migration_*/upload",
+		async (route) => {
+			interruptedTarget =
+				new URL(route.request().url()).pathname.split("/")[3] ?? "";
+			await route.abort();
+		},
+		{ times: 1 },
+	);
+	await reopened
+		.getByRole("button", { name: m.archive_import_transfer(), exact: true })
+		.click();
+	await expect(reopened.getByRole("status")).toHaveText(
+		m.archive_import_uncertain(),
+	);
+	expect(interruptedTarget).toMatch(/^migration_/);
+	const retainedBefore = await page.request.get(
+		`/api/portability/import/plans/${job.id}/attachment-migrations?ordinal=${parent.ordinal}`,
+	);
+	expect(retainedBefore.ok()).toBe(true);
+	const previous = await retainedBefore.json();
+	expect(previous).toMatchObject({
+		targetAttachmentId: interruptedTarget,
+		revision: 1,
+		committed: false,
+		attachmentState: "reserved",
+		recoverable: false,
+	});
+	await reopened
+		.getByRole("button", { name: "Close", exact: true })
+		.and(reopened.locator('[data-slot="button"]'))
+		.click();
+	await expect(reopened).toHaveCount(0);
+	await panel
+		.getByRole("button", { name: "Import selected files", exact: true })
+		.click();
+	const recovered = page.getByTestId("attachment-archive-import-dialog");
+	await recovered.getByLabel("Encrypted files archive").setInputFiles({
+		name: filesDownload.suggestedFilename(),
+		mimeType: "application/json",
+		buffer: filesBytes,
+	});
+	await recovered
+		.getByLabel("Archive passphrase", { exact: true })
+		.fill(ARCHIVE_SECRET);
+	await recovered
+		.getByRole("button", { name: "Open archive", exact: true })
+		.click();
+	await recovered
+		.getByRole("radio", {
+			name: `${FILE_NAME} Applied destination: ${taskTitle} Source file: ${source.id}`,
+			exact: true,
+		})
+		.check({ timeout: DERIVE_TIMEOUT });
+	await expect(recovered.getByRole("status")).toHaveText(
+		m.archive_import_recovery(),
+	);
+	const recoveryWrites: string[] = [];
+	const repeatedContentApplies: string[] = [];
+	page.on("request", (request) => {
+		if (request.method() !== "POST") return;
+		const path = new URL(request.url()).pathname;
+		if (path.endsWith("/attachment-recoveries"))
+			recoveryWrites.push(request.postData() ?? "");
+		if (path.endsWith("/apply")) repeatedContentApplies.push(path);
+	});
+	await recovered
+		.getByRole("button", { name: m.archive_import_replace(), exact: true })
+		.click();
+	await expect(
+		recovered.getByText(m.archive_import_replace_confirmation(), {
+			exact: true,
+		}),
+	).toBeVisible();
+	expect(recoveryWrites).toEqual([]);
+	await capture(page, "archive-reopened-live-replacement-confirmation");
+	await recovered
+		.getByRole("button", {
+			name: m.archive_import_replace_confirm(),
+			exact: true,
+		})
+		.click();
+	await expect(recovered.getByRole("status")).toHaveText(
+		m.archive_import_complete(),
+		{ timeout: DERIVE_TIMEOUT },
+	);
+	expect(recoveryWrites).toHaveLength(1);
+	const recoveryRequest = JSON.parse(recoveryWrites[0] ?? "");
+	expect(recoveryRequest).toMatchObject({
+		retireLive: true,
+		previous: {
+			associationId: previous.associationId,
+			attemptId: previous.attemptId,
+			targetAttachmentId: interruptedTarget,
+			revision: 1,
+		},
+	});
+	expect(recoveryRequest.prepared.id).not.toBe(interruptedTarget);
+	expect(repeatedContentApplies).toEqual([]);
+	const retainedAfter = await page.request.get(
+		`/api/portability/import/plans/${job.id}/attachment-migrations?ordinal=${parent.ordinal}`,
+	);
+	expect(retainedAfter.ok()).toBe(true);
+	const completed = await retainedAfter.json();
+	expect(completed).toMatchObject({
+		associationId: previous.associationId,
+		revision: 2,
+		targetAttachmentId: recoveryRequest.prepared.id,
+		committed: true,
+		destinationParent: parent.destinationParent,
+	});
+	const afterRecoveryExport = await page.request.get(
+		"/api/portability/export?version=2",
+	);
+	expect(afterRecoveryExport.ok()).toBe(true);
+	const afterRecovery: PortableExportV2 = await afterRecoveryExport.json();
+	expect(
+		afterRecovery.data.attachments.filter(
+			(row) => row.parentId === parent.destinationParent.id,
+		),
+	).toHaveLength(1);
+	expect(
+		afterRecovery.data.tasks.filter(
+			(row) => row.id === parent.destinationParent.id,
+		),
+	).toHaveLength(1);
+	await capture(page, "archive-reopened-replacement-completed");
+	await recovered
+		.getByRole("button", { name: "Close", exact: true })
+		.and(recovered.locator('[data-slot="button"]'))
+		.click();
+	await expect(recovered).toHaveCount(0);
+	await panel
+		.getByRole("button", { name: "Import selected files", exact: true })
+		.click();
+	const completedReopened = page.getByTestId(
+		"attachment-archive-import-dialog",
+	);
+	await completedReopened.getByLabel("Encrypted files archive").setInputFiles({
+		name: filesDownload.suggestedFilename(),
+		mimeType: "application/json",
+		buffer: filesBytes,
+	});
+	await completedReopened
+		.getByLabel("Archive passphrase", { exact: true })
+		.fill(ARCHIVE_SECRET);
+	await completedReopened
+		.getByRole("button", { name: "Open archive", exact: true })
+		.click();
+	await completedReopened
+		.getByRole("radio", {
+			name: `${FILE_NAME} Applied destination: ${taskTitle} Source file: ${source.id}`,
+			exact: true,
+		})
+		.check({ timeout: DERIVE_TIMEOUT });
+	await expect(completedReopened.getByRole("status")).toHaveText(
+		m.archive_import_complete(),
+	);
+	await expect(
+		completedReopened.getByRole("button", {
+			name: m.archive_import_replace(),
+			exact: true,
+		}),
+	).toHaveCount(0);
+	expect(recoveryWrites).toHaveLength(1);
+	expect(repeatedContentApplies).toEqual([]);
 });
