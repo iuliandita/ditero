@@ -23,7 +23,7 @@ are included, with no subscriptions or paid feature unlocks.
 [Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Brand assets](assets/brand/README.md)
 
 > **Alpha.** The first release was `v0.0.1-alpha.1`; the current published alpha is
-> [`v0.0.1-alpha.2`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.2).
+> [`v0.0.1-alpha.3`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.3).
 > The release pipeline packages server
 > containers, Helm/Compose deployment files, desktop installers and signed Android
 > downloads. Native platform qualification remains in progress; Windows builds are
@@ -62,6 +62,8 @@ size and high contrast stay on each device.
   [custom palettes](docs/themes.md) sync with your account
 - Saved views, dashboards, calendar/board/table layouts, keyboard shortcuts, and a focus timer
 - Encrypted attachments with filesystem or S3-compatible server storage
+- Authenticated encrypted attachment archives and reviewed, resumable attachment
+  migration with explicit parent mapping and durable replay
 - JSON export and reviewed, resumable native import, including version 2 history
   and attribution, plus Ditero CSV, Todoist project CSV snapshots and plain Trello
   board JSON imports; see
@@ -78,8 +80,8 @@ size and high contrast stay on each device.
   [terminal UI](docs/tui.md) for task creation, completion, scalar updates, deletion
   and reordering, with read-only comments
 
-iOS, TickTick and Microsoft To Do import, encrypted attachment migration, and wider
-terminal, native and deployment qualification remain pending. Voice capture is
+iOS, TickTick and Microsoft To Do import remain pending. Wider attachment migration
+runtime, terminal, native and deployment qualification remain pending. Voice capture is
 pending final qualification. Calendar subscriptions can be created and revoked
 in web settings; a new subscription URL is shown only once.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
@@ -136,7 +138,7 @@ That pulls `ghcr.io/iuliandita/ditero:nightly` and `:nightly-zero`. Add `--build
 to build from this checkout instead. After tagged releases are available,
 `DITERO_IMAGE_TAG` selects their matching app and Zero tags. Commit-specific
 nightly tags use different suffix ordering for app and Zero, so pin those two
-service images separately in a Compose override; see [image tags](RELEASING.md#channels-and-image-tags).
+service images separately in a Compose override; see [image tags](RELEASING.md#channels).
 
 To reach it from anything other than the machine it runs on, set
 `BETTER_AUTH_URL` and `PUBLIC_ZERO_URL` to addresses that machine's browsers can

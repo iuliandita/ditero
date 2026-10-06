@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-10-05 | Status: pre-v1, building on `develop`
+> Updated: 2026-10-06 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -22,9 +22,10 @@ mapping, and explicit notification activation have landed. Task history and port
 history archives preserve transitions and attribution. Settings accepts version 2
 archives through reviewed, resumable history import, with explicit source claims
 and retained replay identity. Ditero CSV, Todoist project CSV snapshots and plain
-Trello board JSON imports are available; TickTick and Microsoft To Do import and
-encrypted attachment migration
-remain unfinished. Voice capture is pending final qualification.
+Trello board JSON imports are available. Authenticated encrypted attachment archives
+and reviewed, resumable attachment migration with explicit parent mapping and durable
+replay have landed; broader runtime qualification remains pending. TickTick and
+Microsoft To Do import remain unfinished. Voice capture is pending final qualification.
 
 The web app is installable as a PWA. Android and Tauri desktop application cores,
 scoped native authentication, encrypted file handling, and development artifact
@@ -37,7 +38,7 @@ qualification notes. Native delivery remains open in issue #346.
 
 Development happens on `develop`. The first published release was `0.0.1-alpha.1`;
 the current published alpha is
-[`0.0.1-alpha.2`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.2).
+[`0.0.1-alpha.3`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.3).
 Published alphas package containers, Helm/Compose deployment files and experimental
 native downloads; Windows downloads are unsigned and macOS downloads use ad-hoc
 signatures. Native qualification remains open. `1.0.0` requires the complete v1
