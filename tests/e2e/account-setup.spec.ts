@@ -435,7 +435,9 @@ for (const mode of ["custom", "skip"] as const)
 		).toBeDisabled();
 		await expect(
 			panel(page).getByText(
-				"You already chose an empty start. You can add starter content now.",
+				mode === "skip"
+					? "You skipped setup. You can add starter content now."
+					: "You already chose an empty start. You can add starter content now.",
 				{ exact: true },
 			),
 		).toBeVisible();

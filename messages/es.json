@@ -2631,6 +2631,7 @@
 	],
 	"setup_offline": "La configuración inicial necesita conexión. Vuelve a conectarte antes de añadir contenido.",
 	"setup_empty_already": "Ya elegiste empezar sin nada. Ahora puedes añadir contenido inicial.",
+	"setup_skipped_already": "Omitiste la configuración. Ahora puedes añadir contenido inicial.",
 	"setup_counters_hint": "Los valores del panel reflejan las tareas a las que tienes acceso.",
-	"setup_personal_hint": "El contenido inicial se añade a tu espacio personal. Esto no invita a nadie ni cambia tus listas existentes."
+	"setup_personal_hint": "La configuración solo afecta a tu espacio personal. No invita a nadie ni cambia las listas existentes."
 }

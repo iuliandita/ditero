@@ -2583,6 +2583,7 @@
 	],
 	"setup_offline": "Für die Starteinrichtung brauchst du eine Verbindung. Verbinde dich wieder, bevor du Inhalte hinzufügst.",
 	"setup_empty_already": "Du hast dich schon für einen leeren Start entschieden. Du kannst jetzt Starterinhalte hinzufügen.",
+	"setup_skipped_already": "Du hast die Einrichtung übersprungen. Du kannst jetzt Starterinhalte hinzufügen.",
 	"setup_counters_hint": "Die Werte im Dashboard spiegeln die Aufgaben wider, auf die du Zugriff hast.",
-	"setup_personal_hint": "Starterinhalte werden zu deinem persönlichen Bereich hinzugefügt. Dadurch wird niemand eingeladen und deine bestehenden Listen bleiben unverändert."
+	"setup_personal_hint": "Die Einrichtung betrifft nur deinen persönlichen Bereich. Sie lädt niemanden ein und verändert keine bestehenden Listen."
 }
