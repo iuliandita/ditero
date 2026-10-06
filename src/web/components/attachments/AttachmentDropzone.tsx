@@ -29,6 +29,8 @@ export type AttachmentDropzoneProps = {
 		key: WorkspaceKeyMaterial,
 	) => void | Promise<void>;
 	onSelectionPendingChange?: (pending: boolean) => void;
+	onRotationOpen?: (dialog: HTMLElement) => void;
+	onRotationClose?: (dialog: HTMLElement) => boolean;
 	children?: ReactNode;
 	showButton?: boolean;
 	enabled?: boolean;
@@ -65,6 +67,8 @@ export const AttachmentDropzone = forwardRef<
 		workspaceName,
 		onFilesReady,
 		onSelectionPendingChange,
+		onRotationOpen,
+		onRotationClose,
 		children,
 		showButton = true,
 		enabled = true,
@@ -207,7 +211,12 @@ export const AttachmentDropzone = forwardRef<
 				</div>
 			)}
 
-			<AttachmentGateChrome gate={gate} workspaceName={workspaceName} />
+			<AttachmentGateChrome
+				gate={gate}
+				workspaceName={workspaceName}
+				onRotationOpen={onRotationOpen}
+				onRotationClose={onRotationClose}
+			/>
 		</fieldset>
 	);
 });

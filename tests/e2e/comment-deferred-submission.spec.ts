@@ -453,6 +453,82 @@ test("comment rotation resume never sends a removed deferred file or its capture
 		await expect(pendingFile).toHaveCount(0);
 		await expect(composer).toHaveValue("");
 		await expect(composer).toBeFocused();
+
+		// A later user choice must survive another real comment/file completion.
+		const keptFocusBody = "Keep task title focus during comment upload";
+		const keptFocusFileName = "focus-preservation.txt";
+		const keptFocusFile = page
+			.getByTestId("comment-pending-files")
+			.getByRole("listitem")
+			.filter({ hasText: keptFocusFileName });
+		await composer.fill(keptFocusBody);
+		await commentGate.getByTestId("attachment-input").setInputFiles({
+			name: keptFocusFileName,
+			mimeType: "text/plain",
+			buffer: Buffer.from("real encrypted focus preservation file"),
+		});
+		await expect(keptFocusFile).toHaveCount(1);
+		await expect(
+			keptFocusFile.getByText(m.attachment_ready_to_upload(), { exact: true }),
+		).toBeVisible();
+		let releaseFinalize = () => {};
+		const heldFinalize = new Promise<void>((resolve) => {
+			releaseFinalize = resolve;
+		});
+		let finalized = () => {};
+		let finalizeFailed = (_error: unknown) => {};
+		const serverFinalized = new Promise<void>((resolve, reject) => {
+			finalized = resolve;
+			finalizeFailed = reject;
+		});
+		await page.route(
+			"**/api/attachments/finalize",
+			async (route) => {
+				try {
+					const response = await route.fetch();
+					expect(response.ok()).toBe(true);
+					finalized();
+					await heldFinalize;
+					await route.fulfill({ response });
+				} catch (error) {
+					finalizeFailed(error);
+					throw error;
+				}
+			},
+			{ times: 1 },
+		);
+		const nextCommitted = page.waitForResponse("**/api/attachments/finalize");
+		const chosenControl = detail.getByTestId("task-detail-title");
+		try {
+			await send.click();
+			await serverFinalized;
+			await expect(composer).toBeDisabled();
+			await expect(chosenControl).toBeEnabled();
+			await chosenControl.focus();
+			await expect(chosenControl).toBeFocused();
+		} finally {
+			releaseFinalize();
+		}
+		expect((await nextCommitted).ok()).toBe(true);
+		await expect(keptFocusFile).toHaveCount(0);
+		await expect(composer).toBeEnabled();
+		await expect(composer).toHaveValue("");
+		await expect(chosenControl).toBeFocused();
+		const retainedComments = (await exported(page)).data.comments.filter(
+			(row) => row.taskId === task.id,
+		);
+		expect(retainedComments.map((row) => row.body).sort()).toEqual(
+			[currentDraft, keptFocusBody].sort(),
+		);
+		const retainedProof = await pool.query<{ body: string; files: number }>(
+			`select c.body,
+      (select count(*)::int from attachment a where a.parent_kind='comment' and a.parent_id=c.id and a.state='committed') as files
+     from comment c where c.task_id=$1 order by c.body`,
+			[task.id],
+		);
+		expect(retainedProof.rows).toEqual(
+			[currentDraft, keptFocusBody].sort().map((body) => ({ body, files: 1 })),
+		);
 	} catch (error) {
 		failed = true;
 		primary = error;
