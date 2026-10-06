@@ -366,8 +366,11 @@ const expectedRawEntries = [
 	["/src/web/lib/zero-lifecycle.ts", "e2e-zero-lifecycle"],
 	["/tests/e2e/zero-close-browser.ts", "e2e-zero-close-browser"],
 	["/src/web/dev/csp-gate.ts", "e2e-csp-gate"],
+	["/src/domain/e2e/stream.ts", "e2e-stream"],
+	["/src/domain/e2e/envelope.ts", "e2e-envelope"],
+	["/src/domain/e2e/wire.ts", "e2e-wire"],
 ] as const;
-test("actual Vite test build retains five browser exports alongside the app", () => {
+test("actual Vite test build retains browser exports alongside the app", () => {
 	const { build } = actualViteConfig("test");
 	assert(build);
 	assert.deepEqual(

@@ -17,6 +17,9 @@ const testEntries = {
 	"e2e-zero-lifecycle": "./src/web/lib/zero-lifecycle.ts",
 	"e2e-zero-close-browser": "./tests/e2e/zero-close-browser.ts",
 	"e2e-csp-gate": "./src/web/dev/csp-gate.ts",
+	"e2e-stream": "./src/domain/e2e/stream.ts",
+	"e2e-envelope": "./src/domain/e2e/envelope.ts",
+	"e2e-wire": "./src/domain/e2e/wire.ts",
 };
 const testRoutes = new Set(
 	Object.values(testEntries).map((path) => path.slice(1)),
