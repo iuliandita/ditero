@@ -6,34 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
-### Added
-
-- Expiring personal access tokens with one-time reveal, revocation and account
-  deletion cleanup. Membership-scoped discovery endpoints expose workspaces,
-  lists, tasks, people, labels, views and dashboards with bounded pagination and
-  an OpenAPI description.
-- Idempotent public task creation with explicit list, due date, assignments and
-  labels, using the same permissions and mutations as the web interface.
-- Bounded CLI discovery with stable JSON and eight read-only MCP tools over stdio.
-  Credentials and the trusted server origin are configured at process startup.
-- Named Paper and Slate light/dark palettes, validated theme JSON import/export
-  and a runtime color editor with contrast guards, preview and cancellation.
-  Custom palettes are currently account-scoped on this device.
-
 ### Fixed
 
 - Browser attachment imports can reopen the original paired archive, confirm prior
   completion and explicitly replace interrupted file transfers without reapplying
   content. Live transfers require replacement confirmation; retired files retain
   their quota charge until garbage collection finishes.
-- Hexadecimal color fields retain left-to-right notation in RTL interfaces.
-
-- CLI task planning with private dashboard resolution, account-local dates and
-  explicit assignees/labels, plus idempotent creation of reviewed proposals.
-
-- Guarded historical import previews and bounded internal replay with atomic
-  content/ledger evidence. Public version 2 uploads remain disabled pending the
-  complete history interface and browser qualification.
 
 ## [0.0.1-alpha.5] - 2026-10-06
 
@@ -67,6 +45,33 @@ All notable changes to this project are documented here. The format is based on
 - Saved views retain parent task context and avoid repeated workspace labels; assignee chips preserve accessible full names with less visual crowding.
 - Browser fixture isolation, invitation navigation readiness and Arabic history-import locale restoration.
 - Failed terminal mutation transitions include bounded diagnostics without changing assertions or deadlines.
+
+## [0.0.1-alpha.2] - 2026-10-04
+
+### Added
+
+- Expiring personal access tokens with one-time reveal, revocation and account
+  deletion cleanup. Membership-scoped discovery endpoints expose workspaces,
+  lists, tasks, people, labels, views and dashboards with bounded pagination and
+  an OpenAPI description.
+- Idempotent public task creation with explicit list, due date, assignments and
+  labels, using the same permissions and mutations as the web interface.
+- Bounded CLI discovery with stable JSON and eight read-only MCP tools over stdio.
+  Credentials and the trusted server origin are configured at process startup.
+- Named Paper and Slate light/dark palettes, validated theme JSON import/export
+  and a runtime color editor with contrast guards, preview and cancellation.
+  Custom palettes are currently account-scoped on this device.
+
+### Fixed
+
+- Hexadecimal color fields retain left-to-right notation in RTL interfaces.
+
+- CLI task planning with private dashboard resolution, account-local dates and
+  explicit assignees/labels, plus idempotent creation of reviewed proposals.
+
+- Guarded historical import previews and bounded internal replay with atomic
+  content/ledger evidence. Public version 2 uploads remain disabled pending the
+  complete history interface and browser qualification.
 
 ## [0.0.1-alpha.1] - 2026-10-03
 
