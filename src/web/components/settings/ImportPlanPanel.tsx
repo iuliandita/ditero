@@ -35,6 +35,8 @@ import { ImportApplyPanel } from "./ImportApplyPanel.tsx";
 type Status = {
 	id: string;
 	planDigest: string;
+	documentDigest: string;
+	mappingDigest: string;
 	sourceId: string;
 	sourceLabel: string;
 	inputBinding?: ProviderInputBinding | null;
@@ -760,10 +762,12 @@ export function ImportPlanPanel() {
 					)}
 				</div>
 			)}
-			{report && applicable && (
+			{report && applicable && zero.userID && (
 				<ImportApplyPanel
 					key={report.id}
 					plan={report}
+					ownerId={zero.userID}
+					exactContentDocument={loaded?.text}
 					onBusy={setApplying}
 					needsAcknowledgement={!!report.inputBinding && !policyAccepted}
 					disabled={busy || (!!report.inputBinding && !policyAccepted)}

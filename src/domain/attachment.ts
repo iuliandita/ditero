@@ -5,6 +5,8 @@ export const PREVIEWABLE_TYPES = [
 	"image/gif",
 ] as const;
 
+export const ATTACHMENT_MIGRATION_ID_PREFIX = "migration_";
+
 const PREVIEWABLE_TYPE_SET = new Set<string>(PREVIEWABLE_TYPES);
 const MAX_FILENAME_LENGTH = 255;
 const MAX_STORAGE_SEGMENT_LENGTH = 255;

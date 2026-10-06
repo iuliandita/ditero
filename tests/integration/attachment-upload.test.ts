@@ -349,6 +349,16 @@ afterAll(async () => {
 });
 
 describe("attachment reserve", () => {
+	test("keeps migration destination IDs out of ordinary reservation", async () => {
+		const id = "migration_2b8dfbb7-36d4-4d4d-9a43-fc9dbb6638eb";
+		expect((await reserve(id)).status).toBe(400);
+		expect(await row(id)).toBeUndefined();
+		expect((await reserve("att-ordinary-positive")).status).toBe(200);
+		expect(await row("att-ordinary-positive")).toMatchObject({
+			state: "reserved",
+		});
+	});
+
 	test("publishes the effective per-file ciphertext limit", async () => {
 		const response = await attachmentConfig();
 

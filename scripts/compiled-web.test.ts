@@ -369,6 +369,7 @@ const expectedRawEntries = [
 	["/src/domain/e2e/stream.ts", "e2e-stream"],
 	["/src/domain/e2e/envelope.ts", "e2e-envelope"],
 	["/src/domain/e2e/wire.ts", "e2e-wire"],
+	["/src/web/lib/e2e/attachment-archive.ts", "e2e-attachment-archive"],
 ] as const;
 test("actual Vite test build retains browser exports alongside the app", () => {
 	const { build } = actualViteConfig("test");

@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { m } from "../../../paraglide/messages.js";
 import { useExportBoundary } from "../../lib/zero.tsx";
 import { Button } from "../ui/button.tsx";
+import { AttachmentArchiveExportDialog } from "./AttachmentArchiveExportDialog.tsx";
 
 export function DataPortabilityPanel() {
 	const boundary = useExportBoundary();
+	const [archiveOpen, setArchiveOpen] = useState(false);
+	const archiveButton = useRef<HTMLButtonElement | null>(null);
 	const active = useRef<AbortController | null>(null);
 	const downloadButton = useRef<HTMLButtonElement | null>(null);
 	const fallbackButton = useRef<HTMLButtonElement | null>(null);
@@ -164,6 +167,23 @@ export function DataPortabilityPanel() {
 				>
 					{m.portability_saved_anyway()}
 				</Button>
+			)}
+			<Button
+				ref={archiveButton}
+				variant="outline"
+				className="mt-3 h-auto min-h-8 max-w-full whitespace-normal py-1.5 pointer-coarse:min-h-11"
+				disabled={busy}
+				onClick={() => setArchiveOpen(true)}
+			>
+				{m.archive_export_action()}
+			</Button>
+			{archiveOpen && (
+				<AttachmentArchiveExportDialog
+					onClose={() => {
+						setArchiveOpen(false);
+						requestAnimationFrame(() => archiveButton.current?.focus());
+					}}
+				/>
 			)}
 		</section>
 	);
