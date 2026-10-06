@@ -175,36 +175,74 @@ test("comment config refusal restores focus and preserves selection before one r
 		}
 	}
 	if (cleanupFailure) throw cleanupFailure;
-	const committed = page.waitForResponse("**/api/attachments/finalize");
-	await send.click();
-	expect((await committed).ok()).toBe(true);
-	await expect
-		.poll(async () => {
-			const after = await exported(page);
-			expect(after.data.tasks.some((row) => row.id === task.id)).toBe(true);
-			const comments = after.data.comments.filter(
-				(row) => row.taskId === task.id,
+	await page.evaluate(installCommentFocusDiagnostics);
+	let retryFailed = false;
+	let retryError: unknown;
+	let retryCleanupFailed = false;
+	let retryCleanupError: unknown;
+	try {
+		const committed = page.waitForResponse("**/api/attachments/finalize");
+		await send.click();
+		expect((await committed).ok()).toBe(true);
+		await expect
+			.poll(async () => {
+				const after = await exported(page);
+				expect(after.data.tasks.some((row) => row.id === task.id)).toBe(true);
+				const comments = after.data.comments.filter(
+					(row) => row.taskId === task.id,
+				);
+				return {
+					comments: comments.length,
+					body: comments[0]?.body,
+					files: after.data.attachments.filter(
+						(row) =>
+							row.parentKind === "comment" &&
+							comments.some((comment) => comment.id === row.parentId),
+					).length,
+				};
+			})
+			.toEqual({ comments: 1, body: COMMENT_TEXT, files: 1 });
+		await expect(
+			page.getByTestId("comment-item").getByRole("button", {
+				name: m.attachment_open_named({ name: FILE_NAME }),
+				exact: true,
+			}),
+		).toBeVisible({ timeout: 20_000 });
+		await expect(composer).toHaveValue("");
+		await expect(composer).toBeFocused();
+		await capture(page, "comment-config-retry-completed-desktop-light");
+	} catch (error) {
+		retryFailed = true;
+		retryError = error;
+		try {
+			const metadata = await page.evaluate(() =>
+				window.__diteroCommentFocus?.stop(),
 			);
-			return {
-				comments: comments.length,
-				body: comments[0]?.body,
-				files: after.data.attachments.filter(
-					(row) =>
-						row.parentKind === "comment" &&
-						comments.some((comment) => comment.id === row.parentId),
-				).length,
-			};
-		})
-		.toEqual({ comments: 1, body: COMMENT_TEXT, files: 1 });
-	await expect(
-		page.getByTestId("comment-item").getByRole("button", {
-			name: m.attachment_open_named({ name: FILE_NAME }),
-			exact: true,
-		}),
-	).toBeVisible({ timeout: 20_000 });
-	await expect(composer).toHaveValue("");
-	await expect(composer).toBeFocused();
-	await capture(page, "comment-config-retry-completed-desktop-light");
+			if (!metadata) throw new Error("comment focus metadata absent");
+			await test.info().attach("focus-diagnostics", {
+				body: JSON.stringify(metadata),
+				contentType: "application/json",
+			});
+		} catch {
+			test.info().annotations.push({
+				type: "secondary-focus-diagnostic",
+				description: "Focus metadata capture failed",
+			});
+		}
+	} finally {
+		try {
+			await page.evaluate(() => window.__diteroCommentFocus?.stop());
+		} catch (error) {
+			retryCleanupFailed = true;
+			retryCleanupError = error;
+			test.info().annotations.push({
+				type: "secondary-focus-cleanup",
+				description: "Focus metadata cleanup failed",
+			});
+		}
+	}
+	if (retryFailed) throw retryError;
+	if (retryCleanupFailed) throw retryCleanupError;
 });
 
 test("comment rotation resume never sends a removed deferred file or its captured body", async ({

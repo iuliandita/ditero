@@ -16,6 +16,153 @@ const fixture = readFileSync(
 );
 test.use({ hasTouch: true });
 
+type ImportFocusReceipt = {
+	version: 1;
+	capacity: 512;
+	retains: "tail";
+	records: unknown[];
+	dropped: number;
+	restored: boolean;
+};
+declare global {
+	interface Window {
+		__diteroImportFocus?: {
+			mark: (kind: string) => void;
+			stop: () => ImportFocusReceipt;
+		};
+	}
+}
+
+function installImportFocusDiagnostics(action: Element) {
+	if (window.__diteroImportFocus) throw new Error("import diagnostics armed");
+	const ids = new WeakMap<Element, number>();
+	const records: unknown[] = [];
+	let nextId = 0;
+	let dropped = 0;
+	const started = performance.now();
+	const knownIds = new Set(["import-apply-status", "confirm-dialog"]);
+	const knownRoles = new Set(["button", "status", "dialog", "alertdialog"]);
+	function project(node: unknown) {
+		if (!(node instanceof Element)) return null;
+		let id = ids.get(node);
+		if (id === undefined) {
+			id = ++nextId;
+			ids.set(node, id);
+		}
+		const testId = node.getAttribute("data-testid");
+		const role = node.getAttribute("role");
+		return {
+			node: id,
+			tag: node.localName,
+			testId: testId && knownIds.has(testId) ? testId : null,
+			role: role && knownRoles.has(role) ? role : null,
+			disabled: "disabled" in node ? Boolean(node.disabled) : null,
+			connected: node.isConnected,
+		};
+	}
+	function record(kind: string, target: unknown = null) {
+		const row = {
+			ms: performance.now() - started,
+			kind,
+			target: project(target),
+			active: project(document.activeElement),
+			action: project(action),
+			status: project(
+				document.querySelector('[data-testid="import-apply-status"]'),
+			),
+			activeEqualsAction: document.activeElement === action,
+			activeIsBody: document.activeElement === document.body,
+			documentHasFocus: document.hasFocus(),
+		};
+		if (records.length === 512) {
+			records.shift();
+			dropped++;
+		}
+		records.push(row);
+	}
+	const descriptor = Object.getOwnPropertyDescriptor(
+		HTMLElement.prototype,
+		"focus",
+	);
+	if (!descriptor || typeof descriptor.value !== "function")
+		throw new Error("focus unavailable");
+	const original: typeof HTMLElement.prototype.focus = descriptor.value;
+	const wrapper = function (
+		this: HTMLElement,
+		...args: Parameters<typeof original>
+	) {
+		record("focus-before", this);
+		try {
+			return Reflect.apply(original, this, args);
+		} finally {
+			record("focus-after", this);
+		}
+	};
+	const listener = (event: Event) => record(event.type, event.target);
+	const windowListener = (event: Event) => record(`window-${event.type}`);
+	const observer = new MutationObserver(() => record("dom"));
+	try {
+		Object.defineProperty(HTMLElement.prototype, "focus", {
+			...descriptor,
+			value: wrapper,
+		});
+		document.addEventListener("focusin", listener, true);
+		document.addEventListener("focusout", listener, true);
+		window.addEventListener("focus", windowListener);
+		window.addEventListener("blur", windowListener);
+		observer.observe(document.documentElement, {
+			subtree: true,
+			childList: true,
+			attributes: true,
+			attributeFilter: ["disabled", "data-state"],
+		});
+	} catch (primary) {
+		observer.disconnect();
+		document.removeEventListener("focusin", listener, true);
+		document.removeEventListener("focusout", listener, true);
+		window.removeEventListener("focus", windowListener);
+		window.removeEventListener("blur", windowListener);
+		if (HTMLElement.prototype.focus === wrapper)
+			Object.defineProperty(HTMLElement.prototype, "focus", descriptor);
+		throw primary;
+	}
+	const marks = new Set([
+		"before-screenshot",
+		"after-screenshot",
+		"before-release",
+		"before-fulfill",
+		"after-fulfill",
+		"completed",
+	]);
+	const api = {
+		mark(kind: string) {
+			if (marks.has(kind)) record(kind);
+		},
+		stop(): ImportFocusReceipt {
+			record("final");
+			observer.disconnect();
+			document.removeEventListener("focusin", listener, true);
+			document.removeEventListener("focusout", listener, true);
+			window.removeEventListener("focus", windowListener);
+			window.removeEventListener("blur", windowListener);
+			const restored = HTMLElement.prototype.focus === wrapper;
+			if (restored)
+				Object.defineProperty(HTMLElement.prototype, "focus", descriptor);
+			if (window.__diteroImportFocus === api) delete window.__diteroImportFocus;
+			return {
+				version: 1,
+				capacity: 512,
+				retains: "tail",
+				records,
+				dropped,
+				restored,
+			};
+		},
+	};
+	window.__diteroImportFocus = api;
+	record("armed");
+}
+
 test("CSV original-file workflow requires policy acknowledgment, applies and replays stable IDs", async ({
 	page,
 }) => {
@@ -99,6 +246,17 @@ test("CSV original-file workflow requires policy acknowledgment, applies and rep
 	expect(afterMobileCapture.coarse).toBe(true);
 	expect(afterMobileCapture.maxTouchPoints).toBeGreaterThan(0);
 	await panel.getByTestId("import-provider-policy").check();
+	const diagnosticErrors: string[] = [];
+	async function markFocus(kind: string) {
+		try {
+			await page.evaluate(
+				(mark) => window.__diteroImportFocus?.mark(mark),
+				kind,
+			);
+		} catch {
+			diagnosticErrors.push("mark-failed");
+		}
+	}
 	let releaseApply = () => {};
 	const heldApply = new Promise<void>((resolve) => {
 		releaseApply = resolve;
@@ -110,61 +268,97 @@ test("CSV original-file workflow requires policy acknowledgment, applies and rep
 			expect(response.ok()).toBe(true);
 			expect((await response.json()).state).toBe("completed");
 			await heldApply;
+			await markFocus("before-fulfill");
 			await route.fulfill({ response });
+			await markFocus("after-fulfill");
 		},
 		{ times: 1 },
 	);
-	await apply.click();
-	await page.getByTestId("confirm-accept").click();
 	try {
-		const pause = panel.getByRole("button", {
-			name: "Pause import",
-			exact: true,
-		});
-		await pause.focus();
-		await expect(pause).toBeFocused();
-		const pointerPremise = await pause.evaluate((element) => {
-			const style = getComputedStyle(element);
-			const bounds = element.getBoundingClientRect();
-			return {
-				coarse: matchMedia("(pointer: coarse)").matches,
-				fine: matchMedia("(pointer: fine)").matches,
-				anyCoarse: matchMedia("(any-pointer: coarse)").matches,
-				viewportWidth: innerWidth,
-				maxTouchPoints: navigator.maxTouchPoints,
-				computedMinHeight: style.minHeight,
-				computedHeight: style.height,
-				actualHeight: bounds.height,
-				spacing: style.getPropertyValue("--spacing").trim(),
-				classes: element.className,
-			};
-		});
-		await test.info().attach("pause-pointer-premise", {
-			body: JSON.stringify(pointerPremise, null, 2),
-			contentType: "application/json",
-		});
-		expect(pointerPremise.coarse).toBe(true);
-		expect(pointerPremise.actualHeight).toBeGreaterThanOrEqual(44);
-		await page.screenshot({
-			path: test.info().outputPath("import-running-mobile.png"),
-			fullPage: false,
-		});
-		await page.setViewportSize({ width: 1280, height: 900 });
-		await pause.focus();
-		await expect(pause).toBeFocused();
-		await panel.screenshot({
-			path: test.info().outputPath("import-running-desktop.png"),
-		});
+		await apply.click();
+		await page.getByTestId("confirm-accept").click();
+		try {
+			const pause = panel.getByRole("button", {
+				name: "Pause import",
+				exact: true,
+			});
+			await pause.focus();
+			await expect(pause).toBeFocused();
+			const pointerPremise = await pause.evaluate((element) => {
+				const style = getComputedStyle(element);
+				const bounds = element.getBoundingClientRect();
+				return {
+					coarse: matchMedia("(pointer: coarse)").matches,
+					fine: matchMedia("(pointer: fine)").matches,
+					anyCoarse: matchMedia("(any-pointer: coarse)").matches,
+					viewportWidth: innerWidth,
+					maxTouchPoints: navigator.maxTouchPoints,
+					computedMinHeight: style.minHeight,
+					computedHeight: style.height,
+					actualHeight: bounds.height,
+					spacing: style.getPropertyValue("--spacing").trim(),
+					classes: element.className,
+				};
+			});
+			await test.info().attach("pause-pointer-premise", {
+				body: JSON.stringify(pointerPremise, null, 2),
+				contentType: "application/json",
+			});
+			expect(pointerPremise.coarse).toBe(true);
+			expect(pointerPremise.actualHeight).toBeGreaterThanOrEqual(44);
+			await page.screenshot({
+				path: test.info().outputPath("import-running-mobile.png"),
+				fullPage: false,
+			});
+			await page.setViewportSize({ width: 1280, height: 900 });
+			await pause.focus();
+			await expect(pause).toBeFocused();
+			try {
+				await pause.evaluate(installImportFocusDiagnostics);
+			} catch {
+				diagnosticErrors.push("arm-failed");
+			}
+			await markFocus("before-screenshot");
+			await panel.screenshot({
+				path: test.info().outputPath("import-running-desktop.png"),
+			});
+			await markFocus("after-screenshot");
+		} finally {
+			try {
+				await markFocus("before-release");
+			} finally {
+				releaseApply();
+			}
+		}
+		await expect(panel.getByTestId("import-apply-status")).toContainText(
+			"completed",
+		);
+		await expect(
+			panel.getByRole("button", { name: "Pause import", exact: true }),
+		).toHaveCount(0);
+		await markFocus("completed");
+		await expect(panel.getByTestId("import-apply-status")).toBeFocused();
+	} catch (primary) {
+		try {
+			const receipt = await page.evaluate(() =>
+				window.__diteroImportFocus?.stop(),
+			);
+			await test.info().attach("import-focus-diagnostics", {
+				body: JSON.stringify({ receipt: receipt ?? null, diagnosticErrors }),
+				contentType: "application/json",
+			});
+		} catch {
+			// Diagnostics must not replace the original assertion or screenshot error.
+		}
+		throw primary;
 	} finally {
 		releaseApply();
+		try {
+			await page.evaluate(() => window.__diteroImportFocus?.stop());
+		} catch {
+			/* A closed page cannot retain the in-page wrapper. */
+		}
 	}
-	await expect(panel.getByTestId("import-apply-status")).toContainText(
-		"completed",
-	);
-	await expect(
-		panel.getByRole("button", { name: "Pause import", exact: true }),
-	).toHaveCount(0);
-	await expect(panel.getByTestId("import-apply-status")).toBeFocused();
 	await panel.screenshot({
 		path: test.info().outputPath("import-completed-focus-desktop.png"),
 	});
