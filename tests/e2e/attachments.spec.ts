@@ -257,15 +257,24 @@ async function createInvite(page: Page, email: string): Promise<URL> {
 	return link;
 }
 
-async function expectDownload(page: Page, name: string, plaintext: Buffer) {
+async function expectDownload(
+	page: Page,
+	name: string,
+	plaintext: Buffer,
+	unlock?: () => Promise<void>,
+) {
 	const tile = page
 		.getByTestId("task-attachments")
 		.getByRole("listitem")
-		.filter({ hasText: name });
+		.filter({ hasText: unlock ? m.attachment_locked_name() : name });
 	await expect(tile).toBeVisible({ timeout: 20_000 });
 	await tile.getByTestId("row-actions").click();
-	const downloading = page.waitForEvent("download");
+	const downloading = page.waitForEvent("download", {
+		timeout: unlock ? DERIVE_TIMEOUT + 20_000 : 20_000,
+	});
+	void downloading.catch(() => undefined);
 	await page.getByTestId("row-action-download").click();
+	if (unlock) await unlock();
 	const download = await downloading;
 	expect(download.suggestedFilename()).toBe(name);
 	const stream = await download.createReadStream();
@@ -459,6 +468,29 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 				.getByRole("button", { name: m.attachment_add(), exact: true }),
 		).toHaveCount(0);
 		await expectNoSeriousA11y(owner, "rotation required");
+		await expectDownload(owner, oldName, oldBytes);
+		await closeTask(owner);
+		await goToSettings(owner);
+		await owner.getByTestId("e2e-lock-now").click();
+		await expect(owner.getByTestId("e2e-status")).toHaveText(
+			m.e2e_status_locked(),
+		);
+		await leaveSettings(owner);
+		await openTask(owner, listName, taskName);
+		await expectDownload(owner, oldName, oldBytes, async () => {
+			const unlock = owner.getByTestId("e2e-unlock-dialog");
+			await expect(unlock).toBeVisible();
+			await unlock.getByTestId("e2e-unlock-passphrase").fill(PASSPHRASE);
+			await unlock.getByTestId("e2e-unlock-submit").click();
+			await expect(unlock).toHaveCount(0, { timeout: DERIVE_TIMEOUT });
+		});
+		await expect(blocked).toBeVisible();
+		await expect(
+			owner
+				.getByTestId("task-attachments")
+				.locator("xpath=ancestor::fieldset")
+				.getByRole("button", { name: m.attachment_add(), exact: true }),
+		).toHaveCount(0);
 		await blocked
 			.getByRole("button", { name: m.e2e_rotation_action() })
 			.click();
