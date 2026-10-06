@@ -787,6 +787,7 @@
 	"field_sort_by": "Sortieren nach",
 	"field_direction": "Richtung",
 	"field_workspaces": "Workspaces",
+	"view_field_task_source": "Aufgaben aus",
 	"field_visibility": "Sichtbarkeit",
 	"field_shared_in": "Geteilt in",
 	"view_layout_list": "Liste",

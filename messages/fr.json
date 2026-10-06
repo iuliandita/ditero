@@ -799,6 +799,7 @@
 	"field_sort_by": "Trier par",
 	"field_direction": "Sens",
 	"field_workspaces": "Workspaces",
+	"view_field_task_source": "Afficher les tâches de",
 	"field_visibility": "Visibilité",
 	"field_shared_in": "Partagée dans",
 	"view_layout_list": "Liste",

@@ -65,6 +65,7 @@ export type ViewEntry = {
 	listTitle: string;
 	listIcon: string | null;
 	sourceContext?: string;
+	parentContext?: string;
 	occurrence?: HabitOccurrence;
 };
 export type ViewEntryGroup = {
@@ -164,6 +165,7 @@ export function ViewRenderer(props: {
 		[props.workspaces],
 	);
 	const listById = useMemo(() => new Map(lists.map((l) => [l.id, l])), [lists]);
+	const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 	const labelById = useMemo(
 		() => new Map(labels.map((l) => [l.id, l])),
 		[labels],
@@ -217,11 +219,17 @@ export function ViewRenderer(props: {
 			const dueAt = effectiveDue == null ? null : new Date(effectiveDue);
 			const done = occurrence ? occurrence.done : (task.done ?? false);
 			const workspace = workspaceById.get(list.workspaceId);
-			const sourceContext = workspace
-				? workspace.kind === "personal"
-					? m.scope_source_personal({ workspace: workspace.name })
-					: m.scope_source_shared({ workspace: workspace.name })
-				: undefined;
+			const sourceContext =
+				workspace && display.workspaceScope.mode !== "one"
+					? workspace.kind === "personal"
+						? m.scope_source_personal({ workspace: workspace.name })
+						: m.scope_source_shared({ workspace: workspace.name })
+					: undefined;
+			const parent = task.parentId ? taskById.get(task.parentId) : undefined;
+			const parentContext =
+				parent && parent.listId === task.listId
+					? m.activation_review_parent({ title: parent.title })
+					: undefined;
 			const filterTask: FilterTask = {
 				id: task.id,
 				listId: task.listId,
@@ -250,6 +258,7 @@ export function ViewRenderer(props: {
 				task,
 				occurrence,
 				sourceContext,
+				parentContext,
 				kind: (list.kind ?? "tasks") as ListKind,
 				listTitle: list.title || m.list_untitled_fallback(),
 				listIcon: list.icon ?? null,
@@ -278,6 +287,7 @@ export function ViewRenderer(props: {
 		pref.timezone,
 		workspaceById,
 		listById,
+		taskById,
 		labelById,
 		labelIdsByTask,
 		assigneeIdsByTask,
@@ -341,7 +351,6 @@ export function ViewRenderer(props: {
 			),
 		[memberships, currentUserId],
 	);
-	const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 	const eligible = (task: Task): boolean => {
 		const list = listById.get(task.listId);
 		return (
@@ -680,6 +689,7 @@ function ListLayout({
 			task={entry.task}
 			occurrence={entry.occurrence}
 			sourceContext={entry.sourceContext}
+			parentContext={entry.parentContext}
 			list={{ title: entry.listTitle, icon: entry.listIcon }}
 			kind={entry.kind}
 			subtasks={[]}

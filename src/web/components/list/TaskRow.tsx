@@ -32,7 +32,6 @@ import {
 	priorityLabel,
 	priorityMeta,
 } from "@/lib/task-display";
-import { TOUCH_KEYBOARD_ONLY } from "@/lib/touch";
 import { cn } from "@/lib/utils";
 import type { ListKind } from "../../../domain/icon-map.ts";
 import { randomId } from "../../../domain/random-id.ts";
@@ -282,6 +281,7 @@ export function TaskRow({
 	density,
 	list,
 	sourceContext,
+	parentContext,
 	occurrence,
 }: {
 	task: Task;
@@ -299,6 +299,7 @@ export function TaskRow({
 	// Shown when the surface mixes lists, so a row says where it lives.
 	list?: { title: string; icon: string | null } | null;
 	sourceContext?: string;
+	parentContext?: string;
 	occurrence?: HabitOccurrence;
 }) {
 	const card = variant === "card";
@@ -409,6 +410,7 @@ export function TaskRow({
 	const ids = useId();
 	const badgeId = `${ids}-badge`;
 	const metaId = `${ids}-meta`;
+	const parentId = `${ids}-parent`;
 	const progressId = `${ids}-progress`;
 	const priorityId = `${ids}-priority`;
 	const completionId = `${ids}-completion`;
@@ -421,6 +423,7 @@ export function TaskRow({
 	const describedBy =
 		[
 			completionId,
+			parentContext && parentId,
 			showBadge && badgeId,
 			(!bare || sourceContext || list) && metaId,
 			showProgress && progressId,
@@ -548,6 +551,15 @@ export function TaskRow({
 							habitDate={occurrence?.date}
 							id={completionId}
 						/>
+						{parentContext && (
+							<span
+								id={parentId}
+								data-testid="task-parent-context"
+								className="mt-0.5 block wrap-anywhere text-xs text-muted-foreground"
+							>
+								{parentContext}
+							</span>
+						)}
 						{showBadge && (
 							<Badge
 								id={badgeId}
@@ -669,10 +681,7 @@ export function TaskRow({
 							}
 							aria-expanded={expanded}
 							onClick={() => setExpanded((e) => !e)}
-							className={cn(
-								"mt-0.5 text-muted-foreground",
-								TOUCH_KEYBOARD_ONLY,
-							)}
+							className="mt-0.5 flex shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background pointer-coarse:size-11"
 						>
 							<ChevronRight
 								className={cn(
@@ -724,20 +733,26 @@ export function TaskRow({
 						<li
 							key={s.id}
 							data-reading-row="subtask"
-							className="group/completion flex items-center gap-2 py-1"
+							className="group/completion flex items-center gap-2 py-1 pointer-coarse:min-h-11 pointer-coarse:py-0"
 						>
-							<Checkbox
-								disabled={!activation.canWriteTask(s.id)}
-								aria-label={s.title}
-								aria-describedby={`${ids}-completion-${s.id}`}
-								checked={s.done ?? false}
-								onCheckedChange={() => {
-									if (activation.canWriteTask(s.id))
-										handlers.onToggle(s.id, s.done ?? false);
-								}}
-								shape={checkShapeFor(kind)}
-								priority={checkToneFor(kind, s.priority)}
-							/>
+							<div
+								data-reading-check-target
+								className="flex shrink-0 items-center justify-center pointer-coarse:size-11"
+							>
+								<Checkbox
+									disabled={!activation.canWriteTask(s.id)}
+									aria-label={s.title}
+									aria-describedby={`${ids}-completion-${s.id}`}
+									checked={s.done ?? false}
+									onCheckedChange={() => {
+										if (activation.canWriteTask(s.id))
+											handlers.onToggle(s.id, s.done ?? false);
+									}}
+									shape={checkShapeFor(kind)}
+									priority={checkToneFor(kind, s.priority)}
+									className="pointer-coarse:after:inset-auto pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:size-11 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2"
+								/>
+							</div>
 							<button
 								type="button"
 								aria-label={m.task_open_details()}
@@ -745,14 +760,14 @@ export function TaskRow({
 								aria-describedby={`${ids}-completion-${s.id}`}
 								onClick={() => handlers.onOpenDetail(s)}
 								className={cn(
-									"min-w-0 flex-1 text-start text-sm",
+									"min-w-0 flex-1 text-start text-sm pointer-coarse:min-h-11 pointer-coarse:content-center",
 									s.done && "text-muted-foreground",
 								)}
 							>
-								<span
-									className={cn("block truncate", strikeClass(s.done ?? false))}
-								>
-									{s.title}
+								<span className="block truncate">
+									<span className={strikeClass(s.done ?? false)}>
+										{s.title}
+									</span>
 								</span>
 								<CompletedBy task={s} id={`${ids}-completion-${s.id}`} />
 							</button>
