@@ -105,6 +105,15 @@ async function expectCoarsePointer(page: Page) {
 
 async function expectTouchTarget(target: Locator, label: string) {
 	await expect(target, label).toBeVisible();
+	await expect
+		.poll(
+			async () => {
+				const box = await target.boundingBox();
+				return box !== null && box.height >= 44 && box.width >= 44;
+			},
+			{ message: `${label} (${target}): at least 44px high and wide` },
+		)
+		.toBe(true);
 	const box = await target.boundingBox();
 	if (!box) throw new Error(`Missing bounds for ${label}`);
 	expect(box.height, `${label} height`).toBeGreaterThanOrEqual(44);

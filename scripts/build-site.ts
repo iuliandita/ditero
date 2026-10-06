@@ -1,63 +1,44 @@
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const locales = ["en", "de", "es", "fr", "ro", "ar"] as const;
 export type Locale = (typeof locales)[number];
-export const fields = [
-	"title",
-	"description",
-	"skip",
-	"languages",
-	"heading",
-	"intro",
-	"download",
-	"setup",
-	"source",
-	"everydayTitle",
-	"everyday",
-	"localTitle",
-	"local",
-	"filesTitle",
-	"files",
-	"requirementsTitle",
-	"requirements",
-	"clientsTitle",
-	"clients",
-	"alphaTitle",
-	"alpha",
-	"docsTitle",
-	"android",
-	"desktop",
-	"backup",
-	"security",
-	"license",
-	"downloadContext",
-	"requirementsAdvancedTitle",
-	"requirementsAdvanced",
-	"previewAlt",
-	"previewCaption",
-	"releaseLabel",
-] as const;
+export const fields = ["title", "message", "link"] as const;
 export type Dictionary = Record<(typeof fields)[number], string>;
-const names: Record<Locale, string> = {
-	en: "English",
-	de: "Deutsch",
-	es: "Español",
-	fr: "Français",
-	ro: "Română",
-	ar: "العربية",
+export const siteUrl = "https://ditero.app/";
+export const copy: Record<Locale, Dictionary> = {
+	en: {
+		title: "Ditero website",
+		message: "The Ditero website is now at ditero.app.",
+		link: "Continue to the Ditero website",
+	},
+	de: {
+		title: "Ditero-Website",
+		message: "Die Ditero-Website ist jetzt auf ditero.app.",
+		link: "Zur Ditero-Website",
+	},
+	es: {
+		title: "Sitio web de Ditero",
+		message: "El sitio web de Ditero ahora está en ditero.app.",
+		link: "Ir al sitio web de Ditero",
+	},
+	fr: {
+		title: "Site de Ditero",
+		message: "Le site de Ditero se trouve maintenant sur ditero.app.",
+		link: "Continuer vers le site de Ditero",
+	},
+	ro: {
+		title: "Site-ul Ditero",
+		message: "Site-ul Ditero este acum la ditero.app.",
+		link: "Continuă pe site-ul Ditero",
+	},
+	ar: {
+		title: "موقع Ditero",
+		message: "موقع Ditero الآن على ditero.app.",
+		link: "انتقل إلى موقع Ditero",
+	},
 };
-export const siteUrl = "https://iuliandita.github.io/ditero/";
-const sourceUrl = "https://github.com/iuliandita/ditero";
-export const publishedRelease = "v0.0.1-alpha.2";
-const docsUrl = `${sourceUrl}/blob/${publishedRelease}`;
-const previewAssets = ["app-preview-light.png", "app-preview-dark.png"];
-const assets = [
-	"ditero-symbol-teal.png",
-	"ditero-wordmark-light.png",
-	"ditero-wordmark-dark.png",
-];
 
 export function parseDictionary(input: unknown): Dictionary {
 	if (!input || typeof input !== "object" || Array.isArray(input))
@@ -96,22 +77,10 @@ export function escapeHtml(text: string): string {
 export function renderPage(
 	template: string,
 	locale: Locale,
-	dictionary: Dictionary,
+	dictionary: Dictionary = copy[locale],
 ): string {
-	const prefix = locale === "en" ? "./" : "../";
+	if (!locales.includes(locale)) throw new Error("Unsupported site locale");
 	const path = (target: Locale) => (target === "en" ? "" : `${target}/`);
-	const languageLinks = locales
-		.map(
-			(target) =>
-				`<a href="${prefix}${path(target)}" lang="${target}" hreflang="${target}"${target === locale ? ' aria-current="page"' : ""}>${escapeHtml(names[target])}</a>`,
-		)
-		.join("\n");
-	const alternates = locales
-		.map(
-			(target) =>
-				`<link rel="alternate" hreflang="${target}" href="${siteUrl}${path(target)}">`,
-		)
-		.join("\n");
 	const values: Record<string, string> = {
 		...Object.fromEntries(
 			Object.entries(parseDictionary(dictionary)).map(([key, value]) => [
@@ -119,21 +88,13 @@ export function renderPage(
 				escapeHtml(value),
 			]),
 		),
-		currentLanguage: escapeHtml(names[locale]),
-		prefix,
-		home: `${prefix}${path(locale)}`,
-		canonical: `${siteUrl}${path(locale)}`,
-		languageLinks,
-		alternates,
-		releaseVersion: escapeHtml(publishedRelease),
-		releaseUrl: `${sourceUrl}/releases/tag/${publishedRelease}`,
-		setupUrl: `${docsUrl}/README.md#run-it-docker-compose`,
-		sourceUrl,
-		androidUrl: `${docsUrl}/apps/android/README.md`,
-		desktopUrl: `${docsUrl}/apps/desktop/README.md`,
-		backupUrl: `${docsUrl}/docs/runbooks/backup-restore.md`,
-		securityUrl: `${docsUrl}/docs/security.md`,
-		licenseUrl: `${docsUrl}/LICENSE`,
+		canonical: escapeHtml(`${siteUrl}${path(locale)}`),
+		alternates: locales
+			.map(
+				(target) =>
+					`<link rel="alternate" hreflang="${target}" href="${siteUrl}${path(target)}">`,
+			)
+			.join("\n"),
 	};
 	return template
 		.replace(
@@ -148,28 +109,11 @@ export function renderPage(
 }
 
 export async function buildSite(root: string, output: string): Promise<void> {
-	const previews = await Promise.all(
-		previewAssets.map(async (name) => ({
-			name,
-			bytes: await readFile(join(root, "site/assets", name)),
-		})),
-	);
 	const template = await readFile(join(root, "site/template.html"), "utf8");
-	const pages = await Promise.all(
-		locales.map(async (locale) => ({
-			locale,
-			html: renderPage(
-				template,
-				locale,
-				parseDictionary(
-					JSON.parse(
-						await readFile(join(root, `site/locales/${locale}.json`), "utf8"),
-					),
-				),
-			),
-		})),
-	);
-	await mkdir(join(output, "assets"), { recursive: true });
+	const pages = locales.map((locale) => ({
+		locale,
+		html: renderPage(template, locale),
+	}));
 	for (const page of pages) {
 		const file = join(
 			output,
@@ -178,19 +122,11 @@ export async function buildSite(root: string, output: string): Promise<void> {
 		await mkdir(dirname(file), { recursive: true });
 		await writeFile(file, page.html);
 	}
-	await copyFile(join(root, "site/site.css"), join(output, "site.css"));
-	for (const asset of assets)
-		await copyFile(
-			join(root, "assets/brand", asset),
-			join(output, "assets", asset),
-		);
-	for (const preview of previews)
-		await writeFile(join(output, "assets", preview.name), preview.bytes);
 	await writeFile(join(output, ".nojekyll"), "");
 }
 
 if (import.meta.main) {
 	const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 	await buildSite(root, join(root, "site/dist"));
-	console.log(`Built ${locales.length} static site pages.`);
+	console.log(`Built ${locales.length} website forwarding pages.`);
 }

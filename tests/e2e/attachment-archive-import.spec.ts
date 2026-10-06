@@ -229,6 +229,10 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 		`/api/portability/import/plans/${job.id}/attachment-parents`,
 		page.url(),
 	).href;
+	const parentsEndpoint = new URL(parentsURL);
+	const matchesParentsURL = (url: URL) =>
+		url.origin === parentsEndpoint.origin &&
+		url.pathname === parentsEndpoint.pathname;
 	let finishParentCapture!: (
 		result: { body: string } | { error: unknown },
 	) => void;
@@ -238,7 +242,7 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 		},
 	);
 	await page.route(
-		parentsURL,
+		matchesParentsURL,
 		async (route: Route) => {
 			try {
 				expect(route.request().method()).toBe("GET");
@@ -254,10 +258,16 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 		},
 		{ times: 1 },
 	);
-	const parentsResponse = page.waitForResponse(parentsURL).then(
-		(actual) => ({ actual }),
-		(error: unknown) => ({ error }),
-	);
+	const parentsResponse = page
+		.waitForResponse(
+			(response) =>
+				response.request().method() === "GET" &&
+				matchesParentsURL(new URL(response.url())),
+		)
+		.then(
+			(actual) => ({ actual }),
+			(error: unknown) => ({ error }),
+		);
 	await panel
 		.getByRole("button", { name: "Import selected files", exact: true })
 		.click();

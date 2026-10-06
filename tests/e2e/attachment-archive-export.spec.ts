@@ -767,9 +767,111 @@ test("archive export: a real shared file without its key is explained and unsele
 	test.setTimeout(180000);
 	const ownerContext = await browser.newContext();
 	const memberContext = await browser.newContext();
+	let member: Page | undefined;
+	let memberID: string | undefined;
+	let failed = false;
+	let failure: unknown;
+	const cleanupErrors: unknown[] = [];
+	const snapshots: {
+		stage: string;
+		online: boolean;
+		journalCount?: number;
+		pending?: number;
+		uncertain?: boolean;
+		refused?: boolean;
+		storageErrorType?: string;
+	}[] = [];
+	const diagnosticFailures: { stage: string; errorType: string }[] = [];
+	const errorType = (error: unknown) =>
+		error instanceof Error &&
+		[
+			"Error",
+			"TypeError",
+			"SyntaxError",
+			"RangeError",
+			"SecurityError",
+			"TimeoutError",
+		].includes(error.name)
+			? error.name
+			: error instanceof Error
+				? "Error"
+				: typeof error;
+	async function snapshot(
+		stage: "before-navigation" | "after-return" | "before-archive" | "failure",
+	) {
+		if (!member || !memberID) {
+			diagnosticFailures.push({ stage, errorType: "ScopeUnavailable" });
+			return;
+		}
+		try {
+			snapshots.push(
+				await member.evaluate(
+					({ stage, memberID }) => {
+						const online = navigator.onLine;
+						try {
+							const storage = window.localStorage;
+							const prefix = `ditero:export:v1:${encodeURIComponent(memberID)}:`;
+							let journalCount = 0;
+							let pending = 0;
+							let uncertain = false;
+							let refused = false;
+							for (let index = 0; index < storage.length; index++) {
+								const key = storage.key(index);
+								if (!key?.startsWith(prefix)) continue;
+								journalCount++;
+								const value: unknown = JSON.parse(
+									storage.getItem(key) ?? "null",
+								);
+								if (
+									typeof value !== "object" ||
+									value === null ||
+									!("pending" in value) ||
+									typeof value.pending !== "number" ||
+									!Number.isSafeInteger(value.pending) ||
+									value.pending < 0 ||
+									!("uncertain" in value) ||
+									typeof value.uncertain !== "boolean" ||
+									!("refused" in value) ||
+									typeof value.refused !== "boolean"
+								)
+									throw new TypeError("Invalid journal metadata");
+								pending = Math.min(1_000_000, pending + value.pending);
+								uncertain ||= value.uncertain;
+								refused ||= value.refused;
+							}
+							return {
+								stage,
+								online,
+								journalCount,
+								pending,
+								uncertain,
+								refused,
+							};
+						} catch (error) {
+							const storageErrorType =
+								error instanceof Error &&
+								[
+									"Error",
+									"TypeError",
+									"SyntaxError",
+									"RangeError",
+									"SecurityError",
+								].includes(error.name)
+									? error.name
+									: "Error";
+							return { stage, online, storageErrorType };
+						}
+					},
+					{ stage, memberID },
+				),
+			);
+		} catch (error) {
+			diagnosticFailures.push({ stage, errorType: errorType(error) });
+		}
+	}
 	try {
 		const owner = await ownerContext.newPage();
-		const member = await memberContext.newPage();
+		member = await memberContext.newPage();
 		const email = uniqueEmail("archive-member");
 		await signUp(owner, uniqueEmail("archive-owner"));
 		await openWorkspaceSwitcher(owner);
@@ -794,11 +896,29 @@ test("archive export: a real shared file without its key is explained and unsele
 		await expect(link).toBeVisible();
 		const token = new URL(await link.inputValue()).searchParams.get("token");
 		if (!token) throw new Error("missing invitation token");
-		await signUp(member, email);
+		memberID = await signUp(member, email);
 		await goToSettings(member);
 		await member.getByTestId("e2e-setup").click();
 		await enroll(member);
+		const savedDownload = member.waitForEvent("download").then(
+			(download) => ({ download }),
+			(error: unknown) => ({ error }),
+		);
+		await member
+			.locator("#data-portability")
+			.getByRole("button", { name: "Download JSON", exact: true })
+			.click();
+		const savedResult = await savedDownload;
+		if ("error" in savedResult) throw savedResult.error;
+		expect(savedResult.download.suggestedFilename()).toBe(
+			"ditero-history-v2.json",
+		);
+		const initialSaved: PortableExportV2 = JSON.parse(
+			await read(savedResult.download),
+		);
+		expect(initialSaved.schemaVersion).toBe(2);
 		await leaveSettings(member);
+		await snapshot("before-navigation");
 		await member.goto(
 			new URL(`/accept?token=${encodeURIComponent(token)}`, member.url()).href,
 		);
@@ -808,6 +928,7 @@ test("archive export: a real shared file without its key is explained and unsele
 		await member.getByTestId("accept-join").click();
 		await navigation;
 		await waitWorkspaceReady(member);
+		await snapshot("after-return");
 		await switchWorkspace(member, "Fictional archive household");
 		const saved = await member.request.get("/api/portability/export?version=2");
 		expect(saved.ok()).toBe(true);
@@ -823,6 +944,7 @@ test("archive export: a real shared file without its key is explained and unsele
 				gets++;
 		});
 		await goToSettings(member);
+		await snapshot("before-archive");
 		await member
 			.getByRole("button", { name: "Export selected files", exact: true })
 			.click();
@@ -849,10 +971,41 @@ test("archive export: a real shared file without its key is explained and unsele
 		).toBeDisabled();
 		expect(gets).toBe(0);
 		await a11y(member);
+	} catch (error) {
+		failed = true;
+		failure = error;
+		await snapshot("failure");
 	} finally {
-		await ownerContext.close();
-		await memberContext.close();
+		for (const context of [ownerContext, memberContext]) {
+			try {
+				await context.close();
+			} catch (error) {
+				cleanupErrors.push(error);
+			}
+		}
 	}
+	if (failed) {
+		try {
+			await test.info().attach("archive-member-export-boundary-metadata", {
+				body: JSON.stringify({
+					snapshots,
+					diagnosticFailures,
+					cleanupErrorTypes: cleanupErrors.map(errorType),
+				}),
+				contentType: "application/json",
+			});
+		} catch (error) {
+			console.warn("archive boundary diagnostic attachment failed", {
+				errorType: errorType(error),
+			});
+		}
+		throw failure;
+	}
+	if (cleanupErrors.length)
+		throw new AggregateError(
+			cleanupErrors,
+			"Archive browser context cleanup failed",
+		);
 });
 
 test("archive export: explicit paging preserves selection and refuses a 65th selected file", async ({

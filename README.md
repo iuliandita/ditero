@@ -20,7 +20,7 @@ up with daily habits. Work offline and sync when you're connected again.
 Your data lives on your server. Reminders, attachments, calendars, and sharing
 are included, with no subscriptions or paid feature unlocks.
 
-[Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Brand assets](assets/brand/README.md)
+[Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Brand assets](assets/brand/README.md)
 
 > **Alpha.** The first release was `v0.0.1-alpha.1`; the current published alpha is
 > [`v0.0.1-alpha.2`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.2).

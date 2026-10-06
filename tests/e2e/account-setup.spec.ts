@@ -540,6 +540,17 @@ test("competing Basic and Custom attempts never merge choices or silently regene
 	const userID = await signUp(page, email);
 	const other = await context.newPage();
 	try {
+		await other.goto(`${webOrigin()}/setup`);
+		await expect(panel(other)).toBeVisible();
+		await expect
+			.poll(() =>
+				other.evaluate(() =>
+					Array.from(document.styleSheets).some(
+						(sheet) => sheet.cssRules.length > 0,
+					),
+				),
+			)
+			.toBe(true);
 		await mountProbe(page, userID, email);
 		await mountProbe(other, userID, email);
 		const firstId = (await readProbe(page)).requestId;
