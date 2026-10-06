@@ -225,12 +225,14 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	expect(run.ok()).toBe(true);
 	expect((await run.json()).run.state).toBe("completed");
 
-	const parentsResponse = page.waitForResponse(
-		(response) =>
-			new URL(response.url()).pathname ===
-				`/api/portability/import/plans/${job.id}/attachment-parents` &&
-			response.ok(),
-	);
+	const parentsResponse = page
+		.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname ===
+					`/api/portability/import/plans/${job.id}/attachment-parents` &&
+				response.ok(),
+		)
+		.then((response) => response.json());
 	await panel
 		.getByRole("button", { name: "Import selected files", exact: true })
 		.click();
@@ -248,7 +250,7 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	await importer
 		.getByRole("button", { name: "Open archive", exact: true })
 		.click();
-	const parents = await (await parentsResponse).json();
+	const parents = await parentsResponse;
 	const parent = parents.items.find(
 		(item: { sourceAttachmentId: string }) =>
 			item.sourceAttachmentId === source.id,

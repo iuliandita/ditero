@@ -503,7 +503,13 @@ test("keymap: rebind persists across reload and fires; vim profile reflected", a
 	await waitWorkspaceReady(page);
 	await blur(page);
 	await page.keyboard.press("?");
-	const cheat = page.getByRole("dialog");
+	const cheat = page.getByRole("dialog", { includeHidden: true }).filter({
+		has: page.getByRole("heading", {
+			name: "Keyboard shortcuts",
+			exact: true,
+			includeHidden: true,
+		}),
+	});
 	await expect(
 		cheat.getByRole("heading", { name: "Keyboard shortcuts" }),
 	).toBeVisible();
@@ -514,15 +520,17 @@ test("keymap: rebind persists across reload and fires; vim profile reflected", a
 	).toBeVisible();
 	await page.keyboard.press("Escape");
 	await expect(cheat).toBeHidden();
+	await expect(cheat).toHaveCount(0, { timeout: 15000 });
 
 	// Active: the rebound key fires the command.
 	await blur(page);
 	await page.keyboard.press("n");
 	await expect(page.getByTestId("quickadd-input")).toBeVisible();
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("quickadd-input")).toBeHidden({
-		timeout: 15000,
-	});
+	const quickaddDialog = page.getByTestId("quickadd-dialog");
+	await quickaddDialog
+		.getByRole("button", { name: "Close", exact: true })
+		.click();
+	await expect(quickaddDialog).toHaveCount(0, { timeout: 15000 });
 
 	// Vim profile: selecting it flips the pressed state (movement stays j/k/o/x in
 	// both profiles, so there is no vim-only binding to assert post-M1c).
