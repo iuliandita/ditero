@@ -23,7 +23,7 @@ are included, with no subscriptions or paid feature unlocks.
 [Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Brand assets](assets/brand/README.md)
 
 > **Alpha.** The first release was `v0.0.1-alpha.1`; the current published alpha is
-> [`v0.0.1-alpha.3`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.3).
+> [`v0.0.1-alpha.4`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.4).
 > The release pipeline packages server
 > containers, Helm/Compose deployment files, desktop installers and signed Android
 > downloads. Native platform qualification remains in progress; Windows builds are

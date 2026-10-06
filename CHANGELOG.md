@@ -31,6 +31,12 @@ All notable changes to this project are documented here. The format is based on
   content/ledger evidence. Public version 2 uploads remain disabled pending the
   complete history interface and browser qualification.
 
+## [0.0.1-alpha.5] - 2026-10-06
+
+### Fixed
+
+- Existing encrypted attachments remain downloadable while workspace key rotation is required.
+
 ## [0.0.1-alpha.4] - 2026-10-06
 
 ### Fixed
