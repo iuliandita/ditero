@@ -145,7 +145,8 @@ export function useAttachmentGate(
 			setError(null);
 			pending.current = current;
 			setPendingFileName(current.files[0]?.name ?? null);
-			if (blocked) {
+			// Historical reads retain their key version; only new files need rotation.
+			if (blocked && current.keyVersion === undefined) {
 				setFocusBlocked(true);
 				return false;
 			}
