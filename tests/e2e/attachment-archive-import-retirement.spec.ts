@@ -85,6 +85,30 @@ async function capture(page: Page, name: string) {
 	await test.info().attach(name, { path, contentType: "image/png" });
 }
 
+async function captureRecoveryVariants(page: Page, name: string) {
+	await page.mouse.move(8, 8);
+	await capture(page, name);
+	await page.emulateMedia({ colorScheme: "dark" });
+	await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+	await capture(page, `${name}-desktop-dark`);
+	await page.setViewportSize({ width: 390, height: 844 });
+	const dialog = page.getByTestId("attachment-archive-import-dialog");
+	const bounds = await dialog.boundingBox();
+	expect(bounds).not.toBeNull();
+	if (!bounds) throw new Error("Recovery dialog has no measured bounds");
+	expect(bounds.x).toBeGreaterThanOrEqual(8);
+	expect(bounds.width).toBeLessThanOrEqual(374);
+	expect(bounds.height).toBeLessThanOrEqual(812);
+	expect(
+		await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth),
+	).toBe(true);
+	await capture(page, `${name}-phone-dark`);
+	await page.emulateMedia({ colorScheme: "light" });
+	await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+	await capture(page, `${name}-phone-light`);
+	await page.setViewportSize({ width: 1440, height: 1000 });
+}
+
 test("archive import retires prepared file metadata after real keyring expiry", async ({
 	page,
 }) => {
@@ -129,8 +153,10 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	await detail.getByRole("button", { name: m.modal_close_label() }).click();
 	await expect(detail).toHaveCount(0);
 	await goToSettings(page);
+	await page.emulateMedia({ colorScheme: "light" });
 	await page.getByTestId("theme-switcher").click();
-	await page.getByRole("option", { name: "Light", exact: true }).click();
+	await page.getByRole("option", { name: "Match system", exact: true }).click();
+	await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
 	const contentResponse = await captureResponseBody(
 		page,
 		"/api/portability/export?version=2",
@@ -458,4 +484,214 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	expect(await absentReopened.json()).toMatchObject({
 		code: "migration-not-found",
 	});
+	await renewedChoice.check();
+	await reopened
+		.getByRole("button", { name: m.archive_import_prepare(), exact: true })
+		.click();
+	await expect(
+		reopened.getByRole("button", {
+			name: m.archive_import_transfer(),
+			exact: true,
+		}),
+	).toBeEnabled({ timeout: DERIVE_TIMEOUT });
+	let interruptedTarget = "";
+	await page.route(
+		"**/api/attachments/migration_*/upload",
+		async (route) => {
+			interruptedTarget =
+				new URL(route.request().url()).pathname.split("/")[3] ?? "";
+			await route.abort();
+		},
+		{ times: 1 },
+	);
+	await reopened
+		.getByRole("button", { name: m.archive_import_transfer(), exact: true })
+		.click();
+	await expect(reopened.getByRole("status")).toHaveText(
+		m.archive_import_uncertain(),
+	);
+	expect(interruptedTarget).toMatch(/^migration_/);
+	const retainedBefore = await page.request.get(
+		`/api/portability/import/plans/${job.id}/attachment-migrations?ordinal=${parent.ordinal}`,
+	);
+	expect(retainedBefore.ok()).toBe(true);
+	const previous = await retainedBefore.json();
+	expect(previous).toMatchObject({
+		targetAttachmentId: interruptedTarget,
+		revision: 1,
+		committed: false,
+		attachmentState: "reserved",
+		recoverable: false,
+	});
+	await reopened
+		.getByRole("button", { name: "Close", exact: true })
+		.and(reopened.locator('[data-slot="button"]'))
+		.click();
+	await expect(reopened).toHaveCount(0);
+	await panel
+		.getByRole("button", { name: "Import selected files", exact: true })
+		.click();
+	const recovered = page.getByTestId("attachment-archive-import-dialog");
+	await recovered.getByLabel("Encrypted files archive").setInputFiles({
+		name: filesDownload.suggestedFilename(),
+		mimeType: "application/json",
+		buffer: filesBytes,
+	});
+	await recovered
+		.getByLabel("Archive passphrase", { exact: true })
+		.fill(ARCHIVE_SECRET);
+	await recovered
+		.getByRole("button", { name: "Open archive", exact: true })
+		.click();
+	await recovered
+		.getByRole("radio", {
+			name: `${FILE_NAME} Applied destination: ${taskTitle} Source file: ${source.id}`,
+			exact: true,
+		})
+		.check({ timeout: DERIVE_TIMEOUT });
+	await expect(recovered.getByRole("status")).toHaveText(
+		"Status checked: the previous transfer is unfinished.",
+	);
+	await expect(
+		recovered.getByRole("group", {
+			name: "Choose one file and its applied destination",
+			exact: true,
+		}),
+	).toBeVisible();
+	const recoveryWrites: string[] = [];
+	const repeatedContentApplies: string[] = [];
+	page.on("request", (request) => {
+		if (request.method() !== "POST") return;
+		const path = new URL(request.url()).pathname;
+		if (path.endsWith("/attachment-recoveries"))
+			recoveryWrites.push(request.postData() ?? "");
+		if (path.endsWith("/apply")) repeatedContentApplies.push(path);
+	});
+	await recovered
+		.getByRole("button", { name: m.archive_import_replace(), exact: true })
+		.click();
+	await expect(
+		recovered.getByText(m.archive_import_replace_confirmation(), {
+			exact: true,
+		}),
+	).toBeVisible();
+	expect(recoveryWrites).toEqual([]);
+	const confirmation = recovered.getByRole("button", {
+		name: "Confirm replacement",
+		exact: true,
+	});
+	await expect(confirmation).toBeFocused();
+	await expect(confirmation).toHaveAccessibleDescription(
+		"This abandons the current file transfer, including any upload still in progress. A fresh encrypted transfer will use the same applied destination. Continue?",
+	);
+	await expect(
+		recovered.getByRole("button", { name: "Cancel", exact: true }),
+	).toBeEnabled();
+	await expect(
+		recovered.getByText(
+			"This attempt needs explicit recovery. Open the original archive and check its retained transfer before choosing a replacement.",
+			{ exact: true },
+		),
+	).toHaveCount(0);
+	await captureRecoveryVariants(
+		page,
+		"archive-reopened-live-replacement-confirmation",
+	);
+	await recovered
+		.getByRole("button", {
+			name: m.archive_import_replace_confirm(),
+			exact: true,
+		})
+		.click();
+	await expect(recovered.getByRole("status")).toHaveText(
+		m.archive_import_complete(),
+		{ timeout: DERIVE_TIMEOUT },
+	);
+	expect(recoveryWrites).toHaveLength(1);
+	const recoveryRequest = JSON.parse(recoveryWrites[0] ?? "");
+	expect(recoveryRequest).toMatchObject({
+		retireLive: true,
+		previous: {
+			associationId: previous.associationId,
+			attemptId: previous.attemptId,
+			targetAttachmentId: interruptedTarget,
+			revision: 1,
+		},
+	});
+	expect(recoveryRequest.prepared.id).not.toBe(interruptedTarget);
+	expect(repeatedContentApplies).toEqual([]);
+	const retainedAfter = await page.request.get(
+		`/api/portability/import/plans/${job.id}/attachment-migrations?ordinal=${parent.ordinal}`,
+	);
+	expect(retainedAfter.ok()).toBe(true);
+	const completed = await retainedAfter.json();
+	expect(completed).toMatchObject({
+		associationId: previous.associationId,
+		revision: 2,
+		targetAttachmentId: recoveryRequest.prepared.id,
+		committed: true,
+		destinationParent: parent.destinationParent,
+	});
+	const afterRecoveryExport = await page.request.get(
+		"/api/portability/export?version=2",
+	);
+	expect(afterRecoveryExport.ok()).toBe(true);
+	const afterRecovery: PortableExportV2 = await afterRecoveryExport.json();
+	expect(
+		afterRecovery.data.attachments.filter(
+			(row) => row.parentId === parent.destinationParent.id,
+		),
+	).toHaveLength(1);
+	expect(
+		afterRecovery.data.tasks.filter(
+			(row) => row.id === parent.destinationParent.id,
+		),
+	).toHaveLength(1);
+	await expect(recovered.getByRole("radio").first()).toBeChecked();
+	await expect(
+		recovered.getByText(
+			"Stopping or closing only cancels local work. A server operation may already have completed. Check its status before retrying; no replacement is created automatically.",
+			{ exact: true },
+		),
+	).toHaveCount(0);
+	await captureRecoveryVariants(page, "archive-reopened-replacement-completed");
+	await recovered
+		.getByRole("button", { name: "Close", exact: true })
+		.and(recovered.locator('[data-slot="button"]'))
+		.click();
+	await expect(recovered).toHaveCount(0);
+	await panel
+		.getByRole("button", { name: "Import selected files", exact: true })
+		.click();
+	const completedReopened = page.getByTestId(
+		"attachment-archive-import-dialog",
+	);
+	await completedReopened.getByLabel("Encrypted files archive").setInputFiles({
+		name: filesDownload.suggestedFilename(),
+		mimeType: "application/json",
+		buffer: filesBytes,
+	});
+	await completedReopened
+		.getByLabel("Archive passphrase", { exact: true })
+		.fill(ARCHIVE_SECRET);
+	await completedReopened
+		.getByRole("button", { name: "Open archive", exact: true })
+		.click();
+	await completedReopened
+		.getByRole("radio", {
+			name: `${FILE_NAME} Applied destination: ${taskTitle} Source file: ${source.id}`,
+			exact: true,
+		})
+		.check({ timeout: DERIVE_TIMEOUT });
+	await expect(completedReopened.getByRole("status")).toHaveText(
+		m.archive_import_complete(),
+	);
+	await expect(
+		completedReopened.getByRole("button", {
+			name: m.archive_import_replace(),
+			exact: true,
+		}),
+	).toHaveCount(0);
+	expect(recoveryWrites).toHaveLength(1);
+	expect(repeatedContentApplies).toEqual([]);
 });

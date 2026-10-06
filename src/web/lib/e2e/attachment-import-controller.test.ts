@@ -28,6 +28,7 @@ vi.mock("../zero-lifecycle.ts", () => ({
 }));
 
 import { createAttachmentImportController } from "./attachment-import-controller.ts";
+import type { MigrationReservation } from "./attachment-migration-api.ts";
 import type { KeyringContextValue } from "./KeyringProvider.tsx";
 import { browserE2eRuntime } from "./runtime.ts";
 
@@ -51,7 +52,7 @@ const prepared = {
 	thumbnailDeclaredBytes: null,
 	thumbnailCiphertextSha256: null,
 };
-const reservation = {
+const reservation: MigrationReservation = {
 	associationId: "12345678-1234-4123-8123-123456789abc",
 	revision: 1,
 	attemptId: "12345678-1234-4123-8123-123456789abd",
@@ -81,7 +82,7 @@ const receipt = (state = "uploading") => ({
 	bytes: 3,
 	sha256: hash,
 });
-const committed = {
+const committed: MigrationReservation = {
 	...reservation,
 	committed: true,
 	committedAt: "2026-10-06T00:00:00.000Z",
@@ -134,6 +135,9 @@ async function ready() {
 	await c.open("archive", document, "passphrase");
 	await c.discoverPage({ afterOrdinal: -1, limit: 64 });
 	c.select(0);
+	mock.fetcher.mockResolvedValueOnce(
+		Response.json({ code: "migration-not-found" }, { status: 404 }),
+	);
 	await c.prepare();
 	return c;
 }
@@ -175,7 +179,7 @@ describe("attachment import controller", () => {
 		expect(c.state.stage).toBe("complete");
 		expect(mock.prepare).toHaveBeenCalledOnce();
 		expect(wdk).toEqual(new Uint8Array(32).fill(7));
-		const sent = mock.fetcher.mock.calls.slice(1);
+		const sent = mock.fetcher.mock.calls.slice(2);
 		expect(sent.map((call) => call[0])).toEqual([
 			`/api/portability/import/plans/${hash}/attachment-reservations`,
 			`/api/attachments/${prepared.id}/upload`,
@@ -192,7 +196,7 @@ describe("attachment import controller", () => {
 			.mockRejectedValueOnce(Error("lost"));
 		await expect(c.transfer()).rejects.toBeDefined();
 		expect(c.state.stage).toBe("uncertain");
-		expect(mock.fetcher).toHaveBeenCalledTimes(4);
+		expect(mock.fetcher).toHaveBeenCalledTimes(5);
 		mock.fetcher.mockResolvedValueOnce(Response.json(committed));
 		await c.reconcile();
 		expect(c.state.stage).toBe("complete");
@@ -204,7 +208,7 @@ describe("attachment import controller", () => {
 		const c = await ready();
 		mock.fetcher.mockRejectedValueOnce(Error("lost"));
 		await expect(c.transfer()).rejects.toBeDefined();
-		const first = mock.fetcher.mock.calls[1][1].body;
+		const first = mock.fetcher.mock.calls[2][1].body;
 		mock.fetcher
 			.mockResolvedValueOnce(new Response("Not Found", { status: 404 }))
 			.mockResolvedValueOnce(Response.json(reservation))
@@ -212,7 +216,7 @@ describe("attachment import controller", () => {
 			.mockResolvedValueOnce(Response.json(receipt("committed")))
 			.mockResolvedValueOnce(Response.json(committed));
 		await c.retry();
-		expect(mock.fetcher.mock.calls[3][1].body).toBe(first);
+		expect(mock.fetcher.mock.calls[4][1].body).toBe(first);
 		expect(mock.prepare).toHaveBeenCalledOnce();
 		expect(c.state.stage).toBe("complete");
 	});
@@ -258,9 +262,9 @@ describe("attachment import controller", () => {
 		});
 		await expect(c.transfer()).rejects.toBeDefined();
 		expect(c.state.stage).toBe("retired");
-		expect(mock.fetcher).toHaveBeenCalledTimes(2);
+		expect(mock.fetcher).toHaveBeenCalledTimes(3);
 		await expect(c.retry()).rejects.toMatchObject({ code: "retired" });
-		expect(mock.fetcher).toHaveBeenCalledTimes(2);
+		expect(mock.fetcher).toHaveBeenCalledTimes(3);
 	});
 	it("requires explicit recovery for a missing previously captured target", async () => {
 		const c = await ready();
@@ -309,12 +313,12 @@ describe("attachment import controller", () => {
 		const c = await ready();
 		locked = true;
 		await expect(c.transfer()).rejects.toMatchObject({ code: "locked" });
-		expect(mock.fetcher).toHaveBeenCalledOnce();
+		expect(mock.fetcher).toHaveBeenCalledTimes(2);
 		locked = false;
 		c.cancel();
-		expect(c.state.stage).toBe("cancelled");
+		expect(c.state.stage).toBe("retired");
 		await expect(c.transfer()).rejects.toBeDefined();
-		expect(mock.fetcher).toHaveBeenCalledOnce();
+		expect(mock.fetcher).toHaveBeenCalledTimes(2);
 	});
 	it("releases archive and permanently refuses disposed ownership", async () => {
 		const c = await ready();
@@ -491,4 +495,348 @@ it("refuses describing more than the archive entry cap", async () => {
 	await expect(c.describeArchiveSources()).rejects.toMatchObject({
 		code: "archive-entry-limit",
 	});
+});
+
+const rich = (
+	value: MigrationReservation = reservation,
+	recoverable = false,
+) => ({
+	...value,
+	...binding,
+	sourceFingerprint: hash,
+	destinationParent: parent.destinationParent,
+	reservationExpiresAt: "2026-10-06T01:00:00.000Z",
+	recoverable,
+});
+async function selectedController() {
+	const c = controller();
+	mock.fetcher.mockResolvedValueOnce(
+		Response.json({ ...binding, items: [parent], nextAfterOrdinal: null }),
+	);
+	await c.open("archive", document, "passphrase");
+	await c.discoverPage({ afterOrdinal: -1, limit: 64 });
+	c.select(0);
+	return c;
+}
+it("reopened archive discovers durable completion without encrypting or duplicating content", async () => {
+	const c = await selectedController();
+	mock.fetcher.mockResolvedValueOnce(Response.json(rich(committed)));
+	await c.inspect();
+	expect(c.state.stage).toBe("complete");
+	expect(mock.prepare).not.toHaveBeenCalled();
+	expect(mock.fetcher.mock.calls.every((call) => !call[1].method)).toBe(true);
+});
+it("requires confirmation before abandoning a live captured transfer", async () => {
+	const c = await selectedController();
+	mock.fetcher
+		.mockResolvedValueOnce(Response.json(rich()))
+		.mockResolvedValueOnce(Response.json(rich()));
+	await c.inspect();
+	await expect(c.recover({ retireLive: false })).rejects.toMatchObject({
+		code: "live-abandon-confirmation-required",
+	});
+	expect(mock.prepare).not.toHaveBeenCalled();
+});
+it("lost replacement response preserves exact frozen request and inspects before replay", async () => {
+	const c = await selectedController();
+	const old: MigrationReservation = {
+		...reservation,
+		attachmentState: "aborted",
+		targetAttachmentId: "migration_12345678-1234-4123-8123-123456789abf",
+	};
+	const next = {
+		...reservation,
+		revision: 2,
+		attemptId: "12345678-1234-4123-8123-123456789abe",
+	};
+	mock.fetcher
+		.mockResolvedValueOnce(Response.json(rich(old, true)))
+		.mockResolvedValueOnce(Response.json(rich(old, true)))
+		.mockResolvedValueOnce(Response.json(rich(old, true)))
+		.mockRejectedValueOnce(Error("lost"));
+	await c.inspect();
+	await expect(c.recover({ retireLive: false })).rejects.toBeDefined();
+	const first = mock.fetcher.mock.calls[4][1].body;
+	expect(c.state.stage).toBe("uncertain");
+	mock.fetcher
+		.mockResolvedValueOnce(Response.json(rich(old, true)))
+		.mockResolvedValueOnce(
+			Response.json({ outcome: "reserved", status: rich(next) }),
+		)
+		.mockResolvedValueOnce(Response.json(receipt()))
+		.mockResolvedValueOnce(Response.json(receipt("committed")))
+		.mockResolvedValueOnce(
+			Response.json({
+				...next,
+				committed: true,
+				committedAt: committed.committedAt,
+				attachmentState: "committed",
+			}),
+		);
+	await c.retry();
+	expect(mock.fetcher.mock.calls[5][0]).toContain("/attachment-migrations?");
+	expect(mock.fetcher.mock.calls[6][1].body).toBe(first);
+	expect(mock.prepare).toHaveBeenCalledOnce();
+	expect(c.state.stage).toBe("complete");
+});
+it("rejects rich inspection destination drift before recovery encryption", async () => {
+	const c = await selectedController();
+	mock.fetcher.mockResolvedValueOnce(Response.json(rich()));
+	await c.inspect();
+	mock.fetcher.mockResolvedValueOnce(
+		Response.json({
+			...rich(),
+			destinationParent: { ...parent.destinationParent, id: "other-list" },
+		}),
+	);
+	await expect(c.recover({ retireLive: true })).rejects.toMatchObject({
+		code: "migration-binding-mismatch",
+	});
+	expect(mock.prepare).not.toHaveBeenCalled();
+});
+it("key retirement erases captured recovery and archive metadata permanently", async () => {
+	const c = await selectedController();
+	mock.fetcher.mockResolvedValueOnce(Response.json(rich()));
+	await c.inspect();
+	locked = true;
+	await expect(c.recover({ retireLive: true })).rejects.toMatchObject({
+		code: "locked",
+	});
+	expect(c.state.inspection).toBeNull();
+	expect(c.state.reservation).toBeNull();
+	expect(c.archiveSourceIds).toEqual([]);
+	locked = false;
+	await expect(c.inspect()).rejects.toMatchObject({ code: "retired" });
+});
+
+it("refuses a changed live witness after replacement confirmation", async () => {
+	const c = await selectedController();
+	mock.fetcher
+		.mockResolvedValueOnce(Response.json(rich()))
+		.mockResolvedValueOnce(
+			Response.json(
+				rich({
+					...reservation,
+					attemptId: "12345678-1234-4123-8123-123456789abe",
+				}),
+			),
+		);
+	await c.inspect();
+	await expect(c.recover({ retireLive: true })).rejects.toMatchObject({
+		code: "reservation-identity-mismatch",
+	});
+	expect(mock.prepare).not.toHaveBeenCalled();
+});
+
+it.each([
+	"lost",
+	"cancel",
+])("rechecks a %s initial inspection without preparation or mutation", async (mode) => {
+	const c = await selectedController();
+	if (mode === "cancel") {
+		let reached!: () => void;
+		const fetching = new Promise<void>((resolve) => {
+			reached = resolve;
+		});
+		mock.fetcher.mockImplementationOnce(
+			(_input: RequestInfo | URL, init?: RequestInit) =>
+				new Promise<Response>((_resolve, reject) => {
+					init?.signal?.addEventListener(
+						"abort",
+						() => reject(Error("cancelled")),
+						{ once: true },
+					);
+					reached();
+				}),
+		);
+		const pending = c.inspect();
+		await fetching;
+		c.cancel();
+		await expect(pending).rejects.toBeDefined();
+		expect(c.state.stage).toBe("cancelled");
+	} else {
+		mock.fetcher.mockRejectedValueOnce(Error("lost inspection"));
+		await expect(c.inspect()).rejects.toBeDefined();
+		expect(c.state.stage).toBe("error");
+	}
+	expect(c.hasPrepared).toBe(false);
+	expect(c.state.ordinal).toBe(0);
+	await expect(c.retry()).rejects.toMatchObject({
+		code: "preparation-required",
+	});
+	mock.fetcher.mockResolvedValueOnce(Response.json(rich(committed)));
+	await c.reconcile();
+	expect(c.state.stage).toBe("complete");
+	expect(c.hasPrepared).toBe(false);
+	expect(mock.prepare).not.toHaveBeenCalled();
+	expect(mock.fetcher.mock.calls.every((call) => !call[1].method)).toBe(true);
+});
+it("pre-encryption recovery inspection can be explicitly rechecked without allocating", async () => {
+	const c = await selectedController();
+	mock.fetcher
+		.mockResolvedValueOnce(Response.json(rich()))
+		.mockRejectedValueOnce(Error("lost reinspection"));
+	await c.inspect();
+	await expect(c.recover({ retireLive: true })).rejects.toBeDefined();
+	expect(c.state.inspection).not.toBeNull();
+	expect(c.hasPrepared).toBe(false);
+	await expect(c.retry()).rejects.toMatchObject({
+		code: "preparation-required",
+	});
+	mock.fetcher.mockResolvedValueOnce(Response.json(rich(committed)));
+	await c.reconcile();
+	expect(c.state.stage).toBe("complete");
+	expect(mock.prepare).not.toHaveBeenCalled();
+	expect(mock.fetcher.mock.calls.every((call) => !call[1].method)).toBe(true);
+});
+async function terminalReplacement() {
+	const c = await selectedController();
+	const original: MigrationReservation = {
+		...reservation,
+		targetAttachmentId: "migration_12345678-1234-4123-8123-123456789abf",
+		attachmentState: "aborted",
+	};
+	const terminal: MigrationReservation = {
+		...reservation,
+		revision: 2,
+		attemptId: "12345678-1234-4123-8123-123456789abe",
+		attachmentState: null,
+	};
+	mock.fetcher
+		.mockResolvedValueOnce(Response.json(rich(original, true)))
+		.mockResolvedValueOnce(Response.json(rich(original, true)))
+		.mockResolvedValueOnce(Response.json(rich(original, true)))
+		.mockResolvedValueOnce(
+			Response.json({
+				outcome: "recovery-required",
+				status: rich(terminal, true),
+			}),
+		);
+	await c.inspect();
+	await expect(c.recover({ retireLive: false })).rejects.toMatchObject({
+		code: "recovery-required",
+	});
+	expect(c.state.stage).toBe("recovery-required");
+	expect(c.hasPrepared).toBe(true);
+	expect(mock.prepare).toHaveBeenCalledOnce();
+	return { c, terminal };
+}
+it("explicitly replaces an exact terminal replacement with a fresh revision three attempt", async () => {
+	const { c, terminal } = await terminalReplacement();
+	const fresh = {
+		...prepared,
+		id: "migration_12345678-1234-4123-8123-123456789ab9",
+	};
+	const third: MigrationReservation = {
+		...reservation,
+		revision: 3,
+		attemptId: "12345678-1234-4123-8123-123456789ab8",
+		targetAttachmentId: fresh.id,
+	};
+	mock.prepare.mockResolvedValueOnce({
+		prepared: fresh,
+		parent: {
+			workspaceId: "destination-workspace",
+			parentKind: "list",
+			parentId: "destination-list",
+		},
+		content: new Uint8Array([1, 2, 3]),
+		thumbnail: null,
+	});
+	const thirdReceipt = (state: string) => ({ ...receipt(state), id: fresh.id });
+	mock.fetcher
+		.mockResolvedValueOnce(Response.json(rich(terminal, true)))
+		.mockResolvedValueOnce(Response.json(rich(terminal, true)))
+		.mockResolvedValueOnce(
+			Response.json({ outcome: "reserved", status: rich(third) }),
+		)
+		.mockResolvedValueOnce(Response.json(thirdReceipt("uploading")))
+		.mockResolvedValueOnce(Response.json(thirdReceipt("committed")))
+		.mockResolvedValueOnce(
+			Response.json({
+				...third,
+				committed: true,
+				committedAt: committed.committedAt,
+				attachmentState: "committed",
+			}),
+		);
+	await c.recover({ retireLive: false });
+	expect(c.state.stage).toBe("complete");
+	expect(mock.prepare).toHaveBeenCalledTimes(2);
+	const writes = mock.fetcher.mock.calls.filter((call) =>
+		String(call[0]).endsWith("/attachment-recoveries"),
+	);
+	expect(writes).toHaveLength(2);
+	const second = JSON.parse(writes[1][1].body);
+	expect(second.previous).toEqual({
+		associationId: terminal.associationId,
+		attemptId: terminal.attemptId,
+		targetAttachmentId: terminal.targetAttachmentId,
+		revision: 2,
+	});
+	expect(second.prepared.id).toBe(fresh.id);
+	expect(second.prepared.id).not.toBe(
+		JSON.parse(writes[0][1].body).prepared.id,
+	);
+});
+it("preserves a terminal replacement request when the confirmed witness changes", async () => {
+	const { c, terminal } = await terminalReplacement();
+	mock.fetcher.mockResolvedValueOnce(
+		Response.json(
+			rich(
+				{ ...terminal, attemptId: "12345678-1234-4123-8123-123456789ab8" },
+				true,
+			),
+		),
+	);
+	await expect(c.recover({ retireLive: false })).rejects.toMatchObject({
+		code: "reservation-identity-mismatch",
+	});
+	expect(c.hasPrepared).toBe(true);
+	expect(mock.prepare).toHaveBeenCalledOnce();
+	expect(
+		mock.fetcher.mock.calls.filter((call) =>
+			String(call[0]).endsWith("/attachment-recoveries"),
+		),
+	).toHaveLength(1);
+});
+
+it("does not adopt a repeatedly changed attempt or clear its frozen terminal replacement", async () => {
+	const { c, terminal } = await terminalReplacement();
+	const changed = rich(
+		{ ...terminal, attemptId: "12345678-1234-4123-8123-123456789ab8" },
+		true,
+	);
+	mock.fetcher
+		.mockResolvedValueOnce(Response.json(changed))
+		.mockResolvedValueOnce(Response.json(changed));
+	await expect(c.recover({ retireLive: false })).rejects.toMatchObject({
+		code: "reservation-identity-mismatch",
+	});
+	await expect(c.recover({ retireLive: false })).rejects.toMatchObject({
+		code: "retry-required",
+	});
+	expect(c.hasPrepared).toBe(true);
+	expect(mock.prepare).toHaveBeenCalledOnce();
+	expect(
+		mock.fetcher.mock.calls.filter((call) =>
+			String(call[0]).endsWith("/attachment-recoveries"),
+		),
+	).toHaveLength(1);
+});
+it("does not clear a frozen replacement while fresh inspection reports an active transfer", async () => {
+	const { c, terminal } = await terminalReplacement();
+	mock.fetcher.mockResolvedValueOnce(
+		Response.json(rich({ ...terminal, attachmentState: "uploading" })),
+	);
+	await expect(c.recover({ retireLive: true })).rejects.toMatchObject({
+		code: "retry-required",
+	});
+	expect(c.hasPrepared).toBe(true);
+	expect(mock.prepare).toHaveBeenCalledOnce();
+	expect(
+		mock.fetcher.mock.calls.filter((call) =>
+			String(call[0]).endsWith("/attachment-recoveries"),
+		),
+	).toHaveLength(1);
 });

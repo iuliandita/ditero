@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	createAttachmentMigrationApi,
+	type MigrationInspectionExpected,
+	type MigrationParentPage,
 	MigrationTransportError,
 	type PreparedMigration,
 } from "./attachment-migration-api.ts";
@@ -41,7 +43,12 @@ const request = {
 	prepared,
 };
 const response = (value: unknown) => Response.json(value);
-const item = (ordinal: number, sourceAttachmentId = `source-${ordinal}`) => ({
+const item = (
+	ordinal: number,
+	sourceAttachmentId = `source-${ordinal}`,
+): MigrationParentPage["items"][number] & {
+	destinationParent: MigrationInspectionExpected["destinationParent"];
+} => ({
 	ordinal,
 	sourceAttachmentId,
 	sourceAttachmentFingerprint: hash,
@@ -361,4 +368,105 @@ it("bounds escaped JSON requests before network", async () => {
 		}),
 	).rejects.toMatchObject({ code: "request-too-large", uncertain: false });
 	expect(fetcher).not.toHaveBeenCalled();
+});
+
+const expectedInspection: MigrationInspectionExpected = {
+	sourceFingerprint: hash,
+	destinationParent: item(0).destinationParent,
+};
+const inspection = {
+	...result,
+	...binding,
+	...expectedInspection,
+	reservationExpiresAt: "2026-10-06T01:00:00.000Z",
+	recoverable: false,
+};
+const replacement = {
+	ordinal: 0,
+	sourceFingerprint: hash,
+	previous: {
+		associationId: result.associationId,
+		attemptId: result.attemptId,
+		targetAttachmentId: result.targetAttachmentId,
+		revision: 1,
+	},
+	prepared: {
+		...prepared,
+		id: "migration_12345678-1234-4123-8123-123456789abe",
+	},
+	retireLive: true,
+};
+it.each([
+	"owner",
+	"source",
+	"destination",
+	"receipt",
+	"extra",
+])("refuses rich inspection %s drift", async (mode) => {
+	const changed = {
+		...inspection,
+		...(mode === "owner"
+			? { ownerId: "other" }
+			: mode === "source"
+				? { sourceFingerprint: "b".repeat(64) }
+				: mode === "destination"
+					? {
+							destinationParent: {
+								...inspection.destinationParent,
+								id: "other",
+							},
+						}
+					: mode === "receipt"
+						? { committed: true }
+						: { uploadUrl: "evil" }),
+	};
+	const api = createAttachmentMigrationApi({
+		binding,
+		checkpoint: () => {},
+		fetcher: async () => response(changed),
+	});
+	await expect(api.inspect(0, expectedInspection)).rejects.toBeDefined();
+});
+it("accepts only exact validated replacement target and next revision", async () => {
+	const status = {
+		...inspection,
+		targetAttachmentId: replacement.prepared.id,
+		revision: 2,
+	};
+	const fetcher = vi
+		.fn()
+		.mockResolvedValueOnce(response({ outcome: "reserved", status }))
+		.mockResolvedValueOnce(
+			response({ outcome: "reserved", status: { ...status, revision: 3 } }),
+		);
+	const api = createAttachmentMigrationApi({
+		binding,
+		checkpoint: () => {},
+		fetcher,
+	});
+	expect(
+		(await api.recover(replacement, expectedInspection)).status.revision,
+	).toBe(2);
+	await expect(
+		api.recover(replacement, expectedInspection),
+	).rejects.toMatchObject({
+		code: "reservation-identity-mismatch",
+		uncertain: true,
+	});
+});
+it("accepts original durable receipt before fresh target equality", async () => {
+	const status = {
+		...inspection,
+		committed: true,
+		committedAt: "2026-10-06T00:00:00.000Z",
+		attachmentState: null,
+	};
+	const api = createAttachmentMigrationApi({
+		binding,
+		checkpoint: () => {},
+		fetcher: async () => response({ outcome: "committed", status }),
+	});
+	expect((await api.recover(replacement, expectedInspection)).outcome).toBe(
+		"committed",
+	);
 });

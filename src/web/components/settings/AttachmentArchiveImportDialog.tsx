@@ -136,19 +136,37 @@ export function AttachmentArchiveImportDialog({
 		ordinal: null,
 		code: null,
 		reservation: null,
+		inspection: null,
 	});
 	const [parents, setParents] = useState<MigrationParentPage["items"]>([]);
 	const [next, setNext] = useState<number | null>(-1);
 	const [prepared, setPrepared] = useState(false);
+	const [confirmRecovery, setConfirmRecovery] = useState(false);
 	const [chosenOrdinal, setChosenOrdinal] = useState<number | null>(null);
 	const status = useRef<HTMLParagraphElement | null>(null);
+	const confirmButton = useRef<HTMLButtonElement | null>(null);
 	const actionFocused = useRef(false);
 	const id = useId();
+	const selectedParent = parents.find(
+		(parent) => parent.ordinal === chosenOrdinal,
+	);
+	const replacementBlockedReason =
+		state.inspection?.attachmentState === "deleting"
+			? m.archive_import_blocked_deleting()
+			: selectedParent?.blockedReason
+				? blockedLabels[selectedParent.blockedReason]()
+				: null;
+	const replacementBlocked = replacementBlockedReason !== null;
+	const completed = state.stage === "complete";
+	const selectedOrdinal = chosenOrdinal ?? state.ordinal;
 	const browserOnly =
 		keys.runtime === browserE2eRuntime && !keys.runtime.attachments;
 	const unlocked = keys.ready && keys.state === "ready";
 	const opened =
 		!["idle", "opening", "retired"].includes(state.stage) && parents.length > 0;
+	useEffect(() => {
+		if (confirmRecovery) confirmButton.current?.focus();
+	}, [confirmRecovery]);
 	useEffect(() => {
 		alive.current = true;
 		scope.current = new AbortController();
@@ -163,6 +181,7 @@ export function AttachmentArchiveImportDialog({
 				ordinal: null,
 				code: "retired",
 				reservation: null,
+				inspection: null,
 			});
 		}
 		return () => {
@@ -182,6 +201,9 @@ export function AttachmentArchiveImportDialog({
 		flight.current = null;
 		setBusy(false);
 		setPassphrase("");
+		setArchive("");
+		setContent("");
+		setConfirmRecovery(false);
 		setSourceNames(new Map());
 		setParents([]);
 		setPrepared(false);
@@ -192,6 +214,7 @@ export function AttachmentArchiveImportDialog({
 			ordinal: null,
 			code: "locked",
 			reservation: null,
+			inspection: null,
 		});
 	}, [unlocked]);
 	function checkpoint() {
@@ -251,7 +274,12 @@ export function AttachmentArchiveImportDialog({
 				signal: scope.current.signal,
 				onState: (value) => {
 					if (alive.current && !scope.current.signal.aborted) {
-						if (value.stage === "retired") setChosenOrdinal(null);
+						if (value.stage === "retired") {
+							setChosenOrdinal(null);
+							setConfirmRecovery(false);
+							setPrepared(false);
+						}
+						setPrepared(controller.current?.hasPrepared ?? false);
 						setState(value);
 					}
 				},
@@ -313,7 +341,12 @@ export function AttachmentArchiveImportDialog({
 				: state.stage === "uncertain"
 					? m.archive_import_uncertain()
 					: state.stage === "recovery-required"
-						? m.archive_import_recovery()
+						? !state.inspection
+							? m.archive_import_recovery()
+							: (replacementBlockedReason ??
+								(state.inspection.recoverable
+									? m.archive_import_recovery_ended()
+									: m.archive_import_recovery_live()))
 						: busy
 							? m.archive_import_working()
 							: state.stage === "prepared"
@@ -331,17 +364,31 @@ export function AttachmentArchiveImportDialog({
 			>
 				<DialogContent
 					className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
+					{...(completed ? { "aria-describedby": undefined } : {})}
 					data-testid="attachment-archive-import-dialog"
 				>
 					<DialogHeader>
 						<DialogTitle>{m.archive_import_action()}</DialogTitle>
-						<DialogDescription>
-							{m.archive_import_description()}
-						</DialogDescription>
 					</DialogHeader>
-					<p className="text-sm text-muted-foreground">
-						{m.archive_import_cancel_note()}
+					<p
+						ref={status}
+						tabIndex={-1}
+						role="status"
+						aria-live="polite"
+						className="text-sm font-medium"
+					>
+						{reading > 0 ? m.archive_import_reading() : liveStatus}
 					</p>
+					{!completed && (
+						<>
+							<DialogDescription>
+								{m.archive_import_description()}
+							</DialogDescription>
+							<p className="text-sm text-muted-foreground">
+								{m.archive_import_cancel_note()}
+							</p>
+						</>
+					)}
 					{!browserOnly ? (
 						<p>{m.archive_export_browser_only()}</p>
 					) : !unlocked ? (
@@ -433,12 +480,16 @@ export function AttachmentArchiveImportDialog({
 							{(state.stage === "error" || state.stage === "retired") &&
 								!prepared && <p>{m.archive_import_reopen()}</p>}
 							{parents.length > 0 && (
-								<div>
-									{!prepared && (
-										<p className="text-sm font-medium">
-											{m.archive_import_choose()}
-										</p>
-									)}
+								<fieldset>
+									<legend
+										className={
+											!prepared && !completed
+												? "text-sm font-medium"
+												: "sr-only"
+										}
+									>
+										{m.archive_import_choose()}
+									</legend>
 									<ul className="max-h-64 overflow-y-auto">
 										{parents.map((parent) => (
 											<li
@@ -451,13 +502,15 @@ export function AttachmentArchiveImportDialog({
 														name={`${id}-parent`}
 														className="size-4 shrink-0 accent-primary"
 														checked={
-															(prepared ? chosenOrdinal : state.ordinal) ===
-															parent.ordinal
+															(prepared || completed
+																? selectedOrdinal
+																: state.ordinal) === parent.ordinal
 														}
 														disabled={
 															busy ||
+															(completed &&
+																parent.ordinal === selectedOrdinal) ||
 															prepared ||
-															!!parent.blockedReason ||
 															!parent.destinationParent ||
 															!controller.current?.archiveSourceIds.includes(
 																parent.sourceAttachmentId,
@@ -467,6 +520,8 @@ export function AttachmentArchiveImportDialog({
 															try {
 																if (!controller.current) return;
 																controller.current.select(parent.ordinal);
+																void run((value) => value.inspect());
+																setConfirmRecovery(false);
 																setChosenOrdinal(parent.ordinal);
 																setFailed(false);
 															} catch {
@@ -499,7 +554,7 @@ export function AttachmentArchiveImportDialog({
 											</li>
 										))}
 									</ul>
-								</div>
+								</fieldset>
 							)}
 							{opened && next !== null && !prepared && (
 								<Button
@@ -514,17 +569,79 @@ export function AttachmentArchiveImportDialog({
 							{state.stage === "selected" && (
 								<Button
 									className={controlClass}
-									disabled={busy}
+									disabled={busy || !!selectedParent?.blockedReason}
 									onClick={() =>
 										void run(async (value) => {
-											await value.prepare();
+											const result = await value.prepare();
 											checkpoint();
-											setPrepared(true);
+											setPrepared(result !== null);
 										})
 									}
 								>
 									{m.archive_import_prepare()}
 								</Button>
+							)}
+							{state.stage === "recovery-required" && !state.inspection && (
+								<Button
+									className={controlClass}
+									disabled={busy}
+									onClick={() => void run((value) => value.inspect())}
+								>
+									{m.archive_import_reconcile()}
+								</Button>
+							)}
+							{state.stage === "recovery-required" && state.inspection && (
+								<div className="space-y-2">
+									<p className="text-sm">{m.archive_import_recovery_note()}</p>
+									{replacementBlockedReason && (
+										<p id={`${id}-replacement-blocked`} className="text-sm">
+											{replacementBlockedReason}
+										</p>
+									)}
+									{!confirmRecovery ? (
+										<Button
+											className={controlClass}
+											disabled={busy || replacementBlocked}
+											aria-describedby={
+												replacementBlocked
+													? `${id}-replacement-blocked`
+													: undefined
+											}
+											onClick={() => setConfirmRecovery(true)}
+										>
+											{m.archive_import_replace()}
+										</Button>
+									) : (
+										<>
+											<p id={`${id}-replacement-risk`} className="text-sm">
+												{m.archive_import_replace_confirmation()}
+											</p>
+											<Button
+												ref={confirmButton}
+												className={controlClass}
+												disabled={busy || replacementBlocked}
+												aria-describedby={`${id}-replacement-risk${replacementBlocked ? ` ${id}-replacement-blocked` : ""}`}
+												onClick={() =>
+													void run(async (value) => {
+														setConfirmRecovery(false);
+														await value.recover({ retireLive: true });
+														setPrepared(value.hasPrepared);
+													})
+												}
+											>
+												{m.archive_import_replace_confirm()}
+											</Button>
+											<Button
+												className={controlClass}
+												variant="outline"
+												disabled={busy}
+												onClick={() => setConfirmRecovery(false)}
+											>
+												{m.confirm_cancel()}
+											</Button>
+										</>
+									)}
+								</div>
 							)}
 							{state.stage === "prepared" && (
 								<Button
@@ -535,7 +652,7 @@ export function AttachmentArchiveImportDialog({
 									{m.archive_import_transfer()}
 								</Button>
 							)}
-							{prepared &&
+							{state.ordinal !== null &&
 								["uncertain", "error", "cancelled"].includes(state.stage) && (
 									<div className="flex flex-wrap gap-2">
 										<Button
@@ -545,14 +662,16 @@ export function AttachmentArchiveImportDialog({
 										>
 											{m.archive_import_reconcile()}
 										</Button>
-										<Button
-											className={controlClass}
-											variant="outline"
-											disabled={busy}
-											onClick={() => void run((value) => value.retry())}
-										>
-											{m.archive_import_retry()}
-										</Button>
+										{prepared && (
+											<Button
+												className={controlClass}
+												variant="outline"
+												disabled={busy}
+												onClick={() => void run((value) => value.retry())}
+											>
+												{m.archive_import_retry()}
+											</Button>
+										)}
 									</div>
 								)}
 							{prepared &&
@@ -580,9 +699,6 @@ export function AttachmentArchiveImportDialog({
 							)}
 						</>
 					)}
-					<p ref={status} tabIndex={-1} role="status" aria-live="polite">
-						{reading > 0 ? m.archive_import_reading() : liveStatus}
-					</p>
 					{failed &&
 						state.stage !== "uncertain" &&
 						state.stage !== "recovery-required" && (

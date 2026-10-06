@@ -268,6 +268,7 @@ async function fixture(kind: "list" | "task" | "comment" = "list") {
 			if (sql.includes("from import_workspace_map"))
 				return rows(state.pin ? [{}] : []);
 			if (sql.includes("from import_source_map")) return rows([state.map]);
+			if (sql.includes("from attachment_migration p")) return rows([]);
 			if (sql.includes("from import_history_ledger"))
 				return rows(state.ledgerPresent ? [state.ledger] : []);
 			if (sql.includes("from list l") || sql.includes("from task t"))

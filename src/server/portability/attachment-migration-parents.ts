@@ -296,6 +296,50 @@ async function historicalParent(
 	return { id: item.targetId, workspaceId: parent.workspaceId };
 }
 
+async function committedDestination(
+	client: PoolClient,
+	ownerId: string,
+	jobId: string,
+	job: Job,
+	ordinal: number,
+	source: z.infer<typeof portableRows.attachments>,
+	fingerprint: string,
+): Promise<AttachmentMigrationParent["destinationParent"]> {
+	const found = await client.query<
+		NonNullable<AttachmentMigrationParent["destinationParent"]>
+	>(
+		`select p.target_parent_kind as kind, p.target_parent_id as id,
+   p.target_workspace_id as "workspaceId"
+   from attachment_migration p
+   join attachment_migration_attempt a on a.association_id=p.id
+    and a.owner_user_id=p.owner_user_id and a.id=p.current_attempt_id
+    and a.id=p.committed_attempt_id and a.revision=p.revision
+    and a.job_id=p.origin_job_id
+   join workspace w on w.id=p.target_workspace_id
+   join membership m on m.workspace_id=w.id and m.user_id=p.owner_user_id
+   where p.owner_user_id=$1 and p.origin_job_id=$2 and p.origin_item_ordinal=$3
+    and p.import_source_id=$4 and p.source_attachment_id=$5
+    and p.source_fingerprint=$6 and p.source_metadata=$7::jsonb
+    and p.document_digest=$8 and p.mapping_digest=$9 and p.plan_digest=$10
+    and p.target_parent_kind=$11 and p.committed_at is not null
+    and p.revision>0 and m.role in ('owner','admin','member')`,
+		[
+			ownerId,
+			jobId,
+			ordinal,
+			job.sourceId,
+			source.id,
+			fingerprint,
+			JSON.stringify(source),
+			job.documentDigest,
+			job.mappingDigest,
+			job.planDigest,
+			source.parentKind,
+		],
+	);
+	return found.rows.length === 1 ? found.rows[0] : null;
+}
+
 // Shares advisory evidence only; callers must lock and recheck before reserve.
 async function readAttachmentMigrationParentPage(
 	client: PoolClient,
@@ -426,12 +470,26 @@ async function readAttachmentMigrationParentPage(
 					parent = "not-permitted";
 			}
 		}
+		const durableDestination =
+			typeof parent === "string"
+				? await committedDestination(
+						client,
+						ownerId,
+						jobId,
+						job,
+						item.ordinal,
+						row,
+						fingerprint,
+					)
+				: null;
 		items.push({
 			ordinal: item.ordinal,
 			sourceAttachmentId: row.id,
 			sourceAttachmentFingerprint: fingerprint,
 			destinationParent:
-				typeof parent === "string" ? null : { kind: row.parentKind, ...parent },
+				typeof parent === "string"
+					? durableDestination
+					: { kind: row.parentKind, ...parent },
 			blockedReason: typeof parent === "string" ? parent : null,
 		});
 	}

@@ -11,13 +11,17 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { storageKeyFor } from "../../src/domain/attachment.ts";
 import type { PortableExportV1 } from "../../src/domain/portability/v1.ts";
 import type { PortableExportV2 } from "../../src/domain/portability/v2.ts";
+import { attachmentQuotaWouldExceed } from "../../src/server/attachments/quota.ts";
 import {
 	type AttachmentGuards,
 	attachmentRoutes,
 } from "../../src/server/attachments/routes.ts";
+import { attachmentSweep } from "../../src/server/attachments/sweep.ts";
 import { getAttachmentMigrationParents } from "../../src/server/portability/attachment-migration-parents.ts";
 import {
 	getAttachmentMigrationStatus,
+	inspectAttachmentMigration,
+	recoverAttachmentMigration,
 	reserveAttachmentMigration,
 } from "../../src/server/portability/attachment-migration-store.ts";
 import {
@@ -711,7 +715,7 @@ function memoryStore(): BlobStore {
 		},
 	};
 }
-function ordinaryApp() {
+function ordinaryApp(pool = restricted(), store = memoryStore()) {
 	const guards: AttachmentGuards = {
 		guardedGet:
 			(handler) =>
@@ -722,9 +726,7 @@ function ordinaryApp() {
 			async ({ request }) =>
 				handler(request, { user: { id: owner } }),
 	};
-	return new Elysia().use(
-		attachmentRoutes(restricted(), guards, memoryStore()),
-	);
+	return new Elysia().use(attachmentRoutes(pool, guards, store));
 }
 async function ordinaryCommit(target: string) {
 	const app = ordinaryApp();
@@ -1104,3 +1106,713 @@ test("two connections same-owner absent reserve serialize to one exact attempt",
 		await Promise.allSettled([first, ...(second ? [second] : [])]);
 	}
 }, 20000);
+
+function recoveryRequest(
+	f: Awaited<ReturnType<typeof ready>>,
+	previous: Awaited<ReturnType<typeof reserveAttachmentMigration>>,
+	retireLive = false,
+) {
+	if (!previous.attemptId || !previous.targetAttachmentId)
+		throw new Error("Missing positive reservation witness");
+	return {
+		ownerId: owner,
+		jobId: f.job.id,
+		ordinal: f.row.ordinal,
+		sourceFingerprint: f.row.sourceAttachmentFingerprint,
+		previous: {
+			associationId: previous.associationId,
+			attemptId: previous.attemptId,
+			targetAttachmentId: previous.targetAttachmentId,
+			revision: previous.revision,
+		},
+		retireLive,
+		prepared: { ...f.request.prepared, id: `migration_${randomUUID()}` },
+	};
+}
+async function inspect(f: Awaited<ReturnType<typeof ready>>) {
+	await roleProof();
+	return inspectAttachmentMigration(
+		restricted(),
+		owner,
+		f.job.id,
+		f.row.ordinal,
+	);
+}
+async function associationRows(id: string) {
+	return (
+		await admin.query(
+			"select revision,current_attempt_id,committed_attempt_id from attachment_migration where id=$1",
+			[id],
+		)
+	).rows;
+}
+test.each([
+	"expired",
+	"aborted",
+	"missing",
+])("explicit %s recovery advances once and exact response-loss replay never recreates a swept target", async (state) => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	expect((await inspect(f)).recoverable).toBe(false);
+	if (state === "missing")
+		await admin.query("delete from attachment where id=$1", [
+			first.targetAttachmentId,
+		]);
+	else
+		await admin.query(
+			"update attachment set state=$2,reservation_expires_at=now()-interval '1 minute' where id=$1",
+			[first.targetAttachmentId, state === "aborted" ? "aborted" : "reserved"],
+		);
+	const before = await inspect(f);
+	expect(before.recoverable).toBe(true);
+	expect(before).toMatchObject({
+		ownerId: owner,
+		jobId: f.job.id,
+		sourceId: f.source.id,
+		documentDigest: f.job.documentDigest,
+		mappingDigest: f.job.mappingDigest,
+		planDigest: f.job.planDigest,
+		sourceFingerprint: f.row.sourceAttachmentFingerprint,
+		destinationParent: f.row.destinationParent,
+	});
+	const request = recoveryRequest(f, first);
+	const recovered = await recoverAttachmentMigration(restricted(), request);
+	expect(recovered).toMatchObject({
+		outcome: "reserved",
+		status: {
+			associationId: first.associationId,
+			revision: 2,
+			targetAttachmentId: request.prepared.id,
+			recoverable: false,
+		},
+	});
+	expect(await recoverAttachmentMigration(restricted(), request)).toEqual(
+		recovered,
+	);
+	await admin.query(
+		"update attachment set reservation_expires_at=now()-interval '1 minute' where id=$1",
+		[request.prepared.id],
+	);
+	expect(await recoverAttachmentMigration(restricted(), request)).toMatchObject(
+		{
+			outcome: "recovery-required",
+			status: {
+				revision: 2,
+				targetAttachmentId: request.prepared.id,
+				recoverable: true,
+			},
+		},
+	);
+	await admin.query("delete from attachment where id=$1", [
+		request.prepared.id,
+	]);
+	expect(await recoverAttachmentMigration(restricted(), request)).toMatchObject(
+		{
+			outcome: "recovery-required",
+			status: { revision: 2, attachmentState: null },
+		},
+	);
+	expect(
+		(
+			await admin.query(
+				"select count(*)::int n from attachment_migration_attempt where association_id=$1",
+				[first.associationId],
+			)
+		).rows[0].n,
+	).toBe(2);
+	expect(
+		(
+			await admin.query("select count(*)::int n from attachment where id=$1", [
+				request.prepared.id,
+			])
+		).rows[0].n,
+	).toBe(0);
+	const next = recoveryRequest(f, recovered.status);
+	expect(
+		(await recoverAttachmentMigration(restricted(), next)).status.revision,
+	).toBe(3);
+	await expect(
+		recoverAttachmentMigration(restricted(), request),
+	).rejects.toMatchObject({ code: "migration-revision-conflict" });
+});
+test("live recovery requires exact confirmed witness and retains uploaded bytes until successful ordinary sweep", async () => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	const transferStore = memoryStore();
+	const app = ordinaryApp(restricted(), transferStore);
+	expect(
+		(
+			await app.handle(
+				new Request(
+					`http://localhost/api/attachments/${first.targetAttachmentId}/upload`,
+					{
+						method: "POST",
+						headers: { "content-type": "application/octet-stream" },
+						body: content.slice().buffer,
+					},
+				),
+			)
+		).status,
+	).toBe(200);
+	const request = recoveryRequest(f, first);
+	await expect(
+		recoverAttachmentMigration(restricted(), request),
+	).rejects.toMatchObject({ code: "migration-live-retirement-required" });
+	await expect(
+		recoverAttachmentMigration(restricted(), {
+			...request,
+			retireLive: true,
+			previous: { ...request.previous, attemptId: randomUUID() },
+		}),
+	).rejects.toMatchObject({ code: "migration-revision-conflict" });
+	await expect(
+		recoverAttachmentMigration(
+			restricted(),
+			{ ...request, retireLive: true },
+			{ quotaBytes: 99 },
+		),
+	).rejects.toMatchObject({ code: "quota-exceeded" });
+	expect(
+		(
+			await admin.query("select state from attachment where id=$1", [
+				first.targetAttachmentId,
+			])
+		).rows[0].state,
+	).toBe("uploading");
+	const recovered = await recoverAttachmentMigration(
+		restricted(),
+		{ ...request, retireLive: true },
+		{ quotaBytes: 100 },
+	);
+	expect(recovered.status.revision).toBe(2);
+	const retired = (
+		await admin.query(
+			"select state,reservation_expires_at from attachment where id=$1",
+			[first.targetAttachmentId],
+		)
+	).rows[0];
+	expect(retired.state).toBe("aborted");
+	expect(retired.reservation_expires_at.getTime()).toBeLessThanOrEqual(
+		Date.now(),
+	);
+	const quotaClient = await restricted().connect();
+	try {
+		await quotaClient.query("begin");
+		await quotaClient.query("select set_config('ditero.user_id',$1,true)", [
+			owner,
+		]);
+		expect(
+			await attachmentQuotaWouldExceed(quotaClient, targetWorkspace, 1, 100),
+		).toBe(true);
+		await quotaClient.query("rollback");
+	} finally {
+		quotaClient.release();
+	}
+	expect(
+		await transferStore.exists(
+			storageKeyFor(targetWorkspace, first.targetAttachmentId as string),
+		),
+	).toBe(true);
+	const failureStore = { ...transferStore };
+	failureStore.delete = async () => {
+		throw new Error("Synthetic failed deletion");
+	};
+	expect(
+		await attachmentSweep(admin, failureStore, { onError: () => {} }),
+	).toEqual({ deleted: 0, failed: 1 });
+	expect(
+		(
+			await admin.query("select count(*)::int n from attachment where id=$1", [
+				first.targetAttachmentId,
+			])
+		).rows[0].n,
+	).toBe(1);
+	expect(await attachmentSweep(admin, transferStore)).toEqual({
+		deleted: 1,
+		failed: 0,
+	});
+	expect(
+		await transferStore.exists(
+			storageKeyFor(targetWorkspace, first.targetAttachmentId as string),
+		),
+	).toBe(false);
+	expect(
+		(
+			await admin.query(
+				"select count(*)::int n from attachment_migration_attempt where association_id=$1",
+				[first.associationId],
+			)
+		).rows[0].n,
+	).toBe(2);
+});
+test("recovery collision rolls back retirement and allocation, while old target uniqueness survives GC", async () => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	const request = recoveryRequest(f, first, true);
+	await admin.query(
+		"insert into attachment(id,workspace_id,parent_kind,parent_id,key_version,state,filename_ciphertext,content_type_ciphertext,dek_wrapped,declared_bytes,storage_key,uploaded_by,reservation_expires_at) select $2,workspace_id,parent_kind,parent_id,key_version,state,filename_ciphertext,content_type_ciphertext,dek_wrapped,declared_bytes,$2,uploaded_by,reservation_expires_at from attachment where id=$1",
+		[first.targetAttachmentId, request.prepared.id],
+	);
+	const before = await associationRows(first.associationId);
+	await expect(
+		recoverAttachmentMigration(restricted(), request),
+	).rejects.toMatchObject({ code: "migration-target-conflict" });
+	expect(await associationRows(first.associationId)).toEqual(before);
+	expect(
+		(
+			await admin.query("select state from attachment where id=$1", [
+				first.targetAttachmentId,
+			])
+		).rows[0].state,
+	).toBe("reserved");
+	expect(
+		(
+			await admin.query(
+				"select count(*)::int n from attachment_migration_attempt where association_id=$1",
+				[first.associationId],
+			)
+		).rows[0].n,
+	).toBe(1);
+});
+test("committed receipt wins over fresh preparation and stale witness after ordinary/source deletion", async () => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	await ordinaryCommit(first.targetAttachmentId as string);
+	const request = recoveryRequest(f, first, true);
+	await admin.query("delete from attachment where id=$1", [
+		first.targetAttachmentId,
+	]);
+	await admin.query(
+		"delete from import_source where id=$1 and owner_user_id=$2",
+		[f.source.id, owner],
+	);
+	const status = await inspect(f);
+	expect(status).toMatchObject({
+		committed: true,
+		recoverable: false,
+		attachmentState: null,
+		targetAttachmentId: first.targetAttachmentId,
+		destinationParent: f.row.destinationParent,
+	});
+	expect(status.committedAt).toBeInstanceOf(Date);
+	expect(
+		await recoverAttachmentMigration(restricted(), {
+			...request,
+			previous: { ...request.previous, attemptId: randomUUID() },
+		}),
+	).toEqual({ outcome: "committed", status });
+	expect(
+		(
+			await admin.query("select count(*)::int n from attachment where id=$1", [
+				request.prepared.id,
+			])
+		).rows[0].n,
+	).toBe(0);
+});
+test("replacement revalidates immutable source map, parent, active key and owner role", async () => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	await admin.query(
+		"update attachment set reservation_expires_at=now()-interval '1 minute' where id=$1",
+		[first.targetAttachmentId],
+	);
+	const request = recoveryRequest(f, first);
+	const before = await associationRows(first.associationId);
+	await admin.query(
+		"update import_source_map set last_plan_digest=$2 where source_id=$1",
+		[f.source.id, "d".repeat(64)],
+	);
+	await expect(
+		recoverAttachmentMigration(restricted(), request),
+	).rejects.toMatchObject({ code: "parent-unapplied" });
+	await admin.query(
+		"update import_source_map set last_plan_digest=$2 where source_id=$1",
+		[f.source.id, f.job.planDigest],
+	);
+	await admin.query(
+		"update workspace_key set active=false where workspace_id=$1",
+		[targetWorkspace],
+	);
+	await expect(
+		recoverAttachmentMigration(restricted(), request),
+	).rejects.toMatchObject({ code: "key-unavailable" });
+	await admin.query(
+		"update workspace_key set active=true where workspace_id=$1",
+		[targetWorkspace],
+	);
+	await admin.query("update membership set role='viewer' where id=$1", [
+		targetSeat,
+	]);
+	await expect(
+		recoverAttachmentMigration(restricted(), request),
+	).rejects.toMatchObject({ code: "not-permitted" });
+	expect(await associationRows(first.associationId)).toEqual(before);
+});
+
+test("other owner's aborted migration bytes remain quota-visible while its immutable ledger is RLS-hidden", async () => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), {
+		...f.request,
+		prepared: {
+			...f.request.prepared,
+			thumbnailDeclaredBytes: 10,
+			thumbnailCiphertextSha256: targetHash,
+		},
+	});
+	await admin.query(
+		"update attachment set state='aborted',reservation_expires_at=now()-interval '1 minute' where id=$1",
+		[first.targetAttachmentId],
+	);
+	const seat = `quota-seat-${randomUUID()}`;
+	await admin.query(
+		"insert into membership(id,workspace_id,user_id,role) values($1,$2,$3,'member')",
+		[seat, targetWorkspace, outsider],
+	);
+	const client = await restricted().connect();
+	try {
+		await roleProof();
+		await client.query("begin");
+		await client.query("select set_config('ditero.user_id',$1,true)", [
+			outsider,
+		]);
+		expect(
+			(
+				await client.query(
+					"select count(*)::int n from attachment_migration_attempt where target_attachment_id=$1",
+					[first.targetAttachmentId],
+				)
+			).rows[0].n,
+		).toBe(0);
+		expect(
+			(
+				await client.query(
+					"select count(*)::int n from attachment where id=$1",
+					[first.targetAttachmentId],
+				)
+			).rows[0].n,
+		).toBe(1);
+		expect(
+			await attachmentQuotaWouldExceed(client, targetWorkspace, 1, 60),
+		).toBe(true);
+		expect(
+			await attachmentQuotaWouldExceed(client, targetWorkspace, 1, 61),
+		).toBe(false);
+		await client.query("rollback");
+	} finally {
+		await client.query("rollback");
+		client.release();
+		await admin.query("delete from membership where id=$1 and user_id=$2", [
+			seat,
+			outsider,
+		]);
+	}
+});
+
+function gatedPool(pool: Pool, matches: (sql: string) => boolean) {
+	const locked = Promise.withResolvers<void>();
+	const resume = Promise.withResolvers<void>();
+	const connected = Promise.withResolvers<number>();
+	let pid = 0;
+	let held = false;
+	const wrapped = new Proxy(pool, {
+		get(target, key) {
+			if (key === "query") return target.query.bind(target);
+			if (key !== "connect") return Reflect.get(target, key);
+			return async () => {
+				const client = await target.connect();
+				pid = (await client.query("select pg_backend_pid() pid")).rows[0]
+					.pid as number;
+				connected.resolve(pid);
+				return new Proxy(client, {
+					get(raw, field) {
+						if (field !== "query") return Reflect.get(raw, field);
+						return async (sql: string, args?: unknown[]) => {
+							const result = await raw.query(sql, args);
+							if (!held && matches(sql)) {
+								held = true;
+								locked.resolve();
+								await resume.promise;
+							}
+							return result;
+						};
+					},
+				});
+			};
+		},
+	});
+	return {
+		pool: wrapped as Pool,
+		locked: locked.promise,
+		connected: connected.promise,
+		resume: () => resume.resolve(),
+		pid: () => pid,
+	};
+}
+async function waitBarrier(
+	barrier: Promise<void>,
+	operation: Promise<unknown>,
+) {
+	await Promise.race([
+		barrier,
+		operation.then(() => {
+			throw new Error("Operation completed before lock barrier");
+		}),
+	]);
+}
+function finalizeRequest(target: string) {
+	return new Request("http://localhost/api/attachments/finalize", {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ id: target }),
+	});
+}
+async function uploadTarget(target: string) {
+	expect(
+		(
+			await ordinaryApp().handle(
+				new Request(`http://localhost/api/attachments/${target}/upload`, {
+					method: "POST",
+					headers: { "content-type": "application/octet-stream" },
+					body: content.slice().buffer,
+				}),
+			)
+		).status,
+	).toBe(200);
+}
+test("ordinary finalize winning the old-target lock yields the committed receipt and no replacement", async () => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	await uploadTarget(first.targetAttachmentId as string);
+	const finalizer = gatedPool(restricted(), (sql) =>
+		sql.includes("from attachment where id = $1 for update"),
+	);
+	const recovery = gatedPool(restricted(), () => false);
+	const request = recoveryRequest(f, first, true);
+	const finalizing = ordinaryApp(finalizer.pool).handle(
+		finalizeRequest(first.targetAttachmentId as string),
+	);
+	let recovering: ReturnType<typeof recoverAttachmentMigration> | undefined;
+	try {
+		await waitBarrier(finalizer.locked, finalizing);
+		recovering = recoverAttachmentMigration(recovery.pool, request);
+		await waitBlocked(await recovery.connected, finalizer.pid());
+		finalizer.resume();
+		expect((await finalizing).status).toBe(200);
+		expect(await recovering).toMatchObject({
+			outcome: "committed",
+			status: {
+				targetAttachmentId: first.targetAttachmentId,
+				revision: 1,
+				committed: true,
+			},
+		});
+		expect(
+			(
+				await admin.query(
+					"select count(*)::int n from attachment where id=$1",
+					[request.prepared.id],
+				)
+			).rows[0].n,
+		).toBe(0);
+	} finally {
+		finalizer.resume();
+		await Promise.allSettled([finalizing, ...(recovering ? [recovering] : [])]);
+	}
+}, 20000);
+test("confirmed recovery winning the old-target lock prevents late finalization of the retired upload", async () => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	await uploadTarget(first.targetAttachmentId as string);
+	const recovery = gatedPool(
+		restricted(),
+		(sql) => sql === "select * from attachment where id=$1 for update",
+	);
+	const finalizer = gatedPool(restricted(), () => false);
+	const recovering = recoverAttachmentMigration(
+		recovery.pool,
+		recoveryRequest(f, first, true),
+	);
+	let finalizing: Promise<Response> | undefined;
+	try {
+		await waitBarrier(recovery.locked, recovering);
+		finalizing = ordinaryApp(finalizer.pool).handle(
+			finalizeRequest(first.targetAttachmentId as string),
+		);
+		await waitBlocked(await finalizer.connected, recovery.pid());
+		recovery.resume();
+		expect((await recovering).status.revision).toBe(2);
+		expect((await finalizing).status).toBe(409);
+		expect(
+			(
+				await admin.query(
+					"select committed_attempt_id from attachment_migration where id=$1",
+					[first.associationId],
+				)
+			).rows[0].committed_attempt_id,
+		).toBe(null);
+	} finally {
+		recovery.resume();
+		await Promise.allSettled([recovering, ...(finalizing ? [finalizing] : [])]);
+	}
+}, 20000);
+test("ordinary sweep holding the old target completes deletion before replacement and cannot erase the new target", async () => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	await admin.query(
+		"update attachment set reservation_expires_at=now()-interval '1 minute' where id=$1",
+		[first.targetAttachmentId],
+	);
+	const sweepPool = gatedPool(admin, (sql) =>
+		sql.includes("from attachment where id = $1 for update"),
+	);
+	const recovery = gatedPool(restricted(), () => false);
+	const sweeping = attachmentSweep(sweepPool.pool, memoryStore());
+	const request = recoveryRequest(f, first);
+	let recovering: ReturnType<typeof recoverAttachmentMigration> | undefined;
+	try {
+		await waitBarrier(sweepPool.locked, sweeping);
+		recovering = recoverAttachmentMigration(recovery.pool, request);
+		await waitBlocked(await recovery.connected, sweepPool.pid());
+		sweepPool.resume();
+		expect(await sweeping).toEqual({ deleted: 1, failed: 0 });
+		expect((await recovering).status).toMatchObject({
+			revision: 2,
+			targetAttachmentId: request.prepared.id,
+		});
+		expect(
+			(
+				await admin.query("select state from attachment where id=$1", [
+					request.prepared.id,
+				])
+			).rows[0].state,
+		).toBe("reserved");
+	} finally {
+		sweepPool.resume();
+		await Promise.allSettled([sweeping, ...(recovering ? [recovering] : [])]);
+	}
+}, 20000);
+
+test("recovery workspace lock refusal and historical target collision preserve the prior exact witness", async () => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	await admin.query(
+		"update attachment set reservation_expires_at=now()-interval '1 minute' where id=$1",
+		[first.targetAttachmentId],
+	);
+	const request = recoveryRequest(f, first);
+	const blocker = await admin.connect();
+	try {
+		await blocker.query("begin");
+		await blocker.query("select id from workspace where id=$1 for update", [
+			targetWorkspace,
+		]);
+		await expect(
+			recoverAttachmentMigration(restricted(), request),
+		).rejects.toMatchObject({ code: "migration-workspace-busy" });
+		expect((await associationRows(first.associationId))[0].revision).toBe(1);
+	} finally {
+		await blocker.query("rollback");
+		blocker.release();
+	}
+	const second = await recoverAttachmentMigration(restricted(), request);
+	await admin.query("delete from attachment where id=$1", [
+		first.targetAttachmentId,
+	]);
+	const collision = {
+		...recoveryRequest(f, second.status, true),
+		prepared: { ...f.request.prepared },
+	};
+	const before = await associationRows(first.associationId);
+	await expect(
+		recoverAttachmentMigration(restricted(), collision),
+	).rejects.toMatchObject({ code: "migration-target-conflict" });
+	expect(await associationRows(first.associationId)).toEqual(before);
+	expect(
+		(
+			await admin.query("select state from attachment where id=$1", [
+				second.status.targetAttachmentId,
+			])
+		).rows[0].state,
+	).toBe("reserved");
+});
+
+test.each([
+	"changed",
+	"deleted",
+])("committed parent discovery retains immutable destination after %s parent, without granting viewer or revoked access", async (state) => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	await ordinaryCommit(first.targetAttachmentId as string);
+	const before = (await discover(f.job)).items.find(
+		(item) => item.ordinal === f.row.ordinal,
+	);
+	expect(before).toEqual(f.row);
+	if (state === "changed")
+		await admin.query(
+			"update list set title=title||' changed' where id=$1 and workspace_id=$2",
+			[f.row.destinationParent?.id, targetWorkspace],
+		);
+	else {
+		await admin.query(
+			"delete from task t using list l where t.list_id=l.id and l.id=$1 and l.workspace_id=$2",
+			[f.row.destinationParent?.id, targetWorkspace],
+		);
+		await admin.query("delete from list where id=$1 and workspace_id=$2", [
+			f.row.destinationParent?.id,
+			targetWorkspace,
+		]);
+	}
+	const discovered = (await discover(f.job)).items.find(
+		(item) => item.ordinal === f.row.ordinal,
+	);
+	expect(discovered).toMatchObject({
+		sourceAttachmentFingerprint: f.row.sourceAttachmentFingerprint,
+		destinationParent: f.row.destinationParent,
+		blockedReason:
+			state === "changed" ? "parent-changed" : "parent-unavailable",
+	});
+	expect(await inspect(f)).toMatchObject({
+		committed: true,
+		destinationParent: f.row.destinationParent,
+		recoverable: false,
+	});
+	const receipt = await associationRows(first.associationId);
+	await admin.query(
+		"update membership set role='viewer' where id=$1 and user_id=$2",
+		[targetSeat, owner],
+	);
+	const viewer = (await discover(f.job)).items.find(
+		(item) => item.ordinal === f.row.ordinal,
+	);
+	expect(viewer?.destinationParent).toBe(null);
+	expect(viewer?.blockedReason).not.toBe(null);
+	await expect(inspect(f)).rejects.toMatchObject({ code: "not-permitted" });
+	await admin.query("delete from membership where id=$1 and user_id=$2", [
+		targetSeat,
+		owner,
+	]);
+	const revoked = (await discover(f.job)).items.find(
+		(item) => item.ordinal === f.row.ordinal,
+	);
+	expect(revoked?.destinationParent).toBe(null);
+	expect(revoked?.blockedReason).not.toBe(null);
+	await expect(inspect(f)).rejects.toMatchObject({ code: "not-permitted" });
+	expect(await associationRows(first.associationId)).toEqual(receipt);
+});
+test("uncommitted parent discovery never supplies retained destination after parent mutation", async () => {
+	const f = await ready();
+	const first = await reserveAttachmentMigration(restricted(), f.request);
+	await admin.query(
+		"update list set title=title||' changed' where id=$1 and workspace_id=$2",
+		[f.row.destinationParent?.id, targetWorkspace],
+	);
+	expect(
+		(await discover(f.job)).items.find(
+			(item) => item.ordinal === f.row.ordinal,
+		),
+	).toMatchObject({ destinationParent: null, blockedReason: "parent-changed" });
+	await expect(
+		recoverAttachmentMigration(restricted(), recoveryRequest(f, first, true)),
+	).rejects.toMatchObject({ code: "parent-changed" });
+	expect((await associationRows(first.associationId))[0].revision).toBe(1);
+});

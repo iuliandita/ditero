@@ -22,6 +22,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Browser attachment imports can reopen the original paired archive, confirm prior
+  completion and explicitly replace interrupted file transfers without reapplying
+  content. Live transfers require replacement confirmation; retired files retain
+  their quota charge until garbage collection finishes.
 - Hexadecimal color fields retain left-to-right notation in RTL interfaces.
 
 - CLI task planning with private dashboard resolution, account-local dates and
