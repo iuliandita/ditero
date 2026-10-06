@@ -1143,6 +1143,56 @@ test("subtask deletion confirms the child and preserves its parent", async ({
 		await panel.getByPlaceholder("Add subtask").press("Enter");
 		await expect(panel.getByText(title, { exact: true })).toBeVisible();
 	}
+	// Stored order must win when the synced rows arrive in the opposite ID order.
+	const parentId = await listRow(page, "Parent stays").getAttribute(
+		"data-task-id",
+	);
+	if (!parentId) throw new Error("missing parent task id");
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	let orderedTitles: string[];
+	try {
+		await expect
+			.poll(
+				async () => {
+					const persisted = await pool.query(
+						"select id from task where parent_id = $1",
+						[parentId],
+					);
+					return persisted.rowCount;
+				},
+				{ timeout: 15000 },
+			)
+			.toBe(2);
+		const children = await pool.query<{ id: string; title: string }>(
+			"select id, title from task where parent_id = $1 order by id desc",
+			[parentId],
+		);
+		expect(children.rows).toHaveLength(2);
+		orderedTitles = children.rows.map((child) => child.title);
+		for (const [index, child] of children.rows.entries()) {
+			const updated = await pool.query(
+				"update task set sort_key = $1 where id = $2 returning id",
+				[`a${index}`, child.id],
+			);
+			expect(updated.rowCount).toBe(1);
+		}
+	} finally {
+		await pool.end();
+	}
+	const childTitles = panel.locator("li > span");
+	await expect(childTitles).toHaveText(orderedTitles, { timeout: 15000 });
+	await panel.getByTestId("task-detail-close").click();
+	await page.reload();
+	await waitWorkspaceReady(page);
+	await openListDesktop(page, "subtask-deletes");
+	await openPanel(page, "Parent stays");
+	await expect(childTitles).toHaveText(orderedTitles, { timeout: 15000 });
+	await page.setViewportSize({ width: 375, height: 812 });
+	await expect(childTitles).toHaveText(orderedTitles);
+	await expect(
+		panel.getByText(orderedTitles[0], { exact: true }),
+	).toBeVisible();
+	await page.setViewportSize({ width: 1280, height: 720 });
 	const remove = panel.getByRole("button", {
 		name: "Delete Child to delete",
 		exact: true,
