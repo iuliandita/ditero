@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.0.1-alpha.6] - 2026-10-07
+
 ### Fixed
 
 - Browser attachment imports can reopen the original paired archive, confirm prior
