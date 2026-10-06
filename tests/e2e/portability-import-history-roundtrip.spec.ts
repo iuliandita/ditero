@@ -427,6 +427,17 @@ test("Settings v2 history roundtrip survives a lost batch response and preserves
 			"insert into user_pref(id,locale,theme) values($1,'ar','dark') on conflict(id) do update set locale='ar',theme='dark'",
 			[actor],
 		);
+		const localeContext = page.context();
+		await localeContext.addCookies([
+			{
+				name: "PARAGLIDE_LOCALE",
+				value: "ar",
+				url: new URL(page.url()).origin,
+			},
+		]);
+		await localeContext.addInitScript(() => {
+			localStorage.setItem("PARAGLIDE_LOCALE", "ar");
+		});
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.reload();
 		await waitWorkspaceReady(page);
