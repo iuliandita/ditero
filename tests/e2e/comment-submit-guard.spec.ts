@@ -1,6 +1,7 @@
 import { expect, type Page, type Route, test } from "@playwright/test";
 import type { PortableExportV2 } from "../../src/domain/portability/v2.ts";
 import { m } from "../../src/paraglide/messages.js";
+import { installCommentFocusDiagnostics } from "./comment-focus-diagnostics.ts";
 import {
 	openDetails,
 	openMoreOptions,
@@ -167,10 +168,36 @@ test("comment submission blocks repeated Send while real configuration is pendin
 	};
 	await page.route("**/api/attachments/config", holdConfig);
 	const committed = page.waitForResponse("**/api/attachments/finalize");
+	type FocusStage =
+		| "before-send"
+		| "after-send"
+		| "before-held-screenshot"
+		| "after-held-screenshot"
+		| "before-release"
+		| "after-release"
+		| "config-delivered"
+		| "file-completed"
+		| "failure";
+	const focusStages: { stage: FocusStage; ms: number }[] = [];
+	const focusStageFailures: FocusStage[] = [];
+	async function markFocus(stage: FocusStage) {
+		try {
+			const ms = await page.evaluate(() => performance.now());
+			if (!Number.isFinite(ms)) throw new Error("Focus clock unavailable");
+			focusStages.push({ stage, ms });
+		} catch {
+			focusStageFailures.push(stage);
+		}
+	}
+	let focusCleanupFailed = false;
+	let focusCleanupFailure: unknown;
 	let primaryFailed = false;
 	let cleanupFailure: unknown;
 	try {
+		await page.evaluate(installCommentFocusDiagnostics);
+		await markFocus("before-send");
 		await send.click();
+		await markFocus("after-send");
 		await observed;
 		await expect(send).toBeDisabled();
 		await expect(composer).toBeDisabled();
@@ -197,9 +224,14 @@ test("comment submission blocks repeated Send while real configuration is pendin
 		expect(
 			during.data.comments.filter((row) => row.taskId === task.id),
 		).toEqual([]);
+		await markFocus("before-held-screenshot");
 		await capture(page, "comment-submit-checking-desktop-light");
+		await markFocus("after-held-screenshot");
+		await markFocus("before-release");
 		release();
+		await markFocus("after-release");
 		await waitForDelivery();
+		await markFocus("config-delivered");
 		expect((await committed).ok()).toBe(true);
 		const comment = page
 			.getByTestId("comment-item")
@@ -211,6 +243,7 @@ test("comment submission blocks repeated Send while real configuration is pendin
 				exact: true,
 			}),
 		).toBeVisible({ timeout: 20_000 });
+		await markFocus("file-completed");
 		await expect
 			.poll(async () => {
 				const after = await exported(page);
@@ -233,6 +266,28 @@ test("comment submission blocks repeated Send while real configuration is pendin
 		await capture(page, "comment-submit-completed-desktop-light");
 	} catch (error) {
 		primaryFailed = true;
+		await markFocus("failure");
+		try {
+			const focus = await page.evaluate(() =>
+				window.__diteroCommentFocus?.stop(),
+			);
+			if (!focus) throw new Error("comment focus metadata absent");
+			if (!focus.restored) throw new Error("Focus method restoration refused");
+			await test.info().attach("focus-diagnostics", {
+				body: JSON.stringify({
+					clock: "browser-performance",
+					focusStages,
+					focusStageFailures,
+					focus,
+				}),
+				contentType: "application/json",
+			});
+		} catch {
+			test.info().annotations.push({
+				type: "secondary-focus-diagnostic",
+				description: "Focus metadata capture failed",
+			});
+		}
 		throw error;
 	} finally {
 		release();
@@ -258,6 +313,27 @@ test("comment submission blocks repeated Send while real configuration is pendin
 					error instanceof Error ? error.name : "Unknown cleanup error",
 			});
 		}
+		try {
+			const focus = await page.evaluate(() =>
+				window.__diteroCommentFocus?.stop(),
+			);
+			if (focus && !focus.restored) {
+				focusCleanupFailed = true;
+				focusCleanupFailure = new Error("Focus method restoration refused");
+				test.info().annotations.push({
+					type: "secondary-focus-cleanup",
+					description: "Focus method restoration refused",
+				});
+			}
+		} catch (error) {
+			focusCleanupFailed = true;
+			focusCleanupFailure = error;
+			test.info().annotations.push({
+				type: "secondary-focus-cleanup",
+				description: "Focus metadata cleanup failed",
+			});
+		}
 	}
 	if (!primaryFailed && cleanupFailure) throw cleanupFailure;
+	if (!primaryFailed && focusCleanupFailed) throw focusCleanupFailure;
 });

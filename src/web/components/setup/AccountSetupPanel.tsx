@@ -94,7 +94,11 @@ export function AccountSetupPanel({
 				state={setup.state}
 				error={error}
 				allowEmptyChoice={setup.allowEmptyChoice}
-				emptyChoiceReason={m.setup_empty_already()}
+				emptyChoiceReason={
+					setup.outcome === "skipped"
+						? m.setup_skipped_already()
+						: m.setup_empty_already()
+				}
 				onSubmit={setup.submit}
 				onRetry={setup.retry}
 				onResume={setup.resume}

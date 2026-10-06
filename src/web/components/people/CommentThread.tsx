@@ -1,6 +1,6 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { Copy, Paperclip, Pencil, Send, Trash2 } from "lucide-react";
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runMutation } from "@/lib/run-mutation";
@@ -112,6 +112,75 @@ export function CommentThread({
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const attachmentPicker = useRef<AttachmentDropzoneHandle>(null);
 	const attachmentButton = useRef<HTMLButtonElement>(null);
+	const sendButton = useRef<HTMLButtonElement>(null);
+	type ComposerReturn = {
+		composer: HTMLTextAreaElement;
+		initiator: Element | null;
+		zero: typeof zero;
+		userId: string;
+		taskId: string;
+		workspaceId: string;
+		ready: boolean;
+		rotation: HTMLElement | null;
+	};
+	const composerReturn = useRef<ComposerReturn | null>(null);
+	const rotationDialog = useRef<HTMLElement | null>(null);
+	const [, setFocusEpoch] = useState(0);
+	function ownsComposer(intent: ComposerReturn) {
+		return (
+			composerReturn.current === intent &&
+			intent.zero === zero &&
+			intent.userId === me &&
+			intent.taskId === task.id &&
+			intent.workspaceId === workspaceId &&
+			intent.composer === textareaRef.current &&
+			intent.composer.isConnected
+		);
+	}
+	function canReturnComposer(intent: ComposerReturn) {
+		const active = document.activeElement;
+		return (
+			active === document.body ||
+			active === intent.composer ||
+			active === intent.initiator ||
+			active ===
+				intent.composer.closest('[data-testid="task-detail"][role="dialog"]') ||
+			!!(active && intent.rotation?.contains(active))
+		);
+	}
+	// Consume only after React commits the enabled composer and rotation's close handoff.
+	useLayoutEffect(() => {
+		const intent = composerReturn.current;
+		if (!intent) return;
+		if (!ownsComposer(intent)) {
+			composerReturn.current = null;
+			return;
+		}
+		if (
+			!intent.ready ||
+			busy ||
+			intent.composer.disabled ||
+			rotationDialog.current
+		)
+			return;
+		composerReturn.current = null;
+		if (canReturnComposer(intent)) intent.composer.focus();
+	});
+	useLayoutEffect(() => {
+		const taskId = task.id;
+		return () => {
+			const intent = composerReturn.current;
+			if (
+				intent?.zero === zero &&
+				intent.userId === me &&
+				intent.taskId === taskId &&
+				intent.workspaceId === workspaceId
+			) {
+				composerReturn.current = null;
+			}
+			rotationDialog.current = null;
+		};
+	}, [zero, me, task.id, workspaceId]);
 
 	function setBody(value: string) {
 		bodyRef.current = value;
@@ -316,6 +385,7 @@ export function CommentThread({
 		key: WorkspaceKeyMaterial,
 	) {
 		if (fileSubmissionPending.current) return;
+		const focusIntent = composerReturn.current;
 		fileSubmissionPending.current = true;
 		setBusy(true);
 		try {
@@ -350,7 +420,7 @@ export function CommentThread({
 		} finally {
 			fileSubmissionPending.current = false;
 			setBusy(false);
-			requestAnimationFrame(() => textareaRef.current?.focus());
+			if (focusIntent) focusIntent.ready = true;
 		}
 	}
 
@@ -364,6 +434,25 @@ export function CommentThread({
 			fileSubmissionPending.current
 		)
 			return;
+		const composer = textareaRef.current;
+		const initiator = document.activeElement;
+		const focusIntent: ComposerReturn | null =
+			composer &&
+			(initiator === composer ||
+				initiator === sendButton.current ||
+				initiator === document.body)
+				? {
+						composer,
+						initiator,
+						zero,
+						userId: me,
+						taskId: task.id,
+						workspaceId,
+						ready: false,
+						rotation: null,
+					}
+				: null;
+		composerReturn.current = focusIntent;
 		submissionPending.current = true;
 		setBusy(true);
 		let restoreFocus = false;
@@ -400,15 +489,12 @@ export function CommentThread({
 			setCaret(0);
 			const invites = resolveNonMemberInvites(text);
 			if (invites.length > 0) setMentionInvites(invites);
-			requestAnimationFrame(() => textareaRef.current?.focus());
+			if (focusIntent) focusIntent.ready = true;
 		} finally {
 			submissionPending.current = false;
 			setBusy(false);
-			if (restoreFocus) {
-				requestAnimationFrame(() => {
-					if (!gate.hasPendingAction()) textareaRef.current?.focus();
-				});
-			}
+			if (restoreFocus && focusIntent && !gate.hasPendingAction())
+				focusIntent.ready = true;
 		}
 	}
 
@@ -700,6 +786,23 @@ export function CommentThread({
 			<AttachmentDropzone
 				ref={attachmentPicker}
 				gate={gate}
+				onRotationOpen={(dialog) => {
+					rotationDialog.current = dialog;
+					const intent = composerReturn.current;
+					if (intent && ownsComposer(intent)) intent.rotation = dialog;
+				}}
+				onRotationClose={(dialog) => {
+					if (rotationDialog.current !== dialog) return false;
+					rotationDialog.current = null;
+					const intent = composerReturn.current;
+					const returning = !!(
+						intent?.ready &&
+						ownsComposer(intent) &&
+						canReturnComposer(intent)
+					);
+					setFocusEpoch((epoch) => epoch + 1);
+					return returning;
+				}}
 				workspaceName={workspaceName}
 				enabled={canAttach && !busy}
 				onFilesReady={(files) => queueFiles(files)}
@@ -807,6 +910,7 @@ export function CommentThread({
 					<Button
 						size="icon"
 						aria-label={m.comment_send_action()}
+						ref={sendButton}
 						data-testid="comment-submit"
 						aria-describedby={
 							checkingFiles || busy ? checkingFilesId : undefined

@@ -2583,6 +2583,7 @@
 	],
 	"setup_offline": "Starter setup needs a connection. Reconnect before adding content.",
 	"setup_empty_already": "You already chose an empty start. You can add starter content now.",
+	"setup_skipped_already": "You skipped setup. You can add starter content now.",
 	"setup_counters_hint": "Dashboard values reflect the tasks you can access.",
-	"setup_personal_hint": "Starter content is added to your personal workspace. This does not invite anyone or change your existing lists."
+	"setup_personal_hint": "Setup only affects your personal workspace. It does not invite anyone or change existing lists."
 }

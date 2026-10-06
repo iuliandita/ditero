@@ -323,10 +323,16 @@ export function useAttachmentGate(
 export function AttachmentGateChrome({
 	gate,
 	workspaceName,
+	onRotationOpen,
+	onRotationClose,
 }: {
 	gate: AttachmentGateController;
 	workspaceName: string;
+	onRotationOpen?: (dialog: HTMLElement) => void;
+	onRotationClose?: (dialog: HTMLElement) => boolean;
 }) {
+	const rotationDialog = useRef<HTMLDivElement>(null);
+	const openedRotationDialog = useRef<HTMLElement | null>(null);
 	const [confirmRotation, setConfirmRotation] = useState(false);
 	const blockedRef = useRef<HTMLDivElement>(null);
 	const { consumeBlockedFocus, focusBlocked } = gate;
@@ -407,7 +413,21 @@ export function AttachmentGateChrome({
 			/>
 
 			<Dialog open={confirmRotation} onOpenChange={setConfirmRotation}>
-				<DialogContent data-testid="attachment-rotation-dialog">
+				<DialogContent
+					ref={rotationDialog}
+					data-testid="attachment-rotation-dialog"
+					onOpenAutoFocus={() => {
+						if (rotationDialog.current) {
+							openedRotationDialog.current = rotationDialog.current;
+							onRotationOpen?.(rotationDialog.current);
+						}
+					}}
+					onCloseAutoFocus={(event) => {
+						const dialog = openedRotationDialog.current;
+						openedRotationDialog.current = null;
+						if (dialog && onRotationClose?.(dialog)) event.preventDefault();
+					}}
+				>
 					<DialogHeader>
 						<DialogTitle>
 							{m.e2e_rotation_confirm_title({ workspace: workspaceName })}
