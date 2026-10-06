@@ -15,6 +15,10 @@ const store = vi.hoisted(() => ({
 	discardSource: vi.fn(),
 	apply: vi.fn(),
 	run: vi.fn(),
+	parents: vi.fn(),
+}));
+vi.mock("./attachment-migration-parents.ts", () => ({
+	getAttachmentMigrationParents: store.parents,
 }));
 vi.mock("./import-apply-store.ts", () => ({
 	applyImportBatch: store.apply,
@@ -26,9 +30,17 @@ vi.mock("./import-plan-store.ts", () => ({
 	getImportPlanStatus: store.get,
 	discardImportPlan: store.discardPlan,
 	discardImportSource: store.discardSource,
-	ImportPlanStoreError: class extends Error {},
+	ImportPlanStoreError: class extends Error {
+		constructor(
+			readonly code: string,
+			readonly status: number,
+		) {
+			super("Import request could not be completed");
+		}
+	},
 }));
 
+import { ImportPlanStoreError } from "./import-plan-store.ts";
 import { importPlanRoutes } from "./import-routes.ts";
 
 function document(): PortableExportV1 {
@@ -117,6 +129,7 @@ beforeEach(() => {
 	store.discardSource.mockResolvedValue(false);
 	store.apply.mockResolvedValue({ state: "completed" });
 	store.run.mockResolvedValue(null);
+	store.parents.mockResolvedValue({ items: [], nextAfterOrdinal: null });
 });
 
 describe("native import plan transport", () => {
@@ -571,4 +584,423 @@ test("provider exact cap and native upload above provider cap retain their posit
 	const native = paddedRequestBody(payload(), 33 * 1024 * 1024);
 	expect((await app().handle(request(native))).status).toBe(200);
 	expect(store.save).toHaveBeenCalledTimes(2);
+});
+
+describe("attachment parent discovery transport", () => {
+	const jobId = "a".repeat(64);
+	function parentRequest(query = "", user = "caller", signal?: AbortSignal) {
+		return new Request(
+			`http://localhost/api/portability/import/plans/${jobId}/attachment-parents${query ? `?${query}` : ""}`,
+			{ headers: { "x-user": user }, signal },
+		);
+	}
+
+	test("uses the captured session owner and returns private advisory results", async () => {
+		const request = parentRequest("", "second-owner");
+		const result = { items: [], nextAfterOrdinal: null };
+		const reply = await app().handle(request);
+		expect(reply.status).toBe(200);
+		expect(await reply.json()).toEqual(result);
+		expect(reply.headers.get("cache-control")).toBe("no-store");
+		expect(reply.headers.get("x-content-type-options")).toBe("nosniff");
+		expect(store.parents).toHaveBeenCalledExactlyOnceWith(
+			expect.anything(),
+			"second-owner",
+			jobId,
+			{ afterOrdinal: -1, limit: 64, signal: request.signal },
+		);
+	});
+
+	test("authenticates and checks origin before discovery", async () => {
+		expect((await app().handle(parentRequest("", ""))).status).toBe(401);
+		const request = parentRequest();
+		request.headers.set("origin", "https://foreign.test");
+		expect((await app().handle(request)).status).toBe(403);
+		expect(store.parents).not.toHaveBeenCalled();
+	});
+
+	test.each([
+		["afterOrdinal=-1&limit=1", -1, 1],
+		["limit=64&afterOrdinal=50000", 50000, 64],
+		["afterOrdinal=0", 0, 64],
+		["limit=2", -1, 2],
+	] as const)("admits bounded decimal pagination %s", async (query, afterOrdinal, limit) => {
+		const request = parentRequest(query);
+		expect((await app().handle(request)).status).toBe(200);
+		expect(store.parents).toHaveBeenCalledExactlyOnceWith(
+			expect.anything(),
+			"caller",
+			jobId,
+			{ afterOrdinal, limit, signal: request.signal },
+		);
+	});
+
+	test.each([
+		"limit=1&limit=2",
+		"afterOrdinal=0&afterOrdinal=1",
+		"workspaceId=target",
+		"destinationParent=target",
+		"ownerId=foreign",
+		"limit=0",
+		"limit=65",
+		"afterOrdinal=-2",
+		"afterOrdinal=50001",
+		"limit=1.5",
+		"afterOrdinal=1.1",
+		"limit=NaN",
+		"afterOrdinal=9007199254740993",
+		"afterOrdinal=1e3",
+		"limit=%2B1",
+		"limit=0x10",
+		"afterOrdinal=",
+		"limit=",
+		"limit=%201",
+		"limit=1&%6cimit=2",
+	])("refuses invalid pagination before discovery: %s", async (query) => {
+		const reply = await app().handle(parentRequest(query));
+		expect(reply.status).toBe(400);
+		expect(await reply.json()).toEqual({ code: "invalid-parent-discovery" });
+		expect(reply.headers.get("cache-control")).toBe("no-store");
+		expect(store.parents).not.toHaveBeenCalled();
+	});
+
+	test("forwards abort to the in-flight helper without retry", async () => {
+		const controller = new AbortController();
+		const request = parentRequest("", "caller", controller.signal);
+		store.parents.mockImplementationOnce(
+			(_pool, _owner, _job, options) =>
+				new Promise((_resolve, reject) => {
+					options.signal.addEventListener(
+						"abort",
+						() => reject(new ImportPlanStoreError("import-cancelled", 408)),
+						{ once: true },
+					);
+				}),
+		);
+		const pending = app().handle(request);
+		await vi.waitFor(() => expect(store.parents).toHaveBeenCalledTimes(1));
+		expect(store.parents.mock.calls[0]?.[3].signal).toBe(request.signal);
+		controller.abort();
+		const reply = await pending;
+		expect(reply.status).toBe(408);
+		expect(await reply.json()).toEqual({ code: "import-cancelled" });
+		expect(reply.headers.get("cache-control")).toBe("no-store");
+		expect(store.parents).toHaveBeenCalledTimes(1);
+	});
+
+	test.each([
+		["plan-not-found", 404],
+		["import-run-incomplete", 409],
+		["parent-evidence-too-large", 413],
+		["import-timeout", 503],
+	] as const)("preserves helper failure %s", async (code, status) => {
+		store.parents.mockRejectedValueOnce(new ImportPlanStoreError(code, status));
+		const reply = await app().handle(parentRequest());
+		expect(reply.status).toBe(status);
+		expect(await reply.json()).toEqual({ code });
+		expect(reply.headers.get("cache-control")).toBe("no-store");
+		expect(reply.headers.get("x-content-type-options")).toBe("nosniff");
+	});
+});
+const reservations = vi.hoisted(() => ({ reserve: vi.fn(), status: vi.fn() }));
+vi.mock("./attachment-migration-store.ts", async (original) => {
+	const module =
+		await original<typeof import("./attachment-migration-store.ts")>();
+	return {
+		...module,
+		reserveAttachmentMigration: reservations.reserve,
+		getAttachmentMigrationStatus: reservations.status,
+	};
+});
+const job = "a".repeat(64);
+const reservationURL = `http://localhost/api/portability/import/plans/${job}/attachment-reservations`;
+function preparedRequest() {
+	return {
+		ordinal: 0,
+		sourceFingerprint: "b".repeat(64),
+		expectedRevision: 0,
+		prepared: {
+			id: "migration_11111111-1111-4111-8111-111111111111",
+			keyVersion: 1,
+			filenameCiphertext: "opaque",
+			contentTypeCiphertext: "opaque",
+			dekWrapped: "opaque",
+			declaredBytes: 50,
+			ciphertextSha256: "c".repeat(64),
+		},
+	};
+}
+function reserveRequest(
+	body: BodyInit = JSON.stringify(preparedRequest()),
+	extra: Record<string, string> = {},
+	url = reservationURL,
+	signal?: AbortSignal,
+) {
+	return new Request(url, {
+		method: "POST",
+		headers: {
+			origin: "http://localhost",
+			"x-user": "caller",
+			"content-type": "application/json",
+			...extra,
+		},
+		body,
+		signal,
+		duplex: "half",
+	} as RequestInit);
+}
+describe("attachment reservation transport", () => {
+	beforeEach(() => {
+		reservations.reserve.mockResolvedValue({ revision: 1 });
+		reservations.status.mockResolvedValue({ revision: 1 });
+	});
+	test("binds session owner and path job, with safe response headers", async () => {
+		const response = await app().handle(reserveRequest());
+		expect(response.status).toBe(200);
+		expect(response.headers.get("cache-control")).toBe("no-store");
+		expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+		expect(reservations.reserve.mock.calls[0]?.[1]).toMatchObject({
+			ownerId: "caller",
+			jobId: job,
+			ordinal: 0,
+		});
+		expect(reservations.reserve.mock.calls[0]?.[2].signal).toBeInstanceOf(
+			AbortSignal,
+		);
+	});
+	test.each([
+		{ ownerId: "foreign" },
+		{ jobId: job },
+		{ extra: true },
+		{ ordinal: -1 },
+		{ ordinal: 50001 },
+		{ expectedRevision: -1 },
+		{ prepared: { ...preparedRequest().prepared, extra: true } },
+	])("strict body rejects %j", async (change) => {
+		expect(
+			(
+				await app().handle(
+					reserveRequest(JSON.stringify({ ...preparedRequest(), ...change })),
+				)
+			).status,
+		).toBe(400);
+		expect(reservations.reserve).not.toHaveBeenCalled();
+	});
+	test.each<Record<string, string>>([
+		{ origin: "https://foreign.example" },
+		{ origin: "" },
+		{ "x-user": "" },
+	])("uses real guards %j", async (headers) => {
+		const response = await app().handle(reserveRequest(undefined, headers));
+		expect([401, 403]).toContain(response.status);
+		expect(reservations.reserve).not.toHaveBeenCalled();
+	});
+	test("rejects unsupported type, malformed JSON and oversized streamed body", async () => {
+		const api = app();
+		expect(
+			(await api.handle(reserveRequest("{}", { "content-type": "text/plain" })))
+				.status,
+		).toBe(415);
+		expect((await api.handle(reserveRequest("{"))).status).toBe(400);
+		expect(
+			(await api.handle(reserveRequest("x".repeat(256 * 1024 + 1)))).status,
+		).toBe(413);
+		expect(reservations.reserve).not.toHaveBeenCalled();
+		expect((await api.handle(reserveRequest())).status).toBe(200);
+	});
+	test("cancelled request releases budget", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const api = app();
+		expect(
+			(
+				await api.handle(
+					reserveRequest(undefined, {}, reservationURL, controller.signal),
+				)
+			).status,
+		).toBe(408);
+		expect(reservations.reserve).not.toHaveBeenCalled();
+		expect((await api.handle(reserveRequest())).status).toBe(200);
+	});
+	test.each([
+		"",
+		"?ordinal=00",
+		"?ordinal=-1",
+		"?ordinal=50001",
+		"?ordinal=1&ordinal=1",
+		"?ordinal=1&extra=x",
+		"?ordinal=1.0",
+	])("rejects query %s", async (query) => {
+		expect(
+			(
+				await app().handle(
+					new Request(reservationURL + query, {
+						headers: { "x-user": "caller" },
+					}),
+				)
+			).status,
+		).toBe(400);
+		expect(reservations.status).not.toHaveBeenCalled();
+	});
+	test("status forwards session and signal", async () => {
+		const response = await app().handle(
+			new Request(reservationURL + "?ordinal=50000", {
+				headers: { "x-user": "caller" },
+			}),
+		);
+		expect(response.status).toBe(200);
+		expect(reservations.status.mock.calls[0]?.slice(1, 4)).toEqual([
+			"caller",
+			job,
+			50000,
+		]);
+		expect(reservations.status.mock.calls[0]?.[4].signal).toBeInstanceOf(
+			AbortSignal,
+		);
+	});
+	test("handled store failures release budget", async () => {
+		reservations.reserve.mockRejectedValueOnce(
+			new ImportPlanStoreError("migration-conflict", 409),
+		);
+		const api = app();
+		const response = await api.handle(reserveRequest());
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({ code: "migration-conflict" });
+		expect((await api.handle(reserveRequest())).status).toBe(200);
+	});
+	test("one per owner and two total share existing apply budget", async () => {
+		let release!: (value: unknown) => void;
+		reservations.reserve.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					release = resolve;
+				}),
+		);
+		const api = app();
+		const first = api.handle(reserveRequest());
+		for (let i = 0; i < 50 && !release; i++) await Promise.resolve();
+		expect(release).toBeTypeOf("function");
+		try {
+			expect((await api.handle(reserveRequest())).status).toBe(429);
+			expect(
+				(await api.handle(request(JSON.stringify(payload())))).status,
+			).toBe(429);
+		} finally {
+			release({ revision: 1 });
+			await first;
+		}
+		expect((await api.handle(reserveRequest())).status).toBe(200);
+	});
+});
+
+test("reservation limits two distinct owners", async () => {
+	const releases: ((v: unknown) => void)[] = [];
+	reservations.reserve.mockImplementation(
+		() =>
+			new Promise((resolve) => {
+				releases.push(resolve);
+			}),
+	);
+	const api = app();
+	const first = api.handle(reserveRequest());
+	for (let i = 0; i < 100 && releases.length < 1; i++) await Promise.resolve();
+	const second = api.handle(reserveRequest(undefined, { "x-user": "second" }));
+	for (let i = 0; i < 100 && releases.length < 2; i++) await Promise.resolve();
+	try {
+		expect(releases).toHaveLength(2);
+		expect(
+			(await api.handle(reserveRequest(undefined, { "x-user": "third" })))
+				.status,
+		).toBe(429);
+	} finally {
+		for (const release of releases) release({ revision: 1 });
+		await Promise.all([first, second]);
+	}
+});
+test("reservation refuses declared overflow and unsafe envelopes", async () => {
+	const api = app();
+	expect(
+		(
+			await api.handle(
+				reserveRequest("{}", { "content-length": String(256 * 1024 + 1) }),
+			)
+		).status,
+	).toBe(413);
+	const body = preparedRequest();
+	body.prepared.filenameCiphertext = "bad\0";
+	expect((await api.handle(reserveRequest(JSON.stringify(body)))).status).toBe(
+		400,
+	);
+	expect(reservations.reserve).not.toHaveBeenCalled();
+});
+test("status refuses invalid ID, foreign origin and absent session", async () => {
+	reservations.status.mockResolvedValue({ revision: 1 });
+	const api = app();
+	expect(
+		(
+			await api.handle(
+				new Request(reservationURL.replace(job, "bad") + "?ordinal=0", {
+					headers: { "x-user": "caller" },
+				}),
+			)
+		).status,
+	).toBe(404);
+	expect(
+		(
+			await api.handle(
+				new Request(reservationURL + "?ordinal=0", {
+					headers: { "x-user": "caller", origin: "https://foreign.example" },
+				}),
+			)
+		).status,
+	).toBe(403);
+	expect(
+		(await api.handle(new Request(reservationURL + "?ordinal=0"))).status,
+	).toBe(401);
+	expect(reservations.status).not.toHaveBeenCalled();
+});
+test("status transports handled error and fails loud without leaked exception", async () => {
+	const api = app();
+	const get = () =>
+		new Request(reservationURL + "?ordinal=0", {
+			headers: { "x-user": "caller" },
+		});
+	reservations.status.mockRejectedValueOnce(
+		new ImportPlanStoreError("migration-not-found", 404),
+	);
+	expect((await api.handle(get())).status).toBe(404);
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	try {
+		reservations.status.mockRejectedValueOnce(new Error("private-details"));
+		const response = await api.handle(get());
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({ code: "import-plan-failed" });
+		expect(log).toHaveBeenCalledWith("import plan request failed", {
+			category: "unexpected",
+		});
+	} finally {
+		log.mockRestore();
+	}
+});
+
+test("reservation enforces unchanged five-second body deadline", async () => {
+	vi.useFakeTimers();
+	const api = app();
+	let cancelled = false;
+	const body = new ReadableStream({
+		cancel() {
+			cancelled = true;
+		},
+	});
+	const pending = api.handle(reserveRequest(body));
+	try {
+		await vi.advanceTimersByTimeAsync(5000);
+		const response = await pending;
+		expect(response.status).toBe(408);
+		expect(await response.json()).toEqual({ code: "request-timeout" });
+		expect(cancelled).toBe(true);
+		expect(reservations.reserve).not.toHaveBeenCalled();
+	} finally {
+		vi.useRealTimers();
+	}
 });

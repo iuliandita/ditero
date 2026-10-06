@@ -3,6 +3,7 @@ import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { Button } from "../ui/button.tsx";
 import { useConfirm } from "../ui/confirm.tsx";
+import { AttachmentArchiveImportDialog } from "./AttachmentArchiveImportDialog.tsx";
 
 type Run = {
 	jobId: string;
@@ -16,6 +17,9 @@ type Run = {
 type Plan = {
 	id: string;
 	planDigest: string;
+	sourceId: string;
+	documentDigest: string;
+	mappingDigest: string;
 	report: {
 		plannerVersion: 1 | 2 | 3 | 4 | 5;
 		applySupported: boolean;
@@ -26,16 +30,22 @@ type Plan = {
 // The parent keys this component by plan ID so confirmation never crosses plans.
 export function ImportApplyPanel({
 	plan,
+	ownerId,
+	exactContentDocument,
 	onBusy,
 	disabled,
 	needsAcknowledgement = false,
 }: {
 	plan: Plan;
+	ownerId: string;
+	exactContentDocument?: string;
 	onBusy: (busy: boolean) => void;
 	disabled: boolean;
 	needsAcknowledgement?: boolean;
 }) {
 	const confirm = useConfirm();
+	const [archiveOpen, setArchiveOpen] = useState(false);
+	const archiveButton = useRef<HTMLButtonElement | null>(null);
 	const blockedId = useId();
 	const status = useRef<HTMLDivElement | null>(null);
 	const action = useRef<HTMLButtonElement | null>(null);
@@ -263,6 +273,33 @@ export function ImportApplyPanel({
 						? m.import_apply_resume()
 						: m.import_apply_action()}
 				</Button>
+			)}
+			{run?.state === "completed" && !loading && !error && (
+				<Button
+					ref={archiveButton}
+					className="h-auto min-h-8 max-w-full whitespace-normal py-1.5 pointer-coarse:min-h-11"
+					variant="outline"
+					onClick={() => setArchiveOpen(true)}
+				>
+					{m.archive_import_action()}
+				</Button>
+			)}
+			{archiveOpen && run?.state === "completed" && (
+				<AttachmentArchiveImportDialog
+					binding={{
+						ownerId,
+						jobId: plan.id,
+						sourceId: plan.sourceId,
+						documentDigest: plan.documentDigest,
+						mappingDigest: plan.mappingDigest,
+						planDigest: plan.planDigest,
+					}}
+					exactContentDocument={exactContentDocument}
+					onClose={() => {
+						setArchiveOpen(false);
+						requestAnimationFrame(() => archiveButton.current?.focus());
+					}}
+				/>
 			)}
 		</div>
 	);

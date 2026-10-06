@@ -2083,6 +2083,148 @@ export const importWorkspaceMap = pgTable(
 	],
 );
 
+export const attachmentMigration = pgTable(
+	"attachment_migration",
+	{
+		id: uuid("id").primaryKey(),
+		ownerUserId: text("owner_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		importSourceId: text("import_source_id").notNull(),
+		sourceAttachmentId: text("source_attachment_id").notNull(),
+		sourceFingerprint: text("source_fingerprint").notNull(),
+		sourceMetadata: jsonb("source_metadata").notNull(),
+		originJobId: text("origin_job_id").notNull(),
+		originItemOrdinal: integer("origin_item_ordinal").notNull(),
+		documentDigest: text("document_digest").notNull(),
+		mappingDigest: text("mapping_digest").notNull(),
+		planDigest: text("plan_digest").notNull(),
+		targetWorkspaceId: text("target_workspace_id").notNull(),
+		targetParentKind: attachmentParentEnum("target_parent_kind").notNull(),
+		targetParentId: text("target_parent_id").notNull(),
+		revision: integer("revision").notNull().default(0),
+		currentAttemptId: uuid("current_attempt_id"),
+		committedAttemptId: uuid("committed_attempt_id"),
+		committedAt: timestamp("committed_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+	},
+	(t) => [
+		check("attachment_migration_check_1", sql`${t.revision} >= 0`),
+		check(
+			"attachment_migration_check_2",
+			sql`(${t.revision} = 0) = (${t.currentAttemptId} IS NULL)`,
+		),
+		check(
+			"attachment_migration_check_3",
+			sql`(${t.committedAttemptId} IS NULL) = (${t.committedAt} IS NULL)`,
+		),
+		check(
+			"attachment_migration_check_4",
+			sql`${t.committedAttemptId} IS NULL OR ${t.committedAttemptId} = ${t.currentAttemptId}`,
+		),
+		check("attachment_migration_check_5", sql`${t.originItemOrdinal} >= 0`),
+		check(
+			"attachment_migration_check_6",
+			sql`${t.sourceFingerprint} ~ '^[0-9a-f]{64}$' AND ${t.documentDigest} ~ '^[0-9a-f]{64}$' AND ${t.mappingDigest} ~ '^[0-9a-f]{64}$' AND ${t.planDigest} ~ '^[0-9a-f]{64}$'`,
+		),
+		check(
+			"attachment_migration_check_7",
+			sql`jsonb_typeof(${t.sourceMetadata}) = 'object' AND octet_length(${t.sourceMetadata}::text) <= 32768`,
+		),
+		check(
+			"attachment_migration_check_8",
+			sql`char_length(${t.importSourceId}) BETWEEN 1 AND 128 AND char_length(${t.sourceAttachmentId}) BETWEEN 1 AND 128 AND char_length(${t.targetWorkspaceId}) BETWEEN 1 AND 128 AND char_length(${t.targetParentId}) BETWEEN 1 AND 128`,
+		),
+		unique("attachment_migration_identity").on(
+			t.ownerUserId,
+			t.importSourceId,
+			t.sourceAttachmentId,
+		),
+		unique("attachment_migration_owner_identity").on(t.id, t.ownerUserId),
+		index("attachment_migration_owner_idx").on(t.ownerUserId),
+	],
+);
+
+export const attachmentMigrationAttempt = pgTable(
+	"attachment_migration_attempt",
+	{
+		id: uuid("id").primaryKey(),
+		associationId: uuid("association_id").notNull(),
+		ownerUserId: text("owner_user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		revision: integer("revision").notNull(),
+		targetAttachmentId: text("target_attachment_id").notNull(),
+		jobId: text("job_id").notNull(),
+		keyVersion: integer("key_version").notNull(),
+		filenameCiphertext: text("filename_ciphertext").notNull(),
+		contentTypeCiphertext: text("content_type_ciphertext").notNull(),
+		dekWrapped: text("dek_wrapped").notNull(),
+		declaredBytes: bigint("declared_bytes", { mode: "number" }).notNull(),
+		ciphertextSha256: text("ciphertext_sha256").notNull(),
+		thumbnailDeclaredBytes: bigint("thumbnail_declared_bytes", {
+			mode: "number",
+		}),
+		thumbnailCiphertextSha256: text("thumbnail_ciphertext_sha256"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+	},
+	(t) => [
+		check(
+			"attachment_migration_attempt_target_id",
+			sql`${t.targetAttachmentId} ~ '^migration_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
+		),
+		check(
+			"attachment_migration_attempt_check_1",
+			sql`${t.revision} >= 1 AND ${t.keyVersion} >= 1`,
+		),
+		check(
+			"attachment_migration_attempt_check_2",
+			sql`${t.declaredBytes} BETWEEN 1 AND 16777216`,
+		),
+		check(
+			"attachment_migration_attempt_check_3",
+			sql`${t.thumbnailDeclaredBytes} IS NULL OR ${t.thumbnailDeclaredBytes} BETWEEN 1 AND 16777216`,
+		),
+		check(
+			"attachment_migration_attempt_check_4",
+			sql`${t.declaredBytes} + coalesce(${t.thumbnailDeclaredBytes},0) <= 16777216`,
+		),
+		check(
+			"attachment_migration_attempt_check_5",
+			sql`(${t.thumbnailDeclaredBytes} IS NULL) = (${t.thumbnailCiphertextSha256} IS NULL)`,
+		),
+		check(
+			"attachment_migration_attempt_check_6",
+			sql`${t.ciphertextSha256} ~ '^[0-9a-f]{64}$' AND (${t.thumbnailCiphertextSha256} IS NULL OR ${t.thumbnailCiphertextSha256} ~ '^[0-9a-f]{64}$')`,
+		),
+		check(
+			"attachment_migration_attempt_check_7",
+			sql`octet_length(${t.filenameCiphertext}) BETWEEN 1 AND 65536 AND octet_length(${t.contentTypeCiphertext}) BETWEEN 1 AND 65536 AND octet_length(${t.dekWrapped}) BETWEEN 1 AND 65536`,
+		),
+		check(
+			"attachment_migration_attempt_check_8",
+			sql`${t.jobId} ~ '^[0-9a-f]{64}$'`,
+		),
+		unique("attachment_migration_attempt_target").on(t.targetAttachmentId),
+		unique("attachment_migration_attempt_revision").on(
+			t.associationId,
+			t.ownerUserId,
+			t.revision,
+		),
+		unique("attachment_migration_attempt_current").on(
+			t.associationId,
+			t.ownerUserId,
+			t.id,
+			t.revision,
+		),
+		index("attachment_migration_attempt_owner_idx").on(t.ownerUserId),
+	],
+);
+
 // Task-owned evidence survives import-ledger and account cleanup. Only deleting
 // the task removes it; source, job, and owner IDs are provenance scalars.
 export const taskNotificationActivation = pgTable(

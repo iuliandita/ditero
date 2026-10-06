@@ -28,6 +28,7 @@ export type AttachmentDropzoneProps = {
 		files: File[],
 		key: WorkspaceKeyMaterial,
 	) => void | Promise<void>;
+	onSelectionPendingChange?: (pending: boolean) => void;
 	children?: ReactNode;
 	showButton?: boolean;
 	enabled?: boolean;
@@ -63,6 +64,7 @@ export const AttachmentDropzone = forwardRef<
 		gate,
 		workspaceName,
 		onFilesReady,
+		onSelectionPendingChange,
 		children,
 		showButton = true,
 		enabled = true,
@@ -74,6 +76,7 @@ export const AttachmentDropzone = forwardRef<
 ) {
 	const input = useRef<HTMLInputElement>(null);
 	const button = useRef<HTMLButtonElement>(null);
+	const pendingSelections = useRef(0);
 	const [dragging, setDragging] = useState(false);
 
 	function openPicker() {
@@ -104,9 +107,16 @@ export const AttachmentDropzone = forwardRef<
 	async function accept(files: File[]) {
 		setDragging(false);
 		if (!enabled) return;
-		await gate.runWithFiles(files, async (key, ready) => {
-			await onFilesReady(ready, key);
-		});
+		pendingSelections.current += 1;
+		try {
+			if (pendingSelections.current === 1) onSelectionPendingChange?.(true);
+			await gate.runWithFiles(files, async (key, ready) => {
+				await onFilesReady(ready, key);
+			});
+		} finally {
+			pendingSelections.current -= 1;
+			if (pendingSelections.current === 0) onSelectionPendingChange?.(false);
+		}
 	}
 
 	return (

@@ -48,6 +48,7 @@ export type AttachmentGateController = {
 	error: string | null;
 	clearError: () => void;
 	runWithFiles: (files: File[], action: ReadyAction) => Promise<boolean>;
+	hasPendingAction: () => boolean;
 	runWithKey: (keyVersion: number, action: ReadyAction) => Promise<boolean>;
 	reportUploadFailure: (error: unknown) => void;
 	rotationPlan: WorkspaceRotationPlan | null;
@@ -279,6 +280,7 @@ export function useAttachmentGate(
 			error,
 			clearError: () => setError(null),
 			runWithFiles,
+			hasPendingAction: () => pending.current !== null,
 			runWithKey,
 			reportUploadFailure,
 			rotationPlan,

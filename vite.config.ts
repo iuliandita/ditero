@@ -20,6 +20,7 @@ const testEntries = {
 	"e2e-stream": "./src/domain/e2e/stream.ts",
 	"e2e-envelope": "./src/domain/e2e/envelope.ts",
 	"e2e-wire": "./src/domain/e2e/wire.ts",
+	"e2e-attachment-archive": "./src/web/lib/e2e/attachment-archive.ts",
 };
 const testRoutes = new Set(
 	Object.values(testEntries).map((path) => path.slice(1)),

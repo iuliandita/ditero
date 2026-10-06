@@ -18,6 +18,12 @@ import {
 } from "../../domain/portability/providers/input.ts";
 import { PortableExportValidationError } from "../../domain/portability/validate.ts";
 import type { Guards } from "../guards.ts";
+import { getAttachmentMigrationParents } from "./attachment-migration-parents.ts";
+import {
+	attachmentMigrationReservationBodySchema,
+	getAttachmentMigrationStatus,
+	reserveAttachmentMigration,
+} from "./attachment-migration-store.ts";
 import { V4ApplyConflict } from "./import-activation.ts";
 import { importActivationRoutes } from "./import-activation-routes.ts";
 import { applyImportBatch, getImportRunStatus } from "./import-apply-store.ts";
@@ -240,10 +246,142 @@ function pathId(request: Request, discard = false): string {
 	return id;
 }
 
+function parentDiscoveryQuery(request: Request): {
+	afterOrdinal: number;
+	limit: number;
+} {
+	const result = { afterOrdinal: -1, limit: 64 };
+	const seen = new Set<string>();
+	for (const [key, raw] of new URL(request.url).searchParams) {
+		if (
+			(key !== "afterOrdinal" && key !== "limit") ||
+			seen.has(key) ||
+			!/^[-]?\d+$/.test(raw)
+		)
+			throw new ImportRequestError("invalid-parent-discovery", 400);
+		seen.add(key);
+		const value = Number(raw);
+		const minimum = key === "afterOrdinal" ? -1 : 1;
+		const maximum = key === "afterOrdinal" ? 50_000 : 64;
+		if (!Number.isSafeInteger(value) || value < minimum || value > maximum)
+			throw new ImportRequestError("invalid-parent-discovery", 400);
+		result[key] = value;
+	}
+	return result;
+}
+
+function reservationJobId(request: Request): string {
+	const id = pathId(request, true);
+	if (!/^[a-f0-9]{64}$/.test(id))
+		throw new ImportRequestError("not-found", 404);
+	return id;
+}
+
+function reservationOrdinal(request: Request): number {
+	const entries = [...new URL(request.url).searchParams];
+	if (
+		entries.length !== 1 ||
+		entries[0]?.[0] !== "ordinal" ||
+		!/^(0|[1-9][0-9]*)$/.test(entries[0][1])
+	)
+		throw new ImportRequestError("invalid-migration-status", 400);
+	const ordinal = Number(entries[0][1]);
+	if (!Number.isSafeInteger(ordinal) || ordinal > 50000)
+		throw new ImportRequestError("invalid-migration-status", 400);
+	return ordinal;
+}
+
 export function importPlanRoutes(pool: Pool, guards: Guards) {
 	const activeUsers = new Set<string>();
 	return new Elysia()
 		.use(importActivationRoutes(pool, guards))
+		.get(
+			"/api/portability/import/plans/:id/attachment-reservations",
+			guards.guardedGet((request, session) =>
+				handled(async () => {
+					const ordinal = reservationOrdinal(request);
+					return response(
+						await getAttachmentMigrationStatus(
+							pool,
+							session.user.id,
+							reservationJobId(request),
+							ordinal,
+							{ signal: request.signal },
+						),
+					);
+				}),
+			),
+		)
+		.post(
+			"/api/portability/import/plans/:id/attachment-reservations",
+			guards.guardedPost((request, session) =>
+				handled(async () => {
+					if (activeUsers.size >= 2 || activeUsers.has(session.user.id))
+						return Response.json(
+							{ code: "import-busy" },
+							{ status: 429, headers: { ...headers, "retry-after": "5" } },
+						);
+					activeUsers.add(session.user.id);
+					try {
+						if (
+							(request.headers.get("content-type") ?? "")
+								.split(";")[0]
+								?.trim()
+								.toLowerCase() !== "application/json"
+						)
+							throw new ImportRequestError("invalid-request", 415);
+						let raw: unknown;
+						try {
+							raw = JSON.parse(
+								(await readRequest(request, 256 * 1024, 5000)).text,
+							);
+						} catch (error) {
+							if (error instanceof ImportRequestError) throw error;
+							throw new ImportRequestError("invalid-request", 400);
+						}
+						const parsed =
+							attachmentMigrationReservationBodySchema.safeParse(raw);
+						if (!parsed.success)
+							throw new ImportRequestError(
+								"invalid-migration-reservation",
+								400,
+							);
+						if (request.signal.aborted)
+							throw new ImportRequestError("request-cancelled", 408);
+						return response(
+							await reserveAttachmentMigration(
+								pool,
+								{
+									...parsed.data,
+									ownerId: session.user.id,
+									jobId: reservationJobId(request),
+								},
+								{ signal: request.signal },
+							),
+						);
+					} finally {
+						activeUsers.delete(session.user.id);
+					}
+				}),
+			),
+			{ parse: "none" },
+		)
+		.get(
+			"/api/portability/import/plans/:id/attachment-parents",
+			guards.guardedGet((request, session) =>
+				handled(async () => {
+					const pagination = parentDiscoveryQuery(request);
+					return response(
+						await getAttachmentMigrationParents(
+							pool,
+							session.user.id,
+							pathId(request, true),
+							{ ...pagination, signal: request.signal },
+						),
+					);
+				}),
+			),
+		)
 		.get(
 			"/api/portability/import/plans/:id/run",
 			guards.guardedGet((request, session) =>

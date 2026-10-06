@@ -3,7 +3,10 @@ import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import { e2eEnabled } from "../../config/e2e.ts";
 import { withUserContext } from "../../db/user-context.ts";
-import { storageKeyFor } from "../../domain/attachment.ts";
+import {
+	ATTACHMENT_MIGRATION_ID_PREFIX,
+	storageKeyFor,
+} from "../../domain/attachment.ts";
 import { e2eBlobSchema } from "../e2e/input.ts";
 import type { BodyResult } from "../native-auth/contracts.ts";
 import type { BlobStore } from "../storage/blob-store.ts";
@@ -56,7 +59,9 @@ const byteCount = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
 const reserveBody = z
 	.object({
-		id: identifier,
+		id: identifier.refine(
+			(value) => !value.startsWith(ATTACHMENT_MIGRATION_ID_PREFIX),
+		),
 		workspaceId: identifier,
 		parentKind: z.enum(["task", "comment", "list"]),
 		parentId: identifier,

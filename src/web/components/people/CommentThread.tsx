@@ -1,6 +1,6 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
 import { Copy, Paperclip, Pencil, Send, Trash2 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runMutation } from "@/lib/run-mutation";
@@ -38,6 +38,7 @@ type MentionInvite = { name: string; userId?: string };
 type PendingCommentFile = {
 	id: string;
 	file: File;
+	selectionController: AbortController;
 	commentId?: string;
 	controller?: AbortController;
 	progress?: AttachmentProgress;
@@ -89,7 +90,8 @@ export function CommentThread({
 	const gate = useAttachmentGate(workspaceId);
 
 	const [error, setError] = useState<string | null>(null);
-	const [body, setBody] = useState("");
+	const [body, setBodyState] = useState("");
+	const bodyRef = useRef("");
 	const [caret, setCaret] = useState(0);
 	const [editing, setEditing] = useState<string | null>(null);
 	const [editBody, setEditBody] = useState("");
@@ -101,10 +103,20 @@ export function CommentThread({
 	>(null);
 	const [copied, setCopied] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
+	const [checkingFiles, setCheckingFiles] = useState(false);
+	const selectionPending = useRef(false);
+	const submissionPending = useRef(false);
+	const fileSubmissionPending = useRef(false);
+	const checkingFilesId = useId();
 	const [pendingFiles, setPendingFiles] = useState<PendingCommentFile[]>([]);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const attachmentPicker = useRef<AttachmentDropzoneHandle>(null);
 	const attachmentButton = useRef<HTMLButtonElement>(null);
+
+	function setBody(value: string) {
+		bodyRef.current = value;
+		setBodyState(value);
+	}
 
 	const thread = useMemo(
 		() =>
@@ -235,7 +247,11 @@ export function CommentThread({
 	function queueFiles(files: File[]) {
 		setPendingFiles((current) => [
 			...current,
-			...files.map((file) => ({ id: randomId(), file })),
+			...files.map((file) => ({
+				id: randomId(),
+				file,
+				selectionController: new AbortController(),
+			})),
 		]);
 	}
 
@@ -245,6 +261,7 @@ export function CommentThread({
 		key: WorkspaceKeyMaterial,
 	) {
 		for (const pending of files) {
+			if (pending.selectionController.signal.aborted) continue;
 			const controller = new AbortController();
 			updatePendingFile(pending.id, {
 				commentId,
@@ -298,11 +315,13 @@ export function CommentThread({
 		files: PendingCommentFile[],
 		key: WorkspaceKeyMaterial,
 	) {
+		if (fileSubmissionPending.current) return;
+		fileSubmissionPending.current = true;
 		setBusy(true);
-		setError(null);
-		const existingCommentId = files.find((file) => file.commentId)?.commentId;
-		const commentId = existingCommentId ?? randomId();
 		try {
+			setError(null);
+			const existingCommentId = files.find((file) => file.commentId)?.commentId;
+			const commentId = existingCommentId ?? randomId();
 			if (!existingCommentId) {
 				const mutation = zero.mutate(
 					mutators.comment.add({ id: commentId, taskId: task.id, body: text }),
@@ -329,35 +348,68 @@ export function CommentThread({
 		} catch (caught) {
 			setError(mutationErrorMessage(caught, m.mutation_failed));
 		} finally {
+			fileSubmissionPending.current = false;
 			setBusy(false);
+			requestAnimationFrame(() => textareaRef.current?.focus());
 		}
 	}
 
 	async function submit() {
 		const text = body.trim();
-		if ((!text && pendingFiles.length === 0) || busy) return;
-		if (pendingFiles.length > 0) {
-			const snapshot = [...pendingFiles];
-			await gate.runWithFiles(
-				snapshot.map((file) => file.file),
-				(key) => submitWithFiles(text, snapshot, key),
-			);
+		if (
+			(!text && pendingFiles.length === 0) ||
+			busy ||
+			selectionPending.current ||
+			submissionPending.current ||
+			fileSubmissionPending.current
+		)
 			return;
+		submissionPending.current = true;
+		setBusy(true);
+		let restoreFocus = false;
+		try {
+			if (pendingFiles.length > 0) {
+				const snapshot = [...pendingFiles];
+				let callbackStarted = false;
+				await gate.runWithFiles(
+					snapshot.map((file) => file.file),
+					(key) => {
+						if (callbackStarted) return;
+						callbackStarted = true;
+						const selected = snapshot.filter(
+							(file) => !file.selectionController.signal.aborted,
+						);
+						if (selected.length === 0) return;
+						return submitWithFiles(bodyRef.current.trim(), selected, key);
+					},
+				);
+				restoreFocus = !callbackStarted && !gate.hasPendingAction();
+				return;
+			}
+			setError(null);
+			await run(
+				zero.mutate(
+					mutators.comment.add({
+						id: randomId(),
+						taskId: task.id,
+						body: text,
+					}),
+				),
+			);
+			setBody("");
+			setCaret(0);
+			const invites = resolveNonMemberInvites(text);
+			if (invites.length > 0) setMentionInvites(invites);
+			requestAnimationFrame(() => textareaRef.current?.focus());
+		} finally {
+			submissionPending.current = false;
+			setBusy(false);
+			if (restoreFocus) {
+				requestAnimationFrame(() => {
+					if (!gate.hasPendingAction()) textareaRef.current?.focus();
+				});
+			}
 		}
-		setError(null);
-		await run(
-			zero.mutate(
-				mutators.comment.add({
-					id: randomId(),
-					taskId: task.id,
-					body: text,
-				}),
-			),
-		);
-		setBody("");
-		setCaret(0);
-		const invites = resolveNonMemberInvites(text);
-		if (invites.length > 0) setMentionInvites(invites);
 	}
 
 	async function confirmMentionInvites() {
@@ -649,8 +701,12 @@ export function CommentThread({
 				ref={attachmentPicker}
 				gate={gate}
 				workspaceName={workspaceName}
-				enabled={canAttach}
+				enabled={canAttach && !busy}
 				onFilesReady={(files) => queueFiles(files)}
+				onSelectionPendingChange={(pending) => {
+					selectionPending.current = pending;
+					setCheckingFiles(pending);
+				}}
 				showButton={false}
 				compact
 			>
@@ -667,12 +723,23 @@ export function CommentThread({
 								progress={pending.progress}
 								error={pending.error}
 								ready={!pending.progress && !pending.error}
-								onCancel={() => {
-									pending.controller?.abort();
-									setPendingFiles((files) =>
-										files.filter((file) => file.id !== pending.id),
-									);
-								}}
+								onCancel={
+									busy && !pending.progress
+										? undefined
+										: () => {
+												if (
+													(submissionPending.current ||
+														fileSubmissionPending.current) &&
+													!pending.progress
+												)
+													return;
+												pending.selectionController.abort();
+												pending.controller?.abort();
+												setPendingFiles((files) =>
+													files.filter((file) => file.id !== pending.id),
+												);
+											}
+								}
 							/>
 						))}
 					</ul>
@@ -683,6 +750,7 @@ export function CommentThread({
 							ref={textareaRef}
 							aria-label={m.comment_input_label()}
 							data-testid="comment-input"
+							disabled={busy}
 							placeholder={m.comment_input_label()}
 							rows={2}
 							value={body}
@@ -698,7 +766,7 @@ export function CommentThread({
 							}
 							className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring"
 						/>
-						{mention && suggestions.length > 0 && (
+						{!busy && mention && suggestions.length > 0 && (
 							<ul
 								data-testid="mention-suggest"
 								className="absolute bottom-full left-0 z-10 mb-1 max-h-48 w-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-overlay"
@@ -730,6 +798,7 @@ export function CommentThread({
 							variant="outline"
 							size="icon"
 							aria-label={m.attachment_add_to_comment()}
+							disabled={busy}
 							onClick={() => attachmentPicker.current?.openPicker()}
 						>
 							<Paperclip />
@@ -739,12 +808,29 @@ export function CommentThread({
 						size="icon"
 						aria-label={m.comment_send_action()}
 						data-testid="comment-submit"
-						disabled={(!body.trim() && pendingFiles.length === 0) || busy}
+						aria-describedby={
+							checkingFiles || busy ? checkingFilesId : undefined
+						}
+						aria-busy={busy}
+						disabled={
+							(!body.trim() && pendingFiles.length === 0) ||
+							busy ||
+							checkingFiles
+						}
 						onClick={() => void submit()}
 					>
 						<Send />
 					</Button>
 				</div>
+				{(checkingFiles || busy) && (
+					<p
+						id={checkingFilesId}
+						role="status"
+						className="text-xs text-muted-foreground"
+					>
+						{busy ? m.comment_sending() : m.comment_attachment_checking()}
+					</p>
+				)}
 			</AttachmentDropzone>
 		</div>
 	);
