@@ -44,7 +44,9 @@ again. The application retains its credential-store process lock and does not
 register or replace URL associations at startup.
 
 Linux scheme association and cold/warm navigation require packaged runtime
-qualification. Windows, macOS, and Android link handling remain unsupported.
+qualification. Windows and macOS link handling remain unsupported. Android
+task-link behavior and qualification limits are documented in the
+[Android guide](../android/README.md#task-links).
 
 ## System notifications
 
