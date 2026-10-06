@@ -541,18 +541,47 @@ test("archive export: coarse mobile dark selection, geometry and authenticated p
 		await page.getByTestId("theme-switcher").click();
 		await page.getByRole("option", { name: "Dark", exact: true }).click();
 		await expect(page.locator("html")).toHaveClass(/dark/);
-		const response = page.waitForResponse(
-			"**/api/portability/export?version=2",
+		const exportURL = new URL("/api/portability/export?version=2", page.url())
+			.href;
+		let finishCapture!: (result: { body: string } | { error: unknown }) => void;
+		const captured = new Promise<{ body: string } | { error: unknown }>(
+			(resolve) => {
+				finishCapture = resolve;
+			},
+		);
+		await page.route(
+			exportURL,
+			async (route: Route) => {
+				try {
+					expect(route.request().method()).toBe("GET");
+					const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+					expect(actual.status()).toBe(200);
+					const body = await actual.text();
+					await route.fulfill({ response: actual });
+					finishCapture({ body });
+				} catch (error) {
+					await route.abort().catch(() => {});
+					finishCapture({ error });
+				}
+			},
+			{ times: 1 },
+		);
+		const response = page.waitForResponse(exportURL).then(
+			(actual) => ({ actual }),
+			(error: unknown) => ({ error }),
 		);
 		await page
 			.getByRole("button", { name: "Export selected files", exact: true })
 			.tap();
+		const captureResult = await captured;
+		if ("error" in captureResult) throw captureResult.error;
 		await expect(
 			dialog(page).getByText("list-image.png", { exact: true }),
 		).toBeVisible({ timeout: deriveTimeout });
-		const actual = await response;
-		expect(actual.ok()).toBe(true);
-		const exact = await actual.text();
+		const browserResult = await response;
+		if ("error" in browserResult) throw browserResult.error;
+		expect(browserResult.actual.ok()).toBe(true);
+		const exact = captureResult.body;
 		expect(
 			await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
 		).toBe(true);

@@ -95,19 +95,48 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	await goToSettings(page);
 	await page.getByTestId("theme-switcher").click();
 	await page.getByRole("option", { name: "Light", exact: true }).click();
-	const contentResponse = page.waitForResponse(
-		"**/api/portability/export?version=2",
+	const exportURL = new URL("/api/portability/export?version=2", page.url())
+		.href;
+	let finishCapture!: (result: { body: string } | { error: unknown }) => void;
+	const captured = new Promise<{ body: string } | { error: unknown }>(
+		(resolve) => {
+			finishCapture = resolve;
+		},
+	);
+	await page.route(
+		exportURL,
+		async (route: Route) => {
+			try {
+				expect(route.request().method()).toBe("GET");
+				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				expect(actual.status()).toBe(200);
+				const body = await actual.text();
+				await route.fulfill({ response: actual });
+				finishCapture({ body });
+			} catch (error) {
+				await route.abort().catch(() => {});
+				finishCapture({ error });
+			}
+		},
+		{ times: 1 },
+	);
+	const contentResponse = page.waitForResponse(exportURL).then(
+		(actual) => ({ actual }),
+		(error: unknown) => ({ error }),
 	);
 	await page
 		.getByRole("button", { name: "Export selected files", exact: true })
 		.click();
+	const exportCaptureResult = await captured;
+	if ("error" in exportCaptureResult) throw exportCaptureResult.error;
 	const exporter = page.getByTestId("attachment-archive-export-dialog");
 	await exporter
 		.getByRole("checkbox", { name: FILE_NAME, exact: true })
 		.check({ timeout: DERIVE_TIMEOUT });
-	const exported = await contentResponse;
-	expect(exported.ok()).toBe(true);
-	const exactExportedContent = await exported.text();
+	const exportBrowserResult = await contentResponse;
+	if ("error" in exportBrowserResult) throw exportBrowserResult.error;
+	expect(exportBrowserResult.actual.ok()).toBe(true);
+	const exactExportedContent = exportCaptureResult.body;
 	const fields = exporter.locator('input[type="password"]');
 	await fields.nth(0).fill(ARCHIVE_SECRET);
 	await fields.nth(1).fill(ARCHIVE_SECRET);

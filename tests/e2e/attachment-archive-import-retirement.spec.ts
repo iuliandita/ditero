@@ -234,7 +234,7 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 
 	const parentsResponse = await captureResponseBody(
 		page,
-		`/api/portability/import/plans/${job.id}/attachment-parents`,
+		`/api/portability/import/plans/${job.id}/attachment-parents?afterOrdinal=-1&limit=64`,
 		"GET",
 	);
 	await panel
