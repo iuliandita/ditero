@@ -799,6 +799,7 @@
 	"field_sort_by": "Ordenar por",
 	"field_direction": "Orden",
 	"field_workspaces": "Workspaces",
+	"view_field_task_source": "Mostrar tareas de",
 	"field_visibility": "Visibilidad",
 	"field_shared_in": "Compartida en",
 	"view_layout_list": "Lista",

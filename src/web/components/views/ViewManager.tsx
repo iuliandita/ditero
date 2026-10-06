@@ -295,7 +295,7 @@ export function ViewManager({
 						</SelectContent>
 					</Select>
 				</Field>
-				<Field label={m.field_workspaces()} htmlFor={`${baseId}-wsscope`}>
+				<Field label={m.view_field_task_source()} htmlFor={`${baseId}-wsscope`}>
 					<Select
 						value={display.workspaceScope.mode === "one" ? "one" : "all"}
 						onValueChange={(v) => setScopeMode(v === "one" ? "one" : "all")}

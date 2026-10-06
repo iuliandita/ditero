@@ -787,6 +787,7 @@
 	"field_sort_by": "Sort by",
 	"field_direction": "Direction",
 	"field_workspaces": "Workspaces",
+	"view_field_task_source": "Show tasks from",
 	"field_visibility": "Visibility",
 	"field_shared_in": "Shared in",
 	"view_layout_list": "List",
