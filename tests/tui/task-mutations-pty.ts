@@ -74,7 +74,16 @@ const wires: {
 	body: string;
 	status: number;
 }[] = [];
-const deadline = Date.now() + 13000;
+const startedAt = Date.now();
+const deadline = startedAt + 13000;
+let stage = "setup: create restricted role";
+let stageStartedAt = startedAt;
+let setupFinishedAt: number | undefined;
+let diagnosticToken: string | undefined;
+const enterStage = (name: string) => {
+	stage = name;
+	stageStartedAt = Date.now();
+};
 const timeout = setTimeout(() => child?.kill("SIGKILL"), 14000);
 const frame = () =>
 	(output.split("\x1b[H\x1b[2J").at(-1) ?? "").replace(
@@ -90,13 +99,51 @@ const wait = async (predicate: () => boolean, message: string) => {
 		await Bun.sleep(5);
 	}
 };
-const send = async (keys: string, predicate?: () => boolean) => {
+const send = async (name: string, keys: string, predicate?: () => boolean) => {
+	enterStage(name);
 	const previous = frames();
 	terminal?.write(keys);
 	await wait(
 		predicate ?? (() => frames() > previous),
 		"Expected terminal transition was absent",
 	);
+};
+const failureDiagnostic = () => {
+	const now = Date.now();
+	const secrets = [diagnosticToken, ...wires.map((wire) => wire.key)].filter(
+		(value): value is string => Boolean(value),
+	);
+	let latestFrame = frame();
+	for (const secret of secrets)
+		latestFrame = latestFrame.replaceAll(secret, "[redacted]");
+	latestFrame = latestFrame
+		.replace(/[^\S\r\n]+$/gm, "")
+		.split("")
+		.filter((character) => {
+			const code = character.charCodeAt(0);
+			return code === 10 || code === 13 || (code >= 32 && code !== 127);
+		})
+		.join("")
+		.split(/\r?\n/)
+		.slice(0, 64)
+		.map((line) =>
+			/[{}]|idempotency|authorization|token/i.test(line)
+				? "[request details omitted]"
+				: line.slice(0, 160),
+		)
+		.join("\n")
+		.slice(0, 8192);
+	return {
+		mode,
+		stage,
+		elapsedMs: now - startedAt,
+		setupElapsedMs: (setupFinishedAt ?? now) - startedAt,
+		transitionElapsedMs: now - stageStartedAt,
+		latestFrame,
+		wires: wires
+			.slice(-64)
+			.map(({ method, path, status }) => ({ method, path, status })),
+	};
 };
 const rows = async () =>
 	(
@@ -137,6 +184,7 @@ try {
 			member: false,
 		},
 	);
+	enterStage("setup: seed task scope");
 	await admin.query(
 		`insert into "user"(id,name,email,email_verified) values($1,'Terminal actor',$2,true)`,
 		[actor, `${suffix}@terminal.test`],
@@ -171,10 +219,12 @@ try {
 			[randomUUID(), childTask, actor],
 		);
 	}
+	enterStage("setup: create PAT and API server");
 	const pat = await createPersonalAccessToken(runtime, actor, {
 		name: "Terminal mutation fixture",
 		access: mode === "read" ? "read" : "write",
 	});
+	diagnosticToken = pat.token;
 	const app = publicApiRoutes(runtime, async () => true);
 	server = Bun.serve({
 		hostname: "127.0.0.1",
@@ -205,6 +255,7 @@ try {
 			return response;
 		},
 	});
+	enterStage("setup: start terminal");
 	const decoder = new TextDecoder();
 	terminal = new Bun.Terminal({
 		cols: 120,
@@ -231,14 +282,18 @@ try {
 			}),
 		},
 	);
+	setupFinishedAt = Date.now();
+	enterStage("startup: authenticated initial frame");
 	await wait(
 		() =>
 			wires.some((wire) => wire.path === "/api/v1/me" && wire.status === 200) &&
 			frames() > 1,
 		"Startup did not finish",
 	);
-	await send("\x1b[B\r", () => frame().includes("Terminal list"));
-	await send("\r", () => frame().includes(title));
+	await send("navigation: open workspace", "\x1b[B\r", () =>
+		frame().includes("Terminal list"),
+	);
+	await send("navigation: open task list", "\r", () => frame().includes(title));
 	const parentSelected = () =>
 		frame()
 			.split("\n")
@@ -253,11 +308,14 @@ try {
 			});
 	if (mode === "delete-cascade") {
 		assert.ok(childTask < task);
-		await send("\x1b[B", parentSelected);
+		await send("selection: select parent task", "\x1b[B", parentSelected);
 	}
 	assert.ok(parentSelected(), "The parent task must be selected");
 	const deleting = mode.startsWith("delete");
 	await send(
+		deleting
+			? "observation: open deletion form"
+			: "observation: open edit form",
 		deleting ? "d" : "e",
 		() =>
 			frame().includes(deleting ? "childrenState" : `"${title}"`) ||
@@ -274,23 +332,28 @@ try {
 		);
 		if (mode === "delete-cascade") {
 			assert.ok(frame().includes('{"version":1,"count":1,'));
-			await send("1");
-			await send("\r");
+			await send("deletion: select children policy", "1");
+			await send("deletion: confirm children policy", "\r");
 			assert.equal(frame().includes(notSent), false);
 		}
-		await send(mode === "delete-cascade" ? "2\r" : "1\r", () =>
-			frame().includes(notSent),
+		await send(
+			"deletion: prepare frozen request",
+			mode === "delete-cascade" ? "2\r" : "1\r",
+			() => frame().includes(notSent),
 		);
 	} else {
 		await send(
+			"update: fill patch and prepare frozen request",
 			"!\r\x1b[200~\nthird\x1b[201~\r2026-10-05T09:30:00.000Z\r1\r\x7f2\r",
 			() => frame().includes(notSent),
 		);
 	}
-	await send("v", () => frame().includes("requestId"));
+	await send("review: inspect frozen request", "v", () =>
+		frame().includes("requestId"),
+	);
 	assert.equal(writes().length, 0);
 	assert.equal(await receipts(), 0);
-	await send("\x1b[200~y\n\x1b[201~");
+	await send("review: pasted approval must not send", "\x1b[200~y\n\x1b[201~");
 	assert.equal(writes().length, 0);
 	if (mode === "conflict")
 		await admin.query("update task set title='Concurrent edit' where id=$1", [
@@ -299,6 +362,7 @@ try {
 	if (mode === "revoked")
 		await revokePersonalAccessToken(runtime, actor, pat.id);
 	await send(
+		"approval: send and observe outcome",
 		"y",
 		() =>
 			writes().length === 1 &&
@@ -378,6 +442,7 @@ try {
 			);
 		if (["update-retry", "delete-retry"].includes(mode)) {
 			await send(
+				"replay: observe immutable retry",
 				"r",
 				() =>
 					writes().length === 2 &&
@@ -400,6 +465,7 @@ try {
 		}
 	}
 	if (mode === "arabic") {
+		enterStage("resize: Arabic frame");
 		const beforeArabic = frames();
 		terminal.resize(40, 20);
 		child.kill("SIGWINCH");
@@ -407,6 +473,7 @@ try {
 			() => frames() > beforeArabic && /[\u0600-\u06ff]/.test(frame()),
 			"Arabic frame was absent",
 		);
+		enterStage("resize: tiny safety frame");
 		const beforeTiny = frames();
 		terminal.resize(19, 8);
 		child.kill("SIGWINCH");
@@ -428,6 +495,7 @@ try {
 		);
 	}
 	await send(
+		"exit: restore terminal and quit",
 		mode === "update-uncertain" ? "\x03" : "q",
 		() => child?.exitCode !== null,
 	);
@@ -456,6 +524,15 @@ try {
 		});
 	}
 	passed = true;
+} catch (error) {
+	try {
+		process.stderr.write(
+			`${JSON.stringify({ terminalFailure: failureDiagnostic() })}\n`,
+		);
+	} catch {
+		// Diagnostics must not replace the original failure.
+	}
+	throw error;
 } finally {
 	clearTimeout(timeout);
 	if (child && child.exitCode === null) {
