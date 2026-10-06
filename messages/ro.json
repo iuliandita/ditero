@@ -2631,6 +2631,6 @@
 	],
 	"setup_offline": "Configurarea inițială are nevoie de conexiune. Reconectează-te înainte de a adăuga conținut.",
 	"setup_empty_already": "Ai ales deja un start gol. Acum poți adăuga conținut inițial.",
-	"setup_counters_hint": "Contoarele din panoul de control încep de la zero. Afișează doar sarcinile la care ai acces.",
+	"setup_counters_hint": "Valorile din panoul de control reflectă sarcinile la care ai acces.",
 	"setup_personal_hint": "Conținutul inițial este adăugat în spațiul tău personal. Asta nu invită pe nimeni și nu modifică listele tale existente."
 }

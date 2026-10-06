@@ -2631,6 +2631,6 @@
 	],
 	"setup_offline": "La configuration de départ nécessite une connexion. Reconnecte-toi avant d'ajouter du contenu.",
 	"setup_empty_already": "Tu as déjà choisi de démarrer à vide. Tu peux maintenant ajouter le contenu de départ.",
-	"setup_counters_hint": "Les compteurs du tableau de bord démarrent à zéro. Ils n'affichent que les tâches auxquelles tu as accès.",
+	"setup_counters_hint": "Les valeurs du tableau de bord reflètent les tâches auxquelles tu as accès.",
 	"setup_personal_hint": "Le contenu de départ est ajouté à ton espace personnel. Cela n'invite personne et ne modifie pas tes listes existantes."
 }

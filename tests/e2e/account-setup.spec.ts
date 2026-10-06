@@ -222,6 +222,12 @@ test("desktop Basic previews, commits once, and reopens read-only", async ({
 	await page.setViewportSize({ width: 1280, height: 1000 });
 	const userID = await signUp(page, uniqueEmail("setup-basic"));
 	await openSetup(page);
+	await expect(
+		panel(page).getByText(
+			"Dashboard values reflect the tasks you can access.",
+			{ exact: true },
+		),
+	).toBeVisible();
 	await capture(page, "setup-desktop-choices");
 	await panel(page)
 		.getByRole("button", { name: "Continue", exact: true })
@@ -294,7 +300,7 @@ test("mobile Guided rejects an empty selection and adds only Packing", async ({
 		.check();
 	await expect(
 		panel(page).getByText(
-			"Dashboard counters start at zero. They only show tasks you can access.",
+			"Dashboard values reflect the tasks you can access.",
 			{ exact: true },
 		),
 	).toHaveCount(0);
@@ -348,7 +354,7 @@ test("mobile Guided rejects an empty selection and adds only Packing", async ({
 	});
 	await expect(
 		panel(page).getByText(
-			"Dashboard counters start at zero. They only show tasks you can access.",
+			"Dashboard values reflect the tasks you can access.",
 			{ exact: true },
 		),
 	).toHaveCount(0);
@@ -403,7 +409,7 @@ for (const mode of ["custom", "skip"] as const)
 		});
 		await expect(
 			panel(page).getByText(
-				"Dashboard counters start at zero. They only show tasks you can access.",
+				"Dashboard values reflect the tasks you can access.",
 				{ exact: true },
 			),
 		).toHaveCount(0);

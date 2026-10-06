@@ -2631,6 +2631,6 @@
 	],
 	"setup_offline": "La configuración inicial necesita conexión. Vuelve a conectarte antes de añadir contenido.",
 	"setup_empty_already": "Ya elegiste empezar sin nada. Ahora puedes añadir contenido inicial.",
-	"setup_counters_hint": "Los contadores del panel empiezan en cero. Solo muestran las tareas a las que tienes acceso.",
+	"setup_counters_hint": "Los valores del panel reflejan las tareas a las que tienes acceso.",
 	"setup_personal_hint": "El contenido inicial se añade a tu espacio personal. Esto no invita a nadie ni cambia tus listas existentes."
 }
