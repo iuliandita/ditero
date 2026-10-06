@@ -76,6 +76,10 @@ Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
    are present and checked, then becomes a prerelease with `latest=false`.
 5. Verify both registries' amd64/arm64 manifests and download checksums. Retain the
    Android signing identity securely so subsequent APKs upgrade existing installs.
+6. After publication, update the current-release links in `README.md` and
+   `docs/ROADMAP.md`, installation examples, and affected client guides through a
+   documentation PR. Keep historical changelog entries and version-tag examples
+   clearly distinguished from current installation guidance.
 
 A failed workflow may be resumed using its existing tag through manual dispatch
 at that tag ref, for example `gh workflow run release.yml --ref v0.0.1-alpha.5
