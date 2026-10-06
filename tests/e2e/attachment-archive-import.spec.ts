@@ -225,14 +225,39 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	expect(run.ok()).toBe(true);
 	expect((await run.json()).run.state).toBe("completed");
 
-	const parentsResponse = page
-		.waitForResponse(
-			(response) =>
-				new URL(response.url()).pathname ===
-					`/api/portability/import/plans/${job.id}/attachment-parents` &&
-				response.ok(),
-		)
-		.then((response) => response.json());
+	const parentsURL = new URL(
+		`/api/portability/import/plans/${job.id}/attachment-parents`,
+		page.url(),
+	).href;
+	let finishParentCapture!: (
+		result: { body: string } | { error: unknown },
+	) => void;
+	const capturedParents = new Promise<{ body: string } | { error: unknown }>(
+		(resolve) => {
+			finishParentCapture = resolve;
+		},
+	);
+	await page.route(
+		parentsURL,
+		async (route: Route) => {
+			try {
+				expect(route.request().method()).toBe("GET");
+				const actual = await route.fetch({ timeout: 15_000, maxRetries: 0 });
+				expect(actual.status()).toBe(200);
+				const body = await actual.text();
+				await route.fulfill({ response: actual });
+				finishParentCapture({ body });
+			} catch (error) {
+				await route.abort().catch(() => {});
+				finishParentCapture({ error });
+			}
+		},
+		{ times: 1 },
+	);
+	const parentsResponse = page.waitForResponse(parentsURL).then(
+		(actual) => ({ actual }),
+		(error: unknown) => ({ error }),
+	);
 	await panel
 		.getByRole("button", { name: "Import selected files", exact: true })
 		.click();
@@ -250,7 +275,12 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	await importer
 		.getByRole("button", { name: "Open archive", exact: true })
 		.click();
-	const parents = await parentsResponse;
+	const parentCaptureResult = await capturedParents;
+	if ("error" in parentCaptureResult) throw parentCaptureResult.error;
+	const parentBrowserResult = await parentsResponse;
+	if ("error" in parentBrowserResult) throw parentBrowserResult.error;
+	expect(parentBrowserResult.actual.ok()).toBe(true);
+	const parents = JSON.parse(parentCaptureResult.body);
 	const parent = parents.items.find(
 		(item: { sourceAttachmentId: string }) =>
 			item.sourceAttachmentId === source.id,
