@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: ditero
     app.kubernetes.io/instance: ditero
-    app.kubernetes.io/version: 0.0.1-alpha.6
+    app.kubernetes.io/version: 0.0.1-alpha.7
     app.kubernetes.io/part-of: ditero
     app.kubernetes.io/component: app
 spec:
