@@ -173,6 +173,30 @@ and `mappings.workspaces`/`mappings.principals` keyed by source IDs. Unmapped
 principals use explicit `null`. All routes require a session, and writes require
 a same-origin request. The settings download remains an export, not a restorable backup.
 
+## Native attachment migration API
+
+Native app sessions can discover their own completed import jobs with
+`GET /api/native/portability/import/jobs`. Optional `limit` is 1 through 64
+(default 64); `afterJobId` continues from `nextAfterJobId`. The response contains
+job and source identifiers, document/mapping/plan digests, and source labels.
+It does not expose saved document content or another account's jobs.
+
+For a completed job, the native routes under
+`/api/native/portability/import/plans/:id` are:
+
+- `GET /attachment-parents` for paginated destination-parent discovery.
+- `GET /attachment-migrations?ordinal=N` for migration inspection.
+- `GET /attachment-reservations?ordinal=N` for reservation status.
+- `POST /attachment-reservations` for a checked reservation.
+- `POST /attachment-recoveries` for explicit replacement of an earlier attempt.
+
+These routes require a current native bearer session; browser session tokens,
+cookies, and Origin headers are refused. Writes accept JSON bodies up to 256 KiB
+and share the browser import admission limit. Existing ownership, membership,
+key-grant, quota, revision, and recovery checks still apply. A reservation does
+not upload or finalize a file. These server routes do not enable native import
+in the app; its file selection, transfer, and recovery workflow remain guarded.
+
 ## CSV provider input
 
 Ditero CSV v1 is a separate migration format, not a native backup or an adapter

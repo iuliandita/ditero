@@ -87,7 +87,10 @@ import { slackInteractionRoutes } from "./notifications/slack-interactions.ts";
 import { startTelegramPoller } from "./notifications/telegram-poll.ts";
 import { telegramWebhookRoutes } from "./notifications/telegram-webhook.ts";
 import { startWorker } from "./notifications/worker.ts";
-import { importPlanRoutes } from "./portability/import-routes.ts";
+import {
+	createImportAdmission,
+	importPlanRoutes,
+} from "./portability/import-routes.ts";
 import {
 	createPortabilityExporter,
 	portabilityRoutes,
@@ -119,6 +122,7 @@ const { guardedPost, guardedGet, foreignOrigin } = makeGuards(
 	(headers) => auth.api.getSession({ headers }),
 );
 const portabilityExporter = createPortabilityExporter(pool);
+const importAdmission = createImportAdmission();
 const attachmentConfig = attachmentStorageConfig(process.env);
 const attachmentStore = await createAttachmentBlobStore(attachmentConfig);
 const nativeTrustedProxies = trustedProxyCIDRsFromEnv(
@@ -146,7 +150,12 @@ function nativeRateLimit(request: Request, peerAddress?: string) {
 			/^\/api\/native\/attachments\/[^/]+\/(upload|download|thumbnail)$/,
 			"/api/native/attachments/:id/$1",
 		);
-	return takeRateToken(db, `native:${route}:${key}`, 12, 0.2);
+	return takeRateToken(
+		db,
+		`native:${route.replace(/^\/api\/native\/portability\/import\/plans\/[^/]+\//, "/api/native/portability/import/plans/:id/")}:${key}`,
+		12,
+		0.2,
+	);
 }
 
 // Shared JSON-body + ChannelError shape for the three channel writes. The body
@@ -237,6 +246,7 @@ const routes = new Elysia()
 		nativePortabilityRoutes({
 			pool,
 			exporter: portabilityExporter,
+			admission: importAdmission,
 			rateLimit: nativeRateLimit,
 		}),
 	)
@@ -259,7 +269,13 @@ const routes = new Elysia()
 			portabilityExporter,
 		),
 	)
-	.use(importPlanRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
+	.use(
+		importPlanRoutes(
+			pool,
+			{ guardedPost, guardedGet, foreignOrigin },
+			importAdmission,
+		),
+	)
 	// Public capability ack, mounted AHEAD of the global CORS plugin: the button
 	// is pressed from ntfy's web UI, a genuine cross-origin request the global
 	// policy rejects (and which `origin: false` rejects outright in production).

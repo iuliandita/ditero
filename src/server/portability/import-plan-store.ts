@@ -710,6 +710,70 @@ export async function saveImportPlan(
 	});
 }
 
+export async function listCompletedAttachmentImportJobs(
+	pool: Pool,
+	ownerId: string,
+	query: { afterJobId?: string; limit: number },
+	signal?: AbortSignal,
+) {
+	const parsed = z
+		.strictObject({
+			afterJobId: z
+				.string()
+				.regex(/^[a-f0-9]{64}$/)
+				.optional(),
+			limit: z.number().int().min(1).max(64),
+		})
+		.safeParse(query);
+	if (!parsed.success) fail("invalid-migration-jobs", 400);
+	return importTransaction(
+		pool,
+		ownerId,
+		async (client) => {
+			const found = await client.query<{
+				ownerId: string;
+				jobId: string;
+				sourceId: string;
+				documentDigest: string;
+				mappingDigest: string;
+				planDigest: string;
+				label: string;
+			}>(
+				`select j.owner_user_id as "ownerId",j.id as "jobId",j.source_id as "sourceId",j.document_digest as "documentDigest",j.mapping_digest as "mappingDigest",j.plan_digest as "planDigest",s.label from import_job j join import_source s on s.id=j.source_id and s.owner_user_id=j.owner_user_id join import_run r on r.job_id=j.id and r.owner_user_id=j.owner_user_id where j.owner_user_id=$1 and r.state='completed' and j.apply_supported and j.planner_version in (2,3,4,5) and j.id=j.plan_digest and ($2::text is null or j.id>$2) order by j.id limit $3`,
+				[ownerId, parsed.data.afterJobId ?? null, parsed.data.limit + 1],
+			);
+			const items = found.rows.slice(0, parsed.data.limit);
+			for (const row of items) {
+				if (
+					row.ownerId !== ownerId ||
+					![
+						row.jobId,
+						row.documentDigest,
+						row.mappingDigest,
+						row.planDigest,
+					].every((v) => /^[a-f0-9]{64}$/.test(v)) ||
+					row.sourceId.length > 128 ||
+					row.label.length > 100 ||
+					row.label.includes("\0") ||
+					!row.label.isWellFormed()
+				)
+					fail("invalid-plan-evidence");
+			}
+			const page = {
+				items,
+				nextAfterJobId:
+					found.rows.length > parsed.data.limit
+						? (items.at(-1)?.jobId ?? null)
+						: null,
+			};
+			if (Buffer.byteLength(JSON.stringify(page)) > 65536)
+				fail("migration-jobs-limit", 413);
+			return page;
+		},
+		signal,
+	);
+}
+
 export async function listImportSources(
 	pool: Pool,
 	ownerId: string,

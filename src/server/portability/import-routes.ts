@@ -294,161 +294,213 @@ function reservationOrdinal(request: Request): number {
 	return ordinal;
 }
 
-export function importPlanRoutes(pool: Pool, guards: Guards) {
-	const activeUsers = new Set<string>();
+export function createImportAdmission(): Set<string> {
+	return new Set();
+}
+
+function migrationJson(text: string, strict: boolean): unknown {
+	if (strict) {
+		const stack: ({ keys: Set<string>; key: boolean } | null)[] = [];
+		for (const token of text.matchAll(/"(?:\\.|[^"\\])*"|[{}[\],:]/g)) {
+			const value = token[0];
+			const top = stack.at(-1);
+			if (value === "{") stack.push({ keys: new Set(), key: true });
+			else if (value === "[") stack.push(null);
+			else if (value === "}" || value === "]") stack.pop();
+			else if (value === "," && top) top.key = true;
+			else if (value === ":" && top) top.key = false;
+			else if (value.startsWith('"') && top?.key) {
+				const key: string = JSON.parse(value);
+				if (top.keys.has(key))
+					throw new ImportRequestError("invalid-request", 400);
+				top.keys.add(key);
+			}
+		}
+	}
+	return JSON.parse(text);
+}
+
+export function createAttachmentMigrationHandlers(
+	pool: Pool,
+	activeUsers = createImportAdmission(),
+	strictNative = false,
+) {
+	return {
+		inspect: (request: Request, ownerId: string) =>
+			handled(async () =>
+				response(
+					await inspectAttachmentMigration(
+						pool,
+						ownerId,
+						reservationJobId(request),
+						reservationOrdinal(request),
+						{ signal: request.signal },
+					),
+				),
+			),
+		status: (request: Request, ownerId: string) =>
+			handled(async () => {
+				const ordinal = reservationOrdinal(request);
+				return response(
+					await getAttachmentMigrationStatus(
+						pool,
+						ownerId,
+						reservationJobId(request),
+						ordinal,
+						{ signal: request.signal },
+					),
+				);
+			}),
+		reserve: (request: Request, ownerId: string) =>
+			handled(async () => {
+				if (strictNative && new URL(request.url).search)
+					throw new ImportRequestError("invalid-migration-query", 400);
+				if (activeUsers.size >= 2 || activeUsers.has(ownerId))
+					return Response.json(
+						{ code: "import-busy" },
+						{ status: 429, headers: { ...headers, "retry-after": "5" } },
+					);
+				activeUsers.add(ownerId);
+				try {
+					if (
+						(request.headers.get("content-type") ?? "")
+							.split(";")[0]
+							?.trim()
+							.toLowerCase() !== "application/json"
+					)
+						throw new ImportRequestError("invalid-request", 415);
+					let raw: unknown;
+					try {
+						raw = migrationJson(
+							(await readRequest(request, 256 * 1024, 5000)).text,
+							strictNative,
+						);
+					} catch (error) {
+						if (error instanceof ImportRequestError) throw error;
+						throw new ImportRequestError("invalid-request", 400);
+					}
+					const parsed =
+						attachmentMigrationReservationBodySchema.safeParse(raw);
+					if (!parsed.success)
+						throw new ImportRequestError("invalid-migration-reservation", 400);
+					if (request.signal.aborted)
+						throw new ImportRequestError("request-cancelled", 408);
+					return response(
+						await reserveAttachmentMigration(
+							pool,
+							{
+								...parsed.data,
+								ownerId: ownerId,
+								jobId: reservationJobId(request),
+							},
+							{ signal: request.signal },
+						),
+					);
+				} finally {
+					activeUsers.delete(ownerId);
+				}
+			}),
+		recover: (request: Request, ownerId: string) =>
+			handled(async () => {
+				if (strictNative && new URL(request.url).search)
+					throw new ImportRequestError("invalid-migration-query", 400);
+				if (activeUsers.size >= 2 || activeUsers.has(ownerId))
+					return Response.json(
+						{ code: "import-busy" },
+						{ status: 429, headers: { ...headers, "retry-after": "5" } },
+					);
+				activeUsers.add(ownerId);
+				try {
+					if (
+						(request.headers.get("content-type") ?? "")
+							.split(";")[0]
+							?.trim()
+							.toLowerCase() !== "application/json"
+					)
+						throw new ImportRequestError("invalid-request", 415);
+					let raw: unknown;
+					try {
+						raw = migrationJson(
+							(await readRequest(request, 256 * 1024, 5000)).text,
+							strictNative,
+						);
+					} catch (error) {
+						if (error instanceof ImportRequestError) throw error;
+						throw new ImportRequestError("invalid-request", 400);
+					}
+					const parsed = attachmentMigrationRecoveryBodySchema.safeParse(raw);
+					if (!parsed.success)
+						throw new ImportRequestError("invalid-migration-recovery", 400);
+					if (request.signal.aborted)
+						throw new ImportRequestError("request-cancelled", 408);
+					return response(
+						await recoverAttachmentMigration(
+							pool,
+							{
+								...parsed.data,
+								ownerId: ownerId,
+								jobId: reservationJobId(request),
+							},
+							{ signal: request.signal },
+						),
+					);
+				} finally {
+					activeUsers.delete(ownerId);
+				}
+			}),
+		parents: (request: Request, ownerId: string) =>
+			handled(async () => {
+				const pagination = parentDiscoveryQuery(request);
+				return response(
+					await getAttachmentMigrationParents(
+						pool,
+						ownerId,
+						strictNative ? reservationJobId(request) : pathId(request, true),
+						{ ...pagination, signal: request.signal },
+					),
+				);
+			}),
+	};
+}
+
+export function importPlanRoutes(
+	pool: Pool,
+	guards: Guards,
+	activeUsers = createImportAdmission(),
+) {
+	const migration = createAttachmentMigrationHandlers(pool, activeUsers);
 	return new Elysia()
 		.use(importActivationRoutes(pool, guards))
 		.get(
 			"/api/portability/import/plans/:id/attachment-migrations",
 			guards.guardedGet((request, session) =>
-				handled(async () =>
-					response(
-						await inspectAttachmentMigration(
-							pool,
-							session.user.id,
-							reservationJobId(request),
-							reservationOrdinal(request),
-							{ signal: request.signal },
-						),
-					),
-				),
+				migration.inspect(request, session.user.id),
 			),
 		)
 		.get(
 			"/api/portability/import/plans/:id/attachment-reservations",
 			guards.guardedGet((request, session) =>
-				handled(async () => {
-					const ordinal = reservationOrdinal(request);
-					return response(
-						await getAttachmentMigrationStatus(
-							pool,
-							session.user.id,
-							reservationJobId(request),
-							ordinal,
-							{ signal: request.signal },
-						),
-					);
-				}),
+				migration.status(request, session.user.id),
 			),
 		)
 		.post(
 			"/api/portability/import/plans/:id/attachment-reservations",
 			guards.guardedPost((request, session) =>
-				handled(async () => {
-					if (activeUsers.size >= 2 || activeUsers.has(session.user.id))
-						return Response.json(
-							{ code: "import-busy" },
-							{ status: 429, headers: { ...headers, "retry-after": "5" } },
-						);
-					activeUsers.add(session.user.id);
-					try {
-						if (
-							(request.headers.get("content-type") ?? "")
-								.split(";")[0]
-								?.trim()
-								.toLowerCase() !== "application/json"
-						)
-							throw new ImportRequestError("invalid-request", 415);
-						let raw: unknown;
-						try {
-							raw = JSON.parse(
-								(await readRequest(request, 256 * 1024, 5000)).text,
-							);
-						} catch (error) {
-							if (error instanceof ImportRequestError) throw error;
-							throw new ImportRequestError("invalid-request", 400);
-						}
-						const parsed =
-							attachmentMigrationReservationBodySchema.safeParse(raw);
-						if (!parsed.success)
-							throw new ImportRequestError(
-								"invalid-migration-reservation",
-								400,
-							);
-						if (request.signal.aborted)
-							throw new ImportRequestError("request-cancelled", 408);
-						return response(
-							await reserveAttachmentMigration(
-								pool,
-								{
-									...parsed.data,
-									ownerId: session.user.id,
-									jobId: reservationJobId(request),
-								},
-								{ signal: request.signal },
-							),
-						);
-					} finally {
-						activeUsers.delete(session.user.id);
-					}
-				}),
+				migration.reserve(request, session.user.id),
 			),
 			{ parse: "none" },
 		)
 		.post(
 			"/api/portability/import/plans/:id/attachment-recoveries",
 			guards.guardedPost((request, session) =>
-				handled(async () => {
-					if (activeUsers.size >= 2 || activeUsers.has(session.user.id))
-						return Response.json(
-							{ code: "import-busy" },
-							{ status: 429, headers: { ...headers, "retry-after": "5" } },
-						);
-					activeUsers.add(session.user.id);
-					try {
-						if (
-							(request.headers.get("content-type") ?? "")
-								.split(";")[0]
-								?.trim()
-								.toLowerCase() !== "application/json"
-						)
-							throw new ImportRequestError("invalid-request", 415);
-						let raw: unknown;
-						try {
-							raw = JSON.parse(
-								(await readRequest(request, 256 * 1024, 5000)).text,
-							);
-						} catch (error) {
-							if (error instanceof ImportRequestError) throw error;
-							throw new ImportRequestError("invalid-request", 400);
-						}
-						const parsed = attachmentMigrationRecoveryBodySchema.safeParse(raw);
-						if (!parsed.success)
-							throw new ImportRequestError("invalid-migration-recovery", 400);
-						if (request.signal.aborted)
-							throw new ImportRequestError("request-cancelled", 408);
-						return response(
-							await recoverAttachmentMigration(
-								pool,
-								{
-									...parsed.data,
-									ownerId: session.user.id,
-									jobId: reservationJobId(request),
-								},
-								{ signal: request.signal },
-							),
-						);
-					} finally {
-						activeUsers.delete(session.user.id);
-					}
-				}),
+				migration.recover(request, session.user.id),
 			),
 			{ parse: "none" },
 		)
 		.get(
 			"/api/portability/import/plans/:id/attachment-parents",
 			guards.guardedGet((request, session) =>
-				handled(async () => {
-					const pagination = parentDiscoveryQuery(request);
-					return response(
-						await getAttachmentMigrationParents(
-							pool,
-							session.user.id,
-							pathId(request, true),
-							{ ...pagination, signal: request.signal },
-						),
-					);
-				}),
+				migration.parents(request, session.user.id),
 			),
 		)
 		.get(

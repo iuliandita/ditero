@@ -41,7 +41,7 @@ vi.mock("./import-plan-store.ts", () => ({
 }));
 
 import { ImportPlanStoreError } from "./import-plan-store.ts";
-import { importPlanRoutes } from "./import-routes.ts";
+import { createImportAdmission, importPlanRoutes } from "./import-routes.ts";
 
 function document(): PortableExportV1 {
 	return {
@@ -1152,4 +1152,31 @@ describe("attachment recovery transport", () => {
 		expect(reply.status).toBe(409);
 		expect(await reply.json()).toEqual({ code: "migration-revision-conflict" });
 	});
+});
+
+test("separate browser route instances can share application import admission", async () => {
+	const admission = createImportAdmission();
+	const guards = makeGuards(
+		["http://localhost"],
+		async () => ({ user: { id: "caller" } }) as Session,
+	);
+	const first = new Elysia().use(
+		importPlanRoutes({} as Pool, guards, admission),
+	);
+	const second = new Elysia().use(
+		importPlanRoutes({} as Pool, guards, admission),
+	);
+	let release!: (value: unknown) => void;
+	store.save.mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				release = resolve;
+			}),
+	);
+	const pending = first.handle(request());
+	await vi.waitFor(() => expect(release).toBeDefined());
+	expect((await second.handle(request())).status).toBe(429);
+	release({ id: "saved", report: { plannerVersion: 4, applySupported: true } });
+	expect((await pending).status).toBe(200);
+	expect(admission.size).toBe(0);
 });
