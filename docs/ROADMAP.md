@@ -38,7 +38,7 @@ qualification notes. Native delivery remains open in issue #346.
 
 Development happens on `develop`. The first published release was `0.0.1-alpha.1`;
 the current published alpha is
-[`0.0.1-alpha.6`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.6).
+[`0.0.1-alpha.7`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.7).
 Published alphas package containers, Helm/Compose deployment files and experimental
 native downloads; Windows downloads are unsigned and macOS downloads use ad-hoc
 signatures. Native qualification remains open. `1.0.0` requires the complete v1

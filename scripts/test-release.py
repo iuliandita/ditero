@@ -263,6 +263,36 @@ class ReleaseTests(unittest.TestCase):
                 release.deployment(root / "output")
             run.assert_not_called()
 
+    def test_deployment_rejects_stale_packaged_guide_examples(self):
+        version = release.metadata()["version"]
+        guides = ("deploy/helm/ditero/README.md", "deploy/kustomize/README.md")
+        mutations = (
+            (guides[0], f"The chart version is `{version}`"),
+            (guides[0], f"ghcr.io/iuliandita/ditero:{version}`"),
+            (guides[0], f"ghcr.io/iuliandita/ditero:{version}-zero`"),
+            (guides[1], f"newTag: {version}"),
+            (guides[1], f"docker.io/iuliandita/ditero:{version}-zero"),
+        )
+        with tempfile.TemporaryDirectory() as directory, patch.object(release.subprocess, "run") as run:
+            root = Path(directory)
+            shutil.copytree(release.ROOT / "deploy", root / "deploy")
+            shutil.copyfile(release.ROOT / "release.json", root / "release.json")
+            originals = {name: (root / name).read_text() for name in guides}
+            with patch.object(release, "ROOT", root):
+                for name in guides:
+                    with (root / name).open("a") as guide:
+                        guide.write("\nHistorical release: `0.0.1-alpha.1`.\n")
+                release.deployment_guides(version)
+                for name, example in mutations:
+                    with self.subTest(example=example):
+                        self.assertEqual(originals[name].count(example), 1)
+                        (root / name).write_text(originals[name].replace(example, example.replace(version, "0.0.0-alpha.1")))
+                        with self.assertRaisesRegex(ValueError, "Packaged deployment guide"):
+                            release.deployment(root / "output")
+                        self.assertFalse((root / "output").exists())
+                        run.assert_not_called()
+                        (root / name).write_text(originals[name])
+
     def test_kustomize_archive_excludes_operator_files(self):
         version = release.metadata()["version"]
         with tempfile.TemporaryDirectory() as directory, patch.object(release.subprocess, "run"):

@@ -66,6 +66,24 @@ def prepare() -> None:
             output.write(f"{key}={value}\n")
 
 
+def deployment_guides(version: str) -> None:
+    guides = {
+        "deploy/helm/ditero/README.md": (
+            (r"The chart version is `([^`]+)`", [version]),
+            (r"Images default to `ghcr\.io/iuliandita/ditero:([^`]+)` and\s*`ghcr\.io/iuliandita/ditero:([^`]+)`", [(version, f"{version}-zero")]),
+        ),
+        "deploy/kustomize/README.md": (
+            (r"(?m)^  newTag: (\S+)$", [version]),
+            (r"(?m)^      value: docker\.io/iuliandita/ditero:(\S+)$", [f"{version}-zero"]),
+        ),
+    }
+    for name, examples in guides.items():
+        source = (ROOT / name).read_text()
+        for pattern, expected in examples:
+            if re.findall(pattern, source) != expected:
+                raise ValueError(f"Packaged deployment guide {name} does not match release.json")
+
+
 def deployment(output: Path) -> None:
     version = metadata()["version"]
     chart = ROOT / "deploy/helm/ditero"
@@ -82,6 +100,7 @@ def deployment(output: Path) -> None:
         manifest = (kustomize / "base" / f"ditero-{component}-deployment.yaml").read_text()
         if not re.search(rf"(?m)^\s+image: ghcr\.io/iuliandita/ditero:{re.escape(version + suffix)}\s*$", manifest):
             raise ValueError("Kustomize image tags do not match release.json")
+    deployment_guides(version)
     output.mkdir(parents=True, exist_ok=True)
     subprocess.run(["helm", "package", "deploy/helm/ditero", "--version", version, "--app-version", version, "--destination", str(output)], cwd=ROOT, check=True)
     files = ("docker-compose.yml", "postgres-init.sh", "secret-file.sh")
