@@ -256,15 +256,18 @@ Implemented foundation with source, bridge and JVM unit coverage:
   not replay an old link.
 - `ACTION_VIEW` intents with the `ditero` scheme are consumed from the launch intent and from
   `onNewIntent`, and the activity intent is replaced afterwards so it does not replay.
+- The startup `onNewIntent` callback leaves the launch intent intact until the native transport
+  attaches; `onCreate` then consumes it under the existing recreation and history checks.
 
 A custom scheme has no ownership verification on Android: any installed app or web page can send one,
 so the design relies on the link holding no credential and being unable to change state. Verified HTTPS
 App Links would need a server `assetlinks.json` and are not part of this change.
 
-An emulator check exercised cold and warm unauthenticated launches and confirmed that links do not
-sign in or select a server. Authenticated task opening remains unqualified: fixture sync connectivity
-blocked that runtime journey. The chooser and browser hand-off, rotation or process-death recreation,
-Recents relaunch, verification-deferral timing, and physical devices still need qualification. A browser
+Emulator checks with a debug build exercised authenticated cold and warm task opening against a
+matching backend. History-flagged links did not reopen a dismissed task, and a foreign server origin
+was refused without changing the selected server or account. Earlier unauthenticated checks confirmed
+that links do not sign in or select a server. The chooser and browser hand-off, rotation or process-death
+recreation, actual Recents relaunch, verification-deferral timing, and physical devices still need qualification. A browser
 hand-off with a selector or clip data is refused and remains unverified. The bridge and delivery hook
 tests cover the JavaScript side; `NativeTaskLinkTest` covers the parser and `Slot` policy, not the full
 `NativeZeroTransport` or `MainActivity` runtime. Task-link work remains open under #796 and #799; broader
