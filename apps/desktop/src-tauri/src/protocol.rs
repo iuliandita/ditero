@@ -496,8 +496,249 @@ pub fn attachment(v: &Value) -> Result<(bool, String, Option<String>)> {
         post.then_some(raw),
     ))
 }
+pub const MIGRATION_BODY: usize = 262144;
+fn migration_exact(v: &Value, required: &[&str], optional: &[&str]) -> Result<()> {
+    let m = v.as_object().ok_or("invalid-body")?;
+    if required.iter().any(|k| !m.contains_key(*k))
+        || m.keys()
+            .any(|k| !required.contains(&k.as_str()) && !optional.contains(&k.as_str()))
+    {
+        return Err("invalid-body");
+    }
+    Ok(())
+}
+fn migration_uint(v: &Value, key: &str, min: u64, max: u64) -> Result<u64> {
+    v.get(key)
+        .and_then(Value::as_u64)
+        .filter(|n| *n >= min && *n <= max)
+        .ok_or("invalid-body")
+}
+pub fn migration_hash(v: &Value, key: &str) -> Result<String> {
+    let s = string(v, key)?;
+    if s.len() != 64
+        || !s
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err("invalid-body");
+    }
+    Ok(s.into())
+}
+fn migration_uuid(v: &Value, key: &str, target: bool) -> Result<()> {
+    let s = string(v, key)?;
+    let raw = if target {
+        s.strip_prefix("migration_").ok_or("invalid-body")?
+    } else {
+        s
+    };
+    if raw.len() != 36
+        || !raw.bytes().enumerate().all(|(i, b)| {
+            if [8, 13, 18, 23].contains(&i) {
+                b == b'-'
+            } else {
+                b.is_ascii_digit() || (b'a'..=b'f').contains(&b)
+            }
+        })
+        || (target && (raw.as_bytes()[14] != b'4' || !b"89ab".contains(&raw.as_bytes()[19])))
+    {
+        return Err("invalid-body");
+    }
+    Ok(())
+}
+fn migration_prepared(v: &Value) -> Result<()> {
+    migration_exact(
+        v,
+        &[
+            "id",
+            "keyVersion",
+            "filenameCiphertext",
+            "contentTypeCiphertext",
+            "dekWrapped",
+            "declaredBytes",
+            "ciphertextSha256",
+        ],
+        &["thumbnailDeclaredBytes", "thumbnailCiphertextSha256"],
+    )?;
+    migration_uuid(v, "id", true)?;
+    migration_uint(v, "keyVersion", 1, 2147483647)?;
+    for key in ["filenameCiphertext", "contentTypeCiphertext", "dekWrapped"] {
+        let text = string(v, key)?;
+        if text.is_empty() || text.len() > 65536 || text.contains('\0') {
+            return Err("invalid-body");
+        }
+    }
+    migration_upload_fields(v)?;
+    Ok(())
+}
+pub fn migration_upload_fields(v: &Value) -> Result<(u64, String, Option<(u64, String)>)> {
+    let bytes = migration_uint(v, "declaredBytes", 1, 16777216)?;
+    let hash = migration_hash(v, "ciphertextSha256")?;
+    let size = v.get("thumbnailDeclaredBytes").filter(|v| !v.is_null());
+    let digest = v.get("thumbnailCiphertextSha256").filter(|v| !v.is_null());
+    let thumbnail = match (size, digest) {
+        (None, None) => None,
+        (Some(_), Some(_)) => {
+            let n = migration_uint(v, "thumbnailDeclaredBytes", 1, 16777216)?;
+            if bytes + n > 16777216 {
+                return Err("invalid-body");
+            }
+            Some((n, migration_hash(v, "thumbnailCiphertextSha256")?))
+        }
+        _ => return Err("invalid-body"),
+    };
+    Ok((bytes, hash, thumbnail))
+}
+pub fn migration_upload(v: &Value) -> Result<String> {
+    migration_exact(
+        v,
+        &[
+            "jobId",
+            "ordinal",
+            "associationId",
+            "attemptId",
+            "targetAttachmentId",
+            "revision",
+            "thumbnail",
+        ],
+        &[],
+    )?;
+    let job = migration_hash(v, "jobId")?;
+    let ordinal = migration_uint(v, "ordinal", 0, 50000)?;
+    migration_uint(v, "revision", 1, 2147483647)?;
+    migration_uuid(v, "associationId", false)?;
+    migration_uuid(v, "attemptId", false)?;
+    migration_uuid(v, "targetAttachmentId", true)?;
+    v.get("thumbnail")
+        .and_then(Value::as_bool)
+        .ok_or("invalid-body")?;
+    Ok(format!(
+        "/api/native/portability/import/plans/{job}/attachment-reservations?ordinal={ordinal}"
+    ))
+}
+pub fn archive_migration(v: &Value) -> Result<(bool, String, Option<String>, usize)> {
+    let op = string(v, "op")?;
+    let body = v.get("body").ok_or("invalid-body")?;
+    let base = "/api/native/portability/import";
+    if op == "archive.migration.jobs" {
+        migration_exact(body, &["limit"], &["afterJobId"])?;
+        let limit = migration_uint(body, "limit", 1, 64)?;
+        let mut path = format!("{base}/jobs?limit={limit}");
+        if body.get("afterJobId").is_some() {
+            path.push_str(&format!(
+                "&afterJobId={}",
+                migration_hash(body, "afterJobId")?
+            ));
+        }
+        return Ok((false, path, None, 65536));
+    }
+    let job = migration_hash(body, "jobId")?;
+    let prefix = format!("{base}/plans/{job}");
+    match op {
+        "archive.migration.parents" => {
+            migration_exact(body, &["jobId", "afterOrdinal", "limit"], &[])?;
+            let after = body
+                .get("afterOrdinal")
+                .and_then(Value::as_i64)
+                .filter(|v| (-1..=50000).contains(v))
+                .ok_or("invalid-body")?;
+            let limit = migration_uint(body, "limit", 1, 64)?;
+            Ok((
+                false,
+                format!("{prefix}/attachment-parents?afterOrdinal={after}&limit={limit}"),
+                None,
+                262144,
+            ))
+        }
+        "archive.migration.inspect" | "archive.migration.status" => {
+            migration_exact(body, &["jobId", "ordinal"], &[])?;
+            let ordinal = migration_uint(body, "ordinal", 0, 50000)?;
+            let action = if op == "archive.migration.inspect" {
+                "attachment-migrations"
+            } else {
+                "attachment-reservations"
+            };
+            Ok((
+                false,
+                format!("{prefix}/{action}?ordinal={ordinal}"),
+                None,
+                16384,
+            ))
+        }
+        "archive.migration.reserve" | "archive.migration.recover" => {
+            let recover = op == "archive.migration.recover";
+            let key = if recover { "recovery" } else { "reservation" };
+            migration_exact(body, &["jobId", key], &[])?;
+            let input = body.get(key).ok_or("invalid-body")?;
+            if recover {
+                migration_exact(
+                    input,
+                    &[
+                        "ordinal",
+                        "sourceFingerprint",
+                        "previous",
+                        "prepared",
+                        "retireLive",
+                    ],
+                    &[],
+                )?;
+                let previous = input.get("previous").ok_or("invalid-body")?;
+                migration_exact(
+                    previous,
+                    &[
+                        "associationId",
+                        "attemptId",
+                        "targetAttachmentId",
+                        "revision",
+                    ],
+                    &[],
+                )?;
+                migration_uuid(previous, "associationId", false)?;
+                migration_uuid(previous, "attemptId", false)?;
+                migration_uuid(previous, "targetAttachmentId", true)?;
+                migration_uint(previous, "revision", 1, 2147483647)?;
+                input
+                    .get("retireLive")
+                    .and_then(Value::as_bool)
+                    .ok_or("invalid-body")?;
+                if previous.get("targetAttachmentId")
+                    == input.get("prepared").and_then(|p| p.get("id"))
+                {
+                    return Err("invalid-body");
+                }
+            } else {
+                migration_exact(
+                    input,
+                    &[
+                        "ordinal",
+                        "sourceFingerprint",
+                        "expectedRevision",
+                        "prepared",
+                    ],
+                    &[],
+                )?;
+                migration_uint(input, "expectedRevision", 0, 2147483647)?;
+            }
+            migration_uint(input, "ordinal", 0, 50000)?;
+            migration_hash(input, "sourceFingerprint")?;
+            migration_prepared(input.get("prepared").ok_or("invalid-body")?)?;
+            let raw = input.to_string();
+            if raw.len() > MIGRATION_BODY {
+                return Err("invalid-body");
+            }
+            let action = if recover {
+                "attachment-recoveries"
+            } else {
+                "attachment-reservations"
+            };
+            Ok((true, format!("{prefix}/{action}"), Some(raw), 16384))
+        }
+        _ => Err("unknown-op"),
+    }
+}
+
 pub fn file_operation(op: &str) -> bool {
-    op.starts_with("archive.export.")
+    op.starts_with("archive.migration.")
+        || op.starts_with("archive.export.")
         || op.starts_with("archive.input.")
         || op.starts_with("attachment.")
         || op.starts_with("upload.")
@@ -512,6 +753,90 @@ pub fn file_chunk(op: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn migration_prepared_fixture() -> Value {
+        json!({"id":"migration_11111111-1111-4111-8111-111111111111","keyVersion":1,"filenameCiphertext":"name","contentTypeCiphertext":"type","dekWrapped":"wrap","declaredBytes":4,"ciphertextSha256":"a".repeat(64),"thumbnailDeclaredBytes":null,"thumbnailCiphertextSha256":null})
+    }
+    #[test]
+    fn archive_migration_fixed_routes_and_nested_boundaries() {
+        let job = "a".repeat(64);
+        for (op, body, suffix, post, cap) in [
+            ("jobs", json!({"limit":1}), "jobs?limit=1", false, 65536),
+            (
+                "parents",
+                json!({"jobId":job,"afterOrdinal":-1,"limit":64}),
+                "attachment-parents?afterOrdinal=-1&limit=64",
+                false,
+                262144,
+            ),
+            (
+                "inspect",
+                json!({"jobId":job,"ordinal":0}),
+                "attachment-migrations?ordinal=0",
+                false,
+                16384,
+            ),
+            (
+                "status",
+                json!({"jobId":job,"ordinal":50000}),
+                "attachment-reservations?ordinal=50000",
+                false,
+                16384,
+            ),
+            (
+                "reserve",
+                json!({"jobId":job,"reservation":{"ordinal":0,"sourceFingerprint":job,"expectedRevision":0,"prepared":migration_prepared_fixture()}}),
+                "attachment-reservations",
+                true,
+                16384,
+            ),
+            (
+                "recover",
+                json!({"jobId":job,"recovery":{"ordinal":0,"sourceFingerprint":job,"previous":{"associationId":"11111111-1111-4111-8111-111111111111","attemptId":"22222222-2222-4222-8222-222222222222","targetAttachmentId":"migration_33333333-3333-4333-8333-333333333333","revision":1},"prepared":migration_prepared_fixture(),"retireLive":true}}),
+                "attachment-recoveries",
+                true,
+                16384,
+            ),
+        ] {
+            let value = json!({"op":format!("archive.migration.{op}"),"body":body});
+            let (actual, path, payload, limit) = archive_migration(&value).unwrap();
+            assert_eq!(actual, post);
+            assert!(path.starts_with("/api/native/portability/import/"));
+            assert!(path.ends_with(suffix));
+            assert_eq!(limit, cap);
+            if let Some(raw) = payload {
+                assert!(parse(&raw).unwrap().get("jobId").is_none());
+            }
+            for field in ["url", "ownerId", "headers", "bytes"] {
+                let mut invalid = value.clone();
+                invalid["body"][field] = json!("caller");
+                assert!(archive_migration(&invalid).is_err());
+            }
+        }
+        for body in [
+            json!({"limit":0}),
+            json!({"limit":65}),
+            json!({"limit":1.5}),
+            json!({"limit":1,"afterJobId":"../x"}),
+        ] {
+            assert!(
+                archive_migration(&json!({"op":"archive.migration.jobs","body":body})).is_err()
+            );
+        }
+        let mut prepared = migration_prepared_fixture();
+        prepared["thumbnailDeclaredBytes"] = json!(1);
+        assert!(migration_prepared(&prepared).is_err());
+        prepared["thumbnailCiphertextSha256"] = json!("b".repeat(64));
+        prepared["declaredBytes"] = json!(16777216);
+        assert!(migration_prepared(&prepared).is_err());
+        prepared = migration_prepared_fixture();
+        prepared["filenameCiphertext"] = json!("x".repeat(65537));
+        assert!(migration_prepared(&prepared).is_err());
+        prepared = migration_prepared_fixture();
+        for field in ["filenameCiphertext", "contentTypeCiphertext", "dekWrapped"] {
+            prepared[field] = json!("\\".repeat(65536));
+        }
+        assert!(archive_migration(&json!({"op":"archive.migration.reserve","body":{"jobId":job,"reservation":{"ordinal":0,"sourceFingerprint":job,"expectedRevision":0,"prepared":prepared}}})).is_err());
+    }
     #[test]
     fn archive_input_uses_named_file_operations_without_request_chunks() {
         for op in [

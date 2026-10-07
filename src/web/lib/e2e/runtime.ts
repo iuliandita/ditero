@@ -1,4 +1,9 @@
 import { authClient } from "../auth-client.ts";
+import type {
+	createAttachmentMigrationApi,
+	MigrationBinding,
+	MigrationJobsPage,
+} from "./attachment-migration-api.ts";
 import type { CiphertextStageRunner, DownloadDestination } from "./download.ts";
 import type { E2eFetcher } from "./workspace-keys.ts";
 
@@ -9,6 +14,15 @@ export type AttachmentRuntime = {
 		signal?: AbortSignal,
 	) => Promise<DownloadDestination>;
 	readonly withStage: CiphertextStageRunner;
+	readonly archiveMigration?: {
+		jobs(
+			query: { limit: number; afterJobId?: string },
+			signal?: AbortSignal,
+		): Promise<MigrationJobsPage>;
+		bind(
+			binding: MigrationBinding,
+		): ReturnType<typeof createAttachmentMigrationApi>;
+	};
 	readonly archiveInput?: {
 		readDocument(
 			kind: "content" | "archive",

@@ -629,6 +629,64 @@ export async function getAttachmentMigrationStatus(
 	);
 }
 
+/** Native upload lengths are derived from the locked immutable attempt, never the caller. */
+export async function getNativeAttachmentMigrationStatus(
+	pool: Pool,
+	ownerId: string,
+	jobId: string,
+	ordinal: number,
+	options: { signal?: AbortSignal } = {},
+) {
+	if (
+		!identifier.safeParse(ownerId).success ||
+		!hash.safeParse(jobId).success ||
+		!z.number().int().min(0).max(50000).safeParse(ordinal).success
+	)
+		fail("invalid-migration-status", 400);
+	const deadline = performance.now() + 15000;
+	const checkpoint = migrationCheckpoint(options.signal, deadline);
+	return importTransaction(
+		pool,
+		ownerId,
+		async (client) => {
+			checkpoint();
+			const value = await retained(client, ownerId, jobId, ordinal);
+			if (!value) fail("migration-not-found", 404);
+			const attempt = checkReceipt(value);
+			const status = result(value.p, value.a, value.f);
+			if (
+				value.p.committed_attempt_id !== null ||
+				value.f === null ||
+				!active(value, new Date())
+			)
+				return { ...status, upload: null };
+			const prepared = preparedSchema.safeParse(preparedFrom(attempt));
+			if (!prepared.success) fail("migration-attachment-binding-changed");
+			validateActiveBinding(value.p, attempt, value.f);
+			await lockRecoveryContext(
+				client,
+				value.p,
+				attempt.key_version,
+				checkpoint,
+			);
+			checkpoint();
+			// Expiry may pass while context locks are acquired.
+			if (!active(value, new Date())) return { ...status, upload: null };
+			return {
+				...status,
+				upload: {
+					declaredBytes: prepared.data.declaredBytes,
+					ciphertextSha256: prepared.data.ciphertextSha256,
+					thumbnailDeclaredBytes: prepared.data.thumbnailDeclaredBytes,
+					thumbnailCiphertextSha256: prepared.data.thumbnailCiphertextSha256,
+				},
+			};
+		},
+		options.signal,
+		deadline,
+	);
+}
+
 type Retained = NonNullable<Awaited<ReturnType<typeof retained>>>;
 type Evidence = Awaited<
 	ReturnType<typeof readAttachmentMigrationParentOnClient>

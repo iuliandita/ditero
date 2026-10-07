@@ -10,6 +10,7 @@ const native = vi.hoisted(() => ({
 	state: {
 		gen: 1,
 		archiveInput: false,
+		archiveMigration: false,
 		server: { origin: "https://example.test" },
 		session: {
 			scope: 'native:["https://example.test","user-1"]',
@@ -42,6 +43,7 @@ vi.mock("./bridge.ts", () => ({
 beforeEach(() => {
 	native.state.gen = 1;
 	native.state.archiveInput = false;
+	native.state.archiveMigration = false;
 	native.refresh.mockReset();
 	native.refusal.mockReset();
 });
@@ -125,6 +127,29 @@ test("verified archive input capability is captured and desktop-only", async () 
 		expect(
 			createNativeRuntime(enabled, options).e2e.attachments?.archiveInput,
 		).toBeDefined();
+	} finally {
+		vi.unstubAllGlobals();
+	}
+});
+
+test("migration capability captures verified explicit true and remains desktop-only", async () => {
+	const absent = await captureVerifiedContext();
+	expect(absent.archiveMigration).toBe(false);
+	native.state.archiveMigration = true;
+	const context = await captureVerifiedContext();
+	expect(context.archiveMigration).toBe(true);
+	const options = { retireZero: async () => {}, onSessionEnded: vi.fn() };
+	expect(
+		createNativeRuntime(context, options).e2e.attachments?.archiveMigration,
+	).toBeUndefined();
+	vi.stubGlobal("__TAURI_INTERNALS__", {});
+	try {
+		expect(
+			createNativeRuntime(context, options).e2e.attachments?.archiveMigration,
+		).toBeDefined();
+		expect(
+			createNativeRuntime(absent, options).e2e.attachments?.archiveMigration,
+		).toBeUndefined();
 	} finally {
 		vi.unstubAllGlobals();
 	}

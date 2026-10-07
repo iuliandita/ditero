@@ -1,4 +1,13 @@
+import { z } from "zod";
 import { sanitiseFilename } from "../../../src/domain/attachment.ts";
+import {
+	createAttachmentMigrationApi,
+	type MigrationReservation,
+	MigrationTransportError,
+	migrationBindingSchema,
+	migrationJobsPageSchema,
+	parseNativeMigrationStatus,
+} from "../../../src/web/lib/e2e/attachment-migration-api.ts";
 import { withCiphertextStage } from "../../../src/web/lib/e2e/ciphertext-staging.ts";
 import type {
 	AttachmentFileWriter,
@@ -150,6 +159,8 @@ export function createAttachmentRuntime(
 	call: Call = callAttachment,
 	archiveExportEnabled = false,
 	archiveInputEnabled = false,
+	archiveMigrationEnabled = false,
+	ownerId?: string,
 ): AttachmentRuntime {
 	const declared = new Map<string, number>();
 	const checked: Call = async (op, body = {}) => {
@@ -616,11 +627,512 @@ export function createAttachmentRuntime(
 					},
 				}
 			: undefined;
+	type Fence = { target: string; operation: string; record?: string };
+	const fencedJobs = new Map<string, Fence>();
+	const activeWrites = new Set<string>();
+	const pendingMutations = new Map<string, number>();
+	type Retained = {
+		ordinal: number;
+		associationId?: string;
+		sourceFingerprint: string;
+		revision: number;
+		reservation?: MigrationReservation;
+		prepared?: string;
+	};
+	function retainedWitness(record?: Retained) {
+		if (!record) return undefined;
+		return JSON.stringify({
+			ordinal: record.ordinal,
+			sourceFingerprint: record.sourceFingerprint,
+			revision: record.revision,
+			associationId: record.associationId,
+			prepared: record.prepared,
+		});
+	}
+	function preparedWitness(prepared: object) {
+		return JSON.stringify(
+			Object.entries(prepared).sort(([a], [b]) => a.localeCompare(b)),
+		);
+	}
+	const retainedJobs = new Map<string, Map<string, Retained>>();
+	const admittedBindings = new Map<string, string>();
+	async function migrationCall(
+		op: AttachmentOp,
+		body: Record<string, unknown>,
+		signal?: AbortSignal,
+		jobId?: string,
+	) {
+		assertCurrent();
+		signal?.throwIfAborted();
+		const mutation =
+			jobId &&
+			[
+				"archive.migration.reserve",
+				"archive.migration.recover",
+				"attachment.finalize",
+				"attachment.abort",
+			].includes(op);
+		if (mutation)
+			pendingMutations.set(jobId, (pendingMutations.get(jobId) ?? 0) + 1);
+		const dispatched = checked(op, body).finally(() => {
+			if (mutation)
+				pendingMutations.set(jobId, (pendingMutations.get(jobId) ?? 1) - 1);
+		});
+		let abort: (() => void) | undefined;
+		const aborted = new Promise<never>((_, reject) => {
+			abort = () =>
+				reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+			signal?.addEventListener("abort", abort, { once: true });
+		});
+		try {
+			return await Promise.race([dispatched, aborted]);
+		} finally {
+			if (abort) signal?.removeEventListener("abort", abort);
+		}
+	}
+	const archiveMigration: AttachmentRuntime["archiveMigration"] =
+		desktop && archiveMigrationEnabled && ownerId
+			? {
+					async jobs(query, signal) {
+						const q = z
+							.strictObject({
+								limit: z.number().int().min(1).max(64),
+								afterJobId: z
+									.string()
+									.regex(/^[a-f0-9]{64}$/)
+									.optional(),
+							})
+							.parse(query);
+						const reply = await migrationCall(
+							"archive.migration.jobs",
+							q,
+							signal,
+						);
+						const result = response(reply);
+						if (
+							!result.ok ||
+							typeof reply.body !== "string" ||
+							new TextEncoder().encode(reply.body).length > 65536
+						)
+							throw new MigrationTransportError(
+								"invalid-response",
+								result.status,
+								false,
+							);
+						const page = migrationJobsPageSchema.parse(JSON.parse(reply.body));
+						let previous = q.afterJobId ?? "";
+						for (const item of page.items) {
+							if (
+								item.ownerId !== ownerId ||
+								item.jobId !== item.planDigest ||
+								item.jobId <= previous
+							)
+								throw new MigrationTransportError(
+									"migration-binding-mismatch",
+									200,
+									false,
+								);
+							previous = item.jobId;
+						}
+						if (
+							page.items.length > q.limit ||
+							(page.nextAfterJobId !== null &&
+								(!page.items.length || page.nextAfterJobId !== previous))
+						)
+							throw new MigrationTransportError(
+								"parent-cursor-mismatch",
+								200,
+								false,
+							);
+						assertCurrent();
+						signal?.throwIfAborted();
+						for (const item of page.items) {
+							const { label: _, ...binding } = item;
+							admittedBindings.set(item.jobId, JSON.stringify(binding));
+						}
+						return page;
+					},
+					bind(input) {
+						assertCurrent();
+						const binding = migrationBindingSchema.parse(input);
+						if (
+							binding.ownerId !== ownerId ||
+							admittedBindings.get(binding.jobId) !== JSON.stringify(binding)
+						)
+							throw new MigrationTransportError(
+								"migration-binding-mismatch",
+								null,
+								false,
+							);
+						const jobId = binding.jobId;
+						const records =
+							retainedJobs.get(jobId) ?? new Map<string, Retained>();
+						retainedJobs.set(jobId, records);
+						const trackedUpload: Call = (op, body) => {
+							pendingMutations.set(
+								jobId,
+								(pendingMutations.get(jobId) ?? 0) + 1,
+							);
+							return checked(op, body).finally(() => {
+								pendingMutations.set(
+									jobId,
+									(pendingMutations.get(jobId) ?? 1) - 1,
+								);
+							});
+						};
+						const nativeFetcher: E2eFetcher = async (path, init) => {
+							if (typeof path !== "string")
+								throw new TypeError("native migration target refused");
+							const signal = init?.signal ?? undefined;
+							const body =
+								typeof init?.body === "string"
+									? JSON.parse(init.body)
+									: undefined;
+							const base = `/api/portability/import/plans/${jobId}`;
+							let op: AttachmentOp;
+							let payload: Record<string, unknown>;
+							if (path.startsWith(`${base}/`)) {
+								const url = new URL(path, "https://native.invalid");
+								const action = url.pathname.slice(base.length + 1);
+								if (action === "attachment-parents") {
+									op = "archive.migration.parents";
+									payload = {
+										jobId,
+										afterOrdinal: Number(url.searchParams.get("afterOrdinal")),
+										limit: Number(url.searchParams.get("limit")),
+									};
+								} else if (action === "attachment-migrations") {
+									op = "archive.migration.inspect";
+									payload = {
+										jobId,
+										ordinal: Number(url.searchParams.get("ordinal")),
+									};
+								} else if (
+									action === "attachment-reservations" &&
+									init?.method !== "POST"
+								) {
+									op = "archive.migration.status";
+									payload = {
+										jobId,
+										ordinal: Number(url.searchParams.get("ordinal")),
+									};
+								} else if (action === "attachment-reservations") {
+									op = "archive.migration.reserve";
+									payload = { jobId, reservation: body };
+								} else if (action === "attachment-recoveries") {
+									op = "archive.migration.recover";
+									payload = { jobId, recovery: body };
+								} else throw new TypeError("native migration target refused");
+							} else if (
+								path === "/api/attachments/finalize" ||
+								path === "/api/attachments/abort"
+							) {
+								op = path.endsWith("finalize")
+									? "attachment.finalize"
+									: "attachment.abort";
+								requireTarget(body.id);
+								payload = body;
+							} else {
+								const match =
+									/^\/api\/attachments\/(migration_[a-f0-9-]+)\/(upload|thumbnail)$/.exec(
+										path,
+									);
+								const record = match && records.get(match[1]);
+								if (!record?.reservation || !(init?.body instanceof Blob))
+									throw new TypeError("native migration witness required");
+								const thumbnail = match?.[2] === "thumbnail";
+								const witness = record.reservation;
+								const pending = trackedUpload(
+									"archive.migration.upload.begin",
+									{
+										jobId,
+										ordinal: record.ordinal,
+										associationId: witness.associationId,
+										attemptId: witness.attemptId,
+										targetAttachmentId: witness.targetAttachmentId,
+										revision: witness.revision,
+										thumbnail,
+									},
+								).then(async (reply) => {
+									if (signal?.aborted && reply.ok)
+										await cancel("attachment.cancel", {
+											transferId: id(reply, "transferId"),
+										});
+									return reply;
+								});
+								let onAbort: (() => void) | undefined;
+								const aborted = new Promise<never>((_, reject) => {
+									onAbort = () =>
+										reject(
+											signal?.reason ??
+												new DOMException("Aborted", "AbortError"),
+										);
+									signal?.addEventListener("abort", onAbort, { once: true });
+								});
+								let transferId: string | undefined;
+								try {
+									const begun = await Promise.race([pending, aborted]);
+									if (!begun.ok) return response(begun);
+									transferId = id(begun, "transferId");
+									let seq = 0;
+									let count = 0;
+									for await (const chunk of chunks(
+										init.body.stream(),
+										signal,
+									)) {
+										count += chunk.length;
+										if (count > init.body.size)
+											throw new TypeError("native migration size refused");
+										await Promise.race([
+											trackedUpload("upload.write", {
+												transferId,
+												seq: seq++,
+												data: encode(chunk),
+											}),
+											aborted,
+										]);
+									}
+									if (count !== init.body.size)
+										throw new TypeError("native migration size refused");
+									return response(
+										await Promise.race([
+											trackedUpload("upload.finish", { transferId, seq }),
+											aborted,
+										]),
+									);
+								} finally {
+									if (onAbort) signal?.removeEventListener("abort", onAbort);
+									if (transferId)
+										await cancel("attachment.cancel", { transferId });
+								}
+							}
+							const reply = await migrationCall(op, payload, signal, jobId);
+							if (op === "archive.migration.status" && reply.ok) {
+								if (
+									typeof reply.body !== "string" ||
+									new TextEncoder().encode(reply.body).length > 16384
+								)
+									throw new TypeError("native migration status refused");
+								const status = parseNativeMigrationStatus(
+									JSON.parse(String(reply.body)),
+								);
+								const { upload: _, ...ordinary } = status;
+								return response({ ...reply, body: JSON.stringify(ordinary) });
+							}
+							return response(reply);
+						};
+						const api = createAttachmentMigrationApi({
+							binding,
+							checkpoint: assertCurrent,
+							fetcher: nativeFetcher,
+						});
+						function requireTarget(target: string) {
+							const record = records.get(target);
+							if (
+								!record?.reservation ||
+								record.reservation.targetAttachmentId !== target
+							)
+								throw new MigrationTransportError(
+									"migration-binding-mismatch",
+									null,
+									false,
+								);
+							return record;
+						}
+						function requirePrepared(prepared: { id: string }) {
+							const record = requireTarget(prepared.id);
+							if (
+								record.prepared &&
+								record.prepared !== preparedWitness(prepared)
+							)
+								throw new MigrationTransportError(
+									"migration-binding-mismatch",
+									null,
+									false,
+								);
+							record.prepared ??= preparedWitness(prepared);
+						}
+						async function write<T>(
+							target: string,
+							operation: string,
+							run: () => Promise<T>,
+						) {
+							assertCurrent();
+							if (
+								fencedJobs.has(jobId) ||
+								activeWrites.has(jobId) ||
+								pendingMutations.get(jobId)
+							)
+								throw new MigrationTransportError(
+									"migration-reconciliation-required",
+									null,
+									false,
+								);
+							activeWrites.add(jobId);
+							try {
+								return await run();
+							} catch (error) {
+								if (error instanceof MigrationTransportError && error.uncertain)
+									fencedJobs.set(jobId, {
+										target,
+										operation,
+										record: retainedWitness(records.get(target)),
+									});
+								throw error;
+							} finally {
+								activeWrites.delete(jobId);
+							}
+						}
+						return {
+							parents: api.parents,
+							async reserve(input, signal) {
+								return write(input.prepared.id, "reserve", async () => {
+									const resultPromise = api.reserve(input, signal);
+									const retained: Retained = {
+										ordinal: input.ordinal,
+										prepared: preparedWitness(input.prepared),
+										sourceFingerprint: input.sourceFingerprint,
+										revision: input.expectedRevision || 1,
+									};
+									records.set(input.prepared.id, retained);
+									const result = await resultPromise;
+									retained.reservation = result;
+									return result;
+								});
+							},
+							async recover(input, expected, signal) {
+								return write(input.prepared.id, "recover", async () => {
+									const resultPromise = api.recover(input, expected, signal);
+									const retained: Retained = {
+										ordinal: input.ordinal,
+										prepared: preparedWitness(input.prepared),
+										sourceFingerprint: input.sourceFingerprint,
+										revision: input.previous.revision + 1,
+										associationId: input.previous.associationId,
+									};
+									records.set(input.prepared.id, retained);
+									const result = await resultPromise;
+									if (result.status.targetAttachmentId === input.prepared.id)
+										retained.reservation = result.status;
+									return result;
+								});
+							},
+							async inspect(value, expected, signal) {
+								const fence = fencedJobs.get(jobId);
+								const settledBeforeRead =
+									!pendingMutations.get(jobId) && !activeWrites.has(jobId);
+								const result = await api.inspect(value, expected, signal);
+								const record =
+									result.targetAttachmentId &&
+									records.get(result.targetAttachmentId);
+								if (
+									record &&
+									record.ordinal === value &&
+									record.sourceFingerprint === result.sourceFingerprint &&
+									record.revision === result.revision &&
+									(!record.associationId ||
+										record.associationId === result.associationId) &&
+									(!record.reservation ||
+										(record.reservation.associationId ===
+											result.associationId &&
+											record.reservation.attemptId === result.attemptId))
+								) {
+									const exactFence =
+										fence &&
+										fencedJobs.get(jobId) === fence &&
+										fence.target === result.targetAttachmentId &&
+										fence.record === retainedWitness(record);
+									record.reservation = result;
+									if (
+										settledBeforeRead &&
+										!pendingMutations.get(jobId) &&
+										exactFence
+									)
+										fencedJobs.delete(jobId);
+								} else if (
+									!fencedJobs.has(jobId) &&
+									result.targetAttachmentId
+								) {
+									records.set(result.targetAttachmentId, {
+										ordinal: value,
+										sourceFingerprint: result.sourceFingerprint,
+										revision: result.revision,
+										associationId: result.associationId,
+										reservation: result,
+									});
+								}
+								return result;
+							},
+							async status(value, expected, signal) {
+								const fence = fencedJobs.get(jobId);
+								const settledBeforeRead =
+									!pendingMutations.get(jobId) && !activeWrites.has(jobId);
+								const record = [...records.values()].find(
+									(r) =>
+										r.ordinal === value &&
+										r.reservation &&
+										(!expected ||
+											r.reservation.targetAttachmentId ===
+												expected.targetAttachmentId),
+								);
+								const result = await api.status(
+									value,
+									expected ?? record?.reservation,
+									signal,
+								);
+								if (
+									record?.reservation &&
+									result.associationId === record.reservation.associationId &&
+									result.attemptId === record.reservation.attemptId &&
+									result.targetAttachmentId ===
+										record.reservation.targetAttachmentId &&
+									result.revision === record.reservation.revision
+								) {
+									const exactFence =
+										fence &&
+										fencedJobs.get(jobId) === fence &&
+										fence.target === result.targetAttachmentId &&
+										fence.record === retainedWitness(record);
+									record.reservation = result;
+									if (
+										settledBeforeRead &&
+										!pendingMutations.get(jobId) &&
+										exactFence
+									)
+										fencedJobs.delete(jobId);
+								}
+								return result;
+							},
+							upload: (prepared, body, signal) =>
+								write(prepared.id, "upload", () => {
+									requirePrepared(prepared);
+									return api.upload(prepared, body, signal);
+								}),
+							thumbnail: (prepared, body, signal) =>
+								write(prepared.id, "thumbnail", () => {
+									requirePrepared(prepared);
+									return api.thumbnail(prepared, body, signal);
+								}),
+							finalize: (prepared, signal) =>
+								write(prepared.id, "finalize", () => {
+									requirePrepared(prepared);
+									return api.finalize(prepared, signal);
+								}),
+							abort: (id, signal) =>
+								write(id, "abort", () => {
+									requireTarget(id);
+									return api.abort(id, signal);
+								}),
+						};
+					},
+				}
+			: undefined;
 	return {
 		fetcher,
 		pickFile,
 		withStage,
 		...(archiveExport ? { archiveExport } : {}),
 		...(archiveInput ? { archiveInput } : {}),
+		...(archiveMigration ? { archiveMigration } : {}),
 	};
 }

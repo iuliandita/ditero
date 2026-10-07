@@ -185,6 +185,91 @@ async fn response(mut response: reqwest::Response) -> Result<Value> {
     )
 }
 
+async fn migration_response(mut response: reqwest::Response, cap: usize) -> Result<Value> {
+    let status = response.status().as_u16();
+    let cap = if (200..300).contains(&status) {
+        cap
+    } else {
+        4096
+    };
+    let content = response
+        .headers()
+        .get("content-type")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+    if !content
+        .split(';')
+        .next()
+        .is_some_and(|s| s.trim().eq_ignore_ascii_case("application/json"))
+    {
+        return Err("invalid-response");
+    }
+    let mut raw = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| "network")? {
+        if raw.len() + chunk.len() > cap {
+            return Err("invalid-response");
+        }
+        raw.extend_from_slice(&chunk);
+    }
+    let raw = String::from_utf8(raw).map_err(|_| "invalid-response")?;
+    protocol::parse(&raw)?;
+    Ok(json!({"ok":(200..300).contains(&status),"status":status,"body":raw}))
+}
+fn migration_witness(reply: &Value, body: &Value) -> Result<(u64, String)> {
+    if reply.get("ok") != Some(&json!(true)) {
+        return Err("migration-upload-refused");
+    }
+    let status = protocol::parse(protocol::string(reply, "body")?)?;
+    exact(
+        &status,
+        &[
+            "associationId",
+            "revision",
+            "attemptId",
+            "targetAttachmentId",
+            "committed",
+            "committedAt",
+            "attachmentState",
+            "upload",
+        ],
+    )?;
+    for key in [
+        "associationId",
+        "attemptId",
+        "targetAttachmentId",
+        "revision",
+    ] {
+        if status.get(key) != body.get(key) {
+            return Err("migration-witness-mismatch");
+        }
+    }
+    if status.get("committed") != Some(&json!(false))
+        || status.get("committedAt") != Some(&Value::Null)
+        || !matches!(
+            status.get("attachmentState").and_then(Value::as_str),
+            Some("reserved" | "uploading")
+        )
+    {
+        return Err("migration-upload-refused");
+    }
+    let fields = status.get("upload").ok_or("migration-upload-refused")?;
+    exact(
+        fields,
+        &[
+            "declaredBytes",
+            "ciphertextSha256",
+            "thumbnailDeclaredBytes",
+            "thumbnailCiphertextSha256",
+        ],
+    )?;
+    let (bytes, hash, thumbnail) = protocol::migration_upload_fields(fields)?;
+    if body.get("thumbnail") == Some(&json!(true)) {
+        thumbnail.ok_or("migration-upload-refused")
+    } else {
+        Ok((bytes, hash))
+    }
+}
+
 impl Transfers {
     pub fn set_root(&mut self, root: PathBuf) {
         self.root = root;
@@ -223,6 +308,91 @@ impl Transfers {
         context.current()?;
         let op = protocol::string(&v, "op")?.to_string();
         let body = v.get("body").cloned().unwrap_or(json!({}));
+        if op.starts_with("archive.migration.") {
+            if !cfg!(target_os = "linux") {
+                return Err("unknown-op");
+            }
+            if op == "archive.migration.upload.begin" {
+                let status_path = protocol::migration_upload(&body)?;
+                return self.begin(
+                    context,
+                    op,
+                    body.clone(),
+                    done,
+                    move |ctx, id, rx, ready| {
+                        Box::pin(async move {
+                            ctx.current()?;
+                            let reply = tokio::time::timeout(DEADLINE, async {
+                                migration_response(
+                                    http.get(format!("{}{status_path}", ctx.session.origin))
+                                        .bearer_auth(&ctx.session.token)
+                                        .header("Accept", "application/json")
+                                        .send()
+                                        .await
+                                        .map_err(|_| "network")?,
+                                    16384,
+                                )
+                                .await
+                            })
+                            .await
+                            .map_err(|_| "transfer-timeout")??;
+                            ctx.current()?;
+                            if reply.get("ok") != Some(&json!(true)) {
+                                return Ok(reply);
+                            }
+                            let (bytes, hash) = migration_witness(&reply, &body)?;
+                            let target_id =
+                                protocol::string(&body, "targetAttachmentId")?.to_string();
+                            let thumbnail = body
+                                .get("thumbnail")
+                                .and_then(Value::as_bool)
+                                .ok_or("invalid-body")?;
+                            let path = format!(
+                                "/api/native/attachments/{target_id}/{}",
+                                if thumbnail { "thumbnail" } else { "upload" }
+                            );
+                            upload(
+                                ctx,
+                                http,
+                                path,
+                                bytes,
+                                id,
+                                rx,
+                                ready,
+                                Some((target_id, hash)),
+                            )
+                            .await
+                        })
+                    },
+                );
+            }
+            let (post, path, payload, cap) = protocol::archive_migration(&v)?;
+            return self.begin(context, op, body, done, move |ctx, _, _, _| {
+                Box::pin(async move {
+                    ctx.current()?;
+                    let reply = tokio::time::timeout(DEADLINE, async {
+                        let request = if post {
+                            http.post(format!("{}{path}", ctx.session.origin))
+                        } else {
+                            http.get(format!("{}{path}", ctx.session.origin))
+                        };
+                        let mut request = request
+                            .bearer_auth(&ctx.session.token)
+                            .header("Accept", "application/json");
+                        if let Some(payload) = payload {
+                            request = request
+                                .header("Content-Type", "application/json")
+                                .body(payload);
+                        }
+                        migration_response(request.send().await.map_err(|_| "network")?, cap).await
+                    })
+                    .await
+                    .map_err(|_| "transfer-timeout")??;
+                    ctx.current()?;
+                    Ok(reply)
+                })
+            });
+        }
         if op.starts_with("attachment.")
             && matches!(
                 op.as_str(),
@@ -282,7 +452,7 @@ impl Transfers {
                     return Err("invalid-body");
                 }
                 self.begin(context, op, body, done, move |ctx, id, rx, ready| {
-                    Box::pin(upload(ctx, http, path, bytes, id, rx, ready))
+                    Box::pin(upload(ctx, http, path, bytes, id, rx, ready, None))
                 })
             }
             "download.begin" => {
@@ -743,6 +913,7 @@ async fn upload(
     id: String,
     mut rx: mpsc::Receiver<Command>,
     ready: Completion,
+    migration: Option<(String, String)>,
 ) -> Result<Value> {
     let (tx, body_rx) = mpsc::channel::<Vec<u8>>(1);
     let stream = futures_util::stream::unfold(body_rx, |mut rx| async {
@@ -757,7 +928,26 @@ async fn upload(
         .header("Content-Length", bytes)
         .body(reqwest::Body::wrap_stream(stream));
     let mut network = AbortTask(tauri::async_runtime::spawn(async move {
-        response(request.send().await.map_err(|_| "network")?).await
+        let response = request.send().await.map_err(|_| "network")?;
+        let reply = if migration.is_some() {
+            migration_response(response, 16384).await?
+        } else {
+            self::response(response).await?
+        };
+        if let Some((target, hash)) = migration {
+            if reply.get("ok") == Some(&json!(true)) {
+                let receipt = protocol::parse(protocol::string(&reply, "body")?)?;
+                exact(&receipt, &["id", "state", "bytes", "sha256"])?;
+                if receipt.get("id") != Some(&json!(target))
+                    || receipt.get("state") != Some(&json!("uploading"))
+                    || receipt.get("bytes").and_then(Value::as_u64) != Some(bytes)
+                    || receipt.get("sha256") != Some(&json!(hash))
+                {
+                    return Err("migration-upload-receipt-mismatch");
+                }
+            }
+        }
+        Ok(reply)
     }));
     ready(Ok(json!({"ok":true,"transferId":id})));
     let mut seq = 0;
@@ -1797,5 +1987,263 @@ mod tests {
                 Ok(Some(expected))
             );
         }
+    }
+    fn migration_body() -> Value {
+        json!({"jobId":"a".repeat(64),"ordinal":0,"associationId":"11111111-1111-4111-8111-111111111111","attemptId":"22222222-2222-4222-8222-222222222222","targetAttachmentId":"migration_33333333-3333-4333-8333-333333333333","revision":1,"thumbnail":false})
+    }
+    fn migration_status() -> Value {
+        let body = migration_body();
+        json!({"associationId":body["associationId"],"attemptId":body["attemptId"],"targetAttachmentId":body["targetAttachmentId"],"revision":1,"committed":false,"committedAt":null,"attachmentState":"reserved","upload":{"declaredBytes":4,"ciphertextSha256":format!("{:x}",Sha256::digest(b"data")),"thumbnailDeclaredBytes":2,"thumbnailCiphertextSha256":format!("{:x}",Sha256::digest(b"tn"))}})
+    }
+    #[test]
+    fn archive_migration_upload_witness_refuses_identity_state_and_size_drift() {
+        let body = migration_body();
+        let reply = |v: Value| json!({"ok":true,"status":200,"body":v.to_string()});
+        assert!(protocol::migration_upload(&body)
+            .unwrap()
+            .ends_with("attachment-reservations?ordinal=0"));
+        assert_eq!(
+            migration_witness(&reply(migration_status()), &body)
+                .unwrap()
+                .0,
+            4
+        );
+        let mut thumbnail = body.clone();
+        thumbnail["thumbnail"] = json!(true);
+        assert_eq!(
+            migration_witness(&reply(migration_status()), &thumbnail)
+                .unwrap()
+                .0,
+            2
+        );
+        for key in [
+            "associationId",
+            "attemptId",
+            "targetAttachmentId",
+            "revision",
+        ] {
+            let mut value = migration_status();
+            value[key] = json!("different");
+            assert_eq!(
+                migration_witness(&reply(value), &body),
+                Err("migration-witness-mismatch")
+            );
+        }
+        for key in ["committed", "committedAt", "attachmentState", "upload"] {
+            let mut value = migration_status();
+            value[key] = if key == "committedAt" {
+                json!("2026-01-01T00:00:00Z")
+            } else {
+                Value::Null
+            };
+            assert!(migration_witness(&reply(value), &body).is_err());
+        }
+        let mut value = migration_status();
+        value["upload"]["declaredBytes"] = json!(16777216);
+        assert!(migration_witness(&reply(value), &body).is_err());
+        let mut invalid = body.clone();
+        invalid["bytes"] = json!(1);
+        assert!(protocol::migration_upload(&invalid).is_err());
+    }
+    fn migration_server(
+        replies: Vec<(u16, Vec<u8>)>,
+        delay: Duration,
+    ) -> (String, std::thread::JoinHandle<Vec<Vec<u8>>>) {
+        migration_server_gated(replies, delay, None)
+    }
+    fn migration_server_gated(
+        replies: Vec<(u16, Vec<u8>)>,
+        delay: Duration,
+        mut gate: Option<(oneshot::Sender<Vec<u8>>, std::sync::mpsc::Receiver<()>)>,
+    ) -> (String, std::thread::JoinHandle<Vec<Vec<u8>>>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let thread = std::thread::spawn(move || {
+            let mut requests = Vec::new();
+            for (status, body) in replies {
+                let until = std::time::Instant::now() + Duration::from_secs(6);
+                let mut socket = loop {
+                    match listener.accept() {
+                        Ok((socket, _)) => break socket,
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            assert!(std::time::Instant::now() < until);
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        Err(e) => panic!("{e}"),
+                    }
+                };
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut raw = Vec::new();
+                let mut buf = [0; 4096];
+                loop {
+                    let n = socket.read(&mut buf).unwrap();
+                    assert!(n > 0);
+                    raw.extend_from_slice(&buf[..n]);
+                    if let Some(end) = raw.windows(4).position(|v| v == b"\r\n\r\n") {
+                        let headers = String::from_utf8_lossy(&raw[..end]).to_ascii_lowercase();
+                        let length = headers
+                            .lines()
+                            .find_map(|line| line.strip_prefix("content-length: "))
+                            .map(|v| v.parse::<usize>().unwrap())
+                            .unwrap_or(0);
+                        if raw.len() >= end + 4 + length {
+                            break;
+                        }
+                    }
+                }
+                if let Some((observed, release)) = gate.take() {
+                    observed.send(raw.clone()).unwrap();
+                    release.recv_timeout(Duration::from_secs(3)).unwrap();
+                }
+                requests.push(raw);
+                std::thread::sleep(delay);
+                let header=format!("HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",body.len());
+                if socket.write_all(header.as_bytes()).is_ok() {
+                    let _ = socket.write_all(&body);
+                }
+            }
+            requests
+        });
+        (origin, thread)
+    }
+    #[tokio::test]
+    async fn archive_migration_response_counts_actual_bytes_and_strict_json() {
+        for (status, raw, cap, accepted) in [
+            (
+                200,
+                json!({"padding":"x".repeat(65536)})
+                    .to_string()
+                    .into_bytes(),
+                262144,
+                true,
+            ),
+            (
+                200,
+                json!({"padding":"x".repeat(65536)})
+                    .to_string()
+                    .into_bytes(),
+                65536,
+                false,
+            ),
+            (
+                200,
+                json!({"padding":"x".repeat(262144)})
+                    .to_string()
+                    .into_bytes(),
+                262144,
+                false,
+            ),
+            (
+                500,
+                json!({"padding":"x".repeat(4096)}).to_string().into_bytes(),
+                262144,
+                false,
+            ),
+            (200, b"{\"a\":1,\"a\":2}".to_vec(), 262144, false),
+            (200, vec![0xff], 262144, false),
+        ] {
+            let (origin, server) = migration_server(vec![(status, raw)], Duration::ZERO);
+            let response = reqwest::Client::new().get(origin).send().await.unwrap();
+            assert_eq!(migration_response(response, cap).await.is_ok(), accepted);
+            server.join().unwrap();
+        }
+    }
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn archive_migration_dispatch_streams_witness_bytes_and_releases_capability() {
+        let receipt = json!({"id":migration_body()["targetAttachmentId"],"state":"uploading","bytes":4,"sha256":format!("{:x}",Sha256::digest(b"data"))});
+        let (origin, server) = migration_server(
+            vec![
+                (200, migration_status().to_string().into_bytes()),
+                (200, receipt.to_string().into_bytes()),
+            ],
+            Duration::from_millis(40),
+        );
+        let mut ctx = context();
+        ctx.session.origin = origin;
+        let files = Transfers::default();
+        let ready = call(
+            &files,
+            &ctx,
+            "archive.migration.upload.begin",
+            migration_body(),
+        )
+        .await
+        .unwrap();
+        let id = ready["transferId"].as_str().unwrap();
+        assert_eq!(
+            call(
+                &files,
+                &ctx,
+                "upload.write",
+                json!({"transferId":id,"seq":0,"data":STANDARD.encode(b"data")})
+            )
+            .await
+            .unwrap(),
+            json!({"ok":true})
+        );
+        let result = call(
+            &files,
+            &ctx,
+            "upload.finish",
+            json!({"transferId":id,"seq":1}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            protocol::parse(result["body"].as_str().unwrap()).unwrap(),
+            receipt
+        );
+        until(|| files.entries.lock().unwrap().is_empty()).await;
+        let requests = server.join().unwrap();
+        let headers = String::from_utf8_lossy(&requests[1]).to_ascii_lowercase();
+        assert!(headers.contains("content-length: 4"));
+        assert!(requests[1].ends_with(b"data"));
+        assert!(String::from_utf8_lossy(&requests[0]).contains("attachment-reservations?ordinal=0"));
+    }
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn archive_migration_control_retirement_cancels_without_late_owner_reply() {
+        let (accepted, observed) = oneshot::channel();
+        let (release, held) = std::sync::mpsc::channel();
+        let (origin, server) = migration_server_gated(
+            vec![(200, b"{}".to_vec())],
+            Duration::ZERO,
+            Some((accepted, held)),
+        );
+        let mut ctx = context();
+        ctx.session.origin = origin;
+        let files = Transfers::default();
+        let (done, rx) = completion();
+        files
+            .dispatch(
+                ctx,
+                reqwest::Client::new(),
+                json!({"op":"archive.migration.jobs","body":{"limit":1}}),
+                done,
+            )
+            .unwrap();
+        let request = tokio::time::timeout(Duration::from_secs(3), observed)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(String::from_utf8_lossy(&request)
+            .starts_with("GET /api/native/portability/import/jobs?limit=1 HTTP/1.1\r\n"));
+        assert_eq!(files.entries.lock().unwrap().len(), 1);
+        files.cancel_all();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(3), rx)
+                .await
+                .unwrap()
+                .unwrap(),
+            Err("cancelled")
+        );
+        assert!(files.entries.lock().unwrap().is_empty());
+        release.send(()).unwrap();
+        assert_eq!(server.join().unwrap(), vec![request]);
     }
 }

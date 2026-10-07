@@ -36,6 +36,7 @@ export type SessionMeta = {
 export type Hello = {
 	archiveExport?: boolean;
 	archiveInput?: boolean;
+	archiveMigration?: boolean;
 	taskLinks?: boolean;
 	linkRefused?: boolean;
 	pushProvider?: NativePushState["provider"];
@@ -89,6 +90,13 @@ export type AttachmentOp =
 	| "upload.begin"
 	| "upload.write"
 	| "upload.finish"
+	| "archive.migration.jobs"
+	| "archive.migration.parents"
+	| "archive.migration.inspect"
+	| "archive.migration.status"
+	| "archive.migration.reserve"
+	| "archive.migration.recover"
+	| "archive.migration.upload.begin"
 	| "archive.input.pick"
 	| "archive.input.read"
 	| "archive.input.cancelPending"
@@ -261,6 +269,8 @@ function parseHello(reply: Reply): Hello {
 	)
 		throw new NativeError("invalid-reply");
 	if (
+		(reply.archiveMigration !== undefined &&
+			typeof reply.archiveMigration !== "boolean") ||
 		(reply.archiveInput !== undefined &&
 			typeof reply.archiveInput !== "boolean") ||
 		(reply.archiveExport !== undefined &&
@@ -270,6 +280,9 @@ function parseHello(reply: Reply): Hello {
 	)
 		throw new NativeError("invalid-reply");
 	return {
+		...(reply.archiveMigration === undefined
+			? {}
+			: { archiveMigration: reply.archiveMigration }),
 		...(reply.archiveInput === undefined
 			? {}
 			: { archiveInput: reply.archiveInput }),
@@ -473,11 +486,13 @@ export function bridgeState(): Hello {
 		linkRefused,
 		archiveExport,
 		archiveInput,
+		archiveMigration,
 	} = requireState();
 	return {
 		...(pushProvider === undefined ? {} : { pushProvider }),
 		...(archiveExport === undefined ? {} : { archiveExport }),
 		...(archiveInput === undefined ? {} : { archiveInput }),
+		...(archiveMigration === undefined ? {} : { archiveMigration }),
 		...(taskLinks === undefined ? {} : { taskLinks }),
 		...(linkRefused === undefined ? {} : { linkRefused }),
 		gen,

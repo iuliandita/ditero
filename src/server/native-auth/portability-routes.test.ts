@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UserContextError } from "../../db/user-context.ts";
 import { makeGuards, type Session } from "../guards.ts";
@@ -26,6 +26,10 @@ const mocks = vi.hoisted(() => ({
 	parents: vi.fn(),
 	inspect: vi.fn(),
 	status: vi.fn(),
+	nativeStatus: vi.fn(),
+	transaction: vi.fn(),
+	parentEvidence: vi.fn(),
+	writeAccess: vi.fn(),
 	reserve: vi.fn(),
 	recover: vi.fn(),
 	apply: vi.fn(),
@@ -33,20 +37,27 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../portability/import-plan-store.ts", async (original) => ({
 	...(await original<object>()),
 	listCompletedAttachmentImportJobs: mocks.jobs,
+	importTransaction: mocks.transaction,
 }));
 vi.mock("../portability/attachment-migration-parents.ts", () => ({
 	getAttachmentMigrationParents: mocks.parents,
+	readAttachmentMigrationParentOnClient: mocks.parentEvidence,
 }));
 vi.mock("../portability/attachment-migration-store.ts", async (original) => ({
 	...(await original<object>()),
 	inspectAttachmentMigration: mocks.inspect,
 	getAttachmentMigrationStatus: mocks.status,
+	getNativeAttachmentMigrationStatus: mocks.nativeStatus,
 	reserveAttachmentMigration: mocks.reserve,
 	recoverAttachmentMigration: mocks.recover,
 }));
 vi.mock("../portability/import-apply-store.ts", async (original) => ({
 	...(await original<object>()),
 	applyImportBatch: mocks.apply,
+}));
+vi.mock("../attachments/quota.ts", async (original) => ({
+	...(await original<object>()),
+	validateAttachmentWrite: mocks.writeAccess,
 }));
 vi.mock("./session.ts", () => ({ authenticateNative: mocks.auth }));
 vi.mock("../portability/export.ts", async (original) => ({
@@ -89,6 +100,7 @@ beforeEach(() => {
 		mocks.parents,
 		mocks.inspect,
 		mocks.status,
+		mocks.nativeStatus,
 		mocks.reserve,
 		mocks.recover,
 	])
@@ -285,7 +297,7 @@ describe("native attachment migration", () => {
 		for (const [action, operation] of [
 			["attachment-parents?afterOrdinal=-1&limit=2", mocks.parents],
 			["attachment-migrations?ordinal=0", mocks.inspect],
-			["attachment-reservations?ordinal=0", mocks.status],
+			["attachment-reservations?ordinal=0", mocks.nativeStatus],
 		] as const) {
 			const response = await app.handle(migrationRequest(action));
 			expect(response.status).toBe(200);
@@ -497,5 +509,228 @@ describe("native attachment migration", () => {
 		abort.abort();
 		expect((await pending).status).toBe(408);
 		expect(mocks.reserve).not.toHaveBeenCalled();
+	});
+});
+
+describe("authoritative native migration upload witness", () => {
+	it("routes native status to its witness handler and keeps browser status exact", async () => {
+		const { app } = setup();
+		mocks.nativeStatus.mockResolvedValue({
+			revision: 1,
+			upload: { declaredBytes: 50 },
+		});
+		mocks.status.mockResolvedValue({ revision: 1 });
+		expect(
+			await (
+				await app.handle(migrationRequest("attachment-reservations?ordinal=0"))
+			).json(),
+		).toEqual({ revision: 1, upload: { declaredBytes: 50 } });
+		expect(
+			await (
+				await app.handle(
+					request(
+						`/api/portability/import/plans/${jobId}/attachment-reservations?ordinal=0`,
+					),
+				)
+			).json(),
+		).toEqual({ revision: 1 });
+		expect(mocks.nativeStatus).toHaveBeenCalledTimes(1);
+		expect(mocks.status).toHaveBeenCalledTimes(1);
+	});
+	async function fixture() {
+		const actual = await vi.importActual<
+			typeof import("../portability/attachment-migration-store.ts")
+		>("../portability/attachment-migration-store.ts");
+		const sourceAttachment = { id: "source-file" };
+		const p = {
+			id: "association",
+			owner_user_id: "a",
+			origin_job_id: jobId,
+			origin_item_ordinal: 0,
+			import_source_id: "source",
+			source_attachment_id: "source-file",
+			source_metadata: sourceAttachment,
+			document_digest: jobId,
+			mapping_digest: jobId,
+			plan_digest: jobId,
+			source_fingerprint: jobId,
+			target_workspace_id: "workspace",
+			target_parent_kind: "list",
+			target_parent_id: "list",
+			revision: 1,
+			current_attempt_id: "attempt",
+			committed_attempt_id: null as string | null,
+			committed_at: null as Date | null,
+		};
+		const a = {
+			id: "attempt",
+			association_id: p.id,
+			owner_user_id: "a",
+			revision: 1,
+			target_attachment_id: migrationBody.prepared.id,
+			job_id: jobId,
+			key_version: 1,
+			filename_ciphertext: "name",
+			content_type_ciphertext: "type",
+			dek_wrapped: "wrapped",
+			declared_bytes: "50",
+			ciphertext_sha256: "c".repeat(64),
+			thumbnail_declared_bytes: null as string | null,
+			thumbnail_ciphertext_sha256: null as string | null,
+		};
+		const f = {
+			id: a.target_attachment_id,
+			uploaded_by: "a",
+			workspace_id: "workspace",
+			parent_kind: "list",
+			parent_id: "list",
+			key_version: 1,
+			filename_ciphertext: "name",
+			content_type_ciphertext: "type",
+			dek_wrapped: "wrapped",
+			declared_bytes: "50",
+			observed_bytes: null as string | null,
+			ciphertext_sha256: null as string | null,
+			thumbnail_declared_bytes: null as string | null,
+			thumbnail_observed_bytes: null,
+			thumbnail_ciphertext_sha256: null,
+			deleted_at: null,
+			committed_at: null,
+			state: "reserved",
+			reservation_expires_at: new Date(Date.now() + 60000),
+		};
+		let missing = false;
+		const query = vi.fn(async (sql: string) => {
+			if (sql.startsWith("select * from attachment_migration_attempt"))
+				return { rows: [a] };
+			if (sql.startsWith("select * from attachment_migration"))
+				return { rows: [p] };
+			if (sql.startsWith("select * from attachment "))
+				return { rows: missing ? [] : [f] };
+			if (sql.startsWith("select m.role")) return { rows: [{ role: "owner" }] };
+			if (sql.includes("list_id"))
+				return { rows: [{ list_id: "list", task_id: null, comment_id: null }] };
+			if (sql.includes("source_key"))
+				return { rows: [{ source_key: "source-list" }] };
+			if (
+				sql.startsWith("select id from workspace") ||
+				sql.startsWith("select id from list")
+			)
+				return { rowCount: 1, rows: [{ id: "list" }] };
+			throw new Error(`Unexpected fixture query: ${sql}`);
+		});
+		const client = { query } as unknown as PoolClient;
+		mocks.transaction.mockImplementation(
+			async (
+				_pool: Pool,
+				_owner: string,
+				run: (client: PoolClient) => Promise<unknown>,
+			) => run(client),
+		);
+		mocks.writeAccess.mockResolvedValue(null);
+		mocks.parentEvidence.mockResolvedValue({
+			sourceId: p.import_source_id,
+			documentDigest: jobId,
+			mappingDigest: jobId,
+			planDigest: jobId,
+			sourceAttachment,
+			parent: {
+				destinationParent: {
+					kind: "list",
+					id: "list",
+					workspaceId: "workspace",
+				},
+				blockedReason: null,
+				sourceAttachmentFingerprint: jobId,
+			},
+		});
+		return {
+			p,
+			a,
+			f,
+			query,
+			missing: () => {
+				missing = true;
+			},
+			read: (signal?: AbortSignal) =>
+				actual.getNativeAttachmentMigrationStatus(pool, "a", jobId, 0, {
+					signal,
+				}),
+			browser: () => actual.getAttachmentMigrationStatus(pool, "a", jobId, 0),
+		};
+	}
+	it("derives sizes from retained attempt and locks current writer context while leaving browser status unchanged", async () => {
+		const x = await fixture();
+		x.a.thumbnail_declared_bytes = x.f.thumbnail_declared_bytes = "20";
+		x.a.thumbnail_ciphertext_sha256 = "d".repeat(64);
+		const value = await x.read();
+		expect(value.upload).toEqual({
+			declaredBytes: 50,
+			ciphertextSha256: "c".repeat(64),
+			thumbnailDeclaredBytes: 20,
+			thumbnailCiphertextSha256: "d".repeat(64),
+		});
+		expect(mocks.writeAccess).toHaveBeenCalledWith(
+			expect.anything(),
+			"a",
+			{
+				workspaceId: "workspace",
+				parentKind: "list",
+				parentId: "list",
+				keyVersion: 1,
+			},
+			{ lockWorkspace: true, lockContext: true },
+		);
+		expect(
+			x.query.mock.calls.some(([sql]) => sql.includes("for update nowait")),
+		).toBe(true);
+		expect(mocks.parentEvidence).toHaveBeenCalledTimes(2);
+		const { upload: _upload, ...status } = value;
+		expect(await x.browser()).toEqual(status);
+	});
+	it.each([
+		"committed",
+		"expired",
+		"missing",
+		"aborted",
+	])("returns null for %s without granting upload", async (kind) => {
+		const x = await fixture();
+		if (kind === "committed") {
+			x.p.committed_attempt_id = x.a.id;
+			x.p.committed_at = new Date();
+		}
+		if (kind === "expired") x.f.reservation_expires_at = new Date(0);
+		if (kind === "missing") x.missing();
+		if (kind === "aborted") x.f.state = "aborted";
+		expect((await x.read()).upload).toBeNull();
+		expect(mocks.writeAccess).not.toHaveBeenCalled();
+	});
+	it.each([
+		"size",
+		"thumbnail",
+		"receipt",
+		"ordinary",
+		"source",
+		"authority",
+	])("refuses %s drift rather than authorizing caller bytes", async (kind) => {
+		const x = await fixture();
+		if (kind === "size")
+			x.a.declared_bytes = x.f.declared_bytes = "9007199254740992";
+		if (kind === "thumbnail")
+			x.a.thumbnail_declared_bytes = x.f.thumbnail_declared_bytes = "20";
+		if (kind === "receipt") x.a.revision = 2;
+		if (kind === "ordinary") x.f.declared_bytes = "51";
+		if (kind === "source") x.p.source_fingerprint = "f".repeat(64);
+		if (kind === "authority")
+			mocks.writeAccess.mockResolvedValue("workspace-key-unavailable");
+		await expect(x.read()).rejects.toBeInstanceOf(ImportPlanStoreError);
+	});
+	it("refuses cancellation before acquiring retained state", async () => {
+		const x = await fixture();
+		await expect(x.read(AbortSignal.abort())).rejects.toMatchObject({
+			code: "import-cancelled",
+			status: 408,
+		});
+		expect(x.query).not.toHaveBeenCalled();
 	});
 });

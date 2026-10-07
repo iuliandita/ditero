@@ -762,3 +762,13 @@ test("archive input capability preserves explicit true/false and rejects malform
 	Object.assign(snapshot, { archiveInput: "true" });
 	await expect(readBridgeState()).rejects.toThrow("invalid-reply");
 });
+
+test("migration capability validates and preserves host metadata", async () => {
+	snapshot.archiveMigration = true;
+	expect((await connectBridge()).archiveMigration).toBe(true);
+	expect(bridgeState().archiveMigration).toBe(true);
+	snapshot.archiveMigration = false;
+	expect((await readBridgeState()).archiveMigration).toBe(false);
+	Object.assign(snapshot, { archiveMigration: "true" });
+	await expect(readBridgeState()).rejects.toThrow("invalid-reply");
+});

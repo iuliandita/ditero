@@ -102,6 +102,12 @@ Linux integration code can read an OS-selected JSON document through
 `archive.input.*`, with a 32 MiB limit and strict UTF-8 validation. This read-only
 capability does not enable native import or recovery.
 
+The Linux `archiveMigration` development capability provides fixed job, parent,
+reservation, status, recovery, and ciphertext upload operations. Upload sizes and
+hashes come from a fresh server witness; uncertain writes require reconciliation
+before another write. These transport primitives do not enable archive import or
+recovery in the app interface.
+
 Use Bun 1.4.2 and Rust 1.98.1, matching the CI toolchain. The official Tauri CLI,
 API, and Rust runtime are pinned to 2.12.1. Install the
 [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/) on your

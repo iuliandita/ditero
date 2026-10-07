@@ -145,6 +145,50 @@ const receiptSchema = z.strictObject({
 	bytes: z.number().int().positive(),
 	sha256: hash,
 });
+export const migrationBindingSchema = bindingSchema;
+export const migrationJobsPageSchema = z.strictObject({
+	items: z
+		.array(
+			bindingSchema.extend({
+				label: z
+					.string()
+					.max(100)
+					.refine((v) => !v.includes("\0") && v.isWellFormed()),
+			}),
+		)
+		.max(64),
+	nextAfterJobId: hash.nullable(),
+});
+export type MigrationJobsPage = z.infer<typeof migrationJobsPageSchema>;
+const uploadWitnessSchema = z
+	.strictObject({
+		declaredBytes: bytes,
+		ciphertextSha256: hash,
+		thumbnailDeclaredBytes: bytes.nullable(),
+		thumbnailCiphertextSha256: hash.nullable(),
+	})
+	.refine(
+		(v) =>
+			v.declaredBytes + (v.thumbnailDeclaredBytes ?? 0) <= 16777216 &&
+			(v.thumbnailDeclaredBytes === null) ===
+				(v.thumbnailCiphertextSha256 === null),
+	);
+export function parseNativeMigrationStatus(value: unknown) {
+	return reservationSchema
+		.extend({ upload: uploadWitnessSchema.nullable() })
+		.refine(
+			(v) =>
+				v.committed === (v.committedAt !== null) &&
+				(!v.committed ||
+					["committed", "deleting", null].includes(v.attachmentState)) &&
+				(v.upload === null ||
+					(!v.committed &&
+						v.attemptId !== null &&
+						v.targetAttachmentId !== null &&
+						["reserved", "uploading"].includes(v.attachmentState ?? ""))),
+		)
+		.parse(value);
+}
 export type MigrationInspection = z.infer<typeof inspectionSchema>;
 export type MigrationRecoveryRequest = z.infer<typeof recoveryRequestSchema>;
 export type MigrationRecovery = z.infer<typeof recoverySchema>;
