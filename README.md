@@ -23,11 +23,13 @@ are included, with no subscriptions or paid feature unlocks.
 [Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Brand assets](assets/brand/README.md)
 
 > **Alpha.** The first release was `v0.0.1-alpha.1`; the current published alpha is
-> [`v0.0.1-alpha.7`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.7).
-> Alpha 7 lets Compose deployments enable encrypted attachments explicitly.
-> The release pipeline packages server
-> containers, Helm/Compose deployment files, desktop installers and signed Android
-> downloads. Native platform qualification remains in progress; Windows builds are
+> [`v0.0.1-alpha.8`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.8).
+> Alpha 8 adds paired JSON and encrypted attachment archive export on Linux desktop
+> and fixes shared workspace key grants under the restricted database role. Each
+> export file is limited to 32 MiB; archive import still requires the browser.
+> The release pipeline packages server containers, Helm/Kustomize/Compose deployment
+> files, desktop installers and signed Android downloads. Native platform qualification
+> remains in progress; Windows builds are
 > unsigned and macOS builds use ad-hoc signatures. Breaking changes are expected
 > before `v1.0.0`. See [release instructions](RELEASING.md) and
 > [published downloads](https://github.com/iuliandita/ditero/releases).
@@ -136,7 +138,7 @@ database passwords or encryption keys for an existing volume. The file is gitign
 mounted secrets with `_FILE` variables are also supported.
 
 That pulls `ghcr.io/iuliandita/ditero:nightly` and `:nightly-zero`. Add `--build`
-to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.0.1-alpha.7`
+to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.0.1-alpha.8`
 to run the current published alpha with matching app and Zero tags. Commit-specific
 nightly tags use different suffix ordering for app and Zero, so pin those two
 service images separately in a Compose override; see [image tags](RELEASING.md#channels).
