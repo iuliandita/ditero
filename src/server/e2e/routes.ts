@@ -16,7 +16,11 @@ import {
 	requestWorkspaceKey,
 	submitGrant,
 } from "./grants.ts";
-import { type RotationFailure, rotateIdentity } from "./identity-rotation.ts";
+import {
+	lockIdentityExclusive,
+	type RotationFailure,
+	rotateIdentity,
+} from "./identity-rotation.ts";
 import {
 	e2eBlobSchema as blob,
 	e2ePublicKeySchema as publicKey,
@@ -361,10 +365,9 @@ export function e2eRoutes<const BasePath extends E2EBasePath>(
 
 				const userId = session.user.id;
 				return await withLiveUserContext(pool, userId, async (client) => {
-					// Insert-then-read, not read-then-insert: two concurrent first
-					// enrollments both reach the insert, one wins, and both then read
-					// the same winning row. The read-first order would let both decide
-					// they are the first and race on the write.
+					await lockIdentityExclusive(client, userId);
+					// Serialize enrollment with identity readers and rotation; repeated
+					// enrollment still returns the existing identity unchanged.
 					// One statement across both tables, so a first enrolment cannot
 					// commit an identity whose wraps are missing -- a state with no
 					// recovery path, since the public key is then immutable and no

@@ -1,15 +1,44 @@
 import type { PoolClient } from "pg";
 
-/**
- * SQL predicate: the recipient's CURRENT identity is `$publicKeyParam`.
- *
- * Returned as a fragment rather than run as its own query because a grant must
- * carry this check INSIDE its write. The share lock also stays through commit:
- * an identity rotation that runs second then sees and rewraps this grant,
- * instead of scanning before the uncommitted row becomes visible. Task 15's
- * grant endpoint is the consumer; the fragment ships with rotation because
- * rotation is what makes a key stale.
- */
+// Identity readers and writers serialize independently of user_key UPDATE RLS.
+// Acquire in a separate statement before identity reads, under READ COMMITTED.
+async function lockIdentities(
+	client: PoolClient,
+	userIds: string[],
+	exclusive: boolean,
+): Promise<void> {
+	const keys = await client.query<{ lock_key: string }>(
+		`select distinct hashtextextended('ditero:e2e:identity:' || user_id, 0) as lock_key
+		 from unnest($1::text[]) as recipients(user_id)
+		 order by lock_key`,
+		[userIds],
+	);
+	// Order the numeric keys, not user IDs: hash collisions must not invert locks.
+	for (const { lock_key } of keys.rows) {
+		await client.query(
+			exclusive
+				? "select pg_advisory_xact_lock($1::bigint)"
+				: "select pg_advisory_xact_lock_shared($1::bigint)",
+			[lock_key],
+		);
+	}
+}
+
+export async function lockIdentityShared(
+	client: PoolClient,
+	userIds: string[],
+): Promise<void> {
+	await lockIdentities(client, userIds, false);
+}
+
+export async function lockIdentityExclusive(
+	client: PoolClient,
+	userId: string,
+): Promise<void> {
+	await lockIdentities(client, [userId], true);
+}
+
+/** Caller holds the recipient's shared identity lock through this write. */
 export function activeRecipientKeyGuard(
 	userIdParam: number,
 	publicKeyParam: number,
@@ -19,8 +48,7 @@ export function activeRecipientKeyGuard(
 		where uk.user_id = $${userIdParam}
 		  and uk.public_key = $${publicKeyParam}
 		  and uk.retired_at is null
-		  and uk.state = 'ready'
-		for share of uk)`;
+		  and uk.state = 'ready')`;
 }
 
 export type Rewrap = {
@@ -67,6 +95,7 @@ export async function rotateIdentity(
 	userId: string,
 	input: RotationInput,
 ): Promise<RotationResult> {
+	await lockIdentityExclusive(client, userId);
 	// Wait for grants before scanning wraps. Locking only at retirement lets
 	// a grant commit after the scan and leaves its wrap on the retired key.
 	const current = await client.query<{ id: string; public_key: string }>(

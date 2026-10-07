@@ -9,6 +9,8 @@ import {
 } from "vitest";
 import zeroConfig from "../../drizzle-zero.config.ts";
 import { withUserContext } from "../../src/db/user-context.ts";
+import { submitGrant } from "../../src/server/e2e/grants.ts";
+import { rotateWorkspace } from "../../src/server/e2e/rotation.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 7. The key tables are backend-owned and must never be readable
@@ -44,11 +46,12 @@ beforeAll(async () => {
 			`grant select, insert, update, delete on ${table} to ditero_runtime_test`,
 		);
 	}
+	await pool.query('grant select, update on "user" to ditero_runtime_test');
 	// Key-table policies read these ordinary tables. Production's default-table
 	// grants already include them; the hand-built non-owner fixture must mirror
 	// that or PostgreSQL fails policy planning before evaluating the predicate.
 	await pool.query(
-		"grant select on membership, workspace to ditero_runtime_test",
+		"grant select, update on membership, workspace to ditero_runtime_test",
 	);
 	runtimePool.on("connect", (client) => {
 		void client.query("set role ditero_runtime_test");
@@ -339,6 +342,120 @@ describe("grant writes cross the owner boundary under RLS", () => {
 			`insert into membership (id, user_id, workspace_id, role)
 			 values ('m_bob', 'u_bob', 'ws_alice', 'member')`,
 		);
+	});
+
+	test("submitGrant grants to a co-member under the non-bypassing runtime role", async () => {
+		await asAlice(insertUserKey("uk_alice", "u_alice"));
+		await asBob(insertUserKey("uk_bob", "u_bob"));
+		await asAlice(`insert into workspace_key (id, workspace_id, version, commitment, minted_by)
+			values ('wk_runtime', 'ws_alice', 1, 'commitment', 'u_alice')`);
+		await asAlice(insertMembershipKey("mk_owner", "u_alice"));
+		await asBob(`insert into key_grant_request
+			(id, membership_id, user_id, workspace_id, requested_version)
+			values ('kgr_runtime', 'm_bob', 'u_bob', 'ws_alice', 1)`);
+		const input = {
+			requestId: "kgr_runtime",
+			recipientPublicKey: "pk_a",
+			enc: "enc",
+			ciphertext: "ct",
+		};
+		const result = await withUserContext(
+			runtimePool,
+			"u_alice",
+			async (client) => {
+				const role = await client.query(
+					"select rolsuper, rolbypassrls from pg_roles where rolname=current_user",
+				);
+				expect(role.rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
+				return submitGrant(client, "u_alice", input);
+			},
+		);
+		expect(result).toEqual({
+			ok: true,
+			requestId: input.requestId,
+			outcome: "granted",
+		});
+		expect(
+			(
+				await asBob(
+					"select state from key_grant_request where id='kgr_runtime'",
+				)
+			).rows,
+		).toEqual([{ state: "ready" }]);
+		expect(
+			(
+				await asBob(
+					"select recipient_public_key from membership_key where membership_id='m_bob'",
+				)
+			).rows,
+		).toEqual([{ recipient_public_key: "pk_a" }]);
+		expect(
+			await withUserContext(runtimePool, "u_alice", (client) =>
+				submitGrant(client, "u_alice", input),
+			),
+		).toEqual({ ok: true, requestId: input.requestId, outcome: "already" });
+	});
+
+	test("workspace rotation grants every enrolled member under the non-bypassing runtime role", async () => {
+		await asAlice(insertUserKey("uk_alice", "u_alice"));
+		await asBob(insertUserKey("uk_bob", "u_bob"));
+		await asAlice(`insert into workspace_key (id, workspace_id, version, commitment, minted_by)
+			values ('wk_runtime', 'ws_alice', 1, 'commitment', 'u_alice')`);
+		await asAlice(insertMembershipKey("mk_owner", "u_alice"));
+		await pool.query(
+			"update workspace set rotation_required=true where id='ws_alice'",
+		);
+		const result = await withUserContext(
+			runtimePool,
+			"u_alice",
+			async (client) => {
+				const role = await client.query(
+					"select rolsuper, rolbypassrls from pg_roles where rolname=current_user",
+				);
+				expect(role.rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
+				return rotateWorkspace(client, "u_alice", "ws_alice", {
+					previousVersion: 1,
+					commitment: "next-commitment",
+					grants: [
+						{
+							membershipId: "m_alice",
+							userId: "u_alice",
+							recipientPublicKey: "pk_a",
+							enc: "enc_a",
+							ciphertext: "ct_a",
+						},
+						{
+							membershipId: "m_bob",
+							userId: "u_bob",
+							recipientPublicKey: "pk_a",
+							enc: "enc_b",
+							ciphertext: "ct_b",
+						},
+					],
+				});
+			},
+		);
+		expect(result).toEqual({
+			ok: true,
+			workspaceId: "ws_alice",
+			version: 2,
+			commitment: "next-commitment",
+			outcome: "rotated",
+		});
+		expect(
+			(
+				await asBob(
+					"select key_version, recipient_public_key from membership_key where membership_id='m_bob'",
+				)
+			).rows,
+		).toEqual([{ key_version: 2, recipient_public_key: "pk_a" }]);
+		expect(
+			(
+				await asAlice(
+					"select active from workspace_key where workspace_id='ws_alice' and version=1",
+				)
+			).rows,
+		).toEqual([{ active: false }]);
 	});
 
 	const grantRow = (id: string, grantedBy: string) =>

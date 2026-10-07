@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { lockIdentityShared } from "./identity-rotation.ts";
 
 const MINT_ROLES = new Set(["owner", "admin"]);
 
@@ -110,13 +111,14 @@ async function lockRecipientIdentities(
 	client: PoolClient,
 	workspaceId: string,
 ): Promise<void> {
-	await client.query(
-		`select uk.id from user_key uk
-		 join membership m on m.user_id = uk.user_id
-		 where m.workspace_id = $1
-		   and uk.state = 'ready' and uk.retired_at is null
-		 for share of uk`,
+	const members = await client.query<{ user_id: string }>(
+		"select user_id from membership where workspace_id = $1",
 		[workspaceId],
+	);
+	// Include unenrolled members so first enrollment cannot escape serialization.
+	await lockIdentityShared(
+		client,
+		members.rows.map((member) => member.user_id),
 	);
 }
 
