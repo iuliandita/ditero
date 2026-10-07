@@ -2543,6 +2543,7 @@
 	"archive_export_mismatch": "Las frases de contraseña no coinciden.",
 	"archive_export_prepare": "Preparar archivo",
 	"archive_export_pair_note": "Descarga ambos archivos y guárdalos juntos. El archivo de contenido incluye contenido legible; el archivo de adjuntos está protegido con tu frase de contraseña.",
+	"archive_export_saved": "Guardado",
 	"archive_export_download_content": "Descargar contenido",
 	"archive_export_download_files": "Descargar archivos",
 	"archive_export_downloading": "Descargando los archivos cifrados seleccionados...",

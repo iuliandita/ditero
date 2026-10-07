@@ -2496,6 +2496,7 @@
 	"archive_export_mismatch": "Die Passphrasen stimmen nicht überein.",
 	"archive_export_prepare": "Archiv vorbereiten",
 	"archive_export_pair_note": "Lade beide Dateien herunter und bewahre sie zusammen auf. Die Inhaltsdatei enthält lesbare Inhalte; das Dateiarchiv ist durch deine Archiv-Passphrase geschützt.",
+	"archive_export_saved": "Gespeichert",
 	"archive_export_download_content": "Inhalte herunterladen",
 	"archive_export_download_files": "Dateien herunterladen",
 	"archive_export_downloading": "Ausgewählte verschlüsselte Dateien werden heruntergeladen...",

@@ -497,7 +497,8 @@ pub fn attachment(v: &Value) -> Result<(bool, String, Option<String>)> {
     ))
 }
 pub fn file_operation(op: &str) -> bool {
-    op.starts_with("attachment.")
+    op.starts_with("archive.export.")
+        || op.starts_with("attachment.")
         || op.starts_with("upload.")
         || op.starts_with("download.")
         || op.starts_with("stage.")

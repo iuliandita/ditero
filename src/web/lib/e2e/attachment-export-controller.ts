@@ -25,7 +25,7 @@ import {
 } from "./attachment-archive-export.ts";
 import type { Deriver } from "./derive.ts";
 import type { KeyringContextValue } from "./KeyringProvider.tsx";
-import { browserE2eRuntime } from "./runtime.ts";
+import { supportsAttachmentArchiveExport } from "./runtime.ts";
 
 type Source = AttachmentArchiveManifestContract["entries"][number]["source"];
 type Progress = {
@@ -69,6 +69,7 @@ export function createAttachmentExportController(options: {
 		createDeriver,
 		signal,
 	} = options;
+	const runtime = keyring().runtime;
 	const owner = () => zero.userID === ownerId && isZeroClientOwnerActive(zero);
 	const abort = new AbortController();
 	const document = parseImportDocument(exactContentDocument, {
@@ -87,7 +88,9 @@ export function createAttachmentExportController(options: {
 		abort.signal.throwIfAborted();
 		if (!owner()) throw new AttachmentExportSelectionError("stale");
 		const keys = keyring();
-		if (keys.runtime !== browserE2eRuntime || keys.runtime.attachments)
+		if (keys.runtime !== runtime)
+			throw new AttachmentExportSelectionError("stale");
+		if (!supportsAttachmentArchiveExport(runtime))
 			throw new AttachmentExportSelectionError("native-unavailable");
 		if (!keys.ready || keys.state !== "ready")
 			throw new AttachmentExportSelectionError("locked");
@@ -259,10 +262,12 @@ export function createAttachmentExportController(options: {
 		size: number,
 	): Promise<Uint8Array> {
 		const keys = checkpoint();
-		const response = await keys.runtime.fetcher(
-			`/api/attachments/${encodeURIComponent(source.id)}/${suffix}`,
-			{ credentials: "same-origin", signal: abort.signal },
-		);
+		const response = await (
+			keys.runtime.attachments?.fetcher ?? keys.runtime.fetcher
+		)(`/api/attachments/${encodeURIComponent(source.id)}/${suffix}`, {
+			credentials: "same-origin",
+			signal: abort.signal,
+		});
 		try {
 			checkpoint();
 			const contentLength = response.headers.get("content-length");

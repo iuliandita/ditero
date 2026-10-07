@@ -89,6 +89,13 @@ writes. The operating system save dialog supplies an opaque destination capabili
 Rust writes a private temporary file and commits the final save atomically.
 Canceled or retired operations clean up their temporary files.
 
+Linux also supports **Export selected files** in Settings. It prepares an exact
+content JSON and its paired encrypted attachment archive, each limited to 32 MiB.
+Save both files through their separate system save dialogs and retain the archive
+passphrase. The fixed native export operation shares the browser export limits
+and never exposes a caller-supplied network target. Archive import and recovery
+remain browser-only; Windows and macOS also require the browser for archive export.
+
 ## Development installers and checks
 
 Use Bun 1.4.2 and Rust 1.98.1, matching the CI toolchain. The official Tauri CLI,

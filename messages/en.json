@@ -2496,6 +2496,7 @@
 	"archive_export_mismatch": "The passphrases do not match.",
 	"archive_export_prepare": "Prepare archive",
 	"archive_export_pair_note": "Download both files and keep them together. The content file contains readable content; the files archive is protected by your archive passphrase.",
+	"archive_export_saved": "Saved",
 	"archive_export_download_content": "Download content",
 	"archive_export_download_files": "Download files",
 	"archive_export_downloading": "Downloading selected encrypted files...",

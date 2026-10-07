@@ -9,6 +9,9 @@ export type AttachmentRuntime = {
 		signal?: AbortSignal,
 	) => Promise<DownloadDestination>;
 	readonly withStage: CiphertextStageRunner;
+	readonly archiveExport?: {
+		readContent(signal?: AbortSignal): Promise<string>;
+	};
 };
 
 export type E2eRuntime = {
@@ -24,3 +27,10 @@ export const browserE2eRuntime: E2eRuntime = {
 		if (result.error) throw result.error;
 	},
 };
+
+export function supportsAttachmentArchiveExport(runtime: E2eRuntime): boolean {
+	return (
+		(runtime === browserE2eRuntime && !runtime.attachments) ||
+		!!runtime.attachments?.archiveExport
+	);
+}
