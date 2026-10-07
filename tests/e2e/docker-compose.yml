@@ -86,39 +86,74 @@ services:
       retries: 30
 
   minio:
-    image: quay.io/thanos/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    command: server /data
+    image: docker.io/chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    cpus: 1
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000
+    entrypoint: /usr/bin/weed
+    command:
+      - -logtostderr=true
+      - server
+      - -dir=/data
+      - -master.volumeSizeLimitMB=256
+      - -volume.max=4
+      - -filer
+      - -s3
+      - -s3.port=9000
+      - -s3.config=/etc/seaweedfs/s3.json
+      - -s3.port.iceberg=0
+      - -s3.port.lance=0
+      - -ip=minio
+      - -ip.bind=0.0.0.0
     labels:
       io.ditero.e2e.run: ${DITERO_E2E_RUN_ID:-unmanaged}
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      GODEBUG: fips140=on
+      WEED_MASTER_VOLUME_GROWTH_COPY_1: "1"
+      WEED_MASTER_VOLUME_GROWTH_COPY_2: "1"
+      WEED_MASTER_VOLUME_GROWTH_COPY_3: "1"
+      WEED_MASTER_VOLUME_GROWTH_COPY_OTHER: "1"
     ports:
       - "127.0.0.1:${DITERO_TEST_MINIO_PORT:-59000}:9000"
     volumes:
       - minio-data:/data
+      - ./seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--aws-sigv4", "aws:amz:us-east-1:s3", "--user", "minioadmin:minioadmin", "http://localhost:9000/"]
       interval: 2s
       timeout: 5s
       retries: 30
 
   minio-init:
-    image: quay.io/thanos/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    image: docker.io/chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 0.5
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000
+      - /data:rw,noexec,nosuid,size=1m,uid=1000,gid=1000
     depends_on:
       minio:
         condition: service_healthy
     labels:
       io.ditero.e2e.run: ${DITERO_E2E_RUN_ID:-unmanaged}
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
     entrypoint:
       - /bin/sh
-      - -c
+      - -ec
       - >-
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
-        mc mb --ignore-existing local/ditero-test
+        buckets=$$(printf 's3.bucket.list\n' | /usr/bin/weed shell -master=minio:9333 -filer=minio:8888);
+        if ! printf '%s\n' "$$buckets" | grep -Eq '^  ditero-test[[:space:]]'; then
+          printf 's3.bucket.create -name ditero-test -owner test-admin\n' |
+            /usr/bin/weed shell -master=minio:9333 -filer=minio:8888;
+        fi
 
 volumes:
   postgres-data:
