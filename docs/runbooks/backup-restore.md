@@ -2,7 +2,8 @@
 
 ## Backup
 
-1. Record the running Ditero and Zero versions.
+1. Record the running Ditero and Zero versions and deployment configuration, including
+   `DITERO_E2E_ENABLED` (defaults to `false`) and attachment storage settings.
 2. Run `pg_dump --format=custom` against the migration-owner or backup role.
 3. After the database dump finishes, snapshot the attachment filesystem volume or S3 bucket. Never
    take the blob snapshot first: a restored database row must not point at a blob that was absent
@@ -21,7 +22,11 @@
 3. Recreate separate migration, runtime, and Zero roles; grant runtime access without owner or `BYPASSRLS` membership.
 4. Restore the matching attachment snapshot before accepting traffic. Extra unreferenced blobs
    from a newer snapshot are harmless; a database row whose blob is missing is not recoverable.
-5. Restore the current and fallback field-encryption keys.
+5. Restore the original deployment configuration, current and fallback field-encryption keys,
+   and service secrets. Preserve `DITERO_E2E_ENABLED=true` if attachments were enabled:
+   `/api/e2e/*` and `/api/attachments/*` return `404` while disabled. Keep the restored
+   account/workspace key envelopes and ciphertext; do not generate replacement keys or
+   reenroll accounts to work around missing configuration.
 6. Remove the old Zero replica and start Zero so it rebuilds from PostgreSQL.
 7. Start Ditero, run migrations, and verify health, login, TOTP, JWT issuance, RLS isolation, sync,
    one encrypted integration credential, and one attachment download and decryption.

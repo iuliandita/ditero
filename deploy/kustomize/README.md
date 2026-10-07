@@ -104,6 +104,23 @@ WebSocket timeouts and upload limits for your use. Configure
 `DITERO_TRUSTED_PROXIES` only for your actual controller addresses if proxy trust
 is required.
 
+Encrypted attachments are disabled by default; `/api/e2e/*` and
+`/api/attachments/*` return `404` while disabled. To opt in, add
+`DITERO_E2E_ENABLED=true` to the existing merged `ditero-app-config` generator's
+`literals`, preserving its other entries:
+
+```yaml
+configMapGenerator:
+- name: ditero-app-config
+  behavior: merge
+  literals:
+  - DITERO_E2E_ENABLED=true
+```
+
+Browser encryption requires HTTPS or a browser-secure loopback origin with Web
+Crypto available, plus account key enrollment and a workspace key grant. Plain
+HTTP on a LAN is insufficient. See the [attachment guide](../../README.md#encrypted-attachments).
+
 ## Render and deploy
 
 Render locally before any cluster change:

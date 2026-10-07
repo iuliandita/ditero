@@ -4,6 +4,16 @@ Ditero encrypts file content, thumbnails, filenames, and declared media types on
 storage driver sees ciphertext only, but PostgreSQL and the blob store must still be backed up as
 one logical set.
 
+Encrypted attachments default to disabled (`DITERO_E2E_ENABLED=false`). Set
+`DITERO_E2E_ENABLED=true` in the application deployment configuration and restart
+the app to opt in. While disabled, `/api/e2e/*` and `/api/attachments/*` return
+`404`. Browser encryption requires HTTPS or a browser-secure loopback origin with
+Web Crypto available, plus account key enrollment and a workspace key grant.
+Plain HTTP on a LAN is insufficient. See the deployment examples for
+[Compose](../../README.md#encrypted-attachments),
+[Helm](../../deploy/helm/ditero/README.md#configuration-and-operations), and
+[Kustomize](../../deploy/kustomize/README.md#configure-an-overlay).
+
 ## Choose a driver
 
 Use `DITERO_ATTACHMENT_STORAGE_DRIVER=filesystem` for a local or mounted volume. Set
@@ -83,6 +93,9 @@ a coordinated backup.
 | Newer database plus an older blob snapshot | Rows can reference missing blobs; those attachments are unrecoverable. |
 
 Restore while the application and Zero are stopped, put the matching blobs in place before serving
-traffic, then verify a real attachment download and client decryption. Follow the full
+traffic, and restore the original feature configuration and keys, including
+`DITERO_E2E_ENABLED=true` when previously enabled. Preserve key envelopes and ciphertext;
+do not generate new keys or reenroll accounts to bypass a configuration problem.
+Then verify a real attachment download and client decryption. Follow the full
 [Backup and Restore](backup-restore.md) procedure and read [E2E Key Loss](e2e-key-loss.md) for the
 separate user-key boundary.
