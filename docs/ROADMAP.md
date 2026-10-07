@@ -38,10 +38,10 @@ qualification notes. Native delivery remains open in issue #346.
 
 Development happens on `develop`. The first published release was `0.0.1-alpha.1`;
 the current published alpha is
-[`0.0.1-alpha.8`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.8).
-Alpha 8 adds paired JSON/encrypted attachment archive export on Linux desktop and
-fixes shared workspace key grants under the restricted database role. Each export
-file is limited to 32 MiB; archive import still requires the browser.
+[`0.0.1-alpha.9`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.9).
+Alpha 9 puts related task details side by side, keeps large-text titles readable,
+and fixes opening task links when Android starts. Broader Android task-link and
+device qualification remains open.
 Published alphas package containers, Helm/Kustomize/Compose deployment files and
 experimental native downloads; Windows downloads are unsigned and macOS downloads
 use ad-hoc
