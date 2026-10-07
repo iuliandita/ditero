@@ -236,6 +236,13 @@ ordering constraints between them, are documented in [.env.example](.env.example
 
 ### Encrypted attachments
 
+Encrypted attachments are disabled by default. To opt in, add
+`DITERO_E2E_ENABLED=true` to the private Compose environment file and recreate the
+app container with the same Compose command. While disabled, `/api/e2e/*` and
+`/api/attachments/*` return `404`. Browser encryption requires HTTPS or a
+browser-secure loopback origin with Web Crypto available, plus account key
+enrollment and a workspace key grant. Plain HTTP on a LAN is insufficient.
+
 Files attached to tasks, comments, and lists are encrypted on the client before upload.
 The server stores and proxies only ciphertext, including encrypted filenames, declared media
 types, and thumbnails. It can still see the parent record, uploader, byte counts, lifecycle

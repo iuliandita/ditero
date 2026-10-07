@@ -128,6 +128,21 @@ Proxy trust defaults to none; explicitly set `DITERO_TRUSTED_PROXIES` only to
 your controller's actual addresses. Restart both deployments after changing
 Secret values: entrypoints load secrets at startup.
 
+Encrypted attachments are disabled by default; `/api/e2e/*` and
+`/api/attachments/*` return `404` while disabled. To opt in, merge this into your
+values file, preserving any existing `app.extraEnv` entries:
+
+```yaml
+app:
+  extraEnv:
+    - name: DITERO_E2E_ENABLED
+      value: "true"
+```
+
+Browser encryption requires HTTPS or a browser-secure loopback origin with Web
+Crypto available, plus account key enrollment and a workspace key grant. Plain
+HTTP on a LAN is insufficient. See the [attachment guide](../../../README.md#encrypted-attachments).
+
 Apply your cluster's NetworkPolicies to permit browser ingress, app/Zero
 callbacks, DNS, PostgreSQL, and any enabled notification providers. This chart
 does not impose a policy because those destination addresses and controllers
