@@ -39,6 +39,7 @@ export type NativeContext = {
 	readonly authHandle: string;
 	readonly archiveExport: boolean;
 	readonly archiveInput: boolean;
+	readonly archiveMigration: boolean;
 };
 
 // Only contexts produced by captureVerifiedContext are accepted by createNativeRuntime.
@@ -69,6 +70,8 @@ export async function captureVerifiedContext(): Promise<NativeContext> {
 		userId: session.userId,
 		deviceId: session.deviceId,
 		authHandle: session.authHandle,
+		archiveMigration:
+			before.archiveMigration === true && after.archiveMigration === true,
 		archiveInput: before.archiveInput === true && after.archiveInput === true,
 		archiveExport:
 			before.archiveExport === true && after.archiveExport === true,
@@ -341,6 +344,8 @@ export function createNativeRuntime(
 			undefined,
 			context.archiveExport,
 			context.archiveInput,
+			context.archiveMigration,
+			context.userId,
 		),
 		// Confirmed replies prove durable cleanup. A snapshot can only prove absent
 		// authority; that outcome leaves the account UI with an explicit failure notice.

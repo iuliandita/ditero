@@ -197,6 +197,13 @@ key-grant, quota, revision, and recovery checks still apply. A reservation does
 not upload or finalize a file. These server routes do not enable native import
 in the app; its file selection, transfer, and recovery workflow remain guarded.
 
+Native reservation status additionally returns `upload`, either `null` or the
+current attempt's declared ciphertext sizes and SHA-256 hashes, including the
+optional thumbnail pair. This witness is available only while the reservation
+and current write context remain eligible. Native uploads derive their length
+from this witness; a caller-supplied size does not authorize a transfer. Browser
+reservation status retains its existing shape.
+
 ## CSV provider input
 
 Ditero CSV v1 is a separate migration format, not a native backup or an adapter

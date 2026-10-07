@@ -23,6 +23,7 @@ import {
 	attachmentMigrationRecoveryBodySchema,
 	attachmentMigrationReservationBodySchema,
 	getAttachmentMigrationStatus,
+	getNativeAttachmentMigrationStatus,
 	inspectAttachmentMigration,
 	recoverAttachmentMigration,
 	reserveAttachmentMigration,
@@ -342,7 +343,9 @@ export function createAttachmentMigrationHandlers(
 			handled(async () => {
 				const ordinal = reservationOrdinal(request);
 				return response(
-					await getAttachmentMigrationStatus(
+					await (strictNative
+						? getNativeAttachmentMigrationStatus
+						: getAttachmentMigrationStatus)(
 						pool,
 						ownerId,
 						reservationJobId(request),

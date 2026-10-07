@@ -6,6 +6,7 @@ import type { PortableExportV1 } from "../../src/domain/portability/v1.ts";
 import { s256Challenge } from "../../src/server/native-auth/contracts.ts";
 import { nativePortabilityRoutes } from "../../src/server/native-auth/portability-routes.ts";
 import { NativeGrantStore } from "../../src/server/native-auth/store.ts";
+import { getAttachmentMigrationStatus } from "../../src/server/portability/attachment-migration-store.ts";
 import { exportPortableJson } from "../../src/server/portability/export.ts";
 import { applyImportBatch } from "../../src/server/portability/import-apply-store.ts";
 import { saveImportPlan } from "../../src/server/portability/import-plan-store.ts";
@@ -335,7 +336,98 @@ test("native migration uses real session ownership, completed-job evidence and R
 				owner.token,
 			)
 		).json(),
+	).toEqual({
+		...reserved,
+		upload: {
+			declaredBytes: 50,
+			ciphertextSha256: "b".repeat(64),
+			thumbnailDeclaredBytes: null,
+			thumbnailCiphertextSha256: null,
+		},
+	});
+	expect(
+		await getAttachmentMigrationStatus(
+			runtime,
+			owner.id,
+			job.id,
+			parent.ordinal,
+		),
 	).toEqual(reserved);
+	const statusPath = `${path}/attachment-reservations?ordinal=${parent.ordinal}`;
+	const positiveWitness = await (await request(statusPath, owner.token)).json();
+	const rotation = (
+		await admin.query<{ rotation_required: boolean }>(
+			"select rotation_required from workspace where id=$1 and owner_id=$2",
+			[target, owner.id],
+		)
+	).rows;
+	expect(rotation).toHaveLength(1);
+	try {
+		expect(
+			(
+				await admin.query(
+					"update workspace set rotation_required=true where id=$1 and owner_id=$2",
+					[target, owner.id],
+				)
+			).rowCount,
+		).toBe(1);
+		const refused = await request(statusPath, owner.token);
+		expect(refused.status).toBe(403);
+		expect((await refused.json()).code).toBe("rotation-required");
+	} finally {
+		expect(
+			(
+				await admin.query(
+					"update workspace set rotation_required=$3 where id=$1 and owner_id=$2",
+					[target, owner.id, rotation[0].rotation_required],
+				)
+			).rowCount,
+		).toBe(1);
+	}
+	expect(await (await request(statusPath, owner.token)).json()).toEqual(
+		positiveWitness,
+	);
+	const expires = (
+		await admin.query<{ expires: string }>(
+			"select reservation_expires_at::text as expires from attachment where id=$1 and uploaded_by=$2",
+			[body.prepared.id, owner.id],
+		)
+	).rows;
+	expect(expires).toHaveLength(1);
+	try {
+		expect(
+			(
+				await admin.query(
+					"update attachment set reservation_expires_at=now()-interval '1 second' where id=$1 and uploaded_by=$2",
+					[body.prepared.id, owner.id],
+				)
+			).rowCount,
+		).toBe(1);
+		expect(await (await request(statusPath, owner.token)).json()).toEqual({
+			...reserved,
+			upload: null,
+		});
+		expect(
+			await getAttachmentMigrationStatus(
+				runtime,
+				owner.id,
+				job.id,
+				parent.ordinal,
+			),
+		).toEqual(reserved);
+	} finally {
+		expect(
+			(
+				await admin.query(
+					"update attachment set reservation_expires_at=$3::timestamptz where id=$1 and uploaded_by=$2",
+					[body.prepared.id, owner.id, expires[0].expires],
+				)
+			).rowCount,
+		).toBe(1);
+	}
+	expect(await (await request(statusPath, owner.token)).json()).toEqual(
+		positiveWitness,
+	);
 	const inspection = await (
 		await request(
 			`${path}/attachment-migrations?ordinal=${parent.ordinal}`,
