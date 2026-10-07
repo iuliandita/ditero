@@ -2684,6 +2684,7 @@
 	"archive_export_mismatch": "عبارتا المرور غير متطابقتين.",
 	"archive_export_prepare": "تحضير الأرشيف",
 	"archive_export_pair_note": "نزّل الملفين واحتفظ بهما معاً. يحتوي ملف المحتوى على محتوى مقروء؛ أما أرشيف الملفات فمحمي بعبارة مرور الأرشيف.",
+	"archive_export_saved": "تم الحفظ",
 	"archive_export_download_content": "تنزيل المحتوى",
 	"archive_export_download_files": "تنزيل الملفات",
 	"archive_export_downloading": "تنزيل الملفات المشفرة المحددة...",

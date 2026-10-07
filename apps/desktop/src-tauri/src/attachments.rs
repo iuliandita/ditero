@@ -22,6 +22,7 @@ use tokio::{
 };
 
 pub const CHUNK: usize = 32768;
+const ARCHIVE_LIMIT: usize = 32 * 1024 * 1024;
 const STAGE_LIMIT: u64 = 512 * 1024 * 1024;
 const DEADLINE: Duration = Duration::from_secs(30);
 pub type Completion = Arc<dyn Fn(Result<Value>) + Send + Sync>;
@@ -251,7 +252,16 @@ impl Transfers {
                 })
             });
         }
+        if op.starts_with("archive.export.") && !cfg!(target_os = "linux") {
+            return Err("unknown-op");
+        }
         match op.as_str() {
+            "archive.export.begin" => {
+                exact(&body, &[])?;
+                self.begin(context, op, body, done, move |ctx, id, rx, ready| {
+                    Box::pin(archive_export(ctx, http, id, rx, ready))
+                })
+            }
             "upload.begin" => {
                 exact(&body, &["attachmentId", "thumbnail", "bytes"])?;
                 let path = target(&body, "upload")?;
@@ -296,13 +306,20 @@ impl Transfers {
                     Box::pin(save(ctx, filename, id, rx, ready))
                 })
             }
-            "save.cancelPending" => {
+            "save.cancelPending" | "archive.export.cancelPending" => {
                 exact(&body, &[])?;
                 let mut entries = self.entries.lock().unwrap();
                 let ids: Vec<_> = entries
                     .iter()
                     .filter(|(_, cap)| {
-                        cap.kind == "save.pick" && !cap.ready && cap.context.matches(&context)
+                        cap.kind
+                            == if op == "save.cancelPending" {
+                                "save.pick"
+                            } else {
+                                "archive.export.begin"
+                            }
+                            && !cap.ready
+                            && cap.context.matches(&context)
                     })
                     .map(|(id, _)| id.clone())
                     .collect();
@@ -348,8 +365,15 @@ impl Transfers {
                 done(Ok(json!({"ok":true})));
                 Ok(())
             }
-            "upload.write" | "upload.finish" | "download.read" | "stage.write" | "stage.read"
-            | "stage.rewind" | "save.write" | "save.finish" => {
+            "archive.export.read"
+            | "upload.write"
+            | "upload.finish"
+            | "download.read"
+            | "stage.write"
+            | "stage.read"
+            | "stage.rewind"
+            | "save.write"
+            | "save.finish" => {
                 let key = if op.starts_with("save.") {
                     "saveId"
                 } else if op.starts_with("stage.") {
@@ -422,6 +446,13 @@ impl Transfers {
             + 'static,
     {
         let mut entries = self.entries.lock().unwrap();
+        if op == "archive.export.begin"
+            && entries
+                .values()
+                .any(|cap| cap.kind == op && cap.context.matches(&context))
+        {
+            return Err("busy");
+        }
         if entries.len() >= 4 {
             return Err("too-many-transfers");
         }
@@ -821,6 +852,96 @@ async fn download(
         }
     }
 }
+fn append_archive(raw: &mut Vec<u8>, bytes: &[u8]) -> Result<()> {
+    if bytes.len() > ARCHIVE_LIMIT.saturating_sub(raw.len()) {
+        return Err("archive-too-large");
+    }
+    raw.extend_from_slice(bytes);
+    Ok(())
+}
+async fn archive_export(
+    ctx: Context,
+    http: reqwest::Client,
+    id: String,
+    mut rx: mpsc::Receiver<Command>,
+    ready: Completion,
+) -> Result<Value> {
+    let bytes = tokio::time::timeout(DEADLINE, async {
+        let mut response = http
+            .get(format!(
+                "{}/api/native/portability/export",
+                ctx.session.origin
+            ))
+            .bearer_auth(&ctx.session.token)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|_| "network")?;
+        let status = response.status().as_u16();
+        if status != 200 {
+            let body = if status == 401 {
+                let reply = crate::attachments::response(response).await?;
+                reply
+                    .get("body")
+                    .and_then(Value::as_str)
+                    .filter(|raw| {
+                        protocol::parse(raw).is_ok_and(|v| v == json!({"code":"unauthorized"}))
+                    })
+                    .map(str::to_string)
+            } else {
+                None
+            };
+            ready(Ok(json!({"ok":false,"status":status,"body":body})));
+            return Err("archive-export-refused");
+        }
+        if response
+            .content_length()
+            .is_some_and(|n| n > ARCHIVE_LIMIT as u64)
+        {
+            return Err("archive-too-large");
+        }
+        if response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_none_or(|v| v.split(';').next().unwrap_or("").trim() != "application/json")
+        {
+            return Err("invalid-response");
+        }
+        let mut raw = Vec::new();
+        while let Some(bytes) = response.chunk().await.map_err(|_| "network")? {
+            ctx.current()?;
+            append_archive(&mut raw, &bytes)?;
+        }
+        ctx.current()?;
+        String::from_utf8(raw)
+            .map(String::into_bytes)
+            .map_err(|_| "invalid-response")
+    })
+    .await
+    .map_err(|_| "transfer-timeout")??;
+    ready(Ok(json!({"ok":true,"transferId":id,"bytes":bytes.len()})));
+    let mut seq = 0;
+    let mut offset = 0;
+    loop {
+        let c = command(&mut rx).await?;
+        ctx.current()?;
+        if c.op != "archive.export.read" {
+            return Err("invalid-transfer-operation");
+        }
+        sequence(&c.body, seq)?;
+        let end = (offset + CHUNK).min(bytes.len());
+        let eof = end == offset;
+        (c.done)(Ok(
+            json!({"ok":true,"data":STANDARD.encode(&bytes[offset..end]),"eof":eof}),
+        ));
+        if eof {
+            return Ok(json!({"ok":true}));
+        }
+        offset = end;
+        seq += 1;
+    }
+}
 async fn response_error(reply: reqwest::Response, ready: Completion) -> Result<Value> {
     let result = response(reply).await;
     ready(result.clone());
@@ -883,6 +1004,165 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+    fn archive_server(
+        reply: Vec<u8>,
+        delay: Duration,
+    ) -> (String, std::thread::JoinHandle<()>, Arc<AtomicBool>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let accepted = Arc::new(AtomicBool::new(false));
+        let observed = accepted.clone();
+        let task = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut request = [0; 4096];
+            let n = socket.read(&mut request).unwrap();
+            assert!(std::str::from_utf8(&request[..n])
+                .unwrap()
+                .starts_with("GET /api/native/portability/export HTTP/1.1"));
+            observed.store(true, Ordering::SeqCst);
+            std::thread::sleep(delay);
+            let _ = socket.write_all(&reply);
+        });
+        (origin, task, accepted)
+    }
+    #[test]
+    fn archive_bound_rejects_before_extending() {
+        let mut bytes = vec![0; ARCHIVE_LIMIT];
+        assert_eq!(append_archive(&mut bytes, &[1]), Err("archive-too-large"));
+        assert_eq!(bytes.len(), ARCHIVE_LIMIT);
+        assert!(append_archive(&mut bytes, &[]).is_ok());
+    }
+    #[tokio::test]
+    async fn archive_export_chunks_exact_utf8_and_rejects_foreign_owner() {
+        let raw = format!("{{\"text\":\"{}\"}}", "x".repeat(CHUNK) + "😀");
+        let reply = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", raw.len(), raw).into_bytes();
+        let (origin, server, _) = archive_server(reply, Duration::ZERO);
+        let mut ctx = context();
+        ctx.session.origin = origin;
+        let files = Transfers::default();
+        let begun = call(&files, &ctx, "archive.export.begin", json!({}))
+            .await
+            .unwrap();
+        let id = begun["transferId"].as_str().unwrap();
+        assert_eq!(begun["bytes"], raw.len());
+        let mut foreign = ctx.clone();
+        foreign.session.token = "replacement".into();
+        assert_eq!(
+            call(
+                &files,
+                &foreign,
+                "archive.export.read",
+                json!({"transferId":id,"seq":0})
+            )
+            .await,
+            Err("invalid-transfer")
+        );
+        assert_eq!(
+            call(&files, &ctx, "archive.export.begin", json!({})).await,
+            Err("busy")
+        );
+        let mut actual = Vec::new();
+        for seq in 0..4 {
+            let next = call(
+                &files,
+                &ctx,
+                "archive.export.read",
+                json!({"transferId":id,"seq":seq}),
+            )
+            .await
+            .unwrap();
+            let chunk = STANDARD.decode(next["data"].as_str().unwrap()).unwrap();
+            assert!(chunk.len() <= CHUNK);
+            actual.extend(chunk);
+            if next["eof"] == true {
+                break;
+            }
+        }
+        assert_eq!(actual, raw.as_bytes());
+        server.join().unwrap();
+        assert_eq!(
+            call(
+                &files,
+                &ctx,
+                "archive.export.begin",
+                json!({"url":"https://other.example"})
+            )
+            .await,
+            Err("invalid-body")
+        );
+    }
+    #[tokio::test]
+    async fn archive_export_rejects_oversize_invalid_utf8_and_redirect() {
+        for (reply, error) in [
+            (format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n", ARCHIVE_LIMIT + 1).into_bytes(), Some("archive-too-large")),
+            ([b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1\r\n\r\n".as_slice(), &[255]].concat(), Some("invalid-response")),
+            (b"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/private\r\nContent-Length: 0\r\n\r\n".to_vec(), None),
+        ] {
+            let (origin, server, _) = archive_server(reply, Duration::ZERO);
+            let mut ctx = context(); ctx.session.origin = origin;
+            let files = Transfers::default();
+            let (done, rx) = completion();
+            files.dispatch(ctx, reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap(), json!({"op":"archive.export.begin","body":{}}), done).unwrap();
+            let result = rx.await.unwrap();
+            if let Some(error) = error { assert_eq!(result, Err(error)); } else { assert_eq!(result.unwrap()["status"], 302); }
+            server.join().unwrap();
+        }
+    }
+    #[tokio::test]
+    async fn archive_pending_cancel_is_owner_bound_and_retirement_releases_read() {
+        for retire in [false, true] {
+            use std::io::{Read, Write};
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let origin = format!("http://{}", listener.local_addr().unwrap());
+            let (accepted, observed) = oneshot::channel();
+            let (release, held) = std::sync::mpsc::channel();
+            let server = std::thread::spawn(move || {
+                let (mut socket, _) = listener.accept().unwrap();
+                let mut request = [0; 4096];
+                let n = socket.read(&mut request).unwrap();
+                assert!(std::str::from_utf8(&request[..n])
+                    .unwrap()
+                    .starts_with("GET /api/native/portability/export HTTP/1.1"));
+                accepted.send(()).unwrap();
+                let _ = held.recv();
+                let _ = socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}");
+            });
+            let mut ctx = context();
+            ctx.session.origin = origin;
+            let files = Transfers::default();
+            let (done, rx) = completion();
+            files
+                .dispatch(
+                    ctx.clone(),
+                    reqwest::Client::new(),
+                    json!({"op":"archive.export.begin","body":{}}),
+                    done,
+                )
+                .unwrap();
+            tokio::time::timeout(Duration::from_secs(3), observed)
+                .await
+                .unwrap()
+                .unwrap();
+            let mut foreign = ctx.clone();
+            foreign.session.token = "other".into();
+            call(&files, &foreign, "archive.export.cancelPending", json!({}))
+                .await
+                .unwrap();
+            assert_eq!(files.entries.lock().unwrap().len(), 1);
+            if retire {
+                files.cancel_all();
+            } else {
+                call(&files, &ctx, "archive.export.cancelPending", json!({}))
+                    .await
+                    .unwrap();
+            }
+            release.send(()).unwrap();
+            assert_eq!(rx.await.unwrap(), Err("cancelled"));
+            assert!(files.entries.lock().unwrap().is_empty());
+            server.join().unwrap();
+        }
     }
     #[tokio::test]
     async fn stages_stream_two_integrity_passes_and_reject_foreign_scope_and_sequences() {

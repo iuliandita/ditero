@@ -14,9 +14,10 @@ import {
 import { m } from "../../../paraglide/messages.js";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
+import { saveNativeArchiveDocument } from "../../lib/e2e/archive-export-save.ts";
 import { createAttachmentExportController } from "../../lib/e2e/attachment-export-controller.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
-import { browserE2eRuntime } from "../../lib/e2e/runtime.ts";
+import { supportsAttachmentArchiveExport } from "../../lib/e2e/runtime.ts";
 import { useExportBoundary } from "../../lib/zero.tsx";
 import { isZeroClientOwnerActive } from "../../lib/zero-lifecycle.ts";
 import { UnlockDialog } from "../e2e/UnlockDialog.tsx";
@@ -157,8 +158,9 @@ export function AttachmentArchiveExportDialog({
 		"download" | "authenticate-and-seal" | null
 	>(null);
 	const id = useId();
-	const browserOnly =
-		keyring.runtime === browserE2eRuntime && !keyring.runtime.attachments;
+	const supported = supportsAttachmentArchiveExport(keyring.runtime);
+	const saving = useRef(false);
+	const [savingFile, setSavingFile] = useState(false);
 	const unlocked = keyring.ready && keyring.state === "ready";
 	const sources = entries
 		.filter((entry) => selected.includes(entry.source.id))
@@ -237,6 +239,8 @@ export function AttachmentArchiveExportDialog({
 	useEffect(() => {
 		const abort = new AbortController();
 		active.current = abort;
+		saving.current = false;
+		setSavingFile(false);
 		pages.current = null;
 		setHasMore(false);
 		setLoadingMore(false);
@@ -249,7 +253,7 @@ export function AttachmentArchiveExportDialog({
 		setConfirmation("");
 		setError(null);
 		setStage("loading");
-		if (browserOnly && unlocked)
+		if (supported && unlocked)
 			void (async () => {
 				const saved = await boundary.waitForSaved({ signal: abort.signal });
 				abort.signal.throwIfAborted();
@@ -304,7 +308,12 @@ export function AttachmentArchiveExportDialog({
 						}),
 					);
 				}
-				const exactContentDocument = await boundedContent(abort.signal);
+				const exactContentDocument = await (keyringRef.current.runtime
+					.attachments?.archiveExport
+					? keyringRef.current.runtime.attachments.archiveExport.readContent(
+							abort.signal,
+						)
+					: boundedContent(abort.signal));
 				abort.signal.throwIfAborted();
 				const captured = createAttachmentExportController({
 					exactContentDocument,
@@ -340,7 +349,7 @@ export function AttachmentArchiveExportDialog({
 			controller.current = null;
 			pages.current = null;
 		};
-	}, [zero, boundary, browserOnly, unlocked, loadPage]);
+	}, [zero, boundary, supported, unlocked, loadPage]);
 
 	useEffect(() => {
 		if (pair && restorePreparedFocus.current) {
@@ -395,8 +404,9 @@ export function AttachmentArchiveExportDialog({
 			}
 		}
 	}
-	function download(kind: "content" | "files") {
+	async function download(kind: "content" | "files") {
 		if (
+			saving.current ||
 			!unlocked ||
 			!pair ||
 			!isZeroClientOwnerActive(zero) ||
@@ -404,6 +414,39 @@ export function AttachmentArchiveExportDialog({
 		)
 			return;
 		const file = pair[kind];
+		const runtime = keyring.runtime;
+		if (runtime.attachments?.archiveExport) {
+			const signal = active.current?.signal;
+			if (!signal) return;
+			saving.current = true;
+			setSavingFile(true);
+			setError(null);
+			try {
+				await saveNativeArchiveDocument(
+					runtime.attachments,
+					file,
+					signal,
+					() => {
+						if (
+							!isZeroClientOwnerActive(zero) ||
+							keyringRef.current.runtime !== runtime ||
+							!keyringRef.current.ready ||
+							keyringRef.current.state !== "ready"
+						)
+							throw new Error("stale-export");
+					},
+				);
+				setRequested((current) => ({ ...current, [kind]: true }));
+			} catch (error) {
+				if (!signal.aborted) setError(exportError(error));
+			} finally {
+				if (active.current?.signal === signal && !signal.aborted) {
+					saving.current = false;
+					setSavingFile(false);
+				}
+			}
+			return;
+		}
 		const url = URL.createObjectURL(
 			new Blob([file.json], { type: "application/json" }),
 		);
@@ -433,7 +476,7 @@ export function AttachmentArchiveExportDialog({
 							{m.archive_export_description()}
 						</DialogDescription>
 					</DialogHeader>
-					{!browserOnly ? (
+					{!supported ? (
 						<p role="status">{m.archive_export_browser_only()}</p>
 					) : !unlocked ? (
 						<div className="space-y-3">
@@ -623,13 +666,15 @@ export function AttachmentArchiveExportDialog({
 										<Button
 											className={controlClass}
 											ref={contentButton}
-											onClick={() => download("content")}
+											disabled={savingFile}
+											onClick={() => void download("content")}
 										>
 											{m.archive_export_download_content()}
 										</Button>
 										<Button
 											className={controlClass}
-											onClick={() => download("files")}
+											disabled={savingFile}
+											onClick={() => void download("files")}
 										>
 											{m.archive_export_download_files()}
 										</Button>
@@ -639,7 +684,9 @@ export function AttachmentArchiveExportDialog({
 											{filenameParts(pair.content.filename)}
 											{requested.content && (
 												<span className="block">
-													{m.portability_download_requested()}
+													{keyring.runtime.attachments?.archiveExport
+														? m.archive_export_saved()
+														: m.portability_download_requested()}
 												</span>
 											)}
 										</p>
@@ -647,7 +694,9 @@ export function AttachmentArchiveExportDialog({
 											{filenameParts(pair.files.filename)}
 											{requested.files && (
 												<span className="block">
-													{m.portability_download_requested()}
+													{keyring.runtime.attachments?.archiveExport
+														? m.archive_export_saved()
+														: m.portability_download_requested()}
 												</span>
 											)}
 										</p>

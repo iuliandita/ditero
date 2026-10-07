@@ -60,6 +60,7 @@ import {
 import { sendInviteMail } from "./mail/invite-mail.ts";
 import { nativeAttachmentRoutes } from "./native-auth/attachment-routes.ts";
 import { nativeE2ERoutes } from "./native-auth/e2e-routes.ts";
+import { nativePortabilityRoutes } from "./native-auth/portability-routes.ts";
 import { nativeAuthRoutes } from "./native-auth/routes.ts";
 import { pushConfiguration } from "./native-push/contracts.ts";
 import { startRelayRecovery } from "./native-push/relay-recovery.ts";
@@ -87,7 +88,10 @@ import { startTelegramPoller } from "./notifications/telegram-poll.ts";
 import { telegramWebhookRoutes } from "./notifications/telegram-webhook.ts";
 import { startWorker } from "./notifications/worker.ts";
 import { importPlanRoutes } from "./portability/import-routes.ts";
-import { portabilityRoutes } from "./portability/routes.ts";
+import {
+	createPortabilityExporter,
+	portabilityRoutes,
+} from "./portability/routes.ts";
 import {
 	calendarFeedRoutes,
 	personalAccessTokenRoutes,
@@ -114,6 +118,7 @@ const { guardedPost, guardedGet, foreignOrigin } = makeGuards(
 	requestOrigins,
 	(headers) => auth.api.getSession({ headers }),
 );
+const portabilityExporter = createPortabilityExporter(pool);
 const attachmentConfig = attachmentStorageConfig(process.env);
 const attachmentStore = await createAttachmentBlobStore(attachmentConfig);
 const nativeTrustedProxies = trustedProxyCIDRsFromEnv(
@@ -228,6 +233,13 @@ const routes = new Elysia()
 			rateLimit: nativeRateLimit,
 		}),
 	)
+	.use(
+		nativePortabilityRoutes({
+			pool,
+			exporter: portabilityExporter,
+			rateLimit: nativeRateLimit,
+		}),
+	)
 	.use(nativePushRoutes({ pool, rateLimit: nativeRateLimit }))
 	.use(nativeE2ERoutes({ pool, database: db, rateLimit: nativeRateLimit }))
 	.use(
@@ -239,7 +251,14 @@ const routes = new Elysia()
 		}),
 	)
 	.use(taskHistoryRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
-	.use(portabilityRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
+	.use(
+		portabilityRoutes(
+			pool,
+			{ guardedPost, guardedGet, foreignOrigin },
+			{},
+			portabilityExporter,
+		),
+	)
 	.use(importPlanRoutes(pool, { guardedPost, guardedGet, foreignOrigin }))
 	// Public capability ack, mounted AHEAD of the global CORS plugin: the button
 	// is pressed from ntfy's web UI, a genuine cross-origin request the global

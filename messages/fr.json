@@ -2543,6 +2543,7 @@
 	"archive_export_mismatch": "Les phrases secrètes ne correspondent pas.",
 	"archive_export_prepare": "Préparer l’archive",
 	"archive_export_pair_note": "Télécharge les deux fichiers et garde-les ensemble. Le fichier de contenu contient du contenu lisible ; l’archive de fichiers est protégée par ta phrase secrète.",
+	"archive_export_saved": "Enregistré",
 	"archive_export_download_content": "Télécharger le contenu",
 	"archive_export_download_files": "Télécharger les fichiers",
 	"archive_export_downloading": "Téléchargement des fichiers chiffrés sélectionnés...",

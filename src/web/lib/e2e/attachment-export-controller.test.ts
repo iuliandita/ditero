@@ -127,6 +127,27 @@ describe("attachment export selection", () => {
 			createAttachmentExportController(options).preflightSelected([source()]),
 		).toMatchObject({ count: 1, encryptedBytes: 50 });
 	});
+	it("refuses native runtimes without explicit archive export capability", () => {
+		const c = controller();
+		const keys = { ...c.options.keyring(), runtime: { ...browserE2eRuntime } };
+		const value = createAttachmentExportController({
+			...c.options,
+			keyring: () => keys,
+		});
+		expect(() => value.preflightSelected([source()])).toThrow(
+			"native-unavailable",
+		);
+	});
+	it("refuses a replaced runtime even when the account remains active", () => {
+		const c = controller();
+		let keys = c.options.keyring();
+		const value = createAttachmentExportController({
+			...c.options,
+			keyring: () => keys,
+		});
+		keys = { ...keys, runtime: { ...browserE2eRuntime } };
+		expect(() => value.preflightSelected([source()])).toThrow("stale");
+	});
 	it("rejects a registered different account even though a matching document was supplied", () => {
 		expect(() =>
 			createAttachmentExportController(controller("different-user").options),
@@ -348,6 +369,58 @@ describe("attachment export selection real cryptography", () => {
 			f.thumbnail.length,
 		);
 		expect(f.wdk).toEqual(new Uint8Array(32).fill(3));
+	});
+	it("exports an authenticated native pair through the captured attachment transport", async () => {
+		const f = await realCryptoFixture();
+		const fallback = vi.fn(async () => {
+			throw new Error("generic network refused");
+		});
+		const nativeFetch = vi.fn(
+			async (input: RequestInfo | URL) =>
+				new Response(
+					new Uint8Array(
+						String(input).endsWith("/thumbnail") ? f.thumbnail : f.content,
+					),
+				),
+		);
+		const keys = {
+			...f.c.options.keyring(),
+			runtime: {
+				...browserE2eRuntime,
+				fetcher: fallback,
+				attachments: {
+					fetcher: nativeFetch,
+					archiveExport: {
+						readContent: async () => f.c.options.exactContentDocument,
+					},
+					pickFile: async () => {
+						throw new Error("not saving here");
+					},
+					withStage: async () => {
+						throw new Error("not staging here");
+					},
+				},
+			},
+		};
+		const value = createAttachmentExportController({
+			...f.c.options,
+			keyring: () => keys,
+			createDeriver: f.createDeriver,
+		});
+		const pair = await value.exportSelected(
+			[f.encryptedSource],
+			"archive passphrase",
+		);
+		expect(pair.content.json).toBe(f.c.options.exactContentDocument);
+		const opened = await openAttachmentArchive(
+			pair.files.json,
+			pair.content.json,
+			"archive passphrase",
+			{ createDeriver: f.createDeriver },
+		);
+		expect(opened.manifest.entries[0]?.source).toEqual(f.encryptedSource);
+		expect(nativeFetch).toHaveBeenCalledTimes(2);
+		expect(fallback).not.toHaveBeenCalled();
 	});
 	it.each([
 		true,

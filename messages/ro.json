@@ -2543,6 +2543,7 @@
 	"archive_export_mismatch": "Frazele de acces nu coincid.",
 	"archive_export_prepare": "Pregătește arhiva",
 	"archive_export_pair_note": "Descarcă ambele fișiere și păstrează-le împreună. Fișierul de conținut include conținut lizibil; arhiva de fișiere este protejată cu fraza ta de acces.",
+	"archive_export_saved": "Salvat",
 	"archive_export_download_content": "Descarcă conținutul",
 	"archive_export_download_files": "Descarcă fișierele",
 	"archive_export_downloading": "Se descarcă fișierele criptate selectate...",

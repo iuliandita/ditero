@@ -738,3 +738,16 @@ test("Linux link retirement waits for a captured-account acknowledgement and fai
 	await retry;
 	expect(bridgeState().session).toEqual(session);
 });
+
+test("archive export capability survives verified host metadata snapshots", async () => {
+	snapshot.archiveExport = true;
+	expect((await connectBridge()).archiveExport).toBe(true);
+	expect(bridgeState().archiveExport).toBe(true);
+	snapshot.archiveExport = false;
+	expect((await readBridgeState()).archiveExport).toBe(false);
+	expect(bridgeState().archiveExport).toBe(false);
+});
+test("archive export capability rejects malformed host values", async () => {
+	Object.assign(snapshot, { archiveExport: "true" });
+	await expect(connectBridge()).rejects.toThrow("invalid-reply");
+});

@@ -34,6 +34,7 @@ export type SessionMeta = {
 };
 
 export type Hello = {
+	archiveExport?: boolean;
 	taskLinks?: boolean;
 	linkRefused?: boolean;
 	pushProvider?: NativePushState["provider"];
@@ -87,6 +88,9 @@ export type AttachmentOp =
 	| "upload.begin"
 	| "upload.write"
 	| "upload.finish"
+	| "archive.export.begin"
+	| "archive.export.read"
+	| "archive.export.cancelPending"
 	| "download.begin"
 	| "download.read"
 	| "save.pick"
@@ -252,11 +256,16 @@ function parseHello(reply: Reply): Hello {
 	)
 		throw new NativeError("invalid-reply");
 	if (
+		(reply.archiveExport !== undefined &&
+			typeof reply.archiveExport !== "boolean") ||
 		(reply.taskLinks !== undefined && typeof reply.taskLinks !== "boolean") ||
 		(reply.linkRefused !== undefined && typeof reply.linkRefused !== "boolean")
 	)
 		throw new NativeError("invalid-reply");
 	return {
+		...(reply.archiveExport === undefined
+			? {}
+			: { archiveExport: reply.archiveExport }),
 		...(reply.taskLinks === undefined ? {} : { taskLinks: reply.taskLinks }),
 		...(reply.linkRefused === undefined
 			? {}
@@ -445,10 +454,18 @@ export async function connectBridge(): Promise<Hello> {
 
 /** Credential-free metadata snapshot of the current generation. */
 export function bridgeState(): Hello {
-	const { gen, server, session, pushProvider, taskLinks, linkRefused } =
-		requireState();
+	const {
+		gen,
+		server,
+		session,
+		pushProvider,
+		taskLinks,
+		linkRefused,
+		archiveExport,
+	} = requireState();
 	return {
 		...(pushProvider === undefined ? {} : { pushProvider }),
+		...(archiveExport === undefined ? {} : { archiveExport }),
 		...(taskLinks === undefined ? {} : { taskLinks }),
 		...(linkRefused === undefined ? {} : { linkRefused }),
 		gen,

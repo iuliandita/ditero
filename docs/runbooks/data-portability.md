@@ -196,9 +196,9 @@ access. See [Native data format](native-format.md) for the version 2 contract.
 
 ## Encrypted attachment archives
 
-Use the browser for attachment archive export and import; these operations are
-currently unavailable in the Android and desktop apps. Sign in to the relevant
-server and unlock **Encrypted files** first. Source files need their available
+Attachment archive export is available in the browser and Linux desktop app.
+Android, Windows and macOS require the browser. Archive import and recovery remain
+browser-only. Sign in to the relevant server and unlock **Encrypted files** first. Source files need their available
 keys; importing also requires current write permission and an available encryption
 key for the applied destination. Import creates no memberships or permissions.
 
@@ -213,6 +213,9 @@ key for the applied destination. Import creates no memberships or permissions.
 3. Select both **Download content** and **Download files** and keep those two files
    together. The content JSON is readable; the files archive is protected by the
    archive passphrase. Keep that passphrase: it is required to open the archive.
+   On Linux desktop, each button opens a separate system save dialog. **Saved**
+   appears only after the file is written successfully; canceling a save leaves
+   that file unconfirmed.
 
 Use the exact content JSON downloaded with that files archive. A separate
 **Download JSON** export, an edited file or a reserialized copy is not a substitute,

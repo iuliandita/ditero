@@ -148,6 +148,7 @@ export function createAttachmentRuntime(
 	scope: string,
 	desktop: boolean,
 	call: Call = callAttachment,
+	archiveExportEnabled = false,
 ): AttachmentRuntime {
 	const declared = new Map<string, number>();
 	const checked: Call = async (op, body = {}) => {
@@ -444,5 +445,85 @@ export function createAttachmentRuntime(
 				}
 			}
 		: (use) => withCiphertextStage(use, scope);
-	return { fetcher, pickFile, withStage };
+	let archiveReading = false;
+	const archiveExport =
+		desktop && archiveExportEnabled
+			? {
+					async readContent(signal?: AbortSignal): Promise<string> {
+						assertCurrent();
+						signal?.throwIfAborted();
+						if (archiveReading) throw new Error("native archive export busy");
+						archiveReading = true;
+						let transferId: string | undefined;
+						const abort = () => {
+							void cancel(
+								transferId
+									? "attachment.cancel"
+									: "archive.export.cancelPending",
+								transferId ? { transferId } : {},
+							);
+						};
+						signal?.addEventListener("abort", abort, { once: true });
+						try {
+							const begun = await checked("archive.export.begin", {});
+							if (!begun.ok)
+								throw new Error(
+									begun.status === 413
+										? "archive-too-large"
+										: begun.status === 429
+											? "export-busy"
+											: begun.status === 401
+												? "unauthorized"
+												: "archive-export-refused",
+								);
+							transferId = id(begun, "transferId");
+							if (
+								!Number.isSafeInteger(begun.bytes) ||
+								Number(begun.bytes) < 0 ||
+								Number(begun.bytes) > 32 * 1024 * 1024
+							)
+								throw new TypeError("native archive size refused");
+							const expected = Number(begun.bytes);
+							const decoder = new TextDecoder("utf-8", {
+								fatal: true,
+								ignoreBOM: true,
+							});
+							const parts: string[] = [];
+							let seen = 0;
+							for (let seq = 0; ; seq++) {
+								signal?.throwIfAborted();
+								const next = await checked("archive.export.read", {
+									transferId,
+									seq,
+								});
+								signal?.throwIfAborted();
+								if (!next.ok || typeof next.eof !== "boolean")
+									throw new TypeError("native archive response refused");
+								const bytes = decode(next);
+								seen += bytes.length;
+								if (seen > expected || (!next.eof && bytes.length === 0))
+									throw new TypeError("native archive size refused");
+								parts.push(decoder.decode(bytes, { stream: !next.eof }));
+								if (next.eof) {
+									if (bytes.length !== 0 || seen !== expected)
+										throw new TypeError("native archive size refused");
+									assertCurrent();
+									return parts.join("");
+								}
+							}
+						} finally {
+							signal?.removeEventListener("abort", abort);
+							if (transferId) await cancel("attachment.cancel", { transferId });
+							else await cancel("archive.export.cancelPending", {});
+							archiveReading = false;
+						}
+					},
+				}
+			: undefined;
+	return {
+		fetcher,
+		pickFile,
+		withStage,
+		...(archiveExport ? { archiveExport } : {}),
+	};
 }

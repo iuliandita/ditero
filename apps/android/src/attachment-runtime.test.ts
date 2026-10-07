@@ -198,3 +198,119 @@ test("native deletion uses the shared API canonical fixed POST route", async () 
 	});
 	expect(call).toHaveBeenCalledWith("attachment.delete", { id: "file-A" });
 });
+
+function archiveHarness(handler: typeof callAttachment) {
+	let current = true;
+	const call = vi.fn(handler);
+	const runtime = createAttachmentRuntime(
+		() => {
+			if (!current) throw new Error("retired");
+		},
+		"account-A",
+		true,
+		call,
+		true,
+	);
+	return {
+		runtime,
+		call,
+		retire() {
+			current = false;
+		},
+	};
+}
+test("archive export is explicit capability and never a generic fetch route", async () => {
+	const call = vi.fn(async () => successful);
+	expect(
+		createAttachmentRuntime(() => {}, "a", true, call).archiveExport,
+	).toBeUndefined();
+	expect(
+		createAttachmentRuntime(() => {}, "a", false, call, true).archiveExport,
+	).toBeUndefined();
+	const h = archiveHarness(async () => successful);
+	await expect(
+		h.runtime.fetcher("/api/native/portability/export"),
+	).rejects.toThrow("target refused");
+	expect(h.call).not.toHaveBeenCalled();
+});
+test("archive reader joins bounded UTF-8 chunks exactly including a split scalar", async () => {
+	const raw = new TextEncoder().encode('{"text":"😀"}');
+	const h = archiveHarness(async (op, body) => {
+		if (op === "archive.export.begin")
+			return { ok: true, transferId: "archive-A", bytes: raw.length };
+		if (op === "archive.export.read") {
+			const seq = Number(body?.seq);
+			const bytes =
+				seq === 0
+					? raw.slice(0, 11)
+					: seq === 1
+						? raw.slice(11)
+						: new Uint8Array();
+			return {
+				ok: true,
+				data: btoa(String.fromCharCode(...bytes)),
+				eof: seq === 2,
+			};
+		}
+		return successful;
+	});
+	expect(await h.runtime.archiveExport?.readContent()).toBe('{"text":"😀"}');
+	expect(h.call).toHaveBeenCalledWith("archive.export.begin", {});
+	expect(h.call.mock.calls.at(-1)).toEqual([
+		"attachment.cancel",
+		{ transferId: "archive-A" },
+	]);
+});
+test("archive reader rejects oversize, invalid UTF-8 and incomplete byte counts", async () => {
+	for (const mode of ["oversize", "utf8", "incomplete"]) {
+		const h = archiveHarness(async (op) =>
+			op === "archive.export.begin"
+				? {
+						ok: true,
+						transferId: "archive-A",
+						bytes: mode === "oversize" ? 32 * 1024 * 1024 + 1 : 1,
+					}
+				: op === "archive.export.read"
+					? {
+							ok: true,
+							data: mode === "utf8" ? "/w==" : "",
+							eof: mode !== "utf8",
+						}
+					: successful,
+		);
+		await expect(h.runtime.archiveExport?.readContent()).rejects.toThrow();
+		expect(h.call.mock.calls.at(-1)?.[0]).toBe("attachment.cancel");
+	}
+});
+test("archive abort cancels pending read and late reply cannot expose content", async () => {
+	let resolve!: (reply: Reply) => void;
+	const h = archiveHarness(async (op) =>
+		op === "archive.export.begin"
+			? new Promise<Reply>((r) => {
+					resolve = r;
+				})
+			: successful,
+	);
+	const controller = new AbortController();
+	const reading = h.runtime.archiveExport?.readContent(controller.signal);
+	await expect(h.runtime.archiveExport?.readContent()).rejects.toThrow("busy");
+	controller.abort();
+	expect(h.call).toHaveBeenCalledWith("archive.export.cancelPending", {});
+	resolve({ ok: true, transferId: "archive-A", bytes: 0 });
+	await expect(reading).rejects.toMatchObject({ name: "AbortError" });
+	expect(h.call.mock.calls.at(-1)?.[0]).toBe("attachment.cancel");
+});
+test("archive retirement never addresses replacement owner", async () => {
+	let resolve!: (reply: Reply) => void;
+	const h = archiveHarness(
+		async () =>
+			new Promise<Reply>((r) => {
+				resolve = r;
+			}),
+	);
+	const reading = h.runtime.archiveExport?.readContent();
+	h.retire();
+	resolve({ ok: true, transferId: "archive-A", bytes: 0 });
+	await expect(reading).rejects.toThrow("retired");
+	expect(h.call).toHaveBeenCalledTimes(1);
+});
