@@ -8,6 +8,7 @@ const fixture = new URL("../tui/task-mutations-pty.ts", import.meta.url)
 if (!process.env.DATABASE_URL && !process.env.TUI_MUTATIONS_ENV_FILE)
 	throw new Error("A designated fixture database is required");
 test.each([
+	"startup-delay",
 	"update",
 	"update-retry",
 	"update-uncertain",
