@@ -9,6 +9,7 @@ import {
 } from "../../src/server/public-api/tokens.ts";
 
 const modes = [
+	"startup-delay",
 	"update",
 	"update-retry",
 	"update-uncertain",
@@ -67,6 +68,10 @@ let server: ReturnType<typeof Bun.serve> | undefined;
 let terminal: Bun.Terminal | undefined;
 let child: ReturnType<typeof Bun.spawn> | undefined;
 let output = "";
+let releaseProfile: (() => void) | undefined;
+const profileRelease = new Promise<void>((resolve) => {
+	releaseProfile = resolve;
+});
 const wires: {
 	method: string;
 	path: string;
@@ -91,6 +96,16 @@ const frame = () =>
 		"",
 	);
 const frames = () => output.split("\x1b[H\x1b[2J").length;
+const startupReady = () => {
+	const rows = frame()
+		.split("\n")
+		.map((line) => line.replace(/^[\s│|]+|[\s│|]+$/g, ""));
+	return (
+		frame().includes("Terminal actor |") &&
+		rows.includes(mode === "arabic" ? "جاهز" : "Ready") &&
+		rows.includes(mode === "arabic" ? "> مساحات العمل" : "> Workspaces")
+	);
+};
 const writes = () =>
 	wires.filter((wire) => ["PATCH", "DELETE"].includes(wire.method));
 const wait = async (predicate: () => boolean, message: string) => {
@@ -240,6 +255,8 @@ try {
 			wires.push(wire);
 			const response = await app.handle(request);
 			wire.status = response.status;
+			if (mode === "startup-delay" && wire.path === "/api/v1/me")
+				await profileRelease;
 			if (
 				["update-retry", "update-uncertain", "delete-retry"].includes(mode) &&
 				writes().length === 1 &&
@@ -284,12 +301,34 @@ try {
 	);
 	setupFinishedAt = Date.now();
 	enterStage("startup: authenticated initial frame");
-	await wait(
-		() =>
-			wires.some((wire) => wire.path === "/api/v1/me" && wire.status === 200) &&
-			frames() > 1,
-		"Startup did not finish",
-	);
+	let startupFinished = false;
+	// A recorded response and the loading frame precede controller construction.
+	const ready = wait(startupReady, "Startup did not finish").then(() => {
+		startupFinished = true;
+	});
+	void ready.catch(() => {});
+	if (mode === "startup-delay") {
+		await wait(
+			() =>
+				wires.some(
+					(wire) => wire.path === "/api/v1/me" && wire.status === 200,
+				) && frames() > 1,
+			"Delayed profile did not reach the initial frame",
+		);
+		await Bun.sleep(25);
+		assert.equal(
+			startupFinished,
+			false,
+			"Initial frame and recorded profile must not admit navigation",
+		);
+		assert.equal(startupReady(), false);
+		assert.equal(
+			wires.some((wire) => !["/api/v1/me"].includes(wire.path)),
+			false,
+		);
+		releaseProfile?.();
+	}
+	await ready;
 	await send("navigation: open workspace", "\x1b[B\r", () =>
 		frame().includes("Terminal list"),
 	);
@@ -534,6 +573,7 @@ try {
 	}
 	throw error;
 } finally {
+	releaseProfile?.();
 	clearTimeout(timeout);
 	if (child && child.exitCode === null) {
 		child.kill("SIGKILL");
