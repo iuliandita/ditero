@@ -59,6 +59,9 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        // BridgeActivity also calls this during onCreate, before our transport is attached.
+        // Leave the launch intent for onCreate to consume after attachment.
+        if (zeroTransport == null) return;
         consumePushIntent(intent);
         consumeTaskLinkIntent(intent);
     }
