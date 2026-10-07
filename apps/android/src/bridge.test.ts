@@ -751,3 +751,14 @@ test("archive export capability rejects malformed host values", async () => {
 	Object.assign(snapshot, { archiveExport: "true" });
 	await expect(connectBridge()).rejects.toThrow("invalid-reply");
 });
+
+test("archive input capability preserves explicit true/false and rejects malformed metadata", async () => {
+	expect((await connectBridge()).archiveInput).toBeUndefined();
+	snapshot.archiveInput = true;
+	expect((await readBridgeState()).archiveInput).toBe(true);
+	expect(bridgeState().archiveInput).toBe(true);
+	snapshot.archiveInput = false;
+	expect((await readBridgeState()).archiveInput).toBe(false);
+	Object.assign(snapshot, { archiveInput: "true" });
+	await expect(readBridgeState()).rejects.toThrow("invalid-reply");
+});

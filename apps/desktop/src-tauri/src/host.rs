@@ -480,7 +480,7 @@ impl Actor {
         self.jwt_exp = 0;
     }
     fn snapshot(&self) -> Value {
-        json!({"ok":true,"gen":self.gen,"server":self.origin.as_ref().map(|o|json!({"origin":o,"queryUrl":format!("{o}/api/zero/query"),"mutateUrl":format!("{o}/api/zero/mutate")})),"session":self.meta(),"exchanging":false,"revoking":false,"grantPending":self.pending.is_some(),"archiveExport":cfg!(target_os = "linux"),"taskLinks":cfg!(target_os = "linux"),"linkRefused":self.link_refused})
+        json!({"ok":true,"gen":self.gen,"server":self.origin.as_ref().map(|o|json!({"origin":o,"queryUrl":format!("{o}/api/zero/query"),"mutateUrl":format!("{o}/api/zero/mutate")})),"session":self.meta(),"exchanging":false,"revoking":false,"grantPending":self.pending.is_some(),"archiveExport":cfg!(target_os = "linux"),"archiveInput":cfg!(target_os = "linux"),"taskLinks":cfg!(target_os = "linux"),"linkRefused":self.link_refused})
     }
     fn meta(&self) -> Value {
         self.session.as_ref().map(|s|json!({"scope":s.scope(),"userId":s.user_id,"deviceId":s.device_id,"authHandle":self.handle,"expiresAt":s.expires_at,"tokenReady":!self.jwt.is_empty(),"jwtExp":self.jwt_exp})).unwrap_or(Value::Null)
@@ -1914,6 +1914,13 @@ mod tests {
             *self.value.lock().unwrap() = registry.clone();
             Ok(())
         }
+    }
+    #[tokio::test]
+    async fn archive_input_capability_is_linux_only() {
+        assert_eq!(
+            actor(false).snapshot()["archiveInput"],
+            cfg!(target_os = "linux")
+        );
     }
     fn actor(reject: bool) -> Actor {
         let (tx, _) = mpsc::channel(32);

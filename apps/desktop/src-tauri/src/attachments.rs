@@ -252,10 +252,22 @@ impl Transfers {
                 })
             });
         }
-        if op.starts_with("archive.export.") && !cfg!(target_os = "linux") {
+        if (op.starts_with("archive.export.") || op.starts_with("archive.input."))
+            && !cfg!(target_os = "linux")
+        {
             return Err("unknown-op");
         }
         match op.as_str() {
+            "archive.input.pick" => {
+                exact(&body, &["kind"])?;
+                let kind = protocol::string(&body, "kind")?;
+                if !matches!(kind, "content" | "archive") {
+                    return Err("invalid-body");
+                }
+                self.begin(context, op, body, done, move |ctx, id, rx, ready| {
+                    Box::pin(archive_input(ctx, id, rx, ready))
+                })
+            }
             "archive.export.begin" => {
                 exact(&body, &[])?;
                 self.begin(context, op, body, done, move |ctx, id, rx, ready| {
@@ -306,7 +318,9 @@ impl Transfers {
                     Box::pin(save(ctx, filename, id, rx, ready))
                 })
             }
-            "save.cancelPending" | "archive.export.cancelPending" => {
+            "save.cancelPending"
+            | "archive.export.cancelPending"
+            | "archive.input.cancelPending" => {
                 exact(&body, &[])?;
                 let mut entries = self.entries.lock().unwrap();
                 let ids: Vec<_> = entries
@@ -315,6 +329,8 @@ impl Transfers {
                         cap.kind
                             == if op == "save.cancelPending" {
                                 "save.pick"
+                            } else if op == "archive.input.cancelPending" {
+                                "archive.input.pick"
                             } else {
                                 "archive.export.begin"
                             }
@@ -337,7 +353,7 @@ impl Transfers {
                 done(Ok(json!({"ok":true})));
                 Ok(())
             }
-            "attachment.cancel" | "stage.cancel" | "save.cancel" => {
+            "attachment.cancel" | "stage.cancel" | "save.cancel" | "archive.input.cancel" => {
                 let key = if op == "save.cancel" {
                     "saveId"
                 } else if op == "stage.cancel" {
@@ -349,7 +365,9 @@ impl Transfers {
                 let id = protocol::string(&body, key)?;
                 let mut entries = self.entries.lock().unwrap();
                 let cap = entries.get(id).ok_or("invalid-transfer")?;
-                if !cap.context.matches(&context) {
+                if !cap.context.matches(&context)
+                    || (op == "archive.input.cancel" && cap.kind != "archive.input.pick")
+                {
                     return Err("invalid-transfer");
                 }
                 let cap = entries.remove(id).unwrap();
@@ -366,6 +384,7 @@ impl Transfers {
                 Ok(())
             }
             "archive.export.read"
+            | "archive.input.read"
             | "upload.write"
             | "upload.finish"
             | "download.read"
@@ -398,7 +417,9 @@ impl Transfers {
                 }
                 let mut entries = self.entries.lock().unwrap();
                 let cap = entries.get_mut(id).ok_or("invalid-transfer")?;
-                if !cap.context.matches(&context) {
+                if !cap.context.matches(&context)
+                    || (op == "archive.input.read" && cap.kind != "archive.input.pick")
+                {
                     return Err("invalid-transfer");
                 }
                 if cap.busy {
@@ -942,6 +963,100 @@ async fn archive_export(
         seq += 1;
     }
 }
+async fn archive_input(
+    ctx: Context,
+    id: String,
+    rx: mpsc::Receiver<Command>,
+    ready: Completion,
+) -> Result<Value> {
+    archive_input_selected(ctx, id, rx, ready, async {
+        rfd::AsyncFileDialog::new()
+            .add_filter("JSON", &["json"])
+            .pick_file()
+            .await
+            .map(|file| file.path().to_path_buf())
+            .ok_or("cancelled")
+    })
+    .await
+}
+async fn archive_input_selected(
+    ctx: Context,
+    id: String,
+    mut rx: mpsc::Receiver<Command>,
+    ready: Completion,
+    selected: impl std::future::Future<Output = Result<PathBuf>>,
+) -> Result<Value> {
+    ctx.current()?;
+    let path = tokio::time::timeout(Duration::from_secs(300), selected)
+        .await
+        .map_err(|_| "picker-timeout")??;
+    ctx.current()?;
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| filename(&json!({"filename":name})).ok())
+        .unwrap_or_else(|| "archive.json".into());
+    let bytes = tokio::time::timeout(DEADLINE, archive_input_bytes(&ctx, &path))
+        .await
+        .map_err(|_| "transfer-timeout")??;
+    ctx.current()?;
+    ready(Ok(
+        json!({"ok":true,"transferId":id,"bytes":bytes.len(),"name":name}),
+    ));
+    let mut seq = 0;
+    let mut offset = 0;
+    loop {
+        let c = command(&mut rx).await?;
+        ctx.current()?;
+        if c.op != "archive.input.read" {
+            return Err("invalid-transfer-operation");
+        }
+        sequence(&c.body, seq)?;
+        let end = (offset + CHUNK).min(bytes.len());
+        let eof = end == offset;
+        (c.done)(Ok(
+            json!({"ok":true,"data":STANDARD.encode(&bytes[offset..end]),"eof":eof}),
+        ));
+        if eof {
+            return Ok(json!({"ok":true}));
+        }
+        offset = end;
+        seq += 1;
+    }
+}
+async fn archive_input_bytes(ctx: &Context, path: &std::path::Path) -> Result<Vec<u8>> {
+    ctx.current()?;
+    let mut options = tokio::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(target_os = "linux")]
+    // O_NONBLOCK | O_NOFOLLOW: a chooser-path replacement cannot block on a FIFO or follow a link.
+    options.custom_flags(0o4000 | 0o400000);
+    let mut file = options.open(path).await.map_err(|_| "file-unavailable")?;
+    if !file
+        .metadata()
+        .await
+        .map_err(|_| "file-unavailable")?
+        .is_file()
+    {
+        return Err("invalid-file");
+    }
+    let mut bytes = Vec::new();
+    let mut chunk = vec![0; CHUNK];
+    loop {
+        ctx.current()?;
+        let n = file
+            .read(&mut chunk)
+            .await
+            .map_err(|_| "file-unavailable")?;
+        ctx.current()?;
+        if n == 0 {
+            break;
+        }
+        append_archive(&mut bytes, &chunk[..n])?;
+    }
+    std::str::from_utf8(&bytes).map_err(|_| "invalid-utf8")?;
+    Ok(bytes)
+}
 async fn response_error(reply: reqwest::Response, ready: Completion) -> Result<Value> {
     let result = response(reply).await;
     ready(result.clone());
@@ -1005,6 +1120,279 @@ mod tests {
         .await
         .unwrap();
     }
+    #[cfg(target_os = "linux")]
+    async fn selected_input(files: &Transfers, ctx: &Context, path: PathBuf) -> Result<Value> {
+        let (done, rx) = completion();
+        let mut ctx = ctx.clone();
+        ctx.epoch = Some((files.epoch.clone(), files.epoch.load(Ordering::SeqCst)));
+        files.begin(
+            ctx,
+            "archive.input.pick".into(),
+            json!({}),
+            done,
+            move |ctx, id, rx, ready| {
+                Box::pin(archive_input_selected(ctx, id, rx, ready, async move {
+                    Ok(path)
+                }))
+            },
+        )?;
+        tokio::time::timeout(Duration::from_secs(3), rx)
+            .await
+            .unwrap()
+            .unwrap()
+    }
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn archive_input_snapshot_is_immutable_owned_chunked_and_retired() {
+        let root = std::env::temp_dir().join(format!("archive-input-{}", random()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("private:name.json");
+        let bytes = "é".repeat(CHUNK + 3).into_bytes();
+        std::fs::write(&path, &bytes).unwrap();
+        let files = Transfers::default();
+        let ctx = context();
+        let ready = selected_input(&files, &ctx, path.clone()).await.unwrap();
+        assert_eq!(ready["bytes"], bytes.len());
+        assert_eq!(ready["name"], "archive.json");
+        assert!(!ready.to_string().contains(root.to_str().unwrap()));
+        let id = ready["transferId"].as_str().unwrap();
+        std::fs::write(&path, b"changed after selection").unwrap();
+        for dimension in 0..6 {
+            let mut foreign = ctx.clone();
+            match dimension {
+                0 => foreign.session.origin = "https://two.example".into(),
+                1 => foreign.session.user_id = "other-user".into(),
+                2 => foreign.session.session_id = "other-session".into(),
+                3 => foreign.session.token = "other-token".into(),
+                4 => {
+                    foreign.gen = 2;
+                    foreign.clock = Arc::new(AtomicU64::new(2));
+                }
+                _ => {
+                    foreign.page = 2;
+                    foreign.pages = Arc::new(AtomicU64::new(2));
+                }
+            }
+            assert_eq!(
+                call(
+                    &files,
+                    &foreign,
+                    "archive.input.read",
+                    json!({"transferId":id,"seq":0})
+                )
+                .await,
+                Err("invalid-transfer")
+            );
+        }
+        let mut actual = Vec::new();
+        for seq in 0..4 {
+            let chunk = call(
+                &files,
+                &ctx,
+                "archive.input.read",
+                json!({"transferId":id,"seq":seq}),
+            )
+            .await
+            .unwrap();
+            let data = chunk["data"].as_str().unwrap();
+            let decoded = STANDARD.decode(data).unwrap();
+            assert_eq!(STANDARD.encode(&decoded), data);
+            assert!(decoded.len() <= CHUNK);
+            if seq == 3 {
+                assert_eq!(chunk["eof"], true);
+                assert!(decoded.is_empty());
+            } else {
+                assert_eq!(chunk["eof"], false);
+                actual.extend(decoded);
+            }
+        }
+        assert_eq!(actual, bytes);
+        until(|| files.entries.lock().unwrap().is_empty()).await;
+        assert_eq!(
+            call(
+                &files,
+                &ctx,
+                "archive.input.read",
+                json!({"transferId":id,"seq":4})
+            )
+            .await,
+            Err("invalid-transfer")
+        );
+        let ready = selected_input(&files, &ctx, path.clone()).await.unwrap();
+        let id = ready["transferId"].as_str().unwrap();
+        assert_eq!(
+            call(
+                &files,
+                &ctx,
+                "archive.input.read",
+                json!({"transferId":id,"seq":1})
+            )
+            .await,
+            Err("invalid-sequence")
+        );
+        until(|| files.entries.lock().unwrap().is_empty()).await;
+        let ready = selected_input(&files, &ctx, root.join("private:name.json"))
+            .await
+            .unwrap();
+        files.cancel_all();
+        assert_eq!(
+            call(
+                &files,
+                &ctx,
+                "archive.input.read",
+                json!({"transferId":ready["transferId"],"seq":0})
+            )
+            .await,
+            Err("invalid-transfer")
+        );
+        std::fs::write(&path, b"").unwrap();
+        let ready = selected_input(&files, &ctx, path.clone()).await.unwrap();
+        assert_eq!(ready["bytes"], 0);
+        let id = ready["transferId"].as_str().unwrap();
+        let empty = call(
+            &files,
+            &ctx,
+            "archive.input.read",
+            json!({"transferId":id,"seq":0}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(empty, json!({"ok":true,"data":"","eof":true}));
+        until(|| files.entries.lock().unwrap().is_empty()).await;
+        let ready = selected_input(&files, &ctx, path).await.unwrap();
+        let id = ready["transferId"].as_str().unwrap();
+        let mut foreign = ctx.clone();
+        foreign.session.user_id = "other-user".into();
+        assert_eq!(
+            call(
+                &files,
+                &foreign,
+                "archive.input.cancel",
+                json!({"transferId":id})
+            )
+            .await,
+            Err("invalid-transfer")
+        );
+        call(
+            &files,
+            &ctx,
+            "archive.input.cancel",
+            json!({"transferId":id}),
+        )
+        .await
+        .unwrap();
+        assert!(files.entries.lock().unwrap().is_empty());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn archive_input_rejects_special_files_invalid_utf8_and_observed_oversize() {
+        let root = std::env::temp_dir().join(format!("archive-input-{}", random()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("archive.json");
+        let files = Transfers::default();
+        let ctx = context();
+        for path in [root.clone(), PathBuf::from("/dev/null")] {
+            assert_eq!(
+                selected_input(&files, &ctx, path).await,
+                Err("invalid-file")
+            );
+            until(|| files.entries.lock().unwrap().is_empty()).await;
+        }
+        std::fs::write(&path, [0xff]).unwrap();
+        assert_eq!(
+            selected_input(&files, &ctx, path.clone()).await,
+            Err("invalid-utf8")
+        );
+        until(|| files.entries.lock().unwrap().is_empty()).await;
+        let link = root.join("link.json");
+        std::os::unix::fs::symlink(&path, &link).unwrap();
+        assert_eq!(
+            selected_input(&files, &ctx, link).await,
+            Err("file-unavailable")
+        );
+        until(|| files.entries.lock().unwrap().is_empty()).await;
+        std::fs::write(&path, vec![b' '; ARCHIVE_LIMIT]).unwrap();
+        assert_eq!(
+            archive_input_bytes(&ctx, &path).await.unwrap().len(),
+            ARCHIVE_LIMIT
+        );
+        use std::io::Write;
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(b" ")
+            .unwrap();
+        assert_eq!(
+            selected_input(&files, &ctx, path).await,
+            Err("archive-too-large")
+        );
+        until(|| files.entries.lock().unwrap().is_empty()).await;
+        for body in [
+            json!({"kind":"invalid"}),
+            json!({"kind":"archive","path":"/tmp/file"}),
+            json!({"kind":"content","url":"https://one.example"}),
+        ] {
+            assert_eq!(
+                call(&files, &ctx, "archive.input.pick", body).await,
+                Err("invalid-body")
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn archive_input_pending_cancellation_and_capacity_are_scoped() {
+        let files = Transfers::default();
+        let ctx = context();
+        let mut pending = Vec::new();
+        let mut selections = Vec::new();
+        for _ in 0..4 {
+            let (selection, selected) = oneshot::channel::<PathBuf>();
+            let (done, rx) = completion();
+            files
+                .begin(
+                    ctx.clone(),
+                    "archive.input.pick".into(),
+                    json!({}),
+                    done,
+                    move |ctx, id, rx, ready| {
+                        Box::pin(archive_input_selected(ctx, id, rx, ready, async move {
+                            selected.await.map_err(|_| "cancelled")
+                        }))
+                    },
+                )
+                .unwrap();
+            pending.push(rx);
+            selections.push(selection);
+        }
+        let (done, _) = completion();
+        assert_eq!(
+            files.begin(
+                ctx.clone(),
+                "archive.input.pick".into(),
+                json!({}),
+                done,
+                |_, _, _, _| Box::pin(std::future::pending())
+            ),
+            Err("too-many-transfers")
+        );
+        let mut foreign = ctx.clone();
+        foreign.session.user_id = "other-user".into();
+        call(&files, &foreign, "archive.input.cancelPending", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(files.entries.lock().unwrap().len(), 4);
+        call(&files, &ctx, "archive.input.cancelPending", json!({}))
+            .await
+            .unwrap();
+        for rx in pending {
+            assert_eq!(rx.await.unwrap(), Err("cancelled"));
+        }
+        until(|| selections.iter().all(oneshot::Sender::is_closed)).await;
+        assert!(files.entries.lock().unwrap().is_empty());
+    }
     fn archive_server(
         reply: Vec<u8>,
         delay: Duration,
@@ -1036,6 +1424,10 @@ mod tests {
             "archive.export.begin",
             "archive.export.read",
             "archive.export.cancelPending",
+            "archive.input.pick",
+            "archive.input.read",
+            "archive.input.cancelPending",
+            "archive.input.cancel",
         ] {
             let (done, mut rx) = completion();
             assert_eq!(

@@ -9,6 +9,12 @@ export type AttachmentRuntime = {
 		signal?: AbortSignal,
 	) => Promise<DownloadDestination>;
 	readonly withStage: CiphertextStageRunner;
+	readonly archiveInput?: {
+		readDocument(
+			kind: "content" | "archive",
+			signal?: AbortSignal,
+		): Promise<string>;
+	};
 	readonly archiveExport?: {
 		readContent(signal?: AbortSignal): Promise<string>;
 	};

@@ -498,6 +498,7 @@ pub fn attachment(v: &Value) -> Result<(bool, String, Option<String>)> {
 }
 pub fn file_operation(op: &str) -> bool {
     op.starts_with("archive.export.")
+        || op.starts_with("archive.input.")
         || op.starts_with("attachment.")
         || op.starts_with("upload.")
         || op.starts_with("download.")
@@ -511,6 +512,18 @@ pub fn file_chunk(op: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn archive_input_uses_named_file_operations_without_request_chunks() {
+        for op in [
+            "archive.input.pick",
+            "archive.input.read",
+            "archive.input.cancelPending",
+            "archive.input.cancel",
+        ] {
+            assert!(file_operation(op));
+            assert!(!file_chunk(op));
+        }
+    }
     #[test]
     fn strict_authorities_and_json() {
         assert_eq!(

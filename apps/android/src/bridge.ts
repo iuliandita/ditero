@@ -35,6 +35,7 @@ export type SessionMeta = {
 
 export type Hello = {
 	archiveExport?: boolean;
+	archiveInput?: boolean;
 	taskLinks?: boolean;
 	linkRefused?: boolean;
 	pushProvider?: NativePushState["provider"];
@@ -88,6 +89,10 @@ export type AttachmentOp =
 	| "upload.begin"
 	| "upload.write"
 	| "upload.finish"
+	| "archive.input.pick"
+	| "archive.input.read"
+	| "archive.input.cancelPending"
+	| "archive.input.cancel"
 	| "archive.export.begin"
 	| "archive.export.read"
 	| "archive.export.cancelPending"
@@ -256,6 +261,8 @@ function parseHello(reply: Reply): Hello {
 	)
 		throw new NativeError("invalid-reply");
 	if (
+		(reply.archiveInput !== undefined &&
+			typeof reply.archiveInput !== "boolean") ||
 		(reply.archiveExport !== undefined &&
 			typeof reply.archiveExport !== "boolean") ||
 		(reply.taskLinks !== undefined && typeof reply.taskLinks !== "boolean") ||
@@ -263,6 +270,9 @@ function parseHello(reply: Reply): Hello {
 	)
 		throw new NativeError("invalid-reply");
 	return {
+		...(reply.archiveInput === undefined
+			? {}
+			: { archiveInput: reply.archiveInput }),
 		...(reply.archiveExport === undefined
 			? {}
 			: { archiveExport: reply.archiveExport }),
@@ -462,10 +472,12 @@ export function bridgeState(): Hello {
 		taskLinks,
 		linkRefused,
 		archiveExport,
+		archiveInput,
 	} = requireState();
 	return {
 		...(pushProvider === undefined ? {} : { pushProvider }),
 		...(archiveExport === undefined ? {} : { archiveExport }),
+		...(archiveInput === undefined ? {} : { archiveInput }),
 		...(taskLinks === undefined ? {} : { taskLinks }),
 		...(linkRefused === undefined ? {} : { linkRefused }),
 		gen,
@@ -772,7 +784,9 @@ export function callAttachment(
 				ok(reply);
 			return reply;
 		},
-		op === "save.pick" ? 300_000 : CALL_TIMEOUT_MS,
+		op === "save.pick" || op === "archive.input.pick"
+			? 300_000
+			: CALL_TIMEOUT_MS,
 	);
 }
 
