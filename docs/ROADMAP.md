@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-10-06 | Status: pre-v1, building on `develop`
+> Updated: 2026-10-07 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -38,9 +38,11 @@ qualification notes. Native delivery remains open in issue #346.
 
 Development happens on `develop`. The first published release was `0.0.1-alpha.1`;
 the current published alpha is
-[`0.0.1-alpha.7`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.7).
-Published alphas package containers, Helm/Compose deployment files and experimental
-native downloads; Windows downloads are unsigned and macOS downloads use ad-hoc
+[`0.0.1-alpha.8`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.8).
+Alpha 8 adds paired JSON/encrypted attachment archive export on Linux desktop and
+fixes shared workspace key grants under the restricted database role.
+Published alphas package containers, Helm/Kustomize/Compose deployment files and
+experimental native downloads; Windows downloads are unsigned and macOS downloads use ad-hoc
 signatures. Native qualification remains open. `1.0.0` requires the complete v1
 contract below.
 
