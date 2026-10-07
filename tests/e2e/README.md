@@ -56,6 +56,18 @@ directories and JSON reports preserve evidence from both phases; CI uploads
 
 ## Per-run isolation and cleanup
 
+The integration S3 fixture uses pinned SeaweedFS 4.48 in standalone server mode.
+The historical service names `minio` and `minio-init`, volume `minio-data`, port
+9000, and `DITERO_TEST_MINIO_PORT` remain compatible with the runner. Its static
+`seaweedfs-s3.json` contains dummy `minioadmin` credentials used with the `ditero-test`
+bucket in this disposable fixture. The health check makes an authenticated
+S3 request; the initializer uses the built-in administrative shell to create the
+bucket if absent. Only S3 is published to loopback; internal administrative ports
+stay on the test network. Growth allocates one volume per request so bucket and
+metadata collections share the four-volume ceiling. Both services run as UID/GID
+1000 with bounded resources.
+These credentials and storage settings are not deployment guidance.
+
 Every runner invocation generates a UUID and uses the Compose project
 `ditero-e2e-<uuid without dashes>`. The label `io.ditero.e2e.run=<uuid>` is on
 every Compose service, all three named volumes, and the default network. Compose

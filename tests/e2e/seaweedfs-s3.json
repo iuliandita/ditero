@@ -1,0 +1,9 @@
+{
+	"identities": [
+		{
+			"name": "test-admin",
+			"credentials": [{ "accessKey": "minioadmin", "secretKey": "minioadmin" }],
+			"actions": ["Admin", "Read", "Write", "List"]
+		}
+	]
+}
