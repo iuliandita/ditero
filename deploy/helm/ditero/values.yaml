@@ -10,7 +10,7 @@ existingSecret: ditero-secrets
 app:
   image:
     repository: ghcr.io/iuliandita/ditero
-    tag: 0.0.1-alpha.7
+    tag: 0.0.1-alpha.8
     # A digest, when supplied, takes precedence over the tag.
     digest: ""
     pullPolicy: IfNotPresent
@@ -47,7 +47,7 @@ zero:
   syncWorkers: 1
   image:
     repository: ghcr.io/iuliandita/ditero
-    tag: 0.0.1-alpha.7-zero
+    tag: 0.0.1-alpha.8-zero
     digest: ""
     pullPolicy: IfNotPresent
   extraEnv: []
