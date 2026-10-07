@@ -43,7 +43,7 @@ those behaviors. See the [Android](apps/android/README.md) and
 | `0.0.1-alpha.4` | Fourth alpha version |
 | `0.0.1-alpha.5` | Fifth alpha version |
 | `0.0.1-alpha.6` | Sixth alpha version |
-| `0.0.1-alpha.7` | Seventh alpha version (pending publication) |
+| `0.0.1-alpha.7` | Seventh alpha version |
 | `X.Y.Z`, `X.Y`, `X`, `latest` | Stable releases, starting at `1.0.0` |
 | `stable` | Stable release explicitly promoted after a week |
 
@@ -51,7 +51,7 @@ Version tags omit the Git tag's `v` prefix. Debian app tags have a `-debian` suf
 Zero tags have a `-zero` suffix. Nightly Zero tags are `nightly-zero` and
 `nightly-zero-<sha>`. Prereleases never move `latest`, major/minor or `stable` tags.
 
-For the alpha Compose package, set `DITERO_IMAGE_TAG=0.0.1-alpha.6` and follow the
+For the alpha Compose package, set `DITERO_IMAGE_TAG=0.0.1-alpha.7` and follow the
 [Compose setup](README.md#run-it-docker-compose). Extract the whole archive: bundled
 PostgreSQL needs the adjacent initialization scripts. Helm instructions and required
 Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
@@ -59,7 +59,9 @@ Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
 ## Release procedure
 
 1. Update `release.json` with the version and a strictly increasing Android version
-   code. Align Helm chart metadata and Helm/Kustomize app/Zero image tags with that version.
+   code. Align Helm chart metadata, Helm/Kustomize app/Zero image tags, and current
+   version/image examples in both packaged deployment guides with that version
+   before tagging. Release packaging checks reject mismatched guide examples.
    Native packaging applies the release version to Tauri and Android without
    rewriting generated files; Cargo's package version remains the base version.
 2. Merge the release PR into `develop` for prereleases or `main` for stable releases.
@@ -79,7 +81,7 @@ Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
 5. Verify both registries' amd64/arm64 manifests and download checksums. Retain the
    Android signing identity securely so subsequent APKs upgrade existing installs.
 6. After publication, update the current-release links in `README.md` and
-   `docs/ROADMAP.md`, installation examples, and affected client guides through a
+   `docs/ROADMAP.md` and affected client guides through a
    documentation PR. Keep historical changelog entries and version-tag examples
    clearly distinguished from current installation guidance.
 
