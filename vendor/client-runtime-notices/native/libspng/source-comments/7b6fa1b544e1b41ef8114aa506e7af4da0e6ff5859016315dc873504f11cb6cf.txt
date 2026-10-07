@@ -1,0 +1,16 @@
+/* NEON optimised palette expansion functions
+ * Derived from palette_neon_intrinsics.c
+ *
+ * Copyright (c) 2018-2019 Cosmin Truta
+ * Copyright (c) 2017-2018 Arm Holdings. All rights reserved.
+ * Written by Richard Townsend <Richard.Townsend@arm.com>, February 2017.
+ *
+ * This code is derived from libpng source code.
+ * For conditions of distribution and use, see the disclaimer
+ * and license in this file.
+ *
+ * Related: https://developer.arm.com/documentation/101964/latest/Color-palette-expansion
+ *
+ * The functions were refactored to iterate forward.
+ *
+ */

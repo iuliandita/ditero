@@ -1,0 +1,12 @@
+/* SSE2 optimised filter functions
+ * Derived from filter_neon_intrinsics.c
+ *
+ * Copyright (c) 2018 Cosmin Truta
+ * Copyright (c) 2016-2017 Glenn Randers-Pehrson
+ * Written by Mike Klein and Matt Sarett
+ * Derived from arm/filter_neon_intrinsics.c
+ *
+ * This code is derived from libpng source code.
+ * For conditions of distribution and use, see the disclaimer
+ * and license above.
+ */

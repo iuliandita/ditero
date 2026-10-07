@@ -188,6 +188,246 @@
 			},
 			"license": "LicenseRef-WebKit-Source-bmalloc-mimalloc-mimalloc-LICENSE",
 			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libspng/source-comments/a4cc439d7346c8512ceaccc5fc4a77121911bafea97344a0c21fef43d4b5458f.txt",
+			"sha256": "a4cc439d7346c8512ceaccc5fc4a77121911bafea97344a0c21fef43d4b5458f",
+			"origin": {
+				"url": "https://github.com/randy408/libspng/blob/fb768002d4288590083a476af628e51c3f1d47cd/spng/spng.c",
+				"revision": "fb768002d4288590083a476af628e51c3f1d47cd"
+			},
+			"license": "LicenseRef-libspng-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libspng/source-comments/4754f9432e7a17d2fcea9a7961ba83ee58fd1972fe578e9af6343ecd155255bc.txt",
+			"sha256": "4754f9432e7a17d2fcea9a7961ba83ee58fd1972fe578e9af6343ecd155255bc",
+			"origin": {
+				"url": "https://github.com/randy408/libspng/blob/fb768002d4288590083a476af628e51c3f1d47cd/spng/spng.c",
+				"revision": "fb768002d4288590083a476af628e51c3f1d47cd"
+			},
+			"license": "LicenseRef-libspng-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libspng/source-comments/b5c2b58d375006363de30e3c882fbcccc18da5e935b264321385e4d35d860589.txt",
+			"sha256": "b5c2b58d375006363de30e3c882fbcccc18da5e935b264321385e4d35d860589",
+			"origin": {
+				"url": "https://github.com/randy408/libspng/blob/fb768002d4288590083a476af628e51c3f1d47cd/spng/spng.c",
+				"revision": "fb768002d4288590083a476af628e51c3f1d47cd"
+			},
+			"license": "LicenseRef-libspng-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libspng/source-comments/7b6fa1b544e1b41ef8114aa506e7af4da0e6ff5859016315dc873504f11cb6cf.txt",
+			"sha256": "7b6fa1b544e1b41ef8114aa506e7af4da0e6ff5859016315dc873504f11cb6cf",
+			"origin": {
+				"url": "https://github.com/randy408/libspng/blob/fb768002d4288590083a476af628e51c3f1d47cd/spng/spng.c",
+				"revision": "fb768002d4288590083a476af628e51c3f1d47cd"
+			},
+			"license": "LicenseRef-libspng-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/316e3e8ee222ed41ec5b7cf8a23141e2604dd0d84a8d9ea604bd6e820a7bc712.txt",
+			"sha256": "316e3e8ee222ed41ec5b7cf8a23141e2604dd0d84a8d9ea604bd6e820a7bc712",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/include/mimalloc-new-delete.h",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/b78d6d6f6987e9c53c0986d9541d0ee788ea342d21354ce3e1201fd576432443.txt",
+			"sha256": "b78d6d6f6987e9c53c0986d9541d0ee788ea342d21354ce3e1201fd576432443",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/include/mimalloc-stats.h",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/a83a37ed49fb4c0ef28a0dd15c22e5b4a692681c03370819462dd1b725f20472.txt",
+			"sha256": "a83a37ed49fb4c0ef28a0dd15c22e5b4a692681c03370819462dd1b725f20472",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/include/mimalloc.h",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/b3a51d85b05cb0b58dc9ebb734fb7b27b0603b1b16e0e38e855af58ca6287f48.txt",
+			"sha256": "b3a51d85b05cb0b58dc9ebb734fb7b27b0603b1b16e0e38e855af58ca6287f48",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/include/mimalloc/atomic.h",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/639b11d93dd04d81062e0686060a502e7a48d45bb741c00492f80211933a9d22.txt",
+			"sha256": "639b11d93dd04d81062e0686060a502e7a48d45bb741c00492f80211933a9d22",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/include/mimalloc/bits.h",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/9c539f023f58cf16211c185ffdbd513c962b5837590d31b3548c97d59017909a.txt",
+			"sha256": "9c539f023f58cf16211c185ffdbd513c962b5837590d31b3548c97d59017909a",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/include/mimalloc/track.h",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/4da3a041a99f06f35d5315666d667215989069705815370797849ac31193fe9c.txt",
+			"sha256": "4da3a041a99f06f35d5315666d667215989069705815370797849ac31193fe9c",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/alloc-posix.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/ebe1bcfd69dd980d2b6c6a9fcfc201a68887152a13c43fb58624cd13fc920599.txt",
+			"sha256": "ebe1bcfd69dd980d2b6c6a9fcfc201a68887152a13c43fb58624cd13fc920599",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/arena.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/7b34d571510e9aa69ce8cf2abf6a8cb75d9830a09d174bc4778ec0bed67f2e85.txt",
+			"sha256": "7b34d571510e9aa69ce8cf2abf6a8cb75d9830a09d174bc4778ec0bed67f2e85",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/bitmap.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/fb6fc3928825c57eda434bb68cbf4f89a592069539c9f04d5a744bc2fea6cb57.txt",
+			"sha256": "fb6fc3928825c57eda434bb68cbf4f89a592069539c9f04d5a744bc2fea6cb57",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/heap-snapshot.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/0d5df7bb3239898448d16103ff76bcee729c486757dfc4cbf29f589df8228240.txt",
+			"sha256": "0d5df7bb3239898448d16103ff76bcee729c486757dfc4cbf29f589df8228240",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/heap.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/71014bdde772e91d0b1fda5fcaaf2cac7e29de8925f2581949fd54cb6075d09a.txt",
+			"sha256": "71014bdde772e91d0b1fda5fcaaf2cac7e29de8925f2581949fd54cb6075d09a",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/page-map.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/6b9f5ebaf7f2122dda2cea985b5accd8ab8b48bb4f57717ee06c5ed7f9bed42f.txt",
+			"sha256": "6b9f5ebaf7f2122dda2cea985b5accd8ab8b48bb4f57717ee06c5ed7f9bed42f",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/page-queue.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/601c45722adbd10eaa2de8b4840d1a3deb3cb3cfbc3b1ba27309ba9e94db004b.txt",
+			"sha256": "601c45722adbd10eaa2de8b4840d1a3deb3cb3cfbc3b1ba27309ba9e94db004b",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/prim/emscripten/prim.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/9a385e80e0858024e431a7caf2d483edd8492f489c5460cf96aa5473bb5854a7.txt",
+			"sha256": "9a385e80e0858024e431a7caf2d483edd8492f489c5460cf96aa5473bb5854a7",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/prim/osx/alloc-override-zone.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/1e6a8703ee950defade268ddf0508e980ff6d6e5a79a5600cd4d9f3abf06cf39.txt",
+			"sha256": "1e6a8703ee950defade268ddf0508e980ff6d6e5a79a5600cd4d9f3abf06cf39",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/random.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/accdb0d8009a467869130e83377904a248ed134abb5731b20f08d5b0cd95306b.txt",
+			"sha256": "accdb0d8009a467869130e83377904a248ed134abb5731b20f08d5b0cd95306b",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/scavenger.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/source-comments/40154cfb99f39cf2ae977d2128342b57c6609f16f122cf8ca8b9d083f780614d.txt",
+			"sha256": "40154cfb99f39cf2ae977d2128342b57c6609f16f122cf8ca8b9d083f780614d",
+			"origin": {
+				"url": "https://github.com/oven-sh/mimalloc/blob/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a/src/static.c",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Source-Comment",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libspng/LICENSE",
+			"sha256": "0622b0794d0fecde47d743f1bb70a03e6fdf082be8e71f39de672ed995d96ff9",
+			"origin": {
+				"url": "https://codeload.github.com/randy408/libspng/tar.gz/fb768002d4288590083a476af628e51c3f1d47cd",
+				"revision": "fb768002d4288590083a476af628e51c3f1d47cd"
+			},
+			"license": "LicenseRef-libspng-Root-LICENSE",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/mimalloc/LICENSE",
+			"sha256": "82ade5d7d9b029044b5fbbc326207fc47c2d44ee4dd71e8a559c36d728217de9",
+			"origin": {
+				"url": "https://codeload.github.com/oven-sh/mimalloc/tar.gz/6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a",
+				"revision": "6a64e1ba7f5b2130d4efccb67ec87fd0003f0f6a"
+			},
+			"license": "LicenseRef-mimalloc-Root-LICENSE",
+			"selection": "conservative-extra"
 		}
 	],
 	"unresolved": [
