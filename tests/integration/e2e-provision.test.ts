@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { handleAuthRequest } from "../../src/auth/auth.ts";
 import { withRegistrationBypass } from "../../src/auth/registration-bypass.ts";
@@ -12,6 +12,7 @@ import {
 } from "../../src/domain/e2e/hpke.ts";
 import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
 import { commitWdk } from "../../src/domain/e2e/wdk-commitment.ts";
+import { rotateIdentity } from "../../src/server/e2e/identity-rotation.ts";
 import { provisionWorkspace } from "../../src/server/e2e/provision.ts";
 import { app } from "../../src/server/index.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
@@ -25,6 +26,16 @@ const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
 
 const pool = new Pool({ connectionString: databaseURL });
+
+async function rollbackAndRelease(client: PoolClient): Promise<void> {
+	let failed = true;
+	try {
+		await client.query("rollback");
+		failed = false;
+	} finally {
+		client.release(failed);
+	}
+}
 const ORIGIN = "http://localhost:5173";
 
 const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
@@ -271,6 +282,66 @@ describe("POST /api/e2e/provision", () => {
 		}
 	});
 
+	test("provisioning waits for identity rotation before validating its recipient", async () => {
+		const { body } = await mint(SHARED, ownerKey, owner);
+		const next = await newIdentity();
+		const rotator = await pool.connect();
+		const minter = await pool.connect();
+		let minting: ReturnType<typeof provisionWorkspace> | undefined;
+		try {
+			await rotator.query("begin");
+			expect(
+				await rotateIdentity(rotator, owner, {
+					publicKey: next.publicKey,
+					previousPublicKey: ownerKey.publicKey,
+					passphraseWrapped: "wrap",
+					recoveryWrapped: "recovery",
+					passphraseSalt: "salt",
+					recoverySalt: "recovery-salt",
+					formatVersion: CURRENT_KDF_VERSION,
+					rewraps: [],
+				}),
+			).toMatchObject({ ok: true });
+			await minter.query("begin");
+			const pid = (
+				await minter.query<{ pid: number }>("select pg_backend_pid() as pid")
+			).rows[0]?.pid;
+			minting = provisionWorkspace(minter, owner, body);
+			await expect
+				.poll(
+					async () =>
+						(
+							await pool.query(
+								"select wait_event from pg_stat_activity where pid=$1",
+								[pid],
+							)
+						).rows[0]?.wait_event,
+				)
+				.toBe("advisory");
+			await rotator.query("commit");
+			expect(await minting).toEqual({
+				ok: false,
+				reason: "stale-recipient-key",
+			});
+			await minter.query("commit");
+			expect(
+				(
+					await pool.query(
+						"select id from workspace_key where workspace_id=$1",
+						[SHARED],
+					)
+				).rows,
+			).toEqual([]);
+		} finally {
+			try {
+				await rollbackAndRelease(rotator);
+			} finally {
+				await minting?.catch(() => undefined);
+				await rollbackAndRelease(minter);
+			}
+		}
+	});
+
 	test("rejects a wrap sealed before the recipient identity changed", async () => {
 		const { body } = await mint(SHARED, ownerKey, owner);
 		const replacement = await newIdentity();
@@ -327,11 +398,12 @@ describe("POST /api/e2e/provision", () => {
 			expect(await workspaceKeys(SHARED)).toEqual([]);
 			expect(await membershipKeys(owner, SHARED)).toEqual([]);
 		} finally {
-			await writer.query("rollback");
-			await minting;
-			await minter.query("rollback");
-			writer.release();
-			minter.release();
+			try {
+				await rollbackAndRelease(writer);
+			} finally {
+				await minting?.catch(() => undefined);
+				await rollbackAndRelease(minter);
+			}
 		}
 	});
 

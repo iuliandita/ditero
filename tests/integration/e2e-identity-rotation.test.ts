@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { handleAuthRequest } from "../../src/auth/auth.ts";
 import {
@@ -28,6 +28,16 @@ const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
 
 const pool = new Pool({ connectionString: databaseURL });
+
+async function rollbackAndRelease(client: PoolClient): Promise<void> {
+	let failed = true;
+	try {
+		await client.query("rollback");
+		failed = false;
+	} finally {
+		client.release(failed);
+	}
+}
 
 const ORIGIN = "http://localhost:5173";
 
@@ -492,32 +502,126 @@ describe("POST /api/e2e/identity/rotate", () => {
 	});
 
 	test("a landed grant holds the recipient identity stable through commit", async () => {
+		await pool.query("delete from membership_key where id = 'mk_alice_v1'");
+		await pool.query(
+			`insert into key_grant_request
+			(id, membership_id, user_id, workspace_id, requested_version)
+			values ('kgr_hold', 'm_alice', $1, 'ws_1', 1)`,
+			[alice],
+		);
+		const next = await newIdentity();
+		const body = rotateBody(
+			next,
+			aliceKey,
+			await rewrapAll(alice, aliceKey, next),
+		);
 		const granter = await pool.connect();
 		const rotator = await pool.connect();
 		try {
 			await granter.query("begin");
-			const landed = await granter.query(
-				`insert into membership_key (id, membership_id, user_id, workspace_id,
-				 key_version, enc, ciphertext, recipient_public_key, granted_by)
-				 select 'mk_overlap', 'm_alice', $1, 'ws_1', 3, 'enc', 'ct', $2, $1
-				 where ${activeRecipientKeyGuard(1, 2)}`,
-				[alice, aliceKey.publicKey],
-			);
-			expect(landed.rowCount).toBe(1);
-
+			expect(
+				await submitGrant(granter, bob, {
+					requestId: "kgr_hold",
+					recipientPublicKey: aliceKey.publicKey,
+					...(await seal(WDK_V1, aliceKey, {
+						workspaceId: "ws_1",
+						keyVersion: 1,
+						recipientUserId: alice,
+					})),
+				}),
+			).toMatchObject({ ok: true, outcome: "granted" });
 			await rotator.query("begin");
 			await rotator.query("set local lock_timeout = '100ms'");
-			await expect(
-				rotator.query(
-					"update user_key set retired_at = now() where user_id = $1 and retired_at is null",
-					[alice],
-				),
-			).rejects.toThrow(/lock timeout/i);
+			await expect(rotateIdentity(rotator, alice, body)).rejects.toMatchObject({
+				code: "55P03",
+			});
 		} finally {
-			await granter.query("rollback").catch(() => undefined);
-			await rotator.query("rollback").catch(() => undefined);
+			await granter.query("rollback");
+			await rotator.query("rollback");
 			granter.release();
 			rotator.release();
+		}
+	});
+
+	test("a grant waits for identity rotation and rejects its retired recipient key", async () => {
+		await pool.query("delete from membership_key where id = 'mk_alice_v1'");
+		await pool.query(
+			`insert into key_grant_request
+			(id, membership_id, user_id, workspace_id, requested_version)
+			values ('kgr_wait', 'm_alice', $1, 'ws_1', 1)`,
+			[alice],
+		);
+		const next = await newIdentity();
+		const body = rotateBody(
+			next,
+			aliceKey,
+			await rewrapAll(alice, aliceKey, next),
+		);
+		const input = {
+			requestId: "kgr_wait",
+			recipientPublicKey: aliceKey.publicKey,
+			...(await seal(WDK_V1, aliceKey, {
+				workspaceId: "ws_1",
+				keyVersion: 1,
+				recipientUserId: alice,
+			})),
+		};
+		const rotator = await pool.connect();
+		const granter = await pool.connect();
+		let granting: ReturnType<typeof submitGrant> | undefined;
+		try {
+			await rotator.query("begin");
+			expect(await rotateIdentity(rotator, alice, body)).toMatchObject({
+				ok: true,
+			});
+			await granter.query("begin");
+			const pid = (
+				await granter.query<{ pid: number }>("select pg_backend_pid() as pid")
+			).rows[0]?.pid;
+			granting = submitGrant(granter, bob, input);
+			await expect
+				.poll(
+					async () =>
+						(
+							await pool.query(
+								"select wait_event from pg_stat_activity where pid=$1",
+								[pid],
+							)
+						).rows[0]?.wait_event,
+				)
+				.toBe("advisory");
+			await rotator.query("commit");
+			expect(await granting).toEqual({
+				ok: false,
+				reason: "stale recipient key",
+			});
+			const replacement = await seal(WDK_V1, next, {
+				workspaceId: "ws_1",
+				keyVersion: 1,
+				recipientUserId: alice,
+			});
+			expect(
+				await submitGrant(granter, bob, {
+					...input,
+					...replacement,
+					recipientPublicKey: next.publicKey,
+				}),
+			).toMatchObject({ ok: true, outcome: "granted" });
+			await granter.query("commit");
+			expect(
+				await open(
+					(await heldKeys(alice)).find((row) => row.keyVersion === 1) as Held,
+					next,
+					alice,
+				),
+			).toEqual(WDK_V1);
+		} finally {
+			try {
+				await rollbackAndRelease(rotator);
+			} finally {
+				await granting?.catch(() => undefined);
+				await rollbackAndRelease(granter);
+			}
 		}
 	});
 
@@ -576,11 +680,12 @@ describe("POST /api/e2e/identity/rotate", () => {
 			]);
 			expect(await heldKeys(alice)).toHaveLength(2);
 		} finally {
-			await granter.query("rollback");
-			await rotation;
-			await rotator.query("rollback");
-			granter.release();
-			rotator.release();
+			try {
+				await rollbackAndRelease(granter);
+			} finally {
+				await rotation?.catch(() => undefined);
+				await rollbackAndRelease(rotator);
+			}
 		}
 	});
 

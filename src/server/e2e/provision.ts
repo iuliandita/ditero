@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { lockIdentityShared } from "./identity-rotation.ts";
 
 // Design 4.2: only Owner and Admin may mint a workspace key version. A Member
 // holding the WDK is a recipient, not a minter, and a Viewer is neither.
@@ -116,6 +117,7 @@ export async function provisionWorkspace(
 		return { ok: false, reason: "not-permitted" };
 	}
 
+	await lockIdentityShared(client, [userId]);
 	const identity = await client.query<{ public_key: string }>(
 		`select public_key from user_key
 		 where user_id = $1 and state = 'ready' and retired_at is null

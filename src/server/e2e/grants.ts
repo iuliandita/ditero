@@ -10,7 +10,10 @@ import {
 	loadChannels,
 	loadPrefs,
 } from "../notifications/recipients.ts";
-import { activeRecipientKeyGuard } from "./identity-rotation.ts";
+import {
+	activeRecipientKeyGuard,
+	lockIdentityShared,
+} from "./identity-rotation.ts";
 
 export type PendingGrant = {
 	requestId: string;
@@ -319,6 +322,7 @@ export async function submitGrant(
 		[request.user_id],
 	);
 	if (recipient.rowCount !== 1) return { ok: false, reason: "no-request" };
+	await lockIdentityShared(client, [request.user_id]);
 
 	// The granter's own wrap for this version IS the evidence they hold the WDK.
 	// No role check: Owner and Admin mint versions, but any ready member can

@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { handleAuthRequest } from "../../src/auth/auth.ts";
 import { withRegistrationBypass } from "../../src/auth/registration-bypass.ts";
@@ -12,6 +12,7 @@ import {
 } from "../../src/domain/e2e/hpke.ts";
 import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
 import { commitWdk } from "../../src/domain/e2e/wdk-commitment.ts";
+import { rotateIdentity } from "../../src/server/e2e/identity-rotation.ts";
 import { rotateWorkspace } from "../../src/server/e2e/rotation.ts";
 import { app } from "../../src/server/index.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
@@ -20,6 +21,16 @@ const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
 
 const pool = new Pool({ connectionString: databaseURL });
+
+async function rollbackAndRelease(client: PoolClient): Promise<void> {
+	let failed = true;
+	try {
+		await client.query("rollback");
+		failed = false;
+	} finally {
+		client.release(failed);
+	}
+}
 const ORIGIN = "http://localhost:5173";
 const WORKSPACE = "ws_rotation";
 const WRAP = "d3JhcHBlZC1ibG9i";
@@ -480,16 +491,139 @@ describe("workspace removal rotation", () => {
 			await identityRotator.query("begin");
 			await identityRotator.query("set local lock_timeout = '100ms'");
 			await expect(
-				identityRotator.query(
-					"update user_key set retired_at = now() where user_id = $1 and retired_at is null",
-					[member.userId],
-				),
+				rotateIdentity(identityRotator, member.userId, {
+					publicKey: (await newIdentity()).publicKey,
+					previousPublicKey: member.identity?.publicKey ?? "",
+					passphraseWrapped: WRAP,
+					recoveryWrapped: WRAP,
+					passphraseSalt: SALT,
+					recoverySalt: SALT,
+					formatVersion: CURRENT_KDF_VERSION,
+					rewraps: [],
+				}),
 			).rejects.toThrow(/lock timeout/i);
 		} finally {
 			await rotator.query("rollback").catch(() => undefined);
 			await identityRotator.query("rollback").catch(() => undefined);
 			rotator.release();
 			identityRotator.release();
+		}
+	});
+
+	test("workspace rotation waits for identity rotation and rejects the stale grant set", async () => {
+		const body = await rotationBody(crypto.getRandomValues(new Uint8Array(32)));
+		const next = await newIdentity();
+		const nextActor = { ...member, identity: next };
+		const identityRotator = await pool.connect();
+		const workspaceRotator = await pool.connect();
+		let rotating: ReturnType<typeof rotateWorkspace> | undefined;
+		try {
+			await identityRotator.query("begin");
+			expect(
+				await rotateIdentity(identityRotator, member.userId, {
+					publicKey: next.publicKey,
+					previousPublicKey: member.identity?.publicKey ?? "",
+					passphraseWrapped: WRAP,
+					recoveryWrapped: WRAP,
+					passphraseSalt: SALT,
+					recoverySalt: SALT,
+					formatVersion: CURRENT_KDF_VERSION,
+					rewraps: [
+						{
+							membershipKeyId: "mk_member_v1",
+							...(await sealFor(v1, nextActor, 1)),
+						},
+					],
+				}),
+			).toMatchObject({ ok: true });
+			await workspaceRotator.query("begin");
+			const pid = (
+				await workspaceRotator.query<{ pid: number }>(
+					"select pg_backend_pid() as pid",
+				)
+			).rows[0]?.pid;
+			rotating = rotateWorkspace(
+				workspaceRotator,
+				owner.userId,
+				WORKSPACE,
+				body,
+			);
+			await expect
+				.poll(
+					async () =>
+						(
+							await pool.query(
+								"select wait_event from pg_stat_activity where pid=$1",
+								[pid],
+							)
+						).rows[0]?.wait_event,
+				)
+				.toBe("advisory");
+			await identityRotator.query("commit");
+			expect(await rotating).toEqual({
+				ok: false,
+				reason: "stale-recipient-key",
+			});
+			await workspaceRotator.query("commit");
+			expect(await workspaceKeys()).toHaveLength(1);
+			expect(await workspaceState()).toBe(true);
+		} finally {
+			try {
+				await rollbackAndRelease(identityRotator);
+			} finally {
+				await rotating?.catch(() => undefined);
+				await rollbackAndRelease(workspaceRotator);
+			}
+		}
+	});
+
+	test("workspace rotation also holds first enrollment until its transaction ends", async () => {
+		const body = await rotationBody(crypto.getRandomValues(new Uint8Array(32)));
+		const rotator = await pool.connect();
+		let enrolling: ReturnType<typeof enroll> | undefined;
+		try {
+			await rotator.query("begin");
+			const pid = (
+				await rotator.query<{ pid: number }>("select pg_backend_pid() as pid")
+			).rows[0]?.pid;
+			expect(
+				await rotateWorkspace(rotator, owner.userId, WORKSPACE, body),
+			).toMatchObject({ ok: true });
+			enrolling = enroll(unenrolled);
+			await expect
+				.poll(
+					async () =>
+						(
+							await pool.query(
+								"select exists(select 1 from pg_stat_activity where $1=any(pg_blocking_pids(pid)) and wait_event='advisory') as blocked",
+								[pid],
+							)
+						).rows[0]?.blocked,
+				)
+				.toBe(true);
+			expect(
+				(
+					await pool.query("select id from user_key where user_id=$1", [
+						unenrolled.userId,
+					])
+				).rows,
+			).toEqual([]);
+			await rotator.query("commit");
+			await enrolling;
+			expect(
+				(
+					await pool.query(
+						"select public_key from user_key where user_id=$1 and retired_at is null",
+						[unenrolled.userId],
+					)
+				).rows,
+			).toEqual([{ public_key: unenrolled.identity?.publicKey }]);
+		} finally {
+			try {
+				await rollbackAndRelease(rotator);
+			} finally {
+				await enrolling?.catch(() => undefined);
+			}
 		}
 	});
 

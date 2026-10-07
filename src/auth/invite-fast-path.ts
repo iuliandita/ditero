@@ -1,7 +1,10 @@
 import type { Pool, PoolClient } from "pg";
 import { withLiveUserContext, withUserContext } from "../db/user-context.ts";
 import { inviteState } from "../domain/invite.ts";
-import { activeRecipientKeyGuard } from "../server/e2e/identity-rotation.ts";
+import {
+	activeRecipientKeyGuard,
+	lockIdentityShared,
+} from "../server/e2e/identity-rotation.ts";
 import {
 	committedInviteAssignment,
 	InviteTaskUnavailable,
@@ -333,6 +336,7 @@ export async function grantFastInvite(
 	input: FastInviteGrantInput,
 ): Promise<"granted" | "already"> {
 	return await withLiveUserContext(pool, userId, async (client) => {
+		await lockIdentityShared(client, [userId]);
 		const found = await client.query<{
 			membership_id: string;
 			workspace_id: string;

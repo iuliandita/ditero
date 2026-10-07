@@ -429,6 +429,22 @@ describe("fragment invite state machine", () => {
 					])
 				).rows,
 			).toEqual([]);
+			await expect(
+				grantFastInvite(grantPool, newcomerId, {
+					token: "rotation-overlap",
+					requestId: claimed.grantRequestId ?? "",
+					recipientPublicKey: newcomerKey.publicKey,
+					...(await sealedFor(newcomerKey, newcomerId)),
+				}),
+			).rejects.toMatchObject({ reason: "stale_recipient_key" });
+			expect(
+				await grantFastInvite(grantPool, newcomerId, {
+					token: "rotation-overlap",
+					requestId: claimed.grantRequestId ?? "",
+					recipientPublicKey: next.publicKey,
+					...(await sealedFor(next, newcomerId)),
+				}),
+			).toBe("granted");
 		} finally {
 			await rotator.query("rollback");
 			rotator.release();
