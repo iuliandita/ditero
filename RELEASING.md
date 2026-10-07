@@ -44,6 +44,7 @@ those behaviors. See the [Android](apps/android/README.md) and
 | `0.0.1-alpha.5` | Fifth alpha version |
 | `0.0.1-alpha.6` | Sixth alpha version |
 | `0.0.1-alpha.7` | Seventh alpha version |
+| `0.0.1-alpha.8` | Eighth alpha version |
 | `0.0.1-alpha.9` | Ninth alpha version |
 | `X.Y.Z`, `X.Y`, `X`, `latest` | Stable releases, starting at `1.0.0` |
 | `stable` | Stable release explicitly promoted after a week |
