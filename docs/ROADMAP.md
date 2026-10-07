@@ -40,9 +40,11 @@ Development happens on `develop`. The first published release was `0.0.1-alpha.1
 the current published alpha is
 [`0.0.1-alpha.8`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.8).
 Alpha 8 adds paired JSON/encrypted attachment archive export on Linux desktop and
-fixes shared workspace key grants under the restricted database role.
+fixes shared workspace key grants under the restricted database role. Each export
+file is limited to 32 MiB; archive import still requires the browser.
 Published alphas package containers, Helm/Kustomize/Compose deployment files and
-experimental native downloads; Windows downloads are unsigned and macOS downloads use ad-hoc
+experimental native downloads; Windows downloads are unsigned and macOS downloads
+use ad-hoc
 signatures. Native qualification remains open. `1.0.0` requires the complete v1
 contract below.
 
