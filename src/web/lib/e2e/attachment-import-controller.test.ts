@@ -30,7 +30,7 @@ vi.mock("../zero-lifecycle.ts", () => ({
 import { createAttachmentImportController } from "./attachment-import-controller.ts";
 import type { MigrationReservation } from "./attachment-migration-api.ts";
 import type { KeyringContextValue } from "./KeyringProvider.tsx";
-import { browserE2eRuntime } from "./runtime.ts";
+import { browserE2eRuntime, type E2eRuntime } from "./runtime.ts";
 
 const hash = "a".repeat(64);
 const binding = {
@@ -91,7 +91,10 @@ const committed: MigrationReservation = {
 let zero: { userID: string };
 let locked: boolean;
 let wdk: Uint8Array;
-function controller(checkpoint: () => void = () => {}) {
+function controller(
+	checkpoint: () => void = () => {},
+	runtime: E2eRuntime = browserE2eRuntime,
+) {
 	zero = { userID: "destination-owner" };
 	locked = false;
 	wdk = new Uint8Array(32).fill(7);
@@ -101,7 +104,7 @@ function controller(checkpoint: () => void = () => {}) {
 		wdk,
 	});
 	const keys = (): KeyringContextValue => ({
-		runtime: browserE2eRuntime,
+		runtime,
 		state: locked ? "locked" : "ready",
 		ready: true,
 		available: true,
@@ -839,4 +842,24 @@ it("does not clear a frozen replacement while fresh inspection reports an active
 			String(call[0]).endsWith("/attachment-recoveries"),
 		),
 	).toHaveLength(1);
+});
+
+it("archive input capability alone cannot enable native attachment import", async () => {
+	const readDocument = vi.fn(async () => document);
+	const runtime: E2eRuntime = {
+		...browserE2eRuntime,
+		attachments: {
+			fetcher: mock.fetcher,
+			pickFile: vi.fn(),
+			withStage: vi.fn(),
+			archiveInput: { readDocument },
+		},
+	};
+	const c = controller(() => {}, runtime);
+	await expect(c.open("archive", document, "passphrase")).rejects.toMatchObject(
+		{ code: "native-unavailable" },
+	);
+	expect(mock.fetcher).not.toHaveBeenCalled();
+	expect(mock.prepare).not.toHaveBeenCalled();
+	expect(readDocument).not.toHaveBeenCalled();
 });

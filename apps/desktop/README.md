@@ -98,6 +98,10 @@ remain browser-only; Windows and macOS also require the browser for archive expo
 
 ## Development installers and checks
 
+Linux integration code can read an OS-selected JSON document through
+`archive.input.*`, with a 32 MiB limit and strict UTF-8 validation. This read-only
+capability does not enable native import or recovery.
+
 Use Bun 1.4.2 and Rust 1.98.1, matching the CI toolchain. The official Tauri CLI,
 API, and Rust runtime are pinned to 2.12.1. Install the
 [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/) on your

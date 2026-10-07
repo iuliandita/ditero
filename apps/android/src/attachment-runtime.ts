@@ -149,6 +149,7 @@ export function createAttachmentRuntime(
 	desktop: boolean,
 	call: Call = callAttachment,
 	archiveExportEnabled = false,
+	archiveInputEnabled = false,
 ): AttachmentRuntime {
 	const declared = new Map<string, number>();
 	const checked: Call = async (op, body = {}) => {
@@ -520,10 +521,106 @@ export function createAttachmentRuntime(
 					},
 				}
 			: undefined;
+	let inputReading = false;
+	const archiveInput: AttachmentRuntime["archiveInput"] =
+		desktop && archiveInputEnabled
+			? {
+					async readDocument(kind, signal) {
+						assertCurrent();
+						signal?.throwIfAborted();
+						if (kind !== "content" && kind !== "archive")
+							throw new TypeError("native archive kind refused");
+						if (inputReading) throw new Error("native archive input busy");
+						inputReading = true;
+						let transferId: string | undefined;
+						let rejectAbort: (reason: unknown) => void = () => {};
+						const aborted = new Promise<never>((_, reject) => {
+							rejectAbort = reject;
+						});
+						const abort = () => {
+							void cancel(
+								transferId
+									? "archive.input.cancel"
+									: "archive.input.cancelPending",
+								transferId ? { transferId } : {},
+							);
+							rejectAbort(
+								signal?.reason ?? new DOMException("Aborted", "AbortError"),
+							);
+						};
+						signal?.addEventListener("abort", abort, { once: true });
+						try {
+							const picked = checked("archive.input.pick", { kind }).then(
+								async (reply) => {
+									if (!reply.ok)
+										throw new TypeError("native archive input refused");
+									transferId = id(reply, "transferId");
+									if (signal?.aborted) {
+										await cancel("archive.input.cancel", { transferId });
+										signal.throwIfAborted();
+									}
+									return reply;
+								},
+							);
+							const begun = await Promise.race([picked, aborted]);
+							if (
+								typeof begun.bytes !== "number" ||
+								!Number.isSafeInteger(begun.bytes) ||
+								begun.bytes < 0 ||
+								begun.bytes > 32 * 1024 * 1024
+							)
+								throw new TypeError("native archive size refused");
+							if (
+								typeof begun.name !== "string" ||
+								sanitiseFilename(begun.name) !== begun.name ||
+								new TextEncoder().encode(begun.name).length > 255
+							)
+								throw new TypeError("native archive name refused");
+							const decoder = new TextDecoder("utf-8", {
+								fatal: true,
+								ignoreBOM: true,
+							});
+							const parts: string[] = [];
+							let seen = 0;
+							for (let seq = 0; ; seq++) {
+								signal?.throwIfAborted();
+								const next = await Promise.race([
+									checked("archive.input.read", { transferId, seq }),
+									aborted,
+								]);
+								signal?.throwIfAborted();
+								if (!next.ok || typeof next.eof !== "boolean")
+									throw new TypeError("native archive response refused");
+								const bytes = decode(next);
+								seen += bytes.length;
+								if (seen > begun.bytes || (!next.eof && !bytes.length))
+									throw new TypeError("native archive size refused");
+								if (next.eof && (bytes.length !== 0 || seen !== begun.bytes))
+									throw new TypeError("native archive size refused");
+								parts.push(decoder.decode(bytes, { stream: !next.eof }));
+								if (next.eof) {
+									assertCurrent();
+									return parts.join("");
+								}
+							}
+						} finally {
+							signal?.removeEventListener("abort", abort);
+							await cancel(
+								transferId
+									? "archive.input.cancel"
+									: "archive.input.cancelPending",
+								transferId ? { transferId } : {},
+							);
+							inputReading = false;
+						}
+					},
+				}
+			: undefined;
 	return {
 		fetcher,
 		pickFile,
 		withStage,
 		...(archiveExport ? { archiveExport } : {}),
+		...(archiveInput ? { archiveInput } : {}),
 	};
 }

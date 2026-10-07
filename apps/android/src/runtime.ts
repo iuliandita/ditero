@@ -38,6 +38,7 @@ export type NativeContext = {
 	readonly deviceId: string;
 	readonly authHandle: string;
 	readonly archiveExport: boolean;
+	readonly archiveInput: boolean;
 };
 
 // Only contexts produced by captureVerifiedContext are accepted by createNativeRuntime.
@@ -68,6 +69,7 @@ export async function captureVerifiedContext(): Promise<NativeContext> {
 		userId: session.userId,
 		deviceId: session.deviceId,
 		authHandle: session.authHandle,
+		archiveInput: before.archiveInput === true && after.archiveInput === true,
 		archiveExport:
 			before.archiveExport === true && after.archiveExport === true,
 	});
@@ -338,6 +340,7 @@ export function createNativeRuntime(
 			"__TAURI_INTERNALS__" in globalThis,
 			undefined,
 			context.archiveExport,
+			context.archiveInput,
 		),
 		// Confirmed replies prove durable cleanup. A snapshot can only prove absent
 		// authority; that outcome leaves the account UI with an explicit failure notice.

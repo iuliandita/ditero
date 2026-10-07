@@ -9,6 +9,7 @@ import {
 const native = vi.hoisted(() => ({
 	state: {
 		gen: 1,
+		archiveInput: false,
 		server: { origin: "https://example.test" },
 		session: {
 			scope: 'native:["https://example.test","user-1"]',
@@ -40,6 +41,7 @@ vi.mock("./bridge.ts", () => ({
 }));
 beforeEach(() => {
 	native.state.gen = 1;
+	native.state.archiveInput = false;
 	native.refresh.mockReset();
 	native.refusal.mockReset();
 });
@@ -103,4 +105,27 @@ test("socket authority loss waits for durable retirement before ending the accou
 	await new Promise((resolve) => setTimeout(resolve, 5));
 	expect(ended).toHaveBeenCalledTimes(1);
 	Object.assign(native.state, { session: previous });
+});
+
+test("verified archive input capability is captured and desktop-only", async () => {
+	const options = { retireZero: async () => {}, onSessionEnded: vi.fn() };
+	const absent = await captureVerifiedContext();
+	expect(absent.archiveInput).toBe(false);
+	native.state.archiveInput = true;
+	const enabled = await captureVerifiedContext();
+	expect(enabled.archiveInput).toBe(true);
+	expect(
+		createNativeRuntime(enabled, options).e2e.attachments?.archiveInput,
+	).toBeUndefined();
+	vi.stubGlobal("__TAURI_INTERNALS__", {});
+	try {
+		expect(
+			createNativeRuntime(absent, options).e2e.attachments?.archiveInput,
+		).toBeUndefined();
+		expect(
+			createNativeRuntime(enabled, options).e2e.attachments?.archiveInput,
+		).toBeDefined();
+	} finally {
+		vi.unstubAllGlobals();
+	}
 });
