@@ -1027,6 +1027,32 @@ mod tests {
         });
         (origin, task, accepted)
     }
+    #[cfg(not(target_os = "linux"))]
+    #[tokio::test]
+    async fn archive_export_operations_are_unavailable_off_linux() {
+        let files = Transfers::default();
+        let ctx = context();
+        for op in [
+            "archive.export.begin",
+            "archive.export.read",
+            "archive.export.cancelPending",
+        ] {
+            let (done, mut rx) = completion();
+            assert_eq!(
+                files.dispatch(
+                    ctx.clone(),
+                    reqwest::Client::new(),
+                    json!({"op": op, "body": {}}),
+                    done,
+                ),
+                Err("unknown-op")
+            );
+            assert!(matches!(
+                rx.try_recv(),
+                Err(oneshot::error::TryRecvError::Closed)
+            ));
+        }
+    }
     #[test]
     fn archive_bound_rejects_before_extending() {
         let mut bytes = vec![0; ARCHIVE_LIMIT];
@@ -1034,6 +1060,7 @@ mod tests {
         assert_eq!(bytes.len(), ARCHIVE_LIMIT);
         assert!(append_archive(&mut bytes, &[]).is_ok());
     }
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn archive_export_chunks_exact_utf8_and_rejects_foreign_owner() {
         let raw = format!("{{\"text\":\"{}\"}}", "x".repeat(CHUNK) + "😀");
@@ -1093,6 +1120,7 @@ mod tests {
             Err("invalid-body")
         );
     }
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn archive_export_rejects_oversize_invalid_utf8_and_redirect() {
         for (reply, error) in [
@@ -1110,6 +1138,7 @@ mod tests {
             server.join().unwrap();
         }
     }
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn archive_pending_cancel_is_owner_bound_and_retirement_releases_read() {
         for retire in [false, true] {
