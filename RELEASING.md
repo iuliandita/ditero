@@ -43,6 +43,7 @@ those behaviors. See the [Android](apps/android/README.md) and
 | `0.0.1-alpha.4` | Fourth alpha version |
 | `0.0.1-alpha.5` | Fifth alpha version |
 | `0.0.1-alpha.6` | Sixth alpha version |
+| `0.0.1-alpha.7` | Seventh alpha version (pending publication) |
 | `X.Y.Z`, `X.Y`, `X`, `latest` | Stable releases, starting at `1.0.0` |
 | `stable` | Stable release explicitly promoted after a week |
 
@@ -67,8 +68,8 @@ Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
 3. Create an annotated tag on the checked commit and push it separately:
 
    ```sh
-   git tag -a v0.0.1-alpha.6 <checked-commit> -m 'Ditero 0.0.1 alpha 6'
-   git push origin v0.0.1-alpha.6
+   git tag -a v0.0.1-alpha.7 <checked-commit> -m 'Ditero 0.0.1 alpha 7'
+   git push origin v0.0.1-alpha.7
    ```
 
 4. The Release workflow resolves the tag once, verifies branch ancestry and checks,
@@ -83,8 +84,8 @@ Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
    clearly distinguished from current installation guidance.
 
 A failed workflow may be resumed using its existing tag through manual dispatch
-at that tag ref, for example `gh workflow run release.yml --ref v0.0.1-alpha.6
--f tag=v0.0.1-alpha.6`. A dispatch from a different commit is rejected so build
+at that tag ref, for example `gh workflow run release.yml --ref v0.0.1-alpha.7
+-f tag=v0.0.1-alpha.7`. A dispatch from a different commit is rejected so build
 provenance agrees with the released source.
 An interrupted draft may be completed; published downloads are never replaced. If a
 public release needs changes, increase the version and Android code and cut a new tag.
