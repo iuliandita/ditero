@@ -93,15 +93,17 @@ async function captureRecoveryVariants(page: Page, name: string) {
 	await capture(page, `${name}-desktop-dark`);
 	await page.setViewportSize({ width: 390, height: 844 });
 	const dialog = page.getByTestId("attachment-archive-import-dialog");
-	const bounds = await dialog.boundingBox();
-	expect(bounds).not.toBeNull();
-	if (!bounds) throw new Error("Recovery dialog has no measured bounds");
-	expect(bounds.x).toBeGreaterThanOrEqual(8);
-	expect(bounds.width).toBeLessThanOrEqual(374);
-	expect(bounds.height).toBeLessThanOrEqual(812);
-	expect(
-		await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth),
-	).toBe(true);
+	await expect(async () => {
+		const bounds = await dialog.boundingBox();
+		expect(bounds).not.toBeNull();
+		if (!bounds) throw new Error("Recovery dialog has no measured bounds");
+		expect(bounds.x).toBeGreaterThanOrEqual(8);
+		expect(bounds.width).toBeLessThanOrEqual(374);
+		expect(bounds.height).toBeLessThanOrEqual(812);
+		expect(
+			await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth),
+		).toBe(true);
+	}).toPass({ timeout: 5000 });
 	await capture(page, `${name}-phone-dark`);
 	await page.emulateMedia({ colorScheme: "light" });
 	await expect(page.locator("html")).toHaveCSS("color-scheme", "light");

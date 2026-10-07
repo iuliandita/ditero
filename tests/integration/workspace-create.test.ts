@@ -114,14 +114,19 @@ afterAll(async () => {
 		).rows[0].n,
 	).toBe(0);
 	await runtime.end();
-	expect(
-		(
-			await admin.query(
-				"select count(*)::int n from pg_stat_activity where usename=$1",
-				[role],
-			)
-		).rows[0].n,
-	).toBe(0);
+	// Pool shutdown can resolve before PostgreSQL finishes closing its sessions.
+	await vi.waitFor(
+		async () =>
+			expect(
+				(
+					await admin.query(
+						"select count(*)::int n from pg_stat_activity where usename=$1",
+						[role],
+					)
+				).rows[0].n,
+			).toBe(0),
+		{ timeout: 1500, interval: 10 },
+	);
 	await admin.query(`drop owned by "${role}"`);
 	await admin.query(`drop role "${role}"`);
 	await admin.end();
