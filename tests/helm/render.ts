@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
+import release from "../../release.json";
 
 type Manifest = {
 	kind: string;
@@ -140,7 +141,7 @@ for (const component of ["app", "zero"]) {
 	const suffix = component === "zero" ? "-zero" : "";
 	assert.equal(
 		container.image,
-		`ghcr.io/iuliandita/ditero:0.0.1-alpha.6${suffix}`,
+		`ghcr.io/iuliandita/ditero:${release.version}${suffix}`,
 	);
 	const endpoint = component === "app" ? "/health" : "/keepalive";
 	for (const probe of [
