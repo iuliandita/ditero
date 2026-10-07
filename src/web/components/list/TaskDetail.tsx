@@ -603,7 +603,7 @@ export function TaskDetail({
 	);
 
 	const header = (
-		<div className="flex items-start gap-3 px-4 pt-4 pb-3">
+		<div className="flex flex-wrap items-start gap-3 px-4 pt-4 pb-3">
 			<Checkbox
 				disabled={!activation.canWrite}
 				checked={checked}
@@ -628,7 +628,7 @@ export function TaskDetail({
 				aria-label={m.task_detail_title_field()}
 				data-testid="task-detail-title"
 				className={cn(
-					"min-h-11 max-h-48 w-full min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-base font-medium transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-input focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:min-h-9 dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+					"min-h-11 max-h-48 w-full min-w-0 flex-1 basis-[min(10rem,calc(100%-3rem))] resize-none overflow-y-auto rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-base font-medium transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-input focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:min-h-9 dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
 					checked && "text-muted-foreground line-through",
 				)}
 				onBlur={(e) => saveTitle(e.currentTarget)}
@@ -645,7 +645,7 @@ export function TaskDetail({
 					}
 				}}
 			/>
-			<div className="-me-1.5 flex shrink-0 items-center">
+			<div className="-me-1.5 ms-auto flex shrink-0 items-center">
 				<RowActions
 					actions={headerActions}
 					label={m.row_actions_for({ name: t.title })}
@@ -692,123 +692,133 @@ export function TaskDetail({
 			)}
 
 			<div className="flex flex-col gap-4">
-				<Field label={m.task_field_due()}>
-					<DuePicker
-						key={t.id}
-						dueAt={t.dueAt ?? null}
-						dueAllDay={t.dueAllDay ?? null}
-						done={t.done ?? false}
-						disabled={!activation.canWrite}
-						onSet={setDue}
-						onClear={() => update({ id: t.id, dueAt: null })}
-					>
-						<ReminderChip task={t} />
-					</DuePicker>
-				</Field>
-
-				{kind !== "checklist" && (
-					<Field label={m.task_field_priority()}>
-						<Select
+				<div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] items-start gap-4 [&>*]:min-w-0 [&>*]:max-w-full">
+					<Field label={m.task_field_due()}>
+						<DuePicker
+							key={t.id}
+							dueAt={t.dueAt ?? null}
+							dueAllDay={t.dueAllDay ?? null}
+							done={t.done ?? false}
 							disabled={!activation.canWrite}
-							value={String(t.priority ?? 0)}
-							onValueChange={(v) => update({ id: t.id, priority: Number(v) })}
+							onSet={setDue}
+							onClear={() => update({ id: t.id, dueAt: null })}
 						>
-							<SelectTrigger
-								size="sm"
-								aria-label={m.task_field_priority()}
-								data-testid="task-priority"
-								className="w-fit min-w-36 pointer-coarse:data-[size=sm]:h-11"
+							<ReminderChip task={t} />
+						</DuePicker>
+					</Field>
+
+					{kind !== "checklist" && (
+						<Field label={m.task_field_priority()}>
+							<Select
+								disabled={!activation.canWrite}
+								value={String(t.priority ?? 0)}
+								onValueChange={(v) => update({ id: t.id, priority: Number(v) })}
 							>
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{PRIORITY_ORDER.map((level) => (
-									<SelectItem
-										key={level}
-										value={String(level)}
-										data-testid={`task-priority-${level}`}
-									>
-										<Flag
-											className={
-												priorityMeta(level)?.color ?? "text-muted-foreground"
-											}
-										/>
-										{priorityLabel(level)}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</Field>
-				)}
-
-				<AssigneePicker
-					task={t}
-					workspaceId={list.workspaceId}
-					disabled={!activation.canWrite}
-				/>
-
-				{kind !== "checklist" && (
-					<Field label={m.task_field_labels()}>
-						<div className="flex flex-wrap items-center gap-1.5">
-							{currentLabels.map((l) => (
-								<Badge key={l.id} variant="secondary">
-									{l.name}
-								</Badge>
-							))}
-							<Popover>
-								<PopoverTrigger asChild>
-									<Button
-										variant="outline"
-										size="sm"
-										className="pointer-coarse:h-11"
-									>
-										<Plus /> {m.task_field_labels()}
-									</Button>
-								</PopoverTrigger>
-								<PopoverContent align="start" className="w-64">
-									<div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
-										{allLabels.map((l) => (
-											<button
-												key={l.id}
-												type="button"
-												aria-pressed={selected.has(l.id)}
-												onClick={() => toggleLabel(l.id)}
-												className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start text-sm hover:bg-muted"
-											>
-												<span className="flex size-4 items-center justify-center">
-													{selected.has(l.id) && <Check className="size-3.5" />}
-												</span>
-												{l.name}
-											</button>
-										))}
-										{allLabels.length === 0 && (
-											<span className="px-1.5 py-1 text-xs text-muted-foreground">
-												{m.task_no_labels()}
-											</span>
-										)}
-									</div>
-									<div className="flex items-center gap-1.5 border-t pt-2">
-										<Input
-											value={newLabel}
-											placeholder={m.task_new_label_placeholder()}
-											onChange={(e) => setNewLabel(e.target.value)}
-											onKeyDown={(e) => {
-												if (e.key === "Enter") void createLabel();
-											}}
-										/>
-										<Button
-											size="sm"
-											onClick={() => void createLabel()}
-											disabled={!newLabel.trim()}
+								<SelectTrigger
+									size="sm"
+									aria-label={m.task_field_priority()}
+									data-testid="task-priority"
+									className="w-fit min-w-36 pointer-coarse:data-[size=sm]:h-11"
+								>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{PRIORITY_ORDER.map((level) => (
+										<SelectItem
+											key={level}
+											value={String(level)}
+											data-testid={`task-priority-${level}`}
 										>
-											{m.action_add()}
+											<Flag
+												className={
+													priorityMeta(level)?.color ?? "text-muted-foreground"
+												}
+											/>
+											{priorityLabel(level)}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</Field>
+					)}
+				</div>
+
+				<div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] items-start gap-4 [&>*]:min-w-0 [&>*]:max-w-full">
+					<AssigneePicker
+						task={t}
+						workspaceId={list.workspaceId}
+						disabled={!activation.canWrite}
+					/>
+
+					{kind !== "checklist" && (
+						<Field label={m.task_field_labels()}>
+							<div className="flex flex-wrap items-center gap-1.5">
+								{currentLabels.map((l) => (
+									<Badge
+										key={l.id}
+										variant="secondary"
+										className="h-auto min-h-5 min-w-0 max-w-full text-start whitespace-normal wrap-anywhere"
+									>
+										{l.name}
+									</Badge>
+								))}
+								<Popover>
+									<PopoverTrigger asChild>
+										<Button
+											variant="outline"
+											size="sm"
+											className="pointer-coarse:h-11"
+										>
+											<Plus /> {m.task_field_labels()}
 										</Button>
-									</div>
-								</PopoverContent>
-							</Popover>
-						</div>
-					</Field>
-				)}
+									</PopoverTrigger>
+									<PopoverContent align="start" className="w-64">
+										<div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+											{allLabels.map((l) => (
+												<button
+													key={l.id}
+													type="button"
+													aria-pressed={selected.has(l.id)}
+													onClick={() => toggleLabel(l.id)}
+													className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start text-sm hover:bg-muted"
+												>
+													<span className="flex size-4 items-center justify-center">
+														{selected.has(l.id) && (
+															<Check className="size-3.5" />
+														)}
+													</span>
+													{l.name}
+												</button>
+											))}
+											{allLabels.length === 0 && (
+												<span className="px-1.5 py-1 text-xs text-muted-foreground">
+													{m.task_no_labels()}
+												</span>
+											)}
+										</div>
+										<div className="flex items-center gap-1.5 border-t pt-2">
+											<Input
+												value={newLabel}
+												placeholder={m.task_new_label_placeholder()}
+												onChange={(e) => setNewLabel(e.target.value)}
+												onKeyDown={(e) => {
+													if (e.key === "Enter") void createLabel();
+												}}
+											/>
+											<Button
+												size="sm"
+												onClick={() => void createLabel()}
+												disabled={!newLabel.trim()}
+											>
+												{m.action_add()}
+											</Button>
+										</div>
+									</PopoverContent>
+								</Popover>
+							</div>
+						</Field>
+					)}
+				</div>
 			</div>
 
 			<label className="flex flex-col gap-1.5 text-sm">
