@@ -62,18 +62,92 @@ export class AttachmentUploadError extends Error {
 	}
 }
 
+export const BROWSER_CIPHERTEXT_UPLOAD_LIMIT_BYTES = 8 * 1024 * 1024;
+
+export class AttachmentUploadCapabilityError extends Error {
+	readonly limitBytes = BROWSER_CIPHERTEXT_UPLOAD_LIMIT_BYTES;
+	constructor(
+		readonly reason: "bounded-ciphertext-limit" | "transport-unavailable",
+	) {
+		super(`attachment upload: ${reason}`);
+		this.name = "AttachmentUploadCapabilityError";
+	}
+}
+
+export function getAttachmentUploadCapability(
+	fetcher?: E2eFetcher,
+): "stream" | "private-file" | "bounded-blob" | "unavailable" {
+	if (fetcher !== undefined) return "stream";
+	if (typeof XMLHttpRequest !== "function" || typeof Blob !== "function")
+		return "unavailable";
+	if (
+		typeof navigator !== "undefined" &&
+		typeof navigator.locks?.request === "function" &&
+		typeof navigator.storage?.getDirectory === "function" &&
+		typeof FileSystemFileHandle !== "undefined" &&
+		typeof FileSystemFileHandle.prototype.createWritable === "function"
+	)
+		return "private-file";
+	return "bounded-blob";
+}
+
+let blobUploadActive = false;
+const blobUploadWaiters: Array<() => void> = [];
+
+function acquireBlobUpload(signal?: AbortSignal): Promise<() => void> {
+	return new Promise((resolve, reject) => {
+		const abort = () => {
+			const index = blobUploadWaiters.indexOf(start);
+			if (index >= 0) blobUploadWaiters.splice(index, 1);
+			reject(new DOMException("Upload aborted", "AbortError"));
+		};
+		const start = () => {
+			signal?.removeEventListener("abort", abort);
+			blobUploadActive = true;
+			let released = false;
+			resolve(() => {
+				if (released) return;
+				released = true;
+				const next = blobUploadWaiters.shift();
+				if (next) next();
+				else blobUploadActive = false;
+			});
+		};
+		if (signal?.aborted) {
+			abort();
+			return;
+		}
+		if (!blobUploadActive) start();
+		else {
+			blobUploadWaiters.push(start);
+			signal?.addEventListener("abort", abort, { once: true });
+		}
+	});
+}
+
 const defaultFetcher: E2eFetcher = (input, init) => fetch(input, init);
 const textEncoder = new TextEncoder();
 
-async function* blobBytes(blob: Blob): AsyncIterable<Uint8Array> {
+async function* blobBytes(
+	blob: Blob,
+	signal?: AbortSignal,
+): AsyncIterable<Uint8Array> {
 	const reader = blob.stream().getReader();
+	const abort = () => {
+		void reader.cancel().catch(() => undefined);
+	};
+	signal?.addEventListener("abort", abort, { once: true });
 	try {
 		while (true) {
+			signal?.throwIfAborted();
 			const next = await reader.read();
+			signal?.throwIfAborted();
 			if (next.done) return;
 			yield next.value;
 		}
 	} finally {
+		signal?.removeEventListener("abort", abort);
+		await reader.cancel().catch(() => undefined);
 		reader.releaseLock();
 	}
 }
@@ -150,14 +224,9 @@ async function uploadCiphertext(
 	loadedBefore: number,
 	total: number,
 	options: AttachmentUploadOptions,
+	capability: ReturnType<typeof getAttachmentUploadCapability>,
 ): Promise<number> {
-	if (
-		options.fetcher === undefined &&
-		typeof navigator !== "undefined" &&
-		navigator.locks !== undefined &&
-		navigator.storage !== undefined &&
-		"getDirectory" in navigator.storage
-	) {
+	if (capability === "private-file") {
 		return await uploadCiphertextFromPrivateFile(
 			url,
 			plaintext,
@@ -168,6 +237,19 @@ async function uploadCiphertext(
 			options,
 		);
 	}
+	if (capability === "bounded-blob") {
+		return await uploadCiphertextFromBlob(
+			url,
+			plaintext,
+			dek,
+			purpose,
+			loadedBefore,
+			total,
+			options,
+		);
+	}
+	if (capability === "unavailable")
+		throw new AttachmentUploadCapabilityError("transport-unavailable");
 	let loaded = loadedBefore;
 	const body = streamBody(
 		encryptStream(blobBytes(plaintext), dek, purpose),
@@ -188,7 +270,7 @@ async function uploadCiphertext(
 
 function xhrUpload(
 	url: string,
-	body: File,
+	body: Blob,
 	signal: AbortSignal | undefined,
 	onProgress: (loaded: number) => void,
 ): Promise<Response> {
@@ -201,31 +283,113 @@ function xhrUpload(
 			signal?.removeEventListener("abort", abort);
 			action();
 		};
-		const abort = () => request.abort();
+		const abort = () => {
+			request.abort();
+			finish(() => reject(new DOMException("Upload aborted", "AbortError")));
+		};
 		request.open("POST", url);
 		request.withCredentials = true;
 		request.setRequestHeader("content-type", "application/octet-stream");
-		request.upload.onprogress = (event) => onProgress(event.loaded);
+		let loaded = 0;
+		request.upload.onprogress = (event) => {
+			if (settled) return;
+			loaded = Math.max(loaded, Math.min(body.size, event.loaded));
+			try {
+				onProgress(loaded);
+			} catch (error) {
+				finish(() => reject(error));
+				request.abort();
+			}
+		};
 		request.onload = () =>
-			finish(() =>
-				resolve(
-					new Response(request.responseText, {
-						status: request.status,
-						statusText: request.statusText,
-					}),
-				),
-			);
+			finish(() => {
+				try {
+					resolve(
+						new Response(request.responseText, {
+							status: request.status,
+							statusText: request.statusText,
+						}),
+					);
+				} catch (error) {
+					reject(error);
+				}
+			});
 		request.onerror = () =>
 			finish(() => reject(new TypeError("attachment upload: network failure")));
 		request.onabort = () =>
 			finish(() => reject(new DOMException("Upload aborted", "AbortError")));
 		if (signal?.aborted) {
-			request.abort();
+			abort();
 			return;
 		}
 		signal?.addEventListener("abort", abort, { once: true });
-		request.send(body);
+		try {
+			request.send(body);
+		} catch (error) {
+			finish(() => reject(error));
+		}
 	});
+}
+
+async function uploadCiphertextFromBlob(
+	url: string,
+	plaintext: Blob,
+	dek: Uint8Array,
+	purpose: "content" | "thumbnail",
+	loadedBefore: number,
+	total: number,
+	options: AttachmentUploadOptions,
+): Promise<number> {
+	const expected = encryptedStreamLength(plaintext.size);
+	const chunks: Uint8Array<ArrayBuffer>[] = [];
+	let observed = 0;
+	try {
+		options.signal?.throwIfAborted();
+		for await (const chunk of encryptStream(
+			blobBytes(plaintext, options.signal),
+			dek,
+			purpose,
+		)) {
+			options.signal?.throwIfAborted();
+			observed += chunk.byteLength;
+			if (
+				observed > expected ||
+				observed > BROWSER_CIPHERTEXT_UPLOAD_LIMIT_BYTES
+			)
+				throw new AttachmentUploadCapabilityError("bounded-ciphertext-limit");
+			chunks.push(chunk.slice());
+			options.onProgress?.({
+				phase: "encrypting",
+				loaded: loadedBefore,
+				total,
+			});
+		}
+		if (observed !== expected)
+			throw new Error("attachment upload: ciphertext length mismatch");
+		options.signal?.throwIfAborted();
+		const body = new Blob(chunks, { type: "application/octet-stream" });
+		chunks.length = 0;
+		if (body.size !== expected)
+			throw new Error("attachment upload: ciphertext length mismatch");
+		await expectOk(
+			await xhrUpload(url, body, options.signal, (loaded) => {
+				options.onProgress?.({
+					phase: "uploading",
+					loaded: loadedBefore + loaded,
+					total,
+				});
+			}),
+			"uploading",
+		);
+		options.onProgress?.({
+			phase: "uploading",
+			loaded: loadedBefore + expected,
+			total,
+		});
+		return loadedBefore + expected;
+	} finally {
+		chunks.length = 0;
+	}
 }
 
 async function uploadCiphertextFromPrivateFile(
@@ -239,7 +403,6 @@ async function uploadCiphertextFromPrivateFile(
 ): Promise<number> {
 	return await withCiphertextStage(async (handle) => {
 		const writable = await handle.createWritable();
-		let encrypted = 0;
 		try {
 			for await (const chunk of encryptStream(
 				blobBytes(plaintext),
@@ -250,10 +413,9 @@ async function uploadCiphertextFromPrivateFile(
 					throw new DOMException("Upload aborted", "AbortError");
 				}
 				await writable.write(chunk.slice());
-				encrypted += chunk.byteLength;
 				options.onProgress?.({
 					phase: "encrypting",
-					loaded: loadedBefore + encrypted,
+					loaded: loadedBefore,
 					total,
 				});
 			}
@@ -290,9 +452,30 @@ export async function uploadAttachment(
 		loaded: 0,
 		total: input.file.size,
 	});
+	const capability = getAttachmentUploadCapability(options.fetcher);
+	const declaredBytes = encryptedStreamLength(input.file.size);
+	if (capability === "unavailable")
+		throw new AttachmentUploadCapabilityError("transport-unavailable");
+	if (
+		capability === "bounded-blob" &&
+		declaredBytes > BROWSER_CIPHERTEXT_UPLOAD_LIMIT_BYTES
+	)
+		throw new AttachmentUploadCapabilityError("bounded-ciphertext-limit");
+	options.signal?.throwIfAborted();
 	const thumbnail = isPreviewable(contentType)
 		? await (options.thumbnailer ?? createAttachmentThumbnail)(input.file)
 		: null;
+	const thumbnailDeclaredBytes = thumbnail
+		? encryptedStreamLength(thumbnail.size)
+		: null;
+	const total = declaredBytes + (thumbnailDeclaredBytes ?? 0);
+	if (
+		capability === "bounded-blob" &&
+		(!Number.isSafeInteger(total) ||
+			total > BROWSER_CIPHERTEXT_UPLOAD_LIMIT_BYTES)
+	)
+		throw new AttachmentUploadCapabilityError("bounded-ciphertext-limit");
+	options.signal?.throwIfAborted();
 	const dek = crypto.getRandomValues(new Uint8Array(DEK_BYTES));
 	const filenameCiphertext = encodeWrapped(
 		await encryptWrapped(
@@ -315,13 +498,14 @@ export async function uploadAttachment(
 			aad.dek(input.workspaceId, input.keyVersion, id),
 		),
 	);
-	const declaredBytes = encryptedStreamLength(input.file.size);
-	const thumbnailDeclaredBytes = thumbnail
-		? encryptedStreamLength(thumbnail.size)
-		: null;
 	let reserveAttempted = false;
+	const release =
+		capability === "bounded-blob"
+			? await acquireBlobUpload(options.signal)
+			: undefined;
 
 	try {
+		options.signal?.throwIfAborted();
 		reserveAttempted = true;
 		const reserve = await expectOk(
 			await fetcher("/api/attachments/reserve", {
@@ -361,7 +545,6 @@ export async function uploadAttachment(
 			throw new Error("attachment upload: reserve returned an invalid target");
 		}
 
-		const total = declaredBytes + (thumbnailDeclaredBytes ?? 0);
 		let uploaded = await uploadCiphertext(
 			expectedUpload,
 			input.file,
@@ -370,6 +553,7 @@ export async function uploadAttachment(
 			0,
 			total,
 			options,
+			capability,
 		);
 		if (thumbnail && expectedThumbnail) {
 			uploaded = await uploadCiphertext(
@@ -380,6 +564,7 @@ export async function uploadAttachment(
 				uploaded,
 				total,
 				options,
+				capability,
 			);
 		}
 		options.onProgress?.({ phase: "finalizing", loaded: uploaded, total });
@@ -402,8 +587,11 @@ export async function uploadAttachment(
 		}
 		return { id, state: "committed" };
 	} catch (error) {
+		release?.();
 		if (reserveAttempted)
 			await abortBestEffort(id, fetcher).catch(() => undefined);
 		throw error;
+	} finally {
+		release?.();
 	}
 }

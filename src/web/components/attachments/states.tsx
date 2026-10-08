@@ -23,7 +23,10 @@ import {
 	useKeyring,
 	type WorkspaceKeyMaterial,
 } from "../../lib/e2e/KeyringProvider.tsx";
-import { AttachmentUploadError } from "../../lib/e2e/upload.ts";
+import {
+	AttachmentUploadCapabilityError,
+	AttachmentUploadError,
+} from "../../lib/e2e/upload.ts";
 import {
 	fetchWorkspaceRotationPlan,
 	rotateWorkspaceKey,
@@ -201,6 +204,16 @@ export function useAttachmentGate(
 	}, [continueWithKey]);
 
 	const reportUploadFailure = useCallback((caught: unknown) => {
+		if (caught instanceof AttachmentUploadCapabilityError) {
+			setError(
+				caught.reason === "bounded-ciphertext-limit"
+					? m.attachment_error_browser_ciphertext_limit({
+							limit: formatBytes(caught.limitBytes),
+						})
+					: m.attachment_error_browser_unavailable(),
+			);
+			return;
+		}
 		if (typeof navigator !== "undefined" && !navigator.onLine) {
 			setError(m.attachment_error_offline());
 			return;

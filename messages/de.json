@@ -1934,6 +1934,8 @@
 	"attachment_upload_cancelled": "Upload abgebrochen.",
 	"attachment_ready_to_upload": "Bereit - wird beim Senden des Kommentars hochgeladen.",
 	"attachment_error_too_large": "Diese Datei überschreitet das Limit von {limit}.",
+	"attachment_error_browser_ciphertext_limit": "Dieser Browser kann bis zu {limit} verschlüsselte Dateidaten hochladen. Versuche es mit einer kleineren Datei oder einem anderen Browser.",
+	"attachment_error_browser_unavailable": "Datei-Uploads sind in diesem Browser nicht verfügbar.",
 	"attachment_error_quota": "Dieser Arbeitsbereich hat keinen freien Speicher mehr. Lösche Dateien, um weitere hinzuzufügen.",
 	"attachment_error_offline": "Uploads brauchen eine Verbindung. Versuche es erneut, wenn du wieder online bist.",
 	"attachment_error_reserve_failed": "Die Datei konnte nicht hinzugefügt werden. Versuche es erneut.",

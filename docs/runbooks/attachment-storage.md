@@ -34,6 +34,12 @@ through Ditero so current membership and role checks are applied at request time
 
 ## Quota and retention
 
+Browser uploads use private-file ciphertext staging when supported. Otherwise,
+they buffer ciphertext only, with an 8 MiB combined limit for each file and its
+thumbnail. Oversized files are rejected before reservation; this local browser
+limit is separate from server limits and workspace quota. Only one buffered
+upload runs at a time. Native attachment transports retain their streaming path.
+
 Browser previews and ordinary downloads are limited to 64 MiB in memory. Larger downloads
 require a browser with the File System Access save picker, OPFS, and Web Locks. The client asks
 for a destination, stages ciphertext in browser storage, verifies the entire stream without

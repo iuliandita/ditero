@@ -249,7 +249,9 @@ Files attached to tasks, comments, and lists are encrypted on the client before 
 The server stores and proxies only ciphertext, including encrypted filenames, declared media
 types, and thumbnails. It can still see the parent record, uploader, byte counts, lifecycle
 state, and storage location because authorization, quota enforcement, and garbage collection
-depend on them.
+depend on them. Browsers without writable private-file staging support uploads
+up to 8 MiB of combined encrypted file and thumbnail data; server limits and
+workspace quotas still apply.
 
 The Compose default stores ciphertext on a persistent filesystem volume. S3-compatible storage
 is also supported without exposing the bucket to browsers. Uploads require a live connection,
