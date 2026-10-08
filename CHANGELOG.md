@@ -25,6 +25,7 @@ All notable changes to this project are documented here. The format is based on
   file, and reading selections use one linked status message.
 - Task label controls respect workspace Viewer permissions while preserving label
   editing for authorized writers during paused imports.
+- Empty task assignee and label controls align without a redundant Unassigned line.
 
 ### Changed
 
