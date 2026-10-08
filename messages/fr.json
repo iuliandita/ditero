@@ -1981,7 +1981,7 @@
 	"attachment_ready_to_upload": "Prêt - sera envoyé avec le commentaire.",
 	"attachment_error_too_large": "Ce fichier dépasse la limite de {limit}.",
 	"attachment_error_browser_ciphertext_limit": "Ce navigateur peut envoyer jusqu'à {limit} de données de fichier chiffrées. Essaie un fichier plus petit ou un autre navigateur.",
-	"attachment_error_browser_unavailable": "L'envoi de fichiers n'est pas disponible dans ce navigateur.",
+	"attachment_error_browser_unavailable": "L'envoi de fichiers n'est pas disponible dans ce navigateur. Essaie un autre navigateur ou appareil.",
 	"attachment_error_quota": "Cet espace de travail n'a plus de stockage disponible. Supprime des fichiers pour en ajouter d'autres.",
 	"attachment_error_offline": "Les envois nécessitent une connexion. Réessaie lorsque tu seras de nouveau en ligne.",
 	"attachment_error_reserve_failed": "Impossible d'ajouter ce fichier. Réessaie.",

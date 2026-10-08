@@ -1935,7 +1935,7 @@
 	"attachment_ready_to_upload": "Ready - uploads when you send the comment.",
 	"attachment_error_too_large": "That file is over the {limit} limit.",
 	"attachment_error_browser_ciphertext_limit": "This browser can upload up to {limit} of encrypted file data. Try a smaller file or another browser.",
-	"attachment_error_browser_unavailable": "File uploads are unavailable in this browser.",
+	"attachment_error_browser_unavailable": "File uploads are unavailable in this browser. Try another browser or device.",
 	"attachment_error_quota": "This workspace is out of storage. Delete some files to add more.",
 	"attachment_error_offline": "Uploads need a connection. Try again when you are back online.",
 	"attachment_error_reserve_failed": "That file could not be added. Try again.",
