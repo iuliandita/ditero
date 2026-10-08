@@ -23,10 +23,10 @@ are included, with no subscriptions or paid feature unlocks.
 [Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Brand assets](assets/brand/README.md)
 
 > **Alpha.** The first release was `v0.0.1-alpha.1`; the current published alpha is
-> [`v0.0.1-alpha.9`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.9).
-> Alpha 9 puts related task details side by side, keeps large-text titles readable,
-> and fixes opening task links when Android starts. Broader Android task-link and
-> device qualification remains open.
+> [`v0.0.1-alpha.10`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.10).
+> Alpha 10 improves archive-import feedback, label permissions, and task-field
+> spacing. The native desktop archive-import entry remains unavailable pending
+> transfer and recovery qualification. Broader native device qualification remains open.
 > The release pipeline packages server containers, Helm/Kustomize/Compose deployment
 > files, desktop installers and signed Android downloads. Native platform qualification
 > remains in progress; Windows builds are
@@ -138,7 +138,7 @@ database passwords or encryption keys for an existing volume. The file is gitign
 mounted secrets with `_FILE` variables are also supported.
 
 That pulls `ghcr.io/iuliandita/ditero:nightly` and `:nightly-zero`. Add `--build`
-to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.0.1-alpha.9`
+to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.0.1-alpha.10`
 to run the current published alpha with matching app and Zero tags. Commit-specific
 nightly tags use different suffix ordering for app and Zero, so pin those two
 service images separately in a Compose override; see [image tags](RELEASING.md#channels).
