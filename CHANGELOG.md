@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.0.1-alpha.11] - 2026-10-08
+
+### Fixed
+
+- Native comment attachments use the native encrypted upload transport, matching
+  task attachments while preserving the browser upload path.
+- Documentation checks cover native and UI source mappings, staged changes,
+  deployment configuration names, and cumulative release documentation.
+
 ## [0.0.1-alpha.10] - 2026-10-08
 
 ### Added
