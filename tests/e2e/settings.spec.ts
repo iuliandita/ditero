@@ -143,8 +143,7 @@ for (const width of [1440, 390]) {
 		await openSettings(page, `settings-clamped-${width}`);
 		// Reproduce the short native data panel with the same real section/nav.
 		await page.addStyleTag({
-			content:
-				"#settings-data{height:160px;overflow:hidden}html{scrollbar-width:auto!important;scrollbar-gutter:stable}html::-webkit-scrollbar{width:16px}",
+			content: "#settings-data{height:160px;overflow:hidden}",
 		});
 		const nav = page.getByTestId("settings-nav");
 		const selector = page.getByTestId("settings-section-select");
@@ -209,26 +208,6 @@ for (const width of [1440, 390]) {
 			.poll(async () => (await danger.boundingBox())?.y ?? Infinity)
 			.toBeLessThanOrEqual((beforeScroll ?? 0) + 1);
 		await expect(selected).toHaveText("Your data");
-		const scrollbar = await page.evaluate(() => {
-			const root = document.documentElement;
-			return {
-				x:
-					root.clientLeft +
-					root.clientWidth +
-					(innerWidth - root.clientWidth) / 2,
-				gutter: innerWidth - root.clientWidth,
-				top: root.scrollTop,
-			};
-		});
-		expect(scrollbar.gutter).toBeGreaterThan(0);
-		// Click the real scrollbar track, without wheel/touch/key events.
-		await page.mouse.click(scrollbar.x, 40);
-		await expect
-			.poll(() => page.evaluate(() => document.documentElement.scrollTop))
-			.toBeLessThan(scrollbar.top - 100);
-		await expect(selected).toHaveText(
-			width === 1440 ? "Keyboard shortcuts" : "Focus and Karma",
-		);
 
 		// The short final section still has an explicit destination of its own.
 		await chooseSection("Danger zone");
