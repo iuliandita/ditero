@@ -14,6 +14,7 @@ import { KarmaSettings } from "../components/settings/KarmaSettings.tsx";
 import { KeymapSettings } from "../components/settings/KeymapSettings.tsx";
 import { LabelManager } from "../components/settings/LabelManager.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
+import { NativeArchiveExportPanel } from "../components/settings/NativeArchiveExportPanel.tsx";
 import { NativeBrowserSettings } from "../components/settings/NativeBrowserSettings.tsx";
 import { NativePushSettings } from "../components/settings/NativePushSettings.tsx";
 import { NotificationSettings } from "../components/settings/NotificationSettings.tsx";
@@ -187,7 +188,7 @@ export function SettingsSurface({
 
 					<SettingsSection id="data" title={m.settings_section_data()}>
 						{native ? (
-							<NativeBrowserSettings />
+							<NativeArchiveExportPanel />
 						) : (
 							<>
 								<DataPortabilityPanel />

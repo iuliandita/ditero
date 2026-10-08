@@ -2237,6 +2237,7 @@
 	"native_approval_pending": "La solicitud sigue esperando aprobación.",
 	"native_signin_failed": "No se pudo completar el inicio de sesión. Inténtalo de nuevo.",
 	"native_settings_browser_note": "Gestiona estos ajustes en el navegador, en el servidor que has elegido. Puede que tengas que iniciar sesión allí.",
+	"native_settings_other_data_browser_note": "Gestiona los demás ajustes de datos en el navegador, en el servidor que has elegido. Puede que tengas que iniciar sesión allí.",
 	"native_settings_open_browser": "Abrir en el navegador",
 	"pwa_update_available": "Hay una actualización lista. Recarga cuando quieras.",
 	"native_push_heading": "En este teléfono",

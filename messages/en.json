@@ -2191,6 +2191,7 @@
 	"native_approval_pending": "The request is still waiting for approval.",
 	"native_signin_failed": "Could not finish signing in. Try again.",
 	"native_settings_browser_note": "Manage these settings in your browser on your selected server. You may need to sign in there.",
+	"native_settings_other_data_browser_note": "Manage other data settings in your browser on your selected server. You may need to sign in there.",
 	"native_settings_open_browser": "Open in browser",
 	"pwa_update_available": "An update is ready. Reload when you're ready.",
 	"native_push_heading": "On this phone",

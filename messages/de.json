@@ -2191,6 +2191,7 @@
 	"native_approval_pending": "Die Anfrage wartet noch auf Bestätigung.",
 	"native_signin_failed": "Anmeldung fehlgeschlagen. Versuche es erneut.",
 	"native_settings_browser_note": "Verwalte diese Einstellungen im Browser auf deinem ausgewählten Server. Möglicherweise musst du dich dort anmelden.",
+	"native_settings_other_data_browser_note": "Verwalte die anderen Dateneinstellungen im Browser auf deinem ausgewählten Server. Möglicherweise musst du dich dort anmelden.",
 	"native_settings_open_browser": "Im Browser öffnen",
 	"pwa_update_available": "Ein Update ist bereit. Lade die App neu, wenn es für dich passt.",
 	"native_push_heading": "Auf diesem Handy",

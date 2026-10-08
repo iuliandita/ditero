@@ -2375,6 +2375,7 @@
 	"native_approval_pending": "لا يزال الطلب ينتظر الموافقة.",
 	"native_signin_failed": "تعذر إكمال تسجيل الدخول. حاول مرة أخرى.",
 	"native_settings_browser_note": "أدر هذه الإعدادات في المتصفح على الخادم الذي اخترته. قد تحتاج إلى تسجيل الدخول هناك.",
+	"native_settings_other_data_browser_note": "أدر إعدادات البيانات الأخرى في المتصفح على الخادم الذي اخترته. قد تحتاج إلى تسجيل الدخول هناك.",
 	"native_settings_open_browser": "فتح في المتصفح",
 	"pwa_update_available": "يتوفر تحديث. أعد تحميل التطبيق عندما تكون مستعدًا.",
 	"native_push_heading": "على هذا الهاتف",

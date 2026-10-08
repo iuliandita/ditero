@@ -3,7 +3,7 @@ import { m } from "../../../paraglide/messages.js";
 import { useNativeAccount } from "../../lib/native-account.tsx";
 import { Button } from "../ui/button.tsx";
 
-export function NativeBrowserSettings() {
+export function NativeBrowserSettings({ note }: { note?: string }) {
 	const native = useNativeAccount();
 	if (!native) return null;
 	return (
@@ -12,7 +12,7 @@ export function NativeBrowserSettings() {
 			data-testid="native-browser-settings"
 		>
 			<p className="text-sm text-muted-foreground">
-				{m.native_settings_browser_note()}
+				{note ?? m.native_settings_browser_note()}
 			</p>
 			<Button asChild variant="outline" className="min-h-11">
 				<a href={`${native.origin}/`}>

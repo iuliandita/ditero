@@ -89,8 +89,9 @@ writes. The operating system save dialog supplies an opaque destination capabili
 Rust writes a private temporary file and commits the final save atomically.
 Canceled or retired operations clean up their temporary files.
 
-Linux also supports **Export selected files** in Settings. It prepares an exact
-content JSON and its paired encrypted attachment archive, each limited to 32 MiB.
+Linux exposes **Export selected files** under **Settings > Your data** when the
+native export capability is available. It prepares an exact content JSON and its
+paired encrypted attachment archive, each limited to 32 MiB.
 Save both files through their separate system save dialogs and retain the archive
 passphrase. The fixed native export operation shares the browser export limits
 and never exposes a caller-supplied network target. Archive import and recovery
