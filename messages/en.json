@@ -2482,6 +2482,24 @@
 	"quickadd_voice_too_long": "That was too long to use. Choose “Check again”, then “Dictate” and say a shorter task.",
 	"quickadd_voice_failed": "Voice input stopped. Your text is unchanged. Choose “Check again”, then “Dictate”.",
 	"quickadd_voice_blocked": "Finish or cancel voice input to add the task.",
+	"archive_export_file_content": "App data",
+	"archive_export_file_files": "Encrypted attachments",
+	"archive_export_ready_description": "Your export is ready. Save both matching files and keep your export password for importing the attachments.",
+	"archive_export_download_requested": "{file}: Download requested.",
+	"archive_export_selected_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} file selected",
+				"countPlural=other": "{countNum} files selected"
+			}
+		}
+	],
 	"archive_export_action": "Export data and attachments",
 	"archive_export_description": "Choose the attachments to export. You'll get two matching files: your Ditero data and the selected attachments.",
 	"archive_export_browser_only": "File archive export is available in the browser. Open this server in your browser to continue.",
@@ -2499,15 +2517,15 @@
 	"archive_export_mismatch": "The passwords do not match.",
 	"archive_export_prepare": "Prepare export",
 	"archive_export_pair_note": "Keep both files together to import the attachments later. The app data file contains readable tasks, lists, comments, and other Ditero data. The attachments file is encrypted and needs your export password.",
-	"archive_export_saved": "Saved",
+	"archive_export_saved": "{file}: Saved",
 	"archive_export_source_list": "List",
 	"archive_export_source_task": "Task",
 	"archive_export_source_comment": "Comment",
 	"archive_export_source_unavailable": "Source unavailable in this saved snapshot",
 	"archive_export_source_details": "{date} · Encrypted size: {size}",
 	"archive_export_source_ordinal": "File {number}",
-	"archive_export_save_cancelled": "Save cancelled. Your prepared files are still available.",
-	"archive_export_save_failed": "This file could not be saved. Choose a destination and try again. Your prepared files are still available.",
+	"archive_export_save_cancelled": "{file}: Save cancelled. Your prepared files are still available.",
+	"archive_export_save_failed": "{file}: This file could not be saved. Choose a destination and try again. Your prepared files are still available.",
 	"archive_export_download_content": "Download app data",
 	"archive_export_download_files": "Download encrypted attachments",
 	"archive_export_downloading": "Downloading selected encrypted files...",

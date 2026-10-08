@@ -475,6 +475,7 @@ export function AttachmentArchiveExportDialog({
 			setSavingFile(true);
 			setError(null);
 			setSaveFeedback((current) => ({ ...current, [kind]: null }));
+			setRequested((current) => ({ ...current, [kind]: false }));
 			try {
 				const outcome = await saveNativeArchiveDocument(
 					runtime.attachments,
@@ -531,7 +532,9 @@ export function AttachmentArchiveExportDialog({
 					<DialogHeader>
 						<DialogTitle>{m.archive_export_action()}</DialogTitle>
 						<DialogDescription>
-							{m.archive_export_description()}
+							{stage === "done"
+								? m.archive_export_ready_description()
+								: m.archive_export_description()}
 						</DialogDescription>
 					</DialogHeader>
 					{!supported ? (
@@ -719,6 +722,11 @@ export function AttachmentArchiveExportDialog({
 												{m.archive_export_selection_limit()}
 											</p>
 										)}
+										<p id={`${id}-selected-count`} className="text-sm">
+											{m.archive_export_selected_count({
+												count: selected.length,
+											})}
+										</p>
 										<Button
 											className={controlClass}
 											disabled={
@@ -728,7 +736,7 @@ export function AttachmentArchiveExportDialog({
 												!passphrase ||
 												passphrase !== confirmation
 											}
-											aria-describedby={`${id}-bounds ${id}-secret-note${sources.length > 0 && !withinBounds ? ` ${id}-selection-limit` : ""}`}
+											aria-describedby={`${id}-bounds ${id}-secret-note ${id}-selected-count${sources.length > 0 && !withinBounds ? ` ${id}-selection-limit` : ""}`}
 											ref={prepareButton}
 											onClick={() => void prepare()}
 										>
@@ -763,6 +771,7 @@ export function AttachmentArchiveExportDialog({
 											{saveFeedback.content && (
 												<span
 													className="block"
+													aria-atomic="true"
 													role={
 														saveFeedback.content === "failed"
 															? "alert"
@@ -770,8 +779,12 @@ export function AttachmentArchiveExportDialog({
 													}
 												>
 													{saveFeedback.content === "failed"
-														? m.archive_export_save_failed()
-														: m.archive_export_save_cancelled()}
+														? m.archive_export_save_failed({
+																file: m.archive_export_file_content(),
+															})
+														: m.archive_export_save_cancelled({
+																file: m.archive_export_file_content(),
+															})}
 												</span>
 											)}
 											{requested.content && (
@@ -781,8 +794,12 @@ export function AttachmentArchiveExportDialog({
 													aria-atomic="true"
 												>
 													{keyring.runtime.attachments?.archiveExport
-														? m.archive_export_saved()
-														: m.portability_download_requested()}
+														? m.archive_export_saved({
+																file: m.archive_export_file_content(),
+															})
+														: m.archive_export_download_requested({
+																file: m.archive_export_file_content(),
+															})}
 												</span>
 											)}
 										</p>
@@ -791,13 +808,18 @@ export function AttachmentArchiveExportDialog({
 											{saveFeedback.files && (
 												<span
 													className="block"
+													aria-atomic="true"
 													role={
 														saveFeedback.files === "failed" ? "alert" : "status"
 													}
 												>
 													{saveFeedback.files === "failed"
-														? m.archive_export_save_failed()
-														: m.archive_export_save_cancelled()}
+														? m.archive_export_save_failed({
+																file: m.archive_export_file_files(),
+															})
+														: m.archive_export_save_cancelled({
+																file: m.archive_export_file_files(),
+															})}
 												</span>
 											)}
 											{requested.files && (
@@ -807,8 +829,12 @@ export function AttachmentArchiveExportDialog({
 													aria-atomic="true"
 												>
 													{keyring.runtime.attachments?.archiveExport
-														? m.archive_export_saved()
-														: m.portability_download_requested()}
+														? m.archive_export_saved({
+																file: m.archive_export_file_files(),
+															})
+														: m.archive_export_download_requested({
+																file: m.archive_export_file_files(),
+															})}
 												</span>
 											)}
 										</p>

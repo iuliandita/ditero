@@ -110,7 +110,8 @@ export function createAttachmentExportController(options: {
 		const workspace = workspaces.get(source.workspaceId);
 		return [workspace?.name, list.title, task?.title, comment?.body]
 			.filter((value): value is string => typeof value === "string")
-			.map(text);
+			.map(text)
+			.filter((value) => value.length > 0);
 	}
 	if (rows.size !== document.data.attachments.length)
 		throw new AttachmentExportSelectionError("invalid-selection");

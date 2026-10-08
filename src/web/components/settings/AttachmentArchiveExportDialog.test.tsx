@@ -242,7 +242,7 @@ test("cancel and save failure retain the pair and opposite Saved, then retry the
 	await prepared();
 	click("Download app data");
 	await nextTurn();
-	expect(renderToStaticMarkup(render()).match(/>Saved</g)).toHaveLength(1);
+	expect(renderToStaticMarkup(render()).match(/: Saved</g)).toHaveLength(1);
 	fixture.pickFile.mockRejectedValueOnce(new FilePickerCancelledError());
 	click("Download encrypted attachments");
 	await nextTurn();
@@ -250,7 +250,7 @@ test("cancel and save failure retain the pair and opposite Saved, then retry the
 	expect(html).toContain("Save cancelled.");
 	expect(html.replace(/<wbr\/>/g, "")).toContain("paired-content.json");
 	expect(html.replace(/<wbr\/>/g, "")).toContain("paired-files.json");
-	expect(html.match(/>Saved</g)).toHaveLength(1);
+	expect(html.match(/: Saved</g)).toHaveLength(1);
 	expect(html).not.toContain("archive could not be prepared");
 	fixture.pickFile.mockResolvedValueOnce({
 		createWritable: async () => ({
@@ -266,8 +266,10 @@ test("cancel and save failure retain the pair and opposite Saved, then retry the
 	await nextTurn();
 	html = renderToStaticMarkup(render());
 	expect(html).toContain('role="alert"');
-	expect(html).toContain("This file could not be saved.");
-	expect(html.match(/>Saved</g)).toHaveLength(1);
+	expect(html).toContain(
+		"Encrypted attachments: This file could not be saved.",
+	);
+	expect(html.match(/: Saved</g)).toHaveLength(1);
 	let finish!: () => void;
 	const writes: Uint8Array[] = [];
 	fixture.pickFile.mockResolvedValueOnce({
@@ -287,10 +289,98 @@ test("cancel and save failure retain the pair and opposite Saved, then retry the
 	click("Download encrypted attachments");
 	await nextTurn();
 	expect(fixture.pickFile).toHaveBeenCalledTimes(4);
-	expect(renderToStaticMarkup(render()).match(/>Saved</g)).toHaveLength(1);
+	expect(renderToStaticMarkup(render()).match(/: Saved</g)).toHaveLength(1);
 	finish();
 	await nextTurn();
-	expect(renderToStaticMarkup(render()).match(/>Saved</g)).toHaveLength(2);
+	expect(renderToStaticMarkup(render()).match(/: Saved</g)).toHaveLength(2);
 	expect(new TextDecoder().decode(writes[0])).toBe(pair.files.json);
 	expect(fixture.exportSelected).toHaveBeenCalledOnce();
+});
+
+test.each([
+	"content",
+	"files",
+] as const)("latest %s save replaces its own Saved while retaining the other file", async (kind) => {
+	await prepared();
+	click("Download app data");
+	await nextTurn();
+	click("Download encrypted attachments");
+	await nextTurn();
+	const role = kind === "content" ? "App data" : "Encrypted attachments";
+	const opposite = kind === "content" ? "Encrypted attachments" : "App data";
+	const action =
+		kind === "content" ? "Download app data" : "Download encrypted attachments";
+	fixture.pickFile.mockRejectedValueOnce(new FilePickerCancelledError());
+	click(action);
+	await nextTurn();
+	let html = renderToStaticMarkup(render());
+	expect(html).not.toContain(`${role}: Saved`);
+	expect(html).toContain(`${opposite}: Saved`);
+	const cancelled = find(
+		render(),
+		(props) =>
+			props.role === "status" &&
+			text(props.children as ReactNode).startsWith(`${role}: Save cancelled.`),
+	);
+	expect(cancelled["aria-atomic"]).toBe("true");
+	fixture.pickFile.mockRejectedValueOnce(new Error("destination failed"));
+	click(action);
+	await nextTurn();
+	html = renderToStaticMarkup(render());
+	expect(html).not.toContain(`${role}: Saved`);
+	expect(html).toContain(`${opposite}: Saved`);
+	const failed = find(
+		render(),
+		(props) =>
+			props.role === "alert" &&
+			text(props.children as ReactNode).startsWith(
+				`${role}: This file could not be saved.`,
+			),
+	);
+	expect(failed["aria-atomic"]).toBe("true");
+	click(action);
+	await nextTurn();
+	const saved = find(
+		render(),
+		(props) =>
+			props.role === "status" &&
+			text(props.children as ReactNode) === `${role}: Saved`,
+	);
+	expect(saved["aria-atomic"]).toBe("true");
+	expect(fixture.exportSelected).toHaveBeenCalledOnce();
+	expect(
+		fixture.pickFile.mock.calls.slice(2).map(([filename]) => filename),
+	).toEqual(Array(3).fill(pair[kind].filename));
+});
+
+test("selection count follows checkboxes and prepared instructions replace choosing", async () => {
+	render();
+	await nextTurn();
+	expect(renderToStaticMarkup(render())).toContain("0 files selected");
+	const first = find(render(), (props) => props.id === "export-file-0");
+	(first.onCheckedChange as (checked: boolean) => void)(true);
+	expect(renderToStaticMarkup(render())).toContain("1 file selected");
+	const second = find(render(), (props) => props.id === "export-file-1");
+	(second.onCheckedChange as (checked: boolean) => void)(true);
+	expect(renderToStaticMarkup(render())).toContain("2 files selected");
+	(first.onCheckedChange as (checked: boolean) => void)(false);
+	expect(renderToStaticMarkup(render())).toContain("1 file selected");
+	const prepare = find(
+		render(),
+		(props, type) =>
+			type === "button" &&
+			text(props.children as ReactNode) === "Prepare export",
+	);
+	expect(prepare["aria-describedby"]).toContain("export-selected-count");
+	for (const id of ["export-passphrase", "export-confirm"]) {
+		const input = find(render(), (props) => props.id === id);
+		(input.onChange as (event: { target: { value: string } }) => void)({
+			target: { value: "separate export secret" },
+		});
+	}
+	click("Prepare export");
+	await nextTurn();
+	const html = renderToStaticMarkup(render());
+	expect(html).toContain("Your export is ready. Save both matching files");
+	expect(html).not.toContain("Choose the attachments to export.");
 });

@@ -2670,6 +2670,28 @@
 	"quickadd_voice_too_long": "كان ذلك طويلًا جدًا. اختر «تحقق مرة أخرى» ثم «إملاء»، وقل مهمة أقصر.",
 	"quickadd_voice_failed": "توقف الإدخال الصوتي. نصك لم يتغير. اختر «تحقق مرة أخرى» ثم «إملاء».",
 	"quickadd_voice_blocked": "أنهِ الإدخال الصوتي أو ألغِه لإضافة المهمة.",
+	"archive_export_file_content": "بيانات التطبيق",
+	"archive_export_file_files": "المرفقات المشفرة",
+	"archive_export_ready_description": "التصدير جاهز. احفظ الملفين المتوافقين واحتفظ بكلمة مرور التصدير لاستيراد المرفقات.",
+	"archive_export_download_requested": "{file}: طُلب التنزيل.",
+	"archive_export_selected_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=zero": "لم يُحدد أي ملف ({countNum})",
+				"countPlural=one": "حُدد ملف واحد ({countNum})",
+				"countPlural=two": "حُدد ملفان ({countNum})",
+				"countPlural=few": "حُددت {countNum} ملفات",
+				"countPlural=many": "حُدد {countNum} ملفًا",
+				"countPlural=other": "حُدد {countNum} ملف"
+			}
+		}
+	],
 	"archive_export_action": "تصدير البيانات والمرفقات",
 	"archive_export_description": "اختر المرفقات التي تريد تصديرها. ستحصل على ملفين متوافقين: بياناتك في Ditero والمرفقات المحددة.",
 	"archive_export_browser_only": "تصدير أرشيف الملفات متاح في المتصفح. افتح هذا الخادم في متصفحك للمتابعة.",
@@ -2687,15 +2709,15 @@
 	"archive_export_mismatch": "كلمتا المرور غير متطابقتين.",
 	"archive_export_prepare": "تجهيز التصدير",
 	"archive_export_pair_note": "احتفظ بالملفين معاً لاستيراد المرفقات لاحقاً. يحتوي ملف بيانات التطبيق على مهام وقوائم وتعليقات وبيانات Ditero أخرى قابلة للقراءة. ملف المرفقات مشفر ويحتاج إلى كلمة مرور التصدير.",
-	"archive_export_saved": "تم الحفظ",
+	"archive_export_saved": "{file}: تم الحفظ",
 	"archive_export_source_list": "قائمة",
 	"archive_export_source_task": "مهمة",
 	"archive_export_source_comment": "تعليق",
 	"archive_export_source_unavailable": "المصدر غير متاح في هذه النسخة المحفوظة",
 	"archive_export_source_details": "{date} · الحجم المشفر: {size}",
 	"archive_export_source_ordinal": "الملف {number}",
-	"archive_export_save_cancelled": "أُلغي الحفظ. لا تزال ملفاتك المحضّرة متاحة.",
-	"archive_export_save_failed": "تعذر حفظ هذا الملف. اختر وجهة وحاول مجدداً. لا تزال ملفاتك المحضّرة متاحة.",
+	"archive_export_save_cancelled": "{file}: أُلغي الحفظ. لا تزال ملفاتك المحضّرة متاحة.",
+	"archive_export_save_failed": "{file}: تعذر حفظ هذا الملف. اختر وجهة وحاول مجدداً. لا تزال ملفاتك المحضّرة متاحة.",
 	"archive_export_download_content": "تنزيل بيانات التطبيق",
 	"archive_export_download_files": "تنزيل المرفقات المشفرة",
 	"archive_export_downloading": "تنزيل الملفات المشفرة المحددة...",

@@ -2529,6 +2529,25 @@
 	"quickadd_voice_too_long": "A fost prea lung. Alege „Verifică din nou”, apoi „Dictează” și spune o sarcină mai scurtă.",
 	"quickadd_voice_failed": "Introducerea vocală s-a oprit. Textul tău este neschimbat. Alege „Verifică din nou”, apoi „Dictează”.",
 	"quickadd_voice_blocked": "Termină sau anulează introducerea vocală pentru a adăuga sarcina.",
+	"archive_export_file_content": "Datele aplicației",
+	"archive_export_file_files": "Atașamente criptate",
+	"archive_export_ready_description": "Exportul este gata. Salvează ambele fișiere care se potrivesc și păstrează parola de export pentru a importa atașamentele.",
+	"archive_export_download_requested": "{file}: Descărcare solicitată.",
+	"archive_export_selected_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} fișier selectat",
+				"countPlural=few": "{countNum} fișiere selectate",
+				"countPlural=other": "{countNum} de fișiere selectate"
+			}
+		}
+	],
 	"archive_export_action": "Exportă datele și atașamentele",
 	"archive_export_description": "Alege atașamentele de exportat. Vei primi două fișiere care se potrivesc: datele tale Ditero și atașamentele selectate.",
 	"archive_export_browser_only": "Exportul arhivelor de fișiere este disponibil în browser. Deschide acest server în browser pentru a continua.",
@@ -2546,15 +2565,15 @@
 	"archive_export_mismatch": "Parolele nu coincid.",
 	"archive_export_prepare": "Pregătește exportul",
 	"archive_export_pair_note": "Păstrează ambele fișiere împreună pentru a importa atașamentele mai târziu. Fișierul cu datele aplicației conține sarcini, liste, comentarii și alte date Ditero lizibile. Fișierul cu atașamente este criptat și necesită parola ta de export.",
-	"archive_export_saved": "Salvat",
+	"archive_export_saved": "{file}: Salvat",
 	"archive_export_source_list": "Listă",
 	"archive_export_source_task": "Sarcină",
 	"archive_export_source_comment": "Comentariu",
 	"archive_export_source_unavailable": "Sursa nu este disponibilă în această copie salvată",
 	"archive_export_source_details": "{date} · Dimensiune criptată: {size}",
 	"archive_export_source_ordinal": "Fișierul {number}",
-	"archive_export_save_cancelled": "Salvare anulată. Fișierele pregătite sunt în continuare disponibile.",
-	"archive_export_save_failed": "Acest fișier nu a putut fi salvat. Alege o destinație și încearcă din nou. Fișierele pregătite sunt în continuare disponibile.",
+	"archive_export_save_cancelled": "{file}: Salvare anulată. Fișierele pregătite sunt în continuare disponibile.",
+	"archive_export_save_failed": "{file}: Acest fișier nu a putut fi salvat. Alege o destinație și încearcă din nou. Fișierele pregătite sunt în continuare disponibile.",
 	"archive_export_download_content": "Descarcă datele aplicației",
 	"archive_export_download_files": "Descarcă atașamentele criptate",
 	"archive_export_downloading": "Se descarcă fișierele criptate selectate...",

@@ -2482,6 +2482,24 @@
 	"quickadd_voice_too_long": "Das war zu lang. Wähle „Erneut prüfen“ und danach „Diktieren“. Sag dann eine kürzere Aufgabe.",
 	"quickadd_voice_failed": "Die Spracheingabe wurde beendet. Dein Text bleibt unverändert. Wähle „Erneut prüfen“ und danach „Diktieren“.",
 	"quickadd_voice_blocked": "Beende oder verwirf die Spracheingabe, um die Aufgabe hinzuzufügen.",
+	"archive_export_file_content": "App-Daten",
+	"archive_export_file_files": "Verschlüsselte Anhänge",
+	"archive_export_ready_description": "Dein Export ist bereit. Speichere beide zusammengehörigen Dateien und bewahre dein Exportpasswort auf, um die Anhänge zu importieren.",
+	"archive_export_download_requested": "{file}: Download angefordert.",
+	"archive_export_selected_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} Datei ausgewählt",
+				"countPlural=other": "{countNum} Dateien ausgewählt"
+			}
+		}
+	],
 	"archive_export_action": "Daten und Anhänge exportieren",
 	"archive_export_description": "Wähle die Anhänge aus, die du exportieren möchtest. Du erhältst zwei zusammengehörige Dateien: deine Ditero-Daten und die ausgewählten Anhänge.",
 	"archive_export_browser_only": "Dateiarchive kannst du im Browser exportieren. Öffne diesen Server in deinem Browser.",
@@ -2499,15 +2517,15 @@
 	"archive_export_mismatch": "Die Passwörter stimmen nicht überein.",
 	"archive_export_prepare": "Export vorbereiten",
 	"archive_export_pair_note": "Bewahre beide Dateien zusammen auf, um die Anhänge später zu importieren. Die App-Datendatei enthält lesbare Aufgaben, Listen, Kommentare und andere Ditero-Daten. Die Datei mit den Anhängen ist verschlüsselt und benötigt dein Exportpasswort.",
-	"archive_export_saved": "Gespeichert",
+	"archive_export_saved": "{file}: Gespeichert",
 	"archive_export_source_list": "Liste",
 	"archive_export_source_task": "Aufgabe",
 	"archive_export_source_comment": "Kommentar",
 	"archive_export_source_unavailable": "Quelle in diesem gespeicherten Stand nicht verfügbar",
 	"archive_export_source_details": "{date} · Verschlüsselte Größe: {size}",
 	"archive_export_source_ordinal": "Datei {number}",
-	"archive_export_save_cancelled": "Speichern abgebrochen. Deine vorbereiteten Dateien sind weiterhin verfügbar.",
-	"archive_export_save_failed": "Diese Datei konnte nicht gespeichert werden. Wähle einen Speicherort und versuche es erneut. Deine vorbereiteten Dateien sind weiterhin verfügbar.",
+	"archive_export_save_cancelled": "{file}: Speichern abgebrochen. Deine vorbereiteten Dateien sind weiterhin verfügbar.",
+	"archive_export_save_failed": "{file}: Diese Datei konnte nicht gespeichert werden. Wähle einen Speicherort und versuche es erneut. Deine vorbereiteten Dateien sind weiterhin verfügbar.",
 	"archive_export_download_content": "App-Daten herunterladen",
 	"archive_export_download_files": "Verschlüsselte Anhänge herunterladen",
 	"archive_export_downloading": "Ausgewählte verschlüsselte Dateien werden heruntergeladen...",

@@ -635,6 +635,14 @@ it.each([
 			: []),
 	]);
 	expect(result.encryptedBytes).toBe(f.content.length);
+	if (kind === "comment") {
+		for (const body of ["", "  \n \t "]) {
+			document.data.comments[0].body = body;
+			await expect(describe()).resolves.toMatchObject({
+				context: ["Household", "Receipts", "October groceries"],
+			});
+		}
+	}
 	// A valid ID alone cannot label an attachment with a different workspace's content.
 	document.data.lists[0].workspaceId = "another-workspace";
 	await expect(describe()).resolves.toMatchObject({ context: [] });
