@@ -2119,7 +2119,7 @@
 	"attachment_ready_to_upload": "جاهز - سيُرفع عند إرسال التعليق.",
 	"attachment_error_too_large": "يتجاوز هذا الملف الحد البالغ {limit}.",
 	"attachment_error_browser_ciphertext_limit": "يمكن لهذا المتصفح رفع ما يصل إلى {limit} من بيانات الملفات المشفّرة. جرّب ملفًا أصغر أو متصفحًا آخر.",
-	"attachment_error_browser_unavailable": "رفع الملفات غير متاح في هذا المتصفح.",
+	"attachment_error_browser_unavailable": "رفع الملفات غير متاح في هذا المتصفح. جرّب متصفحًا أو جهازًا آخر.",
 	"attachment_error_quota": "نفدت مساحة التخزين في مساحة العمل هذه. احذف بعض الملفات لإضافة المزيد.",
 	"attachment_error_offline": "يتطلب الرفع اتصالًا. حاول مرة أخرى عند عودتك إلى الإنترنت.",
 	"attachment_error_reserve_failed": "تعذّرت إضافة هذا الملف. حاول مرة أخرى.",

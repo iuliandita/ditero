@@ -1981,7 +1981,7 @@
 	"attachment_ready_to_upload": "Listo: se subirá cuando envíes el comentario.",
 	"attachment_error_too_large": "Ese archivo supera el límite de {limit}.",
 	"attachment_error_browser_ciphertext_limit": "Este navegador puede subir hasta {limit} de datos de archivos cifrados. Prueba con un archivo más pequeño u otro navegador.",
-	"attachment_error_browser_unavailable": "Las subidas de archivos no están disponibles en este navegador.",
+	"attachment_error_browser_unavailable": "Las subidas de archivos no están disponibles en este navegador. Prueba con otro navegador o dispositivo.",
 	"attachment_error_quota": "Este espacio de trabajo no tiene almacenamiento disponible. Elimina algunos archivos para añadir más.",
 	"attachment_error_offline": "Las subidas necesitan conexión. Inténtalo de nuevo cuando vuelvas a tener conexión.",
 	"attachment_error_reserve_failed": "No se pudo añadir ese archivo. Inténtalo de nuevo.",
