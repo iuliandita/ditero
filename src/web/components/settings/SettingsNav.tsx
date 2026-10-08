@@ -16,11 +16,14 @@ import {
 
 export type SettingsNavItem = { id: SettingsSectionId; label: string };
 
+const sectionJumpEvent = "ditero:settings-section-jump";
+
 // Jumps to a section and moves focus to its heading, so keyboard and screen
 // reader users land where sighted users do.
 export function jumpToSettingsSection(id: SettingsSectionId) {
 	const section = document.getElementById(settingsSectionDomId(id));
 	if (!section) return;
+	window.dispatchEvent(new CustomEvent(sectionJumpEvent, { detail: id }));
 	section.scrollIntoView({
 		behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
 			? "auto"
@@ -39,6 +42,7 @@ export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
 	);
 
 	const selectedSection = useRef<SettingsSectionId | null>(null);
+	const explicitSection = useRef<SettingsSectionId | null>(null);
 	const navRef = useRef<HTMLElement>(null);
 
 	useEffect(() => {
@@ -47,6 +51,75 @@ export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
 			const element = document.getElementById(settingsSectionDomId(item.id));
 			return element ? [element] : [];
 		});
+		const updateCurrent = () => {
+			// A clamped jump can leave later sections visible too. Keep the user's
+			// destination until they resume scrolling the settings themselves.
+			if (explicitSection.current) return;
+			const last = items.at(-1);
+			const lastSection =
+				last && document.getElementById(settingsSectionDomId(last.id));
+			// A short final section cannot scroll to the top of the viewport.
+			if (
+				lastSection &&
+				lastSection.getBoundingClientRect().bottom <= window.innerHeight
+			) {
+				setCurrent(last.id);
+				return;
+			}
+			const first = items.find((item) => visible.has(item.id));
+			if (first) setCurrent(first.id);
+		};
+		const resumeScrollSpy = (event: Event) => {
+			if (
+				event.target instanceof Element &&
+				event.target.closest('[role="dialog"], [role="listbox"]')
+			)
+				return;
+			explicitSection.current = null;
+			updateCurrent();
+		};
+		const onSectionJump = (event: Event) => {
+			const id = (event as CustomEvent<SettingsSectionId>).detail;
+			if (!items.some((item) => item.id === id)) return;
+			explicitSection.current = id;
+			setCurrent(id);
+		};
+		const onScrollbarPointer = (event: PointerEvent) => {
+			const root = document.scrollingElement;
+			if (
+				event.button === 0 &&
+				root instanceof HTMLElement &&
+				root.scrollHeight > root.clientHeight &&
+				(event.target === root ||
+					event.clientX < root.clientLeft ||
+					event.clientX >= root.clientLeft + root.clientWidth)
+			)
+				resumeScrollSpy(event);
+		};
+		const onScrollKey = (event: KeyboardEvent) => {
+			if (
+				event.defaultPrevented ||
+				event.altKey ||
+				event.ctrlKey ||
+				event.metaKey ||
+				![
+					"ArrowUp",
+					"ArrowDown",
+					"PageUp",
+					"PageDown",
+					"Home",
+					"End",
+					" ",
+				].includes(event.key) ||
+				(event.target instanceof Element &&
+					(event.target.closest(
+						'button, input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="combobox"], [role="slider"]',
+					) ||
+						(event.key === " " && event.target.closest("a"))))
+			)
+				return;
+			resumeScrollSpy(event);
+		};
 		let observer: IntersectionObserver | undefined;
 		let boundary: number | undefined;
 		const observeSections = () => {
@@ -71,31 +144,29 @@ export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
 							visible.set(id, entry.boundingClientRect.top);
 						else visible.delete(id);
 					}
-					const last = items.at(-1);
-					const lastSection =
-						last && document.getElementById(settingsSectionDomId(last.id));
-					// A short final section cannot scroll to the top of the viewport.
-					if (
-						lastSection &&
-						lastSection.getBoundingClientRect().bottom <= window.innerHeight
-					) {
-						setCurrent(last.id);
-						return;
-					}
-					const first = items.find((item) => visible.has(item.id));
-					if (first) setCurrent(first.id);
+					updateCurrent();
 				},
 				{ rootMargin: `-${boundary}px 0px -60% 0px` },
 			);
 			for (const section of sections) observer.observe(section);
 		};
 		observeSections();
+		window.addEventListener("wheel", resumeScrollSpy, { passive: true });
+		window.addEventListener("touchmove", resumeScrollSpy, { passive: true });
+		window.addEventListener("keydown", onScrollKey);
+		window.addEventListener(sectionJumpEvent, onSectionJump);
+		window.addEventListener("pointerdown", onScrollbarPointer);
 		const resizeObserver = new ResizeObserver(observeSections);
 		if (navRef.current) resizeObserver.observe(navRef.current);
 		if (sections[0]) resizeObserver.observe(sections[0]);
 		return () => {
 			observer?.disconnect();
 			resizeObserver.disconnect();
+			window.removeEventListener("wheel", resumeScrollSpy);
+			window.removeEventListener("touchmove", resumeScrollSpy);
+			window.removeEventListener("keydown", onScrollKey);
+			window.removeEventListener(sectionJumpEvent, onSectionJump);
+			window.removeEventListener("pointerdown", onScrollbarPointer);
 		};
 	}, [items]);
 
@@ -113,6 +184,7 @@ export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
 					onValueChange={(id) => {
 						const section = items.find((item) => item.id === id);
 						if (!section) return;
+						explicitSection.current = section.id;
 						setCurrent(section.id);
 						selectedSection.current = section.id;
 					}}
@@ -157,7 +229,6 @@ export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
 								// The URL fragment is reserved for invite secrets; never write
 								// a section id into it.
 								event.preventDefault();
-								setCurrent(item.id);
 								jumpToSettingsSection(item.id);
 							}}
 						>

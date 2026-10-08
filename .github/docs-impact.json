@@ -2,9 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "7888c56761bd3e31cc95b3ca6a3d883d32f0998fee515b92a8a4f1874a9ea05e",
-			"docs": ["docs/runbooks/attachment-storage.md"],
-			"note": "Document native comment attachment transport parity while preserving the bounded browser default and published alpha.10 qualification limits."
+			"sourceDigest": "bcb55ae5d12b936b224b9e073175891ffeee2f20785c9f52787d95ad29dfbee9",
+			"noImpact": "Restore the existing settings section selection and focus behavior after explicit navigation and manual scrolling; no new settings, commands, permissions or data formats."
 		},
 		"release": {
 			"sourceDigest": "f7350086e76864806bb9e589a372574e19915ef718151f5d19d786ae7bb57475",

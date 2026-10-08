@@ -132,6 +132,91 @@ for (const width of [390, 1024]) {
 	});
 }
 
+for (const width of [1440, 390]) {
+	test(`explicit settings selection survives a clamped jump and resumes on manual scroll at ${width}px`, async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width, height: 800 });
+		await page.emulateMedia({
+			reducedMotion: width === 1440 ? "no-preference" : "reduce",
+		});
+		await openSettings(page, `settings-clamped-${width}`);
+		// Reproduce the short native data panel with the same real section/nav.
+		await page.addStyleTag({
+			content: "#settings-data{height:160px;overflow:hidden}",
+		});
+		const nav = page.getByTestId("settings-nav");
+		const selector = page.getByTestId("settings-section-select");
+		const data = page.locator("#settings-data");
+		const danger = page.locator("#settings-danger");
+		const originalHash = new URL(page.url()).hash;
+		const chooseSection = async (label: string) => {
+			if (width === 1440) {
+				await nav.getByRole("link", { name: label, exact: true }).click();
+			} else {
+				await chooseOption(page, selector, label);
+			}
+		};
+		const selected =
+			width === 1440 ? nav.locator('[aria-current="location"]') : selector;
+
+		await chooseSection("Notifications");
+		await expect(selected).toHaveText("Notifications");
+		await page.getByTestId("quiet-tz-change").focus();
+		await page.keyboard.press("Space");
+		await expect(page.getByTestId("timezone-select")).toBeFocused();
+		await expect(selected).toHaveText("Appearance and language");
+
+		await chooseSection("Your data");
+		await expect(page.locator("#settings-data-heading")).toBeFocused();
+		await expect
+			.poll(async () => {
+				return data.evaluate((element) => {
+					const final = document.getElementById("settings-danger");
+					return (
+						element.getBoundingClientRect().top >
+							Number.parseFloat(getComputedStyle(element).scrollMarginTop) &&
+						(final?.getBoundingClientRect().bottom ?? Infinity) <= innerHeight
+					);
+				});
+			})
+			.toBe(true);
+		// Allow the observer to process the actual clamped landing, not just the click.
+		await page.evaluate(
+			() =>
+				new Promise<void>((resolve) => {
+					requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+				}),
+		);
+		await expect(selected).toHaveText("Your data");
+		expect(new URL(page.url()).hash).toBe(originalHash);
+
+		const beforeScroll = (await danger.boundingBox())?.y;
+		expect(beforeScroll).toBeDefined();
+		await data.hover();
+		await page.mouse.wheel(0, -600);
+		await expect
+			.poll(async () => (await danger.boundingBox())?.y ?? 0)
+			.toBeGreaterThan((beforeScroll ?? 0) + 100);
+		await expect(selected).toHaveText(
+			width === 1440 ? "Keyboard shortcuts" : "Focus and Karma",
+		);
+
+		await chooseSection("Your data");
+		await expect(page.locator("#settings-data-heading")).toBeFocused();
+		await expect
+			.poll(async () => (await danger.boundingBox())?.y ?? Infinity)
+			.toBeLessThanOrEqual((beforeScroll ?? 0) + 1);
+		await expect(selected).toHaveText("Your data");
+
+		// The short final section still has an explicit destination of its own.
+		await chooseSection("Danger zone");
+		await expect(page.locator("#settings-danger-heading")).toBeFocused();
+		await expect(selected).toHaveText("Danger zone");
+		expect(new URL(page.url()).hash).toBe(originalHash);
+	});
+}
+
 test("unconfigured channels start collapsed with one Set up action", async ({
 	page,
 }) => {
