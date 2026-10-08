@@ -1,10 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test, vi } from "vitest";
+import type { E2eRuntime } from "../lib/e2e/runtime.ts";
 import { NativeAccountContext } from "../lib/native-account.tsx";
 import { SettingsSurface } from "./SettingsSurface.tsx";
 
 const { control, browserOnly } = vi.hoisted(() => {
-	const control = { native: false };
+	const control = { native: false, archiveExport: false };
 	return {
 		control,
 		browserOnly: (name: string) => () => {
@@ -16,6 +17,24 @@ const { control, browserOnly } = vi.hoisted(() => {
 // New messages are compiled by the serialized app build, not this render check.
 vi.mock("../../paraglide/messages.js", () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) }),
+}));
+vi.mock("../lib/e2e/KeyringProvider.tsx", () => ({
+	useKeyring: () => ({
+		runtime: {
+			fetcher: vi.fn(),
+			signOut: vi.fn(),
+			...(control.archiveExport
+				? {
+						attachments: {
+							fetcher: vi.fn(),
+							pickFile: vi.fn(),
+							withStage: vi.fn(),
+							archiveExport: { readContent: vi.fn() },
+						},
+					}
+				: {}),
+		} satisfies E2eRuntime,
+	}),
 }));
 vi.mock("../components/settings/NotificationSettings.tsx", () => ({
 	NotificationSettings: browserOnly("browser-notifications"),
@@ -93,7 +112,7 @@ const surface = (
 
 test("native settings never mount browser account panels, retain native encryption and shared settings, and leave browser panels intact", () => {
 	control.native = true;
-	const native = renderToStaticMarkup(
+	const nativeSurface = (
 		<NativeAccountContext
 			value={{
 				profile: {
@@ -107,8 +126,9 @@ test("native settings never mount browser account panels, retain native encrypti
 			}}
 		>
 			{surface}
-		</NativeAccountContext>,
+		</NativeAccountContext>
 	);
+	const native = renderToStaticMarkup(nativeSurface);
 	expect(native.match(/data-testid="native-browser-settings"/g)).toHaveLength(
 		6,
 	);
@@ -116,6 +136,8 @@ test("native settings never mount browser account panels, retain native encrypti
 		6,
 	);
 	expect(native).toContain("min-h-11");
+	expect(native).not.toContain("archive_export_action");
+	expect(native).not.toContain("native_settings_other_data_browser_note");
 	expect(native).toContain("native-encryption:canonical-user");
 	for (const marker of [
 		"shared-account",
@@ -129,6 +151,15 @@ test("native settings never mount browser account panels, retain native encrypti
 		"shared-karma",
 	])
 		expect(native).toContain(marker);
+	control.archiveExport = true;
+	const exportEnabled = renderToStaticMarkup(nativeSurface);
+	expect(exportEnabled).toContain("archive_export_action");
+	expect(exportEnabled).toContain("archive_export_description");
+	expect(exportEnabled).toContain("native_settings_other_data_browser_note");
+	expect(
+		exportEnabled.match(/href="https:\/\/chosen.example.test\/"/g),
+	).toHaveLength(6);
+	control.archiveExport = false;
 	control.native = false;
 	const browser = renderToStaticMarkup(surface);
 	for (const marker of [

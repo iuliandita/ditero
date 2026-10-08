@@ -1,5 +1,6 @@
 import { expect, test, vi } from "vitest";
 import { deleteAttachment } from "../../../src/web/lib/e2e/attachment-api.ts";
+import { FilePickerCancelledError } from "../../../src/web/lib/e2e/download.ts";
 import { createAttachmentRuntime } from "./attachment-runtime.ts";
 import { type callAttachment, NativeError } from "./bridge.ts";
 
@@ -589,4 +590,60 @@ test("archive input abort does not become null when the pending chooser reports 
 	expect(h.call.mock.calls.some(([op]) => op === "archive.input.read")).toBe(
 		false,
 	);
+});
+
+test("save picker cancellation is typed, releases the chooser, and allows retry", async () => {
+	let cancel = true;
+	const h = harness(async (op) => {
+		if (op === "save.pick") {
+			if (cancel) throw new NativeError("cancelled");
+			return { ok: true, saveId: "save-A" };
+		}
+		return successful;
+	});
+	await expect(h.runtime.pickFile("content.json")).rejects.toBeInstanceOf(
+		FilePickerCancelledError,
+	);
+	cancel = false;
+	await expect(h.runtime.pickFile("content.json")).resolves.toBeDefined();
+});
+test.each([
+	new NativeError("picker-timeout"),
+	Object.assign(new Error("cancelled"), { code: "cancelled" }),
+])("save picker preserves non-cancellation errors %#", async (error) => {
+	const h = harness(async (op) => {
+		if (op === "save.pick") throw error;
+		return successful;
+	});
+	await expect(h.runtime.pickFile("content.json")).rejects.toBe(error);
+});
+test.each([
+	"abort",
+	"retire",
+])("save picker does not normalize cancellation after %s", async (kind) => {
+	let reject!: (error: unknown) => void;
+	const h = harness(async (op) =>
+		op === "save.pick"
+			? new Promise<Reply>((_resolve, fail) => {
+					reject = fail;
+				})
+			: successful,
+	);
+	const abort = new AbortController();
+	const picking = h.runtime.pickFile("content.json", abort.signal);
+	if (kind === "abort") abort.abort();
+	else h.retire();
+	reject(new NativeError("cancelled"));
+	await expect(picking).rejects.not.toBeInstanceOf(FilePickerCancelledError);
+});
+test("save writer cancellation remains a write error", async () => {
+	const error = new NativeError("cancelled");
+	const h = harness(async (op) => {
+		if (op === "save.pick") return { ok: true, saveId: "save-A" };
+		if (op === "save.write") throw error;
+		return successful;
+	});
+	const destination = await h.runtime.pickFile("content.json");
+	const writer = await destination.createWritable();
+	await expect(writer.write(new Uint8Array([1]))).rejects.toBe(error);
 });

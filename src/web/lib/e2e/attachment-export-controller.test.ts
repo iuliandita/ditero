@@ -336,6 +336,10 @@ describe("attachment export selection real cryptography", () => {
 		await expect(value.describe(f.encryptedSource)).resolves.toEqual({
 			id: "source-file",
 			filename: "picnic-notes.txt",
+			context: [],
+			createdAt: "2026-10-05T00:00:00.000Z",
+			encryptedBytes: f.content.length,
+			ordinal: 1,
 		});
 		const result = await value.exportSelected(
 			[f.encryptedSource],
@@ -548,4 +552,90 @@ describe("attachment export selection real cryptography", () => {
 		expect(f.createDeriver).not.toHaveBeenCalled();
 		expect(f.wdk).toEqual(new Uint8Array(32).fill(3));
 	});
+});
+
+it.each([
+	"list",
+	"task",
+	"comment",
+] as const)("describes authorized %s context from the exact saved snapshot", async (kind) => {
+	const f = await realCryptoFixture();
+	const document = f.document;
+	document.data.workspaces.push({
+		id: "source-workspace",
+		name: "Household",
+		ownerId: "source-user",
+		kind: "personal",
+	});
+	document.data.lists.push({
+		id: "source-list",
+		workspaceId: "source-workspace",
+		ownerId: "source-user",
+		title: "Receipts",
+		kind: "tasks",
+		icon: null,
+		folderId: null,
+		sortKey: "a0",
+		completedDisplay: "keep",
+	});
+	document.data.tasks.push({
+		id: "source-task",
+		listId: "source-list",
+		title: "October groceries",
+		done: false,
+		notes: null,
+		dueAt: null,
+		dueAllDay: false,
+		priority: 0,
+		completedAt: null,
+		sortKey: "a0",
+		parentId: null,
+		quantity: null,
+		unit: null,
+		category: null,
+		rrule: null,
+		recurrenceRelative: false,
+		recurrenceAnchorAt: null,
+		recurrenceConsumed: null,
+		reminderTime: null,
+		repeatEveryMin: null,
+		maxRepeats: null,
+		fallbackUserId: null,
+		urgent: false,
+	});
+	document.data.comments.push({
+		id: "source-comment",
+		taskId: "source-task",
+		authorId: "source-user",
+		body: `  Keep\n this receipt ${"x".repeat(150)}`,
+		createdAt: document.exportedAt,
+		editedAt: null,
+	});
+	const row = document.data.attachments[0];
+	if (!row) throw new Error("Missing attachment fixture");
+	row.parentKind = kind;
+	row.parentId = `source-${kind}`;
+	const source = {
+		...f.encryptedSource,
+		parentKind: kind,
+		parentId: row.parentId,
+	};
+	const describe = () =>
+		createAttachmentExportController({
+			...f.c.options,
+			exactContentDocument: JSON.stringify(document),
+		}).describe(source);
+	const result = await describe();
+	expect(result.context).toEqual([
+		"Household",
+		"Receipts",
+		...(kind === "list" ? [] : ["October groceries"]),
+		...(kind === "comment"
+			? [`Keep this receipt ${"x".repeat(150)}`.slice(0, 100)]
+			: []),
+	]);
+	expect(result.encryptedBytes).toBe(f.content.length);
+	// A valid ID alone cannot label an attachment with a different workspace's content.
+	document.data.lists[0].workspaceId = "another-workspace";
+	await expect(describe()).resolves.toMatchObject({ context: [] });
 });

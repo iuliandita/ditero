@@ -2,8 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "bcb55ae5d12b936b224b9e073175891ffeee2f20785c9f52787d95ad29dfbee9",
-			"noImpact": "Restore the existing settings section selection and focus behavior after explicit navigation and manual scrolling; no new settings, commands, permissions or data formats."
+			"sourceDigest": "ce3518a07cb3e61dde6516f54350e29b63c26dff163309da1850ac39ed2c6d69",
+			"docs": ["apps/desktop/README.md", "docs/runbooks/data-portability.md"],
+			"note": "Document the native export entry, matching source labels and encrypted sizes, paired files and password, retained save retries, confirmed language saves, and restoring the saved language before automatic time-zone detection at startup."
 		},
 		"release": {
 			"sourceDigest": "f7350086e76864806bb9e589a372574e19915ef718151f5d19d786ae7bb57475",
@@ -19,6 +20,11 @@
 			"sourceDigest": "be023f5bb6fa6773cd9209646c67be07c6f22342a8bec6f2ccfa70c988d73932",
 			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
 			"note": "Align chart metadata and both packaged app/sync image examples with alpha.11; retain existing qualification limits."
+		},
+		"native": {
+			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
+			"docs": ["apps/desktop/README.md"],
+			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		}
 	}
 }

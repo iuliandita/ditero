@@ -1,5 +1,8 @@
 import { ATTACHMENT_ARCHIVE_LIMITS } from "../../../domain/portability/attachment-archive.ts";
-import type { AttachmentFileWriter } from "./download.ts";
+import {
+	type AttachmentFileWriter,
+	FilePickerCancelledError,
+} from "./download.ts";
 import type { AttachmentRuntime } from "./runtime.ts";
 
 export async function saveNativeArchiveDocument(
@@ -7,7 +10,7 @@ export async function saveNativeArchiveDocument(
 	file: { filename: string; json: string },
 	signal: AbortSignal,
 	assertCurrent: () => void,
-): Promise<void> {
+): Promise<"saved" | "cancelled"> {
 	const check = () => {
 		signal.throwIfAborted();
 		assertCurrent();
@@ -19,7 +22,14 @@ export async function saveNativeArchiveDocument(
 	const bytes = new TextEncoder().encode(file.json);
 	if (bytes.byteLength > ATTACHMENT_ARCHIVE_LIMITS.serializedBytes)
 		throw new Error("content-export-limit");
-	const destination = await runtime.pickFile(file.filename, signal);
+	let destination: Awaited<ReturnType<AttachmentRuntime["pickFile"]>>;
+	try {
+		destination = await runtime.pickFile(file.filename, signal);
+	} catch (error) {
+		check();
+		if (error instanceof FilePickerCancelledError) return "cancelled";
+		throw error;
+	}
 	let writer: AttachmentFileWriter | undefined;
 	let complete = false;
 	let writerAborted = false;
@@ -57,4 +67,5 @@ export async function saveNativeArchiveDocument(
 		signal.removeEventListener("abort", onAbort);
 		if (!complete) await cancel();
 	}
+	return "saved";
 }

@@ -204,18 +204,25 @@ key for the applied destination. Import creates no memberships or permissions.
 
 ### Export a matching pair
 
-1. In Settings, select **Export selected files**. Wait for saved changes and
+1. In Settings, select **Export data and attachments**. Wait for saved changes and
    available files, then choose the committed list, task or comment attachments
    to include. Files without an available key or matching saved metadata cannot
-   be selected.
-2. Enter **Archive passphrase** and **Confirm archive passphrase**, using a separate
-   passphrase from your account passphrase. Select **Prepare archive**.
-3. Select both **Download content** and **Download files** and keep those two files
-   together. The content JSON is readable; the files archive is protected by the
-   archive passphrase. Keep that passphrase: it is required to open the archive.
+   be selected. Each file shows its source and upload time to help distinguish
+   matching filenames; displayed file sizes count encrypted data.
+2. Enter **Export password** and **Confirm export password**, using a separate
+   password from your account password. Select **Prepare export**.
+3. Select both **Download app data** and **Download encrypted attachments** and keep
+   those two files together. The app data JSON contains readable tasks, lists,
+   comments, and other Ditero data. The attachments file is encrypted with your
+   export password. Keep that password: it is required to open the archive.
    On Linux desktop, each button opens a separate system save dialog. **Saved**
    appears only after the file is written successfully; canceling a save leaves
-   that file unconfirmed.
+   that file unconfirmed. Canceling or failing to save keeps the prepared pair
+   available. Use the same download button to choose a destination and retry.
+
+Language changes wait for local saving and server confirmation before reloading.
+Stay connected until the language changes; export requires confirmed saved changes.
+At startup, Ditero restores your saved language before detecting your time zone.
 
 Use the exact content JSON downloaded with that files archive. A separate
 **Download JSON** export, an edited file or a reserialized copy is not a substitute,

@@ -91,7 +91,6 @@ import {
 import { viewIcon } from "../lib/nav-icon.tsx";
 import { useNavSections } from "../lib/nav-sections.ts";
 import { recordRecent } from "../lib/recents.ts";
-import { runMutation } from "../lib/run-mutation.ts";
 import { useIsDesktop, useMediaQuery } from "../lib/use-media-query.ts";
 import { BUILTIN_VIEWS, DEFAULT_HOME } from "../views/builtins.ts";
 import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
@@ -152,15 +151,6 @@ function NormalWorkspace({
 	const isDesktop = useIsDesktop();
 	const zero = useZero<typeof schema>();
 	const activation = useTaskImportActivationMap();
-	const persistLocale = useCallback(
-		(locale: Locale) => {
-			return runMutation(
-				zero.mutate(mutators.userPref.set({ locale })),
-				(message) => console.error("userPref.set failed", message),
-			);
-		},
-		[zero],
-	);
 	const {
 		workspaces,
 		lists,
@@ -182,6 +172,10 @@ function NormalWorkspace({
 	const { views: savedViews } = useViews();
 	const { dashboards, loading: dashboardsLoading } = useDashboards();
 	const { pref, setPref, loading: prefLoading } = useUserPref();
+	const persistLocale = useCallback(
+		(locale: Locale) => setPref({ locale }),
+		[setPref],
+	);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [settingsSection, setSettingsSection] = useState<
 		"account" | "appearance"

@@ -78,6 +78,40 @@ export function createAttachmentExportController(options: {
 	if (!owner() || document.sourceUserId !== ownerId)
 		throw new AttachmentExportSelectionError("stale");
 	const rows = new Map(document.data.attachments.map((row) => [row.id, row]));
+	const ordinals = new Map(
+		document.data.attachments.map((row, index) => [row.id, index + 1]),
+	);
+	const lists = new Map(document.data.lists.map((row) => [row.id, row]));
+	const tasks = new Map(document.data.tasks.map((row) => [row.id, row]));
+	const comments = new Map(document.data.comments.map((row) => [row.id, row]));
+	const workspaces = new Map(
+		document.data.workspaces.map((row) => [row.id, row]),
+	);
+	const text = (value: string) =>
+		value.replace(/\s+/g, " ").trim().slice(0, 100);
+	function sourceContext(source: Source): readonly string[] {
+		const comment =
+			source.parentKind === "comment"
+				? comments.get(source.parentId)
+				: undefined;
+		const task =
+			source.parentKind === "task"
+				? tasks.get(source.parentId)
+				: comment
+					? tasks.get(comment.taskId)
+					: undefined;
+		const list =
+			source.parentKind === "list"
+				? lists.get(source.parentId)
+				: task
+					? lists.get(task.listId)
+					: undefined;
+		if (!list || list.workspaceId !== source.workspaceId) return [];
+		const workspace = workspaces.get(source.workspaceId);
+		return [workspace?.name, list.title, task?.title, comment?.body]
+			.filter((value): value is string => typeof value === "string")
+			.map(text);
+	}
 	if (rows.size !== document.data.attachments.length)
 		throw new AttachmentExportSelectionError("invalid-selection");
 	const forwardAbort = () => abort.abort(signal?.reason);
@@ -351,8 +385,15 @@ export function createAttachmentExportController(options: {
 							aad.metadata(source.id, "filename"),
 						);
 						checkpoint();
+						const row = rows.get(source.id);
+						if (!row)
+							throw new AttachmentExportSelectionError("invalid-selection");
 						return {
 							id: source.id,
+							context: sourceContext(source),
+							createdAt: row.createdAt,
+							encryptedBytes: row.observedBytes ?? 0,
+							ordinal: ordinals.get(source.id) ?? 1,
 							filename: sanitiseFilename(
 								new TextDecoder("utf-8", { fatal: true }).decode(filename),
 							),

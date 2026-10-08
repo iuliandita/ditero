@@ -12,12 +12,14 @@ import {
 	AttachmentArchiveContractError,
 } from "../../../domain/portability/attachment-archive.ts";
 import { m } from "../../../paraglide/messages.js";
+import { getLocale } from "../../../paraglide/runtime.js";
 import { queries } from "../../../zero/queries.ts";
 import type { schema } from "../../../zero/schema.gen.ts";
 import { saveNativeArchiveDocument } from "../../lib/e2e/archive-export-save.ts";
 import { createAttachmentExportController } from "../../lib/e2e/attachment-export-controller.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { supportsAttachmentArchiveExport } from "../../lib/e2e/runtime.ts";
+import { formatBytes } from "../../lib/intl-format.ts";
 import { useExportBoundary } from "../../lib/zero.tsx";
 import { isZeroClientOwnerActive } from "../../lib/zero-lifecycle.ts";
 import { UnlockDialog } from "../e2e/UnlockDialog.tsx";
@@ -35,7 +37,34 @@ import { Input } from "../ui/input.tsx";
 type Controller = ReturnType<typeof createAttachmentExportController>;
 type Source = Parameters<Controller["describe"]>[0];
 type Pair = Awaited<ReturnType<Controller["exportSelected"]>>;
-type Entry = { source: Source; filename: string | null };
+type Description = Awaited<ReturnType<Controller["describe"]>>;
+type Entry = {
+	source: Source;
+	filename: string | null;
+	description?: Description;
+};
+type FileKind = "content" | "files";
+type SaveFeedback = Record<FileKind, "cancelled" | "failed" | null>;
+function sourceLabel(entry: Entry): string {
+	const kind =
+		entry.source.parentKind === "list"
+			? m.archive_export_source_list()
+			: entry.source.parentKind === "task"
+				? m.archive_export_source_task()
+				: m.archive_export_source_comment();
+	return `${kind}: ${entry.description?.context.join(" / ") || m.archive_export_source_unavailable()}`;
+}
+function sourceDetails(entry: Entry): string {
+	if (!entry.description) return "";
+	const date = new Intl.DateTimeFormat(getLocale(), {
+		dateStyle: "medium",
+		timeStyle: "medium",
+	}).format(new Date(entry.description.createdAt));
+	return m.archive_export_source_details({
+		date,
+		size: formatBytes(entry.description.encryptedBytes),
+	});
+}
 type ExportError = "failed" | "pending" | "limit";
 function exportError(error: unknown): ExportError {
 	if (error instanceof Error && error.message === "pending-writes")
@@ -154,6 +183,10 @@ export function AttachmentArchiveExportDialog({
 	const [error, setError] = useState<ExportError | null>(null);
 	const [pair, setPair] = useState<Pair | null>(null);
 	const [requested, setRequested] = useState({ content: false, files: false });
+	const [saveFeedback, setSaveFeedback] = useState<SaveFeedback>({
+		content: null,
+		files: null,
+	});
 	const [progress, setProgress] = useState<
 		"download" | "authenticate-and-seal" | null
 	>(null);
@@ -165,6 +198,25 @@ export function AttachmentArchiveExportDialog({
 	const sources = entries
 		.filter((entry) => selected.includes(entry.source.id))
 		.map((entry) => entry.source);
+	const displayRows = entries.map((entry) => {
+		const label = sourceLabel(entry);
+		const details = sourceDetails(entry);
+		return {
+			entry,
+			label,
+			details,
+			identity: JSON.stringify([
+				entry.filename,
+				entry.source.parentKind,
+				label,
+				details,
+			]),
+		};
+	});
+	const displayCounts = new Map<string, number>();
+	for (const { identity } of displayRows)
+		displayCounts.set(identity, (displayCounts.get(identity) ?? 0) + 1);
+	const numberFormat = new Intl.NumberFormat(getLocale());
 	let withinBounds = false;
 	if (sources.length && controller.current && unlocked) {
 		try {
@@ -206,7 +258,7 @@ export function AttachmentArchiveExportDialog({
 					try {
 						const description = await page.controller.describe(source);
 						check();
-						items.push({ source, filename: description.filename });
+						items.push({ source, filename: description.filename, description });
 					} catch {
 						check();
 						items.push({ source, filename: null });
@@ -248,6 +300,7 @@ export function AttachmentArchiveExportDialog({
 		setSelected([]);
 		setPair(null);
 		setRequested({ content: false, files: false });
+		setSaveFeedback({ content: null, files: null });
 		setProgress(null);
 		setPassphrase("");
 		setConfirmation("");
@@ -404,7 +457,7 @@ export function AttachmentArchiveExportDialog({
 			}
 		}
 	}
-	async function download(kind: "content" | "files") {
+	async function download(kind: FileKind) {
 		if (
 			saving.current ||
 			!unlocked ||
@@ -421,8 +474,9 @@ export function AttachmentArchiveExportDialog({
 			saving.current = true;
 			setSavingFile(true);
 			setError(null);
+			setSaveFeedback((current) => ({ ...current, [kind]: null }));
 			try {
-				await saveNativeArchiveDocument(
+				const outcome = await saveNativeArchiveDocument(
 					runtime.attachments,
 					file,
 					signal,
@@ -436,9 +490,13 @@ export function AttachmentArchiveExportDialog({
 							throw new Error("stale-export");
 					},
 				);
-				setRequested((current) => ({ ...current, [kind]: true }));
-			} catch (error) {
-				if (!signal.aborted) setError(exportError(error));
+				if (outcome === "saved")
+					setRequested((current) => ({ ...current, [kind]: true }));
+				else
+					setSaveFeedback((current) => ({ ...current, [kind]: "cancelled" }));
+			} catch {
+				if (!signal.aborted)
+					setSaveFeedback((current) => ({ ...current, [kind]: "failed" }));
 			} finally {
 				if (active.current?.signal === signal && !signal.aborted) {
 					saving.current = false;
@@ -513,63 +571,83 @@ export function AttachmentArchiveExportDialog({
 											className="max-h-64 overflow-y-auto"
 											aria-label={m.archive_export_selection()}
 										>
-											{entries.map((entry, index) => (
-												<li
-													key={entry.source.id}
-													className="flex min-h-11 items-center gap-3 py-1"
-												>
-													<span className="flex shrink-0 items-center justify-center pointer-coarse:size-11">
-														<Checkbox
-															id={`${id}-file-${index}`}
-															className="shrink-0 pointer-coarse:after:inset-auto pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:size-11 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2"
-															checked={selected.includes(entry.source.id)}
-															disabled={
-																!entry.filename ||
-																stage === "preparing" ||
-																loadingMore ||
-																(!selected.includes(entry.source.id) &&
-																	selected.length >=
-																		ATTACHMENT_ARCHIVE_LIMITS.entries)
-															}
-															onCheckedChange={(value) =>
-																setSelected((current) =>
-																	value === true
-																		? current.includes(entry.source.id) ||
-																			current.length >=
-																				ATTACHMENT_ARCHIVE_LIMITS.entries
-																			? current
-																			: [...current, entry.source.id]
-																		: current.filter(
-																				(value) => value !== entry.source.id,
-																			),
-																)
-															}
-															aria-describedby={
-																!entry.filename
-																	? `${id}-reason-${index}`
-																	: undefined
-															}
-														/>
-													</span>
-													<div className="min-w-0">
-														<label
-															className="block min-h-11 content-center break-words text-sm"
-															htmlFor={`${id}-file-${index}`}
-														>
-															{entry.filename ??
-																m.archive_export_unavailable_file()}
-														</label>
-														{!entry.filename && (
-															<p
-																id={`${id}-reason-${index}`}
-																className="text-xs text-muted-foreground"
+											{displayRows.map(
+												({ entry, label, details, identity }, index) => (
+													<li
+														key={entry.source.id}
+														className="flex min-h-11 items-center gap-3 py-1"
+													>
+														<span className="flex shrink-0 items-center justify-center pointer-coarse:size-11">
+															<Checkbox
+																id={`${id}-file-${index}`}
+																className="shrink-0 pointer-coarse:after:inset-auto pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:size-11 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2"
+																checked={selected.includes(entry.source.id)}
+																disabled={
+																	!entry.filename ||
+																	stage === "preparing" ||
+																	loadingMore ||
+																	(!selected.includes(entry.source.id) &&
+																		selected.length >=
+																			ATTACHMENT_ARCHIVE_LIMITS.entries)
+																}
+																onCheckedChange={(value) =>
+																	setSelected((current) =>
+																		value === true
+																			? current.includes(entry.source.id) ||
+																				current.length >=
+																					ATTACHMENT_ARCHIVE_LIMITS.entries
+																				? current
+																				: [...current, entry.source.id]
+																			: current.filter(
+																					(value) => value !== entry.source.id,
+																				),
+																	)
+																}
+																aria-describedby={`${id}-source-${index}${!entry.filename ? ` ${id}-reason-${index}` : ""}`}
+															/>
+														</span>
+														<div className="min-w-0">
+															<label
+																className="block min-h-11 content-center break-words text-sm"
+																htmlFor={`${id}-file-${index}`}
 															>
-																{m.archive_export_missing_key()}
+																<bdi>
+																	{entry.filename ??
+																		m.archive_export_unavailable_file()}
+																</bdi>
+															</label>
+															<p
+																id={`${id}-source-${index}`}
+																className="break-words text-xs text-muted-foreground"
+															>
+																<bdi>{label}</bdi>
+																{entry.description && (
+																	<span className="block">
+																		<bdi>{details}</bdi>
+																	</span>
+																)}
+																{(displayCounts.get(identity) ?? 0) > 1 && (
+																	<span className="block">
+																		{m.archive_export_source_ordinal({
+																			number: numberFormat.format(
+																				entry.description?.ordinal ?? index + 1,
+																			),
+																		})}
+																	</span>
+																)}
 															</p>
-														)}
-													</div>
-												</li>
-											))}
+															{!entry.filename && (
+																<p
+																	id={`${id}-reason-${index}`}
+																	className="text-xs text-muted-foreground"
+																>
+																	{m.archive_export_missing_key()}
+																</p>
+															)}
+														</div>
+													</li>
+												),
+											)}
 										</ul>
 										{hasMore && (
 											<Button
@@ -680,20 +758,54 @@ export function AttachmentArchiveExportDialog({
 										</Button>
 									</div>
 									<div className="space-y-2 break-words text-xs text-muted-foreground">
-										<p role="status" aria-atomic="true">
+										<p>
 											{filenameParts(pair.content.filename)}
+											{saveFeedback.content && (
+												<span
+													className="block"
+													role={
+														saveFeedback.content === "failed"
+															? "alert"
+															: "status"
+													}
+												>
+													{saveFeedback.content === "failed"
+														? m.archive_export_save_failed()
+														: m.archive_export_save_cancelled()}
+												</span>
+											)}
 											{requested.content && (
-												<span className="block">
+												<span
+													className="block"
+													role="status"
+													aria-atomic="true"
+												>
 													{keyring.runtime.attachments?.archiveExport
 														? m.archive_export_saved()
 														: m.portability_download_requested()}
 												</span>
 											)}
 										</p>
-										<p role="status" aria-atomic="true">
+										<p>
 											{filenameParts(pair.files.filename)}
+											{saveFeedback.files && (
+												<span
+													className="block"
+													role={
+														saveFeedback.files === "failed" ? "alert" : "status"
+													}
+												>
+													{saveFeedback.files === "failed"
+														? m.archive_export_save_failed()
+														: m.archive_export_save_cancelled()}
+												</span>
+											)}
 											{requested.files && (
-												<span className="block">
+												<span
+													className="block"
+													role="status"
+													aria-atomic="true"
+												>
 													{keyring.runtime.attachments?.archiveExport
 														? m.archive_export_saved()
 														: m.portability_download_requested()}
