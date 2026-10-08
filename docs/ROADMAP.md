@@ -38,9 +38,10 @@ qualification notes. Native delivery remains open in issue #346.
 
 Development happens on `develop`. The first published release was `0.0.1-alpha.1`;
 the current published alpha is
-[`0.0.1-alpha.9`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.9).
-Alpha 9 puts related task details side by side, keeps large-text titles readable,
-and fixes opening task links when Android starts. Broader Android task-link and
+[`0.0.1-alpha.10`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.10).
+Alpha 10 improves archive-import feedback, label permissions, and task-field
+spacing, and adds documentation checks. The native desktop archive-import entry
+remains unavailable pending transfer and recovery qualification. Broader native
 device qualification remains open.
 Published alphas package containers, Helm/Kustomize/Compose deployment files and
 experimental native downloads; Windows downloads are unsigned and macOS downloads
