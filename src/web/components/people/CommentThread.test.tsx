@@ -128,7 +128,7 @@ beforeEach(() => {
 	fixture.slots = [];
 	fixture.runtime = {};
 	fixture.mutate.mockReset().mockImplementation(() => ({
-		client: Promise.resolve(),
+		client: Promise.resolve({ type: "success" }),
 		server: Promise.resolve({ type: "success" }),
 	}));
 	fixture.upload.mockReset().mockResolvedValue({ id: "attachment-1" });
@@ -161,7 +161,7 @@ test.each([
 		acknowledge = resolve;
 	});
 	fixture.mutate.mockImplementation(() => ({
-		client: Promise.resolve(),
+		client: Promise.resolve({ type: "success" }),
 		server,
 	}));
 	selectFile();
