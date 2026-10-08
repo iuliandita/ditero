@@ -248,18 +248,19 @@ async function pair(page: Page, touch = false) {
 	)?.[1];
 	expect(id).toBeTruthy();
 	expect(filesDownload.suggestedFilename()).toBe(`ditero-files-${id}.json`);
-	for (const filename of [
-		contentDownload.suggestedFilename(),
-		filesDownload.suggestedFilename(),
-	]) {
+	for (const [filename, expectedStatus] of [
+		[contentDownload.suggestedFilename(), "App data: Download requested."],
+		[
+			filesDownload.suggestedFilename(),
+			"Encrypted attachments: Download requested.",
+		],
+	] as const) {
 		const status = surface
 			.locator("p")
 			.filter({ hasText: filename })
 			.getByRole("status");
 		await expect(status).toHaveCount(1);
-		await expect(status).toHaveText(
-			"Download requested. Check your browser downloads.",
-		);
+		await expect(status).toHaveText(expectedStatus);
 		await expect(status).toBeVisible();
 	}
 	await capture(

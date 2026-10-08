@@ -209,8 +209,9 @@ key for the applied destination. Import creates no memberships or permissions.
    to include. Files without an available key or matching saved metadata cannot
    be selected. Each file shows its source and upload time to help distinguish
    matching filenames; displayed file sizes count encrypted data.
-2. Enter **Export password** and **Confirm export password**, using a separate
-   password from your account password. Select **Prepare export**.
+2. Check the selected file count. Enter **Export password** and **Confirm export
+   password**, using a separate password from your account password. Select
+   **Prepare export**.
 3. Select both **Download app data** and **Download encrypted attachments** and keep
    those two files together. The app data JSON contains readable tasks, lists,
    comments, and other Ditero data. The attachments file is encrypted with your
@@ -219,6 +220,8 @@ key for the applied destination. Import creates no memberships or permissions.
    appears only after the file is written successfully; canceling a save leaves
    that file unconfirmed. Canceling or failing to save keeps the prepared pair
    available. Use the same download button to choose a destination and retry.
+   Each file shows the outcome of its latest save attempt; retrying one file
+   does not clear the other file's successful save.
 
 Language changes wait for local saving and server confirmation before reloading.
 Stay connected until the language changes; export requires confirmed saved changes.

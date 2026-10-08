@@ -2529,6 +2529,25 @@
 	"quickadd_voice_too_long": "Fue demasiado largo para usarlo. Pulsa «Comprobar de nuevo», luego «Dictar» y di una tarea más corta.",
 	"quickadd_voice_failed": "La entrada de voz se detuvo. Tu texto no ha cambiado. Pulsa «Comprobar de nuevo» y luego «Dictar».",
 	"quickadd_voice_blocked": "Termina o cancela la entrada de voz para añadir la tarea.",
+	"archive_export_file_content": "Datos de la app",
+	"archive_export_file_files": "Adjuntos cifrados",
+	"archive_export_ready_description": "Tu exportación está lista. Guarda ambos archivos que van juntos y conserva tu contraseña de exportación para importar los adjuntos.",
+	"archive_export_download_requested": "{file}: Descarga solicitada.",
+	"archive_export_selected_count": [
+		{
+			"declarations": [
+				"input count",
+				"local countNum = count: number",
+				"local countPlural = count: plural"
+			],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{countNum} archivo seleccionado",
+				"countPlural=many": "{countNum} de archivos seleccionados",
+				"countPlural=other": "{countNum} archivos seleccionados"
+			}
+		}
+	],
 	"archive_export_action": "Exportar datos y adjuntos",
 	"archive_export_description": "Elige los adjuntos que quieres exportar. Obtendrás dos archivos que van juntos: tus datos de Ditero y los adjuntos seleccionados.",
 	"archive_export_browser_only": "La exportación de archivos está disponible en el navegador. Abre este servidor en tu navegador para continuar.",
@@ -2546,15 +2565,15 @@
 	"archive_export_mismatch": "Las contraseñas no coinciden.",
 	"archive_export_prepare": "Preparar exportación",
 	"archive_export_pair_note": "Guarda ambos archivos juntos para importar los adjuntos más adelante. El archivo de datos de la app contiene tareas, listas, comentarios y otros datos de Ditero legibles. El archivo de adjuntos está cifrado y necesita tu contraseña de exportación.",
-	"archive_export_saved": "Guardado",
+	"archive_export_saved": "{file}: Guardado",
 	"archive_export_source_list": "Lista",
 	"archive_export_source_task": "Tarea",
 	"archive_export_source_comment": "Comentario",
 	"archive_export_source_unavailable": "Origen no disponible en esta instantánea guardada",
 	"archive_export_source_details": "{date} · Tamaño cifrado: {size}",
 	"archive_export_source_ordinal": "Archivo {number}",
-	"archive_export_save_cancelled": "Guardado cancelado. Tus archivos preparados siguen disponibles.",
-	"archive_export_save_failed": "No se pudo guardar este archivo. Elige un destino y vuelve a intentarlo. Tus archivos preparados siguen disponibles.",
+	"archive_export_save_cancelled": "{file}: Guardado cancelado. Tus archivos preparados siguen disponibles.",
+	"archive_export_save_failed": "{file}: No se pudo guardar este archivo. Elige un destino y vuelve a intentarlo. Tus archivos preparados siguen disponibles.",
 	"archive_export_download_content": "Descargar datos de la app",
 	"archive_export_download_files": "Descargar adjuntos cifrados",
 	"archive_export_downloading": "Descargando los archivos cifrados seleccionados...",

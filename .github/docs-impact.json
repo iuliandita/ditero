@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "ce3518a07cb3e61dde6516f54350e29b63c26dff163309da1850ac39ed2c6d69",
-			"docs": ["apps/desktop/README.md", "docs/runbooks/data-portability.md"],
-			"note": "Document the native export entry, matching source labels and encrypted sizes, paired files and password, retained save retries, confirmed language saves, and restoring the saved language before automatic time-zone detection at startup."
+			"sourceDigest": "85f60eb5b11f2fb0a92bda5e72a3f5ee97e550ea8432ee17dc71aecee9b05b59",
+			"docs": ["docs/runbooks/data-portability.md"],
+			"note": "Document selected file totals, latest per-file save outcomes, named status messages, and prepared-pair instructions alongside the existing export, retry, and confirmed language behavior."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
