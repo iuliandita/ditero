@@ -60,6 +60,10 @@ Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
 
 ## Release procedure
 
+Review affected operator and client instructions using the
+[documentation impact checks](docs/MAINTENANCE.md). Static checks do not establish
+live upgrade, backup or restore qualification.
+
 1. Update `release.json` with the version and a strictly increasing Android version
    code. Align Helm chart metadata, Helm/Kustomize app/Zero image tags, and current
    version/image examples in both packaged deployment guides with that version
