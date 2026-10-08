@@ -187,17 +187,20 @@ export function AssigneePicker({
 	const assignedCount = assignedIds.size;
 
 	return (
-		<div className="flex flex-col gap-1 text-sm">
+		<div className="flex flex-col gap-1.5 text-sm">
 			<span className="text-muted-foreground">{m.field_assignees()}</span>
-			<p data-testid="assignee-names" className="min-w-0 wrap-anywhere text-sm">
-				{assignedCount > 0
-					? formatList(
-							[...assignedIds].map(
-								(id) => userMap.get(id)?.name ?? m.group_unknown_user(),
-							),
-						)
-					: m.group_unassigned()}
-			</p>
+			{assignedCount > 0 && (
+				<p
+					data-testid="assignee-names"
+					className="min-w-0 wrap-anywhere text-sm"
+				>
+					{formatList(
+						[...assignedIds].map(
+							(id) => userMap.get(id)?.name ?? m.group_unknown_user(),
+						),
+					)}
+				</p>
+			)}
 			<Popover
 				onOpenChange={(o) => {
 					if (!o) {
