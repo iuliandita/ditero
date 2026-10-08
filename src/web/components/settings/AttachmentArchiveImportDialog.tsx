@@ -82,11 +82,7 @@ function BoundedFilePicker({
 	if (onNativePick)
 		return (
 			<div className="flex flex-col gap-1 text-sm">
-				<label
-					id={`${id}-label`}
-					htmlFor={id}
-					className="text-muted-foreground"
-				>
+				<label id={`${id}-label`} htmlFor={id} className="font-medium">
 					{label}
 				</label>
 				<div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -94,7 +90,7 @@ function BoundedFilePicker({
 						id={id}
 						type="button"
 						variant="outline"
-						className="pointer-coarse:min-h-11 aria-disabled:cursor-not-allowed aria-disabled:bg-muted aria-disabled:text-foreground aria-disabled:hover:bg-muted aria-disabled:active:translate-y-0"
+						className="pointer-coarse:min-h-11 dark:aria-invalid:border-destructive aria-disabled:cursor-not-allowed aria-disabled:bg-muted aria-disabled:text-foreground aria-disabled:hover:bg-muted aria-disabled:active:translate-y-0"
 						aria-disabled={disabled}
 						aria-labelledby={`${id}-label ${id}`}
 						aria-invalid={!!error}
@@ -232,6 +228,17 @@ export function AttachmentArchiveImportDialog({
 	}
 	const runtimeAvailable = runtimeIsCurrent();
 	const unlocked = keys.ready && keys.state === "ready";
+	const openBlockedReason = busy
+		? m.archive_import_working()
+		: reading > 0
+			? m.archive_import_reading()
+			: !content
+				? m.archive_import_need_content()
+				: !archive
+					? m.archive_import_need_archive()
+					: !passphrase
+						? m.archive_import_need_passphrase()
+						: null;
 	const opened =
 		!["idle", "opening", "retired"].includes(state.stage) && parents.length > 0;
 	useEffect(() => {
@@ -586,6 +593,9 @@ export function AttachmentArchiveImportDialog({
 									</p>
 									<Button
 										className={controlClass}
+										aria-describedby={
+											openBlockedReason ? `${id}-open-blocked` : undefined
+										}
 										disabled={
 											busy || reading > 0 || !content || !archive || !passphrase
 										}
@@ -612,6 +622,14 @@ export function AttachmentArchiveImportDialog({
 									>
 										{m.archive_import_open()}
 									</Button>
+									{openBlockedReason && (
+										<p
+											id={`${id}-open-blocked`}
+											className="text-sm text-muted-foreground"
+										>
+											{openBlockedReason}
+										</p>
+									)}
 								</>
 							)}
 							{(state.stage === "error" || state.stage === "retired") &&
