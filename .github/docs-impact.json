@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "e7e53791b03d9b38f61c72c147bfb9ada2cf60ec26c2c46e024438584206267c",
+			"sourceDigest": "4d97bffb5792a0d22516ac363214f49e2a95e3836d7577c14cdcec3df49daad0",
 			"docs": ["apps/desktop/README.md", "docs/runbooks/data-portability.md"],
-			"note": "Document the capability-gated native export entry and clarify app data, encrypted attachments, export password and paired-file import requirements."
+			"note": "Document the native export entry, matching files and password, and language changes waiting for local completion and server confirmation before reloading."
 		},
 		"release": {
 			"sourceDigest": "f7350086e76864806bb9e589a372574e19915ef718151f5d19d786ae7bb57475",

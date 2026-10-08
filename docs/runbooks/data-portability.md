@@ -218,6 +218,9 @@ key for the applied destination. Import creates no memberships or permissions.
    appears only after the file is written successfully; canceling a save leaves
    that file unconfirmed.
 
+Language changes wait for local saving and server confirmation before reloading.
+Stay connected until the language changes; export requires confirmed saved changes.
+
 Use the exact content JSON downloaded with that files archive. A separate
 **Download JSON** export, an edited file or a reserialized copy is not a substitute,
 even if its content looks identical. Each JSON file is limited to 32 MiB; the
