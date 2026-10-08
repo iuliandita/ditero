@@ -9,10 +9,11 @@ import {
 	parseNativeMigrationStatus,
 } from "../../../src/web/lib/e2e/attachment-migration-api.ts";
 import { withCiphertextStage } from "../../../src/web/lib/e2e/ciphertext-staging.ts";
-import type {
-	AttachmentFileWriter,
-	CiphertextStageRunner,
-	DownloadDestination,
+import {
+	type AttachmentFileWriter,
+	type CiphertextStageRunner,
+	type DownloadDestination,
+	FilePickerCancelledError,
 } from "../../../src/web/lib/e2e/download.ts";
 import type { AttachmentRuntime } from "../../../src/web/lib/e2e/runtime.ts";
 import type { E2eFetcher } from "../../../src/web/lib/e2e/workspace-keys.ts";
@@ -384,6 +385,10 @@ export function createAttachmentRuntime(
 			saveId = await Promise.race([picked, aborted]);
 		} catch (error) {
 			await cancel("save.cancelPending", {});
+			assertCurrent();
+			signal?.throwIfAborted();
+			if (error instanceof NativeError && error.code === "cancelled")
+				throw new FilePickerCancelledError();
 			throw error;
 		} finally {
 			picking = false;

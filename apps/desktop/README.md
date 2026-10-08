@@ -93,7 +93,10 @@ Linux exposes **Export data and attachments** under **Settings > Your data** whe
 native export capability is available. It prepares an exact content JSON and its
 paired encrypted attachment archive, each limited to 32 MiB.
 Save both files through their separate system save dialogs and retain the export
-password. The fixed native export operation shares the browser export limits
+password. File source labels and upload times distinguish matching filenames.
+Canceling or failing to save retains the prepared pair; retry the affected download
+button without preparing the export again. Saved appears only after a confirmed write.
+The fixed native export operation shares the browser export limits
 and never exposes a caller-supplied network target. Archive import and recovery
 remain browser-only; Windows and macOS also require the browser for archive export.
 

@@ -10,6 +10,13 @@ import type { E2eFetcher } from "./workspace-keys.ts";
 
 export const MEMORY_DOWNLOAD_BYTES = 64 * 1024 * 1024;
 
+export class FilePickerCancelledError extends Error {
+	constructor() {
+		super("File picker cancelled");
+		this.name = "FilePickerCancelledError";
+	}
+}
+
 export class DownloadMemoryLimitError extends Error {
 	constructor() {
 		super("attachment download: file exceeds the in-memory download limit");

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ATTACHMENT_ARCHIVE_LIMITS } from "../../../domain/portability/attachment-archive.ts";
 import { saveNativeArchiveDocument } from "./archive-export-save.ts";
+import { FilePickerCancelledError } from "./download.ts";
 import type { AttachmentRuntime } from "./runtime.ts";
 
 function fixture() {
@@ -129,6 +130,89 @@ describe("native paired archive save", () => {
 			),
 		).rejects.toThrow("retired");
 		expect(f.destination.createWritable).not.toHaveBeenCalled();
+		expect(f.destination.cancel).toHaveBeenCalledOnce();
+	});
+});
+
+describe("native archive save outcomes", () => {
+	it("returns cancelled only for the current chooser and opens no writer", async () => {
+		const f = fixture();
+		vi.mocked(f.runtime.pickFile).mockRejectedValue(
+			new FilePickerCancelledError(),
+		);
+		await expect(
+			saveNativeArchiveDocument(
+				f.runtime,
+				{ filename: "content.json", json: "{}" },
+				f.abort.signal,
+				f.current,
+			),
+		).resolves.toBe("cancelled");
+		expect(f.destination.createWritable).not.toHaveBeenCalled();
+	});
+	it.each([
+		"pick",
+		"write",
+		"close",
+	])("preserves %s failures and permits retry of the exact prepared document", async (phase) => {
+		const f = fixture();
+		if (phase === "pick")
+			vi.mocked(f.runtime.pickFile).mockRejectedValueOnce(
+				new Error("destination failed"),
+			);
+		if (phase === "write")
+			f.writer.write.mockRejectedValueOnce(new Error("destination failed"));
+		if (phase === "close")
+			f.writer.close.mockRejectedValueOnce(new Error("destination failed"));
+		const file = { filename: "content.json", json: '{"prepared":true}' };
+		await expect(
+			saveNativeArchiveDocument(f.runtime, file, f.abort.signal, f.current),
+		).rejects.toThrow("destination failed");
+		expect(f.writer.abort).toHaveBeenCalledTimes(phase === "pick" ? 0 : 1);
+		expect(f.destination.cancel).toHaveBeenCalledTimes(
+			phase === "pick" ? 0 : 1,
+		);
+		await expect(
+			saveNativeArchiveDocument(f.runtime, file, f.abort.signal, f.current),
+		).resolves.toBe("saved");
+		expect(
+			vi.mocked(f.runtime.pickFile).mock.calls.map(([name]) => name),
+		).toEqual([file.filename, file.filename]);
+	});
+	it.each([
+		"abort",
+		"retire",
+	])("does not mask %s as chooser cancellation", async (kind) => {
+		const f = fixture();
+		vi.mocked(f.runtime.pickFile).mockImplementation(async () => {
+			if (kind === "abort") f.abort.abort();
+			else
+				f.current.mockImplementation(() => {
+					throw new Error("retired");
+				});
+			throw new FilePickerCancelledError();
+		});
+		await expect(
+			saveNativeArchiveDocument(
+				f.runtime,
+				{ filename: "content.json", json: "{}" },
+				f.abort.signal,
+				f.current,
+			),
+		).rejects.not.toBeInstanceOf(FilePickerCancelledError);
+	});
+	it("does not normalize a write-phase cancellation", async () => {
+		const f = fixture();
+		f.writer.write.mockRejectedValue(new FilePickerCancelledError());
+		await expect(
+			saveNativeArchiveDocument(
+				f.runtime,
+				{ filename: "content.json", json: "{}" },
+				f.abort.signal,
+				f.current,
+			),
+		).rejects.toBeInstanceOf(FilePickerCancelledError);
+		expect(f.writer.abort).toHaveBeenCalledOnce();
 		expect(f.destination.cancel).toHaveBeenCalledOnce();
 	});
 });

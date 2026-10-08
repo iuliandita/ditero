@@ -207,7 +207,8 @@ key for the applied destination. Import creates no memberships or permissions.
 1. In Settings, select **Export data and attachments**. Wait for saved changes and
    available files, then choose the committed list, task or comment attachments
    to include. Files without an available key or matching saved metadata cannot
-   be selected.
+   be selected. Each file shows its source and upload time to help distinguish
+   matching filenames; displayed file sizes count encrypted data.
 2. Enter **Export password** and **Confirm export password**, using a separate
    password from your account password. Select **Prepare export**.
 3. Select both **Download app data** and **Download encrypted attachments** and keep
@@ -216,7 +217,8 @@ key for the applied destination. Import creates no memberships or permissions.
    export password. Keep that password: it is required to open the archive.
    On Linux desktop, each button opens a separate system save dialog. **Saved**
    appears only after the file is written successfully; canceling a save leaves
-   that file unconfirmed.
+   that file unconfirmed. Canceling or failing to save keeps the prepared pair
+   available. Use the same download button to choose a destination and retry.
 
 Language changes wait for local saving and server confirmation before reloading.
 Stay connected until the language changes; export requires confirmed saved changes.
