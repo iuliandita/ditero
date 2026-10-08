@@ -27,7 +27,7 @@ export type AttachmentRuntime = {
 		readDocument(
 			kind: "content" | "archive",
 			signal?: AbortSignal,
-		): Promise<string>;
+		): Promise<Readonly<{ text: string; name: string }> | null>;
 	};
 	readonly archiveExport?: {
 		readContent(signal?: AbortSignal): Promise<string>;

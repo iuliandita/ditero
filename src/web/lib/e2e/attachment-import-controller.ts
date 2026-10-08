@@ -66,6 +66,9 @@ export function createAttachmentImportController(options: {
 	if (options.ownerId !== options.binding.ownerId)
 		throw new AttachmentImportError("owner-mismatch");
 	const runtime = options.keyring().runtime;
+	const migration = runtime.attachments?.archiveMigration;
+	const archiveInput = runtime.attachments?.archiveInput;
+	const browser = runtime === browserE2eRuntime && !runtime.attachments;
 	let retired = false,
 		busy = false;
 	let abort = new AbortController();
@@ -126,8 +129,12 @@ export function createAttachmentImportController(options: {
 		const keys = options.keyring();
 		if (
 			keys.runtime !== runtime ||
-			runtime !== browserE2eRuntime ||
-			runtime.attachments
+			(browser
+				? runtime.attachments
+				: !migration ||
+					!archiveInput ||
+					runtime.attachments?.archiveMigration !== migration ||
+					runtime.attachments?.archiveInput !== archiveInput)
 		)
 			throw new AttachmentImportError("native-unavailable");
 		if (!keys.ready || keys.state !== "ready")
@@ -138,11 +145,18 @@ export function createAttachmentImportController(options: {
 		ownership();
 		abort.signal.throwIfAborted();
 	}
-	const api = createAttachmentMigrationApi({
-		binding: options.binding,
-		checkpoint: ownership,
-		fetcher: runtime.fetcher,
-	});
+	let api: ReturnType<typeof createAttachmentMigrationApi> | undefined;
+	function migrationApi() {
+		ownership();
+		api ??= migration
+			? migration.bind(options.binding)
+			: createAttachmentMigrationApi({
+					binding: options.binding,
+					checkpoint: ownership,
+					fetcher: runtime.fetcher,
+				});
+		return api;
+	}
 	const forwardAbort = () => {
 		abort.abort(options.signal?.reason);
 	};
@@ -274,7 +288,11 @@ export function createAttachmentImportController(options: {
 		await fingerprint(selected);
 		try {
 			const result = await wait(
-				api.inspect(selected.ordinal, expectedInspection(), abort.signal),
+				migrationApi().inspect(
+					selected.ordinal,
+					expectedInspection(),
+					abort.signal,
+				),
 			);
 			inspected = Object.freeze({ ...result });
 			if (result.committed) {
@@ -325,7 +343,11 @@ export function createAttachmentImportController(options: {
 			throw new AttachmentImportError("reservation-identity-mismatch");
 		mutation = "recover";
 		const result = await wait(
-			api.recover(recoveryRequest, expectedInspection(), abort.signal),
+			migrationApi().recover(
+				recoveryRequest,
+				expectedInspection(),
+				abort.signal,
+			),
 		);
 		inspected = result.status;
 		reservation = undefined;
@@ -342,24 +364,38 @@ export function createAttachmentImportController(options: {
 	}
 	async function status() {
 		const current = requirePrepared();
+		const unacknowledgedNativeReserve =
+			migration && mutation === "reserve" && !reservation && !recoveryRequest;
 		try {
 			const result = await wait(
-				api.status(
-					current.request.ordinal,
-					reservation
-						? {
-								attemptId: reservation.attemptId,
-								targetAttachmentId: reservation.targetAttachmentId,
-								revision: reservation.revision,
-							}
-						: undefined,
-					abort.signal,
-				),
+				unacknowledgedNativeReserve
+					? migrationApi().inspect(
+							current.request.ordinal,
+							expectedInspection(),
+							abort.signal,
+						)
+					: migrationApi().status(
+							current.request.ordinal,
+							reservation
+								? {
+										attemptId: reservation.attemptId,
+										targetAttachmentId: reservation.targetAttachmentId,
+										revision: reservation.revision,
+									}
+								: undefined,
+							abort.signal,
+						),
 			);
 			accept(result);
 			return result;
 		} catch (error) {
 			if (error instanceof MigrationTransportError && error.status === 404) {
+				if (unacknowledgedNativeReserve)
+					throw new MigrationTransportError(
+						"migration-reconciliation-required",
+						404,
+						true,
+					);
 				if (reservation) throw new AttachmentImportError("recovery-required");
 				return null;
 			}
@@ -371,13 +407,15 @@ export function createAttachmentImportController(options: {
 		publish("transferring");
 		if (!existing) {
 			mutation = "reserve";
-			existing = await wait(api.reserve(current.request, abort.signal));
+			existing = await wait(
+				migrationApi().reserve(current.request, abort.signal),
+			);
 			if (accept(existing)) return;
 		}
 		if (existing.attachmentState === "reserved") {
 			mutation = "upload";
 			await wait(
-				api.upload(
+				migrationApi().upload(
 					current.frozen.prepared,
 					new Blob([byteNarrower("attachment import")(current.frozen.content)]),
 					abort.signal,
@@ -388,7 +426,7 @@ export function createAttachmentImportController(options: {
 		if (current.frozen.thumbnail !== null) {
 			mutation = "thumbnail";
 			await wait(
-				api.thumbnail(
+				migrationApi().thumbnail(
 					current.frozen.prepared,
 					new Blob([
 						byteNarrower("attachment import")(current.frozen.thumbnail),
@@ -398,7 +436,7 @@ export function createAttachmentImportController(options: {
 			);
 		}
 		mutation = "finalize";
-		await wait(api.finalize(current.frozen.prepared, abort.signal));
+		await wait(migrationApi().finalize(current.frozen.prepared, abort.signal));
 		const acknowledged = await status();
 		if (!acknowledged?.committed)
 			throw new MigrationTransportError(
@@ -536,7 +574,7 @@ export function createAttachmentImportController(options: {
 				if (!opened || request)
 					throw new AttachmentImportError("invalid-stage");
 				publish("discovering");
-				const page = await wait(api.parents(query, abort.signal));
+				const page = await wait(migrationApi().parents(query, abort.signal));
 				for (const parent of page.items) {
 					await fingerprint(parent);
 					parents.set(
@@ -681,10 +719,13 @@ export function createAttachmentImportController(options: {
 				if (value.committed) return;
 				mutation = "upload";
 				await wait(
-					api.abort(requirePrepared().frozen.prepared.id, abort.signal),
+					migrationApi().abort(
+						requirePrepared().frozen.prepared.id,
+						abort.signal,
+					),
 				);
 				const confirmed = await wait(
-					api.status(
+					migrationApi().status(
 						requirePrepared().request.ordinal,
 						{
 							attemptId: value.attemptId,

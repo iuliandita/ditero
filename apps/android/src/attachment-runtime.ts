@@ -16,7 +16,7 @@ import type {
 } from "../../../src/web/lib/e2e/download.ts";
 import type { AttachmentRuntime } from "../../../src/web/lib/e2e/runtime.ts";
 import type { E2eFetcher } from "../../../src/web/lib/e2e/workspace-keys.ts";
-import { type AttachmentOp, callAttachment } from "./bridge.ts";
+import { type AttachmentOp, callAttachment, NativeError } from "./bridge.ts";
 
 const CHUNK = 32768;
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -572,8 +572,21 @@ export function createAttachmentRuntime(
 									}
 									return reply;
 								},
+								(error: unknown) => {
+									assertCurrent();
+									signal?.throwIfAborted();
+									if (
+										error instanceof NativeError &&
+										error.code === "cancelled"
+									)
+										return null;
+									throw error;
+								},
 							);
 							const begun = await Promise.race([picked, aborted]);
+							assertCurrent();
+							signal?.throwIfAborted();
+							if (begun === null) return null;
 							if (
 								typeof begun.bytes !== "number" ||
 								!Number.isSafeInteger(begun.bytes) ||
@@ -611,7 +624,10 @@ export function createAttachmentRuntime(
 								parts.push(decoder.decode(bytes, { stream: !next.eof }));
 								if (next.eof) {
 									assertCurrent();
-									return parts.join("");
+									return Object.freeze({
+										text: parts.join(""),
+										name: begun.name,
+									});
 								}
 							}
 						} finally {

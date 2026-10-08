@@ -2710,6 +2710,7 @@
 	"archive_import_description": "افتح الأرشيف المطابق بعد تطبيق استيراد محتواه المحفوظ. تُشفّر الملفات من جديد للوجهة المطبقة.",
 	"archive_import_destination_reference": "الوجهة المطبقة:",
 	"archive_import_failed": "فشلت العملية. تحقق من الملفات وعبارة المرور والوصول إلى الوجهة.",
+	"archive_import_empty_file": "الملف المحدد لا يحتوي على بيانات. اختر ملف تصدير JSON يحتوي على بيانات.",
 	"archive_import_limits": "يجب ألا يتجاوز كل ملف JSON حجم 32 MiB. يدعم الأرشيف حتى 64 ملفاً و16 MiB من البيانات المشفرة.",
 	"archive_import_more": "تحميل وجهات إضافية",
 	"archive_import_open": "فتح الأرشيف",

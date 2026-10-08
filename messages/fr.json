@@ -2569,6 +2569,7 @@
 	"archive_import_description": "Ouvre l’archive après avoir appliqué son import de contenu enregistré. Les fichiers sont rechiffrés pour la destination appliquée.",
 	"archive_import_destination_reference": "Destination appliquée :",
 	"archive_import_failed": "L’opération a échoué. Vérifie les fichiers, la phrase secrète et l’accès à la destination.",
+	"archive_import_empty_file": "Le fichier sélectionné ne contient aucune donnée. Choisis un export JSON contenant des données.",
 	"archive_import_limits": "Chaque JSON doit faire au plus 32 MiB. L’archive accepte jusqu’à 64 fichiers et 16 MiB de données chiffrées.",
 	"archive_import_more": "Charger plus de destinations",
 	"archive_import_open": "Ouvrir l’archive",

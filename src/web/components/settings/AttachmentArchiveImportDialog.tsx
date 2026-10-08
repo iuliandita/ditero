@@ -1,4 +1,5 @@
 import { useQuery, useZero } from "@rocicorp/zero/react";
+import { FileUp } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { ATTACHMENT_ARCHIVE_LIMITS } from "../../../domain/portability/attachment-archive.ts";
 import { m } from "../../../paraglide/messages.js";
@@ -67,12 +68,59 @@ function BoundedFilePicker({
 	fileName,
 	disabled,
 	onFile,
+	onNativePick,
+	error,
 }: {
 	label: string;
 	fileName: string | null;
 	disabled: boolean;
 	onFile: (file: File | undefined) => void;
+	onNativePick?: () => void;
+	error?: string;
 }) {
+	const id = useId();
+	if (onNativePick)
+		return (
+			<div className="flex flex-col gap-1 text-sm">
+				<label
+					id={`${id}-label`}
+					htmlFor={id}
+					className="text-muted-foreground"
+				>
+					{label}
+				</label>
+				<div className="flex min-w-0 flex-wrap items-center gap-3">
+					<Button
+						id={id}
+						type="button"
+						variant="outline"
+						className="pointer-coarse:min-h-11 aria-disabled:cursor-not-allowed aria-disabled:bg-muted aria-disabled:text-foreground aria-disabled:hover:bg-muted aria-disabled:active:translate-y-0"
+						aria-disabled={disabled}
+						aria-labelledby={`${id}-label ${id}`}
+						aria-invalid={!!error}
+						aria-describedby={error ? `${id}-name ${id}-error` : `${id}-name`}
+						onClick={() => {
+							if (!disabled) onNativePick();
+						}}
+					>
+						<FileUp />
+						{m.file_picker_choose()}
+					</Button>
+					<span id={`${id}-name`} className="min-w-0 break-all">
+						<bdi>{fileName ?? m.file_picker_none()}</bdi>
+					</span>
+				</div>
+				{error && (
+					<p
+						id={`${id}-error`}
+						role="alert"
+						className="text-sm text-destructive"
+					>
+						{error}
+					</p>
+				)}
+			</div>
+		);
 	return (
 		<FilePicker
 			label={label}
@@ -107,6 +155,11 @@ export function AttachmentArchiveImportDialog({
 	const [tasks] = useQuery(queries.tasks.mine());
 	const [comments] = useQuery(queries.comments.mine());
 	const keys = useKeyring();
+	const [capturedRuntime] = useState(() => ({
+		runtime: keys.runtime,
+		input: keys.runtime.attachments?.archiveInput,
+		migration: keys.runtime.attachments?.archiveMigration,
+	}));
 	const keysRef = useRef(keys);
 	keysRef.current = keys;
 	const [capturedBinding] = useState(() => Object.freeze({ ...binding }));
@@ -131,6 +184,9 @@ export function AttachmentArchiveImportDialog({
 	const flight = useRef<object | null>(null);
 	const [reading, setReading] = useState(0);
 	const [failed, setFailed] = useState(false);
+	const [emptyFile, setEmptyFile] = useState<"content" | "archive" | null>(
+		null,
+	);
 	const [state, setState] = useState<AttachmentImportState>({
 		stage: "idle",
 		ordinal: null,
@@ -160,7 +216,21 @@ export function AttachmentArchiveImportDialog({
 	const completed = state.stage === "complete";
 	const selectedOrdinal = chosenOrdinal ?? state.ordinal;
 	const browserOnly =
-		keys.runtime === browserE2eRuntime && !keys.runtime.attachments;
+		capturedRuntime.runtime === browserE2eRuntime &&
+		!capturedRuntime.runtime.attachments;
+	function runtimeIsCurrent() {
+		const runtime = keysRef.current.runtime;
+		return (
+			runtime === capturedRuntime.runtime &&
+			(browserOnly
+				? !runtime.attachments
+				: !!capturedRuntime.input &&
+					!!capturedRuntime.migration &&
+					runtime.attachments?.archiveInput === capturedRuntime.input &&
+					runtime.attachments?.archiveMigration === capturedRuntime.migration)
+		);
+	}
+	const runtimeAvailable = runtimeIsCurrent();
 	const unlocked = keys.ready && keys.state === "ready";
 	const opened =
 		!["idle", "opening", "retired"].includes(state.stage) && parents.length > 0;
@@ -193,22 +263,31 @@ export function AttachmentArchiveImportDialog({
 		};
 	}, [zero, capturedBinding.ownerId]);
 	useEffect(() => {
-		if (!controller.current || unlocked) return;
+		if (unlocked && runtimeAvailable) return;
+		if (
+			!controller.current &&
+			!pickers.current.content &&
+			!pickers.current.archive
+		)
+			return;
 		scope.current.abort();
 		pickers.current.content?.abort();
 		pickers.current.archive?.abort();
-		controller.current.dispose();
+		controller.current?.dispose();
 		flight.current = null;
 		setBusy(false);
 		setPassphrase("");
 		setArchive("");
 		setContent("");
+		setContentName(null);
+		setArchiveName(null);
 		setConfirmRecovery(false);
 		setSourceNames(new Map());
 		setParents([]);
 		setPrepared(false);
 		setChosenOrdinal(null);
 		setFailed(false);
+		setEmptyFile(null);
 		setState({
 			stage: "retired",
 			ordinal: null,
@@ -216,12 +295,16 @@ export function AttachmentArchiveImportDialog({
 			reservation: null,
 			inspection: null,
 		});
-	}, [unlocked]);
+	}, [unlocked, runtimeAvailable]);
 	function checkpoint() {
 		if (
 			!alive.current ||
 			scope.current.signal.aborted ||
-			zero.userID !== capturedBinding.ownerId
+			zero !== initialZero.current ||
+			zero.userID !== capturedBinding.ownerId ||
+			!runtimeIsCurrent() ||
+			!keysRef.current.ready ||
+			keysRef.current.state !== "ready"
 		)
 			throw new Error("retired");
 	}
@@ -232,6 +315,7 @@ export function AttachmentArchiveImportDialog({
 		pickers.current[kind] = abort;
 		setReading((n) => n + 1);
 		setFailed(false);
+		setEmptyFile(null);
 		if (kind === "content") {
 			setContent("");
 			setContentName(null);
@@ -256,12 +340,47 @@ export function AttachmentArchiveImportDialog({
 			if (alive.current) setReading((n) => n - 1);
 		}
 	}
+	async function pickNative(kind: "content" | "archive") {
+		if (browserOnly || flight.current || reading || !unlocked) return;
+		const input = capturedRuntime.input;
+		if (!input) return;
+		pickers.current[kind]?.abort();
+		const abort = new AbortController();
+		pickers.current[kind] = abort;
+		setReading((n) => n + 1);
+		setFailed(false);
+		setEmptyFile(null);
+		try {
+			checkpoint();
+			const selected = await input.readDocument(kind, abort.signal);
+			checkpoint();
+			if (abort.signal.aborted || pickers.current[kind] !== abort || !selected)
+				return;
+			if (!selected.text.trim()) {
+				setEmptyFile(kind);
+				return;
+			}
+			if (kind === "content") {
+				setContent(selected.text);
+				setContentName(selected.name);
+			} else {
+				setArchive(selected.text);
+				setArchiveName(selected.name);
+			}
+		} catch {
+			if (alive.current && !abort.signal.aborted && runtimeIsCurrent())
+				setFailed(true);
+		} finally {
+			if (alive.current) setReading((n) => n - 1);
+		}
+	}
 	async function run(operation: (value: Controller) => Promise<unknown>) {
-		if (flight.current || reading || !unlocked || !browserOnly) return;
+		if (flight.current || reading || !unlocked || !runtimeAvailable) return;
 		const currentFlight = {};
 		flight.current = currentFlight;
 		setBusy(true);
 		setFailed(false);
+		setEmptyFile(null);
 		actionFocused.current = document.activeElement?.tagName === "BUTTON";
 		try {
 			checkpoint();
@@ -389,7 +508,7 @@ export function AttachmentArchiveImportDialog({
 							</p>
 						</>
 					)}
-					{!browserOnly ? (
+					{!runtimeAvailable ? (
 						<p>{m.archive_export_browser_only()}</p>
 					) : !unlocked ? (
 						<div className="space-y-2">
@@ -411,15 +530,33 @@ export function AttachmentArchiveImportDialog({
 										<BoundedFilePicker
 											label={m.archive_import_content_file()}
 											fileName={contentName}
-											disabled={busy}
+											error={
+												emptyFile === "content"
+													? m.archive_import_empty_file()
+													: undefined
+											}
+											disabled={busy || (!browserOnly && reading > 0)}
 											onFile={(file) => void pick("content", file)}
+											onNativePick={
+												browserOnly
+													? undefined
+													: () => void pickNative("content")
+											}
 										/>
 									)}
 									<BoundedFilePicker
 										label={m.archive_import_archive_file()}
 										fileName={archiveName}
-										disabled={busy}
+										error={
+											emptyFile === "archive"
+												? m.archive_import_empty_file()
+												: undefined
+										}
+										disabled={busy || (!browserOnly && reading > 0)}
 										onFile={(file) => void pick("archive", file)}
+										onNativePick={
+											browserOnly ? undefined : () => void pickNative("archive")
+										}
 									/>
 									<p className="text-xs text-muted-foreground">
 										{m.archive_import_limits()}
@@ -524,6 +661,7 @@ export function AttachmentArchiveImportDialog({
 																setConfirmRecovery(false);
 																setChosenOrdinal(parent.ordinal);
 																setFailed(false);
+																setEmptyFile(null);
 															} catch {
 																setFailed(true);
 															}

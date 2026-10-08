@@ -2522,6 +2522,7 @@
 	"archive_import_description": "Open the paired archive after applying its saved content import. Files are re-encrypted for the applied destination.",
 	"archive_import_destination_reference": "Applied destination:",
 	"archive_import_failed": "This operation failed. Check the files, passphrase and destination access.",
+	"archive_import_empty_file": "The selected file has no content. Choose a JSON export that contains data.",
 	"archive_import_limits": "Each JSON file must be at most 32 MiB. The archive supports up to 64 files and 16 MiB of encrypted file data.",
 	"archive_import_more": "Load more destinations",
 	"archive_import_open": "Open archive",
