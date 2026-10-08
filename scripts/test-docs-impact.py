@@ -19,6 +19,7 @@ class DocumentationImpact(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.git('init', '-q')
+        self.git('config', 'maintenance.auto', 'false')
         self.git('config', 'user.name', 'Fixture')
         self.git('config', 'user.email', 'fixture@example.invalid')
         self.write('src/cli/main.ts', 'export const version = 1\n')
