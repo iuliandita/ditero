@@ -105,8 +105,10 @@ capability does not enable native import or recovery.
 The Linux `archiveMigration` development capability provides fixed job, parent,
 reservation, status, recovery, and ciphertext upload operations. Upload sizes and
 hashes come from a fresh server witness; uncertain writes require reconciliation
-before another write. These transport primitives do not enable archive import or
-recovery in the app interface.
+before another write. Development import controls bind a completed job to the
+captured account and read its paired documents through the system chooser. The
+Settings entry remains unavailable until native import and recovery journeys are
+qualified.
 
 Use Bun 1.4.2 and Rust 1.98.1, matching the CI toolchain. The official Tauri CLI,
 API, and Rust runtime are pinned to 2.12.1. Install the

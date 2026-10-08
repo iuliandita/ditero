@@ -1,7 +1,7 @@
 import { expect, test, vi } from "vitest";
 import { deleteAttachment } from "../../../src/web/lib/e2e/attachment-api.ts";
 import { createAttachmentRuntime } from "./attachment-runtime.ts";
-import type { callAttachment } from "./bridge.ts";
+import { type callAttachment, NativeError } from "./bridge.ts";
 
 type Reply = Awaited<ReturnType<typeof callAttachment>>;
 const successful: Reply = { ok: true, status: 200, body: "{}" };
@@ -354,7 +354,9 @@ test("archive input reads both kinds with ordered split UTF-8 chunks and empty E
 			}
 			return successful;
 		});
-		expect(await h.runtime.archiveInput?.readDocument(kind)).toBe("a😀b");
+		const picked = await h.runtime.archiveInput?.readDocument(kind);
+		expect(picked).toEqual({ text: "a😀b", name: "archive.json" });
+		expect(Object.isFrozen(picked)).toBe(true);
 		expect(h.call).toHaveBeenCalledWith("archive.input.pick", { kind });
 		expect(
 			h.call.mock.calls
@@ -488,4 +490,103 @@ test("archive input retirement never cancels replacement owner", async () => {
 	resolve(inputReady);
 	await expect(reading).rejects.toThrow("retired");
 	expect(h.call).toHaveBeenCalledTimes(1);
+});
+
+test("archive chooser cancellation returns null and releases the pending chooser", async () => {
+	const h = archiveHarness(async (op) => {
+		if (op === "archive.input.pick") throw new NativeError("cancelled");
+		return successful;
+	});
+	expect(await h.runtime.archiveInput?.readDocument("content")).toBeNull();
+	expect(await h.runtime.archiveInput?.readDocument("archive")).toBeNull();
+	expect(
+		h.call.mock.calls.filter(([op]) => op === "archive.input.pick"),
+	).toHaveLength(2);
+	expect(
+		h.call.mock.calls.filter(([op]) => op === "archive.input.cancelPending"),
+	).toHaveLength(2);
+	expect(h.call.mock.calls.some(([op]) => op === "archive.input.read")).toBe(
+		false,
+	);
+});
+
+test("archive input returns a frozen named empty document rather than chooser cancellation", async () => {
+	const h = archiveHarness(async (op) => {
+		if (op === "archive.input.pick")
+			return { ...inputReady, name: "empty.json" };
+		if (op === "archive.input.read") return { ok: true, data: "", eof: true };
+		return successful;
+	});
+	const picked = await h.runtime.archiveInput?.readDocument("content");
+	expect(picked).toEqual({ text: "", name: "empty.json" });
+	expect(Object.isFrozen(picked)).toBe(true);
+	expect(h.call.mock.calls.at(-1)).toEqual([
+		"archive.input.cancel",
+		{ transferId: "input-A" },
+	]);
+});
+
+test.each([
+	new NativeError("picker-timeout"),
+	new NativeError("invalid-message"),
+	Object.assign(new Error("cancelled"), { code: "cancelled" }),
+])("archive chooser does not convert other errors into cancellation: %s", async (error) => {
+	const h = archiveHarness(async (op) => {
+		if (op === "archive.input.pick") throw error;
+		return successful;
+	});
+	await expect(h.runtime.archiveInput?.readDocument("archive")).rejects.toBe(
+		error,
+	);
+	expect(h.call.mock.calls.at(-1)).toEqual(["archive.input.cancelPending", {}]);
+});
+
+test("archive input does not convert a read-phase cancellation into chooser cancellation", async () => {
+	const h = archiveHarness(async (op) => {
+		if (op === "archive.input.pick") return inputReady;
+		if (op === "archive.input.read") throw new NativeError("cancelled");
+		return successful;
+	});
+	await expect(
+		h.runtime.archiveInput?.readDocument("content"),
+	).rejects.toMatchObject({ code: "cancelled" });
+	expect(h.call.mock.calls.at(-1)).toEqual([
+		"archive.input.cancel",
+		{ transferId: "input-A" },
+	]);
+});
+
+test("archive input retirement refuses a late cancelled chooser without replacement cleanup", async () => {
+	let reject!: (error: unknown) => void;
+	const h = archiveHarness(async (op) =>
+		op === "archive.input.pick"
+			? new Promise<Reply>((_, fail) => {
+					reject = fail;
+				})
+			: successful,
+	);
+	const reading = h.runtime.archiveInput?.readDocument("archive");
+	h.retire();
+	reject(new NativeError("cancelled"));
+	await expect(reading).rejects.toThrow("retired");
+	expect(h.call).toHaveBeenCalledTimes(1);
+});
+
+test("archive input abort does not become null when the pending chooser reports cancelled", async () => {
+	let reject!: (error: unknown) => void;
+	const h = archiveHarness(async (op) =>
+		op === "archive.input.pick"
+			? new Promise<Reply>((_, fail) => {
+					reject = fail;
+				})
+			: successful,
+	);
+	const abort = new AbortController();
+	const reading = h.runtime.archiveInput?.readDocument("archive", abort.signal);
+	abort.abort();
+	reject(new NativeError("cancelled"));
+	await expect(reading).rejects.toMatchObject({ name: "AbortError" });
+	expect(h.call.mock.calls.some(([op]) => op === "archive.input.read")).toBe(
+		false,
+	);
 });

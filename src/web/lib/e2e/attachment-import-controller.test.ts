@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createAttachmentRuntime } from "../../../../apps/android/src/attachment-runtime.ts";
+import type { callAttachment } from "../../../../apps/android/src/bridge.ts";
 import { aad, encryptWrapped } from "../../../domain/e2e/envelope.ts";
 import { encodeBytes, encodeWrapped } from "../../../domain/e2e/wire.ts";
 
@@ -28,7 +30,10 @@ vi.mock("../zero-lifecycle.ts", () => ({
 }));
 
 import { createAttachmentImportController } from "./attachment-import-controller.ts";
-import type { MigrationReservation } from "./attachment-migration-api.ts";
+import {
+	type MigrationReservation,
+	MigrationTransportError,
+} from "./attachment-migration-api.ts";
 import type { KeyringContextValue } from "./KeyringProvider.tsx";
 import { browserE2eRuntime, type E2eRuntime } from "./runtime.ts";
 
@@ -66,7 +71,7 @@ const parent = {
 	sourceAttachmentId: "source-file",
 	sourceAttachmentFingerprint: hash,
 	destinationParent: {
-		kind: "list",
+		kind: "list" as const,
 		id: "destination-list",
 		workspaceId: "destination-workspace",
 	},
@@ -91,11 +96,13 @@ const committed: MigrationReservation = {
 let zero: { userID: string };
 let locked: boolean;
 let wdk: Uint8Array;
+let currentRuntime: E2eRuntime;
 function controller(
 	checkpoint: () => void = () => {},
 	runtime: E2eRuntime = browserE2eRuntime,
 ) {
 	zero = { userID: "destination-owner" };
+	currentRuntime = runtime;
 	locked = false;
 	wdk = new Uint8Array(32).fill(7);
 	const workspaceKey = vi.fn().mockResolvedValue({
@@ -104,7 +111,7 @@ function controller(
 		wdk,
 	});
 	const keys = (): KeyringContextValue => ({
-		runtime,
+		runtime: currentRuntime,
 		state: locked ? "locked" : "ready",
 		ready: true,
 		available: true,
@@ -845,7 +852,10 @@ it("does not clear a frozen replacement while fresh inspection reports an active
 });
 
 it("archive input capability alone cannot enable native attachment import", async () => {
-	const readDocument = vi.fn(async () => document);
+	const readDocument = vi.fn(async () => ({
+		text: document,
+		name: "content.json",
+	}));
 	const runtime: E2eRuntime = {
 		...browserE2eRuntime,
 		attachments: {
@@ -862,4 +872,356 @@ it("archive input capability alone cannot enable native attachment import", asyn
 	expect(mock.fetcher).not.toHaveBeenCalled();
 	expect(mock.prepare).not.toHaveBeenCalled();
 	expect(readDocument).not.toHaveBeenCalled();
+});
+
+function nativeImport() {
+	type Api = ReturnType<
+		typeof import("./attachment-migration-api.ts").createAttachmentMigrationApi
+	>;
+	const api: Api = {
+		parents: vi.fn<Api["parents"]>().mockResolvedValue({
+			...binding,
+			items: [parent],
+			nextAfterOrdinal: null,
+		}),
+		inspect: vi.fn<Api["inspect"]>(),
+		status: vi.fn<Api["status"]>().mockResolvedValue(committed),
+		reserve: vi.fn<Api["reserve"]>().mockResolvedValue(reservation),
+		upload: vi
+			.fn<Api["upload"]>()
+			.mockResolvedValue({ ...receipt(), state: "uploading" }),
+		thumbnail: vi.fn<Api["thumbnail"]>(),
+		finalize: vi
+			.fn<Api["finalize"]>()
+			.mockResolvedValue({ ...receipt("committed"), state: "committed" }),
+		abort: vi.fn<Api["abort"]>(),
+		recover: vi.fn<Api["recover"]>(),
+	};
+	vi.mocked(api.inspect).mockRejectedValue(
+		new MigrationTransportError("migration-not-found", 404, false),
+	);
+	let admitted = false;
+	const jobs = vi.fn(async (_query: { limit: number }) => {
+		admitted = true;
+		return {
+			items: [{ ...binding, label: "Completed import" }],
+			nextAfterJobId: null,
+		};
+	});
+	const bind = vi.fn((value: typeof binding) => {
+		if (!admitted || value !== binding)
+			throw new MigrationTransportError(
+				"migration-binding-mismatch",
+				null,
+				false,
+			);
+		return api;
+	});
+	const runtime = {
+		...browserE2eRuntime,
+		attachments: {
+			fetcher: vi.fn(),
+			pickFile: vi.fn(),
+			withStage: vi.fn(),
+			archiveInput: { readDocument: vi.fn() },
+			archiveMigration: { jobs, bind },
+		},
+	};
+	return { api, runtime, jobs, bind };
+}
+
+async function readyNative(h: ReturnType<typeof nativeImport>) {
+	await h.jobs({ limit: 64 });
+	const c = controller(() => {}, h.runtime);
+	await c.open("archive", document, "passphrase");
+	await c.discoverPage({ afterOrdinal: -1, limit: 64 });
+	c.select(0);
+	await c.prepare();
+	return c;
+}
+
+it("uses only a jobs-admitted native binding for encrypted transfer and acknowledgment", async () => {
+	const h = nativeImport();
+	const c = await readyNative(h);
+	await c.transfer();
+	expect(c.state.stage).toBe("complete");
+	expect(h.jobs.mock.invocationCallOrder[0]).toBeLessThan(
+		h.bind.mock.invocationCallOrder[0],
+	);
+	expect(h.bind).toHaveBeenCalledExactlyOnceWith(binding);
+	expect(h.api.reserve).toHaveBeenCalledOnce();
+	expect(h.api.upload).toHaveBeenCalledWith(
+		prepared,
+		expect.any(Blob),
+		expect.any(AbortSignal),
+	);
+	expect(h.api.status).toHaveBeenCalledOnce();
+	expect(mock.fetcher).not.toHaveBeenCalled();
+	expect(wdk).toEqual(new Uint8Array(32).fill(7));
+});
+
+it("refuses an unadmitted native job without browser fallback", async () => {
+	const h = nativeImport();
+	const c = controller(() => {}, h.runtime);
+	await c.open("archive", document, "passphrase");
+	await expect(
+		c.discoverPage({ afterOrdinal: -1, limit: 64 }),
+	).rejects.toMatchObject({ code: "migration-binding-mismatch" });
+	expect(h.api.parents).not.toHaveBeenCalled();
+	expect(mock.fetcher).not.toHaveBeenCalled();
+});
+
+it("reconciles native lost-finalize acknowledgment without replaying encrypted upload", async () => {
+	const h = nativeImport();
+	const c = await readyNative(h);
+	vi.mocked(h.api.finalize).mockRejectedValueOnce(
+		new MigrationTransportError("response-lost", null, true),
+	);
+	await expect(c.transfer()).rejects.toMatchObject({ code: "response-lost" });
+	expect(c.state.stage).toBe("uncertain");
+	await c.reconcile();
+	expect(c.state.stage).toBe("complete");
+	expect(h.api.upload).toHaveBeenCalledOnce();
+	expect(h.api.abort).not.toHaveBeenCalled();
+	expect(mock.fetcher).not.toHaveBeenCalled();
+});
+
+it.each([
+	"lock",
+	"runtime",
+	"owner",
+])("retires native preparation on %s loss without transport", async (loss) => {
+	const h = nativeImport();
+	const c = await readyNative(h);
+	if (loss === "lock") locked = true;
+	else if (loss === "runtime") currentRuntime = { ...h.runtime };
+	else zero.userID = "next-owner";
+	await expect(c.transfer()).rejects.toMatchObject({
+		code:
+			loss === "lock"
+				? "locked"
+				: loss === "runtime"
+					? "native-unavailable"
+					: "retired",
+	});
+	expect(c.state.stage).toBe("retired");
+	expect(c.hasPrepared).toBe(false);
+	expect(h.api.reserve).not.toHaveBeenCalled();
+	expect(mock.fetcher).not.toHaveBeenCalled();
+});
+
+it.each([
+	"migration-only",
+	"neither",
+	"foreign-browser",
+])("refuses %s native capabilities without binding or cookie fetch", async (caps) => {
+	const h = nativeImport();
+	const runtime: E2eRuntime =
+		caps === "foreign-browser"
+			? { ...browserE2eRuntime }
+			: {
+					...h.runtime,
+					attachments:
+						caps === "neither"
+							? { fetcher: vi.fn(), pickFile: vi.fn(), withStage: vi.fn() }
+							: { ...h.runtime.attachments, archiveInput: undefined },
+				};
+	const c = controller(() => {}, runtime);
+	await expect(c.open("archive", document, "passphrase")).rejects.toMatchObject(
+		{ code: "native-unavailable" },
+	);
+	expect(h.bind).not.toHaveBeenCalled();
+	expect(mock.open).not.toHaveBeenCalled();
+	expect(mock.fetcher).not.toHaveBeenCalled();
+});
+
+async function realNativeReserve(
+	options: {
+		inspection?: Partial<MigrationReservation> | "missing";
+		pending?: boolean;
+	} = {},
+) {
+	let dispatched = false;
+	let finalized = false;
+	let settleReserve!: (
+		reply: Awaited<ReturnType<typeof callAttachment>>,
+	) => void;
+	const reserveReply = new Promise<Awaited<ReturnType<typeof callAttachment>>>(
+		(resolve) => {
+			settleReserve = resolve;
+		},
+	);
+	const json = (body: unknown, status = 200) => ({
+		ok: status < 300,
+		status,
+		body: JSON.stringify(body),
+	});
+	const call = vi.fn<typeof callAttachment>(async (op) => {
+		if (op === "archive.migration.jobs")
+			return json({
+				items: [{ ...binding, label: "Completed import" }],
+				nextAfterJobId: null,
+			});
+		if (op === "archive.migration.parents")
+			return json({ ...binding, items: [parent], nextAfterOrdinal: null });
+		if (op === "archive.migration.reserve") {
+			dispatched = true;
+			if (options.pending) return reserveReply;
+			throw Error("lost reserve reply");
+		}
+		if (op === "archive.migration.inspect") {
+			if (!dispatched || options.inspection === "missing")
+				return json({ code: "migration-not-found" }, 404);
+			return json({
+				...reservation,
+				...binding,
+				sourceFingerprint: hash,
+				destinationParent: parent.destinationParent,
+				reservationExpiresAt: "2026-10-08T12:00:00Z",
+				recoverable: false,
+				...options.inspection,
+			});
+		}
+		if (op === "archive.migration.status")
+			return json({
+				...(finalized ? committed : reservation),
+				upload: finalized
+					? null
+					: {
+							declaredBytes: 3,
+							ciphertextSha256: hash,
+							thumbnailDeclaredBytes: null,
+							thumbnailCiphertextSha256: null,
+						},
+			});
+		if (op === "archive.migration.upload.begin")
+			return { ok: true, transferId: "actual-native-transfer" };
+		if (op === "upload.finish") return json(receipt());
+		if (op === "attachment.finalize") {
+			finalized = true;
+			return json(receipt("committed"));
+		}
+		if (op === "upload.write" || op === "attachment.cancel")
+			return { ok: true };
+		throw Error(`Unexpected native operation: ${op}`);
+	});
+	const attachments = createAttachmentRuntime(
+		() => {},
+		"captured-native-scope",
+		true,
+		call,
+		false,
+		true,
+		true,
+		binding.ownerId,
+	);
+	if (!attachments.archiveMigration) throw Error("Native migration missing");
+	await attachments.archiveMigration.jobs({ limit: 64 });
+	const c = controller(() => {}, { ...browserE2eRuntime, attachments });
+	await c.open("archive", document, "passphrase");
+	await c.discoverPage({ afterOrdinal: -1, limit: 64 });
+	c.select(0);
+	await c.prepare();
+	return { c, call, settle: () => settleReserve(json(reservation)) };
+}
+
+it("real native adapter reconciles lost reserve before reusing the exact preparation", async () => {
+	const { c, call } = await realNativeReserve();
+	await expect(c.transfer()).rejects.toMatchObject({ uncertain: true });
+	expect(c.state.stage).toBe("uncertain");
+	await c.retry();
+	expect(c.state.stage).toBe("complete");
+	expect(mock.prepare).toHaveBeenCalledOnce();
+	expect(
+		call.mock.calls.filter(([op]) => op === "archive.migration.reserve"),
+	).toHaveLength(1);
+	expect(
+		call.mock.calls.filter(([op]) => op === "archive.migration.upload.begin"),
+	).toHaveLength(1);
+	expect(call).toHaveBeenCalledWith(
+		"archive.migration.upload.begin",
+		expect.objectContaining({
+			targetAttachmentId: prepared.id,
+			revision: 1,
+			attemptId: reservation.attemptId,
+		}),
+	);
+	expect(
+		call.mock.calls.some(([op]) => op === "archive.migration.recover"),
+	).toBe(false);
+	expect(mock.fetcher).not.toHaveBeenCalled();
+});
+
+it.each([
+	{ targetAttachmentId: "migration_12345678-1234-4123-8123-123456789ab9" },
+	{ revision: 2 },
+])("real native adapter refuses a changed lost-reserve witness %j", async (inspection) => {
+	const { c, call } = await realNativeReserve({ inspection });
+	await expect(c.transfer()).rejects.toMatchObject({ uncertain: true });
+	await expect(c.retry()).rejects.toMatchObject({
+		code: "reservation-identity-mismatch",
+	});
+	expect(
+		call.mock.calls.filter(([op]) => op === "archive.migration.reserve"),
+	).toHaveLength(1);
+	expect(
+		call.mock.calls.some(
+			([op]) =>
+				op === "archive.migration.upload.begin" ||
+				op === "archive.migration.recover",
+		),
+	).toBe(false);
+	expect(mock.prepare).toHaveBeenCalledOnce();
+	expect(mock.fetcher).not.toHaveBeenCalled();
+});
+
+it("real native adapter keeps missing lost-reserve inspection uncertain without another reserve", async () => {
+	const { c, call } = await realNativeReserve({ inspection: "missing" });
+	await expect(c.transfer()).rejects.toMatchObject({ uncertain: true });
+	await expect(c.retry()).rejects.toMatchObject({
+		code: "migration-reconciliation-required",
+		uncertain: true,
+	});
+	expect(c.state.stage).toBe("uncertain");
+	expect(
+		call.mock.calls.filter(([op]) => op === "archive.migration.reserve"),
+	).toHaveLength(1);
+	expect(
+		call.mock.calls.some(
+			([op]) =>
+				op === "archive.migration.upload.begin" ||
+				op === "archive.migration.recover",
+		),
+	).toBe(false);
+	expect(mock.fetcher).not.toHaveBeenCalled();
+});
+
+it("real native adapter preserves the pending-reserve fence until original settlement", async () => {
+	const { c, call, settle } = await realNativeReserve({ pending: true });
+	const transfer = c.transfer();
+	const rejected = expect(transfer).rejects.toMatchObject({ uncertain: true });
+	await vi.waitFor(() =>
+		expect(
+			call.mock.calls.some(([op]) => op === "archive.migration.reserve"),
+		).toBe(true),
+	);
+	c.cancel();
+	await rejected;
+	await expect(c.retry()).rejects.toMatchObject({
+		code: "migration-reconciliation-required",
+	});
+	expect(
+		call.mock.calls.some(([op]) => op === "archive.migration.upload.begin"),
+	).toBe(false);
+	settle();
+	await c.reconcile();
+	await c.retry();
+	expect(c.state.stage).toBe("complete");
+	expect(
+		call.mock.calls.filter(([op]) => op === "archive.migration.reserve"),
+	).toHaveLength(1);
+	expect(
+		call.mock.calls.filter(([op]) => op === "archive.migration.upload.begin"),
+	).toHaveLength(1);
+	expect(mock.fetcher).not.toHaveBeenCalled();
 });

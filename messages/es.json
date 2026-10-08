@@ -2569,6 +2569,7 @@
 	"archive_import_description": "Abre el archivo de adjuntos después de aplicar su importación de contenido guardada. Los archivos se vuelven a cifrar para el destino aplicado.",
 	"archive_import_destination_reference": "Destino aplicado:",
 	"archive_import_failed": "La operación falló. Comprueba los archivos, la frase de contraseña y el acceso al destino.",
+	"archive_import_empty_file": "El archivo seleccionado no tiene contenido. Elige una exportación JSON que contenga datos.",
 	"archive_import_limits": "Cada JSON debe tener como máximo 32 MiB. El archivo admite hasta 64 archivos y 16 MiB de datos cifrados.",
 	"archive_import_more": "Cargar más destinos",
 	"archive_import_open": "Abrir archivo",
