@@ -252,13 +252,15 @@ async function pair(page: Page, touch = false) {
 		contentDownload.suggestedFilename(),
 		filesDownload.suggestedFilename(),
 	]) {
-		const status = surface.getByRole("status").filter({ hasText: filename });
+		const status = surface
+			.locator("p")
+			.filter({ hasText: filename })
+			.getByRole("status");
 		await expect(status).toHaveCount(1);
-		await expect(
-			status.getByText("Download requested. Check your browser downloads.", {
-				exact: true,
-			}),
-		).toBeVisible();
+		await expect(status).toHaveText(
+			"Download requested. Check your browser downloads.",
+		);
+		await expect(status).toBeVisible();
 	}
 	await capture(
 		page,
