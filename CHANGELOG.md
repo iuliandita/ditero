@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.0.1-alpha.10] - 2026-10-08
+
+### Added
+
+- Linux desktop development foundations for bounded system-selected JSON input
+  and account-bound attachment migration, with server-verified ciphertext upload
+  sizes and hashes. The native Settings import entry remains unavailable pending
+  transfer and recovery qualification.
+
+### Fixed
+
+- Guarded archive import controls retire stale account or runtime operations and
+  require reconciliation after uncertain native reservations before another write.
+- Archive import dialogs explain disabled opening prerequisites, distinguish
+  archive and account passphrases, and improve picker labels and dark-theme errors.
+- Empty native file selections explain rejection without misidentifying a retained
+  file, and reading selections use one linked status message.
+- Task label controls respect workspace Viewer permissions while preserving label
+  editing for authorized writers during paused imports.
+- Empty task assignee and label controls align without a redundant Unassigned line.
+
+### Changed
+
+- Documentation checks link mapped configuration, client, deployment and release
+  changes to affected guides or an explicit source-bound explanation.
+
 ## [0.0.1-alpha.6] - 2026-10-07
 
 ### Fixed

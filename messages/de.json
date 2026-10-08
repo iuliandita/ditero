@@ -2522,7 +2522,7 @@
 	"archive_import_description": "Öffne das zugehörige Archiv nach dem gespeicherten Inhaltsimport. Dateien werden für das importierte Ziel neu verschlüsselt.",
 	"archive_import_destination_reference": "Importiertes Ziel:",
 	"archive_import_failed": "Der Vorgang ist fehlgeschlagen. Prüfe Dateien, Passphrase und Zugriff auf das Ziel.",
-	"archive_import_empty_file": "Die ausgewählte Datei hat keinen Inhalt. Wähle einen JSON-Export mit Daten.",
+	"archive_import_empty_file": "Die leere Datei wurde abgelehnt. Eine vorherige Auswahl bleibt unverändert. Wähle einen JSON-Export mit Daten.",
 	"archive_import_limits": "Jede JSON-Datei darf höchstens 32 MiB haben. Das Archiv unterstützt bis zu 64 Dateien und 16 MiB verschlüsselte Dateidaten.",
 	"archive_import_more": "Weitere Ziele laden",
 	"archive_import_open": "Archiv öffnen",

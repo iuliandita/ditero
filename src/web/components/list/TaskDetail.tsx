@@ -49,6 +49,7 @@ import { useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { localDay } from "../../../domain/local-day.ts";
 import { randomId } from "../../../domain/random-id.ts";
+import { WRITE_ROLES } from "../../../domain/role.ts";
 import { keyBetween } from "../../../domain/sort-key.ts";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
@@ -212,6 +213,14 @@ export function TaskDetail({
 	const zero = useZero<typeof schema>();
 	const [workspaces] = useQuery(queries.workspaces.mine());
 	const sourceWorkspace = workspaces.find((w) => w.id === list.workspaceId);
+	const [memberships] = useQuery(queries.memberships.mine());
+	const callerRole = memberships.find(
+		(row) => row.workspaceId === list.workspaceId && row.userId === zero.userID,
+	)?.role;
+	const canEditLabels = callerRole != null && WRITE_ROLES.has(callerRole);
+	const canEditLabelsRef = useRef(canEditLabels);
+	canEditLabelsRef.current = canEditLabels;
+	const labelsReasonId = useId();
 	const focus = useFocusTimer();
 	const confirm = useConfirm();
 	const snackbar = useSnackbar();
@@ -485,6 +494,7 @@ export function TaskDetail({
 	}
 
 	function toggleLabel(labelId: string) {
+		if (!canEditLabelsRef.current) return;
 		const next = new Set(selected);
 		if (next.has(labelId)) next.delete(labelId);
 		else next.add(labelId);
@@ -496,6 +506,7 @@ export function TaskDetail({
 	}
 
 	async function createLabel() {
+		if (!canEditLabelsRef.current) return;
 		const name = newLabel.trim();
 		if (!name) return;
 		const id = randomId();
@@ -513,6 +524,7 @@ export function TaskDetail({
 			).client,
 		);
 		if (created !== null) return failed(created);
+		if (!canEditLabelsRef.current) return;
 		const attached = mutationResultFailure(
 			await zero.mutate(
 				mutators.taskLabel.set({
@@ -765,6 +777,10 @@ export function TaskDetail({
 								<Popover>
 									<PopoverTrigger asChild>
 										<Button
+											disabled={!canEditLabels}
+											aria-describedby={
+												!canEditLabels ? labelsReasonId : undefined
+											}
 											variant="outline"
 											size="sm"
 											className="pointer-coarse:h-11"
@@ -779,8 +795,9 @@ export function TaskDetail({
 													key={l.id}
 													type="button"
 													aria-pressed={selected.has(l.id)}
+													disabled={!canEditLabels}
 													onClick={() => toggleLabel(l.id)}
-													className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start text-sm hover:bg-muted"
+													className="flex items-center gap-2 rounded-md px-1.5 py-1 text-start text-sm hover:bg-muted disabled:opacity-60 disabled:hover:bg-transparent"
 												>
 													<span className="flex size-4 items-center justify-center">
 														{selected.has(l.id) && (
@@ -798,6 +815,7 @@ export function TaskDetail({
 										</div>
 										<div className="flex items-center gap-1.5 border-t pt-2">
 											<Input
+												disabled={!canEditLabels}
 												value={newLabel}
 												placeholder={m.task_new_label_placeholder()}
 												onChange={(e) => setNewLabel(e.target.value)}
@@ -808,7 +826,7 @@ export function TaskDetail({
 											<Button
 												size="sm"
 												onClick={() => void createLabel()}
-												disabled={!newLabel.trim()}
+												disabled={!canEditLabels || !newLabel.trim()}
 											>
 												{m.action_add()}
 											</Button>
@@ -816,6 +834,14 @@ export function TaskDetail({
 									</PopoverContent>
 								</Popover>
 							</div>
+							{!canEditLabels && (
+								<p
+									id={labelsReasonId}
+									className="text-xs text-muted-foreground"
+								>
+									{m.mutator_error_denied()}
+								</p>
+							)}
 						</Field>
 					)}
 				</div>
