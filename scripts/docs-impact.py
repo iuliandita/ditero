@@ -16,7 +16,8 @@ SHA = re.compile(r'[0-9a-f]{40}')
 LIMIT = 2 * 1024 * 1024
 # Source prefixes and exact files, paired with permitted user-facing guides.
 RULES = {
-    'configuration': (('src/config/',), ('deploy/', 'docs/runbooks/', '.env.example')),
+    'configuration': (('src/config/', 'deploy/', 'apps/android/capacitor.config.ts',
+                       'apps/desktop/src-tauri/tauri.conf.json'), ('deploy/', 'docs/runbooks/', '.env.example')),
     'authentication': (('src/auth/', 'src/server/native-auth/'),
                        ('docs/runbooks/native-authentication.md', 'docs/runbooks/public-api.md',
                         'apps/android/README.md', 'apps/desktop/README.md')),
@@ -24,12 +25,18 @@ RULES = {
                    ('docs/runbooks/public-api.md', 'docs/cli.md', 'docs/mcp.md', 'docs/tui.md')),
     'clients': (('src/cli/', 'src/mcp/', 'src/tui/', 'scripts/build-clients.ts'),
                 ('docs/cli.md', 'docs/mcp.md', 'docs/tui.md')),
-    'native': (('apps/android/src/bridge.ts', 'apps/android/src/runtime.ts',
-                'apps/android/src/attachment-runtime.ts',
-                'apps/android/android/app/src/main/java/io/ditero/app/NativeSessionVault.java',
-                'apps/android/android/app/src/main/java/io/ditero/app/NativeAttachmentTransfers.java',
-                'apps/android/android/app/src/main/java/io/ditero/app/ServerContext.java',
-                'apps/desktop/src-tauri/src/',
+    'ui': (('src/web/App.tsx', 'src/web/index.css', 'src/web/theme-documents.css',
+            'src/web/accent-themes.css',
+            'src/web/hooks/useNativeTaskLinks.ts', 'src/web/hooks/useNativeNotificationNavigation.ts',
+            'src/web/hooks/useTaskImportActivation.ts', 'src/web/hooks/useUserPref.ts',
+            'src/web/hooks/useAppearanceSync.ts', 'src/web/hooks/useThemeChoice.ts',
+            'src/web/hooks/useSyncedTheme.ts', 'src/web/hooks/useWorkspaceRowActions.ts',
+            'src/web/components/', 'src/web/routes/', 'src/web/pages/',
+            'src/web/lib/e2e/upload.ts', 'src/web/lib/e2e/download.ts'),
+           ('README.md', 'docs/', 'apps/android/README.md', 'apps/desktop/README.md')),
+    'native': (('apps/android/src/', 'apps/android/android/app/src/main/',
+                'apps/android/android/app/src/google/', 'apps/android/android/app/src/independent/',
+                'apps/desktop/src/', 'apps/desktop/src-tauri/src/',
                 'src/web/lib/e2e/runtime.ts', 'src/web/lib/e2e/attachment-migration-api.ts'),
                ('apps/android/README.md', 'apps/desktop/README.md',
                 'docs/runbooks/native-authentication.md', 'docs/runbooks/native-format.md')),
@@ -40,7 +47,8 @@ RULES = {
                 ('RELEASING.md', 'README.md', 'docs/ROADMAP.md', 'deploy/')),
     'compatibility': (('drizzle/', 'src/db/migrate.ts', 'src/server/attachments/',
                        'src/domain/attachment', 'src/domain/e2e/envelope.ts', 'src/domain/e2e/stream.ts',
-                       'src/web/lib/e2e/device-store.ts', 'src/server/storage/',
+                       'src/web/lib/e2e/device-store.ts', 'src/web/lib/e2e/ciphertext-staging.ts',
+                       'src/server/storage/',
                        'src/domain/portability/attachment-archive.ts',
                        'src/web/lib/e2e/attachment-archive.ts',
                        'src/web/lib/e2e/attachment-migration-prepare.ts',
@@ -51,6 +59,11 @@ RULES = {
                        'apps/desktop/README.md')),
 }
 TOPICS = ('upgrade', 'backup', 'rollback', 'clientVersions')
+# These persisted-format boundaries require recovery guidance across the full range.
+MIGRATION_SOURCES = ('drizzle/', 'src/domain/e2e/envelope.ts', 'src/domain/e2e/stream.ts',
+                     'src/web/lib/e2e/device-store.ts', 'src/web/lib/e2e/ciphertext-staging.ts',
+                     'src/server/storage/', 'src/domain/portability/attachment-archive.ts',
+                     'src/web/lib/e2e/attachment-archive.ts', 'patches/@rocicorp%2Fzero@')
 ENV = re.compile(r'(?:process|Bun)\.env(?:\.([A-Z][A-Z0-9_]*)|\[\s*[\"\']([A-Z][A-Z0-9_]*)[\"\']\s*\])|\b(DITERO_[A-Z0-9_]+)\b')
 
 
@@ -82,6 +95,19 @@ def tree(root, rev):
     return entries
 
 
+def index_tree(root):
+    entries = {}
+    for row in git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+        if not row:
+            continue
+        info, name = row.split(b'\t', 1)
+        mode, oid, stage = info.decode('ascii').split()
+        if stage != '0' or mode not in ('100644', '100755') or oid == '0' * 40:
+            raise ValueError('Unmerged or nonregular index input: ' + ascii(name))
+        entries[name.decode('utf-8', 'strict')] = (mode, 'blob', oid)
+    return entries
+
+
 def blob(root, entries, path):
     entry = entries.get(path)
     if entry is None:
@@ -101,7 +127,8 @@ def matches(path, patterns):
 
 
 def production(path):
-    return not document(path) and not re.search(r'(?:^|/)(?:tests?|__tests__)/|\.(?:test|spec)\.', path)
+    style = path in ('src/web/index.css', 'src/web/theme-documents.css', 'src/web/accent-themes.css')
+    return not document(path) and (style or not path.endswith(('.css', '.svg', '.png', '.jpg', '.webp', '.d.ts'))) and not re.search(r'(?:^|/)(?:tests?|__tests__)/|\.(?:test|spec)\.', path)
 
 
 def document(path):
@@ -130,10 +157,15 @@ def declarations(text):
     for group, entry in value['groups'].items():
         if group not in RULES or not isinstance(entry, dict):
             raise ValueError('Unknown group or invalid entry')
-        required = {'noImpact', 'sourceDigest'} | (set(TOPICS) if group == 'compatibility' else set())
+        documented = 'docs' in entry
+        required = ({'docs', 'note', 'sourceDigest'} if documented else {'noImpact', 'sourceDigest'}) | (set(TOPICS) if group == 'compatibility' else set())
         if set(entry) != required or not re.fullmatch(r'[0-9a-f]{64}', str(entry['sourceDigest'])):
             raise ValueError('Invalid rationale fields for ' + group)
-        for key in required - {'sourceDigest'}:
+        if documented:
+            docs = entry['docs']
+            if not isinstance(docs, list) or not 1 <= len(docs) <= 20 or any(not isinstance(p, str) or not document(p) or not matches(p, RULES[group][1]) or p.startswith('docs/local/') or '..' in p.split('/') for p in docs) or len(set(docs)) != len(docs):
+                raise ValueError('Invalid cited guides for ' + group)
+        for key in required - {'sourceDigest', 'docs'}:
             if not isinstance(entry[key], str) or not 30 <= len(entry[key].strip()) <= 2000:
                 raise ValueError('Provide a specific 30-2000 character explanation for ' + key)
     return value['groups']
@@ -179,17 +211,19 @@ def local_links(root, entries, paths):
     return errors
 
 
-def check(root, base, head, pr=False, static=False):
+def check(root, base, head, pr=False, static=False, staged=False):
+    if staged and (pr or static):
+        raise ValueError('Staged mode cannot use PR or static mode')
     head = commit(root, head)
-    current = tree(root, head)
+    current = index_tree(root) if staged else tree(root, head)
     if static:
         paths = {p for p in current if canonical_markdown(p)}
         errors = local_links(root, current, paths)
         for required in ('README.md', 'RELEASING.md'):
             if required not in current:
                 errors.append('Missing canonical guide: ' + required)
-        inventory_paths = {p for p in current if p.startswith('src/config/') and
-                           p.endswith('.ts') and production(p) and
+        inventory_paths = {p for p in current if matches(p, RULES['configuration'][0]) and
+                           production(p) and
                            p != 'src/config/test-crash.ts'}
         names = set()
         for path in inventory_paths:
@@ -217,16 +251,20 @@ def check(root, base, head, pr=False, static=False):
             blob(root, previous, p).split() != blob(root, current, p).split()}
     errors = []
     for group in sorted(groups):
-        relevant = {p for p in docs if matches(p, RULES[group][1])}
-        if relevant:
-            if group == 'compatibility':
-                guidance = '\n'.join(blob(root, current, p) for p in relevant).lower()
-                if any(cue not in guidance for cue in ('upgrade', 'backup', 'rollback', 'client')):
-                    errors.append('Compatibility docs need upgrade, backup, rollback and client-version guidance')
-            continue
         entry = now.get(group)
         if not entry or entry == before.get(group) or entry['sourceDigest'] != digest(current, group):
             errors.append(group + ': change relevant docs or provide a fresh source-bound no-impact explanation')
+            continue
+        if group == 'compatibility' and 'docs' not in entry and any(production(p) and matches(p, MIGRATION_SOURCES) for p in changed):
+            errors.append('Compatibility migrations and persisted formats require cited recovery guidance')
+        if 'docs' in entry:
+            cited = set(entry['docs'])
+            if not cited <= docs:
+                errors.append(group + ': cited guides must change in this range')
+            elif group == 'compatibility':
+                guidance = '\n'.join(blob(root, current, p) for p in cited).lower()
+                if any(cue not in guidance for cue in ('upgrade', 'backup', 'rollback', 'client')):
+                    errors.append('Compatibility docs need upgrade, backup, rollback and client-version guidance')
     for path in changed:
         if matches(path, RULES['configuration'][0]) and production(path):
             altered = literal_names(blob(root, previous, path)) ^ literal_names(blob(root, current, path))
@@ -240,7 +278,7 @@ def check(root, base, head, pr=False, static=False):
         link_paths |= {p for p in current if p.endswith('.md')}
     errors += local_links(root, current, link_paths)
     return {'base': base, 'head': head, 'comparisonBase': start, 'groups': sorted(groups),
-            'sourceDigests': {g: digest(current, g) for g in sorted(groups)}, 'errors': errors}
+            'sourceDigests': {g: digest(current, g) for g in sorted(groups)}, 'staged': staged, 'errors': errors}
 
 
 def main():
@@ -249,11 +287,12 @@ def main():
     parser.add_argument('--head')
     parser.add_argument('--pr', action='store_true')
     parser.add_argument('--static', action='store_true')
+    parser.add_argument('--staged', action='store_true')
     parser.add_argument('--event')
     args = parser.parse_args()
     root = Path.cwd()
     if args.event:
-        if args.base or args.head or args.static or args.pr:
+        if args.base or args.head or args.static or args.pr or args.staged:
             raise ValueError('--event cannot be combined with range options')
         event_path = Path(args.event)
         if event_path.stat().st_size > LIMIT:
@@ -270,11 +309,16 @@ def main():
             args.base, args.head = event['before'], event['after']
             if args.head != git(root, 'rev-parse', 'HEAD').decode().strip():
                 raise ValueError('Push head differs from checkout')
+    if args.staged:
+        if args.static or args.pr or args.head:
+            raise ValueError('--staged cannot use --head, --pr or --static')
+        args.head = git(root, 'rev-parse', 'HEAD').decode().strip()
+        args.base = args.base or args.head
     if args.static and not args.head:
         args.head = git(root, 'rev-parse', 'HEAD').decode().strip()
     if not args.head or (not args.static and not args.base):
         parser.error('Provide --base and --head, --event, or --static')
-    result = check(root, args.base, args.head, args.pr, args.static)
+    result = check(root, args.base, args.head, args.pr, args.static, args.staged)
     result['checkerSha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     print(json.dumps(result, ensure_ascii=True, sort_keys=True))
     return bool(result['errors'])

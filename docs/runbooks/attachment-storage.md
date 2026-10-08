@@ -34,11 +34,16 @@ through Ditero so current membership and role checks are applied at request time
 
 ## Quota and retention
 
-Browser uploads use private-file ciphertext staging when supported. Otherwise,
-they buffer ciphertext only, with an 8 MiB combined limit for each file and its
-thumbnail. Oversized files are rejected before reservation; this local browser
-limit is separate from server limits and workspace quota. Only one buffered
-upload runs at a time. Native attachment transports retain their streaming path.
+On develop after alpha.10, browser uploads prefer private-file ciphertext staging
+when the required OPFS and Web Locks operations are available. Otherwise, they
+buffer ciphertext only, with an 8 MiB combined limit for each file and its
+thumbnail, then send the encrypted Blob through XMLHttpRequest. Oversized files
+are rejected before reservation; this fallback limit is separate from server
+limits and workspace quota. Only one buffered upload runs at a time. If neither
+browser transport is available, use another browser or device; increasing server
+quota cannot add browser capabilities. Native attachment transports retain their
+streaming path. These changes do not qualify an unfinished native transfer
+journey or change alpha.10 downloads.
 
 Browser previews and ordinary downloads are limited to 64 MiB in memory. Larger downloads
 require a browser with the File System Access save picker, OPFS, and Web Locks. The client asks

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tarfile
 import tempfile
 import ipaddress
@@ -55,6 +56,8 @@ def prepare() -> None:
         eligible = [run for run in runs if run["event"] == "push" and run["head_branch"] == branch]
         if not eligible or max(eligible, key=lambda run: run["id"])["conclusion"] != "success":
             raise ValueError(f"Latest {workflow} push run for {sha} on {branch} must pass first")
+    subprocess.run([sys.executable, "-I", str(ROOT / "scripts/docs-release.py"), "--head", sha],
+                   cwd=ROOT, check=True, timeout=180)
     dockerhub = os.environ.get("DOCKERHUB_ENABLED", "true")
     if dockerhub not in ("true", "false"):
         raise ValueError("DITERO_DOCKERHUB_ENABLED must be true or false")

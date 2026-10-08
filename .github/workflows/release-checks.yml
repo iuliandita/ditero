@@ -44,6 +44,7 @@ jobs:
           python3 scripts/test-release.py
           python3 scripts/release.py check
           python3 -I scripts/docs-impact.py --static
+          python3 -I scripts/test-docs-release.py
       - name: Validate Helm, Kustomize and deployment archives
         run: |
           helm lint deploy/helm/ditero --strict
