@@ -1980,6 +1980,8 @@
 	"attachment_upload_cancelled": "Încărcare anulată.",
 	"attachment_ready_to_upload": "Pregătit - se încarcă atunci când trimiți comentariul.",
 	"attachment_error_too_large": "Fișierul depășește limita de {limit}.",
+	"attachment_error_browser_ciphertext_limit": "Acest browser poate încărca cel mult {limit} de date criptate din fișiere. Încearcă un fișier mai mic sau alt browser.",
+	"attachment_error_browser_unavailable": "Încărcarea fișierelor nu este disponibilă în acest browser.",
 	"attachment_error_quota": "Acest spațiu de lucru nu mai are spațiu de stocare. Șterge câteva fișiere pentru a adăuga altele.",
 	"attachment_error_offline": "Încărcările necesită o conexiune. Încearcă din nou când revii online.",
 	"attachment_error_reserve_failed": "Fișierul nu a putut fi adăugat. Încearcă din nou.",
