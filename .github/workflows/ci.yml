@@ -18,6 +18,56 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check documentation impact with base-owned policy
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          # One-time reviewed bootstrap base; subsequent missing policies fail.
+          DOCS_IMPACT_BOOTSTRAP_BASE: a57012691dc362ea264b45f20c626ac37dd83996
+        run: |
+          python3 -I - <<'PYTHON'
+          import hashlib, json, os, pathlib, re, subprocess, sys, tempfile
+          event_path = pathlib.Path(os.environ['GITHUB_EVENT_PATH'])
+          if event_path.stat().st_size > 2097152:
+              raise SystemExit('Event exceeds limit')
+          event = json.loads(event_path.read_text())
+          base = event['pull_request']['base']['sha'] if 'pull_request' in event else event['before']
+          if not isinstance(base, str) or not re.fullmatch('[0-9a-f]{40}', base):
+              raise SystemExit('Invalid immutable base')
+          def git(*args):
+              return subprocess.run(['git', '--no-pager', *args], capture_output=True, timeout=30)
+          resolved = git('cat-file', '-t', base)
+          if resolved.returncode or resolved.stdout.strip() != b'commit':
+              raise SystemExit('Base commit unavailable; do not substitute checkout policy')
+          listing = git('ls-tree', base, '--', 'scripts/docs-impact.py')
+          if listing.returncode or (listing.stdout and not listing.stdout.startswith((b'100644 blob ', b'100755 blob '))):
+              raise SystemExit('Base policy must be a regular Git blob')
+          policy = git('show', base + ':scripts/docs-impact.py')
+          if policy.returncode:
+              listing = git('ls-tree', base, '--', 'scripts/docs-impact.py')
+              if listing.returncode or listing.stdout or base != os.environ['DOCS_IMPACT_BOOTSTRAP_BASE']:
+                  raise SystemExit('Base checker missing; explicit one-time bootstrap pin required')
+              print('BOOTSTRAP: executing proposed checker; independent source review required', flush=True)
+              proposed = pathlib.Path('scripts/docs-impact.py')
+              if proposed.is_symlink() or not proposed.is_file():
+                  raise SystemExit('Bootstrap policy must be a regular file')
+              source = proposed.read_bytes()
+          else:
+              source = policy.stdout
+          if len(source) > 2097152:
+              raise SystemExit('Policy exceeds limit')
+          print('Checker SHA256: ' + hashlib.sha256(source).hexdigest(), flush=True)
+          with tempfile.TemporaryDirectory(prefix='docs-impact-') as directory:
+              checker = pathlib.Path(directory) / 'check.py'
+              checker.write_bytes(source)
+              subprocess.run([sys.executable, '-I', str(checker), '--event', str(event_path)], check=True, timeout=180)
+          PYTHON
+      - name: Test proposed documentation guard offline
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 -I scripts/test-docs-impact.py
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
