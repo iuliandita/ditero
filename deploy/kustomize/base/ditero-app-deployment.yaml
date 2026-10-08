@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: ditero
     app.kubernetes.io/instance: ditero
-    app.kubernetes.io/version: 0.0.1-alpha.11
+    app.kubernetes.io/version: 0.0.1-alpha.12
     app.kubernetes.io/part-of: ditero
     app.kubernetes.io/component: app
 spec:
@@ -23,7 +23,7 @@ spec:
       labels:
         app.kubernetes.io/name: ditero
         app.kubernetes.io/instance: ditero
-        app.kubernetes.io/version: 0.0.1-alpha.11
+        app.kubernetes.io/version: 0.0.1-alpha.12
         app.kubernetes.io/part-of: ditero
         app.kubernetes.io/component: app
     spec:
@@ -39,7 +39,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: app
-        image: ghcr.io/iuliandita/ditero:0.0.1-alpha.11
+        image: ghcr.io/iuliandita/ditero:0.0.1-alpha.12
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
