@@ -7,9 +7,19 @@
 			"note": "Document native comment attachment transport parity while preserving the bounded browser default and published alpha.10 qualification limits."
 		},
 		"release": {
-			"sourceDigest": "3d88450f228a40ca50bfd2a0dc2a1a217c379c311482dd4c96d22557c8cf1784",
+			"sourceDigest": "f7350086e76864806bb9e589a372574e19915ef718151f5d19d786ae7bb57475",
 			"docs": ["RELEASING.md"],
-			"note": "Require a protected cumulative documentation assessment from the fixed alpha.10 review epoch before preparing the same gated release commit."
+			"note": "Prepare alpha.11 and Android code11 with the retained signing identity and unchanged protected documentation epoch."
+		},
+		"configuration": {
+			"sourceDigest": "5220ccf44e63ecaed60217854ff94318baf7f4e167671b220fd95f0abd59399b",
+			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
+			"note": "Align prerelease deployment image versions without adding operator settings."
+		},
+		"deployment": {
+			"sourceDigest": "be023f5bb6fa6773cd9209646c67be07c6f22342a8bec6f2ccfa70c988d73932",
+			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
+			"note": "Align chart metadata and both packaged app/sync image examples with alpha.11; retain existing qualification limits."
 		}
 	}
 }
