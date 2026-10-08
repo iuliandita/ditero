@@ -173,7 +173,11 @@ for (const width of [1440, 390]) {
 			.poll(async () => {
 				return data.evaluate((element) => {
 					const final = document.getElementById("settings-danger");
+					const root = document.scrollingElement;
 					return (
+						root !== null &&
+						Math.abs(root.scrollHeight - root.clientHeight - root.scrollTop) <=
+							1 &&
 						element.getBoundingClientRect().top >
 							Number.parseFloat(getComputedStyle(element).scrollMarginTop) &&
 						(final?.getBoundingClientRect().bottom ?? Infinity) <= innerHeight
@@ -193,7 +197,19 @@ for (const width of [1440, 390]) {
 
 		const beforeScroll = (await danger.boundingBox())?.y;
 		expect(beforeScroll).toBeDefined();
-		await data.hover();
+		const bounds = await data.boundingBox();
+		const viewport = page.viewportSize();
+		if (!bounds || !viewport)
+			throw new Error("Missing settings scroll geometry");
+		const left = Math.max(0, bounds.x);
+		const right = Math.min(viewport.width, bounds.x + bounds.width);
+		const top = Math.max(0, bounds.y);
+		const bottom = Math.min(viewport.height, bounds.y + bounds.height);
+		expect(right).toBeGreaterThan(left);
+		expect(bottom).toBeGreaterThan(top);
+		// Locator hover can center the clipped panel and change the wheel baseline.
+		await page.mouse.move((left + right) / 2, (top + bottom) / 2);
+		expect((await danger.boundingBox())?.y).toBeCloseTo(beforeScroll ?? 0, 0);
 		await page.mouse.wheel(0, -600);
 		await expect
 			.poll(async () => (await danger.boundingBox())?.y ?? 0)
