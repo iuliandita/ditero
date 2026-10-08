@@ -222,6 +222,7 @@ key for the applied destination. Import creates no memberships or permissions.
 
 Language changes wait for local saving and server confirmation before reloading.
 Stay connected until the language changes; export requires confirmed saved changes.
+At startup, Ditero restores your saved language before detecting your time zone.
 
 Use the exact content JSON downloaded with that files archive. A separate
 **Download JSON** export, an edited file or a reserialized copy is not a substitute,

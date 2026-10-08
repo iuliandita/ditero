@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "4d97bffb5792a0d22516ac363214f49e2a95e3836d7577c14cdcec3df49daad0",
-			"docs": ["apps/desktop/README.md", "docs/runbooks/data-portability.md"],
-			"note": "Document the native export entry, matching files and password, and language changes waiting for local completion and server confirmation before reloading."
+			"sourceDigest": "537b4427550dd0a3303697b425d7bb7f315c06b16c8458ff33b8f9b06ce02954",
+			"docs": ["docs/runbooks/data-portability.md"],
+			"note": "Document the native export entry, matching files and password, confirmed language saves, and restoring the saved language before automatic time-zone detection at startup."
 		},
 		"release": {
 			"sourceDigest": "f7350086e76864806bb9e589a372574e19915ef718151f5d19d786ae7bb57475",

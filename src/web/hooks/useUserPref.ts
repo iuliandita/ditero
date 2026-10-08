@@ -232,6 +232,8 @@ export function useUserPref(): {
 	const [, forceRender] = useState(0);
 	useEffect(() => {
 		if (loading || detectionAttemptedForUserId === zero.userID) return;
+		// Reconciliation retires this client; detect after the locale reload.
+		if (pref.locale !== null && pref.locale !== getLocale()) return;
 		const zone = timeZoneToDetect(pref, detectedTimeZone());
 		detectionAttemptedForUserId = zero.userID;
 		if (!zone) return;
