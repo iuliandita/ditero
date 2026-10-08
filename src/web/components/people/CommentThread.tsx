@@ -14,7 +14,10 @@ import { mutators } from "../../../zero/mutators.ts";
 import { queries } from "../../../zero/queries.ts";
 import type { schema, Task } from "../../../zero/schema.gen.ts";
 import { copyText } from "../../lib/clipboard.ts";
-import type { WorkspaceKeyMaterial } from "../../lib/e2e/KeyringProvider.tsx";
+import {
+	useKeyring,
+	type WorkspaceKeyMaterial,
+} from "../../lib/e2e/KeyringProvider.tsx";
 import { uploadAttachment } from "../../lib/e2e/upload.ts";
 import { formatBytes, formatList } from "../../lib/intl-format.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
@@ -88,6 +91,7 @@ export function CommentThread({
 	const [memberships] = useQuery(queries.memberships.mine());
 	const [attachments] = useQuery(queries.attachments.mine());
 	const gate = useAttachmentGate(workspaceId);
+	const keyring = useKeyring();
 
 	const [error, setError] = useState<string | null>(null);
 	const [body, setBodyState] = useState("");
@@ -350,6 +354,7 @@ export function CommentThread({
 					{
 						id: pending.id,
 						signal: controller.signal,
+						fetcher: keyring.runtime.attachments?.fetcher,
 						onProgress: (progress) =>
 							updatePendingFile(pending.id, {
 								progress: {

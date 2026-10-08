@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "a57175c16c2be006334183f8bdf560fb871a3352585c3c0ddb39039ecff0522c",
+			"sourceDigest": "7888c56761bd3e31cc95b3ca6a3d883d32f0998fee515b92a8a4f1874a9ea05e",
 			"docs": ["docs/runbooks/attachment-storage.md"],
-			"note": "Document the developed browser ciphertext Blob fallback limit and recovery guidance without claiming it ships in the published alpha.10."
+			"note": "Document native comment attachment transport parity while preserving the bounded browser default and published alpha.10 qualification limits."
 		},
 		"release": {
 			"sourceDigest": "3d88450f228a40ca50bfd2a0dc2a1a217c379c311482dd4c96d22557c8cf1784",

@@ -55,7 +55,9 @@ The server quota does not imply browser support for an equally large preview.
 
 Android and desktop development apps use native HTTPS transfers and system save
 pickers. Downloads stage ciphertext privately and verify the complete stream before
-writing plaintext to the chosen destination. Their platform qualification is bounded;
+writing plaintext to the chosen destination. On develop after alpha.10, comment
+attachments use the same native upload transport as task files; browser comment
+uploads retain the browser transport described above. Their platform qualification is bounded;
 see the [Android](../../apps/android/README.md#encrypted-files) and
 [desktop](../../apps/desktop/README.md#encrypted-files) guides.
 
