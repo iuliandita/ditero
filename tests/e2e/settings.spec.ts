@@ -457,7 +457,10 @@ test("the import file picker is on-system and keyboard reachable", async ({
 	await page.getByRole("button", { name: "Download JSON" }).focus();
 	await page.keyboard.press("Tab");
 	await expect(
-		page.getByRole("button", { name: "Export selected files", exact: true }),
+		page.getByRole("button", {
+			name: "Export data and attachments",
+			exact: true,
+		}),
 	).toBeFocused();
 	await page.keyboard.press("Tab");
 	await expect(panel.getByTestId("import-format")).toBeFocused();

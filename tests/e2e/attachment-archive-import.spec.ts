@@ -125,7 +125,7 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 		(error: unknown) => ({ error }),
 	);
 	await page
-		.getByRole("button", { name: "Export selected files", exact: true })
+		.getByRole("button", { name: "Export data and attachments", exact: true })
 		.click();
 	const exportCaptureResult = await captured;
 	if ("error" in exportCaptureResult) throw exportCaptureResult.error;
@@ -141,10 +141,10 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	await fields.nth(0).fill(ARCHIVE_SECRET);
 	await fields.nth(1).fill(ARCHIVE_SECRET);
 	await exporter
-		.getByRole("button", { name: "Prepare archive", exact: true })
+		.getByRole("button", { name: "Prepare export", exact: true })
 		.click();
 	const contentButton = exporter.getByRole("button", {
-		name: "Download content",
+		name: "Download app data",
 		exact: true,
 	});
 	await expect(contentButton).toBeVisible({ timeout: DERIVE_TIMEOUT });
@@ -153,7 +153,10 @@ test("archive import: exact exported v2 pair commits to its applied parent after
 	const contentDownload = await contentEvent;
 	const filesEvent = page.waitForEvent("download");
 	await exporter
-		.getByRole("button", { name: "Download files", exact: true })
+		.getByRole("button", {
+			name: "Download encrypted attachments",
+			exact: true,
+		})
 		.click();
 	const filesDownload = await filesEvent;
 	const contentBytes = await readDownload(contentDownload);

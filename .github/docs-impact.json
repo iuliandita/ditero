@@ -3,8 +3,8 @@
 	"groups": {
 		"ui": {
 			"sourceDigest": "e7e53791b03d9b38f61c72c147bfb9ada2cf60ec26c2c46e024438584206267c",
-			"docs": ["apps/desktop/README.md"],
-			"note": "Document the capability-gated native archive export entry under Settings > Your data while retaining the browser handoff and existing native import qualification limits."
+			"docs": ["apps/desktop/README.md", "docs/runbooks/data-portability.md"],
+			"note": "Document the capability-gated native export entry and clarify app data, encrypted attachments, export password and paired-file import requirements."
 		},
 		"release": {
 			"sourceDigest": "f7350086e76864806bb9e589a372574e19915ef718151f5d19d786ae7bb57475",

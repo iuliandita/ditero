@@ -165,7 +165,7 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 		"GET",
 	);
 	await page
-		.getByRole("button", { name: "Export selected files", exact: true })
+		.getByRole("button", { name: "Export data and attachments", exact: true })
 		.click();
 	const exporter = page.getByTestId("attachment-archive-export-dialog");
 	await exporter
@@ -176,10 +176,10 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	await fields.nth(0).fill(ARCHIVE_SECRET);
 	await fields.nth(1).fill(ARCHIVE_SECRET);
 	await exporter
-		.getByRole("button", { name: "Prepare archive", exact: true })
+		.getByRole("button", { name: "Prepare export", exact: true })
 		.click();
 	const contentButton = exporter.getByRole("button", {
-		name: "Download content",
+		name: "Download app data",
 		exact: true,
 	});
 	await expect(contentButton).toBeVisible({ timeout: DERIVE_TIMEOUT });
@@ -188,7 +188,10 @@ test("archive import retires prepared file metadata after real keyring expiry", 
 	const contentDownload = await contentEvent;
 	const filesEvent = page.waitForEvent("download");
 	await exporter
-		.getByRole("button", { name: "Download files", exact: true })
+		.getByRole("button", {
+			name: "Download encrypted attachments",
+			exact: true,
+		})
 		.click();
 	const filesDownload = await filesEvent;
 	const contentBytes = await readDownload(contentDownload);

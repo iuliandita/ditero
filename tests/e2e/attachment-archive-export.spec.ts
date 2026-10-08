@@ -205,14 +205,14 @@ async function pair(page: Page, touch = false) {
 	await fields.nth(0).fill(ARCHIVE_SECRET);
 	await fields.nth(1).fill("not the archive secret");
 	await expect(
-		surface.getByRole("button", { name: "Prepare archive", exact: true }),
+		surface.getByRole("button", { name: "Prepare export", exact: true }),
 	).toBeDisabled();
 	await expect(
-		surface.getByText("The passphrases do not match.", { exact: true }),
+		surface.getByText("The passwords do not match.", { exact: true }),
 	).toBeVisible();
 	await fields.nth(1).fill(ARCHIVE_SECRET);
 	const prepare = surface.getByRole("button", {
-		name: "Prepare archive",
+		name: "Prepare export",
 		exact: true,
 	});
 	await expect(prepare).toBeEnabled();
@@ -222,13 +222,13 @@ async function pair(page: Page, touch = false) {
 		await page.keyboard.press("Enter");
 	}
 	const content = surface.getByRole("button", {
-		name: "Download content",
+		name: "Download app data",
 		exact: true,
 	});
 	await expect(content).toBeVisible({ timeout: deriveTimeout });
 	if (!touch) await expect(content).toBeFocused();
 	await expect(
-		surface.getByRole("button", { name: "Prepare archive", exact: true }),
+		surface.getByRole("button", { name: "Prepare export", exact: true }),
 	).toHaveCount(0);
 	await a11y(page);
 	const first = page.waitForEvent("download");
@@ -237,7 +237,7 @@ async function pair(page: Page, touch = false) {
 	const contentDownload = await first;
 	const second = page.waitForEvent("download");
 	const filesButton = surface.getByRole("button", {
-		name: "Download files",
+		name: "Download encrypted attachments",
 		exact: true,
 	});
 	if (touch) await filesButton.tap();
@@ -451,7 +451,7 @@ test("archive export: locked desktop keys and two authenticated explicit downloa
 	});
 	page.on("download", () => downloads++);
 	await page
-		.getByRole("button", { name: "Export selected files", exact: true })
+		.getByRole("button", { name: "Export data and attachments", exact: true })
 		.click();
 	await expect(
 		dialog(page).getByText("Unlock encrypted files first.", { exact: false }),
@@ -521,7 +521,10 @@ test("archive export: locked desktop keys and two authenticated explicit downloa
 		.click();
 	await expect(dialog(page)).toHaveCount(0);
 	await expect(
-		page.getByRole("button", { name: "Export selected files", exact: true }),
+		page.getByRole("button", {
+			name: "Export data and attachments",
+			exact: true,
+		}),
 	).toBeFocused();
 });
 
@@ -571,7 +574,7 @@ test("archive export: coarse mobile dark selection, geometry and authenticated p
 			(error: unknown) => ({ error }),
 		);
 		await page
-			.getByRole("button", { name: "Export selected files", exact: true })
+			.getByRole("button", { name: "Export data and attachments", exact: true })
 			.tap();
 		const captureResult = await captured;
 		if ("error" in captureResult) throw captureResult.error;
@@ -687,7 +690,7 @@ test("archive export: accepted writes wait and closing cancels a real content re
 		await expect.poll(() => hold.count).toBeGreaterThan(0);
 		await goToSettings(page);
 		await page
-			.getByRole("button", { name: "Export selected files", exact: true })
+			.getByRole("button", { name: "Export data and attachments", exact: true })
 			.click();
 		await expect(
 			dialog(page).getByText(
@@ -703,7 +706,10 @@ test("archive export: accepted writes wait and closing cancels a real content re
 			.click();
 		await expect(dialog(page)).toHaveCount(0);
 		await expect(
-			page.getByRole("button", { name: "Export selected files", exact: true }),
+			page.getByRole("button", {
+				name: "Export data and attachments",
+				exact: true,
+			}),
 		).toBeFocused();
 	} finally {
 		hold.release();
@@ -735,7 +741,7 @@ test("archive export: accepted writes wait and closing cancels a real content re
 	});
 	try {
 		await page
-			.getByRole("button", { name: "Export selected files", exact: true })
+			.getByRole("button", { name: "Export data and attachments", exact: true })
 			.click();
 		await ready;
 		await dialog(page)
@@ -750,7 +756,7 @@ test("archive export: accepted writes wait and closing cancels a real content re
 		await page.unroute("**/api/portability/export?version=2");
 	}
 	await page
-		.getByRole("button", { name: "Export selected files", exact: true })
+		.getByRole("button", { name: "Export data and attachments", exact: true })
 		.click();
 	await expect(
 		dialog(page).getByText("task-note.txt", { exact: true }),
@@ -946,7 +952,7 @@ test("archive export: a real shared file without its key is explained and unsele
 		await goToSettings(member);
 		await snapshot("before-archive");
 		await member
-			.getByRole("button", { name: "Export selected files", exact: true })
+			.getByRole("button", { name: "Export data and attachments", exact: true })
 			.click();
 		const unavailable = dialog(member).getByRole("checkbox", {
 			name: "Unavailable file",
@@ -965,7 +971,7 @@ test("archive export: a real shared file without its key is explained and unsele
 		).toHaveCount(0);
 		await expect(
 			dialog(member).getByRole("button", {
-				name: "Prepare archive",
+				name: "Prepare export",
 				exact: true,
 			}),
 		).toBeDisabled();
@@ -1055,7 +1061,7 @@ test("archive export: explicit paging preserves selection and refuses a 65th sel
 			contentReads++;
 	});
 	await page
-		.getByRole("button", { name: "Export selected files", exact: true })
+		.getByRole("button", { name: "Export data and attachments", exact: true })
 		.click();
 	const surface = dialog(page);
 	const files = surface.getByRole("checkbox");
