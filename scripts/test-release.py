@@ -56,7 +56,9 @@ class ReleaseTests(unittest.TestCase):
             with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release.subprocess, "run") as run:
                 release.prepare()
                 self.assertIn(f"sha={sha}", output.read_text())
-                run.assert_called_once_with(["git", "merge-base", "--is-ancestor", sha, "origin/develop"], cwd=release.ROOT, check=True)
+                self.assertEqual(run.call_count, 2)
+                run.assert_any_call(["git", "merge-base", "--is-ancestor", sha, "origin/develop"], cwd=release.ROOT, check=True)
+                run.assert_any_call([release.sys.executable, "-I", str(release.ROOT / "scripts/docs-release.py"), "--head", sha], cwd=release.ROOT, check=True, timeout=180)
                 runs.append({"id": 2, "event": "push", "head_branch": "develop", "conclusion": "failure"})
                 with self.assertRaisesRegex(ValueError, "must pass first"):
                     release.prepare()

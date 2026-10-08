@@ -50,6 +50,18 @@ class DocumentationImpact(unittest.TestCase):
             entry.update({key: 'No compatibility effect because only an internal name changes.' for key in guard.TOPICS})
         self.write('.github/docs-impact.json', json.dumps({'version': 1, 'groups': {group: entry}}))
 
+    def documented(self, group, paths):
+        self.git('add', '--all')
+        head = self.save() if self.git('diff', '--cached', '--name-only') else self.git('rev-parse', 'HEAD')
+        path = self.root / '.github/docs-impact.json'
+        value = json.loads(path.read_text())
+        entry = {'docs': paths, 'note': 'Updated the cited instructions for the current source behavior.',
+                 'sourceDigest': guard.digest(guard.tree(self.root, head), group)}
+        if group == 'compatibility':
+            entry.update({key: 'The cited recovery guide explains the current compatibility requirements.' for key in guard.TOPICS})
+        value['groups'][group] = entry
+        path.write_text(json.dumps(value))
+
     def test_internal_and_test_only(self):
         self.write('src/cli/main.test.ts', 'throw new Error("inert")')
         self.write('src/web/internal.ts', 'export const helper = 1')
@@ -63,6 +75,7 @@ class DocumentationImpact(unittest.TestCase):
     def test_relevant_docs_without_declaration(self):
         self.write('src/cli/main.ts', 'export const version = 2')
         self.write('docs/cli.md', '# CLI\nChanged command behavior.\n')
+        self.documented('clients', ['docs/cli.md'])
         self.assertEqual([], self.check())
 
     def test_fresh_rationale_then_stale(self):
@@ -76,11 +89,13 @@ class DocumentationImpact(unittest.TestCase):
     def test_compatibility_cues(self):
         self.write('drizzle/0001.sql', 'alter table tasks add column sample text;')
         self.write('docs/runbooks/backup-restore.md', '# Backup\nNew schema.\n')
+        self.documented('compatibility', ['docs/runbooks/backup-restore.md'])
         self.assertIn('Compatibility docs', self.check()[0])
 
     def test_complete_compatibility_guidance(self):
         self.write('drizzle/0001.sql', 'alter table tasks add column sample text;')
         self.write('docs/runbooks/backup-restore.md', '# Upgrade\nBackup before upgrade. Rollback needs the previous backup. Client versions must match.\n')
+        self.documented('compatibility', ['docs/runbooks/backup-restore.md'])
         self.assertEqual([], self.check())
 
     def test_configuration_literals(self):
@@ -91,6 +106,7 @@ class DocumentationImpact(unittest.TestCase):
     def test_configuration_guidance(self):
         self.write('src/config/env.ts', 'const value = process.env.DITERO_SAMPLE')
         self.write('deploy/README.md', '# Configuration\nDITERO_SAMPLE controls the sample setting.\n')
+        self.documented('configuration', ['deploy/README.md'])
         self.assertEqual([], self.check())
 
     def test_local_link_and_external_link(self):
@@ -162,7 +178,7 @@ class DocumentationImpact(unittest.TestCase):
         for name in ('NativeSessionVault', 'NativeAttachmentTransfers', 'ServerContext'):
             with self.subTest(name=name):
                 path = prefix + name + '.java'
-                self.assert_path_mapping(path, 'native', path, 'class ' + name + ' {}',
+                self.assert_path_mapping(path, 'native', 'apps/android/android/app/src/main/', 'class ' + name + ' {}',
                                          'apps/android/README.md', '# Android\nDocument ' + name + ' contract.')
 
     def test_persisted_formats_require_compatibility_guidance(self):
@@ -193,6 +209,7 @@ class DocumentationImpact(unittest.TestCase):
             with self.assertRaises(AssertionError, msg='Mutation must be detected for ' + path):
                 require_mapping()
         self.write(guide, guidance)
+        self.documented(group, [guide])
         self.assertEqual([], self.check())
         self.base = self.git('rev-parse', 'HEAD')
 
@@ -206,6 +223,7 @@ class DocumentationImpact(unittest.TestCase):
         self.write('.github/workflows/release-checks.yml', 'name: Checks')
         self.assertTrue(any(e.startswith('release:') for e in self.check()))
         self.write('RELEASING.md', '# Release\nReview documentation impact before publication.')
+        self.documented('release', ['RELEASING.md'])
         self.assertEqual([], self.check())
 
     def static(self):
@@ -241,6 +259,7 @@ class DocumentationImpact(unittest.TestCase):
         self.git('checkout', '-qb', 'feature')
         self.write('src/cli/main.ts', 'export const version = 2')
         self.write('docs/cli.md', '# CLI\nNew behavior.')
+        self.documented('clients', ['docs/cli.md'])
         head = self.save()
         self.git('checkout', '-qb', 'advanced-base', self.base)
         self.write('unrelated.txt', 'Advanced base')
@@ -254,7 +273,80 @@ class DocumentationImpact(unittest.TestCase):
         self.write('release.json', '{"version":"0.0.1-alpha.10"}')
         self.write('RELEASING.md', '# Release\nPrepare alpha 10 before publishing.')
         self.write('README.md', '# Ditero\nCurrent published release: alpha 9.')
+        self.documented('release', ['RELEASING.md'])
         self.assertEqual([], self.check())
+
+    def test_changed_docs_need_current_assessment(self):
+        self.write('src/cli/main.ts', 'export const version = 2')
+        self.write('docs/cli.md', '# CLI version two')
+        self.assertTrue(self.check())
+        self.documented('clients', ['docs/cli.md'])
+        self.assertEqual([], self.check())
+        self.write('src/cli/main.ts', 'export const version = 3')
+        self.assertTrue(self.check())
+
+    def test_cited_docs_must_change_and_be_permitted(self):
+        self.write('src/cli/main.ts', 'export const version = 2')
+        self.documented('clients', ['docs/cli.md'])
+        self.assertTrue(any('must change' in e for e in self.check()))
+        with self.assertRaises(ValueError):
+            guard.declarations(json.dumps({'version': 1, 'groups': {'clients': {
+                'docs': ['docs/unrelated.md'], 'note': 'A sufficiently long explanation of the source change.', 'sourceDigest': '0' * 64}}}))
+
+    def test_ui_native_offline_boundaries(self):
+        for path, group, mapping, guide in (
+            ('src/web/App.tsx', 'ui', 'src/web/App.tsx', 'README.md'),
+            ('src/web/index.css', 'ui', 'src/web/index.css', 'README.md'),
+            ('src/web/hooks/useNativeTaskLinks.ts', 'ui', 'src/web/hooks/useNativeTaskLinks.ts', 'README.md'),
+            ('src/web/components/QuickAdd.tsx', 'ui', 'src/web/components/', 'README.md'),
+            ('apps/desktop/src/transport.ts', 'native', 'apps/desktop/src/', 'apps/desktop/README.md'),
+            ('apps/android/android/app/src/main/java/io/ditero/app/NativeZeroTransport.java', 'native', 'apps/android/android/app/src/main/', 'apps/android/README.md'),
+            ('src/web/lib/e2e/ciphertext-staging.ts', 'compatibility', 'src/web/lib/e2e/ciphertext-staging.ts', 'docs/runbooks/backup-restore.md')):
+            with self.subTest(path=path):
+                self.assert_path_mapping(path, group, mapping, 'source boundary changed', guide,
+                                         '# Upgrade backup rollback client versions guidance ' + path)
+
+    def test_deployment_literal_needs_named_guidance(self):
+        self.write('deploy/docker/docker-compose.yml', 'environment: {DITERO_NEW_SETTING: value}')
+        self.write('deploy/README.md', '# Changed deployment guidance')
+        self.documented('deployment', ['deploy/README.md'])
+        self.documented('configuration', ['deploy/README.md'])
+        self.assertTrue(any('literal configuration' in e for e in self.check()))
+        self.write('deploy/README.md', '# DITERO_NEW_SETTING controls the sample setting.')
+        self.assertEqual([], self.check())
+
+    def test_staged_new_source_and_exclusions(self):
+        self.write('src/cli/new-command.ts', 'new public command')
+        self.git('add', '--all')
+        self.assertTrue(guard.check(self.root, self.base, self.base, staged=True)['errors'])
+        self.git('reset', '--quiet', self.base)
+        (self.root / 'src/cli/new-command.ts').unlink()
+        for path in ('src/cli/new.test.ts', 'src/web/components/presentation.css', 'src/web/vendor/shadcn-tailwind.css', 'src/web/hooks/useWorkspaceData.ts', 'src/web/internal.ts'):
+            self.write(path, 'excluded')
+        self.git('add', '--all')
+        self.assertEqual([], guard.check(self.root, self.base, self.base, staged=True)['errors'])
+        (self.root / 'src/cli/link.ts').symlink_to('/etc/passwd')
+        self.git('add', '--all')
+        with self.assertRaisesRegex(ValueError, 'nonregular'):
+            guard.check(self.root, self.base, self.base, staged=True)
+
+    def test_staged_unmerged_input_rejected(self):
+        oid = self.git('rev-parse', 'HEAD:src/cli/main.ts')
+        subprocess.run(['git', 'update-index', '--index-info'], cwd=self.root,
+                                input=f'0 {"0" * 40}\tsrc/cli/main.ts\n100644 {oid} 1\tsrc/cli/main.ts\n',
+                                text=True, capture_output=True, check=True)
+        with self.assertRaisesRegex(ValueError, 'Unmerged'):
+            guard.check(self.root, self.base, self.base, staged=True)
+
+    def test_combined_migration_cannot_use_later_noimpact(self):
+        self.write('drizzle/0001.sql', 'alter table tasks add column example text;')
+        migration = self.save()
+        self.write('src/server/attachments/query.ts', 'query-only refactor')
+        self.rationale('compatibility')
+        head = self.save()
+        self.assertEqual([], guard.check(self.root, migration, head)['errors'])
+        self.assertTrue(any('recovery guidance' in e for e in guard.check(self.root, self.base, head)['errors']))
+
 
 
 if __name__ == '__main__':

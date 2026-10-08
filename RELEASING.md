@@ -63,7 +63,13 @@ Secret keys are in the [chart guide](deploy/helm/ditero/README.md).
 
 Review affected operator and client instructions using the
 [documentation impact checks](docs/MAINTENANCE.md). Static checks do not establish
-live upgrade, backup or restore qualification.
+live upgrade, backup or restore qualification. Required CI and release preparation
+also check cumulative documentation from the pinned alpha.10 review epoch through
+the exact candidate. The fixed range retains earlier migration obligations when
+later changes only alter queries. It is deliberately broader than the latest
+release range; advancing the epoch requires an explicit reviewed policy migration.
+Run `python3 -I scripts/docs-release.py` after committing the complete assessment.
+Missing history, a changed epoch tag or unavailable tooling blocks publication.
 
 1. Update `release.json` with the version and a strictly increasing Android version
    code. Align Helm chart metadata, Helm/Kustomize app/Zero image tags, and current

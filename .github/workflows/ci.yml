@@ -26,6 +26,8 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
           # One-time reviewed bootstrap base; subsequent missing policies fail.
           DOCS_IMPACT_BOOTSTRAP_BASE: a57012691dc362ea264b45f20c626ac37dd83996
+          DOCS_IMPACT_MIGRATION_BASE: 9854e1d8fc513f2972eab175f2837969b9a636cf
+          DOCS_IMPACT_MIGRATION_POLICY: b408a044c9bbaec1f26e9f67c713a5f57501ca05cfc57913933dd9ca0ba247c9
         run: |
           python3 -I - <<'PYTHON'
           import hashlib, json, os, pathlib, re, subprocess, sys, tempfile
@@ -58,16 +60,48 @@ jobs:
               source = policy.stdout
           if len(source) > 2097152:
               raise SystemExit('Policy exceeds limit')
+          migration = (base == os.environ['DOCS_IMPACT_MIGRATION_BASE'] and
+                       hashlib.sha256(source).hexdigest() == os.environ['DOCS_IMPACT_MIGRATION_POLICY'])
+          if migration:
+              print('MIGRATION: executing proposed assessment schema; independent source review required', flush=True)
+              proposed = pathlib.Path('scripts/docs-impact.py')
+              if proposed.is_symlink() or not proposed.is_file():
+                  raise SystemExit('Migration policy must be a regular file')
+              source = proposed.read_bytes()
+          if len(source) > 2097152:
+              raise SystemExit('Policy exceeds limit')
           print('Checker SHA256: ' + hashlib.sha256(source).hexdigest(), flush=True)
           with tempfile.TemporaryDirectory(prefix='docs-impact-') as directory:
               checker = pathlib.Path(directory) / 'check.py'
               checker.write_bytes(source)
               subprocess.run([sys.executable, '-I', str(checker), '--event', str(event_path)], check=True, timeout=180)
+              release_policy = git('show', base + ':scripts/docs-release.py')
+              if release_policy.returncode:
+                  if not migration:
+                      raise SystemExit('Base release documentation policy unavailable')
+                  proposed = pathlib.Path('scripts/docs-release.py')
+                  if proposed.is_symlink() or not proposed.is_file():
+                      raise SystemExit('Migration release policy must be a regular file')
+                  release_source = proposed.read_bytes()
+              else:
+                  listing = git('ls-tree', base, '--', 'scripts/docs-release.py')
+                  if not listing.stdout.startswith((b'100644 blob ', b'100755 blob ')):
+                      raise SystemExit('Release policy must be a regular Git blob')
+                  release_source = release_policy.stdout
+              if len(release_source) > 2097152:
+                  raise SystemExit('Release policy exceeds limit')
+              release_checker = pathlib.Path(directory) / 'release.py'
+              release_checker.write_bytes(release_source)
+              head = event['pull_request']['head']['sha'] if 'pull_request' in event else event['after']
+              subprocess.run([sys.executable, '-I', str(release_checker), '--policy', str(checker),
+                              '--head', head], check=True, timeout=180)
           PYTHON
       - name: Test proposed documentation guard offline
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python3 -I scripts/test-docs-impact.py
+        run: |
+          python3 -I scripts/test-docs-impact.py
+          python3 -I scripts/test-docs-release.py
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
