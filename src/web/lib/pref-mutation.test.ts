@@ -101,6 +101,7 @@ describe("mutationServerSucceeded", () => {
 
 	test.each([
 		"server-first",
+		"server-first-later-client",
 		"client-first",
 	])("locale retirement leaves no prior journal after %s success", async (order) => {
 		const storage = journal();
@@ -112,7 +113,11 @@ describe("mutationServerSucceeded", () => {
 			mutate: () => ({ client: client.promise, server: server.promise }),
 			close: async () => {},
 		};
-		const owner = registerZeroClient("user", zero, () => tracker.dispose());
+		let retired = false;
+		const owner = registerZeroClient("user", zero, () => {
+			retired = true;
+			tracker.dispose();
+		});
 		const tracked = zero.mutate;
 		Object.defineProperty(zero, "mutate", {
 			value: () => tracker.wrapMutation(tracked),
@@ -128,12 +133,21 @@ describe("mutationServerSucceeded", () => {
 				setLocale: () => {},
 			});
 			expect(storage.length).toBe(1);
-			if (order === "server-first") {
+			if (order !== "client-first") {
 				server.resolve(success);
+				if (order === "server-first-later-client") {
+					await nextTurn();
+					expect(retired).toBe(false);
+					expect(applied).toBe(false);
+					expect(tracker.getSnapshot().pending).toBe(1);
+				}
 				client.resolve(success);
 			} else {
 				client.resolve(success);
 				await nextTurn();
+				expect(retired).toBe(false);
+				expect(applied).toBe(false);
+				expect(tracker.getSnapshot().pending).toBe(1);
 				server.resolve(success);
 			}
 			await expect(changed).resolves.toBe(true);
