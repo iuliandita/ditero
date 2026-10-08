@@ -497,6 +497,7 @@ export function AttachmentArchiveImportDialog({
 						<DialogTitle>{m.archive_import_action()}</DialogTitle>
 					</DialogHeader>
 					<p
+						id={`${id}-status`}
 						ref={status}
 						tabIndex={-1}
 						role="status"
@@ -594,7 +595,11 @@ export function AttachmentArchiveImportDialog({
 									<Button
 										className={controlClass}
 										aria-describedby={
-											openBlockedReason ? `${id}-open-blocked` : undefined
+											reading > 0
+												? `${id}-status`
+												: openBlockedReason
+													? `${id}-open-blocked`
+													: undefined
 										}
 										disabled={
 											busy || reading > 0 || !content || !archive || !passphrase
@@ -622,7 +627,7 @@ export function AttachmentArchiveImportDialog({
 									>
 										{m.archive_import_open()}
 									</Button>
-									{openBlockedReason && (
+									{openBlockedReason && reading === 0 && (
 										<p
 											id={`${id}-open-blocked`}
 											className="text-sm text-muted-foreground"

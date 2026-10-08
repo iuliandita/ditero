@@ -2569,7 +2569,7 @@
 	"archive_import_description": "Deschide arhiva asociată după aplicarea importului de conținut salvat. Fișierele sunt criptate din nou pentru destinația aplicată.",
 	"archive_import_destination_reference": "Destinația aplicată:",
 	"archive_import_failed": "Operația a eșuat. Verifică fișierele, fraza de acces și accesul la destinație.",
-	"archive_import_empty_file": "Fișierul selectat nu are conținut. Alege un export JSON care conține date.",
+	"archive_import_empty_file": "Fișierul gol a fost respins. Orice selecție anterioară rămâne neschimbată. Alege un export JSON care conține date.",
 	"archive_import_limits": "Fiecare JSON trebuie să aibă cel mult 32 MiB. Arhiva permite până la 64 de fișiere și 16 MiB de date criptate.",
 	"archive_import_more": "Încarcă mai multe destinații",
 	"archive_import_open": "Deschide arhiva",

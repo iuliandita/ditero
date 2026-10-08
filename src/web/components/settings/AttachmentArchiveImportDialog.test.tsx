@@ -108,15 +108,24 @@ test.each([
 	);
 });
 test.each([
-	[false, 1, "Reading selected file..."],
-	[true, 1, "Working..."],
-])("pending state takes precedence %#", (busy, reading, reason) => {
-	Object.assign(fixture, { busy, reading });
+	false,
+	true,
+])("reading uses one linked status when busy=%s", (busy) => {
+	Object.assign(fixture, { busy, reading: 1 });
+	const html = markup();
+	const described = html.match(/aria-describedby="([^"]+-status)" disabled=""/);
+	expect(described).not.toBeNull();
+	expect(html).toContain(`id="${described?.[1]}"`);
+	expect(html.match(/Reading selected file\.\.\./g)).toHaveLength(1);
+	expect(html).not.toContain("-open-blocked");
+	expect(html).not.toContain("Choose the paired content JSON file.");
+});
+test("working without a read retains its linked explanation", () => {
+	Object.assign(fixture, { busy: true });
 	const html = markup();
 	expect(html.match(/<p id="[^"]+-open-blocked"[^>]*>([^<]*)<\/p>/)?.[1]).toBe(
-		reason,
+		"Working...",
 	);
-	expect(html).not.toContain("Choose the paired content JSON file.");
 });
 test("all prerequisites enable opening without a stale explanation", () => {
 	Object.assign(fixture, {
