@@ -195,9 +195,9 @@
 		{
 			"architecture": "x86_64",
 			"name": "tzdata",
-			"version": "2026d-r0",
-			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/tzdata-2026d-r0.apk",
-			"sha256": "e13f0f891c5e231bfb89727556bc05e9a44fce6389c6c1505f2772369da5a262"
+			"version": "2026e-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/tzdata-2026e-r0.apk",
+			"sha256": "7bc6ce864ab55efe009139c98d5626a4d1fc53a3f273b85002230c1b90d446c2"
 		},
 		{
 			"architecture": "aarch64",
@@ -377,9 +377,9 @@
 		{
 			"architecture": "aarch64",
 			"name": "tzdata",
-			"version": "2026d-r0",
-			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/tzdata-2026d-r0.apk",
-			"sha256": "361f751cc2100ff7c979372e9ac0a93bd932ac58580bb723df2ecbea36b96baf"
+			"version": "2026e-r0",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/tzdata-2026e-r0.apk",
+			"sha256": "fd091890b7042a28126f7312cdf531bdf9048b04f21d92e50d063590bcfa7bec"
 		}
 	]
 }

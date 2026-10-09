@@ -12,14 +12,12 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "7d580742f0d29de2e91a41c68251926ea77e516263e2d9abc063f2d4dabe6b10",
-			"docs": ["deploy/docker/aio/README.md"],
-			"note": "Document failed pinned-download filenames and HTTP statuses without changing approved artifacts or checksum verification."
+			"sourceDigest": "646ca03dd10000e63e9556561529f494708992d1e2a65100e26ec4489885c68a",
+			"noImpact": "Only the pinned build-time timezone package version and checksums change; operator configuration, deployment layout and service startup contracts stay the same."
 		},
 		"deployment": {
-			"sourceDigest": "d5877936bbf232c2baf2a16d9c454a211782f9d855925434b91bd7b8c0cf91df",
-			"docs": ["deploy/docker/aio/README.md"],
-			"note": "Document failed pinned-download filenames and HTTP statuses without changing approved artifacts or checksum verification."
+			"sourceDigest": "9890c80c4a7537caabe45a45a0b40e1c9390aadb51f2fe87e6c5e2fa6770a66c",
+			"noImpact": "Only the pinned build-time timezone package version and checksums change; operator configuration, deployment layout and service startup contracts stay the same."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
