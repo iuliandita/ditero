@@ -93,10 +93,12 @@ class PackageBoundary(unittest.TestCase):
             archive.writestr(m.CANDIDATE + ".tar.gz", packed)
             archive.writestr("SHA256SUMS", f"{m.sha(packed)}  {m.CANDIDATE}.tar.gz\n")
         with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(ValueError, "Expanded TAR exceeds bound"):
+            with self.assertRaises(m.GuardFailure) as caught:
                 m.validate_package(raw.getvalue(), Path(directory))
-            with self.assertRaisesRegex(ValueError, "Artifact exceeds bound"):
+            self.assertIs(caught.exception.guard, m.Guard.EXPANDED_TAR_EXCEEDS_BOUND)
+            with self.assertRaises(m.GuardFailure) as caught:
                 m.validate_package(b"x" * (m.LIMIT + 1), Path(directory))
+            self.assertIs(caught.exception.guard, m.Guard.ARTIFACT_EXCEEDS_BOUND)
 
     def test_inventory_and_source_pin_rejections(self):
         def changed_inventory(files, key, value):
@@ -198,7 +200,8 @@ finally:
             proof = json.loads((root / "receipt.json").read_bytes())
             self.assertFalse(proof["passed"])
             self.assertEqual(proof["cancellationSignal"], signal.SIGTERM)
-            self.assertEqual(set(proof), {"passed", "cancellationSignal"})
+            self.assertEqual(set(proof), {"passed", "cancellationSignal", "failureIdentifier", "exceptionType"})
+            self.assertEqual(proof["failureIdentifier"], "cancelled")
             with self.assertRaises(ProcessLookupError):
                 os.kill(int((root / "pid").read_text()), 0)
 
@@ -210,6 +213,71 @@ finally:
 
     def test_cancellation_at_child_registration(self):
         self.run_stub(registration_race=True)
+
+class FailureDiagnostics(unittest.TestCase):
+    def setUp(self):
+        m.CANCELLATION = None
+        m.COMMAND_DEADLINE = None
+
+    def tearDown(self):
+        m.CANCELLATION = None
+        m.COMMAND_DEADLINE = None
+
+    def test_static_guard_and_unexpected_exception_redaction(self):
+        with self.assertRaises(m.GuardFailure) as caught:
+            m.require(False, m.Guard.PUBLISHED_ZIP_SIZE_DIFFERS)
+        self.assertEqual(m.failure_context(caught.exception)["failureIdentifier"], "published-zip-size-differs")
+        hostile = "postgres://user:secret@host/private?token=credential"
+        self.assertNotIn(hostile, json.dumps(m.failure_context(ValueError(hostile))))
+        self.assertEqual(m.failure_context(ValueError(hostile))["failureIdentifier"], "unexpected-exception")
+
+    def test_failed_cli_receipt_has_static_stage_and_guard(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / "archive"
+            archive.mkdir()
+            (archive / "payload").write_bytes(b"secret-body")
+            output = root / "output"
+            result = subprocess.run(["python3", "-I", str(Path(m.__file__)), "--archive-dir", str(archive), "--source", str(root), "--arch", "amd64", "--output", str(output)], capture_output=True)
+            proof = json.loads((output / "receipt.json").read_bytes())
+            self.assertEqual(result.returncode, 1)
+            self.assertFalse(proof["passed"])
+            self.assertEqual(proof["stage"], "archive-size")
+            self.assertEqual(proof["failureIdentifier"], "published-zip-size-differs")
+            self.assertNotIn("secret-body", json.dumps(proof) + result.stderr.decode())
+
+    def test_nonzero_runtime_metadata_and_hostile_output(self):
+        import os
+        import sys
+        hostile = "postgres://credential:secret@host/private"
+        context = {"stage": m.Stage.ROLE_RUNTIME.value}
+        program = "import os;os.write(1,b'PASS fresh migration and API/Zero health\\nPASS secret-body\\n');os.write(2,b'AIO runtime phase failed: fresh startup\\n" + hostile + "\\nAIO runtime phase failed: secret-body\\n');raise SystemExit(7)"
+        with self.assertRaises(m.GuardFailure):
+            m.command([sys.executable, "-c", program, hostile], {**os.environ, "PRIVATE_SECRET": hostile}, 2, context=context)
+        proof = context["command"]
+        self.assertEqual(proof["exitCode"], 7)
+        self.assertTrue(proof["ownedCommandReaped"])
+        self.assertEqual(proof["completedPassMarkerCount"], 1)
+        self.assertEqual(proof["harnessPhase"], "fresh startup")
+        self.assertNotIn(hostile, json.dumps(context))
+        self.assertNotIn("secret-body", json.dumps(context))
+
+    def test_cap_and_timeout_are_distinct_and_reaped(self):
+        import os
+        import sys
+        for program, timeout, cap, flag, guard in (
+            ("import os,time;os.write(2,b'secret'*100);time.sleep(2)", 2, 16, "outputCapExceeded", "command-output-exceeds-bound"),
+            ("import time;time.sleep(2)", 0.1, 1024, "timedOut", "command-deadline-exceeded"),
+        ):
+            with self.subTest(flag=flag):
+                context = {"stage": m.Stage.ROLE_RUNTIME.value}
+                with self.assertRaises((m.GuardFailure, __import__('subprocess').TimeoutExpired)):
+                    m.command([sys.executable, "-c", program], os.environ, timeout, cap=cap, context=context)
+                self.assertTrue(context["command"][flag])
+                self.assertTrue(context["command"]["ownedCommandReaped"])
+                self.assertEqual(context["command"]["failureIdentifier"], guard)
+                self.assertNotIn("secret", json.dumps(context))
 
 if __name__ == "__main__":
     unittest.main()
