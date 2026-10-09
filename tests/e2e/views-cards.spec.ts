@@ -207,7 +207,7 @@ test("board: default grouping is by priority, cards are one surface with row cue
 	await expect(card).toBeVisible();
 	const source = card.getByTestId("task-source-context");
 	await expect(source).toHaveAttribute("title", `${workspaceName} · Personal`);
-	await expect(source.locator('[aria-hidden="true"]')).toHaveText(
+	await expect(source.locator(':scope > span[aria-hidden="true"]')).toHaveText(
 		workspaceName,
 	);
 	await expect(source.locator(".sr-only")).toHaveText(
