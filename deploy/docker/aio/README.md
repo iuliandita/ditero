@@ -12,6 +12,9 @@ Build from the repository root with `deploy/docker/Dockerfile.all-in-one`.
 `ZERO_RUNTIME_IMAGE` must be a qualified Alpine Ditero Zero runtime pinned by
 immutable digest; arbitrary upstream Zero images are not interchangeable. The
 Bun builder and architecture package artifacts retain their existing pins.
+Failed pinned downloads report the artifact filename and HTTP status. The build
+stops before installing that artifact; checksum verification remains required.
+
 The final image defaults to API UID1000. No runtime role switches UID, adds
 capabilities or repairs volume ownership. No supervisor or Docker socket runs
 inside the role containers. The bundle installs no supervisor.
