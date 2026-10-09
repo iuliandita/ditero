@@ -1,6 +1,6 @@
 # Roadmap
 
-> Updated: 2026-10-08 | Status: pre-v1, building on `develop`
+> Updated: 2026-10-09 | Status: pre-v1, building on `develop`
 >
 > Priorities change with feedback. This is current intent, not a promise.
 
@@ -38,9 +38,11 @@ qualification notes. Native delivery remains open in issue #346.
 
 Development happens on `develop`. The first published release was `0.0.1-alpha.1`;
 the current published alpha is
-[`0.0.1-alpha.11`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.11).
-Alpha 11 fixes native comment attachment uploads and strengthens documentation
-checks. The native desktop archive-import entry
+[`0.0.1-alpha.12`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.12).
+Alpha 12 clarifies the paired app-data and encrypted attachment downloads,
+keeps prepared exports available after a canceled or failed save, and waits for
+language-save confirmation before reloading.
+The native desktop archive-import entry
 remains unavailable pending transfer and recovery qualification. Broader native
 device qualification remains open.
 Published alphas package containers, Helm/Kustomize/Compose deployment files and
