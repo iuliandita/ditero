@@ -16,6 +16,12 @@ rows. Create separate personal scopes and the shared Maple household and Garden
 club workspaces. Keep credentials and session state outside this dataset. Never
 seed an existing instance containing user data.
 
+Create the personal Weekly priorities view owned by Casey Lane using the JSON
+filter and display configuration. Resolve each `personAlias` to its fresh user
+ID, then add the fresh view ID to Casey Lane's `user_pref.pinned_views`. The
+preference row ID is the user ID. This pin makes the view available in navigation;
+the assignee filter includes parent tasks and keeps subtasks in Task Detail.
+
 Capture real product UI without replacing its DOM or styles. The reference
 layouts use Task Detail at 1440x1000 and 390x1000, and the cross-workspace priority
 Board at 1440x1000. Remove only the disposable instance and its explicitly owned

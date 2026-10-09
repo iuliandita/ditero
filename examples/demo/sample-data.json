@@ -101,5 +101,55 @@
       "labels": [],
       "subtasks": []
     }
-  ]
+  ],
+  "view": {
+    "alias": "weekly-priorities",
+    "name": "Weekly priorities",
+    "scope": "personal",
+    "owner": "Casey Lane",
+    "pinnedFor": [
+      "Casey Lane"
+    ],
+    "filter": {
+      "op": "and",
+      "conditions": [
+        {
+          "field": "done",
+          "operator": "is",
+          "value": false
+        },
+        {
+          "op": "or",
+          "conditions": [
+            {
+              "field": "assignee",
+              "operator": "includes",
+              "personAlias": "Casey Lane"
+            },
+            {
+              "field": "assignee",
+              "operator": "includes",
+              "personAlias": "Alex Reed"
+            },
+            {
+              "field": "assignee",
+              "operator": "includes",
+              "personAlias": "Morgan Vale"
+            }
+          ]
+        }
+      ]
+    },
+    "display": {
+      "layout": "board",
+      "groupBy": "priority",
+      "sort": {
+        "field": "manual",
+        "dir": "asc"
+      },
+      "workspaceScope": {
+        "mode": "all"
+      }
+    }
+  }
 }
