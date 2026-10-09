@@ -18,7 +18,7 @@
 		"deployment": {
 			"sourceDigest": "9890c80c4a7537caabe45a45a0b40e1c9390aadb51f2fe87e6c5e2fa6770a66c",
 			"docs": ["deploy/docker/aio/README.md"],
-			"note": "Document the immutable published native runtime gate, sanitized receipts and ephemeral retained-volume lifetime."
+			"note": "Add fixed stage and guard identifiers plus sanitized command exit, bounds, cancellation and reaping metadata to failed published AIO qualification receipts; retain documented runtime scope, cleanup budgets and artifact layout."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
