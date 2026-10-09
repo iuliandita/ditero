@@ -189,3 +189,23 @@ with original data/credentials; startup/essential-child/guardian/controller-loss
 failures; first-cause preservation; graceful stop/reaping and log leak checks.
 arm64 and encrypted backup/restore remain separate gates. No complete support,
 publication or fresh runtime pass is claimed by this source redesign.
+
+### Published native runtime qualification
+
+The manually dispatched `aio-runtime-qualification.yml` workflow qualifies the
+immutable experimental publication from source
+`792ecf49ea1500f360a965a656bec5e43cb93303`, publication run `37883668165`,
+attempt 1. It downloads the pinned package and runs its exact source tests on
+independent native Ubuntu 24.04 AMD64 and ARM64 hosted runners. Each job has a
+75-minute bound, including the harnesses' full cleanup reserves. Parent
+cancellation drains the synchronous role harness and requests scoped wrapper
+cleanup before escalation. It does not build,
+publish, sign, or rescan an image. Package checksums, seven source files, image
+inventory and SPDX bytes are checked before pulling a platform digest anonymously.
+
+The existing role and wrapper tests exercise private credential permissions,
+TERM/HUP handling, guardian failure, child reaping and volume cleanup. Only a
+sanitized receipt is uploaded. Failed fixtures retain their volumes for the
+remaining lifetime of the disposable runner; these volumes are lost when that
+runner is decommissioned. This gate does not qualify backup/restore, production
+operation, or other open AIO support requirements.

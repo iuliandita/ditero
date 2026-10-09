@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""Offline controls for the published package boundary; no container calls."""
+import importlib.util
+import io
+import gzip
+import json
+from pathlib import Path
+import tarfile
+import tempfile
+import unittest
+import zipfile
+
+spec = importlib.util.spec_from_file_location("qualify", Path(__file__).with_name("qualify-published-aio.py"))
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+
+class PackageBoundary(unittest.TestCase):
+    def package(self, source, mutation=None, edit=None):
+        files = {name: b"candidate bytes\n" for name in m.FILES}
+        for name, data in files.items():
+            path = source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        identity = {"sourceSHA": m.SHA, "workflowRef": "iuliandita/ditero/.github/workflows/aio-experimental.yml@refs/heads/develop", "workflowRunURL": f"https://github.com/iuliandita/ditero/actions/runs/{m.RUN}"}
+        files["SOURCE.json"] = json.dumps({**identity, "experimental": True, "runtimeQualified": False, "workflow": "aio-experimental.yml", "sourceFiles": {n:m.sha(files[n]) for n in m.FILES}}).encode()
+        platforms = {}
+        for arch in ("amd64", "arm64"):
+            sbom = json.dumps({"spdxVersion": "SPDX-2.3"}).encode()
+            files[f"evidence/sbom-{arch}.spdx.json"] = sbom
+            platforms[arch] = {"sourceSHA": m.SHA, "platform": "linux/" + arch, "digest": "sha256:" + "a" * 64, "sbom": f"sbom-{arch}.spdx.json", "sbomSHA256": m.sha(sbom), **{k:True for k in ("registriesMatch", "scanPassed", "signed", "provenanceAttested")}}
+        files["IMAGE-INVENTORY.json"] = json.dumps({**identity, "candidate": m.CANDIDATE, "repositories": ["ghcr.io/iuliandita/ditero", "docker.io/iuliandita/ditero"], "indexDigest": "sha256:" + "b" * 64, "platforms": platforms, **{k:True for k in ("indexRegistriesMatch", "indexSigned", "indexProvenanceAttested")}}).encode()
+        if edit:
+            edit(files)
+        files["SHA256SUMS"] = "".join(f"{m.sha(data)}  {name}\n" for name,data in files.items()).encode()
+        packed = io.BytesIO()
+        with tarfile.open(fileobj=packed, mode="w:gz") as archive:
+            for name,data in files.items():
+                member = tarfile.TarInfo(name)
+                member.mode = 0o755 if name.endswith("run-bundle.sh") else 0o644
+                member.size = len(data)
+                if mutation:
+                    mutation(member)
+                archive.addfile(member, io.BytesIO(data) if member.isfile() else None)
+        raw = io.BytesIO()
+        with zipfile.ZipFile(raw, "w") as archive:
+            archive.writestr(m.CANDIDATE + ".tar.gz", packed.getvalue())
+            archive.writestr("SHA256SUMS", f"{m.sha(packed.getvalue())}  {m.CANDIDATE}.tar.gz\n")
+        return raw.getvalue()
+
+    def test_complete_closure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            contents, inventory = m.validate_package(self.package(source), source)
+            self.assertEqual(len(contents), 12)
+            self.assertEqual(set(inventory["platforms"]), {"amd64", "arm64"})
+
+    def test_reject_link_and_traversal(self):
+        def link(member):
+            if member.name == "LICENSE":
+                member.type = tarfile.SYMTYPE
+                member.linkname = "outside"
+        def traversal(member):
+            if member.name == "LICENSE":
+                member.name = "../LICENSE"
+        for mutation in (link, traversal):
+            with self.subTest(mutation=mutation.__name__), tempfile.TemporaryDirectory() as directory:
+                source = Path(directory)
+                with self.assertRaises(ValueError):
+                    m.validate_package(self.package(source, mutation), source)
+
+    def test_candidate_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            raw = self.package(source)
+            (source / "LICENSE").write_bytes(b"changed")
+            with self.assertRaises(ValueError):
+                m.validate_package(raw, source)
+
+    def test_mode_and_oversized_member(self):
+        def mode(member):
+            member.mode = 0o777
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            with self.assertRaises(ValueError):
+                m.validate_package(self.package(source, mode), source)
+        # Reject an oversized TAR declaration before its missing body is read.
+        member = tarfile.TarInfo("LICENSE")
+        member.mode = 0o644
+        member.size = m.LIMIT + 1
+        packed = gzip.compress(member.tobuf() + b"\0" * 1024)
+        raw = io.BytesIO()
+        with zipfile.ZipFile(raw, "w") as archive:
+            archive.writestr(m.CANDIDATE + ".tar.gz", packed)
+            archive.writestr("SHA256SUMS", f"{m.sha(packed)}  {m.CANDIDATE}.tar.gz\n")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "Expanded TAR exceeds bound"):
+                m.validate_package(raw.getvalue(), Path(directory))
+            with self.assertRaisesRegex(ValueError, "Artifact exceeds bound"):
+                m.validate_package(b"x" * (m.LIMIT + 1), Path(directory))
+
+    def test_inventory_and_source_pin_rejections(self):
+        def changed_inventory(files, key, value):
+            doc = json.loads(files["IMAGE-INVENTORY.json"])
+            doc[key] = value
+            files["IMAGE-INVENTORY.json"] = json.dumps(doc).encode()
+        for key,value in (("indexSigned", False), ("platforms", {}), ("indexDigest", "latest")):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as directory:
+                source = Path(directory)
+                raw = self.package(source, edit=lambda f:changed_inventory(f,key,value))
+                with self.assertRaises(ValueError):
+                    m.validate_package(raw, source)
+        def wrong_pin(files):
+            doc = json.loads(files["SOURCE.json"])
+            doc["sourceFiles"]["LICENSE"] = "0" * 64
+            files["SOURCE.json"] = json.dumps(doc).encode()
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            with self.assertRaises(ValueError):
+                m.validate_package(self.package(source, edit=wrong_pin), source)
+
+    def test_duplicate_zip_and_failed_receipt_sanitization(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            raw = self.package(source)
+            out = io.BytesIO(raw)
+            with zipfile.ZipFile(out, "a") as z:
+                z.writestr("unexpected", b"extra")
+            with self.assertRaises(ValueError):
+                m.validate_package(out.getvalue(), source)
+            # A failed archive is rejected before any subprocess; receipt is safe.
+            import subprocess
+            archive = source / "archive"
+            archive.mkdir()
+            (archive / "bad.zip").write_bytes(b"private-secret-payload")
+            receipt = source / "receipt"
+            proc = subprocess.run(["python3", "-I", str(Path(m.__file__)), "--archive-dir", str(archive), "--source", str(source), "--arch", "amd64", "--output", str(receipt)], capture_output=True)
+            self.assertEqual(proc.returncode, 1)
+            data = (receipt / "receipt.json").read_bytes()
+            self.assertFalse(json.loads(data)["passed"])
+            self.assertNotIn(b"private-secret-payload", data + proc.stdout + proc.stderr)
+
+    def test_duplicate_json(self):
+        with self.assertRaises(ValueError):
+            m.strict_json(b'{"passed":true,"passed":false}')
+
+class CancellationLifecycle(unittest.TestCase):
+    def run_stub(self, draining=False, registration_race=False):
+        import os
+        import signal
+        import subprocess
+        import time
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            child = root / "child.py"
+            child.write_text("""import os,signal,time
+from pathlib import Path
+root=Path(__file__).parent
+(root/'pid').write_text(str(os.getpid()))
+def cleanup(*_):
+ time.sleep(0.35)
+ (root/'cleaned').write_text('complete')
+ raise SystemExit(0)
+signal.signal(signal.SIGTERM,cleanup)
+(root/'ready').write_text('ready')
+""" + ("time.sleep(0.6)\ncleanup()\n" if draining else "while True: time.sleep(0.05)\n"))
+            parent = root / "parent.py"
+            parent.write_text(f"""import importlib.util,os,signal,time
+from pathlib import Path
+spec=importlib.util.spec_from_file_location('qualify',{str(Path(m.__file__))!r})
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+root=Path(__file__).parent
+for sig in (signal.SIGTERM,signal.SIGHUP): signal.signal(sig,m.request_cancellation)
+""" + ("""original=m.subprocess.Popen
+def spawn(*a,**k):
+ proc=original(*a,**k)
+ while not (root/'ready').exists(): time.sleep(0.01)
+ m.request_cancellation(signal.SIGTERM,None)
+ return proc
+m.subprocess.Popen=spawn
+""" if registration_race else "") + f"""try:
+ m.command(['python3',str(root/'child.py')],os.environ,3,cleanup_timeout=2,drain_on_cancel={draining!r})
+except m.Cancelled: pass
+finally:
+ m.save_receipt(root,{{'passed':True}})
+""")
+            proc = subprocess.Popen(["python3", "-I", str(parent)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            limit = time.monotonic() + 5
+            while not (root / "ready").exists() and time.monotonic() < limit:
+                time.sleep(0.01)
+            self.assertTrue((root / "ready").exists())
+            if not registration_race:
+                proc.send_signal(signal.SIGTERM)
+                time.sleep(0.15)
+                proc.send_signal(signal.SIGHUP)
+            out, err = proc.communicate(timeout=5)
+            self.assertEqual(proc.returncode, 0, err)
+            self.assertTrue((root / "cleaned").exists())
+            proof = json.loads((root / "receipt.json").read_bytes())
+            self.assertFalse(proof["passed"])
+            self.assertEqual(proof["cancellationSignal"], signal.SIGTERM)
+            self.assertEqual(set(proof), {"passed", "cancellationSignal"})
+            with self.assertRaises(ProcessLookupError):
+                os.kill(int((root / "pid").read_text()), 0)
+
+    def test_term_cleanup_and_repeated_signal(self):
+        self.run_stub()
+
+    def test_synchronous_harness_drains_on_cancel(self):
+        self.run_stub(draining=True)
+
+    def test_cancellation_at_child_registration(self):
+        self.run_stub(registration_race=True)
+
+if __name__ == "__main__":
+    unittest.main()
