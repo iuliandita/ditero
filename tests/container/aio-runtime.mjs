@@ -170,7 +170,6 @@ function rejection(config, name, expected) {
 			"run",
 			"--pull",
 			"never",
-			"--no-build",
 			"--no-deps",
 			"--rm",
 			"--name",

@@ -26,6 +26,37 @@ After independently qualifying and resolving that image, export `DITERO_AIO_IMAG
 to its immutable `registry/image@sha256:...` identity. All four roles use that
 same identity. The host wrapper refuses mutable tags and disables pulls/builds.
 
+## Experimental publication candidate
+
+The optional `Experimental AIO bundle` workflow prepares separate amd64 and arm64
+images. Publication requires a manual dispatch whose full 40-character commit SHA
+matches the dispatch ref, belongs to develop, and has passing latest same-commit
+CI, Security, Android, Desktop and release-packaging push runs. PR validation has
+read-only permissions and cannot publish images.
+
+Each platform is scanned before push, then signed and given a digest-specific
+SPDX SBOM attestation in GHCR and Docker Hub. Build provenance is attested in GHCR,
+matching the ordinary release publication pattern; identical content digests bind
+the Docker Hub copies. The multiarch index is also signed in both registries and
+has GHCR provenance. The candidate name includes the full source SHA, workflow run
+ID and attempt. It never moves standard image tags or creates release assets.
+A failed partial publication can leave experimental platform images; rerun all
+jobs for a new candidate rather than mixing evidence from different attempts.
+
+The workflow's 30-day bundle artifact contains the unchanged wrapper and Compose
+files, their guides, source identity, immutable image inventory, platform SBOMs
+and SHA256 checksums. Verify the artifact checksums and registry signatures,
+provenance and SBOM attestations using the exact workflow identity before use.
+Extract into a private directory, verify `SHA256SUMS` there, and select the
+inventory's `registry/image@sha256:...` index identity. Preload the selected image;
+the wrapper itself never pulls or builds. The extracted startup command is
+`sh deploy/docker/aio/run-bundle.sh`.
+
+This workflow and package are source candidates until an actual publication is
+verified. Publication alone does not establish wrapper-only TERM/HUP reaping,
+sustained health failure propagation, arm64 runtime support or backup/restore.
+Those require separate qualification against the exact published digest.
+
 ## Private role inputs
 
 Prepare four separate private host directories, owned by the corresponding
