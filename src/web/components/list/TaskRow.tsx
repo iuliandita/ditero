@@ -49,6 +49,10 @@ import { useConfirm } from "../ui/confirm.tsx";
 import { RowActions, useRowContextMenu } from "../ui/row-actions.tsx";
 import { CompletedBy } from "./CompletedBy.tsx";
 import { type RowSelection, SelectToggle } from "./SelectToggle.tsx";
+import {
+	TaskSourceContext,
+	type TaskSourceWorkspace,
+} from "./TaskSourceContext.tsx";
 import { type Due, taskActions } from "./taskActions.ts";
 
 export type { RowSelection } from "./SelectToggle.tsx";
@@ -281,6 +285,7 @@ export function TaskRow({
 	density,
 	list,
 	sourceContext,
+	sourceWorkspace,
 	parentContext,
 	occurrence,
 }: {
@@ -299,6 +304,7 @@ export function TaskRow({
 	// Shown when the surface mixes lists, so a row says where it lives.
 	list?: { title: string; icon: string | null } | null;
 	sourceContext?: string;
+	sourceWorkspace?: TaskSourceWorkspace;
 	parentContext?: string;
 	occurrence?: HabitOccurrence;
 }) {
@@ -625,16 +631,11 @@ export function TaskRow({
 									</span>
 								)}
 								{sourceContext && (
-									<span
-										className={cn(
-											"min-w-0 max-w-full wrap-anywhere text-xs text-muted-foreground",
-											dashboard && "line-clamp-2",
-										)}
-										title={dashboard ? sourceContext : undefined}
-										data-testid="task-source-context"
-									>
-										{sourceContext}
-									</span>
+									<TaskSourceContext
+										context={sourceContext}
+										workspace={sourceWorkspace}
+										compact={dashboard}
+									/>
 								)}
 								{labels.map((l) => (
 									<Badge

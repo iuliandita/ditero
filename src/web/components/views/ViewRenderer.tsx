@@ -51,6 +51,7 @@ import {
 	type RowSelection,
 	TaskRow,
 } from "../list/TaskRow.tsx";
+import type { TaskSourceWorkspace } from "../list/TaskSourceContext.tsx";
 import { TaskListSkeleton } from "../shell/AppSkeleton.tsx";
 import { EmptyState } from "../ui/empty-state.tsx";
 import { BoardLayout } from "./BoardLayout.tsx";
@@ -65,6 +66,7 @@ export type ViewEntry = {
 	listTitle: string;
 	listIcon: string | null;
 	sourceContext?: string;
+	sourceWorkspace?: TaskSourceWorkspace;
 	parentContext?: string;
 	occurrence?: HabitOccurrence;
 };
@@ -258,6 +260,10 @@ export function ViewRenderer(props: {
 				task,
 				occurrence,
 				sourceContext,
+				sourceWorkspace:
+					sourceContext && workspace
+						? { name: workspace.name, kind: workspace.kind ?? "shared" }
+						: undefined,
 				parentContext,
 				kind: (list.kind ?? "tasks") as ListKind,
 				listTitle: list.title || m.list_untitled_fallback(),
@@ -689,6 +695,7 @@ function ListLayout({
 			task={entry.task}
 			occurrence={entry.occurrence}
 			sourceContext={entry.sourceContext}
+			sourceWorkspace={entry.sourceWorkspace}
 			parentContext={entry.parentContext}
 			list={{ title: entry.listTitle, icon: entry.listIcon }}
 			kind={entry.kind}

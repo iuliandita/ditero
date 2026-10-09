@@ -2,9 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "85f60eb5b11f2fb0a92bda5e72a3f5ee97e550ea8432ee17dc71aecee9b05b59",
-			"docs": ["docs/runbooks/data-portability.md"],
-			"note": "Document selected file totals, latest per-file save outcomes, named status messages, and prepared-pair instructions alongside the existing export, retry, and confirmed language behavior."
+			"sourceDigest": "3dd81594f87afe6f7ee7719fa3d6a47279b468b122389aa01ebe3a54c0bf7517",
+			"noImpact": "Task rows and cards replace the visible Personal or Shared word with a person or group icon while retaining the workspace name and the existing localized tooltip and screen-reader context. Task behavior, permissions, settings and documented workflows are unchanged."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",

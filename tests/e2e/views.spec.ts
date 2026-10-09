@@ -469,12 +469,14 @@ test("keys: j/k move task-row focus, x toggles done, o opens detail", async ({
 	const detail = page.getByRole("dialog");
 	await expect(detail.getByLabel("Task title")).toBeVisible();
 	await page.keyboard.press("Escape");
-	await expect(detail).toBeHidden({ timeout: 15000 });
+	await expect(page.getByTestId("task-detail")).toHaveCount(0, {
+		timeout: 15000,
+	});
+	await expect(navs.nth(0)).toBeFocused();
 
-	// x toggles the focused row's checkbox done. Re-focus row 0 deterministically
-	// first (Escape may not restore focus to a nav element).
-	await blur(page);
-	await page.keyboard.press("j");
+	// The j/k assertions above cover navigation; x starts from an explicit row.
+	await navs.nth(0).focus();
+	await expect(navs.nth(0)).toBeFocused();
 	await page.keyboard.press("x");
 	await expect(
 		page.getByTestId("list").getByRole("checkbox", { name: "Row A" }),
