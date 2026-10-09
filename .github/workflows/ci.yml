@@ -229,6 +229,8 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
           version: "v0.70.0"
+      - name: Qualify experimental bundle runtime
+        run: node tests/container/aio-runtime.mjs
       # Preserve source builds and run the container smokes sequentially.
       - run: tests/container/compose.sh
       - run: tests/container/zero.sh
