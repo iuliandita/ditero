@@ -54,11 +54,21 @@ function command(
 		timeout: remaining,
 		maxBuffer: 8 * 1024 * 1024,
 	});
-	// Do not print process output: a future runtime error could contain credentials.
+	// Keep diagnostics bounded and redact the fixture's generated credentials.
 	if (result.error)
 		throw new Error(`${program} transport failed: ${result.error.code}`);
-	if (!allowFailure && result.status !== 0)
-		throw new Error(`${phase}: ${program} failed with status ${result.status}`);
+	if (!allowFailure && result.status !== 0) {
+		const stderr = (result.stderr || "")
+			.replace(/[a-f0-9]{64}/gi, "[redacted]")
+			.replace(/[A-Za-z0-9+/]{43}=/g, "[redacted]")
+			.trim();
+		const detail = stderr
+			? `; stderr: ${stderr.slice(0, 4096)}${stderr.length > 4096 ? " [truncated]" : ""}`
+			: "";
+		throw new Error(
+			`${phase}: ${program} failed with status ${result.status}${detail}`,
+		);
+	}
 	return result;
 }
 const docker = (args, options) => command("docker", args, options);
