@@ -209,6 +209,28 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      - name: Bundle source lifecycle controls
+        run: node tests/container/aio-bundle.mjs
+      - name: Build experimental bundle image
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          ZERO_RUNTIME_IMAGE: ghcr.io/iuliandita/ditero@sha256:41de0920d3cc704aa38983e25f358025684210b63405258ebc989eeefe6ac24d
+        run: |
+          docker build --platform linux/amd64 --file deploy/docker/Dockerfile.all-in-one \
+            --build-arg ZERO_RUNTIME_IMAGE="$ZERO_RUNTIME_IMAGE" \
+            --build-arg DITERO_GIT_SHA="$SOURCE_SHA" \
+            --build-arg DITERO_CHANNEL=aio-candidate --tag ditero-aio:check .
+          docker image inspect ditero-aio:check
+      - name: Scan experimental bundle image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ditero-aio:check
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          version: "v0.70.0"
+      - name: Qualify experimental bundle runtime
+        run: node tests/container/aio-runtime.mjs
       # Preserve source builds and run the container smokes sequentially.
       - run: tests/container/compose.sh
       - run: tests/container/zero.sh
