@@ -14,7 +14,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // This is deliberately a separate CI milestone: never run it against operator data.
-const root = fileURLToPath(new URL("../../", import.meta.url));
+const root =
+	process.env.DITERO_AIO_TEST_SOURCE ||
+	fileURLToPath(new URL("../../", import.meta.url));
 const project = `ditero-aio-runtime-${randomBytes(8).toString("hex")}`;
 const fixture = mkdtempSync(join(tmpdir(), `${project}-`));
 chmodSync(fixture, 0o700);
@@ -395,6 +397,7 @@ try {
 	);
 	const wrongMountDir = join(fixture, "wrong-mount");
 	mkdirSync(wrongMountDir, { mode: 0o755 });
+	chmodSync(wrongMountDir, 0o755);
 	sudo(["chown", "1002:1002", wrongMountDir]);
 	const wrongMount = structuredClone(config);
 	const mount = wrongMount.services.api.volumes.find(

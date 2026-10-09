@@ -145,6 +145,62 @@ class PackageBoundary(unittest.TestCase):
         with self.assertRaises(ValueError):
             m.strict_json(b'{"passed":true,"passed":false}')
 
+class ReviewedRuntimeHarness(unittest.TestCase):
+    def test_reviewed_pin_and_canonical_candidate_asset_binding(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            candidate = source / "candidate"
+            candidate.mkdir()
+            (candidate / "asset").write_text("candidate assets")
+            (source / "asset").write_text("CI assets")
+            argv, env = m.role_runtime_command(candidate / ".." / "candidate", "immutable-image", {})
+            self.assertEqual(argv, ["node", str(m.RUNTIME_HARNESS)])
+            self.assertEqual(env["DITERO_AIO_TEST_IMAGE"], "immutable-image")
+            self.assertEqual(env["DITERO_AIO_TEST_SOURCE"], str(candidate.resolve()))
+            harness = m.RUNTIME_HARNESS.read_text()
+            root = harness[harness.index("const root ="):harness.index("const project =")]
+            probe = source / "tests/container/root.mjs"
+            probe.parent.mkdir(parents=True)
+            probe.write_text('import { fileURLToPath } from "node:url";\nimport { readFileSync } from "node:fs";\nimport { join } from "node:path";\n' + root + 'console.log(readFileSync(join(root, "asset"), "utf8"));\n')
+            for binding, expected in ((env, "candidate assets"), ({}, "CI assets")):
+                with self.subTest(binding=bool(binding)):
+                    result = subprocess.run(["node", str(probe)], env=binding, capture_output=True, check=True)
+                    self.assertEqual(result.stdout.decode().strip(), expected)
+
+    def test_tampered_and_symlink_reviewed_harness_rejected(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            actual = root / "runtime.mjs"
+            actual.write_bytes(m.RUNTIME_HARNESS.read_bytes())
+            link = root / "link.mjs"
+            link.symlink_to(actual)
+            with patch.object(m, "RUNTIME_HARNESS", link):
+                with self.assertRaises(m.GuardFailure) as caught:
+                    m.role_runtime_command(root, "immutable-image", {})
+                self.assertIs(caught.exception.guard, m.Guard.REVIEWED_RUNTIME_HARNESS_PIN_DIFFERS)
+            actual.write_bytes(actual.read_bytes() + b"\n// changed\n")
+            with patch.object(m, "RUNTIME_HARNESS", actual):
+                with self.assertRaises(m.GuardFailure) as caught:
+                    m.role_runtime_command(root, "immutable-image", {})
+                self.assertIs(caught.exception.guard, m.Guard.REVIEWED_RUNTIME_HARNESS_PIN_DIFFERS)
+
+    def test_actual_wrong_mount_fixture_mode_under_both_umasks(self):
+        import subprocess
+        harness = m.RUNTIME_HARNESS.read_text()
+        fixture = harness[harness.index('\tconst wrongMountDir ='):harness.index('\tsudo(["chown", "1002:1002", wrongMountDir]);')]
+        with tempfile.TemporaryDirectory() as directory:
+            for mask in (0o077, 0o022):
+                for corrected in (True, False):
+                    with self.subTest(mask=oct(mask), corrected=corrected):
+                        branch = fixture if corrected else fixture.replace('\tchmodSync(wrongMountDir, 0o755);\n', '')
+                        script = 'import { mkdirSync, chmodSync, statSync } from "node:fs"; import { join } from "node:path";\n' + f'process.umask({mask}); const fixture = process.argv[1];\n' + branch + 'console.log(statSync(wrongMountDir).mode & 0o777);'
+                        target = Path(directory) / f"{mask}-{corrected}"
+                        target.mkdir()
+                        result = subprocess.run(["node", "--input-type=module", "-e", script, str(target)], capture_output=True, check=True)
+                        self.assertEqual(int(result.stdout), 0o755 if corrected or mask == 0o022 else 0o700)
+
 class CancellationLifecycle(unittest.TestCase):
     def run_stub(self, draining=False, registration_race=False):
         import os

@@ -29,6 +29,8 @@ FILES = ("deploy/docker/aio/run-bundle.sh", "deploy/docker/aio/compose.yml",
          "docs/runbooks/database-roles.md", "docs/runbooks/encryption.md")
 TESTS = {"aio-runtime.mjs": "045dc4cd8a40ead1cd9eea10f6dd9f0c4c2215a96abd62df57df9ab0be81d50a",
          "aio-wrapper-runtime.mjs": "b2d97c8311728528a5ae791236509cc50e7da539d826f222af5b2740d03b8530"}
+RUNTIME_HARNESS_SHA256 = "4c60c42de1576cefed443c92d4eda164fdee2fdd79546ba8a243b5bafd953785"
+RUNTIME_HARNESS = Path(__file__).resolve().parent.parent / "tests/container/aio-runtime.mjs"
 COMMAND_DEADLINE = None
 CANCELLATION = None
 
@@ -51,6 +53,7 @@ class Guard(str, Enum):
     BOUNDED_IMAGE_DESCRIPTORS_REQUIRED = "bounded-image-descriptors-required"
     CANDIDATE_RUNTIME_TEST_PIN_DIFFERS = "candidate-runtime-test-pin-differs"
     CANDIDATE_SOURCE_BYTES_DIFFER = "candidate-source-bytes-differ"
+    REVIEWED_RUNTIME_HARNESS_PIN_DIFFERS = "reviewed-runtime-harness-pin-differs"
     COMMAND_DEADLINE_EXCEEDED = "command-deadline-exceeded"
     COMMAND_FAILED_RUNTIME_OUTPUT_WITHHELD = "command-failed-runtime-output-withheld"
     COMMAND_OUTPUT_EXCEEDS_BOUND = "command-output-exceeds-bound"
@@ -147,6 +150,10 @@ def require(value, guard):
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+def role_runtime_command(source, image, env):
+    require(RUNTIME_HARNESS.is_file() and not RUNTIME_HARNESS.is_symlink() and sha(RUNTIME_HARNESS.read_bytes()) == RUNTIME_HARNESS_SHA256, Guard.REVIEWED_RUNTIME_HARNESS_PIN_DIFFERS)
+    return ["node", str(RUNTIME_HARNESS)], {**env, "DITERO_AIO_TEST_IMAGE": image, "DITERO_AIO_TEST_SOURCE": str(source.resolve())}
 
 def strict_json(data):
     def unique(pairs):
@@ -355,7 +362,9 @@ def main():
                 path.write_bytes(data)
                 path.chmod(0o755 if name.endswith("run-bundle.sh") else 0o644)
             receipt["stage"] = Stage.ROLE_RUNTIME.value
-            runtime = command(["node", str(args.source / "tests/container/aio-runtime.mjs")], {**env, "DITERO_AIO_TEST_IMAGE": image}, 16 * 60, cleanup_timeout=180, drain_on_cancel=True, context=receipt)
+            runtime_argv, runtime_env = role_runtime_command(args.source, image, env)
+            receipt.update(runtimeHarnessSHA256=RUNTIME_HARNESS_SHA256, runtimeAssetSourceSHA792=SHA)
+            runtime = command(runtime_argv, runtime_env, 16 * 60, cleanup_timeout=180, drain_on_cancel=True, context=receipt)
             require(re.search(rb"^AIO actual runtime: [1-9][0-9]* checks passed$", runtime, re.MULTILINE), Guard.PINNED_RUNTIME_FINAL_COMPLETION_REQUIRED)
             receipt.update(runtimeExitStatus=0, image=image, imageID=loaded["Id"], payloadBytes=payload, runtimeOutputSHA256=sha(runtime), runtimeOutputBytes=len(runtime))
             receipt["stage"] = Stage.WRAPPER_RUNTIME.value
