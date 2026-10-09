@@ -1,0 +1,118 @@
+x-role: &role
+  image: ${DITERO_AIO_IMAGE:?Set the immutable bundle image digest}
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: "no"
+  cpus: 1.0
+  mem_limit: 1g
+  pids_limit: 256
+  stop_grace_period: 30s
+  logging:
+    driver: local
+    options: {max-size: 10m, max-file: "2"}
+  networks: [backend]
+
+services:
+  postgres:
+    <<: *role
+    user: "1001:1001"
+    command: [postgres]
+    tmpfs: ["/run:rw,noexec,nosuid,nodev,size=64m,uid=1001,gid=1001,mode=700", "/tmp:rw,noexec,nosuid,nodev,size=64m,uid=1001,gid=1001,mode=700"]
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/credentials/POSTGRES_PASSWORD
+      DITERO_MIGRATION_DB_PASSWORD_FILE: /run/credentials/DITERO_MIGRATION_DB_PASSWORD
+      DITERO_RUNTIME_DB_PASSWORD_FILE: /run/credentials/DITERO_RUNTIME_DB_PASSWORD
+      ZERO_DATABASE_PASSWORD_FILE: /run/credentials/ZERO_DATABASE_PASSWORD
+    volumes:
+      - pg18:/var/lib/ditero/pg18
+      - type: bind
+        source: ${AIO_POSTGRES_SECRETS:?Set the postgres private directory}
+        target: /run/credentials
+        read_only: true
+        bind: {create_host_path: false}
+    healthcheck:
+      test: [CMD, /usr/local/lib/ditero-aio/healthcheck.sh, postgres]
+      interval: 5s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+  migrate:
+    <<: *role
+    user: "1000:1000"
+    command: [migrate]
+    tmpfs: ["/run:rw,noexec,nosuid,nodev,size=32m,uid=1000,gid=1000,mode=700", "/tmp:rw,noexec,nosuid,nodev,size=32m,uid=1000,gid=1000,mode=700"]
+    environment:
+      DITERO_MIGRATION_DB_PASSWORD_FILE: /run/credentials/DITERO_MIGRATION_DB_PASSWORD
+    volumes:
+      - type: bind
+        source: ${AIO_MIGRATE_SECRETS:?Set the migration private directory}
+        target: /run/credentials
+        read_only: true
+        bind: {create_host_path: false}
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  api:
+    <<: *role
+    user: "1000:1000"
+    command: [api]
+    tmpfs: ["/run:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=700", "/tmp:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=700"]
+    environment:
+      DITERO_RUNTIME_DB_PASSWORD_FILE: /run/credentials/DITERO_RUNTIME_DB_PASSWORD
+      BETTER_AUTH_SECRET_FILE: /run/credentials/BETTER_AUTH_SECRET
+      DITERO_ENCRYPTION_KEY_FILE: /run/credentials/DITERO_ENCRYPTION_KEY
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set the public application origin}
+      PUBLIC_ZERO_URL: ${PUBLIC_ZERO_URL:?Set the public sync origin}
+    volumes:
+      - attachments:/var/lib/ditero/attachments
+      - type: bind
+        source: ${AIO_API_SECRETS:?Set the API private directory}
+        target: /run/credentials
+        read_only: true
+        bind: {create_host_path: false}
+    ports: ["127.0.0.1:${AIO_APP_PORT:-3000}:3000"]
+    networks: [backend, outbound]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, /usr/local/lib/ditero-aio/healthcheck.sh, api]
+      interval: 10s
+      timeout: 20s
+      start_period: 60s
+      retries: 3
+
+  zero:
+    <<: *role
+    user: "1002:1002"
+    command: [zero]
+    tmpfs: ["/run:rw,noexec,nosuid,nodev,size=64m,uid=1002,gid=1002,mode=700", "/tmp:rw,noexec,nosuid,nodev,size=64m,uid=1002,gid=1002,mode=700"]
+    environment:
+      ZERO_DATABASE_PASSWORD_FILE: /run/credentials/ZERO_DATABASE_PASSWORD
+      ZERO_ADMIN_PASSWORD_FILE: /run/credentials/ZERO_ADMIN_PASSWORD
+    volumes:
+      - zero:/var/lib/ditero/zero
+      - type: bind
+        source: ${AIO_ZERO_SECRETS:?Set the Zero private directory}
+        target: /run/credentials
+        read_only: true
+        bind: {create_host_path: false}
+    ports: ["127.0.0.1:${AIO_ZERO_PORT:-4848}:4848"]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, /usr/local/lib/ditero-aio/healthcheck.sh, zero]
+      interval: 10s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+networks:
+  backend: {internal: true}
+  outbound: {}
+volumes:
+  pg18: {}
+  zero: {}
+  attachments: {}

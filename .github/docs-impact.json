@@ -12,14 +12,14 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "d7ff9cb4a789aa5f0299b4a74a62c9e429f0bbbb7ceb32e6ca9f3e7d3c791bad",
-			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Align prerelease deployment image versions without adding operator settings."
+			"sourceDigest": "feee6522667962f87346a93d816e390a353fbb33c4d2930df92c25e9748f096e",
+			"docs": ["deploy/docker/aio/README.md"],
+			"note": "Document the optional one-image role-container bundle, private per-role credentials, fail-closed storage ownership, foreground lifecycle, and separate runtime qualification limits."
 		},
 		"deployment": {
-			"sourceDigest": "0411f8f89826478e102aada02109832a77114d2a6a29ddb249a87c3c0770b95e",
-			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Align chart metadata and both packaged app/sync image examples with alpha.12; retain existing qualification limits."
+			"sourceDigest": "913713f7f4b7537dbfa024e6aab825be6e89682f604124c81d9371aac8abad9d",
+			"docs": ["deploy/docker/aio/README.md"],
+			"note": "Document the optional one-image role-container bundle, private per-role credentials, fail-closed storage ownership, foreground lifecycle, and separate runtime qualification limits."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
