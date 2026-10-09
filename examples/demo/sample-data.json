@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "clockAnchor": "2026-10-06T12:00:00.000Z",
+  "locale": "en",
+  "sourceTag": "v0.0.1-alpha.12",
+  "sourceSHA": "28fc7056f852ee13ec8132356bf35d3133e91595",
+  "people": [
+    "Casey Lane",
+    "Alex Reed",
+    "Morgan Vale"
+  ],
+  "viewName": "Weekly priorities",
+  "tasks": [
+    {
+      "title": "Plan picnic",
+      "scope": "Maple household shared",
+      "priority": 3,
+      "dueOffsetDays": 0,
+      "notes": "Bring lunch and a blanket. Meet at the park at noon.",
+      "assignees": [
+        "Casey Lane",
+        "Alex Reed"
+      ],
+      "labels": [
+        "Family"
+      ],
+      "subtasks": [
+        {
+          "title": "Check the weather",
+          "done": true
+        },
+        {
+          "title": "Pack sandwiches",
+          "done": false
+        },
+        {
+          "title": "Bring picnic blanket",
+          "done": false
+        }
+      ]
+    },
+    {
+      "title": "Book bike service",
+      "scope": "personal",
+      "priority": 3,
+      "dueOffsetDays": 1,
+      "notes": null,
+      "assignees": [
+        "Alex Reed"
+      ],
+      "labels": [],
+      "subtasks": []
+    },
+    {
+      "title": "Plant herbs",
+      "scope": "Garden club shared",
+      "priority": 2,
+      "dueOffsetDays": 3,
+      "notes": null,
+      "assignees": [
+        "Morgan Vale"
+      ],
+      "labels": [],
+      "subtasks": []
+    },
+    {
+      "title": "Choose meals",
+      "scope": "Maple household shared",
+      "priority": 2,
+      "dueOffsetDays": 4,
+      "notes": null,
+      "assignees": [
+        "Casey Lane"
+      ],
+      "labels": [
+        "Family"
+      ],
+      "subtasks": []
+    },
+    {
+      "title": "Sort cupboard",
+      "scope": "personal",
+      "priority": 1,
+      "dueOffsetDays": 5,
+      "notes": null,
+      "assignees": [
+        "Alex Reed"
+      ],
+      "labels": [],
+      "subtasks": []
+    },
+    {
+      "title": "Water plants",
+      "scope": "Garden club shared",
+      "priority": 0,
+      "dueOffsetDays": 2,
+      "notes": null,
+      "assignees": [
+        "Morgan Vale"
+      ],
+      "labels": [],
+      "subtasks": []
+    }
+  ]
+}
