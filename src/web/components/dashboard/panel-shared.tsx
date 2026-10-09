@@ -83,6 +83,9 @@ export function usePanelEntries(
 				const workspace = workspaces.find((w) => w.id === list?.workspaceId);
 				return {
 					...entry,
+					sourceWorkspace: workspace
+						? { name: workspace.name, kind: workspace.kind ?? "shared" }
+						: undefined,
 					sourceContext: workspace
 						? workspace.kind === "personal"
 							? m.scope_source_personal({ workspace: workspace.name })
@@ -210,6 +213,7 @@ function PanelRows({
 						task={e.task}
 						occurrence={e.occurrence}
 						sourceContext={e.sourceContext}
+						sourceWorkspace={e.sourceWorkspace}
 						kind={e.kind as ListKind}
 						subtasks={[]}
 						labels={e.labels}

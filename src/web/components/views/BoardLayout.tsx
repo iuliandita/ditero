@@ -39,6 +39,7 @@ function CardBody({
 			task={entry.task}
 			occurrence={entry.occurrence}
 			sourceContext={entry.sourceContext}
+			sourceWorkspace={entry.sourceWorkspace}
 			parentContext={entry.parentContext}
 			kind={entry.kind}
 			subtasks={[]}

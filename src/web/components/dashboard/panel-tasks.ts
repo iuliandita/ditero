@@ -12,13 +12,13 @@ import {
 	type FilterTask,
 	resolveWorkspaceScope,
 } from "../../../domain/view-filter.ts";
-
 import {
 	type HabitOccurrence,
 	habitOccurrence,
 	matchesOccurrenceFilter,
 	type OccurrenceLog,
 } from "../../views/habit-occurrence.ts";
+import type { TaskSourceWorkspace } from "../list/TaskSourceContext.tsx";
 
 export type PanelTaskFields = {
 	id: string;
@@ -43,6 +43,7 @@ export type PanelEntry<T, L> = {
 	labels: L[];
 	occurrence?: HabitOccurrence;
 	sourceContext?: string;
+	sourceWorkspace?: TaskSourceWorkspace;
 };
 
 export function matchingTasks<
