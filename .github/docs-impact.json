@@ -12,14 +12,14 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "feee6522667962f87346a93d816e390a353fbb33c4d2930df92c25e9748f096e",
+			"sourceDigest": "7d580742f0d29de2e91a41c68251926ea77e516263e2d9abc063f2d4dabe6b10",
 			"docs": ["deploy/docker/aio/README.md"],
-			"note": "Document the optional one-image role-container bundle, private per-role credentials, fail-closed storage ownership, foreground lifecycle, and separate runtime qualification limits."
+			"note": "Document failed pinned-download filenames and HTTP statuses without changing approved artifacts or checksum verification."
 		},
 		"deployment": {
-			"sourceDigest": "913713f7f4b7537dbfa024e6aab825be6e89682f604124c81d9371aac8abad9d",
+			"sourceDigest": "d5877936bbf232c2baf2a16d9c454a211782f9d855925434b91bd7b8c0cf91df",
 			"docs": ["deploy/docker/aio/README.md"],
-			"note": "Document the optional one-image role-container bundle, private per-role credentials, fail-closed storage ownership, foreground lifecycle, and separate runtime qualification limits."
+			"note": "Document failed pinned-download filenames and HTTP statuses without changing approved artifacts or checksum verification."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",

@@ -17,7 +17,10 @@ async function fetchPinned(url, sha, path) {
 	)
 		throw Error("official artifact URL required");
 	const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
-	if (!response.ok) throw Error("artifact unavailable");
+	if (!response.ok)
+		throw Error(
+			`artifact unavailable: ${u.pathname.split("/").pop()} (HTTP ${response.status})`,
+		);
 	const bytes = Buffer.from(await response.arrayBuffer());
 	if (createHash("sha256").update(bytes).digest("hex") !== sha)
 		throw Error("artifact hash mismatch");
