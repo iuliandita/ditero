@@ -28,7 +28,7 @@ COPY package.json bun.lock ./
 COPY patches ./patches
 RUN bun install --frozen-lockfile --production --omit=optional --omit=peer
 
-FROM rocicorp/zero:1.9.0@sha256:f80683bf3ddf08be26c68ddd94589fada29a0b8a4597668b090006c09041d4cd AS zero-base
+FROM rocicorp/zero:1.10.0@sha256:745c80f13eb53f5b74e5423d9051269aaa26cd32333fc8da4229b03800d58437 AS zero-base
 
 # Keep upstream's PostgreSQL patch, but rebuild its dependency tree
 # from the reviewed lock so the vulnerable packages are actually replaced.
@@ -43,7 +43,7 @@ RUN pnpm install --prod --frozen-lockfile
 COPY deploy/docker/zero-runtime/verify.mjs ./
 
 # Rebuild the exact backup sources Zero ships, preserving both backup formats.
-FROM golang:1.27.1-alpine3.23@sha256:0908ac9b9319e09d7c238aabe914e0395c51d63c4e3d0ae8c554fda9158a5769 AS litestream-build
+FROM golang:1.27.2-alpine3.23@sha256:9e45f0eb4a63ed37ad6e604950407558b7c738e34e015ae77a5d4ad369cde079 AS litestream-build
 RUN apk add --no-cache build-base
 ENV GOTOOLCHAIN=local
 WORKDIR /src
