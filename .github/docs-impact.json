@@ -12,11 +12,13 @@
 		},
 		"configuration": {
 			"sourceDigest": "18afe9800429856d003397c1e6d1caa9beb1f816ce7bd776ad3b1b2f80866309",
-			"noImpact": "Patch both pinned Litestream module graphs to golang.org/x/net v0.60.0 and its required minimum dependencies, and the shared Go build image to 1.27.2 for the HTTP/2 denial-of-service fix. Source archive pins, Alpine variant, backup formats, restore commands, operator configuration, and deployment layout remain unchanged."
+			"docs": ["deploy/docker/zero-runtime/litestream/README.md"],
+			"note": "Document the explicit golang.org/x/net v0.60.0 update for both Litestream variants and the pinned Go 1.27.2 build toolchain. Its required minimum dependency upgrades preserve the existing source revisions, backup formats, operator settings, and deployment layout."
 		},
 		"deployment": {
 			"sourceDigest": "c61e1f722d639629bff3b34506193744da13b93a21960f32ee0e89949f96023f",
-			"noImpact": "Patch both pinned Litestream module graphs to golang.org/x/net v0.60.0 and its required minimum dependencies, and the shared Go build image to 1.27.2 for the HTTP/2 denial-of-service fix. Source archive pins, Alpine variant, backup formats, restore commands, operator configuration, and deployment layout remain unchanged."
+			"docs": ["deploy/docker/zero-runtime/litestream/README.md"],
+			"note": "Document the explicit golang.org/x/net v0.60.0 update for both Litestream variants and the pinned Go 1.27.2 build toolchain. Its required minimum dependency upgrades preserve the existing source revisions, backup formats, operator settings, and deployment layout."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
