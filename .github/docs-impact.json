@@ -12,12 +12,18 @@
 		},
 		"configuration": {
 			"sourceDigest": "98c074637a6c93144384e38b13f9c4f475b69c8a155eef2e0f35df84b44b1709",
-			"docs": ["deploy/docker/zero-runtime/litestream/README.md", "deploy/docker/aio/README.md"],
+			"docs": [
+				"deploy/docker/zero-runtime/litestream/README.md",
+				"deploy/docker/aio/README.md"
+			],
 			"note": "Document both Litestream security updates and the optional AIO binary source. CI builds same-commit amd64 binaries while retaining qualified immutable Zero base assertions, strict final-image scans and runtime smokes. Publication defaults and existing backup formats remain unchanged; current-source checks do not remediate old published digests."
 		},
 		"deployment": {
 			"sourceDigest": "91140872f4f84c604cf5ba484ea508460aa2d10e444f09a0744f90c14226a658",
-			"docs": ["deploy/docker/zero-runtime/litestream/README.md", "deploy/docker/aio/README.md"],
+			"docs": [
+				"deploy/docker/zero-runtime/litestream/README.md",
+				"deploy/docker/aio/README.md"
+			],
 			"note": "Document both Litestream security updates and the optional AIO binary source. CI builds same-commit amd64 binaries while retaining qualified immutable Zero base assertions, strict final-image scans and runtime smokes. Publication defaults and existing backup formats remain unchanged; current-source checks do not remediate old published digests."
 		},
 		"native": {
