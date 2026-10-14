@@ -11,13 +11,12 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "646ca03dd10000e63e9556561529f494708992d1e2a65100e26ec4489885c68a",
-			"noImpact": "Only the pinned build-time timezone package version and checksums change; operator configuration, deployment layout and service startup contracts stay the same."
+			"sourceDigest": "18afe9800429856d003397c1e6d1caa9beb1f816ce7bd776ad3b1b2f80866309",
+			"noImpact": "Patch both pinned Litestream module graphs to golang.org/x/net v0.60.0 and its required minimum dependencies, and the shared Go build image to 1.27.2 for the HTTP/2 denial-of-service fix. Source archive pins, Alpine variant, backup formats, restore commands, operator configuration, and deployment layout remain unchanged."
 		},
 		"deployment": {
-			"sourceDigest": "9890c80c4a7537caabe45a45a0b40e1c9390aadb51f2fe87e6c5e2fa6770a66c",
-			"docs": ["deploy/docker/aio/README.md"],
-			"note": "Add fixed stage and guard identifiers plus sanitized command exit, bounds, cancellation and reaping metadata to failed published AIO qualification receipts; retain documented runtime scope, cleanup budgets and artifact layout."
+			"sourceDigest": "c61e1f722d639629bff3b34506193744da13b93a21960f32ee0e89949f96023f",
+			"noImpact": "Patch both pinned Litestream module graphs to golang.org/x/net v0.60.0 and its required minimum dependencies, and the shared Go build image to 1.27.2 for the HTTP/2 denial-of-service fix. Source archive pins, Alpine variant, backup formats, restore commands, operator configuration, and deployment layout remain unchanged."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
