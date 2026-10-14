@@ -343,3 +343,5 @@ branch/PR workflow and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 Self-hosted todo app, local-first task manager, Todoist alternative, shared shopping
 lists, chore tracker, habit tracker, family organizer, and group task management.
+
+Made by [Iulian Dita](https://iuliandita.com). [Other projects](https://iuliandita.com/projects/).

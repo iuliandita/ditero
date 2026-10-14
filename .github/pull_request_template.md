@@ -8,6 +8,8 @@
 
 <!-- How did you verify this works? -->
 
+- [ ] Documentation static, staged and full PR-range checks pass (see CONTRIBUTING.md)
+- [ ] `bun run i18n:compile` and `bun run i18n:validate` pass
 - [ ] `bun run lint` passes
 - [ ] `bun run typecheck` passes
 - [ ] `bun run test` passes

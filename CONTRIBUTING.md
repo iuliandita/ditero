@@ -1,6 +1,8 @@
 # Contributing to Ditero
 
-Ditero is pre-alpha. Development targets `develop`; breaking changes are expected.
+Ditero is alpha, with published prereleases. Development targets `develop`; breaking
+changes are expected. See [release channels](RELEASING.md) for published alphas
+and nightly builds.
 Use [Docker Compose](README.md#run-it-docker-compose) to run the application, and
 the [Android](apps/android/README.md) or [desktop](apps/desktop/README.md) guides
 for native builds.
@@ -57,6 +59,9 @@ removing or replacing the patch.
 Install dependencies with `bun install --frozen-lockfile`, then run:
 
 ```sh
+python3 -I scripts/docs-impact.py --static
+python3 -I scripts/docs-impact.py --staged
+python3 -I scripts/test-docs-impact.py
 bun run lint
 bun run i18n:compile
 bun run i18n:validate
@@ -73,3 +78,13 @@ Run host Chromium E2E tests separately from container lifecycle checks. Starting
 unrelated containers can change host network interfaces and interrupt browser requests with
 `net::ERR_NETWORK_CHANGED`. Use an idle Docker host or a dedicated CI runner. Failed browser
 tests retain screenshots and traces under `test-results/`; inspect these before retrying.
+
+Review documentation impact for the whole PR with `python3 -I scripts/docs-impact.py
+--base FULL_BASE_SHA --head FULL_HEAD_SHA --pr` using fetched immutable commits.
+Mapped changes need a fresh source-bound assessment in `.github/docs-impact.json`;
+see [documentation maintenance](docs/MAINTENANCE.md) for guide updates, compatibility
+and recovery requirements. Static checks do not qualify live deployment or native behavior.
+
+Report bugs through the issue form with the alpha, nightly tag or source commit and
+reproduction steps. Redact credentials, tokens, personal data and private server
+addresses from logs and screenshots. Report vulnerabilities [privately](SECURITY.md).
