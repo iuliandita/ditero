@@ -216,8 +216,14 @@ jobs:
           SOURCE_SHA: ${{ github.sha }}
           ZERO_RUNTIME_IMAGE: ghcr.io/iuliandita/ditero@sha256:41de0920d3cc704aa38983e25f358025684210b63405258ebc989eeefe6ac24d
         run: |
+          docker build --platform linux/amd64 --file deploy/docker/Dockerfile \
+            --target zero-runtime --build-arg DITERO_GIT_SHA="$SOURCE_SHA" \
+            --build-arg DITERO_CHANNEL=aio-candidate --tag ditero-zero:aio-candidate .
+          test "$(docker image inspect ditero-zero:aio-candidate --format '{{.Architecture}}')" = amd64
+          test "$(docker image inspect ditero-zero:aio-candidate --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$SOURCE_SHA"
           docker build --platform linux/amd64 --file deploy/docker/Dockerfile.all-in-one \
             --build-arg ZERO_RUNTIME_IMAGE="$ZERO_RUNTIME_IMAGE" \
+            --build-arg LITESTREAM_IMAGE=ditero-zero:aio-candidate \
             --build-arg DITERO_GIT_SHA="$SOURCE_SHA" \
             --build-arg DITERO_CHANNEL=aio-candidate --tag ditero-aio:check .
           docker image inspect ditero-aio:check

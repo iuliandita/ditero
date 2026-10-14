@@ -11,14 +11,14 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "18afe9800429856d003397c1e6d1caa9beb1f816ce7bd776ad3b1b2f80866309",
-			"docs": ["deploy/docker/zero-runtime/litestream/README.md"],
-			"note": "Document the explicit golang.org/x/net v0.60.0 update for both Litestream variants and the pinned Go 1.27.2 build toolchain. Its required minimum dependency upgrades preserve the existing source revisions, backup formats, operator settings, and deployment layout."
+			"sourceDigest": "98c074637a6c93144384e38b13f9c4f475b69c8a155eef2e0f35df84b44b1709",
+			"docs": ["deploy/docker/zero-runtime/litestream/README.md", "deploy/docker/aio/README.md"],
+			"note": "Document both Litestream security updates and the optional AIO binary source. CI builds same-commit amd64 binaries while retaining qualified immutable Zero base assertions, strict final-image scans and runtime smokes. Publication defaults and existing backup formats remain unchanged; current-source checks do not remediate old published digests."
 		},
 		"deployment": {
-			"sourceDigest": "c61e1f722d639629bff3b34506193744da13b93a21960f32ee0e89949f96023f",
-			"docs": ["deploy/docker/zero-runtime/litestream/README.md"],
-			"note": "Document the explicit golang.org/x/net v0.60.0 update for both Litestream variants and the pinned Go 1.27.2 build toolchain. Its required minimum dependency upgrades preserve the existing source revisions, backup formats, operator settings, and deployment layout."
+			"sourceDigest": "91140872f4f84c604cf5ba484ea508460aa2d10e444f09a0744f90c14226a658",
+			"docs": ["deploy/docker/zero-runtime/litestream/README.md", "deploy/docker/aio/README.md"],
+			"note": "Document both Litestream security updates and the optional AIO binary source. CI builds same-commit amd64 binaries while retaining qualified immutable Zero base assertions, strict final-image scans and runtime smokes. Publication defaults and existing backup formats remain unchanged; current-source checks do not remediate old published digests."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
