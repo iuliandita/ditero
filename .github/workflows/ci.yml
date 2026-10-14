@@ -123,6 +123,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
@@ -216,8 +218,14 @@ jobs:
           SOURCE_SHA: ${{ github.sha }}
           ZERO_RUNTIME_IMAGE: ghcr.io/iuliandita/ditero@sha256:41de0920d3cc704aa38983e25f358025684210b63405258ebc989eeefe6ac24d
         run: |
+          docker build --platform linux/amd64 --file deploy/docker/Dockerfile \
+            --target zero-runtime --build-arg DITERO_GIT_SHA="$SOURCE_SHA" \
+            --build-arg DITERO_CHANNEL=aio-candidate --tag ditero-zero:aio-candidate .
+          test "$(docker image inspect ditero-zero:aio-candidate --format '{{.Architecture}}')" = amd64
+          test "$(docker image inspect ditero-zero:aio-candidate --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$SOURCE_SHA"
           docker build --platform linux/amd64 --file deploy/docker/Dockerfile.all-in-one \
             --build-arg ZERO_RUNTIME_IMAGE="$ZERO_RUNTIME_IMAGE" \
+            --build-arg LITESTREAM_IMAGE=ditero-zero:aio-candidate \
             --build-arg DITERO_GIT_SHA="$SOURCE_SHA" \
             --build-arg DITERO_CHANNEL=aio-candidate --tag ditero-aio:check .
           docker image inspect ditero-aio:check

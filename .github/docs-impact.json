@@ -11,13 +11,20 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "646ca03dd10000e63e9556561529f494708992d1e2a65100e26ec4489885c68a",
-			"noImpact": "Only the pinned build-time timezone package version and checksums change; operator configuration, deployment layout and service startup contracts stay the same."
+			"sourceDigest": "98c074637a6c93144384e38b13f9c4f475b69c8a155eef2e0f35df84b44b1709",
+			"docs": [
+				"deploy/docker/zero-runtime/litestream/README.md",
+				"deploy/docker/aio/README.md"
+			],
+			"note": "Document both Litestream security updates and the optional AIO binary source. CI builds same-commit amd64 binaries while retaining qualified immutable Zero base assertions, strict final-image scans and runtime smokes. Publication defaults and existing backup formats remain unchanged; current-source checks do not remediate old published digests."
 		},
 		"deployment": {
-			"sourceDigest": "9890c80c4a7537caabe45a45a0b40e1c9390aadb51f2fe87e6c5e2fa6770a66c",
-			"docs": ["deploy/docker/aio/README.md"],
-			"note": "Add fixed stage and guard identifiers plus sanitized command exit, bounds, cancellation and reaping metadata to failed published AIO qualification receipts; retain documented runtime scope, cleanup budgets and artifact layout."
+			"sourceDigest": "91140872f4f84c604cf5ba484ea508460aa2d10e444f09a0744f90c14226a658",
+			"docs": [
+				"deploy/docker/zero-runtime/litestream/README.md",
+				"deploy/docker/aio/README.md"
+			],
+			"note": "Document both Litestream security updates and the optional AIO binary source. CI builds same-commit amd64 binaries while retaining qualified immutable Zero base assertions, strict final-image scans and runtime smokes. Publication defaults and existing backup formats remain unchanged; current-source checks do not remediate old published digests."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",

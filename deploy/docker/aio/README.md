@@ -15,6 +15,15 @@ Bun builder and architecture package artifacts retain their existing pins.
 Failed pinned downloads report the artifact filename and HTTP status. The build
 stops before installing that artifact; checksum verification remains required.
 
+`LITESTREAM_IMAGE` defaults to `ZERO_RUNTIME_IMAGE`. An explicit override supplies
+only `/usr/local/bin/litestream` and `/usr/local/bin/litestream-v5`, after the
+qualified Zero base assertions. Use binaries built for the final image's platform;
+the override does not replace the base or qualify the resulting image.
+CI builds the existing Dockerfile's `zero-runtime` target from the checked-out
+commit for amd64 and uses that local image as the binary source. The final bundle
+still requires its strict scan and runtime checks; later Zero smokes reuse the
+source build cache.
+
 The final image defaults to API UID1000. No runtime role switches UID, adds
 capabilities or repairs volume ownership. No supervisor or Docker socket runs
 inside the role containers. The bundle installs no supervisor.
@@ -36,6 +45,10 @@ images. Publication requires a manual dispatch whose full 40-character commit SH
 matches the dispatch ref, belongs to develop, and has passing latest same-commit
 CI, Security, Android, Desktop and release-packaging push runs. PR validation has
 read-only permissions and cannot publish images.
+
+The publication workflow retains its pinned Zero base and default binary source.
+It fails closed when that image fails the strict scan. A passing current-source CI
+candidate does not remediate an old published digest or qualify a new publication.
 
 Each platform is scanned before push, then signed and given a digest-specific
 SPDX SBOM attestation in GHCR and Docker Hub. Build provenance is attested in GHCR,
