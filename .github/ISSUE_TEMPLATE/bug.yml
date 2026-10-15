@@ -38,7 +38,7 @@ body:
     id: version
     attributes:
       label: Ditero version / image tag
-      placeholder: "e.g. 0.4.2, nightly-a1b2c3d, latest"
+      placeholder: "e.g. v0.0.1-alpha.12, nightly-a1b2c3d, or source commit SHA"
     validations:
       required: true
 
@@ -62,10 +62,10 @@ body:
     id: postgres
     attributes:
       label: Postgres
-      description: Version and where it runs (bundled, Supabase, self-hosted, etc.).
+      description: Version and deployment, if known. Native clients and source-only reports may leave this empty.
       placeholder: "e.g. 18, bundled compose"
     validations:
-      required: true
+      required: false
 
   - type: input
     id: client
@@ -80,4 +80,5 @@ body:
     id: logs
     attributes:
       label: Relevant logs / screenshots
+      description: Redact credentials, tokens, personal data and private server addresses. Report security vulnerabilities privately using SECURITY.md.
       render: text
