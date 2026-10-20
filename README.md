@@ -60,7 +60,8 @@ size and high contrast stay on each device.
   Slack, or email
 - Multi-workspace sharing with Owner / Admin / Member / Viewer roles
 - Invitation links, managed accounts, comments, and recorded task completion history
-- Email/password, passkeys, TOTP, recovery codes, and optional Google sign-in
+- Email/password, passkeys, TOTP, recovery codes, and optional
+  [Google sign-in](docs/runbooks/sign-in-providers.md)
 - English, German, Spanish, French, Romanian, and Arabic, including RTL layout
 - Light, dark, and system modes, six accent themes, reading-size presets, and high contrast
 - Named light/dark palettes, runtime color editing and validated JSON sharing;
@@ -186,6 +187,7 @@ All configuration is environment-driven. The common variables:
 | `DITERO_ZERO_SHARD_SCHEMA` | `zero_0` | Schema zero-cache keeps sync bookkeeping in. Both app roles need access to it; see [database roles](docs/runbooks/database-roles.md). |
 | `DITERO_IMAGE_TAG` | `nightly` | Image tag the Compose stack runs. The zero-cache image is that tag plus `-zero`. |
 | `DITERO_REGISTRATION_MODE` | `bootstrap` | `open`, `bootstrap` (first account plus eligible invitations), or `closed` (eligible invitations only). |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Optional Google sign-in from your own OAuth client; both are required. See [sign-in providers](docs/runbooks/sign-in-providers.md). |
 
 > **Note:** the web client fetches `PUBLIC_ZERO_URL` from `/api/config` at
 > startup, so one built image serves any hostname. Set it to the address

@@ -122,6 +122,21 @@ continuously test every database, sync, or notification dependency.
 
 Use `app.extraEnv` and `zero.extraEnv` for additional supported configuration.
 Use `valueFrom.secretKeyRef` for sensitive settings rather than literal values.
+For example, optional Google sign-in needs your own OAuth client (see
+[sign-in providers](https://github.com/iuliandita/ditero/blob/develop/docs/runbooks/sign-in-providers.md));
+add both keys to a Secret, which may be the existing one, and reference them:
+
+```yaml
+app:
+  extraEnv:
+    - name: GOOGLE_CLIENT_ID
+      valueFrom:
+        secretKeyRef: { name: ditero-secrets, key: GOOGLE_CLIENT_ID }
+    - name: GOOGLE_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef: { name: ditero-secrets, key: GOOGLE_CLIENT_SECRET }
+```
+
 Do not repeat chart-managed variables. If customizing Zero's app/shard identity,
 set the matching application `DITERO_ZERO_SHARD_SCHEMA` and database grants.
 Proxy trust defaults to none; explicitly set `DITERO_TRUSTED_PROXIES` only to
