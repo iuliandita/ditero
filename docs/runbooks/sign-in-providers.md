@@ -51,10 +51,10 @@ Set both values; Google sign-in stays off unless both are present.
 - **Helm:** add both keys to a Secret and reference them from `app.extraEnv`; see
   the [chart guide](../../deploy/helm/ditero/README.md#configuration-and-operations).
 
-Restart the application after changing them. Until
-[#1060](https://github.com/iuliandita/ditero/issues/1060) is fixed, the login page
-shows the Google button even when Google is not configured; clicking it then fails
-and the server logs `Provider not found`.
+Restart the application after changing them. The login and sign-up pages show
+Google only when both credentials are configured. The unauthenticated `/api/config`
+response publishes enabled provider names in `socialProviders`, never credentials;
+web, Android and desktop browser sign-in use this same server configuration.
 
 ### Behavior
 
@@ -62,6 +62,8 @@ and the server logs `Provider not found`.
   would allow an email signup: in `bootstrap` mode only the first account or an
   invited email, in `closed` mode only invited emails. Invitations match the
   Google account's email address.
+- Refused Google sign-ups return to the sign-in page with the same localized
+  invitation-required or registration-disabled message as email sign-up.
 - Google sign-in links to an existing account only when that account's email is
   verified. Sign in with your password or passkey otherwise.
 - Android and desktop apps sign in through the system browser, so Google sign-in

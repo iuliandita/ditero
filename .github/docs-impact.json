@@ -2,8 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "3dd81594f87afe6f7ee7719fa3d6a47279b468b122389aa01ebe3a54c0bf7517",
-			"noImpact": "Task rows and cards replace the visible Personal or Shared word with a person or group icon while retaining the workspace name and the existing localized tooltip and screen-reader context. Task behavior, permissions, settings and documented workflows are unchanged."
+			"sourceDigest": "89073bc9ce9995fbc4826a6c3f275b136df4469ac3f1520bbde22baf3e86fdef",
+			"docs": ["docs/runbooks/sign-in-providers.md"],
+			"note": "Sign-in and sign-up show Google only when the server publishes it as configured. OAuth callback registration refusals use the same six localized messages as email registration."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
@@ -24,18 +25,9 @@
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		},
 		"authentication": {
-			"sourceDigest": "b7378d045bf86ce9b8c87f19f4483d973f9bbfa4df65140a5585e987fc6a3cf9",
+			"sourceDigest": "d887a046ffb6932e89d70a86d73d8fa1a6c4eac5385a5ca1d00831fe3fd2da5e",
 			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Document retryable browser token lookup failures while retaining authoritative session verification and 401 for missing, expired or revoked sessions."
-		},
-		"compatibility": {
-			"sourceDigest": "2768c3515ffb1e7cedd1a01e1f906d4aefedaa61be0fe2fb25a4692ea3278d67",
-			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "Document the Zero 1.9 outage recovery patch, retained durable-close behavior and automatic queued-mutation replay without bypassing authentication.",
-			"upgrade": "Upgrade the application and reload open clients to load the corrected client bundle; no database migration or storage format change is required.",
-			"backup": "Take the existing database and attachment backup before upgrading, and retain browser storage until queued edits have reached the server.",
-			"rollback": "Rolling back restores the older client outage defect; reload clients after rollback and verify that queued edits reach the server.",
-			"clientVersions": "Already open older clients need a reload to gain recovery; the patch preserves persisted formats and leaves invalid sessions requiring sign-in."
+			"note": "OAuth registration denials preserve their stable policy code through Better Auth callback redirects. Native browser sign-in retains the grant ID and displays the localized policy message."
 		}
 	}
 }

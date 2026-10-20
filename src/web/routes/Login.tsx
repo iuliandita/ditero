@@ -1,5 +1,5 @@
 import { KeyRound } from "lucide-react";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	PASSWORD_MAX_LENGTH,
 	PASSWORD_MIN_LENGTH,
@@ -13,6 +13,7 @@ import { Input } from "../components/ui/input.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { authErrorMessage } from "../lib/auth-messages.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
+import { fetchPublicConfig } from "../lib/public-config.ts";
 import {
 	runAfterZeroRetirement,
 	ZeroRetirementError,
@@ -42,6 +43,25 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
+	const [callbackError, setCallbackError] = useState(() =>
+		new URLSearchParams(window.location.search).get("error"),
+	);
+	const [googleEnabled, setGoogleEnabled] = useState(false);
+	useEffect(() => {
+		let active = true;
+		void fetchPublicConfig().then(
+			(config) => {
+				if (active)
+					setGoogleEnabled(config.socialProviders?.includes("google") === true);
+			},
+			() => {
+				// Email and passkeys remain usable when config is unavailable.
+			},
+		);
+		return () => {
+			active = false;
+		};
+	}, []);
 	const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
 	const [twoFactorCode, setTwoFactorCode] = useState("");
 	const [backupCode, setBackupCode] = useState("");
@@ -51,6 +71,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 		setMode(next);
 		setPassword("");
 		setError(null);
+		setCallbackError(null);
 	}
 
 	async function runAction(
@@ -61,6 +82,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 		pendingRef.current = true;
 		setPending(true);
 		setError(null);
+		setCallbackError(null);
 		try {
 			await runAfterZeroRetirement(action);
 		} catch (error) {
@@ -104,8 +126,13 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 
 	function signInGoogle() {
 		void runAction(async () => {
+			const errorURL = new URL(window.location.href);
+			errorURL.searchParams.delete("error");
+			errorURL.searchParams.delete("error_description");
+			errorURL.hash = "";
 			const res = await authClient.signIn.social({
 				provider: "google",
+				errorCallbackURL: errorURL.href,
 				...(callbackURL ? { callbackURL } : {}),
 			});
 			if (res.error)
@@ -135,12 +162,17 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 		}, m.login_error_invalid_backup_code);
 	}
 
-	const errorMessage = error ? (
+	const visibleError =
+		error ??
+		(callbackError
+			? authErrorMessage({ code: callbackError }, m.login_error_sign_in_failed)
+			: null);
+	const errorMessage = visibleError ? (
 		<p
 			role="alert"
 			className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-foreground"
 		>
-			{error}
+			{visibleError}
 		</p>
 	) : null;
 
@@ -340,17 +372,19 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 					<KeyRound aria-hidden="true" />
 					{m.login_signin_passkey()}
 				</Button>
-				<Button
-					data-testid="signin-google"
-					type="button"
-					variant="outline"
-					className="h-11 w-full"
-					onClick={signInGoogle}
-					disabled={pending}
-				>
-					<GoogleMark />
-					{m.login_continue_google()}
-				</Button>
+				{googleEnabled && (
+					<Button
+						data-testid="signin-google"
+						type="button"
+						variant="outline"
+						className="h-11 w-full"
+						onClick={signInGoogle}
+						disabled={pending}
+					>
+						<GoogleMark />
+						{m.login_continue_google()}
+					</Button>
+				)}
 			</div>
 			<p className="mt-6 text-center text-sm text-muted-foreground">
 				{mode === "signup" ? m.login_existing_account() : m.login_new_here()}{" "}
