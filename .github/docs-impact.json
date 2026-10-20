@@ -25,7 +25,7 @@
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		},
 		"authentication": {
-			"sourceDigest": "d887a046ffb6932e89d70a86d73d8fa1a6c4eac5385a5ca1d00831fe3fd2da5e",
+			"sourceDigest": "fae47d451731979c36e529b1b45e14ed9d85a902bf10e2017cc50820778cc4fe",
 			"docs": ["docs/runbooks/native-authentication.md"],
 			"note": "OAuth registration denials preserve their stable policy code through Better Auth callback redirects. Native browser sign-in retains the grant ID and displays the localized policy message."
 		}
