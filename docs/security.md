@@ -14,6 +14,9 @@ Email/password, passkeys, TOTP, and recovery codes are supported. Cookie-authent
 Production defaults to `DITERO_REGISTRATION_MODE=bootstrap`: only the first account
 can register without an invitation. `closed` disables uninvited registration,
 including the first account; eligible invitations can still admit accounts.
+Optional Google sign-in creates accounts through the same registration check, so
+a first Google sign-in needs the same admission as an email signup. See
+[Sign-in providers](runbooks/sign-in-providers.md).
 
 Android and desktop use explicit system-browser consent to obtain a device-bound
 native session. Credentials remain in native storage; session revocation stops

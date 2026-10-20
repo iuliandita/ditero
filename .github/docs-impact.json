@@ -11,20 +11,19 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "98c074637a6c93144384e38b13f9c4f475b69c8a155eef2e0f35df84b44b1709",
+			"sourceDigest": "e32769de387a2b031b6e3a219a9074dfd95f08d7a808b024316700999ae72d79",
 			"docs": [
-				"deploy/docker/zero-runtime/litestream/README.md",
-				"deploy/docker/aio/README.md"
+				".env.example",
+				"docs/runbooks/sign-in-providers.md",
+				"deploy/docker/aio/README.md",
+				"deploy/helm/ditero/README.md"
 			],
-			"note": "Document both Litestream security updates and the optional AIO binary source. CI builds same-commit amd64 binaries while retaining qualified immutable Zero base assertions, strict final-image scans and runtime smokes. Publication defaults and existing backup formats remain unchanged; current-source checks do not remediate old published digests."
+			"note": "Compose now forwards GOOGLE_CLIENT_ID, without which Google sign-in could not be enabled. The new sign-in provider guide documents per-instance OAuth clients, the exact callback, Google redirect-host limits, Compose/AIO/Helm configuration, registration and linking behavior, and planned providers."
 		},
 		"deployment": {
-			"sourceDigest": "91140872f4f84c604cf5ba484ea508460aa2d10e444f09a0744f90c14226a658",
-			"docs": [
-				"deploy/docker/zero-runtime/litestream/README.md",
-				"deploy/docker/aio/README.md"
-			],
-			"note": "Document both Litestream security updates and the optional AIO binary source. CI builds same-commit amd64 binaries while retaining qualified immutable Zero base assertions, strict final-image scans and runtime smokes. Publication defaults and existing backup formats remain unchanged; current-source checks do not remediate old published digests."
+			"sourceDigest": "4a4cadef874a1cef442178e7a6e332a0eefe5252e635068a1d4c49486f7d7794",
+			"docs": ["deploy/docker/aio/README.md", "deploy/helm/ditero/README.md"],
+			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
