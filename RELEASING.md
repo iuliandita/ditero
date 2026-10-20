@@ -20,11 +20,28 @@ Tagged releases include:
 - Container signatures, provenance and SPDX SBOMs, plus immutable image digest files.
 - Helm and Kustomize packages for app and Zero with external PostgreSQL, and a
   Compose archive containing the bundled PostgreSQL initialization scripts.
-- Linux x86_64 DEB and AppImage, unsigned Windows x86_64 installer, and an ad-hoc
-  signed macOS Apple Silicon DMG.
+- Linux x86_64 DEB, RPM and AppImage; unsigned Windows x86_64 and ARM64 NSIS
+  installers; separate ad-hoc signed macOS Apple Silicon and Intel DMGs.
 - A signed independent Android universal APK and AAB. This flavor uses UnifiedPush;
   Google delivery requires separate private configuration and is not packaged here.
 - `SHA256SUMS.txt` covering every download.
+
+The development-installer and release workflows use the same five native targets:
+Ubuntu 24.04 x64, Windows x64/ARM64, and macOS Apple Silicon/Intel. Linux ARM64
+installers are not built. Linux packages include AppStream metadata, a desktop
+entry and the MIT license. They require a compatible system WebKitGTK 4.1/GTK 3;
+the Ubuntu 24.04 build baseline is not a promise of compatibility with older Linux.
+
+Installer smoke checks verify Linux payload contents and x64 architecture, install
+the DEB with dependency resolution, and launch DEB, extracted RPM and AppImage
+payloads under Xvfb. RPM installation/dependency resolution on an RPM distribution
+remains unqualified. Windows checks silently install NSIS, compare the installed
+executable to the build, verify its PE architecture and require a Ditero window.
+macOS checks mount the DMG, copy its app, verify the architecture and ad-hoc
+signature, then require the process to survive startup. These checks do not
+exercise sign-in, credential storage, upgrades or download trust warnings.
+Development downloads include a per-platform `SHA256SUMS.txt`; release checksums
+and provenance continue to cover the complete release asset set.
 
 Windows installers have no trusted publisher signature. macOS downloads have ad-hoc
 signatures and are not notarized. Native device/platform qualification, general deep

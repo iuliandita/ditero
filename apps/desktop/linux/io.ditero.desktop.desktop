@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Ditero
+Comment=Tasks and shared lists for your self-hosted server
+Exec=ditero-desktop %u
+Icon=io.ditero.desktop
+Terminal=false
+Categories=Office;ProjectManagement;
+MimeType=x-scheme-handler/ditero;
+StartupNotify=true
+StartupWMClass=io.ditero.desktop

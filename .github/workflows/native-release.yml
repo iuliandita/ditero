@@ -38,12 +38,22 @@ jobs:
             platform: linux
             label: linux-x64-unsigned
             target: x86_64-unknown-linux-gnu
-            bundles: deb,appimage
+            bundles: deb,rpm,appimage
           - runner: windows-2025
             platform: windows
             label: windows-x64-unsigned
             target: x86_64-pc-windows-msvc
             bundles: nsis
+          - runner: windows-11-arm
+            platform: windows-arm64
+            label: windows-arm64-unsigned
+            target: aarch64-pc-windows-msvc
+            bundles: nsis
+          - runner: macos-15-intel
+            platform: macos-x64
+            label: macos-x64-adhoc
+            target: x86_64-apple-darwin
+            bundles: app,dmg
           - runner: macos-15
             platform: macos
             label: macos-arm64-adhoc
@@ -83,15 +93,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             libwebkit2gtk-4.1-dev build-essential curl wget file \
-            libxdo-dev libssl-dev libdbus-1-dev libayatana-appindicator3-dev librsvg2-dev
+            libxdo-dev libssl-dev libdbus-1-dev libayatana-appindicator3-dev librsvg2-dev \
+            rpm cpio patchelf libfuse2t64 appstream xvfb x11-utils
       - name: Select Rust toolchain
         run: |
           set -euo pipefail
+          if [[ "$DESKTOP_PLATFORM" == windows* ]]; then
+            rustup set default-host "$DESKTOP_TARGET"
+          fi
           rustup toolchain install 1.98.1 --profile minimal --component rustfmt
           rustup default 1.98.1
           rustup target add "$DESKTOP_TARGET"
           rustc --version
           cargo --version
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: native-${{ matrix.target }}-1.98.1
+      - name: Validate AppStream metadata
+        if: runner.os == 'Linux'
+        run: appstreamcli validate --no-net apps/desktop/linux/io.ditero.desktop.metainfo.xml
       - name: Install root dependencies
         run: bun install --frozen-lockfile
       - name: Install desktop dependencies
@@ -118,6 +139,24 @@ jobs:
           set -euo pipefail
           bun run tauri build --config "$RUNNER_TEMP/desktop-release-config.json" \
             --target "$DESKTOP_TARGET" --bundles "$DESKTOP_BUNDLES" -- --locked
+      - name: Smoke-test Linux installers
+        if: runner.os == 'Linux'
+        run: bash scripts/desktop-smoke.sh linux "$DESKTOP_TARGET" release
+      - name: Smoke-test macOS disk image
+        if: runner.os == 'macOS'
+        run: bash scripts/desktop-smoke.sh macos "$DESKTOP_TARGET" release
+      - name: Smoke-test Windows installation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/desktop-smoke.ps1 -Target $env:DESKTOP_TARGET -Profile release
+      - name: Upload installer smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-smoke-${{ matrix.label }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-smoke/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Collect release packages
         run: |
           set -euo pipefail

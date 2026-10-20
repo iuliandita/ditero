@@ -6,13 +6,13 @@
 			"noImpact": "Task rows and cards replace the visible Personal or Shared word with a person or group icon while retaining the workspace name and the existing localized tooltip and screen-reader context. Task behavior, permissions, settings and documented workflows are unchanged."
 		},
 		"release": {
-			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
-			"docs": ["RELEASING.md"],
-			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
+			"sourceDigest": "58abbf8f278fff164a6d039954f3cf6394952b06b8d985e678398fb9b3b04581",
+			"docs": ["RELEASING.md", "README.md"],
+			"note": "Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "1ef746d15432e04d25188975ed586a5413d5106c41883f49212e481b1ae5aae6",
-			"noImpact": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged."
+			"sourceDigest": "b22503c945e6a24414e0380ba98a717e6a5b595775265461f9845c5559f49196",
+			"noImpact": "Only desktop installer metadata, bundled license files and platform package settings change. Server configuration, deployment variables and operator setup remain unchanged; installer behavior is documented in RELEASING.md and the desktop guide."
 		},
 		"deployment": {
 			"sourceDigest": "3cb56b9dc41deafd254840faee7defba3f98b24d86daea7c6731b50d10f3e43e",
