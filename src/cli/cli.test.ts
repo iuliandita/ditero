@@ -290,7 +290,7 @@ it("prints release identity without credentials or a network request", async () 
 		dirty: true,
 		target: "source",
 		minimumBun: MINIMUM_BUN,
-		bun: process.versions.bun,
+		bun: process.versions.bun ?? null,
 	});
 	expect(stderr).not.toHaveBeenCalled();
 	expect(fetcher).not.toHaveBeenCalled();

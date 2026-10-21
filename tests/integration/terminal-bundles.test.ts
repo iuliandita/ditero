@@ -421,7 +421,7 @@ test("bundles report JSON identity, ignore hostile working-directory config, and
 	expect(unsupported.status).toBe(2);
 	expect(unsupported.stderr).toContain("or newer is required");
 	expect(unsupported.stdout).toBe("");
-});
+}, 30_000);
 
 const execute = promisify(execFile);
 test.each([
