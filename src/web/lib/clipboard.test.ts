@@ -3,17 +3,27 @@ import { copyText } from "./clipboard.ts";
 
 // No DOM environment in this suite (see vitest.config.ts) -- a document-shaped
 // stub exercises the selection path without needing a real one.
-function fakeDoc(execResult = true) {
+function fakeDoc(execResult = true, selectionAllowed = true) {
 	const appended: Array<Record<string, unknown>> = [];
 	const selected: string[] = [];
 	let removed = 0;
 	const doc = {
+		activeElement: null,
 		createElement: () => {
 			const el: Record<string, unknown> = {
 				value: "",
 				style: {},
 				setAttribute: () => {},
+				focus: () => {
+					if (selectionAllowed) Reflect.set(doc, "activeElement", el);
+				},
 				select: () => selected.push(String(el.value)),
+				setSelectionRange: (start: number, end: number) => {
+					if (selectionAllowed) {
+						el.selectionStart = start;
+						el.selectionEnd = end;
+					}
+				},
 				remove: () => {
 					removed++;
 				},
@@ -23,7 +33,7 @@ function fakeDoc(execResult = true) {
 		body: {
 			appendChild: (el: Record<string, unknown>) => appended.push(el),
 		},
-		execCommand: () => execResult,
+		execCommand: vi.fn(() => execResult),
 	} as unknown as Document;
 	return { doc, appended, selected, removed: () => removed };
 }
@@ -69,4 +79,12 @@ describe("copyText", () => {
 		await copyText("link", { writer: undefined, doc });
 		expect(removed()).toBe(1);
 	});
+});
+
+it("does not report a copy when the focus scope blocks selection", async () => {
+	const { doc } = fakeDoc(true, false);
+	await expect(copyText("link", { writer: undefined, doc })).resolves.toBe(
+		false,
+	);
+	expect(doc.execCommand).not.toHaveBeenCalled();
 });

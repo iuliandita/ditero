@@ -15,6 +15,7 @@ import { commitWdk } from "../../src/domain/e2e/wdk-commitment.ts";
 import { rotateIdentity } from "../../src/server/e2e/identity-rotation.ts";
 import { rotateWorkspace } from "../../src/server/e2e/rotation.ts";
 import { app } from "../../src/server/index.ts";
+import { signInForTest } from "../support/auth-sign-in.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 const databaseURL = process.env.DATABASE_URL;
@@ -78,7 +79,7 @@ async function newIdentity(): Promise<Identity> {
 
 async function signUp(label: string, stamp: string): Promise<Actor> {
 	const email = `rotation-${label}-${stamp}@test.invalid`;
-	const response = await withRegistrationBypass(() =>
+	const registration = await withRegistrationBypass(() =>
 		handleAuthRequest(
 			new Request("http://localhost:3000/api/auth/sign-up/email", {
 				method: "POST",
@@ -87,7 +88,8 @@ async function signUp(label: string, stamp: string): Promise<Actor> {
 			}),
 		),
 	);
-	expect(response.status).toBe(200);
+	expect(registration.status).toBe(200);
+	const response = await signInForTest(email);
 	// This suite needs six independent sessions but does not exercise auth
 	// throttling. Production permits five signups per source per minute, so leave
 	// each signup ordinary and clear only the isolated fixture's rate bucket

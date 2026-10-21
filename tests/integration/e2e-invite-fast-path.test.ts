@@ -17,6 +17,7 @@ import { CURRENT_KDF_VERSION } from "../../src/domain/e2e/kdf.ts";
 import { commitWdk } from "../../src/domain/e2e/wdk-commitment.ts";
 import { rotateIdentity } from "../../src/server/e2e/identity-rotation.ts";
 import { app } from "../../src/server/index.ts";
+import { signInForTest } from "../support/auth-sign-in.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 const databaseURL = process.env.DATABASE_URL;
@@ -41,7 +42,7 @@ async function identity(): Promise<Identity> {
 }
 
 async function signUp(email: string): Promise<string> {
-	const response = await withRegistrationBypass(() =>
+	const registration = await withRegistrationBypass(() =>
 		handleAuthRequest(
 			new Request("http://localhost:3000/api/auth/sign-up/email", {
 				method: "POST",
@@ -50,7 +51,8 @@ async function signUp(email: string): Promise<string> {
 			}),
 		),
 	);
-	expect(response.status).toBe(200);
+	expect(registration.status).toBe(200);
+	const response = await signInForTest(email);
 	return response.headers
 		.getSetCookie()
 		.map((value) => value.split(";", 1)[0])

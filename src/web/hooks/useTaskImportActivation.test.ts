@@ -1,10 +1,66 @@
-import { expect, test } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { expect, test, vi } from "vitest";
 import {
 	resolveCachedTaskImportActivation,
 	resolveTaskImportActivation,
 	taskActivationAllowsWrites,
 	taskImportRecoveryKey,
+	useTaskImportActivation,
 } from "./useTaskImportActivation.ts";
+
+const access = vi.hoisted(() => ({ role: "member", status: "native" }));
+vi.mock("../../zero/queries.ts", () => ({
+	queries: Object.fromEntries(
+		["memberships", "lists", "tasks", "taskImportActivations"].map((key) => [
+			key,
+			{ mine: () => key },
+		]),
+	),
+}));
+vi.mock("@rocicorp/zero/react", () => ({
+	useZero: () => ({ userID: "user" }),
+	useQuery: (query: string) => {
+		const rows = {
+			memberships: [
+				{ workspaceId: "workspace", userId: "user", role: access.role },
+			],
+			lists: [{ id: "list", workspaceId: "workspace" }],
+			tasks: [
+				{
+					id: "task",
+					listId: "list",
+					hasImportActivation: access.status !== "native",
+				},
+			],
+			taskImportActivations: ["native", "unknown"].includes(access.status)
+				? []
+				: [{ taskId: "task", status: access.status }],
+		};
+		return [rows[query as keyof typeof rows], { type: "complete" }];
+	},
+}));
+
+test.each([
+	"owner",
+	"admin",
+	"member",
+	"viewer",
+])("%s task writes require both a write role and import activation", (role) => {
+	access.role = role;
+	for (const status of ["native", "active", "pending", "blocked", "unknown"]) {
+		access.status = status;
+		let canWrite: boolean | undefined;
+		function Probe() {
+			canWrite = useTaskImportActivation("task").canWrite;
+			return null;
+		}
+		renderToStaticMarkup(createElement(Probe));
+		expect(canWrite, `${role}/${status}`).toBe(
+			role !== "viewer" && ["native", "active"].includes(status),
+		);
+	}
+});
 
 test("an absent guard requires an explicit native task marker", () => {
 	expect(resolveTaskImportActivation([], "unknown", "task")).toBe("unknown");

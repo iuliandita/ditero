@@ -1,4 +1,5 @@
 import type { Transaction } from "@rocicorp/zero";
+import { MutatorError } from "../domain/mutator-error.ts";
 import type { Schema } from "./schema.gen.ts";
 
 type Tx = Transaction<Schema>;
@@ -67,6 +68,7 @@ async function lockAuthority(
 	actorId: string,
 	membershipId: string,
 	remove: boolean,
+	leave = false,
 ): Promise<Authority> {
 	await context(tx, actorId);
 	const discovered = await query(
@@ -155,6 +157,13 @@ async function lockAuthority(
 	)
 		throw new Error("Membership authority changed");
 	const personal = workspace[0].kind === "personal";
+	if (leave && targetUserId !== actorId)
+		throw new Error("access denied: can only leave your own membership");
+	if (leave && personal)
+		throw new MutatorError(
+			"workspace_personal_leave",
+			"cannot leave a personal workspace",
+		);
 	if (
 		personal &&
 		!(remove && workspace[0].owner_id === actorId && targetUserId !== actorId)
@@ -162,17 +171,23 @@ async function lockAuthority(
 		throw new Error("personal workspace membership is fixed");
 	if (
 		!personal &&
+		!leave &&
 		(!caller || !["owner", "admin"].includes(String(caller.role)))
 	)
 		throw new Error("access denied: need admin+");
 	const callerRole = personal ? "owner" : String(caller?.role);
 	if (target.role === "owner" && callerRole !== "owner")
 		throw new Error("access denied: only an owner may change an owner");
+	if (target.role === "owner" && !replacementUserId && leave)
+		throw new MutatorError(
+			"workspace_last_owner",
+			"cannot leave the last owner: transfer ownership first",
+		);
 	if (target.role === "owner" && !replacementUserId)
 		throw new Error(
 			remove ? "cannot remove the last owner" : "cannot demote the last owner",
 		);
-	if (targetUserId === actorId)
+	if (targetUserId === actorId && !leave)
 		throw new Error("access denied: cannot change your own membership");
 	if (remove && workspace[0].owner_id === targetUserId && !replacementUserId)
 		throw new Error("cannot remove the last owner");
@@ -220,8 +235,15 @@ export async function removeMembershipWithActivation(
 	tx: Tx,
 	actorId: string,
 	membershipId: string,
+	intent: "remove" | "leave" = "remove",
 ): Promise<void> {
-	const authority = await lockAuthority(tx, actorId, membershipId, true);
+	const authority = await lockAuthority(
+		tx,
+		actorId,
+		membershipId,
+		true,
+		intent === "leave",
+	);
 	const { workspaceId, targetUserId, replacementUserId } = authority;
 	await lockPaged(
 		tx,
@@ -265,6 +287,10 @@ export async function removeMembershipWithActivation(
 		pairTask = id(rows[rows.length - 1], "task_id");
 		pairUser = id(rows[rows.length - 1], "user_id");
 	}
+	await query(
+		tx,
+		"select set_config('ditero.activation_scope','membership-remove',true)",
+	);
 	await lockPaged(
 		tx,
 		`select g.task_id as id from task_notification_activation g
@@ -298,6 +324,7 @@ export async function removeMembershipWithActivation(
 		where r.task_id=any($1::text[])`,
 		[affectedTaskIds],
 	);
+	await query(tx, "select set_config('ditero.activation_scope','',true)");
 	await query(
 		tx,
 		`delete from task_assignee a using task t,list l

@@ -78,6 +78,11 @@ export function RestrictedTaskDetail({
 				</SheetHeader>
 
 				<div className="flex flex-col gap-4 p-4 pt-2">
+					{!activation.canWriteWorkspace && (
+						<p className="text-sm text-muted-foreground">
+							{m.workspace_read_only()}
+						</p>
+					)}
 					<ImportActivationRecovery
 						key={taskImportRecoveryKey(t.id, workspaceId, activation.status)}
 						taskId={t.id}

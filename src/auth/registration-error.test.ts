@@ -92,12 +92,16 @@ describe("OAuth registration denial", () => {
 		}
 	});
 
-	it("does not mislabel an unexpected failure as registration policy", () => {
-		expect(
-			registrationAPIError(
-				new Error("Database unavailable"),
-				"/callback/google",
-			).body,
-		).toEqual({ message: "Database unavailable", code: undefined });
+	it.each([
+		"/sign-up/email",
+		"/callback/google",
+	])("logs an unexpected failure on %s without exposing it as policy", (path) => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		const cause = new Error("connect ECONNREFUSED db:5432");
+		const error = registrationAPIError(cause, path);
+		expect(error.status).toBe("INTERNAL_SERVER_ERROR");
+		expect(error.body).toEqual({ message: "Registration is unavailable" });
+		expect(log).toHaveBeenCalledWith("registration policy check failed", cause);
+		log.mockRestore();
 	});
 });

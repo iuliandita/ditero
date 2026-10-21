@@ -221,6 +221,9 @@ async function redeemViaAcceptPage(
 		await page.getByTestId("accept-email").fill(opts.email);
 		await page.getByTestId("accept-password").fill(opts.password);
 		await page.getByTestId("accept-submit").click();
+		await expect(page.getByTestId("signup-notice")).toBeVisible();
+		await page.getByTestId("accept-password").fill(opts.password);
+		await page.getByTestId("accept-submit").click();
 	}
 	await expect(page.getByTestId("create-list-open")).toBeVisible({
 		timeout: 20000,

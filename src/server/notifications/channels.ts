@@ -220,6 +220,7 @@ async function storedConfig(
 // one) are otherwise underivable client-side, and the alternative -- letting the
 // user fill in a form the save path will reject -- is worse.
 export type ChannelCapabilities = {
+	available: ChannelKind[];
 	ackBaseUrl: boolean;
 	email: boolean;
 	telegramTransport: TelegramMode;
@@ -236,6 +237,7 @@ export function channelCapabilities(
 	const base = ackBaseUrl(env) !== null;
 	const transport = telegramMode(env);
 	return {
+		available: Object.keys(IMPLEMENTED) as ChannelKind[],
 		ackBaseUrl: base,
 		email: isMailConfigured(env),
 		telegramTransport: transport,

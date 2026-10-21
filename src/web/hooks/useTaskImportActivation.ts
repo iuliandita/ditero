@@ -1,7 +1,11 @@
-import { useQuery } from "@rocicorp/zero/react";
+import { useQuery, useZero } from "@rocicorp/zero/react";
 import { useCallback, useMemo } from "react";
+import { type Role, WRITE_ROLES } from "../../domain/role.ts";
 import { queries } from "../../zero/queries.ts";
-import type { TaskNotificationActivation } from "../../zero/schema.gen.ts";
+import type {
+	schema,
+	TaskNotificationActivation,
+} from "../../zero/schema.gen.ts";
 
 export type TaskImportActivationStatus =
 	| "unknown"
@@ -54,13 +58,32 @@ export function useTaskImportActivation(taskId: string | null | undefined) {
 	const status = taskId == null ? "unknown" : activation.statusForTask(taskId);
 	return {
 		status,
-		canWrite: taskActivationAllowsWrites(status),
+		canWrite: taskId != null && activation.canWriteTask(taskId),
+		canWriteWorkspace:
+			taskId != null && activation.canWriteTaskWorkspace(taskId),
 		needsRecovery: status === "pending" || status === "blocked",
 		loading: status === "unknown",
 	};
 }
 
+export function useWorkspaceWriteAccess() {
+	const zero = useZero<typeof schema>();
+	const [memberships] = useQuery(queries.memberships.mine());
+	return useCallback(
+		(workspaceId: string) =>
+			memberships.some(
+				(row) =>
+					row.userId === zero.userID &&
+					row.workspaceId === workspaceId &&
+					WRITE_ROLES.has(row.role as Role),
+			),
+		[memberships, zero.userID],
+	);
+}
+
 export function useTaskImportActivationMap() {
+	const canWriteWorkspace = useWorkspaceWriteAccess();
+	const [lists] = useQuery(queries.lists.mine());
 	const [rows, details] = useQuery(queries.taskImportActivations.mine());
 	const [tasks, taskDetails] = useQuery(queries.tasks.mine());
 	const byTask = useMemo(
@@ -77,12 +100,30 @@ export function useTaskImportActivationMap() {
 			),
 		[rows, details.type, taskDetails.type, byTask],
 	);
+	const writableTasks = useMemo(() => {
+		const writableLists = new Set(
+			lists
+				.filter((list) => canWriteWorkspace(list.workspaceId))
+				.map((list) => list.id),
+		);
+		return new Set(
+			tasks
+				.filter((task) => writableLists.has(task.listId))
+				.map((task) => task.id),
+		);
+	}, [tasks, lists, canWriteWorkspace]);
+	const canWriteTaskWorkspace = useCallback(
+		(taskId: string) => writableTasks.has(taskId),
+		[writableTasks],
+	);
 	const canWriteTask = useCallback(
-		(taskId: string) => taskActivationAllowsWrites(statusForTask(taskId)),
-		[statusForTask],
+		(taskId: string) =>
+			canWriteTaskWorkspace(taskId) &&
+			taskActivationAllowsWrites(statusForTask(taskId)),
+		[statusForTask, canWriteTaskWorkspace],
 	);
 	return useMemo(
-		() => ({ statusForTask, canWriteTask }),
-		[statusForTask, canWriteTask],
+		() => ({ statusForTask, canWriteTask, canWriteTaskWorkspace }),
+		[statusForTask, canWriteTask, canWriteTaskWorkspace],
 	);
 }

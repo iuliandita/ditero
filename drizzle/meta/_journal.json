@@ -589,6 +589,13 @@
       "when": 1791261464726,
       "tag": "0083_account_setup_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1792544034216,
+      "tag": "0084_membership_leave_cleanup",
+      "breakpoints": true
     }
   ]
 }

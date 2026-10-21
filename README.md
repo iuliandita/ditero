@@ -15,7 +15,8 @@
 
 Ditero is a free, self-hosted, local-first task app for families, friends, clubs,
 and small teams. Share a shopping list, divide the chores, plan a project, or keep
-up with daily habits. Work offline and sync when you're connected again.
+up with daily habits. Already-open browser tabs work offline and sync when you're
+connected again; opening or reloading the app needs a connection.
 
 Your data lives on your server. Reminders, attachments, calendars, and sharing
 are included, with no subscriptions or paid feature unlocks.
@@ -50,7 +51,10 @@ The interface supports six languages, including Arabic and RTL layout. Choose
 light, dark, or system mode, then choose an accent: teal by default, or blue,
 clay, violet, berry, or ochre. Reading-size presets and high contrast are independent
 of those choices. Palettes and accent preferences sync with your account; reading
-size and high contrast stay on each device.
+size and high contrast stay on each device. The last workspace and list also stay
+on each device, separately for each account. If access ends or a list is deleted,
+navigation falls back to an available workspace or its home view. Saved list
+templates use the name you enter, or the template name when you leave it blank.
 
 ## Available on develop
 
@@ -59,7 +63,12 @@ size and high contrast stay on each device.
 - Recurring tasks and habits/chores with flexible recurrence (RFC 5545 RRULE) and streaks
 - Reminders with escalation and acknowledgement, delivered to ntfy, Telegram, Discord,
   Slack, or email
+- Display names at sign-up and in Settings > Account, shared in member and assignee displays.
+  Names, including managed-account names, use a trimmed 1-80-character limit without control characters.
 - Multi-workspace sharing with Owner / Admin / Member / Viewer roles
+  (Viewer task controls are read-only and explain the restriction). Email-bound
+  invites opened with another account offer sign-out so you can use the invited account.
+- Leave shared workspaces from your own Members row; the last owner must transfer ownership first
 - Invitation links, managed accounts, comments, and recorded task completion history
 - Email/password, passkeys, TOTP, recovery codes, and optional
   [Google sign-in](docs/runbooks/sign-in-providers.md)
@@ -67,7 +76,8 @@ size and high contrast stay on each device.
 - Light, dark, and system modes, six accent themes, reading-size presets, and high contrast
 - Named light/dark palettes, runtime color editing and validated JSON sharing;
   [custom palettes](docs/themes.md) sync with your account
-- Saved views, dashboards, calendar/board/table layouts, keyboard shortcuts, and a focus timer
+- Focus timers resume after reload on the same device, including paused and task-bound intervals
+- Saved views, dashboards, calendar/board/table layouts, and keyboard shortcuts
 - Encrypted attachments with filesystem or S3-compatible server storage
 - Authenticated encrypted attachment archives and reviewed, resumable attachment
   migration with explicit parent mapping and durable replay
@@ -92,6 +102,14 @@ runtime, terminal, native and deployment qualification remain pending. Voice cap
 pending final qualification. Calendar subscriptions can be created and revoked
 in web settings; a new subscription URL is shown only once.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
+
+Focus timers are stored locally for each account and shared by its tabs on the same
+browser or native server profile. Returning after an interval expires records that
+interval once and advances according to the auto-cycle setting; paused time is excluded.
+Stop discards the unfinished interval in every tab. Clearing site data removes local
+timer state. Timers do not follow you to another device. After reload, elapsed time
+relies on the device clock. Moving that clock forward can count unworked time,
+capped at the interval length.
 
 ## Tech stack
 
@@ -189,7 +207,7 @@ All configuration is environment-driven. The common variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `BETTER_AUTH_SECRET` | _(required)_ | Signing secret for auth/JWTs. Generate with `openssl rand -hex 32`. |
+| `BETTER_AUTH_SECRET` | _(required)_ | At least 32 characters in production. Generate with `openssl rand -hex 32`. Changing it requires the [key rotation procedure](docs/runbooks/key-rotation.md#authentication-secret-rotation); replacing it directly breaks sign-in. |
 | `ZERO_ADMIN_PASSWORD` | _(required)_ | Admin password zero-cache requires in production. Generate with `openssl rand -hex 32`. |
 | `DITERO_ENCRYPTION_KEY` | _(required)_ | 32-byte Base64 key for stored replayable secrets. |
 | `DITERO_MIGRATION_DB_PASSWORD` | _(required, bundled)_ | Password for the schema-owner role. |
@@ -275,7 +293,9 @@ types, and thumbnails. It can still see the parent record, uploader, byte counts
 state, and storage location because authorization, quota enforcement, and garbage collection
 depend on them. Browsers without writable private-file staging support uploads
 up to 8 MiB of combined encrypted file and thumbnail data; server limits and
-workspace quotas still apply.
+workspace quotas still apply. Attachment tiles show the original byte count when it
+can be recovered exactly from the encrypted framing. Otherwise, "Stored size"
+identifies the encrypted byte count, including framing overhead.
 
 The Compose default stores ciphertext on a persistent filesystem volume. S3-compatible storage
 is also supported without exposing the bucket to browsers. Uploads require a live connection,
@@ -289,8 +309,12 @@ no other copy. All attachment configuration is documented in [.env.example](.env
 
 Production browser builds include a PWA manifest and a bounded offline public
 app shell. The service worker caches static public files, with no API, auth,
-Zero, or private user responses. Offline shell loading does not replace session
-checks; private synced records remain in Zero's separate local storage. Updates
+Zero, or private user responses. Opening or reloading the browser app offline
+shows a connection-required page instead of opening cached workspaces. It retries
+automatically when the connection returns, with a Retry button for manual attempts.
+Already-open tabs keep working offline and sync queued edits after reconnecting.
+Private synced records remain in Zero's separate local storage; startup still
+requires live session verification. Updates
 show a notice and reload only on user choice, after durable local sync retirement.
 HTTPS and browser-secure loopback origins are supported. Browser qualification
 covered installability, offline shell recovery, and manual update; it did not

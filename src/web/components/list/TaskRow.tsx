@@ -200,7 +200,7 @@ function DueChip({ task }: { task: Task }) {
 				overdue ? "text-destructive" : "text-muted-foreground",
 			)}
 		>
-			<CalendarClock className="size-3" />
+			<CalendarClock className="size-3 shrink-0" />
 			{formatDue(task.dueAt, task.dueAllDay)}
 		</span>
 	);
@@ -483,6 +483,11 @@ export function TaskRow({
 						"group group/completion flex min-h-12 gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted",
 						card ? "items-start" : "items-center",
 					)}
+					title={
+						!activation.canWriteTaskWorkspace(task.id)
+							? m.workspace_read_only()
+							: undefined
+					}
 					data-kbd-row
 					data-reading-row="task"
 					data-selected={selection?.selected || undefined}
@@ -504,6 +509,11 @@ export function TaskRow({
 						>
 							<Checkbox
 								disabled={!canToggle}
+								title={
+									!activation.canWriteTaskWorkspace(task.id)
+										? m.workspace_read_only()
+										: undefined
+								}
 								aria-label={task.title}
 								aria-describedby={completionId}
 								checked={displayedDone}
@@ -520,190 +530,192 @@ export function TaskRow({
 							/>
 						</div>
 					)}
-					<button
-						type="button"
-						data-kbd-nav
-						data-task-id={task.id}
-						aria-label={m.task_open_details()}
-						aria-describedby={describedBy}
-						onMouseDown={(event) => {
-							// Shift-click extends the selection, not the page's text selection.
-							if (selection && event.shiftKey) event.preventDefault();
-						}}
-						onClick={onOpenClick}
-						title={card || dashboard ? task.title : undefined}
-						className={cn(
-							"min-w-0 flex-1 text-start",
-							card ? "min-h-8 py-1.5" : "min-h-11 content-center",
-						)}
-					>
-						<span
-							data-reading-title
-							className={cn(
-								"block text-sm",
-								card
-									? "line-clamp-2 break-words"
-									: dashboard
-										? "line-clamp-2 break-words md:line-clamp-none md:truncate"
-										: "truncate",
-								displayedDone && "text-muted-foreground",
-							)}
-						>
-							<span className={strikeClass(displayedDone)}>{task.title}</span>
-						</span>
-						<CompletedBy
-							task={task}
-							done={displayedDone}
-							habitDate={occurrence?.date}
-							id={completionId}
-						/>
-						{parentContext && (
-							<span
-								id={parentId}
-								data-testid="task-parent-context"
-								className="mt-0.5 block wrap-anywhere text-xs text-muted-foreground"
-							>
-								{parentContext}
-							</span>
-						)}
-						{showBadge && (
-							<Badge
-								id={badgeId}
-								variant="outline"
-								className="mt-1 text-xs text-warning"
-							>
-								{activationStatus === "pending"
-									? m.activation_badge_pending()
-									: m.activation_badge_blocked()}
-							</Badge>
-						)}
-						{(!bare || sourceContext || list) && (
-							<div
-								id={metaId}
-								data-reading-metadata
-								className={cn(
-									"mt-0.5 flex flex-wrap items-center",
-									dashboard ? "gap-x-2 gap-y-1" : "gap-2",
-								)}
-							>
-								<AssigneeChips taskId={task.id} density={density} />
-								{dashboard && hasPriority && (
-									<span
-										aria-hidden
-										data-testid="task-priority-metadata"
-										className="text-xs text-muted-foreground md:hidden"
-									>
-										{priorityLabel(task.priority)}
-									</span>
-								)}
-								{occurrence ? (
-									<span
-										className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-										data-testid="habit-occurrence-date"
-									>
-										<CalendarClock aria-hidden className="size-3" />
-										{occurrence.status === "unavailable"
-											? m.habit_occurrence_unavailable()
-											: occurrence.status === "skipped"
-												? m.habit_occurrence_skipped()
-												: occurrence.date
-													? formatDayKey(occurrence.date)
-													: null}
-									</span>
-								) : (
-									!bare && <DueChip task={task} />
-								)}
-								{list && (
-									<span
-										className={cn(
-											"inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground",
-											dashboard && "max-w-full",
-										)}
-										title={dashboard ? list.title : undefined}
-									>
-										<ListIcon
-											icon={list.icon}
-											kind={kind}
-											title={list.title}
-											className="size-3 shrink-0"
-										/>
-										<span className="truncate">{list.title}</span>
-									</span>
-								)}
-								{sourceContext && (
-									<TaskSourceContext
-										context={sourceContext}
-										workspace={sourceWorkspace}
-										compact={dashboard}
-									/>
-								)}
-								{labels.map((l) => (
-									<Badge
-										key={l.id}
-										variant="outline"
-										className="h-4 border-transparent bg-muted/60 px-1.5 text-muted-foreground"
-									>
-										{l.name}
-									</Badge>
-								))}
-								{total > 0 && kind !== "project" && (
-									<SubtaskCount done={doneCount} total={total} />
-								)}
-							</div>
-						)}
-						{showProgress && (
-							<div id={progressId} className="mt-1 flex items-center gap-2">
-								<div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-									<div
-										className="h-full rounded-full bg-kind-project"
-										style={{ width: `${Math.round(progress * 100)}%` }}
-									/>
-								</div>
-								<SubtaskCount done={doneCount} total={total} />
-							</div>
-						)}
-					</button>
-					{/* Outside the title button: the chip is itself a control when the
-					    reminder is still live, and a button cannot nest in a button. */}
-					{!bare && <ReminderChip task={task} />}
-					{!bare && (
-						<PriorityFlag
-							id={priorityId}
-							dashboard={dashboard}
-							priority={task.priority}
-							className={card ? "mt-2.5" : undefined}
-						/>
-					)}
-					{total > 0 && (
+					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
 						<button
 							type="button"
-							aria-label={
-								expanded ? m.subtasks_collapse() : m.subtasks_expand()
-							}
-							aria-expanded={expanded}
-							onClick={() => setExpanded((e) => !e)}
-							className="mt-0.5 flex shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background pointer-coarse:size-11"
+							data-kbd-nav
+							data-task-id={task.id}
+							aria-label={m.task_open_details()}
+							aria-describedby={describedBy}
+							onMouseDown={(event) => {
+								// Shift-click extends the selection, not the page's text selection.
+								if (selection && event.shiftKey) event.preventDefault();
+							}}
+							onClick={onOpenClick}
+							title={card || dashboard ? task.title : undefined}
+							className={cn(
+								"min-w-[min(12rem,100%)] flex-[1_1_12rem] text-start",
+								card ? "min-h-8 py-1.5" : "min-h-11 content-center",
+							)}
 						>
-							<ChevronRight
+							<span
+								data-reading-title
 								className={cn(
-									"size-4 transition-transform",
-									expanded ? "rotate-90" : "rtl:rotate-180",
+									"block text-sm",
+									card
+										? "line-clamp-2 break-words"
+										: dashboard
+											? "line-clamp-2 break-words md:line-clamp-none md:truncate"
+											: "truncate",
+									displayedDone && "text-muted-foreground",
 								)}
+							>
+								<span className={strikeClass(displayedDone)}>{task.title}</span>
+							</span>
+							<CompletedBy
+								task={task}
+								done={displayedDone}
+								habitDate={occurrence?.date}
+								id={completionId}
 							/>
+							{parentContext && (
+								<span
+									id={parentId}
+									data-testid="task-parent-context"
+									className="mt-0.5 block wrap-anywhere text-xs text-muted-foreground"
+								>
+									{parentContext}
+								</span>
+							)}
+							{showBadge && (
+								<Badge
+									id={badgeId}
+									variant="outline"
+									className="mt-1 text-xs text-warning"
+								>
+									{activationStatus === "pending"
+										? m.activation_badge_pending()
+										: m.activation_badge_blocked()}
+								</Badge>
+							)}
+							{(!bare || sourceContext || list) && (
+								<div
+									id={metaId}
+									data-reading-metadata
+									className={cn(
+										"mt-0.5 flex flex-wrap items-center",
+										dashboard ? "gap-x-2 gap-y-1" : "gap-2",
+									)}
+								>
+									<AssigneeChips taskId={task.id} density={density} />
+									{dashboard && hasPriority && (
+										<span
+											aria-hidden
+											data-testid="task-priority-metadata"
+											className="text-xs text-muted-foreground md:hidden"
+										>
+											{priorityLabel(task.priority)}
+										</span>
+									)}
+									{occurrence ? (
+										<span
+											className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+											data-testid="habit-occurrence-date"
+										>
+											<CalendarClock aria-hidden className="size-3" />
+											{occurrence.status === "unavailable"
+												? m.habit_occurrence_unavailable()
+												: occurrence.status === "skipped"
+													? m.habit_occurrence_skipped()
+													: occurrence.date
+														? formatDayKey(occurrence.date)
+														: null}
+										</span>
+									) : (
+										!bare && <DueChip task={task} />
+									)}
+									{list && (
+										<span
+											className={cn(
+												"inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground",
+												dashboard && "max-w-full",
+											)}
+											title={dashboard ? list.title : undefined}
+										>
+											<ListIcon
+												icon={list.icon}
+												kind={kind}
+												title={list.title}
+												className="size-3 shrink-0"
+											/>
+											<span className="truncate">{list.title}</span>
+										</span>
+									)}
+									{sourceContext && (
+										<TaskSourceContext
+											context={sourceContext}
+											workspace={sourceWorkspace}
+											compact={dashboard}
+										/>
+									)}
+									{labels.map((l) => (
+										<Badge
+											key={l.id}
+											variant="outline"
+											className="h-4 border-transparent bg-muted/60 px-1.5 text-muted-foreground"
+										>
+											{l.name}
+										</Badge>
+									))}
+									{total > 0 && kind !== "project" && (
+										<SubtaskCount done={doneCount} total={total} />
+									)}
+								</div>
+							)}
+							{showProgress && (
+								<div id={progressId} className="mt-1 flex items-center gap-2">
+									<div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+										<div
+											className="h-full rounded-full bg-kind-project"
+											style={{ width: `${Math.round(progress * 100)}%` }}
+										/>
+									</div>
+									<SubtaskCount done={doneCount} total={total} />
+								</div>
+							)}
 						</button>
-					)}
-					{selection && !selecting && (
-						<SelectToggle
-							title={task.title}
-							selection={selection}
-							placement="trail"
+						{/* Outside the title button: the chip is itself a control when the
+					    reminder is still live, and a button cannot nest in a button. */}
+						{!bare && <ReminderChip task={task} />}
+						{!bare && (
+							<PriorityFlag
+								id={priorityId}
+								dashboard={dashboard}
+								priority={task.priority}
+								className={card ? "mt-2.5" : undefined}
+							/>
+						)}
+						{total > 0 && (
+							<button
+								type="button"
+								aria-label={
+									expanded ? m.subtasks_collapse() : m.subtasks_expand()
+								}
+								aria-expanded={expanded}
+								onClick={() => setExpanded((e) => !e)}
+								className="mt-0.5 flex shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background pointer-coarse:size-11"
+							>
+								<ChevronRight
+									className={cn(
+										"size-4 transition-transform",
+										expanded ? "rotate-90" : "rtl:rotate-180",
+									)}
+								/>
+							</button>
+						)}
+						{selection && !selecting && (
+							<SelectToggle
+								title={task.title}
+								selection={selection}
+								placement="trail"
+							/>
+						)}
+						<RowActions
+							actions={actions}
+							label={actionsLabel}
+							hideOnTouch={!dashboard}
 						/>
-					)}
-					<RowActions
-						actions={actions}
-						label={actionsLabel}
-						hideOnTouch={!dashboard}
-					/>
+					</div>
 					{/* The keyboard's delete target. It cannot be the menu item: Radix
 					    portals the menu content out of this row, and the item exists
 					    only while the menu is open, so actOnFocused could never find

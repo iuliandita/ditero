@@ -28,6 +28,7 @@ import {
 	fetchMyGrants,
 	type MyAttachmentGrant,
 } from "../../lib/e2e/attachment-api.ts";
+import { attachmentSizeLabel } from "../../lib/e2e/attachment-size.ts";
 import {
 	type DecryptedAttachmentMetadata,
 	type DownloadDestination,
@@ -44,7 +45,10 @@ import {
 	useKeyring,
 	type WorkspaceKeyMaterial,
 } from "../../lib/e2e/KeyringProvider.tsx";
-import { uploadAttachment } from "../../lib/e2e/upload.ts";
+import {
+	AttachmentUploadError,
+	uploadAttachment,
+} from "../../lib/e2e/upload.ts";
 import { formatBytes } from "../../lib/intl-format.ts";
 import { useConfirm } from "../ui/confirm.tsx";
 import type { RowAction } from "../ui/row-action.ts";
@@ -422,7 +426,10 @@ export const AttachmentList = forwardRef<
 				console.error("attachments: upload failed", caught);
 				gate.reportUploadFailure(caught);
 				updatePending(upload.id, {
-					error: m.attachment_error_upload_failed(),
+					error:
+						caught instanceof AttachmentUploadError && caught.status === 413
+							? m.attachment_error_server_limit()
+							: m.attachment_error_upload_failed(),
 					progress: undefined,
 				});
 			}
@@ -710,7 +717,7 @@ export const AttachmentList = forwardRef<
 							key={tile.row.id}
 							name={tile.name}
 							contentType={tile.contentType}
-							size={formatBytes(tile.row.declaredBytes)}
+							size={attachmentSizeLabel(tile.row.declaredBytes)}
 							date={formatCreatedAt(tile.row.createdAt)}
 							state={tile.state}
 							workspaceName={workspaceName}
@@ -738,7 +745,7 @@ export const AttachmentList = forwardRef<
 							key={tile.row.id}
 							name={tile.name}
 							contentType={tile.contentType}
-							size={formatBytes(tile.row.declaredBytes)}
+							size={attachmentSizeLabel(tile.row.declaredBytes)}
 							date={formatCreatedAt(tile.row.createdAt)}
 							state={tile.state}
 							workspaceName={workspaceName}
@@ -803,9 +810,9 @@ export const AttachmentList = forwardRef<
 		>
 			{variant === "task" ? (
 				<section className="flex flex-col gap-2" data-testid="task-attachments">
-					<h3 className="text-sm text-muted-foreground">
+					<h2 className="text-sm text-muted-foreground">
 						{m.attachment_section_heading()}
-					</h3>
+					</h2>
 					{content}
 					{count === 0 && (
 						<p className="text-xs text-muted-foreground">

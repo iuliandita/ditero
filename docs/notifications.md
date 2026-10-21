@@ -5,7 +5,9 @@ about assignments, `@`-mentions, and overdue tasks.
 
 ntfy, Telegram, Discord, Slack, and email are supported. Email requires operator
 SMTP configuration. Discord and Slack have send-only webhook modes and interactive
-app modes; app modes require a public listener on your Ditero server.
+app modes; app modes require a public listener on your Ditero server. Settings
+only offers setup for channels the server reports available. Missing or invalid
+settings show repair guidance beside each affected field.
 
 Read the [disclaimers](#disclaimers) before relying on this for anything that
 matters. Especially before relying on it for medication.

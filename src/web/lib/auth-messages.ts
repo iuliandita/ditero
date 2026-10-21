@@ -9,10 +9,12 @@ import { m } from "../../paraglide/messages.js";
 
 export type AuthErrorLike = {
 	code?: string | null;
+	status?: number;
 	message?: string | null;
 };
 
 const AUTH_ERROR_MESSAGES: Record<string, () => string> = {
+	INVALID_DISPLAY_NAME: m.account_name_invalid,
 	INVALID_EMAIL_OR_PASSWORD: m.auth_error_invalid_email_or_password,
 	INVALID_PASSWORD: m.auth_error_invalid_password,
 	USER_ALREADY_EXISTS: m.auth_error_user_already_exists,
@@ -66,4 +68,11 @@ export function authErrorMessage(
 		return AUTH_ERROR_MESSAGES[code]();
 	}
 	return error?.message ?? fallback();
+}
+
+export function totpErrorMessage(error: AuthErrorLike): string {
+	if (error.status === 0) return m.login_error_totp_network();
+	if (error.status != null && error.status >= 500)
+		return m.login_error_totp_server();
+	return authErrorMessage(error, m.login_error_totp_server);
 }

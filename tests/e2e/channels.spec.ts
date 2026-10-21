@@ -223,11 +223,16 @@ test.describe("channel settings surface", () => {
 		await expect(page.getByTestId("channel-ntfy-serverUrl")).toBeVisible();
 		await expect(page.getByTestId("channel-ntfy-topic")).toBeVisible();
 
-		// Telegram's form is a different shape: a bot token and a chat id, proving
-		// the form is derived per kind rather than shared.
-		await expand(page, "telegram");
-		await expect(page.getByTestId("channel-telegram-botToken")).toBeVisible();
-		await expect(page.getByTestId("channel-telegram-chatId")).toBeVisible();
+		await expect(
+			page.getByTestId("channel-telegram-disclosure"),
+		).toBeDisabled();
+		await expect(page.getByTestId("channel-telegram-unavailable")).toHaveText(
+			"That channel is not available yet.",
+		);
+		// Discord uses a webhook URL instead of ntfy's server/topic fields.
+		await expand(page, "discord");
+		await expect(page.getByTestId("channel-discord-webhookUrl")).toBeVisible();
+		await expect(page.getByTestId("channel-discord-serverUrl")).toHaveCount(0);
 
 		// The public summary shows the topic, never the (masked) token.
 		await page.getByTestId("channel-ntfy-serverUrl").fill(NTFY);
@@ -377,6 +382,11 @@ test("email test-send delivers real SMTP bytes to the sink", async ({
 	});
 	let res = await api.post(`${MAIL_API}/api/auth/sign-up/email`, {
 		data: { email, password: PASSWORD, name: "Mail Wire" },
+	});
+	expect(res.ok(), await res.text()).toBeTruthy();
+
+	res = await api.post(`${MAIL_API}/api/auth/sign-in/email`, {
+		data: { email, password: PASSWORD },
 	});
 	expect(res.ok(), await res.text()).toBeTruthy();
 

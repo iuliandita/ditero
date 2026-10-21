@@ -1,3 +1,5 @@
+import { fetchWithConnectionCheck } from "./connection-required.ts";
+
 type ConnectionState = { name: string };
 
 type ZeroConnection = {
@@ -14,7 +16,9 @@ type ZeroConnection = {
 export class SessionExpiredError extends Error {}
 
 export async function fetchZeroToken(): Promise<string> {
-	const response = await fetch("/api/auth/token", { credentials: "include" });
+	const response = await fetchWithConnectionCheck("/api/auth/token", {
+		credentials: "include",
+	});
 	if (response.status === 401 || response.status === 403)
 		throw new SessionExpiredError(`token refresh refused: ${response.status}`);
 	if (!response.ok) throw new Error(`token refresh failed: ${response.status}`);

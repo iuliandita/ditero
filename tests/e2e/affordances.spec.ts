@@ -537,6 +537,19 @@ test("roles: a Viewer is offered no Delete anywhere", async ({ page }) => {
 	await expect(page.getByTestId("row-action-rename")).toHaveCount(0);
 	await closeRowMenu(page);
 
+	await expect(
+		page.getByRole("checkbox", { name: names.task, exact: true }),
+	).toBeDisabled();
+	await expect(page.getByTestId("new-task")).toBeDisabled();
+	await expect(page.getByTestId("new-task-submit")).toBeDisabled();
+	await expect(
+		page.getByText("Your workspace role allows viewing only.", { exact: true }),
+	).toBeVisible();
+	await page.locator("[data-task-id]").filter({ hasText: names.task }).click();
+	await expect(page.getByTestId("task-detail-title")).toBeDisabled();
+	await expect(page.getByTestId("task-detail-done")).toBeDisabled();
+	await page.getByTestId("task-detail-close").click();
+
 	// Nothing anywhere on the surface offers a delete.
 	await expect(page.getByTestId("row-action-delete")).toHaveCount(0);
 });

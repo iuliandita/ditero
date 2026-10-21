@@ -33,6 +33,7 @@ pub struct Context {
     pub session: Session,
     pub clock: Arc<AtomicU64>,
     pub pages: Arc<AtomicU64>,
+    pub fences: Option<Arc<crate::request_fence::Fences>>,
     epoch: Option<(Arc<AtomicU64>, u64)>,
     commit: Option<Arc<Mutex<()>>>,
     cancelled: Arc<AtomicBool>,
@@ -51,9 +52,25 @@ impl Context {
             session,
             clock,
             pages,
+            fences: None,
             epoch: None,
             commit: None,
             cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+    async fn send(&self, request: reqwest::RequestBuilder) -> Result<reqwest::Response> {
+        match &self.fences {
+            Some(fences) => fences.send(&self.session, request).await,
+            None => {
+                #[cfg(test)]
+                {
+                    request.send().await.map_err(|_| "network")
+                }
+                #[cfg(not(test))]
+                {
+                    Err("storage-failed")
+                }
+            }
         }
     }
     fn current(&self) -> Result<()> {
@@ -324,12 +341,12 @@ impl Transfers {
                             ctx.current()?;
                             let reply = tokio::time::timeout(DEADLINE, async {
                                 migration_response(
-                                    http.get(format!("{}{status_path}", ctx.session.origin))
-                                        .bearer_auth(&ctx.session.token)
-                                        .header("Accept", "application/json")
-                                        .send()
-                                        .await
-                                        .map_err(|_| "network")?,
+                                    ctx.send(
+                                        http.get(format!("{}{status_path}", ctx.session.origin))
+                                            .bearer_auth(&ctx.session.token)
+                                            .header("Accept", "application/json"),
+                                    )
+                                    .await?,
                                     16384,
                                 )
                                 .await
@@ -384,7 +401,7 @@ impl Transfers {
                                 .header("Content-Type", "application/json")
                                 .body(payload);
                         }
-                        migration_response(request.send().await.map_err(|_| "network")?, cap).await
+                        migration_response(ctx.send(request).await?, cap).await
                     })
                     .await
                     .map_err(|_| "transfer-timeout")??;
@@ -418,7 +435,7 @@ impl Transfers {
                             .header("Content-Type", "application/json")
                             .body(payload);
                     }
-                    response(request.send().await.map_err(|_| "network")?).await
+                    response(ctx.send(request).await?).await
                 })
             });
         }
@@ -927,8 +944,9 @@ async fn upload(
         .header("Content-Type", "application/octet-stream")
         .header("Content-Length", bytes)
         .body(reqwest::Body::wrap_stream(stream));
+    let network_context = ctx.clone();
     let mut network = AbortTask(tauri::async_runtime::spawn(async move {
-        let response = request.send().await.map_err(|_| "network")?;
+        let response = network_context.send(request).await?;
         let reply = if migration.is_some() {
             migration_response(response, 16384).await?
         } else {
@@ -1005,12 +1023,12 @@ async fn download(
     mut rx: mpsc::Receiver<Command>,
     ready: Completion,
 ) -> Result<Value> {
-    let response = http
-        .get(format!("{}{path}", ctx.session.origin))
-        .bearer_auth(&ctx.session.token)
-        .send()
-        .await
-        .map_err(|_| "network")?;
+    let response = ctx
+        .send(
+            http.get(format!("{}{path}", ctx.session.origin))
+                .bearer_auth(&ctx.session.token),
+        )
+        .await?;
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return response_error(response, ready).await;
@@ -1078,16 +1096,16 @@ async fn archive_export(
     ready: Completion,
 ) -> Result<Value> {
     let bytes = tokio::time::timeout(DEADLINE, async {
-        let mut response = http
-            .get(format!(
-                "{}/api/native/portability/export",
-                ctx.session.origin
-            ))
-            .bearer_auth(&ctx.session.token)
-            .header("Accept", "application/json")
-            .send()
-            .await
-            .map_err(|_| "network")?;
+        let mut response = ctx
+            .send(
+                http.get(format!(
+                    "{}/api/native/portability/export",
+                    ctx.session.origin
+                ))
+                .bearer_auth(&ctx.session.token)
+                .header("Accept", "application/json"),
+            )
+            .await?;
         let status = response.status().as_u16();
         if status != 200 {
             let body = if status == 401 {
@@ -1259,6 +1277,7 @@ mod tests {
     use tokio::sync::oneshot;
     fn context() -> Context {
         Context {
+            fences: None,
             gen: 1,
             page: 1,
             clock: Arc::new(AtomicU64::new(1)),

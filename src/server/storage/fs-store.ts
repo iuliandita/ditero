@@ -1,10 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, rename, rm, stat } from "node:fs/promises";
+import { mkdir, open, rename, rm, stat, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { BlobNotFoundError, type BlobStore } from "./blob-store.ts";
+import {
+	BlobNotFoundError,
+	type BlobStore,
+	storageErrorCode,
+} from "./blob-store.ts";
 
 function isMissing(error: unknown): boolean {
 	return error instanceof Error && "code" in error && error.code === "ENOENT";
@@ -28,6 +32,26 @@ export class FsBlobStore implements BlobStore {
 	constructor(root: string) {
 		if (root.length === 0) throw new Error("blob store root must not be empty");
 		this.#root = resolve(root);
+	}
+
+	async verifyWritable(): Promise<void> {
+		const probe = resolve(this.#root, `.ditero-probe-${randomUUID()}`);
+		let file: Awaited<ReturnType<typeof open>> | undefined;
+		let created = false;
+		try {
+			file = await open(probe, "wx", 0o600);
+			created = true;
+			await file.writeFile(new Uint8Array([0]));
+			await file.close();
+			file = undefined;
+			await unlink(probe);
+		} catch (error) {
+			await file?.close().catch(() => {});
+			if (created) await unlink(probe).catch(() => {});
+			throw new Error(
+				`Attachment filesystem storage at "${this.#root}" is not writable (${storageErrorCode(error)})`,
+			);
+		}
 	}
 
 	#path(key: string): string {

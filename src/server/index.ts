@@ -6,6 +6,7 @@ import { cors } from "@elysiajs/cors";
 import { mustGetMutator, mustGetQuery, type Transaction } from "@rocicorp/zero";
 import { handleMutateRequest, handleQueryRequest } from "@rocicorp/zero/server";
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
+import { APIError } from "better-auth";
 import type { Cron } from "croner";
 import { Elysia } from "elysia";
 import { auth, handleAuthRequest } from "../auth/auth.ts";
@@ -26,9 +27,11 @@ import {
 	ManagedAccountError,
 } from "../auth/managed-account.ts";
 import { trustedAuthOrigins } from "../auth/origins.ts";
+import { verifyStoredJwks } from "../auth/startup.ts";
 import {
 	attachmentStorageConfig,
 	createAttachmentBlobStore,
+	verifyAttachmentStorage,
 } from "../config/attachment-storage.ts";
 import { e2eEnabled } from "../config/e2e.ts";
 import { mailConfig } from "../config/mail.ts";
@@ -38,6 +41,7 @@ import { db, pool } from "../db/client.ts";
 import { verifyRuntimeDatabaseRole } from "../db/runtime-role.ts";
 import { verifyZeroShardAccess, zeroShardSchema } from "../db/zero-shard.ts";
 import { channelKeyRing } from "../security/channel-config.ts";
+import { createFieldKeyRing } from "../security/field-encryption.ts";
 import { mutators } from "../zero/mutators.ts";
 import { queries } from "../zero/queries.ts";
 import type { Schema } from "../zero/schema.gen.ts";
@@ -528,7 +532,16 @@ const routes = new Elysia()
 				);
 			} catch (error) {
 				if (error instanceof ManagedAccountError) {
-					return new Response(error.message, { status: error.status });
+					return Response.json(
+						{ message: error.message },
+						{ status: error.status },
+					);
+				}
+				if (error instanceof APIError) {
+					return Response.json(error.body, {
+						status: error.statusCode,
+						headers: error.headers,
+					});
 				}
 				throw error;
 			}
@@ -652,6 +665,19 @@ const app = staticDir
 	: routes;
 
 if (import.meta.main) {
+	if (e2eEnabled()) await verifyAttachmentStorage(attachmentConfig);
+	const authContext = await auth.$context;
+	await verifyStoredJwks(
+		pool,
+		authContext.secretConfig,
+		process.env.DITERO_ENCRYPTION_KEY
+			? createFieldKeyRing({
+					current: process.env.DITERO_ENCRYPTION_KEY,
+					next: process.env.DITERO_ENCRYPTION_KEY_NEXT,
+				})
+			: undefined,
+	);
+
 	const jobs: Cron[] = [];
 	const stopBackground: (() => void | Promise<void>)[] = [];
 	if (process.env.NODE_ENV === "production") {

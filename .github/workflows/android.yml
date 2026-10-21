@@ -50,7 +50,8 @@ jobs:
       - name: Check Android TypeScript
         run: bunx tsc --noEmit --project apps/android/tsconfig.json
       - name: Test native bridge lifecycle
-        run: bunx vitest run apps/android/src/bridge.test.ts apps/android/src/connection-error.test.ts
+        # Directories, not file lists: a misnamed or new test file can no longer be skipped.
+        run: bunx vitest run apps/android/src
       - name: Build bundled UI
         working-directory: apps/android
         run: bun run build
@@ -75,7 +76,7 @@ jobs:
           fi
           grep -F "Google Android packaging requires private google-services.json and src/google/assets/native-relay.json with a trusted relay origin and receipt keys" "$refusal"
       - name: Upload test APK
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-independent-debug-apk-${{ github.sha }}
           path: apps/android/android/app/build/outputs/apk/independent/debug/app-independent-debug.apk

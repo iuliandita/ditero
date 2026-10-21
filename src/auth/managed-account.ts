@@ -7,6 +7,7 @@ import { db as defaultDb } from "../db/client.ts";
 import { managedAccount, membership, workspace } from "../db/schema.ts";
 import { ADMIN_ROLES, type Role, WRITE_ROLES } from "../domain/role.ts";
 import { auth as defaultAuth } from "./auth.ts";
+import { normalizeDisplayName } from "./display-name.ts";
 import {
 	type AppEnv,
 	memberInvitePolicy,
@@ -72,8 +73,14 @@ export async function createManagedAccount(
 			"managed account role must be member/viewer",
 		);
 	}
-	if (!input.displayName.trim() || input.displayName.length > 100) {
-		throw new ManagedAccountError(400, "displayName is required (max 100)");
+	let displayName: string;
+	try {
+		displayName = normalizeDisplayName(input.displayName);
+	} catch {
+		throw new ManagedAccountError(
+			400,
+			"Use 1-80 characters without control characters for your display name",
+		);
 	}
 	if (input.password.length < 8 || input.password.length > 200) {
 		throw new ManagedAccountError(400, "password must be 8-200 chars");
@@ -124,7 +131,7 @@ export async function createManagedAccount(
 	const email = `kid.${crypto.randomUUID()}@managed.invalid`;
 	const result = await withRegistrationBypass(() =>
 		authInstance.api.signUpEmail({
-			body: { name: input.displayName, email, password: input.password },
+			body: { name: displayName, email, password: input.password },
 		}),
 	);
 	const userId = result.user.id;

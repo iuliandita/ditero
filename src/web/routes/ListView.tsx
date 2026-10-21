@@ -280,7 +280,7 @@ export function ListView({
 
 	async function createTask() {
 		const t = title.trim();
-		if (!t) return;
+		if (!t || !canAttach) return;
 		setTitle("");
 		await run(
 			zero.mutate(
@@ -319,6 +319,8 @@ export function ListView({
 	// Same count as the sidebar bar: every task in the list, subtasks included.
 	const doneCount = listTasks.filter((t) => t.done).length;
 	const canEditContainer =
+		selectRole != null &&
+		WRITE_ROLES.has(selectRole) &&
 		!tasksLoading &&
 		listTasks.every((task) => activation.canWriteTask(task.id));
 	const mode = (list.completedDisplay ?? "sink") as CompletedDisplay;
@@ -410,6 +412,7 @@ export function ListView({
 	// list-template picker: applied from the surface that owns the target
 	// container, which for a task is the open list.
 	function addFromTemplate(templateId: string) {
+		if (!canAttach) return;
 		void run(
 			zero.mutate(
 				mutators.template.instantiateTask({
@@ -434,6 +437,8 @@ export function ListView({
 				<TitleSuggestInput
 					inputRef={titleInput}
 					data-testid="new-task"
+					disabled={!canAttach}
+					aria-describedby={!canAttach ? "list-read-only" : undefined}
 					placeholder={addCopy.placeholder()}
 					value={title}
 					onChange={setTitle}
@@ -443,6 +448,8 @@ export function ListView({
 				/>
 				<Button
 					data-testid="new-task-submit"
+					disabled={!canAttach}
+					aria-describedby={!canAttach ? "list-read-only" : undefined}
 					type="button"
 					className="min-h-11 md:min-h-0"
 					onClick={() => void createTask()}
@@ -450,6 +457,11 @@ export function ListView({
 					{addCopy.action()}
 				</Button>
 			</div>
+			{!canAttach && (
+				<p id="list-read-only" className="text-xs text-muted-foreground">
+					{m.workspace_read_only()}
+				</p>
+			)}
 			<InlineSyntaxHint
 				example={arrival?.blank === true}
 				onQuickAdd={onQuickAdd}
@@ -557,7 +569,11 @@ export function ListView({
 						)}
 						<DropdownMenuSeparator />
 						<DropdownMenuSub>
-							<DropdownMenuSubTrigger data-testid="add-from-template">
+							<DropdownMenuSubTrigger
+								data-testid="add-from-template"
+								disabled={!canAttach}
+								title={!canAttach ? m.workspace_read_only() : undefined}
+							>
 								{m.list_add_from_template()}
 							</DropdownMenuSubTrigger>
 							<DropdownMenuSubContent>
@@ -664,6 +680,8 @@ export function ListView({
 				>
 					<Button
 						data-testid="list-empty-add"
+						disabled={!canAttach}
+						title={!canAttach ? m.workspace_read_only() : undefined}
 						variant="outline"
 						onClick={() => {
 							if (titleInput.current?.getClientRects().length) {

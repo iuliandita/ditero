@@ -23,6 +23,9 @@ Automatic `.env`, `bunfig.toml`, `package.json` and `tsconfig.json` loading is d
 Supply credentials explicitly through the process environment. Caller-controlled
 Bun runtime flags are trusted configuration; the executable is not a sandbox.
 Bundled relink inputs and partial notices are retained in the local candidate.
+`notices/runtime/manifest.json` binds the retained source notices to their source
+URLs and SHA-256 checksums. Archive qualification verifies the extracted notice
+files; this integrity check does not establish complete runtime license coverage.
 
 The [terminal interface](tui.md) provides interactive browsing and reviewed task
 creation, completion, scalar updates, deletion and reordering, plus read-only

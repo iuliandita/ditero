@@ -188,3 +188,54 @@ describe("countdown", () => {
 		expect(resumeCountdown(c, 50)).toBe(c);
 	});
 });
+
+describe("snackbarReducer: releaseKey", () => {
+	const completed = snackbarReducer(EMPTY_SNACKBAR, {
+		type: "show",
+		message: "Completed",
+		key: "task-1",
+	});
+	const refusal = {
+		type: "fail",
+		message: "Could not",
+		key: "task-1",
+	} as const;
+
+	test("a rollback before the refusal still lets the refusal show", () => {
+		const released = snackbarReducer(completed, {
+			type: "releaseKey",
+			key: "task-1",
+		});
+		expect(released.snack).toBeNull();
+		expect(snackbarReducer(released, refusal).snack?.message).toBe("Could not");
+	});
+
+	test("a rollback after the refusal keeps the refusal", () => {
+		const failed = snackbarReducer(completed, refusal);
+		expect(snackbarReducer(failed, { type: "releaseKey", key: "task-1" })).toBe(
+			failed,
+		);
+	});
+
+	test("a queued refusal is kept behind an unrelated snack", () => {
+		const other = snackbarReducer(completed, {
+			type: "show",
+			message: "Other",
+			key: "task-2",
+		});
+		const queued = snackbarReducer(other, refusal);
+		const released = snackbarReducer(queued, {
+			type: "releaseKey",
+			key: "task-1",
+		});
+		expect(released.queue).toEqual([{ message: "Could not", key: "task-1" }]);
+	});
+
+	test("an explicit retraction still silences the refusal", () => {
+		const retracted = snackbarReducer(completed, {
+			type: "dismissKey",
+			key: "task-1",
+		});
+		expect(snackbarReducer(retracted, refusal).snack).toBeNull();
+	});
+});

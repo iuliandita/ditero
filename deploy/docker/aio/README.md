@@ -18,22 +18,25 @@ Bun builder and architecture package artifacts retain their existing pins.
 Failed pinned downloads report the artifact filename and HTTP status. The build
 stops before installing that artifact; checksum verification remains required.
 
-`LITESTREAM_IMAGE` defaults to `ZERO_RUNTIME_IMAGE`. An explicit override supplies
-only `/usr/local/bin/litestream` and `/usr/local/bin/litestream-v5`, after the
-qualified Zero base assertions. Use binaries built for the final image's platform;
-the override does not replace the base or qualify the resulting image.
-CI builds the existing Dockerfile's `zero-runtime` target from the checked-out
-commit for amd64 and uses that local image as the binary source. The final bundle
-still requires its strict scan and runtime checks; later Zero smokes reuse the
-source build cache.
+`LITESTREAM_IMAGE` is required separately and supplies only
+`/usr/local/bin/litestream` and `/usr/local/bin/litestream-v5`, after the qualified
+Zero base assertions. Build the existing Dockerfile's `zero-runtime` target from
+the same checked-out commit for the final image's platform. This supplies current
+backup binaries even when the qualified base predates a security fix. It does not
+replace the base or qualify the resulting image. CI does this for amd64; manual
+publication does it independently for amd64 and arm64. The final bundle still
+requires its strict scan and runtime checks.
 
 The final image defaults to API UID1000. No runtime role switches UID, adds
 capabilities or repairs volume ownership. No supervisor or Docker socket runs
 inside the role containers. The bundle installs no supervisor.
 
 ```sh
-docker build --file deploy/docker/Dockerfile.all-in-one \
+docker build --builder default --file deploy/docker/Dockerfile --target zero-runtime \
+  --tag ditero-zero:aio-candidate .
+docker build --builder default --file deploy/docker/Dockerfile.all-in-one \
   --build-arg ZERO_RUNTIME_IMAGE="$ZERO_RUNTIME_IMAGE" \
+  --build-arg LITESTREAM_IMAGE=ditero-zero:aio-candidate \
   --tag ditero-bundle:experimental .
 ```
 
@@ -49,9 +52,11 @@ matches the dispatch ref, belongs to develop, and has passing latest same-commit
 CI, Security, Android, Desktop and release-packaging push runs. PR validation has
 read-only permissions and cannot publish images.
 
-The publication workflow retains its pinned Zero base and default binary source.
-It fails closed when that image fails the strict scan. A passing current-source CI
-candidate does not remediate an old published digest or qualify a new publication.
+The publication workflow retains its pinned Zero base and builds its backup
+binaries from the checked source for each target architecture, checking the
+candidate's architecture and revision before the final build. It fails closed
+when the final image fails the strict scan. A passing current-source CI candidate
+does not remediate an old published digest or qualify a new publication.
 
 Each platform is scanned before push, then signed and given a digest-specific
 SPDX SBOM attestation in GHCR and Docker Hub. Build provenance is attested in GHCR,
@@ -106,6 +111,11 @@ do not inject a shared environment file into every role. Remote access requires
 operator-managed HTTPS. The shipped port bindings remain loopback-only.
 
 ## Configuration boundary
+
+`BETTER_AUTH_SECRET` must be at least 32 characters in production. Replacing it
+directly makes stored JWKS and two-factor secrets unreadable and startup fails.
+Use the [authentication secret rotation procedure](../../../docs/runbooks/key-rotation.md#authentication-secret-rotation)
+and `bun run security:rotate-auth-secrets` before restarting with a new value.
 
 The wrapper reads `DITERO_AIO_IMAGE` and `DITERO_AIO_PROJECT`; Compose also accepts
 `AIO_APP_PORT` and `AIO_ZERO_PORT` for loopback bindings. Its credential paths are

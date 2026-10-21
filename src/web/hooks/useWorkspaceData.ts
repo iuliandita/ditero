@@ -111,6 +111,8 @@ export function useWorkspaceData() {
 		assignees,
 		memberships,
 		viewRowsLoading,
+		navigationRowsReady:
+			workspacesDetails.type === "complete" && listsDetails.type === "complete",
 		notificationRowsReady:
 			workspacesDetails.type === "complete" &&
 			listsDetails.type === "complete" &&

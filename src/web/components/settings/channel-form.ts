@@ -7,6 +7,7 @@
 import {
 	type ChannelKind,
 	channelConfigKeys,
+	channelConfigSchema,
 	isPublicChannelField,
 	MASKED,
 } from "../../../domain/notification-channel.ts";
@@ -33,6 +34,7 @@ export function hasModes(kind: ChannelKind): kind is ModedKind {
 // The interactions URL is carried separately (see InteractionsUrls) because the
 // user has to paste it into the provider, so it is public by construction.
 export type ChannelCapabilities = {
+	available?: readonly ChannelKind[];
 	ackBaseUrl: boolean;
 	email: boolean;
 	telegramTransport: "poll" | "webhook";
@@ -45,6 +47,7 @@ export type InteractionsUrls = Record<ModedKind, string>;
 // slow load is the safe direction -- the alternative offers a control the
 // server will reject.
 export const DEFAULT_CAPABILITIES: ChannelCapabilities = {
+	available: [],
 	ackBaseUrl: false,
 	email: false,
 	telegramTransport: "poll",
@@ -222,8 +225,10 @@ export function channelHealth(
 export function rowUnavailable(
 	kind: ChannelKind,
 	capabilities: ChannelCapabilities,
-): "email_smtp_missing" | null {
+): "email_smtp_missing" | "channel_unavailable" | null {
 	if (kind === "email" && !capabilities.email) return "email_smtp_missing";
+	if (capabilities.available && !capabilities.available.includes(kind))
+		return "channel_unavailable";
 	return null;
 }
 
@@ -245,6 +250,7 @@ export function appModeDisabled(capabilities: ChannelCapabilities): boolean {
 }
 
 export type ChannelWarning =
+	| "channel_unavailable"
 	| "app_mode_no_public_url"
 	| "email_smtp_missing"
 	| "email_delivery_paused"
@@ -288,4 +294,33 @@ export function interactionsUrlFor(
 ): string | null {
 	if (urls === null || !hasModes(kind)) return null;
 	return urls[kind] ?? null;
+}
+
+export type ChannelFieldError = "required" | "invalid";
+
+export function channelFieldErrors(
+	kind: ChannelKind,
+	mode: ChannelMode,
+	values: Record<string, string>,
+	stored: StoredChannel | null,
+): Record<string, ChannelFieldError> {
+	const result = channelConfigSchema[kind].safeParse(
+		formConfig(kind, mode, values),
+	);
+	if (result.success) return {};
+	const errors: Record<string, ChannelFieldError> = {};
+	for (const field of channelFields(kind, mode)) {
+		if (!result.error.issues.some((issue) => issue.path[0] === field.key))
+			continue;
+		// The server restores an unchanged masked secret before schema validation.
+		if (
+			field.secret &&
+			values[field.key] === MASKED &&
+			stored?.config[field.key] === MASKED &&
+			storedMode(stored) === mode
+		)
+			continue;
+		errors[field.key] = !values[field.key] ? "required" : "invalid";
+	}
+	return errors;
 }
