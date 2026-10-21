@@ -28,6 +28,7 @@ import {
 	fetchMyGrants,
 	type MyAttachmentGrant,
 } from "../../lib/e2e/attachment-api.ts";
+import { attachmentSizeLabel } from "../../lib/e2e/attachment-size.ts";
 import {
 	type DecryptedAttachmentMetadata,
 	type DownloadDestination,
@@ -710,7 +711,7 @@ export const AttachmentList = forwardRef<
 							key={tile.row.id}
 							name={tile.name}
 							contentType={tile.contentType}
-							size={formatBytes(tile.row.declaredBytes)}
+							size={attachmentSizeLabel(tile.row.declaredBytes)}
 							date={formatCreatedAt(tile.row.createdAt)}
 							state={tile.state}
 							workspaceName={workspaceName}
@@ -738,7 +739,7 @@ export const AttachmentList = forwardRef<
 							key={tile.row.id}
 							name={tile.name}
 							contentType={tile.contentType}
-							size={formatBytes(tile.row.declaredBytes)}
+							size={attachmentSizeLabel(tile.row.declaredBytes)}
 							date={formatCreatedAt(tile.row.createdAt)}
 							state={tile.state}
 							workspaceName={workspaceName}

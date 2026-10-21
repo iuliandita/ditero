@@ -1957,6 +1957,7 @@
 			}
 		}
 	],
+	"attachment_stored_size": "Taille stockée : {size}",
 	"attachment_empty": "Aucun fichier pour le moment.",
 	"attachment_dropzone_hint": "Dépose des fichiers ici ou utilise Ajouter un fichier.",
 	"attachment_dropzone_active": "Dépose pour joindre.",

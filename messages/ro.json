@@ -1957,6 +1957,7 @@
 			}
 		}
 	],
+	"attachment_stored_size": "Dimensiune stocată: {size}",
 	"attachment_empty": "Niciun fișier încă.",
 	"attachment_dropzone_hint": "Plasează fișiere aici sau folosește Adaugă fișier.",
 	"attachment_dropzone_active": "Plasează pentru atașare.",

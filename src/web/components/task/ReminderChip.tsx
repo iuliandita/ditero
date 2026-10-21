@@ -83,7 +83,10 @@ export function ReminderChip({ task }: { task: Task }) {
 		return (
 			<span
 				data-testid="reminder-chip"
-				className={cn("rounded-full border px-2 py-0.5 text-xs", tone)}
+				className={cn(
+					"max-w-full rounded-full border px-2 py-0.5 text-xs wrap-anywhere",
+					tone,
+				)}
 			>
 				{text}
 			</span>
@@ -101,7 +104,10 @@ export function ReminderChip({ task }: { task: Task }) {
 				data-testid="reminder-chip"
 				aria-label={m.reminder_ack_aria({ status: text })}
 				// Row-level tap target parity with the habit done/skip controls.
-				className={cn("min-h-9 rounded-full border px-3 py-0.5 text-xs", tone)}
+				className={cn(
+					"min-h-9 max-w-full rounded-full border px-3 py-0.5 text-xs wrap-anywhere",
+					tone,
+				)}
 				onClick={() => {
 					setError(null);
 					void runMutation(

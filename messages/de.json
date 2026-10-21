@@ -1911,6 +1911,7 @@
 			}
 		}
 	],
+	"attachment_stored_size": "Speichergröße: {size}",
 	"attachment_empty": "Noch keine Dateien.",
 	"attachment_dropzone_hint": "Lege Dateien hier ab oder verwende Datei hinzufügen.",
 	"attachment_dropzone_active": "Zum Anhängen ablegen.",

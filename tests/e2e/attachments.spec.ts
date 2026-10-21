@@ -119,7 +119,7 @@ test("attachments render on task, comment, and list surfaces", async ({
 	await inputFor(taskSurface).setInputFiles({
 		name: "task-note.txt",
 		mimeType: "text/plain",
-		buffer: Buffer.from("task attachment plaintext"),
+		buffer: Buffer.alloc(216, "x"),
 	});
 	await finishEnrollment(page, "task-note.txt");
 	await expect(
@@ -130,6 +130,9 @@ test("attachments render on task, comment, and list surfaces", async ({
 	await expect(
 		taskSurface.getByRole("button", { name: /Cancel upload/ }),
 	).toHaveCount(0, { timeout: 20_000 });
+	await expect(
+		taskSurface.getByRole("listitem").filter({ hasText: "task-note.txt" }),
+	).toContainText("216 byte");
 	await expectNoSeriousA11y(page, "task attachments");
 
 	const composer = page.getByTestId("comment-input");
