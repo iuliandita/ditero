@@ -359,6 +359,7 @@ edit/create and cold start, reconnect, two-server isolation, and both sign-outs.
 Fresh Credential Manager and Keychain reads confirm verified evidence and final
 credential removal. The harness also requires the protected cleanup journal to
 finish before crediting sign-out; this stronger check awaits its next hosted run.
+Intel macOS final sign-out remains provisional until that cleanup check passes.
 The branch-scoped Desktop runtime journeys workflow installs development packages
 on hosted Windows, Apple Silicon macOS, Intel macOS, and Linux runners. Its
 per-journey artifacts distinguish completed checks from unavailable features
