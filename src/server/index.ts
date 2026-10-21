@@ -6,6 +6,7 @@ import { cors } from "@elysiajs/cors";
 import { mustGetMutator, mustGetQuery, type Transaction } from "@rocicorp/zero";
 import { handleMutateRequest, handleQueryRequest } from "@rocicorp/zero/server";
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
+import type { Cron } from "croner";
 import { Elysia } from "elysia";
 import { auth, handleAuthRequest } from "../auth/auth.ts";
 import { ensurePersonalWorkspace } from "../auth/bootstrap.ts";
@@ -105,6 +106,7 @@ import {
 	publicApiRoutes,
 } from "./public-api/routes.ts";
 import { publicConfig } from "./public-config.ts";
+import { createShutdown } from "./shutdown.ts";
 import { taskHistoryRoutes } from "./task-history.ts";
 import { nativeZeroPayload } from "./zero-auth.ts";
 
@@ -665,6 +667,9 @@ if (import.meta.main) {
 				})
 			: undefined,
 	);
+
+	const jobs: Cron[] = [];
+	const stopBackground: (() => void | Promise<void>)[] = [];
 	if (process.env.NODE_ENV === "production") {
 		await verifyRuntimeDatabaseRole(pool);
 		await verifyZeroShardAccess(pool, zeroShardSchema(process.env));
@@ -682,47 +687,62 @@ if (import.meta.main) {
 	if (process.env.DITERO_BACKGROUND_JOBS !== "0") {
 		// Every replica starts one; the advisory lock elects the leader per tick.
 		// Timing is validated here so a bad interval fails at boot, not at 03:00.
-		startScheduler(db, pool);
+		jobs.push(startScheduler(db, pool));
 		// Reuses the scheduler's advisory-lock mechanism under a distinct key:
 		// remote object-store latency must never hold the reminder leader hostage.
-		startAttachmentSweep(pool, attachmentStore);
+		jobs.push(startAttachmentSweep(pool, attachmentStore));
 		// Leader-elected like the scan: a periodic table sweep, not a
 		// request-driven event.
-		startOverdueSweep(db, pool);
+		jobs.push(startOverdueSweep(db, pool));
 		// Leader-elected too, under its own key: Telegram hands an update to
 		// whichever poller asks first, so a second one consumes acks away. In
 		// webhook mode it registers the listener with each bot instead of polling.
-		startTelegramPoller(db, pool);
+		const telegram = startTelegramPoller(db, pool);
+		stopBackground.push(() => telegram.stop());
 		// The drain runs on every replica (claims are mediated by SKIP LOCKED).
 		// ackBaseUrl is null when no public origin is configured, which disables
 		// the ack action rather than minting a link no push client can follow.
 		const timing = workerTiming(process.env);
-		startWorker(
-			db,
-			createSendFn({
-				database: db,
-				allowedPrivateCIDRs: notifyAllowedPrivateCIDRs(
-					process.env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
-				),
-				deadlineMs: timing.adapterDeadlineMs,
-				ackBaseUrl: ackBaseUrl(process.env),
-			}),
-			process.env,
-			timing,
+		jobs.push(
+			startWorker(
+				db,
+				createSendFn({
+					database: db,
+					allowedPrivateCIDRs: notifyAllowedPrivateCIDRs(
+						process.env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
+					),
+					deadlineMs: timing.adapterDeadlineMs,
+					ackBaseUrl: ackBaseUrl(process.env),
+				}),
+				process.env,
+				timing,
+			),
 		);
 	}
 	const relay = pushConfiguration()["fcm-relay"],
 		relayRing = channelKeyRing();
 	if (relay && relayRing)
-		startRelayRecovery(
-			pool,
-			relayRing,
-			relay,
-			notifyAllowedPrivateCIDRs(
-				process.env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
+		stopBackground.push(
+			startRelayRecovery(
+				pool,
+				relayRing,
+				relay,
+				notifyAllowedPrivateCIDRs(
+					process.env.DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS,
+				),
 			),
 		);
 	app.listen(PORT);
+	const server = app.server;
+	if (!server) throw new Error("HTTP server did not start");
+	const shutdown = createShutdown({
+		server,
+		jobs,
+		stopBackground,
+		closeDatabase: () => pool.end(),
+	});
+	process.on("SIGTERM", shutdown);
+	process.on("SIGINT", shutdown);
 	console.log(`ditero api on :${PORT}`);
 }
 

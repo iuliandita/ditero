@@ -311,6 +311,10 @@ function bindings(manifests: Manifest[], namespace: string) {
 					container.env.findIndex((item) => item.name === "ZERO_QUERY_URL"),
 			);
 			assert.equal(env(container, "ZERO_ENABLE_CRUD_MUTATIONS"), "false");
+			assert.equal(
+				env(container, "ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS"),
+				"30",
+			);
 			assert.equal(env(container, "ZERO_NUM_SYNC_WORKERS"), "1");
 			assert.equal(env(container, "ZERO_REPLICA_FILE"), "/data/replica.db");
 		}

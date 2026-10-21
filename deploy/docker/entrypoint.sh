@@ -29,4 +29,4 @@ DATABASE_URL="$DATABASE_MIGRATION_URL" bun run db:migrate
 unset DATABASE_MIGRATION_URL DITERO_MIGRATION_DB_PASSWORD
 
 echo "ditero: starting server..."
-exec bun run src/server/index.ts
+exec bun src/server/index.ts

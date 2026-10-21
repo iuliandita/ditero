@@ -15,6 +15,8 @@ go get go.opentelemetry.io/otel/sdk@v1.45.0
 go get filippo.io/age@v1.2.1
 # Both variants:
 go get golang.org/x/net@v0.60.0
+# V5 only:
+go get github.com/klauspost/compress@v1.18.7
 go mod tidy
 ```
 

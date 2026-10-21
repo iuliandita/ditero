@@ -542,7 +542,7 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 
 		await signUp(outsider, outsiderEmail);
 		const oldUrl = `/api/attachments/${encodeURIComponent(oldId)}/download`;
-		expect((await outsider.request.get(oldUrl)).status()).toBe(403);
+		expect((await outsider.request.get(oldUrl)).status()).toBe(404);
 		await goToSettings(outsider);
 		await outsider.getByTestId("e2e-setup").click();
 		await finishEnrollment(outsider);
@@ -621,14 +621,14 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 			[newId],
 		);
 		expect(rotated.rows[0].key_version).toBe(stored.rows[0].key_version + 1);
-		expect((await member.request.get(oldUrl)).status()).toBe(403);
+		expect((await member.request.get(oldUrl)).status()).toBe(404);
 		expect(
 			(
 				await member.request.get(
 					`/api/attachments/${encodeURIComponent(newId)}/download`,
 				)
 			).status(),
-		).toBe(403);
+		).toBe(404);
 
 		await closeTask(owner);
 		const pendingLink = await createInvite(owner, outsiderEmail);

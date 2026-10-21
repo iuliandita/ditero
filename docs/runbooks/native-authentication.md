@@ -33,6 +33,10 @@ The page uses the existing sign-in flow, shows the device and signed-in account,
 and requires an explicit approval. It returns no session token to the browser.
 That browser sign-in uses separate IP-plus-email buckets and a household-sized
 per-IP ceiling; see [Trusted Proxy](trusted-proxy.md) for NAT and VPN limits.
+
+Google appears only when the server has both OAuth credentials configured. A
+registration-policy refusal returns to this page with the localized registration
+message and retains the grant ID; see [sign-in providers](sign-in-providers.md).
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.
@@ -64,8 +68,11 @@ five minutes, or when their session expires if sooner. The Zero query and mutati
 endpoints verify the configured issuer and audience and check live session and
 user state. Native tokens additionally require the exact linked, unrevoked device.
 Revocation stops new query and mutation requests. It does not immediately evict
-rows already cached in a client or prove an existing cache stream has closed;
-the stream may remain until reconnect or token expiry.
+rows already cached in a client. Shipped deployments set
+`ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS=30`: an existing stream can receive rows
+until the next `/api/zero/query` revalidation rejects it, normally within 30 seconds
+plus request and scheduling latency. There is no immediate per-session disconnect.
+See [Security](../security.md) for the bound and deployment override implications.
 
 Previously issued subject-only JWTs are refused. Existing signed-in browser
 clients can refresh through the usual cookie-authenticated token endpoint.

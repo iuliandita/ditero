@@ -763,7 +763,7 @@ describe("attachment upload and finalize", () => {
 		expect(
 			(await downloadThumbnail("att-thumbnail-download", "upload-outsider"))
 				.status,
-		).toBe(403);
+		).toBe(404);
 	});
 
 	test("membership removal during thumbnail upload aborts and removes both blobs", async () => {

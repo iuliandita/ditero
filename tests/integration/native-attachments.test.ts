@@ -324,7 +324,7 @@ test("real native grants stream private ciphertext and refuse browser credential
 	check(await upload(bob.token), 404);
 	check(await upload(alice.token), 200);
 	check(await request("finalize", alice.token, { id }), 200);
-	check(await request(`${id}/download`, bob.token), 403);
+	check(await request(`${id}/download`, bob.token), 404);
 	const download = check(await request(`${id}/download`, alice.token), 200);
 	expect(download.headers.get("content-type")).toBe("application/octet-stream");
 	expect(new Uint8Array(await download.arrayBuffer())).toEqual(bytes);

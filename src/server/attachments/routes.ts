@@ -427,7 +427,7 @@ async function downloadResponse(
 		return result.rows[0] ?? null;
 	});
 	if (!row) return new Response("Not Found", { status: 404 });
-	if (!row.is_member) return new Response("Forbidden", { status: 403 });
+	if (!row.is_member) return new Response("Not Found", { status: 404 });
 	if (
 		row.state !== "committed" ||
 		!row.has_parent ||

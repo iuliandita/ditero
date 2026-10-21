@@ -134,8 +134,9 @@ def deployment(output: Path) -> None:
 
 def expected_assets(version: str) -> set[str]:
     suffixes = (
-        "linux-x64-unsigned.deb", "linux-x64-unsigned.AppImage",
-        "windows-x64-unsigned.exe", "macos-arm64-adhoc.dmg",
+        "linux-x64-unsigned.deb", "linux-x64-unsigned.rpm", "linux-x64-unsigned.AppImage",
+        "windows-x64-unsigned.exe", "windows-arm64-unsigned.exe",
+        "macos-arm64-adhoc.dmg", "macos-x64-adhoc.dmg",
         "android-independent-universal-signed.apk", "android-independent-universal-signed.aab",
         "compose.tar.gz", "kustomize.tar.gz", "sbom-alpine.spdx.json", "sbom-debian.spdx.json", "sbom-zero.spdx.json",
         "image-alpine.txt", "image-debian.txt", "image-zero.txt",
@@ -351,13 +352,13 @@ def publish(output: Path) -> None:
     digests["SHA256SUMS.txt"] = hashlib.sha256((output / "SHA256SUMS.txt").read_bytes()).hexdigest()
     names.add("SHA256SUMS.txt")
     prerelease = version.startswith("0.") or "-" in version
-    notes = f"""Ditero {version} is an experimental alpha for self-hosted testing. Back up your database and attachments before upgrading.
+    notes = f"""Ditero {version} is an experimental build for self-hosted testing. Back up your database and attachments before upgrading.
 
 Server: multi-architecture amd64/arm64 Alpine app, Debian app, and Zero images at `ghcr.io/{repo}:{version}`, `:{version}-debian`, and `:{version}-zero`. See the image digest files and SPDX SBOMs. Images are signed with keyless cosign; verify the release workflow identity before deployment.
 
 Deployment: the Helm chart uses external PostgreSQL with logical replication and an existing Secret; see the README inside the chart. The Kustomize archive provides app and Zero manifests for external PostgreSQL; its guide describes local rendering and the remaining cluster qualification. The Compose archive includes the bundled database initialization files. Set `DITERO_IMAGE_TAG={version}` when running Compose.
 
-Desktop: Linux x86_64 DEB/AppImage, unsigned Windows x86_64 installer, and ad-hoc signed macOS Apple Silicon DMG. Windows and macOS downloads have no trusted publisher signature or notarization. Native qualification, general deep links and automatic updates remain incomplete.
+Desktop: Linux x86_64 DEB/RPM/AppImage, unsigned Windows x86_64/ARM64 NSIS installers, and separate ad-hoc signed macOS Apple Silicon/Intel DMGs. Windows and macOS downloads have no trusted publisher signature or notarization. Installer smoke checks cover payloads and bounded startup, not authenticated journeys or upgrades. RPM-distro installation remains unqualified. Native qualification, general deep links and automatic updates remain incomplete.
 
 Android: signed independent APK and AAB, with UnifiedPush and no Google SDK configuration. The AAB is for distribution tooling, not direct installation. Broader device qualification remains open; no store distribution is configured.
 

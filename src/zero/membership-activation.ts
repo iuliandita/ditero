@@ -228,11 +228,7 @@ export async function removeMembershipWithActivation(
 		`select id from list where workspace_id=$1 and ($2::text is null or id>$2) order by id limit ${PAGE} for update`,
 		[workspaceId],
 	);
-	await query(
-		tx,
-		"create temporary table if not exists membership_activation_affected (id text primary key) on commit drop",
-	);
-	await query(tx, "truncate membership_activation_affected");
+	const affectedTaskIds: string[] = [];
 	let cursor: string | null = null;
 	while (true) {
 		const rows = await query(tx, `${affected} for update of t`, [
@@ -242,30 +238,28 @@ export async function removeMembershipWithActivation(
 		]);
 		if (rows.length === 0) break;
 		const taskIds = rows.map((row) => id(row));
-		await query(
-			tx,
-			"insert into membership_activation_affected(id) select unnest($1::text[]) on conflict do nothing",
-			[taskIds],
-		);
+		affectedTaskIds.push(...taskIds);
 		cursor = taskIds[taskIds.length - 1];
 	}
 	const changed = await query(
 		tx,
-		`select (select count(*) from membership_activation_affected)::text as locked,
-		(select count(*) from (${affected.replace(`limit ${PAGE}`, "")}) current)::text as current`,
+		`select (select count(*) from (${affected.replace(`limit ${PAGE}`, "")}) current)::text as current`,
 		[workspaceId, targetUserId, null],
 	);
-	if (changed.length !== 1 || changed[0].locked !== changed[0].current)
+	if (
+		changed.length !== 1 ||
+		String(affectedTaskIds.length) !== changed[0].current
+	)
 		throw new Error("Membership affected tasks changed");
 	let pairTask: string | null = null;
 	let pairUser: string | null = null;
 	while (true) {
 		const rows = await query(
 			tx,
-			`select a.task_id,a.user_id from task_assignee a join membership_activation_affected e on e.id=a.task_id
-			where a.user_id=$1 and ($2::text is null or (a.task_id,a.user_id)>($2,$3))
+			`select a.task_id,a.user_id from task_assignee a
+			where a.task_id=any($4::text[]) and a.user_id=$1 and ($2::text is null or (a.task_id,a.user_id)>($2,$3))
 			order by a.task_id,a.user_id limit ${PAGE} for update of a`,
-			[targetUserId, pairTask, pairUser],
+			[targetUserId, pairTask, pairUser, affectedTaskIds],
 		);
 		if (!rows.length) break;
 		pairTask = id(rows[rows.length - 1], "task_id");
@@ -273,9 +267,9 @@ export async function removeMembershipWithActivation(
 	}
 	await lockPaged(
 		tx,
-		`select g.task_id as id from task_notification_activation g join membership_activation_affected e on e.id=g.task_id
-		where ($1::text is null or g.task_id>$1) order by g.task_id limit ${PAGE} for update of g`,
-		[],
+		`select g.task_id as id from task_notification_activation g
+		where g.task_id=any($1::text[]) and ($2::text is null or g.task_id>$2) order by g.task_id limit ${PAGE} for update of g`,
+		[affectedTaskIds],
 	);
 	let recipientTask: string | null = null;
 	let recipientUser: string | null = null;
@@ -283,10 +277,9 @@ export async function removeMembershipWithActivation(
 		const rows = await query(
 			tx,
 			`select r.task_id,r.user_id from task_notification_recipient r
-			join membership_activation_affected e on e.id=r.task_id
-			where ($1::text is null or (r.task_id,r.user_id) > ($1,$2))
+			where r.task_id=any($3::text[]) and ($1::text is null or (r.task_id,r.user_id) > ($1,$2))
 			order by r.task_id,r.user_id limit ${PAGE} for update of r`,
-			[recipientTask, recipientUser],
+			[recipientTask, recipientUser, affectedTaskIds],
 		);
 		if (!rows.length) break;
 		recipientTask = id(rows[rows.length - 1], "task_id");
@@ -296,12 +289,14 @@ export async function removeMembershipWithActivation(
 		tx,
 		`update task_notification_activation g set status='blocked',completion_mode=null,
 		blocked_reason='membership-removed',updated_at=now()
-		from membership_activation_affected e where e.id=g.task_id`,
+		where g.task_id=any($1::text[])`,
+		[affectedTaskIds],
 	);
 	await query(
 		tx,
 		`update task_notification_recipient r set active=false
-		from membership_activation_affected e where e.id=r.task_id`,
+		where r.task_id=any($1::text[])`,
+		[affectedTaskIds],
 	);
 	await query(
 		tx,

@@ -265,6 +265,49 @@ describe("withLeaderLock", () => {
 		expect(await withLeaderLock(pool, LOCK_KEY, async () => 2)).toBe(2);
 		expect(await advisoryHolders(LOCK_KEY)).toEqual([]);
 	});
+
+	test("a lost lock connection aborts leadership and cannot write after a new leader acquires", async () => {
+		let entered!: (pid: number) => void;
+		const ready = new Promise<number>((resolve) => {
+			entered = resolve;
+		});
+		let resume!: () => void;
+		const paused = new Promise<void>((resolve) => {
+			resume = resolve;
+		});
+		let lost!: () => void;
+		const disconnected = new Promise<void>((resolve) => {
+			lost = resolve;
+		});
+		const old = withLeaderLock(pool, LOCK_KEY, async (client, signal) => {
+			const { rows } = await client.query<{ pid: number }>(
+				"select pg_backend_pid() as pid",
+			);
+			signal.addEventListener("abort", lost, { once: true });
+			entered(rows[0].pid);
+			await paused;
+			// Leader scans use this connection, never a pool that could reconnect.
+			await client.query("select 1");
+		});
+		const outcome = old.then(
+			() => "unexpected success",
+			() => "disconnected",
+		);
+		try {
+			const pid = await ready;
+			await otherPool.query("select pg_terminate_backend($1)", [pid]);
+			await disconnected;
+			expect(await withLeaderLock(otherPool, LOCK_KEY, async () => true)).toBe(
+				true,
+			);
+		} finally {
+			resume();
+		}
+		expect(await outcome).toBe("disconnected");
+		expect(await withLeaderLock(pool, LOCK_KEY, async () => "recovered")).toBe(
+			"recovered",
+		);
+	}, 10_000);
 });
 
 describe("reminder creation", () => {

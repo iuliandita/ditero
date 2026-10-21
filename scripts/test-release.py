@@ -17,6 +17,27 @@ spec.loader.exec_module(release)
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_all_desktop_installer_targets_are_required(self):
+        version = "0.0.1-beta.1"
+        desktop = {
+            "linux-x64-unsigned.deb", "linux-x64-unsigned.rpm", "linux-x64-unsigned.AppImage",
+            "windows-x64-unsigned.exe", "windows-arm64-unsigned.exe",
+            "macos-arm64-adhoc.dmg", "macos-x64-adhoc.dmg",
+        }
+        expected = release.expected_assets(version)
+        self.assertTrue({f"ditero-{version}-{name}" for name in desktop} <= expected)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            for name in expected:
+                (output / name).write_bytes(b"artifact")
+            for name in desktop:
+                with self.subTest(name=name):
+                    path = output / f"ditero-{version}-{name}"
+                    path.unlink()
+                    with self.assertRaisesRegex(ValueError, "missing="):
+                        release.verify_downloads(output, version)
+                    path.write_bytes(b"artifact")
+
     def test_complete_downloads(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)

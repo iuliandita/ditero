@@ -26,6 +26,10 @@ const packages = [
 				"apps/desktop/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/original.AppImage",
 				"AppImage",
 			],
+			[
+				"apps/desktop/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/original.rpm",
+				"rpm",
+			],
 		],
 	},
 	{
@@ -44,6 +48,26 @@ const packages = [
 		files: [
 			[
 				"apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/original.dmg",
+				"dmg",
+			],
+		],
+	},
+	{
+		platform: "windows-arm64",
+		label: "windows-arm64-unsigned",
+		files: [
+			[
+				"apps/desktop/src-tauri/target/aarch64-pc-windows-msvc/release/bundle/nsis/original.exe",
+				"exe",
+			],
+		],
+	},
+	{
+		platform: "macos-x64",
+		label: "macos-x64-adhoc",
+		files: [
+			[
+				"apps/desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/original.dmg",
 				"dmg",
 			],
 		],
@@ -129,6 +153,44 @@ describe("native release artifact collection", () => {
 			"expected exactly one linux AppImage package, found 0",
 		);
 		expect(readdirSync(root)).toEqual(["apps"]);
+	});
+
+	test.each(
+		packages.filter(({ platform }) => platform !== "android"),
+	)("collects $platform development packages from the debug profile", ({
+		platform,
+		label,
+		files,
+	}) => {
+		const root = fixture(
+			files.map(([path, content]) => [
+				path.replace("/release/", "/debug/"),
+				content,
+			]),
+		);
+		const result = spawnSync(
+			"python3",
+			[
+				"scripts/native-artifacts.py",
+				"--root",
+				root,
+				"--output",
+				join(root, "out"),
+				"--platform",
+				platform,
+				"--version",
+				version,
+				"--profile",
+				"debug",
+			],
+			{ encoding: "utf8" },
+		);
+		expect(result.status, result.stderr).toBe(0);
+		expect(readdirSync(join(root, "out")).sort()).toEqual(
+			files
+				.map(([, extension]) => `ditero-${version}-${label}.${extension}`)
+				.sort(),
+		);
 	});
 
 	test("refuses duplicate packages", () => {

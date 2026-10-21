@@ -116,6 +116,7 @@ const PLAIN_SECRETS = [
 ];
 // Validated or fixed here rather than passed through verbatim.
 const SPECIAL = [
+	"ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS",
 	"API_PORT",
 	"NODE_ENV",
 	"BETTER_AUTH_URL",
@@ -587,6 +588,8 @@ export function buildConfiguration(
 	};
 	if (!Object.hasOwn(roles, role)) fail("unknown bundle role");
 	scanUnsupported(env);
+	if (role !== "zero" && present(env.ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS))
+		fail("ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS is not allowed for this role");
 	const allowed = {
 		postgres: [
 			"POSTGRES_PASSWORD",
@@ -698,13 +701,20 @@ export function buildConfiguration(
 			ZERO_QUERY_URL: `http://api:${API_PORT}/api/zero/query`,
 			ZERO_MUTATE_URL: `http://api:${API_PORT}/api/zero/mutate`,
 			ZERO_ENABLE_CRUD_MUTATIONS: "false",
+			ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS: "30",
 			ZERO_ADMIN_PASSWORD: values.ZERO_ADMIN_PASSWORD,
 		});
 	}
-	for (const name of ["API_PORT", "NODE_ENV", "DITERO_ZERO_SHARD_SCHEMA"]) {
+	for (const name of [
+		"API_PORT",
+		"NODE_ENV",
+		"DITERO_ZERO_SHARD_SCHEMA",
+		"ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS",
+	]) {
 		const expected = {
 			API_PORT,
 			NODE_ENV: "production",
+			ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS: "30",
 			DITERO_ZERO_SHARD_SCHEMA: DEFAULT_SHARD_SCHEMA,
 		}[name];
 		if (present(env[name]) && env[name] !== expected) fail(`${name} is fixed`);
