@@ -2095,6 +2095,7 @@
 			}
 		}
 	],
+	"attachment_stored_size": "الحجم المخزّن: {size}",
 	"attachment_empty": "لا توجد ملفات بعد.",
 	"attachment_dropzone_hint": "أفلت الملفات هنا أو استخدم إضافة ملف.",
 	"attachment_dropzone_active": "أفلت للإرفاق.",

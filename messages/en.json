@@ -1911,6 +1911,7 @@
 			}
 		}
 	],
+	"attachment_stored_size": "Stored size: {size}",
 	"attachment_empty": "No files yet.",
 	"attachment_dropzone_hint": "Drop files here or use Add file.",
 	"attachment_dropzone_active": "Drop to attach.",

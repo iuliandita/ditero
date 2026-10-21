@@ -1140,7 +1140,9 @@ function NormalWorkspace({
 								aria-label={m.setup_title()}
 								className="mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-lg border p-4 text-sm"
 							>
-								<p className="min-w-0 flex-1">{m.setup_pending()}</p>
+								<p className="min-w-0 basis-full sm:flex-1">
+									{m.setup_pending()}
+								</p>
 								<Button
 									variant="outline"
 									className="min-h-11"

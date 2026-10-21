@@ -1957,6 +1957,7 @@
 			}
 		}
 	],
+	"attachment_stored_size": "Tamaño almacenado: {size}",
 	"attachment_empty": "Todavía no hay archivos.",
 	"attachment_dropzone_hint": "Suelta archivos aquí o usa Añadir archivo.",
 	"attachment_dropzone_active": "Suelta para adjuntar.",

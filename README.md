@@ -273,7 +273,9 @@ types, and thumbnails. It can still see the parent record, uploader, byte counts
 state, and storage location because authorization, quota enforcement, and garbage collection
 depend on them. Browsers without writable private-file staging support uploads
 up to 8 MiB of combined encrypted file and thumbnail data; server limits and
-workspace quotas still apply.
+workspace quotas still apply. Attachment tiles show the original byte count when it
+can be recovered exactly from the encrypted framing. Otherwise, "Stored size"
+identifies the encrypted byte count, including framing overhead.
 
 The Compose default stores ciphertext on a persistent filesystem volume. S3-compatible storage
 is also supported without exposing the bucket to browsers. Uploads require a live connection,
