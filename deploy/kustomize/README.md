@@ -164,7 +164,9 @@ a `wait-for-app` init container, the same gate the Helm chart uses: it polls the
 app `/health` until the reported `replica` equals the app image reference, which
 the app serves as `DITERO_REPLICA_ID`. The old app pod, or a new one still
 migrating, never matches, so Zero starts only after the new app is migrated and
-healthy. Apply the base or overlay once; no staged replicas are needed.
+healthy. The init container reads `APP_HEALTH_URL` and `APP_REVISION`, both set by
+the manifests as in the Helm chart. Apply the base or overlay once; no staged
+replicas are needed.
 
 The identifier is copied from the app image by the `replacements` block in the
 base. A kustomization that overrides `images` must repeat that block, as in the
