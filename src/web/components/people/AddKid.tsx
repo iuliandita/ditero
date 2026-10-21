@@ -16,6 +16,10 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import {
+	DISPLAY_NAME_MAX_LENGTH,
+	normalizeDisplayName,
+} from "../../../auth/display-name.ts";
 import { m } from "../../../paraglide/messages.js";
 import { copyText } from "../../lib/clipboard.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
@@ -55,6 +59,13 @@ export function AddKid({
 
 	async function submit() {
 		if (busy) return;
+		let name: string;
+		try {
+			name = normalizeDisplayName(displayName);
+		} catch {
+			setError(m.account_name_invalid());
+			return;
+		}
 		setBusy(true);
 		setError(null);
 		try {
@@ -64,14 +75,19 @@ export function AddKid({
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
 					workspaceId,
-					displayName: displayName.trim(),
+					displayName: name,
 					password,
 					role,
 				}),
 			});
 			if (!res.ok) {
-				const msg = (await res.text()).trim();
-				setError(msg || m.add_kid_failed_status({ status: res.status }));
+				const text = (await res.text()).trim();
+				let message = text;
+				if (res.headers.get("content-type")?.includes("application/json")) {
+					const data = JSON.parse(text) as { message?: unknown };
+					message = typeof data.message === "string" ? data.message : "";
+				}
+				setError(message || m.add_kid_failed_status({ status: res.status }));
 				return;
 			}
 			const data = (await res.json()) as { userId: string; email: string };
@@ -149,6 +165,7 @@ export function AddKid({
 							<Input
 								id={nameId}
 								data-testid="add-kid-name"
+								maxLength={DISPLAY_NAME_MAX_LENGTH}
 								value={displayName}
 								placeholder={m.add_kid_name_placeholder()}
 								onChange={(e) => setDisplayName(e.target.value)}

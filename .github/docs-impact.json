@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "c5ba25d9e64f257ead672cbb503fec6f509afbbddcd7fdc74cc313a7fae6b33f",
+			"sourceDigest": "640ff6beafe4acdea12ba520a152308001fe09082f892e99ee37e6ffad4938c2",
 			"docs": ["README.md"],
-			"note": "Document display names at signup and in Account settings, including propagation to members and assignees."
+			"note": "Document display names at signup and in Account settings, propagation to members and assignees, and the shared managed-account name limit."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
@@ -25,9 +25,9 @@
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		},
 		"authentication": {
-			"sourceDigest": "8e469f1225eb99218012c796628279aabd832c38f8bdab443b50d23d43eae32e",
+			"sourceDigest": "6ca45caa3202bc731bff215dcaaeb0e4d0a5b92e1fe73e27a1b47cb0ce241dbc",
 			"docs": ["docs/runbooks/public-api.md"],
-			"note": "Document the current account name, Better Auth name update validation, and synced display behavior."
+			"note": "Document the current account name, identity update validation, synced display behavior, and managed-account normalization with JSON validation errors."
 		}
 	}
 }

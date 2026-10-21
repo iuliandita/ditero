@@ -58,7 +58,8 @@ size and high contrast stay on each device.
 - Recurring tasks and habits/chores with flexible recurrence (RFC 5545 RRULE) and streaks
 - Reminders with escalation and acknowledgement, delivered to ntfy, Telegram, Discord,
   Slack, or email
-- Display names at sign-up and in Settings > Account, shared in member and assignee displays
+- Display names at sign-up and in Settings > Account, shared in member and assignee displays.
+  Names, including managed-account names, use a trimmed 1-80-character limit without control characters.
 - Multi-workspace sharing with Owner / Admin / Member / Viewer roles
 - Invitation links, managed accounts, comments, and recorded task completion history
 - Email/password, passkeys, TOTP, recovery codes, and optional
