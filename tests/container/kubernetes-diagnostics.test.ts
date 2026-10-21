@@ -8,7 +8,7 @@ test.each([
 	const result = await capture(
 		process.execPath,
 		["-e", `setInterval(() => process.${stream}.write('x'.repeat(65536)), 1)`],
-		{ limit: 1024, timeout: 5000 },
+		{ limit: 1024, timeout: 2000 },
 	);
 	expect(result.output.length).toBe(1024);
 	expect(result.truncated).toBe(true);
