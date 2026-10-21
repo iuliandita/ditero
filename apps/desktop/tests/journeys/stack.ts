@@ -58,7 +58,9 @@ export function background(
 	args: string[],
 	env = process.env,
 ) {
-	const log = createWriteStream(resolve(evidence, `${name}.log`));
+	const log = createWriteStream(resolve(evidence, `${name}.log`), {
+		flags: "a",
+	});
 	const child = spawn(command, args, {
 		cwd: root,
 		env,

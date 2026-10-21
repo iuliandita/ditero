@@ -130,6 +130,7 @@ Windows uses installed-app toasts with click routing while the banner is visible
 dismissed banners are removed from history. macOS 10.14+ uses
 UNUserNotificationCenter and asks for notification permission when you enable delivery. Denied permission is shown
 with a localized reason; allow Ditero in system notification settings and retry.
+Permission-check failures remain unavailable; they never imply permission granted.
 macOS 10.13 retains the legacy NSUserNotification backend; runtime qualification
 of that older OS remains open. UserNotifications is weak-linked so adding modern
 delivery does not raise the bundle minimum.

@@ -12,3 +12,5 @@ $installed = Join-Path $destination 'ditero-desktop.exe'
 $built = "apps/desktop/src-tauri/target/$env:DESKTOP_TARGET/debug/ditero-desktop.exe"
 if ((Get-FileHash $installed).Hash -ne (Get-FileHash $built).Hash) { throw 'Installed bytes differ' }
 @{application=$installed; installer=$installer[0].Name} | ConvertTo-Json | Set-Content (Join-Path $out 'installed.json')
+& powershell -NoProfile -File apps/desktop/tests/journeys/windows-notification-count.ps1 -Diagnostics | Set-Content (Join-Path $out 'evidence/notification-platform.json')
+if ($LASTEXITCODE -ne 0) { throw 'Notification platform diagnostic failed' }

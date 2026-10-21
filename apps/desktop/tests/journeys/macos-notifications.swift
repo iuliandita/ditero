@@ -3,6 +3,10 @@ import ApplicationServices
 import Foundation
 
 let mode = CommandLine.arguments[1]
+if mode == "permission" {
+    NSRunningApplication.runningApplications(withBundleIdentifier: "io.ditero.desktop")
+        .first?.activate(options: [.activateIgnoringOtherApps])
+}
 let evidence = URL(fileURLWithPath: ProcessInfo.processInfo.environment["RUNNER_TEMP"]!)
     .appendingPathComponent("desktop-journeys/evidence")
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {

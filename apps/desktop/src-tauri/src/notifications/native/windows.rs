@@ -3,6 +3,7 @@ use ::windows::{
     core::{h, Interface, HSTRING},
     Data::Xml::Dom::XmlDocument,
     Foundation::{DateTime, IReference, PropertyValue, TypedEventHandler},
+    Win32::System::WinRT::{RoInitialize, RoUninitialize, RO_INIT_MULTITHREADED},
     UI::Notifications::{
         NotificationSetting, ToastNotification, ToastNotificationManager, ToastNotifier,
     },
@@ -10,11 +11,51 @@ use ::windows::{
 
 const APP_ID: &str = "io.ditero.desktop";
 
+struct Apartment(bool);
+impl Drop for Apartment {
+    fn drop(&mut self) {
+        if self.0 {
+            unsafe { RoUninitialize() };
+        }
+    }
+}
+thread_local! {
+    static APARTMENT: std::cell::OnceCell<Apartment> = const { std::cell::OnceCell::new() };
+}
+fn apartment() -> Result<()> {
+    // A cached agile factory does not initialize each Tokio worker's apartment.
+    APARTMENT.with(|slot| {
+        if slot.get().is_some() {
+            return Ok(());
+        }
+        let owns = match unsafe { RoInitialize(RO_INIT_MULTITHREADED) } {
+            Ok(()) => true,
+            Err(error) if error.code().0 == 0x80010106u32 as i32 => false,
+            Err(error) => return Err(failure("initialize", &error, "temporary-unavailable")),
+        };
+        let _ = slot.set(Apartment(owns));
+        Ok(())
+    })
+}
 fn notifier() -> Result<ToastNotifier> {
+    apartment()?;
     ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_ID))
-        .map_err(|_| "unsupported")
+        .map_err(|error| failure("create", &error, "unsupported"))
+}
+fn failure(stage: &str, error: &::windows::core::Error, state: &'static str) -> &'static str {
+    #[cfg(debug_assertions)]
+    eprintln!(
+        "Windows notification {stage} HRESULT: {:#010x}",
+        error.code().0
+    );
+    let _ = (stage, error);
+    state
 }
 pub fn initialize() {
+    if apartment().is_err() {
+        eprintln!("notification startup initialization unconfirmed");
+        return;
+    }
     if !ToastNotificationManager::History()
         .and_then(|history| history.ClearWithId(&HSTRING::from(APP_ID)))
         .is_ok()
@@ -23,7 +64,10 @@ pub fn initialize() {
     }
 }
 pub async fn permission(_request: bool) -> Result<()> {
-    match notifier()?.Setting().map_err(|_| "temporary-unavailable")? {
+    match notifier()?
+        .Setting()
+        .map_err(|error| failure("setting", &error, "temporary-unavailable"))?
+    {
         NotificationSetting::Enabled => Ok(()),
         _ => Err("denied"),
     }
@@ -55,6 +99,7 @@ impl Backend {
             return Err("cancelled");
         }
         permission(false).await?;
+        apartment()?;
         // Construct text nodes instead of interpolating localized text into XML.
         let xml = XmlDocument::new().map_err(|_| "temporary-unavailable")?;
         xml.LoadXml(h!("<toast duration='long' activationType='foreground'><visual><binding template='ToastGeneric'><text>Ditero</text><text></text></binding></visual></toast>")).map_err(|_| "temporary-unavailable")?;
@@ -117,15 +162,16 @@ impl Backend {
         let dismissed = match toast.Dismissed(&TypedEventHandler::new(move |_, _| {
             // Classic desktop activation is reliable while the banner is on screen.
             // Do not leave a history entry whose click could launch a second process.
-            if ToastNotificationManager::History()
-                .and_then(|history| {
-                    history.RemoveGroupedTagWithId(
-                        &HSTRING::from(&key),
-                        h!("ditero"),
-                        &HSTRING::from(APP_ID),
-                    )
-                })
-                .is_err()
+            if apartment().is_err()
+                || ToastNotificationManager::History()
+                    .and_then(|history| {
+                        history.RemoveGroupedTagWithId(
+                            &HSTRING::from(&key),
+                            h!("ditero"),
+                            &HSTRING::from(APP_ID),
+                        )
+                    })
+                    .is_err()
             {
                 eprintln!("notification history withdrawal unconfirmed");
             }
@@ -151,6 +197,10 @@ impl Backend {
         Ok(display)
     }
     pub fn close(&self, id: &str, display: Display) {
+        if apartment().is_err() {
+            eprintln!("notification withdrawal initialization unconfirmed");
+            return;
+        }
         let _ = display.toast.RemoveActivated(display.action);
         let _ = display.toast.RemoveFailed(display.failed);
         let _ = display.toast.RemoveDismissed(display.dismissed);
@@ -161,5 +211,10 @@ impl Backend {
         if hidden.is_err() || removed.is_err() {
             eprintln!("notification withdrawal unconfirmed");
         }
+    }
+}
+impl Drop for Backend {
+    fn drop(&mut self) {
+        let _ = apartment();
     }
 }
