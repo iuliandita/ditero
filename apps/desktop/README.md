@@ -366,6 +366,8 @@ It uses ephemeral servers and an OS-trusted local CA, without certificate bypass
 macOS automation is included only in debug builds, requires explicit process-local
 test configuration, and is checked for absence from the optimized release binary.
 Sign-out now starts retired notification cleanup after durable local revocation.
+A native regression and mutation control verify that normal close waits for
+pending sync-handshake classification before retiring the socket.
 These disposable runner accounts do not qualify download trust, trusted signing,
 notarization, upgrades, or physical devices. Windows/macOS system notifications
 remain unavailable in the product. Existing client data, backups, and rollback

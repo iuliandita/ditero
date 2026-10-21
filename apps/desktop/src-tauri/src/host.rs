@@ -3551,9 +3551,12 @@ mod tests {
                 let session = host.session.clone().unwrap();
                 let guard = host.fences.begin(&session).unwrap();
                 let (done, handshake) = oneshot::channel();
+                let (release, started) = oneshot::channel();
                 let (tx, _rx) = mpsc::channel(1);
                 let task = tauri::async_runtime::spawn(async move {
-                    tokio::task::yield_now().await;
+                    if started.await.is_err() {
+                        return;
+                    }
                     guard.complete(safe).unwrap();
                     let _ = done.send(());
                 });
@@ -3567,16 +3570,24 @@ mod tests {
                     },
                 );
                 assert!(!host.fences.allowed(&session));
-                if client_close {
-                    host.post(
-                        &json!({"op":"ws.close","rid":1,"gen":host.gen,"cid":1}),
-                        100,
-                    )
-                    .await
-                    .unwrap();
-                } else {
-                    host.drain_gracefully().await;
-                }
+                let mut closing = Box::pin(async {
+                    if client_close {
+                        host.post(
+                            &json!({"op":"ws.close","rid":1,"gen":host.gen,"cid":1}),
+                            100,
+                        )
+                        .await
+                        .unwrap();
+                    } else {
+                        host.drain_gracefully().await;
+                    }
+                });
+                assert!(
+                    futures_util::poll!(&mut closing).is_pending(),
+                    "normal close returns before handshake classification"
+                );
+                release.send(()).unwrap();
+                closing.await;
                 assert!(host.sockets.is_empty());
                 assert_eq!(
                     host.fences.allowed(&session),

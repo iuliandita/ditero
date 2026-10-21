@@ -23,7 +23,7 @@ try:
     mutant = subprocess.run(command, capture_output=True, text=True, timeout=180)
     output = mutant.stdout + mutant.stderr
     (evidence / "close-mutant.log").write_text(output)
-    assert mutant.returncode != 0 and "client_close=false, safe=true" in output, "Mutation did not reach the expected refusal-fence assertion"
+    assert mutant.returncode != 0 and "normal close returns before handshake classification" in output, "Mutation did not reach the expected refusal-fence assertion"
 finally:
     source.write_bytes(original)
 assert source.read_bytes() == original, "Native source restoration failed"
