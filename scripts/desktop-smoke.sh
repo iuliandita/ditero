@@ -26,7 +26,10 @@ mkdir -p "$out"
 
 one_package() {
   local matches=("$bundle/$1/"*".$2")
-  [[ ${#matches[@]} == 1 && -s "${matches[0]}" ]]
+  if [[ ${#matches[@]} != 1 || ! -f "${matches[0]}" || ! -s "${matches[0]}" || -L "${matches[0]}" ]]; then
+    echo "Expected exactly one nonempty regular $1 package" >&2
+    return 1
+  fi
   printf '%s\n' "${matches[0]}"
 }
 
@@ -85,7 +88,7 @@ case "$platform" in
     dmg=$(one_package dmg dmg)
     mount="$out/mounted"
     mkdir "$mount"
-    hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
+    { yes || true; } | PAGER="cat" hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
     trap 'hdiutil detach "$mount"' EXIT
     ditto "$mount/Ditero.app" "$out/Ditero.app"
     hdiutil detach "$mount"
