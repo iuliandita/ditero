@@ -1,6 +1,11 @@
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { createWriteStream, mkdirSync, readFileSync } from "node:fs";
+import {
+	appendFileSync,
+	createWriteStream,
+	mkdirSync,
+	readFileSync,
+} from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createServer as httpsServer } from "node:https";
 import { type Socket, createServer as tcpServer } from "node:net";
@@ -72,6 +77,7 @@ export async function freePort() {
 }
 export async function proxy(upstream: number) {
 	const port = await freePort();
+	const log = createWriteStream(resolve(evidence, `https-${port}.log`));
 	let server: ReturnType<typeof httpsServer>;
 	const sockets = new Set<Socket>();
 	async function online() {
@@ -90,6 +96,9 @@ export async function proxy(upstream: number) {
 						headers: req.headers,
 					},
 					(reply) => {
+						log.write(
+							`${req.method} ${req.url?.split("?")[0]} ${reply.statusCode}\n`,
+						);
 						res.writeHead(reply.statusCode ?? 502, reply.headers);
 						reply.pipe(res);
 					},
@@ -101,6 +110,7 @@ export async function proxy(upstream: number) {
 				req.pipe(request);
 			},
 		);
+		server.on("tlsClientError", (error) => log.write(`TLS ${error.message}\n`));
 		server.on("connection", (socket) => {
 			sockets.add(socket);
 			socket.on("close", () => sockets.delete(socket));
@@ -186,13 +196,17 @@ export async function stack() {
 		"--encoding=UTF8",
 		"--no-locale",
 	]);
+	appendFileSync(
+		resolve(data, "postgresql.conf"),
+		"\nunix_socket_directories = ''\nwal_level = 'logical'\nmax_replication_slots = 20\nmax_wal_senders = 20\n",
+	);
 	run(exe("pg_ctl"), [
 		"-D",
 		data,
 		"-l",
 		resolve(evidence, "postgres.log"),
 		"-o",
-		`-p ${port} -h 127.0.0.1 -c unix_socket_directories='' -c wal_level=logical -c max_replication_slots=20 -c max_wal_senders=20`,
+		`-p ${port} -h 127.0.0.1`,
 		"-w",
 		"start",
 	]);

@@ -129,6 +129,7 @@ try {
 	});
 	assert(app);
 	const native = app;
+	let desktopTaskId = "";
 	await journey("untrusted HTTPS certificate is refused", async () => {
 		const rejected = await untrustedFixture();
 		try {
@@ -222,6 +223,11 @@ try {
 					)
 				).rowCount === 1,
 		);
+		desktopTaskId = (
+			await a.pool.query(
+				"select id from task where list_id='list_journey_a' and title='Created on desktop'",
+			)
+		).rows[0].id;
 	});
 	await journey("server task reaches desktop", async () => {
 		await a.pool.query(
@@ -237,6 +243,25 @@ try {
 	await journey("offline change remains queued", async () => {
 		await a.api.offline();
 		await a.zero.offline();
+		await native.click(`[data-task-id="${desktopTaskId}"]`);
+		await native.fill(ids("task-detail-title"), "Edited while offline");
+		await native.evaluate(
+			"(() => { document.querySelector('[data-testid=\"task-detail-title\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); return true })()",
+		);
+		await native.click(ids("task-detail-close"));
+		await until("optimistic offline edit", () =>
+			native.evaluate(
+				"document.querySelector('[data-testid=\"list\"]').textContent.includes('Edited while offline')",
+			),
+		);
+		assert.equal(
+			(
+				await a.pool.query("select title from task where id=$1", [
+					desktopTaskId,
+				])
+			).rows[0].title,
+			"Created on desktop",
+		);
 		await addTask("Queued while offline");
 		assert.equal(
 			(
@@ -259,7 +284,7 @@ try {
 		await openList("List journey_a");
 		await until("durable offline task", () =>
 			native.evaluate(
-				"document.querySelector('[data-testid=\"list\"]').textContent.includes('Queued while offline')",
+				"document.querySelector('[data-testid=\"list\"]').textContent.includes('Queued while offline') && document.querySelector('[data-testid=\"list\"]').textContent.includes('Edited while offline')",
 			),
 		);
 		assert.equal(
@@ -284,6 +309,15 @@ try {
 					)
 				).rowCount === 1,
 			120,
+		);
+		await until(
+			"offline edit committed",
+			async () =>
+				(
+					await a.pool.query("select title from task where id=$1", [
+						desktopTaskId,
+					])
+				).rows[0].title === "Edited while offline",
 		);
 	});
 	await native.click(ids("nav-settings"));
@@ -386,7 +420,7 @@ try {
 		await openList("List journey_b");
 		assert.equal(
 			await native.evaluate(
-				"document.body.textContent.includes('Created on desktop') || document.body.textContent.includes('Queued while offline') || document.body.textContent.includes('List journey_a')",
+				"document.body.textContent.includes('Created on desktop') || document.body.textContent.includes('Edited while offline') || document.body.textContent.includes('Queued while offline') || document.body.textContent.includes('List journey_a')",
 			),
 			false,
 		);

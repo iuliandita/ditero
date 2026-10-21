@@ -40,8 +40,11 @@ export async function desktop(application: string) {
 				DITERO_JOURNEY_DIRECTORY: state,
 				DITERO_JOURNEY_TOKEN: token,
 			});
-			await until("macOS debug hook", () => existsSync(ready));
-			port = JSON.parse(readFileSync(ready, "utf8")).port;
+			port = await until("macOS debug hook", () =>
+				existsSync(ready)
+					? (JSON.parse(readFileSync(ready, "utf8")).port as number)
+					: undefined,
+			);
 		} else {
 			if (!driver) {
 				port = await freePort();
@@ -111,6 +114,14 @@ export async function desktop(application: string) {
 		});
 	}
 	async function screenshot(name: string) {
+		writeFileSync(
+			resolve(evidence, `${name}-protocol.json`),
+			JSON.stringify(
+				await evaluate("globalThis.__journeyProtocol ?? []"),
+				null,
+				2,
+			),
+		);
 		writeFileSync(
 			resolve(evidence, `${name}.html`),
 			await evaluate<string>("document.documentElement.outerHTML"),
@@ -183,6 +194,28 @@ export async function desktop(application: string) {
 		}
 	}
 	await launch();
+	await until("native transport", () => evaluate("!!globalThis.NativeDitero"));
+	await evaluate(`(() => {
+		const native = globalThis.NativeDitero, original = native.postMessage;
+		const operations = new Map(), trace = globalThis.__journeyProtocol = [];
+		let listener = native.onmessage;
+		const record = value => { trace.push(value); if (trace.length > 200) trace.shift(); };
+		native.postMessage = function(bytes) {
+			const message = JSON.parse(bytes);
+			operations.set(message.rid, message.op);
+			record({direction:'request', op:message.op, rid:message.rid});
+			return original.call(native, bytes);
+		};
+		Object.defineProperty(native, 'onmessage', {
+			get: () => event => {
+				const message = JSON.parse(event.data);
+				if (message.t === 'reply') record({direction:'reply', op:operations.get(message.rid), rid:message.rid, ok:message.ok, code:message.code});
+				listener?.call(native, event);
+			},
+			set: value => { listener = value; }
+		});
+		return true;
+	})()`);
 	if (process.platform === "darwin") {
 		const refused = await new Promise<string>((done, fail) => {
 			const socket = connect(port, "127.0.0.1");

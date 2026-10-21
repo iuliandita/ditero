@@ -36,28 +36,10 @@ export async function systemBrowser() {
 		);
 		run("pwsh", ["-NoProfile", "-File", script]);
 	} else if (process.platform === "darwin") {
-		const source = resolve(state, "private/browser.applescript");
-		const wrapper = resolve(state, "private/Journey Browser.app");
-		const command = `${shellQuote(chrome)} ${args.map(shellQuote).join(" ")} `;
-		writeFileSync(
-			source,
-			`on open location address\n do shell script ${JSON.stringify(command)} & quoted form of address & " >/dev/null 2>&1 &"\nend open location\n`,
-		);
-		run("osacompile", ["-o", wrapper, source]);
-		run("python3", [
-			"-c",
-			"import pathlib,plistlib,sys; p=pathlib.Path(sys.argv[1]); d=plistlib.loads(p.read_bytes()); d.update(CFBundleIdentifier='io.ditero.journey-browser',CFBundleURLTypes=[{'CFBundleURLSchemes':['https']}]); p.write_bytes(plistlib.dumps(d))",
-			`${wrapper}/Contents/Info.plist`,
-		]);
-		run("codesign", ["--force", "--sign", "-", wrapper]);
-		run(
-			"/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
-			["-f", wrapper],
-		);
 		const swift = resolve(state, "private/browser.swift");
 		writeFileSync(
 			swift,
-			'import Foundation\nimport CoreServices\nlet status = LSSetDefaultHandlerForURLScheme("https" as CFString, "io.ditero.journey-browser" as CFString)\nif status != noErr { fatalError("Default browser registration failed") }\n',
+			'import Foundation\nimport CoreServices\nlet status = LSSetDefaultHandlerForURLScheme("https" as CFString, "com.google.Chrome" as CFString)\nif status != noErr { fatalError("Default Chrome registration failed: " + String(status)) }\n',
 		);
 		run("swift", [swift]);
 	} else {
