@@ -181,6 +181,7 @@ final class NativePushCoordinator {
     synchronized void denied() {failure="denied";}
     synchronized String state() {
         reconcile();
+        if("denied".equals(failure) && permitted()) failure=null;
         if(failure!=null) return failure;
         String state=store.prefs.getString("state","disabled");
         if(state.equals("disabled")) for(String key:store.prefs.getAll().keySet())

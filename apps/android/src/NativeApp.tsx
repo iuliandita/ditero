@@ -16,6 +16,7 @@ import {
 } from "../../../src/web/lib/DisplayPreferencesProvider.tsx";
 import { KeyringProvider } from "../../../src/web/lib/e2e/KeyringProvider.tsx";
 import {
+	type NativeAccount,
 	NativeAccountContext,
 	type NativeNotificationNavigation,
 	type NativePush,
@@ -31,6 +32,7 @@ import {
 	connectBridge,
 	createNativeNotificationNavigation,
 	createNativePush,
+	createNativeSettingsOpener,
 	createNativeTaskLinkNavigation,
 	installNativeWebSocket,
 	NativeError,
@@ -41,6 +43,7 @@ import {
 	requestGrant,
 	selectServer,
 } from "./bridge.ts";
+import { connectErrorMessage } from "./connect-error.ts";
 import {
 	captureVerifiedContext,
 	createNativeRuntime,
@@ -53,6 +56,7 @@ type Active = {
 	profile: NativeProfile;
 	origin: string;
 	push: NativePush;
+	openSettings: NativeAccount["openSettings"];
 	notifications: NativeNotificationNavigation;
 	taskLinks?: NativeTaskLinkNavigation;
 };
@@ -164,6 +168,7 @@ function NativeAppRoutes({
 		setActive({
 			runtime,
 			profile,
+			openSettings: createNativeSettingsOpener(context.gen, context.authHandle),
 			origin: context.origin,
 			...(current.taskLinks
 				? {
@@ -188,16 +193,19 @@ function NativeAppRoutes({
 	useEffect(() => {
 		const owner = ++epoch.current;
 		let restoreSocket: (() => void) | undefined;
+		let desktopRestore = false;
 		void (async () => {
 			const hello = await connectBridge();
+			desktopRestore = pushProvider === "desktop" && hello.session !== null;
 			if (owner !== epoch.current) return;
 			if (hello.linkRefused) show({ message: m.native_link_unavailable() });
 			restoreSocket = installNativeWebSocket();
 			setOrigin(hello.server?.origin ?? "");
 			if (hello.session) await activate(owner);
 		})()
-			.catch(() => {
-				if (owner === epoch.current) setError(m.native_connect_failed());
+			.catch((error: unknown) => {
+				if (owner === epoch.current)
+					setError(connectErrorMessage(error, desktopRestore));
 			})
 			.finally(() => {
 				if (owner === epoch.current) setLoading(false);
@@ -210,6 +218,7 @@ function NativeAppRoutes({
 
 	async function connect() {
 		if (busy) return;
+		let desktopRestore = false;
 		const owner = ++epoch.current;
 		setBusy(true);
 		setError(null);
@@ -220,6 +229,7 @@ function NativeAppRoutes({
 			if (owner !== epoch.current) return;
 			// server.select fences link ingress; only a fresh hello lifts it and rebinds the page.
 			const next = await connectBridge();
+			desktopRestore = pushProvider === "desktop" && next.session !== null;
 			if (owner !== epoch.current) return;
 			if (next.linkRefused) show({ message: m.native_link_unavailable() });
 			setOrigin(next.server?.origin ?? origin);
@@ -229,8 +239,9 @@ function NativeAppRoutes({
 				await openBrowser();
 				if (owner === epoch.current) setApproval(true);
 			}
-		} catch {
-			if (owner === epoch.current) setError(m.native_connect_failed());
+		} catch (error) {
+			if (owner === epoch.current)
+				setError(connectErrorMessage(error, desktopRestore));
 		} finally {
 			if (owner === epoch.current) setBusy(false);
 		}
@@ -285,6 +296,7 @@ function NativeAppRoutes({
 						push: active.push,
 						notifications: active.notifications,
 						taskLinks: active.taskLinks,
+						openSettings: active.openSettings,
 						changeServer,
 					}}
 				>

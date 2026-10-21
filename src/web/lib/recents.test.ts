@@ -72,12 +72,14 @@ describe("recents", () => {
 			profile,
 			origin: firstOrigin,
 			storageScope: `native:["${firstOrigin}","u1"]`,
+			openSettings: async () => {},
 			changeServer,
 		});
 		const second = scopeFor({
 			profile,
 			origin: secondOrigin,
 			storageScope: `native:["${secondOrigin}","u1"]`,
+			openSettings: async () => {},
 			changeServer,
 		});
 		const browser = scopeFor(null);

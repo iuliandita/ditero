@@ -108,7 +108,8 @@ The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaini
 
 The `deploy/docker` stack runs the app (web UI + API served
 same-origin on one port), PostgreSQL, and the Zero sync cache.
-Clients collaborate through this shared server. PostgreSQL must provide logical
+Clients collaborate through this shared server. PostgreSQL 15 or newer is required
+(the bundled image uses PostgreSQL 18). PostgreSQL must provide logical
 replication and direct connections; PGlite and other embedded databases are not
 supported substitutes. See [database roles](docs/runbooks/database-roles.md).
 
@@ -139,6 +140,15 @@ owner; later ones need an invitation.
 Reuse and back up that environment file for restarts and upgrades. Do not regenerate
 database passwords or encryption keys for an existing volume. The file is gitignored;
 mounted secrets with `_FILE` variables are also supported.
+Compose file secrets are bind mounts: their files and parent directories must be
+readable/traversable by each container's actual UID/GID, including PostgreSQL's
+`postgres` user and the app's UID 1000. A host-owned mode 0600 file usually fails
+this requirement; use narrowly scoped ownership, groups or ACLs. Keep secrets
+private and follow [initialization recovery](docs/runbooks/database-roles.md#bundled-secrets-and-incomplete-initialization).
+
+Bundled raw password variables support URL delimiters such as `@:/%#?`; the app
+and Zero entrypoints percent-encode them when building DSNs. Explicit DSNs must
+already percent-encode credentials. Do not print DSNs in diagnostic reports.
 
 That pulls `ghcr.io/iuliandita/ditero:nightly` and `:nightly-zero`. Add `--build`
 to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.0.1-alpha.12`
@@ -149,6 +159,12 @@ service images separately in a Compose override; see [image tags](RELEASING.md#c
 To reach it from anything other than the machine it runs on, set
 `BETTER_AUTH_URL` and `PUBLIC_ZERO_URL` to addresses that machine's browsers can
 resolve.
+
+Serve the application at its own origin root, such as `https://tasks.example.com/`
+or a dedicated port. An app path prefix such as `/ditero/` is unsupported: assets
+and API routes use root-relative paths. Zero alone can use a proxy path prefix
+when the proxy strips that prefix, forwards WebSocket upgrades, and
+`PUBLIC_ZERO_URL` includes the externally visible prefix.
 
 `BETTER_AUTH_URL` names exactly one origin, and auth routes reject every other
 one with `403`. To serve the same instance at more than one address — a LAN
@@ -181,6 +197,8 @@ All configuration is environment-driven. The common variables:
 | `DITERO_DATABASE_URL` | bundled Postgres | Non-owner application Postgres DSN. |
 | `DITERO_MIGRATION_DATABASE_URL` | bundled Postgres | Schema-owner migration DSN. |
 | `DITERO_ZERO_DATABASE_URL` | bundled Postgres | Direct, replication-capable Zero DSN. |
+| `ZERO_APP_PUBLICATIONS` | unset | Comma-separated precreated Zero publications for a non-superuser replication login; see [database roles](docs/runbooks/database-roles.md). Empty leaves Zero's default unchanged. |
+| `ZERO_AUTO_RESET` | unset | Set `true` to rebuild the Zero cache when replication/schema changes require a reset. Empty leaves Zero's default unchanged. |
 | `POSTGRES_PASSWORD` | _(required, bundled)_ | Password for bundled PostgreSQL and Zero's bundled connection. |
 | `DITERO_TRUSTED_PROXIES` | empty | Comma-separated CIDRs allowed to supply forwarding headers. |
 | `PUBLIC_ZERO_URL` | `http://localhost:4848` | Address browsers dial zero-cache on. Served to the web client at runtime and used for the CSP. |
@@ -197,7 +215,7 @@ All configuration is environment-driven. The common variables:
 ### Bundled vs. external Postgres
 
 The `bundled` profile runs `upstream-db` (Postgres 18 with `wal_level=logical`).
-To use your own Postgres instead, provide separate runtime, migration-owner, and
+To use your own PostgreSQL 15+ instead, provide separate runtime, migration-owner, and
 Zero DSNs and omit that profile:
 
 ```sh

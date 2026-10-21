@@ -198,7 +198,7 @@ async function closeMembersPanel(page: Page): Promise<void> {
 }
 
 function tokenFrom(link: string): string {
-	const token = new URL(link).searchParams.get("token");
+	const token = new URLSearchParams(new URL(link).hash.slice(1)).get("token");
 	if (!token) throw new Error(`no token in invite link: ${link}`);
 	return token;
 }

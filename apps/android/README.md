@@ -21,6 +21,26 @@ network failures permit this fallback; invalid credentials, trust failures,
 expired evidence, and failed revocation storage stay unavailable. Offline task
 editing and account/server transitions still require broader device qualification.
 
+## Android Back and Activity recreation
+
+Back dismisses the topmost dialog, sheet or menu through its existing close policy,
+then closes task details or the create-list form, and returns from a content screen
+to the Lists tab. It exits only from a top-level tab. Network resources are closed
+in the background after the old page and in-memory session are invalidated, including
+when a font-size change recreates the Activity.
+
+## Browser-only settings
+
+"Open in browser" in Settings opens the selected server's matching Notifications,
+Security, Access tokens, Calendar subscriptions, Your data, or Danger zone section.
+The system browser may require a separate sign-in. The `settings.open` native
+operation accepts only those fixed destinations, bound to the current account;
+it accepts no URL or credentials. The sign-in browser operation remains limited
+to the pending login grant. Browser handoff failures show a retryable message.
+
+The matching `/settings/<section>` browser routes require a server version that
+includes these routes; older servers still open their normal application page.
+
 ## Encrypted files
 
 Enable `DITERO_E2E_ENABLED` on the server and enroll the account's encryption keys
@@ -35,6 +55,12 @@ encrypted stream before writing plaintext to the selected document. A bounded
 emulator check uploaded a file and saved it through the Storage Access Framework;
 the saved 216-byte file matched the original. This does not qualify all document
 providers, file sizes, interruption paths, or physical devices.
+
+Recovery-code downloads use the same account-bound system document chooser and
+confirmed native write as attachment saving. Cancelling keeps the code visible;
+a write failure shows an error so you can choose a destination and retry.
+Connection failures distinguish an HTTPS requirement, an unknown server name,
+an untrusted certificate and an unreachable server. Certificate trust remains required.
 
 ## Background reminders
 

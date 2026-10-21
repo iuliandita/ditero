@@ -60,6 +60,7 @@ import {
 } from "./http-policy.ts";
 import { sendInviteMail } from "./mail/invite-mail.ts";
 import { nativeAttachmentRoutes } from "./native-auth/attachment-routes.ts";
+import { readJsonObject } from "./native-auth/contracts.ts";
 import { nativeE2ERoutes } from "./native-auth/e2e-routes.ts";
 import { nativePortabilityRoutes } from "./native-auth/portability-routes.ts";
 import { nativeAuthRoutes } from "./native-auth/routes.ts";
@@ -479,13 +480,21 @@ const routes = new Elysia()
 	// Invite preview: minimal, pre-signup read. Returns ONLY {valid, workspaceName,
 	// email}; never the token, role, or ids. Cross-origin requests are rejected;
 	// same-origin (no Origin header) is allowed so the signup screen can read it.
-	.get("/api/invite/preview", async ({ request }) => {
-		if (foreignOrigin(request))
-			return new Response("Forbidden", { status: 403 });
-		const token = new URL(request.url).searchParams.get("token");
-		if (!token) return { valid: false };
-		return await previewInvite(token, db);
-	})
+	// The bearer belongs in the body, never in a request URL or cache entry.
+	.post(
+		"/api/invite/preview",
+		async ({ request, set }) => {
+			set.headers["cache-control"] = "no-store";
+			if (foreignOrigin(request))
+				return new Response("Forbidden", { status: 403 });
+			const body = await readJsonObject(request);
+			if (!body.ok) return new Response("Bad Request", { status: body.status });
+			const { token } = body.value;
+			if (typeof token !== "string" || !token) return { valid: false };
+			return await previewInvite(token, db);
+		},
+		{ parse: "none" },
+	)
 	// Managed ("kid") account: guardian session. Creates a restricted account under
 	// a non-routable @managed.invalid handle and adds it to the workspace.
 	.post(

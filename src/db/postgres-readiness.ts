@@ -23,11 +23,20 @@ export function postgresReadinessCode(error: unknown): string {
 		return error.code;
 	return "UNKNOWN";
 }
-function failure(code: string): Error & { code: string } {
-	return Object.assign(
-		new Error(`PostgreSQL readiness probe failed (${code})`),
-		{ code },
-	);
+function failure(
+	code: string,
+	connectionString?: string,
+): Error & { code: string } {
+	let message = `PostgreSQL readiness probe failed (${code})`;
+	if ((code === "28P01" || code === "28000") && connectionString) {
+		let role = "configured login";
+		try {
+			const username = decodeURIComponent(new URL(connectionString).username);
+			if (/^[a-zA-Z0-9_.-]{1,63}$/.test(username)) role = username;
+		} catch {}
+		message += `: authentication failed for role ${role}; check its password and existence. Bundled databases may have incomplete role initialization; see docs/runbooks/database-roles.md`;
+	}
+	return Object.assign(new Error(message), { code });
 }
 export async function waitForPostgres(
 	connectionString: string,
@@ -96,7 +105,7 @@ export async function waitForPostgres(
 		if (error === undefined && performance.now() < deadline) return;
 		const code =
 			error === undefined ? "ETIMEDOUT" : postgresReadinessCode(error);
-		const safe = failure(code);
+		const safe = failure(code, connectionString);
 		first ??= safe;
 		if (!recoverable.has(code)) throw safe;
 		const delay = Math.min(backoffMs, deadline - performance.now());

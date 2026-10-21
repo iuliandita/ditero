@@ -160,6 +160,7 @@ final class NativeZeroTransport {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final SecureRandom random = new SecureRandom();
     private final ExecutorService io = Executors.newFixedThreadPool(2);
+    private static final ExecutorService cleanup = Executors.newSingleThreadExecutor();
     private final OkHttpClient http;
     private final OkHttpClient wsHttp;
     private final SharedPreferences prefs;
@@ -253,10 +254,13 @@ final class NativeZeroTransport {
         final int code;
         // Null when the response exceeded the body bound.
         final String body;
+        final String connectionError;
 
-        HttpResult(int code, String body) {
+        HttpResult(int code, String body) { this(code, body, null); }
+        HttpResult(int code, String body, String connectionError) {
             this.code = code;
             this.body = body;
+            this.connectionError = connectionError;
         }
     }
 
@@ -348,7 +352,6 @@ final class NativeZeroTransport {
         pendingPushOpen=null;
         pushPermissionOwner=null;
         ready = false;
-        attachments.cancelAll();
         generation++;
         for (Sock s : new ArrayList<>(socks.values())) s.detach();
         socks.clear();
@@ -361,10 +364,12 @@ final class NativeZeroTransport {
         revoking = null;
         context = null;
         zero = null;
-        attachments.shutdown();
-        io.shutdownNow();
-        http.dispatcher().cancelAll();
-        http.connectionPool().evictAll();
+        cleanup.execute(() -> {
+            attachments.shutdown();
+            io.shutdownNow();
+            http.dispatcher().cancelAll();
+            http.connectionPool().evictAll();
+        });
     }
 
     // ---- listener entry -------------------------------------------------------------
@@ -446,6 +451,10 @@ final class NativeZeroTransport {
                 case "browser":
                     requireReady(m);
                     browser(proxy, rid);
+                    return;
+                case "settings.open":
+                    requireReady(m);
+                    settingsBrowser(proxy, rid, m);
                     return;
                 case "complete":
                     requireReady(m);
@@ -851,7 +860,7 @@ final class NativeZeroTransport {
         try {
             next = ServerContext.parse(raw);
         } catch (IllegalArgumentException e) {
-            fail(proxy, rid, "invalid-origin");
+            fail(proxy, rid, "scheme".equals(e.getMessage()) ? "https-required" : "invalid-origin");
             return;
         }
         // Like desktop, every select clears the link slot and fences ingress, even for the same origin.
@@ -899,15 +908,16 @@ final class NativeZeroTransport {
                     return;
                 }
                 try {
-                    if (result == null) {
+                    if (result == null || result.code == -2) {
                         if (owner == session && offlineReady(owner)) {
                             zero = ServerContext.ZeroEndpoint.parse(owner.zeroUrl);
                             sendToPage(proxy, obj("t", "reply", "rid", rid, "ok", true, "origin", ctx.origin,
                                     "zeroURL", zero.httpsUrl, "queryUrl", ctx.queryUrl(), "mutateUrl", ctx.mutateUrl()));
                             return;
                         }
-                        throw new Reject("network");
+                        throw new Reject(result != null ? result.connectionError : "network");
                     }
+                    if (result.connectionError != null) throw new Reject(result.connectionError);
                     if (result.code == -1) throw new Reject("transport-refused");
                     if (result.code != 200) throw new Reject("http-" + result.code);
                     if (result.body == null) throw new Reject("invalid-response");
@@ -930,7 +940,7 @@ final class NativeZeroTransport {
                     fail(proxy, rid, e instanceof Reject ? e.getMessage() : "invalid-response");
                 }
             }
-        });
+        }, true);
     }
 
     private void sessionRead(JavaScriptReplyProxy proxy, int rid) {
@@ -1150,6 +1160,7 @@ final class NativeZeroTransport {
                 }
                 try {
                     if (result == null) throw new Reject("network");
+                    if (result.connectionError != null) throw new Reject(result.connectionError);
                     if (result.code != 200) throw new Reject("http-" + result.code);
                     if (result.body == null) throw new Reject("invalid-response");
                     Map<String, Object> out = asMap(parse(result.body));
@@ -1165,7 +1176,7 @@ final class NativeZeroTransport {
                     fail(proxy, rid, e instanceof Reject ? e.getMessage() : "invalid-response");
                 }
             }
-        });
+        }, true);
     }
 
     private static String authorizeUrl(Pending p) {
@@ -1186,6 +1197,26 @@ final class NativeZeroTransport {
         } catch (ActivityNotFoundException e) {
             fail(proxy, rid, "no-browser");
         }
+    }
+
+    private void settingsBrowser(JavaScriptReplyProxy proxy, int rid, Map<String, Object> m) throws Reject {
+        if (!java.util.Set.of("op", "rid", "gen", "id", "body").containsAll(m.keySet())
+                || !(m.get("body") instanceof Map)) throw new Reject("invalid-message");
+        Map<?, ?> body = (Map<?, ?>) m.get("body");
+        if (body.size() != 1 || !(body.get("section") instanceof String)) throw new Reject("invalid-message");
+        Session captured = session;
+        if (captured == null || captured.context != context || !captured.verified || captured.refused
+                || revoking != null || !unexpired(captured.expiresAt) || handle == null || !handle.equals(m.get("id")))
+            throw new Reject("stale-generation");
+        final String url;
+        try { url = captured.context.settingsUrl((String) body.get("section")); }
+        catch (IllegalArgumentException e) { throw new Reject("invalid-settings"); }
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        intent.addCategory(Intent.CATEGORY_BROWSABLE);
+        try {
+            activity.startActivity(intent);
+            sendToPage(proxy, obj("t", "reply", "rid", rid, "ok", true));
+        } catch (ActivityNotFoundException e) { fail(proxy, rid, "no-browser"); }
     }
 
     private void complete(final JavaScriptReplyProxy proxy, final int rid) {
@@ -1559,6 +1590,10 @@ final class NativeZeroTransport {
 
     /** Only an unavailable transport before any response may use cached startup proof. */
     private void dispatch(final Request request, final Done done) {
+        dispatch(request, done, false);
+    }
+
+    private void dispatch(final Request request, final Done done, boolean connectionErrors) {
         io.execute(new Runnable() {
             @Override
             public void run() {
@@ -1566,7 +1601,9 @@ final class NativeZeroTransport {
                 try {
                     res = call(request);
                 } catch (IOException e) {
-                    res = offlineFailure(e) ? null : new HttpResult(-1, null);
+                    res = connectionErrors
+                            ? new HttpResult(offlineFailure(e) ? -2 : -1, null, NativeConnectError.classify(e))
+                            : offlineFailure(e) ? null : new HttpResult(-1, null);
                 } catch (RuntimeException e) {
                     res = new HttpResult(-1, null);
                 }
@@ -1817,7 +1854,8 @@ final class NativeZeroTransport {
                 detached = true;
                 terminal = true;
             }
-            if (ws != null) ws.cancel();
+            WebSocket target = ws;
+            if (target != null) cleanup.execute(target::cancel);
         }
 
         void requestClose(int code, String reason) {

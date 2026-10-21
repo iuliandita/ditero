@@ -39,6 +39,19 @@ Removing a member still requires key rotation before new encrypted uploads.
 Membership removal works with the documented runtime grants, without database TEMP
 privilege, and preserves assignment and notification cleanup in the same transaction.
 
+New invitation links carry their bearer in `/accept#token=...`, keeping it out of
+HTTP request URLs and referrers. Preview uses `POST /api/invite/preview` with a JSON
+`token` body and a non-cacheable response. Previously sent `?token=` links still
+work; the accept page replaces that query field with a fragment after capture.
+The first navigation of a legacy link can still reach request logs, so existing
+logs and already-shared links remain sensitive.
+
+Encrypted invites combine `token` and `e2e` fragment fields. The accept page moves
+the encrypted key fragment into its existing tab cache, retaining only the bearer
+fragment for authentication reloads and interrupted claim/grant/finalize recovery.
+The AEAD binding and fallback key-request flow are unchanged. Treat the complete
+link as a credential; fragments can still appear in browser history and copied links.
+
 ## Stored Secrets
 
 TOTP seeds, backup codes, OAuth tokens, JWT private keys, and backend integration credentials use AES-256-GCM envelopes. A key fingerprint identifies rotation state without storing key material. PATs are high-entropy bearer tokens and are stored only as SHA-256 hashes.

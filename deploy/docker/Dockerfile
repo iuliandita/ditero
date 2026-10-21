@@ -43,7 +43,7 @@ RUN pnpm install --prod --frozen-lockfile
 COPY deploy/docker/zero-runtime/verify.mjs ./
 
 # Rebuild the exact backup sources Zero ships, preserving both backup formats.
-FROM golang:1.27.2-alpine3.23@sha256:9e45f0eb4a63ed37ad6e604950407558b7c738e34e015ae77a5d4ad369cde079 AS litestream-build
+FROM golang:1.27.3-alpine3.23@sha256:895e5feab11a4b3774d24ee3c9579028456b82ad37f42a9eb6f82adaf776a201 AS litestream-build
 RUN apk add --no-cache build-base
 ENV GOTOOLCHAIN=local
 WORKDIR /src

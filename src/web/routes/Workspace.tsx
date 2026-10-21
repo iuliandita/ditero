@@ -16,6 +16,10 @@ import {
 	useRef,
 	useState,
 } from "react";
+import {
+	type NativeSettingsSection,
+	settingsSectionFromPath,
+} from "../../domain/native-settings.ts";
 import { randomId } from "../../domain/random-id.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import { m } from "../../paraglide/messages.js";
@@ -88,6 +92,7 @@ import {
 	useAccountStorageScope,
 	useNativeAccount,
 } from "../lib/native-account.tsx";
+import { NATIVE_NAVIGATE_BACK } from "../lib/native-back.ts";
 import { viewIcon } from "../lib/nav-icon.tsx";
 import { useNavSections } from "../lib/nav-sections.ts";
 import { recordRecent } from "../lib/recents.ts";
@@ -177,17 +182,21 @@ function NormalWorkspace({
 		[setPref],
 	);
 	const [activeId, setActiveId] = useState<string | null>(null);
+	const initialSettings = nativeAccount
+		? null
+		: settingsSectionFromPath(window.location.pathname);
 	const [settingsSection, setSettingsSection] = useState<
-		"account" | "appearance"
-	>("account");
+		"account" | "appearance" | NativeSettingsSection
+	>(initialSettings ?? "account");
 	const [contentState, dispatchContent] = useReducer(
 		workspaceContentReducer,
-		initialSetup ? { kind: "settings" } : { kind: "home" },
+		initialSetup || initialSettings ? { kind: "settings" } : { kind: "home" },
 	);
 	useEffect(() => {
 		if (
 			contentState.kind !== "settings" &&
-			window.location.pathname === "/setup"
+			(window.location.pathname === "/setup" ||
+				settingsSectionFromPath(window.location.pathname))
 		)
 			window.history.replaceState(
 				window.history.state,
@@ -688,6 +697,20 @@ function NormalWorkspace({
 		contentState.kind === "home" ||
 		contentState.kind === "index" ||
 		(contentState.kind === "view" && contentState.id === "today");
+	useEffect(() => {
+		function back(event: Event) {
+			if (detailTaskId) setDetailTaskId(null);
+			else if (newListFolder) setNewListFolder(null);
+			else if (contentState.kind === "settings")
+				dispatchContent({ kind: settingsReturn.current });
+			else if (!isTabRoot) openIndex();
+			else return;
+			event.preventDefault();
+		}
+		window.addEventListener(NATIVE_NAVIGATE_BACK, back);
+		return () => window.removeEventListener(NATIVE_NAVIGATE_BACK, back);
+	}, [contentState.kind, detailTaskId, isTabRoot, newListFolder, openIndex]);
+
 	function selectTab(tab: MobileTab) {
 		if (tab === "lists") openIndex();
 		else openNavView("today");

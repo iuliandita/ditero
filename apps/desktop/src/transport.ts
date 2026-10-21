@@ -3,6 +3,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { m } from "../../../src/paraglide/messages.js";
 import { retireZeroClients } from "../../../src/web/lib/zero-lifecycle.ts";
 
+export function startupErrorMessage(error: unknown): string {
+	return error === "vault-unavailable"
+		? m.native_keyring_unavailable()
+		: m.native_signin_failed();
+}
+
 type NativeObject = {
 	postMessage(message: string): void;
 	onmessage: ((event: MessageEvent) => void) | null;

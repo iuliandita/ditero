@@ -42,6 +42,17 @@ final class ServerContext {
         return origin + path;
     }
 
+    /** Only fixed Settings destinations may leave the bundled application. */
+    String settingsUrl(String section) {
+        if (section == null) throw new IllegalArgumentException("settings");
+        switch (section) {
+            case "notifications": case "security": case "access-tokens":
+            case "calendar-feeds": case "data": case "danger":
+                return url("/settings/" + section);
+            default: throw new IllegalArgumentException("settings");
+        }
+    }
+
     String queryUrl() {
         return url("/api/zero/query");
     }

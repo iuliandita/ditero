@@ -6,6 +6,13 @@ credential store. Complete native application delivery remains in progress; see
 [Android development](../../apps/android/README.md) and
 [desktop development](../../apps/desktop/README.md) for build and qualification limits.
 
+Workspace invitations use the server's HTTPS `/accept#token=...` web page.
+Previously sent `/accept?token=...` links remain accepted and move the token into
+the fragment after capture; preview sends it in a POST body. Encrypted invitation
+fragments retain their existing key-binding and reload recovery behavior.
+These are browser links. The Android and desktop `ditero://task` handlers accept
+task navigation only; invitation changes do not add native scheme destinations.
+
 The client generates a random PKCE verifier with 43 to 128 unreserved ASCII
 characters, then computes its SHA-256 challenge in canonical unpadded base64url.
 Only S256 is supported. The verifier stays with the client.
@@ -190,3 +197,11 @@ The native client must retire its local sync client before changing account
 ownership and report network or local credential-cleanup failures truthfully.
 Local forgetting alone does not prove server revocation. The endpoint retains
 the same admission, no-store, and empty-body contract as native bootstrap.
+
+## Choosing a different browser account
+
+The consent page shows the browser account that will authorize the device.
+Use **Use a different account** to sign out of that browser session and return to
+sign-in with the same native request. The replacement account must still explicitly
+allow the device. A sign-out failure stays on consent and offers a retry; it never
+approves the request. The native app session and browser session are independent.

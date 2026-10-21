@@ -5,7 +5,7 @@ The Dockerfile rebuilds the exact sources shipped by Zero 1.9.0:
 - Legacy: Rocicorp `zero@v0.0.9`, commit `5efae7df64aebc3247a739360232f908d2bc47e2`.
 - V5: Litestream `v0.5.15`, commit `4e3f0c0f98a8808788c721b3637b41e7f9ce4a9c`.
 
-Archive checksums and the Go 1.27.2 toolchain are pinned in the Dockerfile. Each directory contains
+Archive checksums and the Go 1.27.3 toolchain are pinned in the Dockerfile. Each directory contains
 replacement Go module manifests and checksums, generated from that source with:
 
 ```sh
@@ -15,6 +15,8 @@ go get go.opentelemetry.io/otel/sdk@v1.45.0
 go get filippo.io/age@v1.2.1
 # Both variants:
 go get golang.org/x/net@v0.60.0
+# V5 only:
+go get github.com/klauspost/compress@v1.18.7
 go mod tidy
 ```
 

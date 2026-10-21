@@ -84,7 +84,7 @@ test("a new account creates a shared workspace through the switcher and retains 
 	await page.getByTestId("invite-submit").click();
 	await expect(page.getByTestId("invite-link")).toBeVisible();
 	const link = await page.getByTestId("invite-link").inputValue();
-	const token = new URL(link).searchParams.get("token");
+	const token = new URLSearchParams(new URL(link).hash.slice(1)).get("token");
 	expect(token).toBeTruthy();
 	const context = await browser.newContext();
 	try {

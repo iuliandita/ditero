@@ -7,9 +7,11 @@ database. The chart version is `0.0.1-alpha.12`; it is a prerelease.
 ## Prerequisites
 
 - A namespace, a storage class supporting `fsGroup`, and two persistent volumes.
-- PostgreSQL configured for logical replication (`wal_level=logical`, sufficient
+- PostgreSQL 15 or newer configured for logical replication (`wal_level=logical`, sufficient
   replication slots and WAL senders), with direct connections for Zero. A
   transaction-pooling proxy is unsuitable for Zero's replication connection.
+- A dedicated application origin rooted at `/`; application URL prefixes such as
+  `/ditero/` are unsupported. See the [Compose deployment guide](../../../README.md#run-it-docker-compose).
 - Three separate database logins: migration owner, restricted application runtime,
   and Zero with its required replication/schema privileges. Follow the
   [database role runbook](../../../docs/runbooks/database-roles.md), including the

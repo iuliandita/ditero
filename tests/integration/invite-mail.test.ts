@@ -185,10 +185,10 @@ describe("invite mail", () => {
 		expect(mail).toEqual({ status: "sent" });
 		expect(started.commands).toContain("RCPT TO:<invitee@example.test>");
 		expect(started.messages[0]).toContain(
-			`https://todo.example/accept?token=${invite.token}`,
+			`https://todo.example/accept#token=${invite.token}`,
 		);
 		expect(invite.link).toBe(
-			`https://todo.example/accept?token=${invite.token}`,
+			`https://todo.example/accept#token=${invite.token}`,
 		);
 	});
 

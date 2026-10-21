@@ -3,8 +3,11 @@ set -eu
 
 . /usr/local/lib/ditero/secret-file.sh
 
-load_secret DITERO_MIGRATION_DB_PASSWORD required
-load_secret DITERO_RUNTIME_DB_PASSWORD required
+if ! load_secret DITERO_MIGRATION_DB_PASSWORD required ||
+	! load_secret DITERO_RUNTIME_DB_PASSWORD required; then
+	echo "ditero: database role initialization aborted before creating roles; check container-readable secrets and see docs/runbooks/database-roles.md" >&2
+	exit 1
+fi
 export DITERO_MIGRATION_DB_PASSWORD DITERO_RUNTIME_DB_PASSWORD
 
 # zero-cache keeps its per-shard bookkeeping in a schema it creates on first
@@ -25,7 +28,8 @@ export DITERO_MIGRATION_DB_PASSWORD DITERO_RUNTIME_DB_PASSWORD
 # internals neither role touches.
 zero_shard_schema=${DITERO_ZERO_SHARD_SCHEMA:-zero_0}
 
-psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+psql --no-psqlrc --set=ON_ERROR_STOP=1 --single-transaction \
+	--username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
 	--set=database_name="$POSTGRES_DB" \
 	--set=zero_shard_schema="$zero_shard_schema" <<'SQL'
 \getenv migration_password DITERO_MIGRATION_DB_PASSWORD
