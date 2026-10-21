@@ -12,24 +12,12 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch. Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "a192ff4cd8a4333e5ad681daf6800fff76d4ddd0662d0a7d096de3341fcc5950",
-			"docs": [
-				"deploy/docker/aio/README.md",
-				"deploy/helm/ditero/README.md",
-				"deploy/kustomize/README.md",
-				"docs/runbooks/database-roles.md"
-			],
-			"note": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged. Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database reconnection, advisory-lock reacquisition and bounded graceful shutdown, including recovery of unfinished notification leases. Gate Zero on completed application migrations and the current Helm revision; give AIO Zero a dedicated ingress bridge without outbound source NAT and document retained-replica recovery. Only desktop installer metadata, bundled license files and platform package settings change. Server configuration, deployment variables and operator setup remain unchanged; installer behavior is documented in RELEASING.md and the desktop guide."
+			"sourceDigest": "5b4c5d043b0e4c6da5b300f22ac6d3c315a0f0789823c1abafcb357e1bf595a2",
+			"noImpact": "The Zero image rebuilds Litestream v0.5.15 with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream source, version suffix, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged."
 		},
 		"deployment": {
-			"sourceDigest": "a9260b0f1b279a55c835870aa3a5182eda72e7ba6e6a7900a008f90eb3948613",
-			"docs": [
-				"deploy/docker/aio/README.md",
-				"deploy/helm/ditero/README.md",
-				"deploy/kustomize/README.md",
-				"docs/runbooks/database-roles.md"
-			],
-			"note": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged. Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database recovery and shutdown timing within the default container and pod grace periods. Document ordered startup, revision-aware Helm readiness, AIO ingress boundaries and cache-only recovery for failed initial synchronization."
+			"sourceDigest": "099b7318325e9d8ac486df6c3324bb004702c73532c6f3b5b7e20e4df768c4cd",
+			"noImpact": "The Zero image rebuilds Litestream v0.5.15 with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream source, version suffix, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
