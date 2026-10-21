@@ -21,13 +21,15 @@ import { normalizeDisplayName, signupDisplayName } from "./display-name.ts";
 import { withFieldEncryption } from "./encrypted-adapter.ts";
 import { emailHasRedeemableInvite } from "./invite-bypass.ts";
 import { mailUnavailableResponse, sendAuthMail } from "./mail.ts";
+import { assertRegistration } from "./oauth-registration.ts";
 import { trustedAuthOrigins } from "./origins.ts";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-policy.ts";
-import { socialProvidersFromEnv } from "./providers.ts";
 import {
-	assertRegistrationAllowed,
-	resolveRegistrationMode,
-} from "./registration.ts";
+	acceptedAuthOrigins,
+	providerAuthOptions,
+	resolveSignInProviders,
+} from "./providers.ts";
+import { resolveRegistrationMode } from "./registration.ts";
 import { registrationBypassActive } from "./registration-bypass.ts";
 import { registrationAPIError } from "./registration-error.ts";
 import {
@@ -47,6 +49,8 @@ const publicSignUp = new AsyncLocalStorage<PublicSignUpState>();
 
 const REGISTRATION_LOCK_KEY = 6_794_321;
 const registrationMode = resolveRegistrationMode(process.env);
+const signIn = resolveSignInProviders(process.env);
+const providerOptions = providerAuthOptions(signIn);
 const authOrigins = [
 	process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
 	...trustedAuthOrigins(process.env),
@@ -70,12 +74,20 @@ const authDatabase = encryptionKey
 		)
 	: authAdapter;
 
-async function assertEmailRegistrationAllowed(email: string): Promise<void> {
-	const invited =
-		registrationBypassActive() ||
-		(await emailHasRedeemableInvite(email.toLowerCase(), db, Date.now()));
-	assertRegistrationAllowed(registrationMode, await registeredUserCount(), {
-		invited,
+async function assertEmailRegistrationAllowed(
+	email: string,
+	path?: string,
+	emailVerified = false,
+): Promise<void> {
+	await assertRegistration({
+		mode: registrationMode,
+		path,
+		email,
+		emailVerified,
+		bypass: registrationBypassActive(),
+		userCount: registeredUserCount,
+		hasInvite: (address) =>
+			emailHasRedeemableInvite(address.toLowerCase(), db, Date.now()),
 	});
 }
 
@@ -104,7 +116,11 @@ export const auth = betterAuth({
 	database: authDatabase,
 	secret: process.env.BETTER_AUTH_SECRET,
 	baseURL: process.env.BETTER_AUTH_URL,
-	trustedOrigins: trustedAuthOrigins(process.env),
+	trustedOrigins: [
+		...trustedAuthOrigins(process.env),
+		...providerOptions.trustedOrigins,
+	],
+	account: providerOptions.account,
 	emailAndPassword: {
 		enabled: true,
 		autoSignIn: false,
@@ -128,10 +144,7 @@ export const auth = betterAuth({
 	advanced: {
 		ipAddress: { ipAddressHeaders: ["x-ditero-client-ip"] },
 	},
-	socialProviders: socialProvidersFromEnv({
-		GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-		GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-	}),
+	socialProviders: providerOptions.socialProviders,
 	hooks: {
 		before: createAuthMiddleware(async (context) => {
 			if (context.path !== "/sign-up/email") return;
@@ -192,7 +205,11 @@ export const auth = betterAuth({
 						signupDisplayName(newUser.name, newUser.email),
 					);
 					try {
-						await assertEmailRegistrationAllowed(newUser.email);
+						await assertEmailRegistrationAllowed(
+							newUser.email,
+							context?.path,
+							newUser.emailVerified === true,
+						);
 					} catch (error) {
 						throw registrationAPIError(error);
 					}
@@ -252,6 +269,7 @@ export const auth = betterAuth({
 				}
 			},
 		},
+		...providerOptions.plugins,
 		passkey(
 			passkeyOptions({
 				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
@@ -328,7 +346,14 @@ async function handleAuthRequestInternal(
 		(request.headers.has("origin") || request.headers.has("cookie"))
 	) {
 		try {
-			requireSameOrigin(request, authOrigins);
+			requireSameOrigin(
+				request,
+				acceptedAuthOrigins(
+					request,
+					authOrigins,
+					Boolean(signIn.settings.apple),
+				),
+			);
 		} catch {
 			// This guard fires ahead of Better Auth, so its own INVALID_ORIGIN is
 			// never reached; answer in the same JSON shape and reuse the code, or
