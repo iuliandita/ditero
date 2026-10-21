@@ -861,25 +861,33 @@ describe("domain mutators", () => {
 		).rejects.toThrow();
 	});
 
-	test("member can instantiate a list template into their workspace", async () => {
+	test.each([
+		{ name: undefined, title: "Groceries", listId: "il-1" },
+		{ name: "Weekend shopping", title: "Weekend shopping", listId: "il-named" },
+	])("member can instantiate a list template with title $title", async ({
+		name,
+		title,
+		listId,
+	}) => {
 		const before = Date.now();
 		await call(
 			mutators.template.instantiateList,
 			{ id: "member" },
 			{
 				templateId: "tpl-list",
+				...(name ? { name } : {}),
 				workspaceId: "w1",
-				listId: "il-1",
+				listId,
 				sortKey: "z0",
 			},
 		);
 		const list = await db.query.list.findFirst({
-			where: (l, { eq }) => eq(l.id, "il-1"),
+			where: (l, { eq }) => eq(l.id, listId),
 		});
-		expect(list?.title).toBe("Groceries");
+		expect(list?.title).toBe(title);
 		expect(list?.kind).toBe("shopping");
 		const tasks = await db.query.task.findMany({
-			where: (t, { eq }) => eq(t.listId, "il-1"),
+			where: (t, { eq }) => eq(t.listId, listId),
 		});
 		// Milk + Bread + Sourdough subtask = 3 rows; none done, none with a due date.
 		expect(tasks).toHaveLength(3);

@@ -49,7 +49,10 @@ The interface supports six languages, including Arabic and RTL layout. Choose
 light, dark, or system mode, then choose an accent: teal by default, or blue,
 clay, violet, berry, or ochre. Reading-size presets and high contrast are independent
 of those choices. Palettes and accent preferences sync with your account; reading
-size and high contrast stay on each device.
+size and high contrast stay on each device. The last workspace and list also stay
+on each device, separately for each account. If access ends or a list is deleted,
+navigation falls back to an available workspace or its home view. Saved list
+templates use the name you enter, or the template name when you leave it blank.
 
 ## Available on develop
 

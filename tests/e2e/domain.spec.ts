@@ -476,13 +476,15 @@ test("save list as template then create-from-template reproduces items", async (
 	await page.getByTestId("create-list-open").click();
 	await page.locator('[data-slot="select-trigger"]').nth(1).click();
 	await page.getByRole("option", { name: listName, exact: true }).click();
+	const copyName = `Copy-${listName}`;
+	await page.getByTestId("new-list").fill(copyName);
 	await page.getByTestId("new-list-submit").click();
 
-	// The workspace now holds the source list and its template-spawned copy.
+	// The entered name belongs to the copy; its tasks still come from the template.
 	await expect(
-		sidebarLists(page).getByRole("button", { name: listName, exact: true }),
-	).toHaveCount(2, { timeout: 15000 });
-	await openListDesktop(page, listName); // opens the newest (copy)
+		sidebarLists(page).getByRole("button", { name: copyName, exact: true }),
+	).toHaveCount(1, { timeout: 15000 });
+	await openListDesktop(page, copyName);
 	const list = page.getByTestId("list");
 	await expect(list.getByText("Flour", { exact: true })).toBeVisible({
 		timeout: 15000,

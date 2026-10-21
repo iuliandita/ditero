@@ -1687,6 +1687,7 @@ export const mutators = defineMutators({
 		instantiateList: defineMutator(
 			z.object({
 				templateId: z.string(),
+				name: z.string().trim().min(1).optional(),
 				workspaceId: z.string(),
 				listId: z.string(),
 				sortKey: z.string(),
@@ -1706,7 +1707,7 @@ export const mutators = defineMutators({
 					content,
 					seededIds(args.listId),
 					keyBetween,
-					{ sortKey: args.sortKey, title: template.name },
+					{ sortKey: args.sortKey, title: args.name ?? template.name },
 				);
 				if (!list) throw new Error("list template produced no list");
 				await insertInstantiatedList(tx, ctx.id, args.workspaceId, list, tasks);

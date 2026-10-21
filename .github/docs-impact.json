@@ -2,23 +2,18 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "1b55a54050942eb795dcb19817c9e7f2a6708b78714e0464cfefa57ff0c9d780",
+			"sourceDigest": "57cf17dbdc783a709193502a0c868365c5c2a1b4f03efdcd81b50f47bee627b2",
 			"docs": ["README.md"],
-			"note": "Document read-only Viewer task controls and wrong-account invite recovery."
+			"note": "Document account-scoped device navigation restoration and names when creating lists from templates."
 		},
-
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
 			"docs": ["RELEASING.md"],
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "a2a680ade634ee7d8e2864e55a275a55faf0abc270886b62a577603e1894a85b",
-			"docs": [
-				"docs/runbooks/key-rotation.md",
-				"docs/runbooks/attachment-storage.md"
-			],
-			"note": "Document the 32-character production authentication secret requirement, maintenance-only BETTER_AUTH_SECRET_NEXT rotation, and the required pre-existing writable filesystem attachment directory."
+			"sourceDigest": "1ef746d15432e04d25188975ed586a5413d5106c41883f49212e481b1ae5aae6",
+			"noImpact": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged."
 		},
 		"deployment": {
 			"sourceDigest": "3cb56b9dc41deafd254840faee7defba3f98b24d86daea7c6731b50d10f3e43e",
@@ -28,20 +23,6 @@
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
 			"docs": ["apps/desktop/README.md"],
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
-		},
-		"authentication": {
-			"sourceDigest": "e47634ef2dfeb5c1e3b1bf2d736d28d063990f8bfa3383909798dda71893dc70",
-			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Production startup validates secret length and retained JWKS decryption. The authentication guide links the stopped-replica secret rotation procedure instead of direct replacement."
-		},
-		"compatibility": {
-			"sourceDigest": "2d3b67d7a2e369cf2035aefd833b089e9f9b6a2f375004c7df478767ef2cd059",
-			"docs": ["docs/runbooks/backup-restore.md"],
-			"note": "The storage startup probe and sanitized upload diagnostics do not change persisted attachment formats; restore guidance now covers directory permissions and matching authentication secrets.",
-			"upgrade": "Before upgrading, provision the filesystem directory when attachments are enabled and retain the existing authentication secret.",
-			"backup": "Back up the database, attachment ciphertext, field keys, and authentication secret as a matching recovery set.",
-			"rollback": "Restore matching database and secret backups or reverse authentication-secret rotation while all replicas are stopped.",
-			"clientVersions": "Browser and native clients remain compatible; attachment formats, quotas, permissions, and transfer payloads are unchanged."
 		}
 	}
 }
