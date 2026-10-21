@@ -260,7 +260,7 @@ export function PanelTaskList({
 						aria-label={priorityLabel(p)}
 						data-testid="panel-priority-section"
 					>
-						<h3 className="mb-1 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+						<h2 className="mb-1 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
 							{tone && (
 								<Flag
 									aria-hidden
@@ -269,7 +269,7 @@ export function PanelTaskList({
 							)}
 							{priorityLabel(p)}
 							<span aria-hidden="true">{rows.length}</span>
-						</h3>
+						</h2>
 						<PanelRows
 							entries={rows}
 							handlers={handlers}

@@ -8,6 +8,7 @@ import type { ChannelKind } from "../../domain/notification-channel.ts";
 import type { ChannelErrorCode } from "../../domain/notification-retry.ts";
 import { m } from "../../paraglide/messages.js";
 import type {
+	ChannelFieldError,
 	ChannelMode,
 	ChannelWarning,
 } from "../components/settings/channel-form.ts";
@@ -56,6 +57,7 @@ export function channelFieldLabel(key: string): string {
 }
 
 const WARNING_MESSAGES: Record<ChannelWarning, () => string> = {
+	channel_unavailable: m.channel_save_not_implemented,
 	app_mode_no_public_url: m.channel_mode_app_degraded,
 	email_smtp_missing: m.channel_email_unavailable,
 	email_delivery_paused: m.channel_email_delivery_paused,
@@ -115,5 +117,34 @@ export function inviteMailMessage(
 					: m.invite_mail_failed_permanent(),
 				tone: "warning",
 			};
+	}
+}
+
+export function channelFieldErrorMessage(
+	kind: ChannelKind,
+	key: string,
+	error: ChannelFieldError,
+): string {
+	if (error === "required")
+		return m.channel_field_required({ field: channelFieldLabel(key) });
+	switch (key) {
+		case "serverUrl":
+			return m.channel_invalid_server_url();
+		case "topic":
+			return m.channel_invalid_topic();
+		case "webhookUrl":
+			return m.channel_invalid_webhook({ channel: channelLabel(kind) });
+		case "chatId":
+			return m.channel_invalid_chat_id();
+		case "publicKey":
+			return m.channel_invalid_public_key();
+		case "channelId":
+			return kind === "discord"
+				? m.channel_invalid_discord_id()
+				: m.channel_invalid_slack_id();
+		case "address":
+			return m.channel_invalid_address();
+		default:
+			return m.channel_invalid_credential();
 	}
 }

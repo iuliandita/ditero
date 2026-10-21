@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { m } from "../../paraglide/messages.js";
-import { authErrorMessage } from "./auth-messages.ts";
+import { authErrorMessage, totpErrorMessage } from "./auth-messages.ts";
 
 // Expected values are catalog literals, not `m.*()`: routing both sides through
 // the same message passes even against an emptied entry. The codes here are the
@@ -101,4 +101,27 @@ describe("authErrorMessage", () => {
 			"Connecte-toi avant d'ajouter une passkey.",
 		);
 	});
+});
+
+test("TOTP distinguishes invalid codes, transport failures, and server failures", () => {
+	expect(
+		totpErrorMessage({
+			code: "INVALID_CODE",
+			status: 401,
+			message: "Invalid code",
+		}),
+	).toBe("That code is not correct.");
+	expect(totpErrorMessage({ status: 0, message: "Failed to fetch" })).toBe(
+		"The server could not be reached. Check your connection and try again.",
+	);
+	expect(
+		totpErrorMessage({
+			code: "INVALID_CODE",
+			status: 503,
+			message: "unavailable",
+		}),
+	).toBe("The server could not verify your code. Try again.");
+	expect(totpErrorMessage({})).toBe(
+		"The server could not verify your code. Try again.",
+	);
 });
