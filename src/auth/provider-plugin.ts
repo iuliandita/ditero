@@ -1,4 +1,7 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { BetterAuthPlugin } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import type { OAuthProvider } from "better-auth/oauth2";
 import { apple } from "better-auth/social-providers";
 import { jwtVerify } from "jose";
 
@@ -14,17 +17,38 @@ type IdTokenConfig = {
 	audience?: string | string[];
 	algorithms?: string[];
 	maxTokenAge?: string;
+	nonceComparison?: "exact" | "exact-or-sha256";
 	verifyClaims?: (claims: Record<string, unknown>) => boolean;
 };
 
+const sha256 = (value: string) => createHash("sha256").update(value).digest();
+
+// Equal-length digests keep the comparison constant time. Apple may answer with
+// the hex SHA-256 of the nonce, as Better Auth's own Apple verifier accepts.
+function nonceMatches(
+	claim: unknown,
+	nonce: string,
+	comparison: IdTokenConfig["nonceComparison"],
+): boolean {
+	if (typeof claim !== "string") return false;
+	const got = sha256(claim);
+	if (timingSafeEqual(got, sha256(nonce))) return true;
+	return (
+		comparison === "exact-or-sha256" &&
+		timingSafeEqual(got, sha256(sha256(nonce).toString("hex")))
+	);
+}
+
 // Better Auth's Microsoft and Apple providers decode the ID token from the token
 // endpoint without checking it. Run the checks their own sign-in-by-token path
-// uses (signature, issuer, audience, age, tenant binding) on the code flow too.
+// uses (signature, issuer, audience, age, tenant binding) on the code flow too,
+// and bind the token to the nonce stored with this authorization's state.
 async function idTokenIsValid(
 	config: IdTokenConfig | undefined,
 	idToken: string | undefined,
+	nonce: string | undefined,
 ): Promise<boolean> {
-	if (!config || !idToken) return false;
+	if (!config || !idToken || !nonce) return false;
 	try {
 		const { payload } = await jwtVerify(idToken, config.jwks as never, {
 			issuer: config.issuer,
@@ -34,23 +58,40 @@ async function idTokenIsValid(
 			requiredClaims: ["iss", "sub", "aud", "exp", "iat"],
 			clockTolerance: 30,
 		});
-		return config.verifyClaims?.(payload) ?? true;
+		return (
+			nonceMatches(payload.nonce, nonce, config.nonceComparison) &&
+			(config.verifyClaims?.(payload) ?? true)
+		);
 	} catch {
 		return false;
 	}
 }
 
 function requireVerifiedIdToken(provider: SocialProvider): SocialProvider {
+	const authorize =
+		provider.createAuthorizationURL as OAuthProvider["createAuthorizationURL"];
 	const getUserInfo = provider.getUserInfo as (token: {
 		idToken?: string;
+		expectedIdTokenNonce?: string;
 	}) => Promise<unknown>;
 	return {
 		...provider,
-		async getUserInfo(token: { idToken?: string }) {
+		requiresIdTokenNonce: true,
+		async createAuthorizationURL(data: Parameters<typeof authorize>[0]) {
+			if (!data.idTokenNonce) throw new Error("ID token nonce is required");
+			const url = await authorize(data);
+			url.searchParams.set("nonce", data.idTokenNonce);
+			return url;
+		},
+		async getUserInfo(token: {
+			idToken?: string;
+			expectedIdTokenNonce?: string;
+		}) {
 			if (
 				!(await idTokenIsValid(
 					provider.idToken as IdTokenConfig,
 					token.idToken,
+					token.expectedIdTokenNonce,
 				))
 			)
 				return null;
@@ -81,6 +122,24 @@ export function signInProviderPlugin(options: {
 }): BetterAuthPlugin {
 	return {
 		id: "ditero-sign-in-providers",
+		hooks: {
+			before: [
+				{
+					matcher: (context) =>
+						(context.path === "/sign-in/social" ||
+							context.path === "/link-social") &&
+						context.body?.provider !== "google" &&
+						Boolean(context.body?.idToken),
+					handler: createAuthMiddleware(async () => {
+						// Also covers OIDC providers registered after discovery recovers.
+						throw new APIError("BAD_REQUEST", {
+							code: "ID_TOKEN_NOT_SUPPORTED",
+							message: "Use the provider authorization code flow",
+						});
+					}),
+				},
+			],
+		},
 		init(context) {
 			const providers = (context.socialProviders as unknown as SocialProvider[])
 				.map((provider): SocialProvider => {

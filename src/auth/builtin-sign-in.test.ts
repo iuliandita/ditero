@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { decodeJwt } from "jose";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -23,7 +23,9 @@ vi.setConfig({ testTimeout: 30_000 });
 beforeEach(() => vi.unstubAllGlobals());
 afterEach(() => vi.unstubAllGlobals());
 
-type Harness = Awaited<ReturnType<typeof setup>>;
+type Harness = Awaited<ReturnType<typeof setup>> & {
+	onAuthorization?: (url: URL) => void;
+};
 
 async function setup(
 	env: Record<string, string>,
@@ -46,6 +48,7 @@ async function signIn(
 	options: { form?: boolean } = {},
 ) {
 	const started = await startOAuth(h.auth, provider);
+	h.onAuthorization?.(started.authorization);
 	return {
 		started,
 		outcome: await finishOAuth(h.auth, provider, started, options),
@@ -362,7 +365,7 @@ describe("Microsoft", () => {
 
 	async function microsoft(tenantSetting: string) {
 		const key = await signingKey("ms-key");
-		const state = { claims: {} as Record<string, unknown>, key };
+		const state = { claims: {} as Record<string, unknown>, key, nonce: "" };
 		const tenantPath = tenantSetting.toLowerCase();
 		const routes: MockRoute[] = [
 			async (r) =>
@@ -371,7 +374,10 @@ describe("Microsoft", () => {
 					? json({
 							access_token: "ms-token",
 							token_type: "Bearer",
-							id_token: await state.key.sign(state.claims, { kid: "ms-key" }),
+							id_token: await state.key.sign(
+								{ nonce: state.nonce, ...state.claims },
+								{ kid: "ms-key" },
+							),
 						})
 					: undefined,
 			(r) =>
@@ -395,7 +401,16 @@ describe("Microsoft", () => {
 				...extra,
 			};
 		};
-		return { h, claims, state };
+		return {
+			h: {
+				...h,
+				onAuthorization: (url: URL) => {
+					state.nonce = url.searchParams.get("nonce") ?? "";
+				},
+			},
+			claims,
+			state,
+		};
 	}
 
 	test("single tenant: keys the account on tenant and object ID, with openid scopes only", async () => {
@@ -411,6 +426,7 @@ describe("Microsoft", () => {
 		expect(
 			started.authorization.searchParams.get("code_challenge_method"),
 		).toBe("S256");
+		expect(started.authorization.searchParams.get("nonce")).toBeTruthy();
 		expect(outcome.error).toBeNull();
 		expect(h.store.account[0]).toMatchObject({
 			providerId: "microsoft",
@@ -481,6 +497,8 @@ describe("Microsoft", () => {
 			{ iat: nowSeconds() - 7200, exp: nowSeconds() - 3600 },
 		],
 		["a missing object ID", { oid: undefined }],
+		["a missing nonce", { nonce: undefined }],
+		["another request's nonce", { nonce: "wrong-nonce" }],
 	])("refuses %s", async (_label, override) => {
 		const { h, claims } = await microsoft("organizations");
 		claims("99999999-9999-9999-9999-999999999999", override);
@@ -488,6 +506,24 @@ describe("Microsoft", () => {
 			"unable_to_get_user_info",
 		);
 		expectNoAccount(h);
+	});
+
+	test("refuses a replayed callback and a token bound to an earlier request", async () => {
+		const { h, claims, state } = await microsoft(TENANT);
+		claims(TENANT);
+		const first = await signIn(h, "microsoft");
+		expect(first.outcome.error).toBeNull();
+		const earlier = state.nonce;
+		expect(
+			(await finishOAuth(h.auth, "microsoft", first.started)).error,
+		).toBeTruthy();
+		const next = await startOAuth(h.auth, "microsoft");
+		expect(next.authorization.searchParams.get("nonce")).not.toBe(earlier);
+		state.nonce = earlier;
+		expect((await finishOAuth(h.auth, "microsoft", next)).error).toBe(
+			"unable_to_get_user_info",
+		);
+		expect(h.store.session).toHaveLength(1);
 	});
 
 	test("refuses a token signed by another key", async () => {
@@ -578,6 +614,7 @@ describe("Apple", () => {
 		expect(started.authorization.origin).toBe("https://appleid.apple.com");
 		expect(query.get("response_mode")).toBe("form_post");
 		expect(query.get("code_challenge_method")).toBe("S256");
+		expect(query.get("nonce")).toBeTruthy();
 		const post = await finishOAuth(h.auth, "apple", started, {
 			form: true,
 			origin: "https://appleid.apple.com",
@@ -624,6 +661,8 @@ describe("Apple", () => {
 	test.each([
 		["a different audience", { aud: "someone-else" }],
 		["a different issuer", { iss: "https://evil.example.test" }],
+		["a missing nonce", { nonce: undefined }],
+		["another request's nonce", { nonce: "wrong-nonce" }],
 		[
 			"an expired token",
 			{ iat: nowSeconds() - 7200, exp: nowSeconds() - 3600 },
@@ -650,6 +689,32 @@ describe("Apple", () => {
 			email: "ada@example.test",
 			emailVerified: true,
 		});
+	});
+
+	test("refuses a replayed callback and a token bound to an earlier request", async () => {
+		const { h, issued } = await apple();
+		const first = await appleSignIn(h, issued);
+		expect(
+			(await finishOAuth(h.auth, "apple", first.started)).error,
+		).toBeNull();
+		const earlier = issued.nonce;
+		expect(
+			(await finishOAuth(h.auth, "apple", first.started)).error,
+		).toBeTruthy();
+		const next = await appleSignIn(h, issued);
+		expect(issued.nonce).not.toBe(earlier);
+		issued.nonce = earlier;
+		expect((await finishOAuth(h.auth, "apple", next.started)).error).toBe(
+			"unable_to_get_user_info",
+		);
+		expect(h.store.session).toHaveLength(1);
+	});
+
+	test("accepts the hashed nonce form Apple may return", async () => {
+		const { h, issued } = await apple();
+		const { started } = await appleSignIn(h, issued);
+		issued.nonce = createHash("sha256").update(issued.nonce).digest("hex");
+		expect((await finishOAuth(h.auth, "apple", started)).error).toBeNull();
 	});
 
 	test("a relay address cannot match an invitation and says so", async () => {

@@ -55,7 +55,8 @@ for their own address.
 - **Protocol.** Authorization code flow with `state`. PKCE (S256) is sent for Google,
   GitHub, Microsoft, Apple and generic OpenID Connect; Better Auth does not send it
   for Discord or Facebook, which rely on `state` and the client secret. OpenID
-  Connect providers also bind the ID token to the request with a `nonce`.
+  Connect, Microsoft and Apple also bind the ID token to the request with a
+  single-use `nonce` kept with the server-side `state`.
 - **Identity.** A sign-in is recognised by the provider's immutable account ID, never
   by email: GitHub numeric ID, Discord ID, Facebook ID, Apple `sub`, Microsoft tenant
   ID plus object ID, and for OpenID Connect the issuer plus `sub`. Changing the email
@@ -244,7 +245,7 @@ purpose.
 
 A domain name such as `contoso.onmicrosoft.com` is refused: Entra puts the tenant GUID
 in tokens, and the check compares it. The server verifies each ID token's signature,
-audience and age itself and enforces the tenant: a single-tenant app accepts only that
+audience, age and nonce itself and enforces the tenant: a single-tenant app accepts only that
 tenant's issuer, `organizations` rejects the personal-account tenant, `consumers`
 accepts only it.
 

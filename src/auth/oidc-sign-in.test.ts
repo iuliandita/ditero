@@ -343,6 +343,53 @@ describe("generic OpenID Connect sign-in", () => {
 		);
 		expect(response.status).toBeGreaterThanOrEqual(400);
 	});
+
+	test("discovery recovery does not open client-submitted ID token sign-in", async () => {
+		const fixture = await idp();
+		let available = false;
+		const mocks = mockProviderEndpoints([
+			(r) =>
+				r.url.href === `${ISSUER}/.well-known/openid-configuration` &&
+				!available
+					? json({}, 503)
+					: undefined,
+			...fixture.routes,
+		]);
+		const h = memoryAuth({ env });
+		await h.auth.$context;
+		available = true;
+		await startOAuth(h.auth, "family");
+		expect(
+			mocks.calls.filter((r) =>
+				r.url.pathname.endsWith("/openid-configuration"),
+			),
+		).toHaveLength(2);
+		const token = await fixture.key.sign({
+			iss: ISSUER,
+			aud: "ditero",
+			sub: "user-1",
+			email: "ada@example.test",
+			email_verified: true,
+			iat: nowSeconds(),
+			exp: nowSeconds() + 300,
+		});
+		const response = await h.auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/social", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({ provider: "family", idToken: { token } }),
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			code: "ID_TOKEN_NOT_SUPPORTED",
+		});
+		expect(h.store.user).toHaveLength(0);
+		expect(h.store.session).toHaveLength(0);
+	});
 });
 
 describe("registration gate for OpenID Connect sign-ups", () => {
