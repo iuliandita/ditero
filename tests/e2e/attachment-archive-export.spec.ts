@@ -903,7 +903,9 @@ test("archive export: a real shared file without its key is explained and unsele
 		await owner.getByTestId("invite-submit").click();
 		const link = owner.getByTestId("invite-link");
 		await expect(link).toBeVisible();
-		const token = new URL(await link.inputValue()).searchParams.get("token");
+		const token = new URLSearchParams(
+			new URL(await link.inputValue()).hash.slice(1),
+		).get("token");
 		if (!token) throw new Error("missing invitation token");
 		memberID = await signUp(member, email);
 		await goToSettings(member);

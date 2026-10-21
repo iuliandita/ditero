@@ -73,7 +73,7 @@ describe("sendInviteMail", () => {
 		expect(status).toEqual({ status: "sent" });
 		expect(started.commands).toContain("RCPT TO:<invitee@example.test>");
 		const message = started.messages[0];
-		expect(message).toContain("https://todo.example/accept?token=tok-123");
+		expect(message).toContain("https://todo.example/accept#token=tok-123");
 		expect(message).toContain("Ada invited you to join Renovation on Ditero.");
 		expect(message).toMatch(
 			/^Subject: Ada invited you to Renovation on Ditero/m,
@@ -104,7 +104,7 @@ describe("sendInviteMail", () => {
 			mailer: createMailer(config(started)),
 		});
 		expect(started.messages[0]).toContain(
-			"https://todo.example/accept?token=tok-123",
+			"https://todo.example/accept#token=tok-123",
 		);
 		expect(started.messages[0]).not.toContain("example//accept");
 	});

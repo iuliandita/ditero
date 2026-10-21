@@ -123,7 +123,9 @@ export function InviteDialog({
 					});
 					const url = new URL(data.link, window.location.origin);
 					url.searchParams.set("e2e", sealed.payload);
-					url.hash = new URLSearchParams({ e2e: sealed.fragment }).toString();
+					const fragment = new URLSearchParams(url.hash.slice(1));
+					fragment.set("e2e", sealed.fragment);
+					url.hash = fragment.toString();
 					createdLink = url.toString();
 				} catch (error) {
 					// The row and its emailed async link already exist. Preserve that

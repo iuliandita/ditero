@@ -270,9 +270,26 @@ describe("fragment invite state machine", () => {
 	});
 	test("preview consumes and claims nothing", async () => {
 		await makeInvite("preview");
-		const response = await call("GET", "/api/invite/preview?token=preview");
+		const response = await call("POST", "/api/invite/preview", {
+			body: { token: "preview" },
+		});
 		expect(response.status).toBe(200);
+		expect(response.headers.get("cache-control")).toBe("no-store");
 		expect(await response.json()).toMatchObject({ valid: true });
+		expect(
+			(await call("GET", "/api/invite/preview?token=preview")).status,
+		).toBe(404);
+		const foreign = await app.handle(
+			new Request("http://localhost:3000/api/invite/preview", {
+				method: "POST",
+				headers: {
+					origin: "https://foreign.example",
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({ token: "preview" }),
+			}),
+		);
+		expect(foreign.status).toBe(403);
 		const row = await pool.query(
 			"select uses, status, claimed_by from invite where token = $1",
 			["preview"],

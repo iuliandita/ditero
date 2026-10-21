@@ -86,7 +86,7 @@ export function publicBaseUrl(env: AppEnv): string {
 }
 
 export function inviteLink(token: string, env: AppEnv): string {
-	return `${publicBaseUrl(env).replace(/\/+$/, "")}/accept?token=${encodeURIComponent(token)}`;
+	return `${publicBaseUrl(env).replace(/\/+$/, "")}/accept#token=${encodeURIComponent(token)}`;
 }
 
 export async function createInvite(
