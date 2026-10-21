@@ -166,7 +166,8 @@ popups. Shutdown gives removal one three-second budget. A stalled system service
 can still display a delayed generic popup after exit; removal is best effort.
 Linux popups request a five-minute expiry and transient handling, which the
 system service may override. Windows removes both owned banners and history
-entries; macOS removes owned pending and delivered requests. Startup removes
+entries; macOS removes owned pending and delivered requests, including late
+completion after a timed-out add request. Startup removes
 leftover app notifications whose old process can no longer handle clicks. In-app
 reminders and other configured delivery channels retain their own behavior.
 

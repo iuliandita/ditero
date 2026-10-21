@@ -231,6 +231,7 @@ impl Modern {
             return Err("cancelled");
         }
         let (tx, mut rx) = mpsc::channel(1);
+        let abandoned = Arc::new(AtomicBool::new(false));
         {
             let content = UNMutableNotificationContent::new();
             content.setTitle(&NSString::from_str("Ditero"));
@@ -241,9 +242,10 @@ impl Modern {
                 None,
             );
             let owner = self.owner.clone();
+            let late = abandoned.clone();
             let key = id.to_owned();
             let handler = RcBlock::new(move |error: *mut NSError| {
-                if !owner.current() {
+                if late.load(Ordering::SeqCst) || !owner.current() {
                     withdraw(&key);
                 }
                 let result = if error.is_null() {
@@ -261,6 +263,8 @@ impl Modern {
             .flatten()
             .unwrap_or(Err("temporary-unavailable"));
         if result.is_err() || !self.owner.current() {
+            // A completion can arrive after the timeout and its initial withdrawal.
+            abandoned.store(true, Ordering::SeqCst);
             withdraw(id);
         }
         result?;
