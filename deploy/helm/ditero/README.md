@@ -193,7 +193,10 @@ service.
 Back up PostgreSQL, the attachment claim, and the authentication/encryption
 Secrets. Preserve the Zero claim for normal restarts; it contains the replica
 cache and can be rebuilt from PostgreSQL if necessary. Test restore before
-relying on backups. Chart-created PVCs carry `helm.sh/resource-policy: keep` and
+relying on backups using the [Kubernetes logical restore procedure](../../../docs/runbooks/backup-restore.md#kubernetes-logical-backup-and-restore).
+A fresh target needs the original role passwords and service secrets, restored
+attachments and an empty Zero claim before the application starts.
+Chart-created PVCs carry `helm.sh/resource-policy: keep` and
 remain after uninstall. To reuse retained data, set the corresponding
 `existingClaim` before reinstalling. Delete retained claims manually only after
 backup and an explicit decision to discard that data. Use a suitable volume

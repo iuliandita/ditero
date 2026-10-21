@@ -18,14 +18,14 @@
 			"note": "Prepare the first beta, 0.1.0-beta.1 with Android code 13, retain the existing signing certificate and documentation epoch, align release commands, and describe the remaining prerelease and native qualification limits. Generated publication notes now describe a prerelease rather than an alpha."
 		},
 		"configuration": {
-			"sourceDigest": "f5dcb8333e83ba0e549930eafc17a64209b627b97b5b603cfd8da83511f04abf",
+			"sourceDigest": "9d1e5209cf812dcda8cf8b5ee56ef4ba17441b6c573fbc5562ffe0ed0037cfb1",
 			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Align the default app and Zero image pair with beta.1 in the packaged guides. This release changes image versions, not operator settings or the retained credentials required for upgrades."
+			"note": "Document the explicit Compose Zero image tag for commit-pinned nightly pairs and preserve the release suffix default. Document staged Kustomize startup and the shared Kubernetes logical restore path with original credentials, attachment ciphertext and a fresh Zero cache. Existing clients and stored formats are unchanged."
 		},
 		"deployment": {
-			"sourceDigest": "eed8f93a8a2f450565cfaf511f278cd90bfc66bf6ac1788f125d6df379766a35",
+			"sourceDigest": "d250e182e1ae064cd1b264ceef875e182b2fc9e1c9395e10aec7598a45840890",
 			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Align chart metadata, resource labels and packaged deployment image examples with 0.1.0-beta.1. Preserve app/Zero pairing, storage and recovery guidance, and cluster qualification limits; the optional one-image bundle remains separate from standard release assets."
+			"note": "Qualify published Compose, Helm and Kustomize recovery paths. Document database-first blob snapshots, original secrets, app-before-Zero startup, CNPG managed roles and logical restore, and bounded diagnostics before cleanup. Add a Compose Zero tag override without changing existing release defaults; the optional all-in-one bundle is unchanged."
 		},
 		"native": {
 			"sourceDigest": "1a9f39a14e3af1c56084dfde8ae3128ffbf181e5aef396f1e8764ab37fd6a27b",

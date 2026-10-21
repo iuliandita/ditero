@@ -123,7 +123,7 @@ services:
     # Stable zero-cache with patched dependencies and a secret-file entrypoint. Published
     # alongside the app image so the stack runs without a checkout; `up --build`
     # builds it from this tree instead.
-    image: ghcr.io/iuliandita/ditero:${DITERO_IMAGE_TAG:-nightly}-zero
+    image: ghcr.io/iuliandita/ditero:${DITERO_ZERO_IMAGE_TAG:-${DITERO_IMAGE_TAG:-nightly}-zero}
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile

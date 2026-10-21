@@ -72,7 +72,11 @@ await_value() {
 	done
 }
 
-compose up --build --detach >/dev/null
+case ${DITERO_CONTAINER_BUILD:-1} in
+1) compose up --build --detach >/dev/null ;;
+0) compose up --no-build --detach >/dev/null ;;
+*) echo "DITERO_CONTAINER_BUILD must be 0 or 1" >&2; exit 1 ;;
+esac
 
 await "the app to serve traffic" 90 \
 	compose exec -T app bun -e 'const r = await fetch("http://localhost:3000/health"); if (!r.ok) process.exit(1)'

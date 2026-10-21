@@ -138,6 +138,28 @@ verify your kube context and namespace, run server-side dry-run and diff against
 that target, and obtain your normal deployment approval. The base can be applied
 with `kubectl apply -k` by the authorized operator after those checks.
 
+For first installation or restore, hold Zero at zero replicas in the overlay
+before applying it, so its initial copy cannot race application migrations:
+
+```yaml
+patches:
+- target:
+    kind: Deployment
+    name: ditero-zero
+  patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 0
+```
+
+Wait for the rendered app Deployment to become available, then scale the rendered
+Zero Deployment to one replica. On upgrade, first scale the existing Zero
+Deployment to zero and wait for its pods to terminate, then apply the overlay
+with Zero still held at zero. Start Zero only after the updated app is healthy.
+Use explicit context and namespace arguments for every operation. A subsequent
+apply of this held overlay stops Zero again; coordinate those operations with
+your deployment controller rather than letting it undo the staged startup.
+
 ## Operations and boundaries
 
 Zero uses `ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS=30`. After sign-out or session
@@ -169,7 +191,11 @@ TLS, CSI compatibility, runtime readiness, or restore. Neither container needs
 Kubernetes API permissions.
 
 Back up PostgreSQL, the attachment claim, and the authentication/encryption
-Secrets together. Preserve the Zero claim for normal restarts; its replica cache
+Secrets together using the [logical recovery procedure](../../docs/runbooks/backup-restore.md#kubernetes-logical-backup-and-restore).
+On first install, upgrade and restore, keep Zero scaled to zero until the new
+app has finished migrations and is healthy; applying the base starts both
+Deployments and does not enforce that ordering. Preserve the Zero claim for normal
+restarts; its replica cache
 can be rebuilt from PostgreSQL when necessary. Test recovery in an isolated
 environment before relying on backups. An image rollback does not undo database
 migrations; the app entrypoint applies migrations before starting.

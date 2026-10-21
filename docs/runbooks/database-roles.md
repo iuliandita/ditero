@@ -79,6 +79,10 @@ PostgreSQL backups or guarantee repair of every failed initial sync.
 Run application migrations and wait for app `/health` before starting Zero.
 Without superuser DDL event triggers, Zero uses degraded schema-change detection;
 keep automatic reset enabled and verify fresh-client sync after migrations.
+`MissingEventTriggerSupport` with a tables-created-or-dropped diagnostic means
+Zero observed schema changes it cannot replicate incrementally. Capture its
+previous log, stop Zero, finish migrations, and restart using the documented reset
+setting. Do not grant the app runtime superuser access to repair this failure.
 
 ## Zero's shard schema
 
