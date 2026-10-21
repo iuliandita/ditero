@@ -52,10 +52,11 @@ export function TaskList({
 	const kind = (list.kind ?? "tasks") as ListKind;
 	const mode = list.completedDisplay ?? "sink";
 	const rootRef = useRef<HTMLDivElement>(null);
-	// A reopen from any path (another device, the detail sheet) retracts a
-	// "Completed" snack that no longer describes the row.
-	const { dismissKey } = useSnackbar();
-	const observed = useSettling(tasks, rootRef, dismissKey);
+	// A reopen from any path (another device, a refused completion rolling back)
+	// drops a "Completed" snack that no longer describes the row. It only
+	// releases the key: a rollback can precede the refusal it reports.
+	const { releaseKey } = useSnackbar();
+	const observed = useSettling(tasks, rootRef, releaseKey);
 	// keep mode never moves a completed row, so nothing settles there.
 	const settling = mode === "keep" ? NOTHING_SETTLING : observed;
 	const { visible, completed } = useMemo(

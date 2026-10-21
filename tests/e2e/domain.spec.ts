@@ -1265,9 +1265,12 @@ test("a refused complete or move takes its snackbar back", async ({ page }) => {
 			timeout: 15000,
 		});
 		await expect(snack("Completed: Held back")).toHaveCount(0);
-		// The panel's own error line: Zero reports the refusal as a resolved error
-		// result, which the runner used to miss while waiting for a rejection.
-		await expect(panel.getByRole("alert")).toBeVisible();
+		// A server refusal rolls the row back first; that must not retract the
+		// refusal notice. The sync indicator reports the rejected change too.
+		await expect(page.getByTestId("sync-indicator")).toHaveAttribute(
+			"data-phase",
+			"rejected",
+		);
 		await expect(
 			snack("Could not complete: Held back").getByTestId("snackbar-action"),
 		).toHaveCount(0);
