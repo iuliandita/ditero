@@ -5,7 +5,7 @@
 	"scripts": {
 		"build": "cd ../.. && vite build apps/desktop --config apps/desktop/vite.config.ts",
 		"tauri": "tauri",
-		"package:linux": "tauri build --debug --bundles deb -- --locked",
+		"package:linux": "tauri build --debug --bundles deb,rpm,appimage -- --locked",
 		"package:windows": "tauri build --debug --bundles nsis -- --locked",
 		"package:macos": "tauri build --debug --bundles app,dmg -- --locked",
 		"release:linux": "bun ../../scripts/desktop-release.ts linux",

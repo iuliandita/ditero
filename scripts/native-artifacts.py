@@ -12,7 +12,7 @@ PACKAGES = {
     "linux": (
         "linux-x64-unsigned",
         "apps/desktop/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle",
-        (("deb/*.deb", "deb"), ("appimage/*.AppImage", "AppImage")),
+        (("deb/*.deb", "deb"), ("appimage/*.AppImage", "AppImage"), ("rpm/*.rpm", "rpm")),
     ),
     "windows": (
         "windows-x64-unsigned",
@@ -22,6 +22,16 @@ PACKAGES = {
     "macos": (
         "macos-arm64-adhoc",
         "apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle",
+        (("dmg/*.dmg", "dmg"),),
+    ),
+    "windows-arm64": (
+        "windows-arm64-unsigned",
+        "apps/desktop/src-tauri/target/aarch64-pc-windows-msvc/release/bundle",
+        (("nsis/*.exe", "exe"),),
+    ),
+    "macos-x64": (
+        "macos-x64-adhoc",
+        "apps/desktop/src-tauri/target/x86_64-apple-darwin/release/bundle",
         (("dmg/*.dmg", "dmg"),),
     ),
     "android": (
@@ -39,10 +49,14 @@ VERSION = re.compile(
 )
 
 
-def collect(root: Path, output: Path, platform: str, version: str) -> list[Path]:
+def collect(root: Path, output: Path, platform: str, version: str, profile: str = "release") -> list[Path]:
     if not VERSION.fullmatch(version):
         raise ValueError("release version must be semantic without a v prefix or build metadata")
     label, directory, kinds = PACKAGES[platform]
+    if profile not in ("debug", "release") or (platform == "android" and profile != "release"):
+        raise ValueError("invalid native package profile")
+    if platform != "android":
+        directory = directory.replace("/release/", f"/{profile}/")
     sources = []
     for pattern, extension in kinds:
         matches = sorted((root / directory).glob(pattern))
@@ -64,11 +78,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--platform", required=True, choices=PACKAGES)
     parser.add_argument("--version", required=True)
+    parser.add_argument("--profile", choices=("debug", "release"), default="release")
     parser.add_argument("--root", type=Path, default=Path("."))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
-        for artifact in collect(args.root, args.output, args.platform, args.version):
+        for artifact in collect(args.root, args.output, args.platform, args.version, args.profile):
             print(artifact.name)
     except (OSError, ValueError) as error:
         print(f"native artifact collection failed: {error}", file=sys.stderr)

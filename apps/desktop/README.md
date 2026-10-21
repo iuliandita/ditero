@@ -145,7 +145,7 @@ cd ..
 
 Then run the package command for the current build platform:
 
-- Linux: `bun run package:linux` creates an unsigned development `.deb`.
+- Linux: `bun run package:linux` creates unsigned development DEB, RPM and AppImage packages.
 - Windows: `bun run package:windows` creates an unsigned development NSIS `.exe`.
 - macOS: `bun run package:macos` creates a development `.app` and `.dmg` with an
   ad-hoc signature, without Developer ID signing or notarization.
@@ -158,17 +158,38 @@ build distribution; the Ubuntu 24.04 CI artifact is not a portable Linux binary.
 The Windows installer may download the WebView2 bootstrapper when WebView2 is
 absent. macOS ad-hoc artifacts can require explicit approval in Privacy & Security.
 
-The Desktop development installers workflow builds one package on each of Linux,
-Windows, and macOS. It freezes both Bun installs and Cargo resolution, runs the
-focused adapter/native lifecycle checks, and uploads artifacts labeled as
-unsigned or ad-hoc development builds. It does not publish a release or run an
-interactive consent/credential-store journey. The macOS CI job builds for its
-runner's native architecture; it does not produce a universal application.
+The Desktop development installers workflow runs on PRs and branch pushes to
+`develop`/`main`, and supports manual dispatch. It builds Linux x64 DEB/RPM/AppImage,
+Windows x64 and ARM64 NSIS, and separate macOS Apple Silicon and Intel DMGs on
+native runners. Linux ARM64 and universal macOS bundles are not produced. CI uses
+explicit Rust targets, so its output is under `src-tauri/target/<target>/debug/`.
+The local commands above use the current native host architecture unless a target
+is explicitly supplied to Tauri. Linux bundling also needs `rpm`, `patchelf` and
+FUSE 2 compatibility libraries; AppStream validation uses `appstreamcli`.
+
+Both Bun installs and Cargo resolution stay frozen. Focused adapter/native lifecycle
+checks remain required. Each platform upload includes checksums and an unsigned
+or ad-hoc label, and expires after seven days. Linux packages include AppStream
+metadata, one visible desktop entry, icons and the MIT license.
+
+The workflow checks the contents and x64 ELF architecture of all Linux formats,
+installs the DEB with dependencies, and installs/verifies the RPM and linked
+libraries in a pinned Fedora 44 container. It launches the DEB, extracted RPM and
+AppImage under Xvfb on Ubuntu, requiring a Ditero window. Fedora graphical startup
+remains unqualified. Windows silently installs NSIS, verifies the
+installed executable matches the build and has the target PE architecture, and
+requires a Ditero window. macOS mounts the DMG, copies the app, checks its native
+architecture and ad-hoc signature, and checks that it survives startup. Startup
+checks do not qualify a rendered signed-in interface, consent, credential storage,
+upgrades or OS download trust. Diagnostics are retained for seven days.
+CI disables per-format updater binary patching to preserve the Windows executable
+for byte-for-byte installation checks; no automatic updater is configured.
 
 ## Manual release signing hooks
 
-The tagged alpha pipeline separately produces optimized Linux x86_64 DEB/AppImage,
-unsigned Windows x86_64 installers and ad-hoc signed macOS Apple Silicon DMGs.
+The tagged prerelease pipeline produces optimized Linux x86_64 DEB/RPM/AppImage,
+unsigned Windows x86_64/ARM64 NSIS installers and separate ad-hoc signed macOS
+Apple Silicon/Intel DMGs. It uses the same installer smoke checks as development CI.
 Downloads have checksums and explicit signing labels. It does not use the
 certificate-required Windows/macOS hooks below. See
 [Releasing](../../RELEASING.md) for the artifact pipeline and remaining limits.
@@ -188,7 +209,7 @@ bun run release:windows
 bun run release:macos
 ```
 
-Linux builds `.deb` and AppImage packages. These hooks do not sign Linux packages;
+Linux builds DEB, RPM and AppImage packages. These hooks do not sign Linux packages;
 release operators must produce and authenticate checksums/signatures before
 publication. Package-manager trust and AppImage signing are separate from Tauri
 updater signatures. Never label an unsigned Linux artifact as signature-qualified.
