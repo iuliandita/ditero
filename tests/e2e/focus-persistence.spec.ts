@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import {
@@ -151,12 +152,20 @@ test("an interval with no recorded start and no monotonic proof is reported as n
 }) => {
 	const userId = await startTask(page, 15);
 	await serverStartObserved(page, userId);
-	await forgetServerStart(page, userId);
+	// Restore an offline/legacy interval that never reached the server. A fresh
+	// identity cannot inherit a deleted start from Zero's persistent cache.
+	const unrecordedId = randomUUID();
+	await forgetServerStart(page, userId, unrecordedId);
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
 	try {
-		await pool.query("delete from focus_interval_start where user_id=$1", [
-			userId,
-		]);
+		expect(
+			(
+				await pool.query(
+					"select count(*)::int as count from focus_interval_start where user_id=$1 and interval_id=$2",
+					[userId, unrecordedId],
+				)
+			).rows,
+		).toEqual([{ count: 0 }]);
 		await page.reload();
 		const timer = page.getByTestId("focus-timer");
 		await expect(timer.getByTestId("focus-phase")).toHaveText("Break", {
@@ -244,32 +253,40 @@ async function focusState(page: Page, userId: string) {
 }
 
 // Leaves the persisted timer as if the start acknowledgement never arrived.
-async function forgetServerStart(page: Page, userId: string) {
-	await page.evaluate(async (userId) => {
-		const db = await new Promise<IDBDatabase>((resolve, reject) => {
-			const request = indexedDB.open("ditero-focus", 1);
-			request.onsuccess = () => resolve(request.result);
-			request.onerror = () => reject(request.error);
-		});
-		try {
-			await new Promise<void>((resolve, reject) => {
-				const transaction = db.transaction("timers", "readwrite");
-				const store = transaction.objectStore("timers");
-				const key = `ditero:focus:${JSON.stringify(["browser", userId])}`;
-				const request = store.get(key);
-				request.onsuccess = () => {
-					const state = request.result;
-					state.session.serverStarted = false;
-					state.revision += 1;
-					store.put(state, key);
-				};
-				transaction.oncomplete = () => resolve();
-				transaction.onerror = () => reject(transaction.error);
+async function forgetServerStart(
+	page: Page,
+	userId: string,
+	intervalId?: string,
+) {
+	await page.evaluate(
+		async ({ userId, intervalId }) => {
+			const db = await new Promise<IDBDatabase>((resolve, reject) => {
+				const request = indexedDB.open("ditero-focus", 1);
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
 			});
-		} finally {
-			db.close();
-		}
-	}, userId);
+			try {
+				await new Promise<void>((resolve, reject) => {
+					const transaction = db.transaction("timers", "readwrite");
+					const store = transaction.objectStore("timers");
+					const key = `ditero:focus:${JSON.stringify(["browser", userId])}`;
+					const request = store.get(key);
+					request.onsuccess = () => {
+						const state = request.result;
+						state.session.serverStarted = false;
+						if (intervalId) state.session.intervalId = intervalId;
+						state.revision += 1;
+						store.put(state, key);
+					};
+					transaction.oncomplete = () => resolve();
+					transaction.onerror = () => reject(transaction.error);
+				});
+			} finally {
+				db.close();
+			}
+		},
+		{ userId, intervalId },
+	);
 }
 
 // An online start is observed by the server and acknowledged back into the

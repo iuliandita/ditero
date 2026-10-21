@@ -18,6 +18,7 @@ import {
 	isFocusDuplicate,
 } from "../../src/domain/focus-interval.ts";
 import { mutators } from "../../src/zero/mutators.ts";
+import { queries } from "../../src/zero/queries.ts";
 import { schema } from "../../src/zero/schema.gen.ts";
 import { withZeroUserContext } from "../../src/zero/task-activation.ts";
 
@@ -115,6 +116,26 @@ afterAll(async () => {
 });
 
 describe("focus interval start on the server path", () => {
+	test("the synced query returns only the caller's recorded starts", async () => {
+		const own = randomUUID();
+		const other = randomUUID();
+		await start(A, own);
+		await start(B, other);
+		// Query authorization must hold independently of database RLS: Zero
+		// evaluates the query against its shared replica.
+		const replica = zeroNodePg(schema, admin);
+		for (const [id, intervalId] of [
+			[A, own],
+			[B, other],
+		]) {
+			expect(
+				await replica.run(
+					queries.focusIntervalStarts.mine.fn({ args: undefined, ctx: { id } }),
+				),
+			).toEqual([{ userId: id, intervalId }]);
+		}
+	});
+
 	test("the start time is the server's, never a client value", async () => {
 		const id = randomUUID();
 		await asServer(A, mutators.focus.startInterval, {
@@ -220,6 +241,10 @@ describe("focus interval start on the server path", () => {
 				(e: unknown) => e,
 			);
 		expect(failure).toBeInstanceOf(Error);
+		expect(failure).toMatchObject({
+			code: "23505",
+			constraint: "focus_session_pkey",
+		});
 		expect(isFocusDuplicate(failure)).toBe(true);
 		expect(isFocusDuplicate(new FocusEarlyError(1000))).toBe(false);
 		expect(isFocusDuplicate(new Error("relation does not exist"))).toBe(false);
@@ -232,7 +257,9 @@ describe("focus interval start on the server path", () => {
 
 	test("another account's interval can be neither read nor written", async () => {
 		const id = randomUUID();
+		const own = randomUUID();
 		await start(A, id);
+		await start(B, own);
 		const asB = async (sql: string, params: unknown[] = []) => {
 			const client = await pool.connect();
 			try {
@@ -246,7 +273,24 @@ describe("focus interval start on the server path", () => {
 				client.release();
 			}
 		};
-		expect((await asB("select * from focus_interval_start")).rows).toEqual([]);
+		expect(
+			(await asB("select interval_id from focus_interval_start")).rows,
+		).toEqual([{ interval_id: own }]);
+		expect(
+			(
+				await asB("select * from focus_interval_start where interval_id=$1", [
+					id,
+				])
+			).rows,
+		).toEqual([]);
+		expect(
+			(
+				await asB(
+					"update focus_interval_start set started_at = now() where user_id = $1",
+					[B],
+				)
+			).rowCount,
+		).toBe(0);
 		expect(
 			(
 				await asB(

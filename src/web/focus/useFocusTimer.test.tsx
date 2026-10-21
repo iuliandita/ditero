@@ -991,12 +991,16 @@ test("an uncountable break stays silent", async () => {
 	await settle();
 	tab.api.skip();
 	await settle();
+	tab.api.start();
+	await settle();
 	const first = (await stored()).session;
 	expect(first?.cycle.phase).toBe("break");
+	expect(first?.running).toBe(true);
 	close(tab);
 	vi.setSystemTime(Date.now() + 60000);
 	const reopened = open();
 	await settle();
+	expect(reopened.api.session?.cycle.phase).toBe("work");
 	expect(logs()).toEqual([]);
 	expect(reopened.api.error).toBeNull();
 });

@@ -1,5 +1,5 @@
 // The server accepts a finished interval only after it has itself observed the
-// full duration (plus reported pauses) since the start it recorded. An early
+// duration less the latency allowance, plus reported pauses, since the start. An early
 // arrival is retryable, so the wait rides in the message like a mutator error
 // code: a server rejection reaches the client as a plain string.
 
@@ -37,6 +37,13 @@ export function focusEarlyWaitMs(e: unknown): number | null {
 const DUPLICATE_RE = /focus_session_pkey/;
 
 export function isFocusDuplicate(e: unknown): boolean {
+	if (typeof e === "object" && e !== null) {
+		const detail = e as { code?: unknown; constraint?: unknown };
+		if (detail.code !== undefined && detail.code !== "23505") return false;
+		if (detail.constraint !== undefined)
+			return detail.constraint === "focus_session_pkey";
+	}
+	// Zero transports application errors as strings, without PostgreSQL fields.
 	const message =
 		e instanceof Error ? e.message : typeof e === "string" ? e : "";
 	return DUPLICATE_RE.test(message);
