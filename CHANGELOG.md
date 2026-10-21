@@ -51,6 +51,37 @@ remain incomplete in [#346](https://github.com/iuliandita/ditero/issues/346).
   non-superuser Zero logins and migration-owner backups.
 - Support and reporting guidance targets the latest published prerelease and
   `develop`/nightly, with actual version identities and private security reporting.
+- Members can leave a shared workspace from their own Members row; the last owner
+  transfers ownership first. Leaving keeps their authored content and requires a
+  file-key rotation.
+- Display names can be edited in Account settings, and sign-up fills one in from
+  the email.
+- Startup rejects auth secrets shorter than 32 characters, unwritable attachment
+  storage, and a changed auth secret without the documented rotation.
+- Household members behind one shared address no longer lock each other out of
+  sign-in: email sign-in is limited per address and email, with a per-address ceiling.
+- Sign-up no longer reveals whether an email is registered: accepted requests get
+  the same response and the app signs in explicitly afterwards. The sign-in form
+  keeps the entered email, notices and errors after an attempt.
+- Wrong-account invites offer sign-out, viewers see read-only task controls with a
+  reason, and members and viewers who join before files are encrypted request access.
+- Reload restores the last workspace and list, and a running focus timer survives
+  reload without losing or double-counting its interval. Lists created from a saved
+  template keep the entered name.
+- Opening or reloading the browser app without a connection shows a page that says
+  Ditero needs a connection and retries on its own, instead of the sign-in form.
+  Already-open tabs keep working offline and sync later. The desktop app opens
+  cached data on an offline cold start for unexpired, verified sessions; older
+  stored sessions need one online start first.
+- A completion the server refuses shows its failure notice instead of silently
+  undoing the row.
+- Messages explain reminder acknowledgements, proxy upload limits, sync address
+  problems, HTTP access limits, notification channel fields and TOTP network
+  failures. Copy buttons only report success after copying, shortcut labels match
+  the platform, long titles and attachment sizes display correctly, and CSV import
+  completion takes keyboard focus.
+- The Debian image uses a refreshed distroless base. The experimental bundle builds
+  its backup binaries from current source and checks its bootstrap boundaries.
 
 ## 0.0.1-alpha.12 - 2026-10-09
 
