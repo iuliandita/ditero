@@ -2,9 +2,12 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "ea6fafb5b16b44da4c27770fba6a1bd7884d71caeded380e824f8e27262dc90f",
-			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "Upgrade Better Auth and passkey together to 1.7.12. TOTP enrollment explicitly requests totp and checks the response method before reading setup keys or backup codes. Document the response boundary and unchanged explicit native approval. Session startup, transport retry, locale and theme behavior are preserved. Zero 1.11 cached query results retain the prior unknown-result loading and import-activation policies; initializing remains a pending sync state. Document the client database boundary and durable retirement behavior."
+			"sourceDigest": "054fe2c80bd8bff518f721c7ed47a7e1df29d40b86971c472b89724f8020d09a",
+			"docs": [
+				"docs/runbooks/database-roles.md",
+				"docs/runbooks/sign-in-providers.md"
+			],
+			"note": "Upgrade Better Auth and passkey together to 1.7.12. TOTP enrollment explicitly requests totp and checks the response method before reading setup keys or backup codes. Document the response boundary and unchanged explicit native approval. Session startup, transport retry, locale and theme behavior are preserved. Zero 1.11 cached query results retain the prior unknown-result loading and import-activation policies; initializing remains a pending sync state. Document the client database boundary and durable retirement behavior. Add the SAML sign-in button and the Settings > Security link control, both driven by the server list in /api/config; the sign-in guide documents linking and errors."
 		},
 		"release": {
 			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",
@@ -12,14 +15,20 @@
 			"note": "Prepare the first beta, 0.1.0-beta.1 with Android code 13, retain the existing signing certificate and documentation epoch, align release commands, and describe the remaining prerelease and native qualification limits. Generated publication notes now describe a prerelease rather than an alpha."
 		},
 		"configuration": {
-			"sourceDigest": "b63e0ac51ab20dc757600167d44462eb8b6a63a758ce7c9066a913f027e31fa5",
-			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "Align Zero client and cache at 1.11.1 with both upstream Litestream configurations and forks. Preserve app IDs, publications, replication slots and restricted application roles. Document V5 backup defaults, connection budgets and upgrade sequencing."
+			"sourceDigest": "9593ba2bcf82c18897ed1d31b0af52ff9944e657f2a26c14cca75bde4ef6094d",
+			"docs": [
+				"docs/runbooks/database-roles.md",
+				"docs/runbooks/sign-in-providers.md"
+			],
+			"note": "Align Zero client and cache at 1.11.1 with both upstream Litestream configurations and forks. Preserve app IDs, publications, replication slots and restricted application roles. Document V5 backup defaults, connection budgets and upgrade sequencing. Document the DITERO_SAML_* settings with their _FILE forms, defaults and failure behavior."
 		},
 		"deployment": {
-			"sourceDigest": "020402a7bd9bfdb2e274f576e89ce2220497147e77af3ec390a19699e04a3ae0",
-			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "Rebuild the aligned Zero runtime and optional all-in-one runtime from the same reviewed package and PostgreSQL patch. Retain pinned Node and hardened backup dependencies, add the V5 configuration, and document existing-replica migration, backup and rollback procedures."
+			"sourceDigest": "14e7e192837829c83ac098f96adf784ee1ebcd2530020fba2245a7f21275337a",
+			"docs": [
+				"docs/runbooks/database-roles.md",
+				"deploy/docker/aio/README.md"
+			],
+			"note": "Rebuild the aligned Zero runtime and optional all-in-one runtime from the same reviewed package and PostgreSQL patch. Retain pinned Node and hardened backup dependencies, add the V5 configuration, and document existing-replica migration, backup and rollback procedures. Pass the DITERO_SAML_* settings through Compose and the all-in-one bundle (file forms only there); mount key, certificate and metadata files read-only."
 		},
 		"native": {
 			"sourceDigest": "1a9f39a14e3af1c56084dfde8ae3128ffbf181e5aef396f1e8764ab37fd6a27b",
@@ -27,9 +36,9 @@
 			"note": "Document desktop cold offline activation from complete unexpired evidence in the OS credential store, exact session binding, fail-closed verification and revocation markers, and native token refresh on socket retry. Existing records need one complete online start; downgrades require signing out stored accounts before installing an older build. Retain queued edits, refuse fallback for trust, HTTP, validation or storage failures, and keep platform runtime qualification explicit. Android cached activation policy is unchanged. Every authenticated native request now persists a refusal fence before I/O, including attachment, notification, cleanup and sync-handshake requests. Binary keyring chunks stay within the Windows blob limit, share credential references, and use a bounded recovery journal. Both earlier protected-record formats require fresh online evidence after upgrade; downgrades require OS credential-manager cleanup. The desktop TLS refusal test fixture now carries a fixed non-secret password because macOS refuses empty-password PKCS#12 imports; test-only, no runtime or documented behavior change."
 		},
 		"authentication": {
-			"sourceDigest": "0441d54419f2627d3f7c2b072d47a8e01e2a35088e6d48b2e3cacdd7cd398b12",
+			"sourceDigest": "45053c21bbf36e55899aa2d5dd7a9f9fe525b64a5e03c1a1d7f42f62a2ec71c8",
 			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Upgrade Better Auth and passkey together to 1.7.12. Google keeps its callback URI, PKCE and pending native consent return URL. OAuth callbacks now preserve APIError codes, so remove the message-as-code workaround and retain readable error descriptions. Document the required additive JWT key migration; account schema, credential formats, registration policies and trusted origins are unchanged."
+			"note": "Upgrade Better Auth and passkey together to 1.7.12. Google keeps its callback URI, PKCE and pending native consent return URL. OAuth callbacks now preserve APIError codes, so remove the message-as-code workaround and retain readable error descriptions. Document the required additive JWT key migration; account schema, credential formats, registration policies and trusted origins are unchanged. Add optional SAML single sign-on: operator-configured, signed assertions required, IdP-initiated off, identity keyed on IdP entity ID plus NameID, registration gate unchanged, explicit linking; the drizzle adapter now declares native transactions. Native sign-in returns through the same page."
 		},
 		"compatibility": {
 			"sourceDigest": "edb8f322a978f64346d1beafefc7750164cc6c94cfc07b9c5bedd45a0a79e6bf",
