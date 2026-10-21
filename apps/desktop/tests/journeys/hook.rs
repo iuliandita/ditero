@@ -27,6 +27,47 @@ pub fn keystore_cli() -> bool {
     true
 }
 
+pub fn notifications_cli() -> bool {
+    if !std::env::args().any(|a| a == "--journey-notifications") {
+        return false;
+    }
+    if !std::env::var("DITERO_JOURNEY_TOKEN")
+        .is_ok_and(|v| v.len() == 64 && v.bytes().all(|b| b.is_ascii_hexdigit()))
+        || std::env::var_os("DITERO_JOURNEY_DIRECTORY").is_none()
+    {
+        eprintln!("Debug notification probe is not configured");
+        std::process::exit(2);
+    }
+    use block2::RcBlock;
+    use objc2_foundation::NSArray;
+    use objc2_user_notifications::{
+        UNNotification, UNNotificationRequest, UNUserNotificationCenter,
+    };
+    use std::ptr::NonNull;
+    let center = UNUserNotificationCenter::currentNotificationCenter();
+    let (tx, rx) = mpsc::sync_channel(1);
+    let delivered = RcBlock::new(move |values: NonNull<NSArray<UNNotification>>| {
+        let _ = tx.send(unsafe { values.as_ref() }.len());
+    });
+    center.getDeliveredNotificationsWithCompletionHandler(&delivered);
+    let delivered = rx
+        .recv_timeout(Duration::from_secs(3))
+        .expect("OS delivered notification count");
+    let (tx, rx) = mpsc::sync_channel(1);
+    let pending = RcBlock::new(move |values: NonNull<NSArray<UNNotificationRequest>>| {
+        let _ = tx.send(unsafe { values.as_ref() }.len());
+    });
+    center.getPendingNotificationRequestsWithCompletionHandler(&pending);
+    let pending = rx
+        .recv_timeout(Duration::from_secs(3))
+        .expect("OS pending notification count");
+    println!(
+        "{}",
+        serde_json::json!({"reader":"fresh-os-notification-center","deliveredCount":delivered,"pendingCount":pending})
+    );
+    true
+}
+
 // Read fresh OS entries in the signed app's identity, never the actor's memory.
 fn keystore_metadata() -> Result<serde_json::Value, &'static str> {
     use serde_json::{json, Value};

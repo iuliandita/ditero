@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { systemBrowser } from "./browser.ts";
 import { desktop } from "./driver.ts";
 import {
+	background,
 	evidence,
 	root,
 	run,
@@ -89,6 +90,44 @@ function vault() {
 		evidenceReady: boolean;
 	};
 }
+function notificationSnapshot(name: string) {
+	const raw =
+		process.platform === "darwin"
+			? run(installedApplication, ["--journey-notifications"], {
+					...process.env,
+					DITERO_JOURNEY_DIRECTORY: state,
+					DITERO_JOURNEY_TOKEN: randomBytes(32).toString("hex"),
+				})
+			: process.platform === "win32"
+				? run("powershell", [
+						"-NoProfile",
+						"-File",
+						resolve(
+							root,
+							"apps/desktop/tests/journeys/windows-notification-count.ps1",
+						),
+					])
+				: JSON.stringify({
+						reader: "dunst-session",
+						deliveredCount:
+							Number(run("dunstctl", ["count", "displayed"])) +
+							Number(run("dunstctl", ["count", "waiting"])),
+						pendingCount: 0,
+					});
+	const snapshot = JSON.parse(raw) as {
+		deliveredCount: number;
+		pendingCount: number;
+	};
+	assert(
+		Number.isSafeInteger(snapshot.deliveredCount) &&
+			snapshot.deliveredCount >= 0,
+	);
+	assert(
+		Number.isSafeInteger(snapshot.pendingCount) && snapshot.pendingCount >= 0,
+	);
+	writeFileSync(resolve(evidence, `${name}.json`), JSON.stringify(snapshot));
+	return snapshot.deliveredCount + snapshot.pendingCount;
+}
 try {
 	const installed = JSON.parse(
 		readFileSync(resolve(state, "installed.json"), "utf8"),
@@ -171,9 +210,10 @@ try {
 		);
 	}
 	await browser.context.clearCookies();
-	async function signIn(origin: string) {
+	async function signIn(origin: string, selected?: () => Promise<void>) {
 		await native.fill("#native-server", origin);
 		await native.click('button[type="submit"]');
+		await selected?.();
 		await browser?.consent(origin, email, password);
 		await until("finish sign-in control", () =>
 			native.evaluate(
@@ -369,37 +409,47 @@ try {
 	await until("desktop notification status", () =>
 		native.evaluate("!!document.querySelector('#native-push-heading')"),
 	);
-	if (process.platform === "linux") {
-		await journey("OS notification shown and clicked", async () => {
-			await until("enable notifications", () =>
-				native.evaluate(
-					"Array.from(document.querySelectorAll('button')).some(e=>e.textContent==='Enable desktop notifications')",
-				),
-			);
-			await native.evaluate(
-				"(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent==='Enable desktop notifications').click(); return true })()",
-			);
-			const registration = await until(
-				"desktop registration",
-				async () =>
-					(
-						await a.pool.query(
-							"select id,user_id from native_push_registration where provider='desktop'",
-						)
-					).rows[0] as { id: string; user_id: string } | undefined,
-			);
-			await a.pool.query(
-				"insert into notification_outbox(id,recipient_user_id,channel_kind,native_registration_id,payload,idempotency_key,status) values('journey_notification',$1,'nativepush',$2,$3,'journey_notification','sent')",
-				[
-					registration.user_id,
-					registration.id,
-					JSON.stringify({ taskId: "task_server" }),
-				],
-			);
-			await a.pool.query(
-				"insert into native_desktop_mailbox(notification_id,registration_id,user_id,expires_at) values('journey_notification',$1,$2,clock_timestamp()+interval '5 minutes')",
-				[registration.id, registration.user_id],
-			);
+	let pendingNotification = false;
+	await journey("OS notification shown and clicked", async () => {
+		await until("enable notifications", () =>
+			native.evaluate(
+				"Array.from(document.querySelectorAll('button')).some(e=>e.textContent==='Enable desktop notifications')",
+			),
+		);
+		const consent =
+			process.platform === "darwin"
+				? background(
+						"notification-consent",
+						resolve(state, "..", "journey-notifications"),
+						["permission"],
+					)
+				: undefined;
+		await native.evaluate(
+			"(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent==='Enable desktop notifications').click(); return true })()",
+		);
+		const registration = await until(
+			"desktop registration",
+			async () =>
+				(
+					await a.pool.query(
+						"select id,user_id from native_push_registration where provider='desktop'",
+					)
+				).rows[0] as { id: string; user_id: string } | undefined,
+		);
+		if (consent?.exitCode === null) consent.kill();
+		await a.pool.query(
+			"insert into notification_outbox(id,recipient_user_id,channel_kind,native_registration_id,payload,idempotency_key,status) values('journey_notification',$1,'nativepush',$2,$3,'journey_notification','sent')",
+			[
+				registration.user_id,
+				registration.id,
+				JSON.stringify({ taskId: "task_server" }),
+			],
+		);
+		await a.pool.query(
+			"insert into native_desktop_mailbox(notification_id,registration_id,user_id,expires_at) values('journey_notification',$1,$2,clock_timestamp()+interval '5 minutes')",
+			[registration.id, registration.user_id],
+		);
+		if (process.platform === "linux") {
 			await until(
 				"OS popup",
 				() => Number(run("dunstctl", ["count", "displayed"])) === 1,
@@ -420,48 +470,76 @@ try {
 				"click",
 				"1",
 			]);
-			await until("notification task destination", () =>
-				native.evaluate(
-					"document.querySelector('[data-testid=\"task-detail-title\"]')?.value==='Created on server'",
-				),
-			);
-			await until(
-				"durable notification receipt",
-				async () =>
-					(
-						await a.pool.query(
-							"select received_at from native_desktop_mailbox where notification_id='journey_notification'",
-						)
-					).rows[0]?.received_at,
-			);
-			assert.equal(
-				(await a.pool.query("select done from task where id='task_server'"))
-					.rows[0].done,
-				false,
-			);
-			await native.screenshot("notification-clicked");
-			await native.click(ids("task-detail-close"));
-			await native.click(ids("nav-settings"));
-		});
-	} else {
-		await until("unsupported notification state", () =>
+		} else if (process.platform === "win32") {
+			run("pwsh", [
+				"-NoProfile",
+				"-File",
+				resolve(root, "apps/desktop/tests/journeys/windows-notifications.ps1"),
+			]);
+		} else {
+			run(resolve(state, "..", "journey-notifications"), ["click"]);
+		}
+
+		await until("notification task destination", () =>
 			native.evaluate(
-				"document.body.textContent.includes('Desktop notifications are unavailable on this system.')",
+				"document.querySelector('[data-testid=\"task-detail-title\"]')?.value==='Created on server'",
 			),
 		);
-		await native.screenshot("notifications-unavailable");
-		record({
-			journey: "OS notification shown and clicked",
-			status: "unsupported",
-			detail:
-				"The installed product reports desktop notifications unavailable on this platform",
-		});
-	}
+		await until(
+			"durable notification receipt",
+			async () =>
+				(
+					await a.pool.query(
+						"select received_at from native_desktop_mailbox where notification_id='journey_notification'",
+					)
+				).rows[0]?.received_at,
+		);
+		assert.equal(
+			(await a.pool.query("select done from task where id='task_server'"))
+				.rows[0].done,
+			false,
+		);
+		await native.screenshot("notification-clicked");
+		await native.click(ids("task-detail-close"));
+		await native.click(ids("nav-settings"));
+		await until(
+			"clicked notification removed from OS",
+			() => notificationSnapshot("notification-after-click") === 0,
+		);
+		await a.pool.query(
+			"insert into notification_outbox(id,recipient_user_id,channel_kind,native_registration_id,payload,idempotency_key,status) values('journey_retired',$1,'nativepush',$2,$3,'journey_retired','sent')",
+			[
+				registration.user_id,
+				registration.id,
+				JSON.stringify({ taskId: "task_server" }),
+			],
+		);
+		await a.pool.query(
+			"insert into native_desktop_mailbox(notification_id,registration_id,user_id,expires_at) values('journey_retired',$1,$2,clock_timestamp()+interval '5 minutes')",
+			[registration.id, registration.user_id],
+		);
+		await until(
+			"pending OS notification positive control",
+			() => notificationSnapshot("notification-before-switch") === 1,
+			45,
+		);
+		pendingNotification = true;
+	}).catch((error) =>
+		console.error(`Notification qualification failed: ${error}`),
+	);
+
 	await journey("server switch isolates account and cache", async () => {
 		await native.evaluate(
 			"(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent==='Change server').click(); return true })()",
 		);
-		await signIn(b.api.origin);
+		await signIn(b.api.origin, async () => {
+			if (pendingNotification)
+				await until(
+					"server switch withdraws previous account notification",
+					() => notificationSnapshot("notification-after-switch") === 0,
+					5,
+				);
+		});
 		await openList("List journey_b");
 		assert.equal(
 			await native.evaluate(
@@ -530,7 +608,38 @@ try {
 			),
 		);
 		await native.click(ids("nav-settings"));
+		if (pendingNotification) {
+			const registration = (
+				await a.pool.query(
+					"select id,user_id from native_push_registration where provider='desktop'",
+				)
+			).rows[0] as { id: string; user_id: string };
+			assert(registration);
+			await a.pool.query(
+				"insert into notification_outbox(id,recipient_user_id,channel_kind,native_registration_id,payload,idempotency_key,status) values('journey_signed_out',$1,'nativepush',$2,$3,'journey_signed_out','sent')",
+				[
+					registration.user_id,
+					registration.id,
+					JSON.stringify({ taskId: "task_server" }),
+				],
+			);
+			await a.pool.query(
+				"insert into native_desktop_mailbox(notification_id,registration_id,user_id,expires_at) values('journey_signed_out',$1,$2,clock_timestamp()+interval '5 minutes')",
+				[registration.id, registration.user_id],
+			);
+			await until(
+				"sign-out OS notification positive control",
+				() => notificationSnapshot("notification-before-sign-out") === 1,
+				45,
+			);
+		}
 		await native.click(ids("sign-out"));
+		if (pendingNotification)
+			await until(
+				"sign-out withdraws captured account notification",
+				() => notificationSnapshot("notification-after-sign-out") === 0,
+				5,
+			);
 		await until("all credentials removed", () => {
 			const proof = vault();
 			writeFileSync(

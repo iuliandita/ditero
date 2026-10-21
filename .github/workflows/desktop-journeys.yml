@@ -69,6 +69,7 @@ jobs:
           set -euo pipefail
           brew install postgresql@18
           swiftc apps/desktop/tests/journeys/macos-browser.swift -o "$RUNNER_TEMP/journey-browser"
+          swiftc apps/desktop/tests/journeys/macos-notifications.swift -o "$RUNNER_TEMP/journey-notifications"
       - name: Select Rust and native driver
         run: |
           set -euo pipefail
@@ -158,7 +159,7 @@ jobs:
           set -euo pipefail
           bun run tauri build --no-bundle --target "$DESKTOP_TARGET" -- --locked
           python3 - <<'PYTHON'
-          import hashlib, json, os, pathlib
+          import hashlib, json, os, pathlib, subprocess
           target = pathlib.Path('src-tauri/target', os.environ['DESKTOP_TARGET'])
           marker = b'DITERO_JOURNEY_TOKEN'
           debug = (target / 'debug/ditero-desktop').read_bytes()
@@ -167,9 +168,16 @@ jobs:
           assert marker not in release, 'Automation leaked into release'
           assert b'--journey-keystore' in debug, 'Missing keystore probe positive control'
           assert b'--journey-keystore' not in release, 'Keystore probe leaked into release'
+          assert b'--journey-notifications' in debug, 'Missing notification probe positive control'
+          assert b'--journey-notifications' not in release, 'Notification probe leaked into release'
+          linkage = subprocess.check_output(['otool', '-l', str(target / 'release/ditero-desktop')], text=True)
+          notifications = [command for command in linkage.split('Load command ') if 'name /System/Library/Frameworks/UserNotifications.framework/' in command]
+          assert len(notifications) == 1 and 'cmd LC_LOAD_WEAK_DYLIB' in notifications[0], 'UserNotifications must be weak-linked for macOS 10.13'
           pathlib.Path(os.environ['RUNNER_TEMP'], 'desktop-journeys/evidence/release-exclusion.json').write_text(json.dumps({
             'debugContainsHook': True, 'releaseContainsHook': False,
             'debugContainsKeystoreProbe': True, 'releaseContainsKeystoreProbe': False,
+            'debugContainsNotificationProbe': True, 'releaseContainsNotificationProbe': False,
+            'userNotificationsWeakLinked': True,
             'debugSha256': hashlib.sha256(debug).hexdigest(), 'releaseSha256': hashlib.sha256(release).hexdigest()
           }))
           PYTHON

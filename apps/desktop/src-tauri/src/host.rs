@@ -128,7 +128,7 @@ struct Actor {
     #[cfg(test)]
     requests: std::sync::Mutex<Vec<(String, String, Option<String>)>>,
     #[cfg(test)]
-    push_supported: bool,
+    push_supported: Result<()>,
 }
 fn capture_link_ingress(epoch: &AtomicU64, verified: &AtomicBool) -> Option<u64> {
     let captured = epoch.load(Ordering::SeqCst);
@@ -288,7 +288,7 @@ pub fn run() {
         #[cfg(test)]
         requests: Default::default(),
         #[cfg(test)]
-        push_supported: true,
+        push_supported: Ok(()),
     };
 
     let builder = tauri::Builder::default();
@@ -328,6 +328,7 @@ pub fn run() {
             native_drain
         ])
         .setup(move |app| {
+            notifications::initialize();
             actor.app = Some(app.handle().clone());
             actor
                 .files
@@ -840,14 +841,15 @@ impl Actor {
         }
         Ok(())
     }
-    async fn notification_supported(&self) -> bool {
+    async fn notification_permission(&self, request: bool) -> Result<()> {
         #[cfg(test)]
         {
+            let _ = request;
             self.push_supported
         }
         #[cfg(not(test))]
         {
-            notifications::supported().await
+            notifications::permission(request).await
         }
     }
     fn retire_in(next: &mut Registry, session: &Session) -> Result<()> {
@@ -1089,9 +1091,9 @@ impl Actor {
             self.push_state = "storage-failed";
             return Ok(self.push_reply());
         }
-        if !self.notification_supported().await {
+        if let Err(state) = self.notification_permission(op != "push.state").await {
             self.stop_notifications();
-            self.push_state = "unsupported";
+            self.push_state = state;
             return Ok(self.push_reply());
         }
         self.current()?;
@@ -2349,7 +2351,7 @@ mod tests {
             #[cfg(test)]
             requests: Default::default(),
             #[cfg(test)]
-            push_supported: true,
+            push_supported: Ok(()),
         }
     }
     fn cached_host() -> Actor {
@@ -3188,12 +3190,43 @@ mod tests {
             &live.retired,
             &host.push.as_ref().unwrap().owner.retired
         ));
-        host.push_supported = false;
+        host.push_supported = Err("unsupported");
         let reply = host.push_post(&state).await.unwrap();
         assert_eq!(reply["state"], "unsupported");
         assert!(host.push.is_none());
         assert!(!live.current());
         host.stop_notifications();
+    }
+    #[tokio::test]
+    async fn notification_permission_refusal_preserves_reason_and_retires_live_callbacks() {
+        for state in ["denied", "unsupported", "temporary-unavailable"] {
+            for op in ["push.state", "push.permission", "push.enable"] {
+                let mut host = actor(false);
+                let owner = push_owner(&mut host);
+                host.start_notifications();
+                let live = host.push.as_ref().unwrap().owner.clone();
+                host.tap = Some(NotificationTap {
+                    owner,
+                    notification: "notification".into(),
+                    token: "tap-token".into(),
+                });
+                host.push_supported = Err(state);
+                let reply = host
+                    .push_post(
+                        &json!({"op":op,"rid":1,"gen":host.gen,"id":host.handle,"locale":"en"}),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(reply["state"], state);
+                if state == "denied" {
+                    assert_eq!(reply["permission"], "denied");
+                }
+                assert!(!live.current());
+                assert!(host.push.is_none());
+                assert!(host.tap.is_none());
+                assert!(host.requests.lock().unwrap().is_empty());
+            }
+        }
     }
     #[tokio::test]
     async fn unavailable_receipt_retires_pending_but_retains_seen_only_for_current_owner() {

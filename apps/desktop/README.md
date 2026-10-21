@@ -126,9 +126,16 @@ task-link behavior and qualification limits are documented in the
 ## System notifications
 
 Linux system notifications require a notification service with action support.
-Enable them in Settings after signing in. They arrive while Ditero is open or
-minimized; closing the application stops reception. Windows and macOS currently
-report this delivery mode as unavailable.
+Windows uses installed-app toasts with click routing while the banner is visible;
+dismissed banners are removed from history. macOS 10.14+ uses
+UNUserNotificationCenter and asks for notification permission when you enable delivery. Denied permission is shown
+with a localized reason; allow Ditero in system notification settings and retry.
+macOS 10.13 retains the legacy NSUserNotification backend; runtime qualification
+of that older OS remains open. UserNotifications is weak-linked so adding modern
+delivery does not raise the bundle minimum.
+Enable delivery in Settings after signing in. Notifications arrive while Ditero
+is open or minimized; closing the application stops reception. These backends
+remain experimental; the hosted journey matrix checks display and click routing.
 
 System popups contain generic text, never task titles or other task content.
 Opening a popup resolves its destination through the current server and account.
@@ -140,14 +147,18 @@ A bounded Linux host check confirmed that the system notification service accept
 a scheduled reminder. Its actual Open action resolved the canonical task and
 focused the native Wayland window. The delivery receipt was stored durably, and
 the task remained unfinished. Focused tests cover pending, revoked, and expired
-notification cleanup. This does not qualify Windows or macOS notification behavior.
+notification cleanup. The Windows/macOS backends retain the same captured
+server/account/session ownership and resolve clicks through the authenticated
+server rather than embedding task data in OS payloads.
 
 Account retirement cancels notification callbacks and attempts to remove owned
 popups. Shutdown gives removal one three-second budget. A stalled system service
 can still display a delayed generic popup after exit; removal is best effort.
-Popups request a five-minute expiry and transient handling, which the system
-service may override. In-app reminders and other configured delivery channels
-retain their own behavior.
+Linux popups request a five-minute expiry and transient handling, which the
+system service may override. Windows removes both owned banners and history
+entries; macOS removes owned pending and delivered requests. Startup removes
+leftover app notifications whose old process can no longer handle clicks. In-app
+reminders and other configured delivery channels retain their own behavior.
 
 ## Encrypted files
 
@@ -357,9 +368,8 @@ Installed Windows x64 and macOS Apple Silicon/Intel development packages pass fi
 refusal, trusted system-browser consent, task sync in both directions, offline
 edit/create and cold start, reconnect, two-server isolation, and both sign-outs.
 Fresh Credential Manager and Keychain reads confirm verified evidence and final
-credential removal. The harness also requires the protected cleanup journal to
-finish before crediting sign-out; this stronger check awaits its next hosted run.
-Intel macOS final sign-out remains provisional until that cleanup check passes.
+credential removal, with the protected cleanup journal finished before sign-out
+is credited on every runner.
 The branch-scoped Desktop runtime journeys workflow installs development packages
 on hosted Windows, Apple Silicon macOS, Intel macOS, and Linux runners. Its
 per-journey artifacts distinguish completed checks from unavailable features
@@ -369,20 +379,25 @@ It uses ephemeral servers and an OS-trusted local CA, without certificate bypass
 macOS automation is included only in debug builds, requires explicit process-local
 test configuration, and is checked for absence from the optimized release binary.
 Its counts-only keystore probe opens fresh OS entries under the installed app
-identity, preserving Keychain access controls and returning no credentials.
+identity, preserving Keychain access controls and returning no credentials. A
+second debug-only probe reads pending/delivered notification counts from the OS
+under that identity; the optimized release must exclude both probes. Notification
+retirement assertions require a positive pending-notification control before
+server switching or sign-out, then zero pending/delivered notifications.
 Sign-out now starts retired notification cleanup after durable local revocation.
 A native regression and mutation control verify that normal close waits for
 pending sync-handshake classification before retiring the socket.
 These disposable runner accounts do not qualify download trust, trusted signing,
-notarization, upgrades, or physical devices. Windows/macOS system notifications
-remain unavailable in the product. Existing client data, backups, and rollback
-procedures are unchanged by this test harness.
+notarization, upgrades, or physical devices. Windows/macOS notification backends
+are implemented and covered by the journey workflow; installer success alone
+does not qualify notification display or click routing.
+Existing client data, backups, and rollback procedures are unchanged by this test harness.
 macOS worker execution and OPFS/locks still require runtime checks. Revocation/recovery failure
 journeys and upgrades remain unqualified on every platform.
 The desktop uses each platform's native TLS trust; server certificates must also
 be trusted by the user's system browser. No certificate bypass is supported.
 
-Broader encrypted-file qualification, Windows/macOS notification integration,
+Broader encrypted-file qualification, Windows/macOS notification runtime qualification,
 deep links, updater delivery, release signing, and complete installer qualification
 remain unfinished. Shared browser-only settings and integrations retain the Android
 core's limitations. A successful installer build alone does not prove complete
