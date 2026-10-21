@@ -300,7 +300,11 @@ beforeEach(() => {
 		{ id: "other-list", workspaceId: "personal", kind: "tasks" },
 	];
 	fixture.save.mockClear();
-	vi.stubGlobal("window", { location: { pathname: "/" } });
+	vi.stubGlobal("window", {
+		location: { pathname: "/" },
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
+	});
 });
 afterEach(() => vi.unstubAllGlobals());
 
