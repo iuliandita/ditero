@@ -24,6 +24,8 @@ Creation returns `grantId` and `expiresAt`. Grants expire after five minutes.
 Open `/native/authorize?grantId=...` on the selected server in the system browser.
 The page uses the existing sign-in flow, shows the device and signed-in account,
 and requires an explicit approval. It returns no session token to the browser.
+That browser sign-in uses separate IP-plus-email buckets and a household-sized
+per-IP ceiling; see [Trusted Proxy](trusted-proxy.md) for NAT and VPN limits.
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.
