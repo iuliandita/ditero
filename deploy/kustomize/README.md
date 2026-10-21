@@ -83,12 +83,32 @@ patches:
     - op: replace
       path: /spec/template/spec/containers/0/image
       value: docker.io/iuliandita/ditero:0.1.0-beta.1-zero
+    - op: replace
+      path: /spec/template/spec/initContainers/0/image
+      value: docker.io/iuliandita/ditero:0.1.0-beta.1-zero
+replacements:
+- source:
+    kind: Deployment
+    name: home-ditero-app
+    fieldPath: spec.template.spec.containers.[name=app].image
+  targets:
+  - select:
+      kind: Deployment
+      name: home-ditero-app
+    fieldPaths:
+    - spec.template.spec.containers.[name=app].env.[name=DITERO_REPLICA_ID].value
+  - select:
+      kind: Deployment
+      name: home-ditero-zero
+    fieldPaths:
+    - spec.template.spec.initContainers.[name=wait-for-app].env.[name=APP_REVISION].value
 ```
 
 Always upgrade the app/Zero image pair together. Pin both images to verified
 immutable digests for production. Since both use the same repository with
 different tags, a repository-wide image override also rewrites the Zero tag;
-set the Zero image explicitly as shown when overriding the pair. Kustomize
+set the Zero container and its `wait-for-app` init container images explicitly as
+shown when overriding the pair. Kustomize
 rewrites generated ConfigMap references and internal app Service references when
 renaming resources. The external Secret remains named `ditero-secrets`; patch the
 projected Secret references if your operator uses another name.
@@ -138,27 +158,26 @@ verify your kube context and namespace, run server-side dry-run and diff against
 that target, and obtain your normal deployment approval. The base can be applied
 with `kubectl apply -k` by the authorized operator after those checks.
 
-For first installation or restore, hold Zero at zero replicas in the overlay
-before applying it, so its initial copy cannot race application migrations:
+Zero must not start while application migrations run, because Zero's DDL event
+triggers would otherwise see a partially migrated schema. The Zero Deployment has
+a `wait-for-app` init container, the same gate the Helm chart uses: it polls the
+app `/health` until the reported `replica` equals the app image reference, which
+the app serves as `DITERO_REPLICA_ID`. The old app pod, or a new one still
+migrating, never matches, so Zero starts only after the new app is migrated and
+healthy. Apply the base or overlay once; no staged replicas are needed.
 
-```yaml
-patches:
-- target:
-    kind: Deployment
-    name: ditero-zero
-  patch: |-
-    - op: replace
-      path: /spec/replicas
-      value: 0
-```
+The identifier is copied from the app image by the `replacements` block in the
+base. A kustomization that overrides `images` must repeat that block, as in the
+overlay above (naming its own resources after any `namePrefix`), because
+replacements in the base run before the override. The render test checks the
+equality; without it a new app would keep the old identifier and the gate would
+open early.
 
-Wait for the rendered app Deployment to become available, then scale the rendered
-Zero Deployment to one replica. On upgrade, first scale the existing Zero
-Deployment to zero and wait for its pods to terminate, then apply the overlay
-with Zero still held at zero. Start Zero only after the updated app is healthy.
-Use explicit context and namespace arguments for every operation. A subsequent
-apply of this held overlay stops Zero again; coordinate those operations with
-your deployment controller rather than letting it undo the staged startup.
+Operators upgrading from `0.0.1-alpha.12` or earlier, or from a render without the
+init container, should remove any manual zero-replica hold patch; applying it
+with the gate present is harmless but blocks Zero. Use explicit context and
+namespace arguments for every operation. The init container uses the Zero image,
+`node`, and no Kubernetes API access; a Zero image without `node` cannot run it.
 
 ## Operations and boundaries
 
@@ -192,9 +211,10 @@ Kubernetes API permissions.
 
 Back up PostgreSQL, the attachment claim, and the authentication/encryption
 Secrets together using the [logical recovery procedure](../../docs/runbooks/backup-restore.md#kubernetes-logical-backup-and-restore).
-On first install, upgrade and restore, keep Zero scaled to zero until the new
-app has finished migrations and is healthy; applying the base starts both
-Deployments and does not enforce that ordering. Preserve the Zero claim for normal
+On first install, upgrade and restore, the Zero init container holds Zero until
+the new app has finished migrations and is healthy. For restore, keep both
+Deployments at zero replicas until the database and attachment data are restored.
+Preserve the Zero claim for normal
 restarts; its replica cache
 can be rebuilt from PostgreSQL when necessary. Test recovery in an isolated
 environment before relying on backups. An image rollback does not undo database

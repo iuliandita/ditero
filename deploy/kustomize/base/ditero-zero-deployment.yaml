@@ -37,6 +37,42 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+      - name: wait-for-app
+        image: ghcr.io/iuliandita/ditero:0.1.0-beta.1-zero
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        command: [node, --input-type=module, -e]
+        args:
+        - |
+          const url = process.env.APP_HEALTH_URL;
+          for (;;) {
+            try {
+              const response = await fetch(url, {signal: AbortSignal.timeout(5000)});
+              if (response.ok && (await response.json()).replica === process.env.APP_REVISION) break;
+            } catch {}
+            console.log("Waiting for this release's app migrations and health");
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        env:
+        - name: DITERO_APP_SERVICE
+          value: ditero-app
+        - name: APP_HEALTH_URL
+          value: http://$(DITERO_APP_SERVICE):3000/health
+        - name: APP_REVISION
+          value: replaced-from-app-image
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
       containers:
       - name: zero
         image: ghcr.io/iuliandita/ditero:0.1.0-beta.1-zero

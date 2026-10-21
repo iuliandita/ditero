@@ -131,10 +131,10 @@ kubectl --context CONTEXT --namespace TARGET exec -i DATABASE_POD -- \
 Restore the attachment archive into the app claim using a temporary pod with
 the app's UID/GID 1000, `fsGroup: 1000`, and explicit resource requests/limits.
 Wait for that writer to exit before starting the app. Keep the Zero claim empty.
-Start only the app, wait for migrations and `/health`, then start Zero. Plain
-Kustomize applies both Deployments together; stage its replicas explicitly on
-first installation, migration and recovery. Helm's current release-revision
-health gate handles app-before-Zero startup, including upgrades from older charts.
+Start only the app, wait for migrations and `/health`, then start Zero. Both the
+Helm chart and the Kustomize base gate Zero on the current app's health through
+an init container, so scaling both Deployments up together is safe; Helm uses the
+release revision and Kustomize the app image reference.
 
 Before replacing or removing a failed pod, capture its current and previous
 logs, events and description. From a source checkout, the bounded read-only

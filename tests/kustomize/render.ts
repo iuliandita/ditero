@@ -166,7 +166,7 @@ function bindings(manifests: Manifest[], namespace: string) {
 		assert.equal(spec.hostNetwork ?? false, false);
 		assert.equal(spec.hostPID ?? false, false);
 		assert.equal(spec.hostIPC ?? false, false);
-		assert.equal(spec.initContainers?.length ?? 0, 0);
+		assert.equal(spec.initContainers?.length ?? 0, name === "zero" ? 1 : 0);
 		assert.equal(spec.securityContext.runAsNonRoot, true);
 		assert.equal(spec.securityContext.runAsUser, 1000);
 		assert.equal(spec.securityContext.runAsGroup, 1000);
@@ -332,6 +332,31 @@ assert.equal(pod(defaults, "zero").container.image, `${defaultImage}-zero`);
 assert.equal(defaultConfig.data?.BETTER_AUTH_URL, "http://localhost:3000");
 assert.equal(defaultConfig.data?.PUBLIC_ZERO_URL, "http://localhost:4848");
 assert.equal(defaultConfig.data?.DITERO_REGISTRATION_MODE, "bootstrap");
+function assertMigrationGate(items: Manifest[], appService: string) {
+	const app = pod(items, "app");
+	const gate = pod(items, "zero").template.spec.initContainers?.[0];
+	assert.ok(gate);
+	const id = app.container.env.find((e) => e.name === "DITERO_REPLICA_ID");
+	const revision = gate.env.find((e) => e.name === "APP_REVISION");
+	assert.equal(id?.value, app.container.image);
+	assert.equal(revision?.value, app.container.image);
+	assert.equal(gate.name, "wait-for-app");
+	assert.equal(gate.image, pod(items, "zero").container.image);
+	assert.equal(
+		gate.env.find((e) => e.name === "DITERO_APP_SERVICE")?.value,
+		appService,
+	);
+	assert.equal(
+		gate.env.find((e) => e.name === "APP_HEALTH_URL")?.value,
+		"http://$(DITERO_APP_SERVICE):3000/health",
+	);
+	assert.equal(gate.securityContext.readOnlyRootFilesystem, true);
+	assert.equal(gate.securityContext.allowPrivilegeEscalation, false);
+	assert.deepEqual(gate.securityContext.capabilities.drop, ["ALL"]);
+	assert.ok(gate.resources.requests.cpu && gate.resources.limits.memory);
+}
+assertMigrationGate(defaults, "ditero-app");
+
 const temporary = await mkdtemp(join(tmpdir(), "ditero-kustomize-"));
 try {
 	await cp(base, join(temporary, "base"), { recursive: true });
@@ -349,6 +374,22 @@ images:
 - name: ghcr.io/iuliandita/ditero
   newName: docker.io/iuliandita/ditero
   newTag: 0.0.2-alpha.1
+replacements:
+- source:
+    kind: Deployment
+    name: home-ditero-app
+    fieldPath: spec.template.spec.containers.[name=app].image
+  targets:
+  - select:
+      kind: Deployment
+      name: home-ditero-app
+    fieldPaths:
+    - spec.template.spec.containers.[name=app].env.[name=DITERO_REPLICA_ID].value
+  - select:
+      kind: Deployment
+      name: home-ditero-zero
+    fieldPaths:
+    - spec.template.spec.initContainers.[name=wait-for-app].env.[name=APP_REVISION].value
 configMapGenerator:
 - name: ditero-app-config
   behavior: merge
@@ -363,6 +404,9 @@ patches:
   patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/image
+      value: docker.io/iuliandita/ditero:0.0.2-alpha.1-zero
+    - op: replace
+      path: /spec/template/spec/initContainers/0/image
       value: docker.io/iuliandita/ditero:0.0.2-alpha.1-zero
 `,
 	);
@@ -382,6 +426,7 @@ patches:
 		pod(configured, "zero").container.image,
 		"docker.io/iuliandita/ditero:0.0.2-alpha.1-zero",
 	);
+	assertMigrationGate(configured, "home-ditero-app");
 	assert.deepEqual(config.data, {
 		BETTER_AUTH_URL: "https://tasks.example.com",
 		PUBLIC_ZERO_URL: "https://sync.example.com",
