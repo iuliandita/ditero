@@ -99,6 +99,6 @@ rendered configuration and generated contracts keep their separate checks.
 The result lists exact checked guides, source files and configuration names.
 Existing release validation runs separately. Version/tag/source, generated API
 contracts, catalogs and deployment rendering retain their existing gates. Prepared develop metadata may
-differ from the latest published alpha; current download links must describe the
+differ from the latest published prerelease; current download links must describe the
 published release. A green static guard does not qualify deployment, restore,
 native runtime support or binary redistribution.

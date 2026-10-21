@@ -10,7 +10,7 @@
 <p align="center">
   <a href="https://github.com/iuliandita/ditero/actions/workflows/ci.yml"><img src="https://github.com/iuliandita/ditero/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/status-alpha-orange" alt="Status: alpha">
+  <img src="https://img.shields.io/badge/status-beta-orange" alt="Status: beta">
 </p>
 
 Ditero is a free, self-hosted, local-first task app for families, friends, clubs,
@@ -20,24 +20,25 @@ up with daily habits. Work offline and sync when you're connected again.
 Your data lives on your server. Reminders, attachments, calendars, and sharing
 are included, with no subscriptions or paid feature unlocks.
 
-[Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Brand assets](assets/brand/README.md)
+[Website](https://ditero.app/) | [Quick start](#run-it-docker-compose) | [Features](#available-on-develop) | [Documentation](#documentation) | [Roadmap](docs/ROADMAP.md) | [Changelog](CHANGELOG.md) | [Brand assets](assets/brand/README.md)
 
-> **Alpha.** The first release was `v0.0.1-alpha.1`; the current published alpha is
+> **Beta preparation.** `0.1.0-beta.1` is the first beta being prepared, a `0.x`
+> prerelease with breaking changes possible before `v1.0.0`. It is not stable.
+> Until beta publication completes, the latest published prerelease remains
 > [`v0.0.1-alpha.12`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.12).
-> Alpha 12 clarifies the paired app-data and encrypted attachment downloads,
-> keeps prepared exports available after a canceled or failed save, and waits for
-> language-save confirmation before reloading.
-> The native desktop archive-import entry remains unavailable pending
-> transfer and recovery qualification. Broader native device qualification remains open.
-> The release pipeline packages server containers, Helm/Kustomize/Compose deployment
-> files, desktop installers and signed Android downloads. Native platform qualification
-> remains in progress; Windows builds are
-> unsigned and macOS builds use ad-hoc signatures. Breaking changes are expected
-> before `v1.0.0`. See [release instructions](RELEASING.md) and
+> The [changelog](CHANGELOG.md) describes the candidate and earlier releases.
+> The native desktop archive-import entry remains unavailable pending transfer
+> and recovery qualification. Native device/platform qualification, general deep
+> links and automatic updates remain incomplete in
+> [#346](https://github.com/iuliandita/ditero/issues/346).
+> The release pipeline packages server containers, Helm/Kustomize/Compose files,
+> desktop installers and signed Android downloads. Windows builds remain unsigned;
+> macOS builds use ad-hoc signatures without notarization. See
+> [release instructions](RELEASING.md) and
 > [published downloads](https://github.com/iuliandita/ditero/releases).
 
 The capabilities below describe `develop`; unreleased additions are available
-from source or nightly images, and published alphas contain a subset.
+from source or nightly images, and published prereleases contain a subset.
 
 ## Made for shared days
 
@@ -152,8 +153,9 @@ already percent-encode credentials. Do not print DSNs in diagnostic reports.
 
 That pulls `ghcr.io/iuliandita/ditero:nightly` and `:nightly-zero`. Add `--build`
 to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.0.1-alpha.12`
-to run the current published alpha with matching app and Zero tags. Commit-specific
-nightly tags use different suffix ordering for app and Zero, so pin those two
+to run the latest published prerelease with matching app and Zero tags until beta
+publication completes. Commit-specific nightly tags use different suffix ordering
+for app and Zero, so pin those two
 service images separately in a Compose override; see [image tags](RELEASING.md#channels).
 
 To reach it from anything other than the machine it runs on, set

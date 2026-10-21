@@ -11,7 +11,7 @@ Use GitHub's built-in [private vulnerability reporting](https://github.com/iulia
 ### Alternative: Direct Contact
 
 Use private vulnerability reporting above; a GitHub profile is not a private
-contact channel. Include the affected alpha or nightly tag, source commit, impact
+contact channel. Include the affected prerelease or nightly tag, source commit, impact
 and a minimal reproduction. Remove unrelated secrets and personal data.
 
 ## What to Expect
@@ -29,8 +29,8 @@ channels, or a user-supplied PostgreSQL instance).
 
 ## Supported Versions
 
-Security fixes target the latest published alpha prerelease (currently
+Security fixes target the latest published prerelease (currently
 [`v0.0.1-alpha.12`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.12))
-and `develop`/nightly builds. Older alphas receive no backported fixes. There is
+and `develop`/nightly builds. Older prereleases receive no backported fixes. There is
 no stable release or stable support window yet; native qualification remains
 in progress as described in the [README](README.md).

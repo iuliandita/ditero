@@ -1,8 +1,8 @@
 # Contributing to Ditero
 
-Ditero is alpha, with published prereleases. Development targets `develop`; breaking
-changes are expected. See [release channels](RELEASING.md) for published alphas
-and nightly builds.
+Ditero is preparing its first beta. It remains a `0.x` prerelease with breaking
+changes possible. Development targets `develop`; support targets the latest
+published prerelease and `develop`/nightly. See [release channels](RELEASING.md).
 Use [Docker Compose](README.md#run-it-docker-compose) to run the application, and
 the [Android](apps/android/README.md) or [desktop](apps/desktop/README.md) guides
 for native builds.
@@ -85,6 +85,6 @@ Mapped changes need a fresh source-bound assessment in `.github/docs-impact.json
 see [documentation maintenance](docs/MAINTENANCE.md) for guide updates, compatibility
 and recovery requirements. Static checks do not qualify live deployment or native behavior.
 
-Report bugs through the issue form with the alpha, nightly tag or source commit and
+Report bugs through the issue form with the prerelease, nightly tag or source commit and
 reproduction steps. Redact credentials, tokens, personal data and private server
 addresses from logs and screenshots. Report vulnerabilities [privately](SECURITY.md).

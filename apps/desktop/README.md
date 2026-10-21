@@ -226,7 +226,7 @@ for byte-for-byte installation checks; no automatic updater is configured.
 
 ## Manual release signing hooks
 
-The tagged prerelease pipeline produces optimized Linux x86_64 DEB/RPM/AppImage,
+The tagged beta pipeline produces optimized Linux x86_64 DEB/RPM/AppImage,
 unsigned Windows x86_64/ARM64 NSIS installers and separate ad-hoc signed macOS
 Apple Silicon/Intel DMGs. It uses the same installer smoke checks as development CI.
 Downloads have checksums and explicit signing labels. It does not use the

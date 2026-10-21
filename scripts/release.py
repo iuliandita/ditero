@@ -352,7 +352,7 @@ def publish(output: Path) -> None:
     digests["SHA256SUMS.txt"] = hashlib.sha256((output / "SHA256SUMS.txt").read_bytes()).hexdigest()
     names.add("SHA256SUMS.txt")
     prerelease = version.startswith("0.") or "-" in version
-    notes = f"""Ditero {version} is an experimental build for self-hosted testing. Back up your database and attachments before upgrading.
+    notes = f"""Ditero {version} is an experimental prerelease for self-hosted testing. Back up your database and attachments before upgrading.
 
 Server: multi-architecture amd64/arm64 Alpine app, Debian app, and Zero images at `ghcr.io/{repo}:{version}`, `:{version}-debian`, and `:{version}-zero`. See the image digest files and SPDX SBOMs. Images are signed with keyless cosign; verify the release workflow identity before deployment.
 

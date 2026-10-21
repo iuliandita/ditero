@@ -1,181 +1,197 @@
 # Changelog
 
-All notable changes to this project are documented here. The format is based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+User-visible changes in the release candidate and published prereleases.
+Downloads, checksums and signatures are on
+[GitHub Releases](https://github.com/iuliandita/ditero/releases).
+Back up your database and attachments before upgrading, and retain the original
+encryption keys and service secrets. Breaking changes remain possible throughout
+the `0.x` prereleases.
 
-## [Unreleased]
+## 0.1.0-beta.1 - 2026-10-21
 
-## [0.0.1-alpha.11] - 2026-10-08
+The first beta is a `0.x` prerelease, not a stable release. Native device/platform
+qualification, trusted Windows/macOS signing, deep links and automatic updates
+remain incomplete in [#346](https://github.com/iuliandita/ditero/issues/346).
 
-### Fixed
+- Task rows use icons for personal and shared workspaces while keeping workspace
+  names, translated tooltips and screen-reader descriptions.
+- Google sign-in setup is documented for self-hosters. Compose now passes the
+  configured Google client ID to the app so sign-in can be enabled there.
+- A reusable fictional demo dataset is available for trying lists, tasks and views.
+- An experimental deployment bundle uses one image for separate database,
+  migration, app and sync containers. Backup and restore qualification remains open.
+- Container backup components receive HTTP/2, Go 1.27.3 and compression-library
+  security fixes without changing backup formats. Pinned timezone files are
+  refreshed, and failed pinned downloads report which artifact failed. The
+  experimental bundle uses an available zlib pin.
+- The experimental bundle adds manual publication and native AMD64/ARM64 runtime
+  qualification workflows with sanitized failure diagnostics. These checks do not
+  establish backup/restore or production readiness.
+- Source builds update Vite to 8.1.6 for its security fix. Contributor checks pin
+  the integration runtime to the standalone client runtime.
+- Removing a member works with a restricted database role, keeps their comments
+  and content, removes their assignments and revokes their file access.
+- Sync clients recover after database outages without a reload, and the server
+  survives database restarts and stops cleanly within container grace periods.
+- Revoked sessions stop syncing within 30 seconds. Zero waits for app migrations
+  on first start, and the experimental bundle exposes its sync port.
+- Google sign-in appears only when configured, and registration-policy refusals
+  keep their localized message.
+- Bundled database passwords may contain URL delimiters. Role initialization is
+  atomic, and the bundled healthcheck reports missing roles.
+- Invitation links keep their token out of request URLs and history.
+- Android closes task details with Back, survives Activity teardown, downloads
+  recovery codes and explains HTTPS, DNS and certificate failures. Native sign-in
+  consent can switch browser accounts.
+- Desktop installers cover Linux DEB, RPM and AppImage, Windows x64 and ARM64, and
+  macOS Apple silicon and Intel. The desktop app explains missing keyrings, opens
+  Settings links in the browser, reports a browser that fails to open, and says
+  when the first start needs the server.
+- Database deployment, outage recovery and Zero role guides cover PostgreSQL 15+,
+  non-superuser Zero logins and migration-owner backups.
+- Support and reporting guidance targets the latest published prerelease and
+  `develop`/nightly, with actual version identities and private security reporting.
 
-- Native comment attachments use the native encrypted upload transport, matching
-  task attachments while preserving the browser upload path.
-- Documentation checks cover native and UI source mappings, staged changes,
-  deployment configuration names, and cumulative release documentation.
+## 0.0.1-alpha.12 - 2026-10-09
 
-## [0.0.1-alpha.10] - 2026-10-08
+- Attachment export explains the matching content and encrypted-file archives,
+  including the separate archive password.
+- Export selection shows source context and encrypted sizes to distinguish files
+  with the same name.
+- Linux desktop export distinguishes a canceled save dialog from a failed save, keeps
+  prepared files available for retry, and shows the latest result for each file.
+- Language changes wait for preferences to save before reloading, avoiding
+  interrupted export bookkeeping.
+- Settings keeps the section you selected highlighted when the page cannot scroll
+  far enough to place it at the top. Manual scrolling resumes section tracking.
 
-### Added
+## 0.0.1-alpha.11 - 2026-10-08
 
-- Linux desktop development foundations for bounded system-selected JSON input
-  and account-bound attachment migration, with server-verified ciphertext upload
-  sizes and hashes. The native Settings import entry remains unavailable pending
-  transfer and recovery qualification.
+- Comment attachments in native apps use the same authenticated upload path as
+  task attachments, including retries.
+- Browsers without private-file staging can upload smaller encrypted files using
+  memory, with an 8 MiB combined limit for the file and thumbnail.
+- Attachment errors explain browser limits and available recovery options.
 
-### Fixed
+## 0.0.1-alpha.10 - 2026-10-08
 
-- Guarded archive import controls retire stale account or runtime operations and
-  require reconciliation after uncertain native reservations before another write.
-- Archive import dialogs explain disabled opening prerequisites, distinguish
-  archive and account passphrases, and improve picker labels and dark-theme errors.
-- Empty native file selections explain rejection without misidentifying a retained
-  file, and reading selections use one linked status message.
-- Task label controls respect workspace Viewer permissions while preserving label
-  editing for authorized writers during paused imports.
-- Empty task assignee and label controls align without a redundant Unassigned line.
+- Archive import dialogs explain why an action is unavailable and distinguish
+  the archive password from the account encryption passphrase.
+- File pickers show clearer selection, reading and rejection messages, with more
+  readable errors in dark mode.
+- Empty assignee and label controls align without a repeated Unassigned line.
+  Viewers cannot edit labels; authorized writers retain access during paused imports.
+- Native archive import remains unavailable in Settings while transfer and
+  recovery checks are unfinished. Use the browser for archive import.
 
-### Changed
+## 0.0.1-alpha.9 - 2026-10-07
 
-- Documentation checks link mapped configuration, client, deployment and release
-  changes to affected guides or an explicit source-bound explanation.
+- Task details use more compact metadata controls while keeping titles readable.
+- Android retains a task link received during startup until the connection is
+  ready to handle it. Broader device and task-link testing remains unfinished.
+- Back up the database and attachments before upgrading this experimental alpha.
 
-## [0.0.1-alpha.6] - 2026-10-07
+## 0.0.1-alpha.8 - 2026-10-07
 
-### Fixed
+- Linux desktop can export selected encrypted files from Settings as a paired
+  content JSON file and encrypted attachment archive, using system save dialogs.
+- Each exported document is limited to 32 MiB. Keep both files and store the
+  archive passphrase securely; archive import and recovery still require the browser.
+- Sharing encrypted workspace keys with legitimate members works with the
+  restricted database accounts used by self-hosted deployments.
+- Packaged deployment guides use the matching release version in their examples.
 
-- Browser attachment imports can reopen the original paired archive, confirm prior
-  completion and explicitly replace interrupted file transfers without reapplying
-  content. Live transfers require replacement confirmation; retired files retain
-  their quota charge until garbage collection finishes.
+## 0.0.1-alpha.7 - 2026-10-07
 
-## [0.0.1-alpha.5] - 2026-10-06
+- Compose honors the encrypted-attachment opt-in. Attachments remain disabled
+  by default and require HTTPS or a browser-secure loopback address.
+- Recovery guidance explains how to retain the original attachment configuration
+  and keys. Do not replace keys or reenroll accounts to work around missing settings.
+- Helm and Kustomize archive guides contain older alpha.6 example commands.
+  Use `0.0.1-alpha.7` for the app and `0.0.1-alpha.7-zero` for sync instead.
+- Back up the database and attachments before upgrading this experimental alpha.
 
-### Fixed
+## 0.0.1-alpha.6 - 2026-10-06
 
-- Existing encrypted attachments remain downloadable while workspace key rotation is required.
-- Saved import plans remain actionable when the saved-source listing is slow or unavailable.
+- An interrupted browser attachment import can reopen its original paired archive
+  and recover the prepared transfer without importing the content again.
+- Previously completed transfers are recognized. Replacing an interrupted or live
+  transfer requires explicit confirmation; retired files count toward quota until
+  cleanup finishes.
+- Back up the database and attachments before upgrading this experimental alpha.
 
-## [0.0.1-alpha.4] - 2026-10-06
+## 0.0.1-alpha.5 - 2026-10-06
 
-### Fixed
+- Existing encrypted attachments remain downloadable when a workspace needs
+  key rotation.
+- Saved content imports remain usable while their source listing is slow or
+  unavailable.
+- The import guide explains paired content and attachment archives and their
+  recovery limits. Keep both archives and their required passphrase.
+- Back up the database and attachments before upgrading this experimental alpha.
 
-- Subtasks retain their saved order in task details.
+## 0.0.1-alpha.4 - 2026-10-06
 
-## [0.0.1-alpha.3] - 2026-10-06
+- Subtasks in task details retain their saved order.
+- Back up the database and attachments before upgrading this experimental alpha.
+- Native platform testing, trusted Windows and macOS signing, and automatic
+  updates remain unfinished. Standalone terminal downloads are not included.
 
-### Added
+## 0.0.1-alpha.3 - 2026-10-06
 
-- First-account setup with Basic, Guided and Custom modes and a preview before applying starter content.
-- Calendar subscriptions and subscription settings.
-- Expanded API/CLI/MCP task, list and folder workflows, comments, ordering and webhooks.
-- Terminal folder workflows, task presentation and reviewed task ordering.
-- Todoist project CSV and plain Trello board imports.
-- Voice quick-add controls with local recognition support. Physical microphone qualification remains open.
-- Android task-link foundations; authenticated and broader device journeys remain open.
-- Authenticated encrypted attachment archives and resumable attachment migration with reviewed parent mapping and durable replay.
+- Optional first-account setup offers Basic, Guided and Custom choices, plus Skip.
+  Preview starter content before adding it; existing data is preserved.
+- Encrypted attachment archives support resumable migration with reviewed mappings
+  to destination tasks, lists and comments. Keep the paired content and file archives.
+- One-way list calendar subscriptions can be created and revoked in Settings.
+- Import Todoist project CSV snapshots and plain Trello board JSON after reviewing
+  excluded content.
+- Voice quick-add offers transcript review in browsers with local speech recognition.
+  Physical microphone testing remains unfinished.
+- API and terminal workflows add lists, folders, task relationships, ordering,
+  comments and list-bound webhooks. Terminal clients must be run from source.
+- Task context, assignee names, keyboard dragging, import/export feedback and
+  comment composer focus are clearer and more consistent.
+- Back up the database and attachments before upgrading. Windows installers remain
+  unsigned; macOS downloads use ad-hoc signatures and are not notarized.
 
-### Fixed
+## 0.0.1-alpha.2 - 2026-10-04
 
-- First-party signing-key retrieval without public network access, dashboard readability and keyboard dragging.
-- Saved views retain parent task context and avoid repeated workspace labels; assignee chips preserve accessible full names with less visual crowding.
-- Browser fixture isolation, invitation navigation readiness and Arabic history-import locale restoration.
-- Failed terminal mutation transitions include bounded diagnostics without changing assertions or deadlines.
+- Personal access tokens provide revocable, expiring API access to the workspaces,
+  lists and tasks your account can use.
+- API and terminal workflows can create, edit, complete and delete tasks, create
+  lists and shared workspaces, and export task calendars.
+- Named light and dark palettes, a color editor with contrast checks, and theme
+  import/export add more appearance choices. Custom palettes are account-scoped
+  on the device in this release.
+- Task history combines recorded changes with imported attribution. Historical
+  archives and replay foundations are present; public version 2 import remains
+  unavailable in this release.
+- CSV imports have a review plan before changes are applied.
+- Linux desktop adds authenticated task links. General native platform and
+  task-link testing remains unfinished.
+- Kustomize manifests and a CloudNativePG bootstrap overlay join the deployment
+  options. External PostgreSQL requires encrypted connections; migrations wait for
+  the database to become ready.
+- Back up the database and attachments before upgrading this experimental alpha.
 
-## [0.0.1-alpha.2] - 2026-10-04
+## 0.0.1-alpha.1 - 2026-10-03
 
-### Added
-
-- Expiring personal access tokens with one-time reveal, revocation and account
-  deletion cleanup. Membership-scoped discovery endpoints expose workspaces,
-  lists, tasks, people, labels, views and dashboards with bounded pagination and
-  an OpenAPI description.
-- Idempotent public task creation with explicit list, due date, assignments and
-  labels, using the same permissions and mutations as the web interface.
-- Bounded CLI discovery with stable JSON and eight read-only MCP tools over stdio.
-  Credentials and the trusted server origin are configured at process startup.
-- Named Paper and Slate light/dark palettes, validated theme JSON import/export
-  and a runtime color editor with contrast guards, preview and cancellation.
-  Custom palettes are currently account-scoped on this device.
-
-### Fixed
-
-- Hexadecimal color fields retain left-to-right notation in RTL interfaces.
-
-- CLI task planning with private dashboard resolution, account-local dates and
-  explicit assignees/labels, plus idempotent creation of reviewed proposals.
-
-- Guarded historical import previews and bounded internal replay with atomic
-  content/ledger evidence. Public version 2 uploads remain disabled pending the
-  complete history interface and browser qualification.
-
-## [0.0.1-alpha.1] - 2026-10-03
-
-### Added
-
-- Complete alpha artifact pipeline: versioned multi-architecture containers, Helm and
-  Compose packages, signed independent Android APK/AAB, experimental desktop installers,
-  image SBOMs/digests and download checksums.
-
-- Shared typed lists, folders, subtasks, labels, priorities, assignments, comments,
-  invitations, and managed accounts with a simplified task view.
-- Saved views, board/table/calendar layouts, dashboards, keyboard shortcuts, a command
-  palette, recurring tasks and habits, streaks, Karma, and a focus timer.
-- Six interface languages, Arabic RTL layout, light/dark/system modes, six accent
-  themes with teal as the default, reading-size presets, and independent high contrast.
-- Transparent logo and wordmark assets with light/dark variants and all six accent
-  palettes in `assets/brand/`.
-- JSON export and reviewed, resumable native import with explicit workspace/person
-  mappings and notification activation safeguards. Unsupported content is reported;
-  imports do not create permissions or replay historical notifications.
-- Recorded task completion history and version 2 history archives with source attribution.
-  Historical storage and replay planning are implemented internally; public version 2
-  import remains unavailable.
-- Browser installation manifest, bounded offline public app-shell caching, and an
-  explicit update prompt that waits for durable local sync retirement before reload.
-- Android and desktop development apps with system-browser consent, native credential
-  storage, scoped sync, and encrypted attachment transfers using system save pickers.
-- Android encrypted UnifiedPush notices with task navigation, Linux desktop system
-  notices while open or minimized, and a separately configured optional Google relay.
-  Google delivery and broader device coverage remain unqualified.
-
-- Notification delivery engine: leader-elected scheduler, an outbox worker on every replica
-  with `FOR UPDATE SKIP LOCKED` claims, lease reclaim and fenced completion writes, a retry
-  ladder bounded at 15 attempts, quiet hours, escalation to a fallback member, and per-user
-  queue caps. Validated by a rig that kills real replicas mid-send.
-- ntfy, Telegram, Discord, Slack, and email delivery channels, with encrypted-at-rest
-  credentials, masked settings, rate-limited test sends, and provider-appropriate inbound
-  acknowledgement paths.
-- Acknowledgement: an in-app control and a single-use capability link in the notification
-  itself, expiring after 24 hours, which terminates every sibling reminder on the occurrence.
-- Assignment, `@`-mention, and overdue event notifications.
-- `DITERO_NOTIFY_ALLOWED_PRIVATE_CIDRS` to allow notification egress to named private ranges,
-  with never-allowable ranges enforced regardless.
-- Notification documentation, including the at-least-once, drop-path, and non-medical-grade
-  disclaimers: [docs/notifications.md](docs/notifications.md).
-- Operator-blind attachments on tasks, comments, and lists. File content, thumbnails,
-  filenames, and declared media types are encrypted in the browser; the server stores only
-  ciphertext through filesystem or S3-compatible storage.
-- E2E key enrollment with an independent encryption passphrase and recovery code, asynchronous
-  workspace grants, invite-fragment fast paths, passphrase rewrapping, and forward-only key
-  rotation after member removal.
-- Account deletion safeguards that preserve shared-workspace history, require ownership transfer
-  for sole owners, and require an explicit warning acknowledgement before deleting the last key
-  holder for shared encrypted files.
-- Repository foundation: license, contributor docs, issue/PR templates, and the
-  CI/nightly/release/promote-stable workflows that implement the channel-based release flow.
-
-### Fixed
-
-- Removed a component-generator CLI dependency carrying an unpatched high-severity
-  advisory while preserving its bundled styles and MIT license in all clients.
-- Accepted offline edits persist before client shutdown, reauthentication, language
-  navigation, and export. Cached nonempty lists render after an offline reload without
-  requiring a fresh server response.
-- Recurring series preserve their phase and finite progress through completion and skip.
-- Shared dashboards refresh membership visibility and shared task completions retain
-  recipient attribution.
-- Native form controls follow the active theme and reading preferences.
-- Notification HTTP connections pin validated DNS addresses and omit TLS SNI for IP
-  endpoints.
+- First public alpha with versioned server containers, Compose and Helm packages,
+  signed Android APK/AAB files, and experimental Linux, Windows and macOS installers.
+  Windows is unsigned; macOS is ad-hoc signed and not notarized.
+- Shared task, shopping, checklist, project and habit lists, with folders,
+  subtasks, labels, assignments, comments and workspace invitations.
+- Saved views, board/table/calendar layouts, dashboards, keyboard shortcuts,
+  recurring tasks, habit streaks, Karma and a focus timer.
+- Six interface languages, including Arabic with right-to-left layout, light and
+  dark modes, six accent themes, reading sizes and high contrast.
+- Reviewed, resumable JSON import and export, task completion history and cached
+  lists after an offline reload. Accepted edits are saved before shutdown or reload.
+- Reminders through ntfy, Telegram, Discord, Slack and email, with quiet hours,
+  escalation and acknowledgement. Delivery may repeat and is not medical-grade.
+- Encrypted attachments on tasks, lists and comments, with account recovery codes
+  and workspace key sharing. Back up the database and files together and retain keys.
+- Browser installation, Android UnifiedPush notifications and Linux desktop
+  notifications while open or minimized. Broader native testing, automatic updates
+  and general task-link support remain unfinished.
