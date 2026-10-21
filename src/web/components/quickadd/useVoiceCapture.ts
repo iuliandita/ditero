@@ -212,8 +212,18 @@ export function useVoiceCapture(identity: VoiceIdentity): VoiceView {
 
 	useEffect(() => {
 		const onHide = () => store.invalidate();
+		// Tab switch or minimize fires visibilitychange, not pagehide. Window
+		// blur is deliberately not used: it would cut dictation when focus moves
+		// to another visible window.
+		const onVisibility = () => {
+			if (document.visibilityState === "hidden") onHide();
+		};
 		window.addEventListener("pagehide", onHide);
-		return () => window.removeEventListener("pagehide", onHide);
+		document.addEventListener("visibilitychange", onVisibility);
+		return () => {
+			window.removeEventListener("pagehide", onHide);
+			document.removeEventListener("visibilitychange", onVisibility);
+		};
 	}, [store]);
 
 	const current = snapshot.key === key ? snapshot : EMPTY;

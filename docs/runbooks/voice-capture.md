@@ -53,7 +53,9 @@ Unknown languages are not mapped to English. Right-to-left layout is supported.
 ## Behavior
 
 Listening stops, and any pending result is discarded, when you cancel, press Escape,
-close quick add, or change account, workspace, target list or language. Dictation is
+close quick add, hide the tab or page (switching tabs, minimizing, leaving), or change
+account, workspace, target list or language. Moving focus to another visible window does
+not stop it. Dictation is
 capped at 20 seconds. Up to three alternatives are offered as radio choices. Keyboard
 focus follows each phase, listening and errors are announced, and touch controls are at
 least 44 px.

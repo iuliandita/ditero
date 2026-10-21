@@ -2,13 +2,13 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "e3267a917e378573ae79f267713e462378089c32e4f45148c144f74175983dc2",
+			"sourceDigest": "6df6e87fe3e7fa2a512b6e2c57fb76ae29713a8432dd724c97cf7091d6b7efe0",
 			"docs": [
 				"README.md",
 				"docs/ROADMAP.md",
 				"docs/runbooks/voice-capture.md"
 			],
-			"note": "Document five reviewed provider content import pickers, timezone/date and recurrence limits, flattened subtasks, completion/notes/labels, field notices, notification exclusions and immutable snapshot retry identity. Keep legacy adapter behavior and native runtime qualification limits explicit. Voice dictation runs on-device where the browser supports it; browsers with only the standard Web Speech API show a vendor-service notice that must be accepted before the mic works, and native webviews stay unavailable."
+			"note": "Document five reviewed provider content import pickers, timezone/date and recurrence limits, flattened subtasks, completion/notes/labels, field notices, notification exclusions and immutable snapshot retry identity. Keep legacy adapter behavior and native runtime qualification limits explicit. Voice dictation runs on-device where the browser supports it; browsers with only the standard Web Speech API show a vendor-service notice that must be accepted before the mic works, and native webviews stay unavailable. Dictation also stops when the tab is hidden or minimized, not when focus moves to another visible window."
 		},
 		"release": {
 			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",

@@ -28,7 +28,8 @@ and reviewed, resumable attachment migration with explicit parent mapping and du
 replay have landed; broader runtime qualification remains pending. Direct Microsoft
 PST import and provider account synchronization remain unsupported. Voice
 dictation in quick add is implemented, on-device where the browser supports it and
-behind a vendor-service notice otherwise (see the voice capture guide); real-device
+behind a vendor-service notice otherwise and stops when the tab is hidden (see the
+voice capture guide); real-device
 qualification and native-app support are pending.
 
 The web app is installable as a PWA. Android and Tauri desktop application cores,
