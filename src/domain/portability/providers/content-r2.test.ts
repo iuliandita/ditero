@@ -540,3 +540,18 @@ describe("P3 conversions", () => {
 		expect(created).toBeLessThan(10);
 	}, 60_000);
 });
+
+describe("note truncation", () => {
+	test("multibyte notes are cut at a whole character within the byte bound", async () => {
+		const result = await run(
+			"generic-csv",
+			`title,notes\nA,${"é".repeat(16_384)}\n`,
+		);
+		const notes = tasks(result)[0]?.notes ?? "";
+		expect(new TextEncoder().encode(notes).byteLength).toBeLessThanOrEqual(
+			32 * 1024 - 1,
+		);
+		expect(notes).toMatch(/^é+$/);
+		expect(notice(result, "field-truncated", "row:2:notes")).toBeDefined();
+	});
+});

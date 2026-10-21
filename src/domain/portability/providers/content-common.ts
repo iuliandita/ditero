@@ -443,9 +443,10 @@ export class ContentBuilder {
 		const encoder = new TextEncoder();
 		if (encoder.encode(result).byteLength <= limit) return result;
 		this.noticeAt("field-truncated", field);
-		let cut = result.slice(0, limit);
-		while (encoder.encode(cut).byteLength > limit) cut = cut.slice(0, -1);
-		return cut.isWellFormed() ? cut : cut.toWellFormed();
+		// encodeInto stops at the last whole code point that fits, in linear time.
+		const buffer = new Uint8Array(limit);
+		const { written } = encoder.encodeInto(result, buffer);
+		return new TextDecoder().decode(buffer.subarray(0, written));
 	}
 	unsupported(row: Record<string, unknown>, supported: readonly string[]) {
 		for (const [key, value] of Object.entries(row)) {

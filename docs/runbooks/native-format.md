@@ -39,7 +39,7 @@ Validation reports use codes and structural paths, without copying task titles,
 comments, or other source content into error messages. Input bytes, row counts,
 and nesting are bounded before validating recursive structures. The parser accepts
 at most 32 MiB, 50,000 rows, 50,000 entries in any nested array, two million values,
-and 32 levels of nesting. A graph report retains at most 1,000 findings, including
+and 32 levels of nesting, which is checked in the byte scan before `JSON.parse`. A graph report retains at most 1,000 findings, including
 a terminal limit error; exceeding the report limit fails validation, so a truncated
 report cannot authorize an incomplete import plan.
 
@@ -109,7 +109,12 @@ produce the existing native version 1 intermediate document and use planner 4.
 They do not add an application endpoint or a second content writer. The original
 file is submitted as `input.originalBase64` with `kind: "provider"`, `version: 2`,
 `adapter: "provider-content"`, `adapterVersion: 1`, the provider, snapshot hash and
-namespace, naming choices, timezone, and bounded `{code,path,count}` notices.
+namespace, naming choices, timezone, the resolved Outlook `dateOrder` (`mdy`, `dmy` or
+null), the Todoist recurrence `anchorDay` (or null), and bounded `{code,path,count}`
+notices. Per-row notice paths use `row:N[:field]`, `card:N` or `item:N`, fold into
+one `more` entry after 300, and counts saturate at 50,000. The migration is edited
+in place because it has not shipped; a database that applied an earlier draft of it
+must be recreated.
 The server reparses the original bytes and requires an exact binding match before
 planning. Notices are also returned with the saved plan and require UI approval.
 The database validates immutable source/job bindings; the original file is not

@@ -83,7 +83,8 @@ templates use the name you enter, or the template name when you leave it blank.
   migration with explicit parent mapping and durable replay
 - JSON export and reviewed, resumable native import, including version 2 history
   and attribution, plus Ditero and generic CSV, Todoist project CSV, TickTick backup
-  CSV, Microsoft To Do via classic Outlook task CSV, and Trello board JSON; see
+  CSV, Microsoft To Do via classic Outlook task CSV, and Trello board JSON, with
+  located preview notices for skipped rows and bound Outlook date order; see
   [data portability](docs/runbooks/data-portability.md) for exclusions
 - Browser installation plus Android and desktop development apps; see
   [native app status](#browser-installation-and-native-development-apps)
