@@ -143,3 +143,10 @@ export async function createAttachmentBlobStore(
 	const { S3BlobStore } = await import("../server/storage/s3-store.ts");
 	return new S3BlobStore(config.options);
 }
+
+export async function verifyAttachmentStorage(
+	config: AttachmentStorageConfig,
+): Promise<void> {
+	if (config.driver === "filesystem")
+		await new FsBlobStore(config.path).verifyWritable();
+}

@@ -33,3 +33,37 @@ bun run security:encrypt-channel-configs
 8. Retain the old key only in the protected rollback record until the rollback window closes.
 
 The migration is transactional and idempotent. Backend `user_secret` rows rotate on authenticated reads during step 3.
+
+## Authentication secret rotation
+
+`BETTER_AUTH_SECRET` separately encrypts the JWT plugin's stored JWKS private
+keys and two-factor secrets/backup codes, inside the server field-encryption
+envelope. Changing it in the environment alone breaks sign-in. Startup refuses
+to serve when the stored JWKS cannot be decrypted. Restore the original secret
+to recover from an accidental replacement; never delete JWKS or replace the
+database to bypass this check.
+
+1. Back up PostgreSQL and the original authentication/encryption secrets and
+   verify the backup. Keep all application replicas stopped during this rotation.
+2. Load the original `BETTER_AUTH_SECRET`, unchanged `DITERO_ENCRYPTION_KEY` and
+   migration-owner `DATABASE_MIGRATION_URL` into the maintenance process from
+   your secret manager. Load the new value as `BETTER_AUTH_SECRET_NEXT` (at least
+   32 characters). These must be environment variables, not command-line values.
+   Leave `DITERO_ENCRYPTION_KEY_NEXT` unset unless also performing field-key
+   rotation with the full procedure above.
+3. Run `bun run security:rotate-auth-secrets` from the matching source checkout
+   or application image. This mode transactionally re-encrypts JWKS private keys,
+   TOTP secrets and backup codes with the new authentication secret while
+   preserving their contents. Rerunning with the same pair is idempotent.
+4. Set every app replica's `BETTER_AUTH_SECRET` to the new value and remove
+   `BETTER_AUTH_SECRET_NEXT` from the maintenance environment. Restart and verify
+   password login, session loading/JWT issuance, TOTP and a backup code. Existing
+   signed cookies are invalidated; users must sign in again. OAuth tokens use
+   the separate field-encryption key in this configuration.
+5. Preserve the old secret and matching pre-rotation backup for the protected
+   rollback window. To roll back, stop all replicas and run the same command
+   with the new secret as current and the old secret as next (or restore the
+   matching database and secret backup together), then restart and verify.
+
+The original secret is required to decrypt retained data. A failed rotation
+rolls back the whole transaction. Do not promote the new secret after a failure.

@@ -61,6 +61,12 @@ the stream may remain until reconnect or token expiry.
 Previously issued subject-only JWTs are refused. Existing signed-in browser
 clients can refresh through the usual cookie-authenticated token endpoint.
 
+Keep `BETTER_AUTH_SECRET` stable and at least 32 characters in production.
+Startup verifies that retained JWT signing keys decrypt with the configured
+secrets. Changing `BETTER_AUTH_SECRET` requires the stopped-replica maintenance
+procedure in [key rotation](key-rotation.md), including
+`bun run security:rotate-auth-secrets`; replacing it directly prevents startup.
+
 All authentication requests are rate limited. Their JSON bodies are bounded to
 4 KiB and reject unexpected fields. Responses carry `Cache-Control: no-store`. The existing
 browser origin checks and cookie authentication remain in place.

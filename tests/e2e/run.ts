@@ -1,5 +1,12 @@
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { e2eDatabaseURL } from "../../scripts/e2e-database-port.ts";
 import {
@@ -345,7 +352,10 @@ function preserveDiagnostics() {
 }
 
 let status = 1;
+let attachmentRoot: string | undefined;
 try {
+	attachmentRoot = mkdtempSync(join(tmpdir(), "ditero-e2e-attachments-"));
+	env.DITERO_ATTACHMENT_FS_PATH = attachmentRoot;
 	if (isolatedBrowser) configureBrowser();
 	// The api servers import src/paraglide (generated, gitignored) at boot, and
 	// they start before vite -- whose paraglide plugin would otherwise be the
@@ -422,6 +432,7 @@ try {
 		}
 	const cleanup = cleanupStack();
 	if (status === 0) status = cleanup;
+	if (attachmentRoot) rmSync(attachmentRoot, { recursive: true, force: true });
 }
 
 if (interrupted) status = interrupted === "SIGINT" ? 130 : 143;

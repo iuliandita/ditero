@@ -5,6 +5,21 @@ export class BlobNotFoundError extends Error {
 	}
 }
 
+export function storageErrorCode(error: unknown): string {
+	if (
+		error &&
+		typeof error === "object" &&
+		"code" in error &&
+		typeof error.code === "string" &&
+		/^[A-Z0-9_]+$/.test(error.code)
+	)
+		return error.code;
+	if (error instanceof AggregateError) {
+		return error.errors.map(storageErrorCode).join(", ");
+	}
+	return "UNKNOWN";
+}
+
 export type BlobStore = {
 	put(
 		key: string,
