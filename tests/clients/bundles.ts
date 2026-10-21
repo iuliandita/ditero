@@ -1,7 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readFile,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, isAbsolute, join, resolve } from "node:path";
 import release from "../../release.json";
 
 export const clientBun = process.env.CLIENT_BUN ?? "bun";
@@ -11,6 +18,8 @@ export const bundleNames = {
 	"ditero-tui": "ditero-tui.js",
 } as const;
 
+// Bundles are executed through their shebang, as a user would, from a working
+// directory holding hostile Bun configuration. PATH selects the Bun under test.
 export async function extractBundles() {
 	const directory = await mkdtemp(join(tmpdir(), "ditero-clients-"));
 	try {
@@ -19,17 +28,14 @@ export async function extractBundles() {
 			execFileSync(
 				"bun",
 				["scripts/build-clients.ts", join(directory, "build")],
-				{
-					encoding: "utf8",
-				},
+				{ encoding: "utf8" },
 			)
 				.trim()
 				.split("\n")
 				.at(-1) ??
 			"";
-		const prefix = `ditero-${release.version}-clients`;
 		execFileSync("tar", ["-xzf", resolve(archive), "-C", directory]);
-		const extracted = join(directory, prefix);
+		const extracted = join(directory, `ditero-${release.version}-clients`);
 		const info = JSON.parse(
 			await readFile(join(extracted, "BUILDINFO.json"), "utf8"),
 		);
@@ -40,13 +46,28 @@ export async function extractBundles() {
 			!/^[a-f0-9]{40}$/.test(info.sourceSha)
 		)
 			throw new Error("Invalid client build identity");
+		const real = isAbsolute(clientBun)
+			? clientBun
+			: execFileSync("which", [clientBun], { encoding: "utf8" }).trim();
+		const bin = join(directory, "bin");
+		await mkdir(bin);
+		await symlink(real, join(bin, "bun"));
 		await writeFile(
 			join(extracted, ".env"),
 			`DITERO_URL=https://poison.example.test\nDITERO_TOKEN=ditero_pat_${"A".repeat(43)}\n`,
 		);
+		await writeFile(
+			join(extracted, "bunfig.toml"),
+			'preload = ["./hostile.ts"]\n',
+		);
+		await writeFile(
+			join(extracted, "hostile.ts"),
+			'process.stderr.write("HOSTILE_PRELOAD\\n");\n',
+		);
 		return {
 			extracted,
 			info,
+			path: `${bin}${delimiter}${process.env.PATH ?? ""}`,
 			close: () => rm(directory, { recursive: true, force: true }),
 		};
 	} catch (error) {
@@ -55,9 +76,6 @@ export async function extractBundles() {
 	}
 }
 
-export function bundleCommand(
-	extracted: string,
-	name: keyof typeof bundleNames,
-) {
-	return [clientBun, join(extracted, bundleNames[name])];
+export function bundlePath(extracted: string, name: keyof typeof bundleNames) {
+	return join(extracted, bundleNames[name]);
 }

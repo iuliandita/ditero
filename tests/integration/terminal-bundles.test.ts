@@ -1,4 +1,4 @@
-import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -22,12 +22,7 @@ import {
 	createPersonalAccessToken,
 	revokePersonalAccessToken,
 } from "../../src/server/public-api/tokens.ts";
-import {
-	bundleCommand,
-	bundleNames,
-	clientBun,
-	extractBundles,
-} from "../clients/bundles.ts";
+import { bundleNames, bundlePath, extractBundles } from "../clients/bundles.ts";
 
 let packaged: Awaited<ReturnType<typeof extractBundles>>;
 const databaseURL = process.env.DATABASE_URL;
@@ -176,11 +171,9 @@ async function cli(
 	secret = token,
 	operation = "complete-task",
 ) {
-	const [command, ...prefix] = bundleCommand(packaged.extracted, "ditero");
 	const child = spawn(
-		command,
+		bundlePath(packaged.extracted, "ditero"),
 		[
-			...prefix,
 			operation,
 			...(operation === "complete-task" ? ["--task", task] : []),
 			"--request-id",
@@ -190,7 +183,7 @@ async function cli(
 		],
 		{
 			cwd: packaged.extracted,
-			env: { PATH: process.env.PATH, DITERO_URL: origin, DITERO_TOKEN: secret },
+			env: { PATH: packaged.path, DITERO_URL: origin, DITERO_TOKEN: secret },
 			stdio: ["pipe", "pipe", "pipe"],
 		},
 	);
@@ -209,6 +202,7 @@ async function cli(
 			child.once("error", reject);
 			child.once("close", resolve);
 		});
+		expect(stderr).not.toContain("HOSTILE_PRELOAD");
 		return { code, stdout, stderr };
 	} finally {
 		clearTimeout(timer);
@@ -221,15 +215,16 @@ async function cli(
 	}
 }
 async function mcp(secret = token) {
-	const [command, ...args] = bundleCommand(packaged.extracted, "ditero-mcp");
 	const transport = new StdioClientTransport({
-		command,
-		args: [...args, "--allow-loopback-http"],
+		command: bundlePath(packaged.extracted, "ditero-mcp"),
+		args: ["--allow-loopback-http"],
 		cwd: packaged.extracted,
-		env: { DITERO_URL: origin, DITERO_TOKEN: secret },
+		env: { PATH: packaged.path, DITERO_URL: origin, DITERO_TOKEN: secret },
 		stderr: "pipe",
 	});
-	transport.stderr?.on("data", () => {});
+	transport.stderr?.on("data", (chunk) => {
+		expect(chunk.toString()).not.toContain("HOSTILE_PRELOAD");
+	});
 	const client = new Client(
 		{ name: "actual-completion", version: "1" },
 		{ versionNegotiation: { mode: { pin: "2026-07-28" } } },
@@ -386,15 +381,15 @@ test("packaged bundle MCP stdio rejects strict inputs before HTTP and rechecks r
 	expect(await counts()).toEqual({ history: 0, karma: 0, receipts: 0 });
 }, 30_000);
 
-test("bundles report JSON identity, keep credentials out of .env, and refuse an unsupported Bun", async () => {
-	const base = { cwd: packaged.extracted, env: { PATH: process.env.PATH } };
+test("bundles report JSON identity, ignore hostile working-directory config, and refuse an unsupported Bun", async () => {
+	const base = { cwd: packaged.extracted, env: { PATH: packaged.path } };
 	for (const [name, file] of Object.entries(bundleNames)) {
-		const out = execFileSync(
-			clientBun,
-			[join(packaged.extracted, file), "--version"],
-			{ ...base, encoding: "utf8" },
-		);
-		expect(JSON.parse(out)).toMatchObject({
+		const result = spawnSync(join(packaged.extracted, file), ["--version"], {
+			...base,
+			encoding: "utf8",
+		});
+		expect(result.stderr).toBe("");
+		expect(JSON.parse(result.stdout)).toMatchObject({
 			name,
 			version: release.version,
 			commit: packaged.info.sourceSha,
@@ -402,21 +397,24 @@ test("bundles report JSON identity, keep credentials out of .env, and refuse an 
 			minimumBun: packaged.info.minimumBun,
 		});
 	}
-	const cliFile = join(packaged.extracted, bundleNames.ditero);
-	const noEnv = spawnSync(
-		clientBun,
-		["--no-env-file", cliFile, "profile", "--json"],
+	const missing = spawnSync(
+		bundlePath(packaged.extracted, "ditero"),
+		["profile", "--json"],
 		{ ...base, encoding: "utf8" },
 	);
-	expect(noEnv.status).toBe(2);
-	expect(noEnv.stderr).not.toContain("poison.example.test");
-	const source = await readFile(cliFile, "utf8");
+	expect(missing.status).toBe(2);
+	expect(missing.stderr).not.toContain("HOSTILE_PRELOAD");
+	expect(missing.stderr).not.toContain("poison.example.test");
+	const source = await readFile(
+		bundlePath(packaged.extracted, "ditero"),
+		"utf8",
+	);
 	const minimum = packaged.info.minimumBun.replaceAll(".", ",");
 	const future = source.replace(`m=[${minimum}]`, "m=[99,0,0]");
 	expect(future).not.toBe(source);
 	const futureFile = join(packaged.extracted, "future.js");
-	await writeFile(futureFile, future);
-	const unsupported = spawnSync(clientBun, [futureFile, "--version"], {
+	await writeFile(futureFile, future, { mode: 0o755 });
+	const unsupported = spawnSync(futureFile, ["--version"], {
 		...base,
 		encoding: "utf8",
 	});
@@ -440,12 +438,12 @@ test.each([
 		[fileURLToPath(new URL("../tui/api-pty.ts", import.meta.url)), mode],
 		{
 			env: {
-				PATH: process.env.PATH,
+				PATH: packaged.path,
 				HOME: process.env.HOME,
 				NODE_ENV: "test",
 				DATABASE_URL: databaseURL,
 				TUI_TEST_COMMAND: JSON.stringify([
-					...bundleCommand(packaged.extracted, "ditero-tui"),
+					bundlePath(packaged.extracted, "ditero-tui"),
 					"--allow-loopback-http",
 				]),
 				TUI_TEST_CWD: packaged.extracted,

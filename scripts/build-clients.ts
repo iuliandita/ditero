@@ -20,9 +20,13 @@ export const clients = {
 	"ditero-tui.js": { name: "ditero-tui", entry: "src/tui/index.ts" },
 } as const;
 
+// Direct execution must not trust the caller's working directory: Bun would
+// otherwise load its .env and run bunfig.toml preloads before any client code.
+export const SHEBANG = "#!/usr/bin/env -S bun --no-env-file --config=/dev/null";
+
 export function bannerFor(minimum: string): string {
 	const wanted = JSON.stringify(minimum.split(".").map(Number));
-	return `#!/usr/bin/env bun\n{const m=${wanted},v=(process.versions.bun||"").split(".").slice(0,3).map(Number);if(!(v.length===3&&v.every(Number.isInteger)&&(v[0]-m[0]||v[1]-m[1]||v[2]-m[2])>=0)){console.error("ditero: Bun ${minimum} or newer is required (found "+(process.versions.bun||"no Bun runtime")+"). Install it from https://bun.sh");process.exit(2)}}\n`;
+	return `${SHEBANG}\n{const m=${wanted},v=(process.versions.bun||"").split(".").slice(0,3).map(Number);if(!(v.length===3&&v.every(Number.isInteger)&&(v[0]-m[0]||v[1]-m[1]||v[2]-m[2])>=0)){console.error("ditero: Bun ${minimum} or newer is required (found "+(process.versions.bun||"no Bun runtime")+"). Install it from https://bun.sh");process.exit(2)}}\n`;
 }
 
 async function command(argv: string[]): Promise<string> {

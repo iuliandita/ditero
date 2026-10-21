@@ -135,7 +135,7 @@ class ReleaseTests(unittest.TestCase):
         version = "0.0.1-alpha.1"
         prefix = f"ditero-{version}-clients"
         minimum = release.minimum_bun()
-        banner = f'#!/usr/bin/env bun\n{{const m=[{minimum.replace(".", ",")}];}}\nconsole.log("bundle");\n'.encode()
+        banner = release.CLIENT_SHEBANG + f'{{const m=[{minimum.replace(".", ",")}];}}\nconsole.log("bundle");\n'.encode()
         notice = ("=" * 72 + "\nzod@4.4.3 (MIT)\n" + "=" * 72 + "\n\nLICENSE\n\nMIT License\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software.\n").encode()
         info = {"version": version, "sourceSha": source_sha, "sourceDirty": False, "target": "bun",
                 "apiVersion": 1, "minimumBun": minimum, "clients": list(release.CLIENT_BUNDLES),
@@ -188,8 +188,9 @@ class ReleaseTests(unittest.TestCase):
             "checksum omits notices": sums_without("THIRD_PARTY_NOTICES.txt"),
             "modified bundle": stale_sum,
             "no shebang": replace("ditero-cli.js", b"console.log(1)\n"),
-            "no minimum check": replace("ditero-cli.js", b"#!/usr/bin/env bun\nconsole.log(1)\n"),
-            "source map": replace("ditero-cli.js", b'#!/usr/bin/env bun\n{const m=[%s]}\n//# sourceMappingURL=x.map\n' % release.minimum_bun().replace(".", ",").encode()),
+            "unrestricted shebang": replace("ditero-cli.js", b"#!/usr/bin/env bun\n{const m=[%s]}\n" % release.minimum_bun().replace(".", ",").encode()),
+            "no minimum check": replace("ditero-cli.js", release.CLIENT_SHEBANG + b"console.log(1)\n"),
+            "source map": replace("ditero-cli.js", release.CLIENT_SHEBANG + b'{const m=[%s]}\n//# sourceMappingURL=x.map\n' % release.minimum_bun().replace(".", ",").encode()),
             "notice without text": replace("THIRD_PARTY_NOTICES.txt", ("=" * 72 + "\nzod@4.4.3 (MIT)\n" + "=" * 72 + "\n\n").encode()),
             "notice for another package": replace("THIRD_PARTY_NOTICES.txt", ("=" * 72 + "\nother@1.0.0 (MIT)\n" + "=" * 72 + "\n\n" + "MIT License permission " * 10).encode()),
             "undeclared dependency": set_info(dependencies=["zod@4.4.3", "extra@1.0.0"]),

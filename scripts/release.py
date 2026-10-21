@@ -334,6 +334,7 @@ def verify_standalone_candidate(path: Path, version: str, source_sha: str) -> No
                 raise ValueError("Client binary is not executable Linux x64 ELF")
 
 
+CLIENT_SHEBANG = b"#!/usr/bin/env -S bun --no-env-file --config=/dev/null\n"
 CLIENT_BUNDLES = ("ditero-cli.js", "ditero-mcp.js", "ditero-tui.js")
 CLIENT_FILES = (*CLIENT_BUNDLES, "THIRD_PARTY_NOTICES.txt", "LICENSE", "BUILDINFO.json", "SHA256SUMS")
 
@@ -372,7 +373,7 @@ def verify_clients(path: Path, version: str, source_sha: str, allow_dirty: bool 
         bundle = content[name]
         if not files[name].mode & 0o111:
             raise ValueError(f"Client bundle is not executable: {name}")
-        if not bundle.startswith(b"#!/usr/bin/env bun\n") or f"m=[{minimum.replace('.', ',')}]".encode() not in bundle[:1024]:
+        if not bundle.startswith(CLIENT_SHEBANG) or f"m=[{minimum.replace('.', ',')}]".encode() not in bundle[:1024]:
             raise ValueError(f"Client bundle lacks the shebang or minimum Bun check: {name}")
         if b"sourceMappingURL" in bundle:
             raise ValueError(f"Client bundle links a source map: {name}")
