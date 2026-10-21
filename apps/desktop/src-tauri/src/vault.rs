@@ -42,6 +42,8 @@ pub fn valid_expiry(s: &str) -> bool {
 pub struct Registry {
     pub selected: Option<String>,
     pub sessions: BTreeMap<String, Session>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub evidence: BTreeMap<String, crate::offline::Evidence>,
     #[serde(default)]
     pub notifications: BTreeMap<String, DesktopRegistration>,
     #[serde(default)]
@@ -132,6 +134,14 @@ fn load_from(
             .iter()
             .any(|(origin, s)| origin != &s.origin || !s.valid())
         || registry.notifications.len() > 64
+        || registry.evidence.iter().any(|(origin, proof)| {
+            origin != &proof.session.origin
+                || !proof.session.valid()
+                || !registry
+                    .sessions
+                    .get(origin)
+                    .is_some_and(|s| same_session(s, &proof.session))
+        })
         || registry.retired_notifications.len() > 64
         || registry
             .notifications
@@ -166,6 +176,7 @@ pub fn remove_session(registry: &mut Registry, captured: &Session) {
         .is_some_and(|s| s.session_id == captured.session_id && s.user_id == captured.user_id)
     {
         registry.sessions.remove(&captured.origin);
+        registry.evidence.remove(&captured.origin);
     }
 }
 #[cfg(test)]
@@ -191,7 +202,16 @@ mod tests {
             device_id: "d1".into(),
             expires_at: "2026-12-01T00:00:00Z".into(),
         };
-        registry.sessions.insert(session.origin.clone(), session);
+        registry
+            .sessions
+            .insert(session.origin.clone(), session.clone());
+        let mut proof = crate::offline::Evidence::new(session.clone());
+        proof.verified = true;
+        proof.name = Some("Alex".into());
+        proof.email = Some("alex@example.test".into());
+        proof.workspace = Some("workspace".into());
+        proof.zero = Some("https://zero.example".into());
+        registry.evidence.insert(session.origin.clone(), proof);
         entry
             .set_password(&serde_json::to_string(&registry).unwrap())
             .unwrap();
@@ -208,6 +228,11 @@ mod tests {
         let recovered = load_from(factory).unwrap();
         assert_eq!(attempts.get(), 2);
         assert_eq!(recovered.selected, registry.selected);
+        assert!(recovered.evidence[&session.origin].ready(&session, 0));
+        assert!(serde_json::to_value(Registry::default())
+            .unwrap()
+            .get("evidence")
+            .is_none());
         assert_eq!(
             recovered.sessions["https://a.example"].token,
             "protected-secret"

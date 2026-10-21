@@ -44,20 +44,39 @@ through Retry after starting an unlocked provider, and all six browser handoffs.
 
 ## Offline startup
 
-Desktop currently needs an online start to verify the selected session before it
-can open cached data. On a connection failure during restoration, the connection
-screen explains this requirement. Reconnect and select Connect. Cached tasks and
-durably saved pending edits stay on the device; retry does not clear them.
+After one complete online start, desktop can reopen the selected account's cached
+data and durably saved queued edits while offline. The OS credential store retains
+verified session expiry, profile, Zero endpoint, and bootstrap workspace together,
+bound to the exact server, account, device, session, and credential. Older stored
+sessions need a complete online start once to populate this evidence. Older desktop
+builds cannot read the added protected-record field. Before downgrading, sign out
+stored accounts with this build to remove their evidence, then sign in online with
+the older build. Keep the current build if credential cleanup fails; signing out
+does not clear the scoped task cache.
 
-Warm offline editing remains available after an online start. Cold offline
-activation is still tracked in #1090. It requires complete, unexpired verified
-evidence encrypted with the session, bound to the server/account/session, and
-durable refusal handling. Invalid credentials, failed certificate trust, expiry,
-and revocation must never authorize offline activation.
+Only a network failure permits cached activation, and only before the verified
+session expires. Invalid credentials, failed certificate trust, HTTP refusals,
+invalid responses, incomplete evidence, and failed credential-store writes never
+authorize fallback. Verification and revocation are marked durably before I/O;
+an interrupted or refused check requires successful online session verification
+before cached activation is available again. Credentials and JWTs remain native;
+no JWT is restored or minted offline.
 
-An isolated Linux runtime check confirmed this guidance on cold offline start and
-retry, then verified a queued edit survived a graceful close and synced after
-reconnection. It does not qualify cold offline activation.
+If cached activation is unavailable, reconnect and select Connect. Cached tasks
+and durably saved pending edits stay on the device; retry does not clear them.
+Offline access cannot discover a remote revocation until the server is reachable;
+the last verified expiry bounds this access, matching Android's policy.
+
+Unit tests cover the host decision matrix, protected evidence persistence, real TLS
+refusal classification, and the shared client startup path. Cold offline activation
+still needs packaged runtime qualification on each platform. To check it manually:
+
+1. Sign in to an existing account online and wait for lists to synchronize.
+2. Disconnect the network, edit a task, and close Ditero normally.
+3. Relaunch offline. Check that cached lists and the pending edit are accessible.
+4. Reconnect and confirm the queued edit synchronizes; restart to verify persistence.
+5. Separately check expired evidence, revoked credentials, an untrusted certificate,
+   and a locked keyring. These must refuse cached activation without deleting edits.
 
 ## Linux task links
 
@@ -173,7 +192,7 @@ bun install --frozen-lockfile
 cd ../..
 bun run i18n:compile
 bunx tsc --noEmit --project apps/desktop/tsconfig.json
-bunx vitest run apps/desktop/src/transport.test.ts apps/android/src/connection-error.test.ts
+bunx vitest run apps/desktop/src/transport.test.ts apps/desktop/src/offline.test.ts apps/android/src/runtime.test.ts
 cd apps/desktop
 bun run build
 cd src-tauri
