@@ -2,7 +2,7 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "5413d85db492dfbdb928cfd0b207586b8e7e01a04e3b3f8f545a6a340f622f64",
+			"sourceDigest": "ca51b3319809ce6c19a51d0278a708d7b85b9589a2770ff3aae7aa7484f4a64b",
 			"docs": [
 				"docs/security.md",
 				"docs/runbooks/native-authentication.md",
@@ -10,7 +10,7 @@
 				"docs/runbooks/sign-in-providers.md",
 				"docs/ROADMAP.md"
 			],
-			"note": "Document neutral sign-up followed by explicit sign-in, including email-bound invitation and pending native approval journeys in all six locales. Document local timer persistence and the reload limit: a forward device-clock correction can credit unworked time up to the interval length. Start and resume now anchor elapsed time at the action. Completion replay, dismissible logging errors, server permissions, timestamp validation and persisted formats remain unchanged. Import completion and conflict transfer focus during the DOM commit; moving focus during a status retry cancels the handoff, which also rechecks focus before committing. Import inputs, acknowledgment and persistence are unchanged. Document the browser connection requirement on opening or reloading, automatic and manual retries for transport failures, and continued offline editing in already-open tabs. HTTP session and startup refusals keep their existing behavior; no cached identity or offline startup is added. A signed-out session refetch after a sign-up or sign-in attempt no longer remounts Login, so the entered email, the sign-up notice and sign-in errors stay visible; no documented flow changes."
+			"note": "Document neutral sign-up followed by explicit sign-in, including email-bound invitation and pending native approval journeys in all six locales. Document local timer persistence and the reload limit: a forward device-clock correction can credit unworked time up to the interval length. Start and resume now anchor elapsed time at the action. Completion replay, dismissible logging errors, server permissions, timestamp validation and persisted formats remain unchanged. Import completion and conflict transfer focus during the DOM commit; moving focus during a status retry cancels the handoff, which also rechecks focus before committing. Import inputs, acknowledgment and persistence are unchanged. Document the browser connection requirement on opening or reloading, automatic and manual retries for transport failures, and continued offline editing in already-open tabs. HTTP session and startup refusals keep their existing behavior; no cached identity or offline startup is added. Once the session has resolved, a signed-out refetch after a sign-up or sign-in attempt no longer remounts Login, while the first fetch keeps the boot skeleton, so the entered email, the sign-up notice and sign-in errors stay visible; no documented flow changes."
 		},
 		"release": {
 			"sourceDigest": "9a48b179570edaf0561709aa7e76537b76284128bf76dbec96406bd2976e25d8",
