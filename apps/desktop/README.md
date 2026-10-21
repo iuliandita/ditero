@@ -357,7 +357,8 @@ Installed Windows x64 and macOS Apple Silicon/Intel development packages pass fi
 refusal, trusted system-browser consent, task sync in both directions, offline
 edit/create and cold start, reconnect, two-server isolation, and both sign-outs.
 Fresh Credential Manager and Keychain reads confirm verified evidence and final
-credential removal.
+credential removal. The harness also requires the protected cleanup journal to
+finish before crediting sign-out; this stronger check awaits its next hosted run.
 The branch-scoped Desktop runtime journeys workflow installs development packages
 on hosted Windows, Apple Silicon macOS, Intel macOS, and Linux runners. Its
 per-journey artifacts distinguish completed checks from unavailable features

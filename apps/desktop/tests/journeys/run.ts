@@ -496,10 +496,14 @@ try {
 		await until("signed-out selector", () =>
 			native.evaluate("!!document.querySelector('#native-server')"),
 		);
-		await until(
-			"selected credential removed from OS store",
-			() => vault().sessionCount === 1 && vault().credentialCount === 1,
-		);
+		await until("selected credential removed from OS store", () => {
+			const proof = vault();
+			return (
+				!proof.pending &&
+				proof.sessionCount === 1 &&
+				proof.credentialCount === 1
+			);
+		});
 		await native.close();
 		await native.launch();
 		await until("cold signed-out selector", () =>
@@ -534,6 +538,7 @@ try {
 				JSON.stringify(proof),
 			);
 			return (
+				!proof.pending &&
 				proof.sessionCount === 0 &&
 				proof.credentialCount === 0 &&
 				proof.evidenceCount === 0
