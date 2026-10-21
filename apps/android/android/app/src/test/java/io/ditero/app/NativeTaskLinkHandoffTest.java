@@ -20,7 +20,7 @@ public class NativeTaskLinkHandoffTest {
         assertEquals("cold", handoff.pending.current(1, owner -> true).token);
         handoff.retire(true, true);
         assertFalse("a page-bound link never transfers to a replacement page", handoff.pending.occupied());
-        assertFalse(handoff.refused);
+        assertTrue("the replacement page receives only an unavailable notice", handoff.refused);
     }
 
     @Test public void shutdownAndFinalDestructionDiscardUnboundLinksAndRefusals() {

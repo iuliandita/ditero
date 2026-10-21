@@ -257,13 +257,15 @@ Implemented foundation with source, bridge and JVM unit coverage:
   Native `link.read`, `link.dismiss(token)` and `link.retire` serve the existing JavaScript delivery;
   each read rechecks the page, account, session and trust. A cold start parks the link unbound and the
   next `hello` binds that one link to the new page generation. A link already bound to an earlier page is
-  dropped on a reload, never handed to the new page. Sign-out, forget, revoke, a refused session, a
-  server change, a new sign-in, and final activity shutdown all clear it. Configuration recreation before
-  `hello` retains the unbound link in a ViewModel, without saving it to disk; the replacement transport
-  rechecks its captured owner and binds it once. A link already bound to a page never transfers to a
-  replacement page. The Activity handles boot-time assets-path configuration updates in place,
-  so they do not retire a newly bound link before task delivery. The page opens the task only if it is
-  already in its synced rows; otherwise it shows the existing unavailable message.
+  dropped on a reload, never handed to the new page; its replacement receives one unavailable notice.
+  Sign-out, forget, revoke, a refused session, a server change, a new sign-in, and final activity
+  shutdown all clear it. Before `hello`, configuration recreation retains the unbound link in a
+  ViewModel, without saving it to disk; the replacement transport rechecks its captured owner and
+  binds it once. A link already bound to a page never transfers to a
+  replacement page; only an unavailable notice survives that retirement. The Activity handles
+  boot-time assets-path configuration updates in place, so they do not retire a newly bound link
+  before task delivery. The page opens the task only if it is already in its synced rows; otherwise
+  it shows the existing unavailable message.
 - Dismiss is idempotent: a well-formed body with an empty or unknown token succeeds and changes nothing,
   and an old token cannot clear a newer entry. A changed owner or page is still answered `cancelled`.
 - `link.retire` and every `server.select` (same origin included) clear the slot and fence ingress, as on
@@ -329,7 +331,7 @@ cd apps/android/android
 - Broader device qualification of native notification permission and UnifiedPush background delivery.
 - Operator Firebase/relay setup and real Google delivery qualification.
 - Store distribution and broader release installation/upgrade qualification.
-- Emulator and device qualification of task links (see above), update delivery, and complete application qualification.
+- Broader device qualification of task links (see above), update delivery, and complete application qualification.
 
 Some shared browser-only account settings and integrations still need explicit
 native support. Keep unsupported operations unavailable until their native

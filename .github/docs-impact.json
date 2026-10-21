@@ -22,9 +22,9 @@
 			"note": "Align chart metadata, resource labels and packaged deployment image examples with 0.1.0-beta.1. Preserve app/Zero pairing, storage and recovery guidance, and cluster qualification limits; the optional one-image bundle remains separate from standard release assets."
 		},
 		"native": {
-			"sourceDigest": "193c31351d4ba740640f518eda21e0428cc8be7472d945c421615bbafdb1e52a",
+			"sourceDigest": "ad3993bd8526e2db809a8aa868e61de728dd88808b8668902f4ed76724ce6ee2",
 			"docs": ["apps/android/README.md"],
-			"note": "Retain unbound task-link ingress in memory across pre-handshake recreation, and handle boot assets updates without retiring a newly bound page. Only an outstanding verification keeps unverified ownership; failed checks retire stale pending links before new ingress. Document one-time refusal feedback, idempotent dismissal and debug-only user CA trust. Release trust anchors, session storage and server protocols are unchanged."
+			"note": "Retain unbound task-link ingress in memory across pre-handshake recreation, and handle boot assets updates without retiring a newly bound page. Only an outstanding verification keeps unverified ownership; failed checks retire stale pending links before new ingress. Document one-time refusal feedback, including retirement of a pending link on page replacement, idempotent dismissal and debug-only user CA trust. Release trust anchors, session storage and server protocols are unchanged."
 		},
 		"authentication": {
 			"sourceDigest": "94708677c42d414b0287be7f48a38f511b95039dce4a14a4b33939cc3d3dd213",

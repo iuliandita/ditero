@@ -817,8 +817,7 @@ final class NativeZeroTransport {
         // Only a link captured before any page existed (cold start) binds to this generation, and only if the
         // restored session still owns it. Anything already bound to the previous page is dropped, not reopened.
         linksFenced=false;
-        boolean cold=pendingLink.unbound();
-        if(pendingLink.occupied() && !pendingLink.rebind(generation,this::ownsLink) && cold) linkHandoff.refused=true;
+        if(pendingLink.occupied() && !pendingLink.rebind(generation,this::ownsLink)) linkHandoff.refused=true;
         JSONObject reply = obj("t", "reply", "rid", rid, "ok", true, "gen", generation,
                 "bridge", "native-zero-2", "authReserve", HANDLE_CHARS, "maxSockets", MAX_SOCKETS);
         put(reply,"taskLinks",true);

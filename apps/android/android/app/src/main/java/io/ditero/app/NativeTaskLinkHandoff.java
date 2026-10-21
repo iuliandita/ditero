@@ -13,7 +13,12 @@ public final class NativeTaskLinkHandoff extends ViewModel {
     }
 
     void retire(boolean changingConfigurations, boolean pageBound) {
-        if (!changingConfigurations || pageBound) clear();
+        if (!changingConfigurations) clear();
+        else if (pageBound) {
+            boolean unavailable = pending.occupied() || refused;
+            clear();
+            refused = unavailable;
+        }
     }
 
     @Override
