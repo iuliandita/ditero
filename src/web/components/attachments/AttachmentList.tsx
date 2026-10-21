@@ -45,7 +45,10 @@ import {
 	useKeyring,
 	type WorkspaceKeyMaterial,
 } from "../../lib/e2e/KeyringProvider.tsx";
-import { uploadAttachment } from "../../lib/e2e/upload.ts";
+import {
+	AttachmentUploadError,
+	uploadAttachment,
+} from "../../lib/e2e/upload.ts";
 import { formatBytes } from "../../lib/intl-format.ts";
 import { useConfirm } from "../ui/confirm.tsx";
 import type { RowAction } from "../ui/row-action.ts";
@@ -423,7 +426,10 @@ export const AttachmentList = forwardRef<
 				console.error("attachments: upload failed", caught);
 				gate.reportUploadFailure(caught);
 				updatePending(upload.id, {
-					error: m.attachment_error_upload_failed(),
+					error:
+						caught instanceof AttachmentUploadError && caught.status === 413
+							? m.attachment_error_server_limit()
+							: m.attachment_error_upload_failed(),
 					progress: undefined,
 				});
 			}

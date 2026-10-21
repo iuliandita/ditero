@@ -443,6 +443,8 @@ test.describe("per-task reminder policy and in-app ack", () => {
 
 		const chip = page.getByTestId("reminder-chip").first();
 		await expect(chip).toBeVisible({ timeout: 45_000 });
+		await expect(chip).toContainText("Complete task");
+		await expect(chip).toHaveAccessibleName(/Complete task/);
 		const box = await chip.boundingBox();
 		expect(box).not.toBeNull();
 		// min-h-9 == 36px, the row-level minimum used elsewhere on mobile.

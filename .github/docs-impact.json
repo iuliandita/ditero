@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "30b5f2121f8a2b21b77b319f417178cbfaccba9dde3266ea6fb82dcb6a16f618",
-			"docs": ["README.md"],
-			"note": "Task titles and first-run paragraphs retain readable space in narrow panes. Document exact recoverable attachment sizes and the Stored size label when row metadata cannot uniquely determine plaintext length. No stored formats or server-visible metadata change."
+			"sourceDigest": "c03a1fb3f314bc90852eb99ad67008edca56ef97665499e0c78da4a10d0b66f2",
+			"docs": ["docs/runbooks/trusted-proxy.md"],
+			"note": "Document proxy body limits and ciphertext overhead. Reminder completion, secure browser API requirements and configured sync endpoint diagnostics become explicit in all six locales. No authentication, permission, sync persistence or attachment format contracts change."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
@@ -12,19 +12,12 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "e32769de387a2b031b6e3a219a9074dfd95f08d7a808b024316700999ae72d79",
-			"docs": [
-				".env.example",
-				"docs/runbooks/sign-in-providers.md",
-				"deploy/docker/aio/README.md",
-				"deploy/helm/ditero/README.md"
-			],
-			"note": "Compose now forwards GOOGLE_CLIENT_ID, without which Google sign-in could not be enabled. The new sign-in provider guide documents per-instance OAuth clients, the exact callback, Google redirect-host limits, Compose/AIO/Helm configuration, registration and linking behavior, and planned providers."
+			"sourceDigest": "1ef746d15432e04d25188975ed586a5413d5106c41883f49212e481b1ae5aae6",
+			"noImpact": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged."
 		},
 		"deployment": {
-			"sourceDigest": "4a4cadef874a1cef442178e7a6e332a0eefe5252e635068a1d4c49486f7d7794",
-			"docs": ["deploy/docker/aio/README.md", "deploy/helm/ditero/README.md"],
-			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
+			"sourceDigest": "3cb56b9dc41deafd254840faee7defba3f98b24d86daea7c6731b50d10f3e43e",
+			"noImpact": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
