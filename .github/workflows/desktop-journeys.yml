@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: desktop-journeys-${{ github.ref }}
+  group: desktop-journeys-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
