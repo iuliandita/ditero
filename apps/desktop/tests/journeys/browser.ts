@@ -27,6 +27,7 @@ export async function systemBrowser() {
 		`--user-data-dir=${profile}`,
 		"--no-first-run",
 		"--no-default-browser-check",
+		"--host-resolver-rules=MAP localhost 127.0.0.1",
 	];
 	const browser =
 		process.platform === "darwin"
@@ -129,6 +130,25 @@ end tell`,
 		context,
 		async probe(origin: string) {
 			const url = `${origin}/health`;
+			const verified = await context.request.get(url);
+			writeFileSync(
+				resolve(evidence, "browser-handler-health.json"),
+				JSON.stringify({
+					status: verified.status(),
+					body: await verified.text(),
+				}),
+			);
+			if (!verified.ok())
+				throw new Error("Verified HTTPS fixture health failed");
+			context.on("requestfailed", (request) =>
+				writeFileSync(
+					resolve(evidence, "browser-request-failed.json"),
+					JSON.stringify({
+						url: request.url().split("?")[0],
+						failure: request.failure(),
+					}),
+				),
+			);
 			try {
 				if (process.platform === "darwin") run("open", [url]);
 				else if (process.platform === "win32")
