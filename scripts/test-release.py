@@ -122,7 +122,7 @@ class ReleaseTests(unittest.TestCase):
                         assets[0]["digest"] = "sha256:" + "0" * 64
                     return json.dumps({"assets": assets})
                 env = {"TAG": f"v{version}", "REPO": "owner/repo", "RELEASE_SHA": sha}
-                with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release.subprocess, "run") as run:
+                with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release, "verify_clients"), patch.object(release.subprocess, "run") as run:
                     if corrupted:
                         with self.assertRaisesRegex(ValueError, "upload digests"):
                             release.publish(output)
@@ -130,6 +130,118 @@ class ReleaseTests(unittest.TestCase):
                         release.publish(output)
                     published = any("--draft=false" in call.args[0] for call in run.call_args_list)
                     self.assertEqual(published, not corrupted)
+
+    def bundle_archive(self, path, source_sha, mutate=None, **changes):
+        version = "0.0.1-alpha.1"
+        prefix = f"ditero-{version}-clients"
+        minimum = release.minimum_bun()
+        banner = f'#!/usr/bin/env bun\n{{const m=[{minimum.replace(".", ",")}];}}\nconsole.log("bundle");\n'.encode()
+        notice = ("=" * 72 + "\nzod@4.4.3 (MIT)\n" + "=" * 72 + "\n\nLICENSE\n\nMIT License\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software.\n").encode()
+        info = {"version": version, "sourceSha": source_sha, "sourceDirty": False, "target": "bun",
+                "apiVersion": 1, "minimumBun": minimum, "clients": list(release.CLIENT_BUNDLES),
+                "dependencies": ["zod@4.4.3"]}
+        info.update(changes)
+        files = {name: banner for name in release.CLIENT_BUNDLES}
+        files.update({"THIRD_PARTY_NOTICES.txt": notice, "LICENSE": b"license", "BUILDINFO.json": json.dumps(info).encode()})
+        files["SHA256SUMS"] = "".join(f"{hashlib.sha256(content).hexdigest()}  {name}\n" for name, content in files.items()).encode()
+        if mutate:
+            mutate(files)
+        with tarfile.open(path, "w:gz") as archive:
+            for name, content in files.items():
+                member = tarfile.TarInfo(f"{prefix}/{name}")
+                member.size = len(content)
+                member.mode = 0o755 if name in release.CLIENT_BUNDLES else 0o644
+                archive.addfile(member, io.BytesIO(content))
+
+    def test_client_bundles_require_every_bundle_checksum_and_notice(self):
+        sha = "a" * 40
+        def rehash(files):
+            files["SHA256SUMS"] = "".join(f"{hashlib.sha256(files[name]).hexdigest()}  {name}\n" for name in release.CLIENT_FILES if name != "SHA256SUMS" and name in files).encode()
+        def drop(name, hashed=True):
+            def mutation(files):
+                del files[name]
+                if hashed:
+                    rehash(files)
+            return mutation
+        def replace(name, content):
+            def mutation(files):
+                files[name] = content
+                rehash(files)
+            return mutation
+        def sums_without(name):
+            def mutation(files):
+                files["SHA256SUMS"] = b"".join(line for line in files["SHA256SUMS"].splitlines(True) if not line.endswith(f"  {name}\n".encode()))
+            return mutation
+        def stale_sum(files):
+            files["ditero-cli.js"] += b"tampered"
+        info = lambda files: json.loads(files["BUILDINFO.json"])
+        def set_info(**changes):
+            def mutation(files):
+                files["BUILDINFO.json"] = json.dumps({**info(files), **changes}).encode()
+                rehash(files)
+            return mutation
+        rejected = {
+            "missing bundle": drop("ditero-mcp.js"),
+            "missing notices": drop("THIRD_PARTY_NOTICES.txt"),
+            "missing checksum list": drop("SHA256SUMS", hashed=False),
+            "checksum omits bundle": sums_without("ditero-tui.js"),
+            "checksum omits notices": sums_without("THIRD_PARTY_NOTICES.txt"),
+            "modified bundle": stale_sum,
+            "no shebang": replace("ditero-cli.js", b"console.log(1)\n"),
+            "no minimum check": replace("ditero-cli.js", b"#!/usr/bin/env bun\nconsole.log(1)\n"),
+            "source map": replace("ditero-cli.js", b'#!/usr/bin/env bun\n{const m=[%s]}\n//# sourceMappingURL=x.map\n' % release.minimum_bun().replace(".", ",").encode()),
+            "notice without text": replace("THIRD_PARTY_NOTICES.txt", ("=" * 72 + "\nzod@4.4.3 (MIT)\n" + "=" * 72 + "\n\n").encode()),
+            "notice for another package": replace("THIRD_PARTY_NOTICES.txt", ("=" * 72 + "\nother@1.0.0 (MIT)\n" + "=" * 72 + "\n\n" + "MIT License permission " * 10).encode()),
+            "undeclared dependency": set_info(dependencies=["zod@4.4.3", "extra@1.0.0"]),
+            "dirty source": set_info(sourceDirty=True),
+            "wrong commit": set_info(sourceSha="b" * 40),
+            "wrong minimum": set_info(minimumBun="1.0.0"),
+            "wrong target": set_info(target="bun-linux-x64"),
+            "extra file": lambda files: files.update({"private.env": b"secret"}),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "clients.tar.gz"
+            self.bundle_archive(path, sha)
+            release.verify_clients(path, "0.0.1-alpha.1", sha)
+            for name, mutation in rejected.items():
+                with self.subTest(name):
+                    self.bundle_archive(path, sha, mutation)
+                    with self.assertRaises(ValueError):
+                        release.verify_clients(path, "0.0.1-alpha.1", sha)
+            self.bundle_archive(path, sha, sourceDirty=True)
+            release.verify_clients(path, "0.0.1-alpha.1", sha, allow_dirty=True)
+
+    def test_client_bundle_archive_rejects_links_and_unexpected_paths(self):
+        sha = "a" * 40
+        with tempfile.TemporaryDirectory() as directory:
+            source, path = Path(directory) / "source.tar.gz", Path(directory) / "clients.tar"
+            self.bundle_archive(source, sha)
+            for name, kind in (("link", tarfile.SYMTYPE), ("nested/file", tarfile.REGTYPE), ("../escape", tarfile.REGTYPE), (".hidden", tarfile.REGTYPE), ("ditero-cli.js", tarfile.REGTYPE)):
+                with self.subTest(name=name), tarfile.open(source) as original, tarfile.open(path, "w") as archive:
+                    for member in original.getmembers():
+                        archive.addfile(member, original.extractfile(member))
+                    member = tarfile.TarInfo(f"ditero-0.0.1-alpha.1-clients/{name}")
+                    member.type = kind
+                    member.linkname = "outside"
+                    member.size = 1 if kind == tarfile.REGTYPE else 0
+                    archive.addfile(member, io.BytesIO(b"x") if member.size else None)
+                with self.assertRaises(ValueError):
+                    release.verify_clients(path, "0.0.1-alpha.1", sha)
+
+    def test_publish_refuses_a_release_with_an_invalid_client_archive(self):
+        version = release.metadata()["version"]
+        sha = "a" * 40
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            for name in release.expected_assets(version):
+                (output / name).write_bytes(b"artifact")
+            def command(*args):
+                return sha
+            env = {"TAG": f"v{version}", "REPO": "owner/repo", "RELEASE_SHA": sha}
+            with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release.subprocess, "run") as run:
+                with self.assertRaises(tarfile.ReadError):
+                    release.publish(output)
+                run.assert_not_called()
 
     def client_archive(self, path, source_sha, **changes):
         version = "0.0.1-alpha.1"
@@ -206,7 +318,7 @@ class ReleaseTests(unittest.TestCase):
                 info["runtimeNoticesManifestSha256"] = hashlib.sha256(raw).hexdigest()
                 files["BUILDINFO.json"] = json.dumps(info).encode()
             self.mutate_runtime_archive(original, candidate, include_notices)
-            release.verify_clients_candidate(candidate, "0.0.1-alpha.1", sha)
+            release.verify_standalone_candidate(candidate, "0.0.1-alpha.1", sha)
             destination = Path(directory) / "extracted"
             with tarfile.open(candidate) as archive:
                 archive.extractall(destination, filter="data")
@@ -222,14 +334,14 @@ class ReleaseTests(unittest.TestCase):
             path = Path(directory) / "clients.tar.gz"
             sha = "a" * 40
             self.client_archive(path, sha)
-            release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+            release.verify_standalone_candidate(path, "0.0.1-alpha.1", sha)
             self.client_archive(path, sha, sourceDirty=True)
-            release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+            release.verify_standalone_candidate(path, "0.0.1-alpha.1", sha)
             for changes in ({"runtimeNoticesComplete": True}, {"sourceDirty": 0}, {"sourceSha": "b" * 40}, {"bunRevision": "b" * 40}, {"runtimeArchiveSha256": "b" * 64}, {"target": "bun-linux-arm64"}, {"apiVersion": True}, {"dependencies": ["private.env"]}):
                 with self.subTest(changes=changes):
                     self.client_archive(path, sha, **changes)
                     with self.assertRaises(ValueError):
-                        release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+                        release.verify_standalone_candidate(path, "0.0.1-alpha.1", sha)
 
     def test_client_archive_rejects_unexpected_paths_and_links(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -247,7 +359,7 @@ class ReleaseTests(unittest.TestCase):
                     member.size = 1 if kind == tarfile.REGTYPE else 0
                     archive.addfile(member, io.BytesIO(b"x") if member.size else None)
                 with self.assertRaises(ValueError):
-                    release.verify_clients_candidate(path, "0.0.1-alpha.1", sha)
+                    release.verify_standalone_candidate(path, "0.0.1-alpha.1", sha)
 
     def mutate_runtime_archive(self, source, destination, mutation):
         prefix = "ditero-0.0.1-alpha.1-clients-linux-x64/"
@@ -296,7 +408,7 @@ class ReleaseTests(unittest.TestCase):
                 with self.subTest(index=index):
                     self.mutate_runtime_archive(source, changed, lambda files: change(files, mutation))
                     with self.assertRaises(ValueError):
-                        release.verify_clients_candidate(changed, "0.0.1-alpha.1", "a" * 40)
+                        release.verify_standalone_candidate(changed, "0.0.1-alpha.1", "a" * 40)
 
     def test_runtime_archive_partition_and_duplicate_json_refusals(self):
         def duplicate(files, name):
@@ -321,7 +433,7 @@ class ReleaseTests(unittest.TestCase):
                 with self.subTest(index=index):
                     self.mutate_runtime_archive(source, changed, mutation)
                     with self.assertRaises(ValueError):
-                        release.verify_clients_candidate(changed, "0.0.1-alpha.1", "a" * 40)
+                        release.verify_standalone_candidate(changed, "0.0.1-alpha.1", "a" * 40)
 
     def test_deployment_requires_matching_kustomize_images(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(release, "ROOT", Path(directory)), patch.object(release, "metadata", return_value={"version": "0.0.1-alpha.1"}), patch.object(release.subprocess, "run") as run:

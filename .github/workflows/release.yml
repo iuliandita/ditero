@@ -86,6 +86,37 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  clients:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # actions/attest-build-provenance
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run build:clients
+      - name: Validate the bundles against this exact commit
+        run: python3 scripts/release.py clients --output out/clients
+      - name: Attest build provenance (terminal clients)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: out/clients/*-clients.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-clients
+          path: out/clients/*-clients.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
   # The Compose stack pins zero-cache to <tag>-zero, so a release that publishes
   # only the app image leaves the stack unrunnable without a checkout. Its base is
   # rocicorp/zero, not ${RUNTIME_IMAGE}, so it is variant-independent and runs once
@@ -415,7 +446,7 @@ jobs:
           retention-days: 30
 
   publish:
-    needs: [prepare, native, deployment, docker, docker-zero]
+    needs: [prepare, native, deployment, clients, docker, docker-zero]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
