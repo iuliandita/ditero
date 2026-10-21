@@ -71,6 +71,15 @@ export async function desktop(application: string) {
 			};
 			if (process.platform === "win32") {
 				const debugPort = await freePort();
+				run("pwsh", [
+					"-NoProfile",
+					"-File",
+					resolve(root, "apps/desktop/tests/journeys/windows-webview.ps1"),
+					"-Port",
+					String(debugPort),
+					"-Profile",
+					resolve(state, "webview-profile"),
+				]);
 				app = background("desktop", application, [], {
 					...process.env,
 					WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort} --disable-gpu`,
