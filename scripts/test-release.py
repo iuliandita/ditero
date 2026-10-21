@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import tempfile
 import shutil
+import subprocess
 import tarfile
 import unittest
 from unittest.mock import patch
@@ -166,8 +167,17 @@ class ReleaseTests(unittest.TestCase):
                 archive.addfile(member, io.BytesIO(content))
 
     def test_extracted_candidate_contains_verified_runtime_source_notices(self):
-        source = release.ROOT / "vendor/client-runtime-notices"
-        raw = (source / "manifest.json").read_bytes()
+        # Check committed bytes so local CRLF files cannot hide Git normalization.
+        committed = subprocess.run(
+            ["git", "archive", "HEAD", "vendor/client-runtime-notices"],
+            cwd=release.ROOT, check=True, capture_output=True,
+        ).stdout
+        with tarfile.open(fileobj=io.BytesIO(committed)) as archive:
+            retained = {
+                member.name.removeprefix("vendor/client-runtime-notices/"): archive.extractfile(member).read()
+                for member in archive.getmembers() if member.isfile()
+            }
+        raw = retained["manifest.json"]
         manifest = json.loads(raw)
         required = {
             "bun/FormatStackTraceForJS-NOTICE.txt", "bun/clap-LICENSE",
@@ -191,7 +201,7 @@ class ReleaseTests(unittest.TestCase):
                         del files[name]
                 files["notices/runtime/manifest.json"] = raw
                 for name in records:
-                    files[name] = (source / name.removeprefix("notices/runtime/")).read_bytes()
+                    files[name] = retained[name.removeprefix("notices/runtime/")]
                 info = json.loads(files["BUILDINFO.json"])
                 info["runtimeNoticesManifestSha256"] = hashlib.sha256(raw).hexdigest()
                 files["BUILDINFO.json"] = json.dumps(info).encode()
