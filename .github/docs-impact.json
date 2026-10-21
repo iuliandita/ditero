@@ -23,6 +23,11 @@
 			"docs": ["apps/desktop/README.md"],
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		},
+		"authentication": {
+			"sourceDigest": "b7378d045bf86ce9b8c87f19f4483d973f9bbfa4df65140a5585e987fc6a3cf9",
+			"docs": ["docs/runbooks/native-authentication.md"],
+			"note": "Document retryable browser token lookup failures while retaining authoritative session verification and 401 for missing, expired or revoked sessions."
+		},
 		"compatibility": {
 			"sourceDigest": "3d8524a7a1b355e851b1a0b2bf9eb05e30355bb0f13eb2bfb3ea92ab7667a304",
 			"docs": ["docs/runbooks/database-roles.md"],
