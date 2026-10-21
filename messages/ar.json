@@ -1,5 +1,11 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"account_display_name": "الاسم المعروض",
+	"account_name_signup_hint": "اترك الحقل فارغًا لاستخدام الجزء من بريدك الإلكتروني الذي يسبق @.",
+	"account_name_invalid": "استخدم من 1 إلى 80 حرفًا دون محارف تحكم.",
+	"account_name_save": "حفظ الاسم",
+	"account_name_saved": "تم حفظ الاسم المعروض.",
+	"account_name_failed": "تعذر حفظ اسمك المعروض.",
 	"theme_editor_accent_note": "احفظ تعديل السمة أو ألغِه لاختيار لون تمييز.",
 	"theme_editor_customize": "تخصيص السمة",
 	"theme_editor_heading": "تعديل السمة",

@@ -1,5 +1,11 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"account_display_name": "Nume afișat",
+	"account_name_signup_hint": "Lasă câmpul gol pentru a folosi partea adresei de e-mail dinainte de @.",
+	"account_name_invalid": "Folosește între 1 și 80 de caractere, fără caractere de control.",
+	"account_name_save": "Salvează numele",
+	"account_name_saved": "Numele afișat a fost salvat.",
+	"account_name_failed": "Numele afișat nu a putut fi salvat.",
 	"theme_editor_accent_note": "Salvează sau anulează editarea temei ca să alegi un accent.",
 	"theme_editor_customize": "Personalizează tema",
 	"theme_editor_heading": "Editează tema",

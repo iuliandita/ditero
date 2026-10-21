@@ -83,3 +83,10 @@ and the server logs `Provider not found`.
 
 New providers depend on a Better Auth upgrade,
 [#1062](https://github.com/iuliandita/ditero/issues/1062).
+
+## Display names
+
+Email sign-up accepts a display name; leaving it blank uses the email local part.
+Change it in Settings > Account in the browser (native clients open browser settings).
+Names are trimmed and limited to 1-80 characters without control characters.
+Changes appear in synced member and assignee displays. Avatars are not editable.

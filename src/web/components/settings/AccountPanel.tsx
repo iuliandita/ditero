@@ -1,10 +1,16 @@
 import { LogOut } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+	DISPLAY_NAME_MAX_LENGTH,
+	normalizeDisplayName,
+} from "../../../auth/display-name.ts";
 import { m } from "../../../paraglide/messages.js";
 import { authClient } from "../../lib/auth-client.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { useNativeAccount } from "../../lib/native-account.tsx";
+import { Input } from "../ui/input.tsx";
+import { NativeBrowserSettings } from "./NativeBrowserSettings.tsx";
 
 export function AccountPanel() {
 	const native = useNativeAccount();
@@ -17,7 +23,12 @@ export function AccountPanel() {
 
 function BrowserAccountPanel() {
 	const { data: session } = authClient.useSession();
-	return <AccountContent profile={session?.user} />;
+	return (
+		<>
+			<AccountContent profile={session?.user} />
+			<DisplayNameForm name={session?.user.name ?? ""} />
+		</>
+	);
 }
 
 function AccountContent({
@@ -69,6 +80,7 @@ function AccountContent({
 					{m.security_sign_out()}
 				</Button>
 			</div>
+			{native && <NativeBrowserSettings />}
 			{native && (
 				<div className="mt-3 flex flex-wrap items-center justify-between gap-3">
 					<p className="min-w-0 break-all text-sm text-muted-foreground">
@@ -97,5 +109,74 @@ function AccountContent({
 				</p>
 			)}
 		</div>
+	);
+}
+
+function DisplayNameForm({ name }: { name: string }) {
+	const [value, setValue] = useState(name);
+	const [saving, setSaving] = useState(false);
+	const [message, setMessage] = useState<string | null>(null);
+	useEffect(() => setValue(name), [name]);
+	return (
+		<form
+			className="mt-4 space-y-2"
+			onSubmit={async (event) => {
+				event.preventDefault();
+				if (saving) return;
+				let normalized: string;
+				try {
+					normalized = normalizeDisplayName(value);
+				} catch {
+					setMessage(m.account_name_invalid());
+					return;
+				}
+				setSaving(true);
+				setMessage(null);
+				try {
+					const result = await authClient.updateUser({ name: normalized });
+					if (result.error) {
+						setMessage(m.account_name_failed());
+						return;
+					}
+					setValue(normalized);
+					setMessage(m.account_name_saved());
+				} catch {
+					setMessage(m.account_name_failed());
+				} finally {
+					setSaving(false);
+				}
+			}}
+		>
+			<label htmlFor="account-display-name" className="text-sm font-medium">
+				{m.account_display_name()}
+			</label>
+			<div className="flex gap-2">
+				<Input
+					id="account-display-name"
+					data-testid="account-display-name"
+					autoComplete="name"
+					maxLength={DISPLAY_NAME_MAX_LENGTH}
+					value={value}
+					onChange={(event) => {
+						setValue(event.target.value);
+						setMessage(null);
+					}}
+					disabled={saving}
+					required
+				/>
+				<Button
+					type="submit"
+					data-testid="save-display-name"
+					disabled={saving || value === name}
+				>
+					{m.account_name_save()}
+				</Button>
+			</div>
+			{message && (
+				<p role="status" className="text-sm">
+					{message}
+				</p>
+			)}
+		</form>
 	);
 }

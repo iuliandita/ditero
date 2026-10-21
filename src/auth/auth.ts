@@ -12,6 +12,7 @@ import {
 } from "../server/client-ip.ts";
 import { zeroJwtOptions } from "../server/zero-auth.ts";
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
+import { normalizeDisplayName, signupDisplayName } from "./display-name.ts";
 import { withFieldEncryption } from "./encrypted-adapter.ts";
 import { emailHasRedeemableInvite } from "./invite-bypass.ts";
 import { mailUnavailableResponse, sendAuthMail } from "./mail.ts";
@@ -62,6 +63,18 @@ async function registeredUserCount(): Promise<number> {
 	return result.value;
 }
 
+function validDisplayName(normalize: () => string): string {
+	try {
+		return normalize();
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			code: "INVALID_DISPLAY_NAME",
+			message:
+				"Use 1-80 characters without control characters for your display name",
+		});
+	}
+}
+
 export const auth = betterAuth({
 	appName: "Ditero",
 	database: authDatabase,
@@ -96,8 +109,24 @@ export const auth = betterAuth({
 	}),
 	databaseHooks: {
 		user: {
+			update: {
+				before: async (data) =>
+					typeof data.name === "undefined"
+						? undefined
+						: {
+								data: {
+									...data,
+									name: validDisplayName(() =>
+										normalizeDisplayName(data.name as string),
+									),
+								},
+							},
+			},
 			create: {
 				before: async (newUser) => {
+					const name = validDisplayName(() =>
+						signupDisplayName(newUser.name, newUser.email),
+					);
 					try {
 						const invited =
 							registrationBypassActive() ||
@@ -120,6 +149,7 @@ export const auth = betterAuth({
 									: undefined,
 						});
 					}
+					return { data: { ...newUser, name } };
 				},
 				after: async (user) => {
 					try {
