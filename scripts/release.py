@@ -339,6 +339,21 @@ CLIENT_BUNDLES = ("ditero-cli.js", "ditero-mcp.js", "ditero-tui.js")
 CLIENT_FILES = (*CLIENT_BUNDLES, "THIRD_PARTY_NOTICES.txt", "LICENSE", "BUILDINFO.json", "SHA256SUMS")
 
 
+CLIENT_MARKER = re.compile(rb"/\*! ditero-package: (\S+) \*/")
+CLIENT_LEAKS = {
+    "absolute home or build path": re.compile(rb"/(?:home|Users|root)/[A-Za-z0-9._-]+|[A-Za-z]:\\Users\\|/(?:github/workspace|__w|actions-runner|runner/work)/|priv/code"),
+    "private-looking host or address": re.compile(
+        rb"(?<![0-9.])(?:10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}(?![0-9])"
+        rb"|[\"'`@/][A-Za-z0-9.-]+\.(?:local|lan|internal|home\.arpa|ditas\.cc|rubean\.io|phonepos\.online)[:/\"'`]"),
+    "environment file content": re.compile(rb"(?m)^[A-Z][A-Z0-9_]{3,}=\S|\b(?:DATABASE_URL|BETTER_AUTH_SECRET|DITERO_[A-Z_]*(?:KEY|SECRET|TOKEN|PASSWORD)|[A-Z_]*PASSWORD)=[^\s\"'`$]{4,}"),
+    "secret": re.compile(
+        rb"-----BEGIN [A-Z ]*PRIVATE KEY-----"
+        rb"|\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{36}"
+        rb"|(?:AKIA|ASIA)[0-9A-Z]{16}|xox[abprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{20,})\b"
+        rb"|\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
+}
+
+
 def minimum_bun() -> str:
     found = re.search(r'MINIMUM_BUN = "(\d+\.\d+\.\d+)"', (ROOT / "src/clients/build-info.ts").read_text())
     if found is None:
@@ -377,6 +392,10 @@ def verify_clients(path: Path, version: str, source_sha: str, allow_dirty: bool 
             raise ValueError(f"Client bundle lacks the shebang or minimum Bun check: {name}")
         if b"sourceMappingURL" in bundle:
             raise ValueError(f"Client bundle links a source map: {name}")
+    for name in (*CLIENT_BUNDLES, "BUILDINFO.json"):
+        for label, pattern in CLIENT_LEAKS.items():
+            if pattern.search(content[name]):
+                raise ValueError(f"Client file contains a {label}: {name}")
     if len(content["BUILDINFO.json"]) > 65536:
         raise ValueError("Client build identity exceeds its size bound")
     info = strict_json(content["BUILDINFO.json"])
@@ -386,6 +405,8 @@ def verify_clients(path: Path, version: str, source_sha: str, allow_dirty: bool 
         raise ValueError("Client bundles were built from modified source")
     if (info.get("version"), info.get("sourceSha"), info.get("target"), info.get("apiVersion"), info.get("clients"), info.get("minimumBun")) != (version, source_sha, "bun", 1, list(CLIENT_BUNDLES), minimum):
         raise ValueError("Client archive source identity mismatch")
+    if not isinstance(info.get("buildBun"), str) or not re.fullmatch(r"\d+\.\d+\.\d+", info["buildBun"]):
+        raise ValueError("Client build identity lacks the building Bun version")
     dependencies = info.get("dependencies")
     if (not isinstance(dependencies, list) or not dependencies or len(dependencies) > 100 or len(set(dependencies)) != len(dependencies)
             or any(not isinstance(name, str) or not re.fullmatch(r"(?:@[a-z0-9._~-]+/)?[a-z0-9._~-]+@[0-9][A-Za-z0-9.+-]*", name) for name in dependencies)):
@@ -409,6 +430,12 @@ def verify_clients(path: Path, version: str, source_sha: str, allow_dirty: bool 
     for dependency, body in bodies.items():
         if len(body.strip()) < 100 or not re.search(r"licen[sc]e|permission|copyright", body, re.I):
             raise ValueError(f"Missing license text for bundled dependency: {dependency}")
+    for name in CLIENT_BUNDLES:
+        bundled = {found.decode() for found in CLIENT_MARKER.findall(content[name])}
+        if not bundled:
+            raise ValueError(f"Client bundle lacks its bundled package markers: {name}")
+        if bundled - set(bodies):
+            raise ValueError(f"Client bundle contains code from a package missing in the notices: {name}: {sorted(bundled - set(bodies))}")
 
 
 def clients_attestation_args(archive: str, repo: str, sha: str) -> list[str]:

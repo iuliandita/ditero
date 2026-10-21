@@ -1,4 +1,4 @@
-import { execFile, spawn, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -379,6 +379,37 @@ test("packaged bundle MCP stdio rejects strict inputs before HTTP and rechecks r
 	).toMatchObject({ error: { status: 401 } });
 	expect(wires).toHaveLength(1);
 	expect(await counts()).toEqual({ history: 0, karma: 0, receipts: 0 });
+}, 30_000);
+
+test("every package bundled into a client has a license notice and the build records its Bun", async () => {
+	const notices = await readFile(
+		join(packaged.extracted, "THIRD_PARTY_NOTICES.txt"),
+		"utf8",
+	);
+	const listed = new Set(
+		[...notices.matchAll(/^={72}\n(\S+) \(.*\)\n={72}$/gm)].map(
+			(match) => match[1],
+		),
+	);
+	expect(new Set(packaged.info.dependencies)).toEqual(listed);
+	const bundled = new Set<string>();
+	for (const file of Object.values(bundleNames)) {
+		const text = await readFile(join(packaged.extracted, file), "utf8");
+		const marked = [...text.matchAll(/\/\*! ditero-package: (\S+) \*\//g)];
+		expect(marked.length, file).toBeGreaterThan(0);
+		for (const match of marked) {
+			bundled.add(match[1]);
+			expect(listed, `${file} ${match[1]}`).toContain(match[1]);
+		}
+	}
+	for (const name of ["ajv", "fast-uri", "json-schema-traverse"])
+		expect(
+			[...bundled].some((id) => id.startsWith(`${name}@`)),
+			name,
+		).toBe(true);
+	expect(packaged.info.buildBun).toBe(
+		execFileSync("bun", ["--version"], { encoding: "utf8" }).trim(),
+	);
 }, 30_000);
 
 test("bundles report JSON identity, ignore hostile working-directory config, and refuse an unsupported Bun", async () => {

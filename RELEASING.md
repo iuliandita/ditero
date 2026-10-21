@@ -14,8 +14,11 @@ Every push and PR builds Android development APKs and unsigned or ad-hoc desktop
 installers. These test artifacts expire after seven days. Release packaging checks
 also retain Helm, Kustomize and Compose packages for 30 days. The same checks build
 the terminal client bundles, verify their identity, checksums and third-party
-notices, and run them against a real database on the newest and the minimum
-supported Bun (`MINIMUM_BUN` in `src/clients/build-info.ts`).
+notices, and run them against a real database on the Bun pinned in
+`release-checks.yml` and on the minimum supported Bun (`MINIMUM_BUN` in
+`src/clients/build-info.ts`). The release gate also rejects a bundle containing code
+from a package missing in the notices, or an absolute home or build path, a
+private-looking host or address, environment-file content or a common secret shape.
 
 Tagged releases include:
 

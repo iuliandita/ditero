@@ -11,8 +11,8 @@ Each release publishes `ditero-VERSION-clients.tar.gz` with the CLI
 (`ditero-tui.js`) as minified JavaScript bundles. They run on a Bun you install
 yourself, on any operating system where Bun 1.3.14 or newer runs. They are not
 standalone executables and Node.js cannot run them; standalone binaries are on the
-[roadmap](ROADMAP.md). Releases are checked on Linux x64 with the newest and the
-minimum Bun; Windows and macOS are not part of that qualification, and the terminal
+[roadmap](ROADMAP.md). Releases are checked on Linux x64 with the Bun pinned in the
+release checks and with the minimum Bun; Windows and macOS are not part of that qualification, and the terminal
 UI needs an interactive POSIX terminal.
 
 ```sh
@@ -29,7 +29,9 @@ The archive has no separate signature file: the attestation is its keyless-signe
 provenance and the checksums only detect corrupted or altered downloads.
 
 The archive holds the three bundles, `THIRD_PARTY_NOTICES.txt` (license text for every
-bundled npm package), `LICENSE`, `BUILDINFO.json` and `SHA256SUMS`. Each bundle starts
+bundled npm package, including packages inlined into a dependency's own files; where
+no copy of the inlined version is installed, the text comes from the installed copy of
+the same package and the entry says so), `LICENSE`, `BUILDINFO.json` and `SHA256SUMS`. Each bundle starts
 with the shebang `#!/usr/bin/env -S bun --no-env-file --config=/dev/null`, so
 `./ditero-cli.js` (with `bun` on `PATH`) ignores a `.env` and a `bunfig.toml` in the
 working directory; Bun would otherwise load the first and run `preload` code from the
@@ -39,7 +41,11 @@ from a directory you control.
 `--version` prints one JSON line with the client name, release version, source commit,
 whether the source was modified, the minimum Bun and the running Bun. An older Bun
 exits with status 2 and a message before any client code runs. Source maps are not
-published; rebuild the exact tagged commit with `bun run build:clients`.
+published. `BUILDINFO.json` records the Bun that built the archive (`buildBun`) and
+the source commit. To reproduce the archive, check out the tag (its commit is
+`sourceSha`), run `bun install --frozen-lockfile`, and run `bun run build:clients`
+with that Bun; another Bun can produce different bytes. The build needs GNU tar
+(`gtar` on macOS, from `brew install gnu-tar`) and stops with an error otherwise.
 
 The bundles support exactly the operations in this guide, the [MCP tools](mcp.md) and
 the [terminal interface](tui.md); they add no commands. They need only the public API

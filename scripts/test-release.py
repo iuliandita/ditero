@@ -182,10 +182,10 @@ class ReleaseTests(unittest.TestCase):
         version = "0.0.1-alpha.1"
         prefix = f"ditero-{version}-clients"
         minimum = release.minimum_bun()
-        banner = release.CLIENT_SHEBANG + f'{{const m=[{minimum.replace(".", ",")}];}}\nconsole.log("bundle");\n'.encode()
+        banner = release.CLIENT_SHEBANG + f'{{const m=[{minimum.replace(".", ",")}];}}\n/*! ditero-package: zod@4.4.3 */\nconsole.log("bundle");\n'.encode()
         notice = ("=" * 72 + "\nzod@4.4.3 (MIT)\n" + "=" * 72 + "\n\nLICENSE\n\nMIT License\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software.\n").encode()
         info = {"version": version, "sourceSha": source_sha, "sourceDirty": False, "target": "bun",
-                "apiVersion": 1, "minimumBun": minimum, "clients": list(release.CLIENT_BUNDLES),
+                "apiVersion": 1, "minimumBun": minimum, "buildBun": "1.4.2", "clients": list(release.CLIENT_BUNDLES),
                 "dependencies": ["zod@4.4.3"]}
         info.update(changes)
         files = {name: banner for name in release.CLIENT_BUNDLES}
@@ -202,6 +202,16 @@ class ReleaseTests(unittest.TestCase):
 
     def test_client_bundles_require_every_bundle_checksum_and_notice(self):
         sha = "a" * 40
+        banner = release.CLIENT_SHEBANG + b"{const m=[%s]}\n/*! ditero-package: zod@4.4.3 */\n" % release.minimum_bun().replace(".", ",").encode()
+        leaks = {
+            "home path": b'const d="/home/builder/ditero/src";\n',
+            "macOS home path": b'const d="/Users/builder/ditero";\n',
+            "private address": b'const u="http://192.168.1.20:3000";\n',
+            "private hostname": b'const u="https://db.corp.local/";\n',
+            "environment file": b"DATABASE_URL=postgres://u:pw@db/app\nDITERO_ENCRYPTION_KEY=abcdef0123\n",
+            "private key": b"-----BEGIN OPENSSH PRIVATE KEY-----\n",
+            "token": b'const t="ghp_' + b"a1" * 20 + b'";\n',
+        }
         def rehash(files):
             files["SHA256SUMS"] = "".join(f"{hashlib.sha256(files[name]).hexdigest()}  {name}\n" for name in release.CLIENT_FILES if name != "SHA256SUMS" and name in files).encode()
         def drop(name, hashed=True):
@@ -246,6 +256,12 @@ class ReleaseTests(unittest.TestCase):
             "wrong minimum": set_info(minimumBun="1.0.0"),
             "wrong target": set_info(target="bun-linux-x64"),
             "extra file": lambda files: files.update({"private.env": b"secret"}),
+            "no building Bun version": set_info(buildBun=None),
+            "bundle without package markers": replace("ditero-tui.js", release.CLIENT_SHEBANG + b"{const m=[%s]}\n" % release.minimum_bun().replace(".", ",").encode()),
+            "bundle with code from a package missing in the notices": replace("ditero-mcp.js", banner + b"/*! ditero-package: ajv@8.18.0 */\n"),
+            "bundle with a package missing from the dependency inventory": replace("ditero-cli.js", banner + b"/*! ditero-package: extra@1.0.0 */\n"),
+            **{f"{label} in a bundle": replace("ditero-cli.js", banner + leak) for label, leak in leaks.items()},
+            "absolute path in the build identity": set_info(note="/home/runner/work/ditero"),
         }
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "clients.tar.gz"
