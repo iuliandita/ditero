@@ -77,6 +77,12 @@ describe("authErrorMessage", () => {
 		);
 	});
 
+	test("localizes the registration outage code", () => {
+		expect(
+			authErrorMessage({ code: "REGISTRATION_UNAVAILABLE" }, fallback),
+		).toBe("Registration is temporarily unavailable. Try again in a moment.");
+	});
+
 	test("distinguishes an untrusted origin from the registration gate", () => {
 		const origin = authErrorMessage(
 			{ code: "INVALID_ORIGIN", message: "Invalid origin" },
