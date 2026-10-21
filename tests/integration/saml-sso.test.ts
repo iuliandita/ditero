@@ -475,6 +475,50 @@ describe("assertion verification", () => {
 		);
 	});
 
+	test("refuses an oversized callback before buffering it", async () => {
+		const app = await boot("open");
+		const flow = await beginFlow(app);
+		const response = await app.handleAuthRequest(
+			new Request(flow.acs, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"content-length": "2000000",
+				},
+				body: "SAMLResponse=x",
+			}),
+		);
+		expect(response.status).toBe(413);
+	});
+
+	test.each<[string, string, string]>([
+		[
+			"a duplicated SAMLResponse",
+			"application/x-www-form-urlencoded",
+			"SAMLResponse=a&SAMLResponse=b",
+		],
+		[
+			"a duplicated RelayState",
+			"application/x-www-form-urlencoded",
+			"SAMLResponse=a&RelayState=a&RelayState=b",
+		],
+		["a non-form body", "application/json", '{"SAMLResponse":"a"}'],
+		["a multipart body", "multipart/form-data; boundary=x", "--x--"],
+		["no SAMLResponse", "application/x-www-form-urlencoded", "RelayState=a"],
+	])("refuses %s", async (_name, type, body) => {
+		const app = await boot("open");
+		const flow = await beginFlow(app);
+		const response = await app.handleAuthRequest(
+			new Request(flow.acs, {
+				method: "POST",
+				headers: { "content-type": type },
+				body,
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(await userCount()).toBe(0);
+	});
+
 	test("refuses a response for another provider ID", async () => {
 		const app = await boot("open");
 		const flow = await beginFlow(app);

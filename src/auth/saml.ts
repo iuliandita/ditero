@@ -3,8 +3,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
 	DEFAULT_MAX_SAML_METADATA_SIZE,
+	DigestAlgorithm,
 	deriveSAMLIdentityProviderEntityID,
 	type SAMLConfig,
+	SignatureAlgorithm,
 	type SSOOptions,
 	type SSOUserResolution,
 	type SSOUserResolutionInput,
@@ -260,22 +262,41 @@ export function linkIdentifier(relayState: string): string {
 	return `${LINK_IDENTIFIER_PREFIX}${relayState}`;
 }
 
-const DEPRECATED_ALGORITHM =
-	/<(?:[\w.-]+:)?(?:SignatureMethod|DigestMethod)\b[^>]*\bAlgorithm\s*=\s*["'][^"']*(?:sha1|sha-1)[^"']*["']/i;
+const MAX_RESPONSE_BASE64 = 400_000;
+const XML_TAG = /<[^<>]{1,4096}>/g;
+const ALGORITHM_ELEMENT =
+	/^<(?:[\w.-]+:)?(?:SignatureMethod|DigestMethod)(?=[\s/>])/;
+const ALGORITHM_ATTRIBUTE = /\bAlgorithm\s*=\s*(?:"([^"]*)"|'([^']*)')/;
+const STRONG_ALGORITHMS: ReadonlySet<string> = new Set(
+	[
+		...Object.values(SignatureAlgorithm),
+		...Object.values(DigestAlgorithm),
+	].filter((uri) => !/sha1/i.test(uri)),
+);
 
 // The verifier's deprecated-algorithm switch only inspects a response-level
-// signature, so an assertion signed with SHA-1 passes it. This adds a refusal in
-// front of the verifier; it never accepts anything the verifier would not.
-export function usesDeprecatedAlgorithm(samlResponse: unknown): boolean {
-	if (typeof samlResponse !== "string" || samlResponse.length > 1_000_000)
-		return false;
-	try {
-		return DEPRECATED_ALGORITHM.test(
-			Buffer.from(samlResponse.replace(/\s+/g, ""), "base64").toString("utf8"),
-		);
-	} catch {
-		return false;
+// signature, so an assertion signed with SHA-1 passes it. This is a bounded,
+// linear scan placed in front of the verifier that fails closed: any signature
+// or digest method that is not exactly a SHA-2 URI, any DOCTYPE or entity
+// declaration, and any response too large to scan is refused. It never accepts
+// anything the verifier would not.
+export function hasUnapprovedAlgorithm(
+	samlResponse: unknown,
+	checkAlgorithms = true,
+): boolean {
+	if (typeof samlResponse !== "string") return true;
+	const compact = samlResponse.replace(/\s+/g, "");
+	if (compact.length > MAX_RESPONSE_BASE64) return true;
+	const xml = Buffer.from(compact, "base64").toString("utf8");
+	if (/<!(?:DOCTYPE|ENTITY)/i.test(xml)) return true;
+	if (!checkAlgorithms) return false;
+	for (const tag of xml.matchAll(XML_TAG)) {
+		if (!ALGORITHM_ELEMENT.test(tag[0])) continue;
+		const attribute = ALGORITHM_ATTRIBUTE.exec(tag[0]);
+		const uri = attribute?.[1] ?? attribute?.[2];
+		if (uri === undefined || !STRONG_ALGORITHMS.has(uri)) return true;
 	}
+	return false;
 }
 
 export function bindingCookieValue(cookieHeader: string | null): string | null {

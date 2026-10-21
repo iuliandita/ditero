@@ -33,6 +33,7 @@ import { registrationBypassActive } from "./registration-bypass.ts";
 import { registrationAPIError } from "./registration-error.ts";
 import {
 	bindingCookieValue,
+	hasUnapprovedAlgorithm,
 	isSamlAcsPath,
 	LINK_INTENT_TTL_MS,
 	linkIdentifier,
@@ -45,7 +46,6 @@ import {
 	SAML_LINK_QUERY,
 	SAML_METADATA_PATH,
 	samlLinkIntent,
-	usesDeprecatedAlgorithm,
 	validReturnPath,
 } from "./saml.ts";
 import {
@@ -378,18 +378,39 @@ async function dispatchAuth(request: Request): Promise<Response> {
 		!isSamlAcsPath(new URL(request.url).pathname, saml.providerId)
 	)
 		return auth.handler(request);
-	let relayState: FormDataEntryValue | null = null;
-	let samlResponse: FormDataEntryValue | null = null;
+	// The verifier caps a response at 256 KB; nothing larger needs to be buffered.
+	if (Number(request.headers.get("content-length") ?? 0) > 1_048_576)
+		return Response.json({ message: "Payload too large" }, { status: 413 });
+	// The checks below must read exactly what the verifier will read: one
+	// urlencoded form, one SAMLResponse, at most one RelayState. Anything else is
+	// refused instead of passed on.
+	const contentType = request.headers
+		.get("content-type")
+		?.split(";", 1)[0]
+		.trim()
+		.toLowerCase();
+	let relayState: string | null = null;
+	let samlResponse: string | null = null;
 	try {
+		if (contentType !== "application/x-www-form-urlencoded") throw new Error();
 		const form = await request.clone().formData();
-		relayState = form.get("RelayState");
-		samlResponse = form.get("SAMLResponse");
+		const responses = form.getAll("SAMLResponse");
+		const states = form.getAll("RelayState");
+		if (
+			responses.length !== 1 ||
+			states.length > 1 ||
+			typeof responses[0] !== "string" ||
+			(states.length === 1 && typeof states[0] !== "string")
+		)
+			throw new Error();
+		samlResponse = responses[0];
+		relayState = (states[0] as string | undefined) || null;
 	} catch {
-		// A body that is not a form is the package's to reject.
+		return Response.json({ message: "Invalid SAML response" }, { status: 400 });
 	}
-	if (!saml.allowDeprecatedAlgorithms && usesDeprecatedAlgorithm(samlResponse))
+	if (hasUnapprovedAlgorithm(samlResponse, !saml.allowDeprecatedAlgorithms))
 		return Response.redirect(
-			`${new URL(request.url).origin}/?error=invalid_saml_response`,
+			`${new URL(saml.acsURL).origin}/?error=invalid_saml_response`,
 			302,
 		);
 	if (
@@ -398,15 +419,14 @@ async function dispatchAuth(request: Request): Promise<Response> {
 		bindingCookieValue(request.headers.get("cookie")) !== relayState
 	)
 		return Response.redirect(
-			`${new URL(request.url).origin}/?error=sso_browser_mismatch`,
+			`${new URL(saml.acsURL).origin}/?error=sso_browser_mismatch`,
 			302,
 		);
-	const intent =
-		typeof relayState === "string" && relayState
-			? await (await auth.$context).internalAdapter.consumeVerificationValue(
-					linkIdentifier(relayState),
-				)
-			: null;
+	const intent = relayState
+		? await (await auth.$context).internalAdapter.consumeVerificationValue(
+				linkIdentifier(relayState),
+			)
+		: null;
 	let userId: unknown;
 	try {
 		userId = intent ? JSON.parse(intent.value).userId : undefined;

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+	hasUnapprovedAlgorithm,
 	isSamlAcsPath,
 	loadIdpMetadata,
 	parseSamlEnv,
@@ -9,7 +10,6 @@ import {
 	resolveSamlUser,
 	samlLinkIntent,
 	samlProviderId,
-	usesDeprecatedAlgorithm,
 	validReturnPath,
 } from "./saml.ts";
 
@@ -447,51 +447,56 @@ describe("request helpers", () => {
 	});
 });
 
-describe("usesDeprecatedAlgorithm", () => {
+describe("hasUnapprovedAlgorithm", () => {
 	const encode = (xml: string) => Buffer.from(xml).toString("base64");
 	const sig = (method: string, digest: string) =>
 		`<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:SignatureMethod Algorithm="${method}"/><ds:Reference><ds:DigestMethod Algorithm="${digest}"/></ds:Reference></ds:SignedInfo></ds:Signature>`;
+	const RSA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
+	const DIGEST256 = "http://www.w3.org/2001/04/xmlenc#sha256";
 
 	test.each([
 		[
 			"a SHA-1 signature",
-			sig(
-				"http://www.w3.org/2000/09/xmldsig#rsa-sha1",
-				"http://www.w3.org/2001/04/xmlenc#sha256",
-			),
+			sig("http://www.w3.org/2000/09/xmldsig#rsa-sha1", DIGEST256),
 		],
-		[
-			"a SHA-1 digest",
-			sig(
-				"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
-				"http://www.w3.org/2000/09/xmldsig#sha1",
-			),
-		],
+		["a SHA-1 digest", sig(RSA256, "http://www.w3.org/2000/09/xmldsig#sha1")],
 		[
 			"an unprefixed element",
-			'<SignatureMethod Algorithm = "http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>',
+			`<SignatureMethod Algorithm = 'http://www.w3.org/2000/09/xmldsig#rsa-sha1'/>`,
 		],
-	])("flags %s", (_name, xml) => {
-		expect(usesDeprecatedAlgorithm(encode(xml))).toBe(true);
+		["an unknown algorithm", sig("urn:example:md5", DIGEST256)],
+		[
+			"an entity-obscured URI",
+			sig("http://www.w3.org/2000/09/xmldsig#rsa-&#x73;ha1", DIGEST256),
+		],
+		["a method without an Algorithm", "<ds:SignatureMethod/>"],
+		["a DOCTYPE", `<!DOCTYPE x [<!ENTITY a "b">]>${sig(RSA256, DIGEST256)}`],
+	])("refuses %s", (_name, xml) => {
+		expect(hasUnapprovedAlgorithm(encode(xml))).toBe(true);
+		const text = encode(xml);
 		expect(
-			usesDeprecatedAlgorithm(
-				`${encode(xml).slice(0, 8)}\n${encode(xml).slice(8)}`,
-			),
+			hasUnapprovedAlgorithm(`${text.slice(0, 8)}\n${text.slice(8)}`),
 		).toBe(true);
 	});
 
-	test("passes SHA-256 and unrelated input", () => {
-		expect(
-			usesDeprecatedAlgorithm(
-				encode(
-					sig(
-						"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
-						"http://www.w3.org/2001/04/xmlenc#sha256",
-					),
-				),
-			),
-		).toBe(false);
-		expect(usesDeprecatedAlgorithm(undefined)).toBe(false);
-		expect(usesDeprecatedAlgorithm("%%%")).toBe(false);
+	test("passes SHA-2 signatures and digests", () => {
+		expect(hasUnapprovedAlgorithm(encode(sig(RSA256, DIGEST256)))).toBe(false);
+	});
+
+	test("fails closed on non-strings and oversized input, and scans in linear time", () => {
+		expect(hasUnapprovedAlgorithm(undefined)).toBe(true);
+		expect(hasUnapprovedAlgorithm("A".repeat(400_001))).toBe(true);
+		const hostile = encode(`<SignatureMethod ${"Algorithm ".repeat(30_000)}`);
+		const started = performance.now();
+		hasUnapprovedAlgorithm(hostile);
+		expect(performance.now() - started).toBeLessThan(500);
+	});
+
+	test("the algorithm scan can be switched off, the DOCTYPE refusal cannot", () => {
+		const legacy = encode(
+			sig("http://www.w3.org/2000/09/xmldsig#rsa-sha1", DIGEST256),
+		);
+		expect(hasUnapprovedAlgorithm(legacy, false)).toBe(false);
+		expect(hasUnapprovedAlgorithm(encode("<!DOCTYPE x>"), false)).toBe(true);
 	});
 });
