@@ -30,7 +30,7 @@ export type MockRequest = {
 };
 export type MockRoute = (
 	request: MockRequest,
-) => Response | Promise<Response> | undefined;
+) => Response | undefined | Promise<Response | undefined>;
 
 // Replaces global fetch for one test. Any outbound request no route claims
 // fails the test, so nothing reaches a real provider.
@@ -233,6 +233,7 @@ export async function finishOAuth(
 		form?: boolean;
 		origin?: string;
 		extra?: Record<string, string>;
+		allowStatus?: boolean;
 	} = {},
 ): Promise<Outcome> {
 	const params = new URLSearchParams({
