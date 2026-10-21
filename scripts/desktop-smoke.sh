@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Bounded packaging checks; no account, server or credential-store qualification.
-set -euo pipefail
+set -Eeuo pipefail
+trap 'echo "Installer smoke failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 if [[ ${1:-} == --linux-launch ]]; then
   unset WAYLAND_DISPLAY
@@ -66,7 +67,10 @@ case "$platform" in
     image=$(one_package appimage AppImage)
     mkdir "$out/deb" "$out/rpm" "$out/appimage"
     dpkg-deb -x "$deb" "$out/deb"
-    (cd "$out/rpm" && rpm2cpio "$rpm" | cpio -idm --quiet)
+    # cpio can close a pipe at TRAILER before rpm2cpio finishes writing padding.
+    rpm2cpio "$rpm" >"$out/rpm.cpio"
+    (cd "$out/rpm" && cpio -idm --quiet <"$out/rpm.cpio")
+    rm "$out/rpm.cpio"
     chmod +x "$image"
     (cd "$out/appimage" && "$image" --appimage-extract >"$out/appimage-contents.txt")
     linux_contents "$out/deb"
