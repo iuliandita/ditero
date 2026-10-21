@@ -1130,6 +1130,7 @@
 	"focus_stop_aria": "Fokus beenden",
 	"focus_cue_work_complete": "Fokus abgeschlossen",
 	"focus_cue_break_over": "Pause vorbei",
+	"focus_log_failed": "Dieses Intervall konnte nicht gespeichert werden. Es wird nicht erneut versucht.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [
