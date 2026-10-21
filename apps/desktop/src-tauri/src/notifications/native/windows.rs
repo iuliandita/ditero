@@ -63,11 +63,63 @@ pub fn initialize() {
         eprintln!("notification startup withdrawal unconfirmed");
     }
 }
+fn expiration(seconds_from_now: u64) -> Result<IReference<DateTime>> {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| "temporary-unavailable")?
+        .as_secs();
+    PropertyValue::CreateDateTime(DateTime {
+        UniversalTime: ((seconds + 11_644_473_600 + seconds_from_now) * 10_000_000) as i64,
+    })
+    .and_then(|value| value.cast())
+    .map_err(|_| "temporary-unavailable")
+}
+fn register_identity(notifier: &ToastNotifier) -> Result<()> {
+    // Win32 Setting returns ELEMENT_NOT_FOUND before the first toast. Match the
+    // Windows Community Toolkit's suppressed, short-lived identity registration.
+    let xml = XmlDocument::new().map_err(|_| "temporary-unavailable")?;
+    xml.LoadXml(h!("<toast><visual><binding template='ToastGeneric'><text>Ditero</text></binding></visual></toast>"))
+        .map_err(|_| "temporary-unavailable")?;
+    let toast =
+        ToastNotification::CreateToastNotification(&xml).map_err(|_| "temporary-unavailable")?;
+    toast
+        .SetSuppressPopup(true)
+        .map_err(|_| "temporary-unavailable")?;
+    toast
+        .SetTag(h!("permission-probe"))
+        .map_err(|_| "temporary-unavailable")?;
+    toast
+        .SetGroup(h!("ditero-init"))
+        .map_err(|_| "temporary-unavailable")?;
+    toast
+        .SetExpirationTime(&expiration(15)?)
+        .map_err(|_| "temporary-unavailable")?;
+    notifier
+        .Show(&toast)
+        .map_err(|error| failure("register", &error, "temporary-unavailable"))?;
+    let hidden = notifier.Hide(&toast);
+    let removed = ToastNotificationManager::History().and_then(|history| {
+        history.RemoveGroupedTagWithId(
+            h!("permission-probe"),
+            h!("ditero-init"),
+            &HSTRING::from(APP_ID),
+        )
+    });
+    hidden
+        .and(removed)
+        .map_err(|error| failure("register-withdraw", &error, "temporary-unavailable"))
+}
 pub async fn permission(_request: bool) -> Result<()> {
-    match notifier()?
-        .Setting()
-        .map_err(|error| failure("setting", &error, "temporary-unavailable"))?
-    {
+    let notifier = notifier()?;
+    let setting = match notifier.Setting() {
+        Err(error) if error.code().0 == 0x80070490u32 as i32 => {
+            register_identity(&notifier)?;
+            notifier.Setting()
+        }
+        result => result,
+    }
+    .map_err(|error| failure("setting", &error, "temporary-unavailable"))?;
+    match setting {
         NotificationSetting::Enabled => Ok(()),
         _ => Err("denied"),
     }
@@ -120,17 +172,8 @@ impl Backend {
         toast
             .SetGroup(h!("ditero"))
             .map_err(|_| "temporary-unavailable")?;
-        let seconds = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| "temporary-unavailable")?
-            .as_secs();
-        let expires: IReference<DateTime> = PropertyValue::CreateDateTime(DateTime {
-            UniversalTime: ((seconds + 11_644_473_600 + 300) * 10_000_000) as i64,
-        })
-        .and_then(|value| value.cast())
-        .map_err(|_| "temporary-unavailable")?;
         toast
-            .SetExpirationTime(&expires)
+            .SetExpirationTime(&expiration(300)?)
             .map_err(|_| "temporary-unavailable")?;
         let captured = self.owner.clone();
         let send = self.send.clone();

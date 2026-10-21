@@ -41,7 +41,7 @@ pub fn notifications_cli() -> bool {
     use block2::RcBlock;
     use objc2_foundation::NSArray;
     use objc2_user_notifications::{
-        UNNotification, UNNotificationRequest, UNUserNotificationCenter,
+        UNNotification, UNNotificationRequest, UNNotificationSettings, UNUserNotificationCenter,
     };
     use std::ptr::NonNull;
     let center = UNUserNotificationCenter::currentNotificationCenter();
@@ -61,9 +61,17 @@ pub fn notifications_cli() -> bool {
     let pending = rx
         .recv_timeout(Duration::from_secs(3))
         .expect("OS pending notification count");
+    let (tx, rx) = mpsc::sync_channel(1);
+    let settings = RcBlock::new(move |value: NonNull<UNNotificationSettings>| {
+        let _ = tx.send(unsafe { value.as_ref() }.authorizationStatus().0);
+    });
+    center.getNotificationSettingsWithCompletionHandler(&settings);
+    let authorization = rx
+        .recv_timeout(Duration::from_secs(3))
+        .expect("OS authorization status");
     println!(
         "{}",
-        serde_json::json!({"reader":"fresh-os-notification-center","deliveredCount":delivered,"pendingCount":pending})
+        serde_json::json!({"reader":"fresh-os-notification-center","deliveredCount":delivered,"pendingCount":pending,"authorizationStatus":authorization})
     );
     true
 }

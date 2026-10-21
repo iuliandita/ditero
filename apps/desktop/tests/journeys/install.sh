@@ -15,6 +15,8 @@ else
   ditto "$out/mount/Ditero.app" "$HOME/Applications/Ditero.app"
   hdiutil detach "$out/mount"
   codesign --verify --deep --strict "$HOME/Applications/Ditero.app"
+  codesign -d --verbose=4 "$HOME/Applications/Ditero.app" > "$out/evidence/installed-signature.txt" 2>&1
+  sw_vers > "$out/evidence/installed-system.txt"
   application="$HOME/Applications/Ditero.app/Contents/MacOS/ditero-desktop"
   cmp "$application" "$bundle/macos/Ditero.app/Contents/MacOS/ditero-desktop"
 fi

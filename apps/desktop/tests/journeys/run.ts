@@ -31,7 +31,7 @@ const expectedJourneys = [
 	"offline change remains queued",
 	"offline cold start with verified evidence",
 	"reconnect drains durable change",
-	"OS notification shown and clicked",
+	"OS notification permission and interaction",
 	"server switch isolates account and cache",
 	"sign-out clears selected OS-keystore credential",
 	"sign-out clears final OS-keystore credential",
@@ -60,10 +60,14 @@ function record(result: Result) {
 		),
 	);
 }
-async function journey(name: string, action: () => Promise<void>) {
+async function journey(name: string, action: () => Promise<unknown>) {
 	try {
-		await action();
-		record({ journey: name, status: "passed" });
+		const detail = await action();
+		record({
+			journey: name,
+			status: "passed",
+			...(typeof detail === "string" ? { detail } : {}),
+		});
 	} catch (error) {
 		record({ journey: name, status: "failed", detail: String(error) });
 		await app
@@ -410,7 +414,7 @@ try {
 		native.evaluate("!!document.querySelector('#native-push-heading')"),
 	);
 	let pendingNotification = false;
-	await journey("OS notification shown and clicked", async () => {
+	await journey("OS notification permission and interaction", async () => {
 		await until("enable notifications", () =>
 			native.evaluate(
 				"Array.from(document.querySelectorAll('button')).some(e=>e.textContent==='Enable desktop notifications')",
@@ -437,16 +441,71 @@ try {
 		await native.evaluate(
 			"(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent==='Enable desktop notifications').click(); return true })()",
 		);
-		const registration = await until(
-			"desktop registration",
-			async () =>
-				(
+		const permission = await until(
+			"desktop registration or macOS denial",
+			async () => {
+				const registration = (
 					await a.pool.query(
 						"select id,user_id from native_push_registration where provider='desktop'",
 					)
-				).rows[0] as { id: string; user_id: string } | undefined,
+				).rows[0] as { id: string; user_id: string } | undefined;
+				if (registration) return { registration };
+				if (
+					process.platform === "darwin" &&
+					(await native.evaluate(
+						"document.body.textContent.includes('Desktop notification permission is denied. Allow notifications in your system settings, then try again.')",
+					))
+				)
+					return { denied: true };
+				return undefined;
+			},
 		);
 		if (consent?.exitCode === null) consent.kill();
+		if ("denied" in permission) {
+			assert.equal(process.platform, "darwin");
+			assert.equal(notificationSnapshot("notification-permission-denied"), 0);
+			const snapshot = JSON.parse(
+				readFileSync(
+					resolve(evidence, "notification-permission-denied.json"),
+					"utf8",
+				),
+			) as { authorizationStatus: number };
+			assert.equal(snapshot.authorizationStatus, 1);
+			assert.match(
+				readFileSync(resolve(evidence, "installed-signature.txt"), "utf8"),
+				/Signature=adhoc/,
+			);
+			const focus = JSON.parse(
+				readFileSync(
+					resolve(evidence, "notification-permission-focus.json"),
+					"utf8",
+				),
+			) as { frontmost: string };
+			assert.equal(focus.frontmost, "io.ditero.desktop");
+			assert.equal(
+				(
+					await a.pool.query(
+						"select count(*)::int as count from native_push_registration where provider='desktop'",
+					)
+				).rows[0].count,
+				0,
+			);
+			writeFileSync(
+				resolve(evidence, "notification-qualification.json"),
+				JSON.stringify({
+					permission: "denied",
+					reader: "fresh-os-notification-center",
+					signature: "adhoc",
+					showClick: "not-qualified",
+					reason:
+						"Hosted macOS denies authorization for this installed ad-hoc bundle; no permission bypass or credential registration",
+				}),
+			);
+			await native.screenshot("notification-permission-denied");
+			return "OS denial and localized refusal verified; ad-hoc hosted display/click remain unqualified";
+		}
+		const { registration } = permission;
+		assert(registration);
 		await a.pool.query(
 			"insert into notification_outbox(id,recipient_user_id,channel_kind,native_registration_id,payload,idempotency_key,status) values('journey_notification',$1,'nativepush',$2,$3,'journey_notification','sent')",
 			[
@@ -534,6 +593,14 @@ try {
 			45,
 		);
 		pendingNotification = true;
+		writeFileSync(
+			resolve(evidence, "notification-qualification.json"),
+			JSON.stringify({
+				permission: "granted",
+				showClick: "verified",
+				retirement: "positive controls required",
+			}),
+		);
 	}).catch((error) =>
 		console.error(`Notification qualification failed: ${error}`),
 	);

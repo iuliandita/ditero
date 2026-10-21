@@ -139,7 +139,13 @@ The installed Linux journey also verifies popup withdrawal on server switch and
 sign-out, with a displayed notification as a positive control before each action.
 Enable delivery in Settings after signing in. Notifications arrive while Ditero
 is open or minimized; closing the application stops reception. These backends
-remain experimental; the hosted journey matrix checks display and click routing.
+remain experimental. The hosted journey matrix requires real display and click
+routing when permission is granted. On hosted macOS 15, the installed ad-hoc build
+changes from NotDetermined to Denied without showing an Allow dialog, even with
+Ditero frontmost. The journey verifies the fresh OS denial, localized reason, no
+notification registration, and empty OS state. Display, click routing and popup
+retirement on macOS still require an installation with granted system permission;
+those checks are not credited by the hosted refusal check.
 
 System popups contain generic text, never task titles or other task content.
 Opening a popup resolves its destination through the current server and account.
@@ -384,7 +390,7 @@ macOS automation is included only in debug builds, requires explicit process-loc
 test configuration, and is checked for absence from the optimized release binary.
 Its counts-only keystore probe opens fresh OS entries under the installed app
 identity, preserving Keychain access controls and returning no credentials. A
-second debug-only probe reads pending/delivered notification counts from the OS
+second debug-only probe reads authorization status and pending/delivered notification counts from the OS
 under that identity; the optimized release must exclude both probes. Notification
 retirement assertions require a positive pending-notification control before
 server switching or sign-out, then zero pending/delivered notifications.
@@ -393,7 +399,8 @@ A native regression and mutation control verify that normal close waits for
 pending sync-handshake classification before retiring the socket.
 These disposable runner accounts do not qualify download trust, trusted signing,
 notarization, upgrades, or physical devices. Windows/macOS notification backends
-are implemented and covered by the journey workflow; installer success alone
+are implemented and covered by the journey workflow, including explicit macOS
+permission-refusal evidence; installer success alone
 does not qualify notification display or click routing.
 Existing client data, backups, and rollback procedures are unchanged by this test harness.
 macOS worker execution and OPFS/locks still require runtime checks. Revocation/recovery failure
