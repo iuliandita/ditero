@@ -14,7 +14,8 @@ func text(_ element: AXUIElement, _ name: String) -> String {
 print("Accessibility trusted: \(AXIsProcessTrusted())")
 var diagnostic = ""
 for _ in 0..<40 {
-    for process in NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.CoreServicesUIAgent") {
+    for process in NSWorkspace.shared.runningApplications.filter({ $0.localizedName == "CoreServicesUIAgent" || $0.bundleIdentifier?.lowercased() == "com.apple.coreservices.uiagent" }) {
+        print("Inspecting \(process.localizedName ?? "unknown") (\(process.bundleIdentifier ?? "unknown"))")
         let app = AXUIElementCreateApplication(process.processIdentifier)
         let (error, value) = attribute(app, kAXWindowsAttribute)
         guard error == .success, let windows = value as? [AXUIElement] else {
