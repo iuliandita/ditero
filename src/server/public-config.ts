@@ -13,15 +13,23 @@ export function zeroPublicURL(env: PublicEnvironment): string {
 	return env.PUBLIC_ZERO_URL || DEFAULT_ZERO_URL;
 }
 
+export type PublicSsoProvider = { id: string; name: string; protocol: "saml" };
+
 export type PublicConfig = {
 	zeroURL: string;
 	// Optional for older servers and native sync adapters that only need Zero.
 	socialProviders?: string[];
+	// Operator-configured single sign-on, never including credentials or IdP data.
+	ssoProviders?: PublicSsoProvider[];
 };
 
-export function publicConfig(env: PublicEnvironment): PublicConfig {
+export function publicConfig(
+	env: PublicEnvironment,
+	ssoProviders: PublicSsoProvider[] = [],
+): PublicConfig {
 	return {
 		zeroURL: zeroPublicURL(env),
 		socialProviders: Object.keys(socialProvidersFromEnv(env)),
+		ssoProviders,
 	};
 }

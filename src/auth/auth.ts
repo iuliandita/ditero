@@ -1,8 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { passkey } from "@better-auth/passkey";
+import { sso } from "@better-auth/sso";
 import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { jwt, twoFactor } from "better-auth/plugins";
 import { count, isNull } from "drizzle-orm";
 import { validateAuthSecret } from "../config/auth-secret.ts";
@@ -31,6 +32,22 @@ import {
 import { registrationBypassActive } from "./registration-bypass.ts";
 import { registrationAPIError } from "./registration-error.ts";
 import {
+	bindingCookieValue,
+	isSamlAcsPath,
+	LINK_INTENT_TTL_MS,
+	linkIdentifier,
+	parseSamlEnv,
+	publicSsoProviders,
+	relayStateFromURL,
+	resolveSaml,
+	SAML_ACS_PATH,
+	SAML_BIND_COOKIE,
+	SAML_LINK_QUERY,
+	SAML_METADATA_PATH,
+	samlLinkIntent,
+	validReturnPath,
+} from "./saml.ts";
+import {
 	authRateLimitOptions,
 	passkeyOptions,
 	readSignInEmail,
@@ -51,6 +68,16 @@ const authOrigins = [
 	process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
 	...trustedAuthOrigins(process.env),
 ];
+const samlSettings = parseSamlEnv(process.env);
+const saml = samlSettings ? await resolveSaml(samlSettings) : null;
+if (saml)
+	console.info("SAML single sign-on enabled", {
+		acs: saml.acsURL,
+		metadata: saml.metadataURL,
+		spEntityId: saml.spEntityId,
+		idpEntityId: saml.idpEntityId,
+	});
+export const ssoProviders = () => publicSsoProviders(saml);
 const trustedProxies = trustedProxyCIDRsFromEnv(
 	process.env.DITERO_TRUSTED_PROXIES,
 );
@@ -59,7 +86,9 @@ const encryptionKey = process.env.DITERO_ENCRYPTION_KEY;
 if (process.env.NODE_ENV === "production" && !encryptionKey) {
 	throw new Error("DITERO_ENCRYPTION_KEY is required in production");
 }
-const authAdapter = drizzleAdapter(db, { provider: "pg" });
+// SSO user resolution links accounts inside one database transaction, which
+// Better Auth only offers when the adapter declares native transaction support.
+const authAdapter = drizzleAdapter(db, { provider: "pg", transaction: true });
 const authDatabase = encryptionKey
 	? withFieldEncryption(
 			authAdapter,
@@ -70,10 +99,16 @@ const authDatabase = encryptionKey
 		)
 	: authAdapter;
 
-async function assertEmailRegistrationAllowed(email: string): Promise<void> {
+// A SAML assertion's address is the IdP's claim, not a verified mailbox, so it
+// satisfies an email invitation only when the operator opted in.
+async function assertEmailRegistrationAllowed(
+	email: string,
+	viaSaml = false,
+): Promise<void> {
 	const invited =
 		registrationBypassActive() ||
-		(await emailHasRedeemableInvite(email.toLowerCase(), db, Date.now()));
+		((!viaSaml || saml?.emailInvites === true) &&
+			(await emailHasRedeemableInvite(email.toLowerCase(), db, Date.now())));
 	assertRegistrationAllowed(registrationMode, await registeredUserCount(), {
 		invited,
 	});
@@ -134,6 +169,7 @@ export const auth = betterAuth({
 	}),
 	hooks: {
 		before: createAuthMiddleware(async (context) => {
+			if (context.path === "/sign-in/sso") return guardSsoStart(context);
 			if (context.path !== "/sign-up/email") return;
 			if (!context.body || typeof context.body !== "object") return;
 			// Public signup accepts only identity and password. In particular, avatar,
@@ -163,6 +199,7 @@ export const auth = betterAuth({
 			}
 		}),
 		after: createAuthMiddleware(async (context) => {
+			if (context.path === "/sign-in/sso") return afterSsoStart(context);
 			const state = publicSignUp.getStore();
 			if (state?.creating && context.context.returned instanceof APIError)
 				state.error = context.context.returned;
@@ -192,7 +229,10 @@ export const auth = betterAuth({
 						signupDisplayName(newUser.name, newUser.email),
 					);
 					try {
-						await assertEmailRegistrationAllowed(newUser.email);
+						await assertEmailRegistrationAllowed(
+							newUser.email,
+							context?.path?.startsWith(SAML_ACS_PATH) === true,
+						);
 					} catch (error) {
 						throw registrationAPIError(error);
 					}
@@ -269,8 +309,137 @@ export const auth = betterAuth({
 			},
 		}),
 		jwt({ jwt: zeroJwtOptions() }),
+		...(saml ? [sso(saml.options)] : []),
 	],
 });
+
+type HookContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
+
+const SSO_START_FIELDS = [
+	"callbackURL",
+	"errorCallbackURL",
+	"newUserCallbackURL",
+];
+
+// The start endpoint is reachable by anyone, so it accepts only the one
+// configured provider and return paths the app itself would send.
+async function guardSsoStart(context: HookContext): Promise<void> {
+	const body = context.body;
+	if (!saml || !body || typeof body !== "object")
+		throw new APIError("BAD_REQUEST", { code: "INVALID_BODY" });
+	for (const key of Object.keys(body)) {
+		if (key !== "providerId" && !SSO_START_FIELDS.includes(key))
+			delete body[key];
+	}
+	for (const key of SSO_START_FIELDS) {
+		if (body[key] !== undefined && !validReturnPath(body[key], authOrigins))
+			throw new APIError("BAD_REQUEST", {
+				code: "INVALID_RETURN_URL",
+				message: "Return address is not allowed",
+			});
+	}
+	body.providerId = saml.providerId;
+	if (context.query?.[SAML_LINK_QUERY] && !(await getSessionFromCtx(context)))
+		throw new APIError("UNAUTHORIZED", { code: "SESSION_REQUIRED" });
+}
+
+// The callback is a cross-site POST that carries none of the browser's Lax
+// cookies, so two things are tied to the RelayState the IdP echoes back: a
+// cookie only the starting browser holds (refusing a victim being handed an
+// attacker's response), and, for linking, the signed-in user.
+async function afterSsoStart(context: HookContext): Promise<void> {
+	const returned = context.context.returned;
+	if (!saml || returned instanceof APIError || !returned) return;
+	const relayState = relayStateFromURL((returned as { url?: unknown }).url);
+	if (!relayState) return;
+	if (saml.bindBrowser)
+		context.setCookie(SAML_BIND_COOKIE, relayState, {
+			httpOnly: true,
+			secure: true,
+			sameSite: "none",
+			path: `/api/auth${SAML_ACS_PATH}`,
+			maxAge: LINK_INTENT_TTL_MS / 1000,
+		});
+	if (!context.query?.[SAML_LINK_QUERY]) return;
+	const session = await getSessionFromCtx(context);
+	if (!session) return;
+	await context.context.internalAdapter.createVerificationValue({
+		identifier: linkIdentifier(relayState),
+		value: JSON.stringify({ userId: session.user.id }),
+		expiresAt: new Date(Date.now() + LINK_INTENT_TTL_MS),
+	});
+}
+
+async function dispatchAuth(request: Request): Promise<Response> {
+	if (
+		!saml ||
+		request.method !== "POST" ||
+		!isSamlAcsPath(new URL(request.url).pathname, saml.providerId)
+	)
+		return auth.handler(request);
+	let relayState: FormDataEntryValue | null = null;
+	try {
+		relayState = (await request.clone().formData()).get("RelayState");
+	} catch {
+		// A body that is not a form is the package's to reject.
+	}
+	if (
+		saml.bindBrowser &&
+		relayState &&
+		bindingCookieValue(request.headers.get("cookie")) !== relayState
+	)
+		return Response.redirect(
+			`${new URL(request.url).origin}/?error=sso_browser_mismatch`,
+			302,
+		);
+	const intent =
+		typeof relayState === "string" && relayState
+			? await (await auth.$context).internalAdapter.consumeVerificationValue(
+					linkIdentifier(relayState),
+				)
+			: null;
+	let userId: unknown;
+	try {
+		userId = intent ? JSON.parse(intent.value).userId : undefined;
+	} catch {
+		userId = undefined;
+	}
+	return typeof userId === "string"
+		? samlLinkIntent.run({ userId }, () => auth.handler(request))
+		: auth.handler(request);
+}
+
+const SSO_ALLOWED: ReadonlyArray<[method: string, path: string]> = [
+	["POST", "/api/auth/sign-in/sso"],
+	["GET", `/api/auth${SAML_METADATA_PATH}`],
+];
+
+// Everything else the package registers (provider registration, domain
+// verification, OIDC callbacks, single logout) stays unreachable: providers
+// come from operator configuration only.
+function samlRouteRefused(request: Request): boolean {
+	const path = new URL(request.url).pathname.replace(/\/+$/, "");
+	if (!path.startsWith("/api/auth/sso/") && path !== "/api/auth/sign-in/sso")
+		return false;
+	if (!saml) return false;
+	if (isSamlAcsPath(path, saml.providerId)) return request.method !== "POST";
+	return !SSO_ALLOWED.some(
+		([method, allowed]) => method === request.method && allowed === path,
+	);
+}
+
+function samlMetadataRequest(request: Request): Request {
+	const url = new URL(request.url);
+	if (
+		!saml ||
+		request.method !== "GET" ||
+		url.pathname.replace(/\/+$/, "") !== `/api/auth${SAML_METADATA_PATH}` ||
+		url.searchParams.has("providerId")
+	)
+		return request;
+	url.searchParams.set("providerId", saml.providerId);
+	return new Request(url, request);
+}
 
 export async function handleAuthRequest(
 	request: Request,
@@ -323,8 +492,17 @@ async function handleAuthRequestInternal(
 	peerAddress?: string,
 ): Promise<Response> {
 	request = sanitizeAuthRequest(request, peerAddress, trustedProxies);
+	if (samlRouteRefused(request))
+		return Response.json({ message: "Not found" }, { status: 404 });
+	request = samlMetadataRequest(request);
+	// The IdP's cross-site POST is authenticated by its signature, not origin.
+	const samlCallback =
+		saml !== null &&
+		request.method === "POST" &&
+		isSamlAcsPath(new URL(request.url).pathname, saml.providerId);
 	if (
 		request.method !== "GET" &&
+		!samlCallback &&
 		(request.headers.has("origin") || request.headers.has("cookie"))
 	) {
 		try {
@@ -374,13 +552,13 @@ async function handleAuthRequestInternal(
 	}
 
 	if (registrationMode !== "bootstrap" || (await registeredUserCount()) > 0) {
-		return auth.handler(request);
+		return dispatchAuth(request);
 	}
 
 	const client = await pool.connect();
 	try {
 		await client.query("select pg_advisory_lock($1)", [REGISTRATION_LOCK_KEY]);
-		return await auth.handler(request);
+		return await dispatchAuth(request);
 	} finally {
 		await client.query("select pg_advisory_unlock($1)", [
 			REGISTRATION_LOCK_KEY,

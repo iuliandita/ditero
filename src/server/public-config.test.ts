@@ -25,7 +25,20 @@ describe("publicConfig", () => {
 	it("serves the zero URL the client dials", () => {
 		expect(
 			publicConfig({ PUBLIC_ZERO_URL: "https://sync.example.test" }),
-		).toEqual({ zeroURL: "https://sync.example.test", socialProviders: [] });
+		).toEqual({
+			zeroURL: "https://sync.example.test",
+			socialProviders: [],
+			ssoProviders: [],
+		});
+	});
+
+	it("lists configured single sign-on providers by display data only", () => {
+		const sso = [{ id: "saml-0123", name: "Corp", protocol: "saml" as const }];
+		expect(publicConfig({ BETTER_AUTH_SECRET: "private" }, sso)).toEqual({
+			zeroURL: DEFAULT_ZERO_URL,
+			socialProviders: [],
+			ssoProviders: sso,
+		});
 	});
 
 	it.each([
@@ -38,6 +51,7 @@ describe("publicConfig", () => {
 		expect(publicConfig({ ...env, BETTER_AUTH_SECRET: "private" })).toEqual({
 			zeroURL: DEFAULT_ZERO_URL,
 			socialProviders,
+			ssoProviders: [],
 		});
 	});
 });
