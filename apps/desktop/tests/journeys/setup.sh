@@ -26,7 +26,7 @@ elif [[ "$RUNNER_OS" == macOS ]]; then
   sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$out/ca.crt"
   pg_bin="$(brew --prefix postgresql@18)/bin"
 else
-  certutil.exe -user -addstore Root "$(cygpath -w "$out/ca.crt")"
+  certutil.exe -user -f -addstore Root "$(cygpath -w "$out/ca.crt")"
   pg_bin="$PGBIN"
 fi
 printf 'JOURNEY_PG_BIN=%s\n' "$pg_bin" >> "$GITHUB_ENV"
