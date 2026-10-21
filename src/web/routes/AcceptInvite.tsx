@@ -2,6 +2,10 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+	DISPLAY_NAME_MAX_LENGTH,
+	signupDisplayName,
+} from "../../auth/display-name.ts";
+import {
 	importRecipientPublicKey,
 	publicKeyFingerprint,
 	sealWdk,
@@ -156,6 +160,7 @@ function AcceptInvitePage({
 	const [fastInvite] = useState(() => captureFastInvite(tokenFromLocation()));
 	const [preview, setPreview] = useState<Preview>({ state: "loading" });
 	const [email, setEmail] = useState("");
+	const [displayName, setDisplayName] = useState("");
 	const [password, setPassword] = useState("");
 	const [mode, setMode] = useState<"signup" | "signin">("signup");
 	const [busy, setBusy] = useState(false);
@@ -437,7 +442,13 @@ function AcceptInvitePage({
 		setError(null);
 		try {
 			if (mode === "signup") {
-				const name = email.split("@")[0] || email;
+				let name: string;
+				try {
+					name = signupDisplayName(displayName, email);
+				} catch {
+					setError(m.account_name_invalid());
+					return;
+				}
 				const res = await authClient.signUp.email({ email, password, name });
 				if (res.error) {
 					setError(authErrorMessage(res.error, m.accept_signup_failed));
@@ -529,6 +540,25 @@ function AcceptInvitePage({
 							void authThenAccept();
 						}}
 					>
+						{mode === "signup" && (
+							<div className="space-y-2">
+								<label htmlFor="accept-name" className="text-sm font-medium">
+									{m.account_display_name()}
+								</label>
+								<Input
+									id="accept-name"
+									data-testid="signup-name"
+									autoComplete="name"
+									maxLength={DISPLAY_NAME_MAX_LENGTH}
+									value={displayName}
+									onChange={(event) => setDisplayName(event.target.value)}
+									disabled={busy}
+								/>
+								<p className="text-xs text-muted-foreground">
+									{m.account_name_signup_hint()}
+								</p>
+							</div>
+						)}
 						<div className="flex flex-col gap-1.5">
 							<label htmlFor={emailId} className="text-sm font-medium">
 								{m.field_email()}

@@ -1,5 +1,11 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"account_display_name": "Nombre visible",
+	"account_name_signup_hint": "Deja el campo vacío para usar la parte de tu correo anterior a @.",
+	"account_name_invalid": "Usa entre 1 y 80 caracteres sin caracteres de control.",
+	"account_name_save": "Guardar nombre",
+	"account_name_saved": "Nombre visible guardado.",
+	"account_name_failed": "No se pudo guardar tu nombre visible.",
 	"theme_editor_accent_note": "Guarda o cancela la edición del tema para elegir un acento.",
 	"theme_editor_customize": "Personalizar tema",
 	"theme_editor_heading": "Editar tema",

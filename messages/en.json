@@ -1,5 +1,11 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"account_display_name": "Display name",
+	"account_name_signup_hint": "Leave blank to use the part of your email before @.",
+	"account_name_invalid": "Use 1-80 characters without control characters.",
+	"account_name_save": "Save name",
+	"account_name_saved": "Display name saved.",
+	"account_name_failed": "Could not save your display name.",
 	"theme_editor_accent_note": "Finish or cancel your theme edit to choose an accent.",
 	"theme_editor_customize": "Customize theme",
 	"theme_editor_heading": "Edit theme",

@@ -201,3 +201,40 @@ describe("authentication hardening schema", () => {
 		});
 	});
 });
+
+describe("display name updates", () => {
+	test("normalizes Better Auth updates and refuses invalid names without changing the saved name", async () => {
+		const cookie = await signUp("display-name@test.invalid");
+		const update = (name: string) =>
+			handleAuthRequest(
+				new Request("http://localhost:3000/api/auth/update-user", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: "http://localhost:5173",
+						cookie,
+					},
+					body: JSON.stringify({ name }),
+				}),
+			);
+		expect((await update("  Maya Chen  ")).status).toBe(200);
+		for (const invalid of [
+			" ",
+			"a".repeat(81),
+			"Maya\n",
+			"Ma\u0000ya",
+			"Ma\u202eya",
+		]) {
+			const response = await update(invalid);
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				code: "INVALID_DISPLAY_NAME",
+			});
+		}
+		const [saved] = await db
+			.select()
+			.from(tables.user)
+			.where(eq(tables.user.email, "display-name@test.invalid"));
+		expect(saved.name).toBe("Maya Chen");
+	});
+});

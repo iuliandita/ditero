@@ -1,5 +1,11 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"account_display_name": "Anzeigename",
+	"account_name_signup_hint": "Lass das Feld leer, um den Teil deiner E-Mail vor @ zu verwenden.",
+	"account_name_invalid": "Verwende 1-80 Zeichen ohne Steuerzeichen.",
+	"account_name_save": "Namen speichern",
+	"account_name_saved": "Anzeigename gespeichert.",
+	"account_name_failed": "Dein Anzeigename konnte nicht gespeichert werden.",
 	"theme_editor_accent_note": "Speichere dein Theme oder brich die Bearbeitung ab, bevor du eine Akzentfarbe wählst.",
 	"theme_editor_customize": "Theme anpassen",
 	"theme_editor_heading": "Theme bearbeiten",

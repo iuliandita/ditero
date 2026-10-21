@@ -13,6 +13,7 @@ export type AuthErrorLike = {
 };
 
 const AUTH_ERROR_MESSAGES: Record<string, () => string> = {
+	INVALID_DISPLAY_NAME: m.account_name_invalid,
 	INVALID_EMAIL_OR_PASSWORD: m.auth_error_invalid_email_or_password,
 	INVALID_PASSWORD: m.auth_error_invalid_password,
 	USER_ALREADY_EXISTS: m.auth_error_user_already_exists,
