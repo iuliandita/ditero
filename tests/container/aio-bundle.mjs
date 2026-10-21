@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import {
 	buildConfiguration,
 	defaultReadSecretFile,
+	health,
 	parseSecretFileContent,
 	startHealthMonitor,
 	validateClusterState,
@@ -26,6 +27,23 @@ const check = (fn) => {
 	fn();
 	checks++;
 };
+check(() => {
+	const dockerfile = readFileSync(
+		new URL("../../deploy/docker/Dockerfile.all-in-one", import.meta.url),
+		"utf8",
+	);
+	assert.match(dockerfile, /^ARG LITESTREAM_IMAGE$/m);
+	const publication = readFileSync(
+		new URL("../../.github/workflows/aio-experimental.yml", import.meta.url),
+		"utf8",
+	);
+	assert.match(publication, /--target zero-runtime/);
+	assert.match(publication, /--platform "linux\/\$ARCH"/);
+	assert.match(
+		publication,
+		/--build-arg LITESTREAM_IMAGE=ditero-zero:aio-candidate/,
+	);
+});
 const pg = {
 	POSTGRES_PASSWORD: "admin synthetic",
 	DITERO_MIGRATION_DB_PASSWORD: "migration synthetic",
@@ -39,6 +57,51 @@ const api = {
 	BETTER_AUTH_URL: "https://example.com",
 	PUBLIC_ZERO_URL: "https://sync.example.com",
 };
+check(() => {
+	const config = buildConfiguration("postgres", pg);
+	assert.equal(config.env.PGDATABASE, "postgres");
+	assert.equal(config.env.PGUSER, "ditero_pgadmin");
+});
+check(() => {
+	const password = " leading and trailing spaces ";
+	const config = buildConfiguration(
+		"api",
+		{
+			...api,
+			DITERO_RUNTIME_DB_PASSWORD: "",
+			DITERO_RUNTIME_DB_PASSWORD_FILE: "/synthetic",
+			BETTER_AUTH_SECRET: password,
+		},
+		() => Buffer.from(`${password}\r\n`),
+	);
+	assert.equal(
+		decodeURIComponent(new URL(config.env.DATABASE_URL).password),
+		password,
+	);
+	assert.equal(config.env.BETTER_AUTH_SECRET, password);
+});
+check(() => {
+	const config = buildConfiguration("api", api);
+	for (const failed of ["none", "database", "health", "query", "mutate"]) {
+		const visited = [];
+		const result = health(config, (command, args) => {
+			if (command === "psql")
+				return {
+					status: failed === "database" ? 1 : 0,
+					stdout: "ditero_runtime|ditero\n",
+				};
+			const route = args.at(-1).split("/").at(-1);
+			visited.push(route);
+			return {
+				status: route === "health" && failed === route ? 1 : 0,
+				stdout: failed === route ? "200" : "401",
+			};
+		});
+		assert.equal(result, failed === "none", `${failed} probe`);
+		if (failed === "none")
+			assert.deepEqual(visited, ["health", "query", "mutate"]);
+	}
+});
 for (const [role, env, uid] of [
 	["postgres", pg, 1001],
 	[
@@ -150,6 +213,19 @@ check(() =>
 );
 check(() => assert.equal(zero.env.ZERO_ENABLE_CRUD_MUTATIONS, "false"));
 check(() => assert.equal(zero.env.ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS, "30"));
+check(() => {
+	for (const [name, value] of Object.entries({
+		ZERO_IN_CONTAINER: "1",
+		ZERO_LITESTREAM_CONFIG_PATH: "/etc/litestream.yml",
+		ZERO_LITESTREAM_EXECUTABLE: "/usr/local/bin/litestream",
+		ZERO_LITESTREAM_EXECUTABLE_V5: "/usr/local/bin/litestream-v5",
+		ZERO_LOG_FORMAT: "json",
+		ZERO_SERVER_VERSION: "1.9.0",
+		ZERO_REPLICA_FILE: "/var/lib/ditero/zero/replica.db",
+		ZERO_MUTATE_URL: "http://api:3000/api/zero/mutate",
+	}))
+		assert.equal(zero.env[name], value, name);
+});
 check(() =>
 	assert.throws(() =>
 		buildConfiguration("zero", {
@@ -166,14 +242,18 @@ try {
 	check(() =>
 		assert.equal(defaultReadSecretFile(file).toString(), "synthetic"),
 	);
-	chmodSync(file, 0o644);
-	check(() => assert.throws(() => defaultReadSecretFile(file)));
+	for (const mode of [0o640, 0o604, 0o620, 0o602, 0o610, 0o601]) {
+		chmodSync(file, mode);
+		check(() => assert.throws(() => defaultReadSecretFile(file)));
+	}
 	chmodSync(file, 0o600);
 	const link = join(dir, "link");
 	symlinkSync(file, link);
 	check(() => assert.throws(() => defaultReadSecretFile(link)));
-	chmodSync(dir, 0o755);
-	check(() => assert.throws(() => defaultReadSecretFile(file)));
+	for (const mode of [0o740, 0o704, 0o720, 0o702, 0o710, 0o701]) {
+		chmodSync(dir, mode);
+		check(() => assert.throws(() => defaultReadSecretFile(file)));
+	}
 	chmodSync(dir, 0o700);
 } finally {
 	rmSync(dir, { recursive: true, force: true });

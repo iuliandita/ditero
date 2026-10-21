@@ -214,10 +214,10 @@ try {
 	assert.match(imageID, /^sha256:[0-9a-f]{64}$/);
 	const secret = () => randomBytes(32).toString("hex");
 	const pg = {
-		POSTGRES_PASSWORD: secret(),
-		DITERO_MIGRATION_DB_PASSWORD: secret(),
-		DITERO_RUNTIME_DB_PASSWORD: secret(),
-		ZERO_DATABASE_PASSWORD: secret(),
+		POSTGRES_PASSWORD: ` ${secret()} `,
+		DITERO_MIGRATION_DB_PASSWORD: ` ${secret()} `,
+		DITERO_RUNTIME_DB_PASSWORD: ` ${secret()} `,
+		ZERO_DATABASE_PASSWORD: ` ${secret()} `,
 	};
 	const env = {
 		...process.env,

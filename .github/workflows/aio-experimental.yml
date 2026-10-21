@@ -85,19 +85,20 @@ jobs:
           persist-credentials: false
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
-      - name: Build one platform exactly once
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: .
-          file: deploy/docker/Dockerfile.all-in-one
-          platforms: linux/${{ matrix.arch }}
-          load: true
-          push: false
-          tags: ditero-aio:experimental
-          build-args: |
-            ZERO_RUNTIME_IMAGE=ghcr.io/iuliandita/ditero@sha256:41de0920d3cc704aa38983e25f358025684210b63405258ebc989eeefe6ac24d
-            DITERO_GIT_SHA=${{ needs.prepare.outputs.sha }}
-            DITERO_CHANNEL=aio-experimental
+      - name: Build current-source backup binaries and one final platform
+        env:
+          ZERO_RUNTIME_IMAGE: ghcr.io/iuliandita/ditero@sha256:41de0920d3cc704aa38983e25f358025684210b63405258ebc989eeefe6ac24d
+        run: |
+          docker build --builder default --platform "linux/$ARCH" --file deploy/docker/Dockerfile \
+            --target zero-runtime --build-arg DITERO_GIT_SHA="$SOURCE_SHA" \
+            --build-arg DITERO_CHANNEL=aio-candidate --tag ditero-zero:aio-candidate .
+          test "$(docker image inspect ditero-zero:aio-candidate --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect ditero-zero:aio-candidate --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$SOURCE_SHA"
+          docker build --builder default --platform "linux/$ARCH" --file deploy/docker/Dockerfile.all-in-one \
+            --build-arg ZERO_RUNTIME_IMAGE="$ZERO_RUNTIME_IMAGE" \
+            --build-arg LITESTREAM_IMAGE=ditero-zero:aio-candidate \
+            --build-arg DITERO_GIT_SHA="$SOURCE_SHA" \
+            --build-arg DITERO_CHANNEL=aio-experimental --tag ditero-aio:experimental .
       - name: Strict scan of this platform before publication
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
