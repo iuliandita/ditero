@@ -156,7 +156,7 @@ export function validateClientRuntimeNotices(
 			)
 				throw new Error("Placeholder runtime notice");
 			if (
-				!/(?:^\s*(?:\*\s*)?copyright\s*(?:\(c\)|©)?\s*(?:[0-9]{4}|[A-Z])|public domain)/im.test(
+				!/(?:^\s*(?:(?:\/\*|\*|\/\/)\s*)?(?:copyright\s*(?:\(c\)|©)?\s*(?:[0-9]{4}|[A-Z])|\(c\)\s*[0-9]{4})|\bcopyright\s*\(c\)\s*[0-9]{4}|public domain|CC0 1\.0 Universal)/im.test(
 					content,
 				) ||
 				!/(?:permission|redistribution|license|licence|SPDX)/i.test(content)

@@ -1,0 +1,16 @@
+Source: hwy/contrib/random/random-inl.h
+/*
+ * Original implementation written in 2019
+ * by David Blackman and Sebastiano Vigna (vigna@acm.org)
+ * Available at https://prng.di.unimi.it/ with creative commons license:
+ * To the extent possible under law, the author has dedicated all copyright
+ * and related and neighboring rights to this software to the public domain
+ * worldwide. This software is distributed without any warranty.
+ * See <http://creativecommons.org/publicdomain/zero/1.0/>.
+ *
+ * This implementation is a Vector port of the original implementation
+ * written by Marco Barbone (m.barbone19@imperial.ac.uk).
+ * I take no credit for the original implementation.
+ * The code is provided as is and the original license applies.
+ */
+

@@ -1,6 +1,11 @@
 {
 	"version": 1,
 	"groups": {
+		"clients": {
+			"sourceDigest": "c07b7e0e2396b7810724d8c3f3a6fcda8106a124fc26874383e6c843e1a708ff",
+			"docs": ["docs/cli.md"],
+			"note": "Document the retained runtime notice manifest, exact source URLs and SHA-256 checksums, extracted-archive integrity qualification, and unchanged incomplete runtime license coverage and binary publication block."
+		},
 		"ui": {
 			"sourceDigest": "8d35ad7eb5f2b1692fb35d98181b999a882399962bf6265ef8c4da933abc2562",
 			"docs": [
@@ -13,8 +18,8 @@
 			"note": "Task titles and first-run paragraphs retain readable space in narrow panes. Document exact recoverable attachment sizes and the Stored size label when row metadata cannot uniquely determine plaintext length. No stored formats or server-visible metadata change. Document proxy body limits and ciphertext overhead. Reminder completion, secure browser API requirements and configured sync endpoint diagnostics become explicit in all six locales. No authentication, permission, sync persistence or attachment format contracts change. Document display names at signup and in Account settings, propagation to members and assignees, and the shared managed-account name limit. Document read-only Viewer task controls and wrong-account invite recovery. Document account-scoped device navigation restoration and names when creating lists from templates. Pending startup restoration now yields to explicit navigation, preserving the documented selection flow without new settings or storage changes. Document provider availability and field-level channel repair guidance; correct headings and distinguish TOTP transport failures. Describe leaving shared workspaces, last-owner protection, retained authored content, assignment cleanup and required file-key rotation. Document Android Back dismissal and navigation order, top-level exit, and background network teardown during Activity recreation. Import completion and conflict transfer focus during the DOM commit; moving focus during a status retry cancels the handoff, which also rechecks focus before committing. Import inputs, acknowledgment and persistence are unchanged."
 		},
 		"release": {
-			"sourceDigest": "6fd453f7ff28723194269729180ddca4848233c1a81e406f0da7c97d19c04561",
-			"noImpact": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch. Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged. The Compose release archive now includes postgres-healthcheck.sh, which the bundled database already bind-mounts, and packaging refuses archives missing any bind-mounted script. Release steps, assets and documented procedures are unchanged. GitHub Actions pins move to upload-artifact 7.0.2, download-artifact 8.0.2 and the current CodeQL v4 commit. Release jobs, inputs, artifacts, signing and publication steps are unchanged."
+			"sourceDigest": "9a48b179570edaf0561709aa7e76537b76284128bf76dbec96406bd2976e25d8",
+			"noImpact": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch. Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged. The Compose release archive now includes postgres-healthcheck.sh, which the bundled database already bind-mounts, and packaging refuses archives missing any bind-mounted script. Release steps, assets and documented procedures are unchanged. GitHub Actions pins move to upload-artifact 7.0.2, download-artifact 8.0.2 and the current CodeQL v4 commit. Release jobs, inputs, artifacts, signing and publication steps are unchanged. Runtime source notices accept the upstream copyright spelling and retain checksum and strict archive inventory checks. Standalone binaries remain unpublished candidates with incomplete runtime license qualification."
 		},
 		"configuration": {
 			"sourceDigest": "08697ebd1318668776b85b3d740224ee83718d894377ed0913686ed2be69ddc4",

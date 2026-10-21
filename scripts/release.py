@@ -303,7 +303,7 @@ def verify_clients_candidate(path: Path, version: str, source_sha: str) -> None:
             if item in manifest["texts"]:
                 if re.search(r"(?:\[(?:year|copyright holder|name of author|insert[^\]]*)\]|<copyright[^>]*>|^\s*(?:TODO|TBD|PLACEHOLDER)\s*$)", content, re.I | re.M):
                     raise ValueError("Placeholder runtime notice")
-                if not re.search(r"(?:^\s*(?:\*\s*)?copyright\s*(?:\(c\)|©)?\s*(?:[0-9]{4}|[A-Z])|public domain)", content, re.I | re.M) or not re.search(r"permission|redistribution|license|licence|SPDX", content, re.I):
+                if not re.search(r"(?:^\s*(?:(?:/\*|\*|//)\s*)?(?:copyright\s*(?:\(c\)|©)?\s*(?:[0-9]{4}|[A-Z])|\(c\)\s*[0-9]{4})|\bcopyright\s*\(c\)\s*[0-9]{4}|public domain|CC0 1\.0 Universal)", content, re.I | re.M) or not re.search(r"permission|redistribution|license|licence|SPDX", content, re.I):
                     raise ValueError("Missing runtime notice header or grant")
         dependencies = info.get("dependencies")
         if not isinstance(dependencies, list) or not dependencies or len(dependencies) > 100 or any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9@_+.-]{1,200}", name) or ".." in name for name in dependencies) or len(set(dependencies)) != len(dependencies):

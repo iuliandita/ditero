@@ -428,6 +428,306 @@
 			},
 			"license": "LicenseRef-mimalloc-Root-LICENSE",
 			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/boringssl/LICENSE",
+			"sha256": "827c8d8fc207c2392794eef9e00fe246f9f61fdcc132556c275be3dd8c3cd97f",
+			"origin": {
+				"url": "https://codeload.github.com/oven-sh/boringssl/tar.gz/41bf9b59c2ebf277a7aa427e1ecad5cc80dd4d4f",
+				"revision": "41bf9b59c2ebf277a7aa427e1ecad5cc80dd4d4f"
+			},
+			"license": "LicenseRef-Upstream-boringssl",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/brotli/LICENSE",
+			"sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94",
+			"origin": {
+				"url": "https://codeload.github.com/google/brotli/tar.gz/v1.1.0",
+				"revision": "1.1.0"
+			},
+			"license": "LicenseRef-Upstream-brotli",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/brotli/source-notices.txt",
+			"sha256": "30f94f8474269da79fcffc3f15a8e27b7cc2d6be6353a8f23c2edb1f18e343a0",
+			"origin": {
+				"url": "https://codeload.github.com/google/brotli/tar.gz/v1.1.0",
+				"revision": "1.1.0"
+			},
+			"license": "LicenseRef-Upstream-brotli",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/cares/LICENSE.md",
+			"sha256": "460f5e768fda3752ca2169a95df062578a10fb126bfd65f3b9b1a1bed2f84807",
+			"origin": {
+				"url": "https://codeload.github.com/c-ares/c-ares/tar.gz/c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab",
+				"revision": "c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab"
+			},
+			"license": "LicenseRef-Upstream-cares",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/cares/source-notices.txt",
+			"sha256": "2d55654176d48106c87df2c7753ed7eac211cfb3363eb431552ddba780f2b365",
+			"origin": {
+				"url": "https://codeload.github.com/c-ares/c-ares/tar.gz/c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab",
+				"revision": "c7a3138dcfe3bb0eaaf10c0c24c36dc66dc790ab"
+			},
+			"license": "LicenseRef-Upstream-cares",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/hdrhistogram/LICENSE.txt",
+			"sha256": "93a583ec58cd981232ec6fab797ff6f17f350c97b83ae0700b2d9350c91028af",
+			"origin": {
+				"url": "https://codeload.github.com/HdrHistogram/HdrHistogram_c/tar.gz/be60a9987ee48d0abf0d7b6a175bad8d6c1585d1",
+				"revision": "be60a9987ee48d0abf0d7b6a175bad8d6c1585d1"
+			},
+			"license": "LicenseRef-Upstream-hdrhistogram",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/hdrhistogram/COPYING.txt",
+			"sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+			"origin": {
+				"url": "https://codeload.github.com/HdrHistogram/HdrHistogram_c/tar.gz/be60a9987ee48d0abf0d7b6a175bad8d6c1585d1",
+				"revision": "be60a9987ee48d0abf0d7b6a175bad8d6c1585d1"
+			},
+			"license": "LicenseRef-Upstream-hdrhistogram",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/highway/LICENSE",
+			"sha256": "e340270d4f64384569a91d546acb5b094d69ce47f0c015db77abb74dc6f815af",
+			"origin": {
+				"url": "https://codeload.github.com/google/highway/tar.gz/2607d3b5b0113992fe84d3848859eae13b3b52c1",
+				"revision": "2607d3b5b0113992fe84d3848859eae13b3b52c1"
+			},
+			"license": "LicenseRef-Upstream-highway",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/highway/source-notices.txt",
+			"sha256": "b26bbf95e89f58438b3650da14edbcd4b0c7018124926c3892351f2a95ae266d",
+			"origin": {
+				"url": "https://codeload.github.com/google/highway/tar.gz/2607d3b5b0113992fe84d3848859eae13b3b52c1",
+				"revision": "2607d3b5b0113992fe84d3848859eae13b3b52c1"
+			},
+			"license": "LicenseRef-Upstream-highway",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libarchive/COPYING",
+			"sha256": "30e556b3959e3985d66efefec5eaac51d4995053caa1d3cffe6eb916f146f229",
+			"origin": {
+				"url": "https://codeload.github.com/libarchive/libarchive/tar.gz/ded82291ab41d5e355831b96b0e1ff49e24d8939",
+				"revision": "ded82291ab41d5e355831b96b0e1ff49e24d8939"
+			},
+			"license": "LicenseRef-Upstream-libarchive",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libarchive/source-notices.txt",
+			"sha256": "671016575921a5ce27ec9cbe4b860e3671d82cfcc7d989c6eb0b183b11453731",
+			"origin": {
+				"url": "https://codeload.github.com/libarchive/libarchive/tar.gz/ded82291ab41d5e355831b96b0e1ff49e24d8939",
+				"revision": "ded82291ab41d5e355831b96b0e1ff49e24d8939"
+			},
+			"license": "LicenseRef-Upstream-libarchive",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libjpeg-turbo/LICENSE.md",
+			"sha256": "e10114e6e40f3d0311c401ca25245ac5ef459a43c20f976fd63f03e816f5741f",
+			"origin": {
+				"url": "https://codeload.github.com/libjpeg-turbo/libjpeg-turbo/tar.gz/e352b02f794f701407b39af08576035ba3360d60",
+				"revision": "e352b02f794f701407b39af08576035ba3360d60"
+			},
+			"license": "LicenseRef-Upstream-libjpeg-turbo",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libjpeg-turbo/README.ijg",
+			"sha256": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6",
+			"origin": {
+				"url": "https://codeload.github.com/libjpeg-turbo/libjpeg-turbo/tar.gz/e352b02f794f701407b39af08576035ba3360d60",
+				"revision": "e352b02f794f701407b39af08576035ba3360d60"
+			},
+			"license": "LicenseRef-Upstream-libjpeg-turbo",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libjpeg-turbo/source-notices.txt",
+			"sha256": "7f8f333813450be00c2bdec32641d5372aa49f652c606dfb6443c6b57de6169a",
+			"origin": {
+				"url": "https://codeload.github.com/libjpeg-turbo/libjpeg-turbo/tar.gz/e352b02f794f701407b39af08576035ba3360d60",
+				"revision": "e352b02f794f701407b39af08576035ba3360d60"
+			},
+			"license": "LicenseRef-Upstream-libjpeg-turbo",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/libwebp/COPYING",
+			"sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf",
+			"origin": {
+				"url": "https://codeload.github.com/webmproject/libwebp/tar.gz/b7e29b9d75bd31422b00c2a446d49d7af06c328d",
+				"revision": "b7e29b9d75bd31422b00c2a446d49d7af06c328d"
+			},
+			"license": "LicenseRef-Upstream-libwebp",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/lshpack/LICENSE",
+			"sha256": "0490f9666828ad1b6b5503102e7ebbe491451b7174511f3b6255caa967caf955",
+			"origin": {
+				"url": "https://codeload.github.com/litespeedtech/ls-hpack/tar.gz/8905c024b6d052f083a3d11d0a169b3c2735c8a1",
+				"revision": "8905c024b6d052f083a3d11d0a169b3c2735c8a1"
+			},
+			"license": "LicenseRef-Upstream-lshpack",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/lshpack/source-notices.txt",
+			"sha256": "2915dcf56cf907d09c5ab2676ea8a72913473d02ec2a64c0b940eefc64f444b5",
+			"origin": {
+				"url": "https://codeload.github.com/litespeedtech/ls-hpack/tar.gz/8905c024b6d052f083a3d11d0a169b3c2735c8a1",
+				"revision": "8905c024b6d052f083a3d11d0a169b3c2735c8a1"
+			},
+			"license": "LicenseRef-Upstream-lshpack",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/lsqpack/LICENSE",
+			"sha256": "6b1aded50331e34502c8d2b00238c6146b1a54314ce94a5c5feb5d340a6d00d6",
+			"origin": {
+				"url": "https://codeload.github.com/litespeedtech/ls-qpack/tar.gz/1e9c5b8e59f8161c54f168a570c8bfdc59ded0c3",
+				"revision": "1e9c5b8e59f8161c54f168a570c8bfdc59ded0c3"
+			},
+			"license": "LicenseRef-Upstream-lsqpack",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/lsqpack/source-notices.txt",
+			"sha256": "f6d4b69b3204cce00ee304aa46bff89102159c85d53944ae2999563cf0a43803",
+			"origin": {
+				"url": "https://codeload.github.com/litespeedtech/ls-qpack/tar.gz/1e9c5b8e59f8161c54f168a570c8bfdc59ded0c3",
+				"revision": "1e9c5b8e59f8161c54f168a570c8bfdc59ded0c3"
+			},
+			"license": "LicenseRef-Upstream-lsqpack",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/lsquic/LICENSE",
+			"sha256": "9bc22643b3ea2b55c547c83e332253d04ba3df4f26696091e6fa9f7a1ccc65ef",
+			"origin": {
+				"url": "https://codeload.github.com/litespeedtech/lsquic/tar.gz/3181911301b1aa4f54c1ed690901abc674ee08fb",
+				"revision": "3181911301b1aa4f54c1ed690901abc674ee08fb"
+			},
+			"license": "LicenseRef-Upstream-lsquic",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/lsquic/LICENSE.chrome",
+			"sha256": "85d5dcb0d30ea89fa5922451957ff2a1a2c3c24f1ad2bb9ab23b5d6080763fc9",
+			"origin": {
+				"url": "https://codeload.github.com/litespeedtech/lsquic/tar.gz/3181911301b1aa4f54c1ed690901abc674ee08fb",
+				"revision": "3181911301b1aa4f54c1ed690901abc674ee08fb"
+			},
+			"license": "LicenseRef-Upstream-lsquic",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/lsquic/source-notices.txt",
+			"sha256": "396e5315c7118c1697e031d17a3e56bc282c24f3a2f80efb2e5a20241da08c62",
+			"origin": {
+				"url": "https://codeload.github.com/litespeedtech/lsquic/tar.gz/3181911301b1aa4f54c1ed690901abc674ee08fb",
+				"revision": "3181911301b1aa4f54c1ed690901abc674ee08fb"
+			},
+			"license": "LicenseRef-Upstream-lsquic",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/picohttpparser/source-notices.txt",
+			"sha256": "d5ed3fb9098dad671d5e175faa98d4ee2291e4fc1a0c66d683d7171222036985",
+			"origin": {
+				"url": "https://codeload.github.com/h2o/picohttpparser/tar.gz/066d2b1e9ab820703db0837a7255d92d30f0c9f5",
+				"revision": "066d2b1e9ab820703db0837a7255d92d30f0c9f5"
+			},
+			"license": "LicenseRef-Upstream-picohttpparser",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/tinycc/COPYING",
+			"sha256": "512d2d21b6b3384ba64781abb0208a1b87740bc31e2df48e2b206ddb7e4d5779",
+			"origin": {
+				"url": "https://codeload.github.com/oven-sh/tinycc/tar.gz/05f0fafaa3be31e31d7b4b5c17dc60f62c991171",
+				"revision": "05f0fafaa3be31e31d7b4b5c17dc60f62c991171"
+			},
+			"license": "LicenseRef-Upstream-tinycc",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/tinycc/source-notices.txt",
+			"sha256": "607e46a255c460122aa0a0e46df45cfdf649e2d90cdbd33048479be06b40bb49",
+			"origin": {
+				"url": "https://codeload.github.com/oven-sh/tinycc/tar.gz/05f0fafaa3be31e31d7b4b5c17dc60f62c991171",
+				"revision": "05f0fafaa3be31e31d7b4b5c17dc60f62c991171"
+			},
+			"license": "LicenseRef-Upstream-tinycc",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/zlib/LICENSE.md",
+			"sha256": "6c9f0d975b41afaa34d22f55bb8986ce69e5cb7ad327cb2b28820cd425edf5ee",
+			"origin": {
+				"url": "https://codeload.github.com/zlib-ng/zlib-ng/tar.gz/12731092979c6d07f42da27da673a9f6c7b13586",
+				"revision": "12731092979c6d07f42da27da673a9f6c7b13586"
+			},
+			"license": "LicenseRef-Upstream-zlib",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/zstd/LICENSE",
+			"sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+			"origin": {
+				"url": "https://codeload.github.com/facebook/zstd/tar.gz/f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+				"revision": "f8745da6ff1ad1e7bab384bd1f9d742439278e99"
+			},
+			"license": "LicenseRef-Upstream-zstd",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/native/zstd/source-notices.txt",
+			"sha256": "28650e7e0dfa0876f2184f9500c64ddc3fb47bf32a736b8a47e4251274e5cfd3",
+			"origin": {
+				"url": "https://codeload.github.com/facebook/zstd/tar.gz/f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+				"revision": "f8745da6ff1ad1e7bab384bd1f9d742439278e99"
+			},
+			"license": "LicenseRef-Upstream-zstd",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/bun/FormatStackTraceForJS-NOTICE.txt",
+			"sha256": "9060f040a75508b0f2705c92963d92566699bd8982e47b3c786fccd6a75b604b",
+			"origin": {
+				"url": "https://raw.githubusercontent.com/oven-sh/bun/744846f844374847c902b5e7fd59b4342a51ef99/src/jsc/bindings/FormatStackTraceForJS.h",
+				"revision": "744846f844374847c902b5e7fd59b4342a51ef99"
+			},
+			"license": "LicenseRef-Upstream-FormatStackTraceForJS-NOTICE.txt",
+			"selection": "conservative-extra"
+		},
+		{
+			"path": "notices/runtime/bun/clap-LICENSE",
+			"sha256": "88d9b4eb60579c191ec391ca04c16130572d7eedc4a86daa58bf28c6e14c9bcd",
+			"origin": {
+				"url": "https://raw.githubusercontent.com/oven-sh/bun/744846f844374847c902b5e7fd59b4342a51ef99/src/clap/LICENSE",
+				"revision": "744846f844374847c902b5e7fd59b4342a51ef99"
+			},
+			"license": "LicenseRef-Upstream-clap-LICENSE",
+			"selection": "conservative-extra"
 		}
 	],
 	"unresolved": [
@@ -437,7 +737,7 @@
 		},
 		{
 			"component": "whole-runtime",
-			"reason": "Artifact-bound native Rust rebuilt std GCC and sysroot coverage unresolved; this initial package is only18 retained candidate texts"
+			"reason": "Artifact-bound native, Rust, rebuilt standard-library, GCC and sysroot coverage remains unresolved; retained source notices include conservative extras and do not assert realized linkage"
 		},
 		{
 			"component": "WebKit",
