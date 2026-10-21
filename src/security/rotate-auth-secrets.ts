@@ -1,6 +1,10 @@
 import { Pool, type PoolClient } from "pg";
 import { authFieldContext } from "../auth/encrypted-adapter.ts";
 import {
+	type AuthSecretRotation,
+	rotateAuthSecretValue,
+} from "./auth-secret-rotation.ts";
+import {
 	createFieldKeyRing,
 	decryptField,
 	encryptField,
@@ -22,6 +26,7 @@ async function rotateColumn(
 	model: string,
 	field: string,
 	ring: ReturnType<typeof createFieldKeyRing>,
+	secrets?: AuthSecretRotation,
 ): Promise<number> {
 	const result = await client.query<{ id: string; value: string }>(
 		`select id, ${column} as value from ${table} where ${column} is not null`,
@@ -32,8 +37,10 @@ async function rotateColumn(
 		const decrypted = row.value.startsWith("ditero:v1:")
 			? decryptField(row.value, context, ring)
 			: { plaintext: row.value, needsRotation: true };
-		if (!decrypted.needsRotation) continue;
-		const plaintext = decrypted.plaintext;
+		const plaintext = secrets
+			? await rotateAuthSecretValue(decrypted.plaintext, model, secrets)
+			: decrypted.plaintext;
+		if (!decrypted.needsRotation && plaintext === decrypted.plaintext) continue;
 		const ciphertext = encryptField(plaintext, context, ring);
 		if (ciphertext !== row.value) {
 			await client.query(`update ${table} set ${column} = $1 where id = $2`, [
@@ -46,31 +53,70 @@ async function rotateColumn(
 	return changed;
 }
 
-const current = process.env.DITERO_ENCRYPTION_KEY;
-const next = process.env.DITERO_ENCRYPTION_KEY_NEXT;
-const databaseURL =
-	process.env.DATABASE_MIGRATION_URL ?? process.env.DATABASE_URL;
-if (!current || !next || !databaseURL) {
-	throw new Error(
-		"DATABASE_MIGRATION_URL, DITERO_ENCRYPTION_KEY, and DITERO_ENCRYPTION_KEY_NEXT are required",
-	);
+export async function rotateAuthFields(
+	client: PoolClient,
+	ring: ReturnType<typeof createFieldKeyRing>,
+	secrets?: AuthSecretRotation,
+): Promise<number> {
+	try {
+		await client.query("begin");
+		let changed = 0;
+		for (const [table, column, model, field] of columns) {
+			changed += await rotateColumn(
+				client,
+				table,
+				column,
+				model,
+				field,
+				ring,
+				secrets,
+			);
+		}
+		await client.query("commit");
+		return changed;
+	} catch (error) {
+		await client.query("rollback");
+		throw error;
+	}
 }
 
-const ring = createFieldKeyRing({ current, next });
-const pool = new Pool({ connectionString: databaseURL });
-const client = await pool.connect();
-try {
-	await client.query("begin");
-	let changed = 0;
-	for (const [table, column, model, field] of columns) {
-		changed += await rotateColumn(client, table, column, model, field, ring);
+if (import.meta.main) {
+	const current = process.env.DITERO_ENCRYPTION_KEY;
+	const next = process.env.DITERO_ENCRYPTION_KEY_NEXT;
+	const authNext = process.env.BETTER_AUTH_SECRET_NEXT;
+	const authCurrent = process.env.BETTER_AUTH_SECRET;
+	const databaseURL =
+		process.env.DATABASE_MIGRATION_URL ?? process.env.DATABASE_URL;
+	if (!current || (!next && !authNext) || !databaseURL) {
+		throw new Error(
+			"DATABASE_MIGRATION_URL, DITERO_ENCRYPTION_KEY, and either DITERO_ENCRYPTION_KEY_NEXT or BETTER_AUTH_SECRET_NEXT are required",
+		);
 	}
-	await client.query("commit");
-	console.log(`rotated ${changed} encrypted auth fields`);
-} catch (error) {
-	await client.query("rollback");
-	throw error;
-} finally {
-	client.release();
-	await pool.end();
+	if (authNext !== undefined && (!authCurrent || authNext.length < 32)) {
+		throw new Error(
+			"Auth secret rotation requires the original BETTER_AUTH_SECRET and a BETTER_AUTH_SECRET_NEXT of at least 32 characters",
+		);
+	}
+	const ring = createFieldKeyRing({ current, next });
+	const pool = new Pool({ connectionString: databaseURL });
+	pool.on("error", () =>
+		console.error("auth rotation: database connection lost"),
+	);
+	const client = await pool.connect();
+	client.on("error", () =>
+		console.error("auth rotation: database connection lost"),
+	);
+	try {
+		const changed = await rotateAuthFields(
+			client,
+			ring,
+			authNext && authCurrent
+				? { current: authCurrent, next: authNext }
+				: undefined,
+		);
+		console.log(`rotated ${changed} encrypted auth fields`);
+	} finally {
+		client.release();
+		await pool.end();
+	}
 }

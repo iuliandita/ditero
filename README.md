@@ -194,7 +194,7 @@ All configuration is environment-driven. The common variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `BETTER_AUTH_SECRET` | _(required)_ | Signing secret for auth/JWTs. Generate with `openssl rand -hex 32`. |
+| `BETTER_AUTH_SECRET` | _(required)_ | At least 32 characters in production. Generate with `openssl rand -hex 32`. Changing it requires the [key rotation procedure](docs/runbooks/key-rotation.md#authentication-secret-rotation); replacing it directly breaks sign-in. |
 | `ZERO_ADMIN_PASSWORD` | _(required)_ | Admin password zero-cache requires in production. Generate with `openssl rand -hex 32`. |
 | `DITERO_ENCRYPTION_KEY` | _(required)_ | 32-byte Base64 key for stored replayable secrets. |
 | `DITERO_MIGRATION_DB_PASSWORD` | _(required, bundled)_ | Password for the schema-owner role. |

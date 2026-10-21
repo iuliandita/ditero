@@ -75,6 +75,12 @@ still return 401, and no token is issued without successful session verification
 See [database outage recovery](database-roles.md#recovering-from-a-database-outage)
 for client upgrade and queued-edit recovery guidance.
 
+Keep `BETTER_AUTH_SECRET` stable and at least 32 characters in production.
+Startup verifies that retained JWT signing keys decrypt with the configured
+secrets. Changing `BETTER_AUTH_SECRET` requires the stopped-replica maintenance
+procedure in [key rotation](key-rotation.md), including
+`bun run security:rotate-auth-secrets`; replacing it directly prevents startup.
+
 All authentication requests are rate limited. Their JSON bodies are bounded to
 4 KiB and reject unexpected fields. Responses carry `Cache-Control: no-store`. The existing
 browser origin checks and cookie authentication remain in place.

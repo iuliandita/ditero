@@ -104,6 +104,11 @@ operator-managed HTTPS. The shipped port bindings remain loopback-only.
 
 ## Configuration boundary
 
+`BETTER_AUTH_SECRET` must be at least 32 characters in production. Replacing it
+directly makes stored JWKS and two-factor secrets unreadable and startup fails.
+Use the [authentication secret rotation procedure](../../../docs/runbooks/key-rotation.md#authentication-secret-rotation)
+and `bun run security:rotate-auth-secrets` before restarting with a new value.
+
 The wrapper reads `DITERO_AIO_IMAGE` and `DITERO_AIO_PROJECT`; Compose also accepts
 `AIO_APP_PORT` and `AIO_ZERO_PORT` for loopback bindings. Its credential paths are
 `POSTGRES_PASSWORD_FILE`, `DITERO_MIGRATION_DB_PASSWORD_FILE`,

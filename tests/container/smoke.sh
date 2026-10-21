@@ -39,12 +39,13 @@ docker run --rm --entrypoint bun "$image" -e '
 ' >/dev/null
 
 suffix=$$
-network="ditero-smoke-$suffix"
-database="ditero-smoke-db-$suffix"
-app="ditero-smoke-app-$suffix"
+prefix=${DITERO_CONTAINER_TEST_PREFIX:-ditero-smoke}
+network="$prefix-$suffix"
+database="$prefix-db-$suffix"
+app="$prefix-app-$suffix"
 
 cleanup() {
-  docker rm -f "$app" "$database" >/dev/null 2>&1 || true
+  docker rm -fv "$app" "$database" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
@@ -103,3 +104,5 @@ until docker exec "$app" bun -e '
   fi
   sleep 1
 done
+
+tests/container/startup.sh "$image" "$app" "$database" "$network"

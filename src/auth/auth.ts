@@ -3,6 +3,7 @@ import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt, twoFactor } from "better-auth/plugins";
 import { count, isNull } from "drizzle-orm";
+import { validateAuthSecret } from "../config/auth-secret.ts";
 import { db, pool } from "../db/client.ts";
 import { user } from "../db/schema.ts";
 import { createFieldKeyRing } from "../security/field-encryption.ts";
@@ -40,6 +41,7 @@ const authOrigins = [
 const trustedProxies = trustedProxyCIDRsFromEnv(
 	process.env.DITERO_TRUSTED_PROXIES,
 );
+validateAuthSecret();
 const encryptionKey = process.env.DITERO_ENCRYPTION_KEY;
 if (process.env.NODE_ENV === "production" && !encryptionKey) {
 	throw new Error("DITERO_ENCRYPTION_KEY is required in production");
