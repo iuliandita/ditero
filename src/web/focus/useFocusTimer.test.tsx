@@ -2,6 +2,7 @@ import { setImmediate } from "node:timers";
 import { IDBFactory, IDBObjectStore } from "fake-indexeddb";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { FocusEarlyError } from "../../domain/focus-interval.ts";
 import { DEFAULT_FOCUS } from "./timer-core.ts";
 import { accessFocusState, focusStorageKey } from "./timer-persistence.ts";
 import { FocusProvider, type FocusTimerApi } from "./useFocusTimer.tsx";
@@ -91,7 +92,14 @@ vi.mock("../lib/native-account.tsx", () => ({
 	useNativeAccount: () => ({ storageScope: fixture.active?.scope }),
 }));
 vi.mock("../../zero/mutators.ts", () => ({
-	mutators: { focus: { logSession: (args: unknown) => args } },
+	mutators: {
+		focus: {
+			logSession: (args: unknown) => args,
+			startInterval: (args: { intervalId: string }) => ({
+				startInterval: args,
+			}),
+		},
+	},
 }));
 
 const { mutators: actualMutators } = await vi.importActual<
@@ -177,7 +185,9 @@ beforeEach(() => {
 	vi.stubGlobal("localStorage", storage);
 	vi.stubGlobal("__diteroFocusTestSec", 10);
 	vi.stubGlobal("BroadcastChannel", undefined);
-	vi.stubGlobal("navigator", {});
+	// Offline by default: no server start, so these cases exercise the
+	// monotonic-proof gate. Server-started intervals are covered separately.
+	vi.stubGlobal("navigator", { onLine: false });
 	vi.stubGlobal("crypto", {
 		getRandomValues: crypto.getRandomValues.bind(crypto),
 	});
@@ -700,4 +710,141 @@ test("a restored forward-clock interval cannot turn unobserved time into credit 
 	await settle();
 	expect(tab.api.session?.cycle.phase).toBe("break");
 	expect(fixture.mutate).not.toHaveBeenCalled();
+});
+
+const OK = { client: Promise.resolve({ type: "success" }) };
+const ok = () => ({ ...OK, server: Promise.resolve({ type: "success" }) });
+const isStart = (
+	args: object,
+): args is { startInterval: { intervalId: string } } => "startInterval" in args;
+const starts = () =>
+	fixture.mutate.mock.calls
+		.map(([args]) => args)
+		.filter(isStart)
+		.map((args) => args.startInterval.intervalId);
+const logs = () =>
+	fixture.mutate.mock.calls.map(([args]) => args).filter((a) => !isStart(a));
+
+test("an online interval announces its start once and marks it server-started", async () => {
+	vi.stubGlobal("navigator", {});
+	const tab = open();
+	tab.api.start();
+	await settle();
+	const state = await stored();
+	expect(starts()).toEqual([state.session?.intervalId]);
+	expect(state.session?.serverStarted).toBe(true);
+	vi.advanceTimersByTime(1250);
+	tab.api.pause();
+	await settle();
+	tab.api.start();
+	await settle();
+	expect(starts()).toHaveLength(1);
+	expect(logs()).toEqual([]);
+});
+
+test.each([
+	["pending", new Promise(() => {})],
+	[
+		"refused",
+		Promise.resolve({ type: "error", error: { type: "app", message: "no" } }),
+	],
+])("a start that is %s leaves the interval unmarked", async (_, server) => {
+	vi.stubGlobal("navigator", {});
+	fixture.mutate.mockReturnValueOnce({ ...OK, server });
+	const tab = open();
+	tab.api.start();
+	await settle();
+	expect(starts()).toHaveLength(1);
+	expect((await stored()).session?.serverStarted).toBe(false);
+});
+
+test("a reload mid-interval still credits an online interval once", async () => {
+	vi.stubGlobal("navigator", {});
+	let tab = open();
+	tab.api.startForTask("task", "Read");
+	await settle();
+	const intervalId = (await stored()).session?.intervalId;
+	vi.advanceTimersByTime(3000);
+	close(tab);
+	tab = open();
+	await settle();
+	vi.advanceTimersByTime(7000);
+	await settle();
+	expect(logs()).toEqual([
+		expect.objectContaining({ intervalId, taskId: "task", durationSec: 10 }),
+	]);
+	close(tab);
+	open();
+	await settle();
+	expect(logs()).toHaveLength(1);
+});
+
+test("a forward clock change across reload is left to the server and retried when early", async () => {
+	vi.stubGlobal("navigator", {});
+	let tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(2000);
+	close(tab);
+	vi.setSystemTime(Date.now() + 60000);
+	fixture.mutate.mockImplementation((args: object) =>
+		isStart(args) ||
+		fixture.mutate.mock.calls.filter(([a]) => !isStart(a)).length > 1
+			? ok()
+			: {
+					...OK,
+					server: Promise.resolve({
+						type: "error",
+						error: { type: "app", message: new FocusEarlyError(8000).message },
+					}),
+				},
+	);
+	tab = open();
+	await settle();
+	expect(logs()).toHaveLength(1);
+	expect((await stored()).pendingCompletions).toHaveLength(1);
+	expect(tab.api.error).toBeNull();
+	vi.advanceTimersByTime(8000);
+	await settle();
+	expect(logs()).toHaveLength(1);
+	vi.advanceTimersByTime(1500);
+	await settle();
+	expect(logs()).toHaveLength(2);
+	expect(logs()[1]).toEqual(logs()[0]);
+	expect((await stored()).pendingCompletions).toEqual([]);
+	vi.advanceTimersByTime(60000);
+	await settle();
+	expect(logs()).toHaveLength(2);
+});
+
+test("a forward clock change across reload earns nothing when the start was never acknowledged", async () => {
+	vi.stubGlobal("navigator", {});
+	fixture.mutate.mockReturnValueOnce({ ...OK, server: new Promise(() => {}) });
+	let tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(2000);
+	close(tab);
+	vi.setSystemTime(Date.now() + 60000);
+	tab = open();
+	await settle();
+	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(logs()).toEqual([]);
+	expect((await stored()).pendingCompletions).toEqual([]);
+});
+
+test("completion reports the paused wall time", async () => {
+	vi.stubGlobal("navigator", {});
+	const tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(2000);
+	tab.api.pause();
+	await settle();
+	vi.advanceTimersByTime(5000);
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(8000);
+	await settle();
+	expect(logs()).toEqual([expect.objectContaining({ pausedMs: 5000 })]);
 });

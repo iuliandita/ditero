@@ -105,14 +105,19 @@ The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaini
 
 Focus timers are stored locally for each account and shared by its tabs on the same
 browser or native server profile. Returning after an interval expires advances
-according to the auto-cycle setting; paused time is excluded.
-Stop discards the unfinished interval in every tab. Clearing site data removes local
-timer state. Timers do not follow you to another device. Offline timers keep working.
-An interval is recorded once only if the completing page can establish its full
-duration from monotonic elapsed time and progress saved when paused. Reload restores
-the countdown using the device clock, but unproven running time earns no credit:
-an interval can finish visually without a session log. Moving the device clock
-forward cannot credit unworked time.
+according to the auto-cycle setting; paused time is excluded. Stop discards the
+unfinished interval in every tab. Clearing site data removes local timer state.
+Timers do not follow you to another device.
+
+An interval started while online is also timed by the server: the server records
+when it started and accepts the finished interval only after the full duration plus
+any pauses has passed on its own clock. Reloading mid-interval keeps the credit, an
+interval the server finds early is retried automatically, and moving the device
+clock forward cannot count unworked time. An interval started offline, or whose
+start the server never acknowledged (for example a reload within moments of
+starting), has no server start. It is recorded once only if the completing page can
+establish the full duration from monotonic elapsed time and progress saved when
+paused, so reloading it mid-interval can finish it without a session log.
 
 ## Tech stack
 

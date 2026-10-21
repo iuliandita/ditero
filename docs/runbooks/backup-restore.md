@@ -91,3 +91,16 @@ Keep the usual coordinated database and attachment backup before migrating. Olde
 continue to work, but only updated clients offer Leave workspace. Application rollback
 can retain this additive migration; do not restore an older database over newer membership
 changes. Leaving and owner removal both require remaining members to rotate file keys.
+
+## Focus Interval Start Upgrade
+
+Run the focus-interval migration before deploying the application that records focus
+interval starts. It adds one owner-only table, `focus_interval_start`, that keeps the
+server's own start time for each online interval; the table is not synced, holds no
+credentials, and old rows are pruned after 14 days. Keep the usual coordinated database
+and attachment backup before migrating. Existing focus sessions, attachment ciphertext and
+key envelopes are unchanged, and the table is disposable: restoring a backup without it
+only means intervals started before the restore fall back to the client's monotonic-time
+check. Application rollback can retain this additive migration. Older web and native
+clients keep working: they never send a start, so their intervals are credited as before,
+and updated clients start announcing intervals once the server is upgraded.

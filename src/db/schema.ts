@@ -1220,6 +1220,39 @@ export const focusSession = pgTable("focus_session", {
 		.notNull(),
 });
 
+// Server-observed interval starts for focus.logSession. Server-only, deliberately
+// absent from the Zero table allowlist; started_at is always the server's now().
+export const focusIntervalStart = pgTable(
+	"focus_interval_start",
+	{
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		intervalId: uuid("interval_id").notNull(),
+		startedAt: timestamp("started_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.userId, t.intervalId] }),
+		pgPolicy("focus_interval_start_owner_select", {
+			for: "select",
+			to: "public",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("focus_interval_start_owner_insert", {
+			for: "insert",
+			to: "public",
+			withCheck: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+		pgPolicy("focus_interval_start_owner_delete", {
+			for: "delete",
+			to: "public",
+			using: sql`${t.userId} = current_setting('ditero.user_id', true)`,
+		}),
+	],
+).enableRLS();
+
 export const dashboard = pgTable("dashboard", {
 	id: text("id").primaryKey(),
 	ownerId: text("owner_id")

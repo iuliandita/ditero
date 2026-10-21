@@ -9,6 +9,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { focusEarlyWaitMs } from "../../domain/focus-interval.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import type { schema } from "../../zero/schema.gen.ts";
@@ -30,6 +31,7 @@ import {
 import {
 	accessFocusState,
 	emptyFocusState,
+	type FocusCompletion,
 	type FocusState,
 	focusStorageKey,
 	intervalFields,
@@ -134,12 +136,14 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		};
 	}, [storageKey, synchronize]);
 
+	const announceRef = useRef<(state: FocusState) => void>(() => undefined);
 	const updateFocus = useCallback(
 		async (update: (state: FocusState) => FocusState) => {
 			try {
 				const { state, changed } = await accessFocusState(storageKey, update);
 				applySnapshot(state);
 				if (changed) {
+					announceRef.current(state);
 					try {
 						localStorage.setItem(storageKey, String(state.revision));
 					} catch (error) {
@@ -154,6 +158,43 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		},
 		[storageKey, applySnapshot],
 	);
+
+	// A fresh interval is announced to the server at once, so its start is
+	// observed with the server's clock. Only a server acknowledgement marks the
+	// interval as server-started; offline starts keep the monotonic-proof gate.
+	const announcedRef = useRef(new Set<string>());
+	useEffect(() => {
+		announceRef.current = (state) => {
+			const s = state.session;
+			if (!s?.running || s.serverStarted || s.remainingSec !== s.plannedSec)
+				return;
+			const key = `${storageKey}:${s.intervalId}`;
+			if (announcedRef.current.has(key) || navigator.onLine === false) return;
+			announcedRef.current.add(key);
+			void (async () => {
+				try {
+					const mutation = zero.mutate(
+						mutators.focus.startInterval({ intervalId: s.intervalId }),
+					);
+					const failure =
+						mutationResultFailure(await mutation.client) ??
+						mutationResultFailure(await mutation.server);
+					if (failure) return;
+					await updateFocus((current) =>
+						current.session?.intervalId === s.intervalId &&
+						!current.session.serverStarted
+							? {
+									...current,
+									session: { ...current.session, serverStarted: true },
+								}
+							: current,
+					);
+				} catch (error) {
+					console.error("focus.startInterval failed", error);
+				}
+			})();
+		};
+	}, [storageKey, zero, updateFocus]);
 
 	const setSession = useCallback(
 		(update: (previous: Session | null, at: number) => Session | null) => {
@@ -194,11 +235,22 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		failureNotice?.key === storageKey ? failureNotice.message : null;
 	const dismissError = useCallback(() => setFailureNotice(null), []);
 	const attemptedRef = useRef(new Set<string>());
+	const retriesRef = useRef(new Map<string, number>());
+	const retryTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
+	const replayRef = useRef<(completion: FocusCompletion) => void>(
+		() => undefined,
+	);
+	useEffect(
+		() => () => {
+			for (const id of retryTimersRef.current) clearTimeout(id);
+			retryTimersRef.current.clear();
+		},
+		[],
+	);
 	useEffect(() => {
-		if (snapshot.key !== storageKey) return;
-		for (const completion of snapshot.state.pendingCompletions) {
+		replayRef.current = (completion) => {
 			const attempt = `${storageKey}:${completion.intervalId}`;
-			if (attemptedRef.current.has(attempt)) continue;
+			if (attemptedRef.current.has(attempt)) return;
 			attemptedRef.current.add(attempt);
 			void (async () => {
 				try {
@@ -210,6 +262,29 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 						localFailure ?? mutationResultFailure(await mutation.server);
 					if (!mountedRef.current || keyRef.current !== storageKey) return;
 					if (failure?.kind === "zero") return;
+					// Early on the server clock: keep the intent and retry once the
+					// server would accept it. Later page loads replay it as well.
+					const wait =
+						failure?.kind === "app" ? focusEarlyWaitMs(failure.message) : null;
+					if (wait !== null) {
+						const tries = (retriesRef.current.get(attempt) ?? 0) + 1;
+						retriesRef.current.set(attempt, tries);
+						if (tries > 5) return;
+						const timer = setTimeout(() => {
+							retryTimersRef.current.delete(timer);
+							const stillPending = snapshotRef.current.state.pendingCompletions;
+							if (
+								!stillPending.some(
+									(item) => item.intervalId === completion.intervalId,
+								)
+							)
+								return;
+							attemptedRef.current.delete(attempt);
+							replayRef.current(completion);
+						}, Math.max(wait, 1000) + 250);
+						retryTimersRef.current.add(timer);
+						return;
+					}
 					if (failure)
 						setFailureNotice({
 							key: storageKey,
@@ -228,8 +303,13 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 					console.error("focus.logSession failed", error);
 				}
 			})();
-		}
-	}, [snapshot, storageKey, zero, updateFocus]);
+		};
+	}, [storageKey, zero, updateFocus]);
+	useEffect(() => {
+		if (snapshot.key !== storageKey) return;
+		for (const completion of snapshot.state.pendingCompletions)
+			replayRef.current(completion);
+	}, [snapshot, storageKey]);
 
 	const [cue, setCue] = useState<Cue | null>(null);
 	const cueIdRef = useRef(0);
@@ -330,7 +410,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			const cycle = nextCycle(s.cycle, cfg);
 			const sec = plannedFor(cycle, cfg);
 			kind = s.cycle.phase;
-			const credit = provenTime(s) >= s.plannedSec * 1000;
+			const credit = s.serverStarted || provenTime(s) >= s.plannedSec * 1000;
 			const fields = intervalFields(cfg);
 			if (cfg.autoCycle) {
 				clockRef.current = {
@@ -367,6 +447,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 								startedAt: s.endsAt - s.plannedSec * 1000,
 								endedAt: s.endsAt,
 								durationSec: s.plannedSec,
+								...(s.pausedMs > 0 ? { pausedMs: Math.round(s.pausedMs) } : {}),
 							},
 						]
 					: current.pendingCompletions,
@@ -406,6 +487,17 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 					running: true,
 					startedAt: at + (previous.remainingSec - previous.plannedSec) * 1000,
 					endsAt: at + previous.remainingSec * 1000,
+					// Wall time since the pause, measured against the virtual start.
+					pausedMs:
+						previous.pausedMs +
+						(previous.startedAt === null
+							? 0
+							: Math.max(
+									0,
+									at -
+										(previous.startedAt +
+											(previous.plannedSec - previous.remainingSec) * 1000),
+								)),
 				};
 			const sec = plannedFor(INITIAL_CYCLE, cfg);
 			return {
