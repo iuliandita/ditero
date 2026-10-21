@@ -12,12 +12,12 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch. Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "5b4c5d043b0e4c6da5b300f22ac6d3c315a0f0789823c1abafcb357e1bf595a2",
-			"noImpact": "The Zero image rebuilds Litestream v0.5.15 with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream source, version suffix, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged."
+			"sourceDigest": "4d5adb26ed144ce08f0e514a927d236ed136556a53aac1162d29a2b806ce9eb7",
+			"noImpact": "The Zero and all-in-one images rebuild Litestream v0.3.13 and v0.5.15 with Go 1.27.3 for CVE-2026-111943 and the v5 binary with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream sources, version suffixes, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged."
 		},
 		"deployment": {
-			"sourceDigest": "099b7318325e9d8ac486df6c3324bb004702c73532c6f3b5b7e20e4df768c4cd",
-			"noImpact": "The Zero image rebuilds Litestream v0.5.15 with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream source, version suffix, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged."
+			"sourceDigest": "eb9a9424e078e250512d6de6a1d9cc390f3bd73b5b71ac5d1cf286c5699090ba",
+			"noImpact": "The Zero and all-in-one images rebuild Litestream v0.3.13 and v0.5.15 with Go 1.27.3 for CVE-2026-111943 and the v5 binary with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream sources, version suffixes, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
