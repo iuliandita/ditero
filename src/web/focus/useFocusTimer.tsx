@@ -25,10 +25,9 @@ import {
 	remainingSecFrom,
 } from "./timer-core.ts";
 import {
-	type FocusState,
 	focusStorageKey,
 	intervalFields,
-	restoreFocusState,
+	restoreFocus,
 	type FocusSessionState as Session,
 	serializeFocus,
 } from "./timer-persistence.ts";
@@ -75,123 +74,37 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 	const configRef = useRef(config);
 	configRef.current = config;
 
-	const [snapshot, setSnapshot] = useState(() => {
-		let raw: string | null = null;
+	const [session, setSessionState] = useState<Session | null>(() => {
 		try {
-			raw = localStorage.getItem(storageKey);
-		} catch (error) {
-			console.error("Could not read focus timer", error);
+			return restoreFocus(localStorage.getItem(storageKey));
+		} catch {
+			return null;
 		}
-		return { key: storageKey, raw, ...restoreFocusState(raw) };
 	});
-	const snapshotRef = useRef(snapshot);
-	const session = snapshot.key === storageKey ? snapshot.session : null;
 	const sessionRef = useRef(session);
+	sessionRef.current = session;
 
-	const synchronize = useCallback(() => {
-		try {
-			const raw = localStorage.getItem(storageKey);
-			if (
-				snapshotRef.current.key === storageKey &&
-				raw === snapshotRef.current.raw
-			)
-				return true;
-			const next = { key: storageKey, raw, ...restoreFocusState(raw) };
-			snapshotRef.current = next;
-			sessionRef.current = next.session;
-			setSnapshot(next);
-		} catch (error) {
-			console.error("Could not read focus timer", error);
-		}
-		return false;
-	}, [storageKey]);
-
-	useEffect(() => {
-		const onStorage = (event: StorageEvent) => {
-			if (
-				(event.key === storageKey || event.key === null) &&
-				(event.storageArea === localStorage || event.storageArea === null)
-			)
-				synchronize();
-		};
-		window.addEventListener("storage", onStorage);
-		synchronize();
-		return () => window.removeEventListener("storage", onStorage);
-	}, [storageKey, synchronize]);
-
-	// Fence stale tabs even before their storage event arrives. A completion and
-	// its next interval share one write, so reload always retains the log intent.
-	const updateFocus = useCallback(
-		(update: (state: FocusState) => FocusState) => {
-			if (!synchronize()) return false;
-			const current = snapshotRef.current;
-			const next = update(current);
-			if (next === current) return true;
+	// Persist transitions synchronously, including Stop and completion, so an
+	// immediate reload cannot revive the previous interval. Keep side effects out
+	// of React state updaters, which Strict Mode may invoke twice.
+	const setSession = useCallback(
+		(
+			update: Session | null | ((previous: Session | null) => Session | null),
+		) => {
+			const next =
+				typeof update === "function" ? update(sessionRef.current) : update;
+			if (next === sessionRef.current) return;
+			sessionRef.current = next;
 			try {
-				const raw =
-					next.session || next.pendingCompletions.length
-						? serializeFocus(next.session, next.pendingCompletions)
-						: null;
-				if (raw === null) localStorage.removeItem(storageKey);
-				else localStorage.setItem(storageKey, raw);
-				const saved = { ...next, key: storageKey, raw };
-				snapshotRef.current = saved;
-				sessionRef.current = saved.session;
-				setSnapshot(saved);
-				return true;
+				if (next) localStorage.setItem(storageKey, serializeFocus(next));
+				else localStorage.removeItem(storageKey);
 			} catch (error) {
 				console.error("Could not persist focus timer", error);
-				return false;
 			}
+			setSessionState(next);
 		},
-		[storageKey, synchronize],
+		[storageKey],
 	);
-
-	const setSession = useCallback(
-		(update: Session | null | ((previous: Session | null) => Session | null)) =>
-			updateFocus((current) => {
-				const next =
-					typeof update === "function" ? update(current.session) : update;
-				return next === current.session
-					? current
-					: { ...current, session: next };
-			}),
-		[updateFocus],
-	);
-
-	const mountedRef = useRef(true);
-	useEffect(() => {
-		mountedRef.current = true;
-		return () => {
-			mountedRef.current = false;
-		};
-	}, []);
-	const attemptedRef = useRef(new Set<string>());
-	useEffect(() => {
-		if (snapshot.key !== storageKey) return;
-		for (const completion of snapshot.pendingCompletions) {
-			const attempt = `${storageKey}:${completion.intervalId}`;
-			if (attemptedRef.current.has(attempt)) continue;
-			attemptedRef.current.add(attempt);
-			void (async () => {
-				try {
-					const saved = await runMutation(
-						zero.mutate(mutators.focus.logSession(completion)),
-						(msg) => console.error("focus.logSession failed", msg),
-					);
-					if (!saved || !mountedRef.current) return;
-					updateFocus((current) => ({
-						...current,
-						pendingCompletions: current.pendingCompletions.filter(
-							(item) => item.intervalId !== completion.intervalId,
-						),
-					}));
-				} catch (error) {
-					console.error("focus.logSession failed", error);
-				}
-			})();
-		}
-	}, [snapshot, storageKey, zero, updateFocus]);
 
 	useEffect(() => {
 		const current = sessionRef.current;
@@ -233,45 +146,58 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		const cfg = prefLoadingRef.current ? s.config : configRef.current;
 		const kind = s.cycle.phase;
 		const durationSec = s.plannedSec;
-		const startedAt = s.startedAt;
+		// Only completed, positive intervals log; a reset never reaches here.
+		if (durationSec >= 1) {
+			const startedAt = s.startedAt;
+			const endedAt = s.endsAt ?? startedAt + durationSec * 1000;
+			const taskId = kind === "work" ? s.boundTaskId : null;
+			void runMutation(
+				zero.mutate(
+					mutators.focus.logSession({
+						intervalId: s.intervalId,
+						...(taskId ? { taskId } : {}),
+						kind,
+						startedAt,
+						endedAt,
+						durationSec,
+					}),
+				),
+				(msg) => console.error("focus.logSession failed", msg),
+			);
+		}
+		showCue(
+			kind === "work" ? m.focus_cue_work_complete() : m.focus_cue_break_over(),
+		);
 
 		const next = nextCycle(s.cycle, cfg);
 		const nextSec = plannedFor(next, cfg);
-		const now = Date.now();
-		const advanced = updateFocus((current) => ({
-			...current,
-			session: {
+		if (cfg.autoCycle) {
+			const now = Date.now();
+			setSession({
 				...intervalFields(cfg),
 				cycle: next,
 				plannedSec: nextSec,
-				running: cfg.autoCycle,
-				startedAt: cfg.autoCycle ? now : null,
-				endsAt: cfg.autoCycle ? now + nextSec * 1000 : null,
+				running: true,
+				startedAt: now,
+				endsAt: now + nextSec * 1000,
 				remainingSec: nextSec,
 				boundTaskId: s.boundTaskId,
 				boundTaskTitle: s.boundTaskTitle,
-			},
-			pendingCompletions: [
-				...current.pendingCompletions,
-				{
-					intervalId: s.intervalId,
-					...(kind === "work" && s.boundTaskId
-						? { taskId: s.boundTaskId }
-						: {}),
-					kind,
-					startedAt,
-					endedAt: s.endsAt ?? startedAt + durationSec * 1000,
-					durationSec,
-				},
-			],
-		}));
-		if (advanced)
-			showCue(
-				kind === "work"
-					? m.focus_cue_work_complete()
-					: m.focus_cue_break_over(),
-			);
-	}, [plannedFor, showCue, updateFocus]);
+			});
+		} else {
+			setSession({
+				...intervalFields(cfg),
+				cycle: next,
+				plannedSec: nextSec,
+				running: false,
+				startedAt: null,
+				endsAt: null,
+				remainingSec: nextSec,
+				boundTaskId: s.boundTaskId,
+				boundTaskTitle: s.boundTaskTitle,
+			});
+		}
+	}, [zero, plannedFor, showCue, setSession]);
 
 	// Tick while running: remaining is recomputed from `endsAt` each tick (not
 	// decremented), so a throttled/suspended tab catches up on the next fire.
@@ -280,7 +206,6 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		if (!session?.running) return;
 		function tick() {
-			if (!synchronize()) return;
 			const s = sessionRef.current;
 			if (!s?.running || s.endsAt == null) return;
 			const now = Date.now();
@@ -298,7 +223,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		tick();
 		const id = setInterval(tick, 250);
 		return () => clearInterval(id);
-	}, [session?.running, complete, setSession, synchronize]);
+	}, [session?.running, complete, setSession]);
 
 	const start = useCallback(() => {
 		setSession((prev) => {
