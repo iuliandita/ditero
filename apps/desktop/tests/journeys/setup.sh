@@ -4,13 +4,26 @@ out="$RUNNER_TEMP/desktop-journeys"
 mkdir -p "$out/evidence" "$out/private"
 chmod 700 "$out/private"
 export MSYS_NO_PATHCONV=1
+cat > "$out/private/ca.cnf" <<'CA'
+[req]
+distinguished_name = dn
+x509_extensions = ca
+prompt = no
+[dn]
+CN = Ditero journey CA
+[ca]
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,keyCertSign,cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always
+CA
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$out/ca.key" -out "$out/ca.crt" \
-  -days 2 -subj '/CN=Ditero journey CA' -addext 'basicConstraints=critical,CA:TRUE' 2> "$out/private/ca.log"
+  -days 2 -sha256 -config "$out/private/ca.cnf" 2> "$out/private/ca.log"
 openssl req -newkey rsa:2048 -nodes -keyout "$out/server.key" -out "$out/server.csr" \
   -subj '/CN=localhost' 2> "$out/private/server.log"
-printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\nbasicConstraints=CA:FALSE\n' > "$out/server.ext"
+printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n' > "$out/server.ext"
 openssl x509 -req -in "$out/server.csr" -CA "$out/ca.crt" -CAkey "$out/ca.key" \
-  -CAcreateserial -out "$out/server.crt" -days 2 -extfile "$out/server.ext" 2> "$out/private/sign.log"
+  -CAcreateserial -out "$out/server.crt" -days 2 -sha256 -extfile "$out/server.ext" 2> "$out/private/sign.log"
 openssl x509 -in "$out/ca.crt" -noout -text > "$out/evidence/ca-public.txt"
 openssl x509 -in "$out/server.crt" -noout -text > "$out/evidence/server-public.txt"
 openssl verify -CAfile "$out/ca.crt" "$out/server.crt" 2>&1 | tee "$out/evidence/certificate-verification.log"
