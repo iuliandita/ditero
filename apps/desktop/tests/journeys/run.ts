@@ -499,6 +499,10 @@ try {
 		await native.click(ids("sign-out"));
 		await until("all credentials removed", () => {
 			const proof = vault();
+			writeFileSync(
+				resolve(evidence, "vault-empty-pending.json"),
+				JSON.stringify(proof),
+			);
 			return (
 				proof.sessionCount === 0 &&
 				proof.credentialCount === 0 &&

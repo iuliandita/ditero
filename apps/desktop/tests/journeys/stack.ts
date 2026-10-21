@@ -64,8 +64,9 @@ export function background(
 		env,
 		stdio: ["ignore", "pipe", "pipe"],
 	});
-	child.stdout?.pipe(log);
-	child.stderr?.pipe(log);
+	child.stdout?.pipe(log, { end: false });
+	child.stderr?.pipe(log, { end: false });
+	child.on("close", () => log.end());
 	child.on("error", (error) => log.write(String(error)));
 	children.push(child);
 	return child;

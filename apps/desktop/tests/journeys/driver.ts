@@ -71,18 +71,35 @@ export async function desktop(application: string) {
 				capabilities: {
 					alwaysMatch: {
 						"tauri:options": { application },
-						...(process.platform === "win32"
-							? {
-									"ms:edgeOptions": {
-										additionalBrowserArguments: "--enable-logging=stderr",
-									},
-								}
-							: {}),
 					},
 				},
 			})) as { sessionId: string };
 			session = value.sessionId;
 		}
+		await until("native transport", () =>
+			evaluate("!!globalThis.NativeDitero"),
+		);
+		await evaluate(`(() => {
+		const native = globalThis.NativeDitero, original = native.postMessage;
+		const operations = new Map(), trace = globalThis.__journeyProtocol = [];
+		let listener = native.onmessage;
+		const record = value => { trace.push(value); if (trace.length > 200) trace.shift(); };
+		native.postMessage = function(bytes) {
+			const message = JSON.parse(bytes);
+			operations.set(message.rid, message.op);
+			record({direction:'request', op:message.op, rid:message.rid});
+			return original.call(native, bytes);
+		};
+		Object.defineProperty(native, 'onmessage', {
+			get: () => event => {
+				const message = JSON.parse(event.data);
+				if (message.t === 'reply') record({direction:'reply', op:operations.get(message.rid), rid:message.rid, ok:message.ok, code:message.code});
+				listener?.call(native, event);
+			},
+			set: value => { listener = value; }
+		});
+		return true;
+	})()`);
 	}
 	async function evaluate<T = unknown>(script: string): Promise<T> {
 		if (process.platform !== "darwin")
@@ -102,6 +119,10 @@ export async function desktop(application: string) {
 				),
 			);
 			socket.on("error", fail);
+			socket.on("end", () => {
+				if (!bytes.includes("\n"))
+					fail(new Error("Debug hook closed without a response"));
+			});
 			socket.on("data", (chunk) => {
 				bytes += chunk.toString();
 				if (bytes.includes("\n")) {
@@ -213,28 +234,6 @@ export async function desktop(application: string) {
 		}
 	}
 	await launch();
-	await until("native transport", () => evaluate("!!globalThis.NativeDitero"));
-	await evaluate(`(() => {
-		const native = globalThis.NativeDitero, original = native.postMessage;
-		const operations = new Map(), trace = globalThis.__journeyProtocol = [];
-		let listener = native.onmessage;
-		const record = value => { trace.push(value); if (trace.length > 200) trace.shift(); };
-		native.postMessage = function(bytes) {
-			const message = JSON.parse(bytes);
-			operations.set(message.rid, message.op);
-			record({direction:'request', op:message.op, rid:message.rid});
-			return original.call(native, bytes);
-		};
-		Object.defineProperty(native, 'onmessage', {
-			get: () => event => {
-				const message = JSON.parse(event.data);
-				if (message.t === 'reply') record({direction:'reply', op:operations.get(message.rid), rid:message.rid, ok:message.ok, code:message.code});
-				listener?.call(native, event);
-			},
-			set: value => { listener = value; }
-		});
-		return true;
-	})()`);
 	if (process.platform === "darwin") {
 		const refused = await new Promise<string>((done, fail) => {
 			const socket = connect(port, "127.0.0.1");

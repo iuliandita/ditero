@@ -88,7 +88,12 @@ jobs:
           $driver = Join-Path $env:EDGEWEBDRIVER 'msedgedriver.exe'
           if (-not (Test-Path $driver)) { throw 'Runner Edge driver missing' }
           & $driver --version
-          "JOURNEY_NATIVE_DRIVER=$driver" >> $env:GITHUB_ENV
+          "JOURNEY_EDGE_DRIVER=$driver" >> $env:GITHUB_ENV
+          Get-ChildItem 'C:\Program Files (x86)\Microsoft\EdgeWebView\Application' -Directory | Select-Object -ExpandProperty Name
+          $wrapper = Join-Path $env:RUNNER_TEMP 'journey-driver.exe'
+          rustc apps/desktop/tests/journeys/windows-driver.rs -o $wrapper
+          if ($LASTEXITCODE -ne 0) { throw 'Driver logging wrapper build failed' }
+          "JOURNEY_NATIVE_DRIVER=$wrapper" >> $env:GITHUB_ENV
       - name: Install frozen dependencies and compile
         run: |
           set -euo pipefail

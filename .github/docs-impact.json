@@ -28,9 +28,9 @@
 			"note": "Align chart metadata, resource labels and packaged deployment image examples with 0.1.0-beta.1. Preserve app/Zero pairing, storage and recovery guidance, and cluster qualification limits; the optional one-image bundle remains separate from standard release assets."
 		},
 		"native": {
-			"sourceDigest": "0f7339cc0171c4e596b7eeac65831b99f95920839754b0015133f2f2f9bc2bc0",
+			"sourceDigest": "21a262b562f319854de811727b2ededbe35c5f3d564234c12d03b1b2ba966c6e",
 			"docs": ["apps/desktop/README.md"],
-			"note": "Document the branch-scoped hosted desktop journey harness, ephemeral trusted HTTPS fixture, per-journey evidence and platform limits. macOS evaluation is debug-only and requires explicit test configuration; optimized release binaries must exclude it. No client protocol, stored data, backup, upgrade or rollback behavior changes. Windows/macOS notifications remain unsupported and are not credited as passing journeys."
+			"note": "Document the branch-scoped hosted desktop journey harness, ephemeral trusted HTTPS fixture, per-journey evidence and platform limits. macOS evaluation is debug-only and requires explicit test configuration; optimized release binaries must exclude it. Sign-out now starts retired notification cleanup after durable local revocation. Client protocols, stored formats, backups, upgrade and rollback procedures are unchanged. Windows/macOS notifications remain unsupported and are not credited as passing journeys."
 		},
 		"authentication": {
 			"sourceDigest": "94708677c42d414b0287be7f48a38f511b95039dce4a14a4b33939cc3d3dd213",

@@ -1999,6 +1999,7 @@ impl Actor {
                 json!({"ok":false,"code":"storage-failed","remoteRevoked":revoked,"alreadyUnusable":unusable}),
             );
         }
+        self.cleanup_notifications();
         Ok(json!({"ok":true,"remoteRevoked":revoked,"alreadyUnusable":unusable}))
     }
     fn close_socket(&mut self, cid: u64) {

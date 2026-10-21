@@ -353,6 +353,7 @@ per-journey artifacts distinguish completed checks from unavailable features.
 It uses ephemeral servers and an OS-trusted local CA, without certificate bypasses.
 macOS automation is included only in debug builds, requires explicit process-local
 test configuration, and is checked for absence from the optimized release binary.
+Sign-out now starts retired notification cleanup after durable local revocation.
 These disposable runner accounts do not qualify download trust, trusted signing,
 notarization, upgrades, or physical devices. Windows/macOS system notifications
 remain unavailable in the product. Existing client data, backups, and rollback
