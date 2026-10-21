@@ -91,6 +91,8 @@ spec:
               value: http://{{ include "ditero.fullname" $ }}-app:3000/api/zero/mutate
             - name: ZERO_ENABLE_CRUD_MUTATIONS
               value: "false"
+            - name: ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS
+              value: "30"
             {{- range $key := list "ZERO_UPSTREAM_DB" "ZERO_ADMIN_PASSWORD" }}
             - name: {{ $key }}_FILE
               value: /run/secrets/ditero/{{ $key }}

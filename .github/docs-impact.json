@@ -11,31 +11,32 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "1ef746d15432e04d25188975ed586a5413d5106c41883f49212e481b1ae5aae6",
-			"noImpact": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged."
+			"sourceDigest": "af85a29c71c82a635601d15231a7241b5faba0920c71374b22ccfe441ca6fb49",
+			"docs": [
+				"deploy/docker/aio/README.md",
+				"deploy/helm/ditero/README.md",
+				"deploy/kustomize/README.md"
+			],
+			"note": "Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior."
 		},
 		"deployment": {
-			"sourceDigest": "3cb56b9dc41deafd254840faee7defba3f98b24d86daea7c6731b50d10f3e43e",
-			"noImpact": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged."
+			"sourceDigest": "b11d2b9dee39dab08a51b4b53f5502590418f9d341a14d772ad6e7b92b162fc1",
+			"docs": [
+				"deploy/docker/aio/README.md",
+				"deploy/helm/ditero/README.md",
+				"deploy/kustomize/README.md"
+			],
+			"note": "Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior."
+		},
+		"authentication": {
+			"sourceDigest": "16f10c5c3863dcc58b8ed6e2dce6634ec1a7ea490785815cb60ffd95933f301d",
+			"docs": ["docs/runbooks/native-authentication.md"],
+			"note": "Document periodic stream revalidation after session revocation; HTTP authorization remains checked against live session state."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
 			"docs": ["apps/desktop/README.md"],
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
-		},
-		"authentication": {
-			"sourceDigest": "b7378d045bf86ce9b8c87f19f4483d973f9bbfa4df65140a5585e987fc6a3cf9",
-			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Document retryable browser token lookup failures while retaining authoritative session verification and 401 for missing, expired or revoked sessions."
-		},
-		"compatibility": {
-			"sourceDigest": "2768c3515ffb1e7cedd1a01e1f906d4aefedaa61be0fe2fb25a4692ea3278d67",
-			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "Document the Zero 1.9 outage recovery patch, retained durable-close behavior and automatic queued-mutation replay without bypassing authentication.",
-			"upgrade": "Upgrade the application and reload open clients to load the corrected client bundle; no database migration or storage format change is required.",
-			"backup": "Take the existing database and attachment backup before upgrading, and retain browser storage until queued edits have reached the server.",
-			"rollback": "Rolling back restores the older client outage defect; reload clients after rollback and verify that queued edits reach the server.",
-			"clientVersions": "Already open older clients need a reload to gain recovery; the patch preserves persisted formats and leaves invalid sessions requiring sign-in."
 		}
 	}
 }

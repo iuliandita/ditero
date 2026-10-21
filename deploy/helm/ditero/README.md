@@ -97,6 +97,12 @@ together.
 
 ## Configuration and operations
 
+Zero uses `ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS=30`. After sign-out or session
+revocation, an open subscription can receive updates until its next `/query`
+revalidation, plus request/scheduling latency. Deploy this configuration update to
+shorten the former five-minute default; no data migration is needed. See
+[session revocation](../../../docs/security.md#authentication).
+
 The commented [`values.yaml`](values.yaml) describes the supported options.
 The chart deliberately runs one application replica and one Zero replica, with
 Recreate updates. Filesystem attachments and Zero's SQLite replica are local

@@ -223,3 +223,9 @@ sanitized receipt is uploaded. Failed fixtures retain their volumes for the
 remaining lifetime of the disposable runner; these volumes are lost when that
 runner is decommissioned. This gate does not qualify backup/restore, production
 operation, or other open AIO support requirements.
+
+Zero fixes `ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS=30`. After sign-out or session
+revocation, an open subscription can receive updates until its next `/query`
+revalidation, plus request/scheduling latency. Upgrade the bundle to shorten the
+former five-minute default; no data migration is needed. See
+[session revocation](../../../docs/security.md#authentication).

@@ -28,7 +28,8 @@ export async function revokeNativeSession(
 				[session.deviceId, session.userId],
 			);
 			// Deleting the session also cascades its native link. Existing Zero
-			// JWTs lose their database authority immediately after commit.
+			// JWTs fail subsequent HTTP checks after commit; existing sync connections
+			// close on periodic /query revalidation (30s in shipped deployments).
 			await client.query("delete from session where id = $1 and user_id = $2", [
 				session.sessionId,
 				session.userId,
