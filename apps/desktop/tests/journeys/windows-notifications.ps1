@@ -42,7 +42,7 @@ while ([DateTime]::UtcNow -lt $deadline) {
             exit 0
         }
     }
-    $snapshot | Set-Content (Join-Path $evidence 'notification-last-uia.txt')
+    Set-Content -Path (Join-Path $evidence 'notification-last-uia.txt') -Value ($snapshot -join "`n")
     Start-Sleep -Milliseconds 200
 }
 throw 'No visible Ditero toast with the expected generic body'

@@ -539,14 +539,33 @@ try {
 				"click",
 				"1",
 			]);
-		} else if (process.platform === "win32") {
-			run("pwsh", [
-				"-NoProfile",
-				"-File",
-				resolve(root, "apps/desktop/tests/journeys/windows-notifications.ps1"),
-			]);
 		} else {
-			run(resolve(state, "..", "journey-notifications"), ["click"]);
+			// The fixture's HTTPS loop must keep serving polls while the OS helper waits.
+			const click =
+				process.platform === "win32"
+					? background("notification-click", "pwsh", [
+							"-NoProfile",
+							"-File",
+							resolve(
+								root,
+								"apps/desktop/tests/journeys/windows-notifications.ps1",
+							),
+						])
+					: background(
+							"notification-click",
+							resolve(state, "..", "journey-notifications"),
+							["click"],
+						);
+			await until(
+				"OS notification helper completion",
+				() => click.exitCode !== null,
+				60,
+			);
+			assert.equal(
+				click.exitCode,
+				0,
+				readFileSync(resolve(evidence, "notification-click.log"), "utf8"),
+			);
 		}
 
 		await until("notification task destination", () =>
