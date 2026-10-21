@@ -122,6 +122,7 @@ test("native settings never mount browser account panels, retain native encrypti
 				},
 				origin: "https://chosen.example.test",
 				storageScope: "native-scope",
+				openSettings: async () => {},
 				changeServer: async () => {},
 			}}
 		>
@@ -132,9 +133,16 @@ test("native settings never mount browser account panels, retain native encrypti
 	expect(native.match(/data-testid="native-browser-settings"/g)).toHaveLength(
 		6,
 	);
-	expect(native.match(/href="https:\/\/chosen.example.test\/"/g)).toHaveLength(
-		6,
-	);
+	expect(native.match(/data-native-settings="[a-z-]+"/g)).toHaveLength(6);
+	for (const section of [
+		"notifications",
+		"security",
+		"access-tokens",
+		"calendar-feeds",
+		"data",
+		"danger",
+	])
+		expect(native).toContain(`data-native-settings="${section}"`);
 	expect(native).toContain("min-h-11");
 	expect(native).not.toContain("archive_export_action");
 	expect(native).not.toContain("native_settings_other_data_browser_note");
@@ -156,9 +164,9 @@ test("native settings never mount browser account panels, retain native encrypti
 	expect(exportEnabled).toContain("archive_export_action");
 	expect(exportEnabled).toContain("archive_export_description");
 	expect(exportEnabled).toContain("native_settings_other_data_browser_note");
-	expect(
-		exportEnabled.match(/href="https:\/\/chosen.example.test\/"/g),
-	).toHaveLength(6);
+	expect(exportEnabled.match(/data-native-settings="[a-z-]+"/g)).toHaveLength(
+		6,
+	);
 	control.archiveExport = false;
 	control.native = false;
 	const browser = renderToStaticMarkup(surface);
@@ -192,6 +200,7 @@ test.each([
 				profile: { id: "maya", name: "Maya Chen", email: "maya@example.test" },
 				origin: "https://chosen.example.test",
 				storageScope: "native-maya",
+				openSettings: async () => {},
 				changeServer: async () => {},
 				push: {
 					identity: "native-maya:session",

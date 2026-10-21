@@ -21,6 +21,18 @@ network failures permit this fallback; invalid credentials, trust failures,
 expired evidence, and failed revocation storage stay unavailable. Offline task
 editing and account/server transitions still require broader device qualification.
 
+## Browser-only settings
+
+"Open in browser" in Settings opens the selected server's matching Notifications,
+Security, Access tokens, Calendar subscriptions, Your data, or Danger zone section.
+The system browser may require a separate sign-in. The `settings.open` native
+operation accepts only those fixed destinations, bound to the current account;
+it accepts no URL or credentials. The sign-in browser operation remains limited
+to the pending login grant. Browser handoff failures show a retryable message.
+
+The matching `/settings/<section>` browser routes require a server version that
+includes these routes; older servers still open their normal application page.
+
 ## Encrypted files
 
 Enable `DITERO_E2E_ENABLED` on the server and enroll the account's encryption keys

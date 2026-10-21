@@ -2,8 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "3dd81594f87afe6f7ee7719fa3d6a47279b468b122389aa01ebe3a54c0bf7517",
-			"noImpact": "Task rows and cards replace the visible Personal or Shared word with a person or group icon while retaining the workspace name and the existing localized tooltip and screen-reader context. Task behavior, permissions, settings and documented workflows are unchanged."
+			"sourceDigest": "bb5e45b4d2d1bb726d335831067502b370185e17495fcca95f80f02233f9c16b",
+			"docs": ["apps/desktop/README.md", "apps/android/README.md"],
+			"note": "Document localized keyring setup and retry, the Linux package recommendation, and account-bound fixed Settings browser handoffs on desktop and Android. Matching Settings routes preserve the destination through browser sign-in; older servers still open their normal application page."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
@@ -11,14 +12,8 @@
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "e32769de387a2b031b6e3a219a9074dfd95f08d7a808b024316700999ae72d79",
-			"docs": [
-				".env.example",
-				"docs/runbooks/sign-in-providers.md",
-				"deploy/docker/aio/README.md",
-				"deploy/helm/ditero/README.md"
-			],
-			"note": "Compose now forwards GOOGLE_CLIENT_ID, without which Google sign-in could not be enabled. The new sign-in provider guide documents per-instance OAuth clients, the exact callback, Google redirect-host limits, Compose/AIO/Helm configuration, registration and linking behavior, and planned providers."
+			"sourceDigest": "738651e814af38d0f12e0accec1f3c2c7cc5226828447d50a16c8df8e3c2c4f9",
+			"noImpact": "The Linux DEB adds a recommended Secret Service provider without changing server configuration or deployment settings. Desktop keyring setup and retry guidance are documented in apps/desktop/README.md."
 		},
 		"deployment": {
 			"sourceDigest": "4a4cadef874a1cef442178e7a6e332a0eefe5252e635068a1d4c49486f7d7794",
@@ -26,9 +21,9 @@
 			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
 		},
 		"native": {
-			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
-			"docs": ["apps/desktop/README.md"],
-			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
+			"sourceDigest": "8edfdb0fc70fd08e2097b6bd2850f6a477cc9877dc19bc389adb492a203bd784",
+			"docs": ["apps/desktop/README.md", "apps/android/README.md"],
+			"note": "Document localized keyring setup and retry, the Linux package recommendation, and account-bound fixed Settings browser handoffs on desktop and Android. Matching Settings routes preserve the destination through browser sign-in; older servers still open their normal application page."
 		}
 	}
 }

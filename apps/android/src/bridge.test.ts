@@ -11,6 +11,7 @@ import {
 	connectBridge,
 	createNativeNotificationNavigation,
 	createNativePush,
+	createNativeSettingsOpener,
 	createNativeTaskLinkNavigation,
 	type Hello,
 	NativeWebSocket,
@@ -771,4 +772,28 @@ test("migration capability validates and preserves host metadata", async () => {
 	expect((await readBridgeState()).archiveMigration).toBe(false);
 	Object.assign(snapshot, { archiveMigration: "true" });
 	await expect(readBridgeState()).rejects.toThrow("invalid-reply");
+});
+
+test("settings handoff uses a named destination and refuses a retired account", async () => {
+	snapshot.session = session;
+	await connectBridge();
+	const open = createNativeSettingsOpener(snapshot.gen, session.authHandle);
+	const pending = open("security");
+	const command = sent.at(-1);
+	if (!command) throw new Error("missing settings operation");
+	expect(command).toEqual({
+		op: "settings.open",
+		rid: expect.any(Number),
+		gen: 1,
+		id: "opaque-1",
+		body: { section: "security" },
+	});
+	reply(command, {});
+	await pending;
+	snapshot.gen++;
+	snapshot.session = { ...session, authHandle: "replacement" };
+	await connectBridge();
+	const count = sent.length;
+	await expect(open("data")).rejects.toThrow("stale-generation");
+	expect(sent).toHaveLength(count);
 });

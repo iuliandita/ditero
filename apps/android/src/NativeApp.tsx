@@ -16,6 +16,7 @@ import {
 } from "../../../src/web/lib/DisplayPreferencesProvider.tsx";
 import { KeyringProvider } from "../../../src/web/lib/e2e/KeyringProvider.tsx";
 import {
+	type NativeAccount,
 	NativeAccountContext,
 	type NativeNotificationNavigation,
 	type NativePush,
@@ -31,6 +32,7 @@ import {
 	connectBridge,
 	createNativeNotificationNavigation,
 	createNativePush,
+	createNativeSettingsOpener,
 	createNativeTaskLinkNavigation,
 	installNativeWebSocket,
 	NativeError,
@@ -53,6 +55,7 @@ type Active = {
 	profile: NativeProfile;
 	origin: string;
 	push: NativePush;
+	openSettings: NativeAccount["openSettings"];
 	notifications: NativeNotificationNavigation;
 	taskLinks?: NativeTaskLinkNavigation;
 };
@@ -164,6 +167,7 @@ function NativeAppRoutes({
 		setActive({
 			runtime,
 			profile,
+			openSettings: createNativeSettingsOpener(context.gen, context.authHandle),
 			origin: context.origin,
 			...(current.taskLinks
 				? {
@@ -285,6 +289,7 @@ function NativeAppRoutes({
 						push: active.push,
 						notifications: active.notifications,
 						taskLinks: active.taskLinks,
+						openSettings: active.openSettings,
 						changeServer,
 					}}
 				>

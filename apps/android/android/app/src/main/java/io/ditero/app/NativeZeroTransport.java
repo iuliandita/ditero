@@ -447,6 +447,10 @@ final class NativeZeroTransport {
                     requireReady(m);
                     browser(proxy, rid);
                     return;
+                case "settings.open":
+                    requireReady(m);
+                    settingsBrowser(proxy, rid, m);
+                    return;
                 case "complete":
                     requireReady(m);
                     complete(proxy, rid);
@@ -1186,6 +1190,26 @@ final class NativeZeroTransport {
         } catch (ActivityNotFoundException e) {
             fail(proxy, rid, "no-browser");
         }
+    }
+
+    private void settingsBrowser(JavaScriptReplyProxy proxy, int rid, Map<String, Object> m) throws Reject {
+        if (!java.util.Set.of("op", "rid", "gen", "id", "body").containsAll(m.keySet())
+                || !(m.get("body") instanceof Map)) throw new Reject("invalid-message");
+        Map<?, ?> body = (Map<?, ?>) m.get("body");
+        if (body.size() != 1 || !(body.get("section") instanceof String)) throw new Reject("invalid-message");
+        Session captured = session;
+        if (captured == null || captured.context != context || !captured.verified || captured.refused
+                || revoking != null || !unexpired(captured.expiresAt) || handle == null || !handle.equals(m.get("id")))
+            throw new Reject("stale-generation");
+        final String url;
+        try { url = captured.context.settingsUrl((String) body.get("section")); }
+        catch (IllegalArgumentException e) { throw new Reject("invalid-settings"); }
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        intent.addCategory(Intent.CATEGORY_BROWSABLE);
+        try {
+            activity.startActivity(intent);
+            sendToPage(proxy, obj("t", "reply", "rid", rid, "ok", true));
+        } catch (ActivityNotFoundException e) { fail(proxy, rid, "no-browser"); }
     }
 
     private void complete(final JavaScriptReplyProxy proxy, final int rid) {

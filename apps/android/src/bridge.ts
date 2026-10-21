@@ -1,3 +1,4 @@
+import type { NativeSettingsSection } from "../../../src/domain/native-settings.ts";
 import { getLocale } from "../../../src/paraglide/runtime.js";
 import {
 	NATIVE_PUSH_STATES,
@@ -120,6 +121,11 @@ export type AttachmentOp =
 type PushOp = "push.state" | "push.enable" | "push.disable" | "push.permission";
 
 type Command =
+	| {
+			op: "settings.open";
+			id: string;
+			body: { section: NativeSettingsSection };
+	  }
 	| { op: "server.select"; origin: string }
 	| { op: SimpleOp }
 	| { op: PushOp; id: string; locale?: "en" | "de" | "es" | "fr" | "ro" | "ar" }
@@ -623,6 +629,25 @@ export async function requestGrant(): Promise<GrantInfo> {
 
 export async function openBrowser(): Promise<void> {
 	return request({ op: "browser" }, (reply) => void ok(reply));
+}
+
+/** A settings destination carries no URL and stays bound to its captured account. */
+export function createNativeSettingsOpener(gen: number, authHandle: string) {
+	return async (section: NativeSettingsSection): Promise<void> => {
+		const assertCurrent = () => {
+			const current = requireState();
+			if (current.gen !== gen || current.session?.authHandle !== authHandle)
+				throw new NativeError("stale-generation");
+		};
+		assertCurrent();
+		return request(
+			{ op: "settings.open", id: authHandle, body: { section } },
+			(reply) => {
+				assertCurrent();
+				void ok(reply);
+			},
+		);
+	};
 }
 
 /** Reconcile before retrying: a timed-out exchange may have completed in Java. */

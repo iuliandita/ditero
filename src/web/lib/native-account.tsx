@@ -1,5 +1,6 @@
 import { useZero } from "@rocicorp/zero/react";
 import { createContext, useContext } from "react";
+import type { NativeSettingsSection } from "../../domain/native-settings.ts";
 
 export const NATIVE_PUSH_STATES = [
 	"unsupported",
@@ -59,6 +60,7 @@ export type NativeAccount = {
 	push?: NativePush;
 	notifications?: NativeNotificationNavigation;
 	taskLinks?: NativeTaskLinkNavigation;
+	openSettings(section: NativeSettingsSection): Promise<void>;
 	changeServer(): Promise<void>;
 };
 export const NativeAccountContext = createContext<NativeAccount | null>(null);
