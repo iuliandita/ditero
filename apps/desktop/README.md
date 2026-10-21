@@ -181,6 +181,8 @@ requires a Ditero window. macOS mounts the DMG, copies the app, checks its nativ
 architecture and ad-hoc signature, and checks that it survives startup. Startup
 checks do not qualify a rendered signed-in interface, consent, credential storage,
 upgrades or OS download trust. Diagnostics are retained for seven days.
+CI disables per-format updater binary patching to preserve the Windows executable
+for byte-for-byte installation checks; no automatic updater is configured.
 
 ## Manual release signing hooks
 

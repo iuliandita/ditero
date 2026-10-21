@@ -40,6 +40,8 @@ executable to the build, verify its PE architecture and require a Ditero window.
 macOS checks mount the DMG, copy its app, verify the architecture and ad-hoc
 signature, then require the process to survive startup. These checks do not
 exercise sign-in, credential storage, upgrades or download trust warnings.
+Per-format updater binary patching is disabled so the installed Windows executable
+matches the build byte for byte; automatic updates are not configured.
 Development downloads include a per-platform `SHA256SUMS.txt`; release checksums
 and provenance continue to cover the complete release asset set.
 

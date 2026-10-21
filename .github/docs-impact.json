@@ -6,8 +6,8 @@
 			"noImpact": "Task rows and cards replace the visible Personal or Shared word with a person or group icon while retaining the workspace name and the existing localized tooltip and screen-reader context. Task behavior, permissions, settings and documented workflows are unchanged."
 		},
 		"release": {
-			"sourceDigest": "58abbf8f278fff164a6d039954f3cf6394952b06b8d985e678398fb9b3b04581",
-			"docs": ["RELEASING.md", "README.md"],
+			"sourceDigest": "4c4b3cae6e0a4d1b69fa72fbce823b3e22eac42c5d144172bb8789698846aad6",
+			"docs": ["RELEASING.md"],
 			"note": "Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged."
 		},
 		"configuration": {

@@ -137,7 +137,7 @@ jobs:
         working-directory: apps/desktop
         run: |
           set -euo pipefail
-          bun run tauri build --config "$RUNNER_TEMP/desktop-release-config.json" \
+          bun run tauri build --no-binary-patching --config "$RUNNER_TEMP/desktop-release-config.json" \
             --target "$DESKTOP_TARGET" --bundles "$DESKTOP_BUNDLES" -- --locked
       - name: Smoke-test Linux installers
         if: runner.os == 'Linux'
