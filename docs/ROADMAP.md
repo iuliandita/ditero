@@ -23,7 +23,7 @@ history archives preserve transitions and attribution. Settings accepts version 
 archives through reviewed, resumable history import, with explicit source claims
 and retained replay identity. Ditero and generic CSV, Todoist project CSV, TickTick
 backup CSV, Microsoft To Do via classic Outlook task CSV, and Trello board JSON
-imports are available with explicit exclusions, per-row notices and immutable snapshot identity. Authenticated encrypted attachment archives
+imports are available with explicit exclusions, per-row notices, reuse of same-named workspace labels and immutable snapshot identity. Authenticated encrypted attachment archives
 and reviewed, resumable attachment migration with explicit parent mapping and durable
 replay have landed; broader runtime qualification remains pending. Direct Microsoft
 PST import and provider account synchronization remain unsupported. Voice capture is

@@ -64,8 +64,8 @@ export const ZONES = (() => {
 	}
 })();
 
-// Provider labels are created, not merged: a name that already exists in the target
-// workspace blocks the label and its task links, so the preview names them up front.
+// Provider labels with a name that already exists in the target workspace reuse that
+// label (and its color), so the preview names them up front.
 export function collidingLabelNames(
 	imported: { name: string; workspaceId: string }[],
 	existing: { name: string; workspaceId: string }[],

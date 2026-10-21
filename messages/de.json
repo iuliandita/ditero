@@ -2740,7 +2740,7 @@
 	"import_content_err_timeout": "Das Lesen der Datei hat zu lange gedauert. Versuche einen kleineren Export.",
 	"import_content_limits": "Die Datei überschreitet die Importgrenzen: 32 MiB, 50.000 Zeilen und 32 KiB pro Wert.",
 	"import_content_mapping_list": "Aufgaben ohne Liste kommen in: {list}",
-	"import_content_label_collision": "Diese importierten Labels gibt es im Zielarbeitsbereich bereits und sie werden nicht wiederverwendet, daher werden ihre Verknüpfungen mit importierten Aufgaben nicht angewendet: {names}",
+	"import_content_label_collision": "Diese importierten Labels gibt es im Zielarbeitsbereich bereits; sie werden mit ihrer aktuellen Farbe wiederverwendet: {names}",
 	"import_content_secure": "Das Berechnen des Datei-Hashwerts erfordert HTTPS oder localhost. Öffne vor dem Import eine sichere Verbindung.",
 	"import_content_binding_conflict": "Diese Quelle ist an andere Dateibytes, Namen oder eine andere Zeitzone gebunden. Wähle ausdrücklich Neue Quelle für eine separate Kopie.",
 	"import_content_invalid": "Dies ist kein unterstützter UTF-8-Export, seine Verweise sind inkonsistent oder er enthält nicht unterstützte Sonderinhalte. PST-, ZIP- und andere Kodierungen müssen gemäß Importanleitung konvertiert werden."

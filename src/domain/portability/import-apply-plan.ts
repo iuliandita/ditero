@@ -50,7 +50,8 @@ export type ImportTargetPrecondition =
 				| { kind: "task-assignee-pair"; taskId: string; userId: string }
 				| null;
 	  }
-	| { kind: "mapped"; mapVersion: number; targetDigest: string };
+	| { kind: "mapped"; mapVersion: number; targetDigest: string }
+	| { kind: "existing-label"; targetDigest: string };
 
 export type ImportDependencyProof = {
 	workspace: { sourceId: string; targetId: string };

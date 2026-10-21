@@ -71,10 +71,11 @@ are ignored; each is listed in the preview with its row (or Trello card) and fie
 Only structural problems (encoding, quoting, JSON, conflicting IDs or references,
 file limits) stop the import, and the message names the row where one is known.
 
-Labels are created, not merged. A label whose name already exists in the target
-workspace is blocked together with its links on imported tasks (the tasks themselves
-import), and the preview names those labels before you apply. Reusing existing labels
-needs a new reviewed apply precondition and is not part of these adapters yet.
+An imported label whose name exactly matches a label already in the target workspace
+(same case and spacing, as the app's own label names) reuses that label and keeps its
+color; other names are created. Labels of other workspaces are never reused, and
+applying the same import again does not duplicate labels. The preview names the
+reused labels before you apply.
 
 Explicit ISO dates and times with offsets are normalized to UTC. Offset-free times
 use the selected/source IANA zone; ambiguous or nonexistent daylight-saving times

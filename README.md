@@ -84,7 +84,8 @@ templates use the name you enter, or the template name when you leave it blank.
 - JSON export and reviewed, resumable native import, including version 2 history
   and attribution, plus Ditero and generic CSV, Todoist project CSV, TickTick backup
   CSV, Microsoft To Do via classic Outlook task CSV, and Trello board JSON, with
-  located preview notices for skipped rows and bound Outlook date order; see
+  located preview notices for skipped rows, bound Outlook date order and reuse of
+  same-named workspace labels; see
   [data portability](docs/runbooks/data-portability.md) for exclusions
 - Browser installation plus Android and desktop development apps; see
   [native app status](#browser-installation-and-native-development-apps)

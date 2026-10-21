@@ -2,13 +2,13 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "eb9c36d9d28190beda28596487719ed5e2d7308e536fd2bfb40fe4666be6ba58",
+			"sourceDigest": "ff15364505e19809e711f0beca34c7ae47c8eb239d0a1e5041468e2c8641a3f7",
 			"docs": [
 				"README.md",
 				"docs/ROADMAP.md",
 				"docs/runbooks/data-portability.md"
 			],
-			"note": "Document five reviewed provider content import pickers, Todoist date and recurrence reading, all-day dates on the importer's calendar day, bound Outlook date order, archived Trello cards, per-row notices, label collisions, timezone/date and recurrence limits, flattened subtasks, completion/notes/labels, field notices, notification exclusions and immutable snapshot retry identity. Keep legacy adapter behavior and native runtime qualification limits explicit."
+			"note": "Document five reviewed provider content import pickers, Todoist date and recurrence reading, all-day dates on the importer's calendar day, bound Outlook date order, archived Trello cards, per-row notices, reuse of same-named target workspace labels, timezone/date and recurrence limits, flattened subtasks, completion/notes/labels, field notices, notification exclusions and immutable snapshot retry identity. Keep legacy adapter behavior and native runtime qualification limits explicit."
 		},
 		"release": {
 			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",

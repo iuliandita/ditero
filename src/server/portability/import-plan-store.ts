@@ -516,6 +516,7 @@ export async function saveImportPlan(
 						deadline,
 						plannerVersion: options.plannerVersion,
 						v4Authority,
+						reuseProviderLabels: binding?.adapter === CONTENT_ADAPTER,
 					},
 				);
 				plan = await sealImportApplyPlan(frozen.items, frozen.snapshots, {

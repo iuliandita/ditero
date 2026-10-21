@@ -2789,7 +2789,7 @@
 	"import_content_err_timeout": "La lecture du fichier a pris trop de temps. Essaie un export plus petit.",
 	"import_content_limits": "Le fichier dépasse les limites d'import : 32 Mio, 50 000 lignes et 32 Kio par valeur.",
 	"import_content_mapping_list": "Les tâches sans liste sont placées dans : {list}",
-	"import_content_label_collision": "Ces étiquettes importées existent déjà dans l'espace de travail cible et ne sont pas réutilisées ; leurs liens avec les tâches importées ne sont donc pas appliqués : {names}",
+	"import_content_label_collision": "Ces étiquettes importées existent déjà dans l'espace de travail cible et sont réutilisées avec leur couleur actuelle : {names}",
 	"import_content_secure": "Le calcul du hash nécessite HTTPS ou localhost. Ouvre une connexion sécurisée avant l’import.",
 	"import_content_binding_conflict": "Cette source est liée à d’autres octets, noms ou fuseau horaire. Choisis Nouvelle source pour créer une copie séparée.",
 	"import_content_invalid": "Ce fichier n’est pas un export UTF-8 compatible, ses références sont incohérentes ou il contient des éléments spéciaux non pris en charge. Convertis les fichiers PST, ZIP et autres encodages selon le guide."

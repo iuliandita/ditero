@@ -2740,7 +2740,7 @@
 	"import_content_err_timeout": "Reading the file took too long. Try a smaller export.",
 	"import_content_limits": "The file exceeds the import limits: 32 MiB, 50,000 rows and 32 KiB per value.",
 	"import_content_mapping_list": "Tasks without a list are placed in: {list}",
-	"import_content_label_collision": "These imported labels already exist in the target workspace and are not reused, so their links on imported tasks are not applied: {names}",
+	"import_content_label_collision": "These imported labels already exist in the target workspace and are reused with their current color: {names}",
 	"import_content_secure": "File hashing requires HTTPS or localhost. Open a secure connection before importing.",
 	"import_content_binding_conflict": "This source is bound to different file bytes, names or time zone. Choose New source explicitly for a separate copy.",
 	"import_content_invalid": "This is not a supported UTF-8 provider export, its references are inconsistent, or it contains unsupported special content. PST, ZIP and non-UTF-8 files must be converted using the import guide."
