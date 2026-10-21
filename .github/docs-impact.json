@@ -28,7 +28,7 @@
 		},
 		"authentication": {
 			"sourceDigest": "27054f72264b6331ec29fc13306f4afe5de604eb3e9963971e44e5a350fe5744",
-			"docs": ["docs/runbooks/native-authentication.md", "docs/runbooks/sign-in-providers.md"],
+			"docs": ["docs/runbooks/native-authentication.md"],
 			"note": "Add generic OpenID Connect, Microsoft, GitHub, Discord, Apple and Facebook sign-in beside Google. Provider accounts are keyed on immutable IDs, only provider-verified emails count for invitations, same-email accounts are no longer linked implicitly (Google included) and linking is explicit in Settings. Account schema, credential formats and the native approval step are unchanged. Anyone who relied on automatic Google linking signs in with their password once and links Google. To roll back, remove the provider variables; linked provider accounts stay as unused rows."
 		},
 		"compatibility": {
