@@ -1,8 +1,13 @@
 import { m } from "../../../src/paraglide/messages.js";
 import { NativeError } from "./bridge.ts";
 
-export function connectErrorMessage(error: unknown): string {
+export function connectErrorMessage(
+	error: unknown,
+	desktopRestore = false,
+): string {
 	if (error instanceof NativeError) {
+		if (desktopRestore && error.code === "network")
+			return m.native_desktop_online_start_required();
 		switch (error.code) {
 			case "https-required":
 				return m.native_connect_https_required();

@@ -2241,6 +2241,7 @@
 	"native_connect_unreachable": "Impossible de joindre le serveur. Vérifie ta connexion et réessaie.",
 	"e2e_recovery_download_failed": "Le code de récupération n’a pas pu être enregistré. Choisis un emplacement et réessaie.",
 	"native_connect_failed": "Connexion impossible. Vérifie l’adresse du serveur et la connexion.",
+	"native_desktop_online_start_required": "L’application de bureau doit démarrer en ligne pour ouvrir les données en cache. Rétablis la connexion à ton serveur, puis sélectionne Se connecter. Tes modifications enregistrées restent sur cet appareil.",
 	"native_change_server": "Changer de serveur",
 	"native_approval_pending": "La demande attend encore une approbation.",
 	"native_signin_failed": "Impossible de terminer la connexion. Réessaie.",

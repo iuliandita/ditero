@@ -2241,6 +2241,7 @@
 	"native_connect_unreachable": "No se puede acceder al servidor. Comprueba tu conexión e inténtalo de nuevo.",
 	"e2e_recovery_download_failed": "No se pudo guardar el código de recuperación. Elige un destino e inténtalo de nuevo.",
 	"native_connect_failed": "No se pudo conectar. Comprueba la dirección del servidor y la conexión.",
+	"native_desktop_online_start_required": "La aplicación de escritorio necesita iniciarse con conexión para abrir los datos en caché. Vuelve a conectarte al servidor y selecciona Conectar. Los cambios guardados permanecen en este dispositivo.",
 	"native_change_server": "Cambiar de servidor",
 	"native_approval_pending": "La solicitud sigue esperando aprobación.",
 	"native_signin_failed": "No se pudo completar el inicio de sesión. Inténtalo de nuevo.",

@@ -2241,6 +2241,7 @@
 	"native_connect_unreachable": "Serverul nu poate fi contactat. Verifică conexiunea și încearcă din nou.",
 	"e2e_recovery_download_failed": "Codul de recuperare nu a putut fi salvat. Alege o destinație și încearcă din nou.",
 	"native_connect_failed": "Conectarea nu a reușit. Verifică adresa serverului și conexiunea.",
+	"native_desktop_online_start_required": "Aplicația desktop trebuie pornită online pentru a deschide datele din cache. Reconectează-te la server, apoi selectează Conectare. Modificările salvate rămân pe acest dispozitiv.",
 	"native_change_server": "Schimbă serverul",
 	"native_approval_pending": "Cererea încă așteaptă aprobarea.",
 	"native_signin_failed": "Autentificarea nu a putut fi finalizată. Încearcă din nou.",

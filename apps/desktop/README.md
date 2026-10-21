@@ -39,6 +39,23 @@ includes these routes; older servers still open their normal application page.
 An isolated Linux runtime check confirmed the missing-keyring message, recovery
 through Retry after starting an unlocked provider, and all six browser handoffs.
 
+## Offline startup
+
+Desktop currently needs an online start to verify the selected session before it
+can open cached data. On a connection failure during restoration, the connection
+screen explains this requirement. Reconnect and select Connect. Cached tasks and
+durably saved pending edits stay on the device; retry does not clear them.
+
+Warm offline editing remains available after an online start. Cold offline
+activation is still tracked in #1090. It requires complete, unexpired verified
+evidence encrypted with the session, bound to the server/account/session, and
+durable refusal handling. Invalid credentials, failed certificate trust, expiry,
+and revocation must never authorize offline activation.
+
+An isolated Linux runtime check confirmed this guidance on cold offline start and
+retry, then verified a queued edit survived a graceful close and synced after
+reconnection. It does not qualify cold offline activation.
+
 ## Linux task links
 
 Linux packages declare the `ditero` URL scheme. A task link has this form:
@@ -153,7 +170,7 @@ bun install --frozen-lockfile
 cd ../..
 bun run i18n:compile
 bunx tsc --noEmit --project apps/desktop/tsconfig.json
-bunx vitest run apps/desktop/src/transport.test.ts
+bunx vitest run apps/desktop/src/transport.test.ts apps/android/src/connection-error.test.ts
 cd apps/desktop
 bun run build
 cd src-tauri
