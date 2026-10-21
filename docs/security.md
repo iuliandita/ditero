@@ -11,6 +11,22 @@
 
 Email/password, passkeys, TOTP, and recovery codes are supported. Cookie-authenticated mutations require an exact configured origin. Sensitive auth routes use PostgreSQL-backed rate limits. Proxy headers are ignored unless the direct peer is within `DITERO_TRUSTED_PROXIES`.
 
+Email sign-in combines an atomic `rate_bucket` token bucket per client IP and
+trimmed, lowercased email (capacity five, refill five per minute) with Better Auth's
+30-per-minute per-IP ceiling. The bounded JSON body clone is limited to 4 KiB;
+bucket keys hash the address and email, and the limiter never looks up or logs
+the email. Known and unknown accounts have identical bucket and 429 behavior.
+IPv4-mapped addresses and IPv6 /64 allocations share identity buckets. Missing
+socket peers use the unknown-client bucket and cannot supply forwarding headers.
+
+The per-IP ceilings are 10 per minute for email sign-up, 30 per minute for each
+two-factor route, and 600 per minute each for session and token refresh. Other
+routes retain the default 100 per minute and existing sensitive-route overrides.
+Passkey ceremonies remain at 10 per minute; the exact passkey-list read rule
+precedes the wildcard and allows 100 per minute. TOTP account lockout remains at
+five failures for 15 minutes. Shared-address ceilings still bound abuse across
+accounts; see [Trusted Proxy](runbooks/trusted-proxy.md) for NAT and VPN guidance.
+
 Production defaults to `DITERO_REGISTRATION_MODE=bootstrap`: only the first account
 can register without an invitation. `closed` disables uninvited registration,
 including the first account; eligible invitations can still admit accounts.

@@ -1,26 +1,56 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
 	authRateLimitOptions,
 	passkeyOptions,
+	readSignInEmail,
 	requireSameOrigin,
+	SIGN_IN_BODY_LIMIT,
+	signInRateKey,
 } from "./security.ts";
 
 describe("authRateLimitOptions", () => {
+	afterEach(() => vi.unstubAllEnvs());
 	test("uses database storage and tighter sensitive-route limits", () => {
+		vi.stubEnv("DITERO_E2E", "0");
 		const options = authRateLimitOptions();
 		expect(options.storage).toBe("database");
 		expect(options.enabled).toBe(true);
 		expect(options.customRules["/sign-in/email"]).toEqual({
 			window: 60,
-			max: 5,
+			max: 30,
 		});
 		expect(options.customRules["/two-factor/*"]).toEqual({
 			window: 60,
-			max: 5,
+			max: 30,
 		});
-		// /get-session is only relaxed under the e2e harness (DITERO_E2E); prod keeps
-		// the default limit, so it must have no customRule here.
-		expect(options.customRules["/get-session"]).toBeUndefined();
+		expect(options.customRules["/sign-up/email"]).toEqual({
+			window: 60,
+			max: 10,
+		});
+		for (const path of ["/get-session", "/token"])
+			expect(options.customRules[path]).toEqual({ window: 60, max: 600 });
+		expect(options.max).toBe(100);
+		for (const path of ["/reset-password", "/change-password"])
+			expect(options.customRules[path]).toEqual({ window: 300, max: 5 });
+		expect(options.customRules["/request-password-reset"]).toEqual({
+			window: 300,
+			max: 3,
+		});
+	});
+	test("relaxes only the harness per-IP rules", () => {
+		vi.stubEnv("DITERO_E2E", "1");
+		const options = authRateLimitOptions();
+		for (const path of [
+			"/sign-in/email",
+			"/sign-up/email",
+			"/get-session",
+			"/token",
+		])
+			expect(options.customRules[path]).toEqual({ window: 60, max: 1000 });
+		expect(options.customRules["/two-factor/*"]).toEqual({
+			window: 60,
+			max: 30,
+		});
 	});
 
 	test("exempts the passkey list read from the ceremony ceiling, and orders it first", () => {
@@ -36,6 +66,65 @@ describe("authRateLimitOptions", () => {
 		expect(keys.indexOf("/passkey/list-user-passkeys")).toBeLessThan(
 			keys.indexOf("/passkey/*"),
 		);
+	});
+});
+
+describe("sign-in identity buckets", () => {
+	test("normalizes emails and address forms without storing the email", () => {
+		const key = signInRateKey("198.51.100.24", " Member@Example.test ");
+		expect(key).toBe(
+			signInRateKey("::ffff:198.51.100.24", "member@example.test"),
+		);
+		expect(key).not.toContain("member");
+		expect(key).not.toBe(signInRateKey("198.51.100.24", "other@example.test"));
+		expect(key).not.toBe(signInRateKey("198.51.100.25", "member@example.test"));
+		expect(signInRateKey("2001:db8::1", "member@example.test")).toBe(
+			signInRateKey("2001:db8::2", "member@example.test"),
+		);
+	});
+	test("reads a JSON clone while preserving the handler body", async () => {
+		const body = { email: " Member@Example.test ", password: "secret" };
+		const request = new Request("http://localhost/api/auth/sign-in/email", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		expect(await readSignInEmail(request)).toBe("member@example.test");
+		expect(await request.json()).toEqual(body);
+	});
+	test.each([
+		"{",
+		"null",
+		"[]",
+		'{"email":42}',
+		'{"email":""}',
+		JSON.stringify({ email: "a".repeat(321) }),
+		JSON.stringify({
+			email: "member@example.test",
+			padding: "a".repeat(SIGN_IN_BODY_LIMIT),
+		}),
+	])("refuses invalid or oversized bodies: %#", async (body) => {
+		const request = new Request("http://localhost/api/auth/sign-in/email", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body,
+		});
+		expect(await readSignInEmail(request)).toBeNull();
+	});
+	test("bounds streamed bodies without trusting content-length", async () => {
+		const request = new Request("http://localhost/api/auth/sign-in/email", {
+			method: "POST",
+			headers: { "content-type": "application/json", "content-length": "1" },
+			body: new ReadableStream({
+				start(controller) {
+					controller.enqueue(new Uint8Array(SIGN_IN_BODY_LIMIT));
+					controller.enqueue(new Uint8Array(1));
+					controller.close();
+				},
+			}),
+			duplex: "half",
+		} as RequestInit);
+		expect(await readSignInEmail(request)).toBeNull();
 	});
 });
 

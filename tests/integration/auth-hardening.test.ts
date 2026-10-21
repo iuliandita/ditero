@@ -1,11 +1,18 @@
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { handleAuthRequest } from "../../src/auth/auth.ts";
+import { withRegistrationBypass } from "../../src/auth/registration-bypass.ts";
 import * as tables from "../../src/db/schema.ts";
 import { app } from "../../src/server/index.ts";
 import { currentTOTP } from "../totp.ts";
+
+// Auth is configured at import time. Even an e2e parent must exercise production
+// ceilings here; changing the environment inside a test would be too late.
+vi.hoisted(() => {
+	delete process.env.DITERO_E2E;
+});
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
@@ -39,6 +46,9 @@ beforeEach(async () => {
 	await db.delete(tables.passkey);
 	await db.delete(tables.twoFactor);
 	await db.delete(tables.rateLimit);
+	await db
+		.delete(tables.rateBucket)
+		.where(like(tables.rateBucket.key, "auth:sign-in:%"));
 	await db.delete(tables.session);
 	await db.delete(tables.account);
 	await db.delete(tables.user);
@@ -126,8 +136,68 @@ describe("authentication hardening schema", () => {
 		expect(statuses.at(-1)).toBe(429);
 		const rows = await db.select().from(tables.rateLimit);
 		expect(rows).toHaveLength(1);
-		expect(rows[0].count).toBeGreaterThanOrEqual(5);
+		expect(rows[0].count).toBe(5);
+		const buckets = await db
+			.select()
+			.from(tables.rateBucket)
+			.where(like(tables.rateBucket.key, "auth:sign-in:%"));
+		expect(buckets).toHaveLength(1);
+		expect(buckets[0].tokens).toBe(0);
 	});
+
+	async function signIn(
+		email: string,
+		password = "wrong-password",
+		suffix = "",
+	) {
+		return handleAuthRequest(
+			new Request(`http://localhost:3000/api/auth/sign-in/email${suffix}`, {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost:5173",
+					"x-ditero-client-ip": "203.0.113.9",
+					"x-forwarded-for": "203.0.113.9",
+				},
+				body: JSON.stringify({ email, password }),
+			}),
+			"198.51.100.24",
+		);
+	}
+
+	test("one member's failures do not lock out another and unknown emails have the same limit", async () => {
+		await signUp("member-a@test.invalid");
+		await withRegistrationBypass(() => signUp("member-b@test.invalid"));
+		for (let attempt = 0; attempt < 5; attempt++) {
+			expect((await signIn("member-a@test.invalid")).status).toBe(401);
+			expect((await signIn("missing@test.invalid")).status).toBe(401);
+		}
+		const known = await signIn("MEMBER-A@test.invalid", "pw-123456");
+		const unknown = await signIn("missing@test.invalid");
+		expect(known.status).toBe(429);
+		expect(unknown.status).toBe(429);
+		expect(await known.json()).toEqual(await unknown.json());
+		expect(known.headers.get("retry-after")).toBe(
+			unknown.headers.get("retry-after"),
+		);
+		expect(
+			(await signIn("member-a@test.invalid", "pw-123456", "/")).status,
+		).toBe(429);
+		expect((await signIn("member-b@test.invalid", "pw-123456")).status).toBe(
+			200,
+		);
+	}, 60_000);
+
+	test("the production per-IP ceiling still stops attempts across different emails", async () => {
+		for (let attempt = 0; attempt < 30; attempt++)
+			expect((await signIn(`missing-${attempt}@test.invalid`)).status).toBe(
+				401,
+			);
+		expect((await signIn("one-more@test.invalid")).status).toBe(429);
+		const rows = await db.select().from(tables.rateLimit);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].count).toBe(30);
+	}, 60_000);
 
 	test("persists TOTP enrollment and requires a second factor at sign-in", async () => {
 		const cookies = new Map<string, string>();

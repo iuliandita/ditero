@@ -10,7 +10,9 @@ import { createFieldKeyRing } from "../security/field-encryption.ts";
 import {
 	sanitizeAuthRequest,
 	trustedProxyCIDRsFromEnv,
+	UNKNOWN_CLIENT_IP,
 } from "../server/client-ip.ts";
+import { takeRateToken } from "../server/notifications/capability.ts";
 import { zeroJwtOptions } from "../server/zero-auth.ts";
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
 import { normalizeDisplayName, signupDisplayName } from "./display-name.ts";
@@ -29,7 +31,11 @@ import { registrationBypassActive } from "./registration-bypass.ts";
 import {
 	authRateLimitOptions,
 	passkeyOptions,
+	readSignInEmail,
 	requireSameOrigin,
+	SIGN_IN_RATE_CAPACITY,
+	SIGN_IN_RATE_REFILL_PER_SEC,
+	signInRateKey,
 } from "./security.ts";
 
 const REGISTRATION_LOCK_KEY = 6_794_321;
@@ -211,6 +217,38 @@ export async function handleAuthRequest(
 
 	const unavailable = mailUnavailableResponse(request);
 	if (unavailable) return unavailable;
+	if (
+		request.method === "POST" &&
+		new URL(request.url).pathname.replace(/\/+$/, "") ===
+			"/api/auth/sign-in/email"
+	) {
+		const email = await readSignInEmail(request);
+		if (email === null)
+			return Response.json(
+				{ message: "Invalid sign-in request", code: "INVALID_BODY" },
+				{ status: 400 },
+			);
+		// No account lookup: existing and unknown addresses consume identical buckets.
+		if (
+			!(await takeRateToken(
+				db,
+				signInRateKey(
+					request.headers.get("x-ditero-client-ip") ?? UNKNOWN_CLIENT_IP,
+					email,
+				),
+				SIGN_IN_RATE_CAPACITY,
+				SIGN_IN_RATE_REFILL_PER_SEC,
+			))
+		) {
+			return Response.json(
+				{
+					message: "Too many requests. Please try again later.",
+					code: "TOO_MANY_REQUESTS",
+				},
+				{ status: 429, headers: { "retry-after": "12" } },
+			);
+		}
+	}
 
 	if (
 		request.method === "GET" &&

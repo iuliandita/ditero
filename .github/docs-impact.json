@@ -1,6 +1,11 @@
 {
 	"version": 1,
 	"groups": {
+		"authentication": {
+			"sourceDigest": "e1964738c759d0e0cbe8f7e77e9d022f773ad28c5c63b35ca1c3dfae1c4428a3",
+			"docs": ["docs/runbooks/native-authentication.md"],
+			"note": "Browser sign-in now combines a separate IP-plus-email token bucket with household-sized per-IP ceilings. The native handoff guide links the updated NAT/VPN runbook; docs/security.md records the exact limits, body bound and unchanged TOTP lockout."
+		},
 		"ui": {
 			"sourceDigest": "439b58de1a5b6c272da03cbe142b35e417d4945879393967edac0fd3c96178df",
 			"docs": ["docs/notifications.md"],
