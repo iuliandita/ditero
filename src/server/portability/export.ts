@@ -62,6 +62,9 @@ async function cancelBackend(pool: Pool, pid: number, applicationName: string) {
 		query_timeout: 1000,
 		statement_timeout: 1000,
 	});
+	control.on("error", () =>
+		console.error("portability export cancellation connection lost"),
+	);
 	try {
 		await control.connect();
 		await control.query(

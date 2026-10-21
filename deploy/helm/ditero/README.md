@@ -120,6 +120,15 @@ readiness/liveness use the real `/health` and `/keepalive` endpoints. The
 application health endpoint proves the HTTP process is serving; it does not
 continuously test every database, sync, or notification dependency.
 
+Database connection loss is logged and the application reconnects without a
+process restart. Leader scans reacquire their advisory locks on later ticks;
+notification deliveries retain their at-least-once lease recovery contract.
+On SIGTERM the application stops accepting connections and starting background
+work, drains for up to five seconds, and closes its database pool. An eight-second
+shutdown deadline fits Docker's default ten seconds and Kubernetes' default
+thirty seconds. Unfinished delivery leases are reclaimed after restart; a forced
+shutdown can still duplicate a delivery accepted by its provider.
+
 Use `app.extraEnv` and `zero.extraEnv` for additional supported configuration.
 Use `valueFrom.secretKeyRef` for sensitive settings rather than literal values.
 For example, optional Google sign-in needs your own OAuth client (see

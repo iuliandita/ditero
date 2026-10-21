@@ -106,13 +106,14 @@ export function startTelegramPoller(
 	const send = options.fetch ?? safeFetch;
 
 	const abort = new AbortController();
+	let leaderSignal: AbortSignal | undefined;
 	const wakers = new Set<() => void>();
 	let stopped = false;
 
 	// Interruptible: stop() must not wait out a 60s backoff, and it must not
 	// leave a timer holding the process open either.
 	function sleep(ms: number): Promise<void> {
-		if (stopped) return Promise.resolve();
+		if (stopped || leaderSignal?.aborted) return Promise.resolve();
 		return new Promise((resolve) => {
 			const wake = () => {
 				clearTimeout(timer);
@@ -144,7 +145,9 @@ export function startTelegramPoller(
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(payload),
-				signal: abort.signal,
+				signal: leaderSignal
+					? AbortSignal.any([abort.signal, leaderSignal])
+					: abort.signal,
 				maxResponseBytes: RESPONSE_MAX_BYTES,
 				...(headersTimeoutMs === undefined ? {} : { headersTimeoutMs }),
 			});
@@ -222,7 +225,7 @@ export function startTelegramPoller(
 			// The provider withholds headers for the whole poll window on purpose.
 			(longPollSec + 5) * 1_000,
 		);
-		if (stopped) return;
+		if (stopped || leaderSignal?.aborted) return;
 		if (!envelope?.ok || !Array.isArray(envelope.result)) {
 			fail(botToken, envelope ? "was refused" : "failed");
 			return;
@@ -232,6 +235,7 @@ export function startTelegramPoller(
 
 		let highest: number | null = null;
 		for (const update of envelope.result) {
+			if (stopped || leaderSignal?.aborted) return;
 			const id = updateId(update);
 			if (id !== null && (highest === null || id > highest)) highest = id;
 			try {
@@ -276,11 +280,11 @@ export function startTelegramPoller(
 	}
 
 	async function leaderSession(): Promise<void> {
-		while (!stopped) {
+		while (!stopped && !leaderSignal?.aborted) {
 			const channels = await telegramChannels(database, env);
 			const tokens = botTokens(channels);
 			for (const token of tokens) {
-				if (stopped) return;
+				if (stopped || leaderSignal?.aborted) return;
 				await reconcile(token);
 			}
 			// Webhook mode holds leadership only to keep the provider registration
@@ -304,7 +308,19 @@ export function startTelegramPoller(
 				const held = await withLeaderLock(
 					pool,
 					TELEGRAM_POLL_LOCK_KEY,
-					leaderSession,
+					async (_client, signal) => {
+						leaderSignal = signal;
+						const wake = () => {
+							for (const wake of [...wakers]) wake();
+						};
+						signal.addEventListener("abort", wake, { once: true });
+						try {
+							await leaderSession();
+						} finally {
+							signal.removeEventListener("abort", wake);
+							leaderSignal = undefined;
+						}
+					},
 				);
 				if (held === null && !stopped) await sleep(idleMs);
 			} catch (error) {
