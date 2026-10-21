@@ -83,7 +83,10 @@ if (typeof worker.skipWaiting === "function") {
 				navigationResponse(
 					request,
 					() => fetch(request),
-					async () => (await caches.open(cacheName)).match("/index.html"),
+					async () =>
+						(await caches.open(cacheName)).match("/index.html", {
+							ignoreVary: true,
+						}),
 				),
 			);
 			return;
@@ -104,7 +107,9 @@ if (typeof worker.skipWaiting === "function") {
 					cacheName,
 					...names.filter((name) => name !== cacheName),
 				]) {
-					const response = await (await caches.open(name)).match(request);
+					const response = await (await caches.open(name)).match(request, {
+						ignoreVary: true,
+					});
 					if (response) return response;
 				}
 				return fetch(request);

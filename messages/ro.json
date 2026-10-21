@@ -1,4 +1,7 @@
 {
+	"startup_connection_retry": "Reîncearcă",
+	"startup_connection_heading": "Ditero are nevoie de conexiune pentru a se deschide",
+	"startup_connection_body": "Va încerca din nou automat când revine conexiunea. Poți încerca din nou și acum.",
 	"workspace_read_only": "Rolul tău în acest spațiu permite doar vizualizarea.",
 	"accept_error_email_mismatch": "Invitația este pentru altă adresă de e-mail. Deconectează-te, apoi conectează-te cu contul la care a fost trimisă.",
 	"accept_switch_account": "Deconectează-te și schimbă contul",

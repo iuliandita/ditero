@@ -15,7 +15,8 @@
 
 Ditero is a free, self-hosted, local-first task app for families, friends, clubs,
 and small teams. Share a shopping list, divide the chores, plan a project, or keep
-up with daily habits. Work offline and sync when you're connected again.
+up with daily habits. Already-open browser tabs work offline and sync when you're
+connected again; opening or reloading the app needs a connection.
 
 Your data lives on your server. Reminders, attachments, calendars, and sharing
 are included, with no subscriptions or paid feature unlocks.
@@ -297,8 +298,12 @@ no other copy. All attachment configuration is documented in [.env.example](.env
 
 Production browser builds include a PWA manifest and a bounded offline public
 app shell. The service worker caches static public files, with no API, auth,
-Zero, or private user responses. Offline shell loading does not replace session
-checks; private synced records remain in Zero's separate local storage. Updates
+Zero, or private user responses. Opening or reloading the browser app offline
+shows a connection-required page instead of opening cached workspaces. It retries
+automatically when the connection returns, with a Retry button for manual attempts.
+Already-open tabs keep working offline and sync queued edits after reconnecting.
+Private synced records remain in Zero's separate local storage; startup still
+requires live session verification. Updates
 show a notice and reload only on user choice, after durable local sync retirement.
 HTTPS and browser-secure loopback origins are supported. Browser qualification
 covered installability, offline shell recovery, and manual update; it did not

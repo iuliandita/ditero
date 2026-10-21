@@ -1,4 +1,7 @@
 {
+	"startup_connection_retry": "Reintentar",
+	"startup_connection_heading": "Ditero necesita conexión para abrirse",
+	"startup_connection_body": "Volverá a intentarlo automáticamente cuando vuelva la conexión. También puedes intentarlo de nuevo ahora.",
 	"workspace_read_only": "Tu rol en este espacio solo permite ver el contenido.",
 	"accept_error_email_mismatch": "Esta invitación es para otra dirección de correo. Cierra sesión e inicia sesión con la cuenta a la que se envió.",
 	"accept_switch_account": "Cerrar sesión y cambiar de cuenta",

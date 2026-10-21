@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { settingsSectionFromPath } from "../domain/native-settings.ts";
+import { ConnectionRequired } from "./components/ConnectionRequired.tsx";
 import { BootSkeleton } from "./components/shell/AppSkeleton.tsx";
 import { ConfirmProvider } from "./components/ui/confirm.tsx";
 import { SnackbarProvider } from "./components/ui/snackbar.tsx";
 import { useUserPref } from "./hooks/useUserPref.ts";
 import { authClient } from "./lib/auth-client.ts";
+import { isConnectionFailure } from "./lib/connection-required.ts";
 import {
 	DisplayPreferencesProvider,
 	SyncedDisplayPreferencesProvider,
@@ -30,7 +32,14 @@ export function App() {
 }
 
 function Routes() {
-	const { data: session, isPending } = authClient.useSession();
+	const { data: session, isPending, error, refetch } = authClient.useSession();
+	const [retryingConnection, setRetryingConnection] = useState(false);
+	const networkFailed = !session && isConnectionFailure(error);
+	useEffect(() => {
+		if (!isPending) setRetryingConnection(networkFailed);
+	}, [isPending, networkFailed]);
+	if (networkFailed || (!session && isPending && retryingConnection))
+		return <ConnectionRequired onRetry={refetch} />;
 	return <SessionRoutes session={session} isPending={isPending} />;
 }
 

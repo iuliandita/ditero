@@ -55,8 +55,10 @@ it.each([
 	expect(passkey.mock.contexts[0]).toBe(client.signIn);
 	expect(authClient.useSession()).toEqual({ data: null });
 	expect(mocks.create).toHaveBeenCalledTimes(1);
+	const { fetchWithConnectionCheck } = await import("./connection-required.ts");
 	expect(mocks.create).toHaveBeenCalledWith({
 		baseURL: "",
+		fetchOptions: { customFetchImpl: fetchWithConnectionCheck },
 		plugins: [{ id: "passkey" }, { id: "two-factor" }],
 	});
 	vi.stubGlobal("NativeDitero", {});
