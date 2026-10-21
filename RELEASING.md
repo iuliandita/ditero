@@ -30,8 +30,10 @@ Tagged releases include:
   Google delivery requires separate private configuration and is not packaged here.
 - `ditero-VERSION-clients.tar.gz`: the CLI, stdio MCP server and TUI as JavaScript
   bundles for a user-installed Bun, with `THIRD_PARTY_NOTICES.txt` and a `SHA256SUMS`
-  file inside, plus a build provenance attestation (`gh attestation verify`). Release
-  preparation rejects an archive missing a bundle, its checksum or the notices.
+  file inside. The archive has no separate signature file; its keyless-signed build
+  provenance attestation is stored with GitHub (`gh attestation verify`, with the
+  command in the release notes). Publication rejects an archive missing a bundle, its
+  checksum or the notices, and rejects a missing or mismatched attestation.
   Standalone executables are not published; see the [roadmap](docs/ROADMAP.md).
 - `SHA256SUMS.txt` covering every download.
 

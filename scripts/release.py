@@ -411,13 +411,20 @@ def verify_clients(path: Path, version: str, source_sha: str, allow_dirty: bool 
             raise ValueError(f"Missing license text for bundled dependency: {dependency}")
 
 
+def clients_attestation_args(archive: str, repo: str, sha: str) -> list[str]:
+    return ["gh", "attestation", "verify", archive, "--repo", repo,
+            "--signer-workflow", f"{repo}/.github/workflows/release.yml", "--source-digest", sha]
+
+
 def publish(output: Path) -> None:
     version = metadata()["version"]
     names = verify_downloads(output, version)
     tag, repo, sha = (os.environ[name] for name in ("TAG", "REPO", "RELEASE_SHA"))
     if tag != f"v{version}" or command("git", "rev-parse", "HEAD") != sha:
         raise ValueError("Release source identity mismatch")
-    verify_clients(output / f"ditero-{version}-clients.tar.gz", version, sha)
+    archive = output / f"ditero-{version}-clients.tar.gz"
+    verify_clients(archive, version, sha)
+    subprocess.run(clients_attestation_args(str(archive), repo, sha), cwd=ROOT, check=True)
     remote = command("git", "ls-remote", "origin", f"refs/tags/{tag}^{{}}")
     if remote.split()[0] != sha:
         raise ValueError("Remote annotated tag changed since preparation")
@@ -441,7 +448,7 @@ Desktop: Linux x86_64 DEB/RPM/AppImage, unsigned Windows x86_64/ARM64 NSIS insta
 
 Android: signed independent APK and AAB, with UnifiedPush and no Google SDK configuration. The AAB is for distribution tooling, not direct installation. Broader device qualification remains open; no store distribution is configured.
 
-Terminal clients: `ditero-{version}-clients.tar.gz` holds the CLI, MCP server and TUI as JavaScript bundles with third-party notices. They run on any OS with Bun {minimum_bun()} or newer already installed (`bun ditero-cli.js --version`); they are not standalone executables and have no keyless signature beyond the checksum below.
+Terminal clients: `ditero-{version}-clients.tar.gz` holds the CLI, MCP server and TUI as JavaScript bundles with third-party notices and per-file SHA-256 checksums. They require an installed Bun {minimum_bun()} or newer and are qualified on Linux x64; other platforms remain unqualified. Run `bun --no-env-file --config=/dev/null ditero-cli.js --version` to inspect the JSON build identity. The archive has no separate signature file; its keyless-signed build provenance attestation is stored with GitHub and was checked before this release was published. Verify it with `{" ".join(clients_attestation_args(f"ditero-{version}-clients.tar.gz", repo, sha))}`. See docs/cli.md for installation and platform limits.
 
 Verify downloads with `sha256sum -c SHA256SUMS.txt`. Checksums verify downloaded bytes; they do not replace platform signing or runtime qualification. This prerelease does not move latest or stable image channels.
 """

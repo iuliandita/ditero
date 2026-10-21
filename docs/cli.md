@@ -17,11 +17,16 @@ UI needs an interactive POSIX terminal.
 
 ```sh
 sha256sum --check --ignore-missing SHA256SUMS.txt
+gh attestation verify ditero-VERSION-clients.tar.gz --repo iuliandita/ditero \
+  --signer-workflow iuliandita/ditero/.github/workflows/release.yml --source-digest FULL_TAG_COMMIT_SHA
 tar -xzf ditero-VERSION-clients.tar.gz
 cd ditero-VERSION-clients
 sha256sum --check SHA256SUMS
 ./ditero-cli.js --version
 ```
+
+The archive has no separate signature file: the attestation is its keyless-signed build
+provenance and the checksums only detect corrupted or altered downloads.
 
 The archive holds the three bundles, `THIRD_PARTY_NOTICES.txt` (license text for every
 bundled npm package), `LICENSE`, `BUILDINFO.json` and `SHA256SUMS`. Each bundle starts

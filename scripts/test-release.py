@@ -131,6 +131,53 @@ class ReleaseTests(unittest.TestCase):
                     published = any("--draft=false" in call.args[0] for call in run.call_args_list)
                     self.assertEqual(published, not corrupted)
 
+    def test_publish_requires_the_clients_attestation_and_documents_the_same_check(self):
+        version = release.metadata()["version"]
+        sha = "a" * 40
+        archive_name = f"ditero-{version}-clients.tar.gz"
+        for attested in (False, True):
+            with self.subTest(attested=attested), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory)
+                for name in release.expected_assets(version):
+                    (output / name).write_bytes(b"artifact")
+                notes = []
+                def command(*args):
+                    if args[0] == "git":
+                        return f"{sha}\trefs/tags/v{version}^{{}}" if args[1] == "ls-remote" else sha
+                    if args[1] == "api":
+                        return "[[]]"
+                    assets = [{"name": path.name, "size": path.stat().st_size, "digest": f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"} for path in output.iterdir()]
+                    return json.dumps({"assets": assets})
+                def run(args, **kwargs):
+                    if args[:3] == ["gh", "attestation", "verify"]:
+                        self.assertEqual(args, release.clients_attestation_args(str(output / archive_name), "owner/repo", sha))
+                        if not attested:
+                            raise subprocess.CalledProcessError(1, args)
+                    elif "--notes-file" in args:
+                        notes.append(Path(args[args.index("--notes-file") + 1]).read_text())
+                env = {"TAG": f"v{version}", "REPO": "owner/repo", "RELEASE_SHA": sha}
+                with patch.dict(os.environ, env), patch.object(release, "command", side_effect=command), patch.object(release, "verify_clients"), patch.object(release.subprocess, "run", side_effect=run) as mock_run:
+                    if not attested:
+                        with self.assertRaises(subprocess.CalledProcessError):
+                            release.publish(output)
+                        self.assertFalse(any(call.args[0][:3] == ["gh", "release", "create"] for call in mock_run.call_args_list))
+                        continue
+                    release.publish(output)
+                self.assertEqual(len(notes), 1)
+                documented = " ".join(release.clients_attestation_args(archive_name, "owner/repo", sha))
+                self.assertIn(f"`{documented}`", notes[0])
+                self.assertNotIn("no keyless signature", notes[0])
+
+    def test_release_workflow_attests_the_clients_archive_before_publish(self):
+        text = (release.ROOT / ".github/workflows/release.yml").read_text()
+        clients = text[text.index("\n  clients:\n"):text.index("\n  docker-zero:")]
+        self.assertIn("uses: actions/attest-build-provenance@", clients)
+        self.assertIn("subject-path: out/clients/*-clients.tar.gz", clients)
+        self.assertIn("id-token: write", clients)
+        self.assertIn("attestations: write", clients)
+        publish = text[text.index("\n  publish:\n"):]
+        self.assertRegex(publish, r"needs: \[[^\]]*\bclients\b[^\]]*\]")
+
     def bundle_archive(self, path, source_sha, mutate=None, **changes):
         version = "0.0.1-alpha.1"
         prefix = f"ditero-{version}-clients"
