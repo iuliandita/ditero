@@ -66,12 +66,31 @@ export async function desktop(application: string) {
 					async () => (await fetch(`http://127.0.0.1:${port}/status`)).ok,
 				);
 			}
+			let capabilities: Record<string, unknown> = {
+				"tauri:options": { application },
+			};
+			if (process.platform === "win32") {
+				const debugPort = await freePort();
+				app = background("desktop", application, [], {
+					...process.env,
+					WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort} --disable-gpu`,
+					WEBVIEW2_USER_DATA_FOLDER: resolve(state, "webview-profile"),
+				});
+				stage("waiting for installed WebView2 debug endpoint");
+				await until("installed WebView2 debug endpoint", async () => {
+					if (app?.exitCode !== null)
+						throw new Error(`Desktop exited ${app?.exitCode}`);
+					return (await fetch(`http://127.0.0.1:${debugPort}/json/version`)).ok;
+				});
+				capabilities = {
+					browserName: "webview2",
+					"ms:edgeOptions": { debuggerAddress: `127.0.0.1:${debugPort}` },
+				};
+			}
 			stage("creating native WebDriver session");
 			const value = (await request("POST", "/session", {
 				capabilities: {
-					alwaysMatch: {
-						"tauri:options": { application },
-					},
+					alwaysMatch: capabilities,
 				},
 			})) as { sessionId: string };
 			session = value.sessionId;
