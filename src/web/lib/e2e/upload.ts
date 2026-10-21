@@ -194,14 +194,17 @@ async function expectOk(
 ): Promise<Response> {
 	if (!response.ok) {
 		const detail = await response.text().catch(() => "");
-		const reason: AttachmentUploadFailure = [
-			"file-too-large",
-			"quota-exceeded",
-			"rotation-required",
-			"key-unavailable",
-		].includes(detail)
-			? (detail as AttachmentUploadFailure)
-			: "unknown";
+		const reason: AttachmentUploadFailure =
+			response.status === 413
+				? "file-too-large"
+				: [
+							"file-too-large",
+							"quota-exceeded",
+							"rotation-required",
+							"key-unavailable",
+						].includes(detail)
+					? (detail as AttachmentUploadFailure)
+					: "unknown";
 		throw new AttachmentUploadError(stage, response.status, reason);
 	}
 	return response;

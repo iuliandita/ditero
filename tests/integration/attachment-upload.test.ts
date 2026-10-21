@@ -567,6 +567,30 @@ describe("attachment reserve", () => {
 });
 
 describe("attachment delete", () => {
+	test("logs a storage upload error code without plaintext metadata or provider details", async () => {
+		expect(
+			(await reserve("att-storage-failure", { declaredBytes: 4 })).status,
+		).toBe(200);
+		const put = vi.spyOn(store, "put").mockRejectedValueOnce(
+			Object.assign(new Error("private filename and provider credentials"), {
+				code: "EACCES",
+			}),
+		);
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			expect(
+				(await upload("att-storage-failure", new Uint8Array(4))).status,
+			).toBe(500);
+			expect(log).toHaveBeenCalledWith("attachments: storage upload failed", {
+				code: "EACCES",
+			});
+			expect(JSON.stringify(log.mock.calls)).not.toContain("private filename");
+		} finally {
+			put.mockRestore();
+			log.mockRestore();
+		}
+	});
+
 	async function committed(id: string, uploadedBy = "upload-owner") {
 		await reserve(id, { declaredBytes: 4 }, uploadedBy);
 		await upload(id, new Uint8Array(4), uploadedBy);

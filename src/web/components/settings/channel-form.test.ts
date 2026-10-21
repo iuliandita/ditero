@@ -12,6 +12,7 @@ import {
 	type ChannelCapabilities,
 	type ChannelHealthRow,
 	type ChannelMode,
+	channelFieldErrors,
 	channelFields,
 	channelHealth,
 	DEFAULT_CAPABILITIES,
@@ -480,5 +481,61 @@ describe("capability gating", () => {
 			);
 		}
 		expect(interactionsUrlFor("discord", null)).toBeNull();
+	});
+});
+
+describe("field-level repair guidance", () => {
+	it("identifies missing and invalid fields without returning credential contents", () => {
+		expect(channelFieldErrors("ntfy", "webhook", {}, null)).toEqual({
+			serverUrl: "required",
+			topic: "required",
+		});
+		expect(
+			channelFieldErrors(
+				"ntfy",
+				"webhook",
+				{ serverUrl: "bad", topic: "has spaces", token: "secret\nvalue" },
+				null,
+			),
+		).toEqual({ serverUrl: "invalid", topic: "invalid", token: "invalid" });
+		expect(
+			channelFieldErrors(
+				"discord",
+				"webhook",
+				{ webhookUrl: "https://other.example/hook" },
+				null,
+			),
+		).toEqual({ webhookUrl: "invalid" });
+	});
+	it("allows unchanged masked credentials but validates replacement values", () => {
+		const config = {
+			mode: "app",
+			botToken: MASKED,
+			publicKey: MASKED,
+			channelId: "123",
+		};
+		const row = stored("discord", config);
+		expect(
+			channelFieldErrors(
+				"discord",
+				"app",
+				{ botToken: MASKED, publicKey: MASKED, channelId: "123" },
+				row,
+			),
+		).toEqual({});
+		expect(
+			channelFieldErrors(
+				"discord",
+				"app",
+				{ botToken: MASKED, publicKey: "bad", channelId: "123" },
+				row,
+			),
+		).toEqual({ publicKey: "invalid" });
+	});
+	it("does not offer a provider excluded by the server's adapter inventory", () => {
+		expect(rowUnavailable("telegram", caps({ available: ["ntfy"] }))).toBe(
+			"channel_unavailable",
+		);
+		expect(rowUnavailable("ntfy", caps({ available: ["ntfy"] }))).toBeNull();
 	});
 });

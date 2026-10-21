@@ -49,7 +49,10 @@ The interface supports six languages, including Arabic and RTL layout. Choose
 light, dark, or system mode, then choose an accent: teal by default, or blue,
 clay, violet, berry, or ochre. Reading-size presets and high contrast are independent
 of those choices. Palettes and accent preferences sync with your account; reading
-size and high contrast stay on each device.
+size and high contrast stay on each device. The last workspace and list also stay
+on each device, separately for each account. If access ends or a list is deleted,
+navigation falls back to an available workspace or its home view. Saved list
+templates use the name you enter, or the template name when you leave it blank.
 
 ## Available on develop
 
@@ -58,7 +61,12 @@ size and high contrast stay on each device.
 - Recurring tasks and habits/chores with flexible recurrence (RFC 5545 RRULE) and streaks
 - Reminders with escalation and acknowledgement, delivered to ntfy, Telegram, Discord,
   Slack, or email
+- Display names at sign-up and in Settings > Account, shared in member and assignee displays.
+  Names, including managed-account names, use a trimmed 1-80-character limit without control characters.
 - Multi-workspace sharing with Owner / Admin / Member / Viewer roles
+  (Viewer task controls are read-only and explain the restriction). Email-bound
+  invites opened with another account offer sign-out so you can use the invited account.
+- Leave shared workspaces from your own Members row; the last owner must transfer ownership first
 - Invitation links, managed accounts, comments, and recorded task completion history
 - Email/password, passkeys, TOTP, recovery codes, and optional
   [Google sign-in](docs/runbooks/sign-in-providers.md)
@@ -187,7 +195,7 @@ All configuration is environment-driven. The common variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `BETTER_AUTH_SECRET` | _(required)_ | Signing secret for auth/JWTs. Generate with `openssl rand -hex 32`. |
+| `BETTER_AUTH_SECRET` | _(required)_ | At least 32 characters in production. Generate with `openssl rand -hex 32`. Changing it requires the [key rotation procedure](docs/runbooks/key-rotation.md#authentication-secret-rotation); replacing it directly breaks sign-in. |
 | `ZERO_ADMIN_PASSWORD` | _(required)_ | Admin password zero-cache requires in production. Generate with `openssl rand -hex 32`. |
 | `DITERO_ENCRYPTION_KEY` | _(required)_ | 32-byte Base64 key for stored replayable secrets. |
 | `DITERO_MIGRATION_DB_PASSWORD` | _(required, bundled)_ | Password for the schema-owner role. |
@@ -273,7 +281,9 @@ types, and thumbnails. It can still see the parent record, uploader, byte counts
 state, and storage location because authorization, quota enforcement, and garbage collection
 depend on them. Browsers without writable private-file staging support uploads
 up to 8 MiB of combined encrypted file and thumbnail data; server limits and
-workspace quotas still apply.
+workspace quotas still apply. Attachment tiles show the original byte count when it
+can be recovered exactly from the encrypted framing. Otherwise, "Stored size"
+identifies the encrypted byte count, including framing overhead.
 
 The Compose default stores ciphertext on a persistent filesystem volume. S3-compatible storage
 is also supported without exposing the bucket to browsers. Uploads require a live connection,

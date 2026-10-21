@@ -160,6 +160,9 @@ export function ShoppingRow({
 		<div>
 			<div
 				className="group group/completion flex min-h-12 items-center gap-2 rounded-md px-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted md:min-h-10"
+				title={
+					!activation.canWriteWorkspace ? m.workspace_read_only() : undefined
+				}
 				data-kbd-row
 				data-reading-row="shopping"
 				data-selected={selection?.selected || undefined}

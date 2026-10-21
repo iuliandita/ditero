@@ -1,6 +1,10 @@
 import { KeyRound } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
+	DISPLAY_NAME_MAX_LENGTH,
+	signupDisplayName,
+} from "../../auth/display-name.ts";
+import {
 	PASSWORD_MAX_LENGTH,
 	PASSWORD_MIN_LENGTH,
 } from "../../auth/password-policy.ts";
@@ -11,9 +15,10 @@ import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input } from "../components/ui/input.tsx";
 import { authClient } from "../lib/auth-client.ts";
-import { authErrorMessage } from "../lib/auth-messages.ts";
+import { authErrorMessage, totpErrorMessage } from "../lib/auth-messages.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
 import { fetchPublicConfig } from "../lib/public-config.ts";
+import { passkeysAvailable } from "../lib/secure-context.ts";
 import {
 	runAfterZeroRetirement,
 	ZeroRetirementError,
@@ -41,6 +46,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 	const [mode, setMode] = useState<"signin" | "signup">("signin");
 	const [email, setEmail] = useState("");
+	const [displayName, setDisplayName] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [callbackError, setCallbackError] = useState(() =>
@@ -100,7 +106,13 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 	function signUp() {
 		void runAction(async () => {
 			// Email verification is off, so signup yields an active session directly.
-			const name = email.split("@")[0] || email;
+			let name: string;
+			try {
+				name = signupDisplayName(displayName, email);
+			} catch {
+				setError(m.account_name_invalid());
+				return;
+			}
 			const res = await authClient.signUp.email({ email, password, name });
 			if (res.error)
 				setError(authErrorMessage(res.error, m.login_error_signup_failed));
@@ -117,6 +129,10 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 	}
 
 	function signInPasskey() {
+		if (!passkeysAvailable("get")) {
+			setError(m.auth_passkey_unavailable());
+			return;
+		}
 		void runAction(async () => {
 			const res = await authClient.signIn.passkey();
 			if (res.error)
@@ -145,9 +161,8 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 			const res = await authClient.twoFactor.verifyTotp({
 				code: twoFactorCode,
 			});
-			if (res.error)
-				setError(authErrorMessage(res.error, m.login_error_invalid_totp));
-		}, m.login_error_invalid_totp);
+			if (res.error) setError(totpErrorMessage(res.error));
+		}, m.login_error_totp_network);
 	}
 
 	function verifyBackupCode() {
@@ -281,6 +296,25 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 					else signIn();
 				}}
 			>
+				{mode === "signup" && (
+					<div className="space-y-2">
+						<label htmlFor="login-name" className="text-sm font-medium">
+							{m.account_display_name()}
+						</label>
+						<Input
+							id="login-name"
+							data-testid="signup-name"
+							autoComplete="name"
+							maxLength={DISPLAY_NAME_MAX_LENGTH}
+							value={displayName}
+							onChange={(event) => setDisplayName(event.target.value)}
+							disabled={pending}
+						/>
+						<p className="text-xs text-muted-foreground">
+							{m.account_name_signup_hint()}
+						</p>
+					</div>
+				)}
 				<div className="space-y-2">
 					<label htmlFor="login-email" className="text-sm font-medium">
 						{m.login_email_label()}

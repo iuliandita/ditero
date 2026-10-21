@@ -300,6 +300,7 @@ function Form({
 				await zero.mutate(
 					mutators.template.instantiateList({
 						templateId: templateSel.slice(3),
+						...(t ? { name: t } : {}),
 						workspaceId,
 						listId,
 						sortKey,

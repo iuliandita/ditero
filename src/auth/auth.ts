@@ -1,17 +1,21 @@
 import { passkey } from "@better-auth/passkey";
-import { betterAuth } from "better-auth";
+import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt, twoFactor } from "better-auth/plugins";
 import { count, isNull } from "drizzle-orm";
+import { validateAuthSecret } from "../config/auth-secret.ts";
 import { db, pool } from "../db/client.ts";
 import { user } from "../db/schema.ts";
 import { createFieldKeyRing } from "../security/field-encryption.ts";
 import {
 	sanitizeAuthRequest,
 	trustedProxyCIDRsFromEnv,
+	UNKNOWN_CLIENT_IP,
 } from "../server/client-ip.ts";
+import { takeRateToken } from "../server/notifications/capability.ts";
 import { zeroJwtOptions } from "../server/zero-auth.ts";
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
+import { normalizeDisplayName, signupDisplayName } from "./display-name.ts";
 import { withFieldEncryption } from "./encrypted-adapter.ts";
 import { emailHasRedeemableInvite } from "./invite-bypass.ts";
 import { mailUnavailableResponse, sendAuthMail } from "./mail.ts";
@@ -27,7 +31,11 @@ import { registrationAPIError } from "./registration-error.ts";
 import {
 	authRateLimitOptions,
 	passkeyOptions,
+	readSignInEmail,
 	requireSameOrigin,
+	SIGN_IN_RATE_CAPACITY,
+	SIGN_IN_RATE_REFILL_PER_SEC,
+	signInRateKey,
 } from "./security.ts";
 
 const REGISTRATION_LOCK_KEY = 6_794_321;
@@ -39,6 +47,7 @@ const authOrigins = [
 const trustedProxies = trustedProxyCIDRsFromEnv(
 	process.env.DITERO_TRUSTED_PROXIES,
 );
+validateAuthSecret();
 const encryptionKey = process.env.DITERO_ENCRYPTION_KEY;
 if (process.env.NODE_ENV === "production" && !encryptionKey) {
 	throw new Error("DITERO_ENCRYPTION_KEY is required in production");
@@ -60,6 +69,18 @@ async function registeredUserCount(): Promise<number> {
 		.from(user)
 		.where(isNull(user.deletedAt));
 	return result.value;
+}
+
+function validDisplayName(normalize: () => string): string {
+	try {
+		return normalize();
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			code: "INVALID_DISPLAY_NAME",
+			message:
+				"Use 1-80 characters without control characters for your display name",
+		});
+	}
 }
 
 export const auth = betterAuth({
@@ -96,8 +117,24 @@ export const auth = betterAuth({
 	}),
 	databaseHooks: {
 		user: {
+			update: {
+				before: async (data) =>
+					typeof data.name === "undefined"
+						? undefined
+						: {
+								data: {
+									...data,
+									name: validDisplayName(() =>
+										normalizeDisplayName(data.name as string),
+									),
+								},
+							},
+			},
 			create: {
 				before: async (newUser, context) => {
+					const name = validDisplayName(() =>
+						signupDisplayName(newUser.name, newUser.email),
+					);
 					try {
 						const invited =
 							registrationBypassActive() ||
@@ -110,6 +147,7 @@ export const auth = betterAuth({
 					} catch (error) {
 						throw registrationAPIError(error, context?.path);
 					}
+					return { data: { ...newUser, name } };
 				},
 				after: async (user) => {
 					try {
@@ -124,6 +162,47 @@ export const auth = betterAuth({
 	// jwt plugin exposes /api/auth/token and JWKS at /api/auth/jwks; the Zero
 	// token lifetime, issuer and audience are pinned in zero-auth.ts.
 	plugins: [
+		{
+			id: "sign-in-identity-rate-limit",
+			async onRequest(request: Request) {
+				if (
+					request.method === "POST" &&
+					new URL(request.url).pathname.replace(/\/+$/, "") ===
+						"/api/auth/sign-in/email"
+				) {
+					const email = await readSignInEmail(request);
+					if (email === null)
+						return {
+							response: Response.json(
+								{ message: "Invalid sign-in request", code: "INVALID_BODY" },
+								{ status: 400 },
+							),
+						};
+					// No account lookup: existing and unknown addresses consume identical buckets.
+					if (
+						!(await takeRateToken(
+							db,
+							signInRateKey(
+								request.headers.get("x-ditero-client-ip") ?? UNKNOWN_CLIENT_IP,
+								email,
+							),
+							SIGN_IN_RATE_CAPACITY,
+							SIGN_IN_RATE_REFILL_PER_SEC,
+						))
+					) {
+						return {
+							response: Response.json(
+								{
+									message: "Too many requests. Please try again later.",
+									code: "TOO_MANY_REQUESTS",
+								},
+								{ status: 429, headers: { "retry-after": "12" } },
+							),
+						};
+					}
+				}
+			},
+		},
 		passkey(
 			passkeyOptions({
 				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,

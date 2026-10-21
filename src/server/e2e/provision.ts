@@ -40,16 +40,15 @@ export type PendingWorkspace = {
 };
 
 /**
- * Every workspace the caller may mint for that is not yet fully provisioned.
+ * Keyless workspaces the caller may mint for, and active keys they lack a grant for.
  *
  * Listed rather than derived one workspace at a time because an account that
  * predates E2E owns several, and provisioning the one in front of the user
  * leaves the rest permanently keyless -- a state nothing notices until a file
  * will not encrypt, long after the enrollment that was supposed to set it up.
  *
- * Workspaces the caller may not mint for are omitted rather than listed and
- * refused: a list the server hands out should not end in a 403 it could have
- * predicted.
+ * Only Owners/Admins may mint, but every current member (including Viewers)
+ * must discover missing grants so enrollment/unlock can request existing keys.
  */
 export async function pendingProvisions(
 	client: PoolClient,
@@ -69,8 +68,8 @@ export async function pendingProvisions(
 		   on wk.workspace_id = w.id and wk.active
 		 left join membership_key mk
 		   on mk.membership_id = m.id and mk.key_version = wk.version
-		 where m.role = any($2)
-		   and (wk.id is null or mk.id is null)
+		 where (wk.id is null and m.role = any($2))
+		    or (wk.id is not null and mk.id is null)
 		 order by w.id`,
 		[userId, [...MINT_ROLES]],
 	);

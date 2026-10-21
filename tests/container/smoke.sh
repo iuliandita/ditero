@@ -166,3 +166,13 @@ test "$(docker inspect --format '{{.State.ExitCode}}' "$app")" = 0
 stop_elapsed=$(($(date +%s) - stop_started))
 echo "docker stop: ${stop_elapsed}s, exit 0"
 test "$stop_elapsed" -lt 9
+
+# The startup controls stop the app and rotate its auth secret, so they run last.
+docker start "$app" >/dev/null
+attempt=0
+until docker exec "$app" bun -e 'if (!(await fetch("http://localhost:3000/health")).ok) process.exit(1)' >/dev/null 2>&1; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 60 ]; then docker logs "$app" >&2; exit 1; fi
+  sleep 1
+done
+tests/container/startup.sh "$image" "$app" "$database" "$network"

@@ -1,7 +1,10 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Elysia } from "elysia";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
@@ -227,6 +230,7 @@ afterAll(async () => {
 describe("attachment download", () => {
 	test("is mounted by the production server composition", async () => {
 		const port = await availablePort();
+		const storagePath = await mkdtemp(join(tmpdir(), "ditero-download-"));
 		const logs: string[] = [];
 		const child = spawn("bun", ["run", "src/server/index.ts"], {
 			cwd: process.cwd(),
@@ -236,6 +240,7 @@ describe("attachment download", () => {
 				BETTER_AUTH_URL: `http://localhost:${port}`,
 				DITERO_BACKGROUND_JOBS: "0",
 				DITERO_E2E_ENABLED: "true",
+				DITERO_ATTACHMENT_FS_PATH: storagePath,
 			},
 			stdio: "pipe",
 		});
@@ -252,6 +257,7 @@ describe("attachment download", () => {
 			expect(response.status).toBe(401);
 		} finally {
 			await stopServer(child);
+			await rm(storagePath, { recursive: true, force: true });
 		}
 	}, 15_000);
 

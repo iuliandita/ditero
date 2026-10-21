@@ -31,6 +31,10 @@ Creation returns `grantId` and `expiresAt`. Grants expire after five minutes.
 Open `/native/authorize?grantId=...` on the selected server in the system browser.
 The page uses the existing sign-in flow, shows the device and signed-in account,
 and requires an explicit approval. It returns no session token to the browser.
+That browser sign-in uses separate IP-plus-email buckets and a household-sized
+per-IP ceiling checked before any email bucket is created; see
+[Trusted Proxy](trusted-proxy.md) for NAT and VPN limits.
+
 Google appears only when the server has both OAuth credentials configured. A
 registration-policy refusal returns to this page with the localized registration
 message and retains the grant ID; see [sign-in providers](sign-in-providers.md).
@@ -80,6 +84,12 @@ invalidate a signed-in client's session. Missing, expired and revoked sessions
 still return 401, and no token is issued without successful session verification.
 See [database outage recovery](database-roles.md#recovering-from-a-database-outage)
 for client upgrade and queued-edit recovery guidance.
+
+Keep `BETTER_AUTH_SECRET` stable and at least 32 characters in production.
+Startup verifies that retained JWT signing keys decrypt with the configured
+secrets. Changing `BETTER_AUTH_SECRET` requires the stopped-replica maintenance
+procedure in [key rotation](key-rotation.md), including
+`bun run security:rotate-auth-secrets`; replacing it directly prevents startup.
 
 All authentication requests are rate limited. Their JSON bodies are bounded to
 4 KiB and reject unexpected fields. Responses carry `Cache-Control: no-store`. The existing

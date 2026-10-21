@@ -9,7 +9,7 @@ import {
 } from "../../domain/attachment.ts";
 import { e2eBlobSchema } from "../e2e/input.ts";
 import type { BodyResult } from "../native-auth/contracts.ts";
-import type { BlobStore } from "../storage/blob-store.ts";
+import { type BlobStore, storageErrorCode } from "../storage/blob-store.ts";
 import {
 	type AttachmentAccessFailure,
 	type AttachmentContext,
@@ -360,7 +360,12 @@ async function transferAttachment({
 			requestBytes(request, declaredBytes),
 		);
 	} catch (error) {
-		if (!(error instanceof UploadTooLargeError)) throw error;
+		if (!(error instanceof UploadTooLargeError)) {
+			console.error("attachments: storage upload failed", {
+				code: storageErrorCode(error),
+			});
+			throw error;
+		}
 		await abortAttachment(client, row);
 		return {
 			response: new Response("Payload Too Large", { status: 413 }),

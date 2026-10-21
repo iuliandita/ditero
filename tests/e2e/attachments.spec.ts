@@ -119,7 +119,7 @@ test("attachments render on task, comment, and list surfaces", async ({
 	await inputFor(taskSurface).setInputFiles({
 		name: "task-note.txt",
 		mimeType: "text/plain",
-		buffer: Buffer.from("task attachment plaintext"),
+		buffer: Buffer.alloc(216, "x"),
 	});
 	await finishEnrollment(page, "task-note.txt");
 	await expect(
@@ -130,6 +130,9 @@ test("attachments render on task, comment, and list surfaces", async ({
 	await expect(
 		taskSurface.getByRole("button", { name: /Cancel upload/ }),
 	).toHaveCount(0, { timeout: 20_000 });
+	await expect(
+		taskSurface.getByRole("listitem").filter({ hasText: "task-note.txt" }),
+	).toContainText("216 byte");
 	await expectNoSeriousA11y(page, "task attachments");
 
 	const composer = page.getByTestId("comment-input");
@@ -283,6 +286,109 @@ async function expectDownload(
 	expect(Buffer.concat(chunks)).toEqual(plaintext);
 }
 
+for (const role of ["member", "viewer"] as const) {
+	test(`attachments: pre-existing ${role} automatically receives file access`, async ({
+		browser,
+	}) => {
+		test.setTimeout(180_000);
+		const ownerContext = await browser.newContext();
+		const recipientContext = await browser.newContext();
+		const owner = await ownerContext.newPage();
+		const recipient = await recipientContext.newPage();
+		for (const page of [owner, recipient]) page.setDefaultTimeout(20_000);
+		const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+		try {
+			const stamp = `${Date.now()}-${role}`;
+			const ownerEmail = uniqueEmail(`early-${role}-owner`);
+			const recipientEmail = uniqueEmail(`early-${role}`);
+			const ownerId = await signUp(owner, ownerEmail);
+			const recipientId = await signUp(recipient, recipientEmail);
+			const workspaceId = `w_early_${stamp}`;
+			const workspaceName = `Early files ${stamp}`;
+			// Seed only the workspace and seats, before any encryption key exists.
+			await pool.query(
+				"insert into workspace (id, name, owner_id, kind) values ($1, $2, $3, 'shared')",
+				[workspaceId, workspaceName, ownerId],
+			);
+			await pool.query(
+				`insert into membership (id, user_id, workspace_id, role) values
+				 ($1, $2, $3, 'owner'), ($4, $5, $3, $6)`,
+				[`mo_${stamp}`, ownerId, workspaceId, `mr_${stamp}`, recipientId, role],
+			);
+			const listName = `Early list ${stamp}`;
+			const taskName = `Early task ${stamp}`;
+			const filename = `shared-${stamp}.txt`;
+			const plaintext = Buffer.from(`Shared file for ${role}`);
+			await switchWorkspace(owner, workspaceName);
+			await createListAndTask(owner, listName, taskName);
+			const finalized = owner.waitForResponse("**/api/attachments/finalize");
+			await inputFor(owner.getByTestId("task-attachments")).setInputFiles({
+				name: filename,
+				mimeType: "text/plain",
+				buffer: plaintext,
+			});
+			await finishEnrollment(owner, filename);
+			expect((await finalized).ok()).toBe(true);
+			await closeTask(owner);
+			await goToSettings(owner);
+			await owner.getByTestId("e2e-lock-now").click();
+			await expect(owner.getByTestId("e2e-status")).toHaveText(
+				m.e2e_status_locked(),
+			);
+
+			await goToSettings(recipient);
+			await recipient.getByTestId("e2e-setup").click();
+			await finishEnrollment(recipient);
+			await leaveSettings(recipient);
+			await switchWorkspace(recipient, workspaceName);
+			await openTask(recipient, listName, taskName);
+			await expect(
+				recipient.getByText(m.attachment_key_pending()).first(),
+			).toBeVisible();
+			await expect
+				.poll(
+					async () =>
+						(
+							await pool.query(
+								"select state from key_grant_request where user_id=$1 and workspace_id=$2",
+								[recipientId, workspaceId],
+							)
+						).rows,
+				)
+				.toEqual([{ state: "key_pending" }]);
+			await expect(
+				recipient.getByText(
+					m.attachment_key_pending_who({ names: ownerEmail.split("@")[0] }),
+				),
+			).toBeVisible();
+
+			await owner.getByTestId("e2e-unlock").click();
+			await owner.getByTestId("e2e-unlock-passphrase").fill(PASSPHRASE);
+			await owner.getByTestId("e2e-unlock-submit").click();
+			await expect(owner.getByTestId("e2e-status")).toHaveText(
+				m.e2e_status_ready(),
+				{ timeout: DERIVE_TIMEOUT },
+			);
+			await expect
+				.poll(
+					async () =>
+						(
+							await pool.query(
+								"select state from key_grant_request where user_id=$1 and workspace_id=$2",
+								[recipientId, workspaceId],
+							)
+						).rows,
+				)
+				.toEqual([{ state: "ready" }]);
+			await expectDownload(recipient, filename, plaintext);
+		} finally {
+			await pool.end();
+			await ownerContext.close();
+			await recipientContext.close();
+		}
+	});
+}
+
 test("attachment canary: ciphertext, fragment grant, removal, rotation, and pending access", async ({
 	browser,
 }) => {
@@ -346,8 +452,11 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 			[oldId],
 		);
 		expect(stored.rowCount).toBe(1);
+		const attachmentRoot = process.env.DITERO_ATTACHMENT_FS_PATH;
+		if (!attachmentRoot)
+			throw new Error("DITERO_ATTACHMENT_FS_PATH is required");
 		const ciphertext = await readFile(
-			resolve("data/attachments", stored.rows[0].storage_key),
+			resolve(attachmentRoot, stored.rows[0].storage_key),
 		);
 		expect(ciphertext.length).toBeGreaterThan(oldBytes.length);
 		expect(ciphertext.includes(oldBytes)).toBe(false);
@@ -563,4 +672,37 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		await memberContext.close();
 		await outsiderContext.close();
 	}
+});
+
+test("attachments explain a proxy HTML 413 without a generic retry error", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("proxy-limit"));
+	await createListAndTask(page, "Proxy limit", "Upload a small file");
+	const surface = page.getByTestId("task-attachments");
+	await page.route("**/api/attachments/*/upload", (route) =>
+		route.fulfill({
+			status: 413,
+			contentType: "text/html",
+			body: "<html>Request Entity Too Large</html>",
+		}),
+	);
+	await inputFor(surface).setInputFiles({
+		name: "limited.txt",
+		mimeType: "text/plain",
+		buffer: Buffer.from("small file"),
+	});
+	await finishEnrollment(page, "limited.txt");
+	await expect(
+		page
+			.getByRole("alert")
+			.filter({
+				hasText: "The file is larger than the server or proxy allows.",
+			})
+			.first(),
+	).toBeVisible();
+	await expect(surface).toContainText(
+		"The file is larger than the server or proxy allows.",
+	);
+	await expect(surface).not.toContainText("Upload failed");
 });

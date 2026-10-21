@@ -6,6 +6,7 @@ import { m } from "../../paraglide/messages.js";
 import { EncryptedFilesPanel } from "../components/e2e/EncryptedFilesPanel.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { authErrorMessage } from "../lib/auth-messages.ts";
+import { passkeysAvailable } from "../lib/secure-context.ts";
 
 type PasskeyRecord = { id: string; name?: string | null };
 
@@ -49,6 +50,10 @@ export function SecurityPanel() {
 	}, [loadPasskeys]);
 
 	async function addPasskey() {
+		if (!passkeysAvailable("create")) {
+			setError(m.auth_passkey_unavailable());
+			return;
+		}
 		setError(null);
 		// Persisted, not display text: a localized name would be stored once and
 		// then render in that locale for every later session. Do not key it.

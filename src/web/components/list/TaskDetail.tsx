@@ -217,10 +217,9 @@ export function TaskDetail({
 	const callerRole = memberships.find(
 		(row) => row.workspaceId === list.workspaceId && row.userId === zero.userID,
 	)?.role;
-	const canEditLabels = callerRole != null && WRITE_ROLES.has(callerRole);
-	const canEditLabelsRef = useRef(canEditLabels);
-	canEditLabelsRef.current = canEditLabels;
+	const callerCanWrite = callerRole != null && WRITE_ROLES.has(callerRole);
 	const labelsReasonId = useId();
+	const readOnlyReasonId = useId();
 	const focus = useFocusTimer();
 	const confirm = useConfirm();
 	const snackbar = useSnackbar();
@@ -274,6 +273,9 @@ export function TaskDetail({
 	const returnFocus = useRef<ReturnTarget | null>(null);
 	const activation = useTaskImportActivation(task?.id);
 	const activationMap = useTaskImportActivationMap();
+	const canEditLabels = callerCanWrite && activation.canWrite;
+	const canEditLabelsRef = useRef(canEditLabels);
+	canEditLabelsRef.current = canEditLabels;
 
 	// Total time-on-task = sum of this task's completed `work` focus intervals.
 	const { sessions: focusSessions } = useFocusSessions(task?.id);
@@ -556,6 +558,7 @@ export function TaskDetail({
 	}
 
 	async function removeTask() {
+		if (!callerCanWrite) return;
 		// task.delete cascades children, so the confirm states them.
 		const count = allTasks.filter((s) => s.parentId === t.id).length;
 		const ok = await confirm({
@@ -573,6 +576,7 @@ export function TaskDetail({
 	}
 
 	async function removeSubtask(subtask: Task, trigger: HTMLButtonElement) {
+		if (!callerCanWrite) return;
 		const ok = await confirm({
 			title: m.task_delete_title(),
 			body: m.task_delete_confirm({ title: subtask.title }),
@@ -592,6 +596,7 @@ export function TaskDetail({
 	const headerActions: RowAction[] = [
 		{
 			id: "delete",
+			hidden: !callerCanWrite,
 			label: m.task_delete(),
 			icon: Trash2,
 			destructive: true,
@@ -616,11 +621,22 @@ export function TaskDetail({
 
 	const header = (
 		<div className="flex flex-wrap items-start gap-3 px-4 pt-4 pb-3">
+			{!activation.canWriteWorkspace && (
+				<p
+					id={readOnlyReasonId}
+					className="w-full text-sm text-muted-foreground"
+				>
+					{m.workspace_read_only()}
+				</p>
+			)}
 			<Checkbox
 				disabled={!activation.canWrite}
 				checked={checked}
 				aria-label={m.task_detail_done_aria()}
 				data-testid="task-detail-done"
+				aria-describedby={
+					!activation.canWriteWorkspace ? readOnlyReasonId : undefined
+				}
 				onCheckedChange={toggleDone}
 				shape={checkShapeFor(kind ?? "tasks")}
 				priority={checkToneFor(kind ?? "tasks", t.priority)}
@@ -639,6 +655,9 @@ export function TaskDetail({
 				}}
 				aria-label={m.task_detail_title_field()}
 				data-testid="task-detail-title"
+				aria-describedby={
+					!activation.canWriteWorkspace ? readOnlyReasonId : undefined
+				}
 				className={cn(
 					"min-h-11 max-h-48 w-full min-w-0 flex-1 basis-[min(10rem,calc(100%-3rem))] resize-none overflow-y-auto rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-base font-medium transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-input focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:min-h-9 dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
 					checked && "text-muted-foreground line-through",
@@ -896,6 +915,7 @@ export function TaskDetail({
 										size="icon-sm"
 										className="pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]"
 										aria-label={m.task_delete_named({ title: s.title })}
+										disabled={!callerCanWrite}
 										onClick={(event) =>
 											void removeSubtask(s, event.currentTarget)
 										}

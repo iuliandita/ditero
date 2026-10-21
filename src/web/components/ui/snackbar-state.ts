@@ -8,6 +8,7 @@ export type Snack = {
 	message: string;
 	key?: string;
 	action?: SnackAction;
+	failed?: true;
 };
 export type SnackbarState = {
 	snack: Snack | null;
@@ -23,7 +24,8 @@ export type SnackbarEvent =
 	| { type: "show"; message: string; key?: string; action?: SnackAction }
 	| { type: "fail"; message: string; key: string }
 	| { type: "dismiss"; id: number }
-	| { type: "dismissKey"; key: string };
+	| { type: "dismissKey"; key: string }
+	| { type: "releaseKey"; key: string };
 
 export const EMPTY_SNACKBAR: SnackbarState = {
 	snack: null,
@@ -43,7 +45,12 @@ function advance(state: SnackbarState): SnackbarState {
 	if (!next) return { ...state, snack: null };
 	return {
 		...state,
-		snack: { id: state.nextId, message: next.message, key: next.key },
+		snack: {
+			id: state.nextId,
+			message: next.message,
+			key: next.key,
+			failed: true,
+		},
 		nextId: state.nextId + 1,
 		queue: rest,
 	};
@@ -78,7 +85,12 @@ export function snackbarReducer(
 		if (state.snack == null || state.snack.key === event.key)
 			return {
 				...state,
-				snack: { id: state.nextId, message: event.message, key: event.key },
+				snack: {
+					id: state.nextId,
+					message: event.message,
+					key: event.key,
+					failed: true,
+				},
 				nextId: state.nextId + 1,
 			};
 		return {
@@ -99,6 +111,13 @@ export function snackbarReducer(
 			].slice(-RETRACTED_MAX),
 		};
 		return state.snack?.key === event.key ? advance(cleared) : cleared;
+	}
+	// The thing changed by a path nobody named, such as a refused write rolling
+	// back: drop its confirmation but keep listening, the refusal may follow.
+	if (event.type === "releaseKey") {
+		return state.snack?.key === event.key && !state.snack.failed
+			? advance(state)
+			: state;
 	}
 	return state.snack?.id === event.id ? advance(state) : state;
 }

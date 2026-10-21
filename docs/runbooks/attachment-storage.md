@@ -21,6 +21,14 @@ Use `DITERO_ATTACHMENT_STORAGE_DRIVER=filesystem` for a local or mounted volume.
 mounts its persistent attachment volume at `/data/attachments`. SMB or NFS is supported by mounting
 it at that filesystem path rather than exposing a share protocol to Ditero.
 
+With encrypted attachments enabled, startup requires this directory to already
+exist and verifies it by creating, writing and removing a private probe file as
+the application user. A missing, read-only or unwritable directory fails startup
+with its path and error code (for example `ENOENT`, `EROFS` or `EACCES`). Provision
+the directory and its UID/GID permissions before enabling the feature. The probe
+does not create the directory or change ownership. Storage errors during later
+uploads log their error codes without filenames or other plaintext metadata.
+
 Use `DITERO_ATTACHMENT_STORAGE_DRIVER=s3` for an S3-compatible bucket. Clear
 `DITERO_ATTACHMENT_FS_PATH`, then set `DITERO_ATTACHMENT_S3_BUCKET` and
 `DITERO_ATTACHMENT_S3_REGION`. Set `DITERO_ATTACHMENT_S3_ENDPOINT` for compatible providers that

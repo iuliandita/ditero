@@ -39,7 +39,7 @@ and never includes credential values in configuration. Supply all six keys:
 | --- | --- | --- |
 | `DATABASE_URL` | App | Restricted runtime-role PostgreSQL DSN |
 | `DATABASE_MIGRATION_URL` | App entrypoint | Migration-owner PostgreSQL DSN |
-| `BETTER_AUTH_SECRET` | App | Stable random authentication secret, at least 32 characters |
+| `BETTER_AUTH_SECRET` | App | Stable random authentication secret, at least 32 characters; change only through the [rotation procedure](../../docs/runbooks/key-rotation.md#authentication-secret-rotation) |
 | `DITERO_ENCRYPTION_KEY` | App | Base64-encoded 32-byte encryption key |
 | `ZERO_UPSTREAM_DB` | Zero | Direct Zero-role PostgreSQL DSN |
 | `ZERO_ADMIN_PASSWORD` | Zero | Strong random administration password |

@@ -25,7 +25,7 @@ The Secret must contain these keys:
 | --- | --- | --- |
 | `DATABASE_URL` | Application | Runtime-role PostgreSQL DSN |
 | `DATABASE_MIGRATION_URL` | Application entrypoint | Migration-owner PostgreSQL DSN |
-| `BETTER_AUTH_SECRET` | Application | Stable random authentication secret, at least 32 characters |
+| `BETTER_AUTH_SECRET` | Application | Stable random authentication secret, at least 32 characters; change only through the [rotation procedure](../../../docs/runbooks/key-rotation.md#authentication-secret-rotation) |
 | `DITERO_ENCRYPTION_KEY` | Application | Base64-encoded 32-byte encryption key |
 | `ZERO_UPSTREAM_DB` | Zero | Direct Zero-role PostgreSQL DSN |
 | `ZERO_ADMIN_PASSWORD` | Zero | Strong random administration password |
@@ -198,3 +198,8 @@ remain after uninstall. To reuse retained data, set the corresponding
 backup and an explicit decision to discard that data. Use a suitable volume
 reclaim policy as an additional safeguard. A Helm rollback does not undo database
 migrations.
+
+Production startup rejects an authentication secret shorter than 32 characters
+or one that cannot decrypt the stored JWKS private key. Restore the original
+secret or complete `bun run security:rotate-auth-secrets` using the rotation
+procedure before restarting. Replacing only the Secret value breaks sign-in.

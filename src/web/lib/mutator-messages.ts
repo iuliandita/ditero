@@ -11,6 +11,8 @@ import { m } from "../../paraglide/messages.js";
 
 const MUTATOR_ERROR_MESSAGES: Record<MutatorErrorCode, () => string> = {
 	denied: m.mutator_error_denied,
+	workspace_last_owner: m.workspace_leave_last_owner,
+	workspace_personal_leave: m.workspace_leave_personal,
 	label_name_taken: m.mutator_error_label_name_taken,
 };
 

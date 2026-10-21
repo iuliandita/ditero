@@ -68,6 +68,26 @@ separately. `pg_dump` does not back up cluster logins or replication slots.
    Zero so it rebuilds from PostgreSQL. Verify health, login, TOTP, JWT issuance, RLS isolation, sync,
    one encrypted integration credential, and one attachment download and decryption.
 
+During an upgrade, startup probes an enabled filesystem attachment directory by creating and
+removing a private file. Restore its ownership and write permissions before
+starting; a missing directory, `EACCES` or `EROFS` stops startup. No attachment
+format migration is required, and older clients remain compatible. Keep the
+original `BETTER_AUTH_SECRET` with each backup: startup also checks the stored
+JWKS private key. Changing that secret requires [key rotation](key-rotation.md#authentication-secret-rotation),
+not a replacement value during restore. A rollback of an authentication-secret
+rotation requires reversing the rotation or restoring matching database and
+secret backups together.
+
 Never test a restore by pointing it at the production Zero replica or notification channels.
 Read [E2E Key Loss](e2e-key-loss.md) before treating a successful infrastructure restore as proof
 that encrypted files remain decryptable.
+
+## Workspace Leave Upgrade
+
+Run the membership-leave cleanup migration before deploying the application that offers
+Leave workspace. It adds restricted notification-cleanup policies and triggers so every
+member role can leave; existing rows, attachment ciphertext and key envelopes are unchanged.
+Keep the usual coordinated database and attachment backup before migrating. Older client versions
+continue to work, but only updated clients offer Leave workspace. Application rollback
+can retain this additive migration; do not restore an older database over newer membership
+changes. Leaving and owner removal both require remaining members to rotate file keys.

@@ -284,6 +284,31 @@ async function requireMembershipAdmin(
 	return { target, callerRole, ownerCount };
 }
 
+async function removeOptimisticMembership(
+	tx: Transaction<Schema>,
+	target: Membership,
+): Promise<void> {
+	// Assignment implies membership everywhere in this codebase (that is
+	// the premise of invite-on-assign), so an assignee row for a
+	// non-member is a row no query syncs and no UI can clear.
+	const assignments = await tx.run(
+		zql.taskAssignee.where("userId", target.userId),
+	);
+	for (const a of assignments) {
+		const task = await tx.run(
+			zql.task.where("id", a.taskId).related("list").one(),
+		);
+		const list = task?.list as List | undefined;
+		if (list?.workspaceId === target.workspaceId)
+			await tx.mutate.taskAssignee.delete({ id: a.id });
+	}
+	await tx.mutate.workspace.update({
+		id: target.workspaceId,
+		rotationRequired: true,
+	});
+	await tx.mutate.membership.delete({ id: target.id });
+}
+
 // `satisfies` ties the tuple to ListKind so a typo or removed kind fails to
 // compile (twin of LIST_KINDS in domain/template.ts).
 const LIST_KINDS = [
@@ -1678,6 +1703,7 @@ export const mutators = defineMutators({
 		instantiateList: defineMutator(
 			z.object({
 				templateId: z.string(),
+				name: z.string().trim().min(1).optional(),
 				workspaceId: z.string(),
 				listId: z.string(),
 				sortKey: z.string(),
@@ -1697,7 +1723,7 @@ export const mutators = defineMutators({
 					content,
 					seededIds(args.listId),
 					keyBetween,
-					{ sortKey: args.sortKey, title: template.name },
+					{ sortKey: args.sortKey, title: args.name ?? template.name },
 				);
 				if (!list) throw new Error("list template produced no list");
 				await insertInstantiatedList(tx, ctx.id, args.workspaceId, list, tasks);
@@ -1787,6 +1813,42 @@ export const mutators = defineMutators({
 		),
 	},
 	membership: {
+		leave: defineMutator(
+			z.object({ id: z.string() }),
+			async ({ tx, ctx, args }) => {
+				if (tx.location === "server") {
+					await removeMembershipWithActivation(tx, ctx.id, args.id, "leave");
+					return;
+				}
+				const target = await tx.run(zql.membership.where("id", args.id).one());
+				if (!target || target.userId !== ctx.id)
+					throw new Error("access denied: can only leave your own membership");
+				const workspace = await tx.run(
+					zql.workspace.where("id", target.workspaceId).one(),
+				);
+				if (!workspace) throw new Error("workspace not found");
+				if (workspace.kind !== "shared")
+					throw new MutatorError(
+						"workspace_personal_leave",
+						"cannot leave a personal workspace",
+					);
+				const others = await tx.run(
+					zql.membership
+						.where("workspaceId", target.workspaceId)
+						.where("role", "owner")
+						.where("userId", "!=", ctx.id),
+				);
+				if (
+					(target.role === "owner" || workspace.ownerId === ctx.id) &&
+					others.length === 0
+				)
+					throw new MutatorError(
+						"workspace_last_owner",
+						"cannot leave the last owner: transfer ownership first",
+					);
+				await removeOptimisticMembership(tx, target);
+			},
+		),
 		setRole: defineMutator(
 			z.object({ id: z.string(), role: z.enum(ROLES) }),
 			async ({ tx, ctx, args }) => {
@@ -1820,25 +1882,7 @@ export const mutators = defineMutators({
 					"cannot remove the last owner",
 					true,
 				);
-				// Assignment implies membership everywhere in this codebase (that is
-				// the premise of invite-on-assign), so an assignee row for a
-				// non-member is a row no query syncs and no UI can clear.
-				const assignments = await tx.run(
-					zql.taskAssignee.where("userId", target.userId),
-				);
-				for (const a of assignments) {
-					const task = await tx.run(
-						zql.task.where("id", a.taskId).related("list").one(),
-					);
-					const list = task?.list as List | undefined;
-					if (list?.workspaceId === target.workspaceId)
-						await tx.mutate.taskAssignee.delete({ id: a.id });
-				}
-				await tx.mutate.workspace.update({
-					id: target.workspaceId,
-					rotationRequired: true,
-				});
-				await tx.mutate.membership.delete({ id: args.id });
+				await removeOptimisticMembership(tx, target);
 			},
 		),
 	},

@@ -11,6 +11,7 @@ import type {
 } from "../../hooks/useNotificationChannels.ts";
 import {
 	channelErrorMessage,
+	channelFieldErrorMessage,
 	channelFieldLabel,
 	channelLabel,
 	channelModeSummary,
@@ -21,8 +22,10 @@ import {
 	appModeDisabled,
 	CHANNEL_MODES,
 	type ChannelCapabilities,
+	type ChannelFieldError,
 	type ChannelHealthRow,
 	type ChannelMode,
+	channelFieldErrors,
 	channelFields,
 	channelHealth,
 	formConfig,
@@ -88,6 +91,9 @@ export function ChannelRow({
 	const [hydrated, setHydrated] = useState(false);
 	// Per row, not from the hook: one shared error across five rows renders a
 	// role="alert" inside rows that never failed (shell doc 5).
+	const [fieldErrors, setFieldErrors] = useState<
+		Record<string, ChannelFieldError>
+	>({});
 	const [rowError, setRowError] = useState<string | null>(null);
 	const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -128,7 +134,15 @@ export function ChannelRow({
 		};
 	}
 
+	function validateFields() {
+		const errors = channelFieldErrors(kind, mode, values, stored);
+		setFieldErrors(errors);
+		setRowError(null);
+		return Object.keys(errors).length === 0;
+	}
+
 	async function onSave() {
+		if (unavailable || !validateFields()) return;
 		setBusy(true);
 		try {
 			const failure = await save(payload());
@@ -140,6 +154,7 @@ export function ChannelRow({
 	}
 
 	async function onTest() {
+		if (unavailable || !validateFields()) return;
 		setBusy(true);
 		try {
 			setRowError(null);
@@ -173,6 +188,8 @@ export function ChannelRow({
 	}
 
 	function onMode(next: ChannelMode) {
+		setFieldErrors({});
+		setRowError(null);
 		setMode(next);
 		setValues(formValues(kind, next, stored));
 	}
@@ -410,10 +427,34 @@ export function ChannelRow({
 								autoCorrect="off"
 								spellCheck={false}
 								data-testid={`${rowId}-${field.key}`}
-								onChange={(e) =>
-									setValues((v) => ({ ...v, [field.key]: e.target.value }))
+								aria-invalid={fieldErrors[field.key] !== undefined || undefined}
+								aria-describedby={
+									fieldErrors[field.key]
+										? `${rowId}-${field.key}-error`
+										: undefined
 								}
+								onChange={(e) => {
+									setValues((v) => ({ ...v, [field.key]: e.target.value }));
+									setFieldErrors((previous) => {
+										const next = { ...previous };
+										delete next[field.key];
+										return next;
+									});
+								}}
 							/>
+							{fieldErrors[field.key] && (
+								<span
+									id={`${rowId}-${field.key}-error`}
+									role="alert"
+									className="text-xs text-destructive"
+								>
+									{channelFieldErrorMessage(
+										kind,
+										field.key,
+										fieldErrors[field.key],
+									)}
+								</span>
+							)}
 						</label>
 					))}
 
@@ -421,7 +462,7 @@ export function ChannelRow({
 						<Button
 							size="sm"
 							data-testid={`${rowId}-save`}
-							disabled={busy}
+							disabled={busy || unavailable !== null}
 							onClick={() => void onSave()}
 						>
 							{m.channel_action_save()}
@@ -430,7 +471,7 @@ export function ChannelRow({
 							size="sm"
 							variant="outline"
 							data-testid={`${rowId}-test`}
-							disabled={busy}
+							disabled={busy || unavailable !== null}
 							onClick={() => void onTest()}
 						>
 							{m.channel_action_test()}

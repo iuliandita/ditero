@@ -837,6 +837,33 @@ describe("capacity and pruning", () => {
 		}
 	});
 
+	test("the tick drains more than one batch of expired sign-in buckets", async () => {
+		const keys = Array.from(
+			{ length: 1_031 },
+			(_, i) => `auth:sign-in:prune-${i}`,
+		);
+		try {
+			await db.insert(tables.rateBucket).values(
+				keys.map((key) => ({
+					key,
+					tokens: 0,
+					refilledAt: new Date(Date.now() - 3 * 3_600_000),
+				})),
+			);
+			expect((await tick()).prunedRateBuckets).toBe(keys.length);
+			expect(
+				await db
+					.select()
+					.from(tables.rateBucket)
+					.where(inArray(tables.rateBucket.key, keys)),
+			).toEqual([]);
+		} finally {
+			await db
+				.delete(tables.rateBucket)
+				.where(inArray(tables.rateBucket.key, keys));
+		}
+	});
+
 	test("prune is skipped when the tick does not ask for it", async () => {
 		const old = new Date(Date.now() - 40 * 24 * 3_600_000);
 		await seedOutbox("wk-p-skip", { status: "sent", createdAt: old });

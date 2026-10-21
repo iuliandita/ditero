@@ -64,6 +64,8 @@ const appEnv = {
 	// it every /api/e2e/* route answers 404 and the enrollment surface renders
 	// nothing at all -- an absence that reads as a broken selector.
 	DITERO_E2E_ENABLED: "true",
+	DITERO_ATTACHMENT_FS_PATH:
+		process.env.DITERO_ATTACHMENT_FS_PATH ?? "data/attachments",
 	BETTER_AUTH_SECRET: "e2e-only-better-auth-secret-32-bytes",
 	DITERO_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString("base64"),
 	DITERO_PASSKEY_ORIGIN: WEB_ORIGIN,

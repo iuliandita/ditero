@@ -215,21 +215,29 @@ test("calendar subscriptions: Viewer creates a bound URL once and revocation sto
 			dialog.getByRole("button", { name: "Done", exact: true }),
 			"dialog Done",
 		);
+		await page.bringToFront();
+		await page
+			.context()
+			.grantPermissions(["clipboard-read", "clipboard-write"], {
+				origin: new URL(page.url()).origin,
+			});
 		await page.evaluate(() => {
+			Reflect.set(window, "calendarClipboard", navigator.clipboard);
 			Object.defineProperty(navigator, "clipboard", {
 				configurable: true,
-				value: {
-					writeText: async (value: string) => {
-						Reflect.set(window, "calendarCopied", value);
-					},
-				},
+				value: undefined,
 			});
 		});
-		await dialog.getByRole("button", { name: "Copy", exact: true }).click();
+		const copy = dialog.getByRole("button", { name: "Copy", exact: true });
+		await copy.click();
 		await expect(dialog.getByRole("status")).toContainText("Copied");
 		expect(
-			await page.evaluate(() => Reflect.get(window, "calendarCopied")),
+			await page.evaluate(async () => {
+				const clipboard = Reflect.get(window, "calendarClipboard") as Clipboard;
+				return await clipboard.readText();
+			}),
 		).toBe(url);
+		await expect(copy).toBeFocused();
 		await page.evaluate(() => {
 			Object.defineProperty(navigator, "clipboard", {
 				configurable: true,

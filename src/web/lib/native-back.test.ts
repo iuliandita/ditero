@@ -3,6 +3,15 @@ import { installNativeBack, NATIVE_NAVIGATE_BACK } from "./native-back.ts";
 
 afterEach(() => vi.unstubAllGlobals());
 
+// Keeps the init dictionary so the dispatched key is observable outside a DOM.
+class StubKeyboardEvent extends Event {
+	readonly key: string;
+	constructor(type: string, init: KeyboardEventInit = {}) {
+		super(type, init);
+		this.key = init.key ?? "";
+	}
+}
+
 test.each([
 	"overlay",
 	"navigation",
@@ -11,7 +20,10 @@ test.each([
 	const window = new EventTarget();
 	const active = new EventTarget();
 	const onEscape = vi.fn();
-	active.addEventListener("keydown", onEscape);
+	active.addEventListener("keydown", (event) => {
+		if ((event as StubKeyboardEvent).key === "Escape" && event.cancelable)
+			onEscape();
+	});
 	const navigation = vi.fn((event: Event) => {
 		if (surface === "navigation") event.preventDefault();
 	});
@@ -21,7 +33,7 @@ test.each([
 		querySelector: () => (surface === "overlay" ? {} : null),
 		activeElement: active,
 	});
-	vi.stubGlobal("KeyboardEvent", Event);
+	vi.stubGlobal("KeyboardEvent", StubKeyboardEvent);
 	const dispose = installNativeBack();
 	const event = new Event("ditero:native-back", { cancelable: true });
 	expect(window.dispatchEvent(event)).toBe(surface === "root");

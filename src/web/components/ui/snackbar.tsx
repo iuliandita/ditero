@@ -36,6 +36,9 @@ type Snackbar = {
 	// Retract the current snack if it is about `key` (e.g. the task reopened),
 	// and any failure still waiting for it.
 	dismissKey: (key: string) => void;
+	// Drop a confirmation about `key` that no longer holds; a later failure for
+	// it still shows.
+	releaseKey: (key: string) => void;
 };
 
 const SnackbarContext = createContext<Snackbar | null>(null);
@@ -62,6 +65,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
 			show: (next) => dispatch({ type: "show", ...next }),
 			fail: (next) => dispatch({ type: "fail", ...next }),
 			dismissKey: (key) => dispatch({ type: "dismissKey", key }),
+			releaseKey: (key) => dispatch({ type: "releaseKey", key }),
 		}),
 		[],
 	);

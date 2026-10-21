@@ -708,7 +708,7 @@ describe("GET /api/e2e/provision/pending", () => {
 		});
 	});
 
-	test("omits workspaces the caller may not mint for", async () => {
+	test("omits keyless workspaces the caller may not mint for", async () => {
 		const listed = (await (await pending(memberCookie)).json()).workspaces;
 		// The presence half is the member's OWN personal workspace, which they
 		// own and may mint for. SHARED, where they are only a Member, is absent:

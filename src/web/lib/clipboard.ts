@@ -20,14 +20,27 @@ function legacyCopy(text: string, doc: Document): boolean {
 	field.style.position = "fixed";
 	field.style.top = "-1000px";
 	field.style.opacity = "0";
-	doc.body.appendChild(field);
+	const active = doc.activeElement as HTMLElement | null;
+	const scope =
+		active?.closest('[role="dialog"], [role="alertdialog"], dialog') ??
+		doc.body;
+	scope.appendChild(field);
 	try {
+		field.focus({ preventScroll: true });
 		field.select();
+		field.setSelectionRange(0, text.length);
+		if (
+			doc.activeElement !== field ||
+			field.selectionStart !== 0 ||
+			field.selectionEnd !== text.length
+		)
+			return false;
 		return doc.execCommand("copy");
 	} catch {
 		return false;
 	} finally {
 		field.remove();
+		active?.focus({ preventScroll: true });
 	}
 }
 

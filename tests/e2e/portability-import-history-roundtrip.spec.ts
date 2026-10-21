@@ -8,6 +8,7 @@ import {
 	goToSettings,
 	leaveSettings,
 	openDetails,
+	openMobileLists,
 	sidebarLists,
 	signUp,
 	switchWorkspace,
@@ -440,7 +441,18 @@ test("Settings v2 history roundtrip survives a lost batch response and preserves
 		});
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.reload();
+		// Let restoration select the saved workspace before leaving its list.
+		await expect(
+			page
+				.getByTestId("list")
+				.getByRole("heading", { name: targetTitle, exact: true }),
+		).toBeVisible({ timeout: 30_000 });
+		await openMobileLists(page);
 		await waitWorkspaceReady(page);
+		await expect(page.getByTestId("workspace-switcher")).toHaveAttribute(
+			"data-workspace-id",
+			targetWorkspace,
+		);
 		await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
 		await expect(page.locator("html")).toHaveClass(/(^|\s)dark(\s|$)/);
 		await goToSettings(page);

@@ -114,6 +114,23 @@ export function MembersPanel({
 			setError,
 		);
 	}
+	async function leaveWorkspace(id: string) {
+		const ok = await confirm({
+			title: m.workspace_leave_title({ workspace: workspaceName }),
+			body: m.workspace_leave_body({ workspace: workspaceName }),
+			confirmLabel: m.workspace_leave_action(),
+			destructive: true,
+		});
+		if (!ok) return;
+		if (
+			await runMutation(
+				zero.mutate(mutators.membership.leave({ id })),
+				setError,
+			)
+		)
+			onOpenChange(false);
+	}
+
 	async function copy(id: string, link: string) {
 		if (await copyText(link)) setCopiedId(id);
 	}
@@ -183,6 +200,7 @@ export function MembersPanel({
 														workspace?.ownerId === zero.userID,
 													handlers: {
 														setRole: (id, r) => void setRole(id, r),
+														leave: (id) => void leaveWorkspace(id),
 														remove: (id, n) => void removeMember(id, n),
 													},
 												})}

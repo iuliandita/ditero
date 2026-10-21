@@ -2,6 +2,10 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+	DISPLAY_NAME_MAX_LENGTH,
+	signupDisplayName,
+} from "../../auth/display-name.ts";
+import {
 	importRecipientPublicKey,
 	publicKeyFingerprint,
 	sealWdk,
@@ -116,6 +120,7 @@ export function captureFastInvite(
 function acceptMessage(status: number, reason: string): string {
 	if (status === 401) return m.accept_error_sign_in_required();
 	if (status === 404) return m.accept_error_invalid();
+	if (reason === "email_mismatch") return m.accept_error_email_mismatch();
 	if (reason === "expired") return m.accept_error_expired();
 	if (reason === "exhausted") return m.accept_error_exhausted();
 	if (reason === "revoked") return m.accept_error_revoked();
@@ -168,10 +173,12 @@ function AcceptInvitePage({
 	const [fastInvite] = useState(() => captureFastInvite(tokenFromLocation()));
 	const [preview, setPreview] = useState<Preview>({ state: "loading" });
 	const [email, setEmail] = useState("");
+	const [displayName, setDisplayName] = useState("");
 	const [password, setPassword] = useState("");
 	const [mode, setMode] = useState<"signup" | "signin">("signup");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [emailMismatch, setEmailMismatch] = useState(false);
 	const [fastClaim, setFastClaim] = useState<FastClaim | null>(null);
 	const [fastWdk, setFastWdk] = useState<Uint8Array | null>(null);
 	const [fastGrant, setFastGrant] = useState(fastInvite?.grant ?? null);
@@ -233,6 +240,7 @@ function AcceptInvitePage({
 			return;
 		}
 		const reason = (await res.text().catch(() => "")).trim();
+		setEmailMismatch(reason === "email_mismatch");
 		setError(acceptMessage(res.status, reason));
 	}, [token]);
 
@@ -291,6 +299,7 @@ function AcceptInvitePage({
 				if (reason === "not_fast_eligible") {
 					await ordinaryAccept();
 				} else {
+					setEmailMismatch(reason === "email_mismatch");
 					setError(acceptMessage(response.status, reason));
 				}
 				return;
@@ -451,7 +460,13 @@ function AcceptInvitePage({
 		setError(null);
 		try {
 			if (mode === "signup") {
-				const name = email.split("@")[0] || email;
+				let name: string;
+				try {
+					name = signupDisplayName(displayName, email);
+				} catch {
+					setError(m.account_name_invalid());
+					return;
+				}
 				const res = await authClient.signUp.email({ email, password, name });
 				if (res.error) {
 					setError(authErrorMessage(res.error, m.accept_signup_failed));
@@ -528,11 +543,25 @@ function AcceptInvitePage({
 					<div className="flex flex-col gap-3">
 						<Button
 							type="button"
-							data-testid="accept-join"
+							data-testid={
+								emailMismatch ? "accept-switch-account" : "accept-join"
+							}
 							disabled={busy}
-							onClick={() => void join()}
+							onClick={() => {
+								if (!emailMismatch) {
+									void join();
+									return;
+								}
+								setBusy(true);
+								void keyring
+									?.signOut()
+									.catch(() => setError(m.security_error_sign_out()))
+									.finally(() => setBusy(false));
+							}}
 						>
-							{m.accept_join_button({ workspace: preview.workspaceName })}
+							{emailMismatch
+								? m.accept_switch_account()
+								: m.accept_join_button({ workspace: preview.workspaceName })}
 						</Button>
 					</div>
 				) : (
@@ -543,6 +572,25 @@ function AcceptInvitePage({
 							void authThenAccept();
 						}}
 					>
+						{mode === "signup" && (
+							<div className="space-y-2">
+								<label htmlFor="accept-name" className="text-sm font-medium">
+									{m.account_display_name()}
+								</label>
+								<Input
+									id="accept-name"
+									data-testid="signup-name"
+									autoComplete="name"
+									maxLength={DISPLAY_NAME_MAX_LENGTH}
+									value={displayName}
+									onChange={(event) => setDisplayName(event.target.value)}
+									disabled={busy}
+								/>
+								<p className="text-xs text-muted-foreground">
+									{m.account_name_signup_hint()}
+								</p>
+							</div>
+						)}
 						<div className="flex flex-col gap-1.5">
 							<label htmlFor={emailId} className="text-sm font-medium">
 								{m.field_email()}

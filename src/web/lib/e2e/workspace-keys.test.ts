@@ -231,7 +231,9 @@ describe("reconcileWorkspaceKeys", () => {
 		]);
 	});
 
-	it("requests an existing key instead of minting a fork", async () => {
+	it.each([
+		1, 3,
+	])("requests a missing active v%s grant instead of minting a fork", async (version) => {
 		const identity = await generateIdentityKeyPair();
 		const publicKey = encodeBytes(identity.publicKey);
 		const called: string[] = [];
@@ -245,9 +247,9 @@ describe("reconcileWorkspaceKeys", () => {
 					workspaces: [
 						{
 							id: WORKSPACE,
-							version: 1,
+							version,
 							reason: "no-grant",
-							commitment: await commitWdk(WDK, WORKSPACE, 1),
+							commitment: await commitWdk(WDK, WORKSPACE, version),
 						},
 					],
 				});
@@ -255,7 +257,7 @@ describe("reconcileWorkspaceKeys", () => {
 			if (String(input) === "/api/e2e/grants/request") {
 				return Response.json({
 					requestId: "kgr_1",
-					keyVersion: 1,
+					keyVersion: version,
 					state: "pending",
 				});
 			}
@@ -275,7 +277,13 @@ describe("reconcileWorkspaceKeys", () => {
 			publicKey,
 			fetcher,
 		);
-		expect(called).toContain("/api/e2e/grants/request");
+		expect(fetcher).toHaveBeenCalledWith(
+			"/api/e2e/grants/request",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({ workspaceId: WORKSPACE }),
+			}),
+		);
 		expect(called).not.toContain("/api/e2e/provision");
 	});
 });

@@ -31,6 +31,16 @@ describe("FsBlobStore", () => {
 		await rm(root, { recursive: true, force: true });
 	});
 
+	it("probes an existing directory without leaving files and rejects a missing root with path and errno", async () => {
+		await store.verifyWritable();
+		expect(await readdir(root)).toEqual([]);
+		const missing = join(root, "missing");
+		await expect(new FsBlobStore(missing).verifyWritable()).rejects.toThrow(
+			`Attachment filesystem storage at "${missing}" is not writable (ENOENT)`,
+		);
+		expect(await readdir(root)).toEqual([]);
+	});
+
 	it("round-trips a stream and returns its observed size and hash", async () => {
 		const key = "ws_1/a4/att_1";
 		expect(await store.exists(key)).toBe(false);
