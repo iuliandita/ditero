@@ -24,7 +24,7 @@
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		},
 		"compatibility": {
-			"sourceDigest": "cb2b1570f0ead786d9c1fa6f6dae5d8053a74784e3f0efe571f133ade1725e7a",
+			"sourceDigest": "3d8524a7a1b355e851b1a0b2bf9eb05e30355bb0f13eb2bfb3ea92ab7667a304",
 			"docs": ["docs/runbooks/database-roles.md"],
 			"note": "Document restricted-role membership removal without TEMP and uniform 404 attachment denials, with unchanged persisted formats.",
 			"upgrade": "Deploy the application update without schema, blob or key conversion; runtime TEMP grants are unnecessary.",
