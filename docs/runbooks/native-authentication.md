@@ -61,6 +61,13 @@ the stream may remain until reconnect or token expiry.
 Previously issued subject-only JWTs are refused. Existing signed-in browser
 clients can refresh through the usual cookie-authenticated token endpoint.
 
+The browser `GET /api/auth/token` endpoint returns 503 with `Retry-After: 5`
+when its session lookup is unavailable, so temporary database failure does not
+invalidate a signed-in client's session. Missing, expired and revoked sessions
+still return 401, and no token is issued without successful session verification.
+See [database outage recovery](database-roles.md#recovering-from-a-database-outage)
+for client upgrade and queued-edit recovery guidance.
+
 All authentication requests are rate limited. Their JSON bodies are bounded to
 4 KiB and reject unexpected fields. Responses carry `Cache-Control: no-store`. The existing
 browser origin checks and cookie authentication remain in place.

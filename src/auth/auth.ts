@@ -180,6 +180,35 @@ export async function handleAuthRequest(
 	const unavailable = mailUnavailableResponse(request);
 	if (unavailable) return unavailable;
 
+	if (
+		request.method === "GET" &&
+		new URL(request.url).pathname === "/api/auth/token"
+	) {
+		const response = await auth.handler(request);
+		if (response.status !== 401) return response;
+		// Better Auth's session middleware turns lookup faults into 401. Only
+		// an authoritative missing session may stop automatic Zero token refresh.
+		try {
+			const session = await auth.api.getSession({
+				headers: request.headers,
+				query: { disableCookieCache: true },
+			});
+			if (!session) return response;
+		} catch (error) {
+			console.error("Zero token session lookup unavailable", error);
+		}
+		return Response.json(
+			{
+				code: "SESSION_UNAVAILABLE",
+				message: "Session verification unavailable",
+			},
+			{
+				status: 503,
+				headers: { "cache-control": "no-store", "retry-after": "5" },
+			},
+		);
+	}
+
 	if (registrationMode !== "bootstrap" || (await registeredUserCount()) > 0) {
 		return auth.handler(request);
 	}

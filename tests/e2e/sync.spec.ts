@@ -66,6 +66,91 @@ async function serverHasTask(title: string): Promise<boolean> {
 	}
 }
 
+for (const failure of [
+	{
+		kind: "PushFailed",
+		origin: "zeroCache",
+		reason: "internal",
+		message: "Fetch from API server threw error: fetch failed",
+		mutationIDs: [],
+	},
+	{
+		kind: "TransformFailed",
+		origin: "zeroCache",
+		reason: "http",
+		status: 503,
+		message: "Fetch from API server returned non-OK status 503",
+		queryIDs: [],
+	},
+	{
+		kind: "Internal",
+		origin: "zeroCache",
+		message: "getaddrinfo ENOTFOUND database",
+	},
+]) {
+	test(`desktop: ${failure.kind} during an API outage reconnects and replays queued edits`, async ({
+		page,
+		context,
+		browser,
+	}) => {
+		test.setTimeout(90_000);
+		let failNextConnection = false;
+		let failuresSent = 0;
+		await page.routeWebSocket(/\/sync\/v\d+\/connect/, (ws) => {
+			if (!failNextConnection) {
+				ws.connectToServer();
+				return;
+			}
+			failNextConnection = false;
+			failuresSent++;
+			// The cache exhausts its API retries before sending this protocol error.
+			// Reproduce that boundary without stopping the shared harness database.
+			ws.send(JSON.stringify(["error", failure]));
+		});
+		await signUp(page, uniqueEmail("sync-api-outage"));
+		const list = `Recovery ${failure.kind}`;
+		await openNewList(page, list);
+		const control = `Online control ${crypto.randomUUID()}`;
+		await addTask(page, control);
+		await expect.poll(() => serverHasTask(control)).toBe(true);
+		const indicator = page.getByTestId("sync-indicator");
+		await expect(indicator).toHaveAttribute("data-phase", "synced");
+		await context.setOffline(true);
+		await expect(indicator).toHaveAttribute("data-phase", "offline", {
+			timeout: 20000,
+		});
+		const title = `Queued through API outage ${crypto.randomUUID()}`;
+		await addTask(page, title);
+		expect(await serverHasTask(title)).toBe(false);
+		failNextConnection = true;
+		await context.setOffline(false);
+		await expect.poll(() => failuresSent).toBe(1);
+		await expect
+			.poll(() => serverHasTask(title), { timeout: 30000 })
+			.toBe(true);
+		await expect(indicator).toHaveAttribute("data-phase", "synced");
+
+		// A fresh IndexedDB consumer proves this was server replay, not optimism.
+		const fresh = await browser.newContext({
+			storageState: await context.storageState(),
+		});
+		try {
+			const reader = await fresh.newPage();
+			await reader.goto(page.url());
+			await waitWorkspaceReady(reader);
+			await sidebarLists(reader)
+				.getByRole("button", { name: list, exact: true })
+				.last()
+				.click();
+			await expect(
+				reader.getByTestId("list").getByText(title, { exact: true }),
+			).toBeVisible();
+		} finally {
+			await fresh.close();
+		}
+	});
+}
+
 test("desktop: offline edits are kept, counted, and land on reconnect", async ({
 	page,
 	context,
