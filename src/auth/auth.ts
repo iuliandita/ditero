@@ -16,6 +16,7 @@ import {
 } from "../server/client-ip.ts";
 import { takeRateToken } from "../server/notifications/capability.ts";
 import { zeroJwtOptions } from "../server/zero-auth.ts";
+import { withAccountConflict } from "./account-conflict.ts";
 import { ensurePersonalWorkspace } from "./bootstrap.ts";
 import { normalizeDisplayName, signupDisplayName } from "./display-name.ts";
 import { withFieldEncryption } from "./encrypted-adapter.ts";
@@ -60,15 +61,17 @@ if (process.env.NODE_ENV === "production" && !encryptionKey) {
 	throw new Error("DITERO_ENCRYPTION_KEY is required in production");
 }
 const authAdapter = drizzleAdapter(db, { provider: "pg" });
-const authDatabase = encryptionKey
-	? withFieldEncryption(
-			authAdapter,
-			createFieldKeyRing({
-				current: encryptionKey,
-				next: process.env.DITERO_ENCRYPTION_KEY_NEXT,
-			}),
-		)
-	: authAdapter;
+const authDatabase = withAccountConflict(
+	encryptionKey
+		? withFieldEncryption(
+				authAdapter,
+				createFieldKeyRing({
+					current: encryptionKey,
+					next: process.env.DITERO_ENCRYPTION_KEY_NEXT,
+				}),
+			)
+		: authAdapter,
+);
 
 async function assertEmailRegistrationAllowed(email: string): Promise<void> {
 	const invited =
@@ -110,6 +113,10 @@ export const auth = betterAuth({
 		autoSignIn: false,
 		minPasswordLength: PASSWORD_MIN_LENGTH,
 		maxPasswordLength: PASSWORD_MAX_LENGTH,
+		// A reset means the old password may be compromised: end every session of
+		// the account, which also ends sync access (the Zero token path rechecks
+		// the live session).
+		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user, url }) => {
 			sendAuthMail("reset", user, url);
 		},

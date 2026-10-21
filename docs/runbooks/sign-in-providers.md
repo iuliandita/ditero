@@ -80,6 +80,11 @@ web, Android and desktop browser sign-in use this same server configuration.
   Google account's email address.
 - Refused Google sign-ups return to the sign-in page with the same localized
   invitation-required or registration-disabled message as email sign-up.
+- If the registration policy cannot be checked (for example the database is
+  unreachable), a new Google sign-up returns to the sign-in page with a
+  try-again message rather than an error page.
+- Each Google account links to one Ditero account. A second link request that
+  races the first is refused with `ACCOUNT_ALREADY_LINKED`.
 - Google sign-in links to an existing account only when that account's email is
   verified. Sign in with your password or passkey otherwise.
 - Android and desktop apps sign in through the system browser, so Google sign-in

@@ -47,6 +47,13 @@ select provider_id, account_id, count(*) from account
 group by provider_id, account_id having count(*) > 1;
 ```
 
+The `account_provider_unique` migration adds a unique index on
+`(provider_id, account_id)` so concurrent link flows cannot create the duplicates
+Better Auth 1.7 rejects. It runs this same check first and fails with a message
+pointing here, without changing or deleting any row; fix the rows and rerun
+`bun run db:migrate`. The index is additive: the 1.6.23 app ignores it, so leave it
+in place on application rollback.
+
 Stop app replicas and Zero, then take a coordinated database and attachment backup
 with the original authentication secret and encryption keys. Run `bun run db:migrate`
 using the migration owner before starting the updated app and then Zero. The

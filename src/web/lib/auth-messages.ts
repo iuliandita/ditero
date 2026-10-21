@@ -50,6 +50,7 @@ const AUTH_ERROR_MESSAGES: Record<string, () => string> = {
 	// failed" concludes the app is broken.
 	REGISTRATION_INVITE_REQUIRED: m.auth_error_registration_invite_required,
 	REGISTRATION_DISABLED: m.auth_error_registration_disabled,
+	REGISTRATION_UNAVAILABLE: m.auth_error_registration_unavailable,
 	// Same 403 as the gate, wholly different cause: the browser reached the app
 	// on an address the server does not trust (TRUSTED_ORIGINS / BETTER_AUTH_URL).
 	INVALID_ORIGIN: m.auth_error_invalid_origin,
