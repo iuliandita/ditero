@@ -39,12 +39,13 @@ docker run --rm --entrypoint bun "$image" -e '
 ' >/dev/null
 
 suffix=$$
-network="ditero-smoke-$suffix"
-database="ditero-smoke-db-$suffix"
-app="ditero-smoke-app-$suffix"
+prefix=${DITERO_CONTAINER_TEST_PREFIX:-ditero-smoke}
+network="$prefix-$suffix"
+database="$prefix-db-$suffix"
+app="$prefix-app-$suffix"
 
 cleanup() {
-  docker rm -f "$app" "$database" >/dev/null 2>&1 || true
+  docker rm -fv "$app" "$database" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
@@ -78,6 +79,7 @@ docker run --detach --name "$app" --network "$network" \
   --env BETTER_AUTH_SECRET=container-smoke-only-secret-32-bytes \
 	--env DITERO_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
   --env BETTER_AUTH_URL=http://localhost:3000 \
+  --env DITERO_SCHEDULER_TICK_MS=1000 \
   "$image" >/dev/null
 
 attempt=0
@@ -103,3 +105,64 @@ until docker exec "$app" bun -e '
   fi
   sleep 1
 done
+
+# Exercise PID 1, actual database loss/recovery, and Docker's default stop budget.
+docker exec "$app" bun -e '
+  const args = (await Bun.file("/proc/1/cmdline").text()).split("\0");
+  if (!args[0].endsWith("bun") || args[1] !== "src/server/index.ts") throw new Error("Bun is not PID 1");
+  const response = await fetch("http://localhost:3000/api/auth/sign-up/email", {
+    method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3000" },
+    body: JSON.stringify({ name: "Lifecycle", email: "lifecycle@example.com", password: "lifecycle-fixture-password" }),
+  });
+  if (!response.ok) throw new Error(`Signup failed: ${response.status}`);
+'
+docker exec -i "$database" psql -U postgres -d ditero -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
+insert into list (id, workspace_id, owner_id, title, sort_key)
+select 'lifecycle-list', w.id, u.id, 'Lifecycle', 'a0'
+from "user" u join workspace w on w.owner_id=u.id and w.kind='personal'
+where u.email='lifecycle@example.com';
+insert into task (id, list_id, title, sort_key, due_at, reminder_time)
+values ('lifecycle-before', 'lifecycle-list', 'Lifecycle', 'a0', now(), to_char(now() at time zone 'UTC','HH24:MI'));
+SQL
+
+wait_reminder() {
+  attempt=0
+  until [ "$(docker exec "$database" psql -U postgres -d ditero -Atc "select count(*) from reminder_state where task_id='$1' and fire_count=1")" = 1 ]; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge 30 ]; then docker logs "$app" >&2; exit 1; fi
+    sleep 1
+  done
+}
+wait_reminder lifecycle-before
+started=$(docker inspect --format '{{.State.StartedAt}}' "$app")
+docker stop "$database" >/dev/null
+sleep 3
+test "$(docker inspect --format '{{.State.Running}}' "$app")" = true
+docker exec "$app" bun -e 'if (!(await fetch("http://localhost:3000/health")).ok) process.exit(1)'
+docker start "$database" >/dev/null
+attempt=0
+until docker exec "$database" psql -U postgres -d ditero -c 'select 1' >/dev/null 2>&1; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 30 ]; then docker logs "$database" >&2; exit 1; fi
+  sleep 1
+done
+docker exec -i "$database" psql -U postgres -d ditero -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
+insert into task (id, list_id, title, sort_key, due_at, reminder_time)
+values ('lifecycle-after', 'lifecycle-list', 'Lifecycle', 'a1', now(), to_char(now() at time zone 'UTC','HH24:MI'));
+SQL
+wait_reminder lifecycle-after
+docker exec "$app" bun -e '
+  const response = await fetch("http://localhost:3000/api/auth/sign-in/email", {
+    method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3000" },
+    body: JSON.stringify({ email: "lifecycle@example.com", password: "lifecycle-fixture-password" }),
+  });
+  if (!response.ok) throw new Error(`Recovered sign-in failed: ${response.status}`);
+'
+test "$(docker inspect --format '{{.State.StartedAt}}' "$app")" = "$started"
+echo 'database restart: process survived and reminder scans/requests recovered'
+stop_started=$(date +%s)
+docker stop "$app" >/dev/null
+test "$(docker inspect --format '{{.State.ExitCode}}' "$app")" = 0
+stop_elapsed=$(($(date +%s) - stop_started))
+echo "docker stop: ${stop_elapsed}s, exit 0"
+test "$stop_elapsed" -lt 9
