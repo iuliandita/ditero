@@ -1995,7 +1995,7 @@
 	"attachment_locked_meta": "{size}, adăugat la {date}",
 	"attachment_date_unknown": "dată necunoscută",
 	"attachment_key_pending": "Se așteaptă accesul la fișierele acestui spațiu de lucru.",
-	"attachment_key_pending_who": "{names} pot acorda acces data viitoare când deschid Ditero.",
+	"attachment_key_pending_who": "{names} pot acorda acces când deschid Ditero și deblochează criptarea.",
 	"attachment_key_pending_self": "Configurează criptarea pentru a deschide acest fișier.",
 	"attachment_unreadable": "Acest fișier nu mai poate fi deschis.",
 	"attachment_unreadable_body": "Toți cei care dețineau cheia acestor fișiere au părăsit {workspace}. Nimeni nu le poate decripta, nici membrii de aici și nici persoana care administrează serverul. Pot fi doar șterse.",

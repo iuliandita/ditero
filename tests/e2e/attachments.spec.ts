@@ -283,6 +283,109 @@ async function expectDownload(
 	expect(Buffer.concat(chunks)).toEqual(plaintext);
 }
 
+for (const role of ["member", "viewer"] as const) {
+	test(`attachments: pre-existing ${role} automatically receives file access`, async ({
+		browser,
+	}) => {
+		test.setTimeout(180_000);
+		const ownerContext = await browser.newContext();
+		const recipientContext = await browser.newContext();
+		const owner = await ownerContext.newPage();
+		const recipient = await recipientContext.newPage();
+		for (const page of [owner, recipient]) page.setDefaultTimeout(20_000);
+		const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+		try {
+			const stamp = `${Date.now()}-${role}`;
+			const ownerEmail = uniqueEmail(`early-${role}-owner`);
+			const recipientEmail = uniqueEmail(`early-${role}`);
+			const ownerId = await signUp(owner, ownerEmail);
+			const recipientId = await signUp(recipient, recipientEmail);
+			const workspaceId = `w_early_${stamp}`;
+			const workspaceName = `Early files ${stamp}`;
+			// Seed only the workspace and seats, before any encryption key exists.
+			await pool.query(
+				"insert into workspace (id, name, owner_id, kind) values ($1, $2, $3, 'shared')",
+				[workspaceId, workspaceName, ownerId],
+			);
+			await pool.query(
+				`insert into membership (id, user_id, workspace_id, role) values
+				 ($1, $2, $3, 'owner'), ($4, $5, $3, $6)`,
+				[`mo_${stamp}`, ownerId, workspaceId, `mr_${stamp}`, recipientId, role],
+			);
+			const listName = `Early list ${stamp}`;
+			const taskName = `Early task ${stamp}`;
+			const filename = `shared-${stamp}.txt`;
+			const plaintext = Buffer.from(`Shared file for ${role}`);
+			await switchWorkspace(owner, workspaceName);
+			await createListAndTask(owner, listName, taskName);
+			const finalized = owner.waitForResponse("**/api/attachments/finalize");
+			await inputFor(owner.getByTestId("task-attachments")).setInputFiles({
+				name: filename,
+				mimeType: "text/plain",
+				buffer: plaintext,
+			});
+			await finishEnrollment(owner, filename);
+			expect((await finalized).ok()).toBe(true);
+			await closeTask(owner);
+			await goToSettings(owner);
+			await owner.getByTestId("e2e-lock-now").click();
+			await expect(owner.getByTestId("e2e-status")).toHaveText(
+				m.e2e_status_locked(),
+			);
+
+			await goToSettings(recipient);
+			await recipient.getByTestId("e2e-setup").click();
+			await finishEnrollment(recipient);
+			await leaveSettings(recipient);
+			await switchWorkspace(recipient, workspaceName);
+			await openTask(recipient, listName, taskName);
+			await expect(
+				recipient.getByText(m.attachment_key_pending()).first(),
+			).toBeVisible();
+			await expect
+				.poll(
+					async () =>
+						(
+							await pool.query(
+								"select state from key_grant_request where user_id=$1 and workspace_id=$2",
+								[recipientId, workspaceId],
+							)
+						).rows,
+				)
+				.toEqual([{ state: "key_pending" }]);
+			await expect(
+				recipient.getByText(
+					m.attachment_key_pending_who({ names: ownerEmail.split("@")[0] }),
+				),
+			).toBeVisible();
+
+			await owner.getByTestId("e2e-unlock").click();
+			await owner.getByTestId("e2e-unlock-passphrase").fill(PASSPHRASE);
+			await owner.getByTestId("e2e-unlock-submit").click();
+			await expect(owner.getByTestId("e2e-status")).toHaveText(
+				m.e2e_status_ready(),
+				{ timeout: DERIVE_TIMEOUT },
+			);
+			await expect
+				.poll(
+					async () =>
+						(
+							await pool.query(
+								"select state from key_grant_request where user_id=$1 and workspace_id=$2",
+								[recipientId, workspaceId],
+							)
+						).rows,
+				)
+				.toEqual([{ state: "ready" }]);
+			await expectDownload(recipient, filename, plaintext);
+		} finally {
+			await pool.end();
+			await ownerContext.close();
+			await recipientContext.close();
+		}
+	});
+}
+
 test("attachment canary: ciphertext, fragment grant, removal, rotation, and pending access", async ({
 	browser,
 }) => {

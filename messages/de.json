@@ -1949,7 +1949,7 @@
 	"attachment_locked_meta": "{size}, hinzugefügt am {date}",
 	"attachment_date_unknown": "Datum unbekannt",
 	"attachment_key_pending": "Warten auf Zugriff auf die Dateien dieses Arbeitsbereichs.",
-	"attachment_key_pending_who": "{names} können den Zugriff gewähren, wenn sie Ditero das nächste Mal öffnen.",
+	"attachment_key_pending_who": "{names} können den Zugriff gewähren, wenn sie Ditero öffnen und die Verschlüsselung entsperren.",
 	"attachment_key_pending_self": "Richte die Verschlüsselung ein, um diese Datei zu öffnen.",
 	"attachment_unreadable": "Diese Datei kann nicht mehr geöffnet werden.",
 	"attachment_unreadable_body": "Alle, die den Schlüssel für diese Dateien hatten, haben {workspace} verlassen. Niemand kann sie entschlüsseln - weder die Mitglieder hier noch die Person, die diesen Server betreibt. Sie können nur gelöscht werden.",

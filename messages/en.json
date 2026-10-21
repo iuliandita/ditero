@@ -1949,7 +1949,7 @@
 	"attachment_locked_meta": "{size}, added {date}",
 	"attachment_date_unknown": "date unknown",
 	"attachment_key_pending": "Waiting for access to this workspace's files.",
-	"attachment_key_pending_who": "{names} can grant it next time they open Ditero.",
+	"attachment_key_pending_who": "{names} can grant access when they open Ditero and unlock encryption.",
 	"attachment_key_pending_self": "Set up encryption to open this file.",
 	"attachment_unreadable": "This file cannot be opened again.",
 	"attachment_unreadable_body": "Everyone who held the key for these files has left {workspace}. Nobody can decrypt them - not the members here, and not whoever runs this server. They can only be deleted.",

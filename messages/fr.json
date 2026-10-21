@@ -1995,7 +1995,7 @@
 	"attachment_locked_meta": "{size}, ajouté le {date}",
 	"attachment_date_unknown": "date inconnue",
 	"attachment_key_pending": "En attente d'accès aux fichiers de cet espace de travail.",
-	"attachment_key_pending_who": "{names} pourront accorder l'accès à leur prochaine ouverture de Ditero.",
+	"attachment_key_pending_who": "{names} pourront accorder l'accès en ouvrant Ditero et en déverrouillant le chiffrement.",
 	"attachment_key_pending_self": "Configure le chiffrement pour ouvrir ce fichier.",
 	"attachment_unreadable": "Ce fichier ne pourra plus être ouvert.",
 	"attachment_unreadable_body": "Toutes les personnes qui détenaient la clé de ces fichiers ont quitté {workspace}. Personne ne peut les déchiffrer, ni les membres présents ni la personne qui exploite ce serveur. Ils peuvent seulement être supprimés.",
