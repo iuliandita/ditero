@@ -36,6 +36,8 @@ Invitations and managed-account admission require a shared workspace. Outstandin
 invites cannot be redeemed or used to bypass registration restrictions. A personal workspace's
 owner can remove legacy members, but cannot transfer its ownership or change membership roles.
 Removing a member still requires key rotation before new encrypted uploads.
+Membership removal works with the documented runtime grants, without database TEMP
+privilege, and preserves assignment and notification cleanup in the same transaction.
 
 ## Stored Secrets
 
@@ -55,6 +57,8 @@ those fields are required for authorization, quota enforcement, integrity checks
 collection. Task and comment text remain server-readable so sync, filters, and reminders work.
 Notification payloads may contain the server-readable parent task title, but never a decrypted
 attachment filename.
+Attachment reads recheck current membership and return the same 404 response for
+foreign and missing IDs, including thumbnails and native routes.
 
 Each user has an X25519 identity keypair. The private key is wrapped independently under an
 encryption-passphrase key and a recovery-code key. Each workspace and key version has a random
