@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { makeSignature } from "better-auth/crypto";
 import { createLocalJWKSet, type JWTPayload, jwtVerify } from "jose";
 import { Pool } from "pg";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, beforeAll, expect, test, vi } from "vitest";
 import { s256Challenge } from "../../src/server/native-auth/contracts.ts";
 import { NativeGrantStore } from "../../src/server/native-auth/store.ts";
 import {
@@ -463,4 +463,29 @@ test("native token endpoint refuses browser and mixed credentials and caps expir
 	const { payload } = await jwtVerify(token, keys, { issuer, audience });
 	expect(payload.exp).toBe(Math.floor(expiry.getTime() / 1000));
 	expect(await verify(`Bearer ${token}`)).toEqual({ id: f.userId });
+});
+
+test("browser token refresh retries session lookup outages but refuses revoked sessions", async () => {
+	const f = await fixture();
+	const refresh = () =>
+		app.handle(
+			new Request(`${origin}/api/auth/token`, {
+				headers: { cookie: f.cookie },
+			}),
+		);
+	expect((await refresh()).status).toBe(200);
+	const adapter = (await auth.$context).internalAdapter;
+	const lookup = vi
+		.spyOn(adapter, "findSession")
+		.mockRejectedValue(new Error("database unavailable"));
+	try {
+		const unavailable = await refresh();
+		expect(unavailable.status).toBe(503);
+		expect(unavailable.headers.get("cache-control")).toBe("no-store");
+	} finally {
+		lookup.mockRestore();
+	}
+	expect((await refresh()).status).toBe(200);
+	await admin.query("delete from session where id=$1", [f.browser.id]);
+	expect((await refresh()).status).toBe(401);
 });

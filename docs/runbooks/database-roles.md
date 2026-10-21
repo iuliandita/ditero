@@ -52,3 +52,25 @@ The application verifies this at startup in production and refuses to boot if th
 Set `DITERO_MIGRATION_DATABASE_URL` to the owner DSN and `DITERO_DATABASE_URL` to the runtime DSN. Configure `DITERO_ZERO_DATABASE_URL` according to the Zero deployment guide and provider replication controls. Never point application runtime traffic at the migration or Zero login.
 
 After migration, verify `user_secret` has both row security flags and that the runtime role cannot read it without `SET LOCAL ditero.user_id`.
+
+## Recovering from a database outage
+
+Clients retry temporary API and database failures and replay queued edits when the
+stack recovers. Invalid or revoked sessions still require sign-in; permission and
+protocol errors are not treated as successful writes.
+
+Zero 1.9.0 stops its client reconnect loop on `PushFailed` and `TransformFailed`,
+even after the cache's four API attempts fail with a network error or HTTP 5xx.
+The bundled package patch keeps those transport failures, database transaction
+failures and recognized cache database-connectivity errors on Zero's existing
+reconnect loop. It preserves authentication refusals,
+malformed-request failures and the durable-close patch. Persistent database faults
+still need operator repair; retrying does not grant missing privileges.
+
+Upgrade the app and reload open clients to load the corrected bundle. Existing
+clients running an older bundle can remain stopped until reloaded; their queued
+edits remain in browser storage. Take the usual database and attachment backup
+before an upgrade, and keep browser storage until pending edits sync. This change
+does not alter storage formats or require a database migration. A rollback to an
+older client version restores the outage-recovery defect; reload clients after a
+rollback and verify pending edits reach the server.
