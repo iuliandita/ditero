@@ -10,7 +10,6 @@ import { authClient } from "../../lib/auth-client.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { useNativeAccount } from "../../lib/native-account.tsx";
 import { Input } from "../ui/input.tsx";
-import { NativeBrowserSettings } from "./NativeBrowserSettings.tsx";
 
 export function AccountPanel() {
 	const native = useNativeAccount();
@@ -80,7 +79,6 @@ function AccountContent({
 					{m.security_sign_out()}
 				</Button>
 			</div>
-			{native && <NativeBrowserSettings />}
 			{native && (
 				<div className="mt-3 flex flex-wrap items-center justify-between gap-3">
 					<p className="min-w-0 break-all text-sm text-muted-foreground">
