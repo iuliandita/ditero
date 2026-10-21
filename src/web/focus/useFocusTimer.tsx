@@ -13,7 +13,6 @@ import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
-import { useNativeAccount } from "../lib/native-account.tsx";
 import { runMutation } from "../lib/run-mutation.ts";
 import {
 	type Cycle,
@@ -24,13 +23,21 @@ import {
 	phaseDurationSec,
 	remainingSecFrom,
 } from "./timer-core.ts";
-import {
-	focusStorageKey,
-	intervalFields,
-	restoreFocus,
-	type FocusSessionState as Session,
-	serializeFocus,
-} from "./timer-persistence.ts";
+
+// Ephemeral session state. Nothing here is persisted; only finished intervals are
+// written (to focus_session, via the mutator). `endsAt` is the wall-clock end of
+// the running interval and drives the countdown from timestamps (survives tab
+// throttling); when paused it is null and `remainingSec` is authoritative.
+type Session = {
+	cycle: Cycle;
+	plannedSec: number; // logged duration for this interval, independent of pauses
+	running: boolean;
+	startedAt: number | null; // ms; set when the interval first starts running
+	endsAt: number | null; // ms; only while running
+	remainingSec: number;
+	boundTaskId: string | null;
+	boundTaskTitle: string | null;
+};
 
 type Cue = { id: number; text: string };
 
@@ -63,59 +70,14 @@ function testOverrideSec(): number | null {
 
 export function FocusProvider({ children }: { children: ReactNode }) {
 	const zero = useZero<typeof schema>();
-	const userId = zero.userID;
-	if (!userId) throw new Error("FocusProvider requires a signed-in user");
-	const { pref, loading } = useUserPref();
-	const prefLoadingRef = useRef(loading);
-	prefLoadingRef.current = loading;
-	const native = useNativeAccount();
-	const storageKey = focusStorageKey(userId, native?.storageScope);
+	const { pref } = useUserPref();
 	const config = useMemo(() => clampFocusConfig(pref.focus), [pref.focus]);
 	const configRef = useRef(config);
 	configRef.current = config;
 
-	const [session, setSessionState] = useState<Session | null>(() => {
-		try {
-			return restoreFocus(localStorage.getItem(storageKey));
-		} catch {
-			return null;
-		}
-	});
+	const [session, setSession] = useState<Session | null>(null);
 	const sessionRef = useRef(session);
 	sessionRef.current = session;
-
-	// Persist transitions synchronously, including Stop and completion, so an
-	// immediate reload cannot revive the previous interval. Keep side effects out
-	// of React state updaters, which Strict Mode may invoke twice.
-	const setSession = useCallback(
-		(
-			update: Session | null | ((previous: Session | null) => Session | null),
-		) => {
-			const next =
-				typeof update === "function" ? update(sessionRef.current) : update;
-			if (next === sessionRef.current) return;
-			sessionRef.current = next;
-			try {
-				if (next) localStorage.setItem(storageKey, serializeFocus(next));
-				else localStorage.removeItem(storageKey);
-			} catch (error) {
-				console.error("Could not persist focus timer", error);
-			}
-			setSessionState(next);
-		},
-		[storageKey],
-	);
-
-	useEffect(() => {
-		const current = sessionRef.current;
-		if (
-			!loading &&
-			current &&
-			JSON.stringify(current.config) !== JSON.stringify(config)
-		) {
-			setSession({ ...current, config });
-		}
-	}, [loading, config, setSession]);
 
 	const [cue, setCue] = useState<Cue | null>(null);
 	const cueIdRef = useRef(0);
@@ -143,18 +105,17 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 	const complete = useCallback(() => {
 		const s = sessionRef.current;
 		if (!s || s.startedAt == null) return;
-		const cfg = prefLoadingRef.current ? s.config : configRef.current;
+		const cfg = configRef.current;
 		const kind = s.cycle.phase;
 		const durationSec = s.plannedSec;
 		// Only completed, positive intervals log; a reset never reaches here.
 		if (durationSec >= 1) {
 			const startedAt = s.startedAt;
-			const endedAt = s.endsAt ?? startedAt + durationSec * 1000;
+			const endedAt = startedAt + durationSec * 1000;
 			const taskId = kind === "work" ? s.boundTaskId : null;
 			void runMutation(
 				zero.mutate(
 					mutators.focus.logSession({
-						intervalId: s.intervalId,
 						...(taskId ? { taskId } : {}),
 						kind,
 						startedAt,
@@ -174,7 +135,6 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		if (cfg.autoCycle) {
 			const now = Date.now();
 			setSession({
-				...intervalFields(cfg),
 				cycle: next,
 				plannedSec: nextSec,
 				running: true,
@@ -186,7 +146,6 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			});
 		} else {
 			setSession({
-				...intervalFields(cfg),
 				cycle: next,
 				plannedSec: nextSec,
 				running: false,
@@ -197,7 +156,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				boundTaskTitle: s.boundTaskTitle,
 			});
 		}
-	}, [zero, plannedFor, showCue, setSession]);
+	}, [zero, plannedFor, showCue]);
 
 	// Tick while running: remaining is recomputed from `endsAt` each tick (not
 	// decremented), so a throttled/suspended tab catches up on the next fire.
@@ -223,7 +182,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		tick();
 		const id = setInterval(tick, 250);
 		return () => clearInterval(id);
-	}, [session?.running, complete, setSession]);
+	}, [session?.running, complete]);
 
 	const start = useCallback(() => {
 		setSession((prev) => {
@@ -232,7 +191,6 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				const sec = plannedFor(INITIAL_CYCLE, cfg);
 				const now = Date.now();
 				return {
-					...intervalFields(cfg),
 					cycle: INITIAL_CYCLE,
 					plannedSec: sec,
 					running: true,
@@ -249,11 +207,10 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				...prev,
 				running: true,
 				startedAt: prev.startedAt ?? now,
-				pausedAt: null,
 				endsAt: now + prev.remainingSec * 1000,
 			};
 		});
-	}, [plannedFor, setSession]);
+	}, [plannedFor]);
 
 	const pause = useCallback(() => {
 		setSession((prev) => {
@@ -261,18 +218,17 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			return {
 				...prev,
 				running: false,
-				pausedAt: Date.now(),
 				endsAt: null,
 				remainingSec: remainingSecFrom(prev.endsAt, Date.now()),
 			};
 		});
-	}, [setSession]);
+	}, []);
 
 	// Stop and discard: a mid-interval reset must NOT log a session.
 	const reset = useCallback(() => {
 		setSession(null);
 		setCue(null);
-	}, [setSession]);
+	}, []);
 
 	// Advance to the next phase without logging (an explicit skip is not a natural
 	// completion).
@@ -286,7 +242,6 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				const now = Date.now();
 				return {
 					...prev,
-					...intervalFields(cfg),
 					cycle: next,
 					plannedSec: sec,
 					startedAt: now,
@@ -296,7 +251,6 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			}
 			return {
 				...prev,
-				...intervalFields(cfg),
 				cycle: next,
 				plannedSec: sec,
 				startedAt: null,
@@ -304,7 +258,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				remainingSec: sec,
 			};
 		});
-	}, [plannedFor, setSession]);
+	}, [plannedFor]);
 
 	const bindTask = useCallback(
 		(taskId: string | null, title: string | null) => {
@@ -312,7 +266,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				prev ? { ...prev, boundTaskId: taskId, boundTaskTitle: title } : prev,
 			);
 		},
-		[setSession],
+		[],
 	);
 
 	// "Start focus" from a task: rebind a running session (don't discard progress),
@@ -327,7 +281,6 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				const sec = plannedFor(INITIAL_CYCLE, cfg);
 				const now = Date.now();
 				return {
-					...intervalFields(cfg),
 					cycle: INITIAL_CYCLE,
 					plannedSec: sec,
 					running: true,
@@ -339,7 +292,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				};
 			});
 		},
-		[plannedFor, setSession],
+		[plannedFor],
 	);
 
 	const api = useMemo<FocusTimerApi>(
