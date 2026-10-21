@@ -32,7 +32,8 @@ Open `/native/authorize?grantId=...` on the selected server in the system browse
 The page uses the existing sign-in flow, shows the device and signed-in account,
 and requires an explicit approval. It returns no session token to the browser.
 That browser sign-in uses separate IP-plus-email buckets and a household-sized
-per-IP ceiling; see [Trusted Proxy](trusted-proxy.md) for NAT and VPN limits.
+per-IP ceiling checked before any email bucket is created; see
+[Trusted Proxy](trusted-proxy.md) for NAT and VPN limits.
 
 Google appears only when the server has both OAuth credentials configured. A
 registration-policy refusal returns to this page with the localized registration

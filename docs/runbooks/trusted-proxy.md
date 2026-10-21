@@ -19,7 +19,11 @@ a shared PostgreSQL bucket per client IP and normalized email: five initial atte
 then one attempt refilled every 12 seconds. A member exhausting that bucket does
 not exhaust another email's bucket. Existing and unknown emails receive the same
 throttling response. Sign-in also has a shared ceiling of 30 requests per minute
-per IP, so sustained abuse can still temporarily block everyone at that address.
+per IP, checked before creating an IP-plus-email bucket. Requests rejected by that
+ceiling create no email bucket, so one IP can create at most 30 per window.
+Sustained abuse can still temporarily block everyone at that address. The worker
+removes buckets idle for over two hours, draining expired rows in batches each
+prune cycle rather than stopping at 1,000 rows.
 Sign-up allows 10 per minute, two-factor routes 30 per minute, and each of
 `/get-session` and `/token` 600 per minute per IP. TOTP account lockout remains
 five failed attempts for 15 minutes. See [Security Architecture](../security.md).

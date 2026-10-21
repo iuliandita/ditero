@@ -452,9 +452,15 @@ export async function workerTick(
 	const prunedCapabilities = skipPrune
 		? 0
 		: await pruneAckCapabilities(database, timing.pruneBatchSize);
-	const prunedRateBuckets = skipPrune
-		? 0
-		: await pruneRateBuckets(database, timing.pruneBatchSize);
+	let prunedRateBuckets = 0;
+	if (!skipPrune) {
+		// Email rotation can produce more than one batch between prune ticks.
+		let pruned: number;
+		do {
+			pruned = await pruneRateBuckets(database, timing.pruneBatchSize);
+			prunedRateBuckets += pruned;
+		} while (pruned === timing.pruneBatchSize);
+	}
 	const claimed = await claimBatch(database, timing.batchSize, replicaId);
 	// Claimed and committed, nothing dispatched: the shape the lease reclaim has
 	// to recover.
