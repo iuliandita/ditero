@@ -53,10 +53,10 @@ verified session expiry, profile, Zero endpoint, and bootstrap workspace togethe
 bound to the exact server, account, device, session, and credential. Older stored
 sessions, including the earlier evidence format, need a complete online start once
 to populate this evidence. Older desktop builds cannot read the bounded-record
-format. Before downgrading, sign out stored accounts, close Ditero, and remove its
-native session records using the OS credential manager; sign in online with the
-older build. Keep the current build if credential cleanup fails. The scoped task
-cache does not need to be cleared.
+format. Before a rollback to an older build, sign out stored accounts, close
+Ditero, and remove its native session records using the OS credential manager;
+sign in online with the older build. Keep the current build if credential cleanup
+fails. The scoped task cache does not need to be cleared.
 
 Only a network failure permits cached activation, and only before the verified
 session expires. Invalid credentials, failed certificate trust, HTTP refusals,
