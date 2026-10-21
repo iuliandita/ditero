@@ -7,13 +7,14 @@ const SMTP = {
 };
 
 describe("channelCapabilities", () => {
-	it("reports booleans and enums only, never the env values", () => {
+	it("reports booleans and channel/transport enums only, never the env values", () => {
 		const caps = channelCapabilities({
 			DITERO_PUBLIC_URL: "https://ditero.example.com",
 			DITERO_TELEGRAM_MODE: "webhook",
 			...SMTP,
 		});
 		expect(caps).toEqual({
+			available: ["ntfy", "discord", "slack", "email"],
 			ackBaseUrl: true,
 			email: true,
 			telegramTransport: "webhook",
@@ -27,6 +28,7 @@ describe("channelCapabilities", () => {
 
 	it("is fail-closed on a bare deployment", () => {
 		expect(channelCapabilities({})).toEqual({
+			available: ["ntfy", "discord", "slack", "email"],
 			ackBaseUrl: false,
 			email: false,
 			telegramTransport: "poll",

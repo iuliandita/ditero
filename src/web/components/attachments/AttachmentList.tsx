@@ -810,9 +810,9 @@ export const AttachmentList = forwardRef<
 		>
 			{variant === "task" ? (
 				<section className="flex flex-col gap-2" data-testid="task-attachments">
-					<h3 className="text-sm text-muted-foreground">
+					<h2 className="text-sm text-muted-foreground">
 						{m.attachment_section_heading()}
-					</h3>
+					</h2>
 					{content}
 					{count === 0 && (
 						<p className="text-xs text-muted-foreground">

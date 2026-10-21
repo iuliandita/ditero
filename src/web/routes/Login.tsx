@@ -15,7 +15,7 @@ import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input } from "../components/ui/input.tsx";
 import { authClient } from "../lib/auth-client.ts";
-import { authErrorMessage } from "../lib/auth-messages.ts";
+import { authErrorMessage, totpErrorMessage } from "../lib/auth-messages.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
 import { passkeysAvailable } from "../lib/secure-context.ts";
 import {
@@ -134,9 +134,8 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 			const res = await authClient.twoFactor.verifyTotp({
 				code: twoFactorCode,
 			});
-			if (res.error)
-				setError(authErrorMessage(res.error, m.login_error_invalid_totp));
-		}, m.login_error_invalid_totp);
+			if (res.error) setError(totpErrorMessage(res.error));
+		}, m.login_error_totp_network);
 	}
 
 	function verifyBackupCode() {

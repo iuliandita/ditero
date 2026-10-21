@@ -237,7 +237,7 @@ test("unconfigured channels start collapsed with one Set up action", async ({
 	page,
 }) => {
 	await openSettings(page, "settings-channels");
-	for (const kind of ["ntfy", "telegram", "discord", "slack"]) {
+	for (const kind of ["ntfy", "discord", "slack"]) {
 		const row = page.getByTestId(`channel-${kind}`);
 		await expect(row).toBeVisible();
 		await expect(row.getByTestId(`channel-${kind}-form`)).toHaveCount(0);
@@ -268,8 +268,10 @@ test("unconfigured channels start collapsed with one Set up action", async ({
 	await page.getByTestId("channel-ntfy-disclosure").click();
 	await expect(page.getByTestId("channel-ntfy-form")).toHaveCount(0);
 	await expect(page.getByTestId("channel-ntfy-action")).toHaveText("Edit");
-	await expect(page.getByTestId("channel-telegram-action")).toHaveText(
-		"Set up",
+	await expect(page.getByTestId("channel-telegram-action")).toHaveCount(0);
+	await expect(page.getByTestId("channel-telegram-disclosure")).toBeDisabled();
+	await expect(page.getByTestId("channel-telegram-unavailable")).toHaveText(
+		"That channel is not available yet.",
 	);
 });
 
