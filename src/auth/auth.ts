@@ -113,6 +113,10 @@ export const auth = betterAuth({
 		autoSignIn: false,
 		minPasswordLength: PASSWORD_MIN_LENGTH,
 		maxPasswordLength: PASSWORD_MAX_LENGTH,
+		// A reset means the old password may be compromised: end every session of
+		// the account, which also ends sync access (the Zero token path rechecks
+		// the live session).
+		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user, url }) => {
 			sendAuthMail("reset", user, url);
 		},
