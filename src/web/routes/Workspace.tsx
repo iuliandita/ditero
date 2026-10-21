@@ -83,6 +83,10 @@ import { runSelectionCommand } from "../keyboard/selection-commands.ts";
 import { useEffectiveKeymap } from "../keyboard/useEffectiveKeymap.ts";
 import { canCreateFolder, canCreateList } from "../lib/create-gates.ts";
 import { shortcutHintVisible } from "../lib/hints.ts";
+import {
+	loadLastNavigation,
+	saveLastNavigation,
+} from "../lib/last-navigation.ts";
 import type { Locale } from "../lib/locale.ts";
 import {
 	useAccountStorageScope,
@@ -163,6 +167,7 @@ function NormalWorkspace({
 		memberships,
 		viewRowsLoading,
 		notificationRowsReady,
+		navigationRowsReady,
 		roleByWorkspace,
 		shareable,
 		members,
@@ -177,6 +182,8 @@ function NormalWorkspace({
 		[setPref],
 	);
 	const [activeId, setActiveId] = useState<string | null>(null);
+	const [savedNavigation] = useState(() => loadLastNavigation(storageScope));
+	const [navigationRestored, setNavigationRestored] = useState(false);
 	const [settingsSection, setSettingsSection] = useState<
 		"account" | "appearance"
 	>("account");
@@ -270,13 +277,96 @@ function NormalWorkspace({
 		setNewListFolder({ id: null, nonce: Date.now(), fromWelcome: true });
 	};
 
-	// Default active workspace is the user's personal one, so new lists stay private.
+	// Wait for missing rows to be confirmed before discarding a saved selection.
 	useEffect(() => {
-		if (activeId) return;
-		const personal = workspaces.find((w) => w.kind === "personal");
-		if (personal) setActiveId(personal.id);
-		else if (workspaces.length) setActiveId(workspaces[0].id);
-	}, [workspaces, activeId]);
+		if (navigationRestored) return;
+		const savedWorkspace = workspaces.find(
+			(row) => row.id === savedNavigation?.workspaceId,
+		);
+		const savedList = lists.find(
+			(row) =>
+				row.id === savedNavigation?.listId &&
+				row.workspaceId === savedWorkspace?.id,
+		);
+		if (
+			savedNavigation &&
+			(!savedWorkspace || (savedNavigation.listId && !savedList)) &&
+			!navigationRowsReady
+		)
+			return;
+		const fallback =
+			workspaces.find((row) => row.kind === "personal") ?? workspaces[0];
+		const workspace = savedWorkspace ?? fallback;
+		if (!workspace) return;
+		setActiveId(workspace.id);
+		if (savedList && !initialSetup) {
+			dispatchContent({ kind: "list", id: savedList.id });
+			setHomeApplied(true);
+		}
+		setNavigationRestored(true);
+	}, [
+		navigationRestored,
+		savedNavigation,
+		workspaces,
+		lists,
+		navigationRowsReady,
+		initialSetup,
+	]);
+
+	useEffect(() => {
+		if (!navigationRestored || !navigationRowsReady) return;
+		if (!workspaces.some((row) => row.id === activeId)) {
+			const fallback =
+				workspaces.find((row) => row.kind === "personal") ?? workspaces[0];
+			setActiveId(fallback?.id ?? null);
+			openHome();
+		} else if (
+			openListId &&
+			!lists.some(
+				(row) => row.id === openListId && row.workspaceId === activeId,
+			)
+		) {
+			closeList(openListId);
+		}
+	}, [
+		navigationRestored,
+		navigationRowsReady,
+		activeId,
+		openListId,
+		workspaces,
+		lists,
+		openHome,
+		closeList,
+	]);
+
+	useEffect(() => {
+		if (
+			!navigationRestored ||
+			!activeId ||
+			!workspaces.some((row) => row.id === activeId)
+		)
+			return;
+		if (contentState.kind === "settings") return;
+		if (
+			openListId &&
+			!lists.some(
+				(row) => row.id === openListId && row.workspaceId === activeId,
+			)
+		)
+			return;
+		saveLastNavigation(storageScope, {
+			workspaceId: activeId,
+			listId: openListId,
+		});
+	}, [
+		navigationRestored,
+		storageScope,
+		activeId,
+		openListId,
+		contentState.kind,
+		workspaces,
+		lists,
+	]);
 
 	const activeLists = useMemo(
 		() => lists.filter((l) => l.workspaceId === activeId),
@@ -385,11 +475,13 @@ function NormalWorkspace({
 	}
 
 	function selectWorkspace(id: string) {
+		setNavigationRestored(true);
 		setActiveId(id);
 		if (isDesktop || contentState.kind !== "index") openHome();
 	}
 	const openList = useCallback(
 		(id: string) => {
+			setNavigationRestored(true);
 			setDetailTaskId(null);
 			dispatchContent({ kind: "list", id });
 			recordRecent(storageScope, { kind: "list", id });
@@ -548,7 +640,8 @@ function NormalWorkspace({
 	// exclusive modes + section so it never hijacks navigation (e.g. Settings
 	// opened before sync) or re-opens after Back.
 	useEffect(() => {
-		if (homeApplied || prefLoading || dashboardsLoading) return;
+		if (homeApplied || !navigationRestored || prefLoading || dashboardsLoading)
+			return;
 		setHomeApplied(true);
 		if (!isDesktop) return;
 		if (homeTarget.kind !== "dashboard") return;
@@ -557,6 +650,7 @@ function NormalWorkspace({
 		dispatchContent({ kind: "dashboard", id: homeTarget.id });
 	}, [
 		homeApplied,
+		navigationRestored,
 		prefLoading,
 		dashboardsLoading,
 		homeTarget,
