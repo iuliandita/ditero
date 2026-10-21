@@ -44,6 +44,14 @@ message and retains the grant ID; see [sign-in providers](sign-in-providers.md).
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.
+"Forgot your password?" on that sign-in page starts a reset by email. The mailed
+link always opens the web reset page (`/reset-password`), never a native target
+supplied by the requesting client, so it works in any browser. The reset creates
+no session and the pending grant is not carried through it: start sign-in from
+the app again afterwards. A completed reset ends every browser and native session
+of the account and revokes its access tokens, calendar feed links, passkeys and
+linked provider sign-ins in the same transaction; see
+[security](../security.md).
 Approval derives the user and approving session from the browser, not from
 request fields. A native session cannot approve another grant. There is no
 caller-supplied callback URL.

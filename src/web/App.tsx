@@ -16,6 +16,7 @@ import { AppZeroProvider } from "./lib/zero.tsx";
 import { AcceptInvite } from "./routes/AcceptInvite.tsx";
 import { Login } from "./routes/Login.tsx";
 import { NativeAuthorize } from "./routes/NativeAuthorize.tsx";
+import { ResetPassword } from "./routes/ResetPassword.tsx";
 import { Workspace } from "./routes/Workspace.tsx";
 
 // The provider sits above every route because Workspace itself calls useConfirm
@@ -71,6 +72,9 @@ function SessionRoutes({
 		return standalone(
 			<NativeAuthorize session={session} isPending={isPending} />,
 		);
+	// The emailed reset link opens here in whatever browser reads the mail.
+	if (window.location.pathname === "/reset-password")
+		return standalone(<ResetPassword />);
 	if (isPending) return standalone(<BootSkeleton />);
 	if (!session)
 		return standalone(

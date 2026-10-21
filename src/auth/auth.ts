@@ -24,6 +24,13 @@ import { emailHasRedeemableInvite } from "./invite-bypass.ts";
 import { mailUnavailableResponse, sendAuthMail } from "./mail.ts";
 import { trustedAuthOrigins } from "./origins.ts";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-policy.ts";
+import {
+	assertPasswordResetScope,
+	RESET_PATH,
+	resetLinkWithWebCallback,
+	runPasswordReset,
+	withPasswordResetTransaction,
+} from "./password-reset.ts";
 import { socialProvidersFromEnv } from "./providers.ts";
 import {
 	assertRegistrationAllowed,
@@ -60,18 +67,18 @@ const encryptionKey = process.env.DITERO_ENCRYPTION_KEY;
 if (process.env.NODE_ENV === "production" && !encryptionKey) {
 	throw new Error("DITERO_ENCRYPTION_KEY is required in production");
 }
-const authAdapter = drizzleAdapter(db, { provider: "pg" });
-const authDatabase = withAccountConflict(
-	encryptionKey
-		? withFieldEncryption(
-				authAdapter,
-				createFieldKeyRing({
-					current: encryptionKey,
-					next: process.env.DITERO_ENCRYPTION_KEY_NEXT,
-				}),
-			)
-		: authAdapter,
-);
+const fieldKeyRing = encryptionKey
+	? createFieldKeyRing({
+			current: encryptionKey,
+			next: process.env.DITERO_ENCRYPTION_KEY_NEXT,
+		})
+	: null;
+const authDatabase = withPasswordResetTransaction((database) => {
+	const authAdapter = drizzleAdapter(database, { provider: "pg" });
+	return withAccountConflict(
+		fieldKeyRing ? withFieldEncryption(authAdapter, fieldKeyRing) : authAdapter,
+	);
+}, db);
 
 async function assertEmailRegistrationAllowed(email: string): Promise<void> {
 	const invited =
@@ -115,10 +122,10 @@ export const auth = betterAuth({
 		maxPasswordLength: PASSWORD_MAX_LENGTH,
 		// A reset means the old password may be compromised: end every session of
 		// the account, which also ends sync access (the Zero token path rechecks
-		// the live session).
+		// the live session). password-reset.ts revokes the other credentials.
 		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user, url }) => {
-			sendAuthMail("reset", user, url);
+			sendAuthMail("reset", user, resetLinkWithWebCallback(url));
 		},
 	},
 	// requireEmailVerification stays off deliberately. It is the one setting
@@ -141,6 +148,7 @@ export const auth = betterAuth({
 	}),
 	hooks: {
 		before: createAuthMiddleware(async (context) => {
+			if (context.path === "/reset-password") assertPasswordResetScope();
 			if (context.path !== "/sign-up/email") return;
 			if (!context.body || typeof context.body !== "object") return;
 			// Public signup accepts only identity and password. In particular, avatar,
@@ -283,10 +291,13 @@ export async function handleAuthRequest(
 	request: Request,
 	peerAddress?: string,
 ): Promise<Response> {
+	const path = new URL(request.url).pathname.replace(/\/+$/, "");
+	if (request.method === "POST" && path === RESET_PATH)
+		return runPasswordReset(() =>
+			handleAuthRequestInternal(request, peerAddress),
+		);
 	const signUp =
-		request.method === "POST" &&
-		new URL(request.url).pathname.replace(/\/+$/, "") ===
-			"/api/auth/sign-up/email";
+		request.method === "POST" && path === "/api/auth/sign-up/email";
 	const started = performance.now();
 	if (!signUp) return handleAuthRequestInternal(request, peerAddress);
 	const state: PublicSignUpState = { creating: false };

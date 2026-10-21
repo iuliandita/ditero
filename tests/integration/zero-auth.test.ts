@@ -510,7 +510,7 @@ test("a completed password reset ends every session and the Zero access issued f
 		value: f.userId,
 		expiresAt: new Date(Date.now() + 60_000),
 	});
-	const reset = await auth.handler(
+	const reset = await app.handle(
 		new Request(`${origin}/api/auth/reset-password`, {
 			method: "POST",
 			headers: { "content-type": "application/json", origin },

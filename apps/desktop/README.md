@@ -8,6 +8,8 @@ store commands to JavaScript.
 
 The Rust host selects a canonical HTTPS server, opens its grant consent page in the
 system browser, exchanges the grant, and verifies the account with that server.
+A forgotten password is reset from that sign-in page; the mailed link opens the
+server's web reset page in whichever browser reads the mail.
 Session credentials, the grant verifier, and Zero JWTs remain native. JavaScript
 receives public account metadata and an opaque authentication handle. Rust validates
 Zero's destination, callbacks, and frames before replacing that handle with the JWT.

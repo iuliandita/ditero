@@ -64,12 +64,40 @@ from creating an unused address and subsequently proving that creation by signin
 in with their chosen password. Rate limits bound attempts; the neutral response
 does not claim to eliminate that active registration side channel.
 
-A completed password reset revokes every session of that account, browser and
-native, because the old password may be compromised. The reset page does not sign
-the user in, so no session is kept. Sync access ends within the revocation bound
-described below: new Zero tokens and requests are refused immediately and open
-subscriptions close at the next revalidation. A session started with the new
-password is unaffected.
+"Forgot your password?" on the sign-in page requests a reset link. The answer is
+the same whether or not the address has an account, and a server without SMTP
+refuses the request with an explanation instead. The mailed link always opens the
+web reset page (`/reset-password`), also for Android and desktop users, whose
+sign-in already runs in the system browser. The link works once and expires
+after an hour. The page keeps the token out of browser history, sets the new
+password, and then sends the user to sign in: the reset itself creates no
+session.
+
+A completed reset assumes the old password may be compromised. In one database
+transaction with the token use and the password change, it:
+
+- ends every session of the account, browser and native;
+- revokes every personal access token and calendar feed link;
+- deletes every passkey;
+- unlinks every Google or other provider sign-in, keeping only the password.
+
+If any step fails, none of them happen and the link stays usable. The reset page
+lists the kinds of credentials that were removed. Sync access ends within the
+revocation bound described below: new Zero tokens and requests are refused
+immediately and open subscriptions close at the next revalidation. A session
+started with the new password is unaffected. A provider sign-in whose verified
+email matches the account links again on its next use.
+
+A reset does not touch inbound webhooks or notification channel credentials,
+which belong to lists and workspaces rather than to signing in, or workspace
+membership and encryption keys. It also keeps two-factor authentication (TOTP and
+backup codes). Removing it would let anyone who controls the mailbox defeat a
+second factor the owner set up. The cost: someone who had the old password could
+also have enrolled their own authenticator, and the owner is then asked for a
+code they don't have. Neither side can sign in. An operator recovers the account
+after verifying the owner out of band, by deleting the account's `two_factor` row
+and setting `two_factor_enabled` to false for the user. After a reset, review
+inbound webhooks and channel settings for anything you did not create.
 
 Android and desktop use explicit system-browser consent to obtain a device-bound
 native session. Credentials remain in native storage. After sign-out or session/device

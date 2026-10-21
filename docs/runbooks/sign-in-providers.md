@@ -85,6 +85,8 @@ web, Android and desktop browser sign-in use this same server configuration.
   try-again message rather than an error page.
 - Each Google account links to one Ditero account. A second link request that
   races the first is refused with `ACCOUNT_ALREADY_LINKED`.
+- A password reset unlinks every Google sign-in of the account. Google sign-in
+  with the account's verified email links again on its next use.
 - Google sign-in links to an existing account only when that account's email is
   verified. Sign in with your password or passkey otherwise.
 - Android and desktop apps sign in through the system browser, so Google sign-in
