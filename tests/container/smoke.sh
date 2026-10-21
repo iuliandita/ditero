@@ -23,6 +23,12 @@ if [ -n "$expected_revision" ]; then
     echo "expected revision $expected_revision, got $actual_revision" >&2
     exit 1
   fi
+  # /health reports this runtime value; the Kustomize migration gate compares it.
+  if ! docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$image" |
+    grep -Fxq "DITERO_GIT_SHA=$expected_revision"; then
+    echo "image environment lacks DITERO_GIT_SHA=$expected_revision" >&2
+    exit 1
+  fi
 fi
 
 configured_user=$(docker image inspect --format '{{.Config.User}}' "$image")
@@ -139,6 +145,15 @@ docker stop "$database" >/dev/null
 sleep 3
 test "$(docker inspect --format '{{.State.Running}}' "$app")" = true
 docker exec "$app" bun -e 'if (!(await fetch("http://localhost:3000/health")).ok) process.exit(1)'
+if [ -n "$expected_revision" ]; then
+  docker exec --env EXPECTED="$expected_revision" "$app" bun -e '
+    const body = await (await fetch("http://localhost:3000/health")).json();
+    if (body.revision !== process.env.EXPECTED) {
+      console.error(JSON.stringify(body));
+      process.exit(1);
+    }
+  '
+fi
 docker start "$database" >/dev/null
 attempt=0
 until docker exec "$database" psql -U postgres -d ditero -c 'select 1' >/dev/null 2>&1; do

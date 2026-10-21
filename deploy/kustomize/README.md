@@ -65,9 +65,12 @@ resources:
 namespace: household
 namePrefix: home-
 images:
-- name: ghcr.io/iuliandita/ditero
+- name: ghcr.io/iuliandita/ditero:0.1.0-beta.1
   newName: docker.io/iuliandita/ditero
   newTag: 0.1.0-beta.1
+- name: ghcr.io/iuliandita/ditero:0.1.0-beta.1-zero
+  newName: docker.io/iuliandita/ditero
+  newTag: 0.1.0-beta.1-zero
 configMapGenerator:
 - name: ditero-app-config
   behavior: merge
@@ -75,40 +78,15 @@ configMapGenerator:
   - BETTER_AUTH_URL=https://tasks.example.com
   - PUBLIC_ZERO_URL=https://sync.example.com
   - DITERO_REGISTRATION_MODE=closed
-patches:
-- target:
-    kind: Deployment
-    name: ditero-zero
-  patch: |-
-    - op: replace
-      path: /spec/template/spec/containers/0/image
-      value: docker.io/iuliandita/ditero:0.1.0-beta.1-zero
-    - op: replace
-      path: /spec/template/spec/initContainers/0/image
-      value: docker.io/iuliandita/ditero:0.1.0-beta.1-zero
-replacements:
-- source:
-    kind: Deployment
-    name: home-ditero-app
-    fieldPath: spec.template.spec.containers.[name=app].image
-  targets:
-  - select:
-      kind: Deployment
-      name: home-ditero-app
-    fieldPaths:
-    - spec.template.spec.containers.[name=app].env.[name=DITERO_REPLICA_ID].value
-  - select:
-      kind: Deployment
-      name: home-ditero-zero
-    fieldPaths:
-    - spec.template.spec.initContainers.[name=wait-for-app].env.[name=APP_REVISION].value
 ```
 
 Always upgrade the app/Zero image pair together. Pin both images to verified
-immutable digests for production. Since both use the same repository with
-different tags, a repository-wide image override also rewrites the Zero tag;
-set the Zero container and its `wait-for-app` init container images explicitly as
-shown when overriding the pair. Kustomize
+immutable digests for production. The base pins the pair as
+`ghcr.io/iuliandita/ditero:<version>` and `<version>-zero`, and an `images` entry
+that includes the tag matches only that reference. Use one entry per image, as
+shown, with the tags of the base you build on. The Zero container and its
+`wait-for-app` init container share a reference, so one entry rewrites both. A
+name-only entry would also rewrite the Zero tag. Kustomize
 rewrites generated ConfigMap references and internal app Service references when
 renaming resources. The external Secret remains named `ditero-secrets`; patch the
 projected Secret references if your operator uses another name.
@@ -160,20 +138,23 @@ with `kubectl apply -k` by the authorized operator after those checks.
 
 Zero must not start while application migrations run, because Zero's DDL event
 triggers would otherwise see a partially migrated schema. The Zero Deployment has
-a `wait-for-app` init container, the same gate the Helm chart uses: it polls the
-app `/health` until the reported `replica` equals the app image reference, which
-the app serves as `DITERO_REPLICA_ID`. The old app pod, or a new one still
-migrating, never matches, so Zero starts only after the new app is migrated and
-healthy. The init container reads `APP_HEALTH_URL` and `APP_REVISION`, both set by
-the manifests as in the Helm chart. Apply the base or overlay once; no staged
+a `wait-for-app` init container that runs the Zero image and polls the app
+`/health` until the reported `revision` equals the init container's own
+`DITERO_GIT_SHA`. Both published images carry their build commit in that variable,
+and the app answers 200 only after its migrations finish. The old app pod, or a new
+one still migrating, reports another revision, so Zero starts only after the new
+app is migrated and healthy. Because the commit comes from the images, any `images`
+override keeps the gate correct without extra overlay fields. A pair built from
+different commits never opens the gate. Apply the base or overlay once; no staged
 replicas are needed.
 
-The identifier is copied from the app image by the `replacements` block in the
-base. A kustomization that overrides `images` must repeat that block, as in the
-overlay above (naming its own resources after any `namePrefix`), because
-replacements in the base run before the override. The render test checks the
-equality; without it a new app would keep the old identifier and the gate would
-open early.
+Images built without a commit (a local `docker build` that passed no
+`DITERO_GIT_SHA`) fall back to comparing `/health` `replica` with `APP_REPLICA_ID`.
+The base copies the app image reference into the app's `DITERO_REPLICA_ID` and the
+init container's `APP_REPLICA_ID` with a `replacements` block, which runs before
+overlay overrides. For such builds, repeat that block in the overlay, naming its
+own resources after any `namePrefix`; otherwise the identifier stays at the base
+image and the fallback opens early. Labeled images ignore this field.
 
 Operators upgrading from `0.0.1-alpha.12` or earlier, or from a render without the
 init container, should remove any manual zero-replica hold patch; applying it

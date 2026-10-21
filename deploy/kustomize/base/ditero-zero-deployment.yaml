@@ -51,10 +51,14 @@ spec:
         args:
         - |
           const url = process.env.APP_HEALTH_URL;
+          const own = process.env.DITERO_GIT_SHA;
           for (;;) {
             try {
               const response = await fetch(url, {signal: AbortSignal.timeout(5000)});
-              if (response.ok && (await response.json()).replica === process.env.APP_REVISION) break;
+              if (response.ok) {
+                const health = await response.json();
+                if (own ? health.revision === own : health.replica === process.env.APP_REPLICA_ID) break;
+              }
             } catch {}
             console.log("Waiting for this release's app migrations and health");
             await new Promise(resolve => setTimeout(resolve, 2000));
@@ -64,7 +68,7 @@ spec:
           value: ditero-app
         - name: APP_HEALTH_URL
           value: http://$(DITERO_APP_SERVICE):3000/health
-        - name: APP_REVISION
+        - name: APP_REPLICA_ID
           value: replaced-from-app-image
         resources:
           requests:

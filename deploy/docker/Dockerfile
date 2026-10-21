@@ -99,6 +99,7 @@ LABEL org.opencontainers.image.title="Ditero zero-cache" \
       org.opencontainers.image.revision="${DITERO_GIT_SHA}" \
       org.opencontainers.image.version="${DITERO_CHANNEL}" \
       ditero.channel="${DITERO_CHANNEL}"
+ENV DITERO_GIT_SHA=${DITERO_GIT_SHA}
 
 # --- runtime bases ----------------------------------------------------------
 FROM ${RUNTIME_IMAGE} AS runtime-alpine
@@ -165,3 +166,4 @@ LABEL org.opencontainers.image.title="Ditero" \
       org.opencontainers.image.revision="${DITERO_GIT_SHA}" \
       org.opencontainers.image.version="${DITERO_CHANNEL}" \
       ditero.channel="${DITERO_CHANNEL}"
+ENV DITERO_GIT_SHA=${DITERO_GIT_SHA}

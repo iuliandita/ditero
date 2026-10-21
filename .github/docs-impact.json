@@ -18,12 +18,12 @@
 			"note": "Prepare the first beta, 0.1.0-beta.1 with Android code 13, retain the existing signing certificate and documentation epoch, align release commands, and describe the remaining prerelease and native qualification limits. Generated publication notes now describe a prerelease rather than an alpha."
 		},
 		"configuration": {
-			"sourceDigest": "11bca3cb25685868786a8f9b42703f96a2cad8709d9d76b1633399b9e477254c",
+			"sourceDigest": "77d6d9ffa5807a3846fc887197bbe8b8d88b8c7aae5119586b2dd720df178adf",
 			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Document the explicit Compose Zero image tag for commit-pinned nightly pairs and preserve the release suffix default. Document staged Kustomize startup and the shared Kubernetes logical restore path with original credentials, attachment ciphertext and a fresh Zero cache. Existing clients and stored formats are unchanged. Kustomize now gates Zero on the current app image through an init container, replacing the manual zero-replica hold; overlays that override images repeat the documented replacements block and patch the init container image. Existing clients, stored formats and Helm values are unchanged; roll back by reverting the manifests."
+			"note": "Document the explicit Compose Zero image tag for commit-pinned nightly pairs and preserve the release suffix default. Document staged Kustomize startup and the shared Kubernetes logical restore path with original credentials, attachment ciphertext and a fresh Zero cache. Existing clients and stored formats are unchanged. Kustomize now gates Zero on the current app build through an init container that compares the commit baked into the Zero image with the app health revision, replacing the manual zero-replica hold; image overrides need one tag-matched entry per image and no extra fields, and unlabeled local builds fall back to the documented replica identifier. Existing clients, stored formats and Helm values are unchanged; roll back by reverting the manifests."
 		},
 		"deployment": {
-			"sourceDigest": "940207ab5285fb55acc9b0b65b4493e58aef21d15306a64e45492fbb5644ca7b",
+			"sourceDigest": "a68f209e3d01dcb6654e5120e75f043c4074e39078161c9238edf354ba2c722c",
 			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
 			"note": "Qualify published Compose, Helm and Kustomize recovery paths. Document database-first blob snapshots, original secrets, app-before-Zero startup, CNPG managed roles and logical restore, and bounded diagnostics before cleanup. Add a Compose Zero tag override without changing existing release defaults; the optional all-in-one bundle is unchanged. The Kustomize base now enforces app-before-Zero startup automatically, matching the Helm gate; no manual staging remains and operators upgrading from alpha.12 drop any hold patch."
 		},
