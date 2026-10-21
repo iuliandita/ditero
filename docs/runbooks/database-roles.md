@@ -98,6 +98,11 @@ reset. Monitor startup logs and verify both existing data and a new write sync.
 Queries rehydrate once after upgrade and again after rollback; allow for a burst
 of requests to the app query endpoint.
 
+Zero 1.11 mutation success results include a `data` field, including `undefined`
+for mutators without a return value. Preference saves and the export journal
+accept this result shape and still wait for both local and server success before
+reporting Saved or clearing pending-write markers.
+
 Keep the restricted runtime and migration role grants described below. CVR and
 CDC schema migrations run under Zero's privileged service login. Use a direct
 connection, and budget at least five change-database connections plus one per

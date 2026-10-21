@@ -62,6 +62,22 @@ function wait(
 afterEach(() => vi.useRealTimers());
 
 describe("export saved boundary", () => {
+	it.each([
+		undefined,
+		{ saved: true },
+	])("clears the journal for acknowledged Zero 1.11 results with data %j", async (data) => {
+		const storage = new Journal();
+		const tracker = boundary(storage);
+		tracker.wrapMutation(() => ({
+			client: Promise.resolve({ type: "success", data }),
+			server: Promise.resolve({ type: "success", data }),
+		}));
+		await flush();
+		expect(tracker.getSnapshot().uncertain).toBe(false);
+		expect(storage.length).toBe(0);
+		expect(await wait(tracker)).toBe(true);
+	});
+
 	it("journals before optimistic writes and waits for positive server acknowledgement", async () => {
 		const storage = new Journal();
 		const tracker = boundary(storage);
