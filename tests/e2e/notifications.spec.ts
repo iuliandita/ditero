@@ -251,12 +251,17 @@ test.describe("notification settings", () => {
 		await goToSettings(page);
 		const panel = await settings(page);
 		await expect(panel.getByTestId("channel-ntfy")).toBeVisible();
-		// Every channel is built now, so Telegram is a real, non-disabled row.
-		// Email is the disabled one on this deployment: it carries no SMTP, and an
-		// unavailable channel stays visible with its reason (shell doc 6).
-		await expect(panel.getByTestId("channel-telegram")).not.toHaveAttribute(
+		// Providers without an adapter and email without SMTP stay visible with
+		// a reason and cannot open an unusable setup form.
+		await expect(panel.getByTestId("channel-telegram")).toHaveAttribute(
 			"aria-disabled",
 			"true",
+		);
+		await expect(
+			panel.getByTestId("channel-telegram-disclosure"),
+		).toBeDisabled();
+		await expect(panel.getByTestId("channel-telegram-unavailable")).toHaveText(
+			"That channel is not available yet.",
 		);
 		await expect(panel.getByTestId("channel-email")).toHaveAttribute(
 			"aria-disabled",
