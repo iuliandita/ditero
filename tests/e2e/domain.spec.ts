@@ -1232,10 +1232,10 @@ test("subtask deletion confirms the child and preserves its parent", async ({
 
 // A snackbar confirms the write the moment it is made; a refusal from the
 // client run or the server must replace it, never leave "Completed" or
-// "Moved to" standing. Demoting the user to viewer makes both writes refused.
+// "Moved to" standing. Refuse server updates without changing client permissions.
 test("a refused complete or move takes its snackbar back", async ({ page }) => {
 	const email = uniqueEmail("refused");
-	await signUp(page, email);
+	const userId = await signUp(page, email);
 	await waitWorkspaceReady(page);
 	await createListDesktop(page, "Work");
 	await createListDesktop(page, "Home");
@@ -1248,33 +1248,42 @@ test("a refused complete or move takes its snackbar back", async ({ page }) => {
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
 	try {
 		await pool.query(
-			`update membership set role = 'viewer'
-			 where user_id = (select id from "user" where email = $1)`,
-			[email],
+			`create function task_sync_refuse() returns trigger language plpgsql as $$
+			begin
+				if exists (select 1 from list where id = OLD.list_id and owner_id = '${userId.replaceAll("'", "''")}') then
+					raise exception 'Task fixture refusal';
+				end if;
+				return NEW;
+			end $$`,
 		);
+		await pool.query(
+			"create trigger task_sync_refuse before update on task for each row execute function task_sync_refuse()",
+		);
+		await expect(panel.getByTestId("task-detail-done")).toBeEnabled();
+		await panel.getByTestId("task-detail-done").click();
+		await expect(snack("Could not complete: Held back")).toBeVisible({
+			timeout: 15000,
+		});
+		await expect(snack("Completed: Held back")).toHaveCount(0);
+		// The panel's own error line: Zero reports the refusal as a resolved error
+		// result, which the runner used to miss while waiting for a rejection.
+		await expect(panel.getByRole("alert")).toBeVisible();
+		await expect(
+			snack("Could not complete: Held back").getByTestId("snackbar-action"),
+		).toHaveCount(0);
+
+		const again = await openPanel(page, "Held back");
+		await openMoreOptions(again);
+		await again.getByRole("combobox", { name: "Move to list" }).click();
+		await page.getByRole("option", { name: "Work", exact: true }).click();
+		await expect(snack("Could not move: Held back")).toBeVisible({
+			timeout: 15000,
+		});
+		await expect(snack("Moved to Work: Held back")).toHaveCount(0);
+		await expect(listRow(page, "Held back")).toBeVisible({ timeout: 15000 });
 	} finally {
+		await pool.query("drop trigger if exists task_sync_refuse on task");
+		await pool.query("drop function if exists task_sync_refuse()");
 		await pool.end();
 	}
-
-	await panel.getByTestId("task-detail-done").click();
-	await expect(snack("Could not complete: Held back")).toBeVisible({
-		timeout: 15000,
-	});
-	await expect(snack("Completed: Held back")).toHaveCount(0);
-	// The panel's own error line: Zero reports the refusal as a resolved error
-	// result, which the runner used to miss while waiting for a rejection.
-	await expect(panel.getByRole("alert")).toBeVisible();
-	await expect(
-		snack("Could not complete: Held back").getByTestId("snackbar-action"),
-	).toHaveCount(0);
-
-	const again = await openPanel(page, "Held back");
-	await openMoreOptions(again);
-	await again.getByRole("combobox", { name: "Move to list" }).click();
-	await page.getByRole("option", { name: "Work", exact: true }).click();
-	await expect(snack("Could not move: Held back")).toBeVisible({
-		timeout: 15000,
-	});
-	await expect(snack("Moved to Work: Held back")).toHaveCount(0);
-	await expect(listRow(page, "Held back")).toBeVisible({ timeout: 15000 });
 });

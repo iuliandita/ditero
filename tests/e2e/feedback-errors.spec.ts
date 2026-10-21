@@ -12,11 +12,23 @@ test("channel setup points to missing and invalid fields and disables an unavail
 		"aria-invalid",
 		"true",
 	);
+	await expect(page.getByTestId("channel-ntfy-serverUrl")).toHaveAttribute(
+		"aria-describedby",
+		"channel-ntfy-serverUrl-error",
+	);
+	await expect(page.getByTestId("channel-ntfy-topic")).toHaveAttribute(
+		"aria-invalid",
+		"true",
+	);
+	await expect(page.getByTestId("channel-ntfy-topic")).toHaveAttribute(
+		"aria-describedby",
+		"channel-ntfy-topic-error",
+	);
 	await expect(page.locator("#channel-ntfy-serverUrl-error")).toHaveText(
-		"Enter Server URL.",
+		"This field is required.",
 	);
 	await expect(page.locator("#channel-ntfy-topic-error")).toHaveText(
-		"Enter Topic.",
+		"This field is required.",
 	);
 	await page.getByTestId("channel-ntfy-serverUrl").fill("invalid-url");
 	await page.getByTestId("channel-ntfy-topic").fill("has spaces");

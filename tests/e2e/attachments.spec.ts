@@ -452,8 +452,11 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 			[oldId],
 		);
 		expect(stored.rowCount).toBe(1);
+		const attachmentRoot = process.env.DITERO_ATTACHMENT_FS_PATH;
+		if (!attachmentRoot)
+			throw new Error("DITERO_ATTACHMENT_FS_PATH is required");
 		const ciphertext = await readFile(
-			resolve("data/attachments", stored.rows[0].storage_key),
+			resolve(attachmentRoot, stored.rows[0].storage_key),
 		);
 		expect(ciphertext.length).toBeGreaterThan(oldBytes.length);
 		expect(ciphertext.includes(oldBytes)).toBe(false);
