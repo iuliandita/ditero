@@ -110,6 +110,7 @@ jobs:
           bun run tauri build --debug --no-binary-patching --target "$DESKTOP_TARGET" \
             --bundles "$DESKTOP_BUNDLES" -- --locked
       - name: Create ephemeral trusted HTTPS fixture
+        timeout-minutes: 3
         run: bash apps/desktop/tests/journeys/setup.sh
       - name: Install Windows development package
         if: runner.os == 'Windows'
@@ -127,7 +128,7 @@ jobs:
           set -euo pipefail
           dbus-run-session -- xvfb-run -a bash apps/desktop/tests/journeys/linux.sh
       - name: Prove macOS automation excluded from release binary
-        if: ${{ always() && runner.os == 'macOS' }}
+        if: ${{ always() && !cancelled() && runner.os == 'macOS' }}
         working-directory: apps/desktop
         run: |
           set -euo pipefail
