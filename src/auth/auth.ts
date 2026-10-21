@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { passkey } from "@better-auth/passkey";
 import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -40,6 +41,9 @@ import {
 } from "./security.ts";
 
 export const SIGN_UP_RESPONSE_FLOOR_MS = 500;
+
+type PublicSignUpState = { creating: boolean; error?: APIError };
+const publicSignUp = new AsyncLocalStorage<PublicSignUpState>();
 
 const REGISTRATION_LOCK_KEY = 6_794_321;
 const registrationMode = resolveRegistrationMode(process.env);
@@ -132,6 +136,12 @@ export const auth = betterAuth({
 		before: createAuthMiddleware(async (context) => {
 			if (context.path !== "/sign-up/email") return;
 			if (!context.body || typeof context.body !== "object") return;
+			// Public signup accepts only identity and password. In particular, avatar,
+			// callback and future additional fields must never reach a new-user insert.
+			for (const key of Object.keys(context.body)) {
+				if (!["name", "email", "password"].includes(key))
+					delete context.body[key];
+			}
 			const { password, email, name } = context.body;
 			// Let Better Auth report input errors before any account lookup.
 			if (
@@ -141,7 +151,9 @@ export const auth = betterAuth({
 				typeof email !== "string"
 			)
 				return;
-			validDisplayName(() => signupDisplayName(name, email));
+			context.body.name = validDisplayName(() =>
+				signupDisplayName(name, email),
+			);
 			try {
 				// The create hook alone runs only for new accounts, leaking existence.
 				await assertEmailRegistrationAllowed(email);
@@ -151,19 +163,9 @@ export const auth = betterAuth({
 			}
 		}),
 		after: createAuthMiddleware(async (context) => {
-			const error = context.context.returned;
-			if (
-				context.path !== "/sign-up/email" ||
-				!context.request ||
-				!(error instanceof APIError) ||
-				error.body?.code !== "FAILED_TO_CREATE_USER"
-			)
-				return;
-			// A competing signup may insert the email after Better Auth's lookup.
-			const existing = await context.context.internalAdapter.findUserByEmail(
-				context.body.email.toLowerCase(),
-			);
-			if (existing) return Response.json({ token: null, user: null });
+			const state = publicSignUp.getStore();
+			if (state?.creating && context.context.returned instanceof APIError)
+				state.error = context.context.returned;
 		}),
 	},
 	databaseHooks: {
@@ -183,6 +185,9 @@ export const auth = betterAuth({
 			},
 			create: {
 				before: async (newUser, context) => {
+					const signUp = publicSignUp.getStore();
+					if (signUp && context?.path === "/sign-up/email")
+						signUp.creating = true;
 					const name = validDisplayName(() =>
 						signupDisplayName(newUser.name, newUser.email),
 					);
@@ -276,8 +281,26 @@ export async function handleAuthRequest(
 		new URL(request.url).pathname.replace(/\/+$/, "") ===
 			"/api/auth/sign-up/email";
 	const started = performance.now();
-	const response = await handleAuthRequestInternal(request, peerAddress);
-	if (!signUp) return response;
+	if (!signUp) return handleAuthRequestInternal(request, peerAddress);
+	const state: PublicSignUpState = { creating: false };
+	const response = await publicSignUp.run(state, async () => {
+		try {
+			const result = await handleAuthRequestInternal(request, peerAddress);
+			if (!result.ok && state.creating) {
+				// Better Auth logs the underlying adapter error; retain an operator signal
+				// even when a later persistence step reports only an HTTP failure.
+				console.error(
+					"Email sign-up persistence failed",
+					state.error ?? { status: result.status },
+				);
+			}
+			return result;
+		} catch (error) {
+			if (!state.creating) throw error;
+			console.error("Email sign-up persistence failed", error);
+			return new Response(null, { status: 500 });
+		}
+	});
 	await new Promise((resolve) =>
 		setTimeout(
 			resolve,
@@ -285,7 +308,7 @@ export async function handleAuthRequest(
 		),
 	);
 	// No real or synthetic user metadata, and no session on either path.
-	if (response.ok)
+	if (response.ok || state.creating)
 		return Response.json(
 			{ token: null, user: null },
 			{

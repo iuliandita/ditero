@@ -1,3 +1,4 @@
+import { APIError } from "better-auth";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -101,6 +102,7 @@ test("open registration hides duplicate accounts without issuing a session or ch
 			.from(tables.user)
 			.where(eq(tables.user.email, email));
 		expect(saved.name).toBe("First account");
+		expect(saved.image).toBeNull();
 		const signedIn = await signInForTest(email);
 		expect((await signedIn.json()).user.id).toBe(saved.id);
 	} finally {
@@ -169,5 +171,153 @@ test("concurrent signups of the same new email return the neutral response", asy
 		]);
 	} finally {
 		lookup.mockRestore();
+	}
+});
+
+async function adversarialSignup(fields: Record<string, unknown>) {
+	const started = performance.now();
+	const response = await handleAuthRequest(
+		new Request("http://localhost:3000/api/auth/sign-up/email", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				origin: "http://localhost:5173",
+			},
+			body: JSON.stringify({
+				name: "Valid",
+				email,
+				password: "pw-123456",
+				...fields,
+			}),
+		}),
+		"198.51.100.85",
+	);
+	expect(performance.now() - started).toBeGreaterThanOrEqual(
+		SIGN_UP_RESPONSE_FLOOR_MS - 10,
+	);
+	return {
+		status: response.status,
+		body: await response.text(),
+		headers: [...response.headers.entries()],
+		cookies: response.headers.getSetCookie(),
+	};
+}
+
+test.each([
+	["NUL avatar", { image: "\u0000" }],
+	["overlong avatar", { image: "a".repeat(100_000) }],
+	["invalid avatar type", { image: { url: "avatar" } }],
+	["NUL name", { name: "Name\u0000" }],
+	["overlong name", { name: "a".repeat(81) }],
+	["invalid name type", { name: ["Name"] }],
+	["blank name fallback", { name: "   " }],
+	["unicode name", { name: "  مريم 👩🏽‍💻 e\u0301  " }],
+	["unpaired surrogate", { name: "Name\ud800" }],
+	["direction control", { name: "Name\u202e" }],
+	["NUL password", { password: "password\u0000" }],
+	["overlong password", { password: "a".repeat(129) }],
+	["invalid password type", { password: ["password"] }],
+	["NUL callback", { callbackURL: "/\u0000" }],
+	["overlong callback", { callbackURL: `/${"a".repeat(100_000)}` }],
+	["invalid callback type", { callbackURL: { url: "/" } }],
+	["invalid remember flag", { rememberMe: "yes" }],
+	[
+		"extra identity fields",
+		{
+			id: "injected",
+			emailVerified: true,
+			role: "admin",
+			additionalFields: { name: "\u0000" },
+		},
+	],
+	[
+		"prototype fields",
+		JSON.parse(
+			'{"__proto__":{"name":"injected"},"constructor":{"prototype":{"role":"admin"}}}',
+		),
+	],
+] satisfies [
+	string,
+	Record<string, unknown>,
+][])("malformed signup equality: %s", async (_label, fields) => {
+	const fresh = await adversarialSignup(fields);
+	await cleanup();
+	await db
+		.insert(tables.user)
+		.values({ id: crypto.randomUUID(), name: "Original", email });
+	await db.delete(tables.rateLimit);
+	const existing = await adversarialSignup(fields);
+	expect(existing).toEqual(fresh);
+	expect(existing.cookies).toEqual([]);
+});
+
+test.each([
+	"user",
+	"account",
+] as const)("%s persistence failure stays neutral and is logged", async (model) => {
+	const context = await auth.$context;
+	const create = context.adapter.create.bind(context.adapter);
+	const failure = new Error(`injected ${model} storage failure`);
+	const adapter = vi
+		.spyOn(context.adapter, "create")
+		.mockImplementation(async (input) => {
+			if (input.model === model) throw failure;
+			return create(input);
+		});
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const authLog = vi.spyOn(context.logger, "error");
+	try {
+		const failed = await adversarialSignup({});
+		expect(failed.status).toBe(200);
+		expect(JSON.parse(failed.body)).toEqual({ token: null, user: null });
+		expect(failed.cookies).toEqual([]);
+		expect(log).toHaveBeenCalledWith(
+			"Email sign-up persistence failed",
+			expect.anything(),
+		);
+		expect(authLog.mock.calls.some((args) => args.includes(failure))).toBe(
+			true,
+		);
+		adapter.mockRestore();
+		await cleanup();
+		await db
+			.insert(tables.user)
+			.values({ id: crypto.randomUUID(), name: "Original", email });
+		expect(await adversarialSignup({})).toEqual(failed);
+	} finally {
+		adapter.mockRestore();
+		log.mockRestore();
+		authLog.mockRestore();
+	}
+});
+
+test("an API creation refusal after admission stays neutral", async () => {
+	const failure = new APIError("BAD_REQUEST", {
+		message: "injected storage refusal",
+	});
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const context = await auth.$context;
+	const create = context.adapter.create.bind(context.adapter);
+	const adapter = vi
+		.spyOn(context.adapter, "create")
+		.mockImplementation(async (input) => {
+			if (input.model === "user") throw failure;
+			return create(input);
+		});
+	try {
+		const failed = await adversarialSignup({});
+		expect(failed.status).toBe(200);
+		expect(failed.cookies).toEqual([]);
+		expect(log).toHaveBeenCalledWith(
+			"Email sign-up persistence failed",
+			failure,
+		);
+		await db
+			.insert(tables.user)
+			.values({ id: crypto.randomUUID(), name: "Original", email });
+		expect(await adversarialSignup({})).toEqual(failed);
+	} finally {
+		adapter.mockRestore();
+		log.mockRestore();
 	}
 });

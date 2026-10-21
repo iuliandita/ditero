@@ -40,6 +40,15 @@ issues cookies or a session. Sign in separately with the account password;
 verification mail is optional and SMTP is not required. Existing account details
 and passwords are never changed by a duplicate sign-up.
 
+Public email sign-up accepts only email, password and display name. Avatar,
+callback, remember-me and extra fields are ignored; names are normalized and
+validated before account lookup. New-account persistence failures return the
+same neutral response, without cookies, under the same timing floor. The server
+logs persistence failures, including underlying storage errors; operators must
+monitor those logs and database health because a neutral response does not
+confirm that an account was created. Internal managed-account creation retains
+its explicit error handling.
+
 Registration policy is checked before account lookup, including for existing
 emails. Closed and invitation-only refusals keep their localized policy codes;
 they reveal admission policy (including eligible email invitations), not whether
