@@ -11,7 +11,9 @@ openssl req -newkey rsa:2048 -nodes -keyout "$out/server.key" -out "$out/server.
 printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\nbasicConstraints=CA:FALSE\n' > "$out/server.ext"
 openssl x509 -req -in "$out/server.csr" -CA "$out/ca.crt" -CAkey "$out/ca.key" \
   -CAcreateserial -out "$out/server.crt" -days 2 -extfile "$out/server.ext" 2> "$out/private/sign.log"
-openssl verify -CAfile "$out/ca.crt" "$out/server.crt"
+openssl x509 -in "$out/ca.crt" -noout -text > "$out/evidence/ca-public.txt"
+openssl x509 -in "$out/server.crt" -noout -text > "$out/evidence/server-public.txt"
+openssl verify -CAfile "$out/ca.crt" "$out/server.crt" 2>&1 | tee "$out/evidence/certificate-verification.log"
 chmod 600 "$out"/*.key
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$out/untrusted.key" -out "$out/untrusted.crt" \
   -days 2 -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' 2> "$out/private/untrusted.log"

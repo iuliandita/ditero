@@ -300,7 +300,9 @@ export async function stack() {
 			await admin.query(`create database ${name}`);
 			const database = `postgres://postgres@127.0.0.1:${port}/${name}`;
 			const apiPort = await freePort(),
-				zeroPort = await freePort();
+				zeroPort = await freePort(),
+				changePort = await freePort(),
+				litestreamPort = await freePort();
 			const api = await proxy(apiPort),
 				zero = await proxy(zeroPort);
 			const pool = new Pool({ connectionString: database });
@@ -335,6 +337,9 @@ export async function stack() {
 				{
 					...env,
 					ZERO_PORT: String(zeroPort),
+					ZERO_CHANGE_STREAMER_PORT: String(changePort),
+					ZERO_CHANGE_STREAMER_ADDRESS: `127.0.0.1:${changePort}`,
+					ZERO_LITESTREAM_PORT: String(litestreamPort),
 					ZERO_UPSTREAM_DB: database,
 					ZERO_CVR_DB: database,
 					ZERO_CHANGE_DB: database,
