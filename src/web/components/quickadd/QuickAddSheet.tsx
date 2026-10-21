@@ -26,6 +26,7 @@ import { getLocale } from "../../../paraglide/runtime.js";
 import { mutators } from "../../../zero/mutators.ts";
 import type { Label, List, schema, Task } from "../../../zero/schema.gen.ts";
 import { useHints } from "../../hooks/useHints.ts";
+import { useWorkspaceWriteAccess } from "../../hooks/useTaskImportActivation.ts";
 import { syntaxHintVisible } from "../../lib/hints.ts";
 import { addCopyFor } from "../../lib/kind-copy.ts";
 import { mutationErrorMessage } from "../../lib/mutator-messages.ts";
@@ -107,12 +108,14 @@ export function QuickAddSheet({
 		lists[0] ??
 		null;
 	const targetWs = targetList?.workspaceId ?? workspaceId;
+	const canWriteWorkspace = useWorkspaceWriteAccess();
+	const canCreate = canWriteWorkspace(targetWs);
 
 	// Native shells (Android and desktop) provide the account context; the
 	// controller refuses them. Any identity change cancels the session.
 	const nativeAccount = useNativeAccount();
 	const voice = useVoiceCapture({
-		open,
+		open: open && canCreate,
 		accountId: zero.userID ?? "",
 		native: nativeAccount !== null,
 		currentListId,
@@ -189,7 +192,7 @@ export function QuickAddSheet({
 
 	async function submit() {
 		const t = title.trim();
-		if (busy || !targetList || !t) return;
+		if (busy || !canCreate || !targetList || !t) return;
 		// Read fresh at event time: this still fences every write.
 		if (voice.blockedNow()) {
 			blockedSeq.current += 1;
@@ -255,6 +258,8 @@ export function QuickAddSheet({
 			<input
 				ref={inputRef}
 				data-testid="quickadd-input"
+				disabled={!canCreate}
+				aria-describedby={!canCreate ? "quickadd-read-only" : undefined}
 				aria-label={m.quickadd_input_label()}
 				className="h-10 w-full rounded-lg border bg-transparent px-3 text-base md:text-sm [@media(pointer:coarse)]:min-h-11"
 				// The `#`/`~`/`pN` sigils are literal parser grammar and stay
@@ -282,12 +287,19 @@ export function QuickAddSheet({
 					if (e.key === "Enter") void submit();
 				}}
 			/>
-			<VoiceCapture
-				key={voiceScope}
-				voice={voice}
-				onUse={acceptVoiceText}
-				onFocusInput={() => inputRef.current?.focus()}
-			/>
+			{!canCreate && (
+				<p id="quickadd-read-only" className="text-sm text-muted-foreground">
+					{m.workspace_read_only()}
+				</p>
+			)}
+			{canCreate && (
+				<VoiceCapture
+					key={voiceScope}
+					voice={voice}
+					onUse={acceptVoiceText}
+					onFocusInput={() => inputRef.current?.focus()}
+				/>
+			)}
 			<TokenChips
 				tokens={chips}
 				unknownLabels={unknownLabels}
@@ -336,7 +348,9 @@ export function QuickAddSheet({
 					type="button"
 					className="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
 					onClick={() => void submit()}
-					disabled={busy || !targetList || !title.trim() || voice.blocking}
+					disabled={
+						busy || !canCreate || !targetList || !title.trim() || voice.blocking
+					}
 					aria-describedby={
 						voice.blocking ? "quickadd-voice-blocked" : undefined
 					}

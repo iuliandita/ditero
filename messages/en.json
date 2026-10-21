@@ -1,4 +1,7 @@
 {
+	"workspace_read_only": "Your workspace role allows viewing only.",
+	"accept_error_email_mismatch": "This invite is for another email address. Sign out, then sign in with the account it was sent to.",
+	"accept_switch_account": "Sign out and switch account",
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"theme_editor_accent_note": "Finish or cancel your theme edit to choose an accent.",
 	"theme_editor_customize": "Customize theme",

@@ -1,4 +1,7 @@
 {
+	"workspace_read_only": "دورك في مساحة العمل يسمح بالعرض فقط.",
+	"accept_error_email_mismatch": "هذه الدعوة لعنوان بريد إلكتروني آخر. سجّل الخروج، ثم سجّل الدخول بالحساب الذي أُرسلت إليه.",
+	"accept_switch_account": "تسجيل الخروج وتبديل الحساب",
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"theme_editor_accent_note": "احفظ تعديل السمة أو ألغِه لاختيار لون تمييز.",
 	"theme_editor_customize": "تخصيص السمة",

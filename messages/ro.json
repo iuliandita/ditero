@@ -1,4 +1,7 @@
 {
+	"workspace_read_only": "Rolul tău în acest spațiu permite doar vizualizarea.",
+	"accept_error_email_mismatch": "Invitația este pentru altă adresă de e-mail. Deconectează-te, apoi conectează-te cu contul la care a fost trimisă.",
+	"accept_switch_account": "Deconectează-te și schimbă contul",
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"theme_editor_accent_note": "Salvează sau anulează editarea temei ca să alegi un accent.",
 	"theme_editor_customize": "Personalizează tema",

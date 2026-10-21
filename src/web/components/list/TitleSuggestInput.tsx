@@ -20,6 +20,8 @@ export function TitleSuggestInput({
 	inputRef,
 	"data-testid": testId,
 	className,
+	disabled = false,
+	"aria-describedby": describedBy,
 }: {
 	value: string;
 	onChange: (next: string) => void;
@@ -30,6 +32,8 @@ export function TitleSuggestInput({
 	inputRef?: React.RefObject<HTMLInputElement | null>;
 	"data-testid"?: string;
 	className?: string;
+	disabled?: boolean;
+	"aria-describedby"?: string;
 }) {
 	const baseId = useId();
 	const listboxId = `${baseId}-listbox`;
@@ -44,7 +48,7 @@ export function TitleSuggestInput({
 		() => (dismissed ? [] : suggestTitles(value, candidates, { listId })),
 		[dismissed, value, candidates, listId],
 	);
-	const open = suggestions.length > 0;
+	const open = !disabled && suggestions.length > 0;
 	const activeId = active >= 0 ? `${baseId}-option-${active}` : undefined;
 
 	function accept(title: string) {
@@ -92,6 +96,8 @@ export function TitleSuggestInput({
 			<input
 				ref={ref}
 				data-testid={testId}
+				disabled={disabled}
+				aria-describedby={describedBy}
 				role="combobox"
 				aria-expanded={open}
 				aria-controls={listboxId}

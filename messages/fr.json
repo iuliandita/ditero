@@ -1,4 +1,7 @@
 {
+	"workspace_read_only": "Ton rôle dans cet espace permet uniquement de consulter le contenu.",
+	"accept_error_email_mismatch": "Cette invitation est destinée à une autre adresse e-mail. Déconnecte-toi, puis connecte-toi avec le compte qui l’a reçue.",
+	"accept_switch_account": "Se déconnecter et changer de compte",
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"theme_editor_accent_note": "Enregistre ou annule la modification du thème pour choisir une couleur d’accent.",
 	"theme_editor_customize": "Personnaliser le thème",
