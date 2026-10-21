@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import { background, freePort, run, state, until } from "./stack.ts";
 
+const shellQuote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`;
+
 export async function systemBrowser() {
 	const port = await freePort();
 	const profile = resolve(state, "browser-profile");
@@ -36,7 +38,7 @@ export async function systemBrowser() {
 	} else if (process.platform === "darwin") {
 		const source = resolve(state, "private/browser.applescript");
 		const wrapper = resolve(state, "private/Journey Browser.app");
-		const command = `${JSON.stringify(chrome)} ${args.map((arg) => JSON.stringify(arg)).join(" ")} `;
+		const command = `${shellQuote(chrome)} ${args.map(shellQuote).join(" ")} `;
 		writeFileSync(
 			source,
 			`on open location address\n do shell script ${JSON.stringify(command)} & quoted form of address & " >/dev/null 2>&1 &"\nend open location\n`,
@@ -55,14 +57,14 @@ export async function systemBrowser() {
 		const swift = resolve(state, "private/browser.swift");
 		writeFileSync(
 			swift,
-			'import CoreServices\nlet status = LSSetDefaultHandlerForURLScheme("https" as CFString, "io.ditero.journey-browser" as CFString)\nif status != noErr { fatalError("Default browser registration failed") }\n',
+			'import Foundation\nimport CoreServices\nlet status = LSSetDefaultHandlerForURLScheme("https" as CFString, "io.ditero.journey-browser" as CFString)\nif status != noErr { fatalError("Default browser registration failed") }\n',
 		);
 		run("swift", [swift]);
 	} else {
 		const wrapper = resolve(state, "private/browser.sh");
 		writeFileSync(
 			wrapper,
-			`#!/bin/sh\nexec ${JSON.stringify(chrome)} ${args.map((arg) => JSON.stringify(arg)).join(" ")} "$@"\n`,
+			`#!/bin/sh\nexec ${shellQuote(chrome)} ${args.map(shellQuote).join(" ")} "$@"\n`,
 			{ mode: 0o700 },
 		);
 		const directory = resolve(

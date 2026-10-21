@@ -67,7 +67,7 @@ def inspect() -> dict:
             proof["verified"] and not proof["pending"]
             and all(proof.get(field) is not None for field in ("name", "email", "zero", "workspace"))
             and proof["session_ref"]["credential"] == snapshot["sessions"][origin]["credential"]
-            and datetime.fromisoformat(proof["session_ref"]["expires_at"]) > datetime.now(timezone.utc)
+            and datetime.fromisoformat(proof["session_ref"]["expires_at"].replace("Z", "+00:00")) > datetime.now(timezone.utc)
             for origin, proof in snapshot.get("evidence", {}).items()
         ),
         "notificationCount": len(snapshot.get("notifications", {})) + len(snapshot.get("retired_notifications", [])),

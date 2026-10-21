@@ -76,6 +76,7 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
           key: journeys-${{ matrix.target }}-1.98.1
+          cache-on-failure: true
       - name: Install tauri-driver
         if: runner.os != 'macOS'
         run: cargo install tauri-driver --version 2.1.0 --locked

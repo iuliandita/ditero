@@ -11,7 +11,7 @@ else
   packages=("$bundle"/dmg/*.dmg)
   test "${#packages[@]}" -eq 1
   mkdir -p "$out/mount" "$HOME/Applications"
-  hdiutil attach "${packages[0]}" -nobrowse -readonly -mountpoint "$out/mount"
+  { yes || true; } | PAGER=cat hdiutil attach "${packages[0]}" -nobrowse -readonly -mountpoint "$out/mount"
   ditto "$out/mount/Ditero.app" "$HOME/Applications/Ditero.app"
   hdiutil detach "$out/mount"
   codesign --verify --deep --strict "$HOME/Applications/Ditero.app"

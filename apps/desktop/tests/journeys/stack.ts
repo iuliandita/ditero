@@ -233,7 +233,7 @@ export async function stack() {
 				NODE_ENV: "test",
 				DATABASE_URL: database,
 				BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
-				DITERO_ENCRYPTION_KEY: randomBytes(32).toString("hex"),
+				DITERO_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
 				BETTER_AUTH_URL: api.origin,
 				DITERO_PUBLIC_URL: api.origin,
 				PUBLIC_ZERO_URL: zero.origin,

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
@@ -182,6 +183,38 @@ export async function desktop(application: string) {
 		}
 	}
 	await launch();
+	if (process.platform === "darwin") {
+		const refused = await new Promise<string>((done, fail) => {
+			const socket = connect(port, "127.0.0.1");
+			let response = "";
+			socket.setTimeout(6000, () =>
+				socket.destroy(new Error("Unauthenticated hook did not close")),
+			);
+			socket.on("error", fail);
+			socket.on("data", (chunk) => {
+				response += chunk.toString();
+			});
+			socket.on("end", () => done(response));
+			socket.on("connect", () =>
+				socket.end(
+					`${JSON.stringify({ token: "0".repeat(64), script: "globalThis.__unauthorizedJourney=true" })}\n`,
+				),
+			);
+		});
+		assert.equal(
+			refused,
+			"",
+			"Unauthenticated evaluation must have no response",
+		);
+		assert.equal(
+			await evaluate("'__unauthorizedJourney' in globalThis"),
+			false,
+		);
+		writeFileSync(
+			resolve(evidence, "hook-authentication.json"),
+			JSON.stringify({ unauthenticatedEvaluationRefused: true }),
+		);
+	}
 	return {
 		evaluate,
 		screenshot,
@@ -191,6 +224,10 @@ export async function desktop(application: string) {
 		close,
 		async stop() {
 			if (app?.exitCode === null) app.kill();
+			if (session)
+				await request("DELETE", `/session/${session}`).catch((error) =>
+					console.error(`WebDriver cleanup: ${error}`),
+				);
 			driver?.kill();
 		},
 	};
