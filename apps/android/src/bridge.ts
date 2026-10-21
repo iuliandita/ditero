@@ -178,6 +178,8 @@ type State = Hello & {
 };
 
 let state: State | undefined;
+// Same-page handshakes retire account authority, but can still report a refusal.
+let taskLinkRefusalGeneration: number | undefined;
 let refusalHandler:
 	| { gen: number; authHandle: string; run: () => void }
 	| undefined;
@@ -317,6 +319,7 @@ function adopt(next: Hello): void {
 		state?.session?.scope !== next.session?.scope ||
 		state?.session?.authHandle !== next.session?.authHandle;
 	state = { ...next, zeroUrl: generationChanged ? undefined : state?.zeroUrl };
+	taskLinkRefusalGeneration = next.taskLinks ? next.gen : undefined;
 	if (changed) {
 		rejectPending(new NativeError("stale-generation"));
 		abortSockets();
@@ -377,8 +380,8 @@ function onNative(event: MessageEvent): void {
 	if (!isRecord(message)) return;
 	if (
 		message.t === "link.refused" &&
-		state?.taskLinks &&
-		message.gen === state.gen
+		taskLinkRefusalGeneration !== undefined &&
+		message.gen === taskLinkRefusalGeneration
 	) {
 		for (const listener of taskLinkRefusalListeners) listener();
 		return;

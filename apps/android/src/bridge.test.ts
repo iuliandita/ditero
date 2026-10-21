@@ -601,6 +601,41 @@ test("signed-out link refusals notify only the current page without requesting a
 	);
 	expect(refused).toHaveBeenCalledTimes(1);
 });
+test("link refusals during a same-page handshake remain visible without account authority", async () => {
+	snapshot.taskLinks = true;
+	await connectBridge();
+	const refused = vi.fn();
+	const unsubscribe = subscribeTaskLinkRefusals(refused);
+	const post = native.postMessage;
+	let hello: Record<string, unknown> | undefined;
+	native.postMessage = (message) => {
+		const command = JSON.parse(message) as Record<string, unknown>;
+		if (command.op === "hello") {
+			sent.push(command);
+			hello = command;
+		} else post(message);
+	};
+	const before = sent.length;
+	const connecting = connectBridge();
+	const refuse = (gen: number) =>
+		native.onmessage?.(
+			new MessageEvent("message", {
+				data: JSON.stringify({ t: "link.refused", gen }),
+			}),
+		);
+	refuse(1);
+	expect(refused).toHaveBeenCalledTimes(1);
+	expect(sent.slice(before).map((command) => command.op)).toEqual(["hello"]);
+	if (!hello) throw Error("missing hello");
+	reply(hello, { ...snapshot, gen: 2 });
+	await connecting;
+	refuse(1);
+	expect(refused).toHaveBeenCalledTimes(1);
+	refuse(2);
+	expect(refused).toHaveBeenCalledTimes(2);
+	expect(bridgeState().session).toBeNull();
+	unsubscribe();
+});
 test("Linux link reply cannot grant URL, workspace, or mutation authority", async () => {
 	snapshot.session = session;
 	snapshot.taskLinks = true;

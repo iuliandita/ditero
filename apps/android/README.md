@@ -282,8 +282,9 @@ Implemented foundation with source, bridge and JVM unit coverage:
   newcomer is refused visibly once the first is dismissed. A pending entry whose owner is stale is
   revalidated and cleared first, so it cannot block a new link; one that is only mid-verification stays.
   A link arriving while the page is signed out shows unavailable through a generation-bound refusal
-  event. No task is queued for a later sign-in. Stale reads also show unavailable without retrying
-  account authority or navigating.
+  event. Same-page handshakes retain only the notice generation while account authority is unavailable;
+  the next handshake replaces it, and old-generation notices are ignored. No task is queued for a later
+  sign-in. Stale reads also show unavailable without retrying account authority or navigating.
 - Verification: the stored account is never relaxed. While a check is in flight the vault reads as
   untrusted, so a warm link waits as an ownerless deferred entry, only when the in-memory session was
   already verified and the origin matches. It is never readable meanwhile. When the check ends, the link

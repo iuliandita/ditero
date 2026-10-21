@@ -891,6 +891,7 @@ final class NativeZeroTransport {
             handle = session == null ? null : newHandle();
         }
         JSONObject reply = obj("t", "reply", "rid", rid, "ok", true, "gen", generation);
+        put(reply,"taskLinks",true);
         put(reply,"pushProvider",push.providerId());
         put(reply, "server", serverMeta());
         put(reply, "session", sessionMeta());
