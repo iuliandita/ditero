@@ -357,3 +357,5 @@ deep links, updater delivery, release signing, and complete installer qualificat
 remain unfinished. Shared browser-only settings and integrations retain the Android
 core's limitations. A successful installer build alone does not prove complete
 desktop application delivery.
+
+Quick add voice dictation is unavailable in the desktop app: the shared interface detects the native bridge and shows an explanation instead of the control, and no native speech plugin exists. Use the browser; see the [voice capture guide](../../docs/runbooks/voice-capture.md).

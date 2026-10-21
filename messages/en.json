@@ -2702,7 +2702,7 @@
 	"import_content_duplicate": "Identical duplicate row ignored",
 	"import_content_comments": "Comment text preserved in notes without source authorship",
 	"import_content_people": "People and assignments excluded",
-	"import_content_attachments": "Attachments excluded",
+	"import_content_attachments": "Attachments not imported; any link stays as text in the notes",
 	"import_content_reminders": "Reminders disabled; import does not notify people",
 	"import_content_history": "History and source timestamps excluded unless explicitly supported",
 	"import_content_archive": "Archived or canceled state is not preserved; completion is mapped separately",

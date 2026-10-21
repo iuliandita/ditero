@@ -2702,7 +2702,7 @@
 	"import_content_duplicate": "Identische doppelte Zeile ignoriert",
 	"import_content_comments": "Kommentartext ohne ursprüngliche Autorenzuordnung in Notizen übernommen",
 	"import_content_people": "Personen und Zuweisungen ausgeschlossen",
-	"import_content_attachments": "Anhänge ausgeschlossen",
+	"import_content_attachments": "Anhänge nicht importiert; vorhandene Links bleiben als Text in den Notizen",
 	"import_content_reminders": "Erinnerungen deaktiviert; der Import benachrichtigt niemanden",
 	"import_content_history": "Verlauf und ursprüngliche Zeitstempel ausgeschlossen, sofern nicht ausdrücklich unterstützt",
 	"import_content_archive": "Archivierungs- oder Abbruchstatus bleibt nicht erhalten; Erledigung wird separat zugeordnet",

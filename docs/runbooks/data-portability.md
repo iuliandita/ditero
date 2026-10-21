@@ -45,7 +45,8 @@ Upload one UTF-8 file (a leading UTF-8 BOM is accepted), choose names for missin
 project/list names, and set an IANA time zone for dates without offsets. Review the
 field notices, map the destination workspace, accept the policy, then save a dry run.
 Saving writes the plan only. Apply uses the same authorized, resumable import pipeline
-as native imports. People, permissions, assignments, attachments, credentials,
+as native imports. People, permissions, assignments, attachment files (see
+[Attachments from other apps](#attachments-from-other-apps)), credentials,
 reminders, urgency and history are excluded. Import sends no assignment notifications
 and suppresses historical overdue alerts. Future ordinary due-date alerts still follow
 normal task notification policy after activation.
@@ -55,7 +56,7 @@ normal task notification policy after activation.
 | Todoist with content | One project CSV: sections become lists under the chosen folder; titles, descriptions, priorities, `@labels`, note rows, indentation and explicit dates are converted. | Todoist CSV has no completion state, so tasks are open. Natural-language dates, deadlines, durations, authors and view settings are excluded. English `every day/week/month/year/weekday starting YYYY-MM-DD` can retain all-day recurrence. |
 | TickTick | A backup CSV with `Folder Name,List Name,Title` and `taskId,parentId` columns: folders, list/column placement, notes, tags, priorities, dates, completion and checklist children are converted. | This adapter targets the backup CSV layout, not TickTick API JSON. Archived/canceled distinctions, reminders, rich task kinds, source timestamps and provider-specific repeat expressions are not retained. Backup status 1 means completed. Status 2 is archived; it is completed only when a completion timestamp is present, otherwise it is imported open with a notice. This differs from the API status convention. |
 | Microsoft To Do | An English classic Outlook Tasks CSV, one task folder at a time: subject, notes, categories, importance, status, due date and completion date are converted. Enter the original list name. | To Do account export is a mailbox PST, which this adapter cannot read. Outlook CSV can omit steps, recurrence, reminders, other lists and records outside its selected date range. No missing content is inferred. Dates use month/day/year. Progress, waiting and deferred states become open with an explicit notice. Localized Outlook headers require conversion to the generic contract. |
-| Trello with content | One board JSON: board becomes a folder, lists become lists, cards become tasks, checklist items become children, labels and dates are retained. `dueComplete` supplies completion; `closed` is archive state. Comment text is appended to notes. | JSON may contain only 1,000 recent actions/comments. Comments lose authorship; activity, members, attachments, board descriptions, checklist headings, custom fields, colors and other metadata are reported as excluded. Template and special-role cards are refused. CSV, workspace ZIP and account completeness are not supported. |
+| Trello with content | One board JSON: board becomes a folder, lists become lists, cards become tasks, checklist items become children, labels and dates are retained. `dueComplete` supplies completion; `closed` is archive state. Comment text is appended to notes. | JSON may contain only 1,000 recent actions/comments. Comments lose authorship. Each card attachment is listed at the end of the notes as `name: link` when it has a plain http(s) link (at most 25 per card); files are not migrated. Activity, members, board descriptions, checklist headings, custom fields, colors and other metadata are reported as excluded. Template and special-role cards are refused. CSV, workspace ZIP and account completeness are not supported. |
 | Generic CSV | The contract below: lists, sections, notes, one-level children, labels, priority, completion, explicit dates and supported recurrence. | Unknown nonempty columns are reported; inconsistent references and conflicting duplicate IDs are refused. |
 
 Deeper subtasks are flattened under their top-level task with an explicit notice.
@@ -197,6 +198,27 @@ arrive. Historical overdue alerts for a newly activated recipient are suppressed
 an explicit change to the task's due date makes that date eligible again, even when
 the new date is in the past. Simply reopening or automatically advancing a recurring
 task does not clear that historical suppression.
+
+## Attachments from other apps
+
+Provider files are never copied into Ditero's encrypted attachments by this import.
+The server does not fetch remote URLs from an import (that would let a crafted file
+make the server request internal addresses), and the browser import does not either:
+Trello attachment downloads need the original account's sign-in and are not offered
+with cross-origin access, so a browser fetch would fail. Trello cards therefore keep
+each attachment's name and web link as text in the notes, and the preview counts them as
+not migrated. Links with embedded credentials, non-web schemes or over 2,048 characters
+are named without a link. Download any file you need from the source before it is removed,
+then attach it to the task.
+
+Todoist's CSV help says exports include comment attachments, but this adapter has no
+qualified export containing them. It keeps comment rows as note text, so any attachment
+reference in that text stays as text, and fetches nothing. TickTick, Microsoft To Do
+and generic CSV have no attachment content.
+
+The only path that migrates files into encrypted attachments is a Ditero paired
+content JSON and encrypted files archive, described in
+[Encrypted attachment archives](#encrypted-attachment-archives).
 
 ## Included and excluded data
 

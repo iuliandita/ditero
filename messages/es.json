@@ -2751,7 +2751,7 @@
 	"import_content_duplicate": "Fila duplicada idéntica ignorada",
 	"import_content_comments": "Texto del comentario conservado en notas sin atribuir autoría",
 	"import_content_people": "Personas y asignaciones excluidas",
-	"import_content_attachments": "Adjuntos excluidos",
+	"import_content_attachments": "Adjuntos no importados; los enlaces se conservan como texto en las notas",
 	"import_content_reminders": "Recordatorios desactivados; la importación no envía avisos",
 	"import_content_history": "Historial y marcas de tiempo originales excluidos salvo compatibilidad explícita",
 	"import_content_archive": "El estado archivado o cancelado no se conserva; la finalización se asigna por separado",

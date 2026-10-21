@@ -1,4 +1,4 @@
-import { ProviderImportError } from "./common.ts";
+import { PROVIDER_MAX_FIELD_BYTES, ProviderImportError } from "./common.ts";
 import {
 	ContentBuilder,
 	type ContentOptions,
@@ -14,6 +14,36 @@ function trelloId(value: unknown): string {
 	const id = nonempty(value);
 	if (!/^[0-9a-f]{24}$/i.test(id)) throw new ProviderImportError("invalid-row");
 	return id.toLowerCase();
+}
+const ATTACHMENT_LINE_LIMIT = 25;
+const ATTACHMENT_URL_LIMIT = 2048;
+const encoder = new TextEncoder();
+// Attachments are never fetched here. A well-formed web link survives as
+// inert text; anything else is named without a link.
+function attachmentLine(value: unknown) {
+	const row = record(value);
+	const name =
+		typeof row.name === "string"
+			? row.name
+					.replace(/[\p{Cc}\p{Cf}\s]+/gu, " ")
+					.trim()
+					.slice(0, 200)
+			: "";
+	let link: string | null = null;
+	if (typeof row.url === "string" && row.url.length <= ATTACHMENT_URL_LIMIT)
+		try {
+			const url = new URL(row.url);
+			if (
+				(url.protocol === "https:" || url.protocol === "http:") &&
+				!url.username &&
+				!url.password &&
+				url.href.length <= ATTACHMENT_URL_LIMIT
+			)
+				link = url.href;
+		} catch {
+			// Unparseable links are reported as omitted below.
+		}
+	return { text: `- ${name || "attachment"}${link ? `: ${link}` : ""}`, link };
 }
 function ordered(values: unknown[]) {
 	return values
@@ -97,7 +127,28 @@ export async function parseTrelloContent(
 			"idChecklists",
 			"isTemplate",
 			"cardRole",
+			"attachments",
 		]);
+		const lines: string[] = [];
+		for (const attachment of items(card.attachments ?? []).map(
+			attachmentLine,
+		)) {
+			builder.notice("attachments-excluded", "card-attachments");
+			if (!attachment.link)
+				builder.notice("attachments-excluded", "attachment-link-omitted");
+			if (lines.length < ATTACHMENT_LINE_LIMIT) lines.push(attachment.text);
+			else builder.notice("format-limits", "attachment-links");
+		}
+		const base = card.desc == null ? null : string(card.desc, 32_767);
+		let notes = base;
+		if (lines.length) {
+			const withLinks = [base, `Attachments not migrated:\n${lines.join("\n")}`]
+				.filter(Boolean)
+				.join("\n\n");
+			if (encoder.encode(withLinks).length < PROVIDER_MAX_FIELD_BYTES)
+				notes = withLinks;
+			else builder.notice("format-limits", "attachment-links");
+		}
 		const labels = items(card.labels ?? []).map((value) => {
 			const label = record(value);
 			builder.unsupported(label, ["id", "name"]);
@@ -113,7 +164,7 @@ export async function parseTrelloContent(
 			id: trelloId(card.id),
 			listId: trelloId(card.idList),
 			title: nonempty(card.name),
-			notes: card.desc == null ? null : string(card.desc, 32_767),
+			notes,
 			...builder.date(card.due == null ? "" : string(card.due)),
 			done: flag(card.dueComplete),
 			labels,

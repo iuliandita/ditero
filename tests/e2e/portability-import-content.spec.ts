@@ -8,7 +8,15 @@ import {
 	waitWorkspaceReady,
 } from "./helpers.ts";
 
-const cases = [
+const cases: {
+	provider: string;
+	picker: string;
+	file: string;
+	tasks: number;
+	title: string;
+	notice: string;
+	notes?: string;
+}[] = [
 	{
 		provider: "todoist",
 		picker: "Todoist project CSV with content",
@@ -40,6 +48,7 @@ const cases = [
 		tasks: 4,
 		title: "Prepare picnic",
 		notice: "recent comments",
+		notes: "Attachments not migrated:\n- attachment: https://example.test/file",
 	},
 	{
 		provider: "generic-csv",
@@ -85,6 +94,7 @@ for (const item of cases)
 		const notices = panel.getByTestId("import-content-notices");
 		await expect(notices).toBeVisible();
 		await expect(notices).toContainText(item.notice);
+		await expect(notices).toContainText("Attachments not imported");
 		const policy = panel.getByTestId("import-provider-policy"),
 			save = panel.getByRole("button", { name: "Save dry run", exact: true });
 		await expect(save).toBeDisabled();
@@ -119,11 +129,12 @@ for (const item of cases)
 			await page.request.get("/api/portability/export")
 		).json();
 		expect(imported.data.tasks).toHaveLength(item.tasks);
-		expect(
-			imported.data.tasks.find(
-				(task: { title: string }) => task.title === item.title,
-			),
-		).toBeDefined();
+		const task = imported.data.tasks.find(
+			(row: { title: string }) => row.title === item.title,
+		);
+		expect(task).toBeDefined();
+		if (item.notes) expect(task.notes).toContain(item.notes);
+		expect(imported.data.attachments).toEqual(original.data.attachments);
 		expect(imported.data.assignments).toEqual([]);
 		expect(imported.data.comments).toEqual([]);
 		// Uploading the same bytes clears consent and returns to the preview using the selected source.

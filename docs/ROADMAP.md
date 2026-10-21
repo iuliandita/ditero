@@ -26,8 +26,9 @@ backup CSV, Microsoft To Do via classic Outlook task CSV, and Trello board JSON
 imports are available with explicit exclusions and immutable snapshot identity. Authenticated encrypted attachment archives
 and reviewed, resumable attachment migration with explicit parent mapping and durable
 replay have landed; broader runtime qualification remains pending. Direct Microsoft
-PST import and provider account synchronization remain unsupported. Voice capture is
-pending final qualification.
+PST import and provider account synchronization remain unsupported. On-device voice
+dictation in quick add is implemented (see the voice capture guide); real-device
+qualification and native-app support are pending.
 
 The web app is installable as a PWA. Android and Tauri desktop application cores,
 scoped native authentication, encrypted file handling, and development artifact

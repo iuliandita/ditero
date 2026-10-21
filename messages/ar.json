@@ -2898,7 +2898,7 @@
 	"import_content_duplicate": "تم تجاهل صف مكرر مطابق",
 	"import_content_comments": "حُفظ نص التعليق في الملاحظات دون نسبة إلى مؤلف",
 	"import_content_people": "استُبعد الأشخاص والإسنادات",
-	"import_content_attachments": "استُبعدت المرفقات",
+	"import_content_attachments": "لم تُستورد المرفقات؛ تبقى الروابط نصًا في الملاحظات",
 	"import_content_reminders": "التذكيرات معطلة؛ لا يرسل الاستيراد إشعارات",
 	"import_content_history": "استُبعد السجل والطوابع الزمنية الأصلية ما لم تكن مدعومة صراحة",
 	"import_content_archive": "لا تُحفظ حالة الأرشفة أو الإلغاء؛ تُعالج حالة الإكمال بشكل منفصل",

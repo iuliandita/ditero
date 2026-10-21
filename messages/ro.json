@@ -2751,7 +2751,7 @@
 	"import_content_duplicate": "Rând duplicat identic ignorat",
 	"import_content_comments": "Textul comentariului păstrat în note fără atribuirea autorului",
 	"import_content_people": "Persoane și atribuiri excluse",
-	"import_content_attachments": "Atașamente excluse",
+	"import_content_attachments": "Atașamente neimportate; linkurile rămân ca text în note",
 	"import_content_reminders": "Mementouri dezactivate; importul nu trimite notificări",
 	"import_content_history": "Istoric și marcaje temporale originale excluse dacă nu sunt acceptate explicit",
 	"import_content_archive": "Starea arhivată sau anulată nu se păstrează; finalizarea este mapată separat",
