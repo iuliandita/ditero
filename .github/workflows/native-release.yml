@@ -132,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo fmt --check
-          cargo test --locked
+          cargo test --locked --target "$DESKTOP_TARGET"
       - name: Build optimized unsigned or ad hoc packages
         working-directory: apps/desktop
         run: |
