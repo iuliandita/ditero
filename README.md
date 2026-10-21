@@ -67,7 +67,8 @@ size and high contrast stay on each device.
 - Light, dark, and system modes, six accent themes, reading-size presets, and high contrast
 - Named light/dark palettes, runtime color editing and validated JSON sharing;
   [custom palettes](docs/themes.md) sync with your account
-- Saved views, dashboards, calendar/board/table layouts, keyboard shortcuts, and a focus timer
+- Focus timers resume after reload on the same device, including paused and task-bound intervals
+- Saved views, dashboards, calendar/board/table layouts, and keyboard shortcuts
 - Encrypted attachments with filesystem or S3-compatible server storage
 - Authenticated encrypted attachment archives and reviewed, resumable attachment
   migration with explicit parent mapping and durable replay
@@ -92,6 +93,11 @@ runtime, terminal, native and deployment qualification remain pending. Voice cap
 pending final qualification. Calendar subscriptions can be created and revoked
 in web settings; a new subscription URL is shown only once.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
+
+The active focus timer is stored locally for each account. Returning after an interval
+expires records that interval and advances to the next phase using the auto-cycle setting;
+paused time is excluded. Stop discards the active interval. Timer state stays on this
+device and is lost if its local storage is cleared.
 
 ## Tech stack
 
