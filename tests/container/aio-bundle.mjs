@@ -217,10 +217,11 @@ check(() => {
 	for (const [name, value] of Object.entries({
 		ZERO_IN_CONTAINER: "1",
 		ZERO_LITESTREAM_CONFIG_PATH: "/etc/litestream.yml",
+		ZERO_LITESTREAM_CONFIG_PATH_V5: "/etc/litestream-v5.yml",
 		ZERO_LITESTREAM_EXECUTABLE: "/usr/local/bin/litestream",
 		ZERO_LITESTREAM_EXECUTABLE_V5: "/usr/local/bin/litestream-v5",
 		ZERO_LOG_FORMAT: "json",
-		ZERO_SERVER_VERSION: "1.9.0",
+		ZERO_SERVER_VERSION: "1.11.1",
 		ZERO_REPLICA_FILE: "/var/lib/ditero/zero/replica.db",
 		ZERO_MUTATE_URL: "http://api:3000/api/zero/mutate",
 	}))

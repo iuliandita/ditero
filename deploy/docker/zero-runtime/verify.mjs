@@ -9,9 +9,12 @@ const zeroManifest = new URL(
 	"./node_modules/@rocicorp/zero/package.json",
 	import.meta.url,
 );
-assert.equal(JSON.parse(readFileSync(zeroManifest, "utf8")).version, "1.9.0");
+assert.equal(JSON.parse(readFileSync(zeroManifest, "utf8")).version, "1.11.1");
 const requireZero = createRequire(realpathSync(zeroManifest));
-assert.equal(requireZero("fastify/package.json").version, "5.12.5");
+assert.equal(requireZero("postgres").zeroPatch, 1);
+for (const file of ["/etc/litestream.yml", "/etc/litestream-v5.yml"])
+	assert.ok(existsSync(file), `Missing backup configuration ${file}`);
+assert.equal(requireZero("fastify/package.json").version, "5.12.7");
 const rimrafManifest = requireZero.resolve("rimraf/package.json");
 const requireRimraf = createRequire(realpathSync(rimrafManifest));
 assert.deepEqual(
@@ -127,8 +130,16 @@ if (existsSync(new URL("fastify/package.json", modules))) {
 let fastifyCopies = 0;
 let undiciCopies = 0;
 let braceExpansionCopies = 0;
+let zeroCopies = 0;
 const fastUriVersions = new Set();
 for (const path of packagePaths) {
+	if (path.endsWith("/@rocicorp/zero/package.json")) {
+		zeroCopies += 1;
+		assert.equal(
+			JSON.parse(readFileSync(new URL(path, modules), "utf8")).version,
+			"1.11.1",
+		);
+	}
 	if (
 		path === "fast-uri/package.json" ||
 		path.endsWith("/fast-uri/package.json")
@@ -159,7 +170,7 @@ for (const path of packagePaths) {
 		fastifyCopies += 1;
 		assert.equal(
 			JSON.parse(readFileSync(new URL(path, modules), "utf8")).version,
-			"5.12.5",
+			"5.12.7",
 		);
 	}
 	if (path === "undici/package.json" || path.endsWith("/undici/package.json")) {
@@ -179,6 +190,7 @@ for (const path of packagePaths) {
 
 assert.deepEqual([...fastUriVersions].sort(), ["3.1.8", "4.1.5"]);
 assert.ok(fastifyCopies > 0, "No physical Fastify package found");
+assert.ok(zeroCopies > 0, "No physical Zero package found");
 assert.ok(undiciCopies > 0, "No physical undici package found");
 assert.ok(
 	braceExpansionCopies > 0,
@@ -190,5 +202,5 @@ const db = new Database(":memory:");
 assert.equal(db.prepare("select 1 as value").get().value, 1);
 db.close();
 console.log(
-	`Zero 1.9.0, Fastify 5.12.5, fast-uri 3.1.8/4.1.5 consumers, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
+	`Zero 1.11.1, Fastify 5.12.7, fast-uri 3.1.8/4.1.5 consumers, UUID 11.1.1, brace-expansion 2.1.7, Node ${process.version}, bundled Undici ${process.versions.undici}, npm Undici 7.29.1, SQLite ${process.platform}/${process.arch} verified`,
 );

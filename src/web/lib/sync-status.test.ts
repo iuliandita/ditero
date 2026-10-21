@@ -76,14 +76,15 @@ describe("deriveSyncPhase", () => {
 		expect(deriveSyncPhase({ ...base, pending: 2 })).toBe("syncing");
 	});
 
-	it("keeps a short reconnect quiet, then says offline", () => {
-		expect(deriveSyncPhase({ ...base, connection: "connecting" })).toBe(
-			"syncing",
-		);
+	it.each([
+		"initializing",
+		"connecting",
+	] as const)("keeps %s quiet, then says offline", (connection) => {
+		expect(deriveSyncPhase({ ...base, connection })).toBe("syncing");
 		expect(
 			deriveSyncPhase({
 				...base,
-				connection: "connecting",
+				connection,
 				offlineSettled: true,
 			}),
 		).toBe("offline");

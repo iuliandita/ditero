@@ -8,8 +8,8 @@ export function listRowsLoading({
 	listId: string;
 	lists: readonly { id: string }[];
 	tasks: readonly { listId: string; parentId?: string | null }[];
-	listsType: "unknown" | "complete" | "error";
-	tasksType: "unknown" | "complete" | "error";
+	listsType: "unknown" | "cached" | "complete" | "error";
+	tasksType: "unknown" | "cached" | "complete" | "error";
 }): boolean {
 	if (listsType === "error" || tasksType === "error") return true;
 	if (listsType === "complete" && tasksType === "complete") return false;

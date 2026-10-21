@@ -12,6 +12,9 @@ const cached = {
 describe("listRowsLoading", () => {
 	test.each([
 		["unknown", "unknown"],
+		["cached", "cached"],
+		["complete", "cached"],
+		["cached", "complete"],
 		["complete", "unknown"],
 		["unknown", "complete"],
 	] as const)("renders cached roots with %s lists and %s tasks", (listsType, tasksType) => {
@@ -39,6 +42,9 @@ describe("listRowsLoading", () => {
 
 	test.each([
 		["unknown", "unknown"],
+		["cached", "cached"],
+		["complete", "cached"],
+		["cached", "complete"],
 		["complete", "unknown"],
 		["unknown", "complete"],
 	] as const)("waits on empty rows with %s lists and %s tasks", (listsType, tasksType) => {

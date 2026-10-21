@@ -25,6 +25,7 @@ export const SYNCING_DELAY_MS = 500;
 export const ZERO_HIDDEN_REASON = "Connection closed because tab was hidden";
 
 export type ConnectionName =
+	| "initializing"
 	| "connecting"
 	| "connected"
 	| "disconnected"
@@ -94,7 +95,7 @@ export type SyncSnapshot = {
 // whose `.client` failed never applied, so it is dropped. A `.server` settling
 // with a "zero" error means the connection dropped (Zero settles every
 // outstanding write then) while the write stays queued in IndexedDB; it stays
-// counted until the next connect, when Zero pushes the queue. Zero 1.9 has no
+// counted until the next connect, when Zero pushes the queue. Zero has no
 // public count of its queue, so writes queued before a reload are not counted
 // here; they still replay.
 export function createSyncTracker() {

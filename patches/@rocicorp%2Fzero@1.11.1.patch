@@ -1,8 +1,8 @@
 diff --git a/out/replicache/src/replicache-impl.js b/out/replicache/src/replicache-impl.js
-index 1d08adc9423c0d88577355c6c8d5b604175d4ad5..2930550edee68de6b59863cb07cb27dff24d2bfa 100644
+index 0732d55a5c819e6816c096f0c8484c86423a595b..34785c0dc2afd26e1fcba3b0a84ac7c163f9339f 100644
 --- a/out/replicache/src/replicache-impl.js
 +++ b/out/replicache/src/replicache-impl.js
-@@ -148,6 +148,9 @@ var ReplicacheImpl = class {
+@@ -172,6 +172,9 @@ var ReplicacheImpl = class {
  	#idbDatabases;
  	#lc;
  	#zero;
@@ -10,9 +10,9 @@ index 1d08adc9423c0d88577355c6c8d5b604175d4ad5..2930550edee68de6b59863cb07cb27df
 +	#closePersisted = false;
 +	#activeMutations = /* @__PURE__ */ new Set();
  	#closeAbortController = new AbortController();
- 	#persistLock = new Lock();
- 	#enableScheduledPersist;
-@@ -359,24 +362,43 @@ var ReplicacheImpl = class {
+ 	/**
+ 	* Aborted on close, on a storage failure after the open, and by
+@@ -489,24 +492,44 @@ var ReplicacheImpl = class {
  	*
  	* When closed all subscriptions end and no more read or writes are allowed.
  	*/
@@ -28,7 +28,7 @@ index 1d08adc9423c0d88577355c6c8d5b604175d4ad5..2930550edee68de6b59863cb07cb27df
 +		closingInstances.set(this.name, gate.promise);
  		this.#closeAbortController.abort();
  		getBrowserGlobal("document")?.removeEventListener("visibilitychange", this.#onVisibilityChange);
--		await this.#ready;
+-		await Promise.race([this.#ready, this.#openFailed.promise]);
 -		const closingPromises = [
 -			this.memdag.close(),
 -			this.perdag.close(),
@@ -48,10 +48,11 @@ index 1d08adc9423c0d88577355c6c8d5b604175d4ad5..2930550edee68de6b59863cb07cb27df
 +	}
 +	async #closeDurably(gate) {
 +		try {
-+			await this.#ready;
++			const ready = await Promise.race([this.#ready.then(() => true), this.#openFailed.promise.then(() => false)]);
 +			// Accepted local commits finish before their owner is persisted and closed.
 +			await Promise.allSettled([...this.#activeMutations]);
-+			if (!this.#closePersisted) {
++			if (ready && !this.#closePersisted) {
++				if (this.#kvStoreProvider.failure) throw this.#kvStoreProvider.failure;
 +				await this.#persist(true);
 +				this.#closePersisted = true;
 +			}
@@ -71,32 +72,35 @@ index 1d08adc9423c0d88577355c6c8d5b604175d4ad5..2930550edee68de6b59863cb07cb27df
  	}
  	async maybeEndPull(syncHead, requestID) {
  		for (;;) {
-@@ -610,17 +632,22 @@ var ReplicacheImpl = class {
+@@ -741,13 +764,17 @@ var ReplicacheImpl = class {
  		};
  	}
  	persist() {
 +		return this.#persist(false);
 +	}
 +	#persist(duringClose) {
- 		return this.#persistLock.withLock(async () => {
+ 		const run = this.#persistLock.withLock(async () => {
  			const { clientID } = this;
  			await this.#ready;
--			if (this.#closed) return;
-+			if (this.#closed && !duringClose) return;
+-			if (this.#closed || this.#storageFailure || this.#persistAbortController.signal.aborted) return;
++			if (!duringClose && (this.#closed || this.#storageFailure || this.#persistAbortController.signal.aborted)) return;
  			try {
 -				await persistDD31(this.#lc, clientID, this.memdag, this.perdag, this.#mutatorRegistry, () => this.#closed, 7, this.#zero?.getTxData);
 +				await persistDD31(this.#lc, clientID, this.memdag, this.perdag, this.#mutatorRegistry, () => this.#closed && !duringClose, 7, this.#zero?.getTxData);
  			} catch (e) {
 +				if (duringClose) throw e;
  				if (e instanceof ClientStateNotFoundError) this.#clientStateNotFoundOnClient(clientID);
- 				else if (this.#closed) this.#lc.debug?.("Exception persisting during close", e);
- 				else throw e;
+ 				else if (e instanceof InvalidRefCountError) {
+ 					await this.#handleInvalidRefCount(e);
+@@ -760,6 +787,7 @@ var ReplicacheImpl = class {
+ 					return;
+ 				}
  			}
 +			if (duringClose) return;
  			const clientGroupID = await this.#clientGroupIDPromise;
  			assert(clientGroupID, "Expected clientGroupID to be defined");
  			this.#onPersist({
-@@ -776,8 +803,12 @@ var ReplicacheImpl = class {
+@@ -1076,8 +1104,12 @@ var ReplicacheImpl = class {
  	#register(name, mutatorImpl) {
  		this.#mutatorRegistry[name] = mutatorImpl;
  		return (args) => {
@@ -110,14 +114,14 @@ index 1d08adc9423c0d88577355c6c8d5b604175d4ad5..2930550edee68de6b59863cb07cb27df
  				client: result,
  				server: trackingData.serverPromise
 diff --git a/out/zero-client/src/client/error.js b/out/zero-client/src/client/error.js
-index 3e3090d3fcaee6af14801d1e915b56a9d978f646..ae777a639f0ad8722ae0ba66e6671a01ef46d5e9 100644
+index 3e3090d3fcaee6af14801d1e915b56a9d978f646..69d526fab1ce2918e919117ebc9747923c8a2453 100644
 --- a/out/zero-client/src/client/error.js
 +++ b/out/zero-client/src/client/error.js
 @@ -57,6 +57,24 @@ function getErrorConnectionTransition(ex) {
  		status: NeedsAuth,
  		reason: ex
  	};
-+	// Cache DB connectivity errors have no structured reason in Zero 1.9.
++	// Cache DB connectivity errors have no structured reason in Zero 1.11.
 +	if (isServerError(ex) && ex.kind === Internal && ex.errorBody.origin === "zeroCache" && /^(?:getaddrinfo (?:ENOTFOUND|EAI_AGAIN) |connect (?:ECONNREFUSED|ETIMEDOUT) |(?:read|write) (?:ECONNRESET|EPIPE|CONNECTION_CLOSED) |Connection terminated unexpectedly$|the database system (?:is shutting down|is starting up|is in recovery mode)$|terminating connection due to administrator command$)/.test(ex.message)) return {
 +		status: NO_STATUS_TRANSITION,
 +		reason: ex
@@ -139,10 +143,10 @@ index 3e3090d3fcaee6af14801d1e915b56a9d978f646..ae777a639f0ad8722ae0ba66e6671a01
  		case AbruptClose:
  		case CleanClose:
 diff --git a/out/zero-client/src/client/zero.js b/out/zero-client/src/client/zero.js
-index c1793b96386c3ba5be6e0b0ff336c2caf495bc6b..8f5fc370b3a38c2da36ecca3c519087c9bd4235a 100644
+index a1fec2409d02c59839e13ec1afe6e0d101d60b06..003999ecf287763e489a369d91f025b664fe1a5e 100644
 --- a/out/zero-client/src/client/zero.js
 +++ b/out/zero-client/src/client/zero.js
-@@ -204,6 +204,8 @@ var Zero = class Zero {
+@@ -212,6 +212,8 @@ var Zero = class Zero {
  	#socketResolver = resolver();
  	#connectionReadyResolver = connectionReadyResolver();
  	#currentConnectAttempt;
@@ -151,7 +155,7 @@ index c1793b96386c3ba5be6e0b0ff336c2caf495bc6b..8f5fc370b3a38c2da36ecca3c519087c
  	#closeAbortController = new AbortController();
  	#visibilityWatcher;
  	#connectionManager;
-@@ -613,25 +615,36 @@ var Zero = class Zero {
+@@ -641,25 +643,36 @@ var Zero = class Zero {
  	* Once a Zero instance has been closed it no longer syncs, you can no
  	* longer query or mutate data with it, and its query views stop updating.
  	*/

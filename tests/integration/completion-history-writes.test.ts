@@ -33,7 +33,7 @@ async function call<A>(
 			tx: Parameters<Parameters<typeof zdb.transaction>[0]>[0];
 			ctx: { id: string };
 			args: A;
-		}) => Promise<void>;
+		}) => Promise<unknown>;
 	},
 	userId: string,
 	args: A,
@@ -154,7 +154,7 @@ async function push(mutationId: number, name: string, args: ReadonlyJSONValue) {
 						tx: Transaction<Schema>;
 						ctx: { id: string };
 						args: unknown;
-					}) => Promise<void>;
+					}) => Promise<unknown>;
 				};
 				await withZeroUserContext(tx as Transaction<Schema>, actor, () =>
 					mutator.fn({

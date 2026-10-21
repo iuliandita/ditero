@@ -68,6 +68,62 @@ the Google callback stays `/api/auth/callback/google`. Reload web clients after
 an app rollback too, so their TOTP caller matches the server's response format.
 Retain browser storage until queued edits sync, and verify sign-in again.
 
+## Zero 1.11 upgrade and rollback
+
+Zero is pinned to 1.11.1 across the client and cache runtime. Upstream publishes
+this patch under its staging npm dist-tag; the latest dist-tag is 1.11.0.
+Read the [1.11 release notes](https://zero.rocicorp.dev/docs/release-notes/1.11)
+and [1.10 notes](https://zero.rocicorp.dev/docs/release-notes/1.10) before upgrading
+from 1.9.
+
+Before replacing any client bundle, bring every browser, Android and desktop
+client online and verify its pending edits reach PostgreSQL. The 1.9-to-1.11
+client upgrade creates a new local database and does not carry unsent mutations
+forward. Keep offline clients on their existing bundle until they reconnect and
+sync; preserving browser storage alone cannot transfer those queued edits. Do
+not force a reload, clear site data, or uninstall an offline native client.
+
+Stop the app and Zero and take coordinated PostgreSQL, attachment and Zero replica
+backups with the original service secrets and encryption keys. Run application
+migrations, start the healthy app, and start the 1.11 Zero server before serving
+1.11 clients. Keep ingress in maintenance mode until both services are ready;
+the app image also serves the new browser bundle. New clients cannot connect to
+the old server. Allow startup time for replica migration and replication catch-up before declaring
+readiness. Keep the
+existing replication slot, app ID, shard and ZERO_APP_PUBLICATIONS configuration.
+Healthy 1.9 server replicas have incremental SQLite and upstream shard migrations;
+this upgrade does not require deleting the replica or resnapshotting PostgreSQL.
+Missing slots, incompatible publications or corrupt replicas can still require a
+reset. Monitor startup logs and verify both existing data and a new write sync.
+Queries rehydrate once after upgrade and again after rollback; allow for a burst
+of requests to the app query endpoint.
+
+Keep the restricted runtime and migration role grants described below. CVR and
+CDC schema migrations run under Zero's privileged service login. Use a direct
+connection, and budget at least five change-database connections plus one per
+view-syncer; `ZERO_CHANGE_MAX_CONNS` no longer caps all these connections.
+
+Litestream V5 is now the default backup format. Custom backup configurations need
+`ZERO_LITESTREAM_CONFIG_PATH_V5` path and V5 format; retain the legacy
+configuration for legacy restores. Backup URLs need a trailing slash. Give each replica its own folder and
+retain both formats through the rollback window. Fork commands use `-fork-to-url`;
+removed VFS options must be removed from custom configuration. Test a restore
+before replacing an established backup workflow.
+
+For rollback, first stop serving 1.11 clients and deploy the previous client
+bundle, then stop the cache. Back up current data before changing server versions.
+Keep the retained replica together with its upstream shard and slot state. Test
+the exact downgrade against a restored copy first; a fresh 1.9 cache is not proof
+that an older binary can use a migrated upstream shard. If the retained downgrade
+fails, restore the coordinated pre-upgrade backup, or qualify Zero's documented
+shard/slot reset against a separate copy before using it. Never delete live
+PostgreSQL data or browser queues as a guessed repair. A full backup restoration
+needs the matching PostgreSQL,
+attachments, replica and secrets, and discards changes made after that snapshot.
+Verify sign-in, fresh-client sync and queued-write replay after rollback. Rolling
+back the client also has a local-database version boundary, so drain its queue
+first. Do not assume an old client can recover unsent 1.11 edits.
+
 ## Non-superuser Zero login and publication
 
 As an administrator connected to the `ditero` database, create a dedicated Zero
@@ -147,21 +203,21 @@ Clients retry temporary API and database failures and replay queued edits when t
 stack recovers. Invalid or revoked sessions still require sign-in; permission and
 protocol errors are not treated as successful writes.
 
-Zero 1.9.0 stops its client reconnect loop on `PushFailed` and `TransformFailed`,
-even after the cache's four API attempts fail with a network error or HTTP 5xx.
-The bundled package patch keeps those transport failures, database transaction
-failures and recognized cache database-connectivity errors on Zero's existing
-reconnect loop. It preserves authentication refusals,
-malformed-request failures and the durable-close patch. Persistent database faults
+The bundled Zero 1.11.1 package patch keeps temporary PushFailed and
+TransformFailed transport errors, database transaction failures and recognized
+cache database-connectivity errors on Zero's reconnect loop. It preserves
+authentication refusals and malformed-request failures. Persistent database faults
 still need operator repair; retrying does not grant missing privileges.
 
-Upgrade the app and reload open clients to load the corrected bundle. Existing
-clients running an older bundle can remain stopped until reloaded; their queued
-edits remain in browser storage. Take the usual database and attachment backup
-before an upgrade, and keep browser storage until pending edits sync. This change
-does not alter storage formats or require a database migration. A rollback to an
-older client version restores the outage-recovery defect; reload clients after a
-rollback and verify pending edits reach the server.
+The durable-close patch blocks new writes immediately, waits for accepted local
+commits and forces persistence before closing storage. Failed persistence retains
+handles for explicit retry and blocks account navigation. Zero 1.11's paused
+background persistence does not bypass that final durability check. An initial
+memory-only storage fallback cannot be reported as a durable close.
+
+Follow the upgrade and rollback procedure above when moving from 1.9; that client
+storage boundary applies even though the retry patch itself does not change data
+formats. Verify pending edits reach the server after an outage.
 
 ## Bundled secrets and incomplete initialization
 

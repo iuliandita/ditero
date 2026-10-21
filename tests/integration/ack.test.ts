@@ -71,7 +71,7 @@ const LOCAL_DATE = "2026-08-02";
 type Ctx = { id: string };
 async function call<A>(
 	mutator: {
-		fn: (a: { tx: Transaction<Schema>; ctx: Ctx; args: A }) => Promise<void>;
+		fn: (a: { tx: Transaction<Schema>; ctx: Ctx; args: A }) => Promise<unknown>;
 	},
 	c: Ctx,
 	args: A,
