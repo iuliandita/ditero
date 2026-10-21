@@ -16,6 +16,7 @@ const sessionSchema = z
 		startedAt: instant.nullable(),
 		endsAt: instant.nullable(),
 		remainingSec: z.number().int().nonnegative().max(10800),
+		provenMs: z.number().finite().nonnegative().max(10800000).default(0),
 		boundTaskId: z.string().max(1024).nullable(),
 		boundTaskTitle: z.string().max(10000).nullable(),
 		config: z.unknown().transform(clampFocusConfig),
@@ -23,6 +24,7 @@ const sessionSchema = z
 	.refine(
 		(s) =>
 			s.remainingSec <= s.plannedSec &&
+			s.provenMs <= s.plannedSec * 1000 &&
 			(s.running
 				? s.startedAt !== null && s.endsAt !== null && s.endsAt >= s.startedAt
 				: s.endsAt === null),
@@ -58,7 +60,7 @@ export function focusStorageKey(userId: string, scope?: string): string {
 	return `ditero:focus:${JSON.stringify([scope ?? "browser", userId])}`;
 }
 export function intervalFields(config: FocusConfig) {
-	return { intervalId: randomId(), config };
+	return { intervalId: randomId(), config, provenMs: 0 };
 }
 
 // A read/write transaction serializes actions across tabs, including completion

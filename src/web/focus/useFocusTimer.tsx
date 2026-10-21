@@ -88,6 +88,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		remainingSec: number;
 		wall: number;
 		monotonic: number;
+		provenMs: number;
 	} | null>(null);
 
 	const applySnapshot = useCallback(
@@ -156,10 +157,10 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
 	const setSession = useCallback(
 		(update: (previous: Session | null, at: number) => Session | null) => {
-			// Anchor the action itself, never the last rendered display tick.
-			const wall = Date.now();
-			const monotonic = performance.now();
 			void updateFocus((current) => {
+				// Anchor to the serialized action, never a stale display tick.
+				const wall = Date.now();
+				const monotonic = performance.now();
 				const next = update(current.session, wall);
 				if (
 					next?.running &&
@@ -174,6 +175,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 						remainingSec: next.remainingSec,
 						wall,
 						monotonic,
+						provenMs: next.provenMs,
 					};
 				}
 				return next === current.session
@@ -258,23 +260,36 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			if (
 				clock?.intervalId !== session.intervalId ||
 				clock.endsAt !== endsAt ||
-				clock.remainingSec !== session.remainingSec
+				clock.remainingSec !== session.remainingSec ||
+				clock.provenMs !== session.provenMs
 			) {
 				clock = {
 					intervalId: session.intervalId,
 					endsAt,
 					remainingSec: session.remainingSec,
-					// Reload has only wall time: forward corrections can credit
-					// unworked time up to this interval's length. Backward
-					// corrections cannot extend it past its remaining duration.
+					// Wall time restores only the display. Credit requires elapsed
+					// monotonic time observed by a live page, excluding reload gaps.
 					wall: Math.max(Date.now(), endsAt - session.remainingSec * 1000),
 					monotonic: performance.now(),
+					provenMs: session.provenMs,
 				};
 				clockRef.current = clock;
 			}
 			return clock.wall + Math.max(0, monotonic - clock.monotonic);
 		},
 		[],
+	);
+	const provenTime = useCallback(
+		(session: Session) => {
+			timerNow(session);
+			const clock = clockRef.current;
+			return Math.min(
+				session.plannedSec * 1000,
+				(clock?.provenMs ?? session.provenMs) +
+					(clock ? Math.max(0, performance.now() - clock.monotonic) : 0),
+			);
+		},
+		[timerNow],
 	);
 	const [now, setNow] = useState(() => performance.now());
 	// Ticks change only the display clock. No persistence or session snapshots.
@@ -315,11 +330,23 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			const cycle = nextCycle(s.cycle, cfg);
 			const sec = plannedFor(cycle, cfg);
 			kind = s.cycle.phase;
+			const credit = provenTime(s) >= s.plannedSec * 1000;
+			const fields = intervalFields(cfg);
+			if (cfg.autoCycle) {
+				clockRef.current = {
+					intervalId: fields.intervalId,
+					endsAt: at + sec * 1000,
+					remainingSec: sec,
+					wall: at,
+					monotonic: performance.now(),
+					provenMs: 0,
+				};
+			}
 			return {
 				...current,
 				session: {
 					...s,
-					...intervalFields(cfg),
+					...fields,
 					cycle,
 					plannedSec: sec,
 					running: cfg.autoCycle,
@@ -327,20 +354,22 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 					endsAt: cfg.autoCycle ? at + sec * 1000 : null,
 					remainingSec: sec,
 				},
-				pendingCompletions: [
-					...current.pendingCompletions,
-					{
-						intervalId,
-						...(kind === "work" && s.boundTaskId
-							? { taskId: s.boundTaskId }
-							: {}),
-						kind,
-						// Pauses and clock corrections must not shorten the logged span.
-						startedAt: s.endsAt - s.plannedSec * 1000,
-						endedAt: s.endsAt,
-						durationSec: s.plannedSec,
-					},
-				],
+				pendingCompletions: credit
+					? [
+							...current.pendingCompletions,
+							{
+								intervalId,
+								...(kind === "work" && s.boundTaskId
+									? { taskId: s.boundTaskId }
+									: {}),
+								kind,
+								// Pauses and clock corrections must not shorten the logged span.
+								startedAt: s.endsAt - s.plannedSec * 1000,
+								endedAt: s.endsAt,
+								durationSec: s.plannedSec,
+							},
+						]
+					: current.pendingCompletions,
 			};
 		}).then((changed) => {
 			completingRef.current = null;
@@ -363,6 +392,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		plannedFor,
 		storageKey,
 		timerNow,
+		provenTime,
 	]);
 
 	const start = useCallback(() => {
@@ -400,9 +430,10 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				running: false,
 				endsAt: null,
 				remainingSec: remainingSecFrom(previous.endsAt, timerNow(previous)),
+				provenMs: provenTime(previous),
 			};
 		});
-	}, [setSession, timerNow]);
+	}, [setSession, timerNow, provenTime]);
 
 	const reset = useCallback(() => {
 		setSession(() => null);

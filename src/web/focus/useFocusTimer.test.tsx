@@ -379,11 +379,10 @@ test("storage events follow the newest revision while accounts and servers stay 
 	).not.toBe(current.session?.intervalId);
 });
 
-test("expired reload completes once across two tabs before preferences finish loading", async () => {
+test("expired reload advances across two tabs without crediting unobserved time", async () => {
 	const tab = open();
 	tab.api.startForTask("task", "Read");
 	await settle();
-	const intervalId = tab.api.session?.intervalId;
 	close(tab);
 	vi.advanceTimersByTime(15000);
 	fixture.pref.focus = { ...DEFAULT_FOCUS, autoCycle: true };
@@ -401,18 +400,7 @@ test("expired reload completes once across two tabs before preferences finish lo
 		running: false,
 	});
 	expect((await stored()).pendingCompletions).toEqual([]);
-	expect(fixture.mutate.mock.calls[0][0]).toEqual({
-		intervalId,
-		taskId: "task",
-		kind: "work",
-		startedAt: 10000,
-		endedAt: 20000,
-		durationSec: 10,
-	});
-	// A follower may replay the intent before its peer acknowledges the commit.
-	expect(
-		fixture.mutate.mock.calls.every(([args]) => args.intervalId === intervalId),
-	).toBe(true);
+	expect(fixture.mutate).not.toHaveBeenCalled();
 	const completed = await stored();
 	close(first);
 	close(second);
@@ -623,4 +611,93 @@ test("a backward clock correction across reload cannot grow the remaining interv
 	await settle();
 	expect(tab.api.session?.remainingSec).toBe(10);
 	expect((await stored()).session?.running).toBe(false);
+});
+
+test.each([
+	0, 5000, 60000,
+])("reload with a %i ms clock change cannot credit unobserved time", async (correction) => {
+	let tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(2000);
+	await settle();
+	close(tab);
+	vi.setSystemTime(Date.now() + correction);
+	tab = open();
+	await settle();
+	vi.advanceTimersByTime(Math.max(0, 8000 - correction));
+	await settle();
+	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(fixture.mutate).not.toHaveBeenCalled();
+	expect((await stored()).pendingCompletions).toEqual([]);
+});
+
+test("a live offline page credits monotonic time and replays it once after reload", async () => {
+	vi.stubGlobal("navigator", { onLine: false });
+	let finish!: (value: unknown) => void;
+	fixture.mutate.mockReturnValueOnce({
+		client: Promise.resolve({ type: "success" }),
+		server: new Promise((resolve) => {
+			finish = resolve;
+		}),
+	});
+	const tab = open();
+	tab.api.start();
+	await settle();
+	vi.setSystemTime(Date.now() + 60000);
+	vi.advanceTimersByTime(10000);
+	await settle();
+	expect(fixture.mutate).toHaveBeenCalledOnce();
+	const pending = (await stored()).pendingCompletions;
+	expect(pending).toHaveLength(1);
+	close(tab);
+	open();
+	await settle();
+	expect(fixture.mutate).toHaveBeenCalledTimes(2);
+	expect(fixture.mutate.mock.calls[1][0]).toEqual(pending[0]);
+	finish({ type: "success" });
+	await settle();
+	expect((await stored()).pendingCompletions).toEqual([]);
+});
+
+test("auto-cycle anchors credit to the start of each new live interval", async () => {
+	fixture.pref.focus = { ...DEFAULT_FOCUS, autoCycle: true };
+	const tab = open();
+	tab.api.start();
+	await settle();
+	for (let i = 0; i < 3; i++) {
+		vi.advanceTimersByTime(10000);
+		await settle();
+	}
+	expect(fixture.mutate).toHaveBeenCalledTimes(3);
+	expect(
+		new Set(fixture.mutate.mock.calls.map(([args]) => args.intervalId)).size,
+	).toBe(3);
+});
+
+test("a restored forward-clock interval cannot turn unobserved time into credit by pausing", async () => {
+	let tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(2000);
+	await settle();
+	tab.api.pause();
+	await settle();
+	expect((await stored()).session?.provenMs).toBe(2000);
+	tab.api.start();
+	await settle();
+	close(tab);
+	vi.setSystemTime(Date.now() + 5000);
+	tab = open();
+	await settle();
+	tab.api.pause();
+	await settle();
+	expect(tab.api.session?.remainingSec).toBe(3);
+	expect((await stored()).session?.provenMs).toBe(2000);
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(3000);
+	await settle();
+	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(fixture.mutate).not.toHaveBeenCalled();
 });
