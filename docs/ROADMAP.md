@@ -31,13 +31,14 @@ The web app is installable as a PWA. Android and Tauri desktop application cores
 scoped native authentication, encrypted file handling, and development artifact
 builds are implemented. Android UnifiedPush and Linux system notifications have
 bounded runtime checks; Google relay source and enrollment/recovery are implemented,
-but real Google delivery remains unqualified. Windows and macOS alpha installers
+but real Google delivery remains unqualified. Windows and macOS prerelease installers
 are published, with full runtime qualification still pending. See the
 [Android](../apps/android/README.md) and [desktop](../apps/desktop/README.md)
 qualification notes. Native delivery remains open in issue #346.
 
-Development happens on `develop`. The first published release was `0.0.1-alpha.1`;
-the current published alpha is
+Development happens on `develop`. The first beta, `0.1.0-beta.1`, is being prepared;
+it remains a `0.x` prerelease with breaking changes possible, not a stable release.
+The first published release was `0.0.1-alpha.1`; the latest published prerelease is
 [`0.0.1-alpha.12`](https://github.com/iuliandita/ditero/releases/tag/v0.0.1-alpha.12).
 Alpha 12 clarifies the paired app-data and encrypted attachment downloads,
 keeps prepared exports available after a canceled or failed save, and waits for
@@ -45,7 +46,7 @@ language-save confirmation before reloading.
 The native desktop archive-import entry
 remains unavailable pending transfer and recovery qualification. Broader native
 device qualification remains open.
-Published alphas package containers, Helm/Kustomize/Compose deployment files and
+Published prereleases package containers, Helm/Kustomize/Compose deployment files and
 experimental native downloads; Windows downloads are unsigned and macOS downloads
 use ad-hoc
 signatures. Native qualification remains open. `1.0.0` requires the complete v1
@@ -65,7 +66,7 @@ calendar subscriptions and show each new URL only once. See
 Helm and Kustomize packages target externally managed PostgreSQL, with an optional
 CloudNativePG overlay. Complete cluster install, upgrade and restore qualification
 remains in progress. These additions describe `develop`, not the complete feature
-set of the published alphas.
+set of the published prereleases.
 
 ## What v1 Delivers
 

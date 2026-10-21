@@ -163,7 +163,7 @@ Those runtime checks remain part of #346.
 
 ## Signed release APK and app bundle
 
-The tagged prerelease pipeline builds the independent signed APK and AAB from the
+The tagged beta pipeline builds the independent signed APK and AAB from the
 validated release commit and publishes versioned downloads with checksums. It
 requires a retained signing identity in repository Actions secrets. The desktop
 platform matrix does not change Android flavors, artifacts or signing identity. See
