@@ -19,14 +19,25 @@ a first Google sign-in needs the same admission as an email signup. See
 [Sign-in providers](runbooks/sign-in-providers.md).
 
 Android and desktop use explicit system-browser consent to obtain a device-bound
-native session. Credentials remain in native storage; session revocation stops
-authenticated operations and sync. See [Native authentication](runbooks/native-authentication.md)
+native session. Credentials remain in native storage. After sign-out or session/device
+revocation commits, subsequent HTTP requests (including Zero query and mutation
+requests) reject the old session. Already-open Zero subscriptions revalidate through
+`/api/zero/query` every 30 seconds in shipped Compose, AIO, Helm and Kustomize
+configurations (`ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS=30`). They may receive new
+rows until that check rejects the session and closes the connection. Allow for query
+request and server scheduling latency beyond the 30-second interval; this is not an
+instantaneous disconnect or a hard real-time deadline. Increasing or disabling the
+interval lengthens that window. Previously synced or downloaded data cannot be erased.
+There is no per-session server disconnect hook in the pinned Zero integration.
+See [Native authentication](runbooks/native-authentication.md)
 for the grant, device-session, and transport boundaries.
 
 Invitations and managed-account admission require a shared workspace. Outstanding personal-workspace
 invites cannot be redeemed or used to bypass registration restrictions. A personal workspace's
 owner can remove legacy members, but cannot transfer its ownership or change membership roles.
 Removing a member still requires key rotation before new encrypted uploads.
+Membership removal works with the documented runtime grants, without database TEMP
+privilege, and preserves assignment and notification cleanup in the same transaction.
 
 New invitation links carry their bearer in `/accept#token=...`, keeping it out of
 HTTP request URLs and referrers. Preview uses `POST /api/invite/preview` with a JSON
@@ -59,6 +70,8 @@ those fields are required for authorization, quota enforcement, integrity checks
 collection. Task and comment text remain server-readable so sync, filters, and reminders work.
 Notification payloads may contain the server-readable parent task title, but never a decrypted
 attachment filename.
+Attachment reads recheck current membership and return the same 404 response for
+foreign and missing IDs, including thumbnails and native routes.
 
 Each user has an X25519 identity keypair. The private key is wrapped independently under an
 encryption-passphrase key and a recovery-code key. Each workspace and key version has a random

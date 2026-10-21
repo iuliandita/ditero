@@ -163,7 +163,12 @@ PostgreSQL initializes through a temporary private socket server and stops it
 before admitting the steady server. Migration uses its existing session advisory
 lock and must finish before API startup. API health and unauthorized query/mutate
 probes gate Zero. PostgreSQL has no published port. API has an outbound network;
-PostgreSQL, migration and Zero share only the internal backend network.
+PostgreSQL and migration use only the internal backend network. Zero also joins
+its own non-internal ingress bridge so Docker can publish its loopback sync port.
+That bridge disables IP masquerading and does not share the API's outbound NAT
+network. This prevents outbound access through Docker's source NAT; networks with
+explicit return routes still require host firewall egress rules. Zero needs only
+PostgreSQL and API callbacks on the internal backend.
 
 Every role uses a read-only root, no-new-privileges, all capabilities dropped,
 private role-owned tmpfs and only its own credentials/data mounts. The three named
@@ -223,3 +228,9 @@ sanitized receipt is uploaded. Failed fixtures retain their volumes for the
 remaining lifetime of the disposable runner; these volumes are lost when that
 runner is decommissioned. This gate does not qualify backup/restore, production
 operation, or other open AIO support requirements.
+
+Zero fixes `ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS=30`. After sign-out or session
+revocation, an open subscription can receive updates until its next `/query`
+revalidation, plus request/scheduling latency. Upgrade the bundle to shorten the
+former five-minute default; no data migration is needed. See
+[session revocation](../../../docs/security.md#authentication).

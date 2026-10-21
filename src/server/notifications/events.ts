@@ -19,7 +19,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { Cron } from "croner";
 import { and, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { Pool } from "pg";
 import { overdueSweepMs } from "../../config/scheduler.ts";
 import { maxQueuedPerUser } from "../../config/worker.ts";
@@ -424,7 +424,7 @@ export async function overdueSweep(
 // by the replica count for no gain (the idempotency key would absorb the
 // duplicates, but only after every replica had done the work).
 export function startOverdueSweep(
-	database: Database,
+	_database: Database,
 	pool: Pool,
 	env: NodeJS.ProcessEnv = process.env,
 ): Cron {
@@ -438,8 +438,8 @@ export function startOverdueSweep(
 		},
 		async () => {
 			try {
-				await withLeaderLock(pool, OVERDUE_LOCK_KEY, () =>
-					overdueSweep(database),
+				await withLeaderLock(pool, OVERDUE_LOCK_KEY, (client) =>
+					overdueSweep(drizzle(client, { schema: tables })),
 				);
 			} catch (error) {
 				console.error("events: overdue sweep failed:", error);

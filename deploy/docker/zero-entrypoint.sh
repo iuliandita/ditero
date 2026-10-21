@@ -14,6 +14,7 @@ fi
 export ZERO_CVR_DB="${ZERO_CVR_DB:-$ZERO_UPSTREAM_DB}"
 export ZERO_CHANGE_DB="${ZERO_CHANGE_DB:-$ZERO_UPSTREAM_DB}"
 load_secret ZERO_ADMIN_PASSWORD required
+export ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS="${ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS:-30}"
 
 # Do not let Zero's invalid-URL diagnostics print credentials.
 node -e '

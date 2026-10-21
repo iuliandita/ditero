@@ -119,13 +119,14 @@ export async function attachmentSweep(
 	pool: Pool,
 	store: BlobStore,
 	options: AttachmentSweepOptions = {},
+	lockClient?: PoolClient,
 ): Promise<AttachmentSweepSummary> {
 	const { now, retentionMs, batchSize } = validateOptions(options);
 	const deletingBefore = new Date(now.getTime() - retentionMs);
 	if (Number.isNaN(deletingBefore.getTime())) {
 		throw new Error("attachment sweep retention produces an invalid cutoff");
 	}
-	const candidates = await pool.query<{ id: string }>(
+	const candidates = await (lockClient ?? pool).query<{ id: string }>(
 		`select id from attachment a
 		 where (state = any($1::attachment_state[])
 		        and reservation_expires_at <= $2)
@@ -137,7 +138,7 @@ export async function attachmentSweep(
 	const summary: AttachmentSweepSummary = { deleted: 0, failed: 0 };
 
 	for (const candidate of candidates.rows) {
-		const client = await pool.connect();
+		const client = lockClient ?? (await pool.connect());
 		try {
 			await client.query("begin");
 			const row = await lockedRow(client, candidate.id);
@@ -191,7 +192,7 @@ export async function attachmentSweep(
 			await client.query("rollback").catch(() => undefined);
 			throw error;
 		} finally {
-			client.release();
+			if (!lockClient) client.release();
 		}
 	}
 
@@ -203,8 +204,8 @@ export async function runAttachmentSweepLeader(
 	store: BlobStore,
 	options: AttachmentSweepOptions = {},
 ): Promise<AttachmentSweepSummary | null> {
-	return await withLeaderLock(pool, ATTACHMENT_SWEEP_LOCK_KEY, () =>
-		attachmentSweep(pool, store, options),
+	return await withLeaderLock(pool, ATTACHMENT_SWEEP_LOCK_KEY, (client) =>
+		attachmentSweep(pool, store, options, client),
 	);
 }
 

@@ -132,6 +132,12 @@ test("account creation requires explicit intent and describes the configured pas
 test("login hierarchy: passkey and Google are secondary buttons, and an error does not shift the logo", async ({
 	page,
 }) => {
+	await page.route("**/api/config", async (route) => {
+		const response = await route.fetch();
+		await route.fulfill({
+			json: { ...(await response.json()), socialProviders: ["google"] },
+		});
+	});
 	await page.goto("/");
 
 	const passkeyButton = page.getByTestId("signin-passkey");

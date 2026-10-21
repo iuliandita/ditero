@@ -2,28 +2,53 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "bb5e45b4d2d1bb726d335831067502b370185e17495fcca95f80f02233f9c16b",
-			"docs": ["apps/desktop/README.md", "apps/android/README.md"],
-			"note": "Document localized keyring setup and retry, the Linux package recommendation, and account-bound fixed Settings browser handoffs on desktop and Android. Matching Settings routes preserve the destination through browser sign-in; older servers still open their normal application page."
+			"sourceDigest": "89073bc9ce9995fbc4826a6c3f275b136df4469ac3f1520bbde22baf3e86fdef",
+			"docs": ["docs/runbooks/sign-in-providers.md"],
+			"note": "Sign-in and sign-up show Google only when the server publishes it as configured. OAuth callback registration refusals use the same six localized messages as email registration."
 		},
 		"release": {
-			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
+			"sourceDigest": "85546f07ee8d2f51d7c3f92b260046cade37fd73679f231cef074aa395ce5b2a",
 			"docs": ["RELEASING.md"],
-			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
+			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch. Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "738651e814af38d0f12e0accec1f3c2c7cc5226828447d50a16c8df8e3c2c4f9",
-			"noImpact": "The Linux DEB adds a recommended Secret Service provider without changing server configuration or deployment settings. Desktop keyring setup and retry guidance are documented in apps/desktop/README.md."
+			"sourceDigest": "a192ff4cd8a4333e5ad681daf6800fff76d4ddd0662d0a7d096de3341fcc5950",
+			"docs": [
+				"deploy/docker/aio/README.md",
+				"deploy/helm/ditero/README.md",
+				"deploy/kustomize/README.md",
+				"docs/runbooks/database-roles.md"
+			],
+			"note": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged. Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database reconnection, advisory-lock reacquisition and bounded graceful shutdown, including recovery of unfinished notification leases. Gate Zero on completed application migrations and the current Helm revision; give AIO Zero a dedicated ingress bridge without outbound source NAT and document retained-replica recovery. Only desktop installer metadata, bundled license files and platform package settings change. Server configuration, deployment variables and operator setup remain unchanged; installer behavior is documented in RELEASING.md and the desktop guide."
 		},
 		"deployment": {
-			"sourceDigest": "4a4cadef874a1cef442178e7a6e332a0eefe5252e635068a1d4c49486f7d7794",
-			"docs": ["deploy/docker/aio/README.md", "deploy/helm/ditero/README.md"],
-			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
+			"sourceDigest": "a9260b0f1b279a55c835870aa3a5182eda72e7ba6e6a7900a008f90eb3948613",
+			"docs": [
+				"deploy/docker/aio/README.md",
+				"deploy/helm/ditero/README.md",
+				"deploy/kustomize/README.md",
+				"docs/runbooks/database-roles.md"
+			],
+			"note": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged. Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database recovery and shutdown timing within the default container and pod grace periods. Document ordered startup, revision-aware Helm readiness, AIO ingress boundaries and cache-only recovery for failed initial synchronization."
 		},
 		"native": {
-			"sourceDigest": "7fc0e7a23875b3f54f3f692800f9d1440a58525528271bec440b8254920bc178",
+			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
 			"docs": ["apps/desktop/README.md"],
-			"note": "Document the asynchronous five-second launcher wait, retryable spawn and non-zero exit failures, and successful handoff when a launcher remains running beyond the bound."
+			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
+		},
+		"authentication": {
+			"sourceDigest": "c098b435edfd921725371b538436ae05aa3ec60333de2c8c85caefd41deff4bf",
+			"docs": ["docs/runbooks/native-authentication.md"],
+			"note": "OAuth registration denials preserve their stable policy code through Better Auth callback redirects. Native browser sign-in retains the grant ID and displays the localized policy message. Document periodic stream revalidation after session revocation; HTTP authorization remains checked against live session state."
+		},
+		"compatibility": {
+			"sourceDigest": "f402bc5ef259e5effb7766743ca27026194a08c775ed4e2813711df7263a7620",
+			"docs": ["docs/runbooks/database-roles.md"],
+			"note": "Document restricted-role membership removal without TEMP and uniform 404 attachment denials, with unchanged persisted formats. Attachment garbage collection uses the same checked-out connection as its leader lock. Persisted attachment states, ciphertext format, quotas and restore procedures are unchanged.",
+			"upgrade": "Deploy the application update without schema, blob or key conversion; runtime TEMP grants are unnecessary. No schema or ciphertext migration is required; restart the application with the updated image.",
+			"backup": "Keep the existing coordinated database and blob backups; ciphertext and key envelopes are unchanged. The existing database and attachment backup procedure remains applicable without changes.",
+			"rollback": "The previous application remains data-compatible but restores the TEMP dependency and foreign attachment 403 response. The prior application can use the same database and attachment objects; no format changes occur.",
+			"clientVersions": "Existing web, Android and desktop clients use unchanged attachment formats and interpret unauthorized downloads as unavailable. Browser, Android and desktop clients use the same attachment protocol and remain compatible."
 		}
 	}
 }

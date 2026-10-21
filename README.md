@@ -294,6 +294,14 @@ HTTPS and browser-secure loopback origins are supported. Browser qualification
 covered installability, offline shell recovery, and manual update; it did not
 perform an OS installation or test a signed-in queued Zero edit during update.
 
+The installer pipeline builds Linux x64 DEB/RPM/AppImage, unsigned Windows
+x64/ARM64 NSIS, and ad-hoc macOS Apple Silicon/Intel DMGs. These are the targets
+for the next release; the current published release keeps its existing downloads.
+PR development installers expire after seven days and include checksums.
+Installer smoke checks cover payloads and bounded startup, with qualification
+limits in the [desktop guide](apps/desktop/README.md#development-installers-and-checks).
+Linux ARM64 installers are not built.
+
 The [Android](apps/android/README.md) and [desktop](apps/desktop/README.md)
 development apps support native browser-consent sign-in, scoped local storage,
 and encrypted attachment upload, download/save, delete, and in-app image preview.

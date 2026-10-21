@@ -30,6 +30,13 @@ alter default privileges for role ditero_migrator in schema public
   grant usage, select, update on sequences to ditero_runtime;
 ```
 
+Membership removal does not require database `TEMP` privilege. Keep the runtime
+role restricted during an upgrade; no schema or stored-data migration is needed for
+this fix. Existing coordinated database/blob backups and client versions remain
+compatible. Application rollback can restore the former TEMP requirement
+and the 403 response for foreign attachment downloads; current downloads return
+404 for both foreign and missing IDs. Rollback needs no data conversion.
+
 ## Non-superuser Zero login and publication
 
 As an administrator connected to the `ditero` database, create a dedicated Zero
@@ -166,3 +173,20 @@ excluding Zero's CDC/CVR internals. The app runtime must remain a separate
 
 See [Zero's PostgreSQL guide](https://zero.rocicorp.dev/docs/connecting-to-postgres)
 for upstream details; managed providers may impose additional replication limits.
+
+## Startup and retained Zero replicas
+
+Start the application and wait for `/health` before starting Zero. Compose gates
+Zero on app health; the AIO bundle additionally waits for its migration service.
+The Helm chart waits for the app belonging to the current release revision.
+When migrating manually, stop Zero first and wait for app migrations to finish.
+
+`ZERO_AUTO_RESET=true` handles supported replication/schema-change resets; it is
+not a repair guarantee for a replica initialized from a partially migrated schema.
+A partial initial-sync replica containing an existing `account` table still exits
+255 on repeated starts with auto-reset enabled.
+If Zero repeatedly exits with `SQLITE_ERROR: table "account" already exists`, stop
+Zero, back up its replica volume, and recreate only that cache volume (the Helm
+Zero PVC for Kubernetes). Preserve PostgreSQL, attachments and every service secret.
+Start the healthy, migrated app, then Zero, and verify sync from a fresh browser.
+PostgreSQL is authoritative; discard no browser-local pending mutations during recovery.

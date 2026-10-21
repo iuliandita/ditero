@@ -8,5 +8,10 @@ export async function fetchPublicConfig(): Promise<PublicConfig> {
 	if (!response.ok) throw new Error(`config fetch failed: ${response.status}`);
 	const body = (await response.json()) as Partial<PublicConfig>;
 	if (!body.zeroURL) throw new Error("config carried no zeroURL");
-	return { zeroURL: body.zeroURL };
+	return {
+		zeroURL: body.zeroURL,
+		socialProviders: Array.isArray(body.socialProviders)
+			? body.socialProviders.filter((provider) => typeof provider === "string")
+			: [],
+	};
 }

@@ -352,7 +352,7 @@ test("same-workspace moves keep downloads and cross-workspace moves preserve enc
 		).rows,
 	).toEqual([{ list_id: "target-list" }, { list_id: "target-list" }]);
 	expect((await download("move-file")).status).toBe(404);
-	expect((await download("move-file", false, "target-user")).status).toBe(403);
+	expect((await download("move-file", false, "target-user")).status).toBe(404);
 	expect(
 		await attachmentSweep(runtime, store, {
 			now: new Date(Date.now() + 60_000),

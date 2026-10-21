@@ -1,5 +1,5 @@
 import { passkey } from "@better-auth/passkey";
-import { APIError, betterAuth } from "better-auth";
+import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt, twoFactor } from "better-auth/plugins";
 import { count, isNull } from "drizzle-orm";
@@ -20,10 +20,10 @@ import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./password-policy.ts";
 import { socialProvidersFromEnv } from "./providers.ts";
 import {
 	assertRegistrationAllowed,
-	RegistrationDeniedError,
 	resolveRegistrationMode,
 } from "./registration.ts";
 import { registrationBypassActive } from "./registration-bypass.ts";
+import { registrationAPIError } from "./registration-error.ts";
 import {
 	authRateLimitOptions,
 	passkeyOptions,
@@ -97,7 +97,7 @@ export const auth = betterAuth({
 	databaseHooks: {
 		user: {
 			create: {
-				before: async (newUser) => {
+				before: async (newUser, context) => {
 					try {
 						const invited =
 							registrationBypassActive() ||
@@ -108,17 +108,7 @@ export const auth = betterAuth({
 							{ invited },
 						);
 					} catch (error) {
-						throw new APIError("FORBIDDEN", {
-							message:
-								error instanceof Error ? error.message : "Registration denied",
-							// Only the deliberate refusals carry a code; anything else
-							// reaching here (a failed invite lookup, say) is a fault, and
-							// labelling it as policy would mislead the client.
-							code:
-								error instanceof RegistrationDeniedError
-									? error.code
-									: undefined,
-						});
+						throw registrationAPIError(error, context?.path);
 					}
 				},
 				after: async (user) => {

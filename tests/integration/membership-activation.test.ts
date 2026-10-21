@@ -13,6 +13,7 @@ const runtime = new Pool({ connectionString: url });
 const zdb = zeroNodePg(schema, runtime);
 const cutoff = new Date("2026-09-21T10:00:00.000Z");
 const due = new Date("2026-09-20T10:00:00.000Z");
+let publicHadTemp = false;
 
 async function remove(actor = "alice", membershipId = "mb") {
 	return zdb.transaction((tx) =>
@@ -92,6 +93,17 @@ beforeAll(async () => {
 	await admin.query(
 		"grant select,insert,update,delete on all tables in schema public to ditero_membership_activation_test",
 	);
+	publicHadTemp = (
+		await admin.query(`select exists (
+			select 1 from pg_database d,
+			aclexplode(coalesce(d.datacl, acldefault('d', d.datdba))) a
+			where d.datname=current_database() and a.grantee=0
+			and a.privilege_type='TEMPORARY'
+		) as granted`)
+	).rows[0].granted;
+	await admin.query(`do $$ begin execute format(
+		'REVOKE TEMP ON DATABASE %I FROM PUBLIC, ditero_membership_activation_test',
+		current_database()); end $$`);
 	runtime.on("connect", (client) => {
 		void client.query("set role ditero_membership_activation_test");
 	});
@@ -115,10 +127,26 @@ beforeEach(async () => {
 afterAll(async () => {
 	await resetAuthFixture(admin);
 	await runtime.end();
+	if (publicHadTemp) {
+		await admin.query(`do $$ begin execute format(
+			'GRANT TEMP ON DATABASE %I TO PUBLIC', current_database()); end $$`);
+	}
 	await admin.end();
 });
 
 test("restricted-role removal blocks affected guards and retains every fence", async () => {
+	expect(
+		(
+			await runtime.query(`select current_user, rolsuper, rolbypassrls,
+			has_database_privilege(current_user,current_database(),'TEMP') as temp
+			from pg_roles where rolname=current_user`)
+		).rows[0],
+	).toEqual({
+		current_user: "ditero_membership_activation_test",
+		rolsuper: false,
+		rolbypassrls: false,
+		temp: false,
+	});
 	await task("assigned");
 	await admin.query(
 		"insert into task_assignee(id,task_id,user_id) values ('seat','assigned','bob')",
