@@ -75,6 +75,12 @@ for (const role of ["viewer", "owner"] as const) {
 					'[data-testid="workspace-option"][data-workspace-kind="personal"]',
 				),
 			).toHaveCount(1);
+			// The departed workspace must not stay selected behind an empty sidebar.
+			await expect(
+				page.locator(
+					'[data-testid="workspace-option"][data-workspace-kind="personal"]:is([aria-checked="true"],[aria-current="true"])',
+				),
+			).toHaveCount(1);
 		} finally {
 			await pool.end();
 		}
