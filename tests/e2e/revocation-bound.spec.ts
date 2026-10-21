@@ -12,16 +12,22 @@ for (const kind of ["browser", "native"] as const) {
 	}) => {
 		test.setTimeout(90_000);
 		const origin = webOrigin();
+		const email = uniqueEmail("revocation");
 		const signup = await request.post("/api/auth/sign-up/email", {
 			headers: { Origin: origin },
 			data: {
-				email: uniqueEmail("revocation"),
+				email,
 				password: "pw-123456",
 				name: "Revocation test",
 			},
 		});
 		expect(signup.status()).toBe(200);
-		const { user } = (await signup.json()) as { user: { id: string } };
+		const signedIn = await request.post("/api/auth/sign-in/email", {
+			headers: { Origin: origin },
+			data: { email, password: "pw-123456" },
+		});
+		expect(signedIn.status()).toBe(200);
+		const { user } = (await signedIn.json()) as { user: { id: string } };
 		// Native endpoints deliberately refuse ambient browser credentials.
 		const native = await playwright.request.newContext({
 			baseURL: configuredOrigin("E2E_API_URL"),

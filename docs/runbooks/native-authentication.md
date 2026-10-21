@@ -29,6 +29,9 @@ Only S256 is supported. The verifier stays with the client.
 
 Creation returns `grantId` and `expiresAt`. Grants expire after five minutes.
 Open `/native/authorize?grantId=...` on the selected server in the system browser.
+Email sign-up returns a neutral result without a session. Sign in separately to
+continue the pending native approval; the grant ID stays in the page URL. SMTP is
+not required. See [email registration](sign-in-providers.md#email-registration).
 The page uses the existing sign-in flow, shows the device and signed-in account,
 and requires an explicit approval. It returns no session token to the browser.
 That browser sign-in uses separate IP-plus-email buckets and a household-sized

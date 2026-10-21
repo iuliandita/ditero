@@ -32,6 +32,7 @@ import { notifyGrantCapable } from "../../src/server/e2e/grants.ts";
 import { app } from "../../src/server/index.ts";
 import { renderPayload } from "../../src/server/notifications/dispatch.ts";
 import { loadChannels } from "../../src/server/notifications/recipients.ts";
+import { signInForTest } from "../support/auth-sign-in.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 15. A grant is the first write in this subsystem where the writer
@@ -62,7 +63,7 @@ async function newIdentity(): Promise<Identity> {
 }
 
 async function signUp(email: string): Promise<string> {
-	const response = await withRegistrationBypass(() =>
+	const registration = await withRegistrationBypass(() =>
 		handleAuthRequest(
 			new Request("http://localhost:3000/api/auth/sign-up/email", {
 				method: "POST",
@@ -71,7 +72,8 @@ async function signUp(email: string): Promise<string> {
 			}),
 		),
 	);
-	expect(response.status).toBe(200);
+	expect(registration.status).toBe(200);
+	const response = await signInForTest(email);
 	return response.headers
 		.getSetCookie()
 		.map((value) => value.split(";", 1)[0])

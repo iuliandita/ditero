@@ -101,6 +101,9 @@ test("a new account creates a shared workspace through the switcher and retains 
 			{ waitUntil: "domcontentloaded" },
 		);
 		await invited.getByTestId("accept-submit").click();
+		await expect(invited.getByRole("status")).toBeVisible();
+		await invited.getByTestId("accept-password").fill("pw-123456");
+		await invited.getByTestId("accept-submit").click();
 		await rootNavigation;
 		await expect(invited.getByTestId("workspace")).toBeVisible();
 		if ((invited.viewportSize()?.width ?? 1280) < 768)

@@ -5,6 +5,22 @@ extra setup. Google sign-in is optional and needs an OAuth client that you creat
 for your own instance. Other providers are not supported yet; see
 [Planned providers](#planned-providers).
 
+## Email registration
+
+Sign-up does not sign you in. After submitting the form, sign in with your account
+password when prompted. The same neutral message appears for new and existing
+addresses; an existing account keeps its original password. Email verification is
+optional, so an instance without SMTP remains usable. The first bootstrap account
+still receives its personal workspace and owner membership. Email-bound invitees
+sign in on the accept page before the invitation is redeemed; the link and any
+encrypted key fragment remain available. Managed accounts retain their own
+credentials and do not replace the guardian's session.
+
+Clients calling `POST /api/auth/sign-up/email` receive `{"token":null,"user":null}`
+on accepted requests, without cookies. Obtain a session and user details through
+sign-in instead. Registration-policy refusals retain their existing error codes.
+See [Security](../security.md#authentication) for enumeration and timing limits.
+
 ## Why each instance needs its own client
 
 OAuth providers send the browser back only to redirect URIs registered on the

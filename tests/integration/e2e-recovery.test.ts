@@ -31,6 +31,7 @@ import {
 	encodeWrapped,
 } from "../../src/domain/e2e/wire.ts";
 import { app } from "../../src/server/index.ts";
+import { signInForTest } from "../support/auth-sign-in.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 12. The properties here are all about what a rewrap must NOT
@@ -53,7 +54,7 @@ let seq = 0;
 async function signUp(
 	email: string,
 ): Promise<{ cookie: string; userId: string }> {
-	const response = await handleAuthRequest(
+	const registration = await handleAuthRequest(
 		new Request("http://localhost:3000/api/auth/sign-up/email", {
 			method: "POST",
 			headers: { "content-type": "application/json", origin: ORIGIN },
@@ -64,7 +65,8 @@ async function signUp(
 			}),
 		}),
 	);
-	expect(response.status).toBe(200);
+	expect(registration.status).toBe(200);
+	const response = await signInForTest(email, ACCOUNT_PASSWORD);
 	const body = (await response.json()) as { user: { id: string } };
 	return {
 		cookie: response.headers

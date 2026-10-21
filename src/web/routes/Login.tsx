@@ -48,6 +48,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 	const [email, setEmail] = useState("");
 	const [displayName, setDisplayName] = useState("");
 	const [password, setPassword] = useState("");
+	const [notice, setNotice] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [callbackError, setCallbackError] = useState(() =>
 		new URLSearchParams(window.location.search).get("error"),
@@ -75,6 +76,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 	const pendingRef = useRef(false);
 	function changeMode(next: "signin" | "signup") {
 		setMode(next);
+		setNotice(false);
 		setPassword("");
 		setError(null);
 		setCallbackError(null);
@@ -105,7 +107,7 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 
 	function signUp() {
 		void runAction(async () => {
-			// Email verification is off, so signup yields an active session directly.
+			// Sign-up never establishes a session or confirms account existence.
 			let name: string;
 			try {
 				name = signupDisplayName(displayName, email);
@@ -114,8 +116,12 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 				return;
 			}
 			const res = await authClient.signUp.email({ email, password, name });
-			if (res.error)
+			if (res.error) {
 				setError(authErrorMessage(res.error, m.login_error_signup_failed));
+				return;
+			}
+			changeMode("signin");
+			setNotice(true);
 		}, m.login_error_signup_failed);
 	}
 
@@ -365,6 +371,11 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 						</p>
 					)}
 				</div>
+				{notice && (
+					<p role="status" className="text-sm text-muted-foreground">
+						{m.login_signup_continue()}
+					</p>
+				)}
 				{errorMessage}
 				<Button
 					data-testid={mode === "signup" ? "signup" : "signin"}

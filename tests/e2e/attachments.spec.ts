@@ -538,6 +538,9 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		await member.getByTestId("accept-email").fill(memberEmail);
 		await member.getByTestId("accept-password").fill("pw-123456");
 		await member.getByTestId("accept-submit").click();
+		await expect(member.getByRole("status")).toBeVisible();
+		await member.getByTestId("accept-password").fill("pw-123456");
+		await member.getByTestId("accept-submit").click();
 		await finishEnrollment(member, undefined, true);
 		await switchWorkspace(member, workspaceName);
 		await openTask(member, listName, taskName);

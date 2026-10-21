@@ -109,16 +109,22 @@ test("new fragment and legacy query invitations preview privately and both redee
 	browser,
 }) => {
 	const origin = webOrigin();
+	const ownerEmail = uniqueEmail("url-owner");
 	const signup = await request.post("/api/auth/sign-up/email", {
 		headers: { Origin: origin },
 		data: {
-			email: uniqueEmail("url-owner"),
+			email: ownerEmail,
 			password: PASSWORD,
 			name: "Invite owner",
 		},
 	});
 	expect(signup.status()).toBe(200);
-	const { user } = (await signup.json()) as { user: { id: string } };
+	const ownerSignIn = await request.post("/api/auth/sign-in/email", {
+		headers: { Origin: origin },
+		data: { email: ownerEmail, password: PASSWORD },
+	});
+	expect(ownerSignIn.status()).toBe(200);
+	const { user } = (await ownerSignIn.json()) as { user: { id: string } };
 	const workspaceId = `w_${crypto.randomUUID()}`;
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
 	try {
@@ -179,19 +185,28 @@ test("new fragment and legacy query invitations preview privately and both redee
 						expect(req.url).not.toContain(token);
 						expect(req.referer).not.toContain(token);
 					}
+				const recipientEmail = uniqueEmail("url-recipient");
 				const recipient = await page.request.post(
 					`${origin}/api/auth/sign-up/email`,
 					{
 						headers: { Origin: origin },
 						data: {
-							email: uniqueEmail("url-recipient"),
+							email: recipientEmail,
 							password: PASSWORD,
 							name: "Invite recipient",
 						},
 					},
 				);
 				expect(recipient.status()).toBe(200);
-				const acceptedUser = (await recipient.json()) as {
+				const recipientSignIn = await page.request.post(
+					`${origin}/api/auth/sign-in/email`,
+					{
+						headers: { Origin: origin },
+						data: { email: recipientEmail, password: PASSWORD },
+					},
+				);
+				expect(recipientSignIn.status()).toBe(200);
+				const acceptedUser = (await recipientSignIn.json()) as {
 					user: { id: string };
 				};
 				await page.reload();
@@ -271,6 +286,9 @@ for (const scenario of ["cached identity", "grant conflict"] as const) {
 			});
 			await recipient.goto(`${link.pathname}${link.search}${link.hash}`);
 			await recipient.getByTestId("accept-email").fill(email);
+			await recipient.getByTestId("accept-password").fill(PASSWORD);
+			await recipient.getByTestId("accept-submit").click();
+			await expect(recipient.getByRole("status")).toBeVisible();
 			await recipient.getByTestId("accept-password").fill(PASSWORD);
 			await recipient.getByTestId("accept-submit").click();
 			await enroll(recipient, false);
@@ -427,6 +445,9 @@ test("fragment invite survives reload ordering and retains the async fallback", 
 		await newcomer.getByTestId("accept-email").fill(newcomerEmail);
 		await newcomer.getByTestId("accept-password").fill(PASSWORD);
 		await newcomer.getByTestId("accept-submit").click();
+		await expect(newcomer.getByRole("status")).toBeVisible();
+		await newcomer.getByTestId("accept-password").fill(PASSWORD);
+		await newcomer.getByTestId("accept-submit").click();
 		await enroll(newcomer, false);
 
 		// The finalize after the durable self-grant is the first one worth trying.
@@ -493,6 +514,9 @@ test("fragment invite survives reload ordering and retains the async fallback", 
 			`/accept?token=${encodeURIComponent(new URLSearchParams(fallbackLink.hash.slice(1)).get("token") as string)}`,
 		);
 		await fallback.getByTestId("accept-email").fill(fallbackEmail);
+		await fallback.getByTestId("accept-password").fill(PASSWORD);
+		await fallback.getByTestId("accept-submit").click();
+		await expect(fallback.getByRole("status")).toBeVisible();
 		await fallback.getByTestId("accept-password").fill(PASSWORD);
 		await fallback.getByTestId("accept-submit").click();
 		await expect(fallback.getByTestId("workspace")).toBeVisible({
