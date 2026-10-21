@@ -21,7 +21,8 @@ import {
 } from "../lib/e2e/KeyringProvider.tsx";
 import { signInEmail } from "../lib/email-sign-in.ts";
 
-// Client accept page for `/accept?token=`. An invitee landing here previews the
+// Client accept page for `/accept#token=` (legacy `?token=` also works).
+// An invitee landing here previews the
 // invite (unauthenticated), then redeems it: a signed-in invitee just joins; a
 // logged-out invitee signs up (or signs in) first, after which the page accepts
 // automatically. Success redirects to "/" so the app boots with the new
@@ -33,8 +34,11 @@ type Preview =
 	| { state: "invalid" }
 	| { state: "valid"; workspaceName: string; email: string | null };
 
-function tokenFromLocation(): string | null {
-	return new URLSearchParams(window.location.search).get("token");
+export function tokenFromLocation(): string | null {
+	return (
+		new URLSearchParams(window.location.hash.slice(1)).get("token") ??
+		new URLSearchParams(window.location.search).get("token")
+	);
 }
 
 type StoredFastInvite = {
@@ -69,7 +73,8 @@ export function captureFastInvite(
 	if (!token) return null;
 	const url = new URL(window.location.href);
 	const payload = url.searchParams.get("e2e");
-	const fragment = new URLSearchParams(url.hash.slice(1)).get("e2e");
+	const fragmentParams = new URLSearchParams(url.hash.slice(1));
+	const fragment = fragmentParams.get("e2e");
 	let stored: StoredFastInvite | null = null;
 	try {
 		stored = JSON.parse(
@@ -92,10 +97,17 @@ export function captureFastInvite(
 			// The current render still holds it. Storage is only reload resilience.
 		}
 	}
-	if (url.hash) {
-		url.hash = "";
-		history.replaceState(history.state, "", `${url.pathname}${url.search}`);
-	}
+	// Keep the token for reload/resume without sending it in HTTP URLs. The
+	// encrypted key fragment still moves to the existing tab cache above.
+	url.searchParams.delete("token");
+	fragmentParams.delete("e2e");
+	fragmentParams.set("token", token);
+	url.hash = fragmentParams.toString();
+	history.replaceState(
+		history.state,
+		"",
+		`${url.pathname}${url.search}${url.hash}`,
+	);
 	return captured;
 }
 
@@ -178,9 +190,11 @@ function AcceptInvitePage({
 		let active = true;
 		(async () => {
 			try {
-				const res = await fetch(
-					`/api/invite/preview?token=${encodeURIComponent(token)}`,
-				);
+				const res = await fetch("/api/invite/preview", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ token }),
+				});
 				const data = (await res.json().catch(() => ({}))) as {
 					valid?: boolean;
 					workspaceName?: string;

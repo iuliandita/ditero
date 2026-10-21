@@ -533,7 +533,7 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		);
 		await leaveSettings(outsider);
 		await outsider.goto(
-			`/accept?token=${encodeURIComponent(pendingLink.searchParams.get("token") as string)}`,
+			`/accept?token=${encodeURIComponent(new URLSearchParams(pendingLink.hash.slice(1)).get("token") as string)}`,
 		);
 		const rootNavigation = outsider.waitForURL(
 			new URL("/", outsider.url()).href,

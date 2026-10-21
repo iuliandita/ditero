@@ -52,7 +52,7 @@ export type InviteMailDeps = {
 };
 
 function inviteAcceptUrl(base: string, token: string): string {
-	return `${base.replace(/\/+$/, "")}/accept?token=${encodeURIComponent(token)}`;
+	return `${base.replace(/\/+$/, "")}/accept#token=${encodeURIComponent(token)}`;
 }
 
 export async function sendInviteMail(

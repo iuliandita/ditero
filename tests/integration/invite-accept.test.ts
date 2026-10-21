@@ -155,7 +155,11 @@ describe("createInvite role-escalation gate", () => {
 			{},
 		);
 		expect(res.token).toBeTruthy();
-		expect(res.link).toContain(`token=${res.token}`);
+		const link = new URL(res.link);
+		expect(link.searchParams.has("token")).toBe(false);
+		expect(new URLSearchParams(link.hash.slice(1)).get("token")).toBe(
+			res.token,
+		);
 		const rows = await db
 			.select()
 			.from(tables.invite)

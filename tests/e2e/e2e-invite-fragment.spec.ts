@@ -8,6 +8,7 @@ import {
 	openWorkspaceSwitcher,
 	signUp,
 	uniqueEmail,
+	webOrigin,
 } from "./helpers.ts";
 
 const WORKSPACE = "w_shared_e2e";
@@ -103,6 +104,119 @@ async function invite(page: Page, email: string): Promise<string> {
 	return link;
 }
 
+test("new fragment and legacy query invitations preview privately and both redeem", async ({
+	request,
+	browser,
+}) => {
+	const origin = webOrigin();
+	const signup = await request.post("/api/auth/sign-up/email", {
+		headers: { Origin: origin },
+		data: {
+			email: uniqueEmail("url-owner"),
+			password: PASSWORD,
+			name: "Invite owner",
+		},
+	});
+	expect(signup.status()).toBe(200);
+	const { user } = (await signup.json()) as { user: { id: string } };
+	const workspaceId = `w_${crypto.randomUUID()}`;
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await pool.query(
+			"insert into workspace (id,name,owner_id,kind) values ($1,'Invite URLs',$2,'shared')",
+			[workspaceId, user.id],
+		);
+		await joinShared(user.id, "owner", workspaceId);
+		const created = await request.post("/api/invite/create", {
+			headers: { Origin: origin },
+			data: { workspaceId, role: "member" },
+		});
+		expect(created.status()).toBe(200);
+		const { link, token } = (await created.json()) as {
+			link: string;
+			token: string;
+		};
+		expect(new URL(link).searchParams.has("token")).toBe(false);
+		expect(new URLSearchParams(new URL(link).hash.slice(1)).get("token")).toBe(
+			token,
+		);
+		for (const format of ["fragment", "legacy"] as const) {
+			const context = await browser.newContext();
+			try {
+				const page = await context.newPage();
+				const previews: { url: string; method: string; body: unknown }[] = [];
+				const requests: { url: string; referer: string }[] = [];
+				page.on("request", (req) => {
+					requests.push({
+						url: req.url(),
+						referer: req.headers().referer ?? "",
+					});
+					if (new URL(req.url()).pathname === "/api/invite/preview")
+						previews.push({
+							url: req.url(),
+							method: req.method(),
+							body: req.postDataJSON(),
+						});
+				});
+				await page.goto(
+					format === "fragment"
+						? `/accept${new URL(link).hash}`
+						: `/accept?token=${encodeURIComponent(token)}`,
+				);
+				await expect(page.getByTestId("accept-page")).toBeVisible();
+				expect(new URL(page.url()).searchParams.has("token")).toBe(false);
+				expect(
+					new URLSearchParams(new URL(page.url()).hash.slice(1)).get("token"),
+				).toBe(token);
+				expect(previews.length).toBeGreaterThan(0);
+				for (const preview of previews) {
+					expect(new URL(preview.url).search).toBe("");
+					expect(preview.method).toBe("POST");
+					expect(preview.body).toEqual({ token });
+				}
+				if (format === "fragment")
+					for (const req of requests) {
+						expect(req.url).not.toContain(token);
+						expect(req.referer).not.toContain(token);
+					}
+				const recipient = await page.request.post(
+					`${origin}/api/auth/sign-up/email`,
+					{
+						headers: { Origin: origin },
+						data: {
+							email: uniqueEmail("url-recipient"),
+							password: PASSWORD,
+							name: "Invite recipient",
+						},
+					},
+				);
+				expect(recipient.status()).toBe(200);
+				const acceptedUser = (await recipient.json()) as {
+					user: { id: string };
+				};
+				await page.reload();
+				await expect(page.getByTestId("accept-join")).toBeVisible();
+				await Promise.all([
+					page.waitForURL(`${origin}/`),
+					page.getByTestId("accept-join").click(),
+				]);
+				expect(
+					(
+						await pool.query(
+							"select role from membership where workspace_id=$1 and user_id=$2",
+							[workspaceId, acceptedUser.user.id],
+						)
+					).rows,
+				).toEqual([{ role: "member" }]);
+			} finally {
+				await context.close();
+			}
+		}
+	} finally {
+		await pool.end();
+	}
+});
+
 for (const scenario of ["cached identity", "grant conflict"] as const) {
 	test(`fragment invite recovers from ${scenario}`, async ({ browser }) => {
 		test.setTimeout(120_000);
@@ -128,7 +242,7 @@ for (const scenario of ["cached identity", "grant conflict"] as const) {
 			expect(link.searchParams.get("e2e")).toBeTruthy();
 			expect(link.hash).toContain("e2e=");
 			await owner.close();
-			const token = link.searchParams.get("token");
+			const token = new URLSearchParams(link.hash.slice(1)).get("token");
 			const obsoletePublicKey = encodeBytes(
 				(await generateIdentityKeyPair()).publicKey,
 			);
@@ -266,15 +380,15 @@ test("fragment invite survives reload ordering and retains the async fallback", 
 	const fastLink = new URL(await invite(owner, newcomerEmail));
 	expect(fastLink.searchParams.get("e2e")).toBeTruthy();
 	expect(new URLSearchParams(fastLink.hash.slice(1)).get("e2e")).toBeTruthy();
-	const token = fastLink.searchParams.get("token");
+	const token = new URLSearchParams(fastLink.hash.slice(1)).get("token");
 	expect(token).toBeTruthy();
 
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
 	try {
 		// Preview is deliberately inert: no reservation and no use is consumed.
-		const preview = await newcomer.request.get(
-			`/api/invite/preview?token=${encodeURIComponent(token as string)}`,
-		);
+		const preview = await newcomer.request.post("/api/invite/preview", {
+			data: { token },
+		});
 		expect(preview.ok()).toBe(true);
 		const before = await pool.query(
 			"select uses, claimed_by from invite where token = $1",
@@ -301,7 +415,15 @@ test("fragment invite survives reload ordering and retains the async fallback", 
 			`${fastLink.pathname}${fastLink.search}${fastLink.hash}`,
 		);
 		await expect(newcomer.getByTestId("accept-page")).toBeVisible();
-		await expect.poll(() => newcomer.url()).not.toContain("#");
+		await expect
+			.poll(() =>
+				new URLSearchParams(new URL(newcomer.url()).hash.slice(1)).get("e2e"),
+			)
+			.toBeNull();
+		expect(new URL(newcomer.url()).searchParams.has("token")).toBe(false);
+		expect(
+			new URLSearchParams(new URL(newcomer.url()).hash.slice(1)).get("token"),
+		).toBe(token);
 		await newcomer.getByTestId("accept-email").fill(newcomerEmail);
 		await newcomer.getByTestId("accept-password").fill(PASSWORD);
 		await newcomer.getByTestId("accept-submit").click();
@@ -368,7 +490,7 @@ test("fragment invite survives reload ordering and retains the async fallback", 
 		// omitted, takes the original async path and leaves a pending grant.
 		const fallbackLink = new URL(await invite(owner, fallbackEmail));
 		await fallback.goto(
-			`/accept?token=${encodeURIComponent(fallbackLink.searchParams.get("token") as string)}`,
+			`/accept?token=${encodeURIComponent(new URLSearchParams(fallbackLink.hash.slice(1)).get("token") as string)}`,
 		);
 		await fallback.getByTestId("accept-email").fill(fallbackEmail);
 		await fallback.getByTestId("accept-password").fill(PASSWORD);
@@ -381,7 +503,10 @@ test("fragment invite survives reload ordering and retains the async fallback", 
 			 join invite i on i.workspace_id = r.workspace_id
 			 join "user" u on u.id = r.user_id
 			 where i.token = $1 and u.email = $2`,
-			[fallbackLink.searchParams.get("token"), fallbackEmail],
+			[
+				new URLSearchParams(fallbackLink.hash.slice(1)).get("token"),
+				fallbackEmail,
+			],
 		);
 		expect(pending.rows).toEqual([{ state: "key_pending" }]);
 		expect(keyringErrors).toEqual([]);

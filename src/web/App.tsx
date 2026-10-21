@@ -46,7 +46,7 @@ function SessionRoutes({
 			{children}
 		</DisplayPreferencesProvider>
 	);
-	// Standalone redemption route: no router, but `/accept?token=` must render for
+	// Standalone redemption route: no router, but `/accept#token=` must render for
 	// both logged-out and logged-in invitees. AcceptInvite runs its own session +
 	// preview logic; every other path stays on the normal session-gated flow.
 	if (window.location.pathname === "/accept")
