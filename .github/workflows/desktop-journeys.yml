@@ -121,12 +121,22 @@ jobs:
         run: bash apps/desktop/tests/journeys/install.sh
       - name: Run Windows and macOS journeys
         if: runner.os != 'Linux'
+        timeout-minutes: 15
         run: node --experimental-strip-types apps/desktop/tests/journeys/run.ts
       - name: Run Linux journeys with a real session keyring
         if: runner.os == 'Linux'
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           dbus-run-session -- xvfb-run -a bash apps/desktop/tests/journeys/linux.sh
+      - name: Upload journey evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-journeys-${{ matrix.runner }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-journeys/evidence/
+          if-no-files-found: error
+          retention-days: 7
       - name: Prove macOS automation excluded from release binary
         if: ${{ always() && !cancelled() && runner.os == 'macOS' }}
         working-directory: apps/desktop
@@ -146,11 +156,11 @@ jobs:
             'debugSha256': hashlib.sha256(debug).hexdigest(), 'releaseSha256': hashlib.sha256(release).hexdigest()
           }))
           PYTHON
-      - name: Upload journey evidence
-        if: always()
+      - name: Upload release exclusion evidence
+        if: ${{ always() && !cancelled() && runner.os == 'macOS' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: desktop-journeys-${{ matrix.runner }}-${{ github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/desktop-journeys/evidence/
+          name: desktop-journeys-release-${{ matrix.runner }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-journeys/evidence/release-exclusion.json
           if-no-files-found: error
           retention-days: 7

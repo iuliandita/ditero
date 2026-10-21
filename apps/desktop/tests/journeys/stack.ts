@@ -5,6 +5,7 @@ import {
 	createWriteStream,
 	mkdirSync,
 	readFileSync,
+	writeFileSync,
 } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createServer as httpsServer } from "node:https";
@@ -19,12 +20,24 @@ export const state = resolve(
 );
 export const evidence = resolve(state, "evidence");
 mkdirSync(evidence, { recursive: true });
+export function stage(name: string) {
+	console.log(`Fixture stage: ${name}`);
+	writeFileSync(
+		resolve(evidence, "fixture-stage.json"),
+		JSON.stringify({ stage: name }),
+	);
+}
 const children: ChildProcess[] = [];
 export function run(command: string, args: string[], env = process.env) {
-	const result = spawnSync(command, args, { cwd: root, env, encoding: "utf8" });
+	const result = spawnSync(command, args, {
+		cwd: root,
+		env,
+		encoding: "utf8",
+		timeout: 120000,
+	});
 	if (result.status !== 0)
 		throw new Error(
-			`${command} failed (${result.status}): ${result.stderr}\n${result.stdout}`,
+			`${command} failed (${result.status}${result.error ? `, ${result.error.message}` : ""}): ${result.stderr}\n${result.stdout}`,
 		);
 	return result.stdout.trim();
 }
@@ -186,6 +199,7 @@ export async function stack() {
 		resolve(pg, `${name}${process.platform === "win32" ? ".exe" : ""}`);
 	const data = resolve(state, "postgres");
 	const port = await freePort();
+	stage("initializing PostgreSQL");
 	run(exe("initdb"), [
 		"-D",
 		data,
@@ -200,6 +214,7 @@ export async function stack() {
 		resolve(data, "postgresql.conf"),
 		"\nunix_socket_directories = ''\nwal_level = 'logical'\nmax_replication_slots = 20\nmax_wal_senders = 20\n",
 	);
+	stage("starting PostgreSQL");
 	run(exe("pg_ctl"), [
 		"-D",
 		data,
@@ -234,6 +249,7 @@ export async function stack() {
 	}
 	try {
 		for (const name of ["journey_a", "journey_b"]) {
+			stage(`creating database ${name}`);
 			await admin.query(`create database ${name}`);
 			const database = `postgres://postgres@127.0.0.1:${port}/${name}`;
 			const apiPort = await freePort(),
@@ -256,12 +272,15 @@ export async function stack() {
 				DITERO_REGISTRATION_MODE: "open",
 				DITERO_BACKGROUND_JOBS: "0",
 			};
+			stage(`migrating database ${name}`);
 			run("bun", ["run", "src/db/migrate.ts"], env);
+			stage(`starting Bun API ${name}`);
 			background(`${name}-api`, "bun", ["run", "src/server/index.ts"], env);
 			await until(
 				`${name} API`,
 				async () => (await fetch(`http://127.0.0.1:${apiPort}/health`)).ok,
 			);
+			stage(`starting Zero ${name}`);
 			background(
 				`${name}-zero`,
 				"node",

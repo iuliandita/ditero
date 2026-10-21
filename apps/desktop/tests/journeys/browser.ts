@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
-import { background, freePort, run, state, until } from "./stack.ts";
+import { background, evidence, freePort, run, state, until } from "./stack.ts";
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`;
 
@@ -28,6 +28,9 @@ export async function systemBrowser() {
 		"system browser CDP",
 		async () => (await fetch(`http://127.0.0.1:${port}/json/version`)).ok,
 	);
+	const connection = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+	const context = connection.contexts()[0];
+	if (!context) throw new Error("missing system browser context");
 	if (process.platform === "win32") {
 		const script = resolve(state, "private/browser-handler.ps1");
 		writeFileSync(
@@ -36,12 +39,46 @@ export async function systemBrowser() {
 		);
 		run("pwsh", ["-NoProfile", "-File", script]);
 	} else if (process.platform === "darwin") {
-		const swift = resolve(state, "private/browser.swift");
-		writeFileSync(
-			swift,
-			'import Foundation\nimport CoreServices\nlet status = LSSetDefaultHandlerForURLScheme("https" as CFString, "com.google.Chrome" as CFString)\nif status != noErr { fatalError("Default Chrome registration failed: " + String(status)) }\n',
-		);
-		run("swift", [swift]);
+		const settings = await context.newPage();
+		await settings.goto("chrome://settings/defaultBrowser");
+		const button = settings.getByRole("button", {
+			name: "Make default",
+			exact: true,
+		});
+		await button
+			.or(
+				settings.getByText("Google Chrome is your default browser", {
+					exact: true,
+				}),
+			)
+			.waitFor();
+		if (await button.isVisible()) {
+			await button.click();
+			try {
+				run("osascript", [
+					"-e",
+					`tell application "System Events"
+repeat 60 times
+try
+tell process "CoreServicesUIAgent"
+click (first button of window 1 whose name contains "Chrome" and name does not contain "Keep")
+return
+end tell
+end try
+delay 0.5
+end repeat
+error "Default browser confirmation was not available"
+end tell`,
+				]);
+			} catch (error) {
+				run("screencapture", [
+					"-x",
+					resolve(evidence, "browser-default-failed.png"),
+				]);
+				throw error;
+			}
+		}
+		await settings.close();
 	} else {
 		const wrapper = resolve(state, "private/browser.sh");
 		writeFileSync(
@@ -56,7 +93,7 @@ export async function systemBrowser() {
 		mkdirSync(directory, { recursive: true });
 		writeFileSync(
 			resolve(directory, "ditero-journey-browser.desktop"),
-			`[Desktop Entry]\nName=Journey browser\nType=Application\nExec="${wrapper}" %u\nMimeType=x-scheme-handler/https;\n`,
+			`[Desktop Entry]\nName=Journey browser\nType=Application\nExec=${wrapper} %u\nTerminal=false\nCategories=Network;WebBrowser;\nMimeType=x-scheme-handler/https;\n`,
 		);
 		run("xdg-mime", [
 			"default",
@@ -65,11 +102,38 @@ export async function systemBrowser() {
 		]);
 		process.env.BROWSER = wrapper;
 	}
-	const connection = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
-	const context = connection.contexts()[0];
-	if (!context) throw new Error("missing system browser context");
 	return {
 		context,
+		async probe(origin: string) {
+			const url = `${origin}/health`;
+			try {
+				if (process.platform === "darwin") run("open", [url]);
+				else if (process.platform === "win32")
+					run("rundll32.exe", ["url.dll,FileProtocolHandler", url]);
+				else run("xdg-open", [url]);
+			} catch (error) {
+				let directHandler = "not attempted";
+				if (process.platform === "linux") {
+					try {
+						run(resolve(state, "private/browser.sh"), [url]);
+						directHandler = "passed";
+					} catch (diagnostic) {
+						directHandler = String(diagnostic);
+					}
+				}
+				writeFileSync(
+					resolve(evidence, "browser-handler.json"),
+					JSON.stringify({ error: String(error), directHandler }, null, 2),
+				);
+				throw error;
+			}
+			const page = await until(
+				"OS HTTPS handler in controlled browser profile",
+				() => context.pages().find((page) => page.url() === url),
+			);
+			await page.screenshot({ path: resolve(evidence, "browser-handler.png") });
+			await page.close();
+		},
 		async consent(origin: string, email: string, password: string) {
 			// The page must have been opened by the native host, never by page.goto().
 			const page = await until("native system-browser handoff", () =>

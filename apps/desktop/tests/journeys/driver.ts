@@ -10,6 +10,7 @@ import {
 	freePort,
 	root,
 	run,
+	stage,
 	state,
 	until,
 } from "./stack.ts";
@@ -22,6 +23,7 @@ export async function desktop(application: string) {
 	async function request(method: string, path: string, body?: unknown) {
 		const response = await fetch(`http://127.0.0.1:${port}${path}`, {
 			method,
+			signal: AbortSignal.timeout(60000),
 			headers: { "content-type": "application/json" },
 			body: body === undefined ? undefined : JSON.stringify(body),
 		});
@@ -32,6 +34,7 @@ export async function desktop(application: string) {
 	}
 	let driver: ReturnType<typeof background> | undefined;
 	async function launch() {
+		stage("starting installed desktop process");
 		if (process.platform === "darwin") {
 			const ready = resolve(state, "hook.json");
 			if (existsSync(ready)) unlinkSync(ready);
@@ -63,6 +66,7 @@ export async function desktop(application: string) {
 					async () => (await fetch(`http://127.0.0.1:${port}/status`)).ok,
 				);
 			}
+			stage("creating native WebDriver session");
 			const value = (await request("POST", "/session", {
 				capabilities: {
 					alwaysMatch: {

@@ -9,6 +9,7 @@ import {
 	root,
 	run,
 	stack,
+	stage,
 	state,
 	until,
 	untrustedFixture,
@@ -81,10 +82,15 @@ function vault() {
 	};
 }
 try {
+	stage("starting PostgreSQL, Bun and Zero");
 	servers = await stack();
+	stage("starting and configuring the system browser");
 	browser = await systemBrowser();
 	const [a, b] = servers.instances;
 	assert(a && b);
+	stage("checking the OS HTTPS handler");
+	await browser.probe(a.api.origin);
+	stage("creating fixture accounts");
 	const password = `Journey-${randomBytes(16).toString("hex")}`;
 	const email = "journey@example.test";
 	for (const instance of [a, b]) {
@@ -121,6 +127,7 @@ try {
 		readFileSync(resolve(state, "installed.json"), "utf8"),
 	) as { application: string };
 	await journey("installed first launch", async () => {
+		stage("launching installed desktop application");
 		app = await desktop(installed.application);
 		await until("server selector", () =>
 			app?.evaluate("!!document.querySelector('#native-server')"),
@@ -142,6 +149,13 @@ try {
 				rejected.requests(),
 				0,
 				"Untrusted TLS must fail before HTTP",
+			);
+			assert.equal(
+				await native.evaluate(
+					"globalThis.__journeyProtocol.filter(e=>e.direction==='reply' && e.op==='grant').at(-1)?.code",
+				),
+				"transport-refused",
+				"The negative control must reach the native TLS request",
 			);
 			await native.screenshot("untrusted-certificate-refused");
 		} finally {
@@ -505,6 +519,10 @@ try {
 		process.exitCode = 1;
 } catch (error) {
 	console.error(error);
+	writeFileSync(
+		resolve(evidence, "failure.json"),
+		JSON.stringify({ error: String(error) }, null, 2),
+	);
 	process.exitCode = 1;
 } finally {
 	for (const name of expectedJourneys) {
