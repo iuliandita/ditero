@@ -9,7 +9,16 @@ import {
 } from "vitest";
 import zeroConfig from "../../drizzle-zero.config.ts";
 import { withUserContext } from "../../src/db/user-context.ts";
-import { submitGrant } from "../../src/server/e2e/grants.ts";
+import {
+	myWorkspaceKeys,
+	pendingGrants,
+	requestWorkspaceKey,
+	submitGrant,
+} from "../../src/server/e2e/grants.ts";
+import {
+	pendingProvisions,
+	provisionWorkspace,
+} from "../../src/server/e2e/provision.ts";
 import { rotateWorkspace } from "../../src/server/e2e/rotation.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
@@ -92,6 +101,99 @@ const asAlice = <T extends QueryResultRow>(sql: string, values?: unknown[]) =>
 	withUserContext(runtimePool, "u_alice", (c) => c.query<T>(sql, values));
 const asBob = <T extends QueryResultRow>(sql: string, values?: unknown[]) =>
 	withUserContext(runtimePool, "u_bob", (c) => c.query<T>(sql, values));
+
+test.each([
+	"member",
+	"viewer",
+])("a pre-existing %s requests and receives a later-provisioned key under RLS", async (role) => {
+	await pool.query(
+		"update workspace set kind = 'shared' where id = 'ws_alice'",
+	);
+	await pool.query(
+		`insert into membership (id, user_id, workspace_id, role)
+			 values ('m_bob', 'u_bob', 'ws_alice', $1)`,
+		[role],
+	);
+	await asAlice(insertUserKey("uk_alice", "u_alice"));
+	await asBob(insertUserKey("uk_bob", "u_bob"));
+	const pending = () =>
+		withUserContext(runtimePool, "u_bob", (client) =>
+			pendingProvisions(client, "u_bob"),
+		);
+	expect(await pending()).toEqual([]);
+	const input = {
+		workspaceId: "ws_alice",
+		recipientPublicKey: "pk_a",
+		commitment: "commitment",
+		enc: "enc",
+		ciphertext: "ct",
+	};
+	expect(
+		await withUserContext(runtimePool, "u_bob", (client) =>
+			provisionWorkspace(client, "u_bob", input),
+		),
+	).toEqual({ ok: false, reason: "not-permitted" });
+	expect(
+		await withUserContext(runtimePool, "u_alice", async (client) => {
+			const actualRole = await client.query(
+				"select rolsuper, rolbypassrls from pg_roles where rolname=current_user",
+			);
+			expect(actualRole.rows).toEqual([
+				{ rolsuper: false, rolbypassrls: false },
+			]);
+			return provisionWorkspace(client, "u_alice", input);
+		}),
+	).toMatchObject({ ok: true, outcome: "minted" });
+	expect(await pending()).toEqual([
+		{
+			id: "ws_alice",
+			version: 1,
+			reason: "no-grant",
+			commitment: "commitment",
+		},
+	]);
+	const request = () =>
+		withUserContext(runtimePool, "u_bob", (client) =>
+			requestWorkspaceKey(client, "u_bob", "ws_alice"),
+		);
+	const requested = await request();
+	expect(requested).toMatchObject({ keyVersion: 1, state: "pending" });
+	expect(await request()).toEqual(requested);
+	if (!requested) throw new Error("missing grant request");
+	expect(
+		await withUserContext(runtimePool, "u_alice", (client) =>
+			pendingGrants(client, "u_alice"),
+		),
+	).toEqual([
+		expect.objectContaining({
+			requestId: requested.requestId,
+			recipientUserId: "u_bob",
+		}),
+	]);
+	expect(
+		await withUserContext(runtimePool, "u_alice", (client) =>
+			submitGrant(client, "u_alice", {
+				...input,
+				requestId: requested.requestId,
+			}),
+		),
+	).toMatchObject({ ok: true, outcome: "granted" });
+	expect(await pending()).toEqual([]);
+	expect(
+		await withUserContext(runtimePool, "u_bob", (client) =>
+			myWorkspaceKeys(client, "u_bob"),
+		),
+	).toEqual([
+		expect.objectContaining({
+			workspaceId: "ws_alice",
+			keyVersion: 1,
+			active: true,
+		}),
+	]);
+	await pool.query("delete from membership where id = 'm_bob'");
+	expect(await pending()).toEqual([]);
+	expect(await request()).toBeNull();
+});
 
 // Each builder writes one row for `userId` under `id`. Parameterised rather
 // than fixed so the isolation test can claim ANOTHER user's id explicitly: an

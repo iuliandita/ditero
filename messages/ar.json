@@ -2147,7 +2147,7 @@
 	"attachment_locked_meta": "{size}، أُضيف في {date}",
 	"attachment_date_unknown": "التاريخ غير معروف",
 	"attachment_key_pending": "في انتظار الوصول إلى ملفات مساحة العمل هذه.",
-	"attachment_key_pending_who": "يمكن لـ {names} منح الوصول عند فتح Ditero في المرة القادمة.",
+	"attachment_key_pending_who": "يمكن لـ {names} منح الوصول عند فتح Ditero وإلغاء قفل التشفير.",
 	"attachment_key_pending_self": "أعدّ التشفير لفتح هذا الملف.",
 	"attachment_unreadable": "لا يمكن فتح هذا الملف مجددًا.",
 	"attachment_unreadable_body": "غادر {workspace} كل من كان يملك مفتاح هذه الملفات. لا يمكن لأحد فك تشفيرها، لا الأعضاء هنا ولا من يشغّل هذا الخادم. لا يمكن إلا حذفها.",

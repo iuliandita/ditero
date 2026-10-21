@@ -2009,7 +2009,7 @@
 	"attachment_locked_meta": "{size}, añadido el {date}",
 	"attachment_date_unknown": "fecha desconocida",
 	"attachment_key_pending": "Esperando acceso a los archivos de este espacio de trabajo.",
-	"attachment_key_pending_who": "{names} pueden concederlo la próxima vez que abran Ditero.",
+	"attachment_key_pending_who": "{names} pueden conceder acceso cuando abran Ditero y desbloqueen el cifrado.",
 	"attachment_key_pending_self": "Configura el cifrado para abrir este archivo.",
 	"attachment_unreadable": "Este archivo no se puede volver a abrir.",
 	"attachment_unreadable_body": "Todas las personas que tenían la clave de estos archivos han dejado {workspace}. Nadie puede descifrarlos: ni los miembros actuales ni quien administra este servidor. Solo se pueden eliminar.",

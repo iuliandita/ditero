@@ -60,6 +60,12 @@ collection. Task and comment text remain server-readable so sync, filters, and r
 Notification payloads may contain the server-readable parent task title, but never a decrypted
 attachment filename.
 
+Any current workspace member, including a Viewer, may download committed files. After
+enrollment or unlock, members automatically request a grant for an existing active workspace
+key they lack. A current member who already holds that key can fulfill the request when
+they open Ditero and unlock encryption. Only Owners and Admins may provision or rotate
+workspace keys; joining before encryption is provisioned does not change file-read access.
+
 Each user has an X25519 identity keypair. The private key is wrapped independently under an
 encryption-passphrase key and a recovery-code key. Each workspace and key version has a random
 256-bit workspace data key, distributed to members with RFC 9180 HPKE base mode using
