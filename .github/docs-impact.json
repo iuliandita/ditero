@@ -2,11 +2,12 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "ba4d2ba873911679389ec45f5a4189f48c797f3f376cd1af774b6a63de98ca92",
+			"sourceDigest": "7eee76044b7304249bb091f0477efe74c9309de5053224ca34bd8e735dd4f635",
 			"docs": [
-				"apps/android/README.md"
+				"apps/android/README.md",
+				"apps/desktop/README.md"
 			],
-			"note": "Document Android Back dismissal and navigation order, top-level exit, and background network teardown during Activity recreation."
+			"note": "Document recovery-code downloads through account-bound native save operations on Android and desktop, retry after a failed write, and distinct Android connection diagnostics without relaxing certificate trust."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
@@ -34,11 +35,12 @@
 			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
 		},
 		"native": {
-			"sourceDigest": "4ded240b5eeec1fc19763b5da1ed09505fbb447cce632677d76c86fbbf216a43",
+			"sourceDigest": "4d162bcebca7428aa59cfbd0df44fa7d7d9c28d385bcc2515a1fc16fb50127ea",
 			"docs": [
-				"apps/android/README.md"
+				"apps/android/README.md",
+				"apps/desktop/README.md"
 			],
-			"note": "Document Android Back dismissal and navigation order, top-level exit, and background network teardown during Activity recreation."
+			"note": "Document recovery-code downloads through account-bound native save operations on Android and desktop, retry after a failed write, and distinct Android connection diagnostics without relaxing certificate trust."
 		}
 	}
 }

@@ -44,6 +44,12 @@ emulator check uploaded a file and saved it through the Storage Access Framework
 the saved 216-byte file matched the original. This does not qualify all document
 providers, file sizes, interruption paths, or physical devices.
 
+Recovery-code downloads use the same account-bound system document chooser and
+confirmed native write as attachment saving. Cancelling keeps the code visible;
+a write failure shows an error so you can choose a destination and retry.
+Connection failures distinguish an HTTPS requirement, an unknown server name,
+an untrusted certificate and an unreachable server. Certificate trust remains required.
+
 ## Background reminders
 
 The Android host uses UnifiedPush connector 3.3.5. Install a compatible distributor

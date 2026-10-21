@@ -41,6 +41,7 @@ import {
 	requestGrant,
 	selectServer,
 } from "./bridge.ts";
+import { connectErrorMessage } from "./connect-error.ts";
 import {
 	captureVerifiedContext,
 	createNativeRuntime,
@@ -229,8 +230,8 @@ function NativeAppRoutes({
 				await openBrowser();
 				if (owner === epoch.current) setApproval(true);
 			}
-		} catch {
-			if (owner === epoch.current) setError(m.native_connect_failed());
+		} catch (error) {
+			if (owner === epoch.current) setError(connectErrorMessage(error));
 		} finally {
 			if (owner === epoch.current) setBusy(false);
 		}

@@ -122,6 +122,20 @@ public class NativePushTest {
             records.put(owner.instance+suffix,new HashMap<>(record)); return true;
         }
     }
+    @Test public void refreshedPermissionClearsOnlyTheStaleDenial() throws Exception {
+        FlowStore store=new FlowStore();
+        durable.remove("active"); durable.put("state","disabled");
+        java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();
+        boolean[] allowed={false};
+        NativePushCoordinator coordinator=new NativePushCoordinator(store,lane,()->allowed[0],()->true,request->{throw new AssertionError();},(owner,payload)->{});
+        try {
+            coordinator.denied(); assertEquals("denied",coordinator.state());
+            allowed[0]=true; assertEquals("disabled",coordinator.state());
+            java.lang.reflect.Field failure=NativePushCoordinator.class.getDeclaredField("failure");
+            failure.setAccessible(true); failure.set(coordinator,"server-unavailable");
+            assertEquals("server-unavailable",coordinator.state());
+        } finally {lane.shutdownNow();}
+    }
     @Test public void explicitStorageFailureRetryReschedulesAndRequiresRegistrationSuccess() throws Exception {
         FlowStore store=new FlowStore();
         java.util.concurrent.ExecutorService lane=java.util.concurrent.Executors.newSingleThreadExecutor();

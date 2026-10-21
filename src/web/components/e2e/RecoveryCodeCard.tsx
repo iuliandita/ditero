@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import { RECOVERY_GROUP_SIZE } from "../../../domain/e2e/recovery-code.ts";
 import { m } from "../../../paraglide/messages.js";
 import { copyText } from "../../lib/clipboard.ts";
-
-const DOWNLOAD_NAME = "ditero-recovery-code.txt";
+import { FilePickerCancelledError } from "../../lib/e2e/download.ts";
+import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
+import { downloadRecoveryCode } from "../../lib/e2e/recovery-download.ts";
 
 export function RecoveryCodeCard({
 	display,
@@ -14,6 +15,11 @@ export function RecoveryCodeCard({
 	display: string;
 	allowDownload: boolean;
 }) {
+	const { runtime } = useKeyring();
+	const [saving, setSaving] = useState(false);
+	const [saveFailed, setSaveFailed] = useState(false);
+	const saveAbort = useRef<AbortController | null>(null);
+	useEffect(() => () => saveAbort.current?.abort(), []);
 	const [copied, setCopied] = useState(false);
 	const codeRef = useRef<HTMLFieldSetElement>(null);
 	const groups = display.split("-");
@@ -30,15 +36,24 @@ export function RecoveryCodeCard({
 		if (await copyText(display)) setCopied(true);
 	}
 
-	function download() {
-		const url = URL.createObjectURL(
-			new Blob([display], { type: "text/plain" }),
-		);
-		const anchor = document.createElement("a");
-		anchor.href = url;
-		anchor.download = DOWNLOAD_NAME;
-		anchor.click();
-		URL.revokeObjectURL(url);
+	async function download() {
+		if (saveAbort.current) return;
+		const controller = new AbortController();
+		saveAbort.current = controller;
+		setSaving(true);
+		setSaveFailed(false);
+		try {
+			await downloadRecoveryCode(display, runtime, controller.signal);
+		} catch (error) {
+			if (
+				!controller.signal.aborted &&
+				!(error instanceof FilePickerCancelledError)
+			)
+				setSaveFailed(true);
+		} finally {
+			saveAbort.current = null;
+			if (!controller.signal.aborted) setSaving(false);
+		}
 	}
 
 	return (
@@ -83,16 +98,20 @@ export function RecoveryCodeCard({
 					<Button
 						type="button"
 						variant="outline"
-						// Hidden below md by the caller: a bare .txt download on a
-						// mobile browser lands somewhere most users cannot find.
 						data-testid="e2e-recovery-download"
-						onClick={download}
+						disabled={saving}
+						onClick={() => void download()}
 					>
 						{m.e2e_recovery_download()}
 					</Button>
 				)}
 			</div>
 
+			{saveFailed && (
+				<p role="alert" className="text-sm text-destructive">
+					{m.e2e_recovery_download_failed()}
+				</p>
+			)}
 			<span role="status" className="sr-only">
 				{copied && m.e2e_recovery_copied()}
 			</span>
