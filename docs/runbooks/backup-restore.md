@@ -4,7 +4,15 @@
 
 1. Record the running Ditero and Zero versions and deployment configuration, including
    `DITERO_E2E_ENABLED` (defaults to `false`) and attachment storage settings.
-2. Run `pg_dump --format=custom` against the migration-owner or backup role.
+2. Run `pg_dump --format=custom` with a role that can read the entire database.
+   For the bundled stack, use its administrator login `postgres`. The app's
+   `ditero_migrator` cannot read Zero's CDC/CVR schemas and is not a full backup
+   role. For external PostgreSQL, use a superuser or an owner/backup login with explicit
+   `USAGE` on all included schemas and `SELECT` on all tables/sequences (including
+   Zero's internal schemas). In either case, the role must bypass row security for
+   a complete dump, including tables with forced row security. Schema ownership
+   alone does not bypass `FORCE ROW LEVEL SECURITY`. Keep this access separate
+   from the application runtime login.
 3. After the database dump finishes, snapshot the attachment filesystem volume or S3 bucket. Never
    take the blob snapshot first: a restored database row must not point at a blob that was absent
    from the snapshot. See [Attachment Storage](attachment-storage.md).
@@ -15,11 +23,39 @@
 6. Encrypt the backup set, record checksums and a shared backup-set identifier, and test restoration
    on an isolated instance.
 
+For bundled Compose, choose a new output filename and run from the repository root:
+
+```sh
+(
+set -eC
+umask 077
+docker compose --env-file deploy/docker/.env \
+  -f deploy/docker/docker-compose.yml --profile bundled \
+  exec -T upstream-db pg_dump -U postgres -d ditero --format=custom > ditero.dump
+)
+```
+
+Check the exit status, encrypt the dump and keep service secrets/role definitions
+separately. `pg_dump` does not back up cluster logins or replication slots.
+
 ## Restore
 
 1. Stop the app and Zero.
-2. Restore PostgreSQL into a compatible server with `wal_level=logical`.
-3. Recreate separate migration, runtime, and Zero roles; grant runtime access without owner or `BYPASSRLS` membership.
+2. Prepare a compatible PostgreSQL 15+ server with `wal_level=logical`. Recreate
+   separate migration, runtime and Zero logins with the original passwords before
+   restoring objects owned by them; grant runtime access without owner or
+   `BYPASSRLS` membership. A fresh bundled `upstream-db` initializes these roles
+   from the original deployment secrets.
+3. Restore the dump using the administrator/restore role, preserving ownership,
+   grants and row security. On the isolated bundled target, with app and Zero
+   stopped, run:
+
+   ```sh
+   docker compose --env-file deploy/docker/.env \
+     -f deploy/docker/docker-compose.yml --profile bundled \
+     exec -T upstream-db pg_restore -U postgres -d ditero \
+     --clean --if-exists --exit-on-error < ditero.dump
+   ```
 4. Restore the matching attachment snapshot before accepting traffic. Extra unreferenced blobs
    from a newer snapshot are harmless; a database row whose blob is missing is not recoverable.
 5. Restore the original deployment configuration, current and fallback field-encryption keys,
@@ -27,8 +63,9 @@
    `/api/e2e/*` and `/api/attachments/*` return `404` while disabled. Keep the restored
    account/workspace key envelopes and ciphertext; do not generate replacement keys or
    reenroll accounts to work around missing configuration.
-6. Remove the old Zero replica and start Zero so it rebuilds from PostgreSQL.
-7. Start Ditero, run migrations, and verify health, login, TOTP, JWT issuance, RLS isolation, sync,
+6. Back up and remove only the target's old Zero replica cache.
+7. Start Ditero, let migrations finish, and wait for app health before starting
+   Zero so it rebuilds from PostgreSQL. Verify health, login, TOTP, JWT issuance, RLS isolation, sync,
    one encrypted integration credential, and one attachment download and decryption.
 
 Never test a restore by pointing it at the production Zero replica or notification channels.
