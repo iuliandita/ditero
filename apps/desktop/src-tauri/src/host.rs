@@ -4,6 +4,7 @@ use crate::{
     notifications::{self, Event as NotificationEvent},
     offline::{self, Evidence},
     protocol::{self, Result, MAX_BODY, MAX_SEND},
+    request_fence::Fences,
     vault::{self, DesktopRegistration, Registry, Session, SystemVault, Vault},
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
@@ -89,6 +90,7 @@ struct Actor {
     http: reqwest::Client,
     file_http: reqwest::Client,
     vault: Box<dyn Vault>,
+    fences: Arc<Fences>,
     registry: Registry,
     origin: Option<String>,
     session: Option<Session>,
@@ -248,6 +250,7 @@ pub fn run() {
         http,
         file_http,
         vault: Box::new(SystemVault),
+        fences: Fences::new(vault::native_store),
         registry: Registry::default(),
         origin: None,
         session: None,
@@ -738,15 +741,22 @@ impl Actor {
                 }
             }
         });
-        self.push = Some(notifications::start(owner, self.http.clone(), events));
+        self.push = Some(notifications::start(
+            owner,
+            self.http.clone(),
+            events,
+            self.fences.clone(),
+        ));
         self.push_state = "active";
     }
     fn cleanup_notifications(&mut self) {
         for registration in self.registry.retired_notifications.clone() {
             let http = self.http.clone();
             let tx = self.tx.clone();
+            let fences = self.fences.clone();
             tauri::async_runtime::spawn(async move {
                 let result = notifications::request(
+                    &fences,
                     &http,
                     &registration.session,
                     "unregister",
@@ -954,11 +964,7 @@ impl Actor {
                 if !self.notification_current(&owner) {
                     return;
                 }
-                let mut next = self.registry.clone();
-                let _ = Self::retire_in(&mut next, &owner.registration.session);
-                vault::remove_session(&mut next, &owner.registration.session);
-                let _ = self.persist(next);
-                self.drop_memory();
+                self.refuse_session(&owner.registration.session);
                 self.push_state = "no-session";
                 self.emit(json!({"t":"session-refused","gen":self.gen,"authHandle":owner.handle}));
             }
@@ -1129,9 +1135,11 @@ impl Actor {
         if self.persist(next).is_err() {
             self.push_state = "storage-failed";
             let http = self.http.clone();
+            let fences = self.fences.clone();
             self.push_tasks
                 .push(tauri::async_runtime::spawn(async move {
                     let _ = notifications::request(
+                        &fences,
                         &http,
                         &registration.session,
                         "unregister",
@@ -1146,6 +1154,30 @@ impl Actor {
         Ok(self.push_reply())
     }
     async fn call_unfenced(
+        &mut self,
+        origin: &str,
+        path: &str,
+        post: bool,
+        body: Option<&str>,
+        token: Option<&str>,
+    ) -> Result<(u16, String)> {
+        let guard = self
+            .registry
+            .sessions
+            .get(origin)
+            .filter(|s| Some(s.token.as_str()) == token)
+            .map(|s| self.fences.begin(s))
+            .transpose()?;
+        let response = self.call_transport(origin, path, post, body, token).await;
+        if let Some(guard) = guard {
+            guard.complete(match &response {
+                Ok((status, _)) => !matches!(status, 401 | 403),
+                Err(code) => *code == "network",
+            })?;
+        }
+        response
+    }
+    async fn call_transport(
         &mut self,
         origin: &str,
         path: &str,
@@ -1240,14 +1272,22 @@ impl Actor {
             .call(&s.origin, path, post, body, Some(&s.token))
             .await?;
         if clear && unauthorized(result.0, &result.1) {
-            let mut next = self.registry.clone();
-            let _ = Self::retire_in(&mut next, &s);
-            vault::remove_session(&mut next, &s);
-            let _ = self.persist(next);
-            self.drop_memory();
+            self.refuse_session(&s);
             return Err("unauthorized");
         }
         Ok(result)
+    }
+    fn refuse_session(&mut self, session: &Session) {
+        let _ = self.fences.refuse(session);
+        let mut next = self.registry.clone();
+        if let Some(proof) = next.evidence.get_mut(&session.origin) {
+            proof.pending = true;
+        }
+        let _ = self.persist(next.clone());
+        let _ = Self::retire_in(&mut next, session);
+        vault::remove_session(&mut next, session);
+        let _ = self.persist(next);
+        self.drop_memory();
     }
     fn file_reply(&mut self, context: attachments::Context, rid: u64, result: Result<Value>) {
         if context.gen != self.gen || context.page != self.page || self.current().is_err() {
@@ -1270,10 +1310,7 @@ impl Actor {
                 .and_then(Value::as_str)
                 .is_some_and(|body| unauthorized(401, body))
         {
-            let mut next = self.registry.clone();
-            vault::remove_session(&mut next, &context.session);
-            let _ = self.persist(next);
-            self.drop_memory();
+            self.refuse_session(&context.session);
         }
         reply["t"] = json!("reply");
         reply["rid"] = json!(rid);
@@ -1306,13 +1343,14 @@ impl Actor {
         {
             return Err("invalid-message");
         }
-        let context = attachments::Context::new(
+        let mut context = attachments::Context::new(
             self.gen,
             self.page,
             self.session.clone().ok_or("no-session")?,
             self.clock.clone(),
             self.pages.clone(),
         );
+        context.fences = Some(self.fences.clone());
         let captured = context.clone();
         let tx = self.tx.clone();
         self.files.dispatch(
@@ -1595,9 +1633,9 @@ impl Actor {
         let zero = match response {
             Err("network")
                 if cached.as_ref().is_some_and(|p| {
-                    captured
-                        .as_ref()
-                        .is_some_and(|s| self.owned(s) && p.ready(s, now()))
+                    captured.as_ref().is_some_and(|s| {
+                        self.owned(s) && p.ready(s, now()) && self.fences.allowed(s)
+                    })
                 }) =>
             {
                 cached.as_ref().unwrap().zero.clone().unwrap()
@@ -1630,7 +1668,7 @@ impl Actor {
         self.registry
             .evidence
             .get(&session.origin)
-            .filter(|proof| proof.ready(session, now()))
+            .filter(|proof| proof.ready(session, now()) && self.fences.allowed(session))
             .cloned()
     }
     fn owned(&self, captured: &Session) -> bool {
@@ -1658,6 +1696,7 @@ impl Actor {
         proof.pending = true;
         self.persist(next)?;
         self.current()?;
+        let revision = self.fences.revision(&captured)?;
         let result = self.session_online(op).await;
         if !self.owned(&captured) {
             return if matches!(result, Err("unauthorized")) {
@@ -1668,7 +1707,11 @@ impl Actor {
         }
         let reply = match result {
             Ok(reply) => reply,
-            Err("network") if cached.as_ref().is_some_and(|p| p.ready(&captured, now())) => {
+            Err("network")
+                if cached.as_ref().is_some_and(|p| {
+                    p.ready(&captured, now()) && self.fences.allowed(&captured)
+                }) =>
+            {
                 let proof = cached.unwrap();
                 let mut next = self.registry.clone();
                 next.evidence.insert(captured.origin.clone(), proof.clone());
@@ -1727,6 +1770,7 @@ impl Actor {
         self.persist(next)?;
         self.current()?;
         if op == "session.read" {
+            self.fences.verified(&captured, revision)?;
             self.session.as_mut().ok_or("no-session")?.expires_at = expiry;
             self.verified = true;
             self.links_verified.store(true, Ordering::SeqCst);
@@ -2011,6 +2055,9 @@ impl Actor {
         let (tx, mut rx) = mpsc::channel::<Message>(16);
         let is_open = Arc::new(AtomicBool::new(false));
         let open_flag = is_open.clone();
+        let guard = self
+            .fences
+            .begin(self.session.as_ref().ok_or("no-session")?)?;
         let task = tauri::async_runtime::spawn(async move {
             let emit = |kind: &str, fields: Value| {
                 if clock.load(Ordering::SeqCst) == gen {
@@ -2029,6 +2076,20 @@ impl Actor {
                 tokio_tungstenite::connect_async_with_config(request, Some(config), false),
             )
             .await;
+            let safe = match &opened {
+                Ok(Ok(_)) | Err(_) => true,
+                Ok(Err(tokio_tungstenite::tungstenite::Error::Http(response))) => {
+                    !matches!(response.status().as_u16(), 401 | 403)
+                }
+                Ok(Err(tokio_tungstenite::tungstenite::Error::Io(_))) => true,
+                _ => false,
+            };
+            if guard.complete(safe).is_err() {
+                emit("error", json!({"kind":"storage-failed"}));
+                emit("close", json!({"code":1006,"reason":"","clean":false}));
+                let _ = owner.send(Work::Ended(gen, cid)).await;
+                return;
+            }
             let mut clean = false;
             let mut code = 1006;
             if let Ok(Ok((mut socket, _))) = opened {
@@ -2226,6 +2287,10 @@ mod tests {
                 reject,
                 remaining_writes: Mutex::new(u64::MAX),
             }),
+            fences: {
+                let store = keyring_core::mock::Store::new().unwrap();
+                Fences::new(move || Ok(store.clone()))
+            },
             registry: Registry::default(),
             origin: None,
             session: None,
@@ -3447,6 +3512,93 @@ mod tests {
             .await;
         assert_eq!(result, Err("send-failed"));
         assert!(host.sockets.is_empty());
+    }
+    #[tokio::test]
+    async fn native_refusals_survive_failed_credential_deletion_and_cold_offline_restart() {
+        for source in ["attachment", "notification", "e2e"] {
+            for writes in [0, 1] {
+                let mut host = cached_host();
+                let store = keyring_core::mock::Store::new().unwrap();
+                let running_store = store.clone();
+                host.fences = Fences::new(move || Ok(running_store.clone()));
+                let captured = host.session.clone().unwrap();
+                let registration = DesktopRegistration {
+                    session: captured.clone(),
+                    registration_id: "registration".into(),
+                    seen: vec![],
+                    receipts: vec![],
+                    locale: "en".into(),
+                };
+                host.registry
+                    .notifications
+                    .insert(captured.origin.clone(), registration.clone());
+                host.verified = true;
+                host.vault = Box::new(TestVault {
+                    value: Mutex::new(host.registry.clone()),
+                    reject: false,
+                    remaining_writes: Mutex::new(writes),
+                });
+                match source {
+                    "attachment" => host.file_reply(
+                        attachments::Context::new(
+                            host.gen,
+                            host.page,
+                            captured.clone(),
+                            host.clock.clone(),
+                            host.pages.clone(),
+                        ),
+                        1,
+                        Ok(json!({"ok":false,"status":401,"body":r#"{"code":"unauthorized"}"#})),
+                    ),
+                    "notification" => {
+                        let owner = notifications::Owner {
+                            registration,
+                            gen: host.gen,
+                            page: host.page,
+                            handle: host.handle.clone(),
+                            clock: host.clock.clone(),
+                            pages: host.pages.clone(),
+                            retired: Arc::new(AtomicBool::new(false)),
+                            wake: Arc::new(tokio::sync::Notify::new()),
+                            locale: Arc::new(std::sync::RwLock::new("en".into())),
+                        };
+                        host.notification_event(NotificationEvent::Unauthorized(owner));
+                    }
+                    _ => {
+                        host.responses
+                            .push_back((403, r#"{"code":"forbidden"}"#.into(), false));
+                        assert_eq!(
+                            host.authed("/api/native/e2e/workspaces", false, None, false)
+                                .await
+                                .unwrap()
+                                .0,
+                            403
+                        );
+                    }
+                }
+                let retained = host.vault.load().unwrap();
+                assert!(
+                    retained.sessions.contains_key(&captured.origin),
+                    "fixture must retain the credential after failed deletion"
+                );
+                let mut restarted = actor(false);
+                restarted.registry = retained;
+                restarted.fences = Fences::new(move || Ok(store.clone()));
+                restarted.origin = Some(captured.origin.clone());
+                restarted.install(Some(captured));
+                assert!(
+                    restarted
+                        .evidence(restarted.session.as_ref().unwrap())
+                        .is_none(),
+                    "{source}/{writes} resurrected refused evidence"
+                );
+                restarted.responses.push_back((0, "".into(), false));
+                assert!(
+                    native_op(&mut restarted, "session.read").await.is_err(),
+                    "{source}/{writes} reopened cached data"
+                );
+            }
+        }
     }
     #[tokio::test]
     async fn file_refusals_retire_only_the_exact_current_native_session() {
