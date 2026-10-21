@@ -15,7 +15,8 @@
 
 Ditero is a free, self-hosted, local-first task app for families, friends, clubs,
 and small teams. Share a shopping list, divide the chores, plan a project, or keep
-up with daily habits. Work offline and sync when you're connected again.
+up with daily habits. Already-open browser tabs work offline and sync when you're
+connected again; opening or reloading the app needs a connection.
 
 Your data lives on your server. Reminders, attachments, calendars, and sharing
 are included, with no subscriptions or paid feature unlocks.
@@ -74,7 +75,8 @@ templates use the name you enter, or the template name when you leave it blank.
 - Light, dark, and system modes, six accent themes, reading-size presets, and high contrast
 - Named light/dark palettes, runtime color editing and validated JSON sharing;
   [custom palettes](docs/themes.md) sync with your account
-- Saved views, dashboards, calendar/board/table layouts, keyboard shortcuts, and a focus timer
+- Focus timers resume after reload on the same device, including paused and task-bound intervals
+- Saved views, dashboards, calendar/board/table layouts, and keyboard shortcuts
 - Encrypted attachments with filesystem or S3-compatible server storage
 - Authenticated encrypted attachment archives and reviewed, resumable attachment
   migration with explicit parent mapping and durable replay
@@ -99,6 +101,14 @@ runtime, terminal, native and deployment qualification remain pending. Voice cap
 pending final qualification. Calendar subscriptions can be created and revoked
 in web settings; a new subscription URL is shown only once.
 The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaining work.
+
+Focus timers are stored locally for each account and shared by its tabs on the same
+browser or native server profile. Returning after an interval expires records that
+interval once and advances according to the auto-cycle setting; paused time is excluded.
+Stop discards the unfinished interval in every tab. Clearing site data removes local
+timer state. Timers do not follow you to another device. After reload, elapsed time
+relies on the device clock. Moving that clock forward can count unworked time,
+capped at the interval length.
 
 ## Tech stack
 
@@ -297,8 +307,12 @@ no other copy. All attachment configuration is documented in [.env.example](.env
 
 Production browser builds include a PWA manifest and a bounded offline public
 app shell. The service worker caches static public files, with no API, auth,
-Zero, or private user responses. Offline shell loading does not replace session
-checks; private synced records remain in Zero's separate local storage. Updates
+Zero, or private user responses. Opening or reloading the browser app offline
+shows a connection-required page instead of opening cached workspaces. It retries
+automatically when the connection returns, with a Retry button for manual attempts.
+Already-open tabs keep working offline and sync queued edits after reconnecting.
+Private synced records remain in Zero's separate local storage; startup still
+requires live session verification. Updates
 show a notice and reload only on user choice, after durable local sync retirement.
 HTTPS and browser-secure loopback origins are supported. Browser qualification
 covered installability, offline shell recovery, and manual update; it did not

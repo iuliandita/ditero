@@ -21,6 +21,7 @@ import { createManagedAccount } from "../../src/auth/managed-account.ts";
 import * as tables from "../../src/db/schema.ts";
 import type { Role } from "../../src/domain/role.ts";
 import { lookupUsers } from "../../src/server/discovery.ts";
+import { signInForTest } from "../support/auth-sign-in.ts";
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
@@ -711,6 +712,9 @@ describe("createManagedAccount", () => {
 			.where(eq(tables.user.id, res.userId));
 		expect(kid).toHaveLength(1);
 		expect(kid[0].email).toBe(res.email);
+		expect(await db.select().from(tables.session)).toHaveLength(0);
+		const signedIn = await signInForTest(res.email, "kid-password-1");
+		expect((await signedIn.json()).user.id).toBe(res.userId);
 
 		const managed = await db
 			.select()

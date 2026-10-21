@@ -1,12 +1,21 @@
 import { Zero } from "@rocicorp/zero";
 import { ZeroProvider } from "@rocicorp/zero/react";
 import type { ReactNode } from "react";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
 import { schema } from "../../zero/schema.gen.ts";
+import { ConnectionRequired } from "../components/ConnectionRequired.tsx";
 import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { Button } from "../components/ui/button.tsx";
+import { ConnectionRequiredError } from "./connection-required.ts";
 import { createExportBoundary } from "./export-boundary.ts";
 import {
 	createSyncTracker,
@@ -88,27 +97,30 @@ export function AppZeroProvider({
 		exportBoundary: ReturnType<typeof createExportBoundary>;
 	} | null>(null);
 	const [startupFailed, setStartupFailed] = useState(false);
+	const [connectionFailed, setConnectionFailed] = useState(false);
+	const initializing = useRef(false);
 	const [startupSaveFailed, setStartupSaveFailed] = useState(false);
 	const [startupAttempt, setStartupAttempt] = useState(0);
 	const [retrying, setRetrying] = useState(false);
 	const retryPending = useRef(false);
 
-	async function retryStartup() {
-		if (retryPending.current) return;
+	const retryStartup = useCallback(async () => {
+		if (retryPending.current || initializing.current) return;
 		retryPending.current = true;
 		setRetrying(true);
 		try {
 			await retireZeroClients();
-			setStartupFailed(false);
+			if (!connectionFailed) setStartupFailed(false);
 			setStartupAttempt((n) => n + 1);
 		} catch {
 			setStartupFailed(true);
 			setStartupSaveFailed(true);
+			setConnectionFailed(false);
 		} finally {
 			retryPending.current = false;
 			setRetrying(false);
 		}
-	}
+	}, [connectionFailed]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: An explicit retry must restart initialization even when the account is unchanged.
 	useEffect(() => {
@@ -118,6 +130,7 @@ export function AppZeroProvider({
 		let stopExportWatch: (() => void) | undefined;
 		let exportBoundary: ReturnType<typeof createExportBoundary> | undefined;
 		let cancelled = false;
+		initializing.current = true;
 		void (async () => {
 			const storageScope = zeroStorageScope(runtime);
 			await runtime.bootstrap();
@@ -196,22 +209,33 @@ export function AppZeroProvider({
 				},
 				() => cancelled,
 			);
-			if (created && !cancelled) setClient(created);
-		})().catch(async (error: unknown) => {
-			let saveFailed = error instanceof ZeroRetirementError;
-			if (owner) {
-				try {
-					await owner.retire();
-				} catch {
-					saveFailed = true;
+			if (created && !cancelled) {
+				setStartupFailed(false);
+				setConnectionFailed(false);
+				setClient(created);
+			}
+		})()
+			.catch(async (error: unknown) => {
+				let saveFailed = error instanceof ZeroRetirementError;
+				if (owner) {
+					try {
+						await owner.retire();
+					} catch {
+						saveFailed = true;
+					}
 				}
-			}
-			if (!cancelled) {
-				console.error("Zero startup failed", error);
-				setStartupFailed(true);
-				setStartupSaveFailed(saveFailed);
-			}
-		});
+				if (!cancelled) {
+					console.error("Zero startup failed", error);
+					setStartupFailed(true);
+					setStartupSaveFailed(saveFailed);
+					setConnectionFailed(
+						!saveFailed && error instanceof ConnectionRequiredError,
+					);
+				}
+			})
+			.finally(() => {
+				if (!cancelled) initializing.current = false;
+			});
 		return () => {
 			cancelled = true;
 			void owner?.retire().catch((error: unknown) => {
@@ -221,6 +245,8 @@ export function AppZeroProvider({
 		};
 	}, [userID, runtime, startupAttempt]);
 
+	if (startupFailed && connectionFailed)
+		return <ConnectionRequired onRetry={retryStartup} />;
 	if (startupFailed)
 		return (
 			<main className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6">

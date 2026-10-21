@@ -125,6 +125,9 @@ test("switches to Arabic pre-auth, applies RTL, persists post-auth and round-tri
 	await page.getByTestId("signup-mode").click();
 	await page.getByTestId("password").fill(PASSWORD);
 	await page.getByTestId("signup").click();
+	await expect(page.getByTestId("signup-notice")).toBeVisible();
+	await page.getByTestId("password").fill(PASSWORD);
+	await page.getByTestId("signin").click();
 	await expect(page.getByTestId("workspace")).toBeVisible({
 		timeout: SIGNUP_TIMEOUT,
 	});

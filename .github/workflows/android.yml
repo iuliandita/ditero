@@ -50,7 +50,8 @@ jobs:
       - name: Check Android TypeScript
         run: bunx tsc --noEmit --project apps/android/tsconfig.json
       - name: Test native bridge lifecycle
-        run: bunx vitest run apps/android/src/bridge.test.ts apps/android/src/connection-error.test.ts
+        # Directories, not file lists: a misnamed or new test file can no longer be skipped.
+        run: bunx vitest run apps/android/src
       - name: Build bundled UI
         working-directory: apps/android
         run: bun run build

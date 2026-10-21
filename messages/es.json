@@ -1,4 +1,7 @@
 {
+	"startup_connection_retry": "Reintentar",
+	"startup_connection_heading": "Ditero necesita conexión para abrirse",
+	"startup_connection_body": "Volverá a intentarlo automáticamente cuando vuelva la conexión. También puedes intentarlo de nuevo ahora.",
 	"workspace_read_only": "Tu rol en este espacio solo permite ver el contenido.",
 	"accept_error_email_mismatch": "Esta invitación es para otra dirección de correo. Cierra sesión e inicia sesión con la cuenta a la que se envió.",
 	"accept_switch_account": "Cerrar sesión y cambiar de cuenta",
@@ -1151,6 +1154,7 @@
 	"focus_stop_aria": "Parar la concentración",
 	"focus_cue_work_complete": "Concentración terminada",
 	"focus_cue_break_over": "Se acabó el descanso",
+	"focus_log_failed": "No se ha podido guardar este intervalo. No se volverá a intentar.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [
@@ -1472,6 +1476,7 @@
 	"login_password_placeholder": "contraseña",
 	"login_new_here": "¿Nuevo por aquí?",
 	"login_signup": "Crear cuenta",
+	"login_signup_continue": "Si se puede usar esta dirección, inicia sesión para continuar.",
 	"login_signin": "Iniciar sesión",
 	"login_signin_passkey": "Iniciar sesión con clave de acceso",
 	"login_continue_google": "Continuar con Google",

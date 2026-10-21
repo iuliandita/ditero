@@ -1,4 +1,7 @@
 {
+	"startup_connection_retry": "Réessayer",
+	"startup_connection_heading": "Ditero a besoin d’une connexion pour s’ouvrir",
+	"startup_connection_body": "Ditero réessaiera automatiquement quand ta connexion sera rétablie. Tu peux aussi réessayer maintenant.",
 	"workspace_read_only": "Ton rôle dans cet espace permet uniquement de consulter le contenu.",
 	"accept_error_email_mismatch": "Cette invitation est destinée à une autre adresse e-mail. Déconnecte-toi, puis connecte-toi avec le compte qui l’a reçue.",
 	"accept_switch_account": "Se déconnecter et changer de compte",
@@ -1151,6 +1154,7 @@
 	"focus_stop_aria": "Arrêter le focus",
 	"focus_cue_work_complete": "Focus terminé",
 	"focus_cue_break_over": "Pause terminée",
+	"focus_log_failed": "Cet intervalle n’a pas pu être enregistré. Il ne sera pas réessayé.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [
@@ -1472,6 +1476,7 @@
 	"login_password_placeholder": "mot de passe",
 	"login_new_here": "Nouveau ici ?",
 	"login_signup": "Créer un compte",
+	"login_signup_continue": "Si cette adresse peut être utilisée, connecte-toi pour continuer.",
 	"login_signin": "Se connecter",
 	"login_signin_passkey": "Se connecter avec une passkey",
 	"login_continue_google": "Continuer avec Google",

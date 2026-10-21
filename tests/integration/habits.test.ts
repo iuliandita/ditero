@@ -890,6 +890,69 @@ describe("M2 habit/recurrence/focus/karma mutators", () => {
 	});
 
 	describe("focus.logSession", () => {
+		test("replaying a persisted interval records once per account", async () => {
+			const interval = {
+				intervalId: crypto.randomUUID(),
+				kind: "work" as const,
+				startedAt: ANCHOR,
+				endedAt: ANCHOR + 1500000,
+				durationSec: 1500,
+			};
+			await Promise.all([
+				call(mutators.focus.logSession, { id: "hm-member" }, interval),
+				call(mutators.focus.logSession, { id: "hm-member" }, interval),
+			]);
+			await call(mutators.focus.logSession, { id: "hm-member" }, interval);
+			await call(mutators.focus.logSession, { id: "hm-owner" }, interval);
+			const rows = await db
+				.select()
+				.from(tables.focusSession)
+				.where(inArray(tables.focusSession.userId, ["hm-member", "hm-owner"]));
+			expect(rows).toHaveLength(2);
+			expect(rows.map((row) => row.userId).sort()).toEqual([
+				"hm-member",
+				"hm-owner",
+			]);
+			expect(await karmaRow("hm-member")).toBeUndefined();
+			expect(await karmaRow("hm-owner")).toBeUndefined();
+			expect(await eventCount("hm-member")).toBe(0);
+			expect(await eventCount("hm-owner")).toBe(0);
+		});
+
+		test.each([
+			-3000, 3000,
+		])("clock-adjusted timestamps remain strict about duration (%i ms)", async (correction) => {
+			const interval = {
+				intervalId: crypto.randomUUID(),
+				kind: "work" as const,
+				startedAt: ANCHOR + correction,
+				endedAt: ANCHOR + correction + 10000,
+				durationSec: 10,
+			};
+			await call(mutators.focus.logSession, { id: "hm-member" }, interval);
+			await expect(
+				call(
+					mutators.focus.logSession,
+					{ id: "hm-member" },
+					{
+						...interval,
+						intervalId: crypto.randomUUID(),
+						durationSec: 3600,
+					},
+				),
+			).rejects.toThrow(/durationSec exceeds elapsed span/);
+			const rows = await db
+				.select()
+				.from(tables.focusSession)
+				.where(eq(tables.focusSession.userId, "hm-member"));
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({
+				startedAt: new Date(interval.startedAt),
+				endedAt: new Date(interval.endedAt),
+				durationSec: 10,
+			});
+		});
+
 		test("writes an own-user row keyed to ctx.id", async () => {
 			await call(
 				mutators.focus.logSession,

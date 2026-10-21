@@ -52,12 +52,7 @@ describe("Better Auth error codes", () => {
 		expect(body.message).toBeTruthy();
 	});
 
-	// The row is inserted directly rather than registered: the suite runs in
-	// bootstrap mode, so by this file every sign-up is refused by our own
-	// `user.create.before` hook and the account would never exist. Better Auth
-	// rejects a duplicate email before reaching that hook, which is the ordering
-	// this assertion depends on.
-	test("a duplicate email is refused by code, not only by prose", async () => {
+	test("a duplicate email receives the same registration policy code", async () => {
 		const email = "codes-integration@test.invalid";
 		await db.delete(tables.user).where(eq(tables.user.email, email));
 		await db.insert(tables.user).values({
@@ -71,7 +66,7 @@ describe("Better Auth error codes", () => {
 			email,
 			password: "pw-123456",
 		});
-		expect(duplicate.code).toBe("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL");
+		expect(duplicate.code).toBe("REGISTRATION_INVITE_REQUIRED");
 
 		await db.delete(tables.user).where(eq(tables.user.email, email));
 	});

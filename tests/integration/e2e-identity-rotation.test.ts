@@ -16,6 +16,7 @@ import {
 	rotateIdentity,
 } from "../../src/server/e2e/identity-rotation.ts";
 import { app } from "../../src/server/index.ts";
+import { signInForTest } from "../support/auth-sign-in.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 13. Rotation is the design's answer to a compromised device
@@ -62,14 +63,15 @@ async function newIdentity(): Promise<Identity> {
 }
 
 async function signUp(email: string): Promise<string> {
-	const response = await handleAuthRequest(
+	const registration = await handleAuthRequest(
 		new Request("http://localhost:3000/api/auth/sign-up/email", {
 			method: "POST",
 			headers: { "content-type": "application/json", origin: ORIGIN },
 			body: JSON.stringify({ name: "Rot", email, password: "pw-123456" }),
 		}),
 	);
-	expect(response.status).toBe(200);
+	expect(registration.status).toBe(200);
+	const response = await signInForTest(email);
 	return response.headers
 		.getSetCookie()
 		.map((value) => value.split(";", 1)[0])

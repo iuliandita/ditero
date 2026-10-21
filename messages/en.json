@@ -1,4 +1,7 @@
 {
+	"startup_connection_retry": "Retry",
+	"startup_connection_heading": "Ditero needs a connection to open",
+	"startup_connection_body": "It will retry automatically when your connection returns. You can also try again now.",
 	"workspace_read_only": "Your workspace role allows viewing only.",
 	"accept_error_email_mismatch": "This invite is for another email address. Sign out, then sign in with the account it was sent to.",
 	"accept_switch_account": "Sign out and switch account",
@@ -1130,6 +1133,7 @@
 	"focus_stop_aria": "Stop focus",
 	"focus_cue_work_complete": "Focus complete",
 	"focus_cue_break_over": "Break over",
+	"focus_log_failed": "This interval couldn't be saved. It won't be retried.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [
@@ -1443,6 +1447,7 @@
 	"login_backup_code_label": "Backup code",
 	"login_new_here": "New here?",
 	"login_signup": "Create an account",
+	"login_signup_continue": "If this address can be used, sign in to continue.",
 	"login_signin": "Sign in",
 	"login_signin_passkey": "Sign in with passkey",
 	"login_continue_google": "Continue with Google",

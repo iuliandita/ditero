@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import tempfile
 import shutil
+import subprocess
 import tarfile
 import unittest
 from unittest.mock import patch
@@ -164,6 +165,57 @@ class ReleaseTests(unittest.TestCase):
                 member.size = len(content)
                 member.mode = 0o755 if name.startswith("bin/") else 0o644
                 archive.addfile(member, io.BytesIO(content))
+
+    def test_extracted_candidate_contains_verified_runtime_source_notices(self):
+        # Check committed bytes so local CRLF files cannot hide Git normalization.
+        committed = subprocess.run(
+            ["git", "archive", "HEAD", "vendor/client-runtime-notices"],
+            cwd=release.ROOT, check=True, capture_output=True,
+        ).stdout
+        with tarfile.open(fileobj=io.BytesIO(committed)) as archive:
+            retained = {
+                member.name.removeprefix("vendor/client-runtime-notices/"): archive.extractfile(member).read()
+                for member in archive.getmembers() if member.isfile()
+            }
+        raw = retained["manifest.json"]
+        manifest = json.loads(raw)
+        required = {
+            "bun/FormatStackTraceForJS-NOTICE.txt", "bun/clap-LICENSE",
+            "native/boringssl/LICENSE", "native/brotli/LICENSE", "native/cares/LICENSE.md",
+            "native/hdrhistogram/LICENSE.txt", "native/highway/LICENSE", "native/libarchive/COPYING",
+            "native/libjpeg-turbo/README.ijg", "native/libjpeg-turbo/LICENSE.md", "native/libwebp/COPYING",
+            "native/lshpack/LICENSE", "native/lsqpack/LICENSE", "native/lsquic/LICENSE.chrome",
+            "native/picohttpparser/source-notices.txt", "native/tinycc/COPYING",
+            "native/zlib/LICENSE.md", "native/zstd/LICENSE",
+        }
+        records = {item["path"]: item for item in manifest["texts"]}
+        self.assertTrue({"notices/runtime/" + path for path in required} <= records.keys())
+        with tempfile.TemporaryDirectory() as directory:
+            original = Path(directory) / "original.tar.gz"
+            candidate = Path(directory) / "candidate.tar.gz"
+            sha = "a" * 40
+            self.client_archive(original, sha)
+            def include_notices(files):
+                for name in list(files):
+                    if name.startswith("notices/runtime/"):
+                        del files[name]
+                files["notices/runtime/manifest.json"] = raw
+                for name in records:
+                    files[name] = retained[name.removeprefix("notices/runtime/")]
+                info = json.loads(files["BUILDINFO.json"])
+                info["runtimeNoticesManifestSha256"] = hashlib.sha256(raw).hexdigest()
+                files["BUILDINFO.json"] = json.dumps(info).encode()
+            self.mutate_runtime_archive(original, candidate, include_notices)
+            release.verify_clients_candidate(candidate, "0.0.1-alpha.1", sha)
+            destination = Path(directory) / "extracted"
+            with tarfile.open(candidate) as archive:
+                archive.extractall(destination, filter="data")
+            package = destination / "ditero-0.0.1-alpha.1-clients-linux-x64"
+            for name, record in records.items():
+                with self.subTest(path=name):
+                    self.assertEqual(hashlib.sha256((package / name).read_bytes()).hexdigest(), record["sha256"])
+            self.assertTrue(manifest["incomplete"])
+            self.assertTrue(any(item["component"] == "Bun" for item in manifest["unresolved"]))
 
     def test_candidate_requires_exact_source_runtime_and_incomplete_notice_marker(self):
         with tempfile.TemporaryDirectory() as directory:

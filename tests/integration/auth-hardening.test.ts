@@ -7,6 +7,7 @@ import { auth, handleAuthRequest } from "../../src/auth/auth.ts";
 import { withRegistrationBypass } from "../../src/auth/registration-bypass.ts";
 import * as tables from "../../src/db/schema.ts";
 import { app } from "../../src/server/index.ts";
+import { signInForTest } from "../support/auth-sign-in.ts";
 import { currentTOTP } from "../totp.ts";
 
 // Auth is configured at import time. Even an e2e parent must exercise production
@@ -22,7 +23,7 @@ const pool = new Pool({ connectionString: databaseURL });
 const db = drizzle(pool, { schema: tables });
 
 async function signUp(email: string): Promise<string> {
-	const response = await handleAuthRequest(
+	const registration = await handleAuthRequest(
 		new Request("http://localhost:3000/api/auth/sign-up/email", {
 			method: "POST",
 			headers: {
@@ -32,7 +33,8 @@ async function signUp(email: string): Promise<string> {
 			body: JSON.stringify({ name: "Security", email, password: "pw-123456" }),
 		}),
 	);
-	expect(response.status).toBe(200);
+	expect(registration.status).toBe(200);
+	const response = await signInForTest(email);
 	return response.headers
 		.getSetCookie()
 		.map((value) => value.split(";", 1)[0])
@@ -261,6 +263,15 @@ describe("authentication hardening schema", () => {
 			(
 				await send("/sign-up/email", {
 					name: "TOTP",
+					email: "totp-integration@test.invalid",
+					password: "pw-123456",
+				})
+			).status,
+		).toBe(200);
+
+		expect(
+			(
+				await send("/sign-in/email", {
 					email: "totp-integration@test.invalid",
 					password: "pw-123456",
 				})

@@ -1,4 +1,5 @@
 import type { PublicConfig } from "../../server/public-config.ts";
+import { fetchWithConnectionCheck } from "./connection-required.ts";
 import { fetchPublicConfig } from "./public-config.ts";
 import { fetchZeroToken } from "./zero-auth.ts";
 
@@ -23,7 +24,7 @@ export type NativeZeroRuntime = ZeroRuntimeOperations & {
 export type ZeroRuntime = BrowserZeroRuntime | NativeZeroRuntime;
 
 async function repairAccountBootstrap(): Promise<void> {
-	const res = await fetch("/api/bootstrap", {
+	const res = await fetchWithConnectionCheck("/api/bootstrap", {
 		method: "POST",
 		credentials: "include",
 	});

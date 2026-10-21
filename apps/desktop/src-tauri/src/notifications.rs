@@ -139,6 +139,7 @@ pub fn target(value: &Value) -> Result<Value> {
     Ok(value.clone())
 }
 pub async fn request(
+    fences: &Arc<crate::request_fence::Fences>,
     http: &reqwest::Client,
     session: &Session,
     operation: &str,
@@ -162,7 +163,7 @@ pub async fn request(
     if let Some(body) = body {
         request = request.json(&body);
     }
-    let mut response = request.send().await.map_err(|_| "network")?;
+    let mut response = fences.send(session, request).await?;
     let status = response.status().as_u16();
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|_| "network")? {
@@ -196,21 +197,26 @@ pub async fn supported() -> bool {
 pub async fn supported() -> bool {
     false
 }
-pub fn start(owner: Owner, http: reqwest::Client, events: mpsc::Sender<Event>) -> Receiver {
+pub fn start(
+    owner: Owner,
+    http: reqwest::Client,
+    events: mpsc::Sender<Event>,
+    fences: Arc<crate::request_fence::Fences>,
+) -> Receiver {
     let captured = owner.clone();
     let finished = Arc::new(AtomicBool::new(false));
     let completed = finished.clone();
     let task = tauri::async_runtime::spawn(async move {
         #[cfg(test)]
         {
-            let _ = (http, events);
+            let _ = (http, events, fences);
             captured.wake.notified().await;
         }
         #[cfg(all(not(test), target_os = "linux"))]
-        linux::run(captured, http, events).await;
+        linux::run(captured, http, events, fences).await;
         #[cfg(all(not(test), not(target_os = "linux")))]
         {
-            let _ = http;
+            let _ = (http, fences);
             let _ = events.send(Event::State(captured, "unsupported")).await;
         }
         completed.store(true, Ordering::SeqCst);
@@ -276,7 +282,12 @@ mod linux {
         .await
         .unwrap_or(false)
     }
-    pub async fn run(owner: Owner, http: reqwest::Client, events: mpsc::Sender<Event>) {
+    pub async fn run(
+        owner: Owner,
+        http: reqwest::Client,
+        events: mpsc::Sender<Event>,
+        fences: Arc<crate::request_fence::Fences>,
+    ) {
         let (proxy, watcher) = match tokio::time::timeout(Duration::from_secs(3), connect()).await {
             Ok(Ok(proxy)) => proxy,
             _ => {
@@ -330,7 +341,7 @@ mod linux {
                     if !owner.current() { break; }
                     for notification in receipts.clone() {
                         if !owner.current() { break; }
-                        let result = request(&http,&owner.registration.session,"receipt",Some(json!({"registrationId":owner.registration.registration_id,"notificationId":notification}))).await;
+                        let result = request(&fences,&http,&owner.registration.session,"receipt",Some(json!({"registrationId":owner.registration.registration_id,"notificationId":notification}))).await;
                         if !owner.current() { break; }
                         if result.is_ok_and(|(status,v)| receipt_terminal(status,&v)) {
                             receipts.retain(|id| id != &notification);
@@ -338,7 +349,7 @@ mod linux {
                         }
                     }
                     if !owner.current() { break; }
-                    let result = request(&http,&owner.registration.session,"poll",Some(json!({"registrationId":owner.registration.registration_id}))).await;
+                    let result = request(&fences,&http,&owner.registration.session,"poll",Some(json!({"registrationId":owner.registration.registration_id}))).await;
                     if !owner.current() { break; }
                     let batch = match result {
                         Ok((200,v)) => messages(&v,&owner.registration.registration_id),

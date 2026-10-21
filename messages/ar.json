@@ -1,4 +1,7 @@
 {
+	"startup_connection_retry": "حاول مرة أخرى",
+	"startup_connection_heading": "يحتاج Ditero إلى اتصال ليفتح",
+	"startup_connection_body": "ستتم إعادة المحاولة تلقائيًا عند عودة الاتصال. يمكنك أيضًا إعادة المحاولة الآن.",
 	"workspace_read_only": "دورك في مساحة العمل يسمح بالعرض فقط.",
 	"accept_error_email_mismatch": "هذه الدعوة لعنوان بريد إلكتروني آخر. سجّل الخروج، ثم سجّل الدخول بالحساب الذي أُرسلت إليه.",
 	"accept_switch_account": "تسجيل الخروج وتبديل الحساب",
@@ -1214,6 +1217,7 @@
 	"focus_stop_aria": "إيقاف التركيز",
 	"focus_cue_work_complete": "اكتمل التركيز",
 	"focus_cue_break_over": "انتهت الاستراحة",
+	"focus_log_failed": "تعذر حفظ هذه الفترة. لن تتكرر محاولة حفظها.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [
@@ -1559,6 +1563,7 @@
 	"login_password_placeholder": "كلمة المرور",
 	"login_new_here": "جديد هنا؟",
 	"login_signup": "إنشاء حساب",
+	"login_signup_continue": "إذا كان من الممكن استخدام هذا العنوان، فسجّل الدخول للمتابعة.",
 	"login_signin": "تسجيل الدخول",
 	"login_signin_passkey": "تسجيل الدخول بمفتاح مرور",
 	"login_continue_google": "المتابعة باستخدام Google",

@@ -1,11 +1,7 @@
 import { Pause, Play, RotateCcw, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { m } from "../../../paraglide/messages.js";
-import {
-	formatMMSS,
-	phaseLabel,
-	remainingSecFrom,
-} from "../../focus/timer-core.ts";
+import { formatMMSS, phaseLabel } from "../../focus/timer-core.ts";
 import { useFocusTimer } from "../../focus/useFocusTimer.tsx";
 
 // Persistent app-level mini-surface (shell doc 4): a docked pill above the mobile
@@ -14,16 +10,38 @@ import { useFocusTimer } from "../../focus/useFocusTimer.tsx";
 // The countdown digits update every second but are aria-hidden; a separate polite
 // status region announces phase/round changes only (not every tick).
 export function FocusTimer() {
-	const { session, roundsPerLongBreak, cue, start, pause, skip, reset } =
-		useFocusTimer();
-	if (!session) return null;
+	const {
+		session,
+		roundsPerLongBreak,
+		cue,
+		error,
+		dismissError,
+		start,
+		pause,
+		skip,
+		reset,
+	} = useFocusTimer();
+	const failure = error ? (
+		<p
+			role="alert"
+			data-testid="focus-error"
+			className="text-sm text-destructive"
+		>
+			{error}
+			<button type="button" className="ms-2 underline" onClick={dismissError}>
+				{m.action_close()}
+			</button>
+		</p>
+	) : null;
+	if (!session)
+		return failure ? (
+			<div className="fixed inset-x-2 bottom-20 z-40 rounded-xl border bg-popover p-3 md:inset-x-auto md:end-4 md:w-72">
+				{failure}
+			</div>
+		) : null;
 
 	const label = phaseLabel(session.cycle);
-	const remaining = session.running
-		? session.endsAt != null
-			? remainingSecFrom(session.endsAt, Date.now())
-			: session.remainingSec
-		: session.remainingSec;
+	const remaining = session.remainingSec;
 	const roundText = m.focus_round_of({
 		round: session.cycle.round,
 		total: roundsPerLongBreak,
@@ -114,6 +132,7 @@ export function FocusTimer() {
 				</Button>
 			</div>
 
+			{failure}
 			{cue && (
 				<p
 					role="status"
