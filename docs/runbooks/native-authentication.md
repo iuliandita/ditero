@@ -38,9 +38,13 @@ That browser sign-in uses separate IP-plus-email buckets and a household-sized
 per-IP ceiling checked before any email bucket is created; see
 [Trusted Proxy](trusted-proxy.md) for NAT and VPN limits.
 
-Google appears only when the server has both OAuth credentials configured. A
-registration-policy refusal returns to this page with the localized registration
-message and retains the grant ID; see [sign-in providers](sign-in-providers.md).
+Each social or OpenID Connect provider appears only when the operator has
+configured it; the page reads the same server-driven list as the web sign-in. A
+provider sign-in is the system browser's ordinary sign-in, so the approval step and
+the grant ID are unchanged. A registration-policy refusal returns to this page with
+the localized registration message and retains the grant ID. A provider email is
+never linked to an existing account automatically; link providers from browser
+settings. See [sign-in providers](sign-in-providers.md).
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.
@@ -49,7 +53,7 @@ request fields. A native session cannot approve another grant. There is no
 caller-supplied callback URL.
 
 Better Auth 1.7 keeps Google's `/api/auth/callback/google` redirect URI and the
-pending native approval URL. Registration refusals carry a stable `error` code
+pending native approval URL; the other providers use `/api/auth/callback/<provider>`. Registration refusals carry a stable `error` code
 and a readable `error_description`; clients localize the code. TOTP enrollment
 explicitly requests the `totp` method and accepts setup keys only from that response.
 Before deploying 1.7, apply the additive JWT key migration described in

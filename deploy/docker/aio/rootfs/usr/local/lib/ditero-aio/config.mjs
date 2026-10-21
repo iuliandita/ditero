@@ -105,6 +105,10 @@ const REQUIRED_FILE_SECRETS = [
 const OPTIONAL_FILE_SECRETS = [
 	"DITERO_ENCRYPTION_KEY_NEXT",
 	"GOOGLE_CLIENT_SECRET",
+	"GITHUB_CLIENT_SECRET",
+	"DISCORD_CLIENT_SECRET",
+	"FACEBOOK_CLIENT_SECRET",
+	"MICROSOFT_CLIENT_SECRET",
 	"DITERO_ATTACHMENT_S3_ACCESS_KEY_ID",
 	"DITERO_ATTACHMENT_S3_SECRET_ACCESS_KEY",
 ];
@@ -131,6 +135,16 @@ const SPECIAL = [
 ];
 // Non-secret product config handed to the API unchanged.
 const PASSTHROUGH = [
+	"GITHUB_CLIENT_ID",
+	"DISCORD_CLIENT_ID",
+	"FACEBOOK_CLIENT_ID",
+	"MICROSOFT_CLIENT_ID",
+	"MICROSOFT_TENANT",
+	"APPLE_CLIENT_ID",
+	"APPLE_TEAM_ID",
+	"APPLE_KEY_ID",
+	"APPLE_PRIVATE_KEY_FILE",
+	"DITERO_OIDC_PROVIDERS",
 	"DITERO_ATTACHMENT_RETENTION_MS",
 	"DITERO_ATTACHMENT_SWEEP_BATCH_SIZE",
 	"DITERO_ATTACHMENT_SWEEP_MS",
@@ -198,6 +212,10 @@ const KNOWN = new Set([
 // namespaces (PATH, HOME, TERM, NO_COLOR, ...) are neither read nor forwarded.
 const UNSUPPORTED_NAMESPACE =
 	/^(DITERO_|ZERO_|POSTGRES_|PG|DATABASE_|BETTER_AUTH_|GOOGLE_|PUBLIC_|API_|TRUSTED_|SERVE_|NODE_|DEV$|MODE$|PROD$)/;
+
+// Generic OIDC providers are named by the operator, so their settings
+// (DITERO_OIDC_<ID>_*) cannot be listed here. The API validates them at start.
+const OIDC_PROVIDER_VARIABLE = /^DITERO_OIDC_[A-Z0-9_]+$/;
 
 // Empty string counts as unset, matching the `${VAR:-}` compose convention and
 // the current load_secret behaviour.
@@ -350,7 +368,12 @@ function absoluteHttpUrl(name, value, { required }) {
 
 function scanUnsupported(env) {
 	for (const name of Object.keys(env).sort()) {
-		if (!present(env[name]) || KNOWN.has(name)) continue;
+		if (
+			!present(env[name]) ||
+			KNOWN.has(name) ||
+			OIDC_PROVIDER_VARIABLE.test(name)
+		)
+			continue;
 		if (UNSUPPORTED_NAMESPACE.test(name)) {
 			fail(`${name} is not supported by the all-in-one image`);
 		}
@@ -613,6 +636,10 @@ export function buildConfiguration(
 			fail(`${name} is not allowed for this role`);
 	}
 	if (role !== "api") {
+		const oidc = Object.keys(env).find(
+			(name) => OIDC_PROVIDER_VARIABLE.test(name) && present(env[name]),
+		);
+		if (oidc !== undefined) fail(`${oidc} is not allowed for this role`);
 		for (const name of [
 			...OPTIONAL_FILE_SECRETS,
 			...PLAIN_SECRETS,
@@ -678,6 +705,11 @@ export function buildConfiguration(
 				out.DITERO_ENCRYPTION_KEY_NEXT,
 			);
 		for (const name of [...PLAIN_SECRETS, ...PASSTHROUGH]) {
+			const value = plainValue(env, name);
+			if (value !== undefined) out[name] = value;
+		}
+		for (const name of Object.keys(env).sort()) {
+			if (!OIDC_PROVIDER_VARIABLE.test(name)) continue;
 			const value = plainValue(env, name);
 			if (value !== undefined) out[name] = value;
 		}

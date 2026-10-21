@@ -132,7 +132,9 @@ Add them only to the API environment in an operator-owned Compose override:
 - Identity/discovery: `DITERO_REGISTRATION_MODE`, `DITERO_MEMBER_INVITES`,
   `DITERO_DISCOVERY`, `DITERO_PUBLIC_URL`, `DITERO_PASSKEY_ORIGIN`,
   `DITERO_PASSKEY_RP_ID`, `DITERO_TRUSTED_PROXIES`, `TRUSTED_ORIGINS`,
-  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (your own OAuth client; see
+  the sign-in provider settings (`GOOGLE_*`, `MICROSOFT_*`, `GITHUB_*`, `DISCORD_*`,
+  `FACEBOOK_*`, `APPLE_*`, `DITERO_OIDC_PROVIDERS` and `DITERO_OIDC_<ID>_*`; your
+  own OAuth clients, see
   [sign-in providers](../../../docs/runbooks/sign-in-providers.md)).
 - Attachments: `DITERO_ATTACHMENT_STORAGE_DRIVER`, `DITERO_ATTACHMENT_FS_PATH`,
   `DITERO_ATTACHMENT_QUOTA_BYTES`, `DITERO_ATTACHMENT_RETENTION_MS`,
@@ -156,7 +158,8 @@ Add them only to the API environment in an operator-owned Compose override:
   `DITERO_WORKER_BATCH_SIZE`, `DITERO_WORKER_CONCURRENCY`,
   `DITERO_WORKER_LEASE_MS` and `DITERO_WORKER_TICK_MS`.
 
-Key rotation accepts `DITERO_ENCRYPTION_KEY_NEXT`. That key, `GOOGLE_CLIENT_SECRET`
+Key rotation accepts `DITERO_ENCRYPTION_KEY_NEXT`. That key, the provider client secrets
+(`GOOGLE_`, `MICROSOFT_`, `GITHUB_`, `DISCORD_` and `FACEBOOK_CLIENT_SECRET`)
 and both S3 credentials also accept their `_FILE` forms in the API's private
 directory. SMTP, Telegram and VAPID private secrets currently accept plain API
 environment values only; keep any override containing them private. Do not pass

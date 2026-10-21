@@ -30,8 +30,13 @@ accounts; see [Trusted Proxy](runbooks/trusted-proxy.md) for NAT and VPN guidanc
 Production defaults to `DITERO_REGISTRATION_MODE=bootstrap`: only the first account
 can register without an invitation. `closed` disables uninvited registration,
 including the first account; eligible invitations can still admit accounts.
-Optional Google sign-in creates accounts through the same registration check, so
-a first Google sign-in needs the same admission as an email signup. See
+Optional provider sign-in (Google, generic OpenID Connect, Microsoft, GitHub,
+Discord, Apple, Facebook) creates accounts through the same registration check, so
+a first provider sign-in needs the same admission as an email signup. Only a
+provider-verified email can satisfy an invitation, and a provider account is never
+linked to an existing account by email: the signed-in owner links it explicitly.
+Provider accounts are keyed on the provider's immutable ID (issuer plus subject for
+OpenID Connect). See
 [Sign-in providers](runbooks/sign-in-providers.md).
 
 Email sign-up returns HTTP 200 with `{"token":null,"user":null}` for both a

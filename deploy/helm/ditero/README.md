@@ -150,7 +150,10 @@ Use `app.extraEnv` and `zero.extraEnv` for additional supported configuration.
 Use `valueFrom.secretKeyRef` for sensitive settings rather than literal values.
 For example, optional Google sign-in needs your own OAuth client (see
 [sign-in providers](https://github.com/iuliandita/ditero/blob/develop/docs/runbooks/sign-in-providers.md));
-add both keys to a Secret, which may be the existing one, and reference them:
+add both keys to a Secret, which may be the existing one, and reference them
+(the other providers use the same pattern with their own variable names; mount
+the Apple `.p8` key or a client secret file and point the matching `_FILE`
+variable at it):
 
 ```yaml
 app:
