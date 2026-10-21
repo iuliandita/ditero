@@ -13,7 +13,10 @@
 		},
 		"configuration": {
 			"sourceDigest": "0a85390f9360fd396635e00104cce99dc64c2ffe6aedf8706cf1be25936d4814",
-			"docs": ["docs/runbooks/sign-in-providers.md", "deploy/docker/aio/README.md"],
+			"docs": [
+				"docs/runbooks/sign-in-providers.md",
+				"deploy/docker/aio/README.md"
+			],
 			"note": "Add optional sign-in provider settings (GOOGLE_, MICROSOFT_, GITHUB_, DISCORD_, FACEBOOK_, APPLE_ and DITERO_OIDC_) with _FILE secrets, documented in the provider runbook and deployment guides. No existing setting changes and all are off by default."
 		},
 		"deployment": {
