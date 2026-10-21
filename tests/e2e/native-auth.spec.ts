@@ -2,8 +2,23 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
-import { configuredOrigin, signUp, uniqueEmail, webOrigin } from "./helpers.ts";
+import { expect, type Page, test } from "@playwright/test";
+import { configuredOrigin, uniqueEmail, webOrigin } from "./helpers.ts";
+
+// Consent never mounts Zero; its session fixture must not depend on workspace sync.
+async function signUpBrowserAccount(
+	page: Page,
+	email: string,
+): Promise<string> {
+	const origin = webOrigin();
+	const response = await page.request.post(`${origin}/api/auth/sign-up/email`, {
+		headers: { Origin: origin },
+		data: { email, password: "pw-123456", name: email.split("@")[0] },
+	});
+	expect(response.ok()).toBe(true);
+	const body = (await response.json()) as { user: { id: string } };
+	return body.user.id;
+}
 
 test.use({
 	screenshot: "off",
@@ -25,9 +40,9 @@ test("system browser retains the native grant and approves only after explicit c
 		credentials = JSON.parse(await readFile(credentialsPath, "utf8"));
 	else {
 		credentials = { email: uniqueEmail("native-maya"), password: "pw-123456" };
-		await signUp(page, credentials.email);
+		await signUpBrowserAccount(page, credentials.email);
 		const named = await page.request.post("/api/auth/update-user", {
-			headers: { Origin: new URL(page.url()).origin },
+			headers: { Origin: webOrigin() },
 			data: { name: "Maya Chen" },
 		});
 		expect(named.ok()).toBe(true);
@@ -260,6 +275,83 @@ test("system browser retains the native grant and approves only after explicit c
 		expect(approvals).toBe(1);
 		expect(zeroRequests).toBe(0);
 		expect(zeroSockets).toBe(0);
+	} finally {
+		await api.dispose();
+	}
+});
+
+test("switching browser accounts preserves the native request and requires replacement consent", async ({
+	page,
+	context,
+	playwright,
+}) => {
+	test.setTimeout(120_000);
+	const first = uniqueEmail("native-switch-first");
+	const second = uniqueEmail("native-switch-second");
+	const firstUserId = await signUpBrowserAccount(page, first);
+	await context.clearCookies();
+	await signUpBrowserAccount(page, second);
+	const api = await playwright.request.newContext({
+		baseURL: configuredOrigin("E2E_API_URL"),
+	});
+	try {
+		const verifier = randomBytes(32).toString("base64url");
+		const challenge = createHash("sha256").update(verifier).digest("base64url");
+		const create = await api.post("/api/native/grants", {
+			data: { challenge, deviceLabel: "Account switch test" },
+		});
+		expect(create.status()).toBe(200);
+		const { grantId } = await create.json();
+		const authorize = `/native/authorize?grantId=${grantId}`;
+		let approvals = 0;
+		page.on("request", (request) => {
+			if (new URL(request.url()).pathname === "/api/native/grants/approve")
+				approvals++;
+		});
+		await page.goto(authorize);
+		await expect(page.getByTestId("native-authorize")).toContainText(second);
+		await page.route("**/api/auth/sign-out", (route) =>
+			route.fulfill({
+				status: 503,
+				contentType: "application/json",
+				body: JSON.stringify({ code: "TEST_UNAVAILABLE", message: "Retry" }),
+			}),
+		);
+		await page.getByTestId("native-authorize-switch-account").click();
+		await expect(page.getByRole("alert")).toContainText("Could not sign out");
+		await expect(page.getByTestId("native-authorize-allow")).toBeEnabled();
+		expect(approvals).toBe(0);
+		await page.unroute("**/api/auth/sign-out");
+		await page.getByTestId("native-authorize-switch-account").click();
+		await expect(page.getByTestId("signin")).toBeVisible();
+		await expect(page).toHaveURL(`${webOrigin()}${authorize}`);
+		expect(
+			await (await page.request.get("/api/auth/get-session")).json(),
+		).toBeNull();
+		expect(approvals).toBe(0);
+		expect(
+			(
+				await api.post("/api/native/grants/exchange", {
+					data: { grantId, verifier },
+				})
+			).status(),
+		).toBe(409);
+		await page.getByTestId("email").fill(first);
+		await page.getByTestId("password").fill("pw-123456");
+		await page.getByTestId("signin").click();
+		await expect(page.getByTestId("native-authorize")).toContainText(first);
+		await expect(page).toHaveURL(`${webOrigin()}${authorize}`);
+		expect(approvals).toBe(0);
+		await page.getByTestId("native-authorize-allow").click();
+		await expect(page.getByTestId("native-authorize-approved")).toBeVisible();
+		const exchange = await api.post("/api/native/grants/exchange", {
+			data: { grantId, verifier },
+		});
+		expect(exchange.status()).toBe(200);
+		expect(await exchange.json()).toMatchObject({
+			userId: firstUserId,
+		});
+		expect(approvals).toBe(1);
 	} finally {
 		await api.dispose();
 	}

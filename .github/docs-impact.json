@@ -2,18 +2,13 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "7eee76044b7304249bb091f0477efe74c9309de5053224ca34bd8e735dd4f635",
-			"docs": [
-				"apps/android/README.md",
-				"apps/desktop/README.md"
-			],
-			"note": "Document recovery-code downloads through account-bound native save operations on Android and desktop, retry after a failed write, and distinct Android connection diagnostics without relaxing certificate trust."
+			"sourceDigest": "05e9affd6915b57ffce5d3e8ce454cd608bf4b681a34386af1fbf3be45004397",
+			"docs": ["docs/runbooks/native-authentication.md"],
+			"note": "Document browser account switching on native consent, preserving the validated request and requiring explicit approval from the replacement account."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
-			"docs": [
-				"RELEASING.md"
-			],
+			"docs": ["RELEASING.md"],
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
@@ -28,19 +23,13 @@
 		},
 		"deployment": {
 			"sourceDigest": "4a4cadef874a1cef442178e7a6e332a0eefe5252e635068a1d4c49486f7d7794",
-			"docs": [
-				"deploy/docker/aio/README.md",
-				"deploy/helm/ditero/README.md"
-			],
+			"docs": ["deploy/docker/aio/README.md", "deploy/helm/ditero/README.md"],
 			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
 		},
 		"native": {
-			"sourceDigest": "4d162bcebca7428aa59cfbd0df44fa7d7d9c28d385bcc2515a1fc16fb50127ea",
-			"docs": [
-				"apps/android/README.md",
-				"apps/desktop/README.md"
-			],
-			"note": "Document recovery-code downloads through account-bound native save operations on Android and desktop, retry after a failed write, and distinct Android connection diagnostics without relaxing certificate trust."
+			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
+			"docs": ["apps/desktop/README.md"],
+			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		}
 	}
 }
