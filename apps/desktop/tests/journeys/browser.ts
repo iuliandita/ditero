@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { request as httpsRequest } from "node:https";
+import { Agent, request as httpsRequest } from "node:https";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import { background, evidence, freePort, run, state, until } from "./stack.ts";
@@ -21,11 +21,12 @@ function fixtureRequest(
 	}>((done, fail) => {
 		const body =
 			options.data === undefined ? undefined : JSON.stringify(options.data);
+		const agent = new Agent({ ca: readFileSync(resolve(state, "ca.crt")) });
 		const request = httpsRequest(
 			url,
 			{
 				method: options.method ?? "GET",
-				ca: readFileSync(resolve(state, "ca.crt")),
+				agent,
 				headers: {
 					...(body
 						? {
@@ -54,7 +55,10 @@ function fixtureRequest(
 		request.setTimeout(15000, () =>
 			request.destroy(new Error("Verified fixture request timed out")),
 		);
-		request.on("error", fail);
+		request.on("close", () => agent.destroy());
+		request.on("error", (error) =>
+			fail(new Error(`Fixture HTTPS ${url}: ${error.stack}`, { cause: error })),
+		);
 		request.end(body);
 	});
 }

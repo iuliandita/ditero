@@ -89,7 +89,8 @@ export async function until<T>(
 	}
 	throw new Error(`${label} timed out${last ? `: ${last}` : ""}`);
 }
-export async function freePort() {
+const allocatedPorts = new Set<number>();
+export async function freePort(): Promise<number> {
 	const server = tcpServer();
 	await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
 	const address = server.address();
@@ -97,6 +98,12 @@ export async function freePort() {
 		throw new Error("missing TCP address");
 	await new Promise<void>((done, fail) =>
 		server.close((error) => (error ? fail(error) : done())),
+	);
+	if (allocatedPorts.has(address.port)) return freePort();
+	allocatedPorts.add(address.port);
+	writeFileSync(
+		resolve(evidence, "allocated-ports.json"),
+		JSON.stringify([...allocatedPorts]),
 	);
 	return address.port;
 }
