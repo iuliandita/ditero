@@ -41,6 +41,10 @@ per-IP ceiling checked before any email bucket is created; see
 Google appears only when the server has both OAuth credentials configured. A
 registration-policy refusal returns to this page with the localized registration
 message and retains the grant ID; see [sign-in providers](sign-in-providers.md).
+SAML single sign-on, when configured, appears on the same page and returns to it
+with the grant ID intact; it uses the browser flow described in
+[SAML single sign-on](sign-in-providers.md#saml-single-sign-on) and adds no native
+credential path. A refused or unlinked identity returns here with a readable error.
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.

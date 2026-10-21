@@ -133,7 +133,11 @@ Add them only to the API environment in an operator-owned Compose override:
   `DITERO_DISCOVERY`, `DITERO_PUBLIC_URL`, `DITERO_PASSKEY_ORIGIN`,
   `DITERO_PASSKEY_RP_ID`, `DITERO_TRUSTED_PROXIES`, `TRUSTED_ORIGINS`,
   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (your own OAuth client; see
-  [sign-in providers](../../../docs/runbooks/sign-in-providers.md)).
+  [sign-in providers](../../../docs/runbooks/sign-in-providers.md)), and the
+  single-line `DITERO_SAML_*` settings of the SAML guide in the same runbook. The
+  bundle forwards file forms only (`DITERO_SAML_IDP_METADATA_FILE`,
+  `DITERO_SAML_SP_PRIVATE_KEY_FILE`, `DITERO_SAML_SP_CERT_FILE`): mount the files
+  into the container and point the variables at them.
 - Attachments: `DITERO_ATTACHMENT_STORAGE_DRIVER`, `DITERO_ATTACHMENT_FS_PATH`,
   `DITERO_ATTACHMENT_QUOTA_BYTES`, `DITERO_ATTACHMENT_RETENTION_MS`,
   `DITERO_ATTACHMENT_SWEEP_BATCH_SIZE`, `DITERO_ATTACHMENT_SWEEP_MS`,
