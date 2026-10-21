@@ -1,17 +1,17 @@
 # Ditero terminal interface
 
-The [local Linux x64 standalone candidate](cli.md) includes `bin/ditero-tui`. Run
-`bin/ditero-tui --version` to inspect its build identity, then launch it in an
-interactive POSIX terminal. Bun and a source checkout are not required. The same
-commands below work with `bin/ditero-tui` in place of `bun run tui`. Automatic
-local config loading is disabled; set the process environment explicitly.
-Binary publication remains blocked by incomplete runtime notices. Other platforms
-and architectures remain unqualified.
+Install the `ditero-tui.js` bundle from the release archive (see
+[release bundles](cli.md#release-bundles)) and run `./ditero-tui.js` with Bun 1.3.14 or
+newer in an interactive POSIX terminal. Its shebang passes
+`--no-env-file --config=/dev/null` to Bun, so a `.env` or `bunfig.toml` in the working
+directory is ignored; pass the same flags if you start it as `bun ditero-tui.js`.
+`--version` prints a JSON build identity.
+Set `DITERO_URL` to the server HTTPS origin and `DITERO_TOKEN` through your secret
+manager or environment. Tokens are never command-line arguments or stored by this
+client. Releases are checked on Linux x64; other platforms are unqualified.
 
-Run `bun install --frozen-lockfile`, then `bun run tui --help`. Set `DITERO_URL`
-to the server HTTPS origin and `DITERO_TOKEN` through your secret manager or
-environment. Tokens are never command-line arguments or stored by this client.
-This source interface requires Bun and an interactive POSIX terminal.
+From a source checkout, run `bun install --frozen-lockfile`, then `bun run tui`
+instead:
 
 ```sh
 bun run tui

@@ -3,29 +3,41 @@
 The CLI uses the version 1 public API to discover member-visible content, plan a
 task, create it, and complete, update, or delete an observed task with an explicit retry key.
 Later sections cover list, folder, comment, relationship, placement and webhook workflows.
-A local Linux x64 glibc standalone candidate can be built for all three terminal
-clients. Public binary distribution is blocked while embedded runtime license and
-copyright notices remain incomplete in [#575](https://github.com/iuliandita/ditero/issues/575).
-Neither release assets nor public Actions uploads include these executables.
+## Release bundles
+
+Each release publishes `ditero-VERSION-clients.tar.gz` with the CLI
+(`ditero-cli.js`), the stdio MCP server (`ditero-mcp.js`) and the terminal UI
+(`ditero-tui.js`) as minified JavaScript bundles. They run on a Bun you install
+yourself, on any operating system where Bun 1.3.14 or newer runs. They are not
+standalone executables and Node.js cannot run them; standalone binaries are on the
+[roadmap](ROADMAP.md). Releases are checked on Linux x64 with the newest and the
+minimum Bun; Windows and macOS are not part of that qualification, and the terminal
+UI needs an interactive POSIX terminal.
 
 ```sh
-bun install --frozen-lockfile
-bun run build:clients
-./out/clients/ditero-VERSION-clients-linux-x64/bin/ditero --version
+sha256sum --check --ignore-missing SHA256SUMS.txt
+tar -xzf ditero-VERSION-clients.tar.gz
+cd ditero-VERSION-clients
+sha256sum --check SHA256SUMS
+./ditero-cli.js --version
 ```
 
-`BUILDINFO.json` records the release version, base source commit, official Bun
-runtime revision and checksum, target, and `runtimeNoticesComplete: false`.
-Modified local source is marked separately. Runtime qualification passes on Linux
-x64 glibc in Ubuntu 24.04 without Bun or a checkout; this does not qualify binary
-redistribution. SSE4.2 is required. ARM, musl, Windows and macOS remain unqualified.
-Automatic `.env`, `bunfig.toml`, `package.json` and `tsconfig.json` loading is disabled.
-Supply credentials explicitly through the process environment. Caller-controlled
-Bun runtime flags are trusted configuration; the executable is not a sandbox.
-Bundled relink inputs and partial notices are retained in the local candidate.
-`notices/runtime/manifest.json` binds the retained source notices to their source
-URLs and SHA-256 checksums. Archive qualification verifies the extracted notice
-files; this integrity check does not establish complete runtime license coverage.
+The archive holds the three bundles, `THIRD_PARTY_NOTICES.txt` (license text for every
+bundled npm package), `LICENSE`, `BUILDINFO.json` and `SHA256SUMS`. Each bundle starts
+with the shebang `#!/usr/bin/env -S bun --no-env-file --config=/dev/null`, so
+`./ditero-cli.js` (with `bun` on `PATH`) ignores a `.env` and a `bunfig.toml` in the
+working directory; Bun would otherwise load the first and run `preload` code from the
+second. If you start a bundle as `bun ditero-cli.js`, pass the same two flags first.
+`--config=/dev/null` is the Linux and macOS spelling; on Windows start the clients
+from a directory you control.
+`--version` prints one JSON line with the client name, release version, source commit,
+whether the source was modified, the minimum Bun and the running Bun. An older Bun
+exits with status 2 and a message before any client code runs. Source maps are not
+published; rebuild the exact tagged commit with `bun run build:clients`.
+
+Supply `DITERO_URL` and `DITERO_TOKEN` through the process environment. Caller
+controlled Bun runtime flags are trusted configuration, not a sandbox. Every command
+below also works from a bundle: replace `bun run cli` with `./ditero-cli.js`.
 
 The [terminal interface](tui.md) provides interactive browsing and reviewed task
 creation, completion, scalar updates, deletion and reordering, plus read-only
@@ -77,7 +89,7 @@ are not retried automatically.
 | Exit | Meaning |
 | --- | --- |
 | 0 | Success |
-| 2 | Invalid arguments, configuration, or rejected request |
+| 2 | Invalid arguments, configuration, rejected request, or unsupported Bun |
 | 3 | Invalid, expired, or revoked token |
 | 4 | Permission denied |
 | 5 | Missing resource or API |

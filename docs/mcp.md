@@ -5,21 +5,26 @@ It uses the same bounded, validated public API client as the CLI. It does not ho
 an LLM or send data to an LLM provider; the MCP client controls where tool results
 go. Only connect clients you trust to read the account's visible content.
 
-The [local Linux x64 standalone candidate](cli.md) includes `bin/ditero-mcp`. Configure
-the MCP client with the absolute executable path and no source arguments:
+Install the `ditero-mcp.js` bundle from the release archive (see
+[release bundles](cli.md#release-bundles)) and configure the MCP client to launch it
+with Bun 1.3.14 or newer:
 
 ```json
-{ "command": "/path/to/bin/ditero-mcp", "args": [] }
+{
+  "command": "bun",
+  "args": ["--no-env-file", "--config=/dev/null", "/path/to/ditero-mcp.js"]
+}
 ```
 
-Binary publication remains blocked by incomplete runtime notices. At runtime
-the local candidate requires neither Bun nor a source checkout. `--version` prints the build
-identity and exits without credentials; the normal stdio launch prints only
-protocol messages to stdout. The SDK handshake reports the application release
-version; public API envelopes remain version 1. Automatic local config loading
-is disabled, so provide credentials in the client process environment.
+`--version` prints a JSON build identity and exits without credentials; the normal
+stdio launch prints only protocol messages to stdout. The SDK handshake reports the
+application release version; public API envelopes remain version 1. Without those
+two flags Bun would load a `.env` and run `bunfig.toml` preloads from the client's
+working directory (`--config=/dev/null` is the Linux and macOS spelling). Provide
+credentials in the client process environment.
+The bundle runs wherever Bun does; releases are checked on Linux x64.
 
-Install source dependencies with `bun install --frozen-lockfile`. Set `DITERO_URL`
+From a source checkout, run `bun install --frozen-lockfile`. Set `DITERO_URL`
 to the trusted HTTPS server origin and supply a personal access token
 through `DITERO_TOKEN` from your secret manager or protected client environment.
 Do not put the token in arguments, a URL, tracked configuration, or shared logs.

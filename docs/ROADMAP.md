@@ -182,6 +182,10 @@ Good ideas with no timeline yet.
   strong per-tenant isolation (shared-DB row-tenancy first, dedicated DB per tenant for
   customers paying for isolation) and the zero-knowledge story above as a genuine guarantee
   for hosted, sensitive data.
+- **Standalone terminal binaries.** Single-file CLI, MCP and TUI executables that embed
+  the Bun runtime, so no Bun install is needed. They wait on complete embedded-runtime
+  license and source notices; until then the clients ship as JavaScript bundles for an
+  installed Bun.
 - Project-management tool integrations (Trello, Linear, and friends).
 - More list kinds unlocked by the typed-container model.
 
