@@ -65,7 +65,10 @@ jobs:
             postgresql postgresql-client dunst xdotool openbox wmctrl scrot
       - name: macOS PostgreSQL
         if: runner.os == 'macOS'
-        run: brew install postgresql@18
+        run: |
+          set -euo pipefail
+          brew install postgresql@18
+          osacompile -o "$RUNNER_TEMP/chrome-confirmation.scpt" apps/desktop/tests/journeys/macos-browser.applescript
       - name: Select Rust and native driver
         run: |
           set -euo pipefail

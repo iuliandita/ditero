@@ -1,7 +1,15 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
-import { background, evidence, freePort, run, state, until } from "./stack.ts";
+import {
+	background,
+	evidence,
+	freePort,
+	root,
+	run,
+	state,
+	until,
+} from "./stack.ts";
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`;
 
@@ -31,24 +39,12 @@ export async function systemBrowser() {
 				])
 			: background("system-browser", chrome, [...args, "about:blank"]);
 	if (process.platform === "darwin") {
-		run("osascript", [
-			"-e",
-			`tell application "System Events"
-repeat 40 times
-try
-tell process "CoreServicesUIAgent"
-if exists (first static text of window 1 whose value contains "Google Chrome") then
-if exists button "Open" of window 1 then
-click button "Open" of window 1
-return
-end if
-end if
-end tell
-end try
-delay 0.25
-end repeat
-end tell`,
-		]);
+		writeFileSync(
+			resolve(evidence, "browser-first-open.txt"),
+			run("osascript", [
+				resolve(root, "apps/desktop/tests/journeys/macos-browser.applescript"),
+			]),
+		);
 	}
 
 	await until(
