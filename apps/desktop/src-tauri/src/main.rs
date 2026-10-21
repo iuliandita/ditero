@@ -1,6 +1,9 @@
 mod attachments;
 mod deep_links;
 mod host;
+#[cfg(all(debug_assertions, target_os = "macos"))]
+#[path = "../../tests/journeys/hook.rs"]
+mod journeys;
 mod notifications;
 mod offline;
 mod protocol;

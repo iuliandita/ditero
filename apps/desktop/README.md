@@ -347,6 +347,16 @@ settings; it does not qualify a new installer or a complete platform journey.
 
 Windows and macOS have successful development builds only; actual sign-in,
 credential-store access, offline behavior, and notification clicks remain unqualified.
+The branch-scoped Desktop runtime journeys workflow installs development packages
+on hosted Windows, Apple Silicon macOS, Intel macOS, and Linux runners. Its
+per-journey artifacts distinguish completed checks from unavailable features.
+It uses ephemeral servers and an OS-trusted local CA, without certificate bypasses.
+macOS automation is included only in debug builds, requires explicit process-local
+test configuration, and is checked for absence from the optimized release binary.
+These disposable runner accounts do not qualify download trust, trusted signing,
+notarization, upgrades, or physical devices. Windows/macOS system notifications
+remain unavailable in the product. Existing client data, backups, and rollback
+procedures are unchanged by this test harness.
 Offline recovery, account/server changes, revoke/restore failures, reload behavior,
 worker execution, OPFS/locks, and installer execution still require platform checks.
 The desktop uses each platform's native TLS trust; server certificates must also

@@ -1,0 +1,197 @@
+import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { connect } from "node:net";
+import { resolve } from "node:path";
+import {
+	background,
+	evidence,
+	freePort,
+	root,
+	run,
+	state,
+	until,
+} from "./stack.ts";
+
+export async function desktop(application: string) {
+	let session = "";
+	let port = 0;
+	let app: ReturnType<typeof background> | undefined;
+	const token = randomBytes(32).toString("hex");
+	async function request(method: string, path: string, body?: unknown) {
+		const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+			method,
+			headers: { "content-type": "application/json" },
+			body: body === undefined ? undefined : JSON.stringify(body),
+		});
+		const data = (await response.json()) as { value: unknown };
+		if (!response.ok)
+			throw new Error(`WebDriver ${method} ${path}: ${JSON.stringify(data)}`);
+		return data.value;
+	}
+	let driver: ReturnType<typeof background> | undefined;
+	async function launch() {
+		if (process.platform === "darwin") {
+			const ready = resolve(state, "hook.json");
+			if (existsSync(ready)) unlinkSync(ready);
+			app = background("desktop", application, [], {
+				...process.env,
+				DITERO_JOURNEY_DIRECTORY: state,
+				DITERO_JOURNEY_TOKEN: token,
+			});
+			await until("macOS debug hook", () => existsSync(ready));
+			port = JSON.parse(readFileSync(ready, "utf8")).port;
+		} else {
+			if (!driver) {
+				port = await freePort();
+				const nativePort = await freePort();
+				const args = [
+					"--port",
+					String(port),
+					"--native-port",
+					String(nativePort),
+				];
+				if (process.env.JOURNEY_NATIVE_DRIVER)
+					args.push("--native-driver", process.env.JOURNEY_NATIVE_DRIVER);
+				driver = background("tauri-driver", "tauri-driver", args);
+				await until(
+					"tauri-driver",
+					async () => (await fetch(`http://127.0.0.1:${port}/status`)).ok,
+				);
+			}
+			const value = (await request("POST", "/session", {
+				capabilities: {
+					alwaysMatch: {
+						"tauri:options": { application },
+						...(process.platform === "win32"
+							? {
+									"ms:edgeOptions": {
+										additionalBrowserArguments: "--enable-logging=stderr",
+									},
+								}
+							: {}),
+					},
+				},
+			})) as { sessionId: string };
+			session = value.sessionId;
+		}
+	}
+	async function evaluate<T = unknown>(script: string): Promise<T> {
+		if (process.platform !== "darwin")
+			return (await request("POST", `/session/${session}/execute/sync`, {
+				script: `return (${script});`,
+				args: [],
+			})) as T;
+		return await new Promise<T>((done, fail) => {
+			const socket = connect(port, "127.0.0.1");
+			let bytes = "";
+			socket.setTimeout(15000, () =>
+				socket.destroy(new Error("debug hook response timeout")),
+			);
+			socket.on("connect", () =>
+				socket.write(
+					`${JSON.stringify({ token, script: script === "__journey_close__" ? script : `JSON.stringify((${script}))` })}\n`,
+				),
+			);
+			socket.on("error", fail);
+			socket.on("data", (chunk) => {
+				bytes += chunk.toString();
+				if (bytes.includes("\n")) {
+					socket.end();
+					try {
+						let value = JSON.parse(bytes.trim());
+						if (typeof value === "string") value = JSON.parse(value);
+						done(value as T);
+					} catch (error) {
+						fail(error);
+					}
+				}
+			});
+		});
+	}
+	async function screenshot(name: string) {
+		writeFileSync(
+			resolve(evidence, `${name}.html`),
+			await evaluate<string>("document.documentElement.outerHTML"),
+		);
+		if (process.platform === "darwin")
+			run("screencapture", ["-x", resolve(evidence, `${name}.png`)]);
+		else
+			writeFileSync(
+				resolve(evidence, `${name}.png`),
+				Buffer.from(
+					(await request("GET", `/session/${session}/screenshot`)) as string,
+					"base64",
+				),
+			);
+	}
+	async function click(selector: string) {
+		await until(`visible ${selector}`, () =>
+			evaluate(
+				`(() => { const e = document.querySelector(${JSON.stringify(selector)}); return !!e && e.getBoundingClientRect().width > 0 && !e.disabled })()`,
+			),
+		);
+		if (process.platform !== "darwin") {
+			const element = (await request("POST", `/session/${session}/element`, {
+				using: "css selector",
+				value: selector,
+			})) as Record<string, string>;
+			await request(
+				"POST",
+				`/session/${session}/element/${element["element-6066-11e4-a52e-4f735466cecf"]}/click`,
+				{},
+			);
+		} else
+			await evaluate(
+				`(() => { const e = document.querySelector(${JSON.stringify(selector)}); e.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true,button:0,pointerType:'mouse'})); e.dispatchEvent(new PointerEvent('pointerup', {bubbles:true,button:0,pointerType:'mouse'})); e.click(); return true })()`,
+			);
+	}
+	async function fill(selector: string, value: string) {
+		await until(`input ${selector}`, () =>
+			evaluate(`!!document.querySelector(${JSON.stringify(selector)})`),
+		);
+		await evaluate(
+			`(() => { const e = document.querySelector(${JSON.stringify(selector)}); const setter = Object.getOwnPropertyDescriptor(e instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set; setter.call(e, ${JSON.stringify(value)}); e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true})); return true })()`,
+		);
+	}
+	async function close() {
+		if (process.platform === "darwin") {
+			await evaluate("__journey_close__");
+			await until("graceful desktop close", () => app?.exitCode !== null, 30);
+		} else {
+			if (process.platform === "win32") {
+				run("pwsh", [
+					"-NoProfile",
+					"-File",
+					resolve(root, "apps/desktop/tests/journeys/close.ps1"),
+					"-Application",
+					application,
+				]);
+			} else {
+				const pid = Number(run("pgrep", ["-x", "ditero-desktop"]));
+				if (!Number.isSafeInteger(pid) || pid <= 0)
+					throw new Error("Expected one desktop PID");
+				run("wmctrl", ["-c", "Ditero"]);
+				await until(
+					"managed desktop exit",
+					() => spawnSync("kill", ["-0", String(pid)]).status !== 0,
+					30,
+				);
+			}
+			await request("DELETE", `/session/${session}`).catch(() => {});
+		}
+	}
+	await launch();
+	return {
+		evaluate,
+		screenshot,
+		click,
+		fill,
+		launch,
+		close,
+		async stop() {
+			if (app?.exitCode === null) app.kill();
+			driver?.kill();
+		},
+	};
+}

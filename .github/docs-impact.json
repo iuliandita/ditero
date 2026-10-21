@@ -28,9 +28,9 @@
 			"note": "Align chart metadata, resource labels and packaged deployment image examples with 0.1.0-beta.1. Preserve app/Zero pairing, storage and recovery guidance, and cluster qualification limits; the optional one-image bundle remains separate from standard release assets."
 		},
 		"native": {
-			"sourceDigest": "1a9f39a14e3af1c56084dfde8ae3128ffbf181e5aef396f1e8764ab37fd6a27b",
+			"sourceDigest": "0f7339cc0171c4e596b7eeac65831b99f95920839754b0015133f2f2f9bc2bc0",
 			"docs": ["apps/desktop/README.md"],
-			"note": "Document desktop cold offline activation from complete unexpired evidence in the OS credential store, exact session binding, fail-closed verification and revocation markers, and native token refresh on socket retry. Existing records need one complete online start; downgrades require signing out stored accounts before installing an older build. Retain queued edits, refuse fallback for trust, HTTP, validation or storage failures, and keep platform runtime qualification explicit. Android cached activation policy is unchanged. Every authenticated native request now persists a refusal fence before I/O, including attachment, notification, cleanup and sync-handshake requests. Binary keyring chunks stay within the Windows blob limit, share credential references, and use a bounded recovery journal. Both earlier protected-record formats require fresh online evidence after upgrade; downgrades require OS credential-manager cleanup. The desktop TLS refusal test fixture now carries a fixed non-secret password because macOS refuses empty-password PKCS#12 imports; test-only, no runtime or documented behavior change."
+			"note": "Document the branch-scoped hosted desktop journey harness, ephemeral trusted HTTPS fixture, per-journey evidence and platform limits. macOS evaluation is debug-only and requires explicit test configuration; optimized release binaries must exclude it. No client protocol, stored data, backup, upgrade or rollback behavior changes. Windows/macOS notifications remain unsupported and are not credited as passing journeys."
 		},
 		"authentication": {
 			"sourceDigest": "94708677c42d414b0287be7f48a38f511b95039dce4a14a4b33939cc3d3dd213",

@@ -1,0 +1,497 @@
+import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { systemBrowser } from "./browser.ts";
+import { desktop } from "./driver.ts";
+import {
+	evidence,
+	root,
+	run,
+	stack,
+	state,
+	until,
+	untrustedFixture,
+} from "./stack.ts";
+
+type Result = {
+	journey: string;
+	status: "passed" | "failed" | "unsupported" | "not-run";
+	detail?: string;
+};
+const expectedJourneys = [
+	"installed first launch",
+	"untrusted HTTPS certificate is refused",
+	"trusted HTTPS and system-browser consent",
+	"desktop task reaches server",
+	"server task reaches desktop",
+	"offline change remains queued",
+	"offline cold start with verified evidence",
+	"reconnect drains durable change",
+	"OS notification shown and clicked",
+	"server switch isolates account and cache",
+	"sign-out clears selected OS-keystore credential",
+	"sign-out clears final OS-keystore credential",
+];
+const results: Result[] = [];
+const ids = (id: string) => `[data-testid="${id}"]`;
+let app: Awaited<ReturnType<typeof desktop>> | undefined;
+let servers: Awaited<ReturnType<typeof stack>> | undefined;
+let browser: Awaited<ReturnType<typeof systemBrowser>> | undefined;
+function record(result: Result) {
+	results.push(result);
+	console.log(
+		`${result.status}: ${result.journey}${result.detail ? `: ${result.detail}` : ""}`,
+	);
+	writeFileSync(
+		resolve(evidence, "results.json"),
+		JSON.stringify(
+			{
+				runner: process.env.RUNNER_OS,
+				architecture: process.arch,
+				sha: process.env.GITHUB_SHA,
+				results,
+			},
+			null,
+			2,
+		),
+	);
+}
+async function journey(name: string, action: () => Promise<void>) {
+	try {
+		await action();
+		record({ journey: name, status: "passed" });
+	} catch (error) {
+		record({ journey: name, status: "failed", detail: String(error) });
+		await app
+			?.screenshot(`failure-${results.length}`)
+			.catch((diagnostic) => console.error(`Screenshot failed: ${diagnostic}`));
+		throw error;
+	}
+}
+function vault() {
+	return JSON.parse(
+		run("python3", [resolve(root, "apps/desktop/tests/journeys/vault.py")]),
+	) as {
+		sessionCount: number;
+		credentialCount: number;
+		evidenceCount: number;
+		pending: boolean;
+		evidenceReady: boolean;
+	};
+}
+try {
+	servers = await stack();
+	browser = await systemBrowser();
+	const [a, b] = servers.instances;
+	assert(a && b);
+	const password = `Journey-${randomBytes(16).toString("hex")}`;
+	const email = "journey@example.test";
+	for (const instance of [a, b]) {
+		const response = await browser.context.request.post(
+			`${instance.api.origin}/api/auth/sign-up/email`,
+			{
+				headers: { Origin: instance.api.origin },
+				data: { name: "Journey User", email, password },
+			},
+		);
+		assert.equal(response.status(), 200, await response.text());
+		const user = await instance.pool.query(
+			'select id from "user" where email=$1',
+			[email],
+		);
+		assert.equal(user.rowCount, 1);
+		const workspace = await instance.pool.query(
+			"select id from workspace where owner_id=$1 and kind='personal'",
+			[user.rows[0].id],
+		);
+		assert.equal(workspace.rowCount, 1);
+		await instance.pool.query(
+			"insert into list(id,workspace_id,owner_id,title,sort_key) values($1,$2,$3,$4,'a0')",
+			[
+				`list_${instance.name}`,
+				workspace.rows[0].id,
+				user.rows[0].id,
+				`List ${instance.name}`,
+			],
+		);
+	}
+	await browser.context.clearCookies();
+	const installed = JSON.parse(
+		readFileSync(resolve(state, "installed.json"), "utf8"),
+	) as { application: string };
+	await journey("installed first launch", async () => {
+		app = await desktop(installed.application);
+		await until("server selector", () =>
+			app?.evaluate("!!document.querySelector('#native-server')"),
+		);
+		await app.screenshot("first-launch");
+	});
+	assert(app);
+	const native = app;
+	await journey("untrusted HTTPS certificate is refused", async () => {
+		const rejected = await untrustedFixture();
+		try {
+			await native.fill("#native-server", rejected.origin);
+			await native.click('button[type="submit"]');
+			await until("certificate refusal", () =>
+				native.evaluate("!!document.querySelector('[role=alert]')"),
+			);
+			assert.equal(
+				rejected.requests(),
+				0,
+				"Untrusted TLS must fail before HTTP",
+			);
+			await native.screenshot("untrusted-certificate-refused");
+		} finally {
+			await rejected.close();
+		}
+	});
+	async function signIn(origin: string) {
+		await native.fill("#native-server", origin);
+		await native.click('button[type="submit"]');
+		await browser?.consent(origin, email, password);
+		await until("finish sign-in control", () =>
+			native.evaluate(
+				`Array.from(document.querySelectorAll('button')).some(e=>e.textContent==='Finish signing in')`,
+			),
+		);
+		await native.evaluate(
+			`(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent==='Finish signing in').click(); return true })()`,
+		);
+		await until(
+			"signed-in workspace",
+			() =>
+				native.evaluate(
+					`!!document.querySelector(${JSON.stringify(ids("workspace"))})`,
+				),
+			90,
+		);
+	}
+	async function openList(name: string) {
+		await until(`synced list ${name}`, () =>
+			native.evaluate(
+				`Array.from(document.querySelectorAll('button')).some(e=>e.textContent.includes(${JSON.stringify(name)}))`,
+			),
+		);
+		await native.evaluate(
+			`(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent.includes(${JSON.stringify(name)})).click(); return true })()`,
+		);
+		await until("list input", () =>
+			native.evaluate(
+				`!!document.querySelector(${JSON.stringify(ids("new-task"))})`,
+			),
+		);
+	}
+	async function addTask(title: string) {
+		await native.fill(ids("new-task"), title);
+		await native.click(ids("new-task-submit"));
+		await until(`visible task ${title}`, () =>
+			native.evaluate(
+				`document.querySelector('[data-testid="list"]').textContent.includes(${JSON.stringify(title)})`,
+			),
+		);
+	}
+	await journey("trusted HTTPS and system-browser consent", async () => {
+		await signIn(a.api.origin);
+		const protectedState = await until(
+			"complete verified OS-store evidence",
+			() => {
+				const proof = vault();
+				return proof.evidenceReady ? proof : undefined;
+			},
+		);
+		assert.equal(protectedState.sessionCount, 1);
+		assert.equal(protectedState.credentialCount, 1);
+		assert.equal(protectedState.evidenceCount, 1);
+		writeFileSync(
+			resolve(evidence, "vault-online.json"),
+			JSON.stringify(protectedState),
+		);
+		await native.screenshot("signed-in");
+	});
+	await journey("desktop task reaches server", async () => {
+		await openList("List journey_a");
+		await addTask("Created on desktop");
+		await until(
+			"server mutation witness",
+			async () =>
+				(
+					await a.pool.query(
+						"select id from task where list_id='list_journey_a' and title='Created on desktop'",
+					)
+				).rowCount === 1,
+		);
+	});
+	await journey("server task reaches desktop", async () => {
+		await a.pool.query(
+			"insert into task(id,list_id,title,sort_key) values('task_server','list_journey_a','Created on server','a1')",
+		);
+		await until("server-to-desktop sync", () =>
+			native.evaluate(
+				"document.querySelector('[data-testid=\"list\"]').textContent.includes('Created on server')",
+			),
+		);
+		await native.screenshot("bidirectional-sync");
+	});
+	await journey("offline change remains queued", async () => {
+		await a.api.offline();
+		await a.zero.offline();
+		await addTask("Queued while offline");
+		assert.equal(
+			(
+				await a.pool.query(
+					"select id from task where title='Queued while offline'",
+				)
+			).rowCount,
+			0,
+		);
+		await native.screenshot("offline-change");
+	});
+	await journey("offline cold start with verified evidence", async () => {
+		await native.close();
+		await native.launch();
+		await until("offline workspace", () =>
+			native.evaluate(
+				`!!document.querySelector(${JSON.stringify(ids("workspace"))})`,
+			),
+		);
+		await openList("List journey_a");
+		await until("durable offline task", () =>
+			native.evaluate(
+				"document.querySelector('[data-testid=\"list\"]').textContent.includes('Queued while offline')",
+			),
+		);
+		assert.equal(
+			(
+				await a.pool.query(
+					"select id from task where title='Queued while offline'",
+				)
+			).rowCount,
+			0,
+		);
+		await native.screenshot("offline-cold-start");
+	});
+	await journey("reconnect drains durable change", async () => {
+		await a.api.online();
+		await a.zero.online();
+		await until(
+			"queued task committed",
+			async () =>
+				(
+					await a.pool.query(
+						"select id from task where title='Queued while offline'",
+					)
+				).rowCount === 1,
+			120,
+		);
+	});
+	await native.click(ids("nav-settings"));
+	await until("desktop notification status", () =>
+		native.evaluate("!!document.querySelector('#native-push-heading')"),
+	);
+	if (process.platform === "linux") {
+		await journey("OS notification shown and clicked", async () => {
+			await until("enable notifications", () =>
+				native.evaluate(
+					"Array.from(document.querySelectorAll('button')).some(e=>e.textContent==='Enable desktop notifications')",
+				),
+			);
+			await native.evaluate(
+				"(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent==='Enable desktop notifications').click(); return true })()",
+			);
+			const registration = await until(
+				"desktop registration",
+				async () =>
+					(
+						await a.pool.query(
+							"select id,user_id from native_push_registration where provider='desktop'",
+						)
+					).rows[0] as { id: string; user_id: string } | undefined,
+			);
+			await a.pool.query(
+				"insert into notification_outbox(id,recipient_user_id,channel_kind,native_registration_id,payload,idempotency_key,status) values('journey_notification',$1,'nativepush',$2,$3,'journey_notification','sent')",
+				[
+					registration.user_id,
+					registration.id,
+					JSON.stringify({ taskId: "task_server" }),
+				],
+			);
+			await a.pool.query(
+				"insert into native_desktop_mailbox(notification_id,registration_id,user_id,expires_at) values('journey_notification',$1,$2,clock_timestamp()+interval '5 minutes')",
+				[registration.id, registration.user_id],
+			);
+			await until(
+				"OS popup",
+				() => Number(run("dunstctl", ["count", "displayed"])) === 1,
+				45,
+			);
+			run("scrot", [resolve(evidence, "notification-shown.png")]);
+			const window = run("xdotool", ["search", "--class", "Dunst"]).split(
+				"\n",
+			)[0];
+			assert(window);
+			run("xdotool", [
+				"mousemove",
+				"--sync",
+				"--window",
+				window,
+				"180",
+				"40",
+				"click",
+				"1",
+			]);
+			await until("notification task destination", () =>
+				native.evaluate(
+					"document.querySelector('[data-testid=\"task-detail-title\"]')?.value==='Created on server'",
+				),
+			);
+			await until(
+				"durable notification receipt",
+				async () =>
+					(
+						await a.pool.query(
+							"select received_at from native_desktop_mailbox where notification_id='journey_notification'",
+						)
+					).rows[0]?.received_at,
+			);
+			assert.equal(
+				(await a.pool.query("select done from task where id='task_server'"))
+					.rows[0].done,
+				false,
+			);
+			await native.screenshot("notification-clicked");
+			await native.click(ids("task-detail-close"));
+			await native.click(ids("nav-settings"));
+		});
+	} else {
+		await until("unsupported notification state", () =>
+			native.evaluate(
+				"document.body.textContent.includes('Desktop notifications are unavailable on this system.')",
+			),
+		);
+		await native.screenshot("notifications-unavailable");
+		record({
+			journey: "OS notification shown and clicked",
+			status: "unsupported",
+			detail:
+				"The installed product reports desktop notifications unavailable on this platform",
+		});
+	}
+	await journey("server switch isolates account and cache", async () => {
+		await native.evaluate(
+			"(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent==='Change server').click(); return true })()",
+		);
+		await signIn(b.api.origin);
+		await openList("List journey_b");
+		assert.equal(
+			await native.evaluate(
+				"document.body.textContent.includes('Created on desktop') || document.body.textContent.includes('Queued while offline') || document.body.textContent.includes('List journey_a')",
+			),
+			false,
+		);
+		await addTask("Only on server B");
+		await until(
+			"server B mutation",
+			async () =>
+				(
+					await b.pool.query(
+						"select id from task where title='Only on server B'",
+					)
+				).rowCount === 1,
+		);
+		assert.equal(
+			(await a.pool.query("select id from task where title='Only on server B'"))
+				.rowCount,
+			0,
+		);
+		await until(
+			"both scoped OS-store credentials",
+			() => vault().sessionCount === 2,
+		);
+		await native.screenshot("server-isolation");
+	});
+	await journey("sign-out clears selected OS-keystore credential", async () => {
+		await native.click(ids("nav-settings"));
+		await native.click(ids("sign-out"));
+		await until("signed-out selector", () =>
+			native.evaluate("!!document.querySelector('#native-server')"),
+		);
+		await until(
+			"selected credential removed from OS store",
+			() => vault().sessionCount === 1 && vault().credentialCount === 1,
+		);
+		await native.close();
+		await native.launch();
+		await until("cold signed-out selector", () =>
+			native.evaluate("!!document.querySelector('#native-server')"),
+		);
+		assert.equal(
+			await native.evaluate(
+				"document.body.textContent.includes('Only on server B')",
+			),
+			false,
+		);
+		await native.screenshot("signed-out-cold-start");
+		writeFileSync(
+			resolve(evidence, "vault-sign-out.json"),
+			JSON.stringify(vault()),
+		);
+	});
+	await journey("sign-out clears final OS-keystore credential", async () => {
+		await native.fill("#native-server", a.api.origin);
+		await native.click('button[type="submit"]');
+		await until("retained account restore", () =>
+			native.evaluate(
+				`!!document.querySelector(${JSON.stringify(ids("workspace"))})`,
+			),
+		);
+		await native.click(ids("nav-settings"));
+		await native.click(ids("sign-out"));
+		await until("all credentials removed", () => {
+			const proof = vault();
+			return (
+				proof.sessionCount === 0 &&
+				proof.credentialCount === 0 &&
+				proof.evidenceCount === 0
+			);
+		});
+		writeFileSync(
+			resolve(evidence, "vault-empty.json"),
+			JSON.stringify(vault()),
+		);
+		await native.close();
+		await native.launch();
+		await until("cold empty-account selector", () =>
+			native.evaluate("!!document.querySelector('#native-server')"),
+		);
+		await native.screenshot("empty-vault-cold-start");
+	});
+	if (results.some((result) => result.status !== "passed"))
+		process.exitCode = 1;
+} catch (error) {
+	console.error(error);
+	process.exitCode = 1;
+} finally {
+	for (const name of expectedJourneys) {
+		if (!results.some((result) => result.journey === name))
+			record({
+				journey: name,
+				status: "not-run",
+				detail: "An earlier prerequisite failed",
+			});
+	}
+	await app?.stop();
+	await browser?.close();
+	await servers?.close();
+	const summary = results
+		.map(
+			(result) =>
+				`| ${result.journey} | ${result.status} | ${result.detail ?? ""} |`,
+		)
+		.join("\n");
+	writeFileSync(
+		resolve(evidence, "summary.md"),
+		`| Journey | Result | Detail |\n| --- | --- | --- |\n${summary}\n`,
+	);
+}

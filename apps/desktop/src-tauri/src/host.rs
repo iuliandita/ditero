@@ -342,6 +342,8 @@ pub fn run() {
                 .on_new_window(|_, _| NewWindowResponse::Deny)
                 .on_download(|_, _| false)
                 .build()?;
+            #[cfg(all(debug_assertions, target_os = "macos"))]
+            crate::journeys::start(app.handle().clone())?;
             Ok(())
         })
         .run(tauri::generate_context!())
