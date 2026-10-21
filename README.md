@@ -105,7 +105,9 @@ Focus timers are stored locally for each account and shared by its tabs on the s
 browser or native server profile. Returning after an interval expires records that
 interval once and advances according to the auto-cycle setting; paused time is excluded.
 Stop discards the unfinished interval in every tab. Clearing site data removes local
-timer state. Timers do not follow you to another device.
+timer state. Timers do not follow you to another device. After reload, elapsed time
+relies on the device clock. Moving that clock forward can count unworked time,
+capped at the interval length.
 
 ## Tech stack
 

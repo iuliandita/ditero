@@ -82,6 +82,13 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 	const keyRef = useRef(storageKey);
 	keyRef.current = storageKey;
 	const mountedRef = useRef(false);
+	const clockRef = useRef<{
+		intervalId: string;
+		endsAt: number;
+		remainingSec: number;
+		wall: number;
+		monotonic: number;
+	} | null>(null);
 
 	const applySnapshot = useCallback(
 		(state: FocusState) => {
@@ -148,9 +155,27 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 	);
 
 	const setSession = useCallback(
-		(update: (previous: Session | null) => Session | null) => {
+		(update: (previous: Session | null, at: number) => Session | null) => {
+			// Anchor the action itself, never the last rendered display tick.
+			const wall = Date.now();
+			const monotonic = performance.now();
 			void updateFocus((current) => {
-				const next = update(current.session);
+				const next = update(current.session, wall);
+				if (
+					next?.running &&
+					next.endsAt !== null &&
+					(next.intervalId !== current.session?.intervalId ||
+						next.endsAt !== current.session?.endsAt ||
+						!current.session?.running)
+				) {
+					clockRef.current = {
+						intervalId: next.intervalId,
+						endsAt: next.endsAt,
+						remainingSec: next.remainingSec,
+						wall,
+						monotonic,
+					};
+				}
 				return next === current.session
 					? current
 					: { ...current, session: next };
@@ -225,13 +250,6 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
 	const storedSession =
 		snapshot.key === storageKey ? snapshot.state.session : null;
-	const clockRef = useRef<{
-		intervalId: string;
-		endsAt: number;
-		remainingSec: number;
-		wall: number;
-		monotonic: number;
-	} | null>(null);
 	const timerNow = useCallback(
 		(session: Session, monotonic = performance.now()) => {
 			const endsAt = session.endsAt;
@@ -246,9 +264,11 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 					intervalId: session.intervalId,
 					endsAt,
 					remainingSec: session.remainingSec,
-					// After reload, a backward correction cannot add unworked time.
+					// Reload has only wall time: forward corrections can credit
+					// unworked time up to this interval's length. Backward
+					// corrections cannot extend it past its remaining duration.
 					wall: Math.max(Date.now(), endsAt - session.remainingSec * 1000),
-					monotonic,
+					monotonic: performance.now(),
 				};
 				clockRef.current = clock;
 			}
@@ -346,10 +366,9 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 	]);
 
 	const start = useCallback(() => {
-		setSession((previous) => {
+		setSession((previous, at) => {
 			if (previous?.running) return previous;
 			const cfg = configFor(previous);
-			const at = Date.now();
 			if (previous)
 				return {
 					...previous,
@@ -391,12 +410,11 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 	}, [setSession]);
 
 	const skip = useCallback(() => {
-		setSession((previous) => {
+		setSession((previous, at) => {
 			if (!previous) return previous;
 			const cfg = configFor(previous);
 			const cycle = nextCycle(previous.cycle, cfg);
 			const sec = plannedFor(cycle, cfg);
-			const at = Date.now();
 			return {
 				...previous,
 				...intervalFields(cfg),
@@ -422,12 +440,11 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
 	const startForTask = useCallback(
 		(taskId: string, title: string) => {
-			setSession((previous) => {
+			setSession((previous, at) => {
 				if (previous?.running)
 					return { ...previous, boundTaskId: taskId, boundTaskTitle: title };
 				const cfg = configFor(previous);
 				const sec = plannedFor(INITIAL_CYCLE, cfg);
-				const at = Date.now();
 				return {
 					...intervalFields(cfg),
 					cycle: INITIAL_CYCLE,

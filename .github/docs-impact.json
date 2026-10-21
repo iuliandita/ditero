@@ -3,7 +3,8 @@
 	"groups": {
 		"ui": {
 			"sourceDigest": "2bea06e2fc1c647a6c0c56174f8da09e3ed1e880dc15cac69a0d44cbc0ba2658",
-			"noImpact": "Focus timers keep the existing start, pause, resume, stop and completion workflow. The countdown now uses the provider's bounded monotonic elapsed time, and failed completion logging shows a dismissible localized error. Replay intents remain until server acknowledgement or an explicit application refusal. These fixes preserve the promised reload behavior without new settings, server permissions, timestamp validation changes or a storage migration. Existing focus guidance remains accurate."
+			"docs": ["README.md"],
+			"note": "Document local timer persistence and the reload limit: a forward device-clock correction can credit unworked time up to the interval length. Start and resume now anchor elapsed time at the action. Completion replay, dismissible logging errors, server permissions, timestamp validation and persisted formats remain unchanged."
 		},
 		"release": {
 			"sourceDigest": "6fd453f7ff28723194269729180ddca4848233c1a81e406f0da7c97d19c04561",

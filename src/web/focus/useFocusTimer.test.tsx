@@ -243,6 +243,58 @@ test("running and paused task intervals survive reload without tick writes", asy
 	expect((await stored()).revision).toBe(paused.revision + 1);
 });
 
+test.each([
+	"start",
+	"startForTask",
+] as const)("%s starts from a fresh clock after the page has been idle", async (action) => {
+	const tab = open();
+	await settle();
+	vi.advanceTimersByTime(60000);
+	if (action === "startForTask") tab.api.startForTask("task", "Read");
+	else tab.api.start();
+	await settle();
+	expect(tab.api.session).toMatchObject({
+		cycle: { phase: "work" },
+		running: true,
+		remainingSec: 10,
+	});
+	expect(fixture.mutate).not.toHaveBeenCalled();
+	vi.advanceTimersByTime(2000);
+	await settle();
+	expect(tab.api.session?.remainingSec).toBe(8);
+	vi.advanceTimersByTime(8000);
+	await settle();
+	expect(fixture.mutate).toHaveBeenCalledOnce();
+});
+
+test("resume starts from a fresh clock after a long pause", async () => {
+	const tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(2000);
+	await settle();
+	tab.api.pause();
+	await settle();
+	const intervalId = tab.api.session?.intervalId;
+	expect(tab.api.session?.remainingSec).toBe(8);
+	vi.advanceTimersByTime(60000);
+	tab.api.start();
+	await settle();
+	expect(tab.api.session).toMatchObject({
+		intervalId,
+		cycle: { phase: "work" },
+		running: true,
+		remainingSec: 8,
+	});
+	expect(fixture.mutate).not.toHaveBeenCalled();
+	vi.advanceTimersByTime(2000);
+	await settle();
+	expect(tab.api.session?.remainingSec).toBe(6);
+	vi.advanceTimersByTime(6000);
+	await settle();
+	expect(fixture.mutate).toHaveBeenCalledOnce();
+});
+
 test("Stop during another tab's tick cannot revive the interval", async () => {
 	const first = open();
 	first.api.start();

@@ -201,7 +201,7 @@ for (const deferredDisk of [true, false]) {
 			timeout: 20000,
 		});
 		await openDetails(page, "Read together");
-		await expect(page.getByTestId("task-focused-total")).toHaveText(
+		await expect(page.getByTestId("task-time-on-task")).toHaveText(
 			"15s focused",
 		);
 		const completion = (await focusState(page, userId)).pendingCompletions;
