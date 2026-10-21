@@ -53,6 +53,9 @@ const AUTH_ERROR_MESSAGES: Record<string, () => string> = {
 	// Same 403 as the gate, wholly different cause: the browser reached the app
 	// on an address the server does not trust (TRUSTED_ORIGINS / BETTER_AUTH_URL).
 	INVALID_ORIGIN: m.auth_error_invalid_origin,
+	// Lowercase codes arrive in the error parameter of a provider callback.
+	account_not_linked: m.auth_error_account_not_linked,
+	account_ownership_conflict: m.auth_error_account_ownership_conflict,
 };
 
 // Precedence is deliberate. An unmapped code still yields the server's English

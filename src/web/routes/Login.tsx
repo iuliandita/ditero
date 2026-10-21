@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { Building2, KeyRound } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	DISPLAY_NAME_MAX_LENGTH,
@@ -9,6 +9,7 @@ import {
 	PASSWORD_MIN_LENGTH,
 } from "../../auth/password-policy.ts";
 import { m } from "../../paraglide/messages.js";
+import type { PublicSsoProvider } from "../../server/public-config.ts";
 import { GoogleMark } from "../components/auth/GoogleMark.tsx";
 import { BrandLogo } from "../components/BrandLogo.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
@@ -54,12 +55,14 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 		new URLSearchParams(window.location.search).get("error"),
 	);
 	const [googleEnabled, setGoogleEnabled] = useState(false);
+	const [ssoProviders, setSsoProviders] = useState<PublicSsoProvider[]>([]);
 	useEffect(() => {
 		let active = true;
 		void fetchPublicConfig().then(
 			(config) => {
-				if (active)
-					setGoogleEnabled(config.socialProviders?.includes("google") === true);
+				if (!active) return;
+				setGoogleEnabled(config.socialProviders?.includes("google") === true);
+				setSsoProviders(config.ssoProviders ?? []);
 			},
 			() => {
 				// Email and passkeys remain usable when config is unavailable.
@@ -156,6 +159,21 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 				provider: "google",
 				errorCallbackURL: errorURL.href,
 				...(callbackURL ? { callbackURL } : {}),
+			});
+			if (res.error)
+				setError(authErrorMessage(res.error, m.login_error_sign_in_failed));
+		}, m.login_error_sign_in_failed);
+	}
+
+	function signInSso(provider: PublicSsoProvider) {
+		void runAction(async () => {
+			// The server accepts only a few app routes as return addresses, so a deep
+			// link falls back to the root rather than failing the sign-in.
+			const returnTo = callbackURL ?? "/";
+			const res = await authClient.signIn.sso({
+				providerId: provider.id,
+				callbackURL: returnTo,
+				errorCallbackURL: returnTo,
 			});
 			if (res.error)
 				setError(authErrorMessage(res.error, m.login_error_sign_in_failed));
@@ -434,6 +452,20 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 						{m.login_continue_google()}
 					</Button>
 				)}
+				{ssoProviders.map((provider) => (
+					<Button
+						key={provider.id}
+						data-testid="signin-sso"
+						type="button"
+						variant="outline"
+						className="h-11 w-full"
+						onClick={() => signInSso(provider)}
+						disabled={pending}
+					>
+						<Building2 aria-hidden="true" />
+						{m.login_continue_sso({ name: provider.name })}
+					</Button>
+				))}
 			</div>
 			<p className="mt-6 text-center text-sm text-muted-foreground">
 				{mode === "signup" ? m.login_existing_account() : m.login_new_here()}{" "}
