@@ -1,5 +1,10 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"workspace_leave_action": "Arbeitsbereich verlassen",
+	"workspace_leave_title": "{workspace} verlassen?",
+	"workspace_leave_body": "Du verlierst den Zugriff auf {workspace}. Deine Aufgabenzuweisungen werden entfernt. Deine Kommentare und erstellten Inhalte bleiben erhalten. Die Schlüssel des Arbeitsbereichs müssen rotiert werden, um den Zugriff auf künftige verschlüsselte Dateien zu entziehen.",
+	"workspace_leave_last_owner": "Übertrage die Eigentümerschaft an einen anderen Eigentümer, bevor du diesen Arbeitsbereich verlässt.",
+	"workspace_leave_personal": "Du kannst deinen persönlichen Arbeitsbereich nicht verlassen.",
 	"theme_editor_accent_note": "Speichere dein Theme oder brich die Bearbeitung ab, bevor du eine Akzentfarbe wählst.",
 	"theme_editor_customize": "Theme anpassen",
 	"theme_editor_heading": "Theme bearbeiten",

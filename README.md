@@ -59,6 +59,7 @@ size and high contrast stay on each device.
 - Reminders with escalation and acknowledgement, delivered to ntfy, Telegram, Discord,
   Slack, or email
 - Multi-workspace sharing with Owner / Admin / Member / Viewer roles
+- Leave shared workspaces from your own Members row; the last owner must transfer ownership first
 - Invitation links, managed accounts, comments, and recorded task completion history
 - Email/password, passkeys, TOTP, recovery codes, and optional
   [Google sign-in](docs/runbooks/sign-in-providers.md)

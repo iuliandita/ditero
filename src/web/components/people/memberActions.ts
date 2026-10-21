@@ -1,4 +1,4 @@
-import { Shield, UserMinus } from "lucide-react";
+import { LogOut, Shield, UserMinus } from "lucide-react";
 import { ADMIN_ROLES, ROLES, type Role } from "../../../domain/role.ts";
 import { m } from "../../../paraglide/messages.js";
 import type { RowAction } from "../ui/row-action.ts";
@@ -7,6 +7,7 @@ import { ROLE_LABELS } from "./role-labels.ts";
 export type MemberActionHandlers = {
 	setRole: (membershipId: string, role: Role) => void;
 	remove: (membershipId: string, name: string) => void;
+	leave: (membershipId: string) => void;
 };
 
 // Client mirror of the membership mutator's gates. It never grants anything --
@@ -46,6 +47,15 @@ export function memberActions({
 		: workspaceKind === "shared" && mayAct;
 
 	return [
+		{
+			id: "leave",
+			label: m.workspace_leave_action(),
+			icon: LogOut,
+			destructive: true,
+			hidden: workspaceKind !== "shared" || !isSelf || callerRole === null,
+			disabledReason: lastOwner ? m.workspace_leave_last_owner() : undefined,
+			onSelect: () => handlers.leave(membershipId),
+		},
 		{
 			id: "role",
 			label: m.member_action_change_role(),

@@ -15,7 +15,7 @@ describe("memberActions", () => {
 			callerRole: "viewer",
 			ownerCount: 2,
 			workspaceKind: "shared",
-			handlers: { setRole: () => {}, remove: () => {} },
+			handlers: { setRole: () => {}, remove: () => {}, leave: () => {} },
 		});
 		expect(visibleActions(actions)).toEqual([]);
 	});
@@ -33,7 +33,7 @@ describe("memberActions", () => {
 			ownerCount: 2,
 			workspaceKind: "personal",
 			callerOwnsWorkspace: true,
-			handlers: { setRole: () => {}, remove: () => {} },
+			handlers: { setRole: () => {}, remove: () => {}, leave: () => {} },
 		});
 		expect(visibleActions(actions).map((action) => action.id)).toEqual([
 			"remove",
@@ -53,8 +53,44 @@ describe("memberActions", () => {
 			ownerCount: 2,
 			workspaceKind: "personal",
 			callerOwnsWorkspace: isSelf,
-			handlers: { setRole: () => {}, remove: () => {} },
+			handlers: { setRole: () => {}, remove: () => {}, leave: () => {} },
 		});
 		expect(visibleActions(actions)).toEqual([]);
+	});
+});
+
+test.each([
+	"member",
+	"viewer",
+	"admin",
+	"owner",
+] as const)("%s can leave their own shared workspace", (role) => {
+	const actions = memberActions({
+		membershipId: "self",
+		memberName: "Me",
+		memberRole: role,
+		isSelf: true,
+		callerRole: role,
+		ownerCount: 2,
+		workspaceKind: "shared",
+		handlers: { setRole: () => {}, remove: () => {}, leave: () => {} },
+	});
+	expect(visibleActions(actions).map((a) => a.id)).toEqual(["leave"]);
+	expect(visibleActions(actions)[0].disabledReason).toBeUndefined();
+});
+test("a sole owner sees the ownership-transfer reason", () => {
+	const actions = memberActions({
+		membershipId: "self",
+		memberName: "Me",
+		memberRole: "owner",
+		isSelf: true,
+		callerRole: "owner",
+		ownerCount: 1,
+		workspaceKind: "shared",
+		handlers: { setRole: () => {}, remove: () => {}, leave: () => {} },
+	});
+	expect(visibleActions(actions)[0]).toMatchObject({
+		id: "leave",
+		disabledReason: expect.any(String),
 	});
 });

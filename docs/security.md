@@ -172,3 +172,14 @@ Terminate TLS at the application or a trusted reverse proxy. Set `BETTER_AUTH_UR
 CI runs lint, type checks, unit, integration, browser, accessibility, container, dependency, secret, misconfiguration, and static-analysis checks. Releases additionally scan built images for high and critical findings, publish an SBOM, attest provenance, and sign image digests.
 
 Report vulnerabilities through the private process in [SECURITY.md](../SECURITY.md).
+
+## Leaving a workspace
+
+In Members, open your own row menu and choose Leave workspace. Personal
+workspaces cannot be left. A sole shared-workspace owner must grant another
+member the Owner role before leaving. Confirmation explains the loss of access,
+assignment removal, retained authored content, and file-key rotation requirement.
+Leaving uses the same transaction as owner-initiated member removal: affected
+notification activation is blocked, ownership is reassigned to a remaining owner,
+and the workspace is marked as requiring key rotation. Previously downloaded
+files cannot be revoked.

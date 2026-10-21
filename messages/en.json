@@ -1,5 +1,10 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"workspace_leave_action": "Leave workspace",
+	"workspace_leave_title": "Leave {workspace}?",
+	"workspace_leave_body": "You will lose access to {workspace}. Your assignments will be removed. Your comments and authored content will remain. Files need workspace key rotation to revoke access to future encrypted files.",
+	"workspace_leave_last_owner": "Transfer ownership to another owner before leaving this workspace.",
+	"workspace_leave_personal": "You cannot leave your personal workspace.",
 	"theme_editor_accent_note": "Finish or cancel your theme edit to choose an accent.",
 	"theme_editor_customize": "Customize theme",
 	"theme_editor_heading": "Edit theme",

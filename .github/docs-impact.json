@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "89073bc9ce9995fbc4826a6c3f275b136df4469ac3f1520bbde22baf3e86fdef",
-			"docs": ["docs/runbooks/sign-in-providers.md"],
-			"note": "Sign-in and sign-up show Google only when the server publishes it as configured. OAuth callback registration refusals use the same six localized messages as email registration."
+			"sourceDigest": "a798baa23076a88be2f4911a54ff1e8001356c1c2c1a79d4f4ffbfb5ef657f2e",
+			"docs": ["README.md", "docs/security.md"],
+			"note": "Describe leaving shared workspaces, last-owner protection, retained authored content, assignment cleanup and required file-key rotation."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
@@ -30,13 +30,13 @@
 			"note": "OAuth registration denials preserve their stable policy code through Better Auth callback redirects. Native browser sign-in retains the grant ID and displays the localized policy message."
 		},
 		"compatibility": {
-			"sourceDigest": "3d8524a7a1b355e851b1a0b2bf9eb05e30355bb0f13eb2bfb3ea92ab7667a304",
-			"docs": ["docs/runbooks/database-roles.md"],
-			"note": "Document restricted-role membership removal without TEMP and uniform 404 attachment denials, with unchanged persisted formats.",
-			"upgrade": "Deploy the application update without schema, blob or key conversion; runtime TEMP grants are unnecessary.",
-			"backup": "Keep the existing coordinated database and blob backups; ciphertext and key envelopes are unchanged.",
-			"rollback": "The previous application remains data-compatible but restores the TEMP dependency and foreign attachment 403 response.",
-			"clientVersions": "Existing web, Android and desktop clients use unchanged attachment formats and interpret unauthorized downloads as unavailable."
+			"sourceDigest": "672ebec633bcecaba52152210d91463722bd9f6c779854c1fd5b9488b1fdd2b4",
+			"docs": ["docs/runbooks/backup-restore.md"],
+			"note": "Add restricted notification cleanup policies and triggers for self-service leave under every runtime membership role.",
+			"upgrade": "Run the additive membership-leave migration before deploying the application that exposes Leave workspace.",
+			"backup": "Keep coordinated database and attachment backups; existing rows, ciphertext and key envelopes are unchanged.",
+			"rollback": "The previous application can retain the additive migration; do not overwrite newer membership changes with an older database.",
+			"clientVersions": "Existing clients continue to work; updated clients expose Leave workspace and the server enforces the same cleanup for every role."
 		}
 	}
 }
