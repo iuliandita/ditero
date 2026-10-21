@@ -33,6 +33,8 @@ as packaging, retaining the test gate without compiling its dependencies twice.
 Linux packages include AppStream metadata, a desktop
 entry and the MIT license. They require a compatible system WebKitGTK 4.1/GTK 3;
 the Ubuntu 24.04 build baseline is not a promise of compatibility with older Linux.
+RPM metadata requires the GLIBC 2.39 symbol capability rather than a dependency
+name containing a version expression.
 
 Installer smoke checks extract Linux payloads with package tools (libarchive for
 RPM), verify contents and x64 architecture, install

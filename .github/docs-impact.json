@@ -11,7 +11,7 @@
 			"note": "Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "b22503c945e6a24414e0380ba98a717e6a5b595775265461f9845c5559f49196",
+			"sourceDigest": "3f7c128b90bfe5a67d58b3fc2343889ce73abc45eb718d4c8c3c6ec6855ab715",
 			"noImpact": "Only desktop installer metadata, bundled license files and platform package settings change. Server configuration, deployment variables and operator setup remain unchanged; installer behavior is documented in RELEASING.md and the desktop guide."
 		},
 		"deployment": {

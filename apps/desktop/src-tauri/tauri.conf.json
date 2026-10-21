@@ -41,7 +41,8 @@
 			},
 			"rpm": {
 				"depends": [
-					"glibc >= 2.39",
+					"glibc",
+					"libc.so.6(GLIBC_2.39)(64bit)",
 					"webkit2gtk4.1",
 					"gtk3",
 					"openssl-libs",
