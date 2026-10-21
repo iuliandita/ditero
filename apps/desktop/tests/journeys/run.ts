@@ -71,10 +71,17 @@ async function journey(name: string, action: () => Promise<void>) {
 		throw error;
 	}
 }
+let installedApplication = "";
 function vault() {
-	return JSON.parse(
-		run("python3", [resolve(root, "apps/desktop/tests/journeys/vault.py")]),
-	) as {
+	const raw =
+		process.platform === "darwin"
+			? run(installedApplication, ["--journey-keystore"], {
+					...process.env,
+					DITERO_JOURNEY_DIRECTORY: state,
+					DITERO_JOURNEY_TOKEN: randomBytes(32).toString("hex"),
+				})
+			: run("python3", [resolve(root, "apps/desktop/tests/journeys/vault.py")]);
+	return JSON.parse(raw) as {
 		sessionCount: number;
 		credentialCount: number;
 		evidenceCount: number;
@@ -86,6 +93,7 @@ try {
 	const installed = JSON.parse(
 		readFileSync(resolve(state, "installed.json"), "utf8"),
 	) as { application: string };
+	installedApplication = installed.application;
 	await journey("installed first launch", async () => {
 		stage("launching installed desktop application");
 		app = await desktop(installed.application);

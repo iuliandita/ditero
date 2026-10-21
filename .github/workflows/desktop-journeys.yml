@@ -165,8 +165,11 @@ jobs:
           release = (target / 'release/ditero-desktop').read_bytes()
           assert marker in debug, 'Missing positive debug control'
           assert marker not in release, 'Automation leaked into release'
+          assert b'--journey-keystore' in debug, 'Missing keystore probe positive control'
+          assert b'--journey-keystore' not in release, 'Keystore probe leaked into release'
           pathlib.Path(os.environ['RUNNER_TEMP'], 'desktop-journeys/evidence/release-exclusion.json').write_text(json.dumps({
             'debugContainsHook': True, 'releaseContainsHook': False,
+            'debugContainsKeystoreProbe': True, 'releaseContainsKeystoreProbe': False,
             'debugSha256': hashlib.sha256(debug).hexdigest(), 'releaseSha256': hashlib.sha256(release).hexdigest()
           }))
           PYTHON

@@ -10,5 +10,9 @@ mod protocol;
 mod request_fence;
 mod vault;
 fn main() {
+    #[cfg(all(debug_assertions, target_os = "macos"))]
+    if journeys::keystore_cli() {
+        return;
+    }
     host::run();
 }

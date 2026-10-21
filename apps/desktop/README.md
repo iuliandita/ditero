@@ -354,10 +354,10 @@ WebKitGTK CSS check covered dark, light, system, Large text, and high contrast
 settings; it does not qualify a new installer or a complete platform journey.
 
 Installed Windows x64 development packages pass first launch, untrusted HTTPS
-refusal, trusted system-browser consent, task sync in both directions, and queued
-offline edits. Independent Credential Manager reads confirm complete verified
-evidence. Cold offline startup, reconnect, server isolation, and sign-out remain
-unqualified on Windows. Installed macOS Apple Silicon/Intel packages pass first
+refusal, trusted system-browser consent, task sync in both directions, offline
+edit/create and cold start, reconnect, two-server isolation, and both sign-outs.
+Independent Credential Manager reads confirm verified evidence and final credential
+removal. Installed macOS Apple Silicon/Intel packages pass first
 launch and untrusted HTTPS refusal; their remaining core journeys are unqualified.
 The branch-scoped Desktop runtime journeys workflow installs development packages
 on hosted Windows, Apple Silicon macOS, Intel macOS, and Linux runners. Its
@@ -367,6 +367,8 @@ and OS-keystore counts.
 It uses ephemeral servers and an OS-trusted local CA, without certificate bypasses.
 macOS automation is included only in debug builds, requires explicit process-local
 test configuration, and is checked for absence from the optimized release binary.
+Its counts-only keystore probe opens fresh OS entries under the installed app
+identity, preserving Keychain access controls and returning no credentials.
 Sign-out now starts retired notification cleanup after durable local revocation.
 A native regression and mutation control verify that normal close waits for
 pending sync-handshake classification before retiring the socket.
@@ -374,7 +376,7 @@ These disposable runner accounts do not qualify download trust, trusted signing,
 notarization, upgrades, or physical devices. Windows/macOS system notifications
 remain unavailable in the product. Existing client data, backups, and rollback
 procedures are unchanged by this test harness.
-Windows/macOS offline recovery, account/server changes, reload behavior, worker
+macOS offline recovery, account/server changes, reload behavior, worker
 execution, and OPFS/locks still require runtime checks. Revocation/recovery failure
 journeys and upgrades remain unqualified on every platform.
 The desktop uses each platform's native TLS trust; server certificates must also
