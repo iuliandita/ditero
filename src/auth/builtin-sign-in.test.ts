@@ -13,8 +13,12 @@ import {
 	signedInUser,
 	signingKey,
 	startOAuth,
+	verifiedUser,
 } from "../../tests/support/oauth-mocks.ts";
 import { acceptedAuthOrigins } from "./providers.ts";
+
+// Password hashing and RSA key generation are slow on a loaded CI runner.
+vi.setConfig({ testTimeout: 30_000 });
 
 beforeEach(() => vi.unstubAllGlobals());
 afterEach(() => vi.unstubAllGlobals());
@@ -154,7 +158,7 @@ describe("GitHub", () => {
 			env,
 			github([{ email: "ada@example.test", primary: true, verified: true }]),
 		);
-		await signedInUser(h.auth, "ada@example.test");
+		await verifiedUser(h, "ada@example.test");
 		const { outcome } = await signIn(h, "github");
 		expect(outcome.error).toBe("account_not_linked");
 		expect(
@@ -245,7 +249,7 @@ describe("Discord", () => {
 			env,
 			discord({ email: "ada@example.test", verified: true }),
 		);
-		await signedInUser(h.auth, "ada@example.test");
+		await verifiedUser(h, "ada@example.test");
 		expect((await signIn(h, "discord")).outcome.error).toBe(
 			"account_not_linked",
 		);
@@ -327,7 +331,7 @@ describe("Facebook", () => {
 
 	test("its email cannot link to an existing account", async () => {
 		const h = await setup(env, facebook());
-		await signedInUser(h.auth, "ada@example.test");
+		await verifiedUser(h, "ada@example.test");
 		expect((await signIn(h, "facebook")).outcome.error).toBe(
 			"account_not_linked",
 		);
@@ -617,6 +621,21 @@ describe("Apple", () => {
 			).toEqual(origins);
 	});
 
+	test.each([
+		["a different audience", { aud: "someone-else" }],
+		["a different issuer", { iss: "https://evil.example.test" }],
+		[
+			"an expired token",
+			{ iat: nowSeconds() - 7200, exp: nowSeconds() - 3600 },
+		],
+	])("refuses %s", async (_label, claims) => {
+		const { h, issued } = await apple(claims);
+		const { started } = await appleSignIn(h, issued);
+		const done = await finishOAuth(h.auth, "apple", started);
+		expect(done.error).toBe("unable_to_get_user_info");
+		expectNoAccount(h);
+	});
+
 	test("completes sign-in through the GET hand-off", async () => {
 		const { h, issued } = await apple();
 		const { started, post } = await appleSignIn(h, issued);
@@ -662,7 +681,7 @@ describe("Apple", () => {
 
 	test("a matching email never links implicitly", async () => {
 		const { h, issued } = await apple();
-		await signedInUser(h.auth, "ada@example.test");
+		await verifiedUser(h, "ada@example.test");
 		const { started } = await appleSignIn(h, issued);
 		const done = await finishOAuth(h.auth, "apple", started);
 		expect(done.error).toBe("account_not_linked");

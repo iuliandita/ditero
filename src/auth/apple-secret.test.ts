@@ -1,11 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { decodeProtectedHeader, importSPKI, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
-import {
-	APPLE_SECRET_REFRESH_SECONDS,
-	APPLE_SECRET_TTL_SECONDS,
-	createAppleSecretSource,
-} from "./apple-secret.ts";
+import { createAppleSecretSource } from "./apple-secret.ts";
 import type { AppleSettings } from "./provider-env.ts";
 
 const settings: AppleSettings = {
@@ -14,6 +10,7 @@ const settings: AppleSettings = {
 	keyId: "KEY1234567",
 	privateKeyPath: "/keys/apple.p8",
 };
+const DAY = 24 * 60 * 60;
 const { privateKey, publicKey } = generateKeyPairSync("ec", {
 	namedCurve: "prime256v1",
 });
@@ -43,8 +40,8 @@ describe("Apple client secret", () => {
 				currentDate: new Date(1_800_000_100_000),
 			},
 		);
-		expect(payload.exp).toBe(1_800_000_000 + APPLE_SECRET_TTL_SECONDS);
-		expect(APPLE_SECRET_TTL_SECONDS).toBeLessThan(15_777_000);
+		// Apple rejects secrets valid for more than six months (15,777,000 s).
+		expect(payload.exp).toBe(1_800_000_000 + 90 * DAY);
 	});
 
 	it("regenerates before expiry and picks up a rotated key file", () => {
@@ -60,7 +57,7 @@ describe("Apple client secret", () => {
 		);
 		const first = source();
 		content = next;
-		now += (APPLE_SECRET_REFRESH_SECONDS - 1) * 1000;
+		now += (45 * DAY - 1) * 1000;
 		expect(source()).toBe(first);
 		now += 2000;
 		const refreshed = source();

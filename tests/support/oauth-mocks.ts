@@ -285,6 +285,18 @@ export async function signedInUser(
 	return cookiesOf(response);
 }
 
+// A password account whose email is verified: the case in which an automatic
+// same-email link would be accepted if implicit linking were still allowed.
+export async function verifiedUser(
+	harness: { auth: TestAuth; store: { user: Record<string, unknown>[] } },
+	email: string,
+): Promise<Map<string, string>> {
+	const jar = await signedInUser(harness.auth, email);
+	for (const user of harness.store.user)
+		if (user.email === email) user.emailVerified = true;
+	return jar;
+}
+
 export const noFiles: ProviderIO = {
 	readFile() {
 		throw new Error("ENOENT");

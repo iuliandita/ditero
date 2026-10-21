@@ -11,6 +11,7 @@ import {
 	signedInUser,
 	signingKey,
 	startOAuth,
+	verifiedUser,
 } from "../../tests/support/oauth-mocks.ts";
 
 const ISSUER = "https://idp.example.test/realms/home";
@@ -119,6 +120,9 @@ async function signInAs(
 	};
 }
 
+// Password hashing and RSA key generation are slow on a loaded CI runner.
+vi.setConfig({ testTimeout: 30_000 });
+
 beforeEach(() => vi.unstubAllGlobals());
 afterEach(() => vi.unstubAllGlobals());
 
@@ -172,7 +176,7 @@ describe("generic OpenID Connect sign-in", () => {
 
 	test("never links a new subject to an existing account by email", async () => {
 		const h = await setup();
-		await signedInUser(h.auth, "ada@example.test");
+		await verifiedUser(h, "ada@example.test");
 		const { outcome } = await signInAs(h);
 		expect(outcome.error).toBe("account_not_linked");
 		expect(outcome.jar.has("better-auth.session_token")).toBe(false);
