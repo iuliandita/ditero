@@ -8,12 +8,14 @@ set -eu
 load_secret DATABASE_URL optional
 if [ -z "${DATABASE_URL:-}" ]; then
 	load_secret DITERO_RUNTIME_DB_PASSWORD required
-	export DATABASE_URL="postgres://ditero_runtime:${DITERO_RUNTIME_DB_PASSWORD}@upstream-db:5432/ditero"
+	DATABASE_URL=$(bun -e 'process.stdout.write(`postgres://ditero_runtime:${encodeURIComponent(process.env.DITERO_RUNTIME_DB_PASSWORD)}@upstream-db:5432/ditero`)')
+	export DATABASE_URL
 fi
 load_secret DATABASE_MIGRATION_URL optional
 if [ -z "${DATABASE_MIGRATION_URL:-}" ]; then
 	load_secret DITERO_MIGRATION_DB_PASSWORD required
-	export DATABASE_MIGRATION_URL="postgres://ditero_migrator:${DITERO_MIGRATION_DB_PASSWORD}@upstream-db:5432/ditero"
+	DATABASE_MIGRATION_URL=$(bun -e 'process.stdout.write(`postgres://ditero_migrator:${encodeURIComponent(process.env.DITERO_MIGRATION_DB_PASSWORD)}@upstream-db:5432/ditero`)')
+	export DATABASE_MIGRATION_URL
 fi
 load_secret BETTER_AUTH_SECRET required
 load_secret GOOGLE_CLIENT_SECRET optional

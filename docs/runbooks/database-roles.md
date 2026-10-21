@@ -52,3 +52,32 @@ The application verifies this at startup in production and refuses to boot if th
 Set `DITERO_MIGRATION_DATABASE_URL` to the owner DSN and `DITERO_DATABASE_URL` to the runtime DSN. Configure `DITERO_ZERO_DATABASE_URL` according to the Zero deployment guide and provider replication controls. Never point application runtime traffic at the migration or Zero login.
 
 After migration, verify `user_secret` has both row security flags and that the runtime role cannot read it without `SET LOCAL ditero.user_id`.
+
+## Bundled secrets and incomplete initialization
+
+Compose `_FILE` inputs must be readable by the receiving container user, with
+search permission on every parent directory. Local Compose file secrets are
+bind mounts; declaring a secret does not change its host ownership or mode.
+Use a dedicated group/ACL or a container-UID-owned private directory, not globally
+readable passwords. PostgreSQL's `postgres` UID differs between image variants;
+inspect the pinned image's `id postgres`. The application runs as UID 1000.
+The AIO bundle has stricter per-role directories; follow its own guide.
+
+`DITERO_MIGRATION_DB_PASSWORD`, `DITERO_RUNTIME_DB_PASSWORD` and `POSTGRES_PASSWORD`
+are raw passwords. The app and Zero entrypoints percent-encode them in generated
+DSNs, including `@:/%#?`. Explicit database URLs must already encode credentials.
+
+The bundled initializer validates both app passwords before SQL and creates all
+roles/grants in one transaction. PostgreSQL still retains its data directory if
+an init script fails, and skips initialization scripts on the next start. Changing
+file permissions after that failure does not create the missing roles. The bundled
+database healthcheck reports the missing `ditero_migrator`/`ditero_runtime` roles
+and blocks dependent services. An app authentication error also names the login;
+`28P01` can mean either a missing role or an incorrect password.
+
+Stop app and Zero, fix secret readability, and back up the database volume before
+recovery. For a fresh install with no user data, recreate only the failed database
+volume and start with the original service secrets. For an existing installation,
+restore a known-good backup or have an administrator repair the roles/grants using
+the original passwords and correct ownership. Never delete an existing database
+as a generic authentication fix, and do not widen runtime privileges or disable RLS.

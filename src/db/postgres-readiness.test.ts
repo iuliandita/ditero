@@ -73,3 +73,31 @@ test("synchronous connect failure closes without relying on pg's unattached end 
 		connect.mockRestore();
 	}
 });
+
+test.each([
+	["ditero_migrator", "ditero_migrator"],
+	["bad%0Arole", "configured login"],
+])("authentication diagnostics safely identify %s without exposing the DSN", async (username, label) => {
+	const connect = vi
+		.spyOn(Socket.prototype, "connect")
+		.mockImplementationOnce(() => {
+			throw Object.assign(new Error("Private server details"), {
+				code: "28P01",
+			});
+		});
+	try {
+		const error = await waitForPostgres(
+			`postgres://${username}:password-canary@private.invalid/db`,
+			{ timeoutMs: 100 },
+		).catch((caught: unknown) => caught);
+		expect(error).toMatchObject({ code: "28P01" });
+		expect(String(error)).toContain(`authentication failed for role ${label}`);
+		expect(String(error)).toContain("incomplete role initialization");
+		expect(String(error)).not.toMatch(
+			/password-canary|private\.invalid|Private server details|bad%0Arole/,
+		);
+		expect(connect).toHaveBeenCalledOnce();
+	} finally {
+		connect.mockRestore();
+	}
+});
