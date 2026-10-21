@@ -3,6 +3,8 @@
 // image would only ever work at the build's hostname. It is resolved here at
 // request time from the same environment variable that drives the CSP, so the
 // address the client dials and the address the CSP permits cannot drift.
+import { socialProvidersFromEnv } from "../auth/providers.ts";
+
 export const DEFAULT_ZERO_URL = "http://localhost:4848";
 
 export type PublicEnvironment = Record<string, string | undefined>;
@@ -13,8 +15,13 @@ export function zeroPublicURL(env: PublicEnvironment): string {
 
 export type PublicConfig = {
 	zeroURL: string;
+	// Optional for older servers and native sync adapters that only need Zero.
+	socialProviders?: string[];
 };
 
 export function publicConfig(env: PublicEnvironment): PublicConfig {
-	return { zeroURL: zeroPublicURL(env) };
+	return {
+		zeroURL: zeroPublicURL(env),
+		socialProviders: Object.keys(socialProvidersFromEnv(env)),
+	};
 }

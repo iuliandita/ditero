@@ -24,6 +24,9 @@ Creation returns `grantId` and `expiresAt`. Grants expire after five minutes.
 Open `/native/authorize?grantId=...` on the selected server in the system browser.
 The page uses the existing sign-in flow, shows the device and signed-in account,
 and requires an explicit approval. It returns no session token to the browser.
+Google appears only when the server has both OAuth credentials configured. A
+registration-policy refusal returns to this page with the localized registration
+message and retains the grant ID; see [sign-in providers](sign-in-providers.md).
 Preview exposes only the device label, expiry, and pending or approved status.
 An approved grant is visible only to its approving account while the original
 approving session remains live. Cancel leaves the request unapproved.
