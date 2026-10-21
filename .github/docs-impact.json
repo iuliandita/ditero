@@ -21,9 +21,9 @@
 			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
 		},
 		"native": {
-			"sourceDigest": "8edfdb0fc70fd08e2097b6bd2850f6a477cc9877dc19bc389adb492a203bd784",
-			"docs": ["apps/desktop/README.md", "apps/android/README.md"],
-			"note": "Document localized keyring setup and retry, the Linux package recommendation, and account-bound fixed Settings browser handoffs on desktop and Android. Matching Settings routes preserve the destination through browser sign-in; older servers still open their normal application page."
+			"sourceDigest": "7fc0e7a23875b3f54f3f692800f9d1440a58525528271bec440b8254920bc178",
+			"docs": ["apps/desktop/README.md"],
+			"note": "Document the asynchronous five-second launcher wait, retryable spawn and non-zero exit failures, and successful handoff when a launcher remains running beyond the bound."
 		}
 	}
 }

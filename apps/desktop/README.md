@@ -30,6 +30,9 @@ The system browser may require a separate sign-in. The `settings.open` native
 operation accepts only those fixed destinations, bound to the current account;
 it accepts no URL or credentials. The sign-in browser operation remains limited
 to the pending login grant. Browser handoff failures show a retryable message.
+The host waits asynchronously for the launcher for up to five seconds. A spawn
+failure or non-zero exit shows that error; a launcher still running after five
+seconds counts as a successful handoff because it may wait for the browser to close.
 
 The matching `/settings/<section>` browser routes require a server version that
 includes these routes; older servers still open their normal application page.
