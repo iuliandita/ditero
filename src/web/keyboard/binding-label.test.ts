@@ -1,21 +1,14 @@
-import { describe, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { formatBinding } from "./binding-label.ts";
 
-describe("formatBinding", () => {
-	test("renders a Meta chord tight with the symbol", () => {
-		expect(formatBinding(["Meta", "k"])).toBe("⌘K");
-	});
-
-	test("renders a two-key sequence spaced", () => {
-		expect(formatBinding(["g", "t"])).toBe("g t");
-	});
-
-	test("renders a single key as-is", () => {
-		expect(formatBinding(["j"])).toBe("j");
-	});
-
-	test("maps named keys to symbols", () => {
-		expect(formatBinding(["Enter"])).toBe("↵");
-		expect(formatBinding(["Backspace"])).toBe("⌫");
-	});
+test.each([
+	["MacIntel", "⌘⇧K", "↵", "⌫"],
+	["Linux x86_64", "Ctrl+Shift+K", "Enter", "Backspace"],
+	["Win32", "Ctrl+Shift+K", "Enter", "Backspace"],
+] as const)("labels shortcuts for %s", (platform, chord, enter, backspace) => {
+	expect(formatBinding(["Meta", "Shift", "k"], platform)).toBe(chord);
+	expect(formatBinding(["Enter"], platform)).toBe(enter);
+	expect(formatBinding(["Backspace"], platform)).toBe(backspace);
+	expect(formatBinding(["g", "t"], platform)).toBe("g t");
+	expect(formatBinding(["j"], platform)).toBe("j");
 });

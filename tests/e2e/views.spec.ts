@@ -548,6 +548,9 @@ test("keymap: rebind persists across reload and fires; vim profile reflected", a
 test("cheat-sheet: ? opens the overlay listing command bindings", async ({
 	page,
 }) => {
+	await page.addInitScript(() =>
+		Object.defineProperty(navigator, "platform", { value: "Linux x86_64" }),
+	);
 	await signUp(page, uniqueEmail("v7"));
 	await waitWorkspaceReady(page);
 
@@ -557,10 +560,10 @@ test("cheat-sheet: ? opens the overlay listing command bindings", async ({
 	await expect(
 		cheat.getByRole("heading", { name: "Keyboard shortcuts" }),
 	).toBeVisible();
-	// A known command label and its ⌘K chord render together.
+	// Linux shows the portable accelerator as Ctrl rather than an Apple symbol.
 	const row = cheat.locator("li", { hasText: "Command palette" });
 	await expect(row).toBeVisible();
-	await expect(row.locator("kbd").filter({ hasText: "K" })).toBeVisible();
+	await expect(row.locator("kbd")).toHaveText("Ctrl+K");
 });
 
 // --- Scenario 8: fresh user lands on Today; an overdue task shows there ---
