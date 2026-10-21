@@ -87,7 +87,12 @@ test.each([
 	const body = {};
 	const scope = {};
 	const otherInput = {};
-	const documentState = { body, activeElement: body };
+	const documentState = {
+		body,
+		activeElement: body,
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
+	};
 	vi.stubGlobal("document", documentState);
 	const statusNode = {
 		focus: vi.fn(() => {
@@ -180,3 +185,115 @@ beforeEach(() => {
 	vi.clearAllMocks();
 });
 afterEach(() => vi.unstubAllGlobals());
+
+test.each([
+	["completed", "action"],
+	["conflict", "action"],
+	["completed", "elsewhere"],
+	["conflict", "elsewhere"],
+	["completed", "body-after-move"],
+	["conflict", "body-after-move"],
+	["completed", "elsewhere-at-commit"],
+	["conflict", "elsewhere-at-commit"],
+] as const)("status retry %s preserves focus at %s", async (state, destination) => {
+	const body = {};
+	const otherInput = {};
+	const listeners = new Set<() => void>();
+	const documentState = {
+		body,
+		activeElement: body,
+		addEventListener: (_event: string, callback: () => void) =>
+			listeners.add(callback),
+		removeEventListener: (_event: string, callback: () => void) =>
+			listeners.delete(callback),
+	};
+	vi.stubGlobal("document", documentState);
+	const statusNode = {
+		focus: vi.fn(() => {
+			documentState.activeElement = statusNode;
+		}),
+	};
+	const actionNode = {};
+	let respond!: (response: Response) => void;
+	const pending = new Promise<Response>((resolve) => {
+		respond = resolve;
+	});
+	vi.stubGlobal(
+		"fetch",
+		vi
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 500 }))
+			.mockReturnValueOnce(pending),
+	);
+	function render() {
+		fixture.cursor = 0;
+		const tree = ImportApplyPanel({
+			plan,
+			ownerId: "owner",
+			onBusy: fixture.onBusy,
+			disabled: false,
+		});
+		const elements = nodes(tree);
+		const status = elements.find(
+			(node) => node.props["data-testid"] === "import-apply-status",
+		);
+		(status?.props.ref as { current: unknown }).current = statusNode;
+		const action = elements.find(
+			(node) =>
+				node.type === "button" &&
+				node.props.children !== "archive_import_action",
+		);
+		if (action) (action.props.ref as { current: unknown }).current = actionNode;
+		else {
+			const ref = fixture.slots.find(
+				(slot) => (slot as { current?: unknown })?.current === actionNode,
+			) as { current: unknown };
+			ref.current = null;
+			if (documentState.activeElement === actionNode)
+				documentState.activeElement = body;
+		}
+		for (const callback of fixture.layoutEffects.splice(0)) callback();
+		for (const callback of fixture.effects.splice(0)) callback();
+		return action;
+	}
+	render();
+	await nextTurn();
+	const retry = render();
+	if (!retry) throw new Error("Missing status retry action");
+	expect(retry.props.children).toBe("import_apply_retry_status");
+	documentState.activeElement = actionNode;
+	(retry.props.onClick as () => void)();
+	render();
+	if (destination !== "action" && destination !== "elsewhere-at-commit") {
+		documentState.activeElement = otherInput;
+		for (const callback of listeners) callback();
+		if (destination === "body-after-move") documentState.activeElement = body;
+	}
+	respond(
+		Response.json({
+			run: {
+				jobId: "plan",
+				state,
+				nextOrdinal: 1,
+				appliedCount: 1,
+				noopCount: 0,
+				conflictCode: null,
+				conflictOrdinal: null,
+			},
+		}),
+	);
+	await nextTurn();
+	if (destination === "elsewhere-at-commit")
+		documentState.activeElement = otherInput;
+	render();
+	expect(statusNode.focus).toHaveBeenCalledTimes(
+		destination === "action" ? 1 : 0,
+	);
+	expect(documentState.activeElement).toBe(
+		destination === "action"
+			? statusNode
+			: destination === "elsewhere" || destination === "elsewhere-at-commit"
+				? otherInput
+				: body,
+	);
+});

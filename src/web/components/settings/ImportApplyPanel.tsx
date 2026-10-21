@@ -73,6 +73,15 @@ export function ImportApplyPanel({
 	const number = (value: number) =>
 		new Intl.NumberFormat(getLocale()).format(value);
 
+	useEffect(() => {
+		const cancelHandoff = () => {
+			if (document.activeElement !== action.current)
+				focusTerminal.current = false;
+		};
+		document.addEventListener("focusin", cancelHandoff);
+		return () => document.removeEventListener("focusin", cancelHandoff);
+	}, []);
+
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reload explicitly retries a failed status read.
 	useEffect(() => {
 		alive.current = true;
@@ -186,7 +195,11 @@ export function ImportApplyPanel({
 	useLayoutEffect(() => {
 		if (terminal && !applying && focusTerminal.current) {
 			focusTerminal.current = false;
-			status.current?.focus();
+			if (
+				document.activeElement === action.current ||
+				document.activeElement === document.body
+			)
+				status.current?.focus();
 		}
 	}, [terminal, applying]);
 	const blockedReason = needsAcknowledgement
