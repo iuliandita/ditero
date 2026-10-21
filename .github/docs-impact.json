@@ -11,17 +11,42 @@
 			"note": "Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "3f7c128b90bfe5a67d58b3fc2343889ce73abc45eb718d4c8c3c6ec6855ab715",
-			"noImpact": "Only desktop installer metadata, bundled license files and platform package settings change. Server configuration, deployment variables and operator setup remain unchanged; installer behavior is documented in RELEASING.md and the desktop guide."
+			"sourceDigest": "a192ff4cd8a4333e5ad681daf6800fff76d4ddd0662d0a7d096de3341fcc5950",
+			"docs": [
+				"deploy/docker/aio/README.md",
+				"deploy/helm/ditero/README.md",
+				"deploy/kustomize/README.md",
+				"docs/runbooks/database-roles.md"
+			],
+			"note": "Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database reconnection, advisory-lock reacquisition and bounded graceful shutdown, including recovery of unfinished notification leases. Gate Zero on completed application migrations and the current Helm revision; give AIO Zero a dedicated ingress bridge without outbound source NAT and document retained-replica recovery. Only desktop installer metadata, bundled license files and platform package settings change. Server configuration, deployment variables and operator setup remain unchanged; installer behavior is documented in RELEASING.md and the desktop guide."
 		},
 		"deployment": {
-			"sourceDigest": "3cb56b9dc41deafd254840faee7defba3f98b24d86daea7c6731b50d10f3e43e",
-			"noImpact": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged."
+			"sourceDigest": "a9260b0f1b279a55c835870aa3a5182eda72e7ba6e6a7900a008f90eb3948613",
+			"docs": [
+				"deploy/docker/aio/README.md",
+				"deploy/helm/ditero/README.md",
+				"deploy/kustomize/README.md",
+				"docs/runbooks/database-roles.md"
+			],
+			"note": "Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database recovery and shutdown timing within the default container and pod grace periods. Document ordered startup, revision-aware Helm readiness, AIO ingress boundaries and cache-only recovery for failed initial synchronization."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
 			"docs": ["apps/desktop/README.md"],
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
+		},
+		"authentication": {
+			"sourceDigest": "c278c62a1d042a6718d4c5b2a346f513dddb415b8283e78ea19fd6749da9e329",
+			"docs": ["docs/runbooks/native-authentication.md"],
+			"note": "Document periodic stream revalidation after session revocation; HTTP authorization remains checked against live session state."
+		},
+		"compatibility": {
+			"sourceDigest": "c5e0efd5a78017c3388bf730c85bc1b6e62c11131aab4163fd98c180a8a257dd",
+			"noImpact": "Attachment garbage collection uses the same checked-out connection as its leader lock. Persisted attachment states, ciphertext format, quotas and restore procedures are unchanged.",
+			"upgrade": "No schema or ciphertext migration is required; restart the application with the updated image.",
+			"backup": "The existing database and attachment backup procedure remains applicable without changes.",
+			"rollback": "The prior application can use the same database and attachment objects; no format changes occur.",
+			"clientVersions": "Browser, Android and desktop clients use the same attachment protocol and remain compatible."
 		}
 	}
 }
