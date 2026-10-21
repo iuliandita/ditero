@@ -10,6 +10,7 @@ import { authClient } from "../../lib/auth-client.ts";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { useNativeAccount } from "../../lib/native-account.tsx";
 import { Input } from "../ui/input.tsx";
+import { LinkedProvidersPanel } from "./LinkedProvidersPanel.tsx";
 
 export function AccountPanel() {
 	const native = useNativeAccount();
@@ -26,6 +27,7 @@ function BrowserAccountPanel() {
 		<>
 			<AccountContent profile={session?.user} />
 			<DisplayNameForm name={session?.user.name ?? ""} />
+			<LinkedProvidersPanel />
 		</>
 	);
 }

@@ -50,9 +50,16 @@ const AUTH_ERROR_MESSAGES: Record<string, () => string> = {
 	// failed" concludes the app is broken.
 	REGISTRATION_INVITE_REQUIRED: m.auth_error_registration_invite_required,
 	REGISTRATION_DISABLED: m.auth_error_registration_disabled,
+	REGISTRATION_RELAY_EMAIL: m.auth_error_registration_relay_email,
 	// Same 403 as the gate, wholly different cause: the browser reached the app
 	// on an address the server does not trust (TRUSTED_ORIGINS / BETTER_AUTH_URL).
 	INVALID_ORIGIN: m.auth_error_invalid_origin,
+	// OAuth callback failures arrive as lowercase `?error=` redirect codes.
+	email_not_found: m.auth_error_email_not_found,
+	email_not_verified: m.auth_error_email_not_verified,
+	account_not_linked: m.auth_error_account_not_linked,
+	unable_to_link_account: m.auth_error_account_not_linked,
+	account_already_linked_to_different_user: m.auth_error_account_already_linked,
 };
 
 // Precedence is deliberate. An unmapped code still yields the server's English

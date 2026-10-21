@@ -8,8 +8,9 @@ import {
 	PASSWORD_MAX_LENGTH,
 	PASSWORD_MIN_LENGTH,
 } from "../../auth/password-policy.ts";
+import type { SignInProviderOption } from "../../auth/provider-names.ts";
 import { m } from "../../paraglide/messages.js";
-import { GoogleMark } from "../components/auth/GoogleMark.tsx";
+import { ProviderMark } from "../components/auth/ProviderMark.tsx";
 import { BrandLogo } from "../components/BrandLogo.tsx";
 import { LanguageSwitcher } from "../components/settings/LanguageSwitcher.tsx";
 import { Button } from "../components/ui/button.tsx";
@@ -19,6 +20,7 @@ import { authErrorMessage, totpErrorMessage } from "../lib/auth-messages.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
 import { fetchPublicConfig } from "../lib/public-config.ts";
 import { passkeysAvailable } from "../lib/secure-context.ts";
+import { signInProviderOptions } from "../lib/sign-in-providers.ts";
 import {
 	runAfterZeroRetirement,
 	ZeroRetirementError,
@@ -53,13 +55,12 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 	const [callbackError, setCallbackError] = useState(() =>
 		new URLSearchParams(window.location.search).get("error"),
 	);
-	const [googleEnabled, setGoogleEnabled] = useState(false);
+	const [providers, setProviders] = useState<SignInProviderOption[]>([]);
 	useEffect(() => {
 		let active = true;
 		void fetchPublicConfig().then(
 			(config) => {
-				if (active)
-					setGoogleEnabled(config.socialProviders?.includes("google") === true);
+				if (active) setProviders(signInProviderOptions(config));
 			},
 			() => {
 				// Email and passkeys remain usable when config is unavailable.
@@ -146,14 +147,14 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 		}, m.login_error_passkey_failed);
 	}
 
-	function signInGoogle() {
+	function signInWith(provider: string) {
 		void runAction(async () => {
 			const errorURL = new URL(window.location.href);
 			errorURL.searchParams.delete("error");
 			errorURL.searchParams.delete("error_description");
 			errorURL.hash = "";
 			const res = await authClient.signIn.social({
-				provider: "google",
+				provider,
 				errorCallbackURL: errorURL.href,
 				...(callbackURL ? { callbackURL } : {}),
 			});
@@ -421,19 +422,22 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 					<KeyRound aria-hidden="true" />
 					{m.login_signin_passkey()}
 				</Button>
-				{googleEnabled && (
+				{providers.map((provider) => (
 					<Button
-						data-testid="signin-google"
+						key={provider.id}
+						data-testid={`signin-${provider.id}`}
 						type="button"
 						variant="outline"
 						className="h-11 w-full"
-						onClick={signInGoogle}
+						onClick={() => signInWith(provider.id)}
 						disabled={pending}
 					>
-						<GoogleMark />
-						{m.login_continue_google()}
+						<ProviderMark provider={provider} />
+						{provider.id === "google"
+							? m.login_continue_google()
+							: m.login_continue_with({ provider: provider.name })}
 					</Button>
-				)}
+				))}
 			</div>
 			<p className="mt-6 text-center text-sm text-muted-foreground">
 				{mode === "signup" ? m.login_existing_account() : m.login_new_here()}{" "}
