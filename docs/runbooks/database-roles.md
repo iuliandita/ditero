@@ -27,6 +27,13 @@ alter default privileges for role ditero_migrator in schema public
   grant usage, select, update on sequences to ditero_runtime;
 ```
 
+Membership removal does not require database `TEMP` privilege. Keep the runtime
+role restricted during an upgrade; no schema or stored-data migration is needed for
+this fix. Existing coordinated database/blob backups and client versions remain
+compatible. Application rollback can restore the former TEMP requirement
+and the 403 response for foreign attachment downloads; current downloads return
+404 for both foreign and missing IDs. Rollback needs no data conversion.
+
 ## Zero's shard schema
 
 zero-cache stores per-client sync bookkeeping in a shard schema (`zero_0` by default) that it creates on first boot, owned by the role it connects as. Both application roles need access to it:
