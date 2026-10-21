@@ -289,7 +289,15 @@ try {
 		await native.screenshot("offline-change");
 	});
 	await journey("offline cold start with verified evidence", async () => {
+		writeFileSync(
+			resolve(evidence, "vault-before-close.json"),
+			JSON.stringify(vault()),
+		);
 		await native.close();
+		writeFileSync(
+			resolve(evidence, "vault-after-close.json"),
+			JSON.stringify(vault()),
+		);
 		await native.launch();
 		await until("offline workspace", () =>
 			native.evaluate(
@@ -524,6 +532,14 @@ try {
 		process.exitCode = 1;
 } catch (error) {
 	console.error(error);
+	try {
+		writeFileSync(
+			resolve(evidence, "vault-failure.json"),
+			JSON.stringify(vault()),
+		);
+	} catch (diagnostic) {
+		console.error(`Failure vault diagnostic: ${diagnostic}`);
+	}
 	if (process.platform === "darwin") {
 		try {
 			run("screencapture", ["-x", resolve(evidence, "failure-desktop.png")]);
