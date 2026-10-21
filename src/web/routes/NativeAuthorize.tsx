@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { m } from "../../paraglide/messages.js";
 import { Button } from "../components/ui/button.tsx";
-import type { authClient } from "../lib/auth-client.ts";
+import { authClient } from "../lib/auth-client.ts";
 import { AuthShell, Login } from "./Login.tsx";
 
 // Browser consent for `/native/authorize?grantId=`. The native app opens this
@@ -127,6 +127,8 @@ function Consent({
 	const [attempt, setAttempt] = useState(0);
 	const [submitting, setSubmitting] = useState(false);
 	const [approveFailed, setApproveFailed] = useState(false);
+	const [switching, setSwitching] = useState(false);
+	const [switchFailed, setSwitchFailed] = useState(false);
 	const submittingRef = useRef(false);
 	const approveAbort = useRef<AbortController | null>(null);
 
@@ -158,11 +160,35 @@ function Consent({
 
 	useEffect(() => () => approveAbort.current?.abort(), []);
 
+	async function switchAccount() {
+		if (submittingRef.current) return;
+		submittingRef.current = true;
+		setSwitching(true);
+		setSwitchFailed(false);
+		setApproveFailed(false);
+		const controller = new AbortController();
+		approveAbort.current = controller;
+		try {
+			const result = await authClient.signOut();
+			if (controller.signal.aborted) return;
+			if (result.error) throw result.error;
+			window.location.assign(
+				`${window.location.origin}/native/authorize?grantId=${grantId}`,
+			);
+		} catch {
+			if (!controller.signal.aborted) setSwitchFailed(true);
+		} finally {
+			submittingRef.current = false;
+			if (!controller.signal.aborted) setSwitching(false);
+		}
+	}
+
 	async function approve() {
 		if (submittingRef.current) return;
 		submittingRef.current = true;
 		setSubmitting(true);
 		setApproveFailed(false);
+		setSwitchFailed(false);
 		const controller = new AbortController();
 		approveAbort.current = controller;
 		try {
@@ -278,12 +304,17 @@ function Consent({
 					{m.native_authorize_approve_failed()}
 				</p>
 			) : null}
-			<div className="space-y-2" aria-busy={submitting}>
+			{switchFailed && (
+				<p role="alert" className="text-sm text-destructive">
+					{m.native_authorize_switch_failed()}
+				</p>
+			)}
+			<div className="space-y-2" aria-busy={submitting || switching}>
 				<Button
 					data-testid="native-authorize-allow"
 					type="button"
 					className="h-auto min-h-12 w-full whitespace-normal py-2"
-					disabled={submitting}
+					disabled={submitting || switching}
 					onClick={() => void approve()}
 				>
 					{submitting
@@ -291,11 +322,23 @@ function Consent({
 						: m.native_authorize_allow()}
 				</Button>
 				<Button
+					data-testid="native-authorize-switch-account"
+					type="button"
+					variant="outline"
+					className="h-auto min-h-12 w-full whitespace-normal py-2"
+					disabled={submitting || switching}
+					onClick={() => void switchAccount()}
+				>
+					{switching
+						? m.native_authorize_switching()
+						: m.native_authorize_switch_account()}
+				</Button>
+				<Button
 					data-testid="native-authorize-cancel"
 					type="button"
 					variant="outline"
 					className="h-auto min-h-12 w-full whitespace-normal py-2"
-					disabled={submitting}
+					disabled={submitting || switching}
 					onClick={() => window.location.assign("/")}
 				>
 					{m.native_authorize_cancel()}

@@ -2,8 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "3dd81594f87afe6f7ee7719fa3d6a47279b468b122389aa01ebe3a54c0bf7517",
-			"noImpact": "Task rows and cards replace the visible Personal or Shared word with a person or group icon while retaining the workspace name and the existing localized tooltip and screen-reader context. Task behavior, permissions, settings and documented workflows are unchanged."
+			"sourceDigest": "05e9affd6915b57ffce5d3e8ce454cd608bf4b681a34386af1fbf3be45004397",
+			"docs": ["docs/runbooks/native-authentication.md"],
+			"note": "Document browser account switching on native consent, preserving the validated request and requiring explicit approval from the replacement account."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",

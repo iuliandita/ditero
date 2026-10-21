@@ -177,3 +177,11 @@ The native client must retire its local sync client before changing account
 ownership and report network or local credential-cleanup failures truthfully.
 Local forgetting alone does not prove server revocation. The endpoint retains
 the same admission, no-store, and empty-body contract as native bootstrap.
+
+## Choosing a different browser account
+
+The consent page shows the browser account that will authorize the device.
+Use **Use a different account** to sign out of that browser session and return to
+sign-in with the same native request. The replacement account must still explicitly
+allow the device. A sign-out failure stays on consent and offers a retry; it never
+approves the request. The native app session and browser session are independent.
