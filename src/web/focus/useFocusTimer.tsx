@@ -14,7 +14,10 @@ import { mutators } from "../../zero/mutators.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import { useNativeAccount } from "../lib/native-account.tsx";
-import { runMutation } from "../lib/run-mutation.ts";
+import {
+	mutationFailureMessage,
+	mutationResultFailure,
+} from "../lib/run-mutation.ts";
 import {
 	type Cycle,
 	clampFocusConfig,
@@ -40,6 +43,8 @@ export type FocusTimerApi = {
 	config: FocusConfig;
 	roundsPerLongBreak: number;
 	cue: Cue | null;
+	error: string | null;
+	dismissError: () => void;
 	start: () => void;
 	pause: () => void;
 	reset: () => void;
@@ -154,6 +159,13 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		[updateFocus],
 	);
 
+	const [failureNotice, setFailureNotice] = useState<{
+		key: string;
+		message: string;
+	} | null>(null);
+	const error =
+		failureNotice?.key === storageKey ? failureNotice.message : null;
+	const dismissError = useCallback(() => setFailureNotice(null), []);
 	const attemptedRef = useRef(new Set<string>());
 	useEffect(() => {
 		if (snapshot.key !== storageKey) return;
@@ -163,12 +175,19 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			attemptedRef.current.add(attempt);
 			void (async () => {
 				try {
-					const saved = await runMutation(
-						zero.mutate(mutators.focus.logSession(completion)),
-						(msg) => console.error("focus.logSession failed", msg),
-					);
-					if (!saved || !mountedRef.current || keyRef.current !== storageKey)
-						return;
+					const mutation = zero.mutate(mutators.focus.logSession(completion));
+					const localFailure = mutationResultFailure(await mutation.client);
+					// A local commit can still be waiting for idle disk persistence.
+					// Keep the replay intent until the server has settled the write.
+					const failure =
+						localFailure ?? mutationResultFailure(await mutation.server);
+					if (!mountedRef.current || keyRef.current !== storageKey) return;
+					if (failure?.kind === "zero") return;
+					if (failure)
+						setFailureNotice({
+							key: storageKey,
+							message: mutationFailureMessage(failure, m.focus_log_failed),
+						});
 					await updateFocus((current) => {
 						const pendingCompletions = current.pendingCompletions.filter(
 							(item) => item.intervalId !== completion.intervalId,
@@ -206,12 +225,46 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 
 	const storedSession =
 		snapshot.key === storageKey ? snapshot.state.session : null;
-	const [now, setNow] = useState(Date.now);
+	const clockRef = useRef<{
+		intervalId: string;
+		endsAt: number;
+		remainingSec: number;
+		wall: number;
+		monotonic: number;
+	} | null>(null);
+	const timerNow = useCallback(
+		(session: Session, monotonic = performance.now()) => {
+			const endsAt = session.endsAt;
+			if (endsAt === null) return Date.now();
+			let clock = clockRef.current;
+			if (
+				clock?.intervalId !== session.intervalId ||
+				clock.endsAt !== endsAt ||
+				clock.remainingSec !== session.remainingSec
+			) {
+				clock = {
+					intervalId: session.intervalId,
+					endsAt,
+					remainingSec: session.remainingSec,
+					// After reload, a backward correction cannot add unworked time.
+					wall: Math.max(Date.now(), endsAt - session.remainingSec * 1000),
+					monotonic,
+				};
+				clockRef.current = clock;
+			}
+			return clock.wall + Math.max(0, monotonic - clock.monotonic);
+		},
+		[],
+	);
+	const [now, setNow] = useState(() => performance.now());
 	// Ticks change only the display clock. No persistence or session snapshots.
 	useEffect(() => {
-		if (!storedSession?.running) return;
-		setNow(Date.now());
-		const id = setInterval(() => setNow(Date.now()), 250);
+		if (!storedSession?.running) {
+			clockRef.current = null;
+			return;
+		}
+		setNow(performance.now());
+		const id = setInterval(() => setNow(performance.now()), 250);
 		return () => clearInterval(id);
 	}, [storedSession?.running]);
 
@@ -220,7 +273,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		if (
 			!storedSession?.running ||
 			storedSession.endsAt === null ||
-			now < storedSession.endsAt ||
+			timerNow(storedSession, now) < storedSession.endsAt ||
 			completingRef.current === storedSession.intervalId
 		)
 			return;
@@ -235,7 +288,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				s.intervalId !== intervalId ||
 				s.startedAt === null ||
 				s.endsAt === null ||
-				at < s.endsAt
+				timerNow(s) < s.endsAt
 			)
 				return current;
 			const cfg = configFor(s);
@@ -262,7 +315,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 							? { taskId: s.boundTaskId }
 							: {}),
 						kind,
-						startedAt: s.startedAt,
+						// Pauses and clock corrections must not shorten the logged span.
+						startedAt: s.endsAt - s.plannedSec * 1000,
 						endedAt: s.endsAt,
 						durationSec: s.plannedSec,
 					},
@@ -281,7 +335,15 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				});
 			}
 		});
-	}, [storedSession, now, updateFocus, configFor, plannedFor, storageKey]);
+	}, [
+		storedSession,
+		now,
+		updateFocus,
+		configFor,
+		plannedFor,
+		storageKey,
+		timerNow,
+	]);
 
 	const start = useCallback(() => {
 		setSession((previous) => {
@@ -293,7 +355,7 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 					...previous,
 					config: cfg,
 					running: true,
-					startedAt: previous.startedAt ?? at,
+					startedAt: at + (previous.remainingSec - previous.plannedSec) * 1000,
 					endsAt: at + previous.remainingSec * 1000,
 				};
 			const sec = plannedFor(INITIAL_CYCLE, cfg);
@@ -318,10 +380,10 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 				...previous,
 				running: false,
 				endsAt: null,
-				remainingSec: remainingSecFrom(previous.endsAt, Date.now()),
+				remainingSec: remainingSecFrom(previous.endsAt, timerNow(previous)),
 			};
 		});
-	}, [setSession]);
+	}, [setSession, timerNow]);
 
 	const reset = useCallback(() => {
 		setSession(() => null);
@@ -389,11 +451,14 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 						...storedSession,
 						remainingSec:
 							storedSession.running && storedSession.endsAt !== null
-								? remainingSecFrom(storedSession.endsAt, now)
+								? remainingSecFrom(
+										storedSession.endsAt,
+										timerNow(storedSession, now),
+									)
 								: storedSession.remainingSec,
 					}
 				: null,
-		[storedSession, now],
+		[storedSession, now, timerNow],
 	);
 	const api = useMemo<FocusTimerApi>(
 		() => ({
@@ -401,6 +466,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			config,
 			roundsPerLongBreak: config.roundsPerLongBreak,
 			cue,
+			error,
+			dismissError,
 			start,
 			pause,
 			reset,
@@ -408,7 +475,19 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			bindTask,
 			startForTask,
 		}),
-		[session, config, cue, start, pause, reset, skip, bindTask, startForTask],
+		[
+			session,
+			config,
+			cue,
+			error,
+			dismissError,
+			start,
+			pause,
+			reset,
+			skip,
+			bindTask,
+			startForTask,
+		],
 	);
 	return <FocusContext.Provider value={api}>{children}</FocusContext.Provider>;
 }

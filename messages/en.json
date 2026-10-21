@@ -1130,6 +1130,7 @@
 	"focus_stop_aria": "Stop focus",
 	"focus_cue_work_complete": "Focus complete",
 	"focus_cue_break_over": "Break over",
+	"focus_log_failed": "This interval couldn't be saved. It won't be retried.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [

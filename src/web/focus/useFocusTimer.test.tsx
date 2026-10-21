@@ -164,6 +164,7 @@ beforeEach(() => {
 	vi.useFakeTimers({
 		toFake: [
 			"Date",
+			"performance",
 			"setTimeout",
 			"clearTimeout",
 			"setInterval",
@@ -184,6 +185,7 @@ beforeEach(() => {
 	fixture.loading = false;
 	fixture.mutate.mockReset().mockReturnValue({
 		client: Promise.resolve({ type: "success" }),
+		server: Promise.resolve({ type: "success" }),
 	});
 	data.clear();
 });
@@ -375,7 +377,8 @@ test.each([
 	vi.stubGlobal("__diteroFocusTestSec", 2);
 	let finish!: (value: unknown) => void;
 	fixture.mutate.mockReturnValueOnce({
-		client: new Promise((resolve) => {
+		client: Promise.resolve({ type: "success" }),
+		server: new Promise((resolve) => {
 			finish = resolve;
 		}),
 	});
@@ -411,7 +414,8 @@ test.each([
 	if (tabs.includes(tab)) close(tab);
 	let finishReplay!: (value: unknown) => void;
 	fixture.mutate.mockReturnValue({
-		client: new Promise((resolve) => {
+		client: Promise.resolve({ type: "success" }),
+		server: new Promise((resolve) => {
 			finishReplay = resolve;
 		}),
 	});
@@ -455,4 +459,116 @@ test.each([
 	}
 	expect(insert).toHaveBeenCalledOnce();
 	expect(rows[0].id).toBe(`owner:${intervalId}`);
+});
+
+test.each([
+	"success",
+	"app",
+	"zero",
+] as const)("keeps the replay intent after local acknowledgement until server %s", async (outcome) => {
+	vi.spyOn(console, "error").mockImplementation(() => {});
+	let finish!: (result: unknown) => void;
+	fixture.mutate.mockReturnValue({
+		client: Promise.resolve({ type: "success" }),
+		server: new Promise((resolve) => {
+			finish = resolve;
+		}),
+	});
+	const tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(10000);
+	await settle();
+	const pending = (await stored()).pendingCompletions;
+	expect(pending).toHaveLength(1);
+	finish(
+		outcome === "success"
+			? { type: "success" }
+			: {
+					type: "error",
+					error: { type: outcome, message: "refused" },
+				},
+	);
+	await settle();
+	expect((await stored()).pendingCompletions).toEqual(
+		outcome === "zero" ? pending : [],
+	);
+	expect(tab.api.error).toBe(
+		outcome === "app"
+			? "This interval couldn't be saved. It won't be retried."
+			: null,
+	);
+	close(tab);
+	open();
+	await settle();
+	expect(fixture.mutate).toHaveBeenCalledTimes(outcome === "zero" ? 2 : 1);
+});
+
+test.each([
+	-3000, 3000,
+])("pause/resume completes after a %i ms wall-clock correction", async (correction) => {
+	let tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(2000);
+	tab.api.pause();
+	await settle();
+	expect(tab.api.session?.remainingSec).toBe(8);
+	vi.setSystemTime(Date.now() + correction);
+	close(tab);
+	tab = open();
+	await settle();
+	tab.api.start();
+	await settle();
+	expect(tab.api.session?.remainingSec).toBe(8);
+	close(tab);
+	tab = open();
+	await settle();
+	vi.advanceTimersByTime(8000);
+	await settle();
+	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(fixture.mutate).toHaveBeenCalledOnce();
+	const completion = fixture.mutate.mock.calls[0][0];
+	expect(completion.durationSec).toBe(10);
+	expect(completion.endedAt - completion.startedAt).toBe(10000);
+	expect((await stored()).pendingCompletions).toEqual([]);
+});
+
+test.each([
+	-60000, 60000,
+])("running elapsed time ignores a %i ms wall-clock correction", async (correction) => {
+	const tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(2000);
+	await settle();
+	vi.setSystemTime(Date.now() + correction);
+	vi.advanceTimersByTime(1000);
+	await settle();
+	expect(tab.api.session?.remainingSec).toBe(7);
+	tab.api.pause();
+	await settle();
+	expect(tab.api.session?.remainingSec).toBe(7);
+	vi.setSystemTime(100000);
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(7000);
+	await settle();
+	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(fixture.mutate).toHaveBeenCalledOnce();
+});
+
+test("a backward clock correction across reload cannot grow the remaining interval", async () => {
+	let tab = open();
+	tab.api.start();
+	await settle();
+	close(tab);
+	vi.setSystemTime(5000);
+	tab = open();
+	await settle();
+	expect(tab.api.session?.remainingSec).toBe(10);
+	tab.api.pause();
+	await settle();
+	expect(tab.api.session?.remainingSec).toBe(10);
+	expect((await stored()).session?.running).toBe(false);
 });

@@ -2,15 +2,8 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "d443b6b48c294abf4beaa208fd849729b3badf649e617957453a921fe6a5ebba",
-			"docs": [
-				"docs/security.md",
-				"docs/runbooks/native-authentication.md",
-				"README.md",
-				"docs/runbooks/trusted-proxy.md",
-				"docs/notifications.md"
-			],
-			"note": "Task titles and first-run paragraphs retain readable space in narrow panes. Document exact recoverable attachment sizes and the Stored size label when row metadata cannot uniquely determine plaintext length. No stored formats or server-visible metadata change. Document proxy body limits and ciphertext overhead. Reminder completion, secure browser API requirements and configured sync endpoint diagnostics become explicit in all six locales. No authentication, permission, sync persistence or attachment format contracts change. Document display names at signup and in Account settings, propagation to members and assignees, and the shared managed-account name limit. Document read-only Viewer task controls and wrong-account invite recovery. Document account-scoped device navigation restoration and names when creating lists from templates. Pending startup restoration now yields to explicit navigation, preserving the documented selection flow without new settings or storage changes. Document provider availability and field-level channel repair guidance; correct headings and distinguish TOTP transport failures. Describe leaving shared workspaces, last-owner protection, retained authored content, assignment cleanup and required file-key rotation. Document Android Back dismissal and navigation order, top-level exit, and background network teardown during Activity recreation."
+			"sourceDigest": "2bea06e2fc1c647a6c0c56174f8da09e3ed1e880dc15cac69a0d44cbc0ba2658",
+			"noImpact": "Focus timers keep the existing start, pause, resume, stop and completion workflow. The countdown now uses the provider's bounded monotonic elapsed time, and failed completion logging shows a dismissible localized error. Replay intents remain until server acknowledgement or an explicit application refusal. These fixes preserve the promised reload behavior without new settings, server permissions, timestamp validation changes or a storage migration. Existing focus guidance remains accurate."
 		},
 		"release": {
 			"sourceDigest": "6fd453f7ff28723194269729180ddca4848233c1a81e406f0da7c97d19c04561",

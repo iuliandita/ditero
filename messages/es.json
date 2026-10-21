@@ -1151,6 +1151,7 @@
 	"focus_stop_aria": "Parar la concentración",
 	"focus_cue_work_complete": "Concentración terminada",
 	"focus_cue_break_over": "Se acabó el descanso",
+	"focus_log_failed": "No se ha podido guardar este intervalo. No se volverá a intentar.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [
