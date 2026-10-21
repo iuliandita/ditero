@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "57cf17dbdc783a709193502a0c868365c5c2a1b4f03efdcd81b50f47bee627b2",
+			"sourceDigest": "5d717b995bedad6f7fb5ccb8c164def29715286f86f839664345ac9c485501d7",
 			"docs": ["README.md"],
-			"note": "Document account-scoped device navigation restoration and names when creating lists from templates."
+			"note": "Document account-scoped device navigation restoration and names when creating lists from templates. Pending startup restoration now yields to explicit navigation, preserving the documented selection flow without new settings or storage changes."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
