@@ -351,6 +351,39 @@ describe("assertion verification", () => {
 		);
 	});
 
+	test("refuses SHA-1 signatures unless the operator allows them", async () => {
+		const { createFixtureIdp } = await import("../support/saml-idp.ts");
+		const legacy = createFixtureIdp(idp.entityId, { sha1: true });
+		const strict = await boot("open", {
+			DITERO_SAML_IDP_METADATA: legacy.metadataXml,
+		});
+		const flow = await beginFlow(strict);
+		await expectRefused(
+			await postAcs(
+				strict,
+				flow.acs,
+				await legacy.respond(flow),
+				flow.relayState,
+			),
+			0,
+		);
+		const lenient = await boot("open", {
+			DITERO_SAML_IDP_METADATA: legacy.metadataXml,
+			DITERO_SAML_ALLOW_DEPRECATED_ALGORITHMS: "true",
+		});
+		const again = await beginFlow(lenient);
+		expect(
+			hasSession(
+				await postAcs(
+					lenient,
+					again.acs,
+					await legacy.respond(again),
+					again.relayState,
+				),
+			),
+		).toBe(true);
+	});
+
 	test("refuses an assertion signed by a different key", async () => {
 		const app = await boot("open");
 		const { createFixtureIdp } = await import("../support/saml-idp.ts");

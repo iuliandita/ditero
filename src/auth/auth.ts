@@ -45,6 +45,7 @@ import {
 	SAML_LINK_QUERY,
 	SAML_METADATA_PATH,
 	samlLinkIntent,
+	usesDeprecatedAlgorithm,
 	validReturnPath,
 } from "./saml.ts";
 import {
@@ -378,11 +379,19 @@ async function dispatchAuth(request: Request): Promise<Response> {
 	)
 		return auth.handler(request);
 	let relayState: FormDataEntryValue | null = null;
+	let samlResponse: FormDataEntryValue | null = null;
 	try {
-		relayState = (await request.clone().formData()).get("RelayState");
+		const form = await request.clone().formData();
+		relayState = form.get("RelayState");
+		samlResponse = form.get("SAMLResponse");
 	} catch {
 		// A body that is not a form is the package's to reject.
 	}
+	if (!saml.allowDeprecatedAlgorithms && usesDeprecatedAlgorithm(samlResponse))
+		return Response.redirect(
+			`${new URL(request.url).origin}/?error=invalid_saml_response`,
+			302,
+		);
 	if (
 		saml.bindBrowser &&
 		relayState &&

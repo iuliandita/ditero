@@ -59,6 +59,7 @@ export type ResolvedSaml = {
 	// Only over https: a SameSite=None cookie needs Secure, and the callback is a
 	// cross-site POST that carries nothing else from the browser that began it.
 	bindBrowser: boolean;
+	allowDeprecatedAlgorithms: boolean;
 	options: SSOOptions;
 };
 
@@ -259,6 +260,24 @@ export function linkIdentifier(relayState: string): string {
 	return `${LINK_IDENTIFIER_PREFIX}${relayState}`;
 }
 
+const DEPRECATED_ALGORITHM =
+	/<(?:[\w.-]+:)?(?:SignatureMethod|DigestMethod)\b[^>]*\bAlgorithm\s*=\s*["'][^"']*(?:sha1|sha-1)[^"']*["']/i;
+
+// The verifier's deprecated-algorithm switch only inspects a response-level
+// signature, so an assertion signed with SHA-1 passes it. This adds a refusal in
+// front of the verifier; it never accepts anything the verifier would not.
+export function usesDeprecatedAlgorithm(samlResponse: unknown): boolean {
+	if (typeof samlResponse !== "string" || samlResponse.length > 1_000_000)
+		return false;
+	try {
+		return DEPRECATED_ALGORITHM.test(
+			Buffer.from(samlResponse.replace(/\s+/g, ""), "base64").toString("utf8"),
+		);
+	} catch {
+		return false;
+	}
+}
+
 export function bindingCookieValue(cookieHeader: string | null): string | null {
 	for (const part of (cookieHeader ?? "").split(";")) {
 		const [name, ...rest] = part.trim().split("=");
@@ -361,6 +380,7 @@ export async function resolveSaml(
 		displayName: settings.displayName,
 		emailInvites: settings.emailInvites,
 		bindBrowser: settings.baseURL.startsWith("https:"),
+		allowDeprecatedAlgorithms: settings.allowDeprecatedAlgorithms,
 		options: {},
 	};
 	resolved.options = {

@@ -9,6 +9,7 @@ import {
 	resolveSamlUser,
 	samlLinkIntent,
 	samlProviderId,
+	usesDeprecatedAlgorithm,
 	validReturnPath,
 } from "./saml.ts";
 
@@ -443,5 +444,54 @@ describe("request helpers", () => {
 		expect(relayStateFromURL("https://idp.example.test/sso")).toBeNull();
 		expect(relayStateFromURL("not a url")).toBeNull();
 		expect(relayStateFromURL(undefined)).toBeNull();
+	});
+});
+
+describe("usesDeprecatedAlgorithm", () => {
+	const encode = (xml: string) => Buffer.from(xml).toString("base64");
+	const sig = (method: string, digest: string) =>
+		`<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:SignatureMethod Algorithm="${method}"/><ds:Reference><ds:DigestMethod Algorithm="${digest}"/></ds:Reference></ds:SignedInfo></ds:Signature>`;
+
+	test.each([
+		[
+			"a SHA-1 signature",
+			sig(
+				"http://www.w3.org/2000/09/xmldsig#rsa-sha1",
+				"http://www.w3.org/2001/04/xmlenc#sha256",
+			),
+		],
+		[
+			"a SHA-1 digest",
+			sig(
+				"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+				"http://www.w3.org/2000/09/xmldsig#sha1",
+			),
+		],
+		[
+			"an unprefixed element",
+			'<SignatureMethod Algorithm = "http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>',
+		],
+	])("flags %s", (_name, xml) => {
+		expect(usesDeprecatedAlgorithm(encode(xml))).toBe(true);
+		expect(
+			usesDeprecatedAlgorithm(
+				`${encode(xml).slice(0, 8)}\n${encode(xml).slice(8)}`,
+			),
+		).toBe(true);
+	});
+
+	test("passes SHA-256 and unrelated input", () => {
+		expect(
+			usesDeprecatedAlgorithm(
+				encode(
+					sig(
+						"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+						"http://www.w3.org/2001/04/xmlenc#sha256",
+					),
+				),
+			),
+		).toBe(false);
+		expect(usesDeprecatedAlgorithm(undefined)).toBe(false);
+		expect(usesDeprecatedAlgorithm("%%%")).toBe(false);
 	});
 });

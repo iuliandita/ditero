@@ -97,7 +97,11 @@ const stripPem = (pem: string) => pem.replace(/-----[A-Z ]+-----|\s/g, "");
 
 export function createFixtureIdp(
 	entityId: string,
-	options: { wantRequestsSigned?: boolean; extraCertificates?: string[] } = {},
+	options: {
+		wantRequestsSigned?: boolean;
+		extraCertificates?: string[];
+		sha1?: boolean;
+	} = {},
 ): FixtureIdp {
 	const { keyPem, certificatePem } = generateKeyPair("ditero-test-idp");
 	const ssoURL = `${entityId}/sso`;
@@ -121,6 +125,12 @@ export function createFixtureIdp(
 		privateKey: keyPem,
 		isAssertionEncrypted: false,
 		nameIDFormat: ["urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"],
+		...(options.sha1
+			? {
+					requestSignatureAlgorithm:
+						"http://www.w3.org/2000/09/xmldsig#rsa-sha1",
+				}
+			: {}),
 	});
 
 	return {
