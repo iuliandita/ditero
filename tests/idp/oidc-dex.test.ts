@@ -8,6 +8,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
@@ -28,7 +29,7 @@ const PASSWORD_HASH =
 	"$2a$10$beJx2NbGPz2IECdjhvNrTuJT5A8RVNBH89cDAKZQu.pP1o0ri63ki";
 const CLIENT_SECRET = randomBytes(18).toString("hex");
 const CONTAINER = `ditero-oidc-dex-${randomBytes(4).toString("hex")}`;
-const work = mkdtempSync(join(process.cwd(), "docs/local/providers/dex-"));
+const work = mkdtempSync(join(tmpdir(), "ditero-dex-"));
 
 let issuer = "";
 let port = 0;
