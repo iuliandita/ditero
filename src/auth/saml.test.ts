@@ -470,6 +470,26 @@ describe("hasUnapprovedAlgorithm", () => {
 			sig("http://www.w3.org/2000/09/xmldsig#rsa-&#x73;ha1", DIGEST256),
 		],
 		["a method without an Algorithm", "<ds:SignatureMethod/>"],
+		[
+			"a duplicated Algorithm",
+			`<ds:SignatureMethod Algorithm="${RSA256}" Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>`,
+		],
+		[
+			"a prefixed second Algorithm",
+			`<ds:SignatureMethod Algorithm="${RSA256}" x:Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>`,
+		],
+		[
+			"only a prefixed Algorithm",
+			`<ds:SignatureMethod x:Algorithm="${RSA256}"/>`,
+		],
+		[
+			"an angle bracket hiding the tag",
+			`<ds:SignatureMethod Algorithm="a>b"/><ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>`,
+		],
+		["an unterminated tag", `<a><ds:SignatureMethod Algorithm="${RSA256}`],
+		["a stray less-than", `<a>x < <ds:DigestMethod Algorithm="${DIGEST256}"/>`],
+		["a comment", `<!-- <ds:DigestMethod Algorithm="${DIGEST256}"/> -->`],
+		["a CDATA section", `<a><![CDATA[x]]></a>`],
 		["a DOCTYPE", `<!DOCTYPE x [<!ENTITY a "b">]>${sig(RSA256, DIGEST256)}`],
 	])("refuses %s", (_name, xml) => {
 		expect(hasUnapprovedAlgorithm(encode(xml))).toBe(true);
@@ -477,6 +497,16 @@ describe("hasUnapprovedAlgorithm", () => {
 		expect(
 			hasUnapprovedAlgorithm(`${text.slice(0, 8)}\n${text.slice(8)}`),
 		).toBe(true);
+	});
+
+	test("reads past quoted angle brackets and declarations", () => {
+		expect(
+			hasUnapprovedAlgorithm(
+				encode(
+					`<?xml version="1.0"?><r a="x>y"><ds:SignatureMethod Algorithm='${RSA256}'/><ds:DigestMethod Algorithm = "${DIGEST256}" /></r>`,
+				),
+			),
+		).toBe(false);
 	});
 
 	test("passes SHA-2 signatures and digests", () => {

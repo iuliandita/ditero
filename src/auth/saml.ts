@@ -263,10 +263,7 @@ export function linkIdentifier(relayState: string): string {
 }
 
 const MAX_RESPONSE_BASE64 = 400_000;
-const XML_TAG = /<[^<>]{1,4096}>/g;
-const ALGORITHM_ELEMENT =
-	/^<(?:[\w.-]+:)?(?:SignatureMethod|DigestMethod)(?=[\s/>])/;
-const ALGORITHM_ATTRIBUTE = /\bAlgorithm\s*=\s*(?:"([^"]*)"|'([^']*)')/;
+const WHITESPACE = /\s/;
 const STRONG_ALGORITHMS: ReadonlySet<string> = new Set(
 	[
 		...Object.values(SignatureAlgorithm),
@@ -274,12 +271,54 @@ const STRONG_ALGORITHMS: ReadonlySet<string> = new Set(
 	].filter((uri) => !/sha1/i.test(uri)),
 );
 
+type Tag = { name: string; attributes: [name: string, value: string][] };
+
+// Reads one start or end tag at `from` (the index of "<"), honouring quotes so a
+// ">" inside an attribute value does not end it. Returns null for anything that
+// is not plainly well formed; the caller treats that as a refusal.
+function readTag(xml: string, from: number): { tag: Tag; end: number } | null {
+	let i = from + 1;
+	const limit = Math.min(xml.length, from + 8192);
+	if (xml[i] === "/") i++;
+	const nameStart = i;
+	while (i < limit && !WHITESPACE.test(xml[i]) && !"/>".includes(xml[i])) i++;
+	const name = xml.slice(nameStart, i);
+	if (!name || name.includes("<") || name.includes("=")) return null;
+	const attributes: Tag["attributes"] = [];
+	for (;;) {
+		while (i < limit && WHITESPACE.test(xml[i])) i++;
+		if (i >= limit) return null;
+		if (xml[i] === ">") return { tag: { name, attributes }, end: i + 1 };
+		if (xml[i] === "/") {
+			i++;
+			continue;
+		}
+		const attributeStart = i;
+		while (i < limit && !WHITESPACE.test(xml[i]) && !"=/>".includes(xml[i]))
+			i++;
+		const attributeName = xml.slice(attributeStart, i);
+		while (i < limit && WHITESPACE.test(xml[i])) i++;
+		if (!attributeName || xml[i] !== "=") return null;
+		i++;
+		while (i < limit && WHITESPACE.test(xml[i])) i++;
+		const quote = xml[i];
+		if (quote !== '"' && quote !== "'") return null;
+		const valueEnd = xml.indexOf(quote, i + 1);
+		if (valueEnd < 0 || valueEnd >= limit) return null;
+		const value = xml.slice(i + 1, valueEnd);
+		if (value.includes("<")) return null;
+		attributes.push([attributeName, value]);
+		i = valueEnd + 1;
+	}
+}
+
 // The verifier's deprecated-algorithm switch only inspects a response-level
 // signature, so an assertion signed with SHA-1 passes it. This is a bounded,
 // linear scan placed in front of the verifier that fails closed: any signature
-// or digest method that is not exactly a SHA-2 URI, any DOCTYPE or entity
-// declaration, and any response too large to scan is refused. It never accepts
-// anything the verifier would not.
+// or digest method that is not exactly one unprefixed Algorithm attribute with a
+// SHA-2 URI, any DOCTYPE, comment, CDATA section or tag it cannot read, and any
+// response too large to scan is refused. It never accepts anything the verifier
+// would not.
 export function hasUnapprovedAlgorithm(
 	samlResponse: unknown,
 	checkAlgorithms = true,
@@ -288,13 +327,32 @@ export function hasUnapprovedAlgorithm(
 	const compact = samlResponse.replace(/\s+/g, "");
 	if (compact.length > MAX_RESPONSE_BASE64) return true;
 	const xml = Buffer.from(compact, "base64").toString("utf8");
-	if (/<!(?:DOCTYPE|ENTITY)/i.test(xml)) return true;
+	if (/<!(?:DOCTYPE|ENTITY|--|\[CDATA\[)/i.test(xml)) return true;
 	if (!checkAlgorithms) return false;
-	for (const tag of xml.matchAll(XML_TAG)) {
-		if (!ALGORITHM_ELEMENT.test(tag[0])) continue;
-		const attribute = ALGORITHM_ATTRIBUTE.exec(tag[0]);
-		const uri = attribute?.[1] ?? attribute?.[2];
-		if (uri === undefined || !STRONG_ALGORITHMS.has(uri)) return true;
+	let at = xml.indexOf("<");
+	while (at >= 0) {
+		if (xml[at + 1] === "?") {
+			const end = xml.indexOf("?>", at);
+			if (end < 0) return true;
+			at = xml.indexOf("<", end);
+			continue;
+		}
+		const read = readTag(xml, at);
+		if (!read) return true;
+		const local = read.tag.name.split(":").pop();
+		if (local === "SignatureMethod" || local === "DigestMethod") {
+			const [only, ...rest] = read.tag.attributes.filter(
+				([name]) => name === "Algorithm" || name.endsWith(":Algorithm"),
+			);
+			if (
+				!only ||
+				rest.length > 0 ||
+				only[0] !== "Algorithm" ||
+				!STRONG_ALGORITHMS.has(only[1])
+			)
+				return true;
+		}
+		at = xml.indexOf("<", read.end);
 	}
 	return false;
 }
