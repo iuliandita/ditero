@@ -302,6 +302,9 @@ remembers only the active user ID and session expiry. Reloading `/` while the
 browser reports offline can reopen that user's cached Zero data until that expiry,
 with an offline banner. Edits stay local until reconnecting and verifying the session;
 only data already stored on this device is available. No token is stored for this fallback.
+Offline edits are flushed promptly to device storage. If a local write is still pending
+or storage fails, leaving or reloading the offline page shows the browser's unsaved-changes
+warning. Stay on the page until storage succeeds; forcing it closed can lose those edits.
 Sign-out, session refusal and expiry disable cached startup. HTTP errors and failed
 requests while the browser reports online never authorize offline restoration.
 If evidence is missing or expired, the loaded shell asks for a connection.

@@ -1,3 +1,11 @@
+export class SessionExpiredError extends Error {}
+
+let generation = 0;
+export const browserSessionGeneration = () => generation;
+export function invalidateBrowserSessionRequests(): void {
+	generation++;
+}
+
 export type BrowserSessionIdentity = {
 	userId: string;
 	expiresAt: number;
@@ -26,7 +34,9 @@ export function readBrowserSession(): BrowserSessionIdentity | null {
 
 export function rememberBrowserSession(
 	identity: BrowserSessionIdentity | null,
+	epoch = generation,
 ): void {
+	if (epoch !== generation) return;
 	try {
 		if (identity)
 			localStorage.setItem(BROWSER_SESSION_KEY, JSON.stringify(identity));
@@ -38,16 +48,34 @@ export function rememberBrowserSession(
 		window.dispatchEvent(new Event(BROWSER_SESSION_CHANGED));
 }
 
-export function forgetBrowserSession(userId: string): void {
-	if (readBrowserSession()?.userId === userId) rememberBrowserSession(null);
+export function forgetBrowserSession(userId?: string): void {
+	const identity = readBrowserSession();
+	if (userId && identity && identity.userId !== userId) return;
+	invalidateBrowserSessionRequests();
+	rememberBrowserSession(null);
+}
+
+export function rejectBrowserSession(error: unknown, userId?: string): void {
+	if (isSessionRefusal(error)) forgetBrowserSession(userId);
 }
 
 export function isSessionRefusal(error: unknown): boolean {
 	return (
-		typeof error === "object" &&
-		error !== null &&
-		"status" in error &&
-		(error.status === 401 || error.status === 403)
+		error instanceof SessionExpiredError ||
+		(typeof error === "object" &&
+			error !== null &&
+			"status" in error &&
+			(error.status === 401 || error.status === 403)) ||
+		(typeof error === "object" &&
+			error !== null &&
+			(("code" in error &&
+				(error.code === "session-expired" || error.code === "auth-rejected")) ||
+				("kind" in error &&
+					(error.kind === "Unauthorized" ||
+						error.kind === "AuthInvalidated")) ||
+				("errorBody" in error &&
+					error.errorBody !== error &&
+					isSessionRefusal(error.errorBody))))
 	);
 }
 

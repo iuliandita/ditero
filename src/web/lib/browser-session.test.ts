@@ -6,6 +6,7 @@ import {
 	isSessionRefusal,
 	readBrowserSession,
 	rememberBrowserSession,
+	SessionExpiredError,
 } from "./browser-session.ts";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -71,4 +72,15 @@ it.each([
 ])("refuses malformed stored evidence %s", (value) => {
 	vi.stubGlobal("localStorage", { getItem: () => value });
 	expect(readBrowserSession()).toBeNull();
+});
+
+it.each([
+	new SessionExpiredError("expired"),
+	{ code: "session-expired" },
+	{ code: "auth-rejected" },
+	{ kind: "Unauthorized" },
+	{ kind: "AuthInvalidated" },
+	{ errorBody: { kind: "PushFailed", reason: "http", status: 403 } },
+])("recognizes explicit auth refusals %j", (error) => {
+	expect(isSessionRefusal(error)).toBe(true);
 });

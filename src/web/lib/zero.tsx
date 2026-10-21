@@ -7,15 +7,19 @@ import { mutators } from "../../zero/mutators.ts";
 import { schema } from "../../zero/schema.gen.ts";
 import { ShellSkeleton } from "../components/shell/AppSkeleton.tsx";
 import { Button } from "../components/ui/button.tsx";
-import { forgetBrowserSession } from "./browser-session.ts";
+import {
+	forgetBrowserSession,
+	rejectBrowserSession,
+} from "./browser-session.ts";
 import { createExportBoundary } from "./export-boundary.ts";
+import { protectOfflineEdits } from "./offline-durability.ts";
 import {
 	createSyncTracker,
 	OFFLINE_EDIT_WINDOW_MS,
 	type SyncTracker,
 	trackMutations,
 } from "./sync-status.ts";
-import { SessionExpiredError, watchZeroAuth } from "./zero-auth.ts";
+import { watchZeroAuth } from "./zero-auth.ts";
 import {
 	createAfterZeroRetirement,
 	registerZeroClient,
@@ -124,6 +128,7 @@ export function AppZeroProvider({
 		let stopAuthRefresh: (() => void) | undefined;
 		let stopConnectionWatch: (() => void) | undefined;
 		let stopExportWatch: (() => void) | undefined;
+		let stopDurability: (() => void) | undefined;
 		let exportBoundary: ReturnType<typeof createExportBoundary> | undefined;
 		let cancelled = false;
 		void (async () => {
@@ -142,6 +147,8 @@ export function AppZeroProvider({
 						config?.zeroURL ?? null,
 						storageScope,
 					);
+					if (runtime.kind === "browser")
+						stopDurability = protectOfflineEdits(instance);
 					owner = registerZeroClient(
 						userID,
 						instance,
@@ -149,6 +156,7 @@ export function AppZeroProvider({
 							stopAuthRefresh?.();
 							stopConnectionWatch?.();
 							stopExportWatch?.();
+							stopDurability?.();
 							exportBoundary?.dispose();
 						},
 						() => cancelled,
@@ -195,15 +203,29 @@ export function AppZeroProvider({
 								(error) => {
 									if (
 										runtime.kind === "browser" &&
-										(error instanceof SessionExpiredError ||
-											(error instanceof TypeError && navigator.onLine))
+										error instanceof TypeError &&
+										navigator.onLine
 									)
 										forgetBrowserSession(userID);
+									if (runtime.kind === "browser")
+										rejectBrowserSession(error, userID);
 									console.error(error);
 								},
 								{
-									onSessionExpired: tracker.setSessionExpired,
-									onAuthRejected: tracker.setAuthRejected,
+									onAuthRefused: () => {
+										if (runtime.kind === "browser")
+											forgetBrowserSession(userID);
+									},
+									onSessionExpired: (expired) => {
+										if (expired && runtime.kind === "browser")
+											rejectBrowserSession({ code: "session-expired" }, userID);
+										tracker.setSessionExpired(expired);
+									},
+									onAuthRejected: (rejected) => {
+										if (rejected && runtime.kind === "browser")
+											rejectBrowserSession({ code: "auth-rejected" }, userID);
+										tracker.setAuthRejected(rejected);
+									},
 								},
 							);
 					return {
@@ -217,10 +239,11 @@ export function AppZeroProvider({
 			);
 			if (created && !cancelled) setClient(created);
 		})().catch(async (error: unknown) => {
+			if (runtime.kind === "browser") rejectBrowserSession(error, userID);
 			if (
 				runtime.kind === "browser" &&
-				(error instanceof SessionExpiredError ||
-					(error instanceof TypeError && navigator.onLine))
+				error instanceof TypeError &&
+				navigator.onLine
 			)
 				forgetBrowserSession(userID);
 			let saveFailed = error instanceof ZeroRetirementError;

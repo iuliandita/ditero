@@ -1,3 +1,7 @@
+import { isSessionRefusal, SessionExpiredError } from "./browser-session.ts";
+
+export { SessionExpiredError } from "./browser-session.ts";
+
 type ConnectionState = { name: string };
 
 type ZeroConnection = {
@@ -11,7 +15,6 @@ type ZeroConnection = {
 // The token endpoint answers 401 once the Better Auth session is gone (it
 // lasts seven days by default), which no retry can fix: the user has to sign
 // in again.
-export class SessionExpiredError extends Error {}
 
 export async function fetchZeroToken(): Promise<string> {
 	const response = await fetch("/api/auth/token", { credentials: "include" });
@@ -45,10 +48,12 @@ export function watchZeroAuth(
 	{
 		onSessionExpired = () => {},
 		onAuthRejected = () => {},
+		onAuthRefused = () => {},
 		retrySignals = onNetworkOrFocus,
 	}: {
 		onSessionExpired?: (expired: boolean) => void;
 		onAuthRejected?: (rejected: boolean) => void;
+		onAuthRefused?: () => void;
 		retrySignals?: (retry: () => void) => () => void;
 	} = {},
 ): () => void {
@@ -115,7 +120,7 @@ export function watchZeroAuth(
 			.catch((error: unknown) => {
 				if (stopped || cycle !== attempt) return;
 				fail(attempt);
-				if (error instanceof SessionExpiredError) {
+				if (isSessionRefusal(error)) {
 					terminalRefusal = true;
 					clearTimer();
 					onSessionExpired(true);
@@ -142,6 +147,7 @@ export function watchZeroAuth(
 			onSessionExpired(false);
 			onAuthRejected(false);
 		} else if (state.name === "needs-auth") {
+			if (transitioned || !cycle) onAuthRefused();
 			// The public needs-auth transition means the submitted credential was
 			// refused; duplicate state notifications are not new rejections.
 			if (transitioned && cycle?.authSent) fail(cycle, true);

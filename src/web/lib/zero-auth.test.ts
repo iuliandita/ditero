@@ -37,6 +37,7 @@ function harness(getToken = vi.fn(async () => "fresh-token")) {
 	});
 	const rejected = vi.fn();
 	const expired = vi.fn();
+	const refused = vi.fn();
 	const errors = vi.fn();
 	let signal = () => {};
 	const stopSignals = vi.fn();
@@ -46,6 +47,7 @@ function harness(getToken = vi.fn(async () => "fresh-token")) {
 		errors,
 		{
 			onAuthRejected: rejected,
+			onAuthRefused: refused,
 			onSessionExpired: expired,
 			retrySignals: (fn) => {
 				signal = fn;
@@ -59,6 +61,7 @@ function harness(getToken = vi.fn(async () => "fresh-token")) {
 		connect,
 		getToken,
 		rejected,
+		refused,
 		expired,
 		errors,
 		signal: () => signal(),
@@ -70,6 +73,7 @@ describe("watchZeroAuth", () => {
 	test("retries immediately, then follows the exact capped ladder without resetting on token success", async () => {
 		const h = harness();
 		h.state.emit({ name: "needs-auth" });
+		expect(h.refused).toHaveBeenCalledOnce();
 		await flush();
 		expect(h.connect).toHaveBeenCalledWith({ auth: "fresh-token" });
 		let count = 1;

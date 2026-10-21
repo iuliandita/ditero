@@ -12,7 +12,6 @@ import {
 	canRestoreBrowserSession,
 	isSessionRefusal,
 	readBrowserSession,
-	rememberBrowserSession,
 } from "./lib/browser-session.ts";
 import {
 	DisplayPreferencesProvider,
@@ -39,13 +38,7 @@ export function App() {
 }
 
 function Routes() {
-	const {
-		data: session,
-		isPending,
-		isRefetching,
-		error,
-		refetch,
-	} = authClient.useSession();
+	const { data: session, isPending, error, refetch } = authClient.useSession();
 	const [identity, setIdentity] = useState(readBrowserSession);
 	const [online, setOnline] = useState(navigator.onLine);
 	const [, tick] = useState(0);
@@ -76,23 +69,7 @@ function Routes() {
 			window.removeEventListener("offline", disconnected);
 		};
 	}, [refetch]);
-	useEffect(() => {
-		if (
-			isSessionRefusal(error) ||
-			(error instanceof TypeError && !failedOffline.current)
-		)
-			rememberBrowserSession(null);
-		else if (!isPending && !isRefetching && !error) {
-			rememberBrowserSession(
-				session
-					? {
-							userId: session.user.id,
-							expiresAt: new Date(session.session.expiresAt).getTime(),
-						}
-					: null,
-			);
-		}
-	}, [session, isPending, isRefetching, error]);
+
 	useEffect(() => {
 		if (!identity) return;
 		let timer: ReturnType<typeof setTimeout>;

@@ -1,11 +1,16 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { Pool } from "pg";
 import {
+	goToSettings,
 	sidebarLists,
 	signUp,
 	uniqueEmail,
 	waitWorkspaceReady,
 } from "./helpers.ts";
+import {
+	holdIdlePersistence,
+	installPersistenceControls,
+} from "./zero-persistence-controls.ts";
 
 async function serverHasTask(title: string): Promise<boolean> {
 	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
@@ -19,18 +24,7 @@ async function serverHasTask(title: string): Promise<boolean> {
 	}
 }
 
-test("offline reload restores only cached account data and reconciles queued edits before refusing a revoked session", async ({
-	page,
-	context,
-}) => {
-	test.setTimeout(120_000);
-	expect(
-		process.env.E2E_BROWSER_MODE,
-		"offline reload requires the compiled PWA fixture",
-	).toBe("compiled");
-	await page.setViewportSize({ width: 1440, height: 900 });
-	await signUp(page, uniqueEmail("offline-reload"));
-	await waitWorkspaceReady(page);
+async function cachePublicShell(page: Page) {
 	await page.evaluate(async () => {
 		await navigator.serviceWorker.register("/sw.js", { type: "module" });
 		await navigator.serviceWorker.ready;
@@ -42,10 +36,30 @@ test("offline reload restores only cached account data and reconciles queued edi
 					{ once: true },
 				),
 			);
-		// Preload the existing durability bridge before disconnecting.
-		const path = "/src/web/lib/zero-lifecycle.ts";
-		await import(path);
 	});
+}
+
+async function expectOfflineRefused(page: Page) {
+	await page.reload();
+	await expect(page.getByRole("alert")).toContainText("Connect to the server");
+	await expect(page.getByTestId("offline-session")).toHaveCount(0);
+	await expect(sidebarLists(page)).toHaveCount(0);
+}
+
+test("offline reload restores only cached account data and reconciles queued edits before refusing a revoked session", async ({
+	page,
+	context,
+}) => {
+	test.setTimeout(120_000);
+	expect(
+		process.env.E2E_BROWSER_MODE,
+		"offline reload requires the compiled PWA fixture",
+	).toBe("compiled");
+	await context.addInitScript(installPersistenceControls);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await signUp(page, uniqueEmail("offline-reload"));
+	await waitWorkspaceReady(page);
+	await cachePublicShell(page);
 	await page.getByTestId("sidebar-create").click();
 	await page.getByTestId("sidebar-new-list").click();
 	await page.getByTestId("new-list").fill("Offline reload list");
@@ -65,16 +79,21 @@ test("offline reload restores only cached account data and reconciles queued edi
 	const queued = `Before offline reload ${crypto.randomUUID()}`;
 	const restored = `After offline reload ${crypto.randomUUID()}`;
 	try {
+		await page.evaluate(holdIdlePersistence, queued);
 		await context.setOffline(true);
 		await page.getByTestId("new-task").fill(queued);
 		await page.getByTestId("new-task-submit").click();
 		await expect(
 			page.getByTestId("list").getByText(queued, { exact: true }),
 		).toBeVisible();
-		await page.evaluate(async () => {
-			const path = "/src/web/lib/zero-lifecycle.ts";
-			await (await import(path)).retireZeroClients();
-		});
+		await expect
+			.poll(() =>
+				page.evaluate(() => window.__zeroCloseControls.completedTransactions),
+			)
+			.toBeGreaterThan(0);
+		await expect
+			.poll(() => page.evaluate(() => window.__zeroCloseControls.idleRequests))
+			.toBeGreaterThan(0);
 		expect(await serverHasTask(queued)).toBe(false);
 		await page.reload();
 		await expect(page.getByTestId("offline-session")).toBeVisible();
@@ -136,3 +155,114 @@ test("offline reload restores only cached account data and reconciles queued edi
 		await context.setOffline(false);
 	}
 });
+
+test("sign-out fences a delayed session verification before the next offline reload", async ({
+	page,
+	context,
+}) => {
+	test.setTimeout(90_000);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await signUp(page, uniqueEmail("offline-sign-out"));
+	await waitWorkspaceReady(page);
+	await cachePublicShell(page);
+	await goToSettings(page);
+	let releaseSession!: () => void;
+	const held = new Promise<void>((resolve) => {
+		releaseSession = resolve;
+	});
+	let fetched!: () => void;
+	const sessionFetched = new Promise<void>((resolve) => {
+		fetched = resolve;
+	});
+	let intercepted = false;
+	await page.route("**/api/auth/get-session**", async (route) => {
+		if (intercepted) {
+			await route.continue();
+			return;
+		}
+		intercepted = true;
+		const response = await route.fetch();
+		expect((await response.json()).user.id).toBeTruthy();
+		fetched();
+		await held;
+		await route.fulfill({ response });
+	});
+	let releaseSignOut!: () => void;
+	const signOutHeld = new Promise<void>((resolve) => {
+		releaseSignOut = resolve;
+	});
+	let signOutFetched!: () => void;
+	const serverSignedOut = new Promise<void>((resolve) => {
+		signOutFetched = resolve;
+	});
+	await page.route("**/api/auth/sign-out", async (route) => {
+		const response = await route.fetch();
+		signOutFetched();
+		await signOutHeld;
+		await route.fulfill({ response });
+	});
+	await page.evaluate(() => window.dispatchEvent(new Event("online")));
+	await sessionFetched;
+	await page.getByTestId("sign-out").click();
+	await serverSignedOut;
+	releaseSession();
+	try {
+		// The pre-sign-out response must be discarded before sign-out completes.
+		await expect(page.getByTestId("signin")).toBeVisible();
+	} finally {
+		releaseSignOut();
+	}
+	await page.waitForResponse(
+		(response) => new URL(response.url()).pathname === "/api/auth/sign-out",
+	);
+	await expect
+		.poll(() =>
+			page.evaluate(() => localStorage.getItem("ditero.browser-session.v1")),
+		)
+		.toBeNull();
+	await page.unroute("**/api/auth/get-session**");
+	try {
+		await context.setOffline(true);
+		await expectOfflineRefused(page);
+	} finally {
+		await context.setOffline(false);
+	}
+});
+
+for (const status of [401, 403]) {
+	test(`bootstrap ${status} after session verification disables offline restoration`, async ({
+		page,
+		context,
+	}) => {
+		test.setTimeout(90_000);
+		await signUp(page, uniqueEmail("offline-bootstrap"));
+		await waitWorkspaceReady(page);
+		await cachePublicShell(page);
+		await expect
+			.poll(() =>
+				page.evaluate(() => localStorage.getItem("ditero.browser-session.v1")),
+			)
+			.not.toBeNull();
+		await page.route("**/api/bootstrap", (route) =>
+			route.fulfill({
+				status,
+				contentType: "application/json",
+				body: JSON.stringify({ error: "Session revoked" }),
+			}),
+		);
+		await page.reload();
+		await expect
+			.poll(() =>
+				page.evaluate(() => localStorage.getItem("ditero.browser-session.v1")),
+			)
+			.toBeNull();
+		await expect(page.getByTestId("offline-session")).toHaveCount(0);
+		await page.unroute("**/api/bootstrap");
+		try {
+			await context.setOffline(true);
+			await expectOfflineRefused(page);
+		} finally {
+			await context.setOffline(false);
+		}
+	});
+}
