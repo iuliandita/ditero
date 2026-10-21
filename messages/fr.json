@@ -1,5 +1,5 @@
 {
-	"channel_field_required": "Saisis {field}.",
+	"channel_field_required": "Ce champ est obligatoire.",
 	"channel_invalid_server_url": "Saisis une URL de serveur complète avec http:// ou https://.",
 	"channel_invalid_topic": "Utilise de 1 à 64 lettres, chiffres, traits de soulignement ou traits d’union.",
 	"channel_invalid_credential": "Utilise au maximum 256 caractères ASCII visibles sans espaces.",

@@ -1,5 +1,5 @@
 {
-	"channel_field_required": "Enter {field}.",
+	"channel_field_required": "This field is required.",
 	"channel_invalid_server_url": "Enter a complete http:// or https:// server URL.",
 	"channel_invalid_topic": "Use 1 to 64 letters, numbers, underscores or hyphens.",
 	"channel_invalid_credential": "Use up to 256 visible ASCII characters without spaces.",
