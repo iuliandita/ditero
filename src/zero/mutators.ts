@@ -1337,6 +1337,7 @@ export const mutators = defineMutators({
 		logSession: defineMutator(
 			z
 				.object({
+					intervalId: z.uuid().optional(),
 					taskId: z.string().optional(),
 					kind: z.enum(["work", "break"]),
 					startedAt: z.number(),
@@ -1358,8 +1359,16 @@ export const mutators = defineMutators({
 					{ message: "durationSec exceeds elapsed span" },
 				),
 			async ({ tx, ctx, args }) => {
+				const id = args.intervalId
+					? `${ctx.id}:${args.intervalId}`
+					: randomId();
+				if (
+					args.intervalId &&
+					(await tx.run(zql.focusSession.where("id", id).one()))
+				)
+					return;
 				await tx.mutate.focusSession.insert({
-					id: randomId(),
+					id,
 					userId: ctx.id,
 					kind: args.kind,
 					startedAt: args.startedAt,
