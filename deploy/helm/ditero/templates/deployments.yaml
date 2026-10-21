@@ -41,6 +41,37 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
+      {{- if eq $component "zero" }}
+      initContainers:
+        - name: wait-for-app
+          image: {{ include "ditero.image" $.Values.zero.image | quote }}
+          imagePullPolicy: {{ $.Values.zero.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          command: [node, --input-type=module, -e]
+          args:
+            - |
+              const url = process.env.APP_HEALTH_URL;
+              for (;;) {
+                try {
+                  const response = await fetch(url, {signal: AbortSignal.timeout(5000)});
+                  if (response.ok && (await response.json()).replica === process.env.APP_REVISION) break;
+                } catch {}
+                console.log("Waiting for this release's app migrations and health");
+                await new Promise(resolve => setTimeout(resolve, 2000));
+              }
+          env:
+            - name: APP_HEALTH_URL
+              value: http://{{ include "ditero.fullname" $ }}-app:3000/health
+            - name: APP_REVISION
+              value: {{ printf "%s-%d" $.Release.Name (int $.Release.Revision) | quote }}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 128Mi}
+      {{- end }}
       containers:
         - name: {{ $component }}
           image: {{ include "ditero.image" $settings.image | quote }}
@@ -58,6 +89,8 @@ spec:
             - name: HOME
               value: /tmp
             {{- if eq $component "app" }}
+            - name: DITERO_REPLICA_ID
+              value: {{ printf "%s-%d" $.Release.Name (int $.Release.Revision) | quote }}
             - name: NODE_ENV
               value: production
             - name: API_PORT

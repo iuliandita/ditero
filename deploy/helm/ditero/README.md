@@ -121,6 +121,14 @@ writable `/tmp` and persistent data mounts.
 
 Default resources are starting estimates, not measured capacity guarantees.
 Monitor memory and storage usage and adjust requests and limits for your data.
+Zero's init container waits for `/health` from the application for this Helm
+release revision, after its entrypoint has completed migrations. The chart sets
+`DITERO_REPLICA_ID` for that check; do not override it in `app.extraEnv`. The wait
+uses the Zero image, retains the nonroot/read-only profile, and mounts no secrets.
+Both pods roll on each Helm revision so an old app cannot satisfy the new gate.
+Stop Zero before running migrations outside the chart's application entrypoint.
+The internal `APP_HEALTH_URL` and `APP_REVISION` are set by the chart.
+
 Startup probes allow up to ten minutes for migrations and initial replication;
 readiness/liveness use the real `/health` and `/keepalive` endpoints. The
 application health endpoint proves the HTTP process is serving; it does not

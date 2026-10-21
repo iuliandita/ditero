@@ -7,30 +7,34 @@
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
-			"docs": ["RELEASING.md"],
+			"docs": [
+				"RELEASING.md"
+			],
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "54d634a046b2761846e965cdf644bb21180a8f56cb91c6ea5d246b36680453dd",
-			"docs": ["deploy/helm/ditero/README.md"],
-			"note": "Document database reconnection, advisory-lock reacquisition and bounded graceful shutdown, including recovery of unfinished notification leases."
+			"sourceDigest": "52c7a25475a3a52aff33ba2a5705eabac99c9852aa63a824b6d5283fe11edf14",
+			"docs": [
+				"deploy/docker/aio/README.md",
+				"deploy/helm/ditero/README.md",
+				"docs/runbooks/database-roles.md"
+			],
+			"note": "Gate Zero on completed application migrations and the current Helm revision; give AIO Zero a dedicated ingress bridge without outbound source NAT and document retained-replica recovery."
 		},
 		"deployment": {
-			"sourceDigest": "078c4644d994b7c4c053133040a0746bb8d68167902a355a8b0ebaef569ed7d9",
-			"docs": ["deploy/helm/ditero/README.md"],
-			"note": "Document database recovery and shutdown timing within the default container and pod grace periods."
-		},
-		"compatibility": {
-			"sourceDigest": "96c9cef41b2020beaf9a7c53dd1fe969f5cfa2dec10bebd05f4077bb05154572",
-			"noImpact": "Attachment garbage collection uses the same checked-out connection as its leader lock. Persisted attachment states, ciphertext format, quotas and restore procedures are unchanged.",
-			"upgrade": "No schema or ciphertext migration is required; restart the application with the updated image.",
-			"backup": "The existing database and attachment backup procedure remains applicable without changes.",
-			"rollback": "The prior application can use the same database and attachment objects; no format changes occur.",
-			"clientVersions": "Browser, Android and desktop clients use the same attachment protocol and remain compatible."
+			"sourceDigest": "fb9671cf242da061877e5e9396f8c11d6e38235258521d492f075c8620a59511",
+			"docs": [
+				"deploy/docker/aio/README.md",
+				"deploy/helm/ditero/README.md",
+				"docs/runbooks/database-roles.md"
+			],
+			"note": "Document ordered startup, revision-aware Helm readiness, AIO ingress boundaries and cache-only recovery for failed initial synchronization."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
-			"docs": ["apps/desktop/README.md"],
+			"docs": [
+				"apps/desktop/README.md"
+			],
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		}
 	}
