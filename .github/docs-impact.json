@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "640ff6beafe4acdea12ba520a152308001fe09082f892e99ee37e6ffad4938c2",
+			"sourceDigest": "5d717b995bedad6f7fb5ccb8c164def29715286f86f839664345ac9c485501d7",
 			"docs": ["README.md"],
-			"note": "Document display names at signup and in Account settings, propagation to members and assignees, and the shared managed-account name limit."
+			"note": "Document account-scoped device navigation restoration and names when creating lists from templates. Pending startup restoration now yields to explicit navigation, preserving the documented selection flow without new settings or storage changes."
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
@@ -23,11 +23,6 @@
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
 			"docs": ["apps/desktop/README.md"],
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
-		},
-		"authentication": {
-			"sourceDigest": "6ca45caa3202bc731bff215dcaaeb0e4d0a5b92e1fe73e27a1b47cb0ce241dbc",
-			"docs": ["docs/runbooks/public-api.md"],
-			"note": "Document the current account name, identity update validation, synced display behavior, and managed-account normalization with JSON validation errors."
 		}
 	}
 }

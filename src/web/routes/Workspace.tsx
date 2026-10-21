@@ -11,6 +11,7 @@ import {
 import {
 	useCallback,
 	useEffect,
+	useLayoutEffect,
 	useMemo,
 	useReducer,
 	useRef,
@@ -76,6 +77,7 @@ import { formatBinding } from "../keyboard/binding-label.ts";
 import {
 	type CommandHandlers,
 	CommandProvider,
+	useCommands,
 } from "../keyboard/CommandContext.tsx";
 import {
 	actOnFocused,
@@ -106,7 +108,18 @@ import { dashboardHomeRef, resolveHomeRef } from "../views/home-ref.ts";
 import { ListView } from "./ListView.tsx";
 import { SettingsSurface } from "./SettingsSurface.tsx";
 import { WorkspaceOverlays } from "./WorkspaceOverlays.tsx";
-import { workspaceContentReducer } from "./workspace-content.ts";
+import {
+	type WorkspaceContentAction,
+	workspaceContentReducer,
+} from "./workspace-content.ts";
+
+function PaletteNavigation({ onNavigate }: { onNavigate: () => void }) {
+	const { isOpen } = useCommands();
+	useLayoutEffect(() => {
+		if (isOpen) onNavigate();
+	}, [isOpen, onNavigate]);
+	return null;
+}
 
 // A restricted managed ("kid") account gets a wholly separate shell -- never the
 // normal workspace UI. Branch here, before any normal-shell hook runs, keying off
@@ -252,26 +265,61 @@ function NormalWorkspace({
 		listId: string;
 		blank: boolean;
 	} | null>(null);
-	const openHome = useCallback(() => dispatchContent({ kind: "home" }), []);
+	const navigationRequested = useRef(false);
+	const cancelNavigationRestore = useCallback(() => {
+		navigationRequested.current = true;
+		setHomeApplied(true);
+	}, []);
+	const navigateContent = useCallback(
+		(action: WorkspaceContentAction) => {
+			cancelNavigationRestore();
+			dispatchContent(action);
+		},
+		[cancelNavigationRestore],
+	);
+	const openQuickAdd = useCallback(() => {
+		cancelNavigationRestore();
+		setQuickAddOpen(true);
+	}, [cancelNavigationRestore]);
+	const newView = useCallback(() => {
+		cancelNavigationRestore();
+		setViewManager({ mode: "create" });
+	}, [cancelNavigationRestore]);
+	const newDashboard = useCallback(() => {
+		cancelNavigationRestore();
+		setDashboardManager({ mode: "create" });
+	}, [cancelNavigationRestore]);
+	const openMembers = () => {
+		cancelNavigationRestore();
+		setMembersOpen(true);
+	};
+	const openCreateWorkspace = () => {
+		cancelNavigationRestore();
+		setCreateWorkspaceOpen(true);
+	};
+	const openHome = useCallback(
+		() => navigateContent({ kind: "home" }),
+		[navigateContent],
+	);
 	const closeList = useCallback(
-		(id: string) => dispatchContent({ kind: "close", target: "list", id }),
-		[],
+		(id: string) => navigateContent({ kind: "close", target: "list", id }),
+		[navigateContent],
 	);
 	const closeView = useCallback(
-		(id: string) => dispatchContent({ kind: "close", target: "view", id }),
-		[],
+		(id: string) => navigateContent({ kind: "close", target: "view", id }),
+		[navigateContent],
 	);
 	const closeDashboard = useCallback(
-		(id: string) => dispatchContent({ kind: "close", target: "dashboard", id }),
-		[],
+		(id: string) => navigateContent({ kind: "close", target: "dashboard", id }),
+		[navigateContent],
 	);
 
 	// Phones go back to the Lists tab, where they came from; desktop has its
 	// index in the sidebar and goes home.
 	const openIndex = useCallback(() => {
 		setDetailTaskId(null);
-		dispatchContent({ kind: "index" });
-	}, []);
+		navigateContent({ kind: "index" });
+	}, [navigateContent]);
 
 	// "New list": the create-list form lives on the desktop landing and on the
 	// mobile Lists tab, so land there first. The nonce remounts the form so it
@@ -290,23 +338,28 @@ function NormalWorkspace({
 	// Wait for missing rows to be confirmed before discarding a saved selection.
 	useEffect(() => {
 		if (navigationRestored) return;
+		const saved = navigationRequested.current ? null : savedNavigation;
 		const savedWorkspace = workspaces.find(
-			(row) => row.id === savedNavigation?.workspaceId,
+			(row) => row.id === saved?.workspaceId,
 		);
 		const savedList = lists.find(
 			(row) =>
-				row.id === savedNavigation?.listId &&
-				row.workspaceId === savedWorkspace?.id,
+				row.id === saved?.listId && row.workspaceId === savedWorkspace?.id,
 		);
 		if (
-			savedNavigation &&
-			(!savedWorkspace || (savedNavigation.listId && !savedList)) &&
+			saved &&
+			(!savedWorkspace || (saved.listId && !savedList)) &&
 			!navigationRowsReady
 		)
 			return;
 		const fallback =
 			workspaces.find((row) => row.kind === "personal") ?? workspaces[0];
-		const workspace = savedWorkspace ?? fallback;
+		const selectedWorkspaceId =
+			lists.find((list) => list.id === openListId)?.workspaceId ?? activeId;
+		const selectedWorkspace = navigationRequested.current
+			? workspaces.find((row) => row.id === selectedWorkspaceId)
+			: null;
+		const workspace = selectedWorkspace ?? savedWorkspace ?? fallback;
 		if (!workspace) return;
 		setActiveId(workspace.id);
 		if (savedList && !initialSetup && !initialSettings) {
@@ -316,6 +369,8 @@ function NormalWorkspace({
 		setNavigationRestored(true);
 	}, [
 		navigationRestored,
+		activeId,
+		openListId,
 		savedNavigation,
 		workspaces,
 		lists,
@@ -486,34 +541,33 @@ function NormalWorkspace({
 	}
 
 	function selectWorkspace(id: string) {
-		setNavigationRestored(true);
+		cancelNavigationRestore();
 		setActiveId(id);
 		if (isDesktop || contentState.kind !== "index") openHome();
 	}
 	const openList = useCallback(
 		(id: string) => {
-			setNavigationRestored(true);
 			setDetailTaskId(null);
-			dispatchContent({ kind: "list", id });
+			navigateContent({ kind: "list", id });
 			recordRecent(storageScope, { kind: "list", id });
 		},
-		[storageScope],
+		[storageScope, navigateContent],
 	);
 	const openView = useCallback(
 		(id: string) => {
 			setDetailTaskId(null);
-			dispatchContent({ kind: "view", id });
+			navigateContent({ kind: "view", id });
 			recordRecent(storageScope, { kind: "view", id });
 		},
-		[storageScope],
+		[storageScope, navigateContent],
 	);
 	const openDashboard = useCallback(
 		(id: string) => {
 			setDetailTaskId(null);
-			dispatchContent({ kind: "dashboard", id });
+			navigateContent({ kind: "dashboard", id });
 			recordRecent(storageScope, { kind: "dashboard", id });
 		},
-		[storageScope],
+		[storageScope, navigateContent],
 	);
 	// A task found by search opens over its list: the docked panel on desktop,
 	// the sheet on a phone.
@@ -589,8 +643,8 @@ function NormalWorkspace({
 		setDetailTaskId(null);
 		settingsReturn.current =
 			!isDesktop && contentState.kind === "index" ? "index" : "home";
-		dispatchContent({ kind: "settings" });
-	}, [isDesktop, contentState.kind]);
+		navigateContent({ kind: "settings" });
+	}, [isDesktop, contentState.kind, navigateContent]);
 	const openAppearance = useCallback(() => {
 		openSettings();
 		setSettingsSection("appearance");
@@ -651,7 +705,13 @@ function NormalWorkspace({
 	// exclusive modes + section so it never hijacks navigation (e.g. Settings
 	// opened before sync) or re-opens after Back.
 	useEffect(() => {
-		if (homeApplied || !navigationRestored || prefLoading || dashboardsLoading)
+		if (
+			navigationRequested.current ||
+			homeApplied ||
+			!navigationRestored ||
+			prefLoading ||
+			dashboardsLoading
+		)
 			return;
 		setHomeApplied(true);
 		if (!isDesktop) return;
@@ -753,10 +813,22 @@ function NormalWorkspace({
 		onOpenHome: openHome,
 		onCloseList: closeList,
 		setNewListFolder,
-		setRenameTarget,
-		setFolderDialog,
-		setViewManager,
-		setDashboardManager,
+		setRenameTarget: (next) => {
+			cancelNavigationRestore();
+			setRenameTarget(next);
+		},
+		setFolderDialog: (next) => {
+			cancelNavigationRestore();
+			setFolderDialog(next);
+		},
+		setViewManager: (next) => {
+			cancelNavigationRestore();
+			setViewManager(next);
+		},
+		setDashboardManager: (next) => {
+			cancelNavigationRestore();
+			setDashboardManager(next);
+		},
 		setHome,
 		onDeleteView: (view) => void deleteView(view),
 		onDeleteDashboard: (dashboard) => void deleteDashboard(dashboard),
@@ -821,7 +893,7 @@ function NormalWorkspace({
 	const firstDashboardId = dashboards[0]?.id ?? null;
 	const commandHandlers = useMemo<CommandHandlers>(
 		() => ({
-			"task.create": () => setQuickAddOpen(true),
+			"task.create": openQuickAdd,
 			"settings.open": () => openSettings(),
 			"nav.down": () => focusNext(),
 			"nav.up": () => focusPrev(),
@@ -831,20 +903,28 @@ function NormalWorkspace({
 			"row.menu": () => actOnFocused("menu"),
 			"help.cheatSheet": () => setCheatOpen(true),
 			"nav.today": () => openNavView("today"),
-			"view.new": () => setViewManager({ mode: "create" }),
+			"view.new": newView,
 			// First dashboard in sidebar (sortKey) order; silent no-op when none
 			// exist (matches the movement handlers' posture — no toast idiom).
 			"nav.dashboard": () => {
 				if (firstDashboardId) openDashboard(firstDashboardId);
 			},
-			"dashboard.new": () => setDashboardManager({ mode: "create" }),
+			"dashboard.new": newDashboard,
 			"selection.toggle": () => runSelectionCommand("toggle"),
 			"selection.extendDown": () => runSelectionCommand("extendDown"),
 			"selection.extendUp": () => runSelectionCommand("extendUp"),
 			"selection.all": () => runSelectionCommand("all"),
 			"selection.clear": () => runSelectionCommand("clear"),
 		}),
-		[firstDashboardId, openNavView, openDashboard, openSettings],
+		[
+			firstDashboardId,
+			openNavView,
+			openDashboard,
+			openSettings,
+			openQuickAdd,
+			newView,
+			newDashboard,
+		],
 	);
 
 	const activeView = activeViewId ? resolveView(activeViewId) : null;
@@ -880,7 +960,7 @@ function NormalWorkspace({
 						onOpen={() => setSetupExpanded(true)}
 						onLeave={() => {
 							setSetupExpanded(false);
-							dispatchContent({ kind: settingsReturn.current });
+							navigateContent({ kind: settingsReturn.current });
 						}}
 					/>
 				}
@@ -888,7 +968,7 @@ function NormalWorkspace({
 				activeRole={activeRole}
 				isDesktop={isDesktop}
 				persistLocale={persistLocale}
-				onBack={() => dispatchContent({ kind: settingsReturn.current })}
+				onBack={() => navigateContent({ kind: settingsReturn.current })}
 				autoFocusBack={!isDesktop}
 				onOpenList={openList}
 			/>
@@ -900,7 +980,7 @@ function NormalWorkspace({
 					listId={openListId}
 					listActions={buildListActions}
 					onBack={!isDesktop ? openIndex : undefined}
-					onQuickAdd={() => setQuickAddOpen(true)}
+					onQuickAdd={openQuickAdd}
 					arrival={arrival?.listId === openListId ? arrival : null}
 				/>
 			</PageFrame>
@@ -919,10 +999,10 @@ function NormalWorkspace({
 				views={BUILTIN_VIEWS.filter((v) => v.id !== "today")}
 				pinnedViews={pinnedViews}
 				onOpenView={openView}
-				onNewView={() => setViewManager({ mode: "create" })}
+				onNewView={newView}
 				dashboards={dashboards}
 				onOpenDashboard={openDashboard}
-				onNewDashboard={() => setDashboardManager({ mode: "create" })}
+				onNewDashboard={newDashboard}
 				isSectionOpen={navSections.isOpen}
 				onToggleSection={navSections.toggle}
 			/>
@@ -966,7 +1046,10 @@ function NormalWorkspace({
 							folders={folders}
 							members={members}
 							workspaces={workspaces}
-							onOpenTask={(t) => setDetailTaskId(t.id)}
+							onOpenTask={(t) => {
+								cancelNavigationRestore();
+								setDetailTaskId(t.id);
+							}}
 							onOpenView={openView}
 						/>
 					</ErrorBoundary>
@@ -1013,7 +1096,7 @@ function NormalWorkspace({
 								<Button
 									type="button"
 									data-testid="desktop-add-task"
-									onClick={() => setQuickAddOpen(true)}
+									onClick={openQuickAdd}
 									disabled={!activeId || !canCreateList(activeRole)}
 								>
 									<Plus aria-hidden /> {m.list_add_task()}
@@ -1065,9 +1148,10 @@ function NormalWorkspace({
 												</DropdownMenuItem>
 												<DropdownMenuItem
 													data-testid="view-edit"
-													onSelect={() =>
-														setViewManager({ mode: "edit", id: activeView.id })
-													}
+													onSelect={() => {
+														cancelNavigationRestore();
+														setViewManager({ mode: "edit", id: activeView.id });
+													}}
 												>
 													<Pencil /> {m.view_menu_edit()}
 												</DropdownMenuItem>
@@ -1111,7 +1195,10 @@ function NormalWorkspace({
 								currentUserId={zero.userID ?? ""}
 								membershipWorkspaceIds={membershipWorkspaceIds}
 								loading={viewRowsLoading}
-								onOpenTask={(t) => setDetailTaskId(t.id)}
+								onOpenTask={(t) => {
+									cancelNavigationRestore();
+									setDetailTaskId(t.id);
+								}}
 								firstRun={
 									isLanding && activeId && canCreateList(activeRole) ? (
 										<FirstRunActions
@@ -1135,6 +1222,7 @@ function NormalWorkspace({
 	return (
 		<FocusProvider>
 			<CommandProvider handlers={commandHandlers}>
+				<PaletteNavigation onNavigate={cancelNavigationRestore} />
 				<AppShell
 					sidebar={
 						// Render (not CSS-hide) per viewport so a list title never exists
@@ -1144,8 +1232,8 @@ function NormalWorkspace({
 								workspaces={workspaces}
 								activeId={activeId}
 								onSelectWorkspace={selectWorkspace}
-								onManageMembers={() => setMembersOpen(true)}
-								onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+								onManageMembers={openMembers}
+								onCreateWorkspace={openCreateWorkspace}
 								canManageMembers={canManageMembers}
 								groups={groups}
 								progressByList={progressByList}
@@ -1156,18 +1244,21 @@ function NormalWorkspace({
 								onNewList={() => startNewList()}
 								onNewListInFolder={startNewList}
 								canCreateList={canCreateList(activeRole)}
-								onNewFolder={() => setFolderDialog({ mode: "create" })}
+								onNewFolder={() => {
+									cancelNavigationRestore();
+									setFolderDialog({ mode: "create" });
+								}}
 								canCreateFolder={canCreateFolder(activeRole)}
 								builtinViews={BUILTIN_VIEWS}
 								pinnedViews={pinnedViews}
 								activeViewId={activeViewId}
 								onOpenView={openNavView}
-								onNewView={() => setViewManager({ mode: "create" })}
+								onNewView={newView}
 								viewActions={buildViewActions}
 								dashboards={dashboards}
 								activeDashboardId={openDashboardId}
 								onOpenDashboard={openDashboard}
-								onNewDashboard={() => setDashboardManager({ mode: "create" })}
+								onNewDashboard={newDashboard}
 								dashboardActions={buildDashboardActions}
 								isSectionOpen={navSections.isOpen}
 								onToggleSection={navSections.toggle}
@@ -1185,14 +1276,17 @@ function NormalWorkspace({
 						<BottomNav
 							tab={mobileTab}
 							onTab={selectTab}
-							onSearch={() => setSearchOpen(true)}
+							onSearch={() => {
+								cancelNavigationRestore();
+								setSearchOpen(true);
+							}}
 						/>
 					}
 					// Settings is not a place to add tasks, and the button would sit on
 					// its controls.
 					fab={
 						contentState.kind === "settings" ? null : (
-							<Fab onOpen={() => setQuickAddOpen(true)} />
+							<Fab onOpen={openQuickAdd} />
 						)
 					}
 				>
@@ -1204,8 +1298,8 @@ function NormalWorkspace({
 								workspaces={workspaces}
 								activeId={activeId}
 								onSelect={selectWorkspace}
-								onManageMembers={() => setMembersOpen(true)}
-								onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+								onManageMembers={openMembers}
+								onCreateWorkspace={openCreateWorkspace}
 								canManageMembers={canManageMembers}
 								onOpenSettings={openSettings}
 								onOpenAppearance={openAppearance}
