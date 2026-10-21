@@ -451,6 +451,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      attestations: read # gh attestation verify on the client archive
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:

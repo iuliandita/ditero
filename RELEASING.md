@@ -33,8 +33,8 @@ Tagged releases include:
   file inside. The archive has no separate signature file; its keyless-signed build
   provenance attestation is stored with GitHub (`gh attestation verify`, with the
   command in the release notes). Publication rejects an archive missing a bundle, its
-  checksum or the notices, and rejects a missing or mismatched attestation.
-  Standalone executables are not published; see the [roadmap](docs/ROADMAP.md).
+  checksum or the notices, and rejects a missing or mismatched attestation; the
+  publish job holds `attestations: read` for that check. Standalone executables are not published; see the [roadmap](docs/ROADMAP.md).
 - `SHA256SUMS.txt` covering every download.
 
 The development-installer and release workflows use the same five native targets:
