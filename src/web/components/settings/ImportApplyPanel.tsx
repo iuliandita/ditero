@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { m } from "../../../paraglide/messages.js";
 import { getLocale } from "../../../paraglide/runtime.js";
 import { Button } from "../ui/button.tsx";
@@ -72,6 +72,15 @@ export function ImportApplyPanel({
 	const total = counts.ensure + counts.ignored + counts.blocked;
 	const number = (value: number) =>
 		new Intl.NumberFormat(getLocale()).format(value);
+
+	useEffect(() => {
+		const cancelHandoff = () => {
+			if (document.activeElement !== action.current)
+				focusTerminal.current = false;
+		};
+		document.addEventListener("focusin", cancelHandoff);
+		return () => document.removeEventListener("focusin", cancelHandoff);
+	}, []);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reload explicitly retries a failed status read.
 	useEffect(() => {
@@ -182,10 +191,15 @@ export function ImportApplyPanel({
 		run?.state === "completed" ||
 		run?.state === "conflict" ||
 		error === "conflict";
-	useEffect(() => {
+	// Complete the handoff in the commit that removes the focused action.
+	useLayoutEffect(() => {
 		if (terminal && !applying && focusTerminal.current) {
 			focusTerminal.current = false;
-			if (document.activeElement === document.body) status.current?.focus();
+			if (
+				document.activeElement === action.current ||
+				document.activeElement === document.body
+			)
+				status.current?.focus();
 		}
 	}, [terminal, applying]);
 	const blockedReason = needsAcknowledgement

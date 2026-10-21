@@ -2,7 +2,7 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "79db5109202c71791b3e7781d6208600b6e2cd867b79cd9758ac930ddf8af66e",
+			"sourceDigest": "8d35ad7eb5f2b1692fb35d98181b999a882399962bf6265ef8c4da933abc2562",
 			"docs": [
 				"docs/security.md",
 				"docs/runbooks/native-authentication.md",
@@ -10,29 +10,30 @@
 				"docs/runbooks/trusted-proxy.md",
 				"docs/notifications.md"
 			],
-			"note": "Task titles and first-run paragraphs retain readable space in narrow panes. Document exact recoverable attachment sizes and the Stored size label when row metadata cannot uniquely determine plaintext length. No stored formats or server-visible metadata change. Document proxy body limits and ciphertext overhead. Reminder completion, secure browser API requirements and configured sync endpoint diagnostics become explicit in all six locales. No authentication, permission, sync persistence or attachment format contracts change. Document display names at signup and in Account settings, propagation to members and assignees, and the shared managed-account name limit. Document read-only Viewer task controls and wrong-account invite recovery. Document account-scoped device navigation restoration and names when creating lists from templates. Pending startup restoration now yields to explicit navigation, preserving the documented selection flow without new settings or storage changes. Document provider availability and field-level channel repair guidance; correct headings and distinguish TOTP transport failures. Describe leaving shared workspaces, last-owner protection, retained authored content, assignment cleanup and required file-key rotation. Document Android Back dismissal and navigation order, top-level exit, and background network teardown during Activity recreation. A server-refused completion keeps its failure notice when the rollback arrives first; documented snackbar behavior is unchanged."
+			"note": "Task titles and first-run paragraphs retain readable space in narrow panes. Document exact recoverable attachment sizes and the Stored size label when row metadata cannot uniquely determine plaintext length. No stored formats or server-visible metadata change. Document proxy body limits and ciphertext overhead. Reminder completion, secure browser API requirements and configured sync endpoint diagnostics become explicit in all six locales. No authentication, permission, sync persistence or attachment format contracts change. Document display names at signup and in Account settings, propagation to members and assignees, and the shared managed-account name limit. Document read-only Viewer task controls and wrong-account invite recovery. Document account-scoped device navigation restoration and names when creating lists from templates. Pending startup restoration now yields to explicit navigation, preserving the documented selection flow without new settings or storage changes. Document provider availability and field-level channel repair guidance; correct headings and distinguish TOTP transport failures. Describe leaving shared workspaces, last-owner protection, retained authored content, assignment cleanup and required file-key rotation. Document Android Back dismissal and navigation order, top-level exit, and background network teardown during Activity recreation. Import completion and conflict transfer focus during the DOM commit; moving focus during a status retry cancels the handoff, which also rechecks focus before committing. Import inputs, acknowledgment and persistence are unchanged."
 		},
 		"release": {
 			"sourceDigest": "6fd453f7ff28723194269729180ddca4848233c1a81e406f0da7c97d19c04561",
 			"noImpact": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch. Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged. The Compose release archive now includes postgres-healthcheck.sh, which the bundled database already bind-mounts, and packaging refuses archives missing any bind-mounted script. Release steps, assets and documented procedures are unchanged. GitHub Actions pins move to upload-artifact 7.0.2, download-artifact 8.0.2 and the current CodeQL v4 commit. Release jobs, inputs, artifacts, signing and publication steps are unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "640d9d701a509ba61f0c32be6e96efbc8ddb7225178d5cb5230631346baef6a2",
+			"sourceDigest": "08697ebd1318668776b85b3d740224ee83718d894377ed0913686ed2be69ddc4",
 			"docs": [
 				"deploy/helm/ditero/README.md",
 				"docs/runbooks/backup-restore.md",
 				"docs/runbooks/key-rotation.md",
 				"docs/runbooks/attachment-storage.md"
 			],
-			"note": "Document the 32-character production authentication secret requirement, maintenance-only BETTER_AUTH_SECRET_NEXT rotation, and the required pre-existing writable filesystem attachment directory. The Debian runtime base moves to the current distroless digest; no configuration, deployment step or documented behavior changes."
+			"note": "Document the 32-character production authentication secret requirement, maintenance-only BETTER_AUTH_SECRET_NEXT rotation, and the required pre-existing writable filesystem attachment directory."
 		},
 		"deployment": {
-			"sourceDigest": "521368715a2f45f2a8576e049fede6f2224a275a171aa747aad4807adfcce297",
+			"sourceDigest": "7c71997198bda9a1e711c8936a9682eed8516ec80f855fdeced86f831c5c9a47",
 			"docs": [
 				"deploy/helm/ditero/README.md",
+				"docs/runbooks/database-roles.md",
 				"docs/runbooks/backup-restore.md"
 			],
-			"note": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged. Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database recovery and shutdown timing within the default container and pod grace periods. Document ordered startup, revision-aware Helm readiness, AIO ingress boundaries and cache-only recovery for failed initial synchronization. Document container-readable file secrets, atomic role initialization, missing-role health failures and safe recovery without widening application privileges. Complete operator setup and restore instructions, preserve runtime role restrictions, explain PostgreSQL compatibility and app origin requirements, and pass Zero publication/reset configuration. The Zero and all-in-one images rebuild Litestream v0.3.13 and v0.5.15 with Go 1.27.3 for CVE-2026-111943 and the v5 binary with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream sources, version suffixes, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged. The Debian runtime base moves to the current distroless digest; no configuration, deployment step or documented behavior changes."
+			"note": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged. Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database recovery and shutdown timing within the default container and pod grace periods. Document ordered startup, revision-aware Helm readiness, AIO ingress boundaries and cache-only recovery for failed initial synchronization. Document container-readable file secrets, atomic role initialization, missing-role health failures and safe recovery without widening application privileges. Complete operator setup and restore instructions, preserve runtime role restrictions, explain PostgreSQL compatibility and app origin requirements, and pass Zero publication/reset configuration. The Zero and all-in-one images rebuild Litestream v0.3.13 and v0.5.15 with Go 1.27.3 for CVE-2026-111943 and the v5 binary with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream sources, version suffixes, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged."
 		},
 		"native": {
 			"sourceDigest": "92683a64c48b35eb793695a732d247949fd15a899c1a9d0996bda4c44e41558b",
