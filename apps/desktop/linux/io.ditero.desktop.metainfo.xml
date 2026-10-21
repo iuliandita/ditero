@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.ditero.desktop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Ditero</name>
+  <summary>Tasks and shared lists for your self-hosted server</summary>
+  <description>
+    <p>Connect to your HTTPS Ditero server to manage tasks and shared lists with scoped local storage and encrypted attachments.</p>
+  </description>
+  <launchable type="desktop-id">io.ditero.desktop.desktop</launchable>
+  <url type="homepage">https://ditero.app</url>
+  <url type="bugtracker">https://github.com/iuliandita/ditero/issues</url>
+  <developer id="com.iuliandita"><name>iuliandita</name></developer>
+  <content_rating type="oars-1.1"/>
+  <supports><control>keyboard</control><control>pointing</control></supports>
+</component>

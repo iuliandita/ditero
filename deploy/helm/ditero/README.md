@@ -97,6 +97,12 @@ together.
 
 ## Configuration and operations
 
+Zero uses `ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS=30`. After sign-out or session
+revocation, an open subscription can receive updates until its next `/query`
+revalidation, plus request/scheduling latency. Deploy this configuration update to
+shorten the former five-minute default; no data migration is needed. See
+[session revocation](../../../docs/security.md#authentication).
+
 The commented [`values.yaml`](values.yaml) describes the supported options.
 The chart deliberately runs one application replica and one Zero replica, with
 Recreate updates. Filesystem attachments and Zero's SQLite replica are local
@@ -115,10 +121,27 @@ writable `/tmp` and persistent data mounts.
 
 Default resources are starting estimates, not measured capacity guarantees.
 Monitor memory and storage usage and adjust requests and limits for your data.
+Zero's init container waits for `/health` from the application for this Helm
+release revision, after its entrypoint has completed migrations. The chart sets
+`DITERO_REPLICA_ID` for that check; do not override it in `app.extraEnv`. The wait
+uses the Zero image, retains the nonroot/read-only profile, and mounts no secrets.
+Both pods roll on each Helm revision so an old app cannot satisfy the new gate.
+Stop Zero before running migrations outside the chart's application entrypoint.
+The internal `APP_HEALTH_URL` and `APP_REVISION` are set by the chart.
+
 Startup probes allow up to ten minutes for migrations and initial replication;
 readiness/liveness use the real `/health` and `/keepalive` endpoints. The
 application health endpoint proves the HTTP process is serving; it does not
 continuously test every database, sync, or notification dependency.
+
+Database connection loss is logged and the application reconnects without a
+process restart. Leader scans reacquire their advisory locks on later ticks;
+notification deliveries retain their at-least-once lease recovery contract.
+On SIGTERM the application stops accepting connections and starting background
+work, drains for up to five seconds, and closes its database pool. An eight-second
+shutdown deadline fits Docker's default ten seconds and Kubernetes' default
+thirty seconds. Unfinished delivery leases are reclaimed after restart; a forced
+shutdown can still duplicate a delivery accepted by its provider.
 
 Use `app.extraEnv` and `zero.extraEnv` for additional supported configuration.
 Use `valueFrom.secretKeyRef` for sensitive settings rather than literal values.

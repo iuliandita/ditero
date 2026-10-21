@@ -16,8 +16,8 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type { Pool } from "pg";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { Pool, PoolClient } from "pg";
 import type { SchedulerTiming } from "../../config/scheduler.ts";
 import { schedulerTiming } from "../../config/scheduler.ts";
 import { crashHook } from "../../config/test-crash.ts";
@@ -89,10 +89,17 @@ const producerVisible = sql`not exists (
 export async function withLeaderLock<T>(
 	pool: Pool,
 	lockKey: number,
-	run: () => Promise<T>,
+	run: (client: PoolClient, signal: AbortSignal) => Promise<T>,
 ): Promise<T | null> {
 	const client = await pool.connect();
-	let releaseError: unknown;
+	const controller = new AbortController();
+	let releaseError: Error | undefined;
+	const lost = (error: Error) => {
+		releaseError = error;
+		controller.abort(error);
+		console.error(`leader: connection lost for lock ${lockKey}; will retry`);
+	};
+	client.on("error", lost);
 	try {
 		const { rows } = await client.query<{ acquired: boolean }>(
 			"SELECT pg_try_advisory_lock($1) AS acquired",
@@ -100,20 +107,22 @@ export async function withLeaderLock<T>(
 		);
 		if (!rows[0]?.acquired) return null;
 		try {
-			return await run();
+			return await run(client, controller.signal);
 		} finally {
 			// Never let the unlock replace the callback's error: on a broken
 			// connection both fail, and the scan's real error is the useful one.
 			try {
 				await client.query("SELECT pg_advisory_unlock($1)", [lockKey]);
 			} catch (error) {
-				releaseError = error;
+				releaseError =
+					error instanceof Error ? error : new Error(String(error));
 			}
 		}
 	} finally {
 		// A connection returned clean while still holding a session-level advisory
 		// lock is never reclaimed, and no later tick acquires. Destroy it instead.
-		client.release(releaseError as Error | undefined);
+		client.release(releaseError);
+		client.off("error", lost);
 	}
 }
 
@@ -1004,7 +1013,7 @@ function readyEscalate(state: LockedReminder, now: Date): boolean {
 }
 
 export function startScheduler(
-	database: Database,
+	_database: Database,
 	pool: Pool,
 	env: NodeJS.ProcessEnv = process.env,
 ): Cron {
@@ -1025,11 +1034,12 @@ export function startScheduler(
 		},
 		async () => {
 			try {
-				await withLeaderLock(pool, SCHEDULER_LOCK_KEY, () =>
+				await withLeaderLock(pool, SCHEDULER_LOCK_KEY, (client) =>
 					// Left undefined when the seam is not armed, so the production
 					// enqueue path keeps short-circuiting on an absent option rather
 					// than awaiting a live no-op closure every transaction.
-					scanTick(database, {
+					// The scan cannot reconnect behind a lost session lock.
+					scanTick(drizzle(client, { schema: tables }), {
 						timing,
 						onBeforeEnqueue: crash && (() => crash("mid-scan")),
 					}),

@@ -58,8 +58,11 @@ five minutes, or when their session expires if sooner. The Zero query and mutati
 endpoints verify the configured issuer and audience and check live session and
 user state. Native tokens additionally require the exact linked, unrevoked device.
 Revocation stops new query and mutation requests. It does not immediately evict
-rows already cached in a client or prove an existing cache stream has closed;
-the stream may remain until reconnect or token expiry.
+rows already cached in a client. Shipped deployments set
+`ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS=30`: an existing stream can receive rows
+until the next `/api/zero/query` revalidation rejects it, normally within 30 seconds
+plus request and scheduling latency. There is no immediate per-session disconnect.
+See [Security](../security.md) for the bound and deployment override implications.
 
 Previously issued subject-only JWTs are refused. Existing signed-in browser
 clients can refresh through the usual cookie-authenticated token endpoint.

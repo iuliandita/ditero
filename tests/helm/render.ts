@@ -206,6 +206,12 @@ assert.equal(
 	"1",
 );
 
+assert.equal(
+	zeroEnv?.find((item) => item.name === "ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS")
+		?.value,
+	"30",
+);
+
 const ingressOverrides = [
 	"app.publicUrl=https://tasks.example.com",
 	"app.publicZeroUrl=https://sync.example.com",

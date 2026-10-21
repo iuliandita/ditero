@@ -20,11 +20,36 @@ Tagged releases include:
 - Container signatures, provenance and SPDX SBOMs, plus immutable image digest files.
 - Helm and Kustomize packages for app and Zero with external PostgreSQL, and a
   Compose archive containing the bundled PostgreSQL initialization scripts.
-- Linux x86_64 DEB and AppImage, unsigned Windows x86_64 installer, and an ad-hoc
-  signed macOS Apple Silicon DMG.
+- Linux x86_64 DEB, RPM and AppImage; unsigned Windows x86_64 and ARM64 NSIS
+  installers; separate ad-hoc signed macOS Apple Silicon and Intel DMGs.
 - A signed independent Android universal APK and AAB. This flavor uses UnifiedPush;
   Google delivery requires separate private configuration and is not packaged here.
 - `SHA256SUMS.txt` covering every download.
+
+The development-installer and release workflows use the same five native targets:
+Ubuntu 24.04 x64, Windows x64/ARM64, and macOS Apple Silicon/Intel. Linux ARM64
+installers are not built. Native lifecycle tests use the same explicit Rust target
+as packaging, retaining the test gate without compiling its dependencies twice.
+Linux packages include AppStream metadata, a desktop
+entry and the MIT license. They require a compatible system WebKitGTK 4.1/GTK 3;
+the Ubuntu 24.04 build baseline is not a promise of compatibility with older Linux.
+RPM metadata requires the GLIBC 2.39 symbol capability rather than a dependency
+name containing a version expression.
+
+Installer smoke checks extract Linux payloads with package tools (libarchive for
+RPM), verify contents and x64 architecture, install
+the DEB with dependency resolution, and install/verify the RPM in a pinned Fedora
+44 container, checking linked libraries. DEB, extracted RPM and AppImage payloads
+launch under Xvfb on Ubuntu; Fedora graphical startup remains unqualified.
+Windows checks silently install NSIS, compare the installed
+executable to the build, verify its PE architecture and require a Ditero window.
+macOS checks mount the DMG, copy its app, verify the architecture and ad-hoc
+signature, then require the process to survive startup. These checks do not
+exercise sign-in, credential storage, upgrades or download trust warnings.
+Per-format updater binary patching is disabled so the installed Windows executable
+matches the build byte for byte; automatic updates are not configured.
+Development downloads include a per-platform `SHA256SUMS.txt`; release checksums
+and provenance continue to cover the complete release asset set.
 
 Windows installers have no trusted publisher signature. macOS downloads have ad-hoc
 signatures and are not notarized. Native device/platform qualification, general deep

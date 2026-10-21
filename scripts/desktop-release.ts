@@ -16,7 +16,11 @@ class ReleaseError extends Error {}
 type Environment = Record<string, string | undefined>;
 type Platform = "linux" | "windows" | "macos";
 const hosts = { linux: "linux", windows: "win32", macos: "darwin" };
-const bundles = { linux: "deb,appimage", windows: "nsis", macos: "app,dmg" };
+const bundles = {
+	linux: "deb,rpm,appimage",
+	windows: "nsis",
+	macos: "app,dmg",
+};
 const required = (env: Environment, name: string): string => {
 	const value = env[name];
 	if (!value || value !== value.trim() || /[\r\n\0]/.test(value))

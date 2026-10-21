@@ -149,6 +149,16 @@ check(() =>
 	assert.equal(new URL(zero.env.ZERO_UPSTREAM_DB).hostname, "postgres"),
 );
 check(() => assert.equal(zero.env.ZERO_ENABLE_CRUD_MUTATIONS, "false"));
+check(() => assert.equal(zero.env.ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS, "30"));
+check(() =>
+	assert.throws(() =>
+		buildConfiguration("zero", {
+			ZERO_DATABASE_PASSWORD: pg.ZERO_DATABASE_PASSWORD,
+			ZERO_ADMIN_PASSWORD: "zero admin synthetic",
+			ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS: "300",
+		}),
+	),
+);
 const dir = mkdtempSync(join(tmpdir(), "ditero-aio-source-"));
 try {
 	const file = join(dir, "credential");

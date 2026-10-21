@@ -92,6 +92,7 @@ services:
     environment:
       ZERO_DATABASE_PASSWORD_FILE: /run/credentials/ZERO_DATABASE_PASSWORD
       ZERO_ADMIN_PASSWORD_FILE: /run/credentials/ZERO_ADMIN_PASSWORD
+      ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS: "30"
     volumes:
       - zero:/var/lib/ditero/zero
       - type: bind
@@ -100,6 +101,7 @@ services:
         read_only: true
         bind: {create_host_path: false}
     ports: ["127.0.0.1:${AIO_ZERO_PORT:-4848}:4848"]
+    networks: [backend, zero-ingress]
     depends_on:
       api: {condition: service_healthy}
     healthcheck:
@@ -112,6 +114,10 @@ services:
 networks:
   backend: {internal: true}
   outbound: {}
+  # Published-port ingress without sharing the API's outbound NAT network.
+  zero-ingress:
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
 volumes:
   pg18: {}
   zero: {}

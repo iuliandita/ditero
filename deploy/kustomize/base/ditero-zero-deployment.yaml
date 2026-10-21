@@ -68,6 +68,8 @@ spec:
           value: http://$(DITERO_APP_SERVICE):3000/api/zero/mutate
         - name: ZERO_ENABLE_CRUD_MUTATIONS
           value: 'false'
+        - name: ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS
+          value: '30'
         - name: ZERO_UPSTREAM_DB_FILE
           value: /run/secrets/ditero/ZERO_UPSTREAM_DB
         - name: ZERO_ADMIN_PASSWORD_FILE

@@ -81,3 +81,20 @@ before an upgrade, and keep browser storage until pending edits sync. This chang
 does not alter storage formats or require a database migration. A rollback to an
 older client version restores the outage-recovery defect; reload clients after a
 rollback and verify pending edits reach the server.
+
+## Startup and retained Zero replicas
+
+Start the application and wait for `/health` before starting Zero. Compose gates
+Zero on app health; the AIO bundle additionally waits for its migration service.
+The Helm chart waits for the app belonging to the current release revision.
+When migrating manually, stop Zero first and wait for app migrations to finish.
+
+`ZERO_AUTO_RESET=true` handles supported replication/schema-change resets; it is
+not a repair guarantee for a replica initialized from a partially migrated schema.
+A partial initial-sync replica containing an existing `account` table still exits
+255 on repeated starts with auto-reset enabled.
+If Zero repeatedly exits with `SQLITE_ERROR: table "account" already exists`, stop
+Zero, back up its replica volume, and recreate only that cache volume (the Helm
+Zero PVC for Kubernetes). Preserve PostgreSQL, attachments and every service secret.
+Start the healthy, migrated app, then Zero, and verify sync from a fresh browser.
+PostgreSQL is authoritative; discard no browser-local pending mutations during recovery.

@@ -37,6 +37,7 @@ services:
       ZERO_QUERY_URL: http://host.docker.internal:3000/api/zero/query
       ZERO_MUTATE_URL: http://host.docker.internal:3000/api/zero/mutate
       ZERO_ENABLE_CRUD_MUTATIONS: "false"
+      ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS: "30"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
