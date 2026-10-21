@@ -61,7 +61,8 @@ templates use the name you enter, or the template name when you leave it blank.
 - Recurring tasks and habits/chores with flexible recurrence (RFC 5545 RRULE) and streaks
 - Reminders with escalation and acknowledgement, delivered to ntfy, Telegram, Discord,
   Slack, or email
-- Display names at sign-up and in Settings > Account, shared in member and assignee displays
+- Display names at sign-up and in Settings > Account, shared in member and assignee displays.
+  Names, including managed-account names, use a trimmed 1-80-character limit without control characters.
 - Multi-workspace sharing with Owner / Admin / Member / Viewer roles
   (Viewer task controls are read-only and explain the restriction). Email-bound
   invites opened with another account offer sign-out so you can use the invited account.

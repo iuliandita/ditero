@@ -1,8 +1,9 @@
+import { APIError } from "better-auth";
 import { eq, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { handleAuthRequest } from "../../src/auth/auth.ts";
+import { auth, handleAuthRequest } from "../../src/auth/auth.ts";
 import { withRegistrationBypass } from "../../src/auth/registration-bypass.ts";
 import * as tables from "../../src/db/schema.ts";
 import { app } from "../../src/server/index.ts";
@@ -39,6 +40,7 @@ async function signUp(email: string): Promise<string> {
 }
 
 beforeEach(async () => {
+	await db.delete(tables.managedAccount);
 	await db.delete(tables.task);
 	await db.delete(tables.list);
 	await db.delete(tables.membership);
@@ -336,5 +338,103 @@ describe("display name updates", () => {
 			.from(tables.user)
 			.where(eq(tables.user.email, "display-name@test.invalid"));
 		expect(saved.name).toBe("Maya Chen");
+	});
+});
+
+describe("managed account display names", () => {
+	let create: (displayName: string) => Promise<Response>;
+	beforeEach(async () => {
+		const cookie = await signUp("guardian-name@test.invalid");
+		const [guardian] = await db
+			.select()
+			.from(tables.user)
+			.where(eq(tables.user.email, "guardian-name@test.invalid"));
+		const workspaceId = crypto.randomUUID();
+		await db.insert(tables.workspace).values({
+			id: workspaceId,
+			name: "Household",
+			kind: "shared",
+			ownerId: guardian.id,
+		});
+		await db.insert(tables.membership).values({
+			id: crypto.randomUUID(),
+			userId: guardian.id,
+			workspaceId,
+			role: "owner",
+		});
+		create = (displayName) =>
+			app.handle(
+				new Request("http://localhost:3000/api/account/managed", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: "http://localhost:5173",
+						cookie,
+					},
+					body: JSON.stringify({
+						workspaceId,
+						displayName,
+						password: "kid-password-1",
+					}),
+				}),
+			);
+	});
+
+	test("rejects invalid managed names before signup and saves normalized boundary names", async () => {
+		const signup = vi.spyOn(auth.api, "signUpEmail");
+		try {
+			for (const name of [
+				"a".repeat(81),
+				"a".repeat(100),
+				"  ",
+				"Maya\n",
+				"Ma\u202eya",
+			]) {
+				const response = await create(name);
+				expect(response.status).toBe(400);
+				expect(response.headers.get("content-type")).toContain(
+					"application/json",
+				);
+				expect(await response.json()).toEqual({
+					message:
+						"Use 1-80 characters without control characters for your display name",
+				});
+				expect(signup).not.toHaveBeenCalled();
+			}
+		} finally {
+			signup.mockRestore();
+		}
+		expect(await db.select().from(tables.user)).toHaveLength(1);
+		expect(await db.select().from(tables.managedAccount)).toEqual([]);
+		const name = "a".repeat(80);
+		const response = await create(`  ${name}  `);
+		expect(response.status).toBe(200);
+		const { userId } = (await response.json()) as { userId: string };
+		const [saved] = await db
+			.select()
+			.from(tables.user)
+			.where(eq(tables.user.id, userId));
+		expect(saved.name).toBe(name);
+	});
+
+	test("converts managed signup APIErrors to their JSON status", async () => {
+		const signup = vi.spyOn(auth.api, "signUpEmail").mockRejectedValueOnce(
+			new APIError("BAD_REQUEST", {
+				code: "INVALID_DISPLAY_NAME",
+				message: "Invalid display name",
+			}),
+		);
+		try {
+			const response = await create("Maya");
+			expect(signup).toHaveBeenCalledOnce();
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({
+				code: "INVALID_DISPLAY_NAME",
+				message: "Invalid display name",
+			});
+		} finally {
+			signup.mockRestore();
+		}
+		expect(await db.select().from(tables.managedAccount)).toEqual([]);
 	});
 });

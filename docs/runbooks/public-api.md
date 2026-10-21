@@ -651,4 +651,6 @@ See [CLI](../cli.md#task-comments) and [MCP](../mcp.md#task-comments) for exampl
 
 Display names can be changed in browser Settings > Account. The identity update
 trims names to 1-80 characters and rejects control characters; profile and people
-discovery return the current name after an update. Avatars remain outside this flow.
+discovery return the current name after an update. Managed-account creation uses
+the same trimmed 1-80-character limit and returns a 400 JSON validation message
+for invalid names. Avatars remain outside this flow.

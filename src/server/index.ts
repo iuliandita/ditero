@@ -6,6 +6,7 @@ import { cors } from "@elysiajs/cors";
 import { mustGetMutator, mustGetQuery, type Transaction } from "@rocicorp/zero";
 import { handleMutateRequest, handleQueryRequest } from "@rocicorp/zero/server";
 import { zeroNodePg } from "@rocicorp/zero/server/adapters/pg";
+import { APIError } from "better-auth";
 import type { Cron } from "croner";
 import { Elysia } from "elysia";
 import { auth, handleAuthRequest } from "../auth/auth.ts";
@@ -531,7 +532,16 @@ const routes = new Elysia()
 				);
 			} catch (error) {
 				if (error instanceof ManagedAccountError) {
-					return new Response(error.message, { status: error.status });
+					return Response.json(
+						{ message: error.message },
+						{ status: error.status },
+					);
+				}
+				if (error instanceof APIError) {
+					return Response.json(error.body, {
+						status: error.statusCode,
+						headers: error.headers,
+					});
 				}
 				throw error;
 			}
