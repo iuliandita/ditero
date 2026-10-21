@@ -14,6 +14,7 @@ import {
 	resolveSaml,
 	samlProviderId,
 } from "../../src/auth/saml.ts";
+import { generateKeyPair } from "../support/saml-idp.ts";
 
 // A real SAML identity provider (Keycloak) in a container, pinned by digest, on
 // a loopback port. Metadata is fetched from its descriptor URL, and the browser
@@ -26,6 +27,8 @@ const REALM = "ditero";
 const PASSWORD = randomBytes(18).toString("hex");
 const CONTAINER = `ditero-saml-keycloak-${randomBytes(4).toString("hex")}`;
 const BASE = "http://localhost:3000";
+// Keycloak advertises WantAuthnRequestsSigned, so the service provider signs.
+const spKeys = generateKeyPair("ditero-keycloak-sp");
 const work = mkdtempSync(join(tmpdir(), "ditero-keycloak-"));
 
 const SP = {
@@ -195,6 +198,8 @@ async function ditero(
 		DITERO_SAML_IDP_METADATA_URL: `${realmURL}/protocol/saml/descriptor`,
 		DITERO_SAML_SP_ENTITY_ID: SP[sp],
 		DITERO_SAML_CLOCK_SKEW_SECONDS: "0",
+		DITERO_SAML_SP_PRIVATE_KEY: spKeys.keyPem,
+		DITERO_SAML_SP_CERT: spKeys.certificatePem,
 		...extra,
 	});
 	if (!settings) throw new Error("SAML settings missing");

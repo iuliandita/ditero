@@ -176,8 +176,12 @@ In the realm, create a client of type SAML:
 - Client ID: the Ditero entity ID. Valid redirect URI:
   `<BETTER_AUTH_URL>/api/auth/sso/saml2/sp/acs/*`.
 - Settings: Name ID format `persistent`, Force POST binding on, Sign assertions on,
-  Sign documents optional, Client signature required off (turn it on only together with
-  `DITERO_SAML_SP_PRIVATE_KEY` and the matching certificate in the client).
+  Sign documents optional, Client signature required off (turn it on only with the
+  certificate from `DITERO_SAML_SP_CERT` uploaded to the client).
+- The realm descriptor advertises that it wants signed AuthnRequests, and Ditero
+  then refuses to start without `DITERO_SAML_SP_PRIVATE_KEY` and `DITERO_SAML_SP_CERT`
+  (generate a key pair with `openssl req -x509 -newkey rsa:2048 -nodes -days 3650
+  -subj /CN=ditero-sp -keyout sp.key -out sp.crt` and mount both files read-only).
 - Mappers: User Property `email` to attribute `email`, `firstName` to `givenName`,
   `lastName` to `surname` (attribute name format Basic).
 - Point Ditero at `https://<keycloak>/realms/<realm>/protocol/saml/descriptor`.
