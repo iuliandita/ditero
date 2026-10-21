@@ -140,6 +140,12 @@ with `kubectl apply -k` by the authorized operator after those checks.
 
 ## Operations and boundaries
 
+Zero uses `ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS=30`. After sign-out or session
+revocation, an open subscription can receive updates until its next `/query`
+revalidation, plus request/scheduling latency. Deploy this configuration update to
+shorten the former five-minute default; no data migration is needed. See
+[session revocation](../../docs/security.md#authentication).
+
 Both Deployments use one replica and `Recreate` updates. The app's filesystem
 attachment store and Zero's SQLite replica are persistent local state; overlapping
 pods must not write these claims. Updates interrupt service. Do not increase

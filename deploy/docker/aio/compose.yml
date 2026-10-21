@@ -92,6 +92,7 @@ services:
     environment:
       ZERO_DATABASE_PASSWORD_FILE: /run/credentials/ZERO_DATABASE_PASSWORD
       ZERO_ADMIN_PASSWORD_FILE: /run/credentials/ZERO_ADMIN_PASSWORD
+      ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS: "30"
     volumes:
       - zero:/var/lib/ditero/zero
       - type: bind

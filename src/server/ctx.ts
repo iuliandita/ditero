@@ -1,6 +1,7 @@
 // Verify a Zero JWT against its JWKS and derive the request ctx. The signature
 // only proves who minted the token; the database decides whether the session
-// behind it is still live, so a revoked session or device stops working at once.
+// behind it is still live. HTTP requests fail after revocation; open sync
+// connections are checked at Zero's periodic /query revalidation (30s by default).
 // createRemoteJWKSet fetches + caches the signing keys from the auth server.
 import { type JWTPayload, type JWTVerifyGetKey, jwtVerify } from "jose";
 import type { Pool } from "pg";
