@@ -106,7 +106,10 @@ def deployment(output: Path) -> None:
     deployment_guides(version)
     output.mkdir(parents=True, exist_ok=True)
     subprocess.run(["helm", "package", "deploy/helm/ditero", "--version", version, "--app-version", version, "--destination", str(output)], cwd=ROOT, check=True)
-    files = ("docker-compose.yml", "postgres-init.sh", "secret-file.sh")
+    files = ("docker-compose.yml", "postgres-init.sh", "postgres-healthcheck.sh", "secret-file.sh")
+    mounted = set(re.findall(r"(?m)^\s+- \./([^:\s]+):", (ROOT / "deploy/docker/docker-compose.yml").read_text()))
+    if not mounted <= set(files):
+        raise ValueError(f"Compose archive omits bind-mounted files: {sorted(mounted - set(files))}")
     with tarfile.open(output / f"ditero-{version}-compose.tar.gz", "w:gz") as archive:
         for name in files:
             archive.add(ROOT / "deploy/docker" / name, arcname=f"ditero-{version}/compose/{name}")

@@ -139,6 +139,15 @@ owner; later ones need an invitation.
 Reuse and back up that environment file for restarts and upgrades. Do not regenerate
 database passwords or encryption keys for an existing volume. The file is gitignored;
 mounted secrets with `_FILE` variables are also supported.
+Compose file secrets are bind mounts: their files and parent directories must be
+readable/traversable by each container's actual UID/GID, including PostgreSQL's
+`postgres` user and the app's UID 1000. A host-owned mode 0600 file usually fails
+this requirement; use narrowly scoped ownership, groups or ACLs. Keep secrets
+private and follow [initialization recovery](docs/runbooks/database-roles.md#bundled-secrets-and-incomplete-initialization).
+
+Bundled raw password variables support URL delimiters such as `@:/%#?`; the app
+and Zero entrypoints percent-encode them when building DSNs. Explicit DSNs must
+already percent-encode credentials. Do not print DSNs in diagnostic reports.
 
 That pulls `ghcr.io/iuliandita/ditero:nightly` and `:nightly-zero`. Add `--build`
 to build from this checkout instead. Set `DITERO_IMAGE_TAG=0.0.1-alpha.12`
