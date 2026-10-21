@@ -16,10 +16,13 @@ The native vault uses the operating system credential store: Secret Service on
 Linux, Keychain on macOS, and Credential Manager on Windows. A locked or unavailable
 vault shows a localized keyring requirement with Retry; start or unlock a provider
 (such as GNOME Keyring or KWallet on Linux), then retry. The DEB recommends
-`gnome-keyring`. There is no plaintext fallback. A single protected record
-commits selection and sessions together, and a process lock prevents concurrent
-instances from overwriting each other's state. Local UI and sync persistence retain
-server/account scopes. Closing waits for durable local sync retirement before
+`gnome-keyring`. There is no plaintext fallback. Bounded binary records keep each
+credential blob within Windows Credential Manager's 2,560-byte limit. One protected
+commit pointer publishes selection and sessions together; session references avoid
+copying credentials into evidence and notification records. A process lock prevents
+concurrent instances from overwriting each other's state. A bounded protected
+journal tracks interrupted writes so retries reclaim uncommitted chunks. Local UI
+and sync persistence retain server/account scopes. Closing waits for durable local sync retirement before
 native sockets are drained and the window is destroyed; a failure keeps it open.
 
 Recovery-code downloads use the native system save dialog and account-bound write
@@ -44,20 +47,47 @@ through Retry after starting an unlocked provider, and all six browser handoffs.
 
 ## Offline startup
 
-Desktop currently needs an online start to verify the selected session before it
-can open cached data. On a connection failure during restoration, the connection
-screen explains this requirement. Reconnect and select Connect. Cached tasks and
-durably saved pending edits stay on the device; retry does not clear them.
+After one complete online start, desktop can reopen the selected account's cached
+data and durably saved queued edits while offline. The OS credential store retains
+verified session expiry, profile, Zero endpoint, and bootstrap workspace together,
+bound to the exact server, account, device, session, and credential. Older stored
+sessions, including the earlier evidence format, need a complete online start once
+to populate this evidence. Older desktop builds cannot read the bounded-record
+format. Before downgrading, sign out stored accounts, close Ditero, and remove its
+native session records using the OS credential manager; sign in online with the
+older build. Keep the current build if credential cleanup fails. The scoped task
+cache does not need to be cleared.
 
-Warm offline editing remains available after an online start. Cold offline
-activation is still tracked in #1090. It requires complete, unexpired verified
-evidence encrypted with the session, bound to the server/account/session, and
-durable refusal handling. Invalid credentials, failed certificate trust, expiry,
-and revocation must never authorize offline activation.
+Only a network failure permits cached activation, and only before the verified
+session expires. Invalid credentials, failed certificate trust, HTTP refusals,
+invalid responses, incomplete evidence, and failed credential-store writes never
+authorize fallback. Verification and revocation are marked durably before I/O;
+an interrupted or refused check requires successful online session verification
+before cached activation is available again. Every authenticated native request,
+including file transfers, notification polling, receipts, cleanup, and sync socket
+handshakes, persists a refusal fence before I/O. A 401/403 retains that fence even
+if credential deletion or later keyring writes fail. Ordinary request success
+cannot clear it; a fresh session verification must succeed. Overlapping requests
+cannot clear a refusal that arrives during verification. Credentials and JWTs
+remain native; no JWT is restored or minted offline.
 
-An isolated Linux runtime check confirmed this guidance on cold offline start and
-retry, then verified a queued edit survived a graceful close and synced after
-reconnection. It does not qualify cold offline activation.
+If cached activation is unavailable, reconnect and select Connect. Cached tasks
+and durably saved pending edits stay on the device; retry does not clear them.
+Offline access cannot discover a remote revocation until the server is reachable;
+the last verified expiry bounds this access, matching Android's policy.
+
+Unit tests cover the host decision matrix, protected evidence persistence, failed
+refusal cleanup, concurrent request fences, bounded multi-account keyring records,
+legacy migration, real TLS refusal classification, and the shared client startup
+path. Cold offline activation still needs packaged runtime qualification on each
+platform. To check it manually:
+
+1. Sign in to an existing account online and wait for lists to synchronize.
+2. Disconnect the network, edit a task, and close Ditero normally.
+3. Relaunch offline. Check that cached lists and the pending edit are accessible.
+4. Reconnect and confirm the queued edit synchronizes; restart to verify persistence.
+5. Separately check expired evidence, revoked credentials, an untrusted certificate,
+   and a locked keyring. These must refuse cached activation without deleting edits.
 
 ## Linux task links
 
@@ -173,7 +203,7 @@ bun install --frozen-lockfile
 cd ../..
 bun run i18n:compile
 bunx tsc --noEmit --project apps/desktop/tsconfig.json
-bunx vitest run apps/desktop/src/transport.test.ts apps/android/src/connect-error.test.ts
+bunx vitest run apps/desktop/src apps/android/src
 cd apps/desktop
 bun run build
 cd src-tauri

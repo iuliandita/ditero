@@ -100,11 +100,8 @@ jobs:
       - name: Check desktop TypeScript
         run: bunx tsc --noEmit --project apps/desktop/tsconfig.json
       - name: Test desktop bridge lifecycle
-        # Vitest ignores a path filter that matches nothing; ls fails on a missing file.
-        run: |
-          files=(apps/desktop/src/transport.test.ts apps/android/src/connect-error.test.ts)
-          ls "${files[@]}" >/dev/null
-          bunx vitest run "${files[@]}"
+        # Directories, not file lists: a misnamed or new test file can no longer be skipped.
+        run: bunx vitest run apps/desktop/src apps/android/src
       - name: Build bundled UI
         working-directory: apps/desktop
         run: bun run build

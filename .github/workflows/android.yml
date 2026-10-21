@@ -50,11 +50,8 @@ jobs:
       - name: Check Android TypeScript
         run: bunx tsc --noEmit --project apps/android/tsconfig.json
       - name: Test native bridge lifecycle
-        # Vitest ignores a path filter that matches nothing; ls fails on a missing file.
-        run: |
-          files=(apps/android/src/bridge.test.ts apps/android/src/connect-error.test.ts)
-          ls "${files[@]}" >/dev/null
-          bunx vitest run "${files[@]}"
+        # Directories, not file lists: a misnamed or new test file can no longer be skipped.
+        run: bunx vitest run apps/android/src
       - name: Build bundled UI
         working-directory: apps/android
         run: bun run build

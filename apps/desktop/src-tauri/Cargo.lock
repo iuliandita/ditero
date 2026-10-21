@@ -956,8 +956,10 @@ version = "0.0.1"
 dependencies = [
  "apple-native-keyring-store",
  "base64 0.22.1",
+ "chrono",
  "futures-util",
  "keyring-core",
+ "native-tls",
  "rand 0.8.8",
  "regex",
  "reqwest",

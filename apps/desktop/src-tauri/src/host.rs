@@ -2,7 +2,9 @@ use crate::{
     attachments::{self, Transfers},
     deep_links::{self, TaskLink},
     notifications::{self, Event as NotificationEvent},
+    offline::{self, Evidence},
     protocol::{self, Result, MAX_BODY, MAX_SEND},
+    request_fence::Fences,
     vault::{self, DesktopRegistration, Registry, Session, SystemVault, Vault},
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
@@ -88,6 +90,7 @@ struct Actor {
     http: reqwest::Client,
     file_http: reqwest::Client,
     vault: Box<dyn Vault>,
+    fences: Arc<Fences>,
     registry: Registry,
     origin: Option<String>,
     session: Option<Session>,
@@ -247,6 +250,7 @@ pub fn run() {
         http,
         file_http,
         vault: Box::new(SystemVault),
+        fences: Fences::new(vault::native_store),
         registry: Registry::default(),
         origin: None,
         session: None,
@@ -737,15 +741,22 @@ impl Actor {
                 }
             }
         });
-        self.push = Some(notifications::start(owner, self.http.clone(), events));
+        self.push = Some(notifications::start(
+            owner,
+            self.http.clone(),
+            events,
+            self.fences.clone(),
+        ));
         self.push_state = "active";
     }
     fn cleanup_notifications(&mut self) {
         for registration in self.registry.retired_notifications.clone() {
             let http = self.http.clone();
             let tx = self.tx.clone();
+            let fences = self.fences.clone();
             tauri::async_runtime::spawn(async move {
                 let result = notifications::request(
+                    &fences,
                     &http,
                     &registration.session,
                     "unregister",
@@ -953,11 +964,7 @@ impl Actor {
                 if !self.notification_current(&owner) {
                     return;
                 }
-                let mut next = self.registry.clone();
-                let _ = Self::retire_in(&mut next, &owner.registration.session);
-                vault::remove_session(&mut next, &owner.registration.session);
-                let _ = self.persist(next);
-                self.drop_memory();
+                self.refuse_session(&owner.registration.session);
                 self.push_state = "no-session";
                 self.emit(json!({"t":"session-refused","gen":self.gen,"authHandle":owner.handle}));
             }
@@ -1128,9 +1135,11 @@ impl Actor {
         if self.persist(next).is_err() {
             self.push_state = "storage-failed";
             let http = self.http.clone();
+            let fences = self.fences.clone();
             self.push_tasks
                 .push(tauri::async_runtime::spawn(async move {
                     let _ = notifications::request(
+                        &fences,
                         &http,
                         &registration.session,
                         "unregister",
@@ -1152,6 +1161,30 @@ impl Actor {
         body: Option<&str>,
         token: Option<&str>,
     ) -> Result<(u16, String)> {
+        let guard = self
+            .registry
+            .sessions
+            .get(origin)
+            .filter(|s| Some(s.token.as_str()) == token)
+            .map(|s| self.fences.begin(s))
+            .transpose()?;
+        let response = self.call_transport(origin, path, post, body, token).await;
+        if let Some(guard) = guard {
+            guard.complete(match &response {
+                Ok((status, _)) => !matches!(status, 401 | 403),
+                Err(code) => *code == "network",
+            })?;
+        }
+        response
+    }
+    async fn call_transport(
+        &mut self,
+        origin: &str,
+        path: &str,
+        post: bool,
+        body: Option<&str>,
+        token: Option<&str>,
+    ) -> Result<(u16, String)> {
         #[cfg(test)]
         {
             let _ = (&self.http, post, body);
@@ -1164,7 +1197,12 @@ impl Actor {
                 if retire {
                     self.clock.fetch_add(1, Ordering::SeqCst);
                 }
-                return Ok((status, body));
+                return match status {
+                    0 => Err("network"),
+                    1 => Err("transport-refused"),
+                    2 => Err("invalid-response"),
+                    _ => Ok((status, body)),
+                };
             }
             panic!("unexpected native HTTP request");
         }
@@ -1185,10 +1223,13 @@ impl Actor {
                     .header("Content-Type", "application/json")
                     .body(body.unwrap_or("{}").to_string());
             }
-            let mut response = request.send().await.map_err(|_| "network")?;
+            let mut response = request
+                .send()
+                .await
+                .map_err(|e| offline::transport_error(&e))?;
             let status = response.status().as_u16();
             let mut bytes = Vec::new();
-            while let Some(chunk) = response.chunk().await.map_err(|_| "network")? {
+            while let Some(chunk) = response.chunk().await.map_err(|_| "invalid-response")? {
                 if bytes.len() + chunk.len() > MAX_BODY {
                     return Err("invalid-response");
                 }
@@ -1231,14 +1272,22 @@ impl Actor {
             .call(&s.origin, path, post, body, Some(&s.token))
             .await?;
         if clear && unauthorized(result.0, &result.1) {
-            let mut next = self.registry.clone();
-            let _ = Self::retire_in(&mut next, &s);
-            vault::remove_session(&mut next, &s);
-            let _ = self.persist(next);
-            self.drop_memory();
+            self.refuse_session(&s);
             return Err("unauthorized");
         }
         Ok(result)
+    }
+    fn refuse_session(&mut self, session: &Session) {
+        let _ = self.fences.refuse(session);
+        let mut next = self.registry.clone();
+        if let Some(proof) = next.evidence.get_mut(&session.origin) {
+            proof.pending = true;
+        }
+        let _ = self.persist(next.clone());
+        let _ = Self::retire_in(&mut next, session);
+        vault::remove_session(&mut next, session);
+        let _ = self.persist(next);
+        self.drop_memory();
     }
     fn file_reply(&mut self, context: attachments::Context, rid: u64, result: Result<Value>) {
         if context.gen != self.gen || context.page != self.page || self.current().is_err() {
@@ -1261,10 +1310,7 @@ impl Actor {
                 .and_then(Value::as_str)
                 .is_some_and(|body| unauthorized(401, body))
         {
-            let mut next = self.registry.clone();
-            vault::remove_session(&mut next, &context.session);
-            let _ = self.persist(next);
-            self.drop_memory();
+            self.refuse_session(&context.session);
         }
         reply["t"] = json!("reply");
         reply["rid"] = json!(rid);
@@ -1297,13 +1343,14 @@ impl Actor {
         {
             return Err("invalid-message");
         }
-        let context = attachments::Context::new(
+        let mut context = attachments::Context::new(
             self.gen,
             self.page,
             self.session.clone().ok_or("no-session")?,
             self.clock.clone(),
             self.pages.clone(),
         );
+        context.fences = Some(self.fences.clone());
         let captured = context.clone();
         let tx = self.tx.clone();
         self.files.dispatch(
@@ -1442,19 +1489,7 @@ impl Actor {
                 self.links_verified.store(self.verified, Ordering::SeqCst);
                 Ok(self.snapshot())
             }
-            "config.read" => {
-                let origin = self.origin.clone().ok_or("no-server")?;
-                let (status, raw) = self.call(&origin, "/api/config", false, None, None).await?;
-                if status != 200 {
-                    return Err("config-refused");
-                }
-                let config = protocol::parse(&raw)?;
-                let zero = protocol::endpoint(protocol::string(&config, "zeroURL")?)?;
-                self.zero = Some(zero.clone());
-                Ok(
-                    json!({"ok":true,"origin":origin,"zeroURL":zero,"queryUrl":format!("{origin}/api/zero/query"),"mutateUrl":format!("{origin}/api/zero/mutate")}),
-                )
-            }
+            "config.read" => self.config_read().await,
             "grant" => {
                 let origin = self.origin.clone().ok_or("no-server")?;
                 let verifier = random(32);
@@ -1489,91 +1524,8 @@ impl Actor {
                 Ok(json!({"ok":true}))
             }
             "complete" => self.complete().await,
-            "session.read" => {
-                let (status, raw) = self
-                    .authed("/api/native/session", false, None, true)
-                    .await?;
-                if status != 200 {
-                    return Err("session-refused");
-                }
-                let out = protocol::parse(&raw)?;
-                let s = self.session.as_ref().ok_or("no-session")?;
-                verify_session(&out, s)?;
-                let expiry = protocol::string(&out, "expiresAt")?;
-                if !vault::valid_expiry(expiry) {
-                    return Err("invalid-response");
-                }
-                let reply = json!({"ok":true,"scope":s.scope(),"userId":s.user_id,"deviceId":s.device_id,"expiresAt":expiry});
-                self.verified = true;
-                self.links_verified.store(true, Ordering::SeqCst);
-                self.bind_cold_link();
-                self.start_notifications();
-                self.cleanup_notifications();
-                Ok(reply)
-            }
-            "profile.read" => {
-                let (status, raw) = self
-                    .authed("/api/native/profile", false, None, true)
-                    .await?;
-                if status != 200 {
-                    return Err("profile-refused");
-                }
-                let out = protocol::parse(&raw)?;
-                let s = self.session.as_ref().ok_or("no-session")?;
-                let name = protocol::string(&out, "name")?;
-                let email = protocol::string(&out, "email")?;
-                if protocol::string(&out, "id")? != s.user_id
-                    || name.len() > 512
-                    || email.len() > 512
-                {
-                    return Err("invalid-response");
-                }
-                Ok(json!({"ok":true,"id":s.user_id,"name":name,"email":email}))
-            }
-            "bootstrap.ensure" => {
-                let (status, raw) = self
-                    .authed("/api/native/bootstrap", true, None, true)
-                    .await?;
-                if status != 200 {
-                    return Err("bootstrap-refused");
-                }
-                let out = protocol::parse(&raw)?;
-                let workspace = protocol::string(&out, "workspaceId")?;
-                if !protocol::id(workspace) {
-                    return Err("invalid-response");
-                }
-                Ok(json!({"ok":true,"workspaceId":workspace}))
-            }
-            "refresh" => {
-                let (status, raw) = self.authed("/api/native/token", false, None, true).await?;
-                if status != 200 {
-                    return Err("token-refused");
-                }
-                let out = protocol::parse(&raw)?;
-                let token = protocol::string(&out, "token")?;
-                let parts: Vec<_> = token.split('.').collect();
-                if token.len() > 768
-                    || parts.len() != 3
-                    || parts.iter().any(|s| {
-                        s.is_empty()
-                            || !s
-                                .bytes()
-                                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-                    })
-                {
-                    return Err("jwt-rejected");
-                }
-                let claims = URL_SAFE_NO_PAD
-                    .decode(parts[1])
-                    .map_err(|_| "jwt-rejected")?;
-                let claims =
-                    protocol::parse(std::str::from_utf8(&claims).map_err(|_| "jwt-rejected")?)?;
-                self.jwt_exp = claims
-                    .get("exp")
-                    .and_then(Value::as_u64)
-                    .ok_or("jwt-rejected")?;
-                self.jwt = token.to_string();
-                Ok(json!({"ok":true,"refreshedAt":now(),"jwtExp":self.jwt_exp}))
+            "session.read" | "profile.read" | "bootstrap.ensure" | "refresh" => {
+                self.session_post(op).await
             }
             "session.revoke" => self.revoke().await,
             "forget" => {
@@ -1658,6 +1610,264 @@ impl Actor {
             _ => Err("unknown-op"),
         }
     }
+    async fn config_read(&mut self) -> Result<Value> {
+        let origin = self.origin.clone().ok_or("no-server")?;
+        let captured = self.session.clone();
+        let cached = captured.as_ref().and_then(|s| self.evidence(s));
+        let was_pending = captured
+            .as_ref()
+            .and_then(|s| self.registry.evidence.get(&s.origin))
+            .is_some_and(|p| p.pending);
+        if let Some(s) = &captured {
+            let mut next = self.registry.clone();
+            let proof = next
+                .evidence
+                .entry(s.origin.clone())
+                .or_insert_with(|| Evidence::new(s.clone()));
+            proof.pending = true;
+            self.persist(next)?;
+            self.current()?;
+        }
+        let response = self.call(&origin, "/api/config", false, None, None).await;
+        self.current()?;
+        let zero = match response {
+            Err("network")
+                if cached.as_ref().is_some_and(|p| {
+                    captured.as_ref().is_some_and(|s| {
+                        self.owned(s) && p.ready(s, now()) && self.fences.allowed(s)
+                    })
+                }) =>
+            {
+                cached.as_ref().unwrap().zero.clone().unwrap()
+            }
+            Err(error) => return Err(error),
+            Ok((status, raw)) => {
+                if status != 200 {
+                    return Err("config-refused");
+                }
+                protocol::endpoint(protocol::string(&protocol::parse(&raw)?, "zeroURL")?)?
+            }
+        };
+        if let Some(s) = &captured {
+            if !self.owned(s) {
+                return Err("cancelled");
+            }
+            let mut next = self.registry.clone();
+            let proof = next.evidence.get_mut(&s.origin).ok_or("no-session")?;
+            proof.zero = Some(zero.clone());
+            proof.pending = was_pending;
+            self.persist(next)?;
+            self.current()?;
+        }
+        self.zero = Some(zero.clone());
+        Ok(
+            json!({"ok":true,"origin":origin,"zeroURL":zero,"queryUrl":format!("{origin}/api/zero/query"),"mutateUrl":format!("{origin}/api/zero/mutate")}),
+        )
+    }
+    fn evidence(&self, session: &Session) -> Option<Evidence> {
+        self.registry
+            .evidence
+            .get(&session.origin)
+            .filter(|proof| proof.ready(session, now()) && self.fences.allowed(session))
+            .cloned()
+    }
+    fn owned(&self, captured: &Session) -> bool {
+        self.current().is_ok()
+            && self.origin.as_ref() == Some(&captured.origin)
+            && self
+                .session
+                .as_ref()
+                .is_some_and(|s| vault::same_session(s, captured))
+    }
+    async fn session_post(&mut self, op: &str) -> Result<Value> {
+        let captured = self.session.clone().ok_or("no-session")?;
+        let cached = self.evidence(&captured);
+        let mut next = self.registry.clone();
+        let proof = next
+            .evidence
+            .entry(captured.origin.clone())
+            .or_insert_with(|| Evidence::new(captured.clone()));
+        if !vault::same_session(&proof.session, &captured) {
+            *proof = Evidence::new(captured.clone());
+        }
+        // Commit before I/O. Refusal, interruption, or failed cleanup must not
+        // resurrect the previously verified record on the next cold launch.
+        let was_pending = proof.pending;
+        proof.pending = true;
+        self.persist(next)?;
+        self.current()?;
+        let revision = self.fences.revision(&captured)?;
+        let result = self.session_online(op).await;
+        if !self.owned(&captured) {
+            return if matches!(result, Err("unauthorized")) {
+                Err("unauthorized")
+            } else {
+                Err("cancelled")
+            };
+        }
+        let reply = match result {
+            Ok(reply) => reply,
+            Err("network")
+                if cached.as_ref().is_some_and(|p| {
+                    p.ready(&captured, now()) && self.fences.allowed(&captured)
+                }) =>
+            {
+                let proof = cached.unwrap();
+                let mut next = self.registry.clone();
+                next.evidence.insert(captured.origin.clone(), proof.clone());
+                self.persist(next)?;
+                self.current()?;
+                if op == "session.read" {
+                    self.verified = true;
+                    self.links_verified.store(true, Ordering::SeqCst);
+                    self.bind_cold_link();
+                }
+                return match op {
+                    "session.read" => Ok(
+                        json!({"ok":true,"scope":captured.scope(),"userId":captured.user_id,"deviceId":captured.device_id,"expiresAt":captured.expires_at}),
+                    ),
+                    "profile.read" => Ok(
+                        json!({"ok":true,"id":captured.user_id,"name":proof.name,"email":proof.email}),
+                    ),
+                    "bootstrap.ensure" => Ok(json!({"ok":true,"workspaceId":proof.workspace})),
+                    "refresh" => Err("offline-ready"),
+                    _ => Err("unknown-op"),
+                };
+            }
+            Err(error) => {
+                self.verified = false;
+                self.links_verified.store(false, Ordering::SeqCst);
+                return Err(error);
+            }
+        };
+        let mut next = self.registry.clone();
+        let proof = next
+            .evidence
+            .get_mut(&captured.origin)
+            .ok_or("no-session")?;
+        match op {
+            "session.read" => {
+                let expiry = protocol::string(&reply, "expiresAt")?.to_owned();
+                proof.session.expires_at = expiry.clone();
+                proof.verified = true;
+                next.sessions
+                    .get_mut(&captured.origin)
+                    .ok_or("no-session")?
+                    .expires_at = expiry;
+            }
+            "profile.read" => {
+                proof.name = Some(protocol::string(&reply, "name")?.into());
+                proof.email = Some(protocol::string(&reply, "email")?.into());
+            }
+            "bootstrap.ensure" => {
+                proof.workspace = Some(protocol::string(&reply, "workspaceId")?.into())
+            }
+            _ => {}
+        }
+        // Only a fresh session verification can recover invalid/interrupted evidence.
+        proof.pending = op != "session.read" && was_pending;
+        let expiry = proof.session.expires_at.clone();
+        self.persist(next)?;
+        self.current()?;
+        if op == "session.read" {
+            self.fences.verified(&captured, revision)?;
+            self.session.as_mut().ok_or("no-session")?.expires_at = expiry;
+            self.verified = true;
+            self.links_verified.store(true, Ordering::SeqCst);
+            self.bind_cold_link();
+            self.start_notifications();
+            self.cleanup_notifications();
+        }
+        Ok(reply)
+    }
+    async fn session_online(&mut self, op: &str) -> Result<Value> {
+        match op {
+            "session.read" => {
+                let (status, raw) = self
+                    .authed("/api/native/session", false, None, true)
+                    .await?;
+                if status != 200 {
+                    return Err("session-refused");
+                }
+                let out = protocol::parse(&raw)?;
+                let s = self.session.as_ref().ok_or("no-session")?;
+                verify_session(&out, s)?;
+                let expiry = protocol::string(&out, "expiresAt")?;
+                if !offline::unexpired(expiry, now()) {
+                    return Err("invalid-response");
+                }
+                let reply = json!({"ok":true,"scope":s.scope(),"userId":s.user_id,"deviceId":s.device_id,"expiresAt":expiry});
+                Ok(reply)
+            }
+            "profile.read" => {
+                let (status, raw) = self
+                    .authed("/api/native/profile", false, None, true)
+                    .await?;
+                if status != 200 {
+                    return Err("profile-refused");
+                }
+                let out = protocol::parse(&raw)?;
+                let s = self.session.as_ref().ok_or("no-session")?;
+                let name = protocol::string(&out, "name")?;
+                let email = protocol::string(&out, "email")?;
+                if protocol::string(&out, "id")? != s.user_id
+                    || name.len() > 512
+                    || email.len() > 512
+                {
+                    return Err("invalid-response");
+                }
+                Ok(json!({"ok":true,"id":s.user_id,"name":name,"email":email}))
+            }
+            "bootstrap.ensure" => {
+                let (status, raw) = self
+                    .authed("/api/native/bootstrap", true, None, true)
+                    .await?;
+                if status != 200 {
+                    return Err("bootstrap-refused");
+                }
+                let out = protocol::parse(&raw)?;
+                let workspace = protocol::string(&out, "workspaceId")?;
+                if !protocol::id(workspace) {
+                    return Err("invalid-response");
+                }
+                Ok(json!({"ok":true,"workspaceId":workspace}))
+            }
+            "refresh" => {
+                let (status, raw) = self.authed("/api/native/token", false, None, true).await?;
+                if status != 200 {
+                    return Err("token-refused");
+                }
+                let out = protocol::parse(&raw)?;
+                let token = protocol::string(&out, "token")?;
+                let parts: Vec<_> = token.split('.').collect();
+                if token.len() > 768
+                    || parts.len() != 3
+                    || parts.iter().any(|s| {
+                        s.is_empty()
+                            || !s
+                                .bytes()
+                                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+                    })
+                {
+                    return Err("jwt-rejected");
+                }
+                let claims = URL_SAFE_NO_PAD
+                    .decode(parts[1])
+                    .map_err(|_| "jwt-rejected")?;
+                let claims =
+                    protocol::parse(std::str::from_utf8(&claims).map_err(|_| "jwt-rejected")?)?;
+                let expiry = claims
+                    .get("exp")
+                    .and_then(Value::as_u64)
+                    .filter(|expiry| *expiry > now() / 1000)
+                    .ok_or("jwt-rejected")?;
+                self.jwt_exp = expiry;
+                self.jwt = token.to_string();
+                Ok(json!({"ok":true,"refreshedAt":now(),"jwtExp":self.jwt_exp}))
+            }
+            _ => Err("unknown-op"),
+        }
+    }
     async fn complete(&mut self) -> Result<Value> {
         let origin = self.origin.clone().ok_or("no-server")?;
         let p = self.pending.as_ref().ok_or("no-pending-grant")?;
@@ -1737,6 +1947,7 @@ impl Actor {
                 Self::retire_in(&mut next, &old)?;
             }
         }
+        next.evidence.remove(origin);
         next.sessions.insert(origin.into(), s.clone());
         self.vault.save(&next)?;
         if let Err(error) = self.current() {
@@ -1756,6 +1967,11 @@ impl Actor {
         self.stop_notifications();
         self.files.cancel_all();
         let s = self.session.clone().ok_or("no-session")?;
+        let mut next = self.registry.clone();
+        if let Some(proof) = next.evidence.get_mut(&s.origin) {
+            proof.pending = true;
+        }
+        self.persist(next)?;
         let (status, raw) = self
             .call(
                 &s.origin,
@@ -1798,13 +2014,27 @@ impl Actor {
         if self.sockets.len() >= 4 || self.sockets.contains_key(&cid) {
             return Err("invalid-socket");
         }
-        if self.session.is_none() || self.jwt.is_empty() {
-            return Err("no-token");
+        if self.session.is_none() {
+            return Err("no-session");
         }
         let target = protocol::socket_target(
             protocol::string(v, "url")?,
             self.zero.as_ref().ok_or("no-config")?,
         )?;
+        protocol::splice_protocol(
+            protocol::string(v, "protocol")?,
+            self.origin.as_ref().ok_or("no-server")?,
+            &self.handle,
+            &self.handle,
+        )?;
+        if self.jwt.is_empty() || self.jwt_exp <= now() / 1000 {
+            match self.session_post("refresh").await {
+                Err("offline-ready") => return Err("network"),
+                result => {
+                    result?;
+                }
+            }
+        }
         let protocol = protocol::splice_protocol(
             protocol::string(v, "protocol")?,
             self.origin.as_ref().ok_or("no-server")?,
@@ -1825,6 +2055,9 @@ impl Actor {
         let (tx, mut rx) = mpsc::channel::<Message>(16);
         let is_open = Arc::new(AtomicBool::new(false));
         let open_flag = is_open.clone();
+        let guard = self
+            .fences
+            .begin(self.session.as_ref().ok_or("no-session")?)?;
         let task = tauri::async_runtime::spawn(async move {
             let emit = |kind: &str, fields: Value| {
                 if clock.load(Ordering::SeqCst) == gen {
@@ -1843,6 +2076,20 @@ impl Actor {
                 tokio_tungstenite::connect_async_with_config(request, Some(config), false),
             )
             .await;
+            let safe = match &opened {
+                Ok(Ok(_)) | Err(_) => true,
+                Ok(Err(tokio_tungstenite::tungstenite::Error::Http(response))) => {
+                    !matches!(response.status().as_u16(), 401 | 403)
+                }
+                Ok(Err(tokio_tungstenite::tungstenite::Error::Io(_))) => true,
+                _ => false,
+            };
+            if guard.complete(safe).is_err() {
+                emit("error", json!({"kind":"storage-failed"}));
+                emit("close", json!({"code":1006,"reason":"","clean":false}));
+                let _ = owner.send(Work::Ended(gen, cid)).await;
+                return;
+            }
             let mut clean = false;
             let mut code = 1006;
             if let Ok(Ok((mut socket, _))) = opened {
@@ -1994,15 +2241,18 @@ mod tests {
     struct TestVault {
         value: Mutex<Registry>,
         reject: bool,
+        remaining_writes: Mutex<u64>,
     }
     impl Vault for TestVault {
         fn load(&self) -> Result<Registry> {
             Ok(self.value.lock().unwrap().clone())
         }
         fn save(&self, registry: &Registry) -> Result<()> {
-            if self.reject {
+            let mut remaining = self.remaining_writes.lock().unwrap();
+            if self.reject || *remaining == 0 {
                 return Err("storage-failed");
             }
+            *remaining -= 1;
             *self.value.lock().unwrap() = registry.clone();
             Ok(())
         }
@@ -2035,7 +2285,12 @@ mod tests {
             vault: Box::new(TestVault {
                 value: Mutex::new(Registry::default()),
                 reject,
+                remaining_writes: Mutex::new(u64::MAX),
             }),
+            fences: {
+                let store = keyring_core::mock::Store::new().unwrap();
+                Fences::new(move || Ok(store.clone()))
+            },
             registry: Registry::default(),
             origin: None,
             session: None,
@@ -2067,6 +2322,300 @@ mod tests {
             #[cfg(test)]
             push_supported: true,
         }
+    }
+    fn cached_host() -> Actor {
+        let mut host = actor(false);
+        let stored = Session {
+            expires_at: "2099-12-01T00:00:00Z".into(),
+            ..session()
+        };
+        host.origin = Some(stored.origin.clone());
+        host.registry.selected = host.origin.clone();
+        host.registry
+            .sessions
+            .insert(stored.origin.clone(), stored.clone());
+        let mut proof = Evidence::new(stored.clone());
+        proof.verified = true;
+        proof.name = Some("Alex".into());
+        proof.email = Some("alex@example.test".into());
+        proof.zero = Some("https://zero.example".into());
+        proof.workspace = Some("workspace".into());
+        host.registry.evidence.insert(stored.origin.clone(), proof);
+        host.vault.save(&host.registry).unwrap();
+        host.install(Some(stored));
+        host
+    }
+    async fn native_op(host: &mut Actor, op: &str) -> Result<Value> {
+        host.post(&json!({"op":op,"rid":1,"gen":host.gen}), 100)
+            .await
+    }
+    #[tokio::test]
+    async fn cold_offline_start_restores_only_complete_protected_evidence_and_no_jwt() {
+        let mut host = cached_host();
+        host.attach(Channel::new(|_| Ok(())), 1).unwrap();
+        native_op(&mut host, "hello").await.unwrap();
+        assert!(!host.verified);
+        for op in [
+            "session.read",
+            "profile.read",
+            "bootstrap.ensure",
+            "config.read",
+            "refresh",
+        ] {
+            host.responses.push_back((0, "".into(), false));
+            let reply = native_op(&mut host, op).await;
+            if op == "refresh" {
+                assert_eq!(reply, Err("offline-ready"));
+            } else {
+                let reply = reply.unwrap();
+                match op {
+                    "session.read" => assert_eq!(reply["userId"], "u1"),
+                    "profile.read" => assert_eq!(reply["name"], "Alex"),
+                    "bootstrap.ensure" => assert_eq!(reply["workspaceId"], "workspace"),
+                    "config.read" => assert_eq!(reply["zeroURL"], "https://zero.example"),
+                    _ => unreachable!(),
+                }
+                assert!(!reply.to_string().contains("secret"));
+            }
+        }
+        assert!(host.verified);
+        assert!(host.jwt.is_empty());
+        assert_eq!(host.meta()["tokenReady"], false);
+        assert_eq!(host.meta()["jwtExp"], 0);
+        assert!(!host.registry.evidence["https://a.example"].pending);
+        assert!(host.vault.load().unwrap().evidence["https://a.example"]
+            .ready(host.session.as_ref().unwrap(), now()));
+    }
+    #[tokio::test]
+    async fn socket_retry_refreshes_native_jwt_after_cached_start_without_retargeting() {
+        let mut host = cached_host();
+        host.zero = Some("https://zero.example".into());
+        let encoded = base64::engine::general_purpose::STANDARD
+            .encode(format!(r#"{{"authToken":"{}"}}"#, host.handle))
+            .replace('+', "%2B")
+            .replace('/', "%2F")
+            .replace('=', "%3D");
+        let request = json!({"op":"ws.open","rid":1,"gen":host.gen,"cid":1,"url":"wss://zero.example/sync/v51/connect","protocol":encoded});
+        host.responses.push_back((0, "".into(), false));
+        assert_eq!(host.socket_open(&request).await, Err("network"));
+        assert!(host.jwt.is_empty());
+        let claims = URL_SAFE_NO_PAD.encode(json!({"exp":now()/1000+3600}).to_string());
+        let token = format!("a.{claims}.c");
+        host.responses
+            .push_back((200, json!({"token":token}).to_string(), false));
+        // The unavailable channel prevents a real socket while exercising token recovery.
+        assert_eq!(host.socket_open(&request).await, Err("closed"));
+        assert_eq!(host.jwt, token);
+        assert!(host.jwt_exp > now() / 1000);
+        assert_eq!(
+            host.requests
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|r| r.1.as_str())
+                .collect::<Vec<_>>(),
+            vec!["/api/native/token", "/api/native/token"]
+        );
+        host.jwt.clear();
+        host.responses.push_back((0, "".into(), true));
+        assert_eq!(host.socket_open(&request).await, Err("cancelled"));
+        assert!(host.jwt.is_empty());
+        assert!(host.sockets.is_empty());
+    }
+    #[tokio::test]
+    async fn incomplete_expired_or_mismatched_evidence_cannot_restore() {
+        let host = cached_host();
+        let session = host.session.as_ref().unwrap();
+        let complete = host.registry.evidence[&session.origin].clone();
+        assert!(complete.ready(session, now()));
+        for missing in [
+            "verified",
+            "pending",
+            "name",
+            "email",
+            "zero",
+            "workspace",
+            "expiry",
+            "origin",
+            "user",
+            "device",
+            "session",
+            "token",
+            "malformed-expiry",
+            "invalid-zero",
+            "invalid-workspace",
+        ] {
+            let mut proof = complete.clone();
+            match missing {
+                "verified" => proof.verified = false,
+                "pending" => proof.pending = true,
+                "name" => proof.name = None,
+                "email" => proof.email = None,
+                "zero" => proof.zero = None,
+                "workspace" => proof.workspace = None,
+                "expiry" => proof.session.expires_at = "2000-01-01T00:00:00Z".into(),
+                "malformed-expiry" => proof.session.expires_at = "2099-02-30T00:00:00Z".into(),
+                "origin" => proof.session.origin = "https://b.example".into(),
+                "user" => proof.session.user_id = "other".into(),
+                "device" => proof.session.device_id = "other".into(),
+                "session" => proof.session.session_id = "other".into(),
+                "token" => proof.session.token = "other".into(),
+                "invalid-zero" => proof.zero = Some("http://zero.example".into()),
+                "invalid-workspace" => proof.workspace = Some("/wrong".into()),
+                _ => unreachable!(),
+            }
+            assert!(!proof.ready(session, now()), "accepted {missing}");
+        }
+        let expiry = chrono::DateTime::parse_from_rfc3339(&session.expires_at)
+            .unwrap()
+            .timestamp_millis() as u64;
+        assert!(complete.ready(session, expiry - 1));
+        assert!(!complete.ready(session, expiry));
+        assert!(!complete.ready(session, expiry + 1));
+        for value in [
+            "2099-02-30T00:00:00Z",
+            "2099-12-01T00:00:00+00:00",
+            "2099-12-01T00:00:00.1Z",
+            "2099-12-01T00:00:60Z",
+        ] {
+            assert!(!offline::unexpired(value, now()), "accepted {value}");
+        }
+    }
+    #[tokio::test]
+    async fn online_start_populates_evidence_and_refreshes_authoritative_expiry() {
+        let mut host = cached_host();
+        host.registry.evidence.clear();
+        let stored = host.session.clone().unwrap();
+        for (op, body) in [
+            (
+                "session.read",
+                json!({"userId":stored.user_id,"deviceId":stored.device_id,"sessionId":stored.session_id,"expiresAt":"2099-12-02T00:00:00.000Z"}),
+            ),
+            (
+                "profile.read",
+                json!({"id":"u1","name":"Sam","email":"sam@example.test"}),
+            ),
+            ("bootstrap.ensure", json!({"workspaceId":"workspace"})),
+            ("config.read", json!({"zeroURL":"https://zero.example"})),
+        ] {
+            host.responses.push_back((200, body.to_string(), false));
+            native_op(&mut host, op).await.unwrap();
+        }
+        let registry = host.vault.load().unwrap();
+        let stored = &registry.sessions["https://a.example"];
+        assert_eq!(stored.expires_at, "2099-12-02T00:00:00.000Z");
+        assert!(registry.evidence["https://a.example"].ready(stored, now()));
+        assert_eq!(
+            registry.evidence["https://a.example"].name.as_deref(),
+            Some("Sam")
+        );
+    }
+    #[tokio::test]
+    async fn offline_evidence_is_not_used_for_trust_http_or_validation_failures() {
+        for op in [
+            "session.read",
+            "profile.read",
+            "bootstrap.ensure",
+            "config.read",
+            "refresh",
+        ] {
+            for (status, body) in [
+                (1, ""),
+                (2, ""),
+                (503, "{}"),
+                (200, "{bad"),
+                (200, "{}"),
+                (401, "{\"code\":\"unauthorized\"}"),
+            ] {
+                let mut host = cached_host();
+                host.responses.push_back((status, body.into(), false));
+                let result = native_op(&mut host, op).await;
+                assert!(result.is_err(), "{op} {status}: {result:?}");
+                assert_ne!(result, Err("offline-ready"));
+                host.registry = host.vault.load().unwrap();
+                let stored = host.registry.sessions.get("https://a.example").cloned();
+                host.install(stored);
+                host.responses.push_back((0, "".into(), false));
+                assert!(
+                    native_op(&mut host, "session.read").await.is_err(),
+                    "{op} {status} resurrected offline evidence"
+                );
+            }
+        }
+    }
+    #[tokio::test]
+    async fn pending_checks_need_live_session_verification_and_stale_pages_cannot_restore() {
+        let mut host = cached_host();
+        host.registry
+            .evidence
+            .get_mut("https://a.example")
+            .unwrap()
+            .pending = true;
+        host.responses.push_back((
+            200,
+            json!({"id":"u1","name":"Alex","email":"alex@example.test"}).to_string(),
+            false,
+        ));
+        native_op(&mut host, "profile.read").await.unwrap();
+        host.responses.push_back((0, "".into(), false));
+        assert_eq!(native_op(&mut host, "session.read").await, Err("network"));
+        let stored = host.session.clone().unwrap();
+        host.responses.push_back((200, json!({"userId":stored.user_id,"deviceId":stored.device_id,"sessionId":stored.session_id,"expiresAt":stored.expires_at}).to_string(), false));
+        native_op(&mut host, "session.read").await.unwrap();
+        assert!(host.evidence(&stored).is_some());
+        host.responses.push_back((0, "".into(), true));
+        assert_eq!(native_op(&mut host, "session.read").await, Err("cancelled"));
+        assert!(host.vault.load().unwrap().evidence["https://a.example"].pending);
+    }
+    #[tokio::test]
+    async fn failed_check_or_refusal_persistence_never_reenables_offline_evidence() {
+        for op in ["session.read", "session.revoke"] {
+            for writes in [0, 1] {
+                let mut host = cached_host();
+                host.vault = Box::new(TestVault {
+                    value: Mutex::new(host.registry.clone()),
+                    reject: false,
+                    remaining_writes: Mutex::new(writes),
+                });
+                host.responses
+                    .push_back((401, r#"{"code":"unauthorized"}"#.into(), false));
+                let result = native_op(&mut host, op).await;
+                if writes == 0 {
+                    assert_eq!(result, Err("storage-failed"));
+                    assert!(host.requests.lock().unwrap().is_empty());
+                } else {
+                    assert!(result.is_err() || result.unwrap()["code"] == "storage-failed");
+                    assert!(host.vault.load().unwrap().evidence["https://a.example"].pending);
+                    assert!(host.session.is_none());
+                }
+            }
+        }
+        let mut revoked = cached_host();
+        revoked.vault = Box::new(TestVault {
+            value: Mutex::new(revoked.registry.clone()),
+            reject: false,
+            remaining_writes: Mutex::new(1),
+        });
+        revoked
+            .responses
+            .push_back((200, r#"{"revoked":true}"#.into(), false));
+        let reply = native_op(&mut revoked, "session.revoke").await.unwrap();
+        assert_eq!(reply["remoteRevoked"], true);
+        assert_eq!(reply["code"], "storage-failed");
+        assert!(revoked.vault.load().unwrap().evidence["https://a.example"].pending);
+        assert!(revoked.session.is_none());
+        let mut host = cached_host();
+        host.vault = Box::new(TestVault {
+            value: Mutex::new(host.registry.clone()),
+            reject: false,
+            remaining_writes: Mutex::new(1),
+        });
+        host.responses.push_back((0, "".into(), false));
+        assert_eq!(
+            native_op(&mut host, "session.read").await,
+            Err("storage-failed")
+        );
+        assert!(host.vault.load().unwrap().evidence["https://a.example"].pending);
     }
     #[test]
     fn settings_destinations_are_fixed_and_bound_to_the_verified_owner() {
@@ -2963,6 +3512,93 @@ mod tests {
             .await;
         assert_eq!(result, Err("send-failed"));
         assert!(host.sockets.is_empty());
+    }
+    #[tokio::test]
+    async fn native_refusals_survive_failed_credential_deletion_and_cold_offline_restart() {
+        for source in ["attachment", "notification", "e2e"] {
+            for writes in [0, 1] {
+                let mut host = cached_host();
+                let store = keyring_core::mock::Store::new().unwrap();
+                let running_store = store.clone();
+                host.fences = Fences::new(move || Ok(running_store.clone()));
+                let captured = host.session.clone().unwrap();
+                let registration = DesktopRegistration {
+                    session: captured.clone(),
+                    registration_id: "registration".into(),
+                    seen: vec![],
+                    receipts: vec![],
+                    locale: "en".into(),
+                };
+                host.registry
+                    .notifications
+                    .insert(captured.origin.clone(), registration.clone());
+                host.verified = true;
+                host.vault = Box::new(TestVault {
+                    value: Mutex::new(host.registry.clone()),
+                    reject: false,
+                    remaining_writes: Mutex::new(writes),
+                });
+                match source {
+                    "attachment" => host.file_reply(
+                        attachments::Context::new(
+                            host.gen,
+                            host.page,
+                            captured.clone(),
+                            host.clock.clone(),
+                            host.pages.clone(),
+                        ),
+                        1,
+                        Ok(json!({"ok":false,"status":401,"body":r#"{"code":"unauthorized"}"#})),
+                    ),
+                    "notification" => {
+                        let owner = notifications::Owner {
+                            registration,
+                            gen: host.gen,
+                            page: host.page,
+                            handle: host.handle.clone(),
+                            clock: host.clock.clone(),
+                            pages: host.pages.clone(),
+                            retired: Arc::new(AtomicBool::new(false)),
+                            wake: Arc::new(tokio::sync::Notify::new()),
+                            locale: Arc::new(std::sync::RwLock::new("en".into())),
+                        };
+                        host.notification_event(NotificationEvent::Unauthorized(owner));
+                    }
+                    _ => {
+                        host.responses
+                            .push_back((403, r#"{"code":"forbidden"}"#.into(), false));
+                        assert_eq!(
+                            host.authed("/api/native/e2e/workspaces", false, None, false)
+                                .await
+                                .unwrap()
+                                .0,
+                            403
+                        );
+                    }
+                }
+                let retained = host.vault.load().unwrap();
+                assert!(
+                    retained.sessions.contains_key(&captured.origin),
+                    "fixture must retain the credential after failed deletion"
+                );
+                let mut restarted = actor(false);
+                restarted.registry = retained;
+                restarted.fences = Fences::new(move || Ok(store.clone()));
+                restarted.origin = Some(captured.origin.clone());
+                restarted.install(Some(captured));
+                assert!(
+                    restarted
+                        .evidence(restarted.session.as_ref().unwrap())
+                        .is_none(),
+                    "{source}/{writes} resurrected refused evidence"
+                );
+                restarted.responses.push_back((0, "".into(), false));
+                assert!(
+                    native_op(&mut restarted, "session.read").await.is_err(),
+                    "{source}/{writes} reopened cached data"
+                );
+            }
+        }
     }
     #[tokio::test]
     async fn file_refusals_retire_only_the_exact_current_native_session() {
