@@ -906,9 +906,9 @@ function prepare(config) {
 		);
 	}
 }
-function health(config) {
+export function health(config, execute = spawnSync) {
 	const call = (command, args, env = config.env) =>
-		spawnSync(command, args, { env, stdio: "ignore", timeout: 5000 }).status ===
+		execute(command, args, { env, stdio: "ignore", timeout: 5000 }).status ===
 		0;
 	if (config.role === "postgres")
 		return (
@@ -936,7 +936,7 @@ function health(config) {
 		PGCONNECT_TIMEOUT: "3",
 		PGOPTIONS: "-c statement_timeout=3000",
 	};
-	const db = spawnSync(
+	const db = execute(
 		"psql",
 		["-X", "-Atqc", "SELECT current_user || '|' || current_database()"],
 		{ env, encoding: "utf8", timeout: 5000 },
@@ -955,7 +955,7 @@ function health(config) {
 	)
 		return false;
 	return ["query", "mutate"].every((route) => {
-		const r = spawnSync(
+		const r = execute(
 			"curl",
 			[
 				"-sS",

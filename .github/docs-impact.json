@@ -22,23 +22,24 @@
 			"noImpact": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch. Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged. The Compose release archive now includes postgres-healthcheck.sh, which the bundled database already bind-mounts, and packaging refuses archives missing any bind-mounted script. Release steps, assets and documented procedures are unchanged. GitHub Actions pins move to upload-artifact 7.0.2, download-artifact 8.0.2 and the current CodeQL v4 commit. Release jobs, inputs, artifacts, signing and publication steps are unchanged. Runtime source notices accept the upstream copyright spelling and retain checksum and strict archive inventory checks. Standalone binaries remain unpublished candidates with incomplete runtime license qualification."
 		},
 		"configuration": {
-			"sourceDigest": "08697ebd1318668776b85b3d740224ee83718d894377ed0913686ed2be69ddc4",
+			"sourceDigest": "192a44083559f69a97162959f6b5b62328377e77bbd14d7ad9616340d66d4fc1",
 			"docs": [
 				"deploy/helm/ditero/README.md",
 				"docs/runbooks/backup-restore.md",
 				"docs/runbooks/key-rotation.md",
-				"docs/runbooks/attachment-storage.md"
+				"docs/runbooks/attachment-storage.md",
+				"deploy/docker/aio/README.md"
 			],
-			"note": "Document the 32-character production authentication secret requirement, maintenance-only BETTER_AUTH_SECRET_NEXT rotation, and the required pre-existing writable filesystem attachment directory."
+			"note": "Document the 32-character production authentication secret requirement, maintenance-only BETTER_AUTH_SECRET_NEXT rotation, and the required pre-existing writable filesystem attachment directory. Experimental AIO builds require an explicit current-source Litestream binary image in addition to the qualified Zero base. Runtime configuration and retained secret bytes are unchanged."
 		},
 		"deployment": {
-			"sourceDigest": "7c71997198bda9a1e711c8936a9682eed8516ec80f855fdeced86f831c5c9a47",
+			"sourceDigest": "6774f43d1f8e8d6cc12f92b72b6ac4f2cd13d135c8881b14a2829d198edea12b",
 			"docs": [
 				"deploy/helm/ditero/README.md",
-				"docs/runbooks/database-roles.md",
-				"docs/runbooks/backup-restore.md"
+				"docs/runbooks/backup-restore.md",
+				"deploy/docker/aio/README.md"
 			],
-			"note": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged. Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database recovery and shutdown timing within the default container and pod grace periods. Document ordered startup, revision-aware Helm readiness, AIO ingress boundaries and cache-only recovery for failed initial synchronization. Document container-readable file secrets, atomic role initialization, missing-role health failures and safe recovery without widening application privileges. Complete operator setup and restore instructions, preserve runtime role restrictions, explain PostgreSQL compatibility and app origin requirements, and pass Zero publication/reset configuration. The Zero and all-in-one images rebuild Litestream v0.3.13 and v0.5.15 with Go 1.27.3 for CVE-2026-111943 and the v5 binary with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream sources, version suffixes, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged."
+			"note": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged. Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database recovery and shutdown timing within the default container and pod grace periods. Document ordered startup, revision-aware Helm readiness, AIO ingress boundaries and cache-only recovery for failed initial synchronization. Document container-readable file secrets, atomic role initialization, missing-role health failures and safe recovery without widening application privileges. Complete operator setup and restore instructions, preserve runtime role restrictions, explain PostgreSQL compatibility and app origin requirements, and pass Zero publication/reset configuration. The Zero and all-in-one images rebuild Litestream v0.3.13 and v0.5.15 with Go 1.27.3 for CVE-2026-111943 and the v5 binary with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream sources, version suffixes, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged. Experimental AIO publication now builds same-source Litestream binaries per architecture; the immutable qualified base and final strict scan remain required."
 		},
 		"native": {
 			"sourceDigest": "92683a64c48b35eb793695a732d247949fd15a899c1a9d0996bda4c44e41558b",
