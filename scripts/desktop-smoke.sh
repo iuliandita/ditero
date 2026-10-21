@@ -102,7 +102,7 @@ case "$platform" in
     codesign --verify --deep --strict --verbose=2 "$app"
     codesign -dv "$app" 2>"$out/codesign.txt"
     grep -q 'Signature=adhoc' "$out/codesign.txt"
-    lipo -verify_arch "$arch" "$binary"
+    lipo "$binary" -verify_arch "$arch"
     file "$binary" | tee "$out/binary.txt"
     "$binary" >"$out/startup.log" 2>&1 &
     pid=$!
