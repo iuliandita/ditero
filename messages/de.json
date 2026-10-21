@@ -709,8 +709,8 @@
 	"reminder_acked": "Bestätigt",
 	"reminder_failed": "Erinnerung fehlgeschlagen",
 	"reminder_expired": "Erinnerung abgelaufen",
-	"reminder_ack_aria": "{status}. Erinnerung bestätigen",
-	"reminder_ack_chip": "{status} - Bestätigen",
+	"reminder_ack_aria": "{status}. Aufgabe abschließen",
+	"reminder_ack_chip": "{status} - Aufgabe abschließen",
 	"reminder_channel_unverified": "Zustellkanal nicht bestätigt",
 	"reminder_urgent_label": "Auch während der Ruhezeit erinnern",
 	"reminder_override_defaults": "Eigene Erinnerungen für diese Aufgabe",
@@ -1911,6 +1911,12 @@
 			}
 		}
 	],
+	"attachment_error_server_limit": "Die Datei ist größer, als der Server oder Proxy erlaubt.",
+	"sync_address": "Sync-Adresse: {address}",
+	"sync_address_mixed_content": "Diese HTTPS-Seite kann keine Verbindung zu einer HTTP-Sync-Adresse herstellen. Konfiguriere eine HTTPS-Sync-Adresse.",
+	"sync_address_localhost": "Diese Sync-Adresse verweist auf dieses Gerät. Konfiguriere eine Sync-Adresse, die von jedem Gerät erreichbar ist.",
+	"e2e_browser_crypto_required": "Verschlüsselung erfordert HTTPS oder localhost und einen Browser mit Web-Crypto-Unterstützung.",
+	"auth_passkey_unavailable": "Passkeys erfordern HTTPS oder localhost und einen Browser mit WebAuthn-Unterstützung.",
 	"attachment_empty": "Noch keine Dateien.",
 	"attachment_dropzone_hint": "Lege Dateien hier ab oder verwende Datei hinzufügen.",
 	"attachment_dropzone_active": "Zum Anhängen ablegen.",

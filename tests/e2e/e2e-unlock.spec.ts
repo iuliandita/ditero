@@ -251,3 +251,21 @@ test("unlock: the auto-lock choice persists across a reload", async ({
 		{ timeout: DERIVE_TIMEOUT },
 	);
 });
+
+for (const unavailable of ["insecure", "missing-api"] as const) {
+	test(`unlock: explains ${unavailable} crypto support`, async ({ page }) => {
+		await setUp(page);
+		await page.getByTestId("e2e-lock-now").click();
+		await page.evaluate((reason) => {
+			if (reason === "insecure")
+				Object.defineProperty(window, "isSecureContext", { value: false });
+			else Object.defineProperty(crypto, "subtle", { value: undefined });
+		}, unavailable);
+		await page.getByTestId("e2e-unlock").click();
+		await expect(page.getByTestId("e2e-unlock-error")).toHaveText(
+			"Encryption requires HTTPS or localhost and a browser with Web Crypto support.",
+		);
+		await page.getByTestId("e2e-unlock-passphrase").fill(PASSPHRASE);
+		await expect(page.getByTestId("e2e-unlock-submit")).toBeDisabled();
+	});
+}

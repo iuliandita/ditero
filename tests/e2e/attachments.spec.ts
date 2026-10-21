@@ -564,3 +564,36 @@ test("attachment canary: ciphertext, fragment grant, removal, rotation, and pend
 		await outsiderContext.close();
 	}
 });
+
+test("attachments explain a proxy HTML 413 without a generic retry error", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("proxy-limit"));
+	await createListAndTask(page, "Proxy limit", "Upload a small file");
+	const surface = page.getByTestId("task-attachments");
+	await page.route("**/api/attachments/*/upload", (route) =>
+		route.fulfill({
+			status: 413,
+			contentType: "text/html",
+			body: "<html>Request Entity Too Large</html>",
+		}),
+	);
+	await inputFor(surface).setInputFiles({
+		name: "limited.txt",
+		mimeType: "text/plain",
+		buffer: Buffer.from("small file"),
+	});
+	await finishEnrollment(page, "limited.txt");
+	await expect(
+		page
+			.getByRole("alert")
+			.filter({
+				hasText: "The file is larger than the server or proxy allows.",
+			})
+			.first(),
+	).toBeVisible();
+	await expect(surface).toContainText(
+		"The file is larger than the server or proxy allows.",
+	);
+	await expect(surface).not.toContainText("Upload failed");
+});

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { m } from "../../../paraglide/messages.js";
 import { useKeyring } from "../../lib/e2e/KeyringProvider.tsx";
 import { KeyringError } from "../../lib/e2e/keyring.ts";
+import { webCryptoAvailable } from "../../lib/secure-context.ts";
 import { RecoverDialog } from "./RecoverDialog.tsx";
 
 // Shell flow 2. Demand-driven: nothing prompts for a passphrase at app start,
@@ -29,6 +30,7 @@ export function UnlockDialog({
 	onUnlocked?: () => void;
 }) {
 	const { unlock, lockedByTimeout } = useKeyring();
+	const cryptoAvailable = webCryptoAvailable();
 	const [passphrase, setPassphrase] = useState("");
 	const [remember, setRemember] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export function UnlockDialog({
 	}, []);
 
 	async function submit(): Promise<void> {
-		if (busy || !passphrase) return;
+		if (busy || !passphrase || !webCryptoAvailable()) return;
 		setBusy(true);
 		setError(null);
 		try {
@@ -157,13 +159,13 @@ export function UnlockDialog({
 								</div>
 							</div>
 
-							{error && (
+							{(!cryptoAvailable || error) && (
 								<p
 									role="alert"
 									data-testid="e2e-unlock-error"
 									className="text-sm text-destructive"
 								>
-									{error}
+									{!cryptoAvailable ? m.e2e_browser_crypto_required() : error}
 								</p>
 							)}
 
@@ -171,7 +173,7 @@ export function UnlockDialog({
 								type="button"
 								className="self-end"
 								data-testid="e2e-unlock-submit"
-								disabled={busy || !passphrase}
+								disabled={busy || !passphrase || !cryptoAvailable}
 								onClick={() => void submit()}
 							>
 								{busy ? m.e2e_unlock_working() : m.e2e_unlock_submit()}
@@ -186,6 +188,7 @@ export function UnlockDialog({
 								type="button"
 								data-testid="e2e-use-recovery"
 								className="self-start text-sm underline underline-offset-4"
+								disabled={!cryptoAvailable}
 								onClick={() => setRecovering(true)}
 							>
 								{m.e2e_unlock_use_recovery()}

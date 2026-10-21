@@ -20,7 +20,9 @@ import {
 import { cn } from "@/lib/utils";
 import { m } from "../../../paraglide/messages.js";
 import { useSyncStatus } from "../../hooks/useSyncStatus.ts";
+import { syncEndpointDetail } from "../../lib/sync-endpoint.ts";
 import type { SyncPhase } from "../../lib/sync-status.ts";
+import { useSyncEndpoint } from "../../lib/zero.tsx";
 import { retireZeroClients } from "../../lib/zero-lifecycle.ts";
 
 // Distinct shapes per state so color is never the only carrier.
@@ -96,6 +98,10 @@ export function SyncIndicator({
 	placement: "sidebar" | "header";
 }) {
 	const { phase, pending, dismissRejection } = useSyncStatus();
+	const endpoint = useSyncEndpoint();
+	const endpointDetail = endpoint
+		? syncEndpointDetail(endpoint, window.location.href)
+		: null;
 	const [open, setOpen] = useState(false);
 	const [pinned, setPinned] = useState(false);
 	const [signingIn, setSigningIn] = useState(false);
@@ -202,6 +208,17 @@ export function SyncIndicator({
 							{state.title()}
 						</PopoverTitle>
 						<PopoverDescription>{state.detail()}</PopoverDescription>
+						{endpointDetail && (
+							<div className="space-y-1 text-xs text-muted-foreground wrap-anywhere">
+								<p>{m.sync_address({ address: endpointDetail.address })}</p>
+								{endpointDetail.problem === "mixed-content" && (
+									<p>{m.sync_address_mixed_content()}</p>
+								)}
+								{endpointDetail.problem === "localhost" && (
+									<p>{m.sync_address_localhost()}</p>
+								)}
+							</div>
+						)}
 					</PopoverHeader>
 					{showCount && (
 						<p

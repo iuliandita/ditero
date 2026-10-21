@@ -13,6 +13,7 @@ import { Input } from "../components/ui/input.tsx";
 import { authClient } from "../lib/auth-client.ts";
 import { authErrorMessage } from "../lib/auth-messages.ts";
 import { signInEmail } from "../lib/email-sign-in.ts";
+import { passkeysAvailable } from "../lib/secure-context.ts";
 import {
 	runAfterZeroRetirement,
 	ZeroRetirementError,
@@ -95,6 +96,10 @@ export function Login({ callbackURL }: { callbackURL?: string } = {}) {
 	}
 
 	function signInPasskey() {
+		if (!passkeysAvailable("get")) {
+			setError(m.auth_passkey_unavailable());
+			return;
+		}
 		void runAction(async () => {
 			const res = await authClient.signIn.passkey();
 			if (res.error)

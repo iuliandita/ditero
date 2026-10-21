@@ -214,6 +214,10 @@ export function useAttachmentGate(
 			);
 			return;
 		}
+		if (caught instanceof AttachmentUploadError && caught.status === 413) {
+			setError(m.attachment_error_server_limit());
+			return;
+		}
 		if (typeof navigator !== "undefined" && !navigator.onLine) {
 			setError(m.attachment_error_offline());
 			return;

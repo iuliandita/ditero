@@ -50,6 +50,11 @@ function createZeroClient(
 }
 type ZeroClient = ReturnType<typeof createZeroClient>;
 
+const SyncEndpointContext = createContext<string | null>(null);
+export function useSyncEndpoint(): string | null {
+	return useContext(SyncEndpointContext);
+}
+
 const SyncTrackerContext = createContext<SyncTracker | null>(null);
 const ExportBoundaryContext = createContext<ReturnType<
 	typeof createExportBoundary
@@ -78,6 +83,7 @@ export function AppZeroProvider({
 }) {
 	const [client, setClient] = useState<{
 		zero: ZeroClient;
+		endpoint: string;
 		tracker: SyncTracker;
 		exportBoundary: ReturnType<typeof createExportBoundary>;
 	} | null>(null);
@@ -181,7 +187,12 @@ export function AppZeroProvider({
 							onAuthRejected: tracker.setAuthRejected,
 						},
 					);
-					return { zero: instance, tracker, exportBoundary: boundary };
+					return {
+						zero: instance,
+						tracker,
+						exportBoundary: boundary,
+						endpoint: config.zeroURL,
+					};
 				},
 				() => cancelled,
 			);
@@ -228,7 +239,9 @@ export function AppZeroProvider({
 		<ZeroProvider zero={client.zero}>
 			<SyncTrackerContext.Provider value={client.tracker}>
 				<ExportBoundaryContext.Provider value={client.exportBoundary}>
-					{children}
+					<SyncEndpointContext.Provider value={client.endpoint}>
+						{children}
+					</SyncEndpointContext.Provider>
 				</ExportBoundaryContext.Provider>
 			</SyncTrackerContext.Provider>
 		</ZeroProvider>

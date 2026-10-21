@@ -285,14 +285,17 @@ describe("uploadAttachment", () => {
 	});
 
 	test.each([
-		[413, "file-too-large"],
-		[409, "quota-exceeded"],
-		[409, "rotation-required"],
-		[409, "key-unavailable"],
-	] as const)("preserves a %s reserve failure as %s", async (status, reason) => {
+		[413, "file-too-large", "file-too-large"],
+		[413, "file-too-large", "<html>Request Entity Too Large</html>"],
+		[413, "file-too-large", ""],
+		[413, "file-too-large", '{"error":"limit"}'],
+		[409, "quota-exceeded", "quota-exceeded"],
+		[409, "rotation-required", "rotation-required"],
+		[409, "key-unavailable", "key-unavailable"],
+	] as const)("preserves a %s reserve failure as %s", async (status, reason, body) => {
 		const fetcher = vi.fn(async (input: RequestInfo | URL) =>
 			String(input) === "/api/attachments/reserve"
-				? new Response(reason, { status })
+				? new Response(body, { status })
 				: Response.json({ state: "aborted" }),
 		);
 		const failure = await uploadAttachment(

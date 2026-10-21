@@ -757,8 +757,8 @@
 	"reminder_acked": "تم تأكيد الاستلام",
 	"reminder_failed": "فشل التذكير",
 	"reminder_expired": "انتهت صلاحية التذكير",
-	"reminder_ack_aria": "{status}. تأكيد استلام التذكير",
-	"reminder_ack_chip": "{status} - تأكيد",
+	"reminder_ack_aria": "{status}. إكمال المهمة",
+	"reminder_ack_chip": "{status} - إكمال المهمة",
 	"reminder_channel_unverified": "قناة التسليم غير مُتحقق منها",
 	"reminder_urgent_label": "ذكّر حتى أثناء ساعات الهدوء",
 	"reminder_override_defaults": "استخدم تذكيرات مخصصة لهذه المهمة",
@@ -2095,6 +2095,12 @@
 			}
 		}
 	],
+	"attachment_error_server_limit": "حجم الملف أكبر مما يسمح به الخادم أو الوكيل.",
+	"sync_address": "عنوان المزامنة: {address}",
+	"sync_address_mixed_content": "لا يمكن لصفحة HTTPS هذه الاتصال بعنوان مزامنة HTTP. اضبط عنوان مزامنة HTTPS.",
+	"sync_address_localhost": "يشير عنوان المزامنة هذا إلى هذا الجهاز. اضبط عنوانًا يمكن الوصول إليه من جميع الأجهزة.",
+	"e2e_browser_crypto_required": "يتطلب التشفير HTTPS أو localhost ومتصفحًا يدعم Web Crypto.",
+	"auth_passkey_unavailable": "تتطلب مفاتيح المرور HTTPS أو localhost ومتصفحًا يدعم WebAuthn.",
 	"attachment_empty": "لا توجد ملفات بعد.",
 	"attachment_dropzone_hint": "أفلت الملفات هنا أو استخدم إضافة ملف.",
 	"attachment_dropzone_active": "أفلت للإرفاق.",
