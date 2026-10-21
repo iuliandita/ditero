@@ -105,12 +105,18 @@ jobs:
           bun run i18n:compile
           bunx vite build
           (cd apps/desktop && bun run build)
+      - name: Harness typecheck
+        if: runner.os == 'Linux'
+        run: bunx tsc --ignoreConfig --noEmit --target es2023 --module nodenext --moduleResolution nodenext --allowImportingTsExtensions --strict --skipLibCheck --types node apps/desktop/tests/journeys/*.ts
       - name: Native formatting and lifecycle
         working-directory: apps/desktop/src-tauri
         run: |
           set -euo pipefail
           cargo fmt --check
           cargo test --locked --target "$DESKTOP_TARGET"
+      - name: Prove pending-handshake close regression
+        if: runner.os == 'Linux'
+        run: python3 apps/desktop/tests/journeys/verify-close.py
       - name: Build development installer
         working-directory: apps/desktop
         run: |
