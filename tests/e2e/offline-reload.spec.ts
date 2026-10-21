@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import { Pool } from "pg";
 import {
 	goToSettings,
@@ -266,3 +266,232 @@ for (const status of [401, 403]) {
 		}
 	});
 }
+
+test("a session issued during another tab sign-out cannot restore signed-out identity", async ({
+	page,
+	context,
+}) => {
+	test.setTimeout(120000);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	const id = await signUp(page, uniqueEmail("cross-tab-sign-out"));
+	await waitWorkspaceReady(page);
+	await cachePublicShell(page);
+	const other = await context.newPage();
+	await other.setViewportSize({ width: 1440, height: 900 });
+	await other.goto("/");
+	await waitWorkspaceReady(other);
+	await goToSettings(page);
+	let sendSignout!: () => void,
+		signoutArrived!: () => void,
+		signedOut!: () => void,
+		finishSignout!: () => void;
+	const send = new Promise<void>((r) => (sendSignout = r)),
+		arrived = new Promise<void>((r) => (signoutArrived = r)),
+		committed = new Promise<void>((r) => (signedOut = r)),
+		finish = new Promise<void>((r) => (finishSignout = r));
+	await page.route("**/api/auth/sign-out", async (route) => {
+		signoutArrived();
+		await send;
+		const response = await route.fetch();
+		expect(response.status()).toBe(200);
+		signedOut();
+		await finish;
+		await route.fulfill({ response });
+	});
+	await other.evaluate(() => {
+		window.addEventListener("storage", (e) => {
+			if (e.key === "ditero.browser-session.v1" && e.newValue === null)
+				sessionStorage.setItem("removed", "true");
+		});
+	});
+	await page.getByTestId("sign-out").click();
+	await arrived;
+	await expect
+		.poll(() => other.evaluate(() => sessionStorage.getItem("removed")))
+		.toBe("true");
+	let captured!: () => void, release!: () => void;
+	const capture = new Promise<void>((r) => (captured = r)),
+		held = new Promise<void>((r) => (release = r));
+	await other.route("**/api/auth/get-session**", async (route) => {
+		const response = await route.fetch();
+		expect((await response.json()).user.id).toBe(id);
+		captured();
+		await held;
+		await route.fulfill({ response });
+	});
+	await other.evaluate(() => window.dispatchEvent(new Event("online")));
+	await capture;
+	sendSignout();
+	await committed;
+	await context.setOffline(true);
+	const signoutReceived = page.waitForResponse(
+		(r) => new URL(r.url()).pathname === "/api/auth/sign-out",
+	);
+	finishSignout();
+	await signoutReceived;
+	await expect(page.getByRole("alert")).toContainText("Connect to the server");
+	expect(
+		await other.evaluate(() =>
+			localStorage.getItem("ditero.browser-session.v1"),
+		),
+	).toBeNull();
+	const sessionReceived = other.waitForResponse(
+		(r) => new URL(r.url()).pathname === "/api/auth/get-session",
+	);
+	release();
+	try {
+		await sessionReceived;
+		await expect(other.getByTestId("signin")).toBeVisible();
+		await expect
+			.poll(() =>
+				other.evaluate(() => localStorage.getItem("ditero.browser-session.v1")),
+			)
+			.toBeNull();
+		await other.unroute("**/api/auth/get-session**");
+		await expectOfflineRefused(other);
+	} finally {
+		release();
+		sendSignout();
+		finishSignout();
+		await context.setOffline(false);
+		await other.close();
+	}
+});
+
+test("a sync outage preserves accepted edits across reload while the browser stays online", async ({
+	page,
+	context,
+}) => {
+	test.setTimeout(120000);
+	await context.addInitScript(installPersistenceControls);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	let blocked = false;
+	const sockets: WebSocketRoute[] = [];
+	await page.routeWebSocket(/\/sync\/v\d+\/connect/, (ws) => {
+		sockets.push(ws);
+		if (!blocked) ws.connectToServer();
+	});
+	await signUp(page, uniqueEmail("sync-outage"));
+	await waitWorkspaceReady(page);
+	await page.getByTestId("sidebar-create").click();
+	await page.getByTestId("sidebar-new-list").click();
+	await page.getByTestId("new-list").fill("Sync outage list");
+	await page.getByTestId("new-list-submit").click();
+	await sidebarLists(page)
+		.getByRole("button", { name: "Sync outage list", exact: true })
+		.last()
+		.click();
+	const control = `Persisted server-offline control ${crypto.randomUUID()}`;
+	await page.evaluate((marker) => {
+		window.__zeroCloseControls.marker = marker;
+	}, control);
+	await page.getByTestId("new-task").fill(control);
+	await page.getByTestId("new-task-submit").click();
+	await expect(page.getByTestId("sync-indicator")).toHaveAttribute(
+		"data-phase",
+		"synced",
+	);
+	await expect
+		.poll(
+			() =>
+				page.evaluate(() => window.__zeroCloseControls.completedTransactions),
+			{ timeout: 30000 },
+		)
+		.toBeGreaterThan(0);
+	const queued = `Queued while navigator online ${crypto.randomUUID()}`;
+	await page.evaluate(holdIdlePersistence, queued);
+	blocked = true;
+	for (const ws of sockets)
+		ws.close({ code: 1011, reason: "server temporarily unavailable" });
+	await expect(page.getByTestId("sync-indicator")).toHaveAttribute(
+		"data-phase",
+		"offline",
+		{ timeout: 30000 },
+	);
+	expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+	await page.getByTestId("new-task").fill(queued);
+	await page.getByTestId("new-task-submit").click();
+	await expect(
+		page.getByTestId("list").getByText(queued, { exact: true }),
+	).toBeVisible();
+	await expect
+		.poll(() => page.evaluate(() => window.__zeroCloseControls.idleRequests))
+		.toBeGreaterThan(0);
+	await expect
+		.poll(() =>
+			page.evaluate(() => window.__zeroCloseControls.completedTransactions),
+		)
+		.toBeGreaterThan(0);
+	expect(await serverHasTask(queued)).toBe(false);
+	await page.reload();
+	await waitWorkspaceReady(page);
+	await sidebarLists(page)
+		.getByRole("button", { name: "Sync outage list", exact: true })
+		.last()
+		.click();
+	await expect(
+		page.getByTestId("list").getByText(control, { exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByTestId("list").getByText(queued, { exact: true }),
+	).toBeVisible();
+	expect(await serverHasTask(queued)).toBe(false);
+	blocked = false;
+	for (const ws of sockets) ws.close();
+	await expect.poll(() => serverHasTask(queued), { timeout: 30000 }).toBe(true);
+});
+
+test("a config failure cannot hide a later real token refusal", async ({
+	page,
+	context,
+}) => {
+	test.setTimeout(90000);
+	const id = await signUp(page, uniqueEmail("late-token-refusal"));
+	await waitWorkspaceReady(page);
+	await cachePublicShell(page);
+	let release!: () => void, gotToken!: () => void;
+	const held = new Promise<void>((r) => (release = r)),
+		captured = new Promise<void>((r) => (gotToken = r));
+	await page.route("**/api/config", (r) =>
+		r.fulfill({
+			status: 503,
+			contentType: "application/json",
+			body: JSON.stringify({ error: "temporary config outage" }),
+		}),
+	);
+	await page.route("**/api/auth/token", async (route) => {
+		const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+		try {
+			await pool.query("delete from session where user_id=$1", [id]);
+		} finally {
+			await pool.end();
+		}
+		const response = await route.fetch();
+		expect(response.status()).toBe(401);
+		gotToken();
+		await held;
+		await route.fulfill({ response });
+	});
+	await page.reload();
+	await captured;
+	await expect(page.getByRole("alert")).toBeVisible();
+	const received = page.waitForResponse(
+		(r) => new URL(r.url()).pathname === "/api/auth/token",
+	);
+	release();
+	await received;
+	await expect
+		.poll(() =>
+			page.evaluate(() => localStorage.getItem("ditero.browser-session.v1")),
+		)
+		.toBeNull();
+	await page.unroute("**/api/config");
+	await page.unroute("**/api/auth/token");
+	try {
+		await context.setOffline(true);
+		await expectOfflineRefused(page);
+	} finally {
+		release();
+		await context.setOffline(false);
+	}
+});

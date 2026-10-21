@@ -128,7 +128,6 @@ export function AppZeroProvider({
 		let stopAuthRefresh: (() => void) | undefined;
 		let stopConnectionWatch: (() => void) | undefined;
 		let stopExportWatch: (() => void) | undefined;
-		let stopDurability: (() => void) | undefined;
 		let exportBoundary: ReturnType<typeof createExportBoundary> | undefined;
 		let cancelled = false;
 		void (async () => {
@@ -136,9 +135,16 @@ export function AppZeroProvider({
 			if (offline && runtime.kind !== "browser")
 				throw new Error("Offline bootstrap is browser-only");
 			if (!offline) await runtime.bootstrap();
+			const checkRefusal = (error: unknown): never => {
+				if (runtime.kind === "browser") rejectBrowserSession(error, userID);
+				throw error;
+			};
 			const [config, token] = offline
 				? [null, undefined]
-				: await Promise.all([runtime.fetchConfig(), runtime.getAuth()]);
+				: await Promise.all([
+						runtime.fetchConfig().catch(checkRefusal),
+						runtime.getAuth().catch(checkRefusal),
+					]);
 			const created = await createAfterZeroRetirement(
 				() => {
 					const instance = createZeroClient(
@@ -147,8 +153,14 @@ export function AppZeroProvider({
 						config?.zeroURL ?? null,
 						storageScope,
 					);
-					if (runtime.kind === "browser")
-						stopDurability = protectOfflineEdits(instance);
+					if (runtime.kind === "browser") {
+						const stopDurability = protectOfflineEdits(instance);
+						const close = instance.close.bind(instance);
+						instance.close = async (...args) => {
+							await close(...args);
+							stopDurability();
+						};
+					}
 					owner = registerZeroClient(
 						userID,
 						instance,
@@ -156,7 +168,6 @@ export function AppZeroProvider({
 							stopAuthRefresh?.();
 							stopConnectionWatch?.();
 							stopExportWatch?.();
-							stopDurability?.();
 							exportBoundary?.dispose();
 						},
 						() => cancelled,

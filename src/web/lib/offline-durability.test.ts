@@ -26,7 +26,11 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-it("flushes each accepted offline commit without idle scheduling and warns until the latest commit is durable", async () => {
+it.each([
+	false,
+	true,
+])("flushes accepted commits and warns until durable when navigator.onLine is %s", async (online) => {
+	network.onLine = online;
 	let finish!: () => void;
 	const persist = vi.fn(
 		() =>
@@ -55,7 +59,7 @@ it("flushes each accepted offline commit without idle scheduling and warns until
 	expect(unload()).toBe(false);
 });
 
-it("retains the unload warning on disk failure, retries on hiding, and flushes online edits when going offline", async () => {
+it("retains the unload warning on disk failure, retries on hiding, and flushes online edits without a network event", async () => {
 	vi.spyOn(console, "error").mockImplementation(() => {});
 	const persist = vi
 		.fn(async () => {})
@@ -87,7 +91,7 @@ it("retains the unload warning on disk failure, retries on hiding, and flushes o
 	documentEvents.visibilityState = "visible";
 	const priorCalls = persist.mock.calls.length;
 	await zero.mutate().client;
-	expect(persist).toHaveBeenCalledTimes(priorCalls);
+	expect(persist).toHaveBeenCalledTimes(priorCalls + 1);
 	network.onLine = false;
 	browser.dispatchEvent(new Event("offline"));
 	await vi.waitFor(() => expect(persist).toHaveBeenCalledTimes(priorCalls + 1));

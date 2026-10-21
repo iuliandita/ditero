@@ -30,7 +30,7 @@ export function protectOfflineEdits(zero: {
 		void flush().catch(console.error);
 	};
 	const beforeUnload = (event: BeforeUnloadEvent) => {
-		if (!navigator.onLine && (pending > 0 || durable < revision)) {
+		if (pending > 0 || durable < revision) {
 			// The browser owns the warning text; asynchronous IDB cannot block unload.
 			event.preventDefault();
 			event.returnValue = "";
@@ -52,8 +52,7 @@ export function protectOfflineEdits(zero: {
 			.then(async (value) => {
 				if (mutationResultFailure(value) === null) {
 					revision++;
-					if (!navigator.onLine || document.visibilityState === "hidden")
-						await flush().catch(console.error);
+					await flush().catch(console.error);
 				}
 				return value;
 			})

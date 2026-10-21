@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "84de130a90af68316fec381c189290efc7d3ad90848b2f8066b6e568babc61a6",
+			"sourceDigest": "8ee3d9df15a4695c0cf36a47e05c3614292ce39895158cb4248736d8b44f5a1a",
 			"docs": ["README.md"],
-			"note": "Document expiry-bound browser offline reload, generation-fenced sign-out and account changes, startup and sync refusal invalidation, prompt offline persistence, the unsaved-changes warning, and public precache matching across Origin variations. Native authentication, Zero account storage identity, and persisted formats are unchanged."
+			"note": "Document expiry-bound browser offline reload, generation-fenced sign-out and account changes, startup and sync refusal invalidation, cross-tab persistent generation checks, independent concurrent startup refusal handling, prompt persistence regardless of browser connectivity, the unsaved-changes warning through failed retirement, and public precache matching across Origin variations. Native authentication and Zero account storage formats are unchanged; browser identity evidence adds a shared invalidation marker."
 		},
 		"release": {
 			"sourceDigest": "6fd453f7ff28723194269729180ddca4848233c1a81e406f0da7c97d19c04561",
@@ -45,7 +45,7 @@
 		"compatibility": {
 			"sourceDigest": "774bbe6163ca9a4341c7aaf01b16745b79f74f60370fb88af80a4b32c9ace108",
 			"docs": ["docs/runbooks/backup-restore.md"],
-			"note": "Expose the existing locked Zero persistence operation and flush accepted offline edits promptly, retaining an unload warning until writes are durable. Browser startup and sync refusals invalidate cached account evidence. Persisted storage formats and native authentication and lifecycle behavior are unchanged.",
+			"note": "Expose the existing locked Zero persistence operation and flush accepted edits regardless of browser connectivity, retaining the unload warning through failed retirement until writes are durable. Browser identity evidence adds a shared generation marker that fences delayed cross-tab session responses. Independent startup refusals invalidate evidence even after another concurrent operation fails. Zero stores and native authentication and lifecycle behavior are unchanged.",
 			"upgrade": "Deploy the application update without schema, blob or key conversion; runtime TEMP grants are unnecessary. No schema or ciphertext migration is required; restart the application with the updated image. Before upgrading, provision the filesystem directory when attachments are enabled and retain the existing authentication secret. Run the additive membership-leave migration before deploying the application that exposes Leave workspace.",
 			"backup": "Keep the existing coordinated database and blob backups; ciphertext and key envelopes are unchanged. The existing database and attachment backup procedure remains applicable without changes. Back up the database, attachment ciphertext, field keys, and authentication secret as a matching recovery set. Keep coordinated database and attachment backups; existing rows, ciphertext and key envelopes are unchanged.",
 			"rollback": "The previous application remains data-compatible but restores the TEMP dependency and foreign attachment 403 response. The prior application can use the same database and attachment objects; no format changes occur. Restore matching database and secret backups or reverse authentication-secret rotation while all replicas are stopped. The previous application can retain the additive migration; do not overwrite newer membership changes with an older database.",

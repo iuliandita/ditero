@@ -95,11 +95,13 @@ changes. Leaving and owner removal both require remaining members to rotate file
 ## Browser Offline Reload Upgrade
 
 Upgrade the web build to apply sign-out and refusal fencing, public-shell cache matching,
-and prompt persistence of offline edits. Client storage, server rows and attachment formats
-are unchanged; no conversion is required. Keep the coordinated database, attachment and secret
-backup described above. Device-only queued edits are not included in server backups: reconnect
-and let them sync before clearing browser storage. If the browser warns about unsaved offline
-changes on reload, stay on the page and allow local storage to finish or recover.
+and prompt persistence of accepted edits even during a sync outage with browser connectivity.
+Browser identity evidence gains a shared generation marker; Zero stores, server rows and
+attachment formats are unchanged; no conversion is required. Keep the coordinated database,
+attachment and secret backup described above. Device-only queued edits are not included in server backups: reconnect
+and let them sync before clearing browser storage. If the browser warns about unsaved
+changes on reload, stay on the page and allow local storage to finish or recover. The warning
+remains active after failed account retirement and clears after a successful save and close.
 
 Application rollback does not require a database restore, but older web clients lose these
 reload safeguards. Existing native client versions retain their own authentication and lifecycle

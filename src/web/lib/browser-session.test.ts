@@ -43,7 +43,7 @@ it("persists only the selected account identity and removes it on revocation or 
 		removeItem: (key: string) => values.delete(key),
 	});
 	rememberBrowserSession(identity);
-	expect(JSON.parse(values.get(BROWSER_SESSION_KEY) ?? "null")).toEqual(
+	expect(JSON.parse(values.get(BROWSER_SESSION_KEY) ?? "null")).toMatchObject(
 		identity,
 	);
 	expect(readBrowserSession()).toEqual(identity);

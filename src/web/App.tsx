@@ -8,6 +8,7 @@ import { useUserPref } from "./hooks/useUserPref.ts";
 import { authClient } from "./lib/auth-client.ts";
 import {
 	BROWSER_SESSION_CHANGED,
+	BROWSER_SESSION_GENERATION_KEY,
 	BROWSER_SESSION_KEY,
 	canRestoreBrowserSession,
 	isSessionRefusal,
@@ -51,7 +52,12 @@ function Routes() {
 	useEffect(() => {
 		const changed = () => setIdentity(readBrowserSession());
 		const storage = (event: StorageEvent) => {
-			if (event.key === BROWSER_SESSION_KEY || event.key === null) changed();
+			if (
+				event.key === BROWSER_SESSION_KEY ||
+				event.key === BROWSER_SESSION_GENERATION_KEY ||
+				event.key === null
+			)
+				changed();
 		};
 		const connected = () => {
 			setOnline(true);

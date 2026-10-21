@@ -10,6 +10,11 @@ import { browserZeroRuntime } from "./zero-runtime.ts";
 const fixture = vi.hoisted(() => ({
 	effects: [] as (() => (() => void) | undefined)[],
 	created: [] as Record<string, unknown>[],
+	instances: [] as {
+		mutate: () => { client: Promise<unknown> };
+		persist: ReturnType<typeof vi.fn<() => Promise<void>>>;
+	}[],
+	persist: vi.fn(async () => {}),
 	watchAuth: vi.fn(),
 	close: vi.fn(async () => {}),
 }));
@@ -29,13 +34,14 @@ vi.mock("@rocicorp/zero", () => ({
 			server: new Promise(() => {}),
 		});
 		close = fixture.close;
-		persist = vi.fn(async () => {});
+		persist = fixture.persist;
 		connection = {
 			state: { current: { name: "disconnected" }, subscribe: () => () => {} },
 		};
 		constructor(options: Record<string, unknown>) {
 			this.userID = options.userID as string;
 			fixture.created.push(options);
+			fixture.instances.push(this);
 		}
 	},
 }));
@@ -58,6 +64,7 @@ afterEach(async () => {
 	await retireZeroClients();
 	fixture.effects = [];
 	fixture.created = [];
+	fixture.instances = [];
 	vi.clearAllMocks();
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
@@ -185,6 +192,75 @@ it("removes cached identity on each Zero auth refusal signal without clearing a 
 			expect(readBrowserSession()?.userId).toBe("account-b");
 		}
 	} finally {
+		cleanup?.();
+	}
+});
+
+it.each([
+	"/api/config",
+	"/api/auth/token",
+])("invalidates a delayed auth refusal even after %s fails first", async (early) => {
+	browserFixture();
+	const late = early === "/api/config" ? "/api/auth/token" : "/api/config";
+	let release!: (response: Response) => void;
+	vi.stubGlobal(
+		"fetch",
+		vi.fn((path: string) => {
+			if (path === late)
+				return new Promise<Response>((resolve) => {
+					release = resolve;
+				});
+			return Promise.resolve(
+				path === early
+					? new Response(null, { status: 503 })
+					: Response.json({}),
+			);
+		}),
+	);
+	AppZeroProvider({
+		userID: "account-a",
+		runtime: browserZeroRuntime,
+		children: null,
+	});
+	const cleanup = fixture.effects[0]();
+	try {
+		await vi.waitFor(() =>
+			expect(console.error).toHaveBeenCalledWith(
+				"Zero startup failed",
+				expect.any(Error),
+			),
+		);
+		expect(readBrowserSession()?.userId).toBe("account-a");
+		release(new Response(null, { status: 401 }));
+		await vi.waitFor(() => expect(readBrowserSession()).toBeNull());
+		expect(fixture.created).toHaveLength(0);
+	} finally {
+		cleanup?.();
+	}
+});
+
+it("keeps unsaved edits protected after failed retirement and removes the warning after a successful retry", async () => {
+	browserFixture();
+	fixture.persist.mockRejectedValue(new Error("disk full"));
+	fixture.close.mockRejectedValueOnce(new Error("disk full"));
+	AppZeroProvider({ userID: "account-a", offline: true, children: null });
+	const cleanup = fixture.effects[0]();
+	const unload = () => {
+		const event = new Event("beforeunload", { cancelable: true });
+		window.dispatchEvent(event);
+		return event.defaultPrevented;
+	};
+	try {
+		await vi.waitFor(() => expect(fixture.instances).toHaveLength(1));
+		await fixture.instances[0].mutate().client;
+		expect(unload()).toBe(true);
+		await expect(retireZeroClients()).rejects.toThrow("disk full");
+		expect(unload()).toBe(true);
+		fixture.persist.mockResolvedValue(undefined);
+		await retireZeroClients();
+		expect(unload()).toBe(false);
+	} finally {
+		fixture.persist.mockResolvedValue(undefined);
 		cleanup?.();
 	}
 });

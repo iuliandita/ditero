@@ -1,6 +1,9 @@
 import {
+	BROWSER_SESSION_CHANGED,
+	BROWSER_SESSION_GENERATION_KEY,
 	BROWSER_SESSION_KEY,
 	browserSessionGeneration,
+	browserSessionStorageGeneration,
 	forgetBrowserSession,
 	invalidateBrowserSessionRequests,
 	isSessionRefusal,
@@ -14,8 +17,14 @@ export function createBrowserSessionFetch(
 	const verifications = new Set<Promise<Response>>();
 	if (typeof window !== "undefined")
 		window.addEventListener("storage", (event) => {
-			if (event.key === BROWSER_SESSION_KEY || event.key === null)
+			if (
+				event.key === BROWSER_SESSION_KEY ||
+				event.key === BROWSER_SESSION_GENERATION_KEY ||
+				event.key === null
+			) {
 				invalidateBrowserSessionRequests();
+				window.dispatchEvent(new Event(BROWSER_SESSION_CHANGED));
+			}
 		});
 	return async (
 		input: RequestInfo | URL,
@@ -32,6 +41,7 @@ export function createBrowserSessionFetch(
 			path.endsWith("/sign-out") || path.endsWith("/delete-user");
 		if (changing) forgetBrowserSession();
 		const epoch = browserSessionGeneration();
+		const storageEpoch = browserSessionStorageGeneration();
 		const clear = () => {
 			if (epoch === browserSessionGeneration()) forgetBrowserSession();
 		};
@@ -62,7 +72,7 @@ export function createBrowserSessionFetch(
 				if (error instanceof TypeError && navigator.onLine) clear();
 				throw error;
 			} finally {
-				if (signingOut && epoch === browserSessionGeneration()) {
+				if (signingOut && storageEpoch === browserSessionStorageGeneration()) {
 					forgetBrowserSession();
 					const signedOutEpoch = browserSessionGeneration();
 					void Promise.allSettled([...verifications]).then(() => {

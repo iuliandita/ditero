@@ -131,3 +131,68 @@ it("an older sign-out cleanup cannot clear a subsequent sign-in", async () => {
 	await Promise.resolve();
 	expect(readBrowserSession()).toEqual(evidence);
 });
+
+it.each([
+	"before",
+	"during",
+])("fences verification started %s another tab signs out, before storage events arrive", async (timing) => {
+	vi.resetModules();
+	const tabASession = await import("./browser-session.ts");
+	const { createBrowserSessionFetch: createTabA } = await import(
+		"./browser-session-fetch.ts"
+	);
+	const tabAWindow = window;
+	let finishSignOut!: (response: Response) => void;
+	const tabA = createTabA(
+		() =>
+			new Promise((resolve) => {
+				finishSignOut = resolve;
+			}),
+	);
+	tabASession.rememberBrowserSession(evidence);
+
+	vi.resetModules();
+	const tabBSession = await import("./browser-session.ts");
+	const { createBrowserSessionFetch: createTabB } = await import(
+		"./browser-session-fetch.ts"
+	);
+	const tabBWindow = Object.assign(new EventTarget(), {
+		location: { origin: "https://example.com" },
+	});
+	vi.stubGlobal("window", tabBWindow);
+	let release!: (response: Response) => void;
+	const tabB = createTabB(
+		() =>
+			new Promise((resolve) => {
+				release = resolve;
+			}),
+	);
+	const pending =
+		timing === "before" ? tabB("/api/auth/get-session") : undefined;
+
+	vi.stubGlobal("window", tabAWindow);
+	const signingOut = tabA("/api/auth/sign-out");
+	vi.stubGlobal("window", tabBWindow);
+	const changed = vi.fn();
+	tabBWindow.addEventListener(tabBSession.BROWSER_SESSION_CHANGED, changed);
+	tabBWindow.dispatchEvent(
+		Object.assign(new Event("storage"), {
+			key: tabBSession.BROWSER_SESSION_KEY,
+		}),
+	);
+	expect(tabBSession.readBrowserSession()).toBeNull();
+	const during =
+		timing === "during" ? tabB("/api/auth/get-session") : undefined;
+
+	vi.stubGlobal("window", tabAWindow);
+	finishSignOut(Response.json({ success: true }));
+	await signingOut;
+	// Tab B has not received the completion's storage event. Its write must
+	// compare the shared generation, even though the identity is already absent.
+	vi.stubGlobal("window", tabBWindow);
+	release(session());
+	expect(await (await (pending ?? during))?.json()).toBeNull();
+	expect(tabBSession.readBrowserSession()).toBeNull();
+	expect(tabASession.readBrowserSession()).toBeNull();
+	expect(changed).toHaveBeenCalled();
+});

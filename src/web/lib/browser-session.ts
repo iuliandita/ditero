@@ -1,7 +1,18 @@
+import { randomId } from "../../domain/random-id.ts";
+
 export class SessionExpiredError extends Error {}
 
 let generation = 0;
-export const browserSessionGeneration = () => generation;
+export function browserSessionStorageGeneration(): string | null {
+	try {
+		return localStorage.getItem(BROWSER_SESSION_GENERATION_KEY) ?? null;
+	} catch {
+		return "unavailable";
+	}
+}
+export function browserSessionGeneration(): string {
+	return `${generation}:${browserSessionStorageGeneration() ?? ""}`;
+}
 export function invalidateBrowserSessionRequests(): void {
 	generation++;
 }
@@ -13,6 +24,8 @@ export type BrowserSessionIdentity = {
 
 // One active account per origin; Zero continues to scope its store by userID.
 export const BROWSER_SESSION_KEY = "ditero.browser-session.v1";
+export const BROWSER_SESSION_GENERATION_KEY =
+	"ditero.browser-session-generation.v1";
 export const BROWSER_SESSION_CHANGED = "ditero-browser-session-changed";
 
 export function readBrowserSession(): BrowserSessionIdentity | null {
@@ -23,7 +36,9 @@ export function readBrowserSession(): BrowserSessionIdentity | null {
 		if (
 			typeof value?.userId !== "string" ||
 			!value.userId ||
-			!Number.isSafeInteger(value.expiresAt)
+			!Number.isSafeInteger(value.expiresAt) ||
+			(value.generation ?? null) !==
+				(localStorage.getItem(BROWSER_SESSION_GENERATION_KEY) ?? null)
 		)
 			return null;
 		return { userId: value.userId, expiresAt: value.expiresAt };
@@ -34,12 +49,19 @@ export function readBrowserSession(): BrowserSessionIdentity | null {
 
 export function rememberBrowserSession(
 	identity: BrowserSessionIdentity | null,
-	epoch = generation,
+	epoch = browserSessionGeneration(),
 ): void {
-	if (epoch !== generation) return;
+	const persistedGeneration = browserSessionStorageGeneration();
+	if (epoch !== browserSessionGeneration()) return;
 	try {
 		if (identity)
-			localStorage.setItem(BROWSER_SESSION_KEY, JSON.stringify(identity));
+			localStorage.setItem(
+				BROWSER_SESSION_KEY,
+				JSON.stringify({
+					...identity,
+					generation: persistedGeneration,
+				}),
+			);
 		else localStorage.removeItem(BROWSER_SESSION_KEY);
 	} catch {
 		// Storage denial disables offline startup; it never creates an identity.
@@ -52,6 +74,12 @@ export function forgetBrowserSession(userId?: string): void {
 	const identity = readBrowserSession();
 	if (userId && identity && identity.userId !== userId) return;
 	invalidateBrowserSessionRequests();
+	try {
+		// Publish every invalidation, even when the identity was already removed.
+		localStorage.setItem(BROWSER_SESSION_GENERATION_KEY, randomId());
+	} catch {
+		// Removing evidence still fails closed if storage cannot accept a fence.
+	}
 	rememberBrowserSession(null);
 }
 
