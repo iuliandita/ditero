@@ -489,6 +489,18 @@ describe("hasUnapprovedAlgorithm", () => {
 		["an unterminated tag", `<a><ds:SignatureMethod Algorithm="${RSA256}`],
 		["a stray less-than", `<a>x < <ds:DigestMethod Algorithm="${DIGEST256}"/>`],
 		["a comment", `<!-- <ds:DigestMethod Algorithm="${DIGEST256}"/> -->`],
+		[
+			"a no-break space ending the name",
+			`<ds:SignatureMethod\u00a0Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>`,
+		],
+		[
+			"a control character in the document",
+			`<a>\u0001</a>${sig(RSA256, DIGEST256)}`,
+		],
+		[
+			"a non-ASCII element name",
+			`<ds:SignatureMethod\u2003x Algorithm="${RSA256}"/>`,
+		],
 		["a CDATA section", `<a><![CDATA[x]]></a>`],
 		["a DOCTYPE", `<!DOCTYPE x [<!ENTITY a "b">]>${sig(RSA256, DIGEST256)}`],
 	])("refuses %s", (_name, xml) => {

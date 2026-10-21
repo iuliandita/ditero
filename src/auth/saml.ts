@@ -263,7 +263,11 @@ export function linkIdentifier(relayState: string): string {
 }
 
 const MAX_RESPONSE_BASE64 = 400_000;
-const WHITESPACE = /\s/;
+// XML whitespace only: JavaScript's \s also matches characters XML parsers treat
+// as part of a name.
+const WHITESPACE = /[ \t\r\n]/;
+const XML_NAME = /^[A-Za-z_][A-Za-z0-9_.-]*(?::[A-Za-z_][A-Za-z0-9_.-]*)?$/;
+const CONTROL_CHARACTER = /\p{Cc}/u;
 const STRONG_ALGORITHMS: ReadonlySet<string> = new Set(
 	[
 		...Object.values(SignatureAlgorithm),
@@ -283,7 +287,7 @@ function readTag(xml: string, from: number): { tag: Tag; end: number } | null {
 	const nameStart = i;
 	while (i < limit && !WHITESPACE.test(xml[i]) && !"/>".includes(xml[i])) i++;
 	const name = xml.slice(nameStart, i);
-	if (!name || name.includes("<") || name.includes("=")) return null;
+	if (!XML_NAME.test(name)) return null;
 	const attributes: Tag["attributes"] = [];
 	for (;;) {
 		while (i < limit && WHITESPACE.test(xml[i])) i++;
@@ -298,7 +302,7 @@ function readTag(xml: string, from: number): { tag: Tag; end: number } | null {
 			i++;
 		const attributeName = xml.slice(attributeStart, i);
 		while (i < limit && WHITESPACE.test(xml[i])) i++;
-		if (!attributeName || xml[i] !== "=") return null;
+		if (!XML_NAME.test(attributeName) || xml[i] !== "=") return null;
 		i++;
 		while (i < limit && WHITESPACE.test(xml[i])) i++;
 		const quote = xml[i];
@@ -327,6 +331,7 @@ export function hasUnapprovedAlgorithm(
 	const compact = samlResponse.replace(/\s+/g, "");
 	if (compact.length > MAX_RESPONSE_BASE64) return true;
 	const xml = Buffer.from(compact, "base64").toString("utf8");
+	if (CONTROL_CHARACTER.test(xml.replace(/[\t\r\n]/g, ""))) return true;
 	if (/<!(?:DOCTYPE|ENTITY|--|\[CDATA\[)/i.test(xml)) return true;
 	if (!checkAlgorithms) return false;
 	let at = xml.indexOf("<");
