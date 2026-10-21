@@ -8,7 +8,10 @@ BEGIN
     OR binding->>'snapshotSha256' !~ '^[0-9a-f]{64}$'
     OR binding->>'provider' NOT IN ('todoist','ticktick','microsoft','trello','generic-csv')
     OR jsonb_typeof(binding->'notices') IS DISTINCT FROM 'array' THEN RETURN false; END IF;
-  IF jsonb_array_length(binding->'notices') > 512 THEN RETURN false; END IF;
+  IF jsonb_array_length(binding->'notices') > 512
+    OR binding->'dateOrder' NOT IN ('null'::jsonb, '"mdy"'::jsonb, '"dmy"'::jsonb)
+    OR (jsonb_typeof(binding->'anchorDay') = 'string' AND binding->>'anchorDay' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+    OR jsonb_typeof(binding->'anchorDay') NOT IN ('string','null') THEN RETURN false; END IF;
   FOREACH key IN ARRAY ARRAY['projectFolderName','unsectionedListName','timezone'] LOOP
     IF jsonb_typeof(binding->key) IS DISTINCT FROM 'string' OR octet_length(binding->>key) NOT BETWEEN 1 AND 500
       OR binding->>key !~ '[^[:space:]]' THEN RETURN false; END IF;
@@ -20,7 +23,8 @@ BEGIN
       OR jsonb_typeof(item->'code') IS DISTINCT FROM 'string'
       OR item->>'code' NOT IN ('unsupported-field','unsupported-date','unsupported-recurrence','flattened-subtasks',
         'duplicate-row','comments-as-notes','people-excluded','attachments-excluded','reminders-disabled',
-        'history-excluded','archive-state','partial-export','completion-unavailable','format-limits','timezone-recurrence','unknown-state')
+        'history-excluded','archive-state','partial-export','completion-unavailable','format-limits','timezone-recurrence','unknown-state',
+        'row-skipped','field-truncated','field-invalid','archived-completed','recurrence-anchor','date-order','private-items','row-ragged')
       THEN RETURN false; END IF;
     IF (item->>'count')::integer > 50000 OR item IS DISTINCT FROM jsonb_build_object('code',item->>'code','path',item->>'path','count',(item->>'count')::integer)
       THEN RETURN false; END IF;
@@ -33,7 +37,8 @@ BEGIN
     AND binding = jsonb_build_object('kind','provider','version',2,'adapter','provider-content','adapterVersion',1,
       'provider',binding->>'provider','sourceNamespace',binding->>'sourceNamespace','identityMode','snapshot-rows',
       'snapshotSha256',binding->>'snapshotSha256','projectFolderName',binding->>'projectFolderName',
-      'unsectionedListName',binding->>'unsectionedListName','timezone',binding->>'timezone','notices',binding->'notices'), false);
+      'unsectionedListName',binding->>'unsectionedListName','timezone',binding->>'timezone',
+      'dateOrder',binding->'dateOrder','anchorDay',binding->'anchorDay','notices',binding->'notices'), false);
 END $$;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION public.import_provider_binding_valid(binding jsonb) RETURNS boolean

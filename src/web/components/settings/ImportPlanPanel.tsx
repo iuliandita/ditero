@@ -33,6 +33,13 @@ import {
 	SelectValue,
 } from "../ui/select.tsx";
 import { ImportApplyPanel } from "./ImportApplyPanel.tsx";
+import {
+	collidingLabelNames,
+	contentError,
+	noticeField,
+	validZone,
+	ZONES,
+} from "./import-content-text.ts";
 
 type Status = {
 	id: string;
@@ -107,6 +114,22 @@ function noticeText(code: NoticeCode): string {
 			return m.import_content_timed_recurrence();
 		case "unknown-state":
 			return m.import_content_unknown_state();
+		case "row-skipped":
+			return m.import_content_row_skipped();
+		case "field-truncated":
+			return m.import_content_field_truncated();
+		case "field-invalid":
+			return m.import_content_field_invalid();
+		case "archived-completed":
+			return m.import_content_archived_completed();
+		case "recurrence-anchor":
+			return m.import_content_recurrence_anchor();
+		case "date-order":
+			return m.import_content_date_order_used();
+		case "private-items":
+			return m.import_content_private_items();
+		case "row-ragged":
+			return m.import_content_row_ragged();
 	}
 }
 
@@ -154,6 +177,15 @@ export function ImportPlanPanel() {
 		() => Intl.DateTimeFormat().resolvedOptions().timeZone,
 	);
 	const contentFormat = contentFormats.some((value) => value === format);
+	const [dateOrder, setDateOrder] = useState<"auto" | "mdy" | "dmy">("auto");
+	const [errorDetail, setErrorDetail] = useState<{
+		code?: string;
+		row?: number;
+	}>({});
+	const zoneTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+		undefined,
+	);
+	const [labels] = useQuery(queries.labels.mine());
 	const [policyAccepted, setPolicyAccepted] = useState(false);
 	const [fileName, setFileName] = useState<string | null>(null);
 	const limitsId = useId();
@@ -248,6 +280,7 @@ export function ImportPlanPanel() {
 			listing.current = null;
 			active.current?.abort();
 			worker.current?.terminate();
+			clearTimeout(zoneTimer.current);
 		};
 	}, [refresh]);
 	function changed() {
@@ -259,12 +292,15 @@ export function ImportPlanPanel() {
 			setPolicyAccepted(false);
 		setReport(null);
 		setError(null);
+		setErrorDetail({});
 	}
 	function selectFile(
 		file: File | undefined,
 		names = { projectFolderName, unsectionedListName },
 		selectedTimezone = timezone,
+		selectedOrder = dateOrder,
 	) {
+		clearTimeout(zoneTimer.current);
 		fileRef.current = file;
 		worker.current?.terminate();
 		worker.current = null;
@@ -288,7 +324,12 @@ export function ImportPlanPanel() {
 		worker.current = parser;
 		parser.onmessage = (
 			event: MessageEvent<
-				Loaded | { error: "invalid" | "limit" | "unsupported" | "secure" }
+				| Loaded
+				| {
+						error: "invalid" | "limit" | "unsupported" | "secure";
+						code?: string;
+						row?: number;
+				  }
 			>,
 		) => {
 			if (worker.current !== parser) return;
@@ -297,6 +338,7 @@ export function ImportPlanPanel() {
 			worker.current = null;
 			if ("error" in event.data) {
 				setError(event.data.error);
+				setErrorDetail({ code: event.data.code, row: event.data.row });
 				return;
 			}
 			const result = event.data;
@@ -320,7 +362,13 @@ export function ImportPlanPanel() {
 				worker.current = null;
 			}
 		};
-		parser.postMessage({ file, format, timezone: selectedTimezone, ...names });
+		parser.postMessage({
+			file,
+			format,
+			timezone: selectedTimezone,
+			dateOrder: selectedOrder,
+			...names,
+		});
 	}
 	async function request(
 		path: string,
@@ -451,6 +499,10 @@ export function ImportPlanPanel() {
 		displayedBinding?.adapter === "trello-board-json" ? displayedBinding : null;
 	const contentBinding =
 		displayedBinding?.adapter === "provider-content" ? displayedBinding : null;
+	const collidingLabels =
+		contentBinding && loaded?.document
+			? collidingLabelNames(loaded.document.data.labels, labels, workspaceMap)
+			: [];
 	const ready =
 		loaded?.document.data.workspaces.every((w) =>
 			writable.some((target) => target.id === workspaceMap[w.id]),
@@ -482,15 +534,32 @@ export function ImportPlanPanel() {
 					{contentBinding ? (
 						<>
 							<p>{m.import_content_policy()}</p>
-							<p>
-								{m.import_todoist_mapping({
-									project: contentBinding.projectFolderName,
-									unsectioned: contentBinding.unsectionedListName,
-								})}
-							</p>
+							{contentBinding.provider === "ticktick" ? (
+								<p>
+									{m.import_content_mapping_list({
+										list: contentBinding.unsectionedListName,
+									})}
+								</p>
+							) : contentBinding.provider !== "trello" ? (
+								<p>
+									{m.import_todoist_mapping({
+										project: contentBinding.projectFolderName,
+										unsectioned: contentBinding.unsectionedListName,
+									})}
+								</p>
+							) : null}
 							<p>
 								{m.import_content_timezone()}: {contentBinding.timezone}
 							</p>
+							{collidingLabels.length > 0 && (
+								<p role="status" data-testid="import-label-collision">
+									{m.import_content_label_collision({
+										names: new Intl.ListFormat(getLocale(), {
+											type: "conjunction",
+										}).format(collidingLabels.slice(0, 10)),
+									})}
+								</p>
+							)}
 							<p className="break-all">
 								{m.import_todoist_snapshot({
 									digest: contentBinding.snapshotSha256,
@@ -507,10 +576,7 @@ export function ImportPlanPanel() {
 											count: new Intl.NumberFormat(getLocale()).format(
 												notice.count,
 											),
-											field:
-												notice.path === "export"
-													? m.import_content_whole_export()
-													: notice.path,
+											field: noticeField(notice.code, notice.path),
 										})}
 									</li>
 								))}
@@ -579,6 +645,7 @@ export function ImportPlanPanel() {
 								)
 									return;
 								setFormat(next as ImportFormat);
+								setDateOrder("auto");
 								if (contentFormats.some((value) => value === next)) {
 									setProjectFolderName(m.import_content_folder_default());
 									setUnsectionedListName(m.import_content_list_default());
@@ -623,27 +690,30 @@ export function ImportPlanPanel() {
 						</Select>
 					)}
 				</Field>
-				{(format === "todoist" || contentFormat) && (
+				{(format === "todoist" ||
+					(contentFormat && format !== "trello-content")) && (
 					<>
-						<Field label={m.import_todoist_project()}>
-							{(labelId) => (
-								<Input
-									aria-labelledby={labelId}
-									data-testid="import-todoist-project"
-									className={trigger}
-									maxLength={500}
-									value={projectFolderName}
-									onChange={(event) => {
-										const value = event.target.value;
-										setProjectFolderName(value);
-										selectFile(fileRef.current, {
-											projectFolderName: value,
-											unsectionedListName,
-										});
-									}}
-								/>
-							)}
-						</Field>
+						{format !== "ticktick" && (
+							<Field label={m.import_todoist_project()}>
+								{(labelId) => (
+									<Input
+										aria-labelledby={labelId}
+										data-testid="import-todoist-project"
+										className={trigger}
+										maxLength={500}
+										value={projectFolderName}
+										onChange={(event) => {
+											const value = event.target.value;
+											setProjectFolderName(value);
+											selectFile(fileRef.current, {
+												projectFolderName: value,
+												unsectionedListName,
+											});
+										}}
+									/>
+								)}
+							</Field>
+						)}
 						<Field label={m.import_todoist_unsectioned()}>
 							{(labelId) => (
 								<Input
@@ -673,21 +743,80 @@ export function ImportPlanPanel() {
 				{contentFormat && (
 					<Field label={m.import_content_timezone()}>
 						{(labelId) => (
-							<Input
-								aria-labelledby={labelId}
-								data-testid="import-content-timezone"
-								className={trigger}
-								value={timezone}
-								maxLength={100}
-								onChange={(event) => {
-									setTimezone(event.target.value);
+							<>
+								<Input
+									aria-labelledby={labelId}
+									data-testid="import-content-timezone"
+									className={trigger}
+									value={timezone}
+									list="import-content-zones"
+									maxLength={100}
+									aria-invalid={!validZone(timezone)}
+									onChange={(event) => {
+										const value = event.target.value;
+										setTimezone(value);
+										clearTimeout(zoneTimer.current);
+										if (validZone(value))
+											zoneTimer.current = setTimeout(
+												() =>
+													selectFile(
+														fileRef.current,
+														{ projectFolderName, unsectionedListName },
+														value,
+													),
+												500,
+											);
+									}}
+								/>
+								<datalist id="import-content-zones">
+									{ZONES.map((zone) => (
+										<option key={zone} value={zone} />
+									))}
+								</datalist>
+								{!validZone(timezone) && (
+									<span role="alert" className="text-xs text-destructive">
+										{m.import_content_timezone_invalid()}
+									</span>
+								)}
+							</>
+						)}
+					</Field>
+				)}
+				{format === "microsoft" && (
+					<Field label={m.import_content_date_order()}>
+						{(labelId) => (
+							<Select
+								value={dateOrder}
+								onValueChange={(value) => {
+									const next = value as "auto" | "mdy" | "dmy";
+									setDateOrder(next);
 									selectFile(
 										fileRef.current,
 										{ projectFolderName, unsectionedListName },
-										event.target.value,
+										timezone,
+										next,
 									);
 								}}
-							/>
+							>
+								<SelectTrigger
+									aria-labelledby={labelId}
+									data-testid="import-content-date-order"
+									className={trigger}
+								>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="auto">
+										{m.import_content_date_order_auto()}
+									</SelectItem>
+									<SelectItem value="mdy">
+										{m.import_content_date_order_mdy()}
+									</SelectItem>
+									<SelectItem value="dmy">
+										{m.import_content_date_order_dmy()}
+									</SelectItem>
+								</SelectContent>
+							</Select>
 						)}
 					</Field>
 				)}
@@ -916,10 +1045,12 @@ export function ImportPlanPanel() {
 										: error === "quota"
 											? m.import_plan_quota()
 											: error === "limit"
-												? m.import_plan_limits()
+												? contentFormat
+													? m.import_content_limits()
+													: m.import_plan_limits()
 												: error === "invalid"
 													? contentFormat
-														? m.import_content_invalid()
+														? contentError(errorDetail)
 														: format === "trello"
 															? m.import_trello_invalid()
 															: format === "todoist"

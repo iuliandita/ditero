@@ -45,6 +45,14 @@ export const NOTICE_CODES = [
 	"format-limits",
 	"timezone-recurrence",
 	"unknown-state",
+	"row-skipped",
+	"field-truncated",
+	"field-invalid",
+	"archived-completed",
+	"recurrence-anchor",
+	"date-order",
+	"private-items",
+	"row-ragged",
 ] as const;
 export type NoticeCode = (typeof NOTICE_CODES)[number];
 export interface ContentNotice {
@@ -52,11 +60,16 @@ export interface ContentNotice {
 	path: string;
 	count: number;
 }
+export type DateOrder = "mdy" | "dmy";
 export interface ContentOptions extends ProviderImportOptions {
 	exportedAt: string;
 	projectFolderName: string;
 	unsectionedListName: string;
 	timezone: string;
+	// Microsoft only: "auto" is resolved from the file or rejected when ambiguous.
+	dateOrder?: DateOrder | "auto" | null;
+	// Todoist only: first occurrence of recurring tasks whose export dropped its start date.
+	anchorDay?: string | null;
 }
 export interface ContentConversion {
 	adapter: typeof CONTENT_ADAPTER;
@@ -68,6 +81,8 @@ export interface ContentConversion {
 	projectFolderName: string;
 	unsectionedListName: string;
 	timezone: string;
+	dateOrder: DateOrder | null;
+	anchorDay: string | null;
 	notices: ContentNotice[];
 	document: PortableExportV1;
 }
@@ -140,26 +155,39 @@ export function flag(value: unknown, fallback = false): boolean {
 		return false;
 	throw new ProviderImportError("invalid-row");
 }
+export interface CsvRow {
+	record: Record<string, string>;
+	// Spreadsheet-style record number: the first record of the file is 1.
+	number: number;
+	short: boolean;
+}
 export function csvRecords(
 	input: Uint8Array,
 	headerStart?: string,
 	options: ProviderImportOptions = {},
+	tolerant = false,
 ) {
 	const checkpoint = providerCheckpoint(options);
-	const rows = parseProviderCsvCells(decodeContent(input), checkpoint, 64);
+	const rows = parseProviderCsvCells(
+		decodeContent(input),
+		checkpoint,
+		64,
+		tolerant,
+	);
 	const start = headerStart
 		? rows.findIndex((row) => row[0] === headerStart)
 		: 0;
 	if (
-		headerStart &&
-		(start > 8 ||
-			rows
-				.slice(0, start)
-				.some(
-					(row) =>
-						row.some(Boolean) &&
-						!/^(Date|Version|Status)(:|$)/.test(row[0] ?? ""),
-				))
+		start < 0 ||
+		(headerStart &&
+			(start > 8 ||
+				rows
+					.slice(0, start)
+					.some(
+						(row) =>
+							row.some(Boolean) &&
+							!/^(Date|Version|Status)(:|$)/.test(row[0] ?? ""),
+					)))
 	)
 		throw new ProviderImportError("invalid-csv");
 	const header = rows[start];
@@ -170,19 +198,30 @@ export function csvRecords(
 			(key) => !key || ["__proto__", "prototype", "constructor"].includes(key),
 		)
 	)
-		throw new ProviderImportError("invalid-csv");
-	return {
-		header,
-		rows: rows
-			.slice(start + 1)
-			.filter((row) => row.some(Boolean))
-			.map((row, index) => {
-				checkpoint();
-				if (row.length !== header.length)
-					throw new ProviderImportError("invalid-csv", start + index + 2);
-				return Object.fromEntries(header.map((key, i) => [key, row[i] ?? ""]));
-			}),
-	};
+		throw new ProviderImportError("invalid-csv", start + 1);
+	const parsed: CsvRow[] = [];
+	// Long rows in tolerant mode cannot be aligned to the header, so callers skip them.
+	const misaligned: number[] = [];
+	for (const [index, row] of rows.slice(start + 1).entries()) {
+		checkpoint();
+		if (!row.some(Boolean)) continue;
+		const number = start + index + 2;
+		if (row.length > header.length && tolerant) {
+			misaligned.push(number);
+			continue;
+		}
+		if (
+			row.length !== header.length &&
+			!(tolerant && row.length < header.length)
+		)
+			throw new ProviderImportError("invalid-csv", number);
+		parsed.push({
+			record: Object.fromEntries(header.map((key, i) => [key, row[i] ?? ""])),
+			number,
+			short: row.length < header.length,
+		});
+	}
+	return { header, rows: parsed, misaligned };
 }
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -203,7 +242,8 @@ function zoneFormatter(zone: string) {
 		} catch {
 			throw new ProviderImportError("invalid-date");
 		}
-		if (formatters.size >= 128) formatters.clear();
+		// Large enough for every IANA zone, so rotating row zones never thrash the cache.
+		if (formatters.size >= 1024) formatters.clear();
 		formatters.set(zone, formatter);
 	}
 	return formatter;
@@ -215,6 +255,18 @@ function wallTime(instant: number, zone: string): string {
 			.map((part) => [part.type, part.value]),
 	);
 	return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+}
+function wallInstants(naive: string, epoch: number, zone: string): number[] {
+	const offsets = new Set(
+		[-86_400_000, 0, 86_400_000].map(
+			(delta) =>
+				Date.parse(`${wallTime(epoch + delta, zone)}Z`) - epoch - delta,
+		),
+	);
+	return [...offsets]
+		.map((offset) => epoch - offset)
+		.filter((instant) => wallTime(instant, zone) === naive)
+		.sort((a, b) => a - b);
 }
 export function contentDate(
 	value: string,
@@ -244,16 +296,19 @@ export function contentDate(
 			throw new ProviderImportError("invalid-date");
 		return { dueAt: new Date(instant).toISOString(), dueAllDay: false };
 	}
+	if (!match[2]) {
+		// A calendar day has no clock: use its first real instant, even when midnight
+		// does not exist in the zone (DST gap) or happens twice.
+		for (let minute = 0; minute <= 300; minute += 30) {
+			const wall = `${day}T${String((minute / 60) | 0).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}:00`;
+			const [first] = wallInstants(wall, Date.parse(`${wall}Z`), zone);
+			if (first !== undefined)
+				return { dueAt: new Date(first).toISOString(), dueAllDay: true };
+		}
+		throw new ProviderImportError("invalid-date");
+	}
 	// Reject gaps and folds rather than silently choosing an instant at a DST transition.
-	const offsets = new Set(
-		[-86_400_000, 0, 86_400_000].map(
-			(delta) =>
-				Date.parse(`${wallTime(epoch + delta, zone)}Z`) - epoch - delta,
-		),
-	);
-	const candidates = [...offsets]
-		.map((offset) => epoch - offset)
-		.filter((instant) => wallTime(instant, zone) === naive);
+	const candidates = wallInstants(naive, epoch, zone);
 	if (candidates.length !== 1) throw new ProviderImportError("invalid-date");
 	return {
 		dueAt: new Date(
@@ -262,7 +317,7 @@ export function contentDate(
 					(/\.(\d+)/.exec(normalized)?.[1] ?? "").padEnd(3, "0").slice(0, 3),
 				),
 		).toISOString(),
-		dueAllDay: !match[2],
+		dueAllDay: false,
 	};
 }
 
@@ -280,12 +335,33 @@ export interface DraftTask {
 	rrule?: string | null;
 	labels?: string[];
 }
+// Failures a single row or value can cause; structural and resource errors stay fatal.
+const ROW_CODES: readonly string[] = ["invalid-row", "field-limit"];
+const FALSE_TEXT = new Set([
+	"false",
+	"FALSE",
+	"False",
+	"N",
+	"n",
+	"0",
+	"0%",
+	"Normal",
+]);
+export const TITLE_LIMIT = 500;
+// Per-row notices keep their location; later ones fold into one "more" entry.
+const LOCATED_LIMIT = 300;
 export class ContentBuilder {
 	readonly checkpoint: () => void;
 	readonly notices: ContentNotice[] = [];
 	readonly tasks = new Map<string, DraftTask>();
 	readonly lists = new Map<string, { title: string; folder: string | null }>();
 	readonly folders = new Map<string, string>();
+	// Location prefix of the row being converted, for example "row:12".
+	at = "";
+	// Resolved by the Microsoft adapter; every other provider leaves it null.
+	dateOrder: DateOrder | null = null;
+	anchorDay: string | null = null;
+	private located = 0;
 	constructor(
 		readonly provider: ContentProvider,
 		readonly options: ContentOptions,
@@ -303,12 +379,73 @@ export class ContentBuilder {
 		const found = this.notices.find(
 			(notice) => notice.code === code && notice.path === path,
 		);
-		if (found) found.count++;
+		if (found) found.count = Math.min(found.count + 1, 50_000);
 		else {
-			if (this.notices.length >= 512)
-				throw new ProviderImportError("row-limit");
-			this.notices.push({ code, path: string(path, 512), count: 1 });
+			// Leave room for one entry per code so the 512 notice bound never fails a file.
+			const shown = this.notices.length >= 480 ? "more" : path;
+			const entry = this.notices.find(
+				(notice) => notice.code === code && notice.path === shown,
+			);
+			if (entry) entry.count = Math.min(entry.count + 1, 50_000);
+			else this.notices.push({ code, path: string(shown, 512), count: 1 });
 		}
+	}
+	// Notice tied to the current row (and optionally one of its fields).
+	noticeAt(code: NoticeCode, field?: string) {
+		if (!this.at) return this.notice(code, field ?? "export");
+		if (this.located >= LOCATED_LIMIT) return this.notice(code, "more");
+		this.located++;
+		this.notice(code, field ? `${this.at}:${field}` : this.at);
+	}
+	// Convert one row; a bad row becomes a located notice instead of failing the file.
+	row(at: string, convert: () => void) {
+		this.at = at;
+		try {
+			convert();
+		} catch (error) {
+			if (!(error instanceof ProviderImportError)) throw error;
+			if (!ROW_CODES.includes(error.code)) throw error;
+			this.noticeAt("row-skipped");
+		} finally {
+			this.at = "";
+		}
+	}
+	skipped(at: string) {
+		this.at = at;
+		this.noticeAt("row-skipped");
+		this.at = "";
+	}
+	// Boolean cell; an unreadable value counts as false and is reported.
+	flag(value: string | undefined, field: string): boolean {
+		try {
+			return flag(value);
+		} catch {
+			this.noticeAt("field-invalid", field);
+			return false;
+		}
+	}
+	// Free text is shortened to the product's character limit instead of failing the file.
+	text(value: string, field: string, max = TITLE_LIMIT): string {
+		let result = value.replaceAll("\u0000", "");
+		if (!result.isWellFormed()) result = result.toWellFormed();
+		const points = [...result];
+		if (points.length > max) {
+			this.noticeAt("field-truncated", field);
+			result = points.slice(0, max).join("");
+		}
+		return result;
+	}
+	// Notes are bounded in bytes by the converted document; cut at a code point boundary.
+	notes(value: string, field: string): string {
+		let result = value.replaceAll("\u0000", "");
+		if (!result.isWellFormed()) result = result.toWellFormed();
+		const limit = PROVIDER_MAX_FIELD_BYTES - 1;
+		const encoder = new TextEncoder();
+		if (encoder.encode(result).byteLength <= limit) return result;
+		this.noticeAt("field-truncated", field);
+		let cut = result.slice(0, limit);
+		while (encoder.encode(cut).byteLength > limit) cut = cut.slice(0, -1);
+		return cut.isWellFormed() ? cut : cut.toWellFormed();
 	}
 	unsupported(row: Record<string, unknown>, supported: readonly string[]) {
 		for (const [key, value] of Object.entries(row)) {
@@ -318,16 +455,17 @@ export class ContentBuilder {
 				value !== null &&
 				value !== undefined &&
 				value !== false &&
+				!(typeof value === "string" && FALSE_TEXT.has(value)) &&
 				(!Array.isArray(value) || value.length)
 			)
 				this.notice("unsupported-field", key);
 		}
 	}
 	list(id: string, title: string, folder: string | null = null) {
-		nonempty(id);
-		nonempty(title);
+		nonempty(id, 4 * TITLE_LIMIT);
+		nonempty(title, 4 * TITLE_LIMIT);
 		if (folder) {
-			nonempty(folder);
+			nonempty(folder, 4 * TITLE_LIMIT);
 			this.folders.set(folder, folder);
 		}
 		const previous = this.lists.get(id);
@@ -339,7 +477,7 @@ export class ContentBuilder {
 	task(task: DraftTask) {
 		this.checkpoint();
 		nonempty(task.id);
-		nonempty(task.title);
+		nonempty(task.title, 4 * TITLE_LIMIT);
 		if (!this.lists.has(task.listId))
 			throw new ProviderImportError("invalid-graph");
 		if (task.notes) string(task.notes, PROVIDER_MAX_FIELD_BYTES - 1);
@@ -357,15 +495,17 @@ export class ContentBuilder {
 		)
 			throw new ProviderImportError("row-limit");
 	}
-	date(value: string, zone = this.options.timezone) {
+	// A date without a time has no zone: it always lands on the importer's calendar day.
+	date(value: string, zone = this.options.timezone, field?: string) {
+		const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
 		try {
-			return contentDate(value, zone);
+			return contentDate(value, dateOnly ? this.options.timezone : zone);
 		} catch {
-			this.notice("unsupported-date");
+			this.noticeAt("unsupported-date", field);
 			return { dueAt: null, dueAllDay: false };
 		}
 	}
-	recurrence(value: string): string | null {
+	recurrence(value: string, field?: string): string | null {
 		if (!value) return null;
 		const simple = new Map([
 			["every day", "FREQ=DAILY"],
@@ -400,13 +540,13 @@ export class ContentBuilder {
 				/* Report the original expression. */
 			}
 		}
-		this.notice("unsupported-recurrence");
+		this.noticeAt("unsupported-recurrence", field);
 		return null;
 	}
-	appendNote(task: DraftTask, note: string) {
+	appendNote(task: DraftTask, note: string, field = "note") {
 		if (!note) return;
-		task.notes = [task.notes, note].filter(Boolean).join("\n\n");
-		string(task.notes, PROVIDER_MAX_FIELD_BYTES - 1);
+		const room = [task.notes, note].filter(Boolean).join("\n\n");
+		task.notes = this.notes(room, field);
 	}
 	async finish(input: Uint8Array): Promise<ContentConversion> {
 		const snapshotSha256 = await todoistSnapshotSha256(input, this.options);
@@ -449,7 +589,7 @@ export class ContentBuilder {
 		const tasks: PortableRows["tasks"][] = [...this.tasks.values()].map(
 			(task, index) => {
 				for (const label of new Set(task.labels ?? [])) {
-					nonempty(label, 500);
+					nonempty(label, 4 * TITLE_LIMIT);
 					labels.set(label, id("label", label));
 					taskLabels.push({
 						id: id("task-label", JSON.stringify([task.id, label])),
@@ -540,7 +680,7 @@ export class ContentBuilder {
 					id: labelId,
 					name,
 					workspaceId: workspace,
-					color: "#64748b",
+					color: "gray",
 				})),
 				taskLabels,
 				assignments: [],
@@ -566,6 +706,8 @@ export class ContentBuilder {
 			projectFolderName: this.options.projectFolderName,
 			unsectionedListName: this.options.unsectionedListName,
 			timezone: this.options.timezone,
+			dateOrder: this.dateOrder,
+			anchorDay: this.anchorDay,
 			notices: this.notices,
 			document,
 		};

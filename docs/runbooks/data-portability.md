@@ -52,22 +52,35 @@ normal task notification policy after activation.
 
 | Picker | Supported source and mapping | Limits shown in preview |
 | --- | --- | --- |
-| Todoist with content | One project CSV: sections become lists under the chosen folder; titles, descriptions, priorities, `@labels`, note rows, indentation and explicit dates are converted. | Todoist CSV has no completion state, so tasks are open. Natural-language dates, deadlines, durations, authors and view settings are excluded. English `every day/week/month/year/weekday starting YYYY-MM-DD` can retain all-day recurrence. |
-| TickTick | A backup CSV with `Folder Name,List Name,Title` and `taskId,parentId` columns: folders, list/column placement, notes, tags, priorities, dates, completion and checklist children are converted. | This adapter targets the backup CSV layout, not TickTick API JSON. Archived/canceled distinctions, reminders, rich task kinds, source timestamps and provider-specific repeat expressions are not retained. Backup status 1 means completed. Status 2 is archived; it is completed only when a completion timestamp is present, otherwise it is imported open with a notice. This differs from the API status convention. |
-| Microsoft To Do | An English classic Outlook Tasks CSV, one task folder at a time: subject, notes, categories, importance, status, due date and completion date are converted. Enter the original list name. | To Do account export is a mailbox PST, which this adapter cannot read. Outlook CSV can omit steps, recurrence, reminders, other lists and records outside its selected date range. No missing content is inferred. Dates use month/day/year. Progress, waiting and deferred states become open with an explicit notice. Localized Outlook headers require conversion to the generic contract. |
-| Trello with content | One board JSON: board becomes a folder, lists become lists, cards become tasks, checklist items become children, labels and dates are retained. `dueComplete` supplies completion; `closed` is archive state. Comment text is appended to notes. | JSON may contain only 1,000 recent actions/comments. Comments lose authorship; activity, members, attachments, board descriptions, checklist headings, custom fields, colors and other metadata are reported as excluded. Template and special-role cards are refused. CSV, workspace ZIP and account completeness are not supported. |
+| Todoist with content | One project CSV: sections become lists under the chosen folder; titles, descriptions, priorities, `@labels`, note rows, indentation and explicit dates are converted. | Todoist CSV has no completion state, so tasks are open. Todoist writes DATE as the text its app displayed, so the adapter reads ISO dates and the common displayed forms (`Oct 21`, `21 Oct 2026 14:00`, German, Spanish, French and Romanian month names) and English recurrences (`every day`, `every 2 weeks`, `every other day`, `every weekday`, `every monday`, `every month on the 15th`, `every jan 31`, optional `starting <date>`). Todoist drops a recurrence's start date on export, so recurring tasks without one begin on the day shown in the preview notice (day of the conversion, in the chosen time zone). Relative dates (`tomorrow`), completion-relative `every!`, `until`/`for` rules, other-language recurrences, deadlines, durations, authors and view settings are excluded with a located notice. The exact DATE text of real exports could not be verified against an account; check the preview. |
+| TickTick | A backup CSV with `Folder Name,List Name,Title` and `taskId,parentId` columns: folders, list/column placement, notes, tags, priorities, dates, completion and checklist children are converted. | This adapter targets the backup CSV layout, not TickTick API JSON. Reminders, rich task kinds, source timestamps and provider-specific repeat expressions are not retained. Backup status 1 is completed, status 2 (archived) and -1 (won't do) are imported as completed with a notice, and a completion time is kept only for completed tasks. Floating times keep their clock time in the chosen zone. Subtasks follow their parent's list. Backups in the wild can contain rows with unescaped delimiters: stray quotes are tolerated, short rows are padded and noted, and rows with extra values are skipped with their row number. |
+| Microsoft To Do | An English classic Outlook Tasks CSV, one task folder at a time: subject, notes, categories, importance, status, due date and completion date are converted. Enter the original list name. | To Do account export is a mailbox PST, which this adapter cannot read. Outlook CSV can omit steps, recurrence, reminders, other lists and records outside its selected date range. No missing content is inferred. Outlook writes dates in the Windows regional order: the adapter detects it from the dates (a day or month above 12), rejects files that mix both, and asks you to choose month/day/year or day/month/year when the file cannot tell; the choice is bound into the source. Progress, waiting and deferred states become open with an explicit notice, items marked private are reported because they follow the workspace's sharing after import, and identical rows stay separate tasks. Localized Outlook headers and non-UTF-8 files require conversion to the generic contract. |
+| Trello with content | One board JSON: board becomes a folder, lists become lists, cards become tasks, checklist items become children, labels and dates are retained. `dueComplete` supplies completion. Archived cards and cards in archived lists are imported as completed with their own notice, so they do not reopen as active work; a closed board is only reported. Comment text is appended to notes, oldest first, with its day. | JSON may contain only 1,000 recent actions/comments. Comments lose authorship; activity, members, attachments, board descriptions, checklist headings, custom fields, colors and other metadata are reported as excluded. Template and special-role cards are refused. CSV, workspace ZIP and account completeness are not supported. |
 | Generic CSV | The contract below: lists, sections, notes, one-level children, labels, priority, completion, explicit dates and supported recurrence. | Unknown nonempty columns are reported; inconsistent references and conflicting duplicate IDs are refused. |
 
 Deeper subtasks are flattened under their top-level task with an explicit notice.
 Identical duplicate IDs/rows are deduplicated; conflicting duplicates are refused.
-Archived lists/cards do not become completed tasks just because they are archived.
 Comments become literal notes without claiming a local author. Notes and titles
-remain text, including formula-like strings; Ditero's CSV download apostrophe-escapes
-spreadsheet formula prefixes. Imported source content is never executed.
+remain text, including formula-like strings, and imported source content is never
+executed. Ditero has no CSV download today; any future one must escape spreadsheet
+formula prefixes.
+
+One bad value does not fail the file. Titles and names longer than 500 characters and
+notes beyond 32 KiB are shortened, unreadable rows are skipped, and unreadable fields
+are ignored; each is listed in the preview with its row (or Trello card) and field.
+Only structural problems (encoding, quoting, JSON, conflicting IDs or references,
+file limits) stop the import, and the message names the row where one is known.
+
+Labels are created, not merged. A label whose name already exists in the target
+workspace is blocked together with its links on imported tasks (the tasks themselves
+import), and the preview names those labels before you apply. Reusing existing labels
+needs a new reviewed apply precondition and is not part of these adapters yet.
 
 Explicit ISO dates and times with offsets are normalized to UTC. Offset-free times
 use the selected/source IANA zone; ambiguous or nonexistent daylight-saving times
-are excluded with a notice. Unsupported dates are never guessed. Only all-day,
+are excluded with a notice. A date without a time has no zone: it always lands on the
+calendar day of the selected zone (a row's own zone is ignored), starting at the first
+real instant of that day. Unsupported dates are never guessed. Only all-day,
 known-anchor recurrence expressible by Ditero's RRULE engine is retained; timed,
 unanchored and completion-relative rules are excluded to avoid changing timezone
 behavior. Check all converted dates and completion states before applying.
@@ -79,7 +92,8 @@ explicit **New source**, which creates separate copies. These adapters do not me
 later provider exports or synchronize accounts. Browser hashing requires HTTPS or
 localhost. Raw upload size is limited to 23 MiB to fit the bounded request envelope;
 conversion also enforces 50,000 rows, 32 KiB fields, strict quoting, bounded JSON and
-at most 512 notice groups. Unsupported encodings, malformed rows, reference cycles,
+at most 512 notice groups (per-row notices beyond 300 fold into one entry, and
+counts stop at 50,000). Nested JSON deeper than 32 levels is rejected before it is parsed. Unsupported encodings, malformed rows, reference cycles,
 prototype-pollution keys and inconsistent duplicate IDs fail before a plan is saved.
 Convert UTF-16/legacy encodings to UTF-8 locally first; PST and ZIP are not text files.
 

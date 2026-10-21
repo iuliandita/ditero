@@ -8,7 +8,15 @@ import {
 	waitWorkspaceReady,
 } from "./helpers.ts";
 
-const cases = [
+const cases: {
+	provider: string;
+	picker: string;
+	file: string;
+	tasks: number;
+	title: string;
+	notice: string;
+	loss?: string;
+}[] = [
 	{
 		provider: "todoist",
 		picker: "Todoist project CSV with content",
@@ -16,6 +24,7 @@ const cases = [
 		tasks: 5,
 		title: "Plan groceries",
 		notice: "flattened to one level",
+		loss: "Dates excluded because",
 	},
 	{
 		provider: "ticktick",
@@ -32,6 +41,7 @@ const cases = [
 		tasks: 2,
 		title: "Prepare weekend list",
 		notice: "selected folder",
+		loss: "Date order used",
 	},
 	{
 		provider: "trello",
@@ -40,6 +50,7 @@ const cases = [
 		tasks: 4,
 		title: "Prepare picnic",
 		notice: "recent comments",
+		loss: "Archived items imported as completed",
 	},
 	{
 		provider: "generic-csv",
@@ -85,6 +96,7 @@ for (const item of cases)
 		const notices = panel.getByTestId("import-content-notices");
 		await expect(notices).toBeVisible();
 		await expect(notices).toContainText(item.notice);
+		if (item.loss) await expect(notices).toContainText(item.loss);
 		const policy = panel.getByTestId("import-provider-policy"),
 			save = panel.getByRole("button", { name: "Save dry run", exact: true });
 		await expect(save).toBeDisabled();
@@ -157,3 +169,36 @@ for (const item of cases)
 				.tasks,
 		).toEqual(imported.data.tasks);
 	});
+
+test("an ambiguous Outlook date order asks for a choice and binds it", async ({
+	page,
+}) => {
+	await signUp(page, uniqueEmail("content-date-order"));
+	await waitWorkspaceReady(page);
+	await goToSettings(page);
+	const panel = page.getByRole("region", { name: "Plan an import" });
+	await chooseOption(
+		page,
+		panel.getByTestId("import-format"),
+		"Microsoft To Do via Outlook CSV",
+	);
+	await panel.getByTestId("import-content-timezone").fill("UTC");
+	await panel.getByLabel("Provider export file").setInputFiles({
+		name: "ambiguous.csv",
+		mimeType: "text/csv",
+		buffer: Buffer.from(
+			"Subject,Due Date,Status,Notes\nA,03/04/2026,Not Started,\n",
+		),
+	});
+	await expect(panel.getByRole("alert")).toContainText(
+		"Choose the date order below",
+	);
+	await chooseOption(
+		page,
+		panel.getByTestId("import-content-date-order"),
+		"Day/month/year",
+	);
+	await expect(panel.getByTestId("import-content-notices")).toContainText(
+		"Date order used (1): Day/month/year",
+	);
+});

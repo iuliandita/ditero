@@ -39,6 +39,7 @@ self.onmessage = async (
 				projectFolderName?: string;
 				unsectionedListName?: string;
 				timezone?: string;
+				dateOrder?: "auto" | "mdy" | "dmy";
 		  }
 	>,
 ) => {
@@ -66,6 +67,7 @@ self.onmessage = async (
 				projectFolderName: event.data.projectFolderName ?? "",
 				unsectionedListName: event.data.unsectionedListName ?? "",
 				timezone: event.data.timezone ?? "",
+				dateOrder: event.data.dateOrder ?? "auto",
 			});
 			const chunks: string[] = [];
 			for (let offset = 0; offset < bytes.length; offset += 24_576) {
@@ -161,7 +163,12 @@ self.onmessage = async (
 		}
 		self.postMessage({ text, document });
 	} catch (error) {
+		const detail =
+			error instanceof ProviderImportError
+				? { code: error.code, row: error.row }
+				: {};
 		self.postMessage({
+			...detail,
 			error:
 				error instanceof UnsupportedImportVersionError
 					? "unsupported"

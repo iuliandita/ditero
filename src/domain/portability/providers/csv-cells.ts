@@ -16,6 +16,8 @@ export function parseProviderCsvCells(
 	text: string,
 	checkpoint: () => void,
 	maxColumns: number,
+	// Lazy quotes and lone CR record ends, for provider exports with unescaped delimiters.
+	lenient = false,
 ): string[][] {
 	const rows: string[][] = [];
 	let row: string[] = [];
@@ -42,19 +44,28 @@ export function parseProviderCsvCells(
 		ended = false;
 		if (state === "quoted") {
 			if (character === '"') {
-				if (text[i + 1] === '"') {
+				const next = text[i + 1];
+				if (next === '"') {
 					field += '"';
 					i++;
-				} else state = "closed";
+				} else if (
+					lenient &&
+					next !== undefined &&
+					next !== "," &&
+					next !== "\n" &&
+					next !== "\r"
+				)
+					field += '"';
+				else state = "closed";
 			} else field += character;
 		} else if (character === ",") cell();
 		else if (character === "\n" || character === "\r") {
-			if (character === "\r" && text[i + 1] !== "\n")
+			if (character === "\r" && text[i + 1] !== "\n" && !lenient)
 				fail("invalid-csv", rows.length + 1);
-			if (character === "\r") i++;
+			if (character === "\r" && text[i + 1] === "\n") i++;
 			record();
 		} else if (character === '"' && state === "start") state = "quoted";
-		else if (state === "closed" || character === '"')
+		else if (state === "closed" || (character === '"' && !lenient))
 			fail("invalid-csv", rows.length + 1);
 		else {
 			state = "plain";

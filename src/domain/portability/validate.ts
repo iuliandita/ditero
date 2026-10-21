@@ -530,12 +530,26 @@ function* childValues(value: object): Generator<unknown> {
 
 export function parseBoundedPortableJson(input: string): unknown {
 	let byteLength = 0;
+	// Bound bracket depth before JSON.parse: native parsing of deeply nested input
+	// is superlinear and cannot be interrupted by request deadlines.
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
 	for (const character of input) {
 		const point = character.codePointAt(0) ?? 0;
 		byteLength +=
 			point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
 		if (byteLength > MAX_BYTES)
 			throw new PortableExportValidationError("byte-limit");
+		if (inString) {
+			if (escaped) escaped = false;
+			else if (character === "\\") escaped = true;
+			else if (character === '"') inString = false;
+		} else if (character === '"') inString = true;
+		else if (character === "[" || character === "{") {
+			if (++depth > MAX_NESTING + 1)
+				throw new PortableExportValidationError("nesting-limit");
+		} else if (character === "]" || character === "}") depth--;
 	}
 	let parsed: unknown;
 	try {

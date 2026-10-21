@@ -118,7 +118,7 @@ async function cleanupRows() {
 	try {
 		await client.query("begin");
 		await client.query(
-			"delete from import_source where owner_user_id in ('content-owner','content-outsider')",
+			"delete from import_source where owner_user_id in ('content-owner','content-outsider','content-viewer')",
 		);
 		await client.query(
 			"delete from task where list_id in (select id from list where workspace_id='content-target')",
@@ -135,7 +135,7 @@ async function cleanupRows() {
 			"delete from workspace where id='content-target' and owner_id='content-owner'",
 		);
 		await client.query(
-			"delete from \"user\" where id in ('content-owner','content-outsider')",
+			"delete from \"user\" where id in ('content-owner','content-outsider','content-viewer')",
 		);
 		await client.query("commit");
 	} catch (error) {
@@ -155,7 +155,7 @@ async function cleanupRows() {
 	expect(
 		(
 			await admin.query(
-				"select (select count(*)::int from \"user\" where id in ('content-owner','content-outsider')) users,(select count(*)::int from workspace where id='content-target') workspaces,(select count(*)::int from import_source where owner_user_id in ('content-owner','content-outsider')) sources,(select count(*)::int from import_job where owner_user_id in ('content-owner','content-outsider')) jobs",
+				"select (select count(*)::int from \"user\" where id in ('content-owner','content-outsider','content-viewer')) users,(select count(*)::int from workspace where id='content-target') workspaces,(select count(*)::int from import_source where owner_user_id in ('content-owner','content-outsider','content-viewer')) sources,(select count(*)::int from import_job where owner_user_id in ('content-owner','content-outsider','content-viewer')) jobs",
 			)
 		).rows[0],
 	).toEqual({ users: 0, workspaces: 0, sources: 0, jobs: 0 });
@@ -203,13 +203,13 @@ beforeAll(async () => {
 beforeEach(async () => {
 	await cleanupRows();
 	await admin.query(
-		`insert into "user"(id,name,email,email_verified) values('content-owner','Owner','content-owner@example.test',false),('content-outsider','Outside','content-outside@example.test',false)`,
+		`insert into "user"(id,name,email,email_verified) values('content-owner','Owner','content-owner@example.test',false),('content-outsider','Outside','content-outside@example.test',false),('content-viewer','Viewer','content-viewer@example.test',false)`,
 	);
 	await admin.query(
 		`insert into workspace(id,name,owner_id,kind) values('content-target','Target','content-owner','shared')`,
 	);
 	await admin.query(
-		`insert into membership(id,user_id,workspace_id,role) values('content-seat','content-owner','content-target','owner')`,
+		`insert into membership(id,user_id,workspace_id,role) values('content-seat','content-owner','content-target','owner'),('content-viewer-seat','content-viewer','content-target','viewer')`,
 	);
 });
 afterAll(async () => {
@@ -408,6 +408,46 @@ test("binding forgery, unauthenticated access and foreign workspace mappings fai
 				)
 			).rows[0].valid,
 		).toBe(false);
+});
+
+test("a viewer of the target workspace cannot plan or apply a provider import", async () => {
+	const value = await body("generic-csv", fixture("generic-tasks.csv"));
+	const viewer = {
+		...value,
+		mappings: {
+			...value.mappings,
+			principals: Object.fromEntries(
+				Object.keys(value.mappings.principals).map((id) => [
+					id,
+					"content-viewer",
+				]),
+			),
+		},
+	};
+	const response = await request("plans", viewer, "content-viewer");
+	expect([403, 404]).toContain(response.status);
+	expect(await count("import_source")).toBe(0);
+	expect(await count("task")).toBe(0);
+});
+
+test("a label that already exists in the target workspace is reported as blocked, never merged or duplicated", async () => {
+	const csv = (title: string) =>
+		Buffer.from(`title,labels\n${title},home;work\n`);
+	const first = await save(await body("generic-csv", csv("First")));
+	expect((await apply(first)).state).toBe("completed");
+	expect(await count("label")).toBe(2);
+	const second = await save(await body("generic-csv", csv("Second")));
+	expect(second.report.counts.blocked).toBeGreaterThan(0);
+	expect((await apply(second)).state).toBe("completed");
+	expect(await count("task")).toBe(2);
+	expect(await count("label")).toBe(2);
+	expect(
+		(
+			await admin.query(
+				"select count(*)::int n from task_label tl join task t on t.id=tl.task_id where t.title='Second'",
+			)
+		).rows[0].n,
+	).toBe(0);
 });
 
 test("import activation suppresses recent past-due notifications before the overdue candidate scan", async () => {

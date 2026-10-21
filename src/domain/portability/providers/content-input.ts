@@ -29,6 +29,11 @@ const shape = {
 	projectFolderName: name,
 	unsectionedListName: name,
 	timezone: name,
+	dateOrder: z.enum(["mdy", "dmy"]).nullable(),
+	anchorDay: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/)
+		.nullable(),
 	notices: z
 		.array(
 			z.strictObject({

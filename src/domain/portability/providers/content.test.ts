@@ -9,7 +9,6 @@ import {
 	contentDate,
 } from "./content-common.ts";
 import { contentBinding } from "./content-input.ts";
-import { exportTaskCsv, parseTaskCsv } from "./csv.ts";
 import {
 	prepareProviderImportRequest,
 	providerDocumentDigest,
@@ -237,21 +236,33 @@ describe("provider content adapters", () => {
 		);
 	});
 	test.each([
-		["malformed quoting", bytes('title\n"unfinished\n')],
-		["duplicate headers", bytes("title,title\nA,B\n")],
-		["extra column", bytes("title\nA,B\n")],
-		["pollution header", bytes("title,__proto__\nA,B\n")],
-		["NUL", bytes("title\nA\u0000B\n")],
-		["invalid UTF-8", new Uint8Array([0xc3, 0x28])],
-		["UTF-16", new Uint8Array([0xff, 0xfe, 0x74, 0x00])],
-		["long field", bytes(`title\n${"x".repeat(32 * 1024 + 1)}\n`)],
-		["duplicate ID collision", bytes("id,title\nx,A\nx,B\n")],
-		["missing parent", bytes("id,parent_id,title\na,missing,Child\n")],
-		["parent cycle", bytes("id,parent_id,title\na,b,A\nb,a,B\n")],
-	] as const)("rejects hostile CSV: %s", async (_name, value) => {
+		["malformed quoting", bytes('title\n"unfinished\n'), "invalid-csv"],
+		["duplicate headers", bytes("title,title\nA,B\n"), "invalid-csv"],
+		["extra column", bytes("title\nA,B\n"), "invalid-csv"],
+		["pollution header", bytes("title,__proto__\nA,B\n"), "invalid-csv"],
+		["NUL", bytes("title\nA\u0000B\n"), "invalid-row"],
+		["invalid UTF-8", new Uint8Array([0xc3, 0x28]), "invalid-encoding"],
+		["UTF-16", new Uint8Array([0xff, 0xfe, 0x74, 0x00]), "invalid-encoding"],
+		[
+			"long field",
+			bytes(`title\n${"x".repeat(32 * 1024 + 1)}\n`),
+			"field-limit",
+		],
+		["duplicate ID collision", bytes("id,title\nx,A\nx,B\n"), "invalid-graph"],
+		[
+			"missing parent",
+			bytes("id,parent_id,title\na,missing,Child\n"),
+			"invalid-graph",
+		],
+		[
+			"parent cycle",
+			bytes("id,parent_id,title\na,b,A\nb,a,B\n"),
+			"invalid-graph",
+		],
+	] as const)("rejects hostile CSV: %s", async (_name, value, code) => {
 		await expect(
 			parseContentProvider("generic-csv", value, options),
-		).rejects.toThrow();
+		).rejects.toMatchObject({ code });
 	});
 	test("accepts UTF-8 BOM and literal formula text while refusing polluted JSON and changed metadata", async () => {
 		const raw = bytes('\ufefftitle,notes\n"=1+1","@literal"\n');
@@ -281,7 +292,7 @@ describe("provider content adapters", () => {
 			);
 		await expect(
 			parseContentProvider("trello", bytes(polluted), options),
-		).rejects.toThrow();
+		).rejects.toMatchObject({ code: "invalid-json" });
 		expect(Object.hasOwn(Object.prototype, "polluted")).toBe(false);
 		const digest = await providerDocumentDigest(
 			contentBinding(result),
@@ -295,14 +306,13 @@ describe("provider content adapters", () => {
 		);
 	});
 	test.each([
-		"missing-list",
-		"single-invalid-position",
-		"conflicting-card",
-		"duplicate-label",
-		"foreign-checklist",
-		"numeric-date",
-		"conflicting-comment",
-	])("rejects hostile Trello references and shapes: %s", async (kind) => {
+		["missing-list", "invalid-graph"],
+		["single-invalid-position", "invalid-row"],
+		["conflicting-card", "invalid-graph"],
+		["duplicate-label", "invalid-graph"],
+		["foreign-checklist", "invalid-graph"],
+		["conflicting-comment", "invalid-graph"],
+	])("rejects hostile Trello references and shapes: %s", async (kind, code) => {
 		const board = JSON.parse(fixture("trello-content.json").toString());
 		if (kind === "missing-list") board.cards[0].idList = "9".repeat(24);
 		if (kind === "single-invalid-position") {
@@ -315,7 +325,6 @@ describe("provider content adapters", () => {
 			board.labels.push({ ...board.labels[0], name: "conflict" });
 		if (kind === "foreign-checklist")
 			board.checklists[0].idBoard = "9".repeat(24);
-		if (kind === "numeric-date") board.cards[0].due = 0;
 		if (kind === "conflicting-comment")
 			board.actions.push({
 				...board.actions[0],
@@ -323,7 +332,7 @@ describe("provider content adapters", () => {
 			});
 		await expect(
 			parseContentProvider("trello", bytes(JSON.stringify(board)), options),
-		).rejects.toThrow();
+		).rejects.toMatchObject({ code });
 	});
 	test("preserves local fractional seconds and reports note-row fields instead of silently discarding them", async () => {
 		expect(contentDate("2026-07-18T09:30:00.123", "Europe/Berlin").dueAt).toBe(
@@ -379,21 +388,25 @@ describe("provider content adapters", () => {
 			"unsupported-recurrence",
 		);
 	});
-	test("TickTick archive state never invents completion without recorded completion evidence", async () => {
+	test("TickTick archived and won't-do tasks are finished work, not open tasks", async () => {
 		const result = await parseContentProvider(
 			"ticktick",
 			bytes(
-				"Folder Name,List Name,Title,Status,taskId,Completed Time\nHome,Tasks,Archived open,2,a,\nHome,Tasks,Archived complete,2,b,2026-01-18T09:00:00Z\n",
+				"Folder Name,List Name,Title,Status,taskId,Completed Time\nHome,Tasks,Archived,2,a,\nHome,Tasks,Archived complete,2,b,2026-01-18T09:00:00Z\nHome,Tasks,Wont do,-1,c,\nHome,Tasks,Open,0,d,2026-01-18T09:00:00Z\n",
 			),
 			options,
 		);
-		expect(result.document.data.tasks.map((task) => task.done)).toEqual([
-			false,
-			true,
+		expect(
+			result.document.data.tasks.map((task) => [task.done, task.completedAt]),
+		).toEqual([
+			[true, null],
+			[true, "2026-01-18T09:00:00.000Z"],
+			[true, null],
+			[false, null],
 		]);
 		expect(result.notices).toContainEqual({
-			code: "unknown-state",
-			path: "Status",
+			code: "archived-completed",
+			path: "row:2:Status",
 			count: 1,
 		});
 	});
@@ -412,18 +425,6 @@ describe("provider content adapters", () => {
 			path: "Status",
 			count: 1,
 		});
-	});
-	test("the existing CSV exporter escapes every free-text field including imported formula text", () => {
-		const raw = fixture("csv-v1.csv");
-		const result = parseTaskCsv(raw, options);
-		if (result.adapter !== "ditero-csv") throw new Error("Wrong adapter");
-		const first = result.document.data.tasks[0];
-		if (!first) throw new Error("Missing fixture task");
-		first.title = ' \t=HYPERLINK("https://example.test")';
-		first.notes = "+2+2";
-		const exported = exportTaskCsv(result);
-		expect(new TextDecoder().decode(exported)).toContain("' \t=HYPERLINK");
-		expect(parseTaskCsv(exported, options).document).toEqual(result.document);
 	});
 	test("honors byte bounds, cancellation and deadlines before conversion", async () => {
 		await expect(

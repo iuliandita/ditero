@@ -405,6 +405,8 @@ export async function prepareProviderImportRequest(
 			projectFolderName: input.projectFolderName,
 			unsectionedListName: input.unsectionedListName,
 			timezone: input.timezone,
+			dateOrder: input.dateOrder ?? "auto",
+			anchorDay: input.anchorDay,
 		});
 		const binding = contentBinding(conversion);
 		const { originalBase64: _originalBase64, ...claimed } = input;
