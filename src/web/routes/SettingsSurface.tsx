@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
+import type { NativeSettingsSection } from "../../domain/native-settings.ts";
 import type { Role } from "../../domain/role.ts";
 import { m } from "../../paraglide/messages.js";
 import { EncryptedFilesPanel } from "../components/e2e/EncryptedFilesPanel.tsx";
@@ -56,14 +57,14 @@ export function SettingsSurface({
 	// Phones arrive from a sheet that unmounts with its trigger; without a
 	// deliberate target focus would fall to the document body.
 	autoFocusBack?: boolean;
-	initialSection?: "account" | "appearance";
+	initialSection?: "account" | "appearance" | NativeSettingsSection;
 	setupPanel?: ReactNode;
 }) {
 	const native = useNativeAccount();
 	const backRef = useRef<HTMLButtonElement>(null);
 	useEffect(() => {
-		if (initialSection === "appearance") {
-			const sectionId = settingsSectionDomId("appearance");
+		if (initialSection && initialSection !== "account") {
+			const sectionId = settingsSectionDomId(initialSection);
 			document.getElementById(sectionId)?.scrollIntoView({ block: "start" });
 			document
 				.getElementById(`${sectionId}-heading`)
@@ -135,7 +136,7 @@ export function SettingsSurface({
 						{native ? (
 							<div className="flex flex-col gap-8">
 								<NativePushSettings />
-								<NativeBrowserSettings />
+								<NativeBrowserSettings section="notifications" />
 							</div>
 						) : (
 							<NotificationSettings />
@@ -146,7 +147,7 @@ export function SettingsSurface({
 						{native ? (
 							<div className="flex flex-col gap-8">
 								<EncryptedFilesPanel userId={native.profile.id} />
-								<NativeBrowserSettings />
+								<NativeBrowserSettings section="security" />
 							</div>
 						) : (
 							<SecurityPanel />
@@ -154,14 +155,22 @@ export function SettingsSurface({
 					</SettingsSection>
 
 					<SettingsSection id="access-tokens" title={m.pat_heading()}>
-						{native ? <NativeBrowserSettings /> : <PersonalAccessTokensPanel />}
+						{native ? (
+							<NativeBrowserSettings section="access-tokens" />
+						) : (
+							<PersonalAccessTokensPanel />
+						)}
 					</SettingsSection>
 
 					<SettingsSection
 						id="calendar-feeds"
 						title={m.calendar_feed_heading()}
 					>
-						{native ? <NativeBrowserSettings /> : <CalendarFeedsPanel />}
+						{native ? (
+							<NativeBrowserSettings section="calendar-feeds" />
+						) : (
+							<CalendarFeedsPanel />
+						)}
 					</SettingsSection>
 					{activeId && (
 						<SettingsSection id="lists" title={m.settings_section_lists()}>
@@ -202,7 +211,11 @@ export function SettingsSurface({
 						title={m.settings_section_danger()}
 						tone="danger"
 					>
-						{native ? <NativeBrowserSettings /> : <AccountDeletionPanel />}
+						{native ? (
+							<NativeBrowserSettings section="danger" />
+						) : (
+							<AccountDeletionPanel />
+						)}
 					</SettingsSection>
 				</div>
 			</div>

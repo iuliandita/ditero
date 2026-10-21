@@ -11,7 +11,7 @@ export function NativeArchiveExportPanel() {
 	const [archiveOpen, setArchiveOpen] = useState(false);
 	const archiveButton = useRef<HTMLButtonElement | null>(null);
 	if (!supportsAttachmentArchiveExport(runtime)) {
-		return <NativeBrowserSettings />;
+		return <NativeBrowserSettings section="data" />;
 	}
 	return (
 		<div className="flex flex-col gap-8">
@@ -29,6 +29,7 @@ export function NativeArchiveExportPanel() {
 				</Button>
 			</div>
 			<NativeBrowserSettings
+				section="data"
 				note={m.native_settings_other_data_browser_note()}
 			/>
 			{archiveOpen && (

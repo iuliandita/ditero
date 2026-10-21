@@ -16,6 +16,10 @@ import {
 	useRef,
 	useState,
 } from "react";
+import {
+	type NativeSettingsSection,
+	settingsSectionFromPath,
+} from "../../domain/native-settings.ts";
 import { randomId } from "../../domain/random-id.ts";
 import { keyBetween } from "../../domain/sort-key.ts";
 import { m } from "../../paraglide/messages.js";
@@ -178,17 +182,21 @@ function NormalWorkspace({
 		[setPref],
 	);
 	const [activeId, setActiveId] = useState<string | null>(null);
+	const initialSettings = nativeAccount
+		? null
+		: settingsSectionFromPath(window.location.pathname);
 	const [settingsSection, setSettingsSection] = useState<
-		"account" | "appearance"
-	>("account");
+		"account" | "appearance" | NativeSettingsSection
+	>(initialSettings ?? "account");
 	const [contentState, dispatchContent] = useReducer(
 		workspaceContentReducer,
-		initialSetup ? { kind: "settings" } : { kind: "home" },
+		initialSetup || initialSettings ? { kind: "settings" } : { kind: "home" },
 	);
 	useEffect(() => {
 		if (
 			contentState.kind !== "settings" &&
-			window.location.pathname === "/setup"
+			(window.location.pathname === "/setup" ||
+				settingsSectionFromPath(window.location.pathname))
 		)
 			window.history.replaceState(
 				window.history.state,

@@ -14,7 +14,9 @@ Zero's destination, callbacks, and frames before replacing that handle with the 
 
 The native vault uses the operating system credential store: Secret Service on
 Linux, Keychain on macOS, and Credential Manager on Windows. A locked or unavailable
-vault fails explicitly; there is no plaintext fallback. A single protected record
+vault shows a localized keyring requirement with Retry; start or unlock a provider
+(such as GNOME Keyring or KWallet on Linux), then retry. The DEB recommends
+`gnome-keyring`. There is no plaintext fallback. A single protected record
 commits selection and sessions together, and a process lock prevents concurrent
 instances from overwriting each other's state. Local UI and sync persistence retain
 server/account scopes. Closing waits for durable local sync retirement before
@@ -22,6 +24,20 @@ native sockets are drained and the window is destroyed; a failure keeps it open.
 
 Recovery-code downloads use the native system save dialog and account-bound write
 operations. Cancelling leaves the code visible; a failed save shows a retryable error.
+
+## Browser-only settings
+
+"Open in browser" in Settings opens the selected server's matching Notifications,
+Security, Access tokens, Calendar subscriptions, Your data, or Danger zone section.
+The system browser may require a separate sign-in. The `settings.open` native
+operation accepts only those fixed destinations, bound to the current account;
+it accepts no URL or credentials. The sign-in browser operation remains limited
+to the pending login grant. Browser handoff failures show a retryable message.
+
+The matching `/settings/<section>` browser routes require a server version that
+includes these routes; older servers still open their normal application page.
+An isolated Linux runtime check confirmed the missing-keyring message, recovery
+through Retry after starting an unlocked provider, and all six browser handoffs.
 
 ## Linux task links
 

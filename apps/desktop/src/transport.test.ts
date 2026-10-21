@@ -31,10 +31,14 @@ vi.mock("../../../src/web/lib/zero-lifecycle.ts", () => ({
 }));
 
 vi.mock("../../../src/paraglide/messages.js", () => ({
-	m: { sync_save_pending_failed: () => "Pending changes could not be saved." },
+	m: {
+		sync_save_pending_failed: () => "Pending changes could not be saved.",
+		native_keyring_unavailable: () => "An unlocked system keyring is required.",
+		native_signin_failed: () => "Could not finish signing in.",
+	},
 }));
 
-import { installTransport } from "./transport.ts";
+import { installTransport, startupErrorMessage } from "./transport.ts";
 
 it("routes scoped refusals and keeps close retryable until pending changes retire", async () => {
 	state.invoke.mockImplementation(async (operation: string) => {
@@ -84,4 +88,17 @@ it("routes scoped refusals and keeps close retryable until pending changes retir
 		state.destroy.mock.invocationCallOrder[0],
 	);
 	vi.unstubAllGlobals();
+});
+
+it.each([
+	"vault-unavailable",
+	"vault-invalid",
+	"closed",
+	new Error("vault-unavailable"),
+])("maps only the native unavailable-vault code to keyring guidance: %s", (error) => {
+	expect(startupErrorMessage(error)).toBe(
+		error === "vault-unavailable"
+			? "An unlocked system keyring is required."
+			: "Could not finish signing in.",
+	);
 });

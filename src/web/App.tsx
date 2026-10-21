@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { settingsSectionFromPath } from "../domain/native-settings.ts";
 import { BootSkeleton } from "./components/shell/AppSkeleton.tsx";
 import { ConfirmProvider } from "./components/ui/confirm.tsx";
 import { SnackbarProvider } from "./components/ui/snackbar.tsx";
@@ -62,7 +63,10 @@ function SessionRoutes({
 		return standalone(
 			<Login
 				callbackURL={
-					window.location.pathname === "/setup" ? "/setup" : undefined
+					window.location.pathname === "/setup" ||
+					settingsSectionFromPath(window.location.pathname)
+						? window.location.pathname
+						: undefined
 				}
 			/>,
 		);

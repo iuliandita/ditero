@@ -1329,6 +1329,39 @@ impl Actor {
             }),
         )
     }
+    fn settings_url(&self, v: &Value) -> Result<String> {
+        self.current()?;
+        let fields = v.as_object().ok_or("invalid-message")?;
+        let body = v
+            .get("body")
+            .and_then(Value::as_object)
+            .ok_or("invalid-message")?;
+        if fields
+            .keys()
+            .any(|key| !["op", "rid", "gen", "id", "body"].contains(&key.as_str()))
+            || body.len() != 1
+        {
+            return Err("invalid-message");
+        }
+        let session = self.session.as_ref().ok_or("no-session")?;
+        if !self.verified
+            || self.origin.as_ref() != Some(&session.origin)
+            || protocol::string(v, "id")? != self.handle
+        {
+            return Err("stale-generation");
+        }
+        let section = protocol::string(&v["body"], "section")?;
+        if !matches!(
+            section,
+            "notifications" | "security" | "access-tokens" | "calendar-feeds" | "data" | "danger"
+        ) {
+            return Err("invalid-settings");
+        }
+        if protocol::origin(&session.origin).as_ref() != Ok(&session.origin) {
+            return Err("invalid-origin");
+        }
+        Ok(format!("{}/settings/{section}", session.origin))
+    }
     async fn post(&mut self, v: &Value, size: usize) -> Result<Value> {
         let map = v.as_object().ok_or("invalid-message")?;
         let op = protocol::string(v, "op")?;
@@ -1448,6 +1481,11 @@ impl Actor {
                 let p = self.pending.as_ref().ok_or("no-pending-grant")?;
                 let origin = self.origin.as_ref().ok_or("no-server")?;
                 open_browser(&format!("{origin}/native/authorize?grantId={}", p.grant))?;
+                Ok(json!({"ok":true}))
+            }
+            "settings.open" => {
+                let url = self.settings_url(v)?;
+                open_browser(&url)?;
                 Ok(json!({"ok":true}))
             }
             "complete" => self.complete().await,
@@ -1983,6 +2021,57 @@ mod tests {
             #[cfg(test)]
             push_supported: true,
         }
+    }
+    #[test]
+    fn settings_destinations_are_fixed_and_bound_to_the_verified_owner() {
+        let mut host = actor(false);
+        link_owner(&mut host);
+        for section in [
+            "notifications",
+            "security",
+            "access-tokens",
+            "calendar-feeds",
+            "data",
+            "danger",
+        ] {
+            let command = json!({"op":"settings.open","rid":1,"gen":host.gen,"id":host.handle,"body":{"section":section}});
+            assert_eq!(
+                host.settings_url(&command).unwrap(),
+                format!("https://a.example/settings/{section}")
+            );
+        }
+        let mut command = json!({"op":"settings.open","rid":1,"gen":host.gen,"id":host.handle,"body":{"section":"security"}});
+        for section in [
+            "",
+            "../native/authorize",
+            "https://other.example",
+            "//other.example",
+            "security?url=x",
+            "security#x",
+            "%73ecurity",
+            "security/",
+        ] {
+            command["body"]["section"] = json!(section);
+            assert_eq!(host.settings_url(&command), Err("invalid-settings"));
+        }
+        command["body"]["section"] = json!("security");
+        command["url"] = json!("https://other.example");
+        assert_eq!(host.settings_url(&command), Err("invalid-message"));
+        command.as_object_mut().unwrap().remove("url");
+        command["body"]["url"] = json!("https://other.example");
+        assert_eq!(host.settings_url(&command), Err("invalid-message"));
+        command["body"].as_object_mut().unwrap().remove("url");
+        command["id"] = json!("retired");
+        assert_eq!(host.settings_url(&command), Err("stale-generation"));
+        command["id"] = json!(host.handle);
+        host.verified = false;
+        assert_eq!(host.settings_url(&command), Err("stale-generation"));
+        host.verified = true;
+        host.origin = Some("https://other.example".into());
+        assert_eq!(host.settings_url(&command), Err("stale-generation"));
+        host.origin = Some("https://a.example".into());
+        host.clock.fetch_add(1, Ordering::SeqCst);
+        assert_eq!(host.settings_url(&command), Err("cancelled"));
     }
     fn link() -> TaskLink {
         deep_links::parse("ditero://task?origin=https%3A%2F%2Fa.example&taskId=task").unwrap()
