@@ -20,6 +20,9 @@ instances from overwriting each other's state. Local UI and sync persistence ret
 server/account scopes. Closing waits for durable local sync retirement before
 native sockets are drained and the window is destroyed; a failure keeps it open.
 
+Recovery-code downloads use the native system save dialog and account-bound write
+operations. Cancelling leaves the code visible; a failed save shows a retryable error.
+
 ## Linux task links
 
 Linux packages declare the `ditero` URL scheme. A task link has this form:
