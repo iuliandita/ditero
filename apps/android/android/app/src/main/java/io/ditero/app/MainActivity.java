@@ -100,7 +100,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
-        if (zeroTransport != null) zeroTransport.drain();
+        if (zeroTransport != null) zeroTransport.drain(isChangingConfigurations());
         zeroTransport = null;
         super.onDestroy();
     }

@@ -358,6 +358,14 @@ function sessionRefused(gen: unknown, authHandle: unknown): void {
 
 const notificationListeners = new Set<() => void>();
 const taskLinkListeners = new Set<() => void>();
+const taskLinkRefusalListeners = new Set<() => void>();
+
+export function subscribeTaskLinkRefusals(listener: () => void): () => void {
+	taskLinkRefusalListeners.add(listener);
+	return () => {
+		taskLinkRefusalListeners.delete(listener);
+	};
+}
 
 function onNative(event: MessageEvent): void {
 	let message: unknown;
@@ -367,6 +375,14 @@ function onNative(event: MessageEvent): void {
 		return;
 	}
 	if (!isRecord(message)) return;
+	if (
+		message.t === "link.refused" &&
+		state?.taskLinks &&
+		message.gen === state.gen
+	) {
+		for (const listener of taskLinkRefusalListeners) listener();
+		return;
+	}
 	if (message.t === "push.open" && state && message.gen === state.gen) {
 		for (const listener of notificationListeners) listener();
 		return;
@@ -1242,7 +1258,8 @@ export function createNativeTaskLinkNavigation(
 		},
 		async dismiss(token) {
 			assertCurrent();
-			if (!validId(token)) throw new NativeError("invalid-message");
+			if (token !== "" && !validId(token))
+				throw new NativeError("invalid-message");
 			await request(
 				{ op: "link.dismiss", id: authHandle, body: { token } },
 				(reply) => {

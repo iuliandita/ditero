@@ -156,6 +156,12 @@ It uses Gradle's development signing configuration. Install it on an Android dev
 running API 24 or later with `adb install -r` followed by that APK path. Debug APKs
 are test artifacts, not signed release or store distributions.
 
+Debug builds also trust user-installed CAs for local HTTPS testing. Install a CA
+with critical CA constraints and certificate-signing key usage in Android Settings;
+its server certificate needs a matching SAN and server-authentication usage. The
+system browser must trust the same CA for consent. Release builds retain Android's
+system trust anchors and do not include this debug configuration.
+
 The Android workflow performs these compilation, bridge-test, and debug-build
 checks and retains the APK for seven days. It does not run an emulator or validate
 HTTPS consent, Keystore persistence, authenticated sync, or encryption on a device.
@@ -252,12 +258,16 @@ Implemented foundation with source, bridge and JVM unit coverage:
   each read rechecks the page, account, session and trust. A cold start parks the link unbound and the
   next `hello` binds that one link to the new page generation. A link already bound to an earlier page is
   dropped on a reload, never handed to the new page. Sign-out, forget, revoke, a refused session, a
-  server change, a new sign-in, and activity shutdown all clear it. The page opens the task only if it is
+  server change, a new sign-in, and final activity shutdown all clear it. Configuration recreation before
+  `hello` retains the unbound link in a ViewModel, without saving it to disk; the replacement transport
+  rechecks its captured owner and binds it once. A link already bound to a page never transfers to a
+  replacement page. The Activity handles boot-time assets-path configuration updates in place,
+  so they do not retire a newly bound link before task delivery. The page opens the task only if it is
   already in its synced rows; otherwise it shows the existing unavailable message.
 - Dismiss is idempotent: a well-formed body with an empty or unknown token succeeds and changes nothing,
   and an old token cannot clear a newer entry. A changed owner or page is still answered `cancelled`.
 - `link.retire` and every `server.select` (same origin included) clear the slot and fence ingress, as on
-  desktop. Links are refused silently until the page says a fresh `hello`; link reads never lift the
+  desktop. Links are refused with unavailable feedback until the page says a fresh `hello`; link reads never lift the
   fence. After a successful `server.select` the app therefore performs a new `hello` handshake, which
   rebinds the page generation and account handle, before it activates the session or requests a grant.
   A superseded attempt does nothing after `select`, and `connectBridge` rejects older in-flight requests
@@ -269,13 +279,15 @@ Implemented foundation with source, bridge and JVM unit coverage:
   arrives while another is pending never overwrites the first token: the first is re-announced and the
   newcomer is refused visibly once the first is dismissed. A pending entry whose owner is stale is
   revalidated and cleared first, so it cannot block a new link; one that is only mid-verification stays.
-  A link arriving while the page is signed out is dropped: the sign-in screen has no authenticated read
-  and nothing is queued for a later sign-in.
+  A link arriving while the page is signed out shows unavailable through a generation-bound refusal
+  event. No task is queued for a later sign-in. Stale reads also show unavailable without retrying
+  account authority or navigating.
 - Verification: the stored account is never relaxed. While a check is in flight the vault reads as
   untrusted, so a warm link waits as an ownerless deferred entry, only when the in-memory session was
   already verified and the origin matches. It is never readable meanwhile. When the check ends, the link
   is promoted and announced if the vault then reads the same verified owner, otherwise it becomes a visible
-  refusal. A failed check with none in flight refuses at once. Delivery otherwise rests on the in-memory
+  refusal. A failed check with none in flight retires stale pending ownership before considering a new link,
+  which is refused at once until trust is restored. Delivery otherwise rests on the in-memory
   session's `verified` flag, which a restored cached proof also sets, so a cold link can be delivered
   from restored proof before any live check; this is cached proof, not live proof, and there is no
   offline-link guarantee beyond it.
@@ -290,15 +302,18 @@ A custom scheme has no ownership verification on Android: any installed app or w
 so the design relies on the link holding no credential and being unable to change state. Verified HTTPS
 App Links would need a server `assetlinks.json` and are not part of this change.
 
-Emulator checks with a debug build exercised authenticated cold and warm task opening against a
-matching backend. History-flagged links did not reopen a dismissed task, and a foreign server origin
-was refused without changing the selected server or account. Earlier unauthenticated checks confirmed
-that links do not sign in or select a server. The chooser and browser hand-off, rotation or process-death
-recreation, actual Recents relaunch, verification-deferral timing, and physical devices still need qualification. A browser
-hand-off with a selector or clip data is refused and remains unverified. The bridge and delivery hook
-tests cover the JavaScript side; `NativeTaskLinkTest` covers the parser and `Slot` policy, not the full
-`NativeZeroTransport` or `MainActivity` runtime. Task-link work remains open under #796 and #799; broader
-device qualification stays open under #346.
+An API 36 emulator with an independent debug build exercised authenticated warm, background,
+force-stopped cold and post-reboot task opening against a matching backend. Runtime checks also cover
+foreign and credential-bearing origins, extra query fields, inaccessible tasks, busy delivery, page
+replacement, verification deferral, failed-verification retirement, repeated dismissal, server changes
+and sign-out. Refused links show unavailable once and do not change the selected server or account.
+These checks exercise `MainActivity` and `NativeZeroTransport`; bridge, delivery-hook and JVM tests
+cover their respective boundaries.
+
+This does not establish release-artifact or physical-device support. The custom-scheme browser chooser
+and external browser hand-off remain unqualified; an intent selector or clip data is refused.
+Broader native and device qualification remains open under #346.
+
 Checks that need no device:
 
 ```sh

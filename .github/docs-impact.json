@@ -2,15 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "ca51b3319809ce6c19a51d0278a708d7b85b9589a2770ff3aae7aa7484f4a64b",
-			"docs": [
-				"docs/security.md",
-				"docs/runbooks/native-authentication.md",
-				"README.md",
-				"docs/runbooks/sign-in-providers.md",
-				"docs/ROADMAP.md"
-			],
-			"note": "Document neutral sign-up followed by explicit sign-in, including email-bound invitation and pending native approval journeys in all six locales. Document local timer persistence and the reload limit: a forward device-clock correction can credit unworked time up to the interval length. Start and resume now anchor elapsed time at the action. Completion replay, dismissible logging errors, server permissions, timestamp validation and persisted formats remain unchanged. Import completion and conflict transfer focus during the DOM commit; moving focus during a status retry cancels the handoff, which also rechecks focus before committing. Import inputs, acknowledgment and persistence are unchanged. Document the browser connection requirement on opening or reloading, automatic and manual retries for transport failures, and continued offline editing in already-open tabs. HTTP session and startup refusals keep their existing behavior; no cached identity or offline startup is added. Once the session has resolved, a signed-out refetch after a sign-up or sign-in attempt no longer remounts Login, while the first fetch keeps the boot skeleton, so the entered email, the sign-up notice and sign-in errors stay visible; no documented flow changes."
+			"sourceDigest": "96357c80ba958a1b95100a6d9beb6dd4a9d908918a0dec0affc6062179807724",
+			"docs": ["apps/android/README.md"],
+			"note": "Document one-time unavailable feedback for stale task-link reads and signed-out refusals using all six existing translations. Refusals never navigate, select a server or change account authority."
 		},
 		"release": {
 			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",
@@ -28,9 +22,9 @@
 			"note": "Align chart metadata, resource labels and packaged deployment image examples with 0.1.0-beta.1. Preserve app/Zero pairing, storage and recovery guidance, and cluster qualification limits; the optional one-image bundle remains separate from standard release assets."
 		},
 		"native": {
-			"sourceDigest": "1a9f39a14e3af1c56084dfde8ae3128ffbf181e5aef396f1e8764ab37fd6a27b",
-			"docs": ["apps/desktop/README.md"],
-			"note": "Document desktop cold offline activation from complete unexpired evidence in the OS credential store, exact session binding, fail-closed verification and revocation markers, and native token refresh on socket retry. Existing records need one complete online start; downgrades require signing out stored accounts before installing an older build. Retain queued edits, refuse fallback for trust, HTTP, validation or storage failures, and keep platform runtime qualification explicit. Android cached activation policy is unchanged. Every authenticated native request now persists a refusal fence before I/O, including attachment, notification, cleanup and sync-handshake requests. Binary keyring chunks stay within the Windows blob limit, share credential references, and use a bounded recovery journal. Both earlier protected-record formats require fresh online evidence after upgrade; downgrades require OS credential-manager cleanup. The desktop TLS refusal test fixture now carries a fixed non-secret password because macOS refuses empty-password PKCS#12 imports; test-only, no runtime or documented behavior change."
+			"sourceDigest": "193c31351d4ba740640f518eda21e0428cc8be7472d945c421615bbafdb1e52a",
+			"docs": ["apps/android/README.md"],
+			"note": "Retain unbound task-link ingress in memory across pre-handshake recreation, and handle boot assets updates without retiring a newly bound page. Only an outstanding verification keeps unverified ownership; failed checks retire stale pending links before new ingress. Document one-time refusal feedback, idempotent dismissal and debug-only user CA trust. Release trust anchors, session storage and server protocols are unchanged."
 		},
 		"authentication": {
 			"sourceDigest": "94708677c42d414b0287be7f48a38f511b95039dce4a14a4b33939cc3d3dd213",
