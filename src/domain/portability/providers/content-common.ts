@@ -96,11 +96,17 @@ export function decodeContent(input: Uint8Array): string {
 		throw new ProviderImportError("invalid-encoding");
 	}
 }
-export function contentJson(input: Uint8Array): Record<string, unknown> {
+export function contentJson(
+	input: Uint8Array,
+	checkpoint: () => void = () => {},
+): Record<string, unknown> {
 	try {
-		const parsed = record(parseBoundedPortableJson(decodeContent(input)));
+		const parsed = record(
+			parseBoundedPortableJson(decodeContent(input), checkpoint),
+		);
 		const pending: unknown[] = [parsed];
 		while (pending.length) {
+			checkpoint();
 			const next = pending.pop();
 			if (!next || typeof next !== "object") continue;
 			for (const [key, value] of Object.entries(next)) {

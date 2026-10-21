@@ -44,7 +44,7 @@ export async function parseTrelloContent(
 	options: ContentOptions,
 ) {
 	const builder = new ContentBuilder("trello", options);
-	const board = contentJson(input),
+	const board = contentJson(input, builder.checkpoint),
 		boardId = trelloId(board.id),
 		name = builder.text(nonempty(board.name, 4_000), "name");
 	builder.unsupported(board, [

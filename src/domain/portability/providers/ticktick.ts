@@ -82,9 +82,11 @@ export async function parseTickTickBackup(
 						.join(" / "),
 					"List Name",
 				),
-				home["Folder Name"] || null,
+				home["Folder Name"]
+					? builder.text(home["Folder Name"], "Folder Name")
+					: null,
 			);
-			let priority = row.Priority || "0";
+			let priority = (row.Priority || "0").replace(/^p/i, "");
 			if (!["0", "1", "3", "5"].includes(priority)) {
 				builder.noticeAt("field-invalid", "Priority");
 				priority = "0";

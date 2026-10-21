@@ -16,6 +16,30 @@ export function dayInZone(instant: string, zone: string): string {
 	}).format(new Date(instant));
 }
 
+// Todoist appends labels to the task name; only a trailing run is a label list.
+// Scanned in one linear pass: a backtracking `(@x\s*)+$` is quadratic on hostile cells.
+export function trailingLabels(content: string): {
+	title: string;
+	labels: string[];
+} {
+	const tokens = [
+		...content.matchAll(/(?<![^\s])@([\p{L}\p{N}_-]+)(?![^\s])/gu),
+	];
+	let start = content.length;
+	let first = tokens.length;
+	for (let index = tokens.length - 1; index >= 0; index--) {
+		const token = tokens[index] as RegExpExecArray;
+		const end = token.index + token[0].length;
+		if (content.slice(end, start).trim() !== "") break;
+		start = token.index;
+		first = index;
+	}
+	return {
+		title: content.slice(0, start).trim(),
+		labels: tokens.slice(first).map((token) => token[1] as string),
+	};
+}
+
 export async function parseTodoistContent(
 	input: Uint8Array,
 	options: ContentOptions,
@@ -92,20 +116,9 @@ export async function parseTodoistContent(
 				if (/^[1-4]$/.test(row.PRIORITY)) priority = Number(row.PRIORITY);
 				else builder.noticeAt("field-invalid", "PRIORITY");
 			}
-			const labels: string[] = [];
-			const title = builder.text(
-				(row.CONTENT ?? "")
-					.replace(
-						/(^|\s)@([\p{L}\p{N}_-]+)/gu,
-						(_match, space: string, name: string) => {
-							labels.push(builder.text(name, "CONTENT"));
-							return space;
-						},
-					)
-					.replace(/\s{2,}/g, " ")
-					.trim(),
-				"CONTENT",
-			);
+			const split = trailingLabels(row.CONTENT ?? "");
+			const labels = split.labels.map((name) => builder.text(name, "CONTENT"));
+			const title = builder.text(split.title, "CONTENT");
 			if (!title) throw new ProviderImportError("invalid-row");
 			const parsed = parseTodoistDate(
 				row.DATE ?? "",

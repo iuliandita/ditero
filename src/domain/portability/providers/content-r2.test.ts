@@ -486,7 +486,7 @@ describe("P3 conversions", () => {
 			"section,Only section,,,,,,,,",
 			"task,mail bob @acme re: x @acme,,1,1,,,,,",
 		]);
-		expect(tasks(result)[0]?.title).toBe("mail bob re: x");
+		expect(tasks(result)[0]?.title).toBe("mail bob @acme re: x");
 		expect(result.document.data.lists.map((list) => list.title)).toEqual([
 			"Only section",
 		]);

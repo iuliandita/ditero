@@ -528,14 +528,19 @@ function* childValues(value: object): Generator<unknown> {
 		}
 }
 
-export function parseBoundedPortableJson(input: string): unknown {
+export function parseBoundedPortableJson(
+	input: string,
+	checkpoint: () => void = () => {},
+): unknown {
 	let byteLength = 0;
 	// Bound bracket depth before JSON.parse: native parsing of deeply nested input
 	// is superlinear and cannot be interrupted by request deadlines.
 	let depth = 0;
 	let inString = false;
 	let escaped = false;
+	let scanned = 0;
 	for (const character of input) {
+		if (scanned++ % 512 === 0) checkpoint();
 		const point = character.codePointAt(0) ?? 0;
 		byteLength +=
 			point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
@@ -552,6 +557,7 @@ export function parseBoundedPortableJson(input: string): unknown {
 		} else if (character === "]" || character === "}") depth--;
 	}
 	let parsed: unknown;
+	checkpoint();
 	try {
 		parsed = JSON.parse(input);
 	} catch {
@@ -578,6 +584,7 @@ export function parseBoundedPortableJson(input: string): unknown {
 	];
 	let visited = 0;
 	while (pending.length) {
+		if (visited % 512 === 0) checkpoint();
 		const frame = pending[pending.length - 1];
 		if (!frame) break;
 		const next = frame.iterator.next();
@@ -601,6 +608,7 @@ export function parseBoundedPortableJson(input: string): unknown {
 				depth: frame.depth + 1,
 			});
 	}
+	checkpoint();
 	return parsed;
 }
 
