@@ -173,7 +173,7 @@ bun install --frozen-lockfile
 cd ../..
 bun run i18n:compile
 bunx tsc --noEmit --project apps/desktop/tsconfig.json
-bunx vitest run apps/desktop/src/transport.test.ts apps/android/src/connection-error.test.ts
+bunx vitest run apps/desktop/src/transport.test.ts apps/android/src/connect-error.test.ts
 cd apps/desktop
 bun run build
 cd src-tauri
