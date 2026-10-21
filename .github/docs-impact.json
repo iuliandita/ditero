@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "69571933e06158f674478136e781dbb2b443d6e8c6b61393dc1230ab53e7eb0f",
-			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Upgrade Better Auth and passkey together to 1.7.12. TOTP enrollment explicitly requests totp and checks the response method before reading setup keys or backup codes. Document the response boundary and unchanged explicit native approval. Session startup, transport retry, locale and theme behavior are preserved."
+			"sourceDigest": "af9226244133af6ac0bc4f0a2ee3b5f6221b6408613842e3a0f535564040d66e",
+			"docs": ["docs/runbooks/sign-in-providers.md"],
+			"note": "Sign-in shows every server-listed provider and Settings gains explicit link and unlink actions, localized in all six catalogs. Existing locale, theme, session and native consent behavior is preserved."
 		},
 		"release": {
 			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",
@@ -12,14 +12,14 @@
 			"note": "Prepare the first beta, 0.1.0-beta.1 with Android code 13, retain the existing signing certificate and documentation epoch, align release commands, and describe the remaining prerelease and native qualification limits. Generated publication notes now describe a prerelease rather than an alpha."
 		},
 		"configuration": {
-			"sourceDigest": "f5dcb8333e83ba0e549930eafc17a64209b627b97b5b603cfd8da83511f04abf",
-			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Align the default app and Zero image pair with beta.1 in the packaged guides. This release changes image versions, not operator settings or the retained credentials required for upgrades."
+			"sourceDigest": "0a85390f9360fd396635e00104cce99dc64c2ffe6aedf8706cf1be25936d4814",
+			"docs": ["docs/runbooks/sign-in-providers.md", "deploy/docker/aio/README.md"],
+			"note": "Add optional sign-in provider settings (GOOGLE_, MICROSOFT_, GITHUB_, DISCORD_, FACEBOOK_, APPLE_ and DITERO_OIDC_) with _FILE secrets, documented in the provider runbook and deployment guides. No existing setting changes and all are off by default."
 		},
 		"deployment": {
-			"sourceDigest": "eed8f93a8a2f450565cfaf511f278cd90bfc66bf6ac1788f125d6df379766a35",
-			"docs": ["deploy/helm/ditero/README.md", "deploy/kustomize/README.md"],
-			"note": "Align chart metadata, resource labels and packaged deployment image examples with 0.1.0-beta.1. Preserve app/Zero pairing, storage and recovery guidance, and cluster qualification limits; the optional one-image bundle remains separate from standard release assets."
+			"sourceDigest": "21ee4db12db0e75723b17e6e130d0e7aac6100539d278d9b57290d657a938a4f",
+			"docs": ["deploy/docker/aio/README.md", "deploy/helm/ditero/README.md"],
+			"note": "Compose and the one-image bundle pass the optional provider variables through and Helm uses extraEnv. All are off by default, so existing volumes, upgrade and rollback steps are unchanged."
 		},
 		"native": {
 			"sourceDigest": "1a9f39a14e3af1c56084dfde8ae3128ffbf181e5aef396f1e8764ab37fd6a27b",
@@ -27,9 +27,9 @@
 			"note": "Document desktop cold offline activation from complete unexpired evidence in the OS credential store, exact session binding, fail-closed verification and revocation markers, and native token refresh on socket retry. Existing records need one complete online start; downgrades require signing out stored accounts before installing an older build. Retain queued edits, refuse fallback for trust, HTTP, validation or storage failures, and keep platform runtime qualification explicit. Android cached activation policy is unchanged. Every authenticated native request now persists a refusal fence before I/O, including attachment, notification, cleanup and sync-handshake requests. Binary keyring chunks stay within the Windows blob limit, share credential references, and use a bounded recovery journal. Both earlier protected-record formats require fresh online evidence after upgrade; downgrades require OS credential-manager cleanup. The desktop TLS refusal test fixture now carries a fixed non-secret password because macOS refuses empty-password PKCS#12 imports; test-only, no runtime or documented behavior change."
 		},
 		"authentication": {
-			"sourceDigest": "0441d54419f2627d3f7c2b072d47a8e01e2a35088e6d48b2e3cacdd7cd398b12",
-			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Upgrade Better Auth and passkey together to 1.7.12. Google keeps its callback URI, PKCE and pending native consent return URL. OAuth callbacks now preserve APIError codes, so remove the message-as-code workaround and retain readable error descriptions. Document the required additive JWT key migration; account schema, credential formats, registration policies and trusted origins are unchanged."
+			"sourceDigest": "27054f72264b6331ec29fc13306f4afe5de604eb3e9963971e44e5a350fe5744",
+			"docs": ["docs/runbooks/native-authentication.md", "docs/runbooks/sign-in-providers.md"],
+			"note": "Add generic OpenID Connect, Microsoft, GitHub, Discord, Apple and Facebook sign-in beside Google. Provider accounts are keyed on immutable IDs, only provider-verified emails count for invitations, same-email accounts are no longer linked implicitly (Google included) and linking is explicit in Settings. Account schema, credential formats and the native approval step are unchanged. Anyone who relied on automatic Google linking signs in with their password once and links Google. To roll back, remove the provider variables; linked provider accounts stay as unused rows."
 		},
 		"compatibility": {
 			"sourceDigest": "40d30bcfd813e7074890ee483f1417968e6758a3e3d60a1295424a2afa461e64",
