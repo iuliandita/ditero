@@ -3,6 +3,7 @@
 The CLI uses the version 1 public API to discover member-visible content, plan a
 task, create it, and complete, update, or delete an observed task with an explicit retry key.
 Later sections cover list, folder, comment, relationship, placement and webhook workflows.
+
 ## Release bundles
 
 Each release publishes `ditero-VERSION-clients.tar.gz` with the CLI
@@ -34,6 +35,11 @@ from a directory you control.
 whether the source was modified, the minimum Bun and the running Bun. An older Bun
 exits with status 2 and a message before any client code runs. Source maps are not
 published; rebuild the exact tagged commit with `bun run build:clients`.
+
+The bundles support exactly the operations in this guide, the [MCP tools](mcp.md) and
+the [terminal interface](tui.md); they add no commands. They need only the public API
+over HTTPS and a personal access token: a read token for discovery and observation, a
+write token for every change.
 
 Supply `DITERO_URL` and `DITERO_TOKEN` through the process environment. Caller
 controlled Bun runtime flags are trusted configuration, not a sandbox. Every command
