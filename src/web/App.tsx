@@ -73,7 +73,7 @@ function SessionRoutes({
 			<NativeAuthorize session={session} isPending={isPending} />,
 		);
 	// The emailed reset link opens here in whatever browser reads the mail.
-	if (window.location.pathname === "/reset-password")
+	if (window.location.pathname.replace(/\/+$/, "") === "/reset-password")
 		return standalone(<ResetPassword />);
 	if (isPending) return standalone(<BootSkeleton />);
 	if (!session)

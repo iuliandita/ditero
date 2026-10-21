@@ -96,7 +96,7 @@ afterAll(async () => {
 
 const hex = () => createHash("sha256").update(randomBytes(16)).digest("hex");
 
-async function seedAccount() {
+async function seedAccount({ withPassword = true } = {}) {
 	const userId = randomUUID();
 	const workspaceId = randomUUID();
 	const listId = randomUUID();
@@ -106,10 +106,11 @@ async function seedAccount() {
 		'insert into "user"(id,name,email,email_verified) values($1,$2,$3,true)',
 		[userId, "Reset fixture", `${userId}@reset.test`],
 	);
-	await admin.query(
-		"insert into account(id,account_id,provider_id,user_id,password,updated_at) values($1,$2,'credential',$2,$3,now())",
-		[randomUUID(), userId, await context.password.hash("old-password-123")],
-	);
+	if (withPassword)
+		await admin.query(
+			"insert into account(id,account_id,provider_id,user_id,password,updated_at) values($1,$2,'credential',$2,$3,now())",
+			[randomUUID(), userId, await context.password.hash("old-password-123")],
+		);
 	await admin.query(
 		"insert into workspace(id,name,owner_id,kind) values($1,'Personal',$2,'personal')",
 		[workspaceId, userId],
@@ -151,12 +152,15 @@ async function seedAccount() {
 		"insert into inbound_webhook(id,user_id,list_id,workspace_id,name,secret_hash,hint,expires_at) values($1,$2,$3,$4,'kept',$5,'abcd',now()+interval '30 days')",
 		[randomUUID(), userId, listId, workspaceId, hex()],
 	);
-	const resetToken = randomBytes(24).toString("hex");
-	await admin.query(
-		"insert into verification(id,identifier,value,expires_at,updated_at) values($1,$2,$3,now()+interval '1 hour',now())",
-		[randomUUID(), `reset-password:${resetToken}`, userId],
+	const [resetToken, otherResetToken] = [0, 1].map(() =>
+		randomBytes(24).toString("hex"),
 	);
-	return { userId, token, feed, resetToken };
+	for (const value of [resetToken, otherResetToken])
+		await admin.query(
+			"insert into verification(id,identifier,value,expires_at,updated_at) values($1,$2,$3,now()+interval '1 hour',now())",
+			[randomUUID(), `reset-password:${value}`, userId],
+		);
+	return { userId, token, feed, resetToken, otherResetToken };
 }
 
 function reset(token: string, newPassword = "new-password-456") {
@@ -236,6 +240,7 @@ test("a reset revokes planted credentials and reports them, leaving workspace se
 	await expect(
 		feeds.downloadCalendarFeed(runtime, victim.feed),
 	).rejects.toThrow();
+	expect((await reset(victim.otherResetToken)).status).toBe(400);
 
 	expect(await counts(bystander.userId)).toMatchObject({
 		sessions: 1,
@@ -306,4 +311,20 @@ test("a reset that bypasses the revoking entry point is refused", async () => {
 	expect(direct.status).toBe(500);
 	expect(await direct.json()).toMatchObject({ code: "RESET_UNAVAILABLE" });
 	expect(await counts(victim.userId)).toEqual(before);
+});
+
+test("a reset of a provider-only account creates its password and unlinks the provider", async () => {
+	const victim = await seedAccount({ withPassword: false });
+	const response = await reset(victim.resetToken);
+	expect(response.status, await response.clone().text()).toBe(200);
+	expect(await response.json()).toMatchObject({
+		revoked: { linkedAccounts: 1, accessTokens: 1 },
+	});
+	expect(await counts(victim.userId)).toMatchObject({
+		credentials: 1,
+		linkedAccounts: 0,
+		accessTokens: 0,
+		resetTokens: 0,
+	});
+	expect(await passwordMatches(victim.userId, "new-password-456")).toBe(true);
 });

@@ -51,8 +51,8 @@ link always opens the web reset page (`/reset-password`), never a native target
 supplied by the requesting client, so it works in any browser. The reset creates
 no session and the pending grant is not carried through it: start sign-in from
 the app again afterwards. A completed reset ends every browser and native session
-of the account and revokes its access tokens, calendar feed links, passkeys and
-linked provider sign-ins in the same transaction; see
+of the account and revokes its access tokens, calendar feed links, passkeys,
+linked provider sign-ins and other reset links in the same transaction; see
 [security](../security.md).
 Approval derives the user and approving session from the browser, not from
 request fields. A native session cannot approve another grant. There is no

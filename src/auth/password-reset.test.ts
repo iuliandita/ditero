@@ -133,6 +133,8 @@ describe("withPasswordResetTransaction", () => {
 		expect(database.transaction).toHaveBeenCalledOnce();
 		expect(statements).toEqual([
 			"select set_config('ditero.user_id', ?, true)",
+			'select id from "user" where id = ? for update',
+			"delete from verification where identifier like 'reset-password:%' and value = ?",
 			"update personal_access_token set revoked_at = statement_timestamp() where user_id = ? and revoked_at is null",
 			"update calendar_feed set revoked_at = statement_timestamp() where user_id = ? and revoked_at is null",
 			"delete from passkey where user_id = ?",
@@ -148,6 +150,26 @@ describe("withPasswordResetTransaction", () => {
 			},
 		});
 	});
+});
+
+test("a reset transaction without a credential write rolls back", async () => {
+	const { database, statements } = fakeDatabase();
+	const { factory } = fakeFactory();
+	const wrapped = withPasswordResetTransaction(
+		() => factory as never,
+		database as never,
+	)({} as never) as unknown as {
+		transaction: (callback: () => Promise<unknown>) => Promise<unknown>;
+	};
+	vi.spyOn(console, "error").mockImplementation(() => {});
+	const response = await runPasswordReset(async () => {
+		await expect(wrapped.transaction(async () => "done")).rejects.toThrow(
+			"Password reset is unavailable",
+		);
+		return Response.json({ status: true });
+	});
+	expect(statements).toEqual([]);
+	expect(response.status).toBe(500);
 });
 
 describe("runPasswordReset", () => {

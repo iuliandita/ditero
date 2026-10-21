@@ -79,9 +79,13 @@ transaction with the token use and the password change, it:
 - ends every session of the account, browser and native;
 - revokes every personal access token and calendar feed link;
 - deletes every passkey;
-- unlinks every Google or other provider sign-in, keeping only the password.
+- unlinks every Google or other provider sign-in, keeping only the password;
+- invalidates every other outstanding reset link of the account.
 
-If any step fails, none of them happen and the link stays usable. The reset page
+If any step fails, none of them happen and the link stays usable. A request
+that was already authenticated before the reset committed can still finish
+creating a credential, so review the lists after a reset if the account was
+actively in use by someone else. The reset page
 lists the kinds of credentials that were removed. Sync access ends within the
 revocation bound described below: new Zero tokens and requests are refused
 immediately and open subscriptions close at the next revalidation. A session

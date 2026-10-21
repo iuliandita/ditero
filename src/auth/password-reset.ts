@@ -38,8 +38,14 @@ export async function revokeResetCredentials(
 	tx: Pick<Transaction, "execute">,
 	userId: string,
 ): Promise<ResetRevocation> {
-	// Token and feed rows are row-level secured by the acting user.
+	// Token and feed rows are row-level secured by the acting user. Creating
+	// either locks the user row too, so one that commits first is revoked here.
 	await tx.execute(sql`select set_config('ditero.user_id', ${userId}, true)`);
+	await tx.execute(sql`select id from "user" where id = ${userId} for update`);
+	// Any other outstanding reset link could reset the password again.
+	await tx.execute(
+		sql`delete from verification where identifier like 'reset-password:%' and value = ${userId}`,
+	);
 	const accessTokens = await tx.execute(
 		sql`update personal_access_token set revoked_at = statement_timestamp() where user_id = ${userId} and revoked_at is null`,
 	);
@@ -126,8 +132,9 @@ export function withPasswordResetTransaction(
 								userId = id;
 							}),
 						);
-						if (userId !== undefined)
-							state.revoked = await revokeResetCredentials(tx, userId);
+						// Roll back rather than commit a password change that nothing revoked.
+						if (userId === undefined) throw resetUnavailable();
+						state.revoked = await revokeResetCredentials(tx, userId);
 						return result;
 					});
 				};
@@ -139,11 +146,14 @@ export function withPasswordResetTransaction(
 // A reset that does not pass through runPasswordReset would change the
 // password and leave every planted credential working.
 export function assertPasswordResetScope(): void {
-	if (!passwordReset.getStore())
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			code: "RESET_UNAVAILABLE",
-			message: "Password reset is unavailable",
-		});
+	if (!passwordReset.getStore()) throw resetUnavailable();
+}
+
+function resetUnavailable(): APIError {
+	return new APIError("INTERNAL_SERVER_ERROR", {
+		code: "RESET_UNAVAILABLE",
+		message: "Password reset is unavailable",
+	});
 }
 
 export async function runPasswordReset(

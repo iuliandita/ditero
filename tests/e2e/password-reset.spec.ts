@@ -81,6 +81,21 @@ test("the mailed link sets a new password, reports what it removed and returns t
 		},
 	);
 	expect(token.status(), await token.text()).toBe(201);
+	const planted = ((await token.json()) as { data: { token: string } }).data
+		.token;
+	const meStatus = async () => {
+		const api = await playwrightRequest.newContext();
+		try {
+			return (
+				await api.get(`${origin}/api/v1/me`, {
+					headers: { authorization: `Bearer ${planted}` },
+				})
+			).status();
+		} finally {
+			await api.dispose();
+		}
+	};
+	expect(await meStatus()).toBe(200);
 
 	const mailApi = await playwrightRequest.newContext();
 	try {
@@ -121,6 +136,7 @@ test("the mailed link sets a new password, reports what it removed and returns t
 	await expect(page.getByTestId("signin")).toBeVisible();
 	expect(await signInStatus(page, email, OLD_PASSWORD)).toBe(401);
 	expect(await signInStatus(page, email, NEW_PASSWORD)).toBe(200);
+	expect(await meStatus()).toBe(401);
 
 	// The link is single-use.
 	const reused = await page.request.get(`${origin}${path}`, {
