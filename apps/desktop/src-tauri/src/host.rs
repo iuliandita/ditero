@@ -79,6 +79,14 @@ struct Socket {
     is_open: Arc<AtomicBool>,
     tx: mpsc::Sender<Message>,
     task: tauri::async_runtime::JoinHandle<()>,
+    handshake: oneshot::Receiver<()>,
+}
+async fn retire_socket(mut socket: Socket) {
+    if !socket.is_open.load(Ordering::SeqCst) {
+        // Let the existing 20-second handshake classify trust before cancellation.
+        let _ = tokio::time::timeout(Duration::from_secs(21), &mut socket.handshake).await;
+    }
+    socket.task.abort();
 }
 struct Actor {
     tx: mpsc::Sender<Work>,
@@ -378,7 +386,7 @@ impl Actor {
                     let _ = ack.send(result);
                 }
                 Work::Drain(ack) => {
-                    self.drain();
+                    self.drain_gracefully().await;
                     if !notifications::drain(
                         std::mem::take(&mut self.push_tasks),
                         Duration::from_secs(3),
@@ -451,6 +459,11 @@ impl Actor {
     fn advance(&mut self) {
         let _guard = self.files.retirement();
         self.gen = self.clock.fetch_add(1, Ordering::SeqCst) + 1;
+    }
+    async fn drain_gracefully(&mut self) {
+        let sockets: Vec<_> = self.sockets.drain().map(|(_, socket)| socket).collect();
+        futures_util::future::join_all(sockets.into_iter().map(retire_socket)).await;
+        self.drain();
     }
     fn drain(&mut self) {
         self.clear_task_links();
@@ -1582,7 +1595,9 @@ impl Actor {
                 }
                 let socket = self.sockets.get(&cid).ok_or("invalid-socket")?;
                 if !socket.is_open.load(Ordering::SeqCst) {
-                    self.close_socket(cid);
+                    let socket = self.sockets.remove(&cid).ok_or("invalid-socket")?;
+                    retire_socket(socket).await;
+                    self.emit(json!({"t":"ws","gen":self.gen,"cid":cid,"e":"close","code":1006,"reason":"","clean":false}));
                     return Ok(json!({"ok":true}));
                 }
                 if socket
@@ -2061,6 +2076,7 @@ impl Actor {
         let guard = self
             .fences
             .begin(self.session.as_ref().ok_or("no-session")?)?;
+        let (handshake_done, handshake) = oneshot::channel();
         let task = tauri::async_runtime::spawn(async move {
             let emit = |kind: &str, fields: Value| {
                 if clock.load(Ordering::SeqCst) == gen {
@@ -2087,7 +2103,9 @@ impl Actor {
                 Ok(Err(tokio_tungstenite::tungstenite::Error::Io(_))) => true,
                 _ => false,
             };
-            if guard.complete(safe).is_err() {
+            let completed = guard.complete(safe);
+            let _ = handshake_done.send(());
+            if completed.is_err() {
                 emit("error", json!({"kind":"storage-failed"}));
                 emit("close", json!({"code":1006,"reason":"","clean":false}));
                 let _ = owner.send(Work::Ended(gen, cid)).await;
@@ -2128,7 +2146,15 @@ impl Actor {
             emit("close", json!({"code":code,"reason":"","clean":clean}));
             let _ = owner.send(Work::Ended(gen, cid)).await;
         });
-        self.sockets.insert(cid, Socket { tx, task, is_open });
+        self.sockets.insert(
+            cid,
+            Socket {
+                tx,
+                task,
+                is_open,
+                handshake,
+            },
+        );
         Ok(json!({"ok":true}))
     }
 }
@@ -3505,6 +3531,7 @@ mod tests {
                 tx,
                 task,
                 is_open: Arc::new(AtomicBool::new(true)),
+                handshake: oneshot::channel().1,
             },
         );
         let result = host
@@ -3515,6 +3542,49 @@ mod tests {
             .await;
         assert_eq!(result, Err("send-failed"));
         assert!(host.sockets.is_empty());
+    }
+    #[tokio::test]
+    async fn normal_close_settles_pending_handshakes_without_clearing_refusals() {
+        for client_close in [false, true] {
+            for safe in [false, true] {
+                let mut host = cached_host();
+                let session = host.session.clone().unwrap();
+                let guard = host.fences.begin(&session).unwrap();
+                let (done, handshake) = oneshot::channel();
+                let (tx, _rx) = mpsc::channel(1);
+                let task = tauri::async_runtime::spawn(async move {
+                    tokio::task::yield_now().await;
+                    guard.complete(safe).unwrap();
+                    let _ = done.send(());
+                });
+                host.sockets.insert(
+                    1,
+                    Socket {
+                        tx,
+                        task,
+                        handshake,
+                        is_open: Arc::new(AtomicBool::new(false)),
+                    },
+                );
+                assert!(!host.fences.allowed(&session));
+                if client_close {
+                    host.post(
+                        &json!({"op":"ws.close","rid":1,"gen":host.gen,"cid":1}),
+                        100,
+                    )
+                    .await
+                    .unwrap();
+                } else {
+                    host.drain_gracefully().await;
+                }
+                assert!(host.sockets.is_empty());
+                assert_eq!(
+                    host.fences.allowed(&session),
+                    safe,
+                    "client_close={client_close}, safe={safe}"
+                );
+            }
+        }
     }
     #[tokio::test]
     async fn native_refusals_survive_failed_credential_deletion_and_cold_offline_restart() {

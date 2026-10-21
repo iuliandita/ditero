@@ -134,7 +134,7 @@ try {
 	const password = `Journey-${randomBytes(16).toString("hex")}`;
 	const email = "journey@example.test";
 	for (const instance of [a, b]) {
-		const response = await browser.context.request.post(
+		const response = await browser.request.post(
 			`${instance.api.origin}/api/auth/sign-up/email`,
 			{
 				headers: { Origin: instance.api.origin },

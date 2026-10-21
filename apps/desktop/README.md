@@ -24,6 +24,9 @@ concurrent instances from overwriting each other's state. A bounded protected
 journal tracks interrupted writes so retries reclaim uncommitted chunks. Local UI
 and sync persistence retain server/account scopes. Closing waits for durable local sync retirement before
 native sockets are drained and the window is destroyed; a failure keeps it open.
+Pending reconnect handshakes finish within their existing deadline before normal
+close cancels them. Network failures preserve verified offline access; failed
+certificate trust and unknown interrupted requests continue to refuse it.
 
 Recovery-code downloads use the native system save dialog and account-bound write
 operations. Cancelling leaves the code visible; a failed save shows a retryable error.

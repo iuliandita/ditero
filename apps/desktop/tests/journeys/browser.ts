@@ -1,9 +1,63 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { request as httpsRequest } from "node:https";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import { background, evidence, freePort, run, state, until } from "./stack.ts";
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`;
+
+function fixtureRequest(
+	url: string,
+	options: {
+		method?: string;
+		headers?: Record<string, string>;
+		data?: unknown;
+	} = {},
+) {
+	return new Promise<{
+		status(): number;
+		ok(): boolean;
+		text(): Promise<string>;
+	}>((done, fail) => {
+		const body =
+			options.data === undefined ? undefined : JSON.stringify(options.data);
+		const request = httpsRequest(
+			url,
+			{
+				method: options.method ?? "GET",
+				ca: readFileSync(resolve(state, "ca.crt")),
+				headers: {
+					...(body
+						? {
+								"Content-Type": "application/json",
+								"Content-Length": String(Buffer.byteLength(body)),
+							}
+						: {}),
+					...options.headers,
+				},
+			},
+			(response) => {
+				const chunks: Buffer[] = [];
+				response.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+				response.on("error", fail);
+				response.on("end", () => {
+					const status = response.statusCode ?? 0;
+					const text = Buffer.concat(chunks).toString("utf8");
+					done({
+						status: () => status,
+						ok: () => status >= 200 && status < 300,
+						text: async () => text,
+					});
+				});
+			},
+		);
+		request.setTimeout(15000, () =>
+			request.destroy(new Error("Verified fixture request timed out")),
+		);
+		request.on("error", fail);
+		request.end(body);
+	});
+}
 
 export async function systemBrowser() {
 	const port = await freePort();
@@ -117,9 +171,15 @@ end tell`,
 	}
 	return {
 		context,
+		request: {
+			post: (
+				url: string,
+				options: { headers: Record<string, string>; data: unknown },
+			) => fixtureRequest(url, { ...options, method: "POST" }),
+		},
 		async probe(origin: string) {
 			const url = `${origin}/health`;
-			const verified = await context.request.get(url);
+			const verified = await fixtureRequest(url);
 			writeFileSync(
 				resolve(evidence, "browser-handler-health.json"),
 				JSON.stringify({
@@ -171,6 +231,16 @@ end tell`,
 					return page;
 				},
 			);
+			await page.waitForFunction(() => {
+				try {
+					return (
+						JSON.parse(document.querySelector("pre")?.textContent ?? "").ok ===
+						true
+					);
+				} catch {
+					return false;
+				}
+			});
 			await page.screenshot({ path: resolve(evidence, "browser-handler.png") });
 			await page.close();
 		},
