@@ -2,46 +2,28 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "555a024ec77a941d587df4ef8292948a45d14c5de663da84e2f3944ccfe964d9",
-			"docs": [
-				"docs/security.md",
-				"apps/android/README.md",
-				"apps/desktop/README.md",
-				"docs/runbooks/native-authentication.md"
-			],
-			"note": "Document fragment invite tokens, legacy query migration, body-based preview and encrypted key-fragment reload recovery. Document Android Back dismissal and navigation order, top-level exit, and background network teardown during Activity recreation. Document recovery-code downloads through account-bound native save operations on Android and desktop, retry after a failed write, and distinct Android connection diagnostics without relaxing certificate trust. Document browser account switching on native consent, preserving the validated request and requiring explicit approval from the replacement account. Document localized keyring setup and retry, the Linux package recommendation, and account-bound fixed Settings browser handoffs on desktop and Android. Matching Settings routes preserve the destination through browser sign-in; older servers still open their normal application page."
+			"sourceDigest": "bb5e45b4d2d1bb726d335831067502b370185e17495fcca95f80f02233f9c16b",
+			"docs": ["apps/desktop/README.md", "apps/android/README.md"],
+			"note": "Document localized keyring setup and retry, the Linux package recommendation, and account-bound fixed Settings browser handoffs on desktop and Android. Matching Settings routes preserve the destination through browser sign-in; older servers still open their normal application page."
 		},
 		"release": {
-			"sourceDigest": "0d8116dc0ccfd64ceb92083be09c6aa640bddbc8bd0021574a62ca26f1c1fa7b",
-			"noImpact": "The Compose release archive now includes postgres-healthcheck.sh, which the bundled database already bind-mounts, and packaging refuses archives missing any bind-mounted script. Release steps, assets and documented procedures are unchanged."
+			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
+			"docs": ["RELEASING.md"],
+			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "8ed3fde2e990d4446aa45a6dc2dc59e17451c615321123504b4d8dbf7e98b895",
-			"docs": [
-				"docs/runbooks/database-roles.md",
-				"docs/runbooks/backup-restore.md",
-				"deploy/helm/ditero/README.md"
-			],
-			"note": "Document container-readable file secrets, atomic role initialization, missing-role health failures and safe recovery without widening application privileges. Document PostgreSQL 15 minimum, complete Zero role/publication setup, working full-database backup roles, own-origin deployment and publication/reset forwarding with empty values unset. The Linux DEB adds a recommended Secret Service provider without changing server configuration or deployment settings. Desktop keyring setup and retry guidance are documented in apps/desktop/README.md."
+			"sourceDigest": "738651e814af38d0f12e0accec1f3c2c7cc5226828447d50a16c8df8e3c2c4f9",
+			"noImpact": "The Linux DEB adds a recommended Secret Service provider without changing server configuration or deployment settings. Desktop keyring setup and retry guidance are documented in apps/desktop/README.md."
 		},
 		"deployment": {
-			"sourceDigest": "48f9e25d8b320e41b76b66bc5aa86212a8e1fc07fa140dbe857a6b42c90515eb",
-			"docs": [
-				"docs/runbooks/database-roles.md",
-				"docs/runbooks/backup-restore.md",
-				"deploy/helm/ditero/README.md"
-			],
-			"note": "Document container-readable file secrets, atomic role initialization, missing-role health failures and safe recovery without widening application privileges. Complete operator setup and restore instructions, preserve runtime role restrictions, explain PostgreSQL compatibility and app origin requirements, and pass Zero publication/reset configuration."
+			"sourceDigest": "4a4cadef874a1cef442178e7a6e332a0eefe5252e635068a1d4c49486f7d7794",
+			"docs": ["deploy/docker/aio/README.md", "deploy/helm/ditero/README.md"],
+			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
 		},
 		"native": {
-			"sourceDigest": "77e81e76b2674864d207d0df19ef3f05aa130c0262828bf04496176166166e3a",
-			"docs": ["apps/android/README.md", "apps/desktop/README.md"],
-			"note": "Document Android Back dismissal and navigation order, top-level exit, and background network teardown during Activity recreation. Document recovery-code downloads through account-bound native save operations on Android and desktop, retry after a failed write, and distinct Android connection diagnostics without relaxing certificate trust. Document localized keyring setup and retry, the Linux package recommendation, and account-bound fixed Settings browser handoffs on desktop and Android. Matching Settings routes preserve the destination through browser sign-in; older servers still open their normal application page. Document the desktop online-start requirement for cached data, retry after reconnection, retention of durably saved edits, and the remaining encrypted evidence and refusal-policy work in issue 1090. Android cached activation and native credential and trust checks are unchanged."
-		},
-		"authentication": {
-			"sourceDigest": "cc4fcf67f7ed126fb4fc504e7adfb2a33d3383994a7f068e24ae941a942313ec",
-			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "Invitations remain HTTPS browser links with fragment tokens and backward-compatible acceptance; native task scheme handling is unchanged."
+			"sourceDigest": "7fc0e7a23875b3f54f3f692800f9d1440a58525528271bec440b8254920bc178",
+			"docs": ["apps/desktop/README.md"],
+			"note": "Document the asynchronous five-second launcher wait, retryable spawn and non-zero exit failures, and successful handoff when a launcher remains running beyond the bound."
 		}
 	}
 }

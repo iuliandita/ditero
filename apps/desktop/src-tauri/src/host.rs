@@ -1480,12 +1480,12 @@ impl Actor {
             "browser" => {
                 let p = self.pending.as_ref().ok_or("no-pending-grant")?;
                 let origin = self.origin.as_ref().ok_or("no-server")?;
-                open_browser(&format!("{origin}/native/authorize?grantId={}", p.grant))?;
+                open_browser(&format!("{origin}/native/authorize?grantId={}", p.grant)).await?;
                 Ok(json!({"ok":true}))
             }
             "settings.open" => {
                 let url = self.settings_url(v)?;
-                open_browser(&url)?;
+                open_browser(&url).await?;
                 Ok(json!({"ok":true}))
             }
             "complete" => self.complete().await,
@@ -1920,31 +1920,77 @@ fn verify_session(v: &Value, s: &Session) -> Result<()> {
     }
     Ok(())
 }
-fn open_browser(url: &str) -> Result<()> {
+async fn open_browser(url: &str) -> Result<()> {
     #[cfg(target_os = "linux")]
-    let mut command = std::process::Command::new("xdg-open");
+    let mut command = tokio::process::Command::new("xdg-open");
     #[cfg(target_os = "macos")]
-    let mut command = std::process::Command::new("open");
+    let mut command = tokio::process::Command::new("open");
     #[cfg(target_os = "windows")]
     let mut command = {
-        let mut c = std::process::Command::new("rundll32.exe");
+        let mut c = tokio::process::Command::new("rundll32.exe");
         c.arg("url.dll,FileProtocolHandler");
         c
     };
-    command
-        .arg(url)
+    command.arg(url);
+    launch_browser(&mut command, Duration::from_secs(5)).await
+}
+async fn launch_browser(command: &mut tokio::process::Command, budget: Duration) -> Result<()> {
+    let mut child = command
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|_| "no-browser")?;
-    Ok(())
+    match tokio::time::timeout(budget, child.wait()).await {
+        Ok(Ok(status)) if status.success() => Ok(()),
+        Ok(_) => Err("no-browser"),
+        // Some launchers stay alive until the browser closes. Leave them running.
+        Err(_) => Ok(()),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Mutex;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn browser_launcher_checks_exit_status() {
+        for (script, expected) in [("exit 3", Err("no-browser")), ("exit 0", Ok(()))] {
+            let mut command = tokio::process::Command::new("/bin/sh");
+            command.args(["-c", script]);
+            assert_eq!(
+                launch_browser(&mut command, Duration::from_secs(5)).await,
+                expected,
+                "{script}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn browser_launcher_spawn_failure_is_retryable() {
+        let mut command = tokio::process::Command::new("");
+        assert_eq!(
+            launch_browser(&mut command, Duration::from_secs(5)).await,
+            Err("no-browser")
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn browser_launcher_still_running_after_budget_counts_as_success() {
+        let mut command = tokio::process::Command::new("/bin/sh");
+        command.args(["-c", "exec sleep 2"]);
+        assert_eq!(
+            tokio::time::timeout(
+                Duration::from_secs(1),
+                launch_browser(&mut command, Duration::from_millis(20)),
+            )
+            .await,
+            Ok(Ok(()))
+        );
+    }
     struct TestVault {
         value: Mutex<Registry>,
         reject: bool,
