@@ -22,6 +22,12 @@
 	"account_name_save": "Salvează numele",
 	"account_name_saved": "Numele afișat a fost salvat.",
 	"account_name_failed": "Numele afișat nu a putut fi salvat.",
+
+	"workspace_leave_action": "Părăsește spațiul de lucru",
+	"workspace_leave_title": "Părăsești {workspace}?",
+	"workspace_leave_body": "Vei pierde accesul la {workspace}. Atribuirile tale vor fi eliminate. Comentariile și conținutul creat de tine vor rămâne. Cheile spațiului trebuie rotite pentru a revoca accesul la fișierele criptate viitoare.",
+	"workspace_leave_last_owner": "Transferă proprietatea altui proprietar înainte de a părăsi acest spațiu.",
+	"workspace_leave_personal": "Nu poți părăsi spațiul personal.",
 	"theme_editor_accent_note": "Salvează sau anulează editarea temei ca să alegi un accent.",
 	"theme_editor_customize": "Personalizează tema",
 	"theme_editor_heading": "Editează tema",

@@ -421,3 +421,133 @@ test("a producer waits for removal and sees the blocked guard", async () => {
 		producer.release();
 	}
 });
+
+async function leave(actor = "bob", membershipId = "mb") {
+	return zdb.transaction((tx) =>
+		withZeroUserContext(tx, actor, () =>
+			mutators.membership.leave.fn({
+				tx,
+				ctx: { id: actor },
+				args: { id: membershipId },
+			}),
+		),
+	);
+}
+
+test.each([
+	"member",
+	"viewer",
+	"admin",
+	"owner",
+] as const)("NOBYPASSRLS %s can leave with the removal cleanup", async (memberRole) => {
+	expect(
+		(
+			await runtime.query(
+				"select rolsuper,rolbypassrls from pg_roles where rolname=current_user",
+			)
+		).rows[0],
+	).toEqual({ rolsuper: false, rolbypassrls: false });
+	await admin.query("update membership set role=$1 where id='mb'", [
+		memberRole,
+	]);
+	await admin.query("update list set owner_id='bob' where id='list'");
+	if (memberRole === "owner")
+		await admin.query("update workspace set owner_id='bob' where id='ws'");
+	await task("leaving-task", "list", "bob");
+	await admin.query(
+		"insert into task_assignee(id,task_id,user_id) values ('leaving-seat','leaving-task','bob')",
+	);
+	await admin.query(
+		"insert into comment(id,task_id,author_id,body) values ('leaving-comment','leaving-task','bob','Keep this')",
+	);
+	await guard("leaving-task", "active");
+	if (memberRole === "viewer") {
+		await expect(
+			zdb.transaction((tx) =>
+				withZeroUserContext(tx, "bob", async () => {
+					await tx.dbTransaction.query(
+						"select set_config('ditero.activation_scope','membership-remove',true)",
+						[],
+					);
+					await tx.dbTransaction.query(
+						"update task_notification_activation set status='blocked',completion_mode=null,blocked_reason='membership-removed',generation=generation+1 where task_id='leaving-task'",
+						[],
+					);
+				}),
+			),
+		).rejects.toThrow(/membership removal may only block activation/);
+	}
+	await leave();
+	expect(
+		(await admin.query("select 1 from membership where id='mb'")).rowCount,
+	).toBe(0);
+	expect(
+		(await admin.query("select 1 from task_assignee where user_id='bob'"))
+			.rowCount,
+	).toBe(0);
+	expect(
+		(
+			await admin.query(
+				"select fallback_user_id from task where id='leaving-task'",
+			)
+		).rows[0].fallback_user_id,
+	).toBeNull();
+	expect(
+		(
+			await admin.query(
+				"select status from task_notification_activation where task_id='leaving-task'",
+			)
+		).rows[0].status,
+	).toBe("blocked");
+	expect(
+		(
+			await admin.query(
+				"select active from task_notification_recipient where task_id='leaving-task'",
+			)
+		).rows[0].active,
+	).toBe(false);
+	expect(
+		(
+			await admin.query(
+				"select owner_id,rotation_required from workspace where id='ws'",
+			)
+		).rows[0],
+	).toEqual({ owner_id: "alice", rotation_required: true });
+	expect(
+		(await admin.query("select owner_id from list where id='list'")).rows[0]
+			.owner_id,
+	).toBe("alice");
+	expect(
+		(
+			await admin.query(
+				"select author_id,body from comment where id='leaving-comment'",
+			)
+		).rows[0],
+	).toEqual({ author_id: "bob", body: "Keep this" });
+});
+
+test("NOBYPASSRLS sole owner and personal workspace cannot leave; another member cannot be targeted", async () => {
+	await admin.query("update membership set role='member' where id='mc'");
+	await expect(leave("alice", "ma")).rejects.toThrow(
+		/transfer ownership first.*code:workspace_last_owner/,
+	);
+	await expect(leave("bob", "ma")).rejects.toThrow(
+		/can only leave your own membership/,
+	);
+	expect(
+		(await admin.query("select rotation_required from workspace where id='ws'"))
+			.rows[0].rotation_required,
+	).toBe(false);
+	await admin.query("update workspace set kind='personal' where id='ws'");
+	await expect(leave("alice", "ma")).rejects.toThrow(
+		/code:workspace_personal_leave/,
+	);
+	await expect(leave()).rejects.toThrow(/code:workspace_personal_leave/);
+	expect(
+		(
+			await admin.query(
+				"select count(*)::int as n from membership where workspace_id='ws'",
+			)
+		).rows[0].n,
+	).toBe(4);
+});

@@ -4,7 +4,12 @@
 // the optimistic path. The human prefix is kept verbatim so server logs and the
 // integration suite's message regexes still read.
 
-export const MUTATOR_ERROR_CODES = ["denied", "label_name_taken"] as const;
+export const MUTATOR_ERROR_CODES = [
+	"denied",
+	"label_name_taken",
+	"workspace_last_owner",
+	"workspace_personal_leave",
+] as const;
 
 export type MutatorErrorCode = (typeof MUTATOR_ERROR_CODES)[number];
 

@@ -81,3 +81,13 @@ secret backups together.
 Never test a restore by pointing it at the production Zero replica or notification channels.
 Read [E2E Key Loss](e2e-key-loss.md) before treating a successful infrastructure restore as proof
 that encrypted files remain decryptable.
+
+## Workspace Leave Upgrade
+
+Run the membership-leave cleanup migration before deploying the application that offers
+Leave workspace. It adds restricted notification-cleanup policies and triggers so every
+member role can leave; existing rows, attachment ciphertext and key envelopes are unchanged.
+Keep the usual coordinated database and attachment backup before migrating. Older client versions
+continue to work, but only updated clients offer Leave workspace. Application rollback
+can retain this additive migration; do not restore an older database over newer membership
+changes. Leaving and owner removal both require remaining members to rotate file keys.

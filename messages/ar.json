@@ -22,6 +22,12 @@
 	"account_name_save": "حفظ الاسم",
 	"account_name_saved": "تم حفظ الاسم المعروض.",
 	"account_name_failed": "تعذر حفظ اسمك المعروض.",
+
+	"workspace_leave_action": "مغادرة مساحة العمل",
+	"workspace_leave_title": "هل تريد مغادرة {workspace}؟",
+	"workspace_leave_body": "ستفقد الوصول إلى {workspace}. ستُزال المهام المسندة إليك. ستبقى تعليقاتك والمحتوى الذي أنشأته. يجب تدوير مفاتيح المساحة لإلغاء الوصول إلى الملفات المشفرة المستقبلية.",
+	"workspace_leave_last_owner": "انقل الملكية إلى مالك آخر قبل مغادرة هذه المساحة.",
+	"workspace_leave_personal": "لا يمكنك مغادرة مساحتك الشخصية.",
 	"theme_editor_accent_note": "احفظ تعديل السمة أو ألغِه لاختيار لون تمييز.",
 	"theme_editor_customize": "تخصيص السمة",
 	"theme_editor_heading": "تعديل السمة",

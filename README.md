@@ -65,6 +65,7 @@ templates use the name you enter, or the template name when you leave it blank.
 - Multi-workspace sharing with Owner / Admin / Member / Viewer roles
   (Viewer task controls are read-only and explain the restriction). Email-bound
   invites opened with another account offer sign-out so you can use the invited account.
+- Leave shared workspaces from your own Members row; the last owner must transfer ownership first
 - Invitation links, managed accounts, comments, and recorded task completion history
 - Email/password, passkeys, TOTP, recovery codes, and optional
   [Google sign-in](docs/runbooks/sign-in-providers.md)

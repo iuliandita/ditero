@@ -22,6 +22,12 @@
 	"account_name_save": "Guardar nombre",
 	"account_name_saved": "Nombre visible guardado.",
 	"account_name_failed": "No se pudo guardar tu nombre visible.",
+
+	"workspace_leave_action": "Salir del espacio de trabajo",
+	"workspace_leave_title": "¿Salir de {workspace}?",
+	"workspace_leave_body": "Perderás el acceso a {workspace}. Se eliminarán tus asignaciones. Tus comentarios y el contenido que creaste se conservarán. Es necesario rotar las claves del espacio para revocar el acceso a futuros archivos cifrados.",
+	"workspace_leave_last_owner": "Transfiere la propiedad a otro propietario antes de salir de este espacio.",
+	"workspace_leave_personal": "No puedes salir de tu espacio personal.",
 	"theme_editor_accent_note": "Guarda o cancela la edición del tema para elegir un acento.",
 	"theme_editor_customize": "Personalizar tema",
 	"theme_editor_heading": "Editar tema",
