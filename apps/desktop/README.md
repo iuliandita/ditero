@@ -350,9 +350,12 @@ Theme radio controls and reading-preference controls have been corrected. An act
 WebKitGTK CSS check covered dark, light, system, Large text, and high contrast
 settings; it does not qualify a new installer or a complete platform journey.
 
-Installed Windows x64 and macOS Apple Silicon/Intel development packages pass
-first launch and refusal of an untrusted HTTPS certificate. Sign-in, credential-store
-access, offline behavior, and notification clicks remain unqualified on those platforms.
+Installed Windows x64 development packages pass first launch, untrusted HTTPS
+refusal, trusted system-browser consent, task sync in both directions, and queued
+offline edits. Independent Credential Manager reads confirm complete verified
+evidence. Cold offline startup, reconnect, server isolation, and sign-out remain
+unqualified on Windows. Installed macOS Apple Silicon/Intel packages pass first
+launch and untrusted HTTPS refusal; their remaining core journeys are unqualified.
 The branch-scoped Desktop runtime journeys workflow installs development packages
 on hosted Windows, Apple Silicon macOS, Intel macOS, and Linux runners. Its
 per-journey artifacts distinguish completed checks from unavailable features.
