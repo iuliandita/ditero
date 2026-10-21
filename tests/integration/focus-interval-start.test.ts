@@ -15,6 +15,7 @@ import {
 import {
 	FocusEarlyError,
 	focusEarlyWaitMs,
+	isFocusDuplicate,
 } from "../../src/domain/focus-interval.ts";
 import { mutators } from "../../src/zero/mutators.ts";
 import { schema } from "../../src/zero/schema.gen.ts";
@@ -184,7 +185,13 @@ describe("focus interval start on the server path", () => {
 		const id = randomUUID();
 		await start(A, id);
 		await backdate(A, id, 61_000);
-		await Promise.all([log(A, id, 60), log(A, id, 60)]).catch(() => {});
+		// Two tabs logging at once: the loser may fail, but only on the session's
+		// primary key, which the client treats as already recorded.
+		const raced = await Promise.allSettled([log(A, id, 60), log(A, id, 60)]);
+		expect(raced.some((r) => r.status === "fulfilled")).toBe(true);
+		for (const r of raced)
+			if (r.status === "rejected")
+				expect(isFocusDuplicate(r.reason)).toBe(true);
 		await log(A, id, 60);
 		await admin.query("delete from focus_interval_start where user_id=$1", [A]);
 		await log(A, id, 60);
@@ -194,6 +201,28 @@ describe("focus interval start on the server path", () => {
 			[A],
 		);
 		expect(Number(karma.rows[0].n)).toBe(0);
+	});
+
+	test("the duplicate-key failure of a lost race is recognized from the real message", async () => {
+		const id = randomUUID();
+		await log(A, id, 60);
+		const row = (
+			await admin.query("select * from focus_session where user_id=$1", [A])
+		).rows[0];
+		const failure = await admin
+			.query(
+				`insert into focus_session (id, user_id, kind, started_at, ended_at, duration_sec)
+				 values ($1, $2, 'work', now(), now(), 60)`,
+				[row.id, A],
+			)
+			.then(
+				() => null,
+				(e: unknown) => e,
+			);
+		expect(failure).toBeInstanceOf(Error);
+		expect(isFocusDuplicate(failure)).toBe(true);
+		expect(isFocusDuplicate(new FocusEarlyError(1000))).toBe(false);
+		expect(isFocusDuplicate(new Error("relation does not exist"))).toBe(false);
 	});
 
 	test("without a recorded start the client-side gate is the only check", async () => {
@@ -252,7 +281,7 @@ describe("focus interval start on the server path", () => {
 		expect(await sessions(B)).toEqual([]);
 	});
 
-	test("old start rows are pruned and an offline-bound role cannot update them", async () => {
+	test("a start prunes the caller's rows older than 14 days", async () => {
 		const old = randomUUID();
 		await start(A, old);
 		await backdate(A, old, 15 * 86_400_000);

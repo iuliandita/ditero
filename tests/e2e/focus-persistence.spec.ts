@@ -112,6 +112,72 @@ test("an online interval reloaded mid-way is still logged once", async ({
 	}
 });
 
+test("a start acknowledgement lost before a reload is recovered from the synced start", async ({
+	page,
+}) => {
+	const userId = await startTask(page, 15);
+	await serverStartObserved(page, userId);
+	await forgetServerStart(page, userId);
+	await page.reload();
+	const timer = page.getByTestId("focus-timer");
+	await expect(timer.getByTestId("focus-task")).toHaveText("Read together");
+	await expect
+		.poll(async () => (await focusState(page, userId)).session?.serverStarted)
+		.toBe(true);
+	await expect(timer.getByTestId("focus-phase")).toHaveText("Break", {
+		timeout: 30000,
+	});
+	await expect(page.getByTestId("focus-error")).toHaveCount(0);
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await expect
+			.poll(
+				async () =>
+					(
+						await pool.query(
+							"select duration_sec from focus_session where user_id=$1",
+							[userId],
+						)
+					).rows,
+			)
+			.toEqual([{ duration_sec: 15 }]);
+	} finally {
+		await pool.end();
+	}
+});
+
+test("an interval with no recorded start and no monotonic proof is reported as not counted", async ({
+	page,
+}) => {
+	const userId = await startTask(page, 15);
+	await serverStartObserved(page, userId);
+	await forgetServerStart(page, userId);
+	const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
+	try {
+		await pool.query("delete from focus_interval_start where user_id=$1", [
+			userId,
+		]);
+		await page.reload();
+		const timer = page.getByTestId("focus-timer");
+		await expect(timer.getByTestId("focus-phase")).toHaveText("Break", {
+			timeout: 40000,
+		});
+		await expect(page.getByTestId("focus-error")).toContainText(
+			"wasn't counted",
+		);
+		expect(
+			(
+				await pool.query(
+					"select count(*)::int as count from focus_session where user_id=$1",
+					[userId],
+				)
+			).rows,
+		).toEqual([{ count: 0 }]);
+	} finally {
+		await pool.end();
+	}
+});
+
 test("an interval that expires away records once and parks on the next phase", async ({
 	page,
 }) => {
@@ -170,6 +236,35 @@ async function focusState(page: Page, userId: string) {
 					.get(`ditero:focus:${JSON.stringify(["browser", userId])}`);
 				request.onsuccess = () => resolve(request.result);
 				request.onerror = () => reject(request.error);
+			});
+		} finally {
+			db.close();
+		}
+	}, userId);
+}
+
+// Leaves the persisted timer as if the start acknowledgement never arrived.
+async function forgetServerStart(page: Page, userId: string) {
+	await page.evaluate(async (userId) => {
+		const db = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open("ditero-focus", 1);
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const transaction = db.transaction("timers", "readwrite");
+				const store = transaction.objectStore("timers");
+				const key = `ditero:focus:${JSON.stringify(["browser", userId])}`;
+				const request = store.get(key);
+				request.onsuccess = () => {
+					const state = request.result;
+					state.session.serverStarted = false;
+					state.revision += 1;
+					store.put(state, key);
+				};
+				transaction.oncomplete = () => resolve();
+				transaction.onerror = () => reject(transaction.error);
 			});
 		} finally {
 			db.close();

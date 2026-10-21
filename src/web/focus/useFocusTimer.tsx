@@ -1,4 +1,4 @@
-import { useZero } from "@rocicorp/zero/react";
+import { useQuery, useZero } from "@rocicorp/zero/react";
 import {
 	createContext,
 	type ReactNode,
@@ -9,9 +9,13 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { focusEarlyWaitMs } from "../../domain/focus-interval.ts";
+import {
+	focusEarlyWaitMs,
+	isFocusDuplicate,
+} from "../../domain/focus-interval.ts";
 import { m } from "../../paraglide/messages.js";
 import { mutators } from "../../zero/mutators.ts";
+import { queries } from "../../zero/queries.ts";
 import type { schema } from "../../zero/schema.gen.ts";
 import { useUserPref } from "../hooks/useUserPref.ts";
 import { useNativeAccount } from "../lib/native-account.tsx";
@@ -35,6 +39,7 @@ import {
 	type FocusState,
 	focusStorageKey,
 	intervalFields,
+	MAX_PAUSED_MS,
 	type FocusSessionState as Session,
 } from "./timer-persistence.ts";
 
@@ -57,6 +62,9 @@ export type FocusTimerApi = {
 
 const FocusContext = createContext<FocusTimerApi | null>(null);
 const CUE_MS = 5000;
+// After a load, how long an interval without a known start waits for the
+// server-recorded starts to sync before it is judged on local proof alone.
+const START_LOOKUP_GRACE_MS = 10_000;
 
 // Production builds omit the short-interval browser-test seam.
 function testOverrideSec(): number | null {
@@ -159,6 +167,45 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		[storageKey, applySnapshot],
 	);
 
+	const markServerStarted = useCallback(
+		(intervalId: string) =>
+			updateFocus((current) =>
+				current.session?.intervalId === intervalId &&
+				!current.session.serverStarted
+					? {
+							...current,
+							session: { ...current.session, serverStarted: true },
+						}
+					: current,
+			),
+		[updateFocus],
+	);
+
+	// The server-recorded starts of this account's intervals. They survive a
+	// reload (Zero re-sends a queued start), so an interval whose acknowledgement
+	// was lost is still known to the server.
+	const [startRows, startDetails] = useQuery(
+		queries.focusIntervalStarts.mine(),
+	);
+	const startedIds = useMemo(
+		() => new Set(startRows.map((row) => row.intervalId)),
+		[startRows],
+	);
+	const startsComplete = startDetails.type === "complete";
+	const mountedAtRef = useRef(performance.now());
+	const storedIntervalId =
+		snapshot.key === storageKey ? snapshot.state.session?.intervalId : null;
+	const storedServerStarted =
+		snapshot.key === storageKey ? snapshot.state.session?.serverStarted : true;
+	useEffect(() => {
+		if (
+			storedIntervalId &&
+			!storedServerStarted &&
+			startedIds.has(storedIntervalId)
+		)
+			void markServerStarted(storedIntervalId);
+	}, [storedIntervalId, storedServerStarted, startedIds, markServerStarted]);
+
 	// A fresh interval is announced to the server at once, so its start is
 	// observed with the server's clock. Only a server acknowledgement marks the
 	// interval as server-started; offline starts keep the monotonic-proof gate.
@@ -180,21 +227,13 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 						mutationResultFailure(await mutation.client) ??
 						mutationResultFailure(await mutation.server);
 					if (failure) return;
-					await updateFocus((current) =>
-						current.session?.intervalId === s.intervalId &&
-						!current.session.serverStarted
-							? {
-									...current,
-									session: { ...current.session, serverStarted: true },
-								}
-							: current,
-					);
+					await markServerStarted(s.intervalId);
 				} catch (error) {
 					console.error("focus.startInterval failed", error);
 				}
 			})();
 		};
-	}, [storageKey, zero, updateFocus]);
+	}, [storageKey, zero, markServerStarted]);
 
 	const setSession = useCallback(
 		(update: (previous: Session | null, at: number) => Session | null) => {
@@ -285,7 +324,10 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 						retryTimersRef.current.add(timer);
 						return;
 					}
-					if (failure)
+					// Another tab logged this interval first: the work is recorded.
+					const duplicate =
+						failure?.kind === "app" && isFocusDuplicate(failure.message);
+					if (failure && !duplicate)
 						setFailureNotice({
 							key: storageKey,
 							message: mutationFailureMessage(failure, m.focus_log_failed),
@@ -383,6 +425,14 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		return () => clearInterval(id);
 	}, [storedSession?.running]);
 
+	// The server's timing check applies once it recorded the start (the flag is
+	// persisted from the ack or from the synced start rows); otherwise only the
+	// page's own monotonic proof of the full duration counts.
+	const countable = useCallback(
+		(session: Session) =>
+			session.serverStarted || provenTime(session) >= session.plannedSec * 1000,
+		[provenTime],
+	);
 	const completingRef = useRef<string | null>(null);
 	useEffect(() => {
 		if (
@@ -392,9 +442,18 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			completingRef.current === storedSession.intervalId
 		)
 			return;
+		// Right after a load the recorded starts may not have synced yet.
+		if (
+			!countable(storedSession) &&
+			!startsComplete &&
+			navigator.onLine !== false &&
+			now - mountedAtRef.current < START_LOOKUP_GRACE_MS
+		)
+			return;
 		const intervalId = storedSession.intervalId;
 		completingRef.current = intervalId;
 		let kind: "work" | "break" | null = null;
+		let counted = true;
 		void updateFocus((current) => {
 			const s = current.session;
 			const at = Date.now();
@@ -410,7 +469,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 			const cycle = nextCycle(s.cycle, cfg);
 			const sec = plannedFor(cycle, cfg);
 			kind = s.cycle.phase;
-			const credit = s.serverStarted || provenTime(s) >= s.plannedSec * 1000;
+			const credit = countable(s);
+			counted = credit;
 			const fields = intervalFields(cfg);
 			if (cfg.autoCycle) {
 				clockRef.current = {
@@ -463,6 +523,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 							? m.focus_cue_work_complete()
 							: m.focus_cue_break_over(),
 				});
+				if (!counted && kind === "work")
+					setFailureNotice({ key: storageKey, message: m.focus_not_counted() });
 			}
 		});
 	}, [
@@ -473,7 +535,8 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 		plannedFor,
 		storageKey,
 		timerNow,
-		provenTime,
+		countable,
+		startsComplete,
 	]);
 
 	const start = useCallback(() => {
@@ -488,16 +551,18 @@ export function FocusProvider({ children }: { children: ReactNode }) {
 					startedAt: at + (previous.remainingSec - previous.plannedSec) * 1000,
 					endsAt: at + previous.remainingSec * 1000,
 					// Wall time since the pause, measured against the virtual start.
-					pausedMs:
+					pausedMs: Math.min(
+						MAX_PAUSED_MS,
 						previous.pausedMs +
-						(previous.startedAt === null
-							? 0
-							: Math.max(
-									0,
-									at -
-										(previous.startedAt +
-											(previous.plannedSec - previous.remainingSec) * 1000),
-								)),
+							(previous.startedAt === null
+								? 0
+								: Math.max(
+										0,
+										at -
+											(previous.startedAt +
+												(previous.plannedSec - previous.remainingSec) * 1000),
+									)),
+					),
 				};
 			const sec = plannedFor(INITIAL_CYCLE, cfg);
 			return {

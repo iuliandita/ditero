@@ -3,6 +3,7 @@ import { IDBFactory, IDBObjectStore } from "fake-indexeddb";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { FocusEarlyError } from "../../domain/focus-interval.ts";
+import { m } from "../../paraglide/messages.js";
 import { DEFAULT_FOCUS } from "./timer-core.ts";
 import { accessFocusState, focusStorageKey } from "./timer-persistence.ts";
 import { FocusProvider, type FocusTimerApi } from "./useFocusTimer.tsx";
@@ -25,6 +26,10 @@ const fixture = vi.hoisted(() => ({
 	mutate: vi.fn(),
 	pref: { focus: { autoCycle: false } },
 	loading: false,
+	starts: {
+		rows: [] as { userId: string; intervalId: string }[],
+		type: "complete" as "complete" | "unknown",
+	},
 }));
 
 // Run each tab's real provider with isolated hook state and shared storage.
@@ -84,6 +89,7 @@ vi.mock("react", async (original) => {
 });
 vi.mock("@rocicorp/zero/react", () => ({
 	useZero: () => ({ userID: fixture.active?.userID, mutate: fixture.mutate }),
+	useQuery: () => [fixture.starts.rows, { type: fixture.starts.type }],
 }));
 vi.mock("../hooks/useUserPref.ts", () => ({
 	useUserPref: () => ({ pref: fixture.pref, loading: fixture.loading }),
@@ -164,6 +170,18 @@ async function settle() {
 	}
 	throw new Error("Provider failed to settle asynchronous actions");
 }
+// Delivers the account's synced start rows (and whether the query is settled).
+async function syncStarts(
+	intervalIds: string[],
+	type: "complete" | "unknown" = "complete",
+) {
+	fixture.starts = {
+		rows: intervalIds.map((intervalId) => ({ userId: "owner", intervalId })),
+		type,
+	};
+	for (const tab of tabs) tab.dirty = true;
+	await settle();
+}
 async function stored(userID = "owner", scope?: string) {
 	return (await accessFocusState(focusStorageKey(userID, scope))).state;
 }
@@ -193,6 +211,7 @@ beforeEach(() => {
 	});
 	fixture.pref.focus = { ...DEFAULT_FOCUS, autoCycle: false };
 	fixture.loading = false;
+	fixture.starts = { rows: [], type: "complete" };
 	fixture.mutate.mockReset().mockReturnValue({
 		client: Promise.resolve({ type: "success" }),
 		server: Promise.resolve({ type: "success" }),
@@ -831,6 +850,7 @@ test("a forward clock change across reload earns nothing when the start was neve
 	expect(tab.api.session?.cycle.phase).toBe("break");
 	expect(logs()).toEqual([]);
 	expect((await stored()).pendingCompletions).toEqual([]);
+	expect(tab.api.error).toBe(m.focus_not_counted());
 });
 
 test("completion reports the paused wall time", async () => {
@@ -847,4 +867,174 @@ test("completion reports the paused wall time", async () => {
 	vi.advanceTimersByTime(8000);
 	await settle();
 	expect(logs()).toEqual([expect.objectContaining({ pausedMs: 5000 })]);
+});
+
+const EARLY = (waitMs: number) => ({
+	...OK,
+	server: Promise.resolve({
+		type: "error",
+		error: { type: "app", message: new FocusEarlyError(waitMs).message },
+	}),
+});
+
+test("a pause longer than a day still resumes and reports the capped pause", async () => {
+	const tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(2000);
+	tab.api.pause();
+	await settle();
+	vi.advanceTimersByTime(30 * 3600 * 1000);
+	tab.api.start();
+	await settle();
+	expect(tab.api.session).toMatchObject({ running: true, remainingSec: 8 });
+	expect((await stored()).session?.pausedMs).toBe(86_400_000);
+	expect(tab.api.error).toBeNull();
+	vi.advanceTimersByTime(8000);
+	await settle();
+	expect(logs()).toEqual([expect.objectContaining({ pausedMs: 86_400_000 })]);
+});
+
+test("pauses accumulate up to the cap across several resumes", async () => {
+	const tab = open();
+	tab.api.start();
+	await settle();
+	for (const hours of [20, 20]) {
+		vi.advanceTimersByTime(1000);
+		tab.api.pause();
+		await settle();
+		vi.advanceTimersByTime(hours * 3600 * 1000);
+		tab.api.start();
+		await settle();
+	}
+	expect((await stored()).session).toMatchObject({
+		running: true,
+		pausedMs: 86_400_000,
+	});
+});
+
+test("an interval whose start ack was lost is credited from the synced start after a reload", async () => {
+	vi.stubGlobal("navigator", {});
+	fixture.mutate.mockReturnValueOnce({ ...OK, server: new Promise(() => {}) });
+	let tab = open();
+	tab.api.startForTask("task", "Read");
+	await settle();
+	const intervalId = (await stored()).session?.intervalId as string;
+	vi.advanceTimersByTime(3000);
+	close(tab);
+	tab = open();
+	await settle();
+	expect((await stored()).session?.serverStarted).toBe(false);
+	await syncStarts([intervalId]);
+	expect((await stored()).session?.serverStarted).toBe(true);
+	vi.advanceTimersByTime(7000);
+	await settle();
+	expect(logs()).toEqual([
+		expect.objectContaining({ intervalId, taskId: "task", durationSec: 10 }),
+	]);
+	expect(tab.api.error).toBeNull();
+});
+
+test("an expiry right after a load waits for the synced starts before judging the interval", async () => {
+	vi.stubGlobal("navigator", {});
+	fixture.mutate.mockReturnValueOnce({ ...OK, server: new Promise(() => {}) });
+	let tab = open();
+	tab.api.start();
+	await settle();
+	const intervalId = (await stored()).session?.intervalId as string;
+	vi.advanceTimersByTime(3000);
+	close(tab);
+	vi.setSystemTime(Date.now() + 60000);
+	fixture.starts = { rows: [], type: "unknown" };
+	tab = open();
+	await settle();
+	expect(tab.api.session).toMatchObject({
+		running: true,
+		cycle: { phase: "work" },
+	});
+	await syncStarts([intervalId], "complete");
+	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(logs()).toHaveLength(1);
+	expect(tab.api.error).toBeNull();
+});
+
+test("an uncountable work interval is dropped once with a notice after the lookup grace", async () => {
+	vi.stubGlobal("navigator", {});
+	vi.stubGlobal("__diteroFocusTestSec", 30);
+	fixture.mutate.mockReturnValueOnce({ ...OK, server: new Promise(() => {}) });
+	let tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(3000);
+	close(tab);
+	vi.setSystemTime(Date.now() + 60000);
+	fixture.starts = { rows: [], type: "unknown" };
+	tab = open();
+	await settle();
+	expect(tab.api.session?.cycle.phase).toBe("work");
+	expect(tab.api.error).toBeNull();
+	vi.advanceTimersByTime(10_500);
+	await settle();
+	expect(tab.api.session?.cycle.phase).toBe("break");
+	expect(logs()).toEqual([]);
+	expect(tab.api.error).toBe(m.focus_not_counted());
+	tab.api.dismissError();
+	await settle();
+	vi.advanceTimersByTime(60_000);
+	await settle();
+	expect(tab.api.error).toBeNull();
+});
+
+test("an uncountable break stays silent", async () => {
+	const tab = open();
+	tab.api.start();
+	await settle();
+	tab.api.skip();
+	await settle();
+	const first = (await stored()).session;
+	expect(first?.cycle.phase).toBe("break");
+	close(tab);
+	vi.setSystemTime(Date.now() + 60000);
+	const reopened = open();
+	await settle();
+	expect(logs()).toEqual([]);
+	expect(reopened.api.error).toBeNull();
+});
+
+test("a completion the server keeps rejecting as early is retried a bounded number of times", async () => {
+	fixture.mutate.mockImplementation(() => EARLY(1000));
+	const tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(10_000);
+	await settle();
+	for (let i = 0; i < 20; i++) {
+		vi.advanceTimersByTime(2000);
+		await settle();
+	}
+	expect(logs()).toHaveLength(6);
+	expect((await stored()).pendingCompletions).toHaveLength(1);
+	expect(tab.api.error).toBeNull();
+});
+
+test("two tabs racing the same completion show no failure when one loses on the primary key", async () => {
+	fixture.mutate.mockImplementation(() => ({
+		...OK,
+		server: Promise.resolve({
+			type: "error",
+			error: {
+				type: "app",
+				message:
+					'duplicate key value violates unique constraint "focus_session_pkey"',
+			},
+		}),
+	}));
+	const tab = open();
+	tab.api.start();
+	await settle();
+	vi.advanceTimersByTime(10_000);
+	await settle();
+	expect(logs()).toHaveLength(1);
+	expect(tab.api.error).toBeNull();
+	expect((await stored()).pendingCompletions).toEqual([]);
 });

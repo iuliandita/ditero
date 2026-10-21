@@ -1155,6 +1155,7 @@
 	"focus_cue_work_complete": "Focus terminé",
 	"focus_cue_break_over": "Pause terminée",
 	"focus_log_failed": "Cet intervalle n’a pas pu être enregistré. Il ne sera pas réessayé.",
+	"focus_not_counted": "Cet intervalle n’a pas été comptabilisé. La durée complète n’a pas pu être confirmée, par exemple après un rechargement hors ligne.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [

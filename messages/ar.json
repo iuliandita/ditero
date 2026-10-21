@@ -1218,6 +1218,7 @@
 	"focus_cue_work_complete": "اكتمل التركيز",
 	"focus_cue_break_over": "انتهت الاستراحة",
 	"focus_log_failed": "تعذر حفظ هذه الفترة. لن تتكرر محاولة حفظها.",
+	"focus_not_counted": "لم تُحتسب هذه الفترة. تعذر تأكيد المدة الكاملة، مثلًا بعد إعادة تحميل الصفحة دون اتصال.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [

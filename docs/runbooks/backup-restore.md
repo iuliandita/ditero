@@ -96,11 +96,14 @@ changes. Leaving and owner removal both require remaining members to rotate file
 
 Run the focus-interval migration before deploying the application that records focus
 interval starts. It adds one owner-only table, `focus_interval_start`, that keeps the
-server's own start time for each online interval; the table is not synced, holds no
-credentials, and old rows are pruned after 14 days. Keep the usual coordinated database
+server's own start time for each online interval. Only the ids of an account's own
+rows sync to its clients (read-only, so a reloaded client can see that the server
+recorded the start); the start time is never synced. The table holds no credentials,
+and old rows are pruned after 14 days. Keep the usual coordinated database
 and attachment backup before migrating. Existing focus sessions, attachment ciphertext and
 key envelopes are unchanged, and the table is disposable: restoring a backup without it
 only means intervals started before the restore fall back to the client's monotonic-time
-check. Application rollback can retain this additive migration. Older web and native
+check, and an interval the client cannot prove either way is reported once as not
+counted. Application rollback can retain this additive migration. Older web and native
 clients keep working: they never send a start, so their intervals are credited as before,
 and updated clients start announcing intervals once the server is upgraded.

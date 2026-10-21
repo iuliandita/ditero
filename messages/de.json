@@ -1134,6 +1134,7 @@
 	"focus_cue_work_complete": "Fokus abgeschlossen",
 	"focus_cue_break_over": "Pause vorbei",
 	"focus_log_failed": "Dieses Intervall konnte nicht gespeichert werden. Es wird nicht erneut versucht.",
+	"focus_not_counted": "Dieses Intervall wurde nicht gezählt. Die volle Zeit ließ sich nicht bestätigen, zum Beispiel nach einem Neuladen ohne Verbindung.",
 	"focus_duration_seconds": [
 		{
 			"declarations": [

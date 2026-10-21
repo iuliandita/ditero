@@ -1220,8 +1220,8 @@ export const focusSession = pgTable("focus_session", {
 		.notNull(),
 });
 
-// Server-observed interval starts for focus.logSession. Server-only, deliberately
-// absent from the Zero table allowlist; started_at is always the server's now().
+// Server-observed interval starts for focus.logSession. started_at is always the
+// server's now() and is not synced; the owner's synced query only exposes the ids.
 export const focusIntervalStart = pgTable(
 	"focus_interval_start",
 	{

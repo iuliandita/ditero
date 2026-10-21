@@ -232,6 +232,8 @@ export default drizzleZeroConfig(schema, {
 			durationSec: true,
 			createdAt: true,
 		},
+		// started_at stays server-side: the client only learns that a start exists.
+		focusIntervalStart: { userId: true, intervalId: true },
 		notificationChannel: {
 			id: true,
 			userId: true,

@@ -2,6 +2,8 @@ import { z } from "zod";
 import { randomId } from "../../domain/random-id.ts";
 import { clampFocusConfig, type FocusConfig } from "./timer-core.ts";
 
+// Server cap on reported pauses (focus.logSession); longer pauses are clamped.
+export const MAX_PAUSED_MS = 86_400_000;
 const instant = z.number().finite().nonnegative().max(8.64e15);
 const sessionSchema = z
 	.object({
@@ -17,7 +19,7 @@ const sessionSchema = z
 		endsAt: instant.nullable(),
 		remainingSec: z.number().int().nonnegative().max(10800),
 		provenMs: z.number().finite().nonnegative().max(10800000).default(0),
-		pausedMs: z.number().finite().nonnegative().max(86400000).default(0),
+		pausedMs: z.number().finite().nonnegative().max(MAX_PAUSED_MS).default(0),
 		serverStarted: z.boolean().default(false),
 		boundTaskId: z.string().max(1024).nullable(),
 		boundTaskTitle: z.string().max(10000).nullable(),
@@ -41,7 +43,7 @@ const completionSchema = z
 		startedAt: instant,
 		endedAt: instant,
 		durationSec: z.number().int().min(1).max(10800),
-		pausedMs: z.number().int().min(0).max(86400000).optional(),
+		pausedMs: z.number().int().min(0).max(MAX_PAUSED_MS).optional(),
 	})
 	.refine(
 		(s) =>

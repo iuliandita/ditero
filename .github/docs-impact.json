@@ -39,14 +39,12 @@
 		},
 		"compatibility": {
 			"sourceDigest": "06dfbeb019ef2e627475b835e04cf50c27cb5ce5683302857dd3a8db4e6f6b0c",
-			"docs": [
-				"docs/runbooks/backup-restore.md"
-			],
-			"note": "Add the additive focus_interval_start migration: an owner-only, unsynced table of server-observed focus interval starts with row-level security, pruned after 14 days. Existing focus sessions, attachment ciphertext, key envelopes and synced data are unchanged. The restore guide describes the disposable table and the client-side fallback for intervals with no recorded start.",
-			"upgrade": "Run the additive focus-interval migration before deploying the application that records interval starts; no data conversion is needed and the usual restart applies the migration. Updated clients begin announcing interval starts once the server is upgraded.",
+			"docs": ["docs/runbooks/backup-restore.md"],
+			"note": "Add the additive focus_interval_start migration: an owner-only table of server-observed focus interval starts with row-level security, pruned after 14 days; only its owner's interval ids are synced read-only to that owner's clients, never the start time. Existing focus sessions, attachment ciphertext, key envelopes and synced data are unchanged. The restore guide describes the disposable table, the client-side fallback for intervals with no recorded start, and the notice shown when an interval cannot be counted.",
+			"upgrade": "Run the additive focus-interval migration before deploying the application that records interval starts; no data conversion is needed and the usual restart applies the migration. Updated clients begin announcing interval starts once the server is upgraded; the Zero replica picks up the new table without a manual step.",
 			"backup": "Keep the usual coordinated database and attachment backup before migrating. The new table is disposable: a restore without it only sends intervals started before the restore through the client's monotonic-time check instead of the server start.",
 			"rollback": "The previous application can keep the additive migration and the same database; it ignores the extra table. Do not restore an older database over newer focus sessions; recorded sessions and attachment objects need no conversion.",
-			"clientVersions": "Existing web, Android and desktop clients keep working: clients without the start announcement are credited by their own checks as before, and updated clients fall back to monotonic-time proof when the server has no start for an interval."
+			"clientVersions": "Existing web, Android and desktop clients keep working: clients without the start announcement are credited by their own checks as before, and updated clients fall back to monotonic-time proof when the server has no start for an interval, showing a notice if neither exists."
 		},
 		"clients": {
 			"sourceDigest": "c07b7e0e2396b7810724d8c3f3a6fcda8106a124fc26874383e6c843e1a708ff",

@@ -31,3 +31,13 @@ export function focusEarlyWaitMs(e: unknown): number | null {
 	const wait = message.match(EARLY_RE)?.[1];
 	return wait === undefined ? null : Math.min(Number(wait), FOCUS_RETRY_CAP_MS);
 }
+
+// Two tabs can log the same finished interval at once; the loser fails on the
+// primary key of the interval's single session row, which still means recorded.
+const DUPLICATE_RE = /focus_session_pkey/;
+
+export function isFocusDuplicate(e: unknown): boolean {
+	const message =
+		e instanceof Error ? e.message : typeof e === "string" ? e : "";
+	return DUPLICATE_RE.test(message);
+}

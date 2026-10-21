@@ -110,14 +110,15 @@ unfinished interval in every tab. Clearing site data removes local timer state.
 Timers do not follow you to another device.
 
 An interval started while online is also timed by the server: the server records
-when it started and accepts the finished interval only after the full duration plus
-any pauses has passed on its own clock. Reloading mid-interval keeps the credit, an
-interval the server finds early is retried automatically, and moving the device
-clock forward cannot count unworked time. An interval started offline, or whose
-start the server never acknowledged (for example a reload within moments of
-starting), has no server start. It is recorded once only if the completing page can
-establish the full duration from monotonic elapsed time and progress saved when
-paused, so reloading it mid-interval can finish it without a session log.
+when it started and accepts the finished interval once its own clock shows the full
+duration plus any pauses, less a small latency allowance (the smaller of 5 seconds
+and 20% of the duration). Reloading mid-interval keeps the credit, an interval the
+server finds early is retried automatically, and moving the device clock forward
+cannot count unworked time. An interval whose start the server never recorded (an
+offline start that is still queued, or one a legacy timer began before this
+version) is recorded only if the completing page can establish the full duration
+from monotonic elapsed time and progress saved when paused. If it cannot, the
+interval is not counted and a one-time notice says so.
 
 ## Tech stack
 
