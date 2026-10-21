@@ -1,4 +1,7 @@
 {
+	"startup_connection_retry": "Retry",
+	"startup_connection_heading": "Ditero needs a connection to open",
+	"startup_connection_body": "It will retry automatically when your connection returns. You can also try again now.",
 	"workspace_read_only": "Your workspace role allows viewing only.",
 	"accept_error_email_mismatch": "This invite is for another email address. Sign out, then sign in with the account it was sent to.",
 	"accept_switch_account": "Sign out and switch account",

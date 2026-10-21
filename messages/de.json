@@ -1,4 +1,7 @@
 {
+	"startup_connection_retry": "Erneut versuchen",
+	"startup_connection_heading": "Ditero braucht zum Öffnen eine Verbindung",
+	"startup_connection_body": "Sobald deine Verbindung wieder da ist, versucht Ditero es automatisch erneut. Du kannst es auch jetzt noch einmal versuchen.",
 	"workspace_read_only": "Deine Workspace-Rolle erlaubt nur das Ansehen.",
 	"accept_error_email_mismatch": "Diese Einladung ist für eine andere E-Mail-Adresse. Melde dich ab und dann mit dem Konto an, an das sie gesendet wurde.",
 	"accept_switch_account": "Abmelden und Konto wechseln",

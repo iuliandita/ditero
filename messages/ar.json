@@ -1,4 +1,7 @@
 {
+	"startup_connection_retry": "حاول مرة أخرى",
+	"startup_connection_heading": "يحتاج Ditero إلى اتصال ليفتح",
+	"startup_connection_body": "ستتم إعادة المحاولة تلقائيًا عند عودة الاتصال. يمكنك أيضًا إعادة المحاولة الآن.",
 	"workspace_read_only": "دورك في مساحة العمل يسمح بالعرض فقط.",
 	"accept_error_email_mismatch": "هذه الدعوة لعنوان بريد إلكتروني آخر. سجّل الخروج، ثم سجّل الدخول بالحساب الذي أُرسلت إليه.",
 	"accept_switch_account": "تسجيل الخروج وتبديل الحساب",

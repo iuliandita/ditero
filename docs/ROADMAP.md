@@ -224,6 +224,8 @@ that is down will not fire a reminder, and ditero is never marketed otherwise.
 - Android UnifiedPush, task opening from notifications, Linux desktop notifications,
   and optional Google relay enrollment/recovery, with the qualification limits
   described above (PRs #478, #486, #494, #495).
-- Cached tasks render after offline reload (PR #497).
+- Already-open browser tabs support offline edits and sync after reconnecting.
+  Opening or reloading offline requires a connection; the cached public shell
+  explains this and retries automatically when the connection returns.
 
 For user-facing change details, see [CHANGELOG.md](../CHANGELOG.md).
