@@ -28,6 +28,7 @@ const origin = "http://localhost:3000";
 let auth: typeof import("../../src/auth/auth.ts");
 let tokens: typeof import("../../src/server/public-api/tokens.ts");
 let feeds: typeof import("../../src/server/public-api/calendar-feeds.ts");
+let appPool: typeof import("../../src/db/client.ts")["pool"] | undefined;
 let users: string[] = [];
 
 beforeAll(async () => {
@@ -61,6 +62,7 @@ beforeAll(async () => {
 	auth = await import("../../src/auth/auth.ts");
 	tokens = await import("../../src/server/public-api/tokens.ts");
 	feeds = await import("../../src/server/public-api/calendar-feeds.ts");
+	({ pool: appPool } = await import("../../src/db/client.ts"));
 });
 
 beforeEach(async () => {
@@ -85,12 +87,11 @@ afterEach(async () => {
 
 afterAll(async () => {
 	process.env.DATABASE_URL = connectionString;
+	await appPool?.end();
 	await runtime.end();
+	await admin.query(`drop owned by "${role}"`);
+	await admin.query(`drop role "${role}"`);
 	await admin.end();
-	const cleanup = new Pool({ connectionString });
-	await cleanup.query(`drop owned by "${role}"`);
-	await cleanup.query(`drop role "${role}"`);
-	await cleanup.end();
 });
 
 const hex = () => createHash("sha256").update(randomBytes(16)).digest("hex");
