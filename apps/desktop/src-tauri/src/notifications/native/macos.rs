@@ -162,8 +162,7 @@ define_class!(
             let id = response.notification().request().identifier().to_string();
             if self.ivars().owner.current()
                 && id.starts_with(&self.ivars().prefix)
-                && response.actionIdentifier().as_ref()
-                    == unsafe { UNNotificationDefaultActionIdentifier }
+                && &*response.actionIdentifier() == unsafe { UNNotificationDefaultActionIdentifier }
             {
                 let _ = self.ivars().send.try_send(Response::Action(id));
             }

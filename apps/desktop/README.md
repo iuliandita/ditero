@@ -133,6 +133,8 @@ with a localized reason; allow Ditero in system notification settings and retry.
 macOS 10.13 retains the legacy NSUserNotification backend; runtime qualification
 of that older OS remains open. UserNotifications is weak-linked so adding modern
 delivery does not raise the bundle minimum.
+The installed Linux journey also verifies popup withdrawal on server switch and
+sign-out, with a displayed notification as a positive control before each action.
 Enable delivery in Settings after signing in. Notifications arrive while Ditero
 is open or minimized; closing the application stops reception. These backends
 remain experimental; the hosted journey matrix checks display and click routing.
