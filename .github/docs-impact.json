@@ -2,41 +2,55 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "a798baa23076a88be2f4911a54ff1e8001356c1c2c1a79d4f4ffbfb5ef657f2e",
-			"docs": ["README.md", "docs/security.md"],
-			"note": "Describe leaving shared workspaces, last-owner protection, retained authored content, assignment cleanup and required file-key rotation."
+			"sourceDigest": "9ed2d49dea834a4c3029c08dceb7c57b80e1e3c66ef626dfadf3f815be5bbdaf",
+			"docs": [
+				"docs/security.md",
+				"apps/android/README.md",
+				"apps/desktop/README.md",
+				"docs/runbooks/native-authentication.md"
+			],
+			"note": "Sign-in and sign-up show Google only when the server publishes it as configured. OAuth callback registration refusals use the same six localized messages as email registration. Document fragment invite tokens, legacy query migration, body-based preview and encrypted key-fragment reload recovery. Document Android Back dismissal and navigation order, top-level exit, and background network teardown during Activity recreation. Document recovery-code downloads through account-bound native save operations on Android and desktop, retry after a failed write, and distinct Android connection diagnostics without relaxing certificate trust. Document browser account switching on native consent, preserving the validated request and requiring explicit approval from the replacement account. Document localized keyring setup and retry, the Linux package recommendation, and account-bound fixed Settings browser handoffs on desktop and Android. Matching Settings routes preserve the destination through browser sign-in; older servers still open their normal application page. Document localized keyring setup and retry, the Linux package recommendation, and account-bound fixed Settings browser handoffs on desktop and Android. Matching Settings routes preserve the destination through browser sign-in; older servers still open their normal application page."
 		},
 		"release": {
-			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
-			"docs": ["RELEASING.md"],
-			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
+			"sourceDigest": "10cae11e10a3dda553156891e6c153c8e2a842775e8bdb49042276f8da450b6c",
+			"noImpact": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch. Document Linux x64 DEB/RPM/AppImage, Windows x64/ARM64 NSIS and separate Apple Silicon/Intel DMGs, bounded installer checks, development checksums and remaining signing and qualification limits. Android artifacts and the retained update identity stay unchanged. The Compose release archive now includes postgres-healthcheck.sh, which the bundled database already bind-mounts, and packaging refuses archives missing any bind-mounted script. Release steps, assets and documented procedures are unchanged."
 		},
 		"configuration": {
-			"sourceDigest": "1ef746d15432e04d25188975ed586a5413d5106c41883f49212e481b1ae5aae6",
-			"noImpact": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged."
+			"sourceDigest": "e8c622f6bdcf907ed8d2c2ae79d021ed664031d2489518a881f062e18ca6e643",
+			"docs": [
+				"deploy/helm/ditero/README.md",
+				"docs/runbooks/database-roles.md",
+				"docs/runbooks/backup-restore.md"
+			],
+			"note": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged. Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database reconnection, advisory-lock reacquisition and bounded graceful shutdown, including recovery of unfinished notification leases. Gate Zero on completed application migrations and the current Helm revision; give AIO Zero a dedicated ingress bridge without outbound source NAT and document retained-replica recovery. Only desktop installer metadata, bundled license files and platform package settings change. Server configuration, deployment variables and operator setup remain unchanged; installer behavior is documented in RELEASING.md and the desktop guide. Document container-readable file secrets, atomic role initialization, missing-role health failures and safe recovery without widening application privileges. Document PostgreSQL 15 minimum, complete Zero role/publication setup, working full-database backup roles, own-origin deployment and publication/reset forwarding with empty values unset. The Linux DEB adds a recommended Secret Service provider without changing server configuration or deployment settings. Desktop keyring setup and retry guidance are documented in apps/desktop/README.md. The Linux DEB adds a recommended Secret Service provider without changing server configuration or deployment settings. Desktop keyring setup and retry guidance are documented in apps/desktop/README.md. The Zero and all-in-one images rebuild Litestream v0.3.13 and v0.5.15 with Go 1.27.3 for CVE-2026-111943 and the v5 binary with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream sources, version suffixes, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged."
 		},
 		"deployment": {
-			"sourceDigest": "3cb56b9dc41deafd254840faee7defba3f98b24d86daea7c6731b50d10f3e43e",
-			"noImpact": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged."
+			"sourceDigest": "7c71997198bda9a1e711c8936a9682eed8516ec80f855fdeced86f831c5c9a47",
+			"docs": [
+				"deploy/helm/ditero/README.md",
+				"docs/runbooks/database-roles.md",
+				"docs/runbooks/backup-restore.md"
+			],
+			"note": "The all-in-one image pins zlib 1.3.2-r1 because Alpine removed r0 from its mirrors. Same zlib upstream version and package set; configuration, deployment steps and documented behavior are unchanged. Set the shipped Zero revalidation interval to 30 seconds and document the revocation window and upgrade behavior. Document database recovery and shutdown timing within the default container and pod grace periods. Document ordered startup, revision-aware Helm readiness, AIO ingress boundaries and cache-only recovery for failed initial synchronization. Document container-readable file secrets, atomic role initialization, missing-role health failures and safe recovery without widening application privileges. Complete operator setup and restore instructions, preserve runtime role restrictions, explain PostgreSQL compatibility and app origin requirements, and pass Zero publication/reset configuration. The Zero and all-in-one images rebuild Litestream v0.3.13 and v0.5.15 with Go 1.27.3 for CVE-2026-111943 and the v5 binary with klauspost/compress 1.18.7 for CVE-2026-63209. Same Litestream sources, version suffixes, binaries and backup formats; configuration, deployment steps and documented behavior are unchanged."
 		},
 		"native": {
-			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
-			"docs": ["apps/desktop/README.md"],
-			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
+			"sourceDigest": "92683a64c48b35eb793695a732d247949fd15a899c1a9d0996bda4c44e41558b",
+			"docs": ["apps/desktop/README.md", "apps/android/README.md"],
+			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write. Document Android Back dismissal and navigation order, top-level exit, and background network teardown during Activity recreation. Document recovery-code downloads through account-bound native save operations on Android and desktop, retry after a failed write, and distinct Android connection diagnostics without relaxing certificate trust. Document localized keyring setup and retry, the Linux package recommendation, and account-bound fixed Settings browser handoffs on desktop and Android. Matching Settings routes preserve the destination through browser sign-in; older servers still open their normal application page. Document the desktop online-start requirement for cached data, retry after reconnection, retention of durably saved edits, and the remaining encrypted evidence and refusal-policy work in issue 1090. Android cached activation and native credential and trust checks are unchanged. Document the asynchronous five-second launcher wait, retryable spawn and non-zero exit failures, and successful handoff when a launcher remains running beyond the bound."
 		},
 		"authentication": {
-			"sourceDigest": "fae47d451731979c36e529b1b45e14ed9d85a902bf10e2017cc50820778cc4fe",
+			"sourceDigest": "7135c7a31d485bafb7f59ef84ce1879b56aee8329c0485753713734e4c7b0938",
 			"docs": ["docs/runbooks/native-authentication.md"],
-			"note": "OAuth registration denials preserve their stable policy code through Better Auth callback redirects. Native browser sign-in retains the grant ID and displays the localized policy message."
+			"note": "OAuth registration denials preserve their stable policy code through Better Auth callback redirects. Native browser sign-in retains the grant ID and displays the localized policy message. Document periodic stream revalidation after session revocation; HTTP authorization remains checked against live session state. Invitations remain HTTPS browser links with fragment tokens and backward-compatible acceptance; native task scheme handling is unchanged."
 		},
 		"compatibility": {
-			"sourceDigest": "672ebec633bcecaba52152210d91463722bd9f6c779854c1fd5b9488b1fdd2b4",
-			"docs": ["docs/runbooks/backup-restore.md"],
-			"note": "Add restricted notification cleanup policies and triggers for self-service leave under every runtime membership role.",
-			"upgrade": "Run the additive membership-leave migration before deploying the application that exposes Leave workspace.",
-			"backup": "Keep coordinated database and attachment backups; existing rows, ciphertext and key envelopes are unchanged.",
-			"rollback": "The previous application can retain the additive migration; do not overwrite newer membership changes with an older database.",
-			"clientVersions": "Existing clients continue to work; updated clients expose Leave workspace and the server enforces the same cleanup for every role."
+			"sourceDigest": "f402bc5ef259e5effb7766743ca27026194a08c775ed4e2813711df7263a7620",
+			"docs": ["docs/runbooks/database-roles.md"],
+			"note": "Document restricted-role membership removal without TEMP and uniform 404 attachment denials, with unchanged persisted formats. Attachment garbage collection uses the same checked-out connection as its leader lock. Persisted attachment states, ciphertext format, quotas and restore procedures are unchanged.",
+			"upgrade": "Deploy the application update without schema, blob or key conversion; runtime TEMP grants are unnecessary. No schema or ciphertext migration is required; restart the application with the updated image.",
+			"backup": "Keep the existing coordinated database and blob backups; ciphertext and key envelopes are unchanged. The existing database and attachment backup procedure remains applicable without changes.",
+			"rollback": "The previous application remains data-compatible but restores the TEMP dependency and foreign attachment 403 response. The prior application can use the same database and attachment objects; no format changes occur.",
+			"clientVersions": "Existing web, Android and desktop clients use unchanged attachment formats and interpret unauthorized downloads as unavailable. Browser, Android and desktop clients use the same attachment protocol and remain compatible."
 		}
 	}
 }
