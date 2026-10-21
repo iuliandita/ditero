@@ -362,7 +362,8 @@ launch and untrusted HTTPS refusal; their remaining core journeys are unqualifie
 The branch-scoped Desktop runtime journeys workflow installs development packages
 on hosted Windows, Apple Silicon macOS, Intel macOS, and Linux runners. Its
 per-journey artifacts distinguish completed checks from unavailable features
-and retain screenshots, process logs, port allocations, and OS-keystore counts.
+and retain screenshots, process logs, port allocations, certificate fingerprints,
+and OS-keystore counts.
 It uses ephemeral servers and an OS-trusted local CA, without certificate bypasses.
 macOS automation is included only in debug builds, requires explicit process-local
 test configuration, and is checked for absence from the optimized release binary.

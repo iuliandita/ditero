@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { randomBytes, X509Certificate } from "node:crypto";
 import {
 	appendFileSync,
 	createWriteStream,
@@ -113,6 +113,23 @@ export async function proxy(upstream: number) {
 	let server: ReturnType<typeof httpsServer>;
 	const sockets = new Set<Socket>();
 	async function online() {
+		const leaf = new X509Certificate(
+			readFileSync(resolve(state, "server.crt")),
+		);
+		const ca = new X509Certificate(readFileSync(resolve(state, "ca.crt")));
+		if (!leaf.verify(ca.publicKey))
+			throw new Error("Fixture certificate signature is invalid");
+		writeFileSync(
+			resolve(evidence, `certificate-${port}.json`),
+			JSON.stringify({
+				origin: `https://127.0.0.1:${port}`,
+				leaf: leaf.fingerprint256,
+				issuer: leaf.issuer,
+				ca: ca.fingerprint256,
+				subject: ca.subject,
+				signatureVerified: true,
+			}),
+		);
 		server = httpsServer(
 			{
 				key: readFileSync(resolve(state, "server.key")),

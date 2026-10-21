@@ -1,6 +1,8 @@
+import { X509Certificate } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { Agent, request as httpsRequest } from "node:https";
 import { resolve } from "node:path";
+import { TLSSocket } from "node:tls";
 import { chromium } from "@playwright/test";
 import { background, evidence, freePort, run, state, until } from "./stack.ts";
 
@@ -56,9 +58,28 @@ function fixtureRequest(
 			request.destroy(new Error("Verified fixture request timed out")),
 		);
 		request.on("close", () => agent.destroy());
-		request.on("error", (error) =>
-			fail(new Error(`Fixture HTTPS ${url}: ${error.stack}`, { cause: error })),
-		);
+		request.on("error", (error) => {
+			const socket = request.socket;
+			const peer =
+				socket instanceof TLSSocket ? socket.getPeerCertificate() : undefined;
+			writeFileSync(
+				resolve(evidence, "fixture-tls-failure.json"),
+				JSON.stringify({
+					url,
+					error: error.message,
+					peer: peer
+						? {
+								fingerprint: peer.fingerprint256,
+								issuer: peer.issuer,
+								subject: peer.subject,
+							}
+						: null,
+					ca: new X509Certificate(readFileSync(resolve(state, "ca.crt")))
+						.fingerprint256,
+				}),
+			);
+			fail(new Error(`Fixture HTTPS ${url}: ${error.stack}`, { cause: error }));
+		});
 		request.end(body);
 	});
 }

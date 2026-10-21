@@ -138,7 +138,8 @@ pub fn transport_error(error: &reqwest::Error) -> &'static str {
     #[cfg(debug_assertions)]
     {
         eprintln!(
-            "Native transport: connect={}, timeout={}",
+            "Native transport: url={:?}, connect={}, timeout={}",
+            error.url(),
             error.is_connect(),
             error.is_timeout()
         );

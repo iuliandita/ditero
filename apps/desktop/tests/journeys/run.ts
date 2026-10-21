@@ -298,7 +298,21 @@ try {
 			resolve(evidence, "vault-after-close.json"),
 			JSON.stringify(vault()),
 		);
+		const network = (name: string) => {
+			if (process.platform === "win32")
+				run("pwsh", [
+					"-NoProfile",
+					"-File",
+					resolve(root, "apps/desktop/tests/journeys/network.ps1"),
+					"-Port",
+					new URL(a.api.origin).port,
+					"-Name",
+					name,
+				]);
+		};
+		network("before-cold-launch");
 		await native.launch();
+		network("after-cold-launch");
 		await until("offline workspace", () =>
 			native.evaluate(
 				`!!document.querySelector(${JSON.stringify(ids("workspace"))})`,
