@@ -424,6 +424,16 @@ try {
 						["permission"],
 					)
 				: undefined;
+		if (consent)
+			await until("notification permission foreground", () => {
+				const focus = JSON.parse(
+					readFileSync(
+						resolve(evidence, "notification-permission-focus.json"),
+						"utf8",
+					),
+				) as { frontmost: string };
+				return focus.frontmost === "io.ditero.desktop";
+			});
 		await native.evaluate(
 			"(() => { Array.from(document.querySelectorAll('button')).find(e=>e.textContent==='Enable desktop notifications').click(); return true })()",
 		);

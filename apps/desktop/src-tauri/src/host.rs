@@ -328,7 +328,6 @@ pub fn run() {
             native_drain
         ])
         .setup(move |app| {
-            notifications::initialize();
             actor.app = Some(app.handle().clone());
             actor
                 .files
@@ -343,7 +342,6 @@ pub fn run() {
                 .open(data.join("native-session.lock"))?;
             lock.try_lock().map_err(std::io::Error::other)?;
             app.manage(ProcessLock { _file: lock });
-            tauri::async_runtime::spawn(actor.run(rx));
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Ditero")
                 .inner_size(1100., 800.)
@@ -351,6 +349,8 @@ pub fn run() {
                 .on_new_window(|_, _| NewWindowResponse::Deny)
                 .on_download(|_, _| false)
                 .build()?;
+            notifications::initialize();
+            tauri::async_runtime::spawn(actor.run(rx));
             #[cfg(all(debug_assertions, target_os = "macos"))]
             crate::journeys::start(app.handle().clone())?;
             Ok(())

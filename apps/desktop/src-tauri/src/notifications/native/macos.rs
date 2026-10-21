@@ -44,6 +44,10 @@ pub async fn permission(request: bool) -> Result<()> {
     if !modern() {
         return Ok(());
     }
+    let status = authorization_status().await?;
+    permission_for_status(status, request).await
+}
+async fn authorization_status() -> Result<isize> {
     let (tx, mut rx) = mpsc::channel(1);
     {
         let handler = RcBlock::new(move |settings: NonNull<UNNotificationSettings>| {
@@ -59,6 +63,9 @@ pub async fn permission(request: bool) -> Result<()> {
         .ok_or("temporary-unavailable")?;
     #[cfg(debug_assertions)]
     eprintln!("macOS notification authorization status: {status}");
+    Ok(status)
+}
+async fn permission_for_status(status: isize, request: bool) -> Result<()> {
     if status == UNAuthorizationStatus::Denied.0 {
         return Err("denied");
     }
@@ -77,6 +84,11 @@ pub async fn permission(request: bool) -> Result<()> {
     let (tx, mut rx) = mpsc::channel(1);
     {
         let handler = RcBlock::new(move |granted: Bool, error: *mut NSError| {
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "macOS notification authorization callback granted: {}",
+                granted.as_bool()
+            );
             #[cfg(debug_assertions)]
             if !error.is_null() {
                 let error = unsafe { &*error };
@@ -99,10 +111,24 @@ pub async fn permission(request: bool) -> Result<()> {
             &handler,
         );
     }
-    tokio::time::timeout(Duration::from_secs(20), rx.recv())
-        .await
-        .map_err(|_| "temporary-unavailable")?
-        .ok_or("temporary-unavailable")?
+    match tokio::time::timeout(Duration::from_secs(20), rx.recv()).await {
+        Ok(Some(result)) => result,
+        Ok(None) => Err("temporary-unavailable"),
+        Err(_) => {
+            #[cfg(debug_assertions)]
+            eprintln!("macOS notification authorization callback timed out; rereading OS status");
+            match authorization_status().await? {
+                status if status == UNAuthorizationStatus::Denied.0 => Err("denied"),
+                status
+                    if status == UNAuthorizationStatus::Authorized.0
+                        || status == UNAuthorizationStatus::Provisional.0 =>
+                {
+                    Ok(())
+                }
+                _ => Err("temporary-unavailable"),
+            }
+        }
+    }
 }
 fn notification_error(error: &NSError) -> &'static str {
     if error.domain().to_string() == "UNErrorDomain" && error.code() == 1 {

@@ -3,10 +3,6 @@ import ApplicationServices
 import Foundation
 
 let mode = CommandLine.arguments[1]
-if mode == "permission" {
-    NSRunningApplication.runningApplications(withBundleIdentifier: "io.ditero.desktop")
-        .first?.activate(options: [.activateIgnoringOtherApps])
-}
 let evidence = URL(fileURLWithPath: ProcessInfo.processInfo.environment["RUNNER_TEMP"]!)
     .appendingPathComponent("desktop-journeys/evidence")
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -16,6 +12,33 @@ func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
 }
 func text(_ element: AXUIElement, _ name: String) -> String {
     attribute(element, name) as? String ?? ""
+}
+if mode == "permission" {
+    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: "io.ditero.desktop").first else {
+        print("Ditero is not running"); exit(1)
+    }
+    let activated = app.activate(options: [.activateIgnoringOtherApps])
+    Thread.sleep(forTimeInterval: 0.2)
+    var clicked = false
+    if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != "io.ditero.desktop" {
+        let application = AXUIElementCreateApplication(app.processIdentifier)
+        if let windows = attribute(application, kAXWindowsAttribute) as? [AXUIElement], let window = windows.first,
+           let position = attribute(window, kAXPositionAttribute), let size = attribute(window, kAXSizeAttribute) {
+            var point = CGPoint.zero
+            var extent = CGSize.zero
+            if AXValueGetValue(position as! AXValue, .cgPoint, &point), AXValueGetValue(size as! AXValue, .cgSize, &extent), extent.width > 100 {
+                let location = CGPoint(x: point.x + extent.width / 2, y: point.y + 12)
+                CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: location, mouseButton: .left)?.post(tap: .cghidEventTap)
+                CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: location, mouseButton: .left)?.post(tap: .cghidEventTap)
+                clicked = true
+                Thread.sleep(forTimeInterval: 0.5)
+            }
+        }
+    }
+    let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+    let focus: [String: Any] = ["frontmost": frontmost, "activationAccepted": activated, "clickedMeasuredTitlebar": clicked]
+    try JSONSerialization.data(withJSONObject: focus).write(to: evidence.appendingPathComponent("notification-permission-focus.json"))
+    guard frontmost == "io.ditero.desktop" else { print("Could not foreground Ditero: \(frontmost)"); exit(1) }
 }
 let deadline = Date().addingTimeInterval(mode == "permission" ? 55 : 45)
 var last = ""
