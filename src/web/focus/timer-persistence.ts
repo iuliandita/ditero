@@ -33,23 +33,54 @@ const sessionSchema = z
 	);
 
 export type FocusSessionState = z.infer<typeof sessionSchema>;
-export type StoredFocus = { version: 1; session: FocusSessionState };
+const completionSchema = z
+	.object({
+		intervalId: z.uuid(),
+		taskId: z.string().max(1024).optional(),
+		kind: z.enum(["work", "break"]),
+		startedAt: instant,
+		endedAt: instant,
+		durationSec: z.number().int().min(1).max(10800),
+	})
+	.refine(
+		(s) =>
+			s.endedAt >= s.startedAt &&
+			s.durationSec <= Math.ceil((s.endedAt - s.startedAt) / 1000) + 1,
+	);
+export type FocusCompletion = z.infer<typeof completionSchema>;
+export type FocusState = {
+	session: FocusSessionState | null;
+	pendingCompletions: FocusCompletion[];
+};
+const storedSchema = z.object({
+	version: z.literal(1),
+	revision: z.uuid().optional(),
+	session: sessionSchema.nullable(),
+	pendingCompletions: z.array(completionSchema).default([]),
+});
 export function focusStorageKey(userId: string, scope?: string): string {
 	return `ditero:focus:${JSON.stringify([scope ?? "browser", userId])}`;
 }
 export function restoreFocus(raw: string | null): FocusSessionState | null {
-	if (!raw) return null;
+	return restoreFocusState(raw).session;
+}
+export function restoreFocusState(raw: string | null): FocusState {
 	try {
-		const stored = z
-			.object({ version: z.literal(1), session: sessionSchema })
-			.parse(JSON.parse(raw));
-		return stored.session;
+		return storedSchema.parse(JSON.parse(raw ?? "null"));
 	} catch {
-		return null;
+		return { session: null, pendingCompletions: [] };
 	}
 }
-export function serializeFocus(session: FocusSessionState): string {
-	return JSON.stringify({ version: 1, session } satisfies StoredFocus);
+export function serializeFocus(
+	session: FocusSessionState | null,
+	pendingCompletions: FocusCompletion[] = [],
+): string {
+	return JSON.stringify({
+		version: 1,
+		revision: randomId(),
+		session,
+		pendingCompletions,
+	});
 }
 export function intervalFields(config: FocusConfig) {
 	return { intervalId: randomId(), pausedAt: null, config };
