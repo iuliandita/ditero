@@ -1,6 +1,7 @@
 import { passkey } from "@better-auth/passkey";
 import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { createAuthMiddleware } from "better-auth/api";
 import { jwt, twoFactor } from "better-auth/plugins";
 import { count, isNull } from "drizzle-orm";
 import { validateAuthSecret } from "../config/auth-secret.ts";
@@ -38,6 +39,8 @@ import {
 	signInRateKey,
 } from "./security.ts";
 
+export const SIGN_UP_RESPONSE_FLOOR_MS = 500;
+
 const REGISTRATION_LOCK_KEY = 6_794_321;
 const registrationMode = resolveRegistrationMode(process.env);
 const authOrigins = [
@@ -62,6 +65,15 @@ const authDatabase = encryptionKey
 			}),
 		)
 	: authAdapter;
+
+async function assertEmailRegistrationAllowed(email: string): Promise<void> {
+	const invited =
+		registrationBypassActive() ||
+		(await emailHasRedeemableInvite(email.toLowerCase(), db, Date.now()));
+	assertRegistrationAllowed(registrationMode, await registeredUserCount(), {
+		invited,
+	});
+}
 
 async function registeredUserCount(): Promise<number> {
 	const [result] = await db
@@ -91,6 +103,7 @@ export const auth = betterAuth({
 	trustedOrigins: trustedAuthOrigins(process.env),
 	emailAndPassword: {
 		enabled: true,
+		autoSignIn: false,
 		minPasswordLength: PASSWORD_MIN_LENGTH,
 		maxPasswordLength: PASSWORD_MAX_LENGTH,
 		sendResetPassword: async ({ user, url }) => {
@@ -115,6 +128,44 @@ export const auth = betterAuth({
 		GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
 		GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
 	}),
+	hooks: {
+		before: createAuthMiddleware(async (context) => {
+			if (context.path !== "/sign-up/email") return;
+			if (!context.body || typeof context.body !== "object") return;
+			const { password, email, name } = context.body;
+			// Let Better Auth report input errors before any account lookup.
+			if (
+				typeof password !== "string" ||
+				password.length < PASSWORD_MIN_LENGTH ||
+				password.length > PASSWORD_MAX_LENGTH ||
+				typeof email !== "string"
+			)
+				return;
+			validDisplayName(() => signupDisplayName(name, email));
+			try {
+				// The create hook alone runs only for new accounts, leaking existence.
+				await assertEmailRegistrationAllowed(email);
+			} catch (error) {
+				await context.context.password.hash(password);
+				throw registrationAPIError(error, context.path);
+			}
+		}),
+		after: createAuthMiddleware(async (context) => {
+			const error = context.context.returned;
+			if (
+				context.path !== "/sign-up/email" ||
+				!context.request ||
+				!(error instanceof APIError) ||
+				error.body?.code !== "FAILED_TO_CREATE_USER"
+			)
+				return;
+			// A competing signup may insert the email after Better Auth's lookup.
+			const existing = await context.context.internalAdapter.findUserByEmail(
+				context.body.email.toLowerCase(),
+			);
+			if (existing) return Response.json({ token: null, user: null });
+		}),
+	},
 	databaseHooks: {
 		user: {
 			update: {
@@ -136,14 +187,7 @@ export const auth = betterAuth({
 						signupDisplayName(newUser.name, newUser.email),
 					);
 					try {
-						const invited =
-							registrationBypassActive() ||
-							(await emailHasRedeemableInvite(newUser.email, db, Date.now()));
-						assertRegistrationAllowed(
-							registrationMode,
-							await registeredUserCount(),
-							{ invited },
-						);
+						await assertEmailRegistrationAllowed(newUser.email);
 					} catch (error) {
 						throw registrationAPIError(error, context?.path);
 					}
@@ -224,6 +268,34 @@ export const auth = betterAuth({
 });
 
 export async function handleAuthRequest(
+	request: Request,
+	peerAddress?: string,
+): Promise<Response> {
+	const signUp =
+		request.method === "POST" &&
+		new URL(request.url).pathname.replace(/\/+$/, "") ===
+			"/api/auth/sign-up/email";
+	const started = performance.now();
+	const response = await handleAuthRequestInternal(request, peerAddress);
+	if (!signUp) return response;
+	await new Promise((resolve) =>
+		setTimeout(
+			resolve,
+			Math.max(0, SIGN_UP_RESPONSE_FLOOR_MS - (performance.now() - started)),
+		),
+	);
+	// No real or synthetic user metadata, and no session on either path.
+	if (response.ok)
+		return Response.json(
+			{ token: null, user: null },
+			{
+				headers: { "cache-control": "no-store" },
+			},
+		);
+	return response;
+}
+
+async function handleAuthRequestInternal(
 	request: Request,
 	peerAddress?: string,
 ): Promise<Response> {

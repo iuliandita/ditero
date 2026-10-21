@@ -385,6 +385,11 @@ test("email test-send delivers real SMTP bytes to the sink", async ({
 	});
 	expect(res.ok(), await res.text()).toBeTruthy();
 
+	res = await api.post(`${MAIL_API}/api/auth/sign-in/email`, {
+		data: { email, password: PASSWORD },
+	});
+	expect(res.ok(), await res.text()).toBeTruthy();
+
 	// Save & test send drives the shared SMTP transport synchronously.
 	res = await api.post(`${MAIL_API}/api/notifications/channel/test`, {
 		data: { kind: "email", enabled: true, config: { address: email } },

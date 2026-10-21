@@ -158,7 +158,8 @@ describe("verification mail", () => {
 		// requireEmailVerification is off precisely so it cannot become a gate.
 		expect(response.status).toBe(200);
 		expect(await response.json()).toMatchObject({
-			user: { email: "ada@example.test" },
+			token: null,
+			user: null,
 		});
 
 		await waitFor(() =>

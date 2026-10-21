@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { handleAuthRequest } from "../../src/auth/auth.ts";
 import { CURRENT_KDF_VERSION, KDF_PARAMS } from "../../src/domain/e2e/kdf.ts";
 import { app } from "../../src/server/index.ts";
+import { signInForTest } from "../support/auth-sign-in.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 8. Enrollment is the one write that establishes an identity, so
@@ -39,14 +40,15 @@ function body(publicKey: string, over?: Record<string, unknown>) {
 }
 
 async function signUp(email: string): Promise<string> {
-	const response = await handleAuthRequest(
+	const registration = await handleAuthRequest(
 		new Request("http://localhost:3000/api/auth/sign-up/email", {
 			method: "POST",
 			headers: { "content-type": "application/json", origin: ORIGIN },
 			body: JSON.stringify({ name: "Enroll", email, password: "pw-123456" }),
 		}),
 	);
-	expect(response.status).toBe(200);
+	expect(registration.status).toBe(200);
+	const response = await signInForTest(email);
 	return response.headers
 		.getSetCookie()
 		.map((value) => value.split(";", 1)[0])

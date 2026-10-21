@@ -1443,6 +1443,7 @@
 	"login_backup_code_label": "Backup code",
 	"login_new_here": "New here?",
 	"login_signup": "Create an account",
+	"login_signup_continue": "If this address can be used, sign in to continue.",
 	"login_signin": "Sign in",
 	"login_signin_passkey": "Sign in with passkey",
 	"login_continue_google": "Continue with Google",

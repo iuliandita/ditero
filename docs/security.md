@@ -34,6 +34,27 @@ Optional Google sign-in creates accounts through the same registration check, so
 a first Google sign-in needs the same admission as an email signup. See
 [Sign-in providers](runbooks/sign-in-providers.md).
 
+Email sign-up returns HTTP 200 with `{"token":null,"user":null}` for both a
+new account and an existing email when admission is allowed. Neither response
+issues cookies or a session. Sign in separately with the account password;
+verification mail is optional and SMTP is not required. Existing account details
+and passwords are never changed by a duplicate sign-up.
+
+Registration policy is checked before account lookup, including for existing
+emails. Closed and invitation-only refusals keep their localized policy codes;
+they reveal admission policy (including eligible email invitations), not whether
+an account exists. First-account creation remains serialized in bootstrap mode.
+Valid-password attempts hash a password on new, duplicate and policy-refused
+paths, and HTTP sign-up responses have a common 500 ms minimum duration.
+This is timing equalization, not a constant-time guarantee: database contention,
+hashing or server overload beyond that floor can still produce different latency.
+Optional verification mail reaches only newly created accounts; someone with
+access to that mailbox or the mail infrastructure can observe delivery. Without
+proof of mailbox ownership, SMTP-free registration cannot prevent an attacker
+from creating an unused address and subsequently proving that creation by signing
+in with their chosen password. Rate limits bound attempts; the neutral response
+does not claim to eliminate that active registration side channel.
+
 Android and desktop use explicit system-browser consent to obtain a device-bound
 native session. Credentials remain in native storage. After sign-out or session/device
 revocation commits, subsequent HTTP requests (including Zero query and mutation

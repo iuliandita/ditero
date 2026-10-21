@@ -158,7 +158,7 @@ export function uniqueEmail(prefix: string): string {
 }
 
 // Context-bound requests share the browser's cookie jar, including for contexts
-// created manually without a baseURL. Signup yields an active session directly.
+// created manually without a baseURL. Sign in explicitly after the neutral signup response.
 export async function signUp(page: Page, email: string): Promise<string> {
 	const origin = webOrigin();
 	const correlation =
@@ -199,11 +199,18 @@ export async function signUp(page: Page, email: string): Promise<string> {
 	expect(response.ok(), `signup failed with status ${response.status()}`).toBe(
 		true,
 	);
-	const body: { user?: { id?: unknown } } = await response.json();
+	const signedIn = await page.request.post(`${origin}/api/auth/sign-in/email`, {
+		headers: { Origin: origin },
+		data: { email, password: PASSWORD },
+	});
+	expect(signedIn.ok(), `sign-in failed with status ${signedIn.status()}`).toBe(
+		true,
+	);
+	const body: { user?: { id?: unknown } } = await signedIn.json();
 	const userId = body.user?.id;
 	expect(typeof userId).toBe("string");
 	if (typeof userId !== "string" || !userId)
-		throw new Error("signup response is missing a user id");
+		throw new Error("sign-in response is missing a user id");
 	await page.goto(origin);
 	await expect(page.getByTestId("workspace")).toBeVisible({
 		timeout: SIGNUP_TIMEOUT,

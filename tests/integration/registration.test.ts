@@ -1,11 +1,17 @@
 import { count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
-import { handleAuthRequest } from "../../src/auth/auth.ts";
+import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+	auth,
+	handleAuthRequest,
+	SIGN_UP_RESPONSE_FLOOR_MS,
+} from "../../src/auth/auth.ts";
+import { acceptInvite } from "../../src/auth/invite-accept.ts";
 import { emailHasRedeemableInvite } from "../../src/auth/invite-bypass.ts";
 import { assertRegistrationAllowed } from "../../src/auth/registration.ts";
 import * as tables from "../../src/db/schema.ts";
+import { signInForTest } from "../support/auth-sign-in.ts";
 
 const databaseURL = process.env.DATABASE_URL;
 if (!databaseURL) throw new Error("DATABASE_URL is required");
@@ -79,6 +85,12 @@ describe("bootstrap registration", () => {
 
 		const [result] = await db.select({ value: count() }).from(tables.user);
 		expect(result.value).toBe(1);
+		const [created] = await db.select().from(tables.user);
+		const session = await signInForTest(created.email);
+		expect(session.headers.getSetCookie().length).toBeGreaterThan(0);
+		expect(await db.select().from(tables.membership)).toMatchObject([
+			{ userId: created.id, role: "owner" },
+		]);
 	});
 });
 
@@ -113,6 +125,21 @@ describe("invite-gated registration (post-first-user)", () => {
 			.from(tables.user)
 			.where(eq(tables.user.email, "invited@test.invalid"));
 		expect(created).toHaveLength(1);
+		expect(response.headers.getSetCookie()).toEqual([]);
+		const signedIn = await signInForTest("invited@test.invalid");
+		expect(signedIn.headers.getSetCookie().length).toBeGreaterThan(0);
+		await acceptInvite(
+			"token-email",
+			created[0].id,
+			"invited@test.invalid",
+			db,
+		);
+		expect(
+			await db
+				.select()
+				.from(tables.membership)
+				.where(eq(tables.membership.workspaceId, "seed-ws")),
+		).toMatchObject([{ userId: created[0].id, role: "member" }]);
 	});
 
 	test("an open (email-null) invite does NOT enable signup", async () => {
@@ -198,4 +225,35 @@ describe("closed-mode invite bypass at the seam", () => {
 			/registration is disabled/i,
 		);
 	});
+});
+
+test("bootstrap policy refuses existing and unknown emails identically after hashing", async () => {
+	await seedWorkspaceOwner();
+	const context = await auth.$context;
+	const hash = vi.spyOn(context.password, "hash");
+	try {
+		const results = [];
+		const durations: number[] = [];
+		for (const email of ["owner@test.invalid", "missing@test.invalid"]) {
+			const start = performance.now();
+			const response = await signup(email);
+			durations.push(performance.now() - start);
+			results.push({
+				status: response.status,
+				body: await response.json(),
+				cookies: response.headers.getSetCookie(),
+			});
+		}
+		expect(hash).toHaveBeenCalledTimes(2);
+		expect(results[0]).toEqual(results[1]);
+		expect(results[0]).toMatchObject({
+			status: 403,
+			body: { code: "REGISTRATION_INVITE_REQUIRED" },
+			cookies: [],
+		});
+		for (const duration of durations)
+			expect(duration).toBeGreaterThanOrEqual(SIGN_UP_RESPONSE_FLOOR_MS - 10);
+	} finally {
+		hash.mockRestore();
+	}
 });

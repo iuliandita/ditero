@@ -1472,6 +1472,7 @@
 	"login_password_placeholder": "mot de passe",
 	"login_new_here": "Nouveau ici ?",
 	"login_signup": "Créer un compte",
+	"login_signup_continue": "Si cette adresse peut être utilisée, connecte-toi pour continuer.",
 	"login_signin": "Se connecter",
 	"login_signin_passkey": "Se connecter avec une passkey",
 	"login_continue_google": "Continuer avec Google",

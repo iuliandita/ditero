@@ -15,6 +15,7 @@ import { commitWdk } from "../../src/domain/e2e/wdk-commitment.ts";
 import { rotateIdentity } from "../../src/server/e2e/identity-rotation.ts";
 import { provisionWorkspace } from "../../src/server/e2e/provision.ts";
 import { app } from "../../src/server/index.ts";
+import { signInForTest } from "../support/auth-sign-in.ts";
 import { resetAuthFixture } from "./reset-auth-fixture.ts";
 
 // M-E2E Task 14. Provisioning mints workspace_key v1 and the owner's own grant
@@ -58,7 +59,7 @@ async function signUp(email: string): Promise<string> {
 	// managed-account paths use, so the users it creates are ordinary ones with
 	// real credentials and real sessions -- not hand-forged session rows, which
 	// would test a cookie this app never issues.
-	const response = await withRegistrationBypass(() =>
+	const registration = await withRegistrationBypass(() =>
 		handleAuthRequest(
 			new Request("http://localhost:3000/api/auth/sign-up/email", {
 				method: "POST",
@@ -67,7 +68,8 @@ async function signUp(email: string): Promise<string> {
 			}),
 		),
 	);
-	expect(response.status).toBe(200);
+	expect(registration.status).toBe(200);
+	const response = await signInForTest(email);
 	return response.headers
 		.getSetCookie()
 		.map((value) => value.split(";", 1)[0])

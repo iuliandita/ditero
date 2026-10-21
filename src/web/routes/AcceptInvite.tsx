@@ -175,6 +175,7 @@ function AcceptInvitePage({
 	const [email, setEmail] = useState("");
 	const [displayName, setDisplayName] = useState("");
 	const [password, setPassword] = useState("");
+	const [notice, setNotice] = useState(false);
 	const [mode, setMode] = useState<"signup" | "signin">("signup");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -472,6 +473,10 @@ function AcceptInvitePage({
 					setError(authErrorMessage(res.error, m.accept_signup_failed));
 					return;
 				}
+				setMode("signin");
+				setPassword("");
+				setNotice(true);
+				return;
 			} else {
 				const result = await signInEmail(email, password);
 				if (result.kind === "error") {
@@ -572,6 +577,11 @@ function AcceptInvitePage({
 							void authThenAccept();
 						}}
 					>
+						{notice && (
+							<p role="status" className="text-sm text-muted-foreground">
+								{m.login_signup_continue()}
+							</p>
+						)}
 						{mode === "signup" && (
 							<div className="space-y-2">
 								<label htmlFor="accept-name" className="text-sm font-medium">
@@ -633,6 +643,7 @@ function AcceptInvitePage({
 							className="self-start text-sm text-primary underline-offset-4 hover:underline"
 							onClick={() => {
 								setMode((cur) => (cur === "signup" ? "signin" : "signup"));
+								setNotice(false);
 								setError(null);
 							}}
 						>

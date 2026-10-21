@@ -16,7 +16,12 @@ async function signUpBrowserAccount(
 		data: { email, password: "pw-123456", name: email.split("@")[0] },
 	});
 	expect(response.ok()).toBe(true);
-	const body = (await response.json()) as { user: { id: string } };
+	const signedIn = await page.request.post(`${origin}/api/auth/sign-in/email`, {
+		headers: { Origin: origin },
+		data: { email, password: "pw-123456" },
+	});
+	expect(signedIn.ok()).toBe(true);
+	const body = (await signedIn.json()) as { user: { id: string } };
 	return body.user.id;
 }
 

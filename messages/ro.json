@@ -1472,6 +1472,7 @@
 	"login_password_placeholder": "parolă",
 	"login_new_here": "Prima vizită?",
 	"login_signup": "Creează cont",
+	"login_signup_continue": "Dacă această adresă poate fi folosită, conectează-te pentru a continua.",
 	"login_signin": "Conectează-te",
 	"login_signin_passkey": "Conectează-te cu passkey",
 	"login_continue_google": "Continuă cu Google",
