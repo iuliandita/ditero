@@ -55,9 +55,9 @@
 		{
 			"architecture": "x86_64",
 			"name": "zlib",
-			"version": "1.3.2-r0",
-			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/zlib-1.3.2-r0.apk",
-			"sha256": "b636306cbf8a0c15493b38de608ba11605fd8f11ade631f5ece6f7fdf5a1e09e"
+			"version": "1.3.2-r1",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/zlib-1.3.2-r1.apk",
+			"sha256": "63aeea03c15a2f9018f81805cfc8aa926bdf5cd68921f22149c2fbb5d0ee9f47"
 		},
 		{
 			"architecture": "x86_64",
@@ -237,9 +237,9 @@
 		{
 			"architecture": "aarch64",
 			"name": "zlib",
-			"version": "1.3.2-r0",
-			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/zlib-1.3.2-r0.apk",
-			"sha256": "a535991af7c9e8369ebbf33c1e388c1bc63c87ead5142eddaee71f65836c33e3"
+			"version": "1.3.2-r1",
+			"url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/zlib-1.3.2-r1.apk",
+			"sha256": "1f77a542ac6634761b9fe38d8bdca19b154071dcfa25432e73f2bc8a0740a33f"
 		},
 		{
 			"architecture": "aarch64",
