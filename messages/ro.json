@@ -1,4 +1,7 @@
 {
+	"workspace_read_only": "Rolul tău în acest spațiu permite doar vizualizarea.",
+	"accept_error_email_mismatch": "Invitația este pentru altă adresă de e-mail. Deconectează-te, apoi conectează-te cu contul la care a fost trimisă.",
+	"accept_switch_account": "Deconectează-te și schimbă contul",
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"account_display_name": "Nume afișat",
 	"account_name_signup_hint": "Lasă câmpul gol pentru a folosi partea adresei de e-mail dinainte de @.",

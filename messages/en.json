@@ -1,4 +1,7 @@
 {
+	"workspace_read_only": "Your workspace role allows viewing only.",
+	"accept_error_email_mismatch": "This invite is for another email address. Sign out, then sign in with the account it was sent to.",
+	"accept_switch_account": "Sign out and switch account",
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"account_display_name": "Display name",
 	"account_name_signup_hint": "Leave blank to use the part of your email before @.",

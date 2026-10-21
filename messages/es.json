@@ -1,4 +1,7 @@
 {
+	"workspace_read_only": "Tu rol en este espacio solo permite ver el contenido.",
+	"accept_error_email_mismatch": "Esta invitación es para otra dirección de correo. Cierra sesión e inicia sesión con la cuenta a la que se envió.",
+	"accept_switch_account": "Cerrar sesión y cambiar de cuenta",
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"account_display_name": "Nombre visible",
 	"account_name_signup_hint": "Deja el campo vacío para usar la parte de tu correo anterior a @.",

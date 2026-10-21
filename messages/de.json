@@ -1,4 +1,7 @@
 {
+	"workspace_read_only": "Deine Workspace-Rolle erlaubt nur das Ansehen.",
+	"accept_error_email_mismatch": "Diese Einladung ist für eine andere E-Mail-Adresse. Melde dich ab und dann mit dem Konto an, an das sie gesendet wurde.",
+	"accept_switch_account": "Abmelden und Konto wechseln",
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"account_display_name": "Anzeigename",
 	"account_name_signup_hint": "Lass das Feld leer, um den Teil deiner E-Mail vor @ zu verwenden.",

@@ -60,6 +60,8 @@ size and high contrast stay on each device.
   Slack, or email
 - Display names at sign-up and in Settings > Account, shared in member and assignee displays
 - Multi-workspace sharing with Owner / Admin / Member / Viewer roles
+  (Viewer task controls are read-only and explain the restriction). Email-bound
+  invites opened with another account offer sign-out so you can use the invited account.
 - Invitation links, managed accounts, comments, and recorded task completion history
 - Email/password, passkeys, TOTP, recovery codes, and optional
   [Google sign-in](docs/runbooks/sign-in-providers.md)

@@ -483,6 +483,11 @@ export function TaskRow({
 						"group group/completion flex min-h-12 gap-2 rounded-md px-1 py-1 transition-colors duration-(--motion-fast) ease-(--motion-ease) [-webkit-touch-callout:none] motion-reduce:transition-none hover:bg-muted/30 active:bg-muted/50 pointer-coarse:select-none data-long-pressed:bg-muted/60 data-selected:bg-muted data-selected:hover:bg-muted",
 						card ? "items-start" : "items-center",
 					)}
+					title={
+						!activation.canWriteTaskWorkspace(task.id)
+							? m.workspace_read_only()
+							: undefined
+					}
 					data-kbd-row
 					data-reading-row="task"
 					data-selected={selection?.selected || undefined}
@@ -504,6 +509,11 @@ export function TaskRow({
 						>
 							<Checkbox
 								disabled={!canToggle}
+								title={
+									!activation.canWriteTaskWorkspace(task.id)
+										? m.workspace_read_only()
+										: undefined
+								}
 								aria-label={task.title}
 								aria-describedby={completionId}
 								checked={displayedDone}

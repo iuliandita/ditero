@@ -1,4 +1,7 @@
 {
+	"workspace_read_only": "دورك في مساحة العمل يسمح بالعرض فقط.",
+	"accept_error_email_mismatch": "هذه الدعوة لعنوان بريد إلكتروني آخر. سجّل الخروج، ثم سجّل الدخول بالحساب الذي أُرسلت إليه.",
+	"accept_switch_account": "تسجيل الخروج وتبديل الحساب",
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"account_display_name": "الاسم المعروض",
 	"account_name_signup_hint": "اترك الحقل فارغًا لاستخدام الجزء من بريدك الإلكتروني الذي يسبق @.",
