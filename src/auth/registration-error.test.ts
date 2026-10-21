@@ -25,11 +25,11 @@ describe("OAuth registration denial", () => {
 			databaseHooks: {
 				user: {
 					create: {
-						before: async (_user, context) => {
+						before: async () => {
 							try {
 								assertRegistrationAllowed(mode, 1);
 							} catch (error) {
-								throw registrationAPIError(error, context?.path);
+								throw registrationAPIError(error);
 							}
 						},
 					},
@@ -43,12 +43,11 @@ describe("OAuth registration denial", () => {
 		});
 		vi.spyOn(google, "getUserInfo").mockResolvedValue({
 			user: {
-				id: "new-social-user",
 				email: "new@example.test",
 				name: "New",
 				emailVerified: true,
 			},
-			data: {},
+			data: { sub: "new-social-user" },
 		});
 		const start = await auth.handler(
 			new Request("http://localhost:3000/api/auth/sign-in/social", {
@@ -78,27 +77,32 @@ describe("OAuth registration denial", () => {
 			),
 		);
 		expect(callback.status).toBe(302);
-		expect(callback.headers.get("location")).toBe(`/?from=login&error=${code}`);
+		const location = callback.headers.get("location");
+		if (!location) throw new Error("Missing OAuth error redirect");
+		const redirect = new URL(location, "http://localhost:3000");
+		expect(redirect.pathname).toBe("/");
+		expect(Object.fromEntries(redirect.searchParams)).toEqual({
+			from: "login",
+			error: code,
+			error_description: message,
+		});
 		expect(store.user).toEqual([]);
 		expect(store.account).toEqual([]);
 		expect(store.session).toEqual([]);
 		try {
 			assertRegistrationAllowed(mode, 1);
 		} catch (error) {
-			expect(registrationAPIError(error, "/sign-up/email").body).toMatchObject({
+			expect(registrationAPIError(error).body).toMatchObject({
 				code,
 				message,
 			});
 		}
 	});
 
-	it.each([
-		"/sign-up/email",
-		"/callback/google",
-	])("logs an unexpected failure on %s without exposing it as policy", (path) => {
+	it("logs an unexpected failure without exposing it as policy", () => {
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
 		const cause = new Error("connect ECONNREFUSED db:5432");
-		const error = registrationAPIError(cause, path);
+		const error = registrationAPIError(cause);
 		expect(error.status).toBe("INTERNAL_SERVER_ERROR");
 		expect(error.body).toEqual({ message: "Registration is unavailable" });
 		expect(log).toHaveBeenCalledWith("registration policy check failed", cause);

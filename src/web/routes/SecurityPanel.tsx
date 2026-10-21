@@ -88,8 +88,11 @@ export function SecurityPanel() {
 
 	async function enableTwoFactor() {
 		setError(null);
-		const result = await authClient.twoFactor.enable({ password });
-		if (result.error) {
+		const result = await authClient.twoFactor.enable({
+			password,
+			method: "totp",
+		});
+		if (result.error || result.data.method !== "totp") {
 			setError(authErrorMessage(result.error, m.security_error_enable_2fa));
 			return;
 		}

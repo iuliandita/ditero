@@ -48,6 +48,14 @@ Approval derives the user and approving session from the browser, not from
 request fields. A native session cannot approve another grant. There is no
 caller-supplied callback URL.
 
+Better Auth 1.7 keeps Google's `/api/auth/callback/google` redirect URI and the
+pending native approval URL. Registration refusals carry a stable `error` code
+and a readable `error_description`; clients localize the code. TOTP enrollment
+explicitly requests the `totp` method and accepts setup keys only from that response.
+Before deploying 1.7, apply the additive JWT key migration described in
+[database roles](database-roles.md#better-auth-17-upgrade). Browser and native
+session credentials and the explicit approval step retain their existing format.
+
 Exchange consumes the approved grant before session creation. It releases its
 database transaction before calling the session adapter, then checks the live
 browser session, user, and original grant expiry again before linking the new

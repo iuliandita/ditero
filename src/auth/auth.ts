@@ -159,7 +159,7 @@ export const auth = betterAuth({
 				await assertEmailRegistrationAllowed(email);
 			} catch (error) {
 				await context.context.password.hash(password);
-				throw registrationAPIError(error, context.path);
+				throw registrationAPIError(error);
 			}
 		}),
 		after: createAuthMiddleware(async (context) => {
@@ -194,7 +194,7 @@ export const auth = betterAuth({
 					try {
 						await assertEmailRegistrationAllowed(newUser.email);
 					} catch (error) {
-						throw registrationAPIError(error, context?.path);
+						throw registrationAPIError(error);
 					}
 					return { data: { ...newUser, name } };
 				},
