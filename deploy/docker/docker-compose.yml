@@ -82,6 +82,12 @@ services:
       upstream-db:
         condition: service_healthy
         required: false
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r = await fetch('http://localhost:3000/health'); if (!r.ok) process.exit(1)"]
+      interval: 5s
+      timeout: 5s
+      start_period: 120s
+      retries: 120
     restart: unless-stopped
 
   upstream-db:
@@ -140,6 +146,8 @@ services:
     ports:
       - "4848:4848"
     depends_on:
+      app:
+        condition: service_healthy
       upstream-db:
         condition: service_healthy
         required: false

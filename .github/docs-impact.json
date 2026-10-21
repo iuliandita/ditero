@@ -7,27 +7,34 @@
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
-			"docs": ["RELEASING.md"],
+			"docs": [
+				"RELEASING.md"
+			],
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "e32769de387a2b031b6e3a219a9074dfd95f08d7a808b024316700999ae72d79",
+			"sourceDigest": "52c7a25475a3a52aff33ba2a5705eabac99c9852aa63a824b6d5283fe11edf14",
 			"docs": [
-				".env.example",
-				"docs/runbooks/sign-in-providers.md",
 				"deploy/docker/aio/README.md",
-				"deploy/helm/ditero/README.md"
+				"deploy/helm/ditero/README.md",
+				"docs/runbooks/database-roles.md"
 			],
-			"note": "Compose now forwards GOOGLE_CLIENT_ID, without which Google sign-in could not be enabled. The new sign-in provider guide documents per-instance OAuth clients, the exact callback, Google redirect-host limits, Compose/AIO/Helm configuration, registration and linking behavior, and planned providers."
+			"note": "Gate Zero on completed application migrations and the current Helm revision; give AIO Zero a dedicated ingress bridge without outbound source NAT and document retained-replica recovery."
 		},
 		"deployment": {
-			"sourceDigest": "4a4cadef874a1cef442178e7a6e332a0eefe5252e635068a1d4c49486f7d7794",
-			"docs": ["deploy/docker/aio/README.md", "deploy/helm/ditero/README.md"],
-			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
+			"sourceDigest": "fb9671cf242da061877e5e9396f8c11d6e38235258521d492f075c8620a59511",
+			"docs": [
+				"deploy/docker/aio/README.md",
+				"deploy/helm/ditero/README.md",
+				"docs/runbooks/database-roles.md"
+			],
+			"note": "Document ordered startup, revision-aware Helm readiness, AIO ingress boundaries and cache-only recovery for failed initial synchronization."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
-			"docs": ["apps/desktop/README.md"],
+			"docs": [
+				"apps/desktop/README.md"
+			],
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		}
 	}

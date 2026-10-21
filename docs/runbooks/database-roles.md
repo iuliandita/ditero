@@ -52,3 +52,20 @@ The application verifies this at startup in production and refuses to boot if th
 Set `DITERO_MIGRATION_DATABASE_URL` to the owner DSN and `DITERO_DATABASE_URL` to the runtime DSN. Configure `DITERO_ZERO_DATABASE_URL` according to the Zero deployment guide and provider replication controls. Never point application runtime traffic at the migration or Zero login.
 
 After migration, verify `user_secret` has both row security flags and that the runtime role cannot read it without `SET LOCAL ditero.user_id`.
+
+## Startup and retained Zero replicas
+
+Start the application and wait for `/health` before starting Zero. Compose gates
+Zero on app health; the AIO bundle additionally waits for its migration service.
+The Helm chart waits for the app belonging to the current release revision.
+When migrating manually, stop Zero first and wait for app migrations to finish.
+
+`ZERO_AUTO_RESET=true` handles supported replication/schema-change resets; it is
+not a repair guarantee for a replica initialized from a partially migrated schema.
+A partial initial-sync replica containing an existing `account` table still exits
+255 on repeated starts with auto-reset enabled.
+If Zero repeatedly exits with `SQLITE_ERROR: table "account" already exists`, stop
+Zero, back up its replica volume, and recreate only that cache volume (the Helm
+Zero PVC for Kubernetes). Preserve PostgreSQL, attachments and every service secret.
+Start the healthy, migrated app, then Zero, and verify sync from a fresh browser.
+PostgreSQL is authoritative; discard no browser-local pending mutations during recovery.
