@@ -147,6 +147,7 @@ describe("check", () => {
 		);
 		await expect(engine.check("de-DE")).resolves.toEqual({
 			status: "available",
+			processing: "device",
 		});
 		expect(fake.availableCalls).toEqual([
 			{ langs: ["de-DE"], processLocally: true },
@@ -161,6 +162,7 @@ describe("check", () => {
 		);
 		await expect(engine.check("en-US")).resolves.toEqual({
 			status: "available",
+			processing: "device",
 		});
 	});
 
@@ -218,24 +220,26 @@ describe("check", () => {
 		});
 	});
 
-	test("no static available()", async () => {
+	test("standard API without available() may use the vendor service", async () => {
 		const fake = makeRecognition({ available: "absent" });
 		const engine = createBrowserVoiceEngine(
 			env({ SpeechRecognition: fake.ctor }),
 		);
-		await expect(engine.check("en-US")).resolves.toMatchObject({
-			reason: "unsupported-no-local-processing",
+		await expect(engine.check("en-US")).resolves.toEqual({
+			status: "available",
+			processing: "vendor",
 		});
-		expect(fake.instances).toHaveLength(0);
+		expect(fake.availableCalls).toHaveLength(0);
 	});
 
-	test("recognizer without processLocally support is refused, not assigned to", async () => {
+	test("available() without a processLocally property may use the vendor service", async () => {
 		const fake = makeRecognition({ local: "missing" });
 		const engine = createBrowserVoiceEngine(
 			env({ SpeechRecognition: fake.ctor }),
 		);
-		await expect(engine.check("en-US")).resolves.toMatchObject({
-			reason: "unsupported-no-local-processing",
+		await expect(engine.check("en-US")).resolves.toEqual({
+			status: "available",
+			processing: "vendor",
 		});
 		expect(fake.availableCalls).toHaveLength(0);
 		for (const r of fake.instances) expect("processLocally" in r).toBe(false);
@@ -311,15 +315,17 @@ describe("start", () => {
 		expect(fake.instances[0].starts).toBe(0);
 	});
 
-	test("missing processLocally refuses before start", () => {
-		const fake = makeRecognition({ local: "missing" });
+	test.each([
+		["available() absent", { available: "absent" as const }, false],
+		["processLocally absent", { local: "missing" as const }, undefined],
+	])("vendor-service engine (%s) starts with the locale and never requests local mode", (_name, opts, local) => {
+		const fake = makeRecognition(opts);
 		const engine = createBrowserVoiceEngine(
 			env({ SpeechRecognition: fake.ctor }),
 		);
-		expect(() => engine.start("en-US", () => {})).toThrowError(
-			expect.objectContaining({ reason: "unsupported-no-local-processing" }),
-		);
-		expect(fake.instances[0].starts).toBe(0);
+		engine.start("ro-RO", () => {});
+		expect(fake.instances[0].starts).toBe(1);
+		expect(fake.instances[0].atStart).toMatchObject({ lang: "ro-RO", local });
 	});
 
 	test("start() throwing detaches handlers and rethrows", () => {
@@ -427,7 +433,7 @@ describe("recognition events", () => {
 		["no-speech", "no-speech"],
 		["audio-capture", "audio-capture"],
 		["language-not-supported", "language-pack-unavailable"],
-		["network", "engine-error"],
+		["network", "network"],
 		["aborted", "engine-error"],
 		["toString", "engine-error"],
 	])("error %s maps to %s", (code, reason) => {

@@ -1,32 +1,45 @@
 # Voice capture in quick add
 
-Quick add can take dictation in the browser. The recognized text is shown for review
+Quick add can take dictation in the browser, on-device where the browser supports it. The recognized text is shown for review
 and reaches the task field only after **Use this text**. It is never submitted
 automatically, and the normal quick-add parser then handles dates, `#labels` and `~lists`.
 
 ## Privacy
 
-Ditero uses on-device speech recognition only. It requires the browser's local
-recognition mode (`processLocally`) and a language pack installed on the device, and
-it refuses to start otherwise. Audio is not sent to Ditero, and Ditero does not allow
-the browser to fall back to a cloud service.
+Ditero never receives the audio. What happens to it depends on the browser, and the
+control tells you which case applies:
 
-This is stricter than the default of some browsers. For example, Chrome's ordinary
-Web Speech recognition sends audio to the vendor's speech service. Ditero does not use
-that mode: where only cloud recognition exists, the control explains that voice input is
-unavailable and you keep typing. The browser still controls microphone permission.
+- **On-device.** Browsers that expose both `SpeechRecognition.available()` and
+  `processLocally` (for example current Chrome) are asked to recognize locally. Ditero
+  sets `processLocally`, checks that it stuck, and requires the language pack to be
+  installed on the device. Audio stays on the device. If the pack is missing, voice
+  input stays off; Ditero does not fall back to a cloud service.
+- **Browser vendor's service.** Browsers that only offer the standard Web Speech API
+  without those two features may send the audio to the browser vendor's speech
+  service. Ditero cannot see or control that. Before the mic button works, quick add
+  shows a notice saying so and the button stays disabled, with the reason, until you
+  choose **Accept and turn on**. The notice stays visible while dictation is
+  available, and review labels the text as heard by the browser's speech service.
+  Acceptance is remembered per user on this device (browser storage, not synced); if
+  storage is blocked it lasts for the page session. Clearing site data asks again.
+- **Not available.** No Web Speech API, or an insecure context (see below).
+
+Detection uses these APIs, not browser names, so a browser that gains on-device support
+moves to the first case without a change here. The browser still controls microphone
+permission. An engine that does not report itself as on-device is treated as the vendor
+service case.
 
 ## When the control is unavailable
 
 The control stays visible with a localized reason instead of failing silently:
 
-- No Web Speech API (for example Firefox), or no on-device mode.
+- No Web Speech API (for example Firefox).
 - Insecure context. Use HTTPS or localhost; plain HTTP origins have no microphone access.
 - The interface language has no mapped speech language, or its on-device pack is not
   installed. A pack that is downloadable or downloading shows a quiet wait state;
   **Check again** re-probes.
 - Microphone permission denied, no microphone, no speech heard, an engine error, or
-  a result longer than 500 characters. Your typed text is left unchanged.
+  the browser's speech service being unreachable, or a result longer than 500 characters. Your typed text is left unchanged.
 - The Android and desktop apps. Their webviews do not provide a qualified local
   recognizer and there is no native speech plugin, so quick add shows an explanation
   instead of the control; type instead.

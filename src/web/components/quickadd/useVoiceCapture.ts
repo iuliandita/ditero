@@ -5,6 +5,18 @@ import {
 	type VoiceState,
 } from "../../../domain/voice-capture.ts";
 import { createBrowserVoiceEngine } from "../../lib/speech-recognition.ts";
+import {
+	readVoiceConsent,
+	writeVoiceConsent,
+} from "../../lib/voice-consent.ts";
+
+const deviceStorage = (): Storage | null => {
+	try {
+		return typeof localStorage === "undefined" ? null : localStorage;
+	} catch {
+		return null;
+	}
+};
 
 // Everything the controller's results are only valid for. Any change cancels
 // the session (the controller is disposed and a new one is bound).
@@ -74,6 +86,9 @@ function createVoiceStore() {
 					engine: createBrowserVoiceEngine(),
 					native: identity.native,
 					locale: identity.locale,
+					acknowledged: readVoiceConsent(identity.accountId, deviceStorage()),
+					onAcknowledge: () =>
+						writeVoiceConsent(identity.accountId, deviceStorage()),
 				});
 				controller = created;
 				key = nextKey;
@@ -106,6 +121,7 @@ function createVoiceStore() {
 			controller?.start();
 		},
 		stop: () => controller?.stop(),
+		acknowledge: () => controller?.acknowledge(),
 		cancel: () => controller?.cancel(),
 		invalidate: () => controller?.invalidate("page"),
 		accept(boundKey: string, draft: string, index: number): string | null {
@@ -147,6 +163,8 @@ export type VoiceView = {
 	/** Cancels active voice and returns true; false when nothing was active. */
 	cancelIfActive(): boolean;
 	start(): void;
+	/** Accept the vendor-service notice; dictation stays off until then. */
+	acknowledge(): void;
 	stop(): void;
 	cancel(): void;
 	retry(): void;
@@ -215,6 +233,7 @@ export function useVoiceCapture(identity: VoiceIdentity): VoiceView {
 		},
 		start: () => store.start(),
 		stop: () => store.stop(),
+		acknowledge: () => store.acknowledge(),
 		cancel: () => store.cancel(),
 		retry: () => store.reprobe(),
 		// Review keeps `ready`, so this cancel + start stays in the gesture.
