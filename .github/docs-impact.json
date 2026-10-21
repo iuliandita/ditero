@@ -6,31 +6,22 @@
 			"noImpact": "Task rows and cards replace the visible Personal or Shared word with a person or group icon while retaining the workspace name and the existing localized tooltip and screen-reader context. Task behavior, permissions, settings and documented workflows are unchanged."
 		},
 		"release": {
-			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
-			"docs": [
-				"RELEASING.md"
-			],
-			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
+			"sourceDigest": "0d8116dc0ccfd64ceb92083be09c6aa640bddbc8bd0021574a62ca26f1c1fa7b",
+			"noImpact": "The Compose release archive now includes postgres-healthcheck.sh, which the bundled database already bind-mounts, and packaging refuses archives missing any bind-mounted script. Release steps, assets and documented procedures are unchanged."
 		},
 		"configuration": {
 			"sourceDigest": "8b4c3926972db5324caed3acde9ebe1f02feb2fce7c0fe1ad8dab2e55c6baad1",
-			"docs": [
-				"docs/runbooks/database-roles.md"
-			],
+			"docs": ["docs/runbooks/database-roles.md"],
 			"note": "Document container-readable file secrets, atomic role initialization, missing-role health failures and safe recovery without widening application privileges."
 		},
 		"deployment": {
 			"sourceDigest": "257d56c2f6b48287c678603a0078b6e2882cef17fbff59595e62f37d1d33491b",
-			"docs": [
-				"docs/runbooks/database-roles.md"
-			],
+			"docs": ["docs/runbooks/database-roles.md"],
 			"note": "Document container-readable file secrets, atomic role initialization, missing-role health failures and safe recovery without widening application privileges."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
-			"docs": [
-				"apps/desktop/README.md"
-			],
+			"docs": ["apps/desktop/README.md"],
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		}
 	}
