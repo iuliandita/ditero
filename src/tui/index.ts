@@ -1,6 +1,6 @@
 import { CliError, parseArguments } from "../cli/arguments.ts";
 import { discover, readSetupStatus, setupNoticeURL } from "../cli/client.ts";
-import { clientVersion } from "../clients/build-info.ts";
+import { clientLabel, clientVersion } from "../clients/build-info.ts";
 import { isSupportedLocale, type Locale } from "../domain/locale.ts";
 import {
 	PUBLIC_API_RESOURCES,
@@ -640,7 +640,7 @@ export async function runTerminal(
 						viewportTitle: "",
 						start: !state?.location,
 						startInfo: [
-							clientVersion("ditero-tui").trim(),
+							clientLabel("ditero-tui"),
 							reportedAccess,
 							m.tui_locale_info({ locale }, options),
 							m.tui_glyph_info(
