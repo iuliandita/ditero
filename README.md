@@ -108,7 +108,8 @@ The [roadmap](docs/ROADMAP.md) distinguishes delivered capabilities from remaini
 
 The `deploy/docker` stack runs the app (web UI + API served
 same-origin on one port), PostgreSQL, and the Zero sync cache.
-Clients collaborate through this shared server. PostgreSQL must provide logical
+Clients collaborate through this shared server. PostgreSQL 15 or newer is required
+(the bundled image uses PostgreSQL 18). PostgreSQL must provide logical
 replication and direct connections; PGlite and other embedded databases are not
 supported substitutes. See [database roles](docs/runbooks/database-roles.md).
 
@@ -150,6 +151,12 @@ To reach it from anything other than the machine it runs on, set
 `BETTER_AUTH_URL` and `PUBLIC_ZERO_URL` to addresses that machine's browsers can
 resolve.
 
+Serve the application at its own origin root, such as `https://tasks.example.com/`
+or a dedicated port. An app path prefix such as `/ditero/` is unsupported: assets
+and API routes use root-relative paths. Zero alone can use a proxy path prefix
+when the proxy strips that prefix, forwards WebSocket upgrades, and
+`PUBLIC_ZERO_URL` includes the externally visible prefix.
+
 `BETTER_AUTH_URL` names exactly one origin, and auth routes reject every other
 one with `403`. To serve the same instance at more than one address — a LAN
 name and `localhost`, say — list the extras in `TRUSTED_ORIGINS`:
@@ -181,6 +188,8 @@ All configuration is environment-driven. The common variables:
 | `DITERO_DATABASE_URL` | bundled Postgres | Non-owner application Postgres DSN. |
 | `DITERO_MIGRATION_DATABASE_URL` | bundled Postgres | Schema-owner migration DSN. |
 | `DITERO_ZERO_DATABASE_URL` | bundled Postgres | Direct, replication-capable Zero DSN. |
+| `ZERO_APP_PUBLICATIONS` | unset | Comma-separated precreated Zero publications for a non-superuser replication login; see [database roles](docs/runbooks/database-roles.md). Empty leaves Zero's default unchanged. |
+| `ZERO_AUTO_RESET` | unset | Set `true` to rebuild the Zero cache when replication/schema changes require a reset. Empty leaves Zero's default unchanged. |
 | `POSTGRES_PASSWORD` | _(required, bundled)_ | Password for bundled PostgreSQL and Zero's bundled connection. |
 | `DITERO_TRUSTED_PROXIES` | empty | Comma-separated CIDRs allowed to supply forwarding headers. |
 | `PUBLIC_ZERO_URL` | `http://localhost:4848` | Address browsers dial zero-cache on. Served to the web client at runtime and used for the CSP. |
@@ -197,7 +206,7 @@ All configuration is environment-driven. The common variables:
 ### Bundled vs. external Postgres
 
 The `bundled` profile runs `upstream-db` (Postgres 18 with `wal_level=logical`).
-To use your own Postgres instead, provide separate runtime, migration-owner, and
+To use your own PostgreSQL 15+ instead, provide separate runtime, migration-owner, and
 Zero DSNs and omit that profile:
 
 ```sh

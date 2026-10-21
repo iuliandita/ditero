@@ -14,4 +14,8 @@ export ZERO_CVR_DB="${ZERO_CVR_DB:-$ZERO_UPSTREAM_DB}"
 export ZERO_CHANGE_DB="${ZERO_CHANGE_DB:-$ZERO_UPSTREAM_DB}"
 load_secret ZERO_ADMIN_PASSWORD required
 
+# Empty Compose defaults must not override Zero's own option defaults.
+[ -n "${ZERO_APP_PUBLICATIONS:-}" ] || unset ZERO_APP_PUBLICATIONS
+[ -n "${ZERO_AUTO_RESET:-}" ] || unset ZERO_AUTO_RESET
+
 exec "$@"

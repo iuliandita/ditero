@@ -7,27 +7,34 @@
 		},
 		"release": {
 			"sourceDigest": "48fcfaaac424dae81925f1cba2ea093f6ce51a7ed1354a1180451bd4856a4aeb",
-			"docs": ["RELEASING.md"],
+			"docs": [
+				"RELEASING.md"
+			],
 			"note": "Prepare alpha.12 and Android code12 with the retained signing identity and unchanged protected documentation epoch."
 		},
 		"configuration": {
-			"sourceDigest": "e32769de387a2b031b6e3a219a9074dfd95f08d7a808b024316700999ae72d79",
+			"sourceDigest": "2b8533450799c68d621cc8887eea8d48cf87642a11264da1c2bc10602bcac95a",
 			"docs": [
-				".env.example",
-				"docs/runbooks/sign-in-providers.md",
-				"deploy/docker/aio/README.md",
+				"docs/runbooks/database-roles.md",
+				"docs/runbooks/backup-restore.md",
 				"deploy/helm/ditero/README.md"
 			],
-			"note": "Compose now forwards GOOGLE_CLIENT_ID, without which Google sign-in could not be enabled. The new sign-in provider guide documents per-instance OAuth clients, the exact callback, Google redirect-host limits, Compose/AIO/Helm configuration, registration and linking behavior, and planned providers."
+			"note": "Document PostgreSQL 15 minimum, complete Zero role/publication setup, working full-database backup roles, own-origin deployment and publication/reset forwarding with empty values unset."
 		},
 		"deployment": {
-			"sourceDigest": "4a4cadef874a1cef442178e7a6e332a0eefe5252e635068a1d4c49486f7d7794",
-			"docs": ["deploy/docker/aio/README.md", "deploy/helm/ditero/README.md"],
-			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
+			"sourceDigest": "d0a958704570d3e0df34339a0c30f42d011eb449d6a605c780e75ca39faa326c",
+			"docs": [
+				"docs/runbooks/database-roles.md",
+				"docs/runbooks/backup-restore.md",
+				"deploy/helm/ditero/README.md"
+			],
+			"note": "Complete operator setup and restore instructions, preserve runtime role restrictions, explain PostgreSQL compatibility and app origin requirements, and pass Zero publication/reset configuration."
 		},
 		"native": {
 			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
-			"docs": ["apps/desktop/README.md"],
+			"docs": [
+				"apps/desktop/README.md"
+			],
 			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
 		}
 	}

@@ -135,6 +135,8 @@ services:
       ZERO_QUERY_URL: http://app:3000/api/zero/query
       ZERO_MUTATE_URL: http://app:3000/api/zero/mutate
       ZERO_ENABLE_CRUD_MUTATIONS: "false"
+      ZERO_APP_PUBLICATIONS: ${ZERO_APP_PUBLICATIONS:-}
+      ZERO_AUTO_RESET: ${ZERO_AUTO_RESET:-}
       ZERO_ADMIN_PASSWORD: ${ZERO_ADMIN_PASSWORD:-}
       ZERO_ADMIN_PASSWORD_FILE: ${ZERO_ADMIN_PASSWORD_FILE:-}
     ports:
