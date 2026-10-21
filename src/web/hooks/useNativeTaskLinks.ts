@@ -101,7 +101,7 @@ export function createTaskLinkDelivery(
 		} catch (error) {
 			if (current() && captured === revision) {
 				if (retired(error)) acknowledgement = null;
-				options.unavailable();
+				else options.unavailable();
 			}
 		} finally {
 			reading = false;

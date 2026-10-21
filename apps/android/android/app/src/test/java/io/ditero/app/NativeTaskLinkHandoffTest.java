@@ -34,4 +34,34 @@ public class NativeTaskLinkHandoffTest {
             assertFalse(handoff.refused);
         }
     }
+
+    @Test public void helloReportsEveryDroppedHeldEntryOnce() {
+        NativeTaskLinkHandoff boundToOldPage = new NativeTaskLinkHandoff();
+        boundToOldPage.pending.offer(link(), null, "bound", 4);
+        boundToOldPage.bindForHello(5, owner -> true);
+        assertFalse(boundToOldPage.pending.occupied());
+        assertTrue(boundToOldPage.takeRefused());
+        assertFalse("reported once", boundToOldPage.takeRefused());
+
+        NativeTaskLinkHandoff refusal = new NativeTaskLinkHandoff();
+        refusal.pending.offerRefusal("refused", 4);
+        refusal.bindForHello(5, owner -> true);
+        assertTrue(refusal.takeRefused());
+
+        NativeTaskLinkHandoff notOwned = new NativeTaskLinkHandoff();
+        notOwned.pending.offer(link(), null, "cold", NativeTaskLink.UNBOUND);
+        notOwned.bindForHello(5, owner -> false);
+        assertTrue(notOwned.takeRefused());
+    }
+
+    @Test public void helloBindsAnOwnedColdLinkWithoutANotice() {
+        NativeTaskLinkHandoff handoff = new NativeTaskLinkHandoff();
+        handoff.pending.offer(link(), null, "cold", NativeTaskLink.UNBOUND);
+        handoff.bindForHello(5, owner -> true);
+        assertFalse(handoff.takeRefused());
+        assertEquals("cold", handoff.pending.current(5, owner -> true).token);
+        NativeTaskLinkHandoff empty = new NativeTaskLinkHandoff();
+        empty.bindForHello(5, owner -> false);
+        assertFalse(empty.takeRefused());
+    }
 }

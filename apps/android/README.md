@@ -159,8 +159,9 @@ are test artifacts, not signed release or store distributions.
 Debug builds also trust user-installed CAs for local HTTPS testing. Install a CA
 with critical CA constraints and certificate-signing key usage in Android Settings;
 its server certificate needs a matching SAN and server-authentication usage. The
-system browser must trust the same CA for consent. Release builds retain Android's
-system trust anchors and do not include this debug configuration.
+system browser must trust the same CA for consent. The debug configuration still refuses
+cleartext traffic. Release builds retain Android's system trust anchors and do not include
+this debug configuration.
 
 The Android workflow performs these compilation, bridge-test, and debug-build
 checks and retains the APK for seven days. It does not run an emulator or validate
@@ -253,7 +254,9 @@ Implemented foundation with source, bridge and JVM unit coverage:
   Unknown or repeated fields, user info, fragments, backslashes, `+`, bad or double percent-encoding and
   invalid UTF-8 are refused. Intent extras are ignored, never read, and grant nothing; only the action
   and data URI count. An intent selector, clip data or MIME type is refused.
-- The link waits in memory only, as one token bound to the captured account, and is never persisted.
+- The link waits in memory only, as one token bound to the captured account, and is never persisted. The
+  held owner is its identity plus a SHA-256 digest of the session token, never the bearer token, so a
+  recreation-retained link cannot authenticate anything.
   Native `link.read`, `link.dismiss(token)` and `link.retire` serve the existing JavaScript delivery;
   each read rechecks the page, account, session and trust. A cold start parks the link unbound and the
   next `hello` binds that one link to the new page generation. A link already bound to an earlier page is
@@ -284,7 +287,10 @@ Implemented foundation with source, bridge and JVM unit coverage:
   A link arriving while the page is signed out shows unavailable through a generation-bound refusal
   event. Same-page handshakes retain only the notice generation while account authority is unavailable;
   the next handshake replaces it, and old-generation notices are ignored. No task is queued for a later
-  sign-in. Stale reads also show unavailable without retrying account authority or navigating.
+  sign-in. Stale reads also show unavailable without retrying account authority or navigating. A page
+  read that fails because the session ended, the handle rotated or the page was replaced says nothing:
+  only native's own `link-unavailable` means a held link was lost. Refusal notices are coalesced to one
+  per five seconds for each page generation, so repeated intents from other apps cannot flood the page.
 - Verification: the stored account is never relaxed. While a check is in flight the vault reads as
   untrusted, so a warm link waits as an ownerless deferred entry, only when the in-memory session was
   already verified and the origin matches. It is never readable meanwhile. When the check ends, the link
@@ -297,7 +303,9 @@ Implemented foundation with source, bridge and JVM unit coverage:
 - `MainActivity` ignores a `VIEW` intent flagged `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`, so Recents does
   not replay an old link.
 - `ACTION_VIEW` intents with the `ditero` scheme are consumed from the launch intent and from
-  `onNewIntent`, and the activity intent is replaced afterwards so it does not replay.
+  `onNewIntent`, and the activity intent is replaced afterwards so it does not replay. Notification
+  taps follow the same launch rule: a recreated or Recents-relaunched Activity does not consume its
+  original launch intent again.
 - The startup `onNewIntent` callback leaves the launch intent intact until the native transport
   attaches; `onCreate` then consumes it under the existing recreation and history checks.
 
@@ -322,8 +330,14 @@ Checks that need no device:
 ```sh
 bunx vitest run apps/android/src/bridge.test.ts src/web/hooks/useNativeTaskLinks.test.ts
 cd apps/android/android
-./gradlew --no-daemon testIndependentDebugUnitTest --tests 'io.ditero.app.NativeTaskLinkTest'
+./gradlew --no-daemon testIndependentDebugUnitTest --tests 'io.ditero.app.NativeTaskLink*'
+./gradlew --no-daemon verifyReleaseManifests
 ```
+
+The JVM tests pin intake (closed, fenced, signed-out), standing (a failed check with none pending is stale),
+the hello notice for dropped entries, notice coalescing and the launch-intent rule. `verifyReleaseManifests`
+fails if a release merged manifest of either flavor sets a network security config, is debuggable or allows
+cleartext traffic; the Android workflow runs it.
 
 ## Remaining work
 

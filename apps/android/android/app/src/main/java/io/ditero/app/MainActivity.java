@@ -45,8 +45,11 @@ public class MainActivity extends BridgeActivity {
                         });
             }
         });
-        consumePushIntent(getIntent());
-        // A recreated Activity is handed its original launch intent again; only a fresh launch is a link.
+        // A recreated or Recents-relaunched Activity is handed its original launch intent again; only a fresh
+        // launch carries a notification tap or a link.
+        Intent launch = getIntent();
+        if (launch != null && NativeIntentIngress.launchable(savedInstanceState != null, launch.getFlags()))
+            consumePushIntent(launch);
         if(savedInstanceState==null) consumeTaskLinkIntent(getIntent());
     }
 

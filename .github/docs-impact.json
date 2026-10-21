@@ -2,9 +2,9 @@
 	"version": 1,
 	"groups": {
 		"ui": {
-			"sourceDigest": "96357c80ba958a1b95100a6d9beb6dd4a9d908918a0dec0affc6062179807724",
+			"sourceDigest": "ca51b3319809ce6c19a51d0278a708d7b85b9589a2770ff3aae7aa7484f4a64b",
 			"docs": ["apps/android/README.md"],
-			"note": "Document one-time unavailable feedback for stale task-link reads and signed-out refusals using all six existing translations. Refusals never navigate, select a server or change account authority."
+			"note": "Document that a task-link read retired by session end, handle rotation or page replacement shows nothing, while native's link-unavailable and signed-out or fenced refusals show the existing unavailable message, coalesced to one per five seconds. Refusals never navigate, select a server or change account authority."
 		},
 		"release": {
 			"sourceDigest": "a675a1dc3668f040faf1c5a69a6adb43d3852b9e3a461a9a6b5aebc3fb0eaf76",
@@ -22,9 +22,9 @@
 			"note": "Align chart metadata, resource labels and packaged deployment image examples with 0.1.0-beta.1. Preserve app/Zero pairing, storage and recovery guidance, and cluster qualification limits; the optional one-image bundle remains separate from standard release assets."
 		},
 		"native": {
-			"sourceDigest": "fb5d303aa6686ca017374725cc82d65d5a84074f7b7c90e74e22e3aa67cea5a6",
+			"sourceDigest": "5b9f068c3faf0b0a82d3d2948d3b89c0b8cd6734825bbfa6d47fd28222e7ef97",
 			"docs": ["apps/android/README.md"],
-			"note": "Retain unbound task-link ingress in memory across pre-handshake recreation, and handle boot assets updates without retiring a newly bound page. Only an outstanding verification keeps unverified ownership; failed checks retire stale pending links before new ingress. Document one-time refusal feedback, including retirement of a pending link on page replacement, idempotent dismissal, refusal feedback during same-page handshakes without retaining account authority, and debug-only user CA trust. Release trust anchors, session storage and server protocols are unchanged."
+			"note": "Retain unbound task-link ingress in memory across pre-handshake recreation, and handle boot assets updates without retiring a newly bound page. Only an outstanding verification keeps unverified ownership; failed checks retire stale pending links before new ingress. Pending links keep a token digest, not the bearer token. Document one-time refusal feedback coalesced per page generation, including retirement of a pending link on page replacement, idempotent dismissal, refusal feedback during same-page handshakes without retaining account authority, and debug-only user CA trust that still refuses cleartext. Notification taps are consumed only from a fresh launch. A Gradle check fails if a release merged manifest sets a network security config. Release trust anchors, session storage and server protocols are unchanged."
 		},
 		"authentication": {
 			"sourceDigest": "94708677c42d414b0287be7f48a38f511b95039dce4a14a4b33939cc3d3dd213",

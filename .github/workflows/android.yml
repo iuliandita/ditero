@@ -64,6 +64,9 @@ jobs:
       - name: Check Google source without private configuration
         working-directory: apps/android/android
         run: ./gradlew --no-daemon testGoogleDebugUnitTest
+      - name: Check release manifests carry no debug trust
+        working-directory: apps/android/android
+        run: ./gradlew --no-daemon verifyReleaseManifests
       - name: Refuse Google packaging without private configuration
         working-directory: apps/android/android
         shell: bash
