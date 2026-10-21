@@ -1,4 +1,6 @@
 {
+	"browser_cached_session": "Hors ligne : les données en cache sont affichées. Les modifications restent sur cet appareil jusqu’à la vérification de ta session en ligne.",
+	"browser_connection_required": "Connecte-toi au serveur pour vérifier ta session et ouvrir cet espace de travail. Le rechargement hors ligne nécessite une session déjà vérifiée et non expirée, ainsi que l’app en cache sur HTTPS ou localhost.",
 	"workspace_read_only": "Ton rôle dans cet espace permet uniquement de consulter le contenu.",
 	"accept_error_email_mismatch": "Cette invitation est destinée à une autre adresse e-mail. Déconnecte-toi, puis connecte-toi avec le compte qui l’a reçue.",
 	"accept_switch_account": "Se déconnecter et changer de compte",

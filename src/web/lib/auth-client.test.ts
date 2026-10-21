@@ -42,7 +42,12 @@ it.each([
 	false,
 ])("creates one same-origin browser client and delegates plugin APIs (window: %s)", async (withWindow) => {
 	if (withWindow)
-		vi.stubGlobal("window", { location: { origin: "https://app.example" } });
+		vi.stubGlobal(
+			"window",
+			Object.assign(new EventTarget(), {
+				location: { origin: "https://app.example" },
+			}),
+		);
 	const passkey = vi.fn().mockResolvedValue({ data: "passkey-result" });
 	const client = {
 		signIn: { passkey },
@@ -57,9 +62,49 @@ it.each([
 	expect(mocks.create).toHaveBeenCalledTimes(1);
 	expect(mocks.create).toHaveBeenCalledWith({
 		baseURL: "",
+		fetchOptions: { customFetchImpl: expect.any(Function) },
 		plugins: [{ id: "passkey" }, { id: "two-factor" }],
 	});
 	vi.stubGlobal("NativeDitero", {});
 	expect(() => authClient.useSession()).toThrow("unavailable in native mode");
 	expect(client.useSession).toHaveBeenCalledTimes(1);
+});
+
+it("invalidates cached identity before account changes and sign-out", async () => {
+	const values = new Map<string, string>();
+	const remove = vi.fn((key: string) => values.delete(key));
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => Response.json({ success: true })),
+	);
+	vi.stubGlobal("localStorage", {
+		getItem: (key: string) => values.get(key),
+		setItem: (key: string, value: string) => values.set(key, value),
+		removeItem: remove,
+	});
+	vi.stubGlobal(
+		"window",
+		Object.assign(new EventTarget(), {
+			location: { origin: "https://app.example" },
+		}),
+	);
+	mocks.create.mockReturnValue({ useSession: vi.fn() });
+	const { authClient } = await import("./auth-client.ts");
+	authClient.useSession();
+	const request = mocks.create.mock.calls[0][0].fetchOptions.customFetchImpl;
+	for (const path of [
+		"/sign-out",
+		"/delete-user",
+		"/sign-in/email",
+		"/sign-up/email",
+	]) {
+		localStorage.setItem(
+			"ditero.browser-session.v1",
+			JSON.stringify({ userId: "a", expiresAt: Date.now() + 60000 }),
+		);
+		const response = request(`/api/auth${path}`);
+		expect(localStorage.getItem("ditero.browser-session.v1")).toBeUndefined();
+		await response;
+	}
+	expect(remove).toHaveBeenCalled();
 });
