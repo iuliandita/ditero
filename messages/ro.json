@@ -1,4 +1,6 @@
 {
+	"browser_cached_session": "Offline: sunt afișate datele salvate local. Modificările rămân pe acest dispozitiv până când sesiunea ta este verificată online.",
+	"browser_connection_required": "Conectează-te la server pentru a verifica sesiunea și a deschide acest spațiu de lucru. Reîncărcarea offline necesită o sesiune verificată anterior, neexpirată, și aplicația salvată local prin HTTPS sau localhost.",
 	"workspace_read_only": "Rolul tău în acest spațiu permite doar vizualizarea.",
 	"accept_error_email_mismatch": "Invitația este pentru altă adresă de e-mail. Deconectează-te, apoi conectează-te cu contul la care a fost trimisă.",
 	"accept_switch_account": "Deconectează-te și schimbă contul",

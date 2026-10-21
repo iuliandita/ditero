@@ -57,9 +57,36 @@ it.each([
 	expect(mocks.create).toHaveBeenCalledTimes(1);
 	expect(mocks.create).toHaveBeenCalledWith({
 		baseURL: "",
+		fetchOptions: { onRequest: expect.any(Function) },
 		plugins: [{ id: "passkey" }, { id: "two-factor" }],
 	});
 	vi.stubGlobal("NativeDitero", {});
 	expect(() => authClient.useSession()).toThrow("unavailable in native mode");
 	expect(client.useSession).toHaveBeenCalledTimes(1);
+});
+
+it("invalidates cached identity before account changes and sign-out", async () => {
+	const remove = vi.fn();
+	vi.stubGlobal("localStorage", { removeItem: remove });
+	vi.stubGlobal(
+		"window",
+		Object.assign(new EventTarget(), {
+			location: { origin: "https://app.example" },
+		}),
+	);
+	mocks.create.mockReturnValue({ useSession: vi.fn() });
+	const { authClient } = await import("./auth-client.ts");
+	authClient.useSession();
+	const onRequest = mocks.create.mock.calls[0][0].fetchOptions.onRequest;
+	for (const path of [
+		"/sign-out",
+		"/delete-user",
+		"/sign-in/email",
+		"/sign-up/email",
+	]) {
+		onRequest({ url: `/api/auth${path}` });
+	}
+	expect(remove).toHaveBeenCalledTimes(4);
+	onRequest({ url: "/api/auth/get-session" });
+	expect(remove).toHaveBeenCalledTimes(4);
 });

@@ -106,7 +106,7 @@ export default defineConfig(({ mode }) => ({
 			apply: "build",
 			generateBundle(_options, bundle) {
 				const assets = Object.values(bundle).filter((item) =>
-					item.fileName.startsWith("assets/"),
+					item.type === "chunk" || item.fileName.startsWith("assets/"),
 				);
 				const bytes = assets.reduce(
 					(sum, item) =>
