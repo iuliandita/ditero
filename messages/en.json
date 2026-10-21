@@ -2187,6 +2187,7 @@
 	"native_finish_signin": "Finish signing in",
 	"native_approval_intro": "Approve the request in your browser, then return here.",
 	"native_connect_failed": "Could not connect. Check the server address and connection.",
+	"native_desktop_online_start_required": "Desktop needs an online start to open cached data. Reconnect to your server, then select Connect. Your saved changes stay on this device.",
 	"native_change_server": "Change server",
 	"native_approval_pending": "The request is still waiting for approval.",
 	"native_signin_failed": "Could not finish signing in. Try again.",

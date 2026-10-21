@@ -41,6 +41,7 @@ import {
 	requestGrant,
 	selectServer,
 } from "./bridge.ts";
+import { connectionErrorMessage } from "./connection-error.ts";
 import {
 	captureVerifiedContext,
 	createNativeRuntime,
@@ -188,16 +189,19 @@ function NativeAppRoutes({
 	useEffect(() => {
 		const owner = ++epoch.current;
 		let restoreSocket: (() => void) | undefined;
+		let desktopRestore = false;
 		void (async () => {
 			const hello = await connectBridge();
+			desktopRestore = pushProvider === "desktop" && hello.session !== null;
 			if (owner !== epoch.current) return;
 			if (hello.linkRefused) show({ message: m.native_link_unavailable() });
 			restoreSocket = installNativeWebSocket();
 			setOrigin(hello.server?.origin ?? "");
 			if (hello.session) await activate(owner);
 		})()
-			.catch(() => {
-				if (owner === epoch.current) setError(m.native_connect_failed());
+			.catch((error: unknown) => {
+				if (owner === epoch.current)
+					setError(connectionErrorMessage(error, desktopRestore));
 			})
 			.finally(() => {
 				if (owner === epoch.current) setLoading(false);
@@ -210,6 +214,7 @@ function NativeAppRoutes({
 
 	async function connect() {
 		if (busy) return;
+		let desktopRestore = false;
 		const owner = ++epoch.current;
 		setBusy(true);
 		setError(null);
@@ -220,6 +225,7 @@ function NativeAppRoutes({
 			if (owner !== epoch.current) return;
 			// server.select fences link ingress; only a fresh hello lifts it and rebinds the page.
 			const next = await connectBridge();
+			desktopRestore = pushProvider === "desktop" && next.session !== null;
 			if (owner !== epoch.current) return;
 			if (next.linkRefused) show({ message: m.native_link_unavailable() });
 			setOrigin(next.server?.origin ?? origin);
@@ -229,8 +235,9 @@ function NativeAppRoutes({
 				await openBrowser();
 				if (owner === epoch.current) setApproval(true);
 			}
-		} catch {
-			if (owner === epoch.current) setError(m.native_connect_failed());
+		} catch (error) {
+			if (owner === epoch.current)
+				setError(connectionErrorMessage(error, desktopRestore));
 		} finally {
 			if (owner === epoch.current) setBusy(false);
 		}

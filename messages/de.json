@@ -2187,6 +2187,7 @@
 	"native_finish_signin": "Anmeldung abschließen",
 	"native_approval_intro": "Bestätige die Anfrage im Browser und kehre dann hierher zurück.",
 	"native_connect_failed": "Verbindung fehlgeschlagen. Prüfe die Serveradresse und Verbindung.",
+	"native_desktop_online_start_required": "Die Desktop-App muss online starten, um zwischengespeicherte Daten zu öffnen. Stelle die Verbindung zu deinem Server wieder her und wähle Verbinden. Deine gespeicherten Änderungen bleiben auf diesem Gerät.",
 	"native_change_server": "Server wechseln",
 	"native_approval_pending": "Die Anfrage wartet noch auf Bestätigung.",
 	"native_signin_failed": "Anmeldung fehlgeschlagen. Versuche es erneut.",

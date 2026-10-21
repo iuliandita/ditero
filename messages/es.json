@@ -2233,6 +2233,7 @@
 	"native_finish_signin": "Completar el inicio de sesión",
 	"native_approval_intro": "Aprueba la solicitud en el navegador y vuelve aquí.",
 	"native_connect_failed": "No se pudo conectar. Comprueba la dirección del servidor y la conexión.",
+	"native_desktop_online_start_required": "La aplicación de escritorio necesita iniciarse con conexión para abrir los datos en caché. Vuelve a conectarte al servidor y selecciona Conectar. Los cambios guardados permanecen en este dispositivo.",
 	"native_change_server": "Cambiar de servidor",
 	"native_approval_pending": "La solicitud sigue esperando aprobación.",
 	"native_signin_failed": "No se pudo completar el inicio de sesión. Inténtalo de nuevo.",

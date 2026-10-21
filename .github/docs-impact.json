@@ -26,9 +26,9 @@
 			"note": "Compose forwards GOOGLE_CLIENT_ID alongside the existing secret inputs. The Helm and AIO guides link the sign-in provider guide and show how to supply both Google values through app.extraEnv secret references or the API environment override."
 		},
 		"native": {
-			"sourceDigest": "20dc2a865ca8ead3dfe92438261f15a249e4ccb840f3a2ad35501302847b293a",
+			"sourceDigest": "3ed6634c023561a1acd46792679551433ec639f57cd786a3140f2d31514d4575",
 			"docs": ["apps/desktop/README.md"],
-			"note": "Document native export source labels and upload times, separate system save dialogs, retained prepared files after cancellation or save failure, and Saved only after a confirmed write."
+			"note": "Document the desktop online-start requirement for cached data, retry after reconnection, retention of durably saved edits, and the remaining encrypted evidence and refusal-policy work in issue 1090. Android cached activation and native credential and trust checks are unchanged."
 		}
 	}
 }
