@@ -5,6 +5,9 @@ import {
 	UnsupportedImportVersionError,
 } from "../../../domain/portability/import-document.ts";
 import { ProviderImportError } from "../../../domain/portability/providers/common.ts";
+import { parseContentProvider } from "../../../domain/portability/providers/content.ts";
+import type { ContentProvider } from "../../../domain/portability/providers/content-common.ts";
+import { contentBinding } from "../../../domain/portability/providers/content-input.ts";
 import { parseTaskCsv } from "../../../domain/portability/providers/csv.ts";
 import {
 	CSV_V1_EXCLUSIONS,
@@ -23,15 +26,62 @@ self.onmessage = async (
 		| File
 		| {
 				file: File;
-				format: "native" | "csv" | "todoist" | "trello";
+				format:
+					| "native"
+					| "csv"
+					| "todoist"
+					| "trello"
+					| "todoist-content"
+					| "trello-content"
+					| "ticktick"
+					| "microsoft"
+					| "generic-csv";
 				projectFolderName?: string;
 				unsectionedListName?: string;
+				timezone?: string;
 		  }
 	>,
 ) => {
 	try {
 		const file = event.data instanceof File ? event.data : event.data.file;
 		const format = event.data instanceof File ? "native" : event.data.format;
+		const providers: Record<string, ContentProvider> = {
+			"todoist-content": "todoist",
+			"trello-content": "trello",
+			ticktick: "ticktick",
+			microsoft: "microsoft",
+			"generic-csv": "generic-csv",
+		};
+		const provider = Object.hasOwn(providers, format)
+			? providers[format]
+			: undefined;
+		if (provider && !(event.data instanceof File)) {
+			if (file.size > PROVIDER_INPUT_MAX_BYTES)
+				throw new ProviderInputError("byte-limit");
+			const deadline = performance.now() + 15_000;
+			const bytes = new Uint8Array(await file.arrayBuffer());
+			const conversion = await parseContentProvider(provider, bytes, {
+				exportedAt: new Date().toISOString(),
+				deadline,
+				projectFolderName: event.data.projectFolderName ?? "",
+				unsectionedListName: event.data.unsectionedListName ?? "",
+				timezone: event.data.timezone ?? "",
+			});
+			const chunks: string[] = [];
+			for (let offset = 0; offset < bytes.length; offset += 24_576) {
+				if (performance.now() >= deadline)
+					throw new ProviderImportError("timeout");
+				chunks.push(
+					btoa(String.fromCharCode(...bytes.subarray(offset, offset + 24_576))),
+				);
+			}
+			const input = parseProviderInput(
+				{ ...contentBinding(conversion), originalBase64: chunks.join("") },
+				{ deadline },
+			);
+			self.postMessage({ input, document: conversion.document });
+			return;
+		}
 		if (format === "csv" || format === "todoist" || format === "trello") {
 			if (file.size > PROVIDER_INPUT_MAX_BYTES)
 				throw new ProviderInputError("byte-limit");

@@ -21,11 +21,13 @@ Native JSON export, validated saved import previews, resumable apply, assignment
 mapping, and explicit notification activation have landed. Task history and portable
 history archives preserve transitions and attribution. Settings accepts version 2
 archives through reviewed, resumable history import, with explicit source claims
-and retained replay identity. Ditero CSV, Todoist project CSV snapshots and plain
-Trello board JSON imports are available. Authenticated encrypted attachment archives
+and retained replay identity. Ditero and generic CSV, Todoist project CSV, TickTick
+backup CSV, Microsoft To Do via classic Outlook task CSV, and Trello board JSON
+imports are available with explicit exclusions and immutable snapshot identity. Authenticated encrypted attachment archives
 and reviewed, resumable attachment migration with explicit parent mapping and durable
-replay have landed; broader runtime qualification remains pending. TickTick and
-Microsoft To Do import remain unfinished. Voice capture is pending final qualification.
+replay have landed; broader runtime qualification remains pending. Direct Microsoft
+PST import and provider account synchronization remain unsupported. Voice capture is
+pending final qualification.
 
 The web app is installable as a PWA. Android and Tauri desktop application cores,
 scoped native authentication, encrypted file handling, and development artifact

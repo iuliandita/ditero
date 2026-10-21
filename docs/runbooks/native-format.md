@@ -102,6 +102,33 @@ are visible, a version 1 export fails with HTTP 409 and `history-requires-v2` be
 returning a file. Use version 2 instead; no records are silently omitted or attributed
 to a local account. Native-only version 1 exports remain unchanged.
 
+## Provider content binding and upgrade
+
+The five content adapters described in [Data portability](data-portability.md#provider-imports-with-content)
+produce the existing native version 1 intermediate document and use planner 4.
+They do not add an application endpoint or a second content writer. The original
+file is submitted as `input.originalBase64` with `kind: "provider"`, `version: 2`,
+`adapter: "provider-content"`, `adapterVersion: 1`, the provider, snapshot hash and
+namespace, naming choices, timezone, and bounded `{code,path,count}` notices.
+The server reparses the original bytes and requires an exact binding match before
+planning. Notices are also returned with the saved plan and require UI approval.
+The database validates immutable source/job bindings; the original file is not
+retained as a replacement backup. Existing native formats and legacy provider
+bindings keep their exact contracts.
+
+Upgrade: back up the database and run the additive provider-content binding
+migration before starting the updated server. Backup: retain coordinated database,
+attachment ciphertext and original encryption/authentication secrets as usual;
+keep original provider export files privately if another preview may be needed.
+Rollback: keep the additive migration and use the previous app only after stopping
+new provider imports. Older builds cannot parse these new saved bindings; use the
+updated app to resume or discard their plans. Do not restore an older database
+over newer content just to remove a picker. Client versions: updated browser
+bundles expose the new pickers; older browser clients retain their legacy import
+paths. Native Settings keeps its browser-import guard. Authentication, attachment
+formats, notification activation and permissions are unchanged; native runtime
+qualification remains separate.
+
 ## Saved dry runs
 
 Settings can validate a native file, map its workspaces and people, and save a

@@ -1,0 +1,113 @@
+{
+	"id": "aaaaaaaaaaaaaaaaaaaaaaaa",
+	"name": "Household board",
+	"closed": false,
+	"desc": "Board context not migrated",
+	"lists": [
+		{
+			"id": "bbbbbbbbbbbbbbbbbbbbbbbb",
+			"idBoard": "aaaaaaaaaaaaaaaaaaaaaaaa",
+			"name": "Weekend",
+			"closed": false,
+			"pos": 16384
+		},
+		{
+			"id": "cccccccccccccccccccccccc",
+			"idBoard": "aaaaaaaaaaaaaaaaaaaaaaaa",
+			"name": "Later",
+			"closed": true,
+			"pos": 32768
+		}
+	],
+	"labels": [
+		{
+			"id": "111111111111111111111111",
+			"idBoard": "aaaaaaaaaaaaaaaaaaaaaaaa",
+			"name": "Home",
+			"color": "green"
+		}
+	],
+	"cards": [
+		{
+			"id": "dddddddddddddddddddddddd",
+			"idBoard": "aaaaaaaaaaaaaaaaaaaaaaaa",
+			"idList": "bbbbbbbbbbbbbbbbbbbbbbbb",
+			"name": "Prepare picnic",
+			"desc": "Bring a blanket",
+			"pos": 16384,
+			"closed": false,
+			"due": "2026-01-18T10:00:00.000Z",
+			"dueComplete": true,
+			"idLabels": ["111111111111111111111111"],
+			"labels": [
+				{
+					"id": "111111111111111111111111",
+					"name": "Home",
+					"color": "green"
+				}
+			],
+			"idChecklists": ["ffffffffffffffffffffffff"],
+			"idMembers": ["222222222222222222222222"],
+			"attachments": [
+				{
+					"id": "333333333333333333333333",
+					"url": "https://example.test/file"
+				}
+			]
+		},
+		{
+			"id": "eeeeeeeeeeeeeeeeeeeeeeee",
+			"idBoard": "aaaaaaaaaaaaaaaaaaaaaaaa",
+			"idList": "cccccccccccccccccccccccc",
+			"name": "Archived idea",
+			"desc": "Archiving does not mean completed",
+			"pos": 16384,
+			"closed": true,
+			"due": null,
+			"dueComplete": false,
+			"idLabels": [],
+			"labels": [],
+			"idChecklists": []
+		}
+	],
+	"checklists": [
+		{
+			"id": "ffffffffffffffffffffffff",
+			"idBoard": "aaaaaaaaaaaaaaaaaaaaaaaa",
+			"idCard": "dddddddddddddddddddddddd",
+			"name": "Packing",
+			"pos": 16384,
+			"checkItems": [
+				{
+					"id": "444444444444444444444444",
+					"name": "Pack cups",
+					"state": "complete",
+					"pos": 16384,
+					"due": null
+				},
+				{
+					"id": "555555555555555555555555",
+					"name": "Pack water",
+					"state": "incomplete",
+					"pos": 32768,
+					"due": "2026-01-18T09:00:00.000Z"
+				}
+			]
+		}
+	],
+	"actions": [
+		{
+			"id": "666666666666666666666666",
+			"type": "commentCard",
+			"date": "2026-01-15T12:00:00.000Z",
+			"idMemberCreator": "222222222222222222222222",
+			"data": {
+				"card": {
+					"id": "dddddddddddddddddddddddd",
+					"name": "Prepare picnic"
+				},
+				"text": "Use reusable cups."
+			}
+		}
+	]
+}
